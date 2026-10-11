@@ -4,6 +4,8 @@
 // The playground sends through Web MIDI (allow it when the browser asks); the warp command needs `sendmidi`
 // (brew install gbevin/tools/sendmidi) and says so when it is missing.
 
+use sound
+
 write_midi("tune.mid", [[0, C4, 0.5, 100], [0.5, E4, 0.5, 90], [1, G4, 1, 80]])
 for note in read_midi("tune.mid") { print note }
 

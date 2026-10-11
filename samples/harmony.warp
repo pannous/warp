@@ -1,6 +1,8 @@
 #!/usr/bin/env warp
 // Music values: chords and scales by name, transposition and tuning.
 
+use sound
+
 tuning = 442                                  // A4 in Hz, as many orchestras tune (440 unless set)
 tempo = 110
 melody scale(D4, dorian) each 1/4 beat        // D E F G A B C D

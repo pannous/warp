@@ -1,6 +1,8 @@
 #!/usr/bin/env warp
 // Shaping the sound: an envelope for every note (attack, decay, sustain, release), wave shapes, gain in decibels.
 
+use sound
+
 attack = 0.02                   // seconds to rise
 decay = 0.1                     // then falls for 0.1 s
 sustain = 0.4                   // to 40 % of the peak

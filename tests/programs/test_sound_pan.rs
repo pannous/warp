@@ -16,7 +16,7 @@ fn panning_interleaves_the_channels() {
 
 #[test]
 fn a_panned_note_sounds_on_one_side() {
-	let (seconds, samples) = rendered("left", "pan = -1.0\nplay C4 for 0.1s\nrender_sound(\"SONG\")");
+	let (seconds, samples) = rendered("left", "use sound\npan = -1.0\nplay C4 for 0.1s\nrender_sound(\"SONG\")");
 	assert_eq!(seconds, "0.1");
 	assert_eq!(samples.len(), 2 * RATE / 10);
 	assert!(samples.iter().step_by(2).any(|&left| left != 0), "the left speaker sounds");
@@ -25,7 +25,7 @@ fn a_panned_note_sounds_on_one_side() {
 
 #[test]
 fn mono_and_stereo_mix_into_stereo() {
-	let (seconds, samples) = rendered("both", "play C4 for 0.1s\npan = 1.0\nplay E4 for 0.1s\nrender_sound(\"SONG\")");
+	let (seconds, samples) = rendered("both", "use sound\nplay C4 for 0.1s\npan = 1.0\nplay E4 for 0.1s\nrender_sound(\"SONG\")");
 	assert_eq!(seconds, "0.2");
 	assert_eq!(samples.len(), 2 * RATE / 5);
 	let (mono, panned) = samples.split_at(samples.len() / 2);

@@ -10,10 +10,10 @@ fn printed(program: &str) -> String {
 
 #[test]
 fn play_gives_the_sounds_handle() {
-	assert_eq!(printed("a = play C4 for 5ms\nb = melody [C4 E4] each 5ms\nc = tone 440Hz for 5ms\n[a b c]"), "[1 2 3]");
+	assert_eq!(printed("use sound\na = play C4 for 5ms\nb = melody [C4 E4] each 5ms\nc = tone 440Hz for 5ms\n[a b c]"), "[1 2 3]");
 	let wav = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("sound-handles.wav");
 	std::fs::write(&wav, warp::sound::wav(&[32768, 40000, 32768], 22050)).unwrap();
-	assert_eq!(printed(&format!("play C4 for 5ms\nplay \"{}\"", wav.display())), "2");
+	assert_eq!(printed(&format!("use sound\nplay C4 for 5ms\nplay \"{}\"", wav.display())), "2");
 }
 
 #[test]

@@ -2,6 +2,8 @@
 // The signal graph: every sound passes distortion → delay → reverb on its way from the voice to the output.
 // The settings at the time of `play` are that sound's sends.
 
+use sound
+
 wave_shape = "sawtooth"
 loudness = -9 dB
 melody [A2 C3 E3 A3] each 1/2 beat      // dry

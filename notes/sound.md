@@ -1,8 +1,12 @@
 # Sound (card basic-sound)
 
-`lib/sound.warp` (sample: samples/music.warp), loaded without `use` when a program calls play, melody, tone or beep (src/modules.rs SOUND_WORDS):
+`lib/sound.warp` (sample: samples/music.warp), loaded without `use` when a program calls play, beep, stop_sound or
+wait_sound (src/modules.rs SOUND_SETUP_FREE_WORDS). Every other sound word (melody, tone, pattern, live_loop,
+render_sound, sound_queued, play_file, the midi words) needs `use sound`; called bare it is the error naming the use
+(card bizarre-global, P171; user, 2026-10-11):
 
 ```warp
+use sound
 beep
 play 440Hz for 0.5s
 play C4                         // note_seconds (0.5 s)
