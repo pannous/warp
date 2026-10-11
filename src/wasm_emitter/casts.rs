@@ -10,7 +10,7 @@ pub const TEXT_AS_NUMBER: &str = "text_as_number";
 pub(super) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
 /// The words emit_cast converts to besides the number types (int, float, rational …)
-const CONVERSION_WORDS: [&str; 5] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number"];
+const CONVERSION_WORDS: [&str; 6] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number", super::hex::HEX_WORD];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -58,6 +58,9 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
+		if let Some(computed) = super::hex::computed_type(target) {
+			return self.emit_numeric_cast(func, located, value, &computed);
+		}
 		if let Some(refusal) = self.cast_refusal(value, target) {
 			self.emit_type_error(func, refusal);
 			return;
@@ -204,6 +207,9 @@ impl WasmGcEmitter {
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
 	pub(super) fn emit_cast(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+		if let Some(computed) = super::hex::computed_type(target_type) {
+			return self.emit_cast(func, value, &computed);
+		}
 		let type_name = match target_type.drop_meta() {
 			Node::Symbol(s) => s.to_lowercase(),
 			Node::Text(s) => s.to_lowercase(),

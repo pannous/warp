@@ -3,6 +3,7 @@ mod test_inline_unions;
 mod test_list_element_types;
 mod test_cast_bugs;
 mod test_unknown_conversion; // card unknown-word
+mod test_hex_int; // card hex-printing
 mod test_constructor_vs_data;
 mod test_data;
 mod test_generic_types;

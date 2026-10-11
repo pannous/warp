@@ -14,6 +14,7 @@ pub mod cells;
 mod closures;
 pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
+pub(crate) mod hex;
 mod constructors;
 pub use constructors::NEW_BOOL;
 mod equality;
@@ -1246,6 +1247,9 @@ impl WasmGcEmitter {
 		// a comparison, `not`, a bool variable…: its Int 1/0 as the bool it is (card bool-type)
 		if !matches!(node.drop_meta(), Node::True | Node::False) && crate::analyzer::is_boolean(node, &self.scope) {
 			self.emit_call(func, constructors::AS_BOOL);
+		}
+		if self.shows_hex(node) {
+			self.emit_call(func, hex::AS_HEX);
 		}
 	}
 

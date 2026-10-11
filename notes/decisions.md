@@ -8,8 +8,10 @@ notes/open_decisions.md.
 
 ## Decided 2026-10-11 (user; via warp-supervisor or the Interviewer)
 - unknown-word (user): `u8` is an alias of `uint8`, which is an alias of `byte` (src/fixed_width.rs ALIASES; overflow
-  messages name byte). Idea queued as card hex-printing: `255 as hex` is an int that prints 0xff, and a byte prints
-  0xFF too (a plain wasm integer, special logic only at FFI crossings).
+  messages name byte).
+- hex-printing (user): `255 as hex` is an int that shows as 0xFF, and a byte shows so too (a plain wasm integer,
+  special logic only at FFI crossings). Defaults taken: uppercase digits (0xFF), arithmetic gives a plain int, a
+  variable assigned `x as byte` shows in hex without the byte's range check (notes/hex_ints.md).
 - bizarre-global (user, via warp-supervisor): play, beep, stop_sound and wait_sound stay global; every other sound
   word (melody, tone, pattern, live_loop, render_sound, sound_queued, the midi words) needs `use sound`, else the error
   "X is in the standard module sound: write `use sound`". Old tests and samples gain a `use sound` line, including

@@ -21,6 +21,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		}
 		// run_block hands exact numbers back by composing them from fixnums (tasks.rs Builders)
 		Node::Symbol(name) if crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()) => ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
+		// `as hex`, `byte b`: values shown in hex (card hex-printing)
+		Node::Symbol(name) if crate::wasm_emitter::hex::shows_in_hex(name) => {
+			ctx.required_functions.extend([crate::wasm_emitter::hex::AS_HEX, crate::wasm_emitter::hex::HEX_TEXT, "list_join", "new_text"]);
+		}
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
 			ctx.required_functions.extend(functions_of_operator(op));
