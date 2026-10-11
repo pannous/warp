@@ -147,3 +147,4 @@ mod test_list_test_of_a_map;
 mod test_type_calls; // card types-constructor
 mod test_hex_word; // hex x is hex(x), literals are 0x…
 mod test_nested_type_calls; // text hex 255 is text(hex(255))
+mod test_text_of_text; // text(text(5)) is "5"
