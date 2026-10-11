@@ -61,7 +61,8 @@ fn weekday_of(days: u32) -> Emit {
 impl WasmGcEmitter {
 	/// The zone functions, when a program makes a zoned time; after emit_times_runtime, whose calendar they use
 	pub(super) fn emit_time_zones(&mut self) {
-		if !self.should_emit_function(super::times::ZONE_NAMES) || !self.should_emit_function(super::times::TIME_FIELD) {
+		// required, not merely emitted, as time arithmetic (uses_times): their refusals mark the text constructors used
+		if !self.uses_times() || !self.ctx.required_functions.contains(super::times::ZONE_NAMES) {
 			return;
 		}
 		self.emit_zone_rule();
