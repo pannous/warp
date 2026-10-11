@@ -145,3 +145,4 @@ mod test_time_zones_at_run_time; // card run-time-dates, stage B3
 mod test_time_programs_run; // card run-time-dates, stage B4
 mod test_list_test_of_a_map;
 mod test_type_calls; // card types-constructor
+mod test_hex_word; // hex x is hex(x), literals are 0x…

@@ -683,12 +683,6 @@ impl WarpParser {
 			return Symbol(format!("{symbol}?"));
 		}
 
-		if symbol == HEX_WORD && !self.options.data_mode {
-			if let Some(number) = self.try_parse_hex_word() {
-				return number;
-			}
-		}
-
 		// `To square a number: …` starts an English sentence with a capital
 		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && self.in_code() && self.word_starts_statement(symbol.len()) {
 			if let Some(definition) = self.try_parse_to_definition() {

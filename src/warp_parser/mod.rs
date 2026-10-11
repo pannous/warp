@@ -503,7 +503,6 @@ const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 const ELVIS_WORD: &str = "elvis";
 /// `x is int` tests the type; `x == int` stays equality (user decision #30)
 const IS_WORD: &str = "is";
-const HEX_WORD: &str = "hex";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
 
