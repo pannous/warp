@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::lowering::nodes::children_rewritten;
+use crate::lowering::switch::SWITCH_WORDS;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
@@ -1318,6 +1319,8 @@ impl WarpParser {
 				self.symbol_after(1, |key| Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}")))))
 			}
 			'(' => {
+				// `match f(3, 4) {…}`: the block holds the cases, no body of a definition of f
+				let is_switch_subject = SWITCH_WORDS.contains(&self.word_ending_before(self.pos - symbol.chars().count()).as_str());
 				// Parse arguments as a proper Node
 				let args_node = self.parse_bracketed('(');
 				// `add(2)(5)`: each glued group calls what the call before returned (closures.rs), one operand
@@ -1331,7 +1334,7 @@ impl WarpParser {
 				self.skip_spaces(); // Only spaces, preserve newlines as statement separators
 
 				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
-				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header {
+				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header && !is_switch_subject {
 					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
 					let signature = call(&symbol, vec![typed_parameters(args_node)]);
