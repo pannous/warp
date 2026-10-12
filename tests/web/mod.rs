@@ -4,6 +4,8 @@ mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs wrangler dev and node
 mod test_assistant_proxy; // card assistant-proxy
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
+#[cfg(feature = "native")] // runs node
+mod test_browser_tables; // card orm-browser-stores
 #[cfg(feature = "native")] // builds a site natively
 mod test_bundle_budget;
 mod test_class_components;

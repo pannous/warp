@@ -1,0 +1,11 @@
+// card orm-paging: a slice of a stored table reads only its rows (a LIMIT … OFFSET … query), each the one instance
+// of its row; run it twice: the changed name stays
+class Person{name: text; age: int}
+people: [Person] = database.people
+if count(people) == 0 { for i in 1 to 50 { people.add(Person("N" + i, i)) } }
+page = people#(11…20)
+print "people#(11…20): ${count(page)} rows, from ${page#1.name} to ${page#10.name}"
+print "people[10:20] starts at ${people[10:20]#1.name}"
+print "first 3: ${(first 3 of people)#3.name}, last 2: ${(last 2 of people)#1.name}"
+page#1.name = page#1.name + "!"
+print "people#11 is now ${people#11.name}"

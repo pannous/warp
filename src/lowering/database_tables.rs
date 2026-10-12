@@ -7,7 +7,7 @@
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
 use super::nodes::key;
-use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, OF_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORDS;
@@ -20,6 +20,8 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+/// `first 3 of people`, `people.last(2)`: a slice at either end of a table
+const END_WORDS: [&str; 2] = ["first", "last"];
 const REMOVE_WORD: &str = "remove";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
@@ -51,7 +53,15 @@ const MADE: &str = "table_made";
 /// a filter's SQL condition and its parameters
 const CONDITION: &str = "table_condition";
 const CONDITION_VALUES: &str = "table_condition_values";
-const GENERATED_NAMES: [(&str, &str); 17] = [
+/// a slice's 0-based start and exclusive end (`people#(11..20)` is 10 to 20), the start at 0 at least, and its rows
+const FROM: &str = "table_from";
+const UNTIL: &str = "table_until";
+const FIRST: &str = "table_first";
+const SLICE_ROWS: &str = "table_slice_rows";
+/// the ids a page of rows' foreign keys point to, those not met yet
+const KEYS: &str = "table_keys";
+const MISSING: &str = "table_missing";
+const GENERATED_NAMES: [(&str, &str); 23] = [
 	(POSITION, "table·position"),
 	(MADE, "table·made"),
 	(ROW, "table·row"),
@@ -69,6 +79,12 @@ const GENERATED_NAMES: [(&str, &str); 17] = [
 	(FAILURE, "table·failure"),
 	(CONDITION, "table·condition"),
 	(CONDITION_VALUES, "table·condition_values"),
+	(FROM, "table·from"),
+	(UNTIL, "table·until"),
+	(FIRST, "table·first"),
+	(SLICE_ROWS, "table·slice_rows"),
+	(KEYS, "table·keys"),
+	(MISSING, "table·missing"),
 ];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
 /// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the remove, deleting
@@ -78,7 +94,9 @@ const GENERATED_NAMES: [(&str, &str); 17] = [
 /// the instances added or read before; the page read last and its start position; the restore after a rolled-back
 /// transaction, giving each instance held its row's values again (id 0 when its row is gone) and loading anew; the
 /// rows a filter keeps, read alone as their instances until the table loads (the loaded ones after); the instance of an id,
-/// ø when no row has it, found in the instances met, which hold each loaded one
+/// ø when no row has it, found in the instances met, which hold each loaded one; a slice, reading only its rows until
+/// the table loads (card orm-paging); the rows of ids not met yet, read together for a page of rows pointing to them (card
+/// orm-batched)
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
@@ -94,12 +112,20 @@ const PAGE: &str = "table_page";
 const START: &str = "table_start";
 const FOUND: &str = "table_found";
 const OF: &str = "table_of";
+const SLICED: &str = "table_sliced";
+const FETCHED: &str = "table_fetched";
 /// `people.table·found(condition, parameters)`: a filter's query until with_lazy_reads
 const FOUND_WORD: &str = "table·found";
-/// `teams.table_instance_of(id)`: the instance of an id until with_lazy_reads makes it `teams·of(id)`
+/// `teams.table_instance_of(id)`: the instance of an id until with_lazy_reads makes it `teams·of(id)`; likewise
+/// `teams.table_fetched_ids(ids)`, `teams·fetched(ids)`
 const INSTANCE_OF_WORD: &str = "table_instance_of";
-const LAZY_PARTS: [(&str, &str); 15] = [
+const FETCHED_WORD: &str = "table_fetched_ids";
+/// Rows whose keys point to more rows not met than this load the other table whole rather than by `id IN (…)`
+const MOST_FETCHED: usize = 500;
+const LAZY_PARTS: [(&str, &str); 17] = [
 	(FOUND, "found"),
+	(SLICED, "sliced"),
+	(FETCHED, "fetched"),
 	(OF, "of"),
 	(LOAD, "load"),
 	(COUNTED, "count"),
@@ -127,6 +153,10 @@ const COUNT_PLACEHOLDER: &str = "table_count_read";
 const ROW_PLACEHOLDER: &str = "table_row_read";
 const PAGE_PLACEHOLDER: &str = "table_page_read";
 const SELECT_PLACEHOLDER: &str = "table_select_read";
+const SLICE_PLACEHOLDER: &str = "table_slice_read";
+const FROM_PLACEHOLDER: &str = "table_from_value";
+/// `"id" IN (`, the start of the condition fetching rows by their ids
+const IN_PLACEHOLDER: &str = "table_in";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// `red.players.add(p)`: the instance whose one-to-many field is added to
 const OWNER_PLACEHOLDER: &str = "table_owner";
@@ -940,7 +970,7 @@ fn table_statements(
 	[vec![with_tables(statement, tables, file, open)], updates].concat()
 }
 
-/// `people#1.age = 5`, `(people where …)#1.age += 1`: a column of an element of a table changed in place, as the
+/// `people#1.age = 5`, `(people where …)#1.age += 1`, `page#1.age = 5`: a column of an element of a table changed in place, as the
 /// element bound first, `people·element = people#1; people·element.age = 5`, whose change written_through writes to
 /// its row
 fn with_bound_element(statement: &Node, tables: &BTreeMap<String, Table>) -> Option<Vec<Node>> {
@@ -956,10 +986,12 @@ fn with_bound_element(statement: &Node, tables: &BTreeMap<String, Table>) -> Opt
 	if matches!(instance.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let variable = tables.keys().find(|name| instance.mentions_any(&[name.as_str()]))?;
-	if !columns_of(&tables[variable]).contains(&field.drop_meta().name()) {
-		return None;
-	}
+	// an element of another list, `page#1.name = …`, may be a row of any table with the column: written_through asks
+	let has_column = |name: &&String| columns_of(&tables[*name]).contains(&field.drop_meta().name());
+	let variable = match tables.keys().find(|name| instance.mentions_any(&[name.as_str()])) {
+		Some(mentioned) => Some(mentioned).filter(has_column)?,
+		None => tables.keys().find(has_column)?,
+	};
 	let element = Node::Symbol(lazy_name(variable, "element"));
 	let changed = Node::Key(
 		Box::new(Node::Key(Box::new(element.clone()), Op::Dot, field.clone())),
@@ -1091,27 +1123,51 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 				.join(" and ")
 		),
 	};
+	// natively the rows read before loading find their keys' rows together, `id IN (…)` (card orm-batched); the browser
+	// has no SQL and loads the other table
+	let fetches: String = match cfg!(feature = "native") {
+		true => table
+			.references
+			.iter()
+			.filter(|(field, _)| !is_own_reference(table, field))
+			.map(|(field, target)| {
+				format!(
+					"{target}.{FETCHED_WORD}([{} for {ROW} in {ROWS}])\n",
+					column_cell(table, ROW, field)
+				)
+			})
+			.collect(),
+		false => String::new(),
+	};
 	// the identity map: the instance of each id met, a hash table keyed by the id (card int-map)
 	let known = format!("{ROW}#1 in {MET}");
 	let constructed = format!("{class}({})", arguments.join(", "));
 	let instance = format!("(if {known} then {MET}[{ROW}#1] else {constructed})");
 	// the rows a required key leaves out are counted and positioned only by loading
-	let (unloaded_count, unloaded_element, unloaded_streamed) = match required.is_empty() {
+	let (unloaded_count, unloaded_element, unloaded_streamed, unloaded_sliced) = match required.is_empty() {
 		true => (
 			COUNT_PLACEHOLDER.to_string(),
 			format!(
 				"{{
 {ROWS} = {ROW_PLACEHOLDER}
-if not {ROWS} then {LOAD}()#{POSITION} else {KEPT}({ROWS}#1)
+{fetches}if not {ROWS} then {LOAD}()#{POSITION} else {KEPT}({ROWS}#1)
 }}"
 			),
 			format!(
 				"{{
 if {POSITION} < {START} or {POSITION} >= {START} + count({PAGE}) {{
-{PAGE} = [{KEPT}({ROW}) for {ROW} in {PAGE_PLACEHOLDER}]
+{ROWS} = {PAGE_PLACEHOLDER}
+{fetches}{PAGE} = [{KEPT}({ROW}) for {ROW} in {ROWS}]
 {START} = {POSITION}
 }}
 {PAGE}#({POSITION} - {START} + 1)
+}}"
+			),
+			format!(
+				"{{
+{ROWS} = {SLICE_PLACEHOLDER}
+{fetches}{SLICE_ROWS}: [{class}] = [{KEPT}({ROW}) for {ROW} in {ROWS}]
+{SLICE_ROWS}
 }}"
 			),
 		),
@@ -1119,6 +1175,7 @@ if {POSITION} < {START} or {POSITION} >= {START} + count({PAGE}) {{
 			format!("count({LOAD}())"),
 			format!("{LOAD}()#{POSITION}"),
 			format!("{LOAD}()#{POSITION}"),
+			format!("slice({LOAD}(), {FIRST}, {UNTIL})"),
 		),
 	};
 	let code = format!(
@@ -1133,7 +1190,7 @@ global {LOADED}
 global {MET}
 if not {LOADED} {{
 {ROWS} = {ROWS_PLACEHOLDER}
-{checks}{variable} = [{instance} for {ROW} in {ROWS}{kept}]
+{fetches}{checks}{variable} = [{instance} for {ROW} in {ROWS}{kept}]
 for {MADE} in {variable} {{ {MET}[{MADE}.{ID_FIELD}] = {MADE} }}
 {LOADED} = yes
 }}
@@ -1180,6 +1237,12 @@ global {PAGE}
 global {START}
 if {LOADED} then {variable}#{POSITION} else {unloaded_streamed}
 }}
+{SLICED}({FROM}, {UNTIL}) := {{
+global {variable}
+global {LOADED}
+{FIRST} = if {FROM} < 0 then 0 else {FROM}
+if {LOADED} then slice({variable}, {FIRST}, {UNTIL}) else {unloaded_sliced}
+}}
 {RESET}() := {{
 global {LOADED}
 global {MET}
@@ -1194,7 +1257,7 @@ global {variable}
 global {LOADED}
 global {MET}
 {ROWS} = {SELECT_PLACEHOLDER}
-if {loaded_found} {{
+{fetches}if {loaded_found} {{
 {LOAD}()
 [{MET}[{ROW}#1] for {ROW} in {ROWS} if {ROW}#1 in {MET}]
 }} else [{KEPT}({ROW}) for {ROW} in {ROWS}]
@@ -1202,8 +1265,17 @@ if {loaded_found} {{
 {OF}({KEY}) := {{
 global {LOADED}
 global {MET}
-if not {LOADED} {{ {LOAD}() }}
+{of_unmet}
 if {KEY} in {MET} then {MET}[{KEY}] else ø
+}}
+{FETCHED}({KEYS}) := {{
+global {LOADED}
+global {MET}
+if not {LOADED} {{
+{MISSING} = [{KEY} for {KEY} in {KEYS} if {KEY} and not ({KEY} in {MET})]
+if count({MISSING}) > {MOST_FETCHED} {{ {LOAD}() }} else if {MISSING} {{ {FOUND}({IN_PLACEHOLDER} + ((count({MISSING}) - 1) times \"?, \") + \"?)\", {MISSING}) }}
+}}
+[]
 }}
 {RESTORE}() := {{
 global {variable}
@@ -1226,7 +1298,11 @@ for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}[{MADE}.{ID_FIELD}
 		name = table.name,
 		restore_met = restored_rows(table, &arguments, &format!("values({MET})")),
 		restore_loaded = restored_rows(table, &arguments, &variable),
-		loaded_found = if required.is_empty() { LOADED } else { "yes" }
+		loaded_found = if required.is_empty() { LOADED } else { "yes" },
+		of_unmet = match cfg!(feature = "native") {
+			true => format!("if not {LOADED} and not ({KEY} in {MET}) {{ {FETCHED}([{KEY}]) }}"),
+			false => format!("if not {LOADED} {{ {LOAD}() }}"),
+		}
 	);
 	let placeholders = [
 		(READ_PLACEHOLDER, table_call("migrate")),
@@ -1237,6 +1313,14 @@ for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}[{MADE}.{ID_FIELD}
 			PAGE_PLACEHOLDER,
 			table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")),
 		),
+		(
+			SLICE_PLACEHOLDER,
+			table_call_with(
+				"page",
+				&format!(", {FIRST} + 1, (if {UNTIL} > {FIRST} then {UNTIL} - {FIRST} else 0)"),
+			),
+		),
+		(IN_PLACEHOLDER, Node::Text(format!("{} IN (", quote(ID_FIELD)))),
 		(
 			SELECT_PLACEHOLDER,
 			table_call_with("select", &format!(", {CONDITION}, {CONDITION_VALUES}")),
@@ -1323,6 +1407,22 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 		{
 			called(lazy_name(&table_of(&parts[1]).unwrap_or_default(), "count"), None)
 		}
+		// `people#(11..20)`, `people[10:20]` (the parser's `slice(people, 10, 20)`; an open bound is ø)
+		Node::List(parts, Bracket::Round, _)
+			if parts.len() == 4 && parts[0].is_symbol(crate::library_words::SLICE) && table_of(&parts[1]).is_some() =>
+		{
+			let variable = table_of(&parts[1]).unwrap_or_default();
+			let bound = |bound: &Node, open: Node| match bound.drop_meta() {
+				Node::Empty => open,
+				_ => rewrite(bound.clone()),
+			};
+			let count = called(lazy_name(&variable, "count"), None);
+			sliced(&variable, bound(&parts[2], Node::int(0)), bound(&parts[3], count))
+		}
+		Node::List(_, Bracket::None, _) if end_phrase(&node).is_some_and(|(.., list)| table_of(&list).is_some()) => {
+			let (word, size, list) = end_phrase(&node).expect("matched");
+			end_slice(&table_of(&list).unwrap_or_default(), &word, rewrite(size))
+		}
 		Node::List(parts, _, _)
 			if parts.len() == 5
 				&& parts[0].drop_meta().name() == FOR_WORD
@@ -1374,9 +1474,19 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 				)
 			}
 			(Some(variable), Node::List(parts, _, _))
+				if parts.len() == 2 && END_WORDS.contains(&parts[0].drop_meta().name().as_str()) =>
+			{
+				end_slice(&variable, &parts[0].drop_meta().name(), rewrite(parts[1].clone()))
+			}
+			(Some(variable), Node::List(parts, _, _))
 				if parts.len() == 2 && parts[0].drop_meta().name() == INSTANCE_OF_WORD =>
 			{
 				called(lazy_name(&variable, "of"), Some(rewrite(parts[1].clone())))
+			}
+			(Some(variable), Node::List(parts, _, _))
+				if parts.len() == 2 && parts[0].drop_meta().name() == FETCHED_WORD =>
+			{
+				called(lazy_name(&variable, "fetched"), Some(rewrite(parts[1].clone())))
 			}
 			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
 			_ => key(rewrite(*left), Op::Dot, rewrite(*right)),
@@ -1403,6 +1513,34 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 			}
 		}
 		_ => node.map_children(rewrite),
+	}
+}
+
+/// The rows of a table from the 0-based `from` to the exclusive `until`, read alone until it loads: `people·sliced(10, 20)`
+fn sliced(variable: &str, from: Node, until: Node) -> Node {
+	generated(
+		&format!("{SLICED}({FROM_PLACEHOLDER}, {VALUE_PLACEHOLDER})"),
+		[(FROM_PLACEHOLDER, from), (VALUE_PLACEHOLDER, until)]
+			.into_iter()
+			.chain(lazy_names(variable)),
+	)
+}
+
+/// `first n of xs`, also as an assignment's value, where it comes grouped `((first n) of) xs`: the word, n and xs
+fn end_phrase(phrase: &Node) -> Option<(String, Node, Node)> {
+	let mut words = vec![];
+	crate::lambdas::flatten_phrase(phrase, &mut words);
+	let [word, size, of, list] = <[Node; 4]>::try_from(words).ok()?;
+	let word = word.drop_meta().name();
+	(END_WORDS.contains(&word.as_str()) && of.is_symbol(OF_WORD)).then_some((word, size, list))
+}
+
+/// `first n of people` (`people.first(n)`) and `last n of people` as slices
+fn end_slice(variable: &str, word: &str, size: Node) -> Node {
+	let count = || called(lazy_name(variable, "count"), None);
+	match word == END_WORDS[0] {
+		true => sliced(variable, Node::int(0), size),
+		false => sliced(variable, key(count(), Op::Sub, size), count()),
 	}
 }
 
@@ -1451,9 +1589,9 @@ pub(crate) fn element_table(node: &Node) -> Option<String> {
 	lazy_part_table(node, &[ELEMENT, STREAMED])
 }
 
-/// The table of a generated read of its whole list, `people·load()` where the program reads `people`
+/// The table of a generated read of its whole list, `people·load()` where the program reads `people`, or of a slice of it
 pub(crate) fn loaded_table(node: &Node) -> Option<String> {
-	lazy_part_table(node, &[LOAD])
+	lazy_part_table(node, &[LOAD, SLICED])
 }
 
 /// The table of a call of one of its lazy parts `placeholders`

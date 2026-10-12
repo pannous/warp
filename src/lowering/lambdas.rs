@@ -438,7 +438,7 @@ fn keyword_and_names(head: &Node) -> Option<Vec<Node>> {
 	(is_keyword && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_)))).then(|| names.to_vec())
 }
 
-fn flatten_phrase(node: &Node, words: &mut Vec<Node>) {
+pub(crate) fn flatten_phrase(node: &Node, words: &mut Vec<Node>) {
 	match node.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Space) => items.iter().for_each(|item| flatten_phrase(item, words)),
 		other => words.push(other.clone()),

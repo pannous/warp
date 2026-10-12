@@ -1,0 +1,14 @@
+// card orm-batched: rows read before their table loads find their foreign keys' rows together, one query
+// `id IN (…)` per page, instead of loading the whole other table
+class Team{name: text}
+class Person{name: text; team: Team?}
+teams: [Team] = database.teams
+people: [Person] = database.people
+if count(teams) == 0 {
+	for i in 1 to 300 { teams.add(Team("T" + i)) }
+	for i in 1 to 300 { people.add(Person("N" + i, teams#i)) }
+}
+print "people#7 plays for ${people#7.team.name}"
+for p in people { if p.name == "N50" { print "N50 plays for ${p.team.name}"; break } }
+names = [p.team.name for p in (people where it.name == "N9")]
+print "N9 plays for ${names#1}"
