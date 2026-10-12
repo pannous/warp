@@ -46,7 +46,10 @@ fn a_failing_route_answers_its_message() {
 	let (status, content_type, body) = answer("GET", "/fail", "");
 	assert_eq!((status, body.as_str()), (500, "boom"));
 	assert!(content_type.starts_with("text/plain"), "{content_type}");
-	assert_eq!(answer("GET", "/index", "").2, "index out of range: 5 not in 1…2");
+	assert_eq!(
+		answer("GET", "/index", "").2,
+		"index out of range: 5 not in 1…2 at 4:17"
+	);
 	let (status, content_type, body) = answer("GET", "/api/fail", "");
 	assert_eq!(
 		(status, content_type.as_str(), body.as_str()),
