@@ -144,6 +144,8 @@ mod test_system_values;
 mod test_table_batched_keys;
 #[cfg(feature = "native")] // counts the rows SQLite read
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
+#[cfg(feature = "native")] // counts the rows SQLite read
+mod test_table_comprehension_where; // card people-where-cond
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
 mod test_table_key_filter; // card table-key-filter
 mod test_table_linear_lookups; // card orm-linear

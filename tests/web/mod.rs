@@ -6,6 +6,7 @@ mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs wrangler dev and node
 mod test_assistant_proxy; // card assistant-proxy
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
+mod test_bound_field_types; // card guest-type
 #[cfg(feature = "native")] // runs node
 mod test_browser_tables; // card orm-browser-stores
 #[cfg(feature = "native")] // builds a site natively
@@ -80,6 +81,8 @@ mod test_request_fields; // card g_mQ9U
 mod test_route_data; // P221
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_route_header; // card web-route-header
+#[cfg(feature = "native")] // runs wasm-split
+mod test_route_helpers; // card web-split-helpers
 #[cfg(feature = "native")] // builds a site (src/site.rs)
 mod test_route_modules;
 #[cfg(feature = "native")] // a server on a port and its SQLite table
@@ -108,6 +111,8 @@ mod test_site;
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_animation; // card site-build
 #[cfg(feature = "native")] // builds a site natively
+mod test_site_failure; // the dev overlay's message
+#[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
 mod test_sleep_run_limit; // card sleep-run-limit
@@ -123,6 +128,8 @@ mod test_typed_variable_not_markup; // card annotation-html
 mod test_uniscript;
 #[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
 mod test_wagi; // card fermyon-hosting
+#[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
+mod test_wagi_headers; // card wagi-build
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_warp_serve; // P222
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build

@@ -65,7 +65,7 @@ unit_factor(u) := {
 	}
 	if u.ends_with("²") or u.ends_with("^2") { one = unit_factor(u.replace("^2", "").replace("²", "")); return [one#1 * one#1, 2 * one#2] }
 	if u.ends_with("³") or u.ends_with("^3") { one = unit_factor(u.replace("^3", "").replace("³", "")); return [one#1 * one#1 * one#1, 3 * one#2] }
-	position = u in unit_names
+	position = unit_names.index_of(u)
 	if position == 0 { raise "unknown unit: " + u }
 	[unit_scales#position, unit_dimensions#position]
 }

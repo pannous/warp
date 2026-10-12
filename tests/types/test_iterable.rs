@@ -12,6 +12,6 @@ fn for_walks_what_iterate_gives() {
 
 #[test]
 fn in_searches_what_iterate_gives() {
-	is!(&format!("{BAG}g = bag(5, 6); 6 in g"), 2);
-	is!(&format!("{BAG}g = bag(5, 6); 7 in g"), 0);
+	is!(&format!("{BAG}g = bag(5, 6); 6 in g"), true);
+	is!(&format!("{BAG}g = bag(5, 6); 7 in g"), false);
 }

@@ -15,7 +15,7 @@ mod values;
 pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
 pub(crate) mod exact;
-pub(crate) mod hex;
+pub(crate) mod radix;
 pub(crate) use casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
 mod config;
@@ -1520,8 +1520,8 @@ impl WasmGcEmitter {
 		if !matches!(node.drop_meta(), Node::True | Node::False) && crate::analyzer::is_boolean(node, &self.scope) {
 			self.emit_call(func, constructors::AS_BOOL);
 		}
-		if self.shows_hex(node) {
-			self.emit_call(func, hex::AS_HEX);
+		if let Some(radix) = self.shown_radix(node) {
+			self.emit_call(func, radix.as_function);
 		}
 	}
 
@@ -1742,6 +1742,19 @@ impl WasmGcEmitter {
 			self.module.section(&CustomSection {
 				name: crate::host::STD_MODULES_SECTION.into(),
 				data: modules.as_bytes().into(),
+			});
+		}
+		let user_functions: Vec<&str> = (self.ctx.user_functions.iter())
+			.filter(|(_, definition)| definition.func_index.is_some())
+			.map(|(name, _)| name.as_str())
+			.collect();
+		if !user_functions.is_empty() {
+			self.module.section(&CustomSection {
+				name: crate::host::USER_FUNCTIONS_SECTION.into(),
+				data: user_functions
+					.join(crate::host::USER_FUNCTIONS_SEPARATOR)
+					.as_bytes()
+					.into(),
 			});
 		}
 		self.emit_names();
