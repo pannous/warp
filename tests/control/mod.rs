@@ -136,6 +136,7 @@ mod test_system_signals;
 mod test_system_values;
 #[cfg(feature = "native")] // its one test counts the table rows read natively: not in the browser build
 mod test_table_batched_keys;
+#[cfg(feature = "native")] // counts the rows SQLite read
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
 mod test_table_key_filter; // card table-key-filter
