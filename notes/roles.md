@@ -90,6 +90,12 @@ The only session that runs the full suite and the only one that pushes code to m
   branch. There: never touch the user's uncommitted files (commit only your own paths: `git commit -- <paths>`), run
   the targeted tests through the queue, `git pull --rebase --autostash`, push, and tell the Integrator the commit and
   filters (its next full run is the check). Bigger or overlapping work keeps its worktree and branch.
+  Moving on demand: a change that grows (more than a few files, many build/test rounds, or another session's files)
+  moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`, `git diff -- <own paths> |
+  git -C <worktree> apply`, then undo only your own paths in the main checkout. Never leave unpushed commits on main.
+  The way back: a branch that turns out small goes straight to main itself (`git pull --rebase` in the worktree,
+  push `HEAD:main`), no Integrator batch. Why not everything on main: sessions there build and test each other's
+  half-done edits.
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
 - Done = commit on the branch, push the branch, SendMessage the Integrator "branch, tip, new tests, filters". The
