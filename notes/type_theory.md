@@ -435,8 +435,9 @@ each constructor field (`instance_parts`) and a field write, which reaches dispa
 a class field may hold ø (tree leaves). The analyzer lowers unions inside class bodies too: `map_children` skips field
 declarations, so `content: Circle | Square` had registered as `any`. Every union part names a builtin type or a
 class (card undeclared-union): only a builtin part covers another, else `int | zork` collapsed to the unknown `zork`.
-`or` spells `|` everywhere (user 2026-10-12). A union result (card union-return, `-> int or text {…}`,
-`f(x): int | text := …`) is checked, not converted: type_name_matching passes each returned value through the local
+`or` spells `|` everywhere (user 2026-10-12). A union result (card union-return, `def f(x) as int or text {…}`,
+`f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it, user 2026-10-12 return-as: `as` binds
+tighter than `or`, so declarations::as_union_result regroups `(f(x) as int) or text`) is checked, not converted: type_name_matching passes each returned value through the local
 `the result: int or text = v`, so a result gets the variable's checks. Not yet: a run-time check of a union
 variable (`x: int | text = f(2.5)` holds 2.5), `x is int` of a rational variable is yes (card int-accepts). Not yet: `x as T?` (a conversion in warp:
 `"4" as int?` is 4; W0's cast only checks).

@@ -1608,6 +1608,11 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			(keyword, Node::List(vec![tuple_result(head).expect("guarded").clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
 		}
 		[keyword, head, rest] if curried_definition(head, rest).is_some() => (keyword, curried_definition(head, rest).expect("guarded"), None),
+		// `def f(x) as int { … }`: the result type before a block body, read as `-> int { … }` is (user 2026-10-12, return-as)
+		[keyword, head, body] if let Node::Key(head, Op::As, result_type) = head.drop_meta() && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			let typed_body = Node::List(vec![result_type.as_ref().clone(), body.clone()], Bracket::None, Separator::Space);
+			(keyword, key(head.as_ref().clone(), Op::As, typed_body), None)
+		}
 		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
 		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), Some(result_type.clone())),
@@ -1623,6 +1628,9 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let definition = function_typed_result(extension_definition(definition));
 	let definition = match typed_result(&definition) {
 		Some((untyped, written_type)) => {
+			if matches!(definition, Node::Key(_, Op::Arrow, _)) {
+				hint_as_result(&written_type);
+			}
 			result_type = Some(written_type);
 			untyped
 		}
@@ -1769,7 +1777,8 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
 pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
-	let Node::Key(head, Op::Arrow | Op::Colon, typed_body) = definition else { return None };
+	let rotated = as_union_result(definition).map(|(head, union)| key(head, Op::As, union));
+	let Node::Key(head, Op::Arrow | Op::Colon | Op::As, typed_body) = rotated.as_ref().unwrap_or(definition) else { return None };
 	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) {
 		return None;
 	}
@@ -1784,6 +1793,23 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
+/// spells canonically (user 2026-10-12, return-as)
+pub(crate) fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
+	let Node::Key(left, Op::Or, rest) = definition.drop_meta() else { return None };
+	let (head, first) = match left.drop_meta() {
+		Node::Key(head, Op::As, first) => (head.as_ref().clone(), first.as_ref().clone()),
+		left => as_union_result(left)?,
+	};
+	Some((head, key(first, Op::Or, rest.as_ref().clone())))
+}
+
+/// `def f(x) -> int` keeps working; warp writes a result type with `as`, unions too (user 2026-10-12, return-as)
+fn hint_as_result(result_type: &Node) {
+	let written = result_type.serialize();
+	crate::normalize::hint(&format!("-> {written}"), &format!("as {written}"), &format!("prefer `def f(x) as {written}`"));
 }
 
 /// `-> int or text { body }` arrives as `int or (text { body })`: the parts `int or text` and the body
