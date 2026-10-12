@@ -49,12 +49,7 @@ impl WarpParser {
 		if node == Empty {
 			return node;
 		}
-		let node = node.with_meta_data(LineInfo {
-			line_nr,
-			column,
-			#[cfg(debug_assertions)]
-			line: self.current_line.s(),
-		});
+		let node = node.with_meta_data(LineInfo::at(line_nr, column, || self.current_line.s()));
 		// Attach preceding comment as metadata
 		if let Some(comment_text) = comment {
 			node.with_comment(comment_text)

@@ -272,6 +272,9 @@ PASSED:
   ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
   ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
+  ✓ control::test_handler_unwinding::a_block_that_ends_still_answers_inside
+  ✓ control::test_handler_unwinding::an_error_caught_outside_the_block_leaves_its_handler
+  ✓ control::test_handler_unwinding::another_events_abort_leaves_the_inner_handler
   ✓ control::test_help_word::a_programs_own_help_wins
   ✓ control::test_help_word::help_of_a_class_and_of_its_instance
   ✓ control::test_help_word::help_of_a_function_is_its_signature
@@ -482,6 +485,9 @@ PASSED:
   ✓ control::test_soft_tests::a_program_naming_test_keeps_its_word
   ✓ control::test_soft_tests::under_test_the_value_is_the_summary
   ✓ control::test_soft_tests::warp_test_prints_the_failures_and_exits_nonzero
+  ✓ control::test_split_kernel::a_go_map_of_a_float_kernel_splits_on_the_host
+  ✓ control::test_split_kernel::a_go_map_of_another_function_still_starts_tasks
+  ✓ control::test_split_kernel::a_small_go_map_of_a_float_kernel_maps_on_one_thread
   ✓ control::test_storage::a_program_variable_named_database_stays_its_own
   ✓ control::test_storage::a_program_variable_named_local_or_session_stays_its_own
   ✓ control::test_storage::a_program_variable_named_storage_stays_its_own
@@ -1525,6 +1531,7 @@ PASSED:
   ✓ lists::test_append_words::test_every_append_word_appends_a_quantity
   ✓ lists::test_auto_linear_floats::a_float_array_mapped_by_a_kernel_is_linear
   ✓ lists::test_auto_linear_floats::a_float_array_mapped_otherwise_stays_a_list
+  ✓ lists::test_auto_linear_floats::a_float_kernel_may_group_and_call_sqrt
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
@@ -1904,6 +1911,7 @@ PASSED:
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
   ✓ modules::test_module_classes::the_programs_own_class_wins
+  ✓ modules::test_module_error_file::a_modules_unknown_word_names_its_file
   ✓ modules::test_module_function_dir::a_used_module_function_reflects_like_the_program_own
   ✓ modules::test_module_meta::an_imported_warp_module_reflects_its_functions
   ✓ modules::test_module_meta::the_meta_section_names_functions_and_classes
@@ -4921,4 +4929,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4916 passed, 0 failed, 4916 total tested
+10 ignored, 4924 passed, 0 failed, 4924 total tested

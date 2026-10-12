@@ -16,6 +16,7 @@ mod test_json5; // card json5-parse
 mod test_json_parse_form; // card g_ogQg
 mod test_module_cache;
 mod test_module_classes;
+mod test_module_error_file; // card module-error-file
 mod test_module_function_dir; // card use-math
 mod test_module_meta; // card reflection-foreign-meta
 mod test_module_signals;

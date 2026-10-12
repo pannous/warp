@@ -332,7 +332,7 @@ pub struct WasmGcEmitter {
 	writes_tags: bool,
 	type_errors: Vec<String>,
 	/// The latest source position among the nodes being emitted (note_position)
-	source_position: Option<(usize, usize)>,
+	source_position: Option<crate::meta::LineInfo>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
@@ -864,16 +864,16 @@ impl WasmGcEmitter {
 	/// The latest source position among the nodes being emitted: where an emitter error points
 	fn note_position(&mut self, node: &Node) {
 		if let Some(info) = node.get_lineinfo() {
-			self.source_position = Some((info.line_nr, info.column));
+			self.source_position = Some(info);
 		}
 	}
 
 	/// An emitter error at the source position of the statement being emitted, unless it names one already
 	fn located(&self, message: String) -> String {
-		let Some((line, column)) = self.source_position else {
+		let Some(position) = &self.source_position else {
 			return message;
 		};
-		let at = format!(" at {line}:{column}");
+		let at = format!(" at {}", position.place());
 		if message.contains(UNKNOWN_POSITION) {
 			return message.replacen(UNKNOWN_POSITION, &at, 1);
 		}
@@ -1010,11 +1010,12 @@ impl WasmGcEmitter {
 
 	/// A diagnostic at the source position of the statement being emitted
 	fn diagnostic_here(&self, message: String) -> crate::diagnostic::Diagnostic {
-		let (line, column) = self.source_position.unwrap_or_default();
+		let position = self.source_position.clone().unwrap_or_default();
 		crate::diagnostic::Diagnostic {
 			message,
-			line,
-			column,
+			line: position.line_nr,
+			column: position.column,
+			file: position.file,
 			..Default::default()
 		}
 	}
