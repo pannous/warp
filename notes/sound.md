@@ -183,7 +183,12 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    `play hum for 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
    one of the program's functions is play_signal of it (one parameter, or a pair [left, right] of such), play_blocks
    (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
-   Still to build: the browser (an AudioWorklet running the module), input (a microphone as the signal's argument).
+   Browser first step built (tests/web/test_signal_sound.rs): host-files.js STD_ADAPTERS.sound.signal / blocks compute
+   all samples at once in the program's Worker (the function as closure_apply's callable, blocks read from memory)
+   and play them as one sound (host.js holder.sounded), as natively headless. Not real time yet: a long signal is
+   computed before it starts, stop_sound cannot end its computation.
+   Still to build: pacing in the browser (an AudioWorklet running the module, or the Worker computing blocks ahead of
+   the page's clock), input (a microphone as the signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 

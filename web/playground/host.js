@@ -118,6 +118,13 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
 	const program = () => holder.exports;
+	// samples (amplitude + SAMPLE_OFFSET of host-files.js, stereo interleaved) queued on the voice, for the page and render_sound
+	holder.sounded = (samples, rate, channels) => {
+		const sound = { samples, rate, channels };
+		const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+		(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
+		hooks.sound?.({ ...sound, at });
+	};
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
 		const bytes = new Uint8Array(program().memory.buffer);
@@ -217,11 +224,7 @@ function programImports(holder, hooks) {
 			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
 			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate, channels) => {
-				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				const sound = { samples: values, rate: Number(rate), channels: Number(channels) };
-				const { place, at } = self.voiceSounded?.(values.length / sound.channels / sound.rate) ?? {};
-				(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
-				hooks.sound?.({ ...sound, at });
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},

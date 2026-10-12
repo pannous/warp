@@ -12,6 +12,11 @@ const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
+// play of a signal (src/sound.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
+const SIGNAL_BLOCK = 512;
+const FULL_SCALE = 32767;
+// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
+const LINEAR_CELL_BYTES = 8;
 
 // MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
 const MIDI_TICKS_PER_QUARTER = 480;
@@ -467,6 +472,29 @@ function rollBack(file) {
 // `at 1s beep()` keeps its second of silence
 // the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
 // render): the samples interleaved and the channels
+// play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
+// samples from `first` on, computed all at once in the Worker and played as one sound; its handle. Paced to the speaker
+// (as natively) it would need an AudioWorklet running the program
+function playedSignal(holder, seconds, rate, channels, block, blockOf) {
+	const total = Math.round(Math.max(0, Number(seconds)) * rate);
+	const samples = [];
+	for (let first = 0; first < total; first += block) {
+		const count = Math.min(block, total - first);
+		const blocks = blockOf(first, count);
+		for (let index = 0; index < count; index++)
+			for (const cells of blocks) samples.push(Math.round(Math.max(-1, Math.min(1, Number(cells[index] ?? 0))) * FULL_SCALE) + SAMPLE_OFFSET);
+	}
+	holder.sounded(samples, rate, channels);
+	return self.lastSoundHandle?.() ?? 0;
+}
+
+// the cells of the linear float array at `address` in the program's memory
+function linearDoubles(program, address) {
+	const view = new DataView(program.memory.buffer);
+	const count = Number(view.getBigInt64(address, true));
+	return Array.from({ length: count }, (_, index) => view.getFloat64(address + LINEAR_CELL_BYTES * (index + 1), true));
+}
+
 function mixed(sounds, rate, run) {
 	const channels = Math.max(1, ...sounds.map(sound => sound.channels ?? 1));
 	const framesOf = sound => sound.samples.length / (sound.channels ?? 1);
@@ -585,6 +613,25 @@ addHostPart({
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			wait: () => null,
+			// play hum for 2s: hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
+			signal(functions, seconds, rate) {
+				const signals = [functions].flat();
+				return playedSignal(this.holder, seconds, Number(rate), signals.length, SIGNAL_BLOCK, (first, count) => {
+					const blocks = signals.map(() => []);
+					for (let index = first; index < first + count; index++) signals.forEach((signal, channel) => blocks[channel].push(signal(index / Number(rate))));
+					return blocks;
+				});
+			},
+			// play fill for 2s of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
+			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
+			blocks(caller, addresses, seconds, rate) {
+				const blocks = [addresses].flat().map(Number);
+				const program = this.holder.exports;
+				return playedSignal(this.holder, seconds, Number(rate), blocks.length, linearDoubles(program, blocks[0]).length, first => {
+					caller(first / Number(rate));
+					return blocks.map(address => linearDoubles(program, address));
+				});
+			},
 			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
 			// offers it for download
 			render(path) {
