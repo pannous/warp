@@ -22,5 +22,6 @@ Rules
 Applied first to notes/web_framework.md (topic card web-framework, 2026-10-12; notes/server_routes.md joins it), then
 the same day to: signals.md → signals, sound.md → sound, type_theory.md → type-theory, classes.md → class-system,
 orm.md → database-tables, simd.md + gpu.md → fast-numbers, threads.md → threads, reflection.md → reflection-words,
-stdlib_connectors.md → connectors, effect_handlers.md → effects, web_playground.md → playground, hosting.md → hosting.
+stdlib_connectors.md → connectors, effect_handlers.md → effects, web_playground.md → playground, hosting.md → hosting;
+cleanup.md → cleanup (the user card itself became the topic).
 Leftovers found already fixed by a Done card were corrected in the note instead of getting a new card.
