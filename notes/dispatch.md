@@ -84,4 +84,14 @@ generic function too; the list/map/text library as methods where that simplifies
   module for `f(x)`, `f x` and `x.f()`; a class's method of that name (body or `take(b:Box)`) is not the program's own
   word (own_functions), so the module still comes and the method joins its generic function. `from list import zip`
   keeps list's other words out. Sound's words other than play, beep, stop_sound and wait_sound still need `use sound`.
-- Follow-up cards: dispatch-positional, warn-field, library-words (step d).
+- Follow-up cards: dispatch-positional (done), warn-field, library-words (step d, done: every standard function is a
+  fallback, one builtin method rule in lower_function_methods).
+
+## Every positional argument (card dispatch-positional, 2026-10-12)
+A method's signature is the class of each positional parameter, None where it takes any value (traits.rs Signature);
+`collide(a:Ship, b:Rock)` is the method `collide·Ship·Rock`, `describe(k, s:Ship)` is `describe·any·Ship`, a first-only
+method keeps its old name `sort·Deck`. Generic::method_for: per position the likeness steps from the argument's class
+(0 its own, a parent 1, any value ANY_DISTANCE); the method no other one beats at every position wins; two left are
+ambiguous ("meet(Dog, Dog) is ambiguous: meet(Dog, Animal) and meet(Animal, Dog) fit equally well", fix: define the
+exact one). At run time the dispatcher tests `instance_of` at every typed position, per combination of the classes
+that fit there (or no instance), the combinations testing more classes first.
