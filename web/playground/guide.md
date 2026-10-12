@@ -521,6 +521,7 @@ only the first run's value.
 ```warp
 stored visits default 0
 visits += 1
+visits
 ```
 
 `local` is a small store of named values, kept in the browser.

@@ -3,9 +3,9 @@
 // Cellular automaton simulation on a torus (the edges wrap), animated in the terminal
 // the grid is a flat list of cells, row by row; the grid is global, shared by the functions
 
-width = 20
-height = 10
-generations = 8
+width = 16
+height = 16
+generations = 16
 global grid = []
 for i in 0 to width * height - 1 { grid.push(false) }
 
