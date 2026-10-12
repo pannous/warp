@@ -155,11 +155,16 @@ fn std_module(module: &str, name: &str, adapters: &[&str]) -> bool {
 /// The std modules a module calls through std_pure / std_io (its STD_MODULES_SECTION), ANY_STD_MODULE for one it
 /// names at run time
 pub fn std_modules_of(module: &[u8]) -> Result<Vec<String>, String> {
+	section_names(module, STD_MODULES_SECTION, STD_MODULES_SEPARATOR)
+}
+
+/// The names a custom section of the module lists, joined by the separator; none without that section
+pub fn section_names(module: &[u8], section_name: &str, separator: &str) -> Result<Vec<String>, String> {
 	for payload in wasmparser::Parser::new(0).parse_all(module) {
 		if let wasmparser::Payload::CustomSection(section) = payload.map_err(|failure| failure.to_string())? {
-			if section.name() == STD_MODULES_SECTION {
+			if section.name() == section_name {
 				let names = std::str::from_utf8(section.data()).map_err(|failure| failure.to_string())?;
-				return Ok(names.split(STD_MODULES_SEPARATOR).map(str::to_string).collect());
+				return Ok(names.split(separator).map(str::to_string).collect());
 			}
 		}
 	}

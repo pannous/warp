@@ -6,6 +6,7 @@
 //! ships one module, with a note.
 use crate::binaryen::BINARYEN_FEATURES;
 use crate::dead_functions::CallGraph;
+use crate::host::{TASK_SPAWN, TASK_SPAWN_VALUES, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR};
 use std::collections::HashMap;
 use std::process::Command;
 use wasmparser::{Name, NameSectionReader, Parser, Payload};
@@ -19,6 +20,10 @@ const WASM_EXTENSION: &str = ".wasm";
 const PRIMARY_FILE: &str = "primary.wasm";
 const MODULE_FILE: &str = "app.wasm";
 const MANIFEST_FILE: &str = "routes.manifest";
+/// The host words starting a task, which calls a function by its export name (web/playground/host-tasks.js)
+const TASK_SPAWNS: [&str; 2] = [TASK_SPAWN, TASK_SPAWN_VALUES];
+/// wasm-split keeps the name section only when asked
+const KEEP_NAMES: &str = "--debuginfo";
 
 /// The primary module and each split route's module with its file name
 pub struct RouteModules {
@@ -28,7 +33,7 @@ pub struct RouteModules {
 
 /// `module` split by route, or None when it has no route whose functions could move (or wasm-split is missing)
 pub fn split_by_route(module: &[u8]) -> Result<Option<RouteModules>, String> {
-	let manifest = manifest(module).map_err(|failure| failure.to_string())?;
+	let manifest = manifest(module)?;
 	if manifest.is_empty() {
 		return Ok(None);
 	}
@@ -42,9 +47,10 @@ pub fn split_by_route(module: &[u8]) -> Result<Option<RouteModules>, String> {
 }
 
 /// Per route with functions of its own: its module name and those functions' names, in route order
-fn manifest(module: &[u8]) -> wasmparser::Result<Vec<(String, Vec<String>)>> {
-	let graph = CallGraph::of(module)?;
-	let names = function_names(module)?;
+fn manifest(module: &[u8]) -> Result<Vec<(String, Vec<String>)>, String> {
+	let graph = CallGraph::of(module).map_err(|failure| failure.to_string())?;
+	let names = function_names(module).map_err(|failure| failure.to_string())?;
+	let movable_exports = movable_exports(module)?;
 	let mut routes: Vec<(usize, u32)> = names
 		.iter()
 		.filter_map(|(&function, name)| {
@@ -60,7 +66,9 @@ fn manifest(module: &[u8]) -> wasmparser::Result<Vec<(String, Vec<String>)>> {
 		.roots
 		.iter()
 		.copied()
-		.filter(|root| !route_functions.contains(root))
+		.filter(|root| {
+			!route_functions.contains(root) && !names.get(root).is_some_and(|name| movable_exports.contains(name))
+		})
 		.collect();
 	let shared = graph.reached(&roots, &route_functions);
 	let reached: Vec<Vec<bool>> = route_functions
@@ -85,6 +93,18 @@ fn manifest(module: &[u8]) -> wasmparser::Result<Vec<(String, Vec<String>)>> {
 		}
 	}
 	Ok(manifest)
+}
+
+/// The program's own functions, exported only for tasks (host.rs USER_FUNCTIONS_SECTION): a task runs them by name in
+/// an instance of its own, without the route's module, so with tasks they stay
+fn movable_exports(module: &[u8]) -> Result<Vec<String>, String> {
+	let spawns_tasks = crate::host_parts::imports_of(module)?
+		.iter()
+		.any(|(_, name)| TASK_SPAWNS.contains(&name.as_str()));
+	match spawns_tasks {
+		true => Ok(vec![]),
+		false => crate::host_parts::section_names(module, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR),
+	}
 }
 
 /// The names of the module's functions (its name section), by function index
@@ -130,6 +150,7 @@ fn wasm_split(module: &[u8], manifest: &[(String, Vec<String>)]) -> Result<Route
 		.current_dir(&folder)
 		.args([
 			"--multi-split",
+			KEEP_NAMES,
 			"--manifest",
 			MANIFEST_FILE,
 			"--out-prefix",

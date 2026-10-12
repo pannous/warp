@@ -79,6 +79,8 @@ mod test_request_fields; // card g_mQ9U
 mod test_route_data; // P221
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_route_header; // card web-route-header
+#[cfg(feature = "native")] // runs wasm-split
+mod test_route_helpers; // card web-split-helpers
 #[cfg(feature = "native")] // builds a site (src/site.rs)
 mod test_route_modules;
 #[cfg(feature = "native")] // a server on a port and its SQLite table
