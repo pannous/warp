@@ -46,6 +46,10 @@ pub const TASK_INSIDE: &str = "task_inside";
 /// task_forks(): 1 while a new task would find a free core (fewer tasks run than there are cores), else 0: a parallel
 /// let (parallel.rs) then calls in sequence (notes/bend.md, BendRT's fork cutoff)
 pub const TASK_FORKS: &str = "task_forks";
+/// task_split_mapf(kernel, xs) → a new block of xs's cells mapped by the float kernel (linear_arrays.rs), its slices in
+/// instances of their own on threads of their own (tasks.rs split_map); 0 where the program maps alone (inside a task, in
+/// the browser). `go xs.map(x => …)` of a linear float array (card go-split-kernel)
+pub const TASK_SPLIT_MAPF: &str = "task_split_mapf";
 pub const SIGNAL_SEND: &str = "signal_send";
 /// `try f(args) else Y` of a user function: guarded_call("f·node", [args]) calls f's node wrapper in the same instance
 /// through the host, which turns the engine's stack overflow into the Error "call stack exhausted" that `try` catches
@@ -124,7 +128,7 @@ pub const CHANNEL_WORDS: [&str; 5] = [
 ];
 /// The host words of tasks, their signals and channels: a module calling one runs tasks (tasks.rs), a function that
 /// calls one has the effect Async (effects.rs)
-pub const TASK_WORDS: [&str; 17] = [
+pub const TASK_WORDS: [&str; 18] = [
 	TASK_SPAWN,
 	TASK_AWAIT,
 	TASK_CONTROL,
@@ -136,6 +140,7 @@ pub const TASK_WORDS: [&str; 17] = [
 	TASK_POLL,
 	TASK_INSIDE,
 	TASK_FORKS,
+	TASK_SPLIT_MAPF,
 	SIGNAL_SEND,
 	CHANNEL_WORDS[0],
 	CHANNEL_WORDS[1],
@@ -160,7 +165,7 @@ pub const VALUE_GIVING_WORDS: [&str; 14] = [
 	STD_IO,
 	SERVE_ROUTES,
 ];
-pub const HOST_WORDS: [&str; 65] = [
+pub const HOST_WORDS: [&str; 66] = [
 	DRAW_SHAPE,
 	DRAW_SHOW,
 	GPU_COMPUTE,
@@ -211,6 +216,7 @@ pub const HOST_WORDS: [&str; 65] = [
 	TASK_POLL,
 	TASK_INSIDE,
 	TASK_FORKS,
+	TASK_SPLIT_MAPF,
 	SIGNAL_SEND,
 	SHARED_WORDS[0],
 	SHARED_WORDS[1],
@@ -229,7 +235,7 @@ pub const HOST_WORDS: [&str; 65] = [
 ];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 65] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 66] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[
@@ -283,6 +289,7 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 		(TASK_POLL, vec![], vec![]),
 		(TASK_INSIDE, vec![], vec![I64]),
 		(TASK_FORKS, vec![], vec![I64]),
+		(TASK_SPLIT_MAPF, vec![I32, I64], vec![I64]),
 		(SIGNAL_SEND, vec![I32, node], vec![I64]),
 		(SHARED_WORDS[0], vec![I64], vec![I64]),
 		(SHARED_WORDS[1], vec![I64, I64], vec![I64]),

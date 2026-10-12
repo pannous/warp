@@ -79,7 +79,13 @@ So 40x for linear arrays and 8x against the automatic array, almost all from the
 adds 5-15% here. The rest is warp's engine settings, not the kernel: the raw f64x2 loop is 0.17-0.4 ns (table above),
 and fuel plus NaN canonicalization (the Interviewer question above) apply to every lane; each map also takes fresh
 zeroed pages (blocks are never freed). The automatic array chooses linear memory for float maps by itself (card auto-linear-floats, notes/linear_arrays.md).
-Next: `go` splitting a kernel into tasks over shared arrays (card go-split-kernel).
+`go xs.map(x => …)` with a float kernel splits on the host (card go-split-kernel, 2026-10-12): parallel.rs kernel_map
+keeps the map (SPLIT_ATTRIBUTE) instead of 8 Node-copying tasks; shared_arrays.rs split_mapped calls
+`task_split_mapf(kernel, xs)` from 2^18 cells up (SPLIT_FEWEST), and src/tasks.rs split_map maps one slice per core,
+each in an instance of its own (exported `ffi_linear_mapf·…` and `ffi_linear_new`), copying cells in and out. 0 (in a
+task, in the browser, below the size) means the program calls the kernel itself. 10 rounds of
+`go xs.map(x => sqrt(x) * 0.5 + 1)` over 4M floats: 0.74 s against 2.12 s without go (debug build); the old task path
+ran out of GC heap. Kernels may group: `sqrt(x)` and `(x + 1) * 2` (linear_arrays.rs ungrouped).
 
 ## Steps
 1. (smallest, next) Typed map kernel: `xs.map(x => numeric body)` over a float array known statically as one emits

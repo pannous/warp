@@ -163,6 +163,9 @@ impl Phrases {
 /// `after C return V` → `go { while not (C) { sleep(1) }; V }`, `await job or y` → `try await job else y`
 fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 	if let Some((list, function)) = crate::parallel::parallel_map(&node) {
+		if let Some(map) = crate::parallel::kernel_map(&list, &function) {
+			return map;
+		}
 		return crate::parallel::map_in_tasks(
 			task_phrases(list, phrases),
 			task_phrases(function, phrases),

@@ -778,6 +778,8 @@ addHostPart({
 		task_inside: () => holder.inTask ? 1n : 0n,
 		// a parallel let forks from the program only: a task's Worker does not see how many others run (src/tasks.rs counts them)
 		task_forks: () => holder.inTask ? 0n : 1n,
+		// a split float map runs on one thread in the browser: 0 makes the program call its kernel itself (src/tasks.rs split_map)
+		task_split_mapf: () => 0n,
 		signal_send: (handler, values) => {
 			(holder.run.signals ??= []).push({ handler: decode(cString(handler)), values: readTaskValue(program(), values) });
 			return 0n;

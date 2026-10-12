@@ -24,6 +24,8 @@ use wasmtime::{
 	UpdateDeadline, Val, ValType,
 };
 
+/// The bytes of a linear array's header (its count) and of each of its cells (linear_arrays.rs)
+const CELL_BYTES: usize = 8;
 /// How often the engine's epoch ticks while tasks run: a stop or pause takes effect within about this long
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// Tasks may block in sleep, channels and host calls, so one worker per core would leave cores idle.
@@ -777,6 +779,15 @@ impl TaskTable {
 		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_FORKS, move || -> i64 {
 			(forker.running.load(Ordering::Relaxed) < cores()) as i64
 		})?;
+		let splitter = self.clone();
+		linker.func_wrap(
+			HOST_LIBRARY,
+			crate::host::TASK_SPLIT_MAPF,
+			move |mut caller: Caller<'_, HostState>, kernel: i32, source: i64| -> wasmtime::Result<i64> {
+				let kernel = c_string(&mut caller, kernel).map_err(host_error)?;
+				splitter.split_map(&mut caller, &kernel, source).map_err(host_error)
+			},
+		)?;
 		let sender = self.clone();
 		linker.func_wrap(
 			HOST_LIBRARY,
@@ -980,14 +991,11 @@ impl TaskTable {
 		self.finished.notify_all();
 	}
 
-	/// f(arguments) in a fresh instance of the module, with the same imports as the program
-	fn run(
+	/// A fresh instance of the module for a task, with the same imports as the program
+	fn instance(
 		self: &Arc<Self>,
-		function: &str,
-		arguments: &[TaskValue],
-		captured: &[(String, Captured)],
 		control: Arc<TaskControl>,
-	) -> Result<TaskValue> {
+	) -> Result<(wasmtime::Store<HostState>, wasmtime::Instance)> {
 		let mut state = HostState::new();
 		state.in_task = true;
 		let mut store = crate::util::fueled_store(&self.engine, state);
@@ -1000,6 +1008,74 @@ impl TaskTable {
 		}
 		self.link_into(&mut linker)?;
 		let instance = linker.instantiate(&mut store, &self.module)?;
+		Ok((store, instance))
+	}
+
+	/// `go xs.map(x => …)` of a linear float array (card go-split-kernel): a new block of the caller's, its cells the
+	/// kernel's results for xs's, mapped in slices by instances of their own on threads of their own; 0 inside a task,
+	/// where the caller maps alone
+	fn split_map(self: &Arc<Self>, caller: &mut Caller<'_, HostState>, kernel: &str, source: i64) -> Result<i64> {
+		use crate::wasm_emitter::linear_arrays::{SPLIT_BLOCK_NEW, SPLIT_KERNEL_PREFIX};
+		if caller.data().in_task {
+			return Ok(0);
+		}
+		let memory = caller_memory(caller)?;
+		let count = cell_count(memory.data(&*caller), source)?;
+		let target = typed_export(caller, SPLIT_BLOCK_NEW)?.call(&mut *caller, count as i64)?;
+		let bytes = count * CELL_BYTES;
+		let (source, target) = (source as usize + CELL_BYTES, target as usize + CELL_BYTES);
+		if target < source + bytes {
+			return Err(anyhow!("the mapped block lies before its source"));
+		}
+		let (before, after) = memory.data_mut(&mut *caller).split_at_mut(target);
+		let cells = &before[source..source + bytes];
+		let results = &mut after[..bytes];
+		let slice_bytes = count.div_ceil(split_threads()) * CELL_BYTES;
+		let kernel = format!("{SPLIT_KERNEL_PREFIX}{kernel}");
+		std::thread::scope(|scope| {
+			let slices: Vec<_> = cells
+				.chunks(slice_bytes)
+				.zip(results.chunks_mut(slice_bytes))
+				.map(|(cells, results)| scope.spawn(|| self.map_slice(&kernel, cells, results)))
+				.collect();
+			slices.into_iter().try_for_each(|slice| {
+				slice
+					.join()
+					.unwrap_or_else(|_| Err(anyhow!("a slice of the map panicked")))
+			})
+		})?;
+		Ok((target - CELL_BYTES) as i64)
+	}
+
+	/// The kernel's results for `cells` (f64s as bytes) into `results`, in an instance of their own
+	fn map_slice(self: &Arc<Self>, kernel: &str, cells: &[u8], results: &mut [u8]) -> Result<()> {
+		use crate::wasm_emitter::linear_arrays::SPLIT_BLOCK_NEW;
+		let control = Arc::new(TaskControl {
+			state: Mutex::new(Control::Run),
+			changed: Condvar::new(),
+		});
+		let (mut store, instance) = self.instance(control)?;
+		let memory = instance
+			.get_memory(&mut store, "memory")
+			.ok_or_else(|| anyhow!("no exported memory"))?;
+		let new = instance.get_typed_func::<i64, i64>(&mut store, SPLIT_BLOCK_NEW)?;
+		let block = new.call(&mut store, (cells.len() / CELL_BYTES) as i64)? as usize + CELL_BYTES;
+		memory.data_mut(&mut store)[block..block + cells.len()].copy_from_slice(cells);
+		let mapped = instance.get_typed_func::<i64, i64>(&mut store, kernel)?;
+		let mapped = mapped.call(&mut store, (block - CELL_BYTES) as i64)? as usize + CELL_BYTES;
+		results.copy_from_slice(&memory.data(&store)[mapped..mapped + results.len()]);
+		Ok(())
+	}
+
+	/// f(arguments) in a fresh instance of the module, with the same imports as the program
+	fn run(
+		self: &Arc<Self>,
+		function: &str,
+		arguments: &[TaskValue],
+		captured: &[(String, Captured)],
+		control: Arc<TaskControl>,
+	) -> Result<TaskValue> {
+		let (mut store, instance) = self.instance(control)?;
 		let callee = instance
 			.get_func(&mut store, function)
 			.ok_or_else(|| anyhow!("no exported function {function}"))?;
@@ -1178,4 +1254,32 @@ fn zero_results(signature: &wasmtime::FuncType) -> Vec<Val> {
 			_ => Val::AnyRef(None),
 		})
 		.collect()
+}
+
+/// The threads a split map takes: one a core
+fn split_threads() -> usize {
+	std::thread::available_parallelism().map_or(1, usize::from)
+}
+
+fn caller_memory(caller: &mut Caller<'_, HostState>) -> Result<Memory> {
+	match caller.get_export("memory") {
+		Some(wasmtime::Extern::Memory(memory)) => Ok(memory),
+		_ => Err(anyhow!("no exported memory")),
+	}
+}
+
+/// The count in the header of the linear array at `block`
+fn cell_count(memory: &[u8], block: i64) -> Result<usize> {
+	let header = memory
+		.get(block as usize..block as usize + CELL_BYTES)
+		.ok_or_else(|| anyhow!("no linear array at {block}"))?;
+	Ok(i64::from_le_bytes(header.try_into()?) as usize)
+}
+
+fn typed_export(caller: &mut Caller<'_, HostState>, name: &str) -> Result<wasmtime::TypedFunc<i64, i64>> {
+	let function = caller
+		.get_export(name)
+		.and_then(wasmtime::Extern::into_func)
+		.ok_or_else(|| anyhow!("no exported function {name}"))?;
+	Ok(function.typed(&*caller)?)
 }

@@ -127,3 +127,8 @@ matches warp's value semantics (index assignment already copies, aliases never c
   own. 4 of 4 runs clean after (before: 2 of 3 hung). Which of (a)/(b) it was is not proven: a passing test's stderr
   is not shown. A channel wait (send, receive, `for … in ch`: channelWait) runs the stalled tasks too, before each
   look at the channel (card task-hang-channels).
+
+## Split float maps (card go-split-kernel)
+`go xs.map(x => kernel)` over a float array doesn't start tasks: the host word task_split_mapf splits the linear array
+into one slice per core, maps each slice in a fresh instance on a scoped thread, and writes the results into a new
+block of the caller's memory (src/tasks.rs split_map, notes/simd.md). Other `go xs.map(f)` still use map_in_tasks.
