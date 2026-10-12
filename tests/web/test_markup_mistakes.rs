@@ -65,11 +65,6 @@ fn right_markup_stays_quiet() {
 		"img{ src: \"a.png\" alt: \"a\" }",
 		"li{ transition: fade 200ms \"x\" }",
 	] {
-		// a handler's event only the page raises is noted by event_signals.rs, no markup mistake
-		let mistakes: Vec<String> = warnings_of(code)
-			.into_iter()
-			.filter(|warning| !warning.contains("comes from the playground page"))
-			.collect();
-		assert_eq!(mistakes, Vec::<String>::new(), "{code}");
+		assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
 	}
 }
