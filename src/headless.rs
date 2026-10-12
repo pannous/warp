@@ -75,6 +75,13 @@ impl Page {
 		shown(&self.html()).1
 	}
 
+	/// The events the program dispatched to the page so far (card page-custom-event): an emit no handler received,
+	/// its name and detail (as warp text), as the browser's page gets them as CustomEvents
+	#[cfg(feature = "native")]
+	pub fn dispatched(&self) -> &[(String, String)] {
+		self.run.dispatched()
+	}
+
 	/// A click on the element showing `label` (its text) with a click handler
 	pub fn click(&mut self, label: &str) -> Result<(), String> {
 		self.fire(CLICK, label, Map::new())
@@ -251,6 +258,10 @@ mod native {
 			let (value, mut store, instance) = run_main_kept(&module.bytes, imports).map_err(failed_run)?;
 			let markup = val_to_node(&value, &mut store, &instance).unwrap_or_else(failed_run);
 			Ok((markup, Run { store, instance }))
+		}
+
+		pub(super) fn dispatched(&self) -> &[(String, String)] {
+			&self.store.data().dispatched
 		}
 
 		/// Runs the handler `on·click·1·node` with `[detail]`, then reads page·value

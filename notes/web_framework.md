@@ -549,6 +549,9 @@ Each step is useful on its own and is what the next ones stand on.
   diagnostic::located_in_file), so the overlay shows the module's line (host_parts::with_excerpt reads that file).
   Left: a failure past parsing in a module's code (an unknown word) still names a bare line, read as the program's;
   node positions carry no file. Probe: probes/dev/uses_module.warp with probes/dev/greeting_module.warp.
+- Browser (card dev-opens-browser): `warp dev` from a terminal opens its page in the default browser
+  (dev_server::serve_and_open, `open` / `xdg-open` / `start`); piped, under WARP_NO_WINDOW or CI it only prints the
+  address, and `dev_server::serve` (tests) never opens. Test warp_dev_opens_no_browser_when_piped.
 - Left: the playground editor's error marks in the overlay (card web-dev-marks).
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)

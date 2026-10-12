@@ -1099,6 +1099,10 @@ fn emits_as_calls(
 				let arguments = if reads_event(bodies) { vec![data] } else { vec![] };
 				call(&handler_function_name(&name), arguments)
 			}
+			// card page-custom-event: in a page it reaches the page, as a CustomEvent of its name with the data as detail
+			None if crate::pipeline::renders_itself() && !block_handled.contains(&name) => {
+				call(crate::host::DISPATCH_EVENT, vec![Node::Text(name.clone()), data])
+			}
 			None => {
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
 				if !block_handled.contains(&name) {

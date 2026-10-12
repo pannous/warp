@@ -14,6 +14,13 @@ const INDEX_PATH: &str = "/";
 const NOT_FOUND: u16 = 404;
 const JSON_TYPE: &str = "application/json";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
+/// What opens a URL in the default browser, by system (card dev-opens-browser)
+#[cfg(target_os = "macos")]
+const BROWSER_OPENER: &[&str] = &["open"];
+#[cfg(target_os = "windows")]
+const BROWSER_OPENER: &[&str] = &["cmd", "/c", "start", ""];
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const BROWSER_OPENER: &[&str] = &["xdg-open"];
 
 /// The program's latest build: the files of the last good one, the failure of the latest if it failed
 struct DevSite {
@@ -79,14 +86,22 @@ impl DevSite {
 
 /// Serves the site of `program` on `port` until the request limit (web_server::stop_after), if any
 pub fn serve(program: &Path, port: u16) -> Result<(), String> {
+	serve_and_open(program, port, false)
+}
+
+/// `warp dev` from a terminal: serves as `serve` does and opens the page in the default browser once it listens
+pub fn serve_and_open(program: &Path, port: u16, open: bool) -> Result<(), String> {
 	let server = tiny_http::Server::http(("127.0.0.1", port))
 		.map_err(|problem| format!("warp dev on port {port}: {problem}"))?;
 	let limit = crate::web_server::take_request_limit();
 	let mut site = DevSite::new(program);
 	site.refresh();
+	let address = format!("http://localhost:{port}/");
+	let opened = open && open_in_browser(&address);
 	println!(
-		"warp dev: http://localhost:{port}/ shows {}, built anew when it changes",
-		program.display()
+		"warp dev: {address} shows {}, built anew when it changes{}",
+		program.display(),
+		if opened { " (opened in your browser)" } else { "" }
 	);
 	for (served, request) in server.incoming_requests().enumerate() {
 		site.refresh();
@@ -104,6 +119,16 @@ pub fn serve(program: &Path, port: u16) -> Result<(), String> {
 		}
 	}
 	Ok(())
+}
+
+/// Opens `url` in the default browser; whether that started
+pub fn open_in_browser(url: &str) -> bool {
+	let (opener, arguments) = BROWSER_OPENER.split_first().expect("an opener");
+	std::process::Command::new(opener)
+		.args(arguments)
+		.arg(url)
+		.spawn()
+		.is_ok()
 }
 
 fn modified_time(file: &Path) -> Option<SystemTime> {

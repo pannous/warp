@@ -389,7 +389,7 @@ fn run_command(args: &[String]) {
 			.map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
 		let served = port
 			.map_err(|_| format!("warp dev: the port is a number, not {}", args[3]))
-			.and_then(|port| warp::dev_server::serve(std::path::Path::new(&args[2]), port));
+			.and_then(|port| warp::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser()));
 		if let Err(failure) = served {
 			fail(failure);
 		}
@@ -494,9 +494,7 @@ fn run_command(args: &[String]) {
 		println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
-		let _ = std::process::Command::new("open")
-			.arg("https://github.com/pannous/warp/")
-			.spawn();
+		warp::dev_server::open_in_browser("https://github.com/pannous/warp/");
 	} else if arg_string.starts_with("eval ") {
 		let code = arg_string.strip_prefix("eval ").unwrap_or("");
 		diagnostic::show_lines_of(code);
@@ -849,6 +847,11 @@ fn write_wagi(code: &str, target: &str) {
 /// window as `warp app` shows it; piped, redirected or under WARP_NO_WINDOW it prints its HTML
 fn shows_in_window(code: &str) -> bool {
 	io::stdout().is_terminal() && warp::paint::shows_windows() && warp::serve::shows_page(code)
+}
+
+/// `warp dev` run from a terminal opens its page (card dev-opens-browser); piped, under WARP_NO_WINDOW or CI it doesn't
+fn opens_browser() -> bool {
+	io::stdout().is_terminal() && warp::paint::shows_windows()
 }
 
 fn is_html_file(target: &str) -> bool {
