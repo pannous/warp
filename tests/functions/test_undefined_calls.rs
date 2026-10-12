@@ -1,9 +1,9 @@
 //! `name(args)` written without a space is a call: unresolved in emitted code it is an error, in data it stays data.
 
 use crate::common::fails_with;
-use warp::wasm_emitter::eval;
-use warp::parse_data;
 use crate::is;
+use warp::parse_data;
+use warp::wasm_emitter::eval;
 
 #[test]
 fn test_unresolved_call_is_an_error() {
@@ -54,7 +54,10 @@ fn test_paren_data_stays_data() {
 
 #[test]
 fn test_declared_type_constructs() {
-	assert_eq!(eval("type P{x:int y:int}; P(1,2)").to_string(), eval("type P{x:int y:int}; P{x:1 y:2}").to_string());
+	assert_eq!(
+		eval("type P{x:int y:int}; P(1,2)").to_string(),
+		eval("type P{x:int y:int}; P{x:1 y:2}").to_string()
+	);
 }
 
 #[test]

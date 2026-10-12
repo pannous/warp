@@ -1,10 +1,10 @@
 // Metadata tests
 // Migrated from tests_*.rs files
 
-use warp::Node;
-use warp::warp_parser::parse;
-use warp::exists;
 use crate::{eq, skip};
+use warp::exists;
+use warp::warp_parser::parse;
+use warp::Node;
 
 #[test]
 fn test_meta_field() {

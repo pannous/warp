@@ -16,5 +16,8 @@ pub const BINARYEN_FEATURES: [&str; 7] = [
 
 /// Is the binaryen tool on PATH
 pub fn available(tool: &str) -> bool {
-	std::process::Command::new(tool).arg("--version").output().is_ok_and(|output| output.status.success())
+	std::process::Command::new(tool)
+		.arg("--version")
+		.output()
+		.is_ok_and(|output| output.status.success())
 }

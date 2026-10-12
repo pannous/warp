@@ -15,7 +15,10 @@ fn plus_concatenates_texts_and_characters() {
 #[test]
 fn plus_equals_appends_to_a_text() {
 	is!("x=\"ab\"; x += \"cd\"; x += \"e\"; x", "abcde");
-	is!("f(n):={ s=\"\"; i=0; while i < n do {s += \"ab\"; i++}; s }; f(3)", "ababab");
+	is!(
+		"f(n):={ s=\"\"; i=0; while i < n do {s += \"ab\"; i++}; s }; f(3)",
+		"ababab"
+	);
 	is!("f(t:text):= t + \"!\"; f(\"x\")", "x!");
 }
 
@@ -41,9 +44,18 @@ fn byte_slice_cuts_by_byte_offsets() {
 
 #[test]
 fn read_loads_a_file_as_bytes() {
-	is!("use uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_slice(index, 0, 4)", "USX1");
-	is!("use uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_at(index, 4)", 5);
-	is!("read(\"no/such/file\")", warp::error("read no/such/file failed: No such file or directory (os error 2)"));
+	is!(
+		"use uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_slice(index, 0, 4)",
+		"USX1"
+	);
+	is!(
+		"use uniscript; index = read(\"packages/uniscript/data/entities.idx\"); byte_at(index, 4)",
+		5
+	);
+	is!(
+		"read(\"no/such/file\")",
+		warp::error("read no/such/file failed: No such file or directory (os error 2)")
+	);
 }
 
 #[test]

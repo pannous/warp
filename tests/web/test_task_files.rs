@@ -11,5 +11,8 @@ fn a_task_plays_a_wav_rendered_before_it() {
 
 #[test]
 fn the_program_reads_what_its_task_wrote() {
-	is!("use file\njob = go { write(\"task.txt\", \"from the task\"); 1 }\nawait job\nread(\"task.txt\")", "from the task");
+	is!(
+		"use file\njob = go { write(\"task.txt\", \"from the task\"); 1 }\nawait job\nread(\"task.txt\")",
+		"from the task"
+	);
 }

@@ -3,7 +3,8 @@
 use crate::common::fails_with;
 use crate::is;
 
-const GREET: &str = "greet(xs) := switch xs { [\"\", middle, \"\"]: middle + \"!\"  [\"foo\", x]: x  _: \"never mind\" }; ";
+const GREET: &str =
+	"greet(xs) := switch xs { [\"\", middle, \"\"]: middle + \"!\"  [\"foo\", x]: x  _: \"never mind\" }; ";
 
 #[test]
 fn test_list_patterns_bind_names() {
@@ -23,8 +24,14 @@ fn test_wildcards_and_numbers() {
 
 #[test]
 fn test_nested_lists_and_pairs() {
-	is!("xs=[1, [2, [3]]]; switch xs { [outer, [middle, [inner]]]: outer + middle + inner  _: 0 }", 6);
-	is!("xs=[1, 2]; switch xs { [outer, [middle, [inner]]]: outer + middle + inner  _: 0 }", 0);
+	is!(
+		"xs=[1, [2, [3]]]; switch xs { [outer, [middle, [inner]]]: outer + middle + inner  _: 0 }",
+		6
+	);
+	is!(
+		"xs=[1, 2]; switch xs { [outer, [middle, [inner]]]: outer + middle + inner  _: 0 }",
+		0
+	);
 	is!("p = [a: 1, b: 2]; switch p { [a: x, b: y]: x + y  _: 0 }", 3);
 }
 
@@ -40,7 +47,10 @@ fn test_no_match_without_default_is_loud() {
 
 #[test]
 fn a_call_as_the_subject() {
-	is!("class Point{x:int; y:int}; match Point(3, 4) { Point{x, y} => x + y }", 7);
+	is!(
+		"class Point{x:int; y:int}; match Point(3, 4) { Point{x, y} => x + y }",
+		7
+	);
 	is!("f(a, b) := a + b; match f(3, 4) { 7 => 1; _ => 0 }", 1);
 	is!("f(a, b) := [a, b]; switch f(3, 4) { [a, b]: b  _: 0 }", 4);
 }

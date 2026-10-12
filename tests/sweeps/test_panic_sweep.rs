@@ -1,8 +1,8 @@
 // User programs the emitter used to panic on: each one is an error value now
+use crate::common;
 use crate::is;
 use warp::wasm_emitter::eval;
 use warp::*;
-use crate::common;
 
 fn assert_error(code: &str) {
 	match eval(code) {
@@ -13,7 +13,10 @@ fn assert_error(code: &str) {
 
 #[test]
 fn test_float_function_result_in_exact_context_is_an_error() {
-	common::fails_with("f(x:float) := x * 2; [1,2,3][f(1.0)]", "is a float where an exact Int is expected");
+	common::fails_with(
+		"f(x:float) := x * 2; [1,2,3][f(1.0)]",
+		"is a float where an exact Int is expected",
+	);
 }
 
 #[test]

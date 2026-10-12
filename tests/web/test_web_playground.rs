@@ -16,7 +16,10 @@ fn evaluate_reports_the_value_the_cli_prints() {
 	let report = evaluate("3+3", HashSet::new());
 	assert_eq!(report["value"], "6");
 	assert_eq!(report["error"], false);
-	assert_eq!(evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"], "[1 2.5 'x' a:3]");
+	assert_eq!(
+		evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"],
+		"[1 2.5 'x' a:3]"
+	);
 	assert_eq!(evaluate("xs=[1 2]; xs#5", HashSet::new())["error"], true);
 }
 
@@ -35,7 +38,10 @@ fn an_acknowledged_warning_is_silent_and_the_value_stays() {
 	assert_eq!(report["value"], "6");
 	assert_eq!(report["warnings"], json!([]));
 	assert_eq!(report["notes"], json!([]));
-	assert_eq!(warp::web::acknowledged_topics(r#"{"ack:upto": "acknowledged", "upto": "..."}"#), acknowledged(&["upto"]));
+	assert_eq!(
+		warp::web::acknowledged_topics(r#"{"ack:upto": "acknowledged", "upto": "..."}"#),
+		acknowledged(&["upto"])
+	);
 }
 
 #[test]
@@ -50,7 +56,10 @@ fn a_tree_from_the_page_reads_like_from_gc_object() {
 	assert_eq!(node_from_tree(&big).serialize(), "-4294967296");
 	let ratio = json!({"kind": "1", "data": {"ratio": [{"int": "1"}, {"int": "3"}]}});
 	assert_eq!(node_from_tree(&ratio).serialize(), "1/3");
-	assert_eq!(node_from_tree(&json!({"kind": "2", "data": {"float": "-Infinity"}})), Node::Number(warp::Number::Float(f64::NEG_INFINITY)));
+	assert_eq!(
+		node_from_tree(&json!({"kind": "2", "data": {"float": "-Infinity"}})),
+		Node::Number(warp::Number::Float(f64::NEG_INFINITY))
+	);
 }
 
 #[test]
@@ -58,8 +67,13 @@ fn a_trap_in_the_page_names_the_runtime_error() {
 	let trap = json!({"trap": "unreachable", "trace": "RuntimeError: unreachable\n    at index_out_of_range (wasm://wasm/1:1)"});
 	assert!(matches!(run_outcome(&trap), Node::Error(_)));
 	assert!(run_outcome(&trap).serialize().contains("index out of range"));
-	assert!(run_outcome(&json!({"failure": "link error"})).serialize().contains("could not run the program"));
-	assert_eq!(run_outcome(&json!({"trap": "remainder by zero", "trace": ""})), warp::wasm_emitter::eval("5%0"));
+	assert!(run_outcome(&json!({"failure": "link error"}))
+		.serialize()
+		.contains("could not run the program"));
+	assert_eq!(
+		run_outcome(&json!({"trap": "remainder by zero", "trace": ""})),
+		warp::wasm_emitter::eval("5%0")
+	);
 	run_outcome(&json!({"result": {"kind": "0"}, "warnings": ["careful"]}));
 	assert_eq!(warp::diagnostic::take_runtime_warnings(), vec!["careful".to_string()]);
 }

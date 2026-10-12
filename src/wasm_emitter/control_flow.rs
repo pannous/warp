@@ -35,7 +35,14 @@ impl WasmGcEmitter {
 	}
 
 	/// `c ? a : b` as a raw number, each branch by `emit` (emit_numeric_value i64, emit_float_value f64)
-	pub(super) fn emit_ternary_raw(&mut self, func: &mut Function, condition: &Node, then_else: &Node, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
+	pub(super) fn emit_ternary_raw(
+		&mut self,
+		func: &mut Function,
+		condition: &Node,
+		then_else: &Node,
+		value_type: ValType,
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
 		// Structure: condition ? Key(then, Colon, else)
 		let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() else {
 			self.emit_malformed(func, then_else, TERNARY_BRANCHES);
@@ -50,7 +57,14 @@ impl WasmGcEmitter {
 	}
 
 	/// `if c then a else b` as a raw number, each branch by `emit`; without else the value is 0
-	pub(super) fn emit_if_then_else_raw(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
+	pub(super) fn emit_if_then_else_raw(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		else_expr: Option<&Node>,
+		value_type: ValType,
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
 		let Some((condition, then_expr)) = if_then_parts(left) else {
 			self.emit_malformed(func, left, IF_THEN);
@@ -60,7 +74,15 @@ impl WasmGcEmitter {
 		self.emit_raw_branches(func, condition, &then_expr, else_expr, value_type, emit);
 	}
 
-	pub(super) fn emit_raw_branches(&mut self, func: &mut Function, condition: &Node, then_expr: &Node, else_expr: Option<&Node>, value_type: ValType, emit: fn(&mut Self, &mut Function, &Node)) {
+	pub(super) fn emit_raw_branches(
+		&mut self,
+		func: &mut Function,
+		condition: &Node,
+		then_expr: &Node,
+		else_expr: Option<&Node>,
+		value_type: ValType,
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
 		self.emit_condition(func, condition, Self::emit_numeric_value);
 		func.instruction(&I::If(BlockType::Result(value_type)));
 		self.emit_raw_branch(func, then_expr, emit);
@@ -103,7 +125,9 @@ impl WasmGcEmitter {
 		let else_value = else_expr.map(branch_value);
 		// a block yields its last statement; get_type sees capture globals in user_globals, where branch_kind(scope)
 		// alone types a free var as Symbol (g-rT0c)
-		let branch_type = |emitter: &Self, value: &Node| emitter.get_type(&crate::analyzer::block_result(value).unwrap_or_else(|| value.clone()));
+		let branch_type = |emitter: &Self, value: &Node| {
+			emitter.get_type(&crate::analyzer::block_result(value).unwrap_or_else(|| value.clone()))
+		};
 		let is_node_valued = |emitter: &Self, value: &Node| {
 			let kind = branch_type(emitter, value);
 			emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint
@@ -160,11 +184,19 @@ impl WasmGcEmitter {
 
 	/// `is_type(x, "Circle")` of a declared class, x statically a number, text or symbol
 	fn never_an_instance(&self, condition: &Node) -> bool {
-		let Node::List(items, _, _) = last_statement(condition).drop_meta() else { return false };
-		let [head, subject, spec] = items.as_slice() else { return false };
+		let Node::List(items, _, _) = last_statement(condition).drop_meta() else {
+			return false;
+		};
+		let [head, subject, spec] = items.as_slice() else {
+			return false;
+		};
 		let is_class_test = head.drop_meta().name() == crate::type_tests::IS_TYPE
 			&& matches!(spec.drop_meta(), Node::Text(class) if self.ctx.type_registry.get_by_name(class).is_some());
-		is_class_test && matches!(self.get_type(subject), Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint)
+		is_class_test
+			&& matches!(
+				self.get_type(subject),
+				Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint
+			)
 	}
 
 	/// Emit while loop: (while condition) do body
@@ -181,7 +213,15 @@ impl WasmGcEmitter {
 		let ran_local = self.next_temp_local;
 		self.next_temp_local += 1;
 
-		Self::emit_list(func, &[I::I64Const(0), I::LocalSet(result_local), I::I64Const(0), I::LocalSet(ran_local)]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(0),
+				I::LocalSet(result_local),
+				I::I64Const(0),
+				I::LocalSet(ran_local),
+			],
+		);
 
 		func.instruction(&I::Block(BlockType::Empty));
 		let break_frame = loop_control::open_control_frames(func);
@@ -201,11 +241,19 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I64Const(1), I::LocalSet(ran_local)]);
 		let (statements, step) = loop_control::split_step(body);
 		// a body ending in a text or list: that value is the loop's (P55)
-		let value = if wrap_result && self.ends_in_reference(&statements) { self.loop_value(&statements) } else { LoopValue::Number };
-		let value_local = match value { LoopValue::Held(local) => Some(local), _ => None };
+		let value = if wrap_result && self.ends_in_reference(&statements) {
+			self.loop_value(&statements)
+		} else {
+			LoopValue::Number
+		};
+		let value_local = match value {
+			LoopValue::Held(local) => Some(local),
+			_ => None,
+		};
 		// the step of a `for` loop (its counter's increment) runs after a body ending in a number or a held value
 		// without becoming the loop's value
-		let step_apart = step.is_some() && (value_local.is_some() || matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items)));
+		let step_apart = step.is_some()
+			&& (value_local.is_some() || matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items)));
 		if loop_control::has_jump(body) {
 			func.instruction(&I::Block(BlockType::Empty));
 			self.enter_loop(break_frame, loop_control::open_control_frames(func));
@@ -213,7 +261,16 @@ impl WasmGcEmitter {
 			self.leave_loop();
 			func.instruction(&I::End);
 		} else {
-			self.emit_loop_body(func, if step_apart || step.is_none() { &statements } else { body }, result_local, value_local);
+			self.emit_loop_body(
+				func,
+				if step_apart || step.is_none() {
+					&statements
+				} else {
+					body
+				},
+				result_local,
+				value_local,
+			);
 		}
 		match &step {
 			Some(step) if step_apart => {
@@ -229,7 +286,14 @@ impl WasmGcEmitter {
 
 		if wrap_result {
 			// the value of a loop is its last body value; a loop whose body never ran is empty
-			Self::emit_list(func, &[I::LocalGet(ran_local), I::I32WrapI64, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+			Self::emit_list(
+				func,
+				&[
+					I::LocalGet(ran_local),
+					I::I32WrapI64,
+					I::If(BlockType::Result(Ref(self.node_ref(false)))),
+				],
+			);
 			match value {
 				LoopValue::Held(local) => {
 					Self::emit_list(func, &[I::LocalGet(local), I::RefAsNonNull]);
@@ -251,12 +315,21 @@ impl WasmGcEmitter {
 
 	/// One pass of a loop body; a numeric value becomes the loop's value, a text or list one too when held in
 	/// value_local
-	pub(super) fn emit_loop_body(&mut self, func: &mut Function, body: &Node, result_local: u32, value_local: Option<u32>) {
+	pub(super) fn emit_loop_body(
+		&mut self,
+		func: &mut Function,
+		body: &Node,
+		result_local: u32,
+		value_local: Option<u32>,
+	) {
 		let statements = match body.drop_meta() {
 			Node::List(items, Bracket::Curly, _) => items.clone(),
 			other => vec![other.clone()],
 		};
-		if let Some((last, before)) = statements.split_last().filter(|(last, _)| self.is_float_assignment(last)) {
+		if let Some((last, before)) = statements
+			.split_last()
+			.filter(|(last, _)| self.is_float_assignment(last))
+		{
 			// `while … { …; x = x * 0.5 }` of a float x: the statements run, the float is the loop's value when held
 			for statement in before {
 				self.emit_discarded_statement(func, statement, Self::emit_numeric_value);
@@ -275,7 +348,8 @@ impl WasmGcEmitter {
 			return;
 		}
 		if body.is_nothing() { // `while c {}` only spins: nothing to evaluate
-		} else if self.ends_in_reference(body) { // `while c { s += "a" }`: a text or list update, its value is not a number
+		} else if self.ends_in_reference(body) {
+			// `while c { s += "a" }`: a text or list update, its value is not a number
 			self.emit_node_instructions(func, body);
 			func.instruction(&value_local.map_or(I::Drop, I::LocalSet));
 		} else {
@@ -292,8 +366,11 @@ impl WasmGcEmitter {
 			other => vec![other.clone()],
 		};
 		let kind = self.get_type(body);
-		let ends_in_float = kind == Kind::Float || statements.last().is_some_and(|last| self.get_type(last) == Kind::Float);
-		!body.is_nothing() && !loop_control::ends_in_jump(body) && ((kind.is_ref() || ends_in_float) && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
+		let ends_in_float =
+			kind == Kind::Float || statements.last().is_some_and(|last| self.get_type(last) == Kind::Float);
+		!body.is_nothing()
+			&& !loop_control::ends_in_jump(body)
+			&& ((kind.is_ref() || ends_in_float) && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
 	}
 
 	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch; gives the enclosing
@@ -310,7 +387,10 @@ impl WasmGcEmitter {
 	fn loop_value(&mut self, statements: &Node) -> LoopValue {
 		match last_statement(statements).drop_meta() {
 			// `xs = xs + [i]`, `s += c`: the variable after the loop, read once
-			Node::Key(variable, op, _) if (*op == Op::Assign || op.is_compound_assign()) && matches!(variable.drop_meta(), Node::Symbol(_)) => {
+			Node::Key(variable, op, _)
+				if (*op == Op::Assign || op.is_compound_assign())
+					&& matches!(variable.drop_meta(), Node::Symbol(_)) =>
+			{
 				LoopValue::Updated(variable.drop_meta().clone())
 			}
 			_ => self.take_loop_value_local().map_or(LoopValue::Number, LoopValue::Held),
@@ -362,7 +442,9 @@ fn loop_nesting(node: &Node) -> u32 {
 /// `(x = s; is_type x "Circle")`: the statement whose value a block is
 fn last_statement(node: &Node) -> &Node {
 	match node.drop_meta() {
-		Node::List(items, _, Separator::Semicolon | Separator::Newline) if !items.is_empty() => last_statement(&items[items.len() - 1]),
+		Node::List(items, _, Separator::Semicolon | Separator::Newline) if !items.is_empty() => {
+			last_statement(&items[items.len() - 1])
+		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => last_statement(&items[0]),
 		_ => node,
 	}

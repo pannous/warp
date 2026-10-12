@@ -31,7 +31,9 @@ pub fn lower(program: Node) -> Node {
 	}
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
-			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+			let parent = name
+				.attribute(crate::warp_parser::EXTENDS_KEYWORD)
+				.map(|parent| parent.drop_meta().name());
 			if let Some(variants) = parent.and_then(|parent| sum_types.get_mut(&parent)) {
 				variants.classes.push(name.drop_meta().name());
 			}
@@ -44,12 +46,19 @@ pub fn lower(program: Node) -> Node {
 /// `Circle(2)`
 fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node {
 	let bare_of = |right: &Node| match right.drop_meta() {
-		Node::Symbol(type_name) if !crate::type_tests::is_equality_operand(right) => sum_types.get(type_name).map(|variants| &variants.bare).filter(|names| !names.is_empty()),
+		Node::Symbol(type_name) if !crate::type_tests::is_equality_operand(right) => sum_types
+			.get(type_name)
+			.map(|variants| &variants.bare)
+			.filter(|names| !names.is_empty()),
 		_ => None,
 	};
 	match node {
-		Node::Key(sum_type, Op::Scope, variant) if is_variant_of(&sum_type, &variant, sum_types) => with_variant_tests(*variant, sum_types),
-		Node::Key(subject, Op::Eq, right) if bare_of(&right).is_some() && matches!(subject.drop_meta(), Node::Symbol(_)) => {
+		Node::Key(sum_type, Op::Scope, variant) if is_variant_of(&sum_type, &variant, sum_types) => {
+			with_variant_tests(*variant, sum_types)
+		}
+		Node::Key(subject, Op::Eq, right)
+			if bare_of(&right).is_some() && matches!(subject.drop_meta(), Node::Symbol(_)) =>
+		{
 			let names = bare_of(&right).expect("guarded");
 			if names.iter().any(|name| name.drop_meta() == subject.drop_meta()) {
 				return Node::True;
@@ -66,7 +75,9 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 
 /// `Shape::Circle(2)`, `Shape::Dot`: a variant of the sum type Shape, by its name or the head of its call
 fn is_variant_of(sum_type: &Node, variant: &Node, sum_types: &HashMap<String, Variants>) -> bool {
-	let Some(variants) = sum_types.get(&sum_type.drop_meta().name()) else { return false };
+	let Some(variants) = sum_types.get(&sum_type.drop_meta().name()) else {
+		return false;
+	};
 	let name = match variant.drop_meta() {
 		Node::List(items, _, _) => items.first().map(|head| head.drop_meta().name()).unwrap_or_default(),
 		other => other.name(),

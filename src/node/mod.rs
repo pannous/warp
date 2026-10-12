@@ -2,27 +2,27 @@
 use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{DataValue, DataType, LineInfo};
+use crate::meta::{DataType, DataValue, LineInfo};
+use crate::node::Node::*;
+use crate::operators::{is_function_keyword, Op};
+use crate::type_kinds::Kind;
 #[cfg(feature = "native")]
 use crate::wasm_reader::GcObject;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
-use crate::operators::{is_function_keyword, Op};
-use crate::node::Node::*;
-use crate::type_kinds::Kind;
 
 mod serialization;
 pub use serialization::{NO, YES};
 mod json_xml;
 pub use json_xml::json_of_json5;
-mod indexing;
 mod comparison;
+mod indexing;
 #[cfg(feature = "native")]
 pub use comparison::GcComparable;
-mod conversions;
 mod arithmetic;
+mod conversions;
 
 /// Prefix of a `@name(value)` annotation key
 pub const ATTRIBUTE_MARK: char = '@';
@@ -42,8 +42,6 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 const SOURCE_LITERAL: &str = "literal";
 /// `global x` parses as the pair `global: x`: a block may declare several, no duplicate key
 pub const GLOBAL_DECLARATION: &str = "global";
-
-
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
@@ -118,11 +116,7 @@ impl Node {
 		}
 	}
 	pub fn strings(p0: Vec<&str>) -> Node {
-		List(
-			map(p0, |s| Text(s.to_string())),
-			Bracket::Square,
-			Separator::None,
-		)
+		List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
 	}
 	pub fn first(&self) -> Node {
 		match self {
@@ -187,21 +181,11 @@ impl Node {
 		match (self, other) {
 			(Number(n), Number(m)) => Number(n.add(m)),
 			(Text(s), Text(m)) => Text(format!("{}{}", s, m)),
-			(List(xs, br, sep), List(ys, _, _)) => List(
-				xs.iter().cloned().chain(ys).collect(),
-				br.clone(),
-				sep.clone(),
-			),
-			(List(xs, br, sep), b) => List(
-				xs.iter().cloned().chain([b]).collect(),
-				br.clone(),
-				sep.clone(),
-			),
-			(a, List(ys, br, sep)) => List(
-				[a.clone()].into_iter().chain(ys).collect(),
-				br.clone(),
-				sep.clone(),
-			),
+			(List(xs, br, sep), List(ys, _, _)) => {
+				List(xs.iter().cloned().chain(ys).collect(), br.clone(), sep.clone())
+			}
+			(List(xs, br, sep), b) => List(xs.iter().cloned().chain([b]).collect(), br.clone(), sep.clone()),
+			(a, List(ys, br, sep)) => List([a.clone()].into_iter().chain(ys).collect(), br.clone(), sep.clone()),
 			(Meta { node, .. }, n) => node.add(n),
 			(n, Meta { node, .. }) => n.add(*node.clone()),
 			// a data operation evaluates nothing: the unevaluated sum a + b (user, P86: lazily allowed; evaluated, both
@@ -249,7 +233,6 @@ impl Node {
 		}
 	}
 
-
 	pub fn value(&self) -> &Node {
 		match self {
 			Node::Number(_) | Text(_) | Char(_) | Data(_) => {
@@ -276,7 +259,11 @@ impl Node {
 
 	/// The one item itself, or a list of all of them
 	pub fn single_or_list(mut items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
-		if items.len() == 1 { items.remove(0) } else { List(items, bracket, separator) }
+		if items.len() == 1 {
+			items.remove(0)
+		} else {
+			List(items, bracket, separator)
+		}
 	}
 
 	/// The name of a symbol, through its metadata
@@ -355,7 +342,6 @@ impl Node {
 }
 
 impl Node {
-
 	// associated 'static' functions
 	pub fn key(s: &str, v: Node) -> Self {
 		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
@@ -460,8 +446,16 @@ impl Node {
 
 	/// The value of the attribute `@name`: an annotation `@name(value) x`, else the meta entry `@name:value` of the literal
 	pub fn attribute(&self, name: &str) -> Option<&Node> {
-		let annotation = self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value);
-		annotation.or_else(|| self.meta_entries().find(|(entry_name, _)| *entry_name == name).map(|(_, value)| value))
+		let annotation = self
+			.attributes()
+			.into_iter()
+			.find(|(attribute_name, _)| *attribute_name == name)
+			.map(|(_, value)| value);
+		annotation.or_else(|| {
+			self.meta_entries()
+				.find(|(entry_name, _)| *entry_name == name)
+				.map(|(_, value)| value)
+		})
 	}
 
 	/// The meta entries `@name:value` written inside this literal (`point{x:1 @source:"gps"}`), never fields
@@ -516,15 +510,23 @@ impl Node {
 				let left = rewrite(*left);
 				Key(Box::new(left), op, Box::new(rewrite(*right)))
 			}
-			Meta { node, data } => Meta { node: Box::new(rewrite(*node)), data },
+			Meta { node, data } => Meta {
+				node: Box::new(rewrite(*node)),
+				data,
+			},
 			// a class body: its methods are lowered as functions are, its field declarations stay (card method-bodies)
 			Type { name, body } => {
 				let mut rewrite_code = |item: Node| if is_class_code(&item) { rewrite(item) } else { item };
 				let body = match *body {
-					List(items, bracket, separator) => List(items.into_iter().map(&mut rewrite_code).collect(), bracket, separator),
+					List(items, bracket, separator) => {
+						List(items.into_iter().map(&mut rewrite_code).collect(), bracket, separator)
+					}
 					single => rewrite_code(single),
 				};
-				Type { name, body: Box::new(body) }
+				Type {
+					name,
+					body: Box::new(body),
+				}
 			}
 			other => other,
 		}
@@ -533,7 +535,10 @@ impl Node {
 	/// This node under the Meta layers (comments, positions) of `original`, which it replaces
 	pub fn with_meta_of(self, original: &Node) -> Node {
 		match original {
-			Meta { node, data } => Meta { node: Box::new(self.with_meta_of(node)), data: data.clone() },
+			Meta { node, data } => Meta {
+				node: Box::new(self.with_meta_of(node)),
+				data: data.clone(),
+			},
 			_ => self,
 		}
 	}
@@ -564,8 +569,15 @@ impl Node {
 			}
 			List(items, _, _) => items.iter().for_each(|item| item.visit(action)),
 			Type { body, .. } => match body.drop_meta() {
-				List(items, _, _) => items.iter().filter(|item| is_class_code(item)).for_each(|item| item.visit(action)),
-				single => if is_class_code(single) { single.visit(action) },
+				List(items, _, _) => items
+					.iter()
+					.filter(|item| is_class_code(item))
+					.for_each(|item| item.visit(action)),
+				single => {
+					if is_class_code(single) {
+						single.visit(action)
+					}
+				}
 			},
 			_ => {}
 		}
@@ -668,18 +680,23 @@ impl Node {
 
 	/// Name of a key given twice in this object `{key: value …}`; code blocks may redefine
 	pub fn duplicate_key(&self) -> Option<String> {
-		let List(items, Bracket::Curly, _) = self.drop_meta() else { return None };
+		let List(items, Bracket::Curly, _) = self.drop_meta() else {
+			return None;
+		};
 		let mut seen = std::collections::HashSet::new();
-		items.iter().filter_map(|item| match item.drop_meta() {
-			// repeated tags `div{…} div{…}` are children, as repeated elements in XML/HTML, not duplicate keys
-			Key(_, Op::Colon, value) if matches!(value.drop_meta(), List(_, Bracket::Curly, _)) => None,
-			Key(key, Op::Colon, _) => match key.drop_meta() {
-				Symbol(name) if name == GLOBAL_DECLARATION => None,
-				Symbol(name) | Text(name) => Some(name.clone()),
+		items
+			.iter()
+			.filter_map(|item| match item.drop_meta() {
+				// repeated tags `div{…} div{…}` are children, as repeated elements in XML/HTML, not duplicate keys
+				Key(_, Op::Colon, value) if matches!(value.drop_meta(), List(_, Bracket::Curly, _)) => None,
+				Key(key, Op::Colon, _) => match key.drop_meta() {
+					Symbol(name) if name == GLOBAL_DECLARATION => None,
+					Symbol(name) | Text(name) => Some(name.clone()),
+					_ => None,
+				},
 				_ => None,
-			},
-			_ => None,
-		}).find(|name| !seen.insert(name.clone()))
+			})
+			.find(|name| !seen.insert(name.clone()))
 	}
 
 	pub fn is_falsy(&self) -> bool {
@@ -692,12 +709,10 @@ impl Node {
 			List(items, _, _) => items.is_empty(),
 			Key(a, _, b) => a.is_falsy() && b.is_falsy(),
 			Meta { node, .. } => node.is_falsy(), // metadata doesn't affect truthiness
-			Error(_) => true, // a failed result: `if x {…}` checks it (wiki/null.md, DESIGN.md "Effects")
+			Error(_) => true,                     // a failed result: `if x {…}` checks it (wiki/null.md, DESIGN.md "Effects")
 			_ => false,
 		}
 	}
-
-
 }
 
 impl fmt::Debug for Node {
@@ -893,9 +908,13 @@ pub fn node(p0: &str) -> Node {
 // ============ Free Convenience Constructors ============
 // Short, ergonomic functions for creating Node values
 
-pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node { Data(DataValue::new(value)) }
+pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Node {
+	Data(DataValue::new(value))
+}
 
-pub fn int(n: i64) -> Node { Number(Number::Int(n)) }
+pub fn int(n: i64) -> Node {
+	Number(Number::Int(n))
+}
 
 pub fn float(n: f64) -> Node {
 	Number(Number::Float(n))
@@ -930,7 +949,6 @@ pub fn types(name: &str) -> Node {
 	Symbol(name.to_string())
 }
 
-
 pub fn key_op(k: Node, op: Op, v: Node) -> Node {
 	Key(Box::new(k), op, Box::new(v))
 }
@@ -960,35 +978,19 @@ pub fn ints(xs: Vec<i32>) -> Node {
 }
 
 pub fn floats(xs: Vec<f64>) -> Node {
-	List(
-		xs.into_iter().map(float).collect(),
-		Bracket::Square,
-		Separator::None,
-	)
+	List(xs.into_iter().map(float).collect(), Bracket::Square, Separator::None)
 }
 
 pub fn texts(xs: Vec<&str>) -> Node {
-	List(
-		xs.into_iter().map(text).collect(),
-		Bracket::Square,
-		Separator::None,
-	)
+	List(xs.into_iter().map(text).collect(), Bracket::Square, Separator::None)
 }
 
 pub fn symbols(xs: Vec<&str>) -> Node {
-	List(
-		xs.into_iter().map(symbol).collect(),
-		Bracket::Square,
-		Separator::None,
-	)
+	List(xs.into_iter().map(symbol).collect(), Bracket::Square, Separator::None)
 }
 
 pub fn strings(p0: Vec<&str>) -> Node {
-	List(
-		map(p0, |s| Text(s.to_string())),
-		Bracket::Square,
-		Separator::None,
-	)
+	List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
 }
 
 /// Operators the parser reads in front of one operand, with ø as the left one (`#x`, `-x`, `not x`, `√x`, `if c`)
@@ -1002,11 +1004,24 @@ fn is_class_code(item: &Node) -> bool {
 	let is_name = |node: &Node| matches!(node.drop_meta(), Symbol(_));
 	match item.drop_meta() {
 		Key(name, Op::Colon, _) if is_name(name) => return false,
-		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => return false,
-		List(words, _, _) if words.first().is_some_and(|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word))) => return true,
+		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => {
+			return false
+		}
+		List(words, _, _)
+			if words.first().is_some_and(
+				|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word)),
+			) =>
+		{
+			return true
+		}
 		_ => {}
 	}
 	let mut code = false;
-	item.visit(&mut |part| code |= matches!(part, Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) | List(_, Bracket::Curly, _)));
+	item.visit(&mut |part| {
+		code |= matches!(
+			part,
+			Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) | List(_, Bracket::Curly, _)
+		)
+	});
 	code
 }

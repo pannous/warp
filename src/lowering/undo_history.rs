@@ -18,12 +18,18 @@ const NAME_PLACEHOLDER: &str = "X";
 pub fn lower(program: Node) -> Node {
 	let mut undone = vec![];
 	collect_undone(&program, &mut undone);
-	let taken = [UNDO_WORD, REDO_WORD].iter().any(|word| crate::soft_keywords::program_names(&program, word));
+	let taken = [UNDO_WORD, REDO_WORD]
+		.iter()
+		.any(|word| crate::soft_keywords::program_names(&program, word));
 	if undone.is_empty() || taken {
 		return program;
 	}
 	let program = with_undo_statements(program);
-	let Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) = program.drop_meta().clone() else { return program };
+	let Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) =
+		program.drop_meta().clone()
+	else {
+		return program;
+	};
 	let mut kept: Vec<String> = vec![];
 	let mut lowered = Vec::with_capacity(statements.len());
 	for statement in statements {
@@ -39,10 +45,14 @@ pub fn lower(program: Node) -> Node {
 
 /// `undo x` or `redo x`: the word and the name
 fn undo_parts(node: &Node) -> Option<(&str, &str)> {
-	let Node::List(items, _, _) = node.drop_meta() else { return None };
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return None;
+	};
 	let [word, name] = items.as_slice() else { return None };
 	match (word.drop_meta(), name.drop_meta()) {
-		(Node::Symbol(word), Node::Symbol(name)) if word == UNDO_WORD || word == REDO_WORD => Some((word.as_str(), name.as_str())),
+		(Node::Symbol(word), Node::Symbol(name)) if word == UNDO_WORD || word == REDO_WORD => {
+			Some((word.as_str(), name.as_str()))
+		}
 		_ => None,
 	}
 }
@@ -60,14 +70,23 @@ fn collect_undone(node: &Node, undone: &mut Vec<String>) {
 /// Every `undo x` and `redo x` as the block that moves x through its history
 fn with_undo_statements(node: Node) -> Node {
 	match undo_parts(&node) {
-		Some((word, name)) => from_template(if word == UNDO_WORD { UNDO_TEMPLATE } else { REDO_TEMPLATE }, name),
+		Some((word, name)) => from_template(
+			if word == UNDO_WORD {
+				UNDO_TEMPLATE
+			} else {
+				REDO_TEMPLATE
+			},
+			name,
+		),
 		None => node.map_children(with_undo_statements),
 	}
 }
 
 /// `x = …` at the main level
 fn assigned_name(statement: &Node) -> Option<String> {
-	let Node::Key(name, Op::Assign | Op::Define, _) = statement.drop_meta() else { return None };
+	let Node::Key(name, Op::Assign | Op::Define, _) = statement.drop_meta() else {
+		return None;
+	};
 	name.symbol_name().map(String::from)
 }
 

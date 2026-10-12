@@ -45,8 +45,12 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 		return vec![];
 	}
 	let problems = problems(&elements);
-	WRITTEN_PROBLEMS.with(|written| *written.borrow_mut() = problems.iter().map(|(_, message, _)| message.clone()).collect());
-	problems.into_iter().map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix)).collect()
+	WRITTEN_PROBLEMS
+		.with(|written| *written.borrow_mut() = problems.iter().map(|(_, message, _)| message.clone()).collect());
+	problems
+		.into_iter()
+		.map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix))
+		.collect()
 }
 
 /// The problems of the markup a run hands back that the markup as written did not show, as runtime warnings
@@ -73,8 +77,15 @@ fn computed_tags_named(node: Node) -> Node {
 }
 
 fn problems<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
-	let labeled_ids: HashSet<String> = elements.iter().filter(|element| element.tag == LABEL).filter_map(|label| label.attribute("for")).collect();
-	let mut problems: Vec<Problem> = elements.iter().filter_map(|element| element_problem(element, &labeled_ids)).collect();
+	let labeled_ids: HashSet<String> = elements
+		.iter()
+		.filter(|element| element.tag == LABEL)
+		.filter_map(|label| label.attribute("for"))
+		.collect();
+	let mut problems: Vec<Problem> = elements
+		.iter()
+		.filter_map(|element| element_problem(element, &labeled_ids))
+		.collect();
 	problems.extend(skipped_headings(elements));
 	problems.extend(duplicate_ids(elements));
 	problems
@@ -95,7 +106,10 @@ impl Element<'_> {
 	}
 
 	fn attribute(&self, name: &str) -> Option<String> {
-		self.attributes.iter().find(|(attribute, _)| attribute == name).and_then(|(_, value)| value.clone())
+		self.attributes
+			.iter()
+			.find(|(attribute, _)| attribute == name)
+			.and_then(|(_, value)| value.clone())
 	}
 
 	fn is_named(&self) -> bool {
@@ -106,7 +120,9 @@ impl Element<'_> {
 /// `div{…}`, `h1: "Hi"` or `label(for:pwd): "Password"`: the tag, content and head attributes of an element as written;
 /// `a: i32` (a typed parameter or field) and `a: 1` (a number field) are none
 fn element_parts(node: &Node) -> Option<(&str, &Node, &[Node])> {
-	let Node::Key(tag, Op::Colon, content) = node.drop_meta() else { return None };
+	let Node::Key(tag, Op::Colon, content) = node.drop_meta() else {
+		return None;
+	};
 	match content.drop_meta() {
 		Node::Type { .. } | Node::Number(_) => return None,
 		Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some() => return None,
@@ -117,7 +133,9 @@ fn element_parts(node: &Node) -> Option<(&str, &Node, &[Node])> {
 		tag => (tag, &[][..]),
 	};
 	match tag.drop_meta() {
-		Node::Symbol(tag) if crate::markup::is_element_tag(tag) => Some((tag.as_str(), content.as_ref(), head_attributes)),
+		Node::Symbol(tag) if crate::markup::is_element_tag(tag) => {
+			Some((tag.as_str(), content.as_ref(), head_attributes))
+		}
 		_ => None,
 	}
 }
@@ -132,8 +150,12 @@ fn content_items(content: &Node) -> Vec<&Node> {
 
 /// `alt: "x"`: an attribute, with its value when that is a text (a one-letter text is a Char), number or name
 fn attribute_parts(item: &Node) -> Option<(String, Option<String>)> {
-	let Node::Key(name, Op::Colon, value) = item.drop_meta() else { return None };
-	let Node::Symbol(name) = name.drop_meta() else { return None };
+	let Node::Key(name, Op::Colon, value) = item.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(name) = name.drop_meta() else {
+		return None;
+	};
 	if crate::markup::is_element_tag(name) {
 		return None;
 	}
@@ -153,8 +175,15 @@ fn is_handler(item: &Node) -> bool {
 /// Does an item say something: a text, a value computed at run time, or an element that does
 fn says_something(item: &Node) -> bool {
 	match element_parts(item) {
-		Some((_, content, _)) => content_items(content).into_iter().any(|child| attribute_parts(child).is_none() && !is_handler(child) && says_something(child)),
-		None => !matches!(item.drop_meta(), Node::Empty) && attribute_parts(item).is_none() && !is_handler(item) && !matches!(item.drop_meta(), Node::Text(text) if text.trim().is_empty()),
+		Some((_, content, _)) => content_items(content)
+			.into_iter()
+			.any(|child| attribute_parts(child).is_none() && !is_handler(child) && says_something(child)),
+		None => {
+			!matches!(item.drop_meta(), Node::Empty)
+				&& attribute_parts(item).is_none()
+				&& !is_handler(item)
+				&& !matches!(item.drop_meta(), Node::Text(text) if text.trim().is_empty())
+		}
 	}
 }
 
@@ -164,8 +193,14 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 		found.push(Element {
 			node,
 			tag: tag.to_string(),
-			attributes: head_attributes.iter().chain(items.iter().copied()).filter_map(attribute_parts).collect(),
-			has_content: items.iter().any(|item| attribute_parts(item).is_none() && !is_handler(item) && says_something(item)),
+			attributes: head_attributes
+				.iter()
+				.chain(items.iter().copied())
+				.filter_map(attribute_parts)
+				.collect(),
+			has_content: items
+				.iter()
+				.any(|item| attribute_parts(item).is_none() && !is_handler(item) && says_something(item)),
 			inside_label,
 		});
 		if tag == STYLE {
@@ -179,8 +214,12 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 		// the head of `add(a: i32) := …` holds parameters, the target of `a:V = …` a typed variable: not markup
 		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, inside_label, found),
 		// `c ? then : else`: the colon parts the branches, it makes no element
-		Node::Key(condition, Op::Question, branches) if let Node::Key(then, Op::Colon, otherwise) = branches.drop_meta() => {
-			[condition, then, otherwise].into_iter().for_each(|part| collect(part, inside_label, found));
+		Node::Key(condition, Op::Question, branches)
+			if let Node::Key(then, Op::Colon, otherwise) = branches.drop_meta() =>
+		{
+			[condition, then, otherwise]
+				.into_iter()
+				.for_each(|part| collect(part, inside_label, found));
 		}
 		Node::Key(left, _, right) => {
 			collect(left, inside_label, found);
@@ -193,21 +232,41 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 fn element_problem<'a>(element: &Element<'a>, labeled_ids: &HashSet<String>) -> Option<Problem<'a>> {
 	let warning = |message: &str, fix: &str| Some((element.node, message.to_string(), fix.to_string()));
 	match element.tag.as_str() {
-		IMAGE if !element.has("alt") => warning("img without alt: a screen reader reads its file name", "alt: \"what it shows\", or alt: \"\" for a decoration"),
+		IMAGE if !element.has("alt") => warning(
+			"img without alt: a screen reader reads its file name",
+			"alt: \"what it shows\", or alt: \"\" for a decoration",
+		),
 		tag if FORM_FIELDS.contains(&tag) && needs_label(element, labeled_ids) => match element.has("placeholder") {
-			true => warning(&format!("{tag} labeled only by its placeholder, which vanishes on typing"), "a label{ for: \"id\" … } beside it, or aria-label: \"…\""),
-			false => warning(&format!("{tag} without a label: a screen reader cannot say what it asks for"), "label{ \"Name\" input{…} } around it, or aria-label: \"…\""),
+			true => warning(
+				&format!("{tag} labeled only by its placeholder, which vanishes on typing"),
+				"a label{ for: \"id\" … } beside it, or aria-label: \"…\"",
+			),
+			false => warning(
+				&format!("{tag} without a label: a screen reader cannot say what it asks for"),
+				"label{ \"Name\" input{…} } around it, or aria-label: \"…\"",
+			),
 		},
-		BUTTON if !element.has_content && !element.is_named() => warning("button without text: a screen reader announces just \"button\"", "a text inside it, or aria-label: \"…\""),
-		LINK if !element.has("href") => warning("a without href: not reachable by keyboard", "href: \"…\", or a button for an action"),
-		LINK if !element.has_content && !element.is_named() => warning("a without text: a screen reader reads its address", "a text inside it, or aria-label: \"…\""),
+		BUTTON if !element.has_content && !element.is_named() => warning(
+			"button without text: a screen reader announces just \"button\"",
+			"a text inside it, or aria-label: \"…\"",
+		),
+		LINK if !element.has("href") => warning(
+			"a without href: not reachable by keyboard",
+			"href: \"…\", or a button for an action",
+		),
+		LINK if !element.has_content && !element.is_named() => warning(
+			"a without text: a screen reader reads its address",
+			"a text inside it, or aria-label: \"…\"",
+		),
 		HTML if !element.has("lang") => warning("html without lang: screen readers guess the language", "lang: \"en\""),
 		_ => None,
 	}
 }
 
 fn needs_label(field: &Element, labeled_ids: &HashSet<String>) -> bool {
-	let self_labeled = field.attribute("type").is_some_and(|kind| SELF_LABELED_INPUTS.contains(&kind.as_str()));
+	let self_labeled = field
+		.attribute("type")
+		.is_some_and(|kind| SELF_LABELED_INPUTS.contains(&kind.as_str()));
 	let labeled_by_id = field.attribute("id").is_some_and(|id| labeled_ids.contains(&id));
 	!(self_labeled || labeled_by_id || field.inside_label || field.is_named())
 }
@@ -217,9 +276,19 @@ fn skipped_headings<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
 	let mut previous = 0;
 	let mut warnings = vec![];
 	for element in elements {
-		let Some(level) = HEADINGS.iter().position(|heading| *heading == element.tag).map(|index| index + 1) else { continue };
+		let Some(level) = HEADINGS
+			.iter()
+			.position(|heading| *heading == element.tag)
+			.map(|index| index + 1)
+		else {
+			continue;
+		};
 		if previous > 0 && level > previous + 1 {
-			warnings.push((element.node, format!("{} after h{previous} skips a heading level", element.tag), format!("h{}", previous + 1)));
+			warnings.push((
+				element.node,
+				format!("{} after h{previous} skips a heading level", element.tag),
+				format!("h{}", previous + 1),
+			));
 		}
 		previous = level;
 	}
@@ -228,8 +297,16 @@ fn skipped_headings<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
 
 fn duplicate_ids<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
 	let mut seen = HashSet::new();
-	elements.iter().filter_map(|element| element.attribute("id").map(|id| (element, id)))
+	elements
+		.iter()
+		.filter_map(|element| element.attribute("id").map(|id| (element, id)))
 		.filter(|(_, id)| !seen.insert(id.clone()))
-		.map(|(element, id)| (element.node, format!("id \"{id}\" is used twice: labels and links find only the first"), "a different id".to_string()))
+		.map(|(element, id)| {
+			(
+				element.node,
+				format!("id \"{id}\" is used twice: labels and links find only the first"),
+				"a different id".to_string(),
+			)
+		})
 		.collect()
 }

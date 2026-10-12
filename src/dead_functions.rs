@@ -15,14 +15,18 @@ pub fn without_dead_functions(module: &[u8]) -> Result<Vec<u8>, String> {
 	}
 	let mut renumbering = Renumbering::new(graph.imported, &live);
 	let mut pruned = wasm_encoder::Module::new();
-	renumbering.parse_core_module(&mut pruned, Parser::new(0), module).map_err(|failure| format!("{failure:?}"))?;
+	renumbering
+		.parse_core_module(&mut pruned, Parser::new(0), module)
+		.map_err(|failure| format!("{failure:?}"))?;
 	Ok(pruned.finish())
 }
 
 /// `module` exporting only the names `keep` accepts, without the functions only the dropped exports reached
 pub fn keeping_exports(module: &[u8], keep: fn(&str) -> bool) -> Result<Vec<u8>, String> {
 	let mut filtered = wasm_encoder::Module::new();
-	ExportFilter(keep).parse_core_module(&mut filtered, Parser::new(0), module).map_err(|failure| format!("{failure:?}"))?;
+	ExportFilter(keep)
+		.parse_core_module(&mut filtered, Parser::new(0), module)
+		.map_err(|failure| format!("{failure:?}"))?;
 	without_dead_functions(&filtered.finish())
 }
 
@@ -31,7 +35,11 @@ struct ExportFilter(fn(&str) -> bool);
 impl Reencode for ExportFilter {
 	type Error = String;
 
-	fn parse_export(&mut self, exports: &mut wasm_encoder::ExportSection, export: wasmparser::Export<'_>) -> Result<(), Error<String>> {
+	fn parse_export(
+		&mut self,
+		exports: &mut wasm_encoder::ExportSection,
+		export: wasmparser::Export<'_>,
+	) -> Result<(), Error<String>> {
 		if (self.0)(export.name) {
 			utils::parse_export(self, exports, export)?;
 		}
@@ -112,7 +120,9 @@ impl CallGraph {
 		let mut reached = vec![false; self.callees.len()];
 		let mut pending = starts.to_vec();
 		while let Some(function) = pending.pop() {
-			let Some(defined) = function.checked_sub(self.imported) else { continue };
+			let Some(defined) = function.checked_sub(self.imported) else {
+				continue;
+			};
 			if blocked.contains(&function) && !starts.contains(&function) {
 				continue;
 			}
@@ -127,7 +137,9 @@ impl CallGraph {
 /// The function an instruction calls or takes a reference to
 fn function_operand(operator: &Operator) -> Option<u32> {
 	match operator {
-		Operator::Call { function_index } | Operator::ReturnCall { function_index } | Operator::RefFunc { function_index } => Some(*function_index),
+		Operator::Call { function_index }
+		| Operator::ReturnCall { function_index }
+		| Operator::RefFunc { function_index } => Some(*function_index),
 		_ => None,
 	}
 }
@@ -150,9 +162,16 @@ struct Renumbering {
 impl Renumbering {
 	fn new(imported: u32, live: &[bool]) -> Renumbering {
 		let mut new_index: HashMap<u32, u32> = (0..imported).map(|index| (index, index)).collect();
-		let live_indices = live.iter().enumerate().filter(|(_, &is_live)| is_live).map(|(defined, _)| imported + defined as u32);
+		let live_indices = live
+			.iter()
+			.enumerate()
+			.filter(|(_, &is_live)| is_live)
+			.map(|(defined, _)| imported + defined as u32);
 		new_index.extend(live_indices.zip(imported..));
-		Renumbering { new_index, live: live.to_vec() }
+		Renumbering {
+			new_index,
+			live: live.to_vec(),
+		}
 	}
 
 	fn is_live(&self, defined: usize) -> bool {
@@ -171,7 +190,10 @@ impl Renumbering {
 		Ok(names)
 	}
 
-	fn live_indirect_names(&self, map: wasmparser::IndirectNameMap) -> Result<wasm_encoder::IndirectNameMap, Error<String>> {
+	fn live_indirect_names(
+		&self,
+		map: wasmparser::IndirectNameMap,
+	) -> Result<wasm_encoder::IndirectNameMap, Error<String>> {
 		let mut names = wasm_encoder::IndirectNameMap::new();
 		for naming in map {
 			let naming = naming?;
@@ -187,10 +209,17 @@ impl Reencode for Renumbering {
 	type Error = String;
 
 	fn function_index(&mut self, function: u32) -> Result<u32, Error<String>> {
-		self.new_index.get(&function).copied().ok_or_else(|| Error::UserError(format!("dead function {function} is still referenced")))
+		self.new_index
+			.get(&function)
+			.copied()
+			.ok_or_else(|| Error::UserError(format!("dead function {function} is still referenced")))
 	}
 
-	fn parse_function_section(&mut self, functions: &mut wasm_encoder::FunctionSection, section: wasmparser::FunctionSectionReader<'_>) -> Result<(), Error<String>> {
+	fn parse_function_section(
+		&mut self,
+		functions: &mut wasm_encoder::FunctionSection,
+		section: wasmparser::FunctionSectionReader<'_>,
+	) -> Result<(), Error<String>> {
 		for (defined, function_type) in section.into_iter().enumerate() {
 			let function_type = function_type?;
 			if self.is_live(defined) {
@@ -200,7 +229,11 @@ impl Reencode for Renumbering {
 		Ok(())
 	}
 
-	fn parse_code_section(&mut self, code: &mut wasm_encoder::CodeSection, section: wasmparser::CodeSectionReader<'_>) -> Result<(), Error<String>> {
+	fn parse_code_section(
+		&mut self,
+		code: &mut wasm_encoder::CodeSection,
+		section: wasmparser::CodeSectionReader<'_>,
+	) -> Result<(), Error<String>> {
 		for (defined, body) in section.into_iter().enumerate() {
 			let body = body?;
 			if self.is_live(defined) {
@@ -210,7 +243,11 @@ impl Reencode for Renumbering {
 		Ok(())
 	}
 
-	fn parse_custom_name_subsection(&mut self, names: &mut wasm_encoder::NameSection, section: Name<'_>) -> Result<(), Error<String>> {
+	fn parse_custom_name_subsection(
+		&mut self,
+		names: &mut wasm_encoder::NameSection,
+		section: Name<'_>,
+	) -> Result<(), Error<String>> {
 		match section {
 			Name::Function(map) => names.functions(&self.live_names(map)?),
 			Name::Local(map) => names.locals(&self.live_indirect_names(map)?),

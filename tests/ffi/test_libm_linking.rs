@@ -1,7 +1,7 @@
 // libm is linked from its headers first; the hand-linked table LIBM_UNARY/LIBM_BINARY serves only when the headers
 // declare nothing for "m", as glibc's math.h does behind __MATHCALL macros (user decision 2026-10-03)
-use warp::ffi::{libm_header_signatures, link_libm, FfiState, LibmSource};
 use crate::is;
+use warp::ffi::{libm_header_signatures, link_libm, FfiState, LibmSource};
 use wasmtime::{Linker, Store};
 
 /// Which libm source served, and whether `m.<function>` is linked afterwards for each name
@@ -10,7 +10,13 @@ fn linked(signatures: &[warp::ffi::FfiHeaderSignature], names: &[&str]) -> (Libm
 	let mut linker: Linker<FfiState> = Linker::new(&engine);
 	let source = link_libm(&mut linker, &engine, signatures).unwrap();
 	let mut store = Store::new(&engine, FfiState::new());
-	(source, names.iter().map(|name| linker.get(&mut store, "m", name).is_ok()).collect())
+	(
+		source,
+		names
+			.iter()
+			.map(|name| linker.get(&mut store, "m", name).is_ok())
+			.collect(),
+	)
 }
 
 #[test]

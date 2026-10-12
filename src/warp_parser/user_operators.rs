@@ -9,8 +9,17 @@ impl WarpParser {
 	/// The declared operator written at the cursor, of one of the kinds
 	pub(super) fn user_operator_at(&self, kinds: &[UserOperatorKind]) -> Option<UserOperator> {
 		let is_name_char = |c: char| c.is_alphanumeric() || c == '_';
-		let whole_word = |operator: &UserOperator| !is_operator_word(&operator.glyph) || !is_name_char(self.peek_char(operator.glyph.len()));
-		self.user_operators.iter().find(|operator| kinds.contains(&operator.kind) && self.chars[self.pos..].starts_with(&operator.glyph) && whole_word(operator)).cloned()
+		let whole_word = |operator: &UserOperator| {
+			!is_operator_word(&operator.glyph) || !is_name_char(self.peek_char(operator.glyph.len()))
+		};
+		self.user_operators
+			.iter()
+			.find(|operator| {
+				kinds.contains(&operator.kind)
+					&& self.chars[self.pos..].starts_with(&operator.glyph)
+					&& whole_word(operator)
+			})
+			.cloned()
 	}
 
 	/// `3‼`: the call of the suffix operator on the left operand
@@ -51,7 +60,10 @@ impl WarpParser {
 		if self.options != ParserOptions::default() {
 			return None;
 		}
-		let rest: String = self.chars[self.pos..].iter().take_while(|c| **c != '\n' && **c != ';').collect();
+		let rest: String = self.chars[self.pos..]
+			.iter()
+			.take_while(|c| **c != '\n' && **c != ';')
+			.collect();
 		let words: Vec<&str> = rest.split_whitespace().collect();
 		if word == "operator" && words.get(1) == Some(&"has") && words.get(2) == Some(&"precedence") {
 			while !matches!(self.current_char(), '\n' | ';' | '\0') {
@@ -61,7 +73,10 @@ impl WarpParser {
 			let statement: Vec<&str> = std::iter::once("operator").chain(words.iter().copied()).collect();
 			return Some(match precedence_declaration(&statement, &self.user_operators) {
 				Ok(Some(_)) => Empty,
-				Ok(None) => error(&format!("an operator precedence is declared `operator ⊕ has precedence above|below Y`, not `operator {}`", words.join(" "))),
+				Ok(None) => error(&format!(
+					"an operator precedence is declared `operator ⊕ has precedence above|below Y`, not `operator {}`",
+					words.join(" ")
+				)),
 				Err(message) => error(&message),
 			});
 		}
@@ -75,11 +90,17 @@ impl WarpParser {
 		} else if is_operator_word(&glyph) {
 			self.set_hint_pos();
 			let name: String = glyph.iter().collect();
-			crate::diagnostic::educate_once(INFIX_WORD_TOPIC, &format!("{word} {name}"), &format!("{word} {OPERATOR_WORD} {name}"), "a declared operator says operator");
+			crate::diagnostic::educate_once(
+				INFIX_WORD_TOPIC,
+				&format!("{word} {name}"),
+				&format!("{word} {OPERATOR_WORD} {name}"),
+				"a declared operator says operator",
+			);
 		}
 		self.advance_by(glyph.len());
 		// `divides(d:int, n:int)`: the operands named and typed as a function's parameters
-		let declared_parameters = (self.current_char() == '(').then(|| self.parse_expr(Op::Define.binding_power().0 + 1));
+		let declared_parameters =
+			(self.current_char() == '(').then(|| self.parse_expr(Op::Define.binding_power().0 + 1));
 		self.skip_spaces();
 		self.advance_by(":=".len());
 		let body = self.parse_expr(0);
@@ -90,7 +111,11 @@ impl WarpParser {
 			},
 			// P48 names the operands `left` and `right`; `a` and `b` stay accepted
 			UserOperatorKind::Infix => {
-				let names = if mentions(&body, "left") || mentions(&body, "right") { ["left", "right"] } else { ["a", "b"] };
+				let names = if mentions(&body, "left") || mentions(&body, "right") {
+					["left", "right"]
+				} else {
+					["a", "b"]
+				};
 				names.map(|name| Symbol(name.to_string())).to_vec()
 			}
 			_ => vec![Symbol("it".to_string())],
@@ -110,10 +135,19 @@ impl WarpParser {
 
 	/// Ranges whose end readers expect either way are Asks, by default read as warp does (exclusive):
 	/// `a upto b` (wiki/range.md: excludes b) and the loop bound `for i in 0..n-1` (Kotlin's `..` includes n-1)
-	pub(super) fn range_reading(&self, op: Op, written: &str, end: &Node, line: usize, column: usize) -> Result<Op, Node> {
+	pub(super) fn range_reading(
+		&self,
+		op: Op,
+		written: &str,
+		end: &Node,
+		line: usize,
+		column: usize,
+	) -> Result<Op, Node> {
 		let end_text = crate::normalize::operand_text(end);
 		let question = match written {
-			UPTO => format!("does `upto {end_text}` include {end_text}? (`..<` or `..` exclude it, `to` or `...` include it)"),
+			UPTO => format!(
+				"does `upto {end_text}` include {end_text}? (`..<` or `..` exclude it, `to` or `...` include it)"
+			),
 			EXCLUSIVE_DOTS if self.in_for_header && is_minus_one(end) => {
 				format!("does the loop bound `..{end_text}` include {end_text}? (warp's `..` excludes it, Kotlin's includes it)")
 			}
@@ -121,7 +155,9 @@ impl WarpParser {
 		};
 		let topic = if written == UPTO { UPTO } else { KOTLIN_RANGE };
 		let readings = vec![reading("exclusive", "..<"), reading("inclusive", "...")];
-		let chosen = ask(&Ask::new(topic, question, readings, Fallback::Warning).written(written).at(line, column))?;
+		let chosen = ask(&Ask::new(topic, question, readings, Fallback::Warning)
+			.written(written)
+			.at(line, column))?;
 		Ok(if chosen == 0 { Op::Range } else { Op::To })
 	}
 }

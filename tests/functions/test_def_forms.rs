@@ -25,5 +25,8 @@ fn a_def_function_calls_its_function_parameter() {
 #[test]
 fn a_parameter_tested_for_membership_is_no_function() {
 	crate::is!("snake=[1]; f(p) := not (p in snake); f(3)", 1);
-	crate::is!("snake=[(1,2)]; def is_free(position) { return not (position in snake) }; is_free((1,2))", 0);
+	crate::is!(
+		"snake=[(1,2)]; def is_free(position) { return not (position in snake) }; is_free((1,2))",
+		0
+	);
 }

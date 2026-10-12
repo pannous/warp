@@ -8,11 +8,14 @@
 //! `window_open` whether that window shows.
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
+use crate::host_words::{
+	BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES,
+	TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN};
 
 const NOTIFICATION_TITLE: &str = "warp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
@@ -40,7 +43,9 @@ pub fn tell_gpu_drawing(on_gpu: bool) {
 }
 
 pub fn window_input() -> [f32; 4] {
-	WINDOW_INPUT.each_ref().map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
+	WINDOW_INPUT
+		.each_ref()
+		.map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
 }
 
 pub fn tell_window_input(input: [f32; 4]) {
@@ -65,10 +70,19 @@ pub fn read(name: &str) -> Result<i64, String> {
 	if name == GPU_DRAWING {
 		return Ok(DRAWING_ON_GPU.load(Ordering::Relaxed) as i64);
 	}
-	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN].iter().position(|pointer| *pointer == name) {
+	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN]
+		.iter()
+		.position(|pointer| *pointer == name)
+	{
 		return Ok(window_input()[at] as i64);
 	}
-	let kept = READINGS.with(|readings| readings.borrow().get(name).filter(|(when, _)| when.elapsed() < READING_LIFETIME).map(|(_, value)| *value));
+	let kept = READINGS.with(|readings| {
+		readings
+			.borrow()
+			.get(name)
+			.filter(|(when, _)| when.elapsed() < READING_LIFETIME)
+			.map(|(_, value)| *value)
+	});
 	if let Some(value) = kept {
 		return Ok(value);
 	}
@@ -86,16 +100,24 @@ fn read_now(name: &str) -> Result<i64, String> {
 		CLIPBOARD_COUNT => clipboard_count(),
 		VIEW_WIDTH => Ok(NATIVE_VIEW.0),
 		VIEW_HEIGHT => Ok(NATIVE_VIEW.1),
-		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
+		other => Err(format!(
+			"{other} is no system value; known: {}",
+			SYSTEM_VALUES.map(|(name, _)| name).join(", ")
+		)),
 	}
 }
 
 fn online() -> bool {
-	std::net::UdpSocket::bind("0.0.0.0:0").and_then(|socket| socket.connect(INTERNET_ADDRESS)).is_ok()
+	std::net::UdpSocket::bind("0.0.0.0:0")
+		.and_then(|socket| socket.connect(INTERNET_ADDRESS))
+		.is_ok()
 }
 
 fn output(program: &str, arguments: &[&str]) -> Result<String, String> {
-	let output = std::process::Command::new(program).args(arguments).output().map_err(|problem| format!("{program}: {problem}"))?;
+	let output = std::process::Command::new(program)
+		.args(arguments)
+		.output()
+		.map_err(|problem| format!("{program}: {problem}"))?;
 	Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -104,18 +126,38 @@ fn output(program: &str, arguments: &[&str]) -> Result<String, String> {
 fn battery() -> Result<(i64, bool), String> {
 	// "-InternalBattery-0 (id=…)	87%; charging; 1:02 remaining present: true"
 	let report = output("pmset", &["-g", "batt"])?;
-	let line = report.lines().find(|line| line.contains('%')).ok_or("battery: this Mac has no battery")?;
-	let percent = line.split('%').next().and_then(|before| before.rsplit(|letter: char| !letter.is_ascii_digit()).next()).and_then(|digits| digits.parse().ok());
+	let line = report
+		.lines()
+		.find(|line| line.contains('%'))
+		.ok_or("battery: this Mac has no battery")?;
+	let percent = line
+		.split('%')
+		.next()
+		.and_then(|before| before.rsplit(|letter: char| !letter.is_ascii_digit()).next())
+		.and_then(|digits| digits.parse().ok());
 	let charging = line.contains("; charging") || line.contains("; charged") || report.contains("'AC Power'");
-	Ok((percent.ok_or_else(|| format!("battery: cannot read {line:?}"))?, charging))
+	Ok((
+		percent.ok_or_else(|| format!("battery: cannot read {line:?}"))?,
+		charging,
+	))
 }
 
 #[cfg(target_os = "linux")]
 fn battery() -> Result<(i64, bool), String> {
-	let supply = std::fs::read_dir("/sys/class/power_supply").map_err(|problem| format!("battery: {problem}"))?
-		.flatten().map(|entry| entry.path()).find(|path| path.join("capacity").exists()).ok_or("battery: this machine has no battery")?;
-	let read = |file: &str| std::fs::read_to_string(supply.join(file)).map(|text| text.trim().to_string()).map_err(|problem| format!("battery: {problem}"));
-	let percent = read("capacity")?.parse().map_err(|_| "battery: cannot read its capacity".to_string())?;
+	let supply = std::fs::read_dir("/sys/class/power_supply")
+		.map_err(|problem| format!("battery: {problem}"))?
+		.flatten()
+		.map(|entry| entry.path())
+		.find(|path| path.join("capacity").exists())
+		.ok_or("battery: this machine has no battery")?;
+	let read = |file: &str| {
+		std::fs::read_to_string(supply.join(file))
+			.map(|text| text.trim().to_string())
+			.map_err(|problem| format!("battery: {problem}"))
+	};
+	let percent = read("capacity")?
+		.parse()
+		.map_err(|_| "battery: cannot read its capacity".to_string())?;
 	Ok((percent, matches!(read("status")?.as_str(), "Charging" | "Full")))
 }
 
@@ -148,7 +190,11 @@ fn clipboard_count() -> Result<i64, String> {
 	const APPKIT: &CStr = c"/System/Library/Frameworks/AppKit.framework/AppKit";
 	let symbol = |name: &CStr| -> Result<*mut c_void, String> {
 		let found = unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr()) };
-		if found.is_null() { Err(format!("clipboard: no {name:?}")) } else { Ok(found) }
+		if found.is_null() {
+			Err(format!("clipboard: no {name:?}"))
+		} else {
+			Ok(found)
+		}
 	};
 	if unsafe { libc::dlopen(APPKIT.as_ptr(), libc::RTLD_LAZY) }.is_null() {
 		return Err("clipboard: cannot load AppKit".to_string());
@@ -180,9 +226,20 @@ fn clipboard_count() -> Result<i64, String> {
 pub fn notify(text: &str) -> Result<(), String> {
 	#[cfg(target_os = "macos")]
 	let shown = std::process::Command::new("osascript")
-		.args(["-e", "on run argv", "-e", &format!("display notification (item 1 of argv) with title \"{NOTIFICATION_TITLE}\""), "-e", "end run", text]).output();
+		.args([
+			"-e",
+			"on run argv",
+			"-e",
+			&format!("display notification (item 1 of argv) with title \"{NOTIFICATION_TITLE}\""),
+			"-e",
+			"end run",
+			text,
+		])
+		.output();
 	#[cfg(not(target_os = "macos"))]
-	let shown = std::process::Command::new("notify-send").args([NOTIFICATION_TITLE, text]).output();
+	let shown = std::process::Command::new("notify-send")
+		.args([NOTIFICATION_TITLE, text])
+		.output();
 	match shown {
 		Ok(output) if output.status.success() => Ok(()),
 		Ok(output) => Err(format!("notify: {}", String::from_utf8_lossy(&output.stderr).trim())),
@@ -195,17 +252,30 @@ pub fn write_clipboard(text: &str) -> Result<(), String> {
 	#[cfg(target_os = "macos")]
 	return input("pbcopy", &[], text);
 	#[cfg(not(target_os = "macos"))]
-	input("wl-copy", &[], text).or_else(|_| input("xclip", &["-selection", "clipboard", "-i"], text))
+	input("wl-copy", &[], text)
+		.or_else(|_| input("xclip", &["-selection", "clipboard", "-i"], text))
 		.map_err(|problem| format!("clipboard: needs wl-copy or xclip ({problem})"))
 }
 
 /// Runs a program with `text` as its input
 fn input(program: &str, arguments: &[&str], text: &str) -> Result<(), String> {
 	use std::io::Write;
-	let mut child = std::process::Command::new(program).args(arguments).stdin(std::process::Stdio::piped()).spawn().map_err(|problem| format!("{program}: {problem}"))?;
-	child.stdin.take().expect("a piped input").write_all(text.as_bytes()).map_err(|problem| format!("{program}: {problem}"))?;
+	let mut child = std::process::Command::new(program)
+		.args(arguments)
+		.stdin(std::process::Stdio::piped())
+		.spawn()
+		.map_err(|problem| format!("{program}: {problem}"))?;
+	child
+		.stdin
+		.take()
+		.expect("a piped input")
+		.write_all(text.as_bytes())
+		.map_err(|problem| format!("{program}: {problem}"))?;
 	let status = child.wait().map_err(|problem| format!("{program}: {problem}"))?;
-	status.success().then_some(()).ok_or_else(|| format!("{program} failed: {status}"))
+	status
+		.success()
+		.then_some(())
+		.ok_or_else(|| format!("{program} failed: {status}"))
 }
 
 /// The clipboard's text: macOS `pbpaste`, Linux `wl-paste` or `xclip`
@@ -213,6 +283,7 @@ pub fn clipboard_text() -> Result<String, String> {
 	#[cfg(target_os = "macos")]
 	return output("pbpaste", &[]);
 	#[cfg(not(target_os = "macos"))]
-	output("wl-paste", &["--no-newline"]).or_else(|_| output("xclip", &["-selection", "clipboard", "-o"]))
+	output("wl-paste", &["--no-newline"])
+		.or_else(|_| output("xclip", &["-selection", "clipboard", "-o"]))
 		.map_err(|problem| format!("clipboard: needs wl-paste or xclip ({problem})"))
 }

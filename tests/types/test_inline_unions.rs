@@ -26,7 +26,8 @@ fn a_covered_part_is_dropped() {
 
 #[test]
 fn a_part_that_is_no_builtin_type_is_refused() {
-	fails_with("class point { x: int }; p: point | text = \"a\"", "point");
+	// a declared class is a part since card union-types (tests/types/test_class_unions.rs)
+	is!("class point { x: int }; p: point | text = \"ab\"; p", "ab");
 }
 
 #[test]

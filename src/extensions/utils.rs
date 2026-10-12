@@ -13,7 +13,11 @@ const DEFAULT_SCHEME: &str = "https";
 const SCHEME_MARK: &str = "://";
 
 pub fn with_default_scheme(url: &str) -> String {
-	if url.starts_with(SCHEME_MARK) { format!("{DEFAULT_SCHEME}{url}") } else { url.to_string() }
+	if url.starts_with(SCHEME_MARK) {
+		format!("{DEFAULT_SCHEME}{url}")
+	} else {
+		url.to_string()
+	}
 }
 
 #[cfg(not(feature = "native"))]
@@ -32,7 +36,11 @@ pub fn download(url: &str) -> String {
 #[must_use]
 #[cfg(all(feature = "native", not(test)))]
 pub fn download(url: &str) -> String {
-	match ureq::get(&with_default_scheme(url)).call().map_err(anyhow::Error::from).and_then(|mut r| r.body_mut().read_to_string().map_err(anyhow::Error::from)) {
+	match ureq::get(&with_default_scheme(url))
+		.call()
+		.map_err(anyhow::Error::from)
+		.and_then(|mut r| r.body_mut().read_to_string().map_err(anyhow::Error::from))
+	{
 		Ok(body) => body,
 		Err(e) => {
 			eprintln!("download failed for {url}: {e}");
@@ -55,7 +63,10 @@ pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<Strin
 #[cfg(all(feature = "native", not(test)))]
 pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut response = agent_within(timeout, true).get(&with_default_scheme(url)).call().map_err(reason)?;
+	let mut response = agent_within(timeout, true)
+		.get(&with_default_scheme(url))
+		.call()
+		.map_err(reason)?;
 	response.body_mut().read_to_string().map_err(reason)
 }
 
@@ -63,9 +74,16 @@ pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String
 /// unless a header names its Content-Type), the answer's text; an answer of status >= 400 is the error, with its body
 /// (an API's own reason, `{"error": … "invalid x-api-key"}`)
 #[cfg(feature = "native")]
-pub fn post_within(url: &str, body: &str, headers: &[(String, String)], timeout: std::time::Duration) -> Result<String, String> {
+pub fn post_within(
+	url: &str,
+	body: &str,
+	headers: &[(String, String)],
+	timeout: std::time::Duration,
+) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut request = agent_within(timeout, false).post(&with_default_scheme(url)).header("Content-Type", "text/plain; charset=utf-8");
+	let mut request = agent_within(timeout, false)
+		.post(&with_default_scheme(url))
+		.header("Content-Type", "text/plain; charset=utf-8");
 	for (name, value) in headers {
 		request = request.header(name, value);
 	}
@@ -81,7 +99,11 @@ pub fn post_within(url: &str, body: &str, headers: &[(String, String)], timeout:
 #[cfg(feature = "native")]
 /// `status_is_error`: an answer of status >= 400 fails the call itself, its body unread
 fn agent_within(timeout: std::time::Duration, status_is_error: bool) -> ureq::Agent {
-	ureq::Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(status_is_error).build().into()
+	ureq::Agent::config_builder()
+		.timeout_global(Some(timeout))
+		.http_status_as_error(status_is_error)
+		.build()
+		.into()
 }
 
 /// A failed request in a few words: DNS, timeout, HTTP status >= 400, else ureq's own
@@ -91,7 +113,9 @@ fn network_reason(error: ureq::Error, timeout: std::time::Duration) -> String {
 	match error {
 		ureq::Error::StatusCode(status) => format!("HTTP status {status}"),
 		ureq::Error::Timeout(_) => format!("timeout after {} ms", timeout.as_millis()),
-		ureq::Error::Io(io) if matches!(io.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock) => format!("timeout after {} ms", timeout.as_millis()),
+		ureq::Error::Io(io) if matches!(io.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock) => {
+			format!("timeout after {} ms", timeout.as_millis())
+		}
 		ureq::Error::HostNotFound => "DNS: host not found".to_string(),
 		other => other.to_string(),
 	}
@@ -104,14 +128,10 @@ pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {
 
 	// Create parent directory if it doesn't exist
 	if let Some(parent) = path.parent() {
-		if !parent.exists()
-			&& create_dir_all(parent).is_err() {
-				return false;
-			}
+		if !parent.exists() && create_dir_all(parent).is_err() {
+			return false;
+		}
 	}
 
-	File::create(filename)
-		.and_then(|mut f| f.write_all(bytes))
-		.is_ok()
+	File::create(filename).and_then(|mut f| f.write_all(bytes)).is_ok()
 }
-

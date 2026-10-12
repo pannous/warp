@@ -24,11 +24,19 @@ impl Diagnostic {
 	/// A diagnostic at the source position of `node`, else of its first part that has one (0:0 if the parser recorded none)
 	pub fn at(node: &Node, message: impl Into<String>) -> Self {
 		let (line, column) = position(node).unwrap_or_default();
-		Diagnostic { message: message.into(), line, column, ..Default::default() }
+		Diagnostic {
+			message: message.into(),
+			line,
+			column,
+			..Default::default()
+		}
 	}
 
 	pub fn message(self, message: impl Into<String>) -> Self {
-		Diagnostic { message: message.into(), ..self }
+		Diagnostic {
+			message: message.into(),
+			..self
+		}
 	}
 
 	pub fn fix(mut self, replacement: impl Into<String>) -> Self {
@@ -51,7 +59,11 @@ impl Diagnostic {
 	/// A warning of the kind `topic` about the expression `written`: shown until the user says "got it" to it or to all
 	/// of the kind
 	pub fn about(self, topic: &str, written: &str) -> Self {
-		Diagnostic { topic: Some(topic.to_string()), expression_key: Some(expression_key(topic, written)), ..self }
+		Diagnostic {
+			topic: Some(topic.to_string()),
+			expression_key: Some(expression_key(topic, written)),
+			..self
+		}
 	}
 
 	/// The topic "got it" silences and the expression it names, for a warning that has them
@@ -63,7 +75,10 @@ impl Diagnostic {
 
 	/// Said "got it" to before, or on a line that says `// got it`
 	fn is_silenced(&self) -> bool {
-		silenced_by_comment(self.line) || self.acknowledgeable().is_some_and(|(topic, written)| is_acknowledged(topic, written))
+		silenced_by_comment(self.line)
+			|| self
+				.acknowledgeable()
+				.is_some_and(|(topic, written)| is_acknowledged(topic, written))
 	}
 
 	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
@@ -95,8 +110,13 @@ pub enum Color {
 /// output panel, which would show the raw escape codes. All colored output goes through here.
 pub fn paint(color: Color, text: &str) -> String {
 	static COLORED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-	let colored = *COLORED.get_or_init(|| std::io::IsTerminal::is_terminal(&std::io::stderr()) && std::env::var_os("NO_COLOR").is_none());
-	if colored { format!("\x1b[{}m{text}\x1b[0m", color as u8) } else { text.to_string() }
+	let colored = *COLORED
+		.get_or_init(|| std::io::IsTerminal::is_terminal(&std::io::stderr()) && std::env::var_os("NO_COLOR").is_none());
+	if colored {
+		format!("\x1b[{}m{text}\x1b[0m", color as u8)
+	} else {
+		text.to_string()
+	}
 }
 
 /// Does a message end its description with a position ` at line:column`
@@ -109,14 +129,22 @@ pub fn message_position(message: &str) -> Option<(usize, usize)> {
 	let description = message.split("; fix: ").next().unwrap_or(message);
 	let (_, place) = description.rsplit_once(" at ")?;
 	let (line, column) = place.split_once(':')?;
-	let number = |digits: &str| (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| digits.parse().ok()).flatten();
+	let number = |digits: &str| {
+		(!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
+			.then(|| digits.parse().ok())
+			.flatten()
+	};
 	Some((number(line)?, number(column)?))
 }
 
 /// Where a failed program's error is: the position its message names (also for an error no diagnostic made)
 pub fn error_position(result: &Node) -> Option<(usize, usize)> {
-	let Node::Error(message) = result.drop_meta() else { return None };
-	let Node::Text(message) = message.drop_meta() else { return None };
+	let Node::Error(message) = result.drop_meta() else {
+		return None;
+	};
+	let Node::Text(message) = message.drop_meta() else {
+		return None;
+	};
 	message_position(message)
 }
 
@@ -142,7 +170,11 @@ pub fn show_lines_of(source: &str) {
 
 /// The line of the shown program at a position, with its marks
 pub fn shown_excerpt(line: usize, column: usize) -> Option<String> {
-	SHOWN_SOURCE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).as_deref().and_then(|source| excerpt(source, line, column))
+	SHOWN_SOURCE
+		.lock()
+		.unwrap_or_else(|poisoned| poisoned.into_inner())
+		.as_deref()
+		.and_then(|source| excerpt(source, line, column))
 }
 
 /// The text of a node for a message: its serialization, or the source from its position to the end of the statement
@@ -157,10 +189,18 @@ pub fn written_text(node: &Node) -> String {
 
 /// The source of the program from `node`'s position to the end of its statement, as the program wrote it
 pub fn written_statement(node: &Node) -> Option<String> {
-	let source_line = |(line, column): (usize, usize)| SOURCE.with(|source| {
-		let rest: String = source.borrow().lines().nth(line.checked_sub(1)?)?.chars().skip(column.saturating_sub(1)).collect();
-		Some(statement_prefix(&rest).trim().to_string())
-	});
+	let source_line = |(line, column): (usize, usize)| {
+		SOURCE.with(|source| {
+			let rest: String = source
+				.borrow()
+				.lines()
+				.nth(line.checked_sub(1)?)?
+				.chars()
+				.skip(column.saturating_sub(1))
+				.collect();
+			Some(statement_prefix(&rest).trim().to_string())
+		})
+	};
 	position(node).and_then(source_line).filter(|text| !text.is_empty())
 }
 
@@ -288,7 +328,11 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		(WarningMode::Quiet, _) => Ok(()),
 		_ => {
-			let shown: Vec<Diagnostic> = warnings.iter().filter(|warning| !warning.is_silenced()).cloned().collect();
+			let shown: Vec<Diagnostic> = warnings
+				.iter()
+				.filter(|warning| !warning.is_silenced())
+				.cloned()
+				.collect();
 			for warning in &shown {
 				eprintln!("warning: {warning}");
 				if let Some(excerpt) = shown_excerpt(warning.line, warning.column) {
@@ -351,7 +395,13 @@ pub fn without_pragma(program: Node, word: &str) -> (Node, bool) {
 		}
 		Node::Meta { node, data } => {
 			let (inner, found) = without_pragma(*node, word);
-			(Node::Meta { node: Box::new(inner), data }, found)
+			(
+				Node::Meta {
+					node: Box::new(inner),
+					data,
+				},
+				found,
+			)
 		}
 		other => (other, false),
 	}
@@ -387,7 +437,11 @@ pub struct Reading {
 }
 
 pub fn reading(meaning: &str, explicit_form: &str) -> Reading {
-	Reading { meaning: meaning.to_string(), explicit_form: explicit_form.to_string(), fix: None }
+	Reading {
+		meaning: meaning.to_string(),
+		explicit_form: explicit_form.to_string(),
+		fix: None,
+	}
 }
 
 impl Reading {
@@ -418,11 +472,23 @@ pub struct Ask {
 
 impl Ask {
 	pub fn new(topic: &str, question: impl Into<String>, readings: Vec<Reading>, fallback: Fallback) -> Self {
-		Ask { topic: topic.to_string(), written: topic.to_string(), question: question.into(), readings, default: 0, fallback, line: 0, column: 0 }
+		Ask {
+			topic: topic.to_string(),
+			written: topic.to_string(),
+			question: question.into(),
+			readings,
+			default: 0,
+			fallback,
+			line: 0,
+			column: 0,
+		}
 	}
 
 	pub fn written(self, source_text: &str) -> Self {
-		Ask { written: source_text.to_string(), ..self }
+		Ask {
+			written: source_text.to_string(),
+			..self
+		}
 	}
 
 	pub fn at(self, line: usize, column: usize) -> Self {
@@ -439,16 +505,38 @@ impl Ask {
 		let (message, fix) = match self.fallback {
 			Fallback::Warning => {
 				let default = &self.readings[self.default];
-				(format!("{} (taking {})", self.question, default.meaning), default.explicit_form.clone())
+				(
+					format!("{} (taking {})", self.question, default.meaning),
+					default.explicit_form.clone(),
+				)
 			}
 			Fallback::Error => {
-				let forms: Vec<String> = self.readings.iter().map(|reading| format!("`{}` for {}", reading.explicit_form, reading.meaning)).collect();
-				(format!("{} (too ambiguous to guess)", self.question), forms.join(" or "))
+				let forms: Vec<String> = self
+					.readings
+					.iter()
+					.map(|reading| format!("`{}` for {}", reading.explicit_form, reading.meaning))
+					.collect();
+				(
+					format!("{} (too ambiguous to guess)", self.question),
+					forms.join(" or "),
+				)
 			}
 		};
 		// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
-		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), ..Default::default() }.about(&self.topic, &self.question);
-		let fixes = self.readings.iter().map(|reading| reading.fix.clone().unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form)));
+		let diagnostic = Diagnostic {
+			message,
+			line: self.line,
+			column: self.column,
+			fix: Some(fix),
+			..Default::default()
+		}
+		.about(&self.topic, &self.question);
+		let fixes = self.readings.iter().map(|reading| {
+			reading
+				.fix
+				.clone()
+				.unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form))
+		});
 		fixes.fold(diagnostic, Diagnostic::offering)
 	}
 }
@@ -494,7 +582,11 @@ impl Acknowledger for TerminalAcknowledger {
 	fn acknowledge(&self, _topic: &str, _written: &str) -> GotIt {
 		eprint!("      got it? [y = this expression, a = all of this kind, n/Enter = keep reminding] ");
 		let mut line = String::new();
-		match std::io::stdin().read_line(&mut line).map(|_| line.trim().to_lowercase()).as_deref() {
+		match std::io::stdin()
+			.read_line(&mut line)
+			.map(|_| line.trim().to_lowercase())
+			.as_deref()
+		{
 			Ok("y" | "yes") => GotIt::This,
 			Ok("a" | "all") => GotIt::All,
 			_ => GotIt::No,
@@ -512,7 +604,14 @@ const GOT_IT_COMMENT: &str = "// got it";
 
 /// Whether the source line `line` (1-based) of the program being compiled carries a `// got it` comment
 fn silenced_by_comment(line: usize) -> bool {
-	line > 0 && SOURCE.with(|source| source.borrow().lines().nth(line - 1).is_some_and(|text| text.to_lowercase().contains(GOT_IT_COMMENT)))
+	line > 0
+		&& SOURCE.with(|source| {
+			source
+				.borrow()
+				.lines()
+				.nth(line - 1)
+				.is_some_and(|text| text.to_lowercase().contains(GOT_IT_COMMENT))
+		})
 }
 
 thread_local! {
@@ -549,14 +648,27 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 /// them, so acknowledged notes stay quiet after the rename
 pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>) {
 	let file = file.as_ref();
-	let Ok(old) = std::fs::read_to_string(old_file) else { return };
+	let Ok(old) = std::fs::read_to_string(old_file) else {
+		return;
+	};
 	let current = std::fs::read_to_string(file).unwrap_or_default();
-	let is_acknowledgement = |line: &&str| line.split_once(" = ").is_some_and(|(key, value)| key.trim().starts_with(ACKNOWLEDGED_PREFIX) && value.trim() == ACKNOWLEDGED);
-	let adopted: Vec<&str> = old.lines().filter(is_acknowledgement).filter(|line| !current.lines().any(|known| known.trim() == line.trim())).collect();
+	let is_acknowledgement = |line: &&str| {
+		line.split_once(" = ")
+			.is_some_and(|(key, value)| key.trim().starts_with(ACKNOWLEDGED_PREFIX) && value.trim() == ACKNOWLEDGED)
+	};
+	let adopted: Vec<&str> = old
+		.lines()
+		.filter(is_acknowledgement)
+		.filter(|line| !current.lines().any(|known| known.trim() == line.trim()))
+		.collect();
 	if adopted.is_empty() {
 		return;
 	}
-	let separator = if current.is_empty() || current.ends_with('\n') { "" } else { "\n" };
+	let separator = if current.is_empty() || current.ends_with('\n') {
+		""
+	} else {
+		"\n"
+	};
 	if let Err(failure) = std::fs::write(file, format!("{current}{separator}{}\n", adopted.join("\n"))) {
 		eprintln!("could not adopt the acknowledgements of {old_file}: {failure}");
 	}
@@ -569,8 +681,16 @@ pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 
 /// The topics acknowledged in the acknowledgements file, none without one
 fn load_acknowledgements() {
-	let saved = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow().as_ref().and_then(|path| std::fs::read_to_string(path).ok())).unwrap_or_default();
-	let topics = saved.lines().filter_map(|line| line.rsplit_once(" = "))
+	let saved = ACKNOWLEDGEMENTS_FILE
+		.with(|file| {
+			file.borrow()
+				.as_ref()
+				.and_then(|path| std::fs::read_to_string(path).ok())
+		})
+		.unwrap_or_default();
+	let topics = saved
+		.lines()
+		.filter_map(|line| line.rsplit_once(" = "))
 		.filter(|(_, value)| value.trim() == ACKNOWLEDGED)
 		.filter_map(|(key, _)| key.trim().strip_prefix(ACKNOWLEDGED_PREFIX).map(str::to_string));
 	ACKNOWLEDGED_TOPICS.with(|acknowledged| *acknowledged.borrow_mut() = topics.collect());
@@ -589,18 +709,29 @@ pub(crate) fn is_acknowledged(topic: &str, written: &str) -> bool {
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
 	[topic.to_string(), expression_key(topic, written)].iter().any(|key| {
 		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(key))
-			|| acknowledger.as_ref().is_some_and(|acknowledger| acknowledger.has_acknowledged(key))
+			|| acknowledger
+				.as_ref()
+				.is_some_and(|acknowledger| acknowledger.has_acknowledged(key))
 	})
 }
 
 fn remember_acknowledged(topic: &str) {
 	ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow_mut().insert(topic.to_string()));
-	let Some(path) = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow().clone()) else { return };
-	let mut topics: Vec<String> = ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().iter().cloned().collect());
+	let Some(path) = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow().clone()) else {
+		return;
+	};
+	let mut topics: Vec<String> =
+		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().iter().cloned().collect());
 	topics.sort();
-	let lines: String = topics.iter().map(|topic| format!("{ACKNOWLEDGED_PREFIX}{topic} = {ACKNOWLEDGED}\n")).collect();
+	let lines: String = topics
+		.iter()
+		.map(|topic| format!("{ACKNOWLEDGED_PREFIX}{topic} = {ACKNOWLEDGED}\n"))
+		.collect();
 	if let Err(problem) = std::fs::write(&path, lines) {
-		eprintln!("warning: could not remember \"got it\" in {}: {problem}", path.display());
+		eprintln!(
+			"warning: could not remember \"got it\" in {}: {problem}",
+			path.display()
+		);
 	}
 }
 
@@ -611,7 +742,9 @@ pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
 		return;
 	}
 	// "got it?" about a hint nobody saw (hints not printed) is not asked
-	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone()).filter(|_| crate::normalize::hints_printed());
+	let acknowledger = ACKNOWLEDGER
+		.with(|current| current.borrow().clone())
+		.filter(|_| crate::normalize::hints_printed());
 	match acknowledger.map_or(GotIt::No, |acknowledger| acknowledger.acknowledge(topic, written)) {
 		GotIt::This => remember_acknowledged(&expression_key(topic, written)),
 		GotIt::All => remember_acknowledged(topic),
@@ -622,17 +755,30 @@ pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, Some(crate::normalize::rewrite(written, preferred, reason))));
+	noted_once(topic, written, || {
+		crate::normalize::show_hint(
+			written,
+			preferred,
+			reason,
+			Some(crate::normalize::rewrite(written, preferred, reason)),
+		)
+	});
 }
 
 /// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
-	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, fix));
+	noted_once(topic, written, || {
+		crate::normalize::show_hint(written, preferred, reason, fix)
+	});
 }
 
 fn noted_once(topic: &str, written: &str, show: impl FnOnce() -> bool) {
 	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off || is_quiet();
-	if hints_off || is_acknowledged(topic, written) || silenced_by_comment(crate::normalize::hint_line()) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
+	if hints_off
+		|| is_acknowledged(topic, written)
+		|| silenced_by_comment(crate::normalize::hint_line())
+		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic))
+	{
 		return;
 	}
 	if show() {

@@ -1,6 +1,6 @@
 use crate::eq;
-use warp::Node::*;
 use warp::warp_parser::parse_file;
+use warp::Node::*;
 
 #[test]
 fn test_timeout_protection() {

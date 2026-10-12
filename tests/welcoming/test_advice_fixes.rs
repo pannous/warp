@@ -6,7 +6,10 @@ use warp::wasm_emitter::eval;
 
 fn advice(code: &str, preferred: &str) -> CapturedHint {
 	let (_, hints) = capture_hints(|| eval(code));
-	hints.into_iter().find(|hint| hint.canonical == preferred).unwrap_or_else(|| panic!("no advice {preferred} for {code}"))
+	hints
+		.into_iter()
+		.find(|hint| hint.canonical == preferred)
+		.unwrap_or_else(|| panic!("no advice {preferred} for {code}"))
 }
 
 /// The advice preferring `preferred` in `code` offers a fix, which gives `expected`
@@ -25,7 +28,11 @@ fn a_block_assignment_offers_global_at_main() {
 
 #[test]
 fn then_after_a_comparison_offers_the_pipe() {
-	assert_advice_fix("yes_no(b) := if b then \"y\" else \"n\"; 1 < 2 then yes_no", "(1<2) |> yes_no", "'y'");
+	assert_advice_fix(
+		"yes_no(b) := if b then \"y\" else \"n\"; 1 < 2 then yes_no",
+		"(1<2) |> yes_no",
+		"'y'",
+	);
 }
 
 #[test]

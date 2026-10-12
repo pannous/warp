@@ -10,9 +10,9 @@
 //! starts where its starter stands: voices sound together. render_sound mixes the sounds since the last render as
 //! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, Once};
 use std::time::{Duration, Instant};
 
@@ -34,7 +34,13 @@ static SOUNDED: AtomicUsize = AtomicUsize::new(0);
 static STOPPED: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 /// The music files' formats by their first bytes: (format, magic bytes, offset of the magic)
 const FILE_FORMATS: [(&str, &[u8], usize); 7] = [
-	("wav", b"WAVE", 8), ("mp3", b"ID3", 0), ("mp3", b"\xFF\xFB", 0), ("ogg", b"OggS", 0), ("flac", b"fLaC", 0), ("aiff", b"AIFF", 8), ("m4a", b"ftyp", 4),
+	("wav", b"WAVE", 8),
+	("mp3", b"ID3", 0),
+	("mp3", b"\xFF\xFB", 0),
+	("ogg", b"OggS", 0),
+	("flac", b"fLaC", 0),
+	("aiff", b"AIFF", 8),
+	("m4a", b"ftyp", 4),
 ];
 /// A command, its options before the file, and the formats it knows
 type Command = (&'static str, &'static [&'static str], &'static [&'static str]);
@@ -44,13 +50,25 @@ type Command = (&'static str, &'static [&'static str], &'static [&'static str]);
 const FILE_PLAYERS: [Command; 5] = [
 	("afplay", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 	("paplay", &[], &["wav", "ogg", "flac", "aiff"]),
-	("ffplay", &["-nodisp", "-autoexit", "-loglevel", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
-	("mpv", &["--no-video", "--msg-level=all=error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+	(
+		"ffplay",
+		&["-nodisp", "-autoexit", "-loglevel", "error"],
+		&["wav", "mp3", "ogg", "flac", "aiff", "m4a"],
+	),
+	(
+		"mpv",
+		&["--no-video", "--msg-level=all=error"],
+		&["wav", "mp3", "ogg", "flac", "aiff", "m4a"],
+	),
 	("aplay", &["-q"], &["wav"]),
 ];
 /// The decoders that read a music file without playing it, the first the system has that knows its format
 const FILE_PROBES: [Command; 2] = [
-	("ffprobe", &["-v", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+	(
+		"ffprobe",
+		&["-v", "error"],
+		&["wav", "mp3", "ogg", "flac", "aiff", "m4a"],
+	),
 	("afinfo", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 ];
 /// A player failing at once (a file it cannot decode) fails play itself; a later failure is printed when it happens
@@ -130,7 +148,12 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 		eprintln!("sound file {format}: {path}");
 		return Ok(handle);
 	}
-	let (player, child) = spawned(&FILE_PLAYERS, format, path, false).ok_or_else(|| format!("no player for {format} found ({}) to play {path}", names_for(&FILE_PLAYERS, format)))?;
+	let (player, child) = spawned(&FILE_PLAYERS, format, path, false).ok_or_else(|| {
+		format!(
+			"no player for {format} found ({}) to play {path}",
+			names_for(&FILE_PLAYERS, format)
+		)
+	})?;
 	let child: Player = Arc::new(Mutex::new(child));
 	let started = Instant::now();
 	while started.elapsed() < EARLY_FAILURE {
@@ -140,7 +163,12 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 		std::thread::sleep(PLAYER_POLL);
 	}
 	listed(handle, &child);
-	let queued = Queued { path: path.into(), start: Instant::now(), stops: STOPS.load(Ordering::Relaxed), handle };
+	let queued = Queued {
+		path: path.into(),
+		start: Instant::now(),
+		stops: STOPS.load(Ordering::Relaxed),
+		handle,
+	};
 	std::thread::spawn(move || watched(child, player, &queued, "sound file"));
 	Ok(handle)
 }
@@ -202,7 +230,10 @@ pub fn stop() {
 /// stop_sound(handle): that sound or music file alone dropped from the queue or stopped
 pub fn stop_one(handle: usize) -> Result<(), String> {
 	if handle == 0 || handle > last_handle() {
-		return Err(format!("stop_sound({handle}): no sound {handle} in this run, which played {}", last_handle()));
+		return Err(format!(
+			"stop_sound({handle}): no sound {handle} in this run, which played {}",
+			last_handle()
+		));
 	}
 	if let Ok(mut stopped) = STOPPED.lock() {
 		stopped.push(handle);
@@ -216,15 +247,29 @@ pub fn stop_one(handle: usize) -> Result<(), String> {
 /// handle 0 fades all. Only warp's own output ramps a playing sound (sound_engine.rs); played by afplay it can't
 pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 	if handle > last_handle() {
-		return Err(format!("fade_sound({handle}): no sound {handle} in this run, which played {}", last_handle()));
+		return Err(format!(
+			"fade_sound({handle}): no sound {handle} in this run, which played {}",
+			last_handle()
+		));
 	}
 	if !(0.0..=1.0).contains(&gain) || seconds < 0.0 {
-		return Err(format!("fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"));
+		return Err(format!(
+			"fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"
+		));
 	}
 	// headless nothing is heard: the render places the fade at the start, not wherever the program's slowness put it
-	let place = if crate::paint::shows_windows() { voice().seconds - queued_seconds() } else { 0.0 };
+	let place = if crate::paint::shows_windows() {
+		voice().seconds - queued_seconds()
+	} else {
+		0.0
+	};
 	if let Ok(mut fades) = FADES.lock() {
-		fades.push(Fade { handle, place, gain, seconds });
+		fades.push(Fade {
+			handle,
+			place,
+			gain,
+			seconds,
+		});
 	}
 	let faded = crate::sound_engine::fade(handle, gain as f32, seconds);
 	if !faded && crate::paint::shows_windows() && last_handle() > 0 {
@@ -235,7 +280,16 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 
 /// The players of the handles chosen ended
 fn killed(chosen: impl Fn(usize) -> bool) {
-	let playing: Vec<Player> = PLAYING.lock().map(|playing| playing.iter().filter(|(handle, _)| chosen(*handle)).map(|(_, child)| child.clone()).collect()).unwrap_or_default();
+	let playing: Vec<Player> = PLAYING
+		.lock()
+		.map(|playing| {
+			playing
+				.iter()
+				.filter(|(handle, _)| chosen(*handle))
+				.map(|(_, child)| child.clone())
+				.collect()
+		})
+		.unwrap_or_default();
 	for child in playing {
 		if let Ok(mut child) = child.lock() {
 			let _ = child.kill();
@@ -275,12 +329,20 @@ pub fn at(seconds: f64) {
 	BEFORE_AT.with(|before| before.borrow_mut().push(voice));
 	let origin = voice.origin.unwrap_or_else(Instant::now);
 	let stops = STOPS.load(Ordering::Relaxed);
-	join_voice(Voice { end: Some(origin + Duration::from_secs_f64(seconds.max(0.0))), seconds: seconds.max(0.0), origin: Some(origin), stops });
+	join_voice(Voice {
+		end: Some(origin + Duration::from_secs_f64(seconds.max(0.0))),
+		seconds: seconds.max(0.0),
+		origin: Some(origin),
+		stops,
+	});
 }
 
 pub fn at_end() {
 	if let Some(before) = BEFORE_AT.with(|before| before.borrow_mut().pop()) {
-		join_voice(Voice { origin: voice().origin, ..before }); // the origin `at` gave a voice without sounds stays
+		join_voice(Voice {
+			origin: voice().origin,
+			..before
+		}); // the origin `at` gave a voice without sounds stays
 	}
 }
 
@@ -290,10 +352,18 @@ fn scheduled(seconds: f64) -> (Instant, f64) {
 	let now = Instant::now();
 	let stops = STOPS.load(Ordering::Relaxed);
 	let mut voice = voice();
-	let start = voice.end.filter(|end| *end > now && voice.stops == stops).unwrap_or(now);
+	let start = voice
+		.end
+		.filter(|end| *end > now && voice.stops == stops)
+		.unwrap_or(now);
 	let place = voice.seconds;
 	let origin = voice.origin.unwrap_or_else(|| start - Duration::from_secs_f64(place));
-	voice = Voice { end: Some(start + Duration::from_secs_f64(seconds)), seconds: place + seconds, origin: Some(origin), stops };
+	voice = Voice {
+		end: Some(start + Duration::from_secs_f64(seconds)),
+		seconds: place + seconds,
+		origin: Some(origin),
+		stops,
+	};
 	join_voice(voice);
 	(start, place)
 }
@@ -321,7 +391,10 @@ fn play_wav(queued: &Queued) {
 			listed(queued.handle, &child);
 			watched(child, player, queued, "sound")
 		}
-		None => eprintln!("sound: no player found ({}) for {shown}", names_for(&FILE_PLAYERS, "wav")),
+		None => eprintln!(
+			"sound: no player found ({}) for {shown}",
+			names_for(&FILE_PLAYERS, "wav")
+		),
 	}
 }
 
@@ -338,7 +411,9 @@ fn wait_at_exit() {
 		fn atexit(callback: extern "C" fn()) -> i32;
 	}
 	// SAFETY: atexit only stores the function pointer; wait_for_sounds reads atomics and a lock and sleeps
-	REGISTERED.call_once(|| unsafe { atexit(wait_for_sounds); });
+	REGISTERED.call_once(|| unsafe {
+		atexit(wait_for_sounds);
+	});
 }
 
 /// Whether the system has a decoder that checks a file of this format without playing it
@@ -348,36 +423,70 @@ pub fn can_probe(format: &str) -> bool {
 
 /// The file decoded by the first probe the system has for its format (none: nothing to check it with)
 fn probe(path: &str, format: &'static str) -> Result<(), String> {
-	let Some((prober, child)) = spawned(&FILE_PROBES, format, path, true) else { return Ok(()) };
-	let output = child.wait_with_output().map_err(|failure| format!("{prober} could not check {path}: {failure}"))?;
+	let Some((prober, child)) = spawned(&FILE_PROBES, format, path, true) else {
+		return Ok(());
+	};
+	let output = child
+		.wait_with_output()
+		.map_err(|failure| format!("{prober} could not check {path}: {failure}"))?;
 	if output.status.success() {
 		return Ok(());
 	}
-	Err(format!("{path} cannot be decoded as {format}: {prober} failed: {}", tail(&output.stderr, &output.stdout)))
+	Err(format!(
+		"{path} cannot be decoded as {format}: {prober} failed: {}",
+		tail(&output.stderr, &output.stdout)
+	))
 }
 
 /// The first command of the list the system has for the format, started on the file, its error output kept (its output
 /// too when `keep_output`: afinfo says its failure there; a player's would fill the pipe)
-fn spawned(commands: &[Command], format: &str, path: &str, keep_output: bool) -> Option<(&'static str, std::process::Child)> {
-	let output = || if keep_output { std::process::Stdio::piped() } else { std::process::Stdio::null() };
+fn spawned(
+	commands: &[Command],
+	format: &str,
+	path: &str,
+	keep_output: bool,
+) -> Option<(&'static str, std::process::Child)> {
+	let output = || {
+		if keep_output {
+			std::process::Stdio::piped()
+		} else {
+			std::process::Stdio::null()
+		}
+	};
 	knowing(commands, format).find_map(|(command, options)| {
-		let child = std::process::Command::new(command).args(options).arg(path).stdin(std::process::Stdio::null())
-			.stdout(output()).stderr(std::process::Stdio::piped()).spawn().ok()?;
+		let child = std::process::Command::new(command)
+			.args(options)
+			.arg(path)
+			.stdin(std::process::Stdio::null())
+			.stdout(output())
+			.stderr(std::process::Stdio::piped())
+			.spawn()
+			.ok()?;
 		Some((command, child))
 	})
 }
 
 /// The commands of the list that know the format, with their options
-fn knowing<'a>(commands: &'a [Command], format: &'a str) -> impl Iterator<Item = (&'static str, &'static [&'static str])> + 'a {
-	commands.iter().filter(move |(_, _, formats)| formats.contains(&format)).map(|(command, options, _)| (*command, *options))
+fn knowing<'a>(
+	commands: &'a [Command],
+	format: &'a str,
+) -> impl Iterator<Item = (&'static str, &'static [&'static str])> + 'a {
+	commands
+		.iter()
+		.filter(move |(_, _, formats)| formats.contains(&format))
+		.map(|(command, options, _)| (*command, *options))
 }
 
 fn names_for(commands: &[Command], format: &str) -> String {
-	knowing(commands, format).map(|(command, _)| command).collect::<Vec<_>>().join(", ")
+	knowing(commands, format)
+		.map(|(command, _)| command)
+		.collect::<Vec<_>>()
+		.join(", ")
 }
 
 fn which(command: &str) -> bool {
-	std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|folder| folder.join(command).is_file()))
+	std::env::var_os("PATH")
+		.is_some_and(|paths| std::env::split_paths(&paths).any(|folder| folder.join(command).is_file()))
 }
 
 /// None while the player plays; once it ended Ok, or the failure naming the player and its error output's tail
@@ -392,12 +501,19 @@ fn failure_of(child: &Player, player: &str, path: &str) -> Option<Result<(), Str
 		use std::io::Read;
 		let _ = stderr.read_to_end(&mut errors);
 	}
-	Some(Err(format!("{path}: {player} failed ({status}): {}", tail(&errors, &[]))))
+	Some(Err(format!(
+		"{path}: {player} failed ({status}): {}",
+		tail(&errors, &[])
+	)))
 }
 
 /// The last characters of a command's error output (or its output, where afinfo writes its failure)
 fn tail(errors: &[u8], output: &[u8]) -> String {
-	let said = String::from_utf8_lossy(if errors.iter().any(|byte| !byte.is_ascii_whitespace()) { errors } else { output });
+	let said = String::from_utf8_lossy(if errors.iter().any(|byte| !byte.is_ascii_whitespace()) {
+		errors
+	} else {
+		output
+	});
 	let said = said.trim();
 	let start = said.char_indices().rev().nth(FAILURE_TAIL).map_or(0, |(at, _)| at);
 	said[start..].replace('\n', " ")
@@ -408,8 +524,13 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 	use std::io::Read;
 	let mut start = [0u8; 12];
 	let mut file = std::fs::File::open(path).map_err(|failure| format!("cannot open {path}: {failure}"))?;
-	let read = file.read(&mut start).map_err(|failure| format!("cannot read {path}: {failure}"))?;
-	FILE_FORMATS.iter().find(|(_, magic, at)| start[..read].get(*at..at + magic.len()) == Some(magic)).map(|(format, _, _)| *format)
+	let read = file
+		.read(&mut start)
+		.map_err(|failure| format!("cannot read {path}: {failure}"))?;
+	FILE_FORMATS
+		.iter()
+		.find(|(_, magic, at)| start[..read].get(*at..at + magic.len()) == Some(magic))
+		.map(|(format, _, _)| *format)
 		.ok_or_else(|| format!("{path} is not a sound file (wav, mp3, ogg, flac, aiff, m4a)"))
 }
 
@@ -422,7 +543,12 @@ pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<(), String> {
 /// play_signal(f, seconds) (card real-time): the samples of f(t), t the sample's time in seconds, each computed when it
 /// is due, in blocks of SIGNAL_BLOCK (play_blocks); `sample_at(channel, t)` for each of the channels, left first. Its
 /// handle
-pub fn play_signal(seconds: f64, rate: u32, channels: u16, mut sample_at: impl FnMut(usize, f64) -> Result<f64, String>) -> Result<usize, String> {
+pub fn play_signal(
+	seconds: f64,
+	rate: u32,
+	channels: u16,
+	mut sample_at: impl FnMut(usize, f64) -> Result<f64, String>,
+) -> Result<usize, String> {
 	play_blocks(seconds, rate, SIGNAL_BLOCK, channels, |first, count| {
 		let mut blocks = vec![Vec::with_capacity(count); channels as usize];
 		for index in first..first + count {
@@ -437,7 +563,13 @@ pub fn play_signal(seconds: f64, rate: u32, channels: u16, mut sample_at: impl F
 /// play_blocks(fill, seconds) (sound layer 8, block-wise): the samples `fill(first, count)` gives, a block of each
 /// channel, `count` of them from the sample `first` on, `block` at a time: on warp's own output each block queued
 /// SIGNAL_AHEAD before the device plays it (stop_sound ends it), else all of them as one sound. Its handle
-pub fn play_blocks(seconds: f64, rate: u32, block: usize, channels: u16, mut fill: impl FnMut(usize, usize) -> Result<Vec<Vec<f64>>, String>) -> Result<usize, String> {
+pub fn play_blocks(
+	seconds: f64,
+	rate: u32,
+	block: usize,
+	channels: u16,
+	mut fill: impl FnMut(usize, usize) -> Result<Vec<Vec<f64>>, String>,
+) -> Result<usize, String> {
 	let total = (seconds.max(0.0) * rate as f64).round() as usize;
 	let handle = next_handle();
 	let stops = STOPS.load(Ordering::Relaxed);
@@ -452,7 +584,11 @@ pub fn play_blocks(seconds: f64, rate: u32, block: usize, channels: u16, mut fil
 		}
 		let count = block.min(total - first);
 		let blocks = fill(first, count)?;
-		samples.extend((0..count).flat_map(|index| blocks.iter().map(move |block| block.get(index).copied().unwrap_or(0.0))).map(signal_pcm));
+		samples.extend(
+			(0..count)
+				.flat_map(|index| blocks.iter().map(move |block| block.get(index).copied().unwrap_or(0.0)))
+				.map(signal_pcm),
+		);
 		if streamed {
 			sounded(handle, std::mem::take(&mut samples), rate, channels)?;
 		}
@@ -489,22 +625,38 @@ fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result
 	} else {
 		let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
 		if audible {
-			queued(Queued { path, start, stops: STOPS.load(Ordering::Relaxed), handle });
+			queued(Queued {
+				path,
+				start,
+				stops: STOPS.load(Ordering::Relaxed),
+				handle,
+			});
 		} else {
 			eprintln!("sound {seconds:.2} s: {}", path.display());
 		}
 	}
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
-		unrendered.push(Unrendered { handle, place, rate, channels, samples });
+		unrendered.push(Unrendered {
+			handle,
+			place,
+			rate,
+			channels,
+			samples,
+		});
 	}
 	Ok(())
 }
 
 fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 	let folder = std::env::temp_dir().join(FOLDER);
-	std::fs::create_dir_all(&folder).map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
+	std::fs::create_dir_all(&folder)
+		.map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
 	let process = std::process::id();
-	let path = folder.join(if handle == 1 { format!("{FILE_STEM}-{process}.wav") } else { format!("{FILE_STEM}-{process}-{handle}.wav") });
+	let path = folder.join(if handle == 1 {
+		format!("{FILE_STEM}-{process}.wav")
+	} else {
+		format!("{FILE_STEM}-{process}-{handle}.wav")
+	});
 	std::fs::write(&path, wav).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
 	Ok(path)
 }
@@ -512,36 +664,70 @@ fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 /// render_sound(path): the sounds since the last render (or the start) in one WAV file, each at its place in its
 /// voice, the voices mixed (in stereo when one of them is: a mono sound on both speakers alike); its seconds
 pub fn render(path: &str) -> Result<f64, String> {
-	let sounds = std::mem::take(&mut *UNRENDERED.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
+	let sounds = std::mem::take(
+		&mut *UNRENDERED
+			.lock()
+			.map_err(|_| "the rendered sounds are poisoned".to_string())?,
+	);
 	let rate = sounds.first().map_or(DEFAULT_RATE, |sound| sound.rate);
 	if let Some(other) = sounds.iter().find(|sound| sound.rate != rate) {
-		return Err(format!("sounds of {rate} and {} samples per second cannot share {path}", other.rate));
+		return Err(format!(
+			"sounds of {rate} and {} samples per second cannot share {path}",
+			other.rate
+		));
 	}
 	let channels = sounds.iter().map(|sound| sound.channels).max().unwrap_or(MONO);
 	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
-	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
+	let mut rendered_until = RENDERED_UNTIL
+		.lock()
+		.map_err(|_| "the rendered sounds are poisoned".to_string())?;
 	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until, f64::min);
-	let fades = std::mem::take(&mut *FADES.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
+	let fades = std::mem::take(
+		&mut *FADES
+			.lock()
+			.map_err(|_| "the rendered sounds are poisoned".to_string())?,
+	);
 	let mut mixed: Vec<i32> = vec![];
 	for sound in sounds {
 		let start = ((sound.place - first_place) * rate as f64).round() as usize * channels as usize;
-		let own: Vec<Fade> = fades.iter().filter(|fade| fade.handle == 0 || fade.handle == sound.handle).copied().collect();
-		let gain = |frame: usize| if own.is_empty() { 1.0 } else { faded_gain(&own, sound.place + frame as f64 / rate as f64) };
-		let samples: Vec<i16> = sound.samples.chunks(sound.channels as usize).enumerate()
+		let own: Vec<Fade> = fades
+			.iter()
+			.filter(|fade| fade.handle == 0 || fade.handle == sound.handle)
+			.copied()
+			.collect();
+		let gain = |frame: usize| {
+			if own.is_empty() {
+				1.0
+			} else {
+				faded_gain(&own, sound.place + frame as f64 / rate as f64)
+			}
+		};
+		let samples: Vec<i16> = sound
+			.samples
+			.chunks(sound.channels as usize)
+			.enumerate()
 			.flat_map(|(index, frame)| {
 				let gain = gain(index);
-				(0..channels as usize).map(move |channel| (frame[channel.min(frame.len() - 1)] as f64 * gain).round() as i16)
+				(0..channels as usize)
+					.map(move |channel| (frame[channel.min(frame.len() - 1)] as f64 * gain).round() as i16)
 			})
 			.collect();
 		if mixed.len() < start + samples.len() {
 			mixed.resize(start + samples.len(), 0);
 		}
-		mixed[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample as i32);
+		mixed[start..]
+			.iter_mut()
+			.zip(samples)
+			.for_each(|(sum, sample)| *sum += sample as i32);
 	}
 	let seconds = mixed.len() as f64 / channels as f64 / rate as f64;
 	*rendered_until = first_place + seconds;
-	let samples: Vec<i16> = mixed.iter().map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
-	std::fs::write(path, wav_of(&samples, rate, channels)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
+	let samples: Vec<i16> = mixed
+		.iter()
+		.map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16)
+		.collect();
+	std::fs::write(path, wav_of(&samples, rate, channels))
+		.map_err(|failure| format!("cannot write {path}: {failure}"))?;
 	Ok(seconds)
 }
 
@@ -549,10 +735,22 @@ pub fn render(path: &str) -> Result<f64, String> {
 /// there to its own
 fn faded_gain(fades: &[Fade], place: f64) -> f64 {
 	let ramped = |fade: &Fade, from: f64, place: f64| {
-		let share = if fade.seconds > 0.0 { ((place - fade.place) / fade.seconds).clamp(0.0, 1.0) } else { 1.0 };
+		let share = if fade.seconds > 0.0 {
+			((place - fade.place) / fade.seconds).clamp(0.0, 1.0)
+		} else {
+			1.0
+		};
 		from + (fade.gain - from) * share
 	};
-	let mut ramp = (&Fade { handle: 0, place: 0.0, gain: 1.0, seconds: 0.0 }, 1.0);
+	let mut ramp = (
+		&Fade {
+			handle: 0,
+			place: 0.0,
+			gain: 1.0,
+			seconds: 0.0,
+		},
+		1.0,
+	);
 	for fade in fades.iter().filter(|fade| fade.place <= place) {
 		ramp = (fade, ramped(ramp.0, ramp.1, fade.place));
 	}
@@ -566,7 +764,10 @@ pub fn wav(samples: &[u64], rate: u32) -> Vec<u8> {
 
 /// The offset samples as 16-bit amplitudes
 fn pcm(samples: &[u64]) -> Vec<i16> {
-	samples.iter().map(|&sample| (sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16).collect()
+	samples
+		.iter()
+		.map(|&sample| (sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16)
+		.collect()
 }
 
 /// A 16-bit PCM WAV of the samples, a stereo one's interleaved left, right
@@ -574,12 +775,24 @@ fn wav_of(samples: &[i16], rate: u32, channels: u16) -> Vec<u8> {
 	let data: Vec<u8> = samples.iter().flat_map(|sample| sample.to_le_bytes()).collect();
 	let data = data.as_slice();
 	let format = [
-		PCM_FORMAT.to_le_bytes().as_slice(), &channels.to_le_bytes(), &rate.to_le_bytes(), &(rate * BYTES_PER_SAMPLE * channels as u32).to_le_bytes(),
-		&(BYTES_PER_SAMPLE as u16 * channels).to_le_bytes(), &BITS_PER_SAMPLE.to_le_bytes(),
-	].concat();
+		PCM_FORMAT.to_le_bytes().as_slice(),
+		&channels.to_le_bytes(),
+		&rate.to_le_bytes(),
+		&(rate * BYTES_PER_SAMPLE * channels as u32).to_le_bytes(),
+		&(BYTES_PER_SAMPLE as u16 * channels).to_le_bytes(),
+		&BITS_PER_SAMPLE.to_le_bytes(),
+	]
+	.concat();
 	[
-		b"RIFF".as_slice(), &(HEADER_SIZE_AFTER_RIFF + data.len() as u32).to_le_bytes(), b"WAVE",
-		b"fmt ", &FORMAT_CHUNK_SIZE.to_le_bytes(), &format,
-		b"data", &(data.len() as u32).to_le_bytes(), data,
-	].concat()
+		b"RIFF".as_slice(),
+		&(HEADER_SIZE_AFTER_RIFF + data.len() as u32).to_le_bytes(),
+		b"WAVE",
+		b"fmt ",
+		&FORMAT_CHUNK_SIZE.to_le_bytes(),
+		&format,
+		b"data",
+		&(data.len() as u32).to_le_bytes(),
+		data,
+	]
+	.concat()
 }

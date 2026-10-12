@@ -41,7 +41,11 @@ const REPLACED_DIRECTORY: &str = ".replaced";
 static FETCHING: Mutex<()> = Mutex::new(());
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
 /// `use folder`, `use package`, `use project`: every definition of that scope is visible, looked up by name (D15)
-const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", Scope::Package), ("project", Scope::Project)];
+const SCOPE_WORDS: [(&str, Scope); 3] = [
+	("folder", Scope::Folder),
+	("package", Scope::Package),
+	("project", Scope::Project),
+];
 /// Folders a package or project scope never looks into, besides hidden ones and nested repositories
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
@@ -50,7 +54,9 @@ const GLOBAL_KEYWORD: &str = "global";
 const DECLARATION_KEYWORDS: [&str; 4] = ["let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
-	DECLARATION_KEYWORDS.contains(&keyword) || is_import_keyword(keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
+	DECLARATION_KEYWORDS.contains(&keyword)
+		|| is_import_keyword(keyword)
+		|| crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
 }
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
@@ -67,13 +73,21 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	loader.program_variables = program_variables(&program);
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
-	let resolved = loader.resolve(program).and_then(|program| loader.implicit_std_modules(&program).map(|_| program)).and_then(|program| match loader.scope {
-		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
-		None => Ok(program),
-	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
+	let resolved = loader
+		.resolve(program)
+		.and_then(|program| loader.implicit_std_modules(&program).map(|_| program))
+		.and_then(|program| match loader.scope {
+			Some(scope) => loader.with_scope(program, scope, file.as_deref()),
+			None => Ok(program),
+		})
+		.map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
-	MODULE_DEFINITIONS.with(|names| own_names.iter().for_each(|own| { names.borrow_mut().remove(own); })); // the program's own word wins
+	MODULE_DEFINITIONS.with(|names| {
+		own_names.iter().for_each(|own| {
+			names.borrow_mut().remove(own);
+		})
+	}); // the program's own word wins
 	resolved.unwrap_or_else(|failure| failure)
 }
 
@@ -86,14 +100,25 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements_of(&program).iter().filter_map(declared_name).collect();
-	let (mut std_definitions, mut file_classes, mut early, mut class_modules) = (vec![], vec![], HashSet::new(), vec![]);
+	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
+		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
-	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
-		if let Some(module) = loader.find(&used.name).is_none().then(|| loader.find_with(&used.name, &crate::wasm_modules::MODULE_EXTENSIONS)).flatten() {
+	for used in statements(program.clone())
+		.iter()
+		.filter_map(used_module)
+		.filter(|used| used.import == Import::Use)
+	{
+		if let Some(module) = loader
+			.find(&used.name)
+			.is_none()
+			.then(|| loader.find_with(&used.name, &crate::wasm_modules::MODULE_EXTENSIONS))
+			.flatten()
+		{
 			let module = module.to_string_lossy();
 			let classes = crate::wasm_modules::classes(&module);
 			let names: Vec<String> = classes.iter().filter_map(declared_name).collect();
-			program = crate::wasm_modules::with_bare_classes(program, &crate::wasm_modules::module_alias(&module), &names);
+			program =
+				crate::wasm_modules::with_bare_classes(program, &crate::wasm_modules::module_alias(&module), &names);
 			file_classes.extend(classes);
 			continue;
 		}
@@ -127,19 +152,31 @@ pub fn insert_module_classes(program: Node) -> Node {
 	}
 	EARLY_CLASS_MODULES.with(|modules| *modules.borrow_mut() = early);
 	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
-	let aliases: Vec<(&str, &str)> = STD_ALIASES.into_iter().filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias)).collect();
+	let aliases: Vec<(&str, &str)> = STD_ALIASES
+		.into_iter()
+		.filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias))
+		.collect();
 	// `collections.Counter(xs)`: the bare class before class_methods reads its construction; other qualified calls
 	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
 	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
 	let program = with_std_aliases(crate::welcome_forms::module_calls(program, &class_modules), &aliases);
-	let std_classes = std_definitions.into_iter().filter(|definition| is_class(definition) && is_foreign(definition)).collect();
+	let std_classes = std_definitions
+		.into_iter()
+		.filter(|definition| is_class(definition) && is_foreign(definition))
+		.collect();
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let program = with_implicit_class_modules(with_needed_definitions(program, std_classes));
 	match file_classes.is_empty() {
 		true => program,
 		false => match program {
-			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List([file_classes, statements].concat(), Bracket::None, separator),
-			single => Node::List([file_classes, vec![single]].concat(), Bracket::None, Separator::Semicolon),
+			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+				Node::List([file_classes, statements].concat(), Bracket::None, separator)
+			}
+			single => Node::List(
+				[file_classes, vec![single]].concat(),
+				Bracket::None,
+				Separator::Semicolon,
+			),
 		},
 	}
 }
@@ -189,10 +226,16 @@ fn with_implicit_class_modules(mut program: Node) -> Node {
 fn without_use_of(program: Node, module: &str) -> Node {
 	match program {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			let kept = statements.into_iter().filter(|statement| used_module(statement).is_none_or(|used| used.name != module)).collect();
+			let kept = statements
+				.into_iter()
+				.filter(|statement| used_module(statement).is_none_or(|used| used.name != module))
+				.collect();
 			Node::List(kept, Bracket::None, separator)
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_use_of(*node, module)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(without_use_of(*node, module)),
+			data,
+		},
 		single => single,
 	}
 }
@@ -213,11 +256,25 @@ pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 fn with_type_module_uses(program: Node) -> Node {
 	let defined = own_functions(&program);
 	// `from list import zip` brings only zip: the module's other words stay out (test_from_import)
-	let imported = |statement: &Node| used_module(statement).or_else(|| imported_words(statement).map(|(used, _, _)| used));
-	let used: HashSet<String> = statements_of(&program).iter().filter_map(imported).map(|used| used.name).collect();
+	let imported =
+		|statement: &Node| used_module(statement).or_else(|| imported_words(statement).map(|(used, _, _)| used));
+	let used: HashSet<String> = statements_of(&program)
+		.iter()
+		.filter_map(imported)
+		.map(|used| used.name)
+		.collect();
 	let type_modules = type_modules();
-	let is_module_name = |receiver: &Node| receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name));
-	let only_provider = |method: &String| match type_modules.iter().filter(|(_, words)| words.contains(method)).collect::<Vec<_>>().as_slice() {
+	let is_module_name = |receiver: &Node| {
+		receiver
+			.symbol_name()
+			.is_some_and(|name| std_module(name).is_some() && !defined.contains(name))
+	};
+	let only_provider = |method: &String| match type_modules
+		.iter()
+		.filter(|(_, words)| words.contains(method))
+		.collect::<Vec<_>>()
+		.as_slice()
+	{
 		[(module, _)] => Some(*module),
 		_ => None,
 	};
@@ -229,15 +286,23 @@ fn with_type_module_uses(program: Node) -> Node {
 		.collect();
 	modules.sort();
 	modules.dedup();
-	with_statements_first(program, modules.into_iter().map(|module| WarpParser::parse(&format!("use {module}"))).collect())
+	with_statements_first(
+		program,
+		modules
+			.into_iter()
+			.map(|module| WarpParser::parse(&format!("use {module}")))
+			.collect(),
+	)
 }
 
 /// The names the program declares, but not its methods: `take()` of a class Box, `take(b:Box)` add to list's take
 /// (notes/dispatch.md "Methods"), a plain `take(xs, n)` is the program's own take
 fn own_functions(program: &Node) -> HashSet<String> {
 	let mut classes = HashSet::new();
-	program.visit(&mut |node| if let Node::Type { name, .. } = node {
-		classes.extend(leftmost_symbol(name));
+	program.visit(&mut |node| {
+		if let Node::Type { name, .. } = node {
+			classes.extend(leftmost_symbol(name));
+		}
 	});
 	let mut own = classes.clone();
 	collect_own_functions(program, &classes, &mut own);
@@ -246,12 +311,16 @@ fn own_functions(program: &Node) -> HashSet<String> {
 
 fn collect_own_functions(node: &Node, classes: &HashSet<String>, own: &mut HashSet<String>) {
 	let is_method = |target: &Node| match target.drop_meta() {
-		Node::List(items, _, _) => matches!(items.get(1).map(Node::drop_meta), Some(Node::Key(_, Op::Colon, class)) if class.symbol_name().is_some_and(|class| classes.contains(class))),
+		Node::List(items, _, _) => {
+			matches!(items.get(1).map(Node::drop_meta), Some(Node::Key(_, Op::Colon, class)) if class.symbol_name().is_some_and(|class| classes.contains(class)))
+		}
 		_ => false,
 	};
 	match node.drop_meta() {
 		Node::Type { .. } => {}
-		Node::Key(target, Op::Assign | Op::Define, value) if is_method(target) => collect_own_functions(value, classes, own),
+		Node::Key(target, Op::Assign | Op::Define, value) if is_method(target) => {
+			collect_own_functions(value, classes, own)
+		}
 		Node::Key(left, _, right) => {
 			own.extend(declared_name(node));
 			collect_own_functions(left, classes, own);
@@ -282,7 +351,9 @@ fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, nam
 				if !is_module_name(receiver) {
 					names.extend(called(call));
 				}
-				call.iter().skip(1).for_each(|argument| collect_called_words(argument, is_module_name, names));
+				call.iter()
+					.skip(1)
+					.for_each(|argument| collect_called_words(argument, is_module_name, names));
 			}
 		}
 		Node::Key(left, _, right) => {
@@ -293,7 +364,9 @@ fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, nam
 			if matches!(bracket, Bracket::Round | Bracket::None) && items.len() > 1 {
 				names.extend(called(items));
 			}
-			items.iter().for_each(|item| collect_called_words(item, is_module_name, names));
+			items
+				.iter()
+				.for_each(|item| collect_called_words(item, is_module_name, names));
 		}
 		Node::Type { body, .. } => collect_called_words(body, is_module_name, names),
 		_ => {}
@@ -305,9 +378,18 @@ fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
 		return program;
 	}
 	match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_statements_first(*node, first)), data },
-		single => Node::List(first.into_iter().chain(std::iter::once(single)).collect(), Bracket::None, Separator::Newline),
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator)
+		}
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_statements_first(*node, first)),
+			data,
+		},
+		single => Node::List(
+			first.into_iter().chain(std::iter::once(single)).collect(),
+			Bracket::None,
+			Separator::Newline,
+		),
 	}
 }
 
@@ -318,7 +400,11 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	let mut needed: Vec<Node> = vec![];
 	let mut mentioned = called_names(std::slice::from_ref(&program));
 	loop {
-		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| is_needed(&name, &mentioned))).cloned().collect();
+		let now_needed: Vec<Node> = definitions
+			.iter()
+			.filter(|definition| declared_name(definition).is_some_and(|name| is_needed(&name, &mentioned)))
+			.cloned()
+			.collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
@@ -329,7 +415,9 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 		return program;
 	}
 	let (statements, separator) = match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => (statements, separator),
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			(statements, separator)
+		}
 		single => (vec![single], Separator::Semicolon),
 	};
 	Node::List([needed, statements].concat(), Bracket::None, separator)
@@ -337,31 +425,48 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 
 /// A mentioned name, or the companion f_as of a mentioned f: overloads lowering calls it where f gives an expected type
 fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
-	mentioned.contains(name) || crate::lowering::overloads::companion_of(name).is_some_and(|function| mentioned.contains(function))
+	mentioned.contains(name)
+		|| crate::lowering::overloads::companion_of(name).is_some_and(|function| mentioned.contains(function))
 }
 
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 fn called_names(statements: &[Node]) -> HashSet<String> {
-	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).collect())
+	with_library_words(
+		mentioned_names(statements)
+			.into_iter()
+			.chain(method_names(statements))
+			.collect(),
+	)
 }
 
 /// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of
 /// those (`prelude·is_digit`): library_words, which writes them so, runs after the modules are resolved
 fn with_library_words(names: HashSet<String>) -> HashSet<String> {
-	let spelled: Vec<&str> = names.iter().flat_map(|name| crate::library_words::words_spelled_by(name)).collect();
-	let qualified: Vec<String> = names.iter().map(String::as_str).chain(spelled.iter().copied()).filter_map(prelude_name).collect();
+	let spelled: Vec<&str> = names
+		.iter()
+		.flat_map(|name| crate::library_words::words_spelled_by(name))
+		.collect();
+	let qualified: Vec<String> = names
+		.iter()
+		.map(String::as_str)
+		.chain(spelled.iter().copied())
+		.filter_map(prelude_name)
+		.collect();
 	let spelled: Vec<String> = spelled.into_iter().map(str::to_string).collect();
 	names.into_iter().chain(spelled).chain(qualified).collect()
 }
 
 /// The variables a program assigns at its top: `words = […]`, also declared global: `global hue = 0`, `global hue`
 fn program_variables(program: &Node) -> HashSet<String> {
-	statements_of(program).iter().filter_map(|statement| match statement.drop_meta() {
-		Node::Key(variable, Op::Assign, _) => variable.drop_meta().symbol_name().map(String::from),
-		Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(GLOBAL_KEYWORD) => leftmost_symbol(declared),
-		_ => None,
-	}).collect()
+	statements_of(program)
+		.iter()
+		.filter_map(|statement| match statement.drop_meta() {
+			Node::Key(variable, Op::Assign, _) => variable.drop_meta().symbol_name().map(String::from),
+			Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(GLOBAL_KEYWORD) => leftmost_symbol(declared),
+			_ => None,
+		})
+		.collect()
 }
 
 /// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
@@ -370,12 +475,26 @@ fn program_variables(program: &Node) -> HashSet<String> {
 /// A module's `global` is a setting, which the program's `tempo = 90` sets (lib/sound.warp's tempo, note_seconds)
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
 	let declared: Vec<String> = definitions.iter().filter_map(declared_name).collect();
-	let settings: Vec<String> = definitions.iter().filter(|definition| is_global_declaration(definition)).filter_map(declared_name).collect();
-	let shadowed: Vec<String> = declared.iter().filter(|name| variables.contains(*name) && !settings.contains(name)).cloned().collect();
-	renamed_apart(definitions, &shadowed).into_iter().map(|definition| {
-		let locals: Vec<String> = assigned_names(&definition).into_iter().filter(|name| variables.contains(name) && !declared.contains(name)).collect();
-		renamed_apart(vec![definition], &locals).remove(0)
-	}).collect()
+	let settings: Vec<String> = definitions
+		.iter()
+		.filter(|definition| is_global_declaration(definition))
+		.filter_map(declared_name)
+		.collect();
+	let shadowed: Vec<String> = declared
+		.iter()
+		.filter(|name| variables.contains(*name) && !settings.contains(name))
+		.cloned()
+		.collect();
+	renamed_apart(definitions, &shadowed)
+		.into_iter()
+		.map(|definition| {
+			let locals: Vec<String> = assigned_names(&definition)
+				.into_iter()
+				.filter(|name| variables.contains(name) && !declared.contains(name))
+				.collect();
+			renamed_apart(vec![definition], &locals).remove(0)
+		})
+		.collect()
 }
 
 /// The names a function definition's body assigns: `hue = …` in `def hsv(h, s, v) {…}`; none for other declarations
@@ -384,9 +503,11 @@ fn assigned_names(definition: &Node) -> HashSet<String> {
 	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || is_global_declaration(definition) {
 		return names;
 	}
-	definition.visit(&mut |node| if let Node::Key(target, op, _) = node {
-		if *op == Op::Assign || op.is_compound_assign() {
-			names.extend(target.drop_meta().symbol_name().map(String::from));
+	definition.visit(&mut |node| {
+		if let Node::Key(target, op, _) = node {
+			if *op == Op::Assign || op.is_compound_assign() {
+				names.extend(target.drop_meta().symbol_name().map(String::from));
+			}
 		}
 	});
 	names
@@ -399,7 +520,14 @@ fn is_global_declaration(statement: &Node) -> bool {
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
 fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Node> {
-	definitions.into_iter().map(|definition| names.iter().fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))).collect()
+	definitions
+		.into_iter()
+		.map(|definition| {
+			names.iter().fold(definition, |node, name| {
+				renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}"))
+			})
+		})
+		.collect()
 }
 
 /// `from` as a word renamed `to`; a field `x.from` keeps its name
@@ -446,8 +574,12 @@ pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
 
 /// Does `use name` name anything: a module (warp, standard, WebAssembly), a scope, a package or a C library
 pub fn resolves(name: &str) -> bool {
-	names_a_module(name) || wasm_module_file(name).is_some() || scope_word(name).is_some() || package_repository(name).is_some()
-		|| is_builtin_library(name) || crate::ffi::is_ffi_library(name)
+	names_a_module(name)
+		|| wasm_module_file(name).is_some()
+		|| scope_word(name).is_some()
+		|| package_repository(name).is_some()
+		|| is_builtin_library(name)
+		|| crate::ffi::is_ffi_library(name)
 }
 
 /// Is `name` a warp module beside the program or in the search directories, or a standard module
@@ -497,7 +629,10 @@ enum Scope {
 }
 
 fn scope_word(name: &str) -> Option<Scope> {
-	SCOPE_WORDS.iter().find(|(word, _)| *word == name).map(|(_, scope)| *scope)
+	SCOPE_WORDS
+		.iter()
+		.find(|(word, _)| *word == name)
+		.map(|(_, scope)| *scope)
 }
 
 /// The other module files of the scope around the program (the working directory for inline code)
@@ -512,15 +647,29 @@ fn scope_files(scope: Scope, file: Option<&Path>) -> Result<Vec<Sibling>, Node> 
 	let itself = file.and_then(|file| file.canonicalize().ok());
 	paths.retain(|path| path.canonicalize().ok() != itself);
 	paths.sort();
-	Ok(paths.into_iter().filter_map(|path| Some(Sibling { source: std::fs::read_to_string(&path).ok()?, path, statements: None })).collect())
+	Ok(paths
+		.into_iter()
+		.filter_map(|path| {
+			Some(Sibling {
+				source: std::fs::read_to_string(&path).ok()?,
+				path,
+				statements: None,
+			})
+		})
+		.collect())
 }
 
 fn is_module_file(path: &Path) -> bool {
-	path.is_file() && path.extension().is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known))
+	path.is_file()
+		&& path
+			.extension()
+			.is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known))
 }
 
 fn collect_module_files(directory: &Path, below: bool, paths: &mut Vec<PathBuf>) {
-	let Ok(entries) = std::fs::read_dir(directory) else { return };
+	let Ok(entries) = std::fs::read_dir(directory) else {
+		return;
+	};
 	for path in entries.filter_map(|entry| entry.ok().map(|entry| entry.path())) {
 		if is_module_file(&path) {
 			paths.push(path);
@@ -532,24 +681,48 @@ fn collect_module_files(directory: &Path, below: bool, paths: &mut Vec<PathBuf>)
 
 /// Hidden folders, fetched packages, build output and nested repositories belong to no scope
 fn is_scoped_directory(directory: &Path) -> bool {
-	let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+	let name = directory
+		.file_name()
+		.map(|name| name.to_string_lossy().to_string())
+		.unwrap_or_default();
 	!name.starts_with('.') && !UNSCOPED_DIRECTORIES.contains(&name.as_str()) && !directory.join(PROJECT_MARKER).exists()
 }
 
 fn package_root(folder: &Path) -> Result<PathBuf, Node> {
 	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
 	let holds_its_module = |directory: &&Path| {
-		let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
-		MODULE_EXTENSIONS.iter().any(|extension| directory.join(format!("{name}.{extension}")).is_file())
+		let name = directory
+			.file_name()
+			.map(|name| name.to_string_lossy().to_string())
+			.unwrap_or_default();
+		MODULE_EXTENSIONS
+			.iter()
+			.any(|extension| directory.join(format!("{name}.{extension}")).is_file())
 	};
-	absolute.ancestors().find(holds_its_module).map(Path::to_path_buf)
-		.ok_or_else(|| error(&format!("use package: no package folder around {}: a package folder holds <folder name>.warp", folder.display())))
+	absolute
+		.ancestors()
+		.find(holds_its_module)
+		.map(Path::to_path_buf)
+		.ok_or_else(|| {
+			error(&format!(
+				"use package: no package folder around {}: a package folder holds <folder name>.warp",
+				folder.display()
+			))
+		})
 }
 
 fn project_root(folder: &Path) -> Result<PathBuf, Node> {
 	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
-	absolute.ancestors().find(|directory| directory.join(PROJECT_MARKER).exists()).map(Path::to_path_buf)
-		.ok_or_else(|| error(&format!("use project: no project root around {}: the project root holds {PROJECT_MARKER}", folder.display())))
+	absolute
+		.ancestors()
+		.find(|directory| directory.join(PROJECT_MARKER).exists())
+		.map(Path::to_path_buf)
+		.ok_or_else(|| {
+			error(&format!(
+				"use project: no project root around {}: the project root holds {PROJECT_MARKER}",
+				folder.display()
+			))
+		})
 }
 
 impl Sibling {
@@ -559,7 +732,10 @@ impl Sibling {
 			let module = WarpParser::parse(&self.source);
 			let parsed = match module.first_error() {
 				Some(failure) => {
-					let warning = crate::diagnostic::Diagnostic::at(&module, format!("folder scope skips {}: {}", self.path.display(), failure.serialize()));
+					let warning = crate::diagnostic::Diagnostic::at(
+						&module,
+						format!("folder scope skips {}: {}", self.path.display(), failure.serialize()),
+					);
 					crate::diagnostic::report(&[warning])?;
 					vec![]
 				}
@@ -574,7 +750,12 @@ impl Sibling {
 		if !self.source.contains(name) {
 			return Ok(vec![]);
 		}
-		Ok(self.statements()?.iter().filter(|statement| is_declaration(statement) && declared_name(statement).as_deref() == Some(name)).cloned().collect())
+		Ok(self
+			.statements()?
+			.iter()
+			.filter(|statement| is_declaration(statement) && declared_name(statement).as_deref() == Some(name))
+			.cloned()
+			.collect())
 	}
 }
 
@@ -625,17 +806,36 @@ impl<'a> Loader<'a> {
 	/// (`take` → `lib·take` when lib/text.warp's `use list` brought it): the program sees a module's words only with
 	/// its own `use`, a bare `take` is the error naming the module
 	fn hidden_apart(&self) -> Vec<Node> {
-		let hidden: Vec<&String> = self.std_modules_of_std_modules.iter().filter(|module| !self.program_std_modules.contains(*module)).flat_map(|module| std_module_definitions(module).unwrap_or_default()).collect();
+		let hidden: Vec<&String> = self
+			.std_modules_of_std_modules
+			.iter()
+			.filter(|module| !self.program_std_modules.contains(*module))
+			.flat_map(|module| std_module_definitions(module).unwrap_or_default())
+			.collect();
 		MODULE_DEFINITIONS.with(|names| {
 			let mut names = names.borrow_mut();
-			hidden.iter().for_each(|word| { names.remove(*word); names.insert(format!("{SHADOWED_WORD_PREFIX}{word}")); });
+			hidden.iter().for_each(|word| {
+				names.remove(*word);
+				names.insert(format!("{SHADOWED_WORD_PREFIX}{word}"));
+			});
 		});
-		self.std_definitions.iter().map(|definition| hidden.iter().fold(definition.clone(), |node, word| renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}")))).collect()
+		self.std_definitions
+			.iter()
+			.map(|definition| {
+				hidden.iter().fold(definition.clone(), |node, word| {
+					renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}"))
+				})
+			})
+			.collect()
 	}
 
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
 		if let Some((used, statement, words)) = imported_words(&node) {
-			return Ok(Node::List(self.import_words(&used, &statement, &words)?, Bracket::None, Separator::Semicolon));
+			return Ok(Node::List(
+				self.import_words(&used, &statement, &words)?,
+				Bracket::None,
+				Separator::Semicolon,
+			));
 		}
 		if let Some(uses) = used_modules(&node) {
 			return Ok(match self.import_all(uses)? {
@@ -648,14 +848,19 @@ impl<'a> Loader<'a> {
 				let mut resolved = Vec::with_capacity(items.len());
 				for item in items {
 					match (imported_words(&item), used_modules(&item)) {
-						(Some((used, statement, words)), _) => resolved.extend(self.import_words(&used, &statement, &words)?),
+						(Some((used, statement, words)), _) => {
+							resolved.extend(self.import_words(&used, &statement, &words)?)
+						}
 						(None, Some(uses)) => resolved.extend(self.import_all(uses)?),
 						(None, None) => resolved.push(self.resolve(item)?),
 					}
 				}
 				Ok(Node::List(resolved, bracket, separator))
 			}
-			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.resolve(*node)?), data }),
+			Node::Meta { node, data } => Ok(Node::Meta {
+				node: Box::new(self.resolve(*node)?),
+				data,
+			}),
 			other => Ok(other),
 		}
 	}
@@ -675,7 +880,11 @@ impl<'a> Loader<'a> {
 		let first_std_definition = self.std_definitions.len();
 		let imported = self.import(used, statement)?;
 		let std_definitions = self.std_definitions.split_off(first_std_definition);
-		let module_words: HashSet<String> = imported.iter().chain(&std_definitions).filter_map(declared_name).collect();
+		let module_words: HashSet<String> = imported
+			.iter()
+			.chain(&std_definitions)
+			.filter_map(declared_name)
+			.collect();
 		if module_words.is_empty() {
 			return Ok(imported);
 		}
@@ -707,7 +916,9 @@ impl<'a> Loader<'a> {
 				return match import {
 					Import::Use => self.use_std_module(name, source),
 					// `include math`: the whole module spliced in place, as an included file is
-					Import::Include => crate::normalize::without_hints(|| self.load_source(import, std_path(std_module_name(name)), source)),
+					Import::Include => crate::normalize::without_hints(|| {
+						self.load_source(import, std_path(std_module_name(name)), source)
+					}),
 				};
 			}
 			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
@@ -725,7 +936,10 @@ impl<'a> Loader<'a> {
 			check_version(name, &path, requirement)?;
 		}
 		if std_module(name).is_some() && !edited_since_build(&path) {
-			let shadowing = format!("{} shadows the standard module {name}: its text differs from the one warp embeds", path.display());
+			let shadowing = format!(
+				"{} shadows the standard module {name}: its text differs from the one warp embeds",
+				path.display()
+			);
 			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(statement, shadowing)])?;
 		}
 		self.load(import, name, path)
@@ -759,15 +973,28 @@ impl<'a> Loader<'a> {
 			}
 		}
 		let mut mentioned = HashSet::new();
-		program.visit(&mut |node| if let Node::Symbol(name) = node { mentioned.insert(name.clone()); });
+		program.visit(&mut |node| {
+			if let Node::Symbol(name) = node {
+				mentioned.insert(name.clone());
+			}
+		});
 		// a program's own `write(x, y)` wins
 		let own: HashSet<String> = statements_of(program).iter().filter_map(declared_name).collect();
 		for (module, words) in PRELUDE_WORDS {
-			let words: Vec<&str> = words.iter().copied().filter(|word| mentioned.contains(*word) && !own.contains(*word)).collect();
+			let words: Vec<&str> = words
+				.iter()
+				.copied()
+				.filter(|word| mentioned.contains(*word) && !own.contains(*word))
+				.collect();
 			if !words.is_empty() {
 				let source = std_module(module).expect("a prelude module is embedded");
-				let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(module), source))?;
-				self.std_definitions.extend(definitions.into_iter().filter(|definition| declared_name(definition).is_some_and(|name| words.contains(&name.as_str()))));
+				let definitions =
+					crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(module), source))?;
+				self.std_definitions.extend(
+					definitions.into_iter().filter(|definition| {
+						declared_name(definition).is_some_and(|name| words.contains(&name.as_str()))
+					}),
+				);
 			}
 		}
 		self.use_prelude(program)
@@ -782,12 +1009,20 @@ impl<'a> Loader<'a> {
 			return Ok(());
 		}
 		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
-		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
-		let qualified = |definition: Node| prelude.iter().fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()));
+		let definitions =
+			crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
+		let qualified = |definition: Node| {
+			prelude.iter().fold(definition, |node, word| {
+				renamed_word(node, word, &prelude_name(word).unwrap_or_default())
+			})
+		};
 		self.std_definitions.extend(definitions.into_iter().map(qualified));
 		MODULE_DEFINITIONS.with(|names| {
 			let mut names = names.borrow_mut();
-			prelude.iter().for_each(|word| { names.remove(word); names.extend(prelude_name(word)); });
+			prelude.iter().for_each(|word| {
+				names.remove(word);
+				names.extend(prelude_name(word));
+			});
 		});
 		Ok(())
 	}
@@ -808,7 +1043,8 @@ impl<'a> Loader<'a> {
 	}
 
 	fn load(&mut self, import: Import, name: &str, path: PathBuf) -> Result<Vec<Node>, Node> {
-		let source = crate::web::read_text(&path.to_string_lossy()).ok_or_else(|| error(&format!("module not readable: {name}")))?;
+		let source = crate::web::read_text(&path.to_string_lossy())
+			.ok_or_else(|| error(&format!("module not readable: {name}")))?;
 		self.load_source(import, path, &source)
 	}
 
@@ -826,9 +1062,21 @@ impl<'a> Loader<'a> {
 			return Err(failure.clone());
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
-		let classes_early = import == Import::Use && EARLY_CLASS_MODULES.with(|modules| modules.borrow().contains(&path.canonicalize().unwrap_or_else(|_| path.clone())));
+		let classes_early = import == Import::Use
+			&& EARLY_CLASS_MODULES.with(|modules| {
+				modules
+					.borrow()
+					.contains(&path.canonicalize().unwrap_or_else(|_| path.clone()))
+			});
 		let module = match classes_early {
-			true => Node::List(statements(module).into_iter().filter(|statement| !is_class(statement)).collect(), Bracket::None, Separator::Semicolon),
+			true => Node::List(
+				statements(module)
+					.into_iter()
+					.filter(|statement| !is_class(statement))
+					.collect(),
+				Bracket::None,
+				Separator::Semicolon,
+			),
 			false => module,
 		};
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -839,8 +1087,12 @@ impl<'a> Loader<'a> {
 		let statements = statements(module?);
 		Ok(match import {
 			Import::Use => {
-				let declarations = shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_variables);
-				MODULE_DEFINITIONS.with(|names| names.borrow_mut().extend(declarations.iter().filter_map(declared_name)));
+				let declarations = shadowed_apart(
+					statements.into_iter().filter(is_declaration).collect(),
+					&self.program_variables,
+				);
+				MODULE_DEFINITIONS
+					.with(|names| names.borrow_mut().extend(declarations.iter().filter_map(declared_name)));
 				declarations
 			}
 			Import::Include => statements,
@@ -863,7 +1115,9 @@ impl<'a> Loader<'a> {
 		}
 		let program = program_file().and_then(|file| file.canonicalize().ok());
 		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
-		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path) && !is_embedded_std_file(path))
+		self.candidates_with(name, extensions)
+			.into_iter()
+			.find(|path| module_exists(path) && !is_program(path) && !is_embedded_std_file(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -871,10 +1125,15 @@ impl<'a> Loader<'a> {
 	}
 
 	fn candidates_with(&self, name: &str, extensions: &[&str]) -> Vec<PathBuf> {
-		let has_extension = extensions.iter().any(|extension| name.ends_with(&format!(".{extension}")));
+		let has_extension = extensions
+			.iter()
+			.any(|extension| name.ends_with(&format!(".{extension}")));
 		let file_names: Vec<String> = match has_extension {
 			true => vec![name.to_string()],
-			false => extensions.iter().map(|extension| format!("{name}.{extension}")).collect(),
+			false => extensions
+				.iter()
+				.map(|extension| format!("{name}.{extension}"))
+				.collect(),
 		};
 		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
 		if is_explicit_path(name) {
@@ -884,7 +1143,12 @@ impl<'a> Loader<'a> {
 		if !is_plain_relative_path(name) {
 			return vec![];
 		}
-		let bases: Vec<PathBuf> = self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
+		let bases: Vec<PathBuf> = self
+			.including_directory
+			.iter()
+			.cloned()
+			.chain(std::iter::once(PathBuf::new()))
+			.collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {
@@ -902,7 +1166,10 @@ impl<'a> Loader<'a> {
 		let mut own = statements(program.clone());
 		let mut known = HashSet::new();
 		bound_names(&program, &mut known);
-		let mut needed: Vec<String> = mentioned_names(&own).into_iter().filter(|name| !known.contains(name)).collect();
+		let mut needed: Vec<String> = mentioned_names(&own)
+			.into_iter()
+			.filter(|name| !known.contains(name))
+			.collect();
 		let mut imports = Vec::new();
 		let mut using_siblings = HashSet::new();
 		while let Some(name) = needed.pop() {
@@ -912,7 +1179,9 @@ impl<'a> Loader<'a> {
 			let mut providers: Vec<(usize, Vec<Node>)> = Vec::new();
 			for (index, sibling) in siblings.iter_mut().enumerate() {
 				let declarations = sibling.declarations_of(&name)?;
-				let same_as_before = providers.iter().any(|(_, earlier)| same_definitions(earlier, &declarations));
+				let same_as_before = providers
+					.iter()
+					.any(|(_, earlier)| same_definitions(earlier, &declarations));
 				if !declarations.is_empty() && !same_as_before {
 					providers.push((index, declarations)); // the same definition in two files is no conflict
 				}
@@ -921,7 +1190,10 @@ impl<'a> Loader<'a> {
 				0 => continue,
 				1 => providers.remove(0),
 				_ => {
-					let files: Vec<String> = providers.iter().map(|(index, _)| siblings[*index].path.display().to_string()).collect();
+					let files: Vec<String> = providers
+						.iter()
+						.map(|(index, _)| siblings[*index].path.display().to_string())
+						.collect();
 					return Err(error(&format!("{name} is defined in more than one file of the scope: {}; rename one, or `use` the one you mean", files.join(" and "))));
 				}
 			};
@@ -929,9 +1201,15 @@ impl<'a> Loader<'a> {
 				imports.extend(self.uses_of(&mut siblings[index])?);
 			}
 			let mut parameters = HashSet::new();
-			declarations.iter().for_each(|declaration| bound_names(declaration, &mut parameters));
+			declarations
+				.iter()
+				.for_each(|declaration| bound_names(declaration, &mut parameters));
 			parameters.remove(&name);
-			needed.extend(mentioned_names(&declarations).into_iter().filter(|used| !parameters.contains(used)));
+			needed.extend(
+				mentioned_names(&declarations)
+					.into_iter()
+					.filter(|used| !parameters.contains(used)),
+			);
 			imports.extend(declarations);
 		}
 		if imports.is_empty() {
@@ -943,9 +1221,17 @@ impl<'a> Loader<'a> {
 
 	/// The modules a sibling file uses, resolved from its folder
 	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
-		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_modules(statement).is_some()).cloned().collect();
+		let uses: Vec<Node> = sibling
+			.statements()?
+			.iter()
+			.filter(|statement| used_modules(statement).is_some())
+			.cloned()
+			.collect();
 		let outer_directory = self.including_directory.replace(folder_of(&sibling.path));
-		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
+		let resolved = uses
+			.into_iter()
+			.map(|statement| self.resolve(statement))
+			.collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
 		Ok(resolved?.into_iter().flat_map(statements).collect())
 	}
@@ -953,13 +1239,23 @@ impl<'a> Loader<'a> {
 	/// `import fourty_two` of `fourty_two.wasm` / `.wat`: `use "<its absolute path>"`, which the FFI imports from
 	/// (wasm_modules.rs); `include` also runs its entry point, whose value it is (P139)
 	fn use_wasm_module(&mut self, module: &Path, statement: &Node, import: Import) -> Vec<Node> {
-		let path = module.canonicalize().unwrap_or_else(|_| module.to_path_buf()).display().to_string();
+		let path = module
+			.canonicalize()
+			.unwrap_or_else(|_| module.to_path_buf())
+			.display()
+			.to_string();
 		self.wasm_modules.push(path.clone());
 		let used = match as_use(statement) {
-			Node::List(_, bracket, separator) => Node::List(vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path.clone())], bracket, separator),
+			Node::List(_, bracket, separator) => Node::List(
+				vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path.clone())],
+				bracket,
+				separator,
+			),
 			other => other,
 		};
-		let entry = (import == Import::Include).then(|| crate::wasm_modules::entry_call(&path)).flatten();
+		let entry = (import == Import::Include)
+			.then(|| crate::wasm_modules::entry_call(&path))
+			.flatten();
 		std::iter::once(used).chain(entry).collect()
 	}
 
@@ -968,8 +1264,18 @@ impl<'a> Loader<'a> {
 		if import == Import::Use {
 			return error(&format!("module not found: {name}"));
 		}
-		let searched: Vec<String> = self.candidates(name).iter().map(|path| path.display().to_string())
-			.map(|path| if path.starts_with(['.', '/']) { path } else { format!("./{path}") }).collect();
+		let searched: Vec<String> = self
+			.candidates(name)
+			.iter()
+			.map(|path| path.display().to_string())
+			.map(|path| {
+				if path.starts_with(['.', '/']) {
+					path
+				} else {
+					format!("./{path}")
+				}
+			})
+			.collect();
 		error(&format!("include not found: {name}; searched {}", searched.join(", ")))
 	}
 }
@@ -1021,8 +1327,25 @@ const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_match
 const AGENT_MODULE: &str = "agent";
 /// lib/sound.warp: `play 440Hz for 0.5s`, `beep` (card basic-sound), loaded when a program calls one of its words
 const SOUND_MODULE: &str = "sound";
-const SOUND_WORDS: [&str; 17] = ["pattern", "live_loop", "play", "melody", "tone", "beep", "play_file", "stop_sound", "sound_queued", "wait_sound", "render_sound",
-	"midi_send", "midi_outputs", "midi_receive", "midi_on", "write_midi", "read_midi"];
+const SOUND_WORDS: [&str; 17] = [
+	"pattern",
+	"live_loop",
+	"play",
+	"melody",
+	"tone",
+	"beep",
+	"play_file",
+	"stop_sound",
+	"sound_queued",
+	"wait_sound",
+	"render_sound",
+	"midi_send",
+	"midi_outputs",
+	"midi_receive",
+	"midi_on",
+	"write_midi",
+	"read_midi",
+];
 /// The sound words every program plays without `use sound` (card basic-sound); the module's rarer words need it (card
 /// bizarre-global, P171), also when these words bring the module along
 const SOUND_SETUP_FREE_WORDS: [&str; 4] = ["play", "beep", "stop_sound", "wait_sound"];
@@ -1034,22 +1357,41 @@ type NeededBy = fn(&Node) -> bool;
 const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
-	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(statements_of(program)); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
-	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
+	("router", |program| {
+		defined(program, crate::routes::PAGE_ROUTES).is_some() || {
+			let called = called_names(statements_of(program));
+			ROUTE_PARTS.iter().any(|word| called.contains(*word))
+		}
+	}),
+	("regex", |program| {
+		defined(program, crate::routes::PAGE_ROUTE_INDEX)
+			.is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))
+	}),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
-	(SOUND_MODULE, |program| first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()),
+	(SOUND_MODULE, |program| {
+		first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()
+	}),
 	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
-	first_called_undefined(program, SOUND_WORDS).is_some() || statements_of(program).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
+	first_called_undefined(program, SOUND_WORDS).is_some()
+		|| statements_of(program)
+			.iter()
+			.filter_map(used_module)
+			.any(|used| used.name == SOUND_MODULE)
 }
 
 /// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)
 fn rare_sound_word(program: &Node) -> Option<&'static str> {
-	first_called_undefined(program, SOUND_WORDS.into_iter().filter(|word| !SOUND_SETUP_FREE_WORDS.contains(word)))
+	first_called_undefined(
+		program,
+		SOUND_WORDS
+			.into_iter()
+			.filter(|word| !SOUND_SETUP_FREE_WORDS.contains(word)),
+	)
 }
 
 /// Whether the program calls `word` without defining it
@@ -1060,34 +1402,61 @@ fn calls_undefined(program: &Node, word: &str) -> bool {
 /// The first of `words` the program calls without defining it
 fn first_called_undefined<'a>(program: &Node, words: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
 	let called = called_names(statements_of(program));
-	words.into_iter().find(|word| called.contains(*word) && defined(program, word).is_none())
+	words
+		.into_iter()
+		.find(|word| called.contains(*word) && defined(program, word).is_none())
 }
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
 /// a note, when a used module defines that word
 const STD_ALIASES: [(&str, &str); 27] = [
-	("HashSet", "Set"), ("TreeSet", "Set"), ("LinkedHashSet", "Set"), ("frozenset", "Set"),
-	("ArrayDeque", "Deque"), ("VecDeque", "Deque"), ("deque", "Deque"),
-	("OrderedDict", "OrderedMap"), ("LinkedHashMap", "OrderedMap"),
+	("HashSet", "Set"),
+	("TreeSet", "Set"),
+	("LinkedHashSet", "Set"),
+	("frozenset", "Set"),
+	("ArrayDeque", "Deque"),
+	("VecDeque", "Deque"),
+	("deque", "Deque"),
+	("OrderedDict", "OrderedMap"),
+	("LinkedHashMap", "OrderedMap"),
 	// P169: the C library's historic names of `use math`'s words (atan2 takes y first, angle(x, y) does not: no alias)
 	// sqrt and cbrt are the operators √ and ∛ already
-	("pow", "power"), ("exp", "exponential"), ("log2", "binary_log"),
-	("log10", "decimal_log"), ("sin", "sine"), ("cos", "cosine"), ("tan", "tangent"), ("asin", "arc_sine"),
-	("acos", "arc_cosine"), ("atan", "arc_tangent"), ("sinh", "hyperbolic_sine"), ("cosh", "hyperbolic_cosine"),
-	("tanh", "hyperbolic_tangent"), ("hypot", "hypotenuse"), ("ceil", "ceiling"), ("trunc", "whole_part"),
-	("fmod", "remainder"), ("ln", "natural_log"),
+	("pow", "power"),
+	("exp", "exponential"),
+	("log2", "binary_log"),
+	("log10", "decimal_log"),
+	("sin", "sine"),
+	("cos", "cosine"),
+	("tan", "tangent"),
+	("asin", "arc_sine"),
+	("acos", "arc_cosine"),
+	("atan", "arc_tangent"),
+	("sinh", "hyperbolic_sine"),
+	("cosh", "hyperbolic_cosine"),
+	("tanh", "hyperbolic_tangent"),
+	("hypot", "hypotenuse"),
+	("ceil", "ceiling"),
+	("trunc", "whole_part"),
+	("fmod", "remainder"),
+	("ln", "natural_log"),
 ];
 
 /// warp's own lib/<module>.warp of a standard module: the source the binary embeds (natively the lib folder of the
 /// repository it was built from, or any file of the same text: lib/ of another warp checkout, card local-lib; in the
 /// browser lib/ of the served repository, the page's file root)
 fn is_embedded_std_file(path: &Path) -> bool {
-	let Some(source) = path.file_stem().and_then(|stem| stem.to_str()).and_then(std_module) else { return false };
+	let Some(source) = path.file_stem().and_then(|stem| stem.to_str()).and_then(std_module) else {
+		return false;
+	};
 	let folder = path.parent().unwrap_or(Path::new(""));
 	if !cfg!(feature = "native") {
 		return folder == Path::new(STD_FOLDER);
 	}
-	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
-	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder || std::fs::read_to_string(path).is_ok_and(|text| text == source)
+	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR"))
+		.join(STD_FOLDER)
+		.canonicalize()
+		.ok();
+	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
+		|| std::fs::read_to_string(path).is_ok_and(|text| text == source)
 }
 
 /// A file changed after the running warp was built: a standard module being edited in a checkout, not a stale copy
@@ -1114,32 +1483,48 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 
 fn std_module(name: &str) -> Option<&'static str> {
 	let name = std_module_name(name);
-	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
+	STD_MODULES
+		.iter()
+		.find(|(module, _)| *module == name)
+		.map(|(_, source)| *source)
 }
 
 /// A standard module's own name for one of its aliases (`graphics` → draw), so each is loaded once
 fn std_module_name(name: &str) -> &str {
-	STD_MODULE_ALIASES.iter().find(|(alias, _)| *alias == name).map_or(name, |(_, module)| *module)
+	STD_MODULE_ALIASES
+		.iter()
+		.find(|(alias, _)| *alias == name)
+		.map_or(name, |(_, module)| *module)
 }
 
 /// The names the standard module at `index` of STD_MODULES defines, in their order; each module is parsed for them
 /// once, when first asked (a compile asks for a few of them)
 fn std_module_words(index: usize) -> &'static [String] {
-	static DEFINED: [std::sync::OnceLock<Vec<String>>; STD_MODULES.len()] = [const { std::sync::OnceLock::new() }; STD_MODULES.len()];
+	static DEFINED: [std::sync::OnceLock<Vec<String>>; STD_MODULES.len()] =
+		[const { std::sync::OnceLock::new() }; STD_MODULES.len()];
 	DEFINED[index].get_or_init(|| {
 		let source = STD_MODULES[index].1;
-		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter(|statement| used_module(statement).is_none()).filter_map(declared_name).collect()
+		statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+			.iter()
+			.filter(|statement| used_module(statement).is_none())
+			.filter_map(declared_name)
+			.collect()
 	})
 }
 
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
-	(0..STD_MODULES.len()).find(|index| std_module_words(*index).iter().any(|name| name == word)).map(|index| STD_MODULES[index].0)
+	(0..STD_MODULES.len())
+		.find(|index| std_module_words(*index).iter().any(|name| name == word))
+		.map(|index| STD_MODULES[index].0)
 }
 
 /// The names a standard module defines, in their order (`dir(time)`); None for no standard module
 pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
-	STD_MODULES.iter().position(|(name, _)| *name == module).map(std_module_words)
+	STD_MODULES
+		.iter()
+		.position(|(name, _)| *name == module)
+		.map(std_module_words)
 }
 
 /// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word
@@ -1156,30 +1541,53 @@ pub fn prelude_word_defaults(word: &str) -> usize {
 /// 1e-6)`), one left out is its default (`limit = 0`); unchanged for no prelude word
 pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 	let source = std_module(PRELUDE_MODULE).unwrap_or_default();
-	let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source))).into_iter().find_map(|statement| match statement.drop_meta() {
-		Node::Key(head, Op::Define, _) if leftmost_symbol(head).as_deref() == Some(word) => match head.drop_meta() {
-			Node::List(items, _, _) => Some(items[1..].iter().map(|item| match item.drop_meta() {
-				Node::Key(name, Op::Assign, default) => (name.drop_meta().name(), Some(default.as_ref().clone())),
-				other => (other.name(), None),
-			}).collect::<Vec<_>>()),
+	let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+		.into_iter()
+		.find_map(|statement| match statement.drop_meta() {
+			Node::Key(head, Op::Define, _) if leftmost_symbol(head).as_deref() == Some(word) => {
+				match head.drop_meta() {
+					Node::List(items, _, _) => Some(
+						items[1..]
+							.iter()
+							.map(|item| match item.drop_meta() {
+								Node::Key(name, Op::Assign, default) => {
+									(name.drop_meta().name(), Some(default.as_ref().clone()))
+								}
+								other => (other.name(), None),
+							})
+							.collect::<Vec<_>>(),
+					),
+					_ => None,
+				}
+			}
 			_ => None,
-		},
-		_ => None,
-	});
+		});
 	let Some(parameters) = parameters else { return arguments };
 	let mut slots: Vec<Option<Node>> = vec![None; parameters.len()];
 	let named_slot = |argument: &Node| match argument.drop_meta() {
-		Node::Key(name, Op::Colon | Op::Assign, value) => parameters.iter().position(|(parameter, _)| *parameter == name.drop_meta().name()).map(|slot| (slot, value.as_ref().clone())),
+		Node::Key(name, Op::Colon | Op::Assign, value) => parameters
+			.iter()
+			.position(|(parameter, _)| *parameter == name.drop_meta().name())
+			.map(|slot| (slot, value.as_ref().clone())),
 		_ => None,
 	};
 	for argument in arguments.iter() {
-		let (slot, value) = named_slot(argument).unwrap_or_else(|| (slots.iter().position(Option::is_none).unwrap_or(slots.len()), argument.clone()));
+		let (slot, value) = named_slot(argument).unwrap_or_else(|| {
+			(
+				slots.iter().position(Option::is_none).unwrap_or(slots.len()),
+				argument.clone(),
+			)
+		});
 		match slots.get_mut(slot) {
 			Some(empty @ None) => *empty = Some(value),
 			_ => return arguments, // too many, or one twice: the arity check names it
 		}
 	}
-	let filled: Option<Vec<Node>> = slots.into_iter().zip(&parameters).map(|(slot, (_, default))| slot.or_else(|| default.clone())).collect();
+	let filled: Option<Vec<Node>> = slots
+		.into_iter()
+		.zip(&parameters)
+		.map(|(slot, (_, default))| slot.or_else(|| default.clone()))
+		.collect();
 	filled.unwrap_or(arguments)
 }
 
@@ -1195,17 +1603,27 @@ fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 		READING_PRELUDE.set(true);
 		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
 		let has_default = |parameter: &Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));
-		let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
-			Node::Key(head, Op::Define, _) => match head.drop_meta() {
-				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1, items[1..].iter().filter(|item| has_default(item)).count())),
+		let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+			.iter()
+			.filter_map(|statement| match statement.drop_meta() {
+				Node::Key(head, Op::Define, _) => match head.drop_meta() {
+					Node::List(items, _, _) => Some((
+						leftmost_symbol(head)?,
+						items.len() - 1,
+						items[1..].iter().filter(|item| has_default(item)).count(),
+					)),
+					_ => None,
+				},
 				_ => None,
-			},
-			_ => None,
-		}).collect();
+			})
+			.collect();
 		READING_PRELUDE.set(false);
 		parameters
 	});
-	parameters.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
+	parameters
+		.iter()
+		.find(|(name, _, _)| name == word)
+		.map(|(_, arity, defaults)| (*arity, *defaults))
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or
@@ -1217,17 +1635,25 @@ pub fn prelude_name(word: &str) -> Option<String> {
 /// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
 pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 	let source = std_module(module).unwrap_or_default();
-	statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
-		Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
-			// "p" parses as a character
-			Node::List(items, _, _) => Some(items.iter().map(|item| match item.drop_meta() {
-				Node::Char(character) => character.to_string(),
-				other => other.name(),
-			}).collect()),
+	statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+		.iter()
+		.find_map(|statement| match statement.drop_meta() {
+			Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
+				// "p" parses as a character
+				Node::List(items, _, _) => Some(
+					items
+						.iter()
+						.map(|item| match item.drop_meta() {
+							Node::Char(character) => character.to_string(),
+							other => other.name(),
+						})
+						.collect(),
+				),
+				_ => None,
+			},
 			_ => None,
-		},
-		_ => None,
-	}).unwrap_or_default()
+		})
+		.unwrap_or_default()
 }
 
 /// The file of the program's folder or search directories that `use module` finds before the standard module of
@@ -1257,19 +1683,29 @@ struct Registered {
 }
 
 fn registered(name: &str) -> Option<Registered> {
-	statements(WarpParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
-		let Node::Key(key, _, value) = entry.drop_meta() else { return None };
-		if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
-			return None;
-		}
-		match value.drop_meta() {
-			Node::Text(url) => Some(Registered { url: url.clone(), pinned: None }),
-			pinned => match pinned["repository"].drop_meta() {
-				Node::Text(url) => Some(Registered { url: url.clone(), pinned: Some(version_of(&pinned["version"])?) }),
-				_ => None,
-			},
-		}
-	})
+	statements(WarpParser::parse(PACKAGE_REGISTRY))
+		.iter()
+		.find_map(|entry| {
+			let Node::Key(key, _, value) = entry.drop_meta() else {
+				return None;
+			};
+			if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
+				return None;
+			}
+			match value.drop_meta() {
+				Node::Text(url) => Some(Registered {
+					url: url.clone(),
+					pinned: None,
+				}),
+				pinned => match pinned["repository"].drop_meta() {
+					Node::Text(url) => Some(Registered {
+						url: url.clone(),
+						pinned: Some(version_of(&pinned["version"])?),
+					}),
+					_ => None,
+				},
+			}
+		})
 }
 
 /// The git url of a package in the registry
@@ -1307,11 +1743,24 @@ pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String
 pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<PathBuf, String> {
 	let url = registered_package(name)?.url;
 	let tags = package_version_tags(name, &url)?;
-	let Some((_, version)) = tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1)) else {
+	let Some((_, version)) = tags
+		.iter()
+		.filter(|(_, version)| requirement.allows(version))
+		.max_by(|a, b| a.1.cmp(&b.1))
+	else {
 		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
-		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
+		return Err(format!(
+			"package {name} has no {requirement} (tagged: {})",
+			versions.join(", ")
+		));
 	};
-	fetch_tagged(Path::new(PACKAGES_DIRECTORY), name, &url, version, &format!("{name}@{version}"))
+	fetch_tagged(
+		Path::new(PACKAGES_DIRECTORY),
+		name,
+		&url,
+		version,
+		&format!("{name}@{version}"),
+	)
 }
 
 /// packages/<link_name>, a link to the version's shallow clone in the machine's package cache: fetched once per machine,
@@ -1325,7 +1774,8 @@ fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_
 	let link = packages.join(link_name);
 	let stale = |target: PathBuf| target.starts_with(package_cache()) && (target != cached || !cached.exists());
 	if std::fs::read_link(&link).is_ok_and(stale) {
-		std::fs::remove_file(&link).map_err(|failure| format!("package {name}: stale link {}: {failure}", link.display()))?;
+		std::fs::remove_file(&link)
+			.map_err(|failure| format!("package {name}: stale link {}: {failure}", link.display()))?;
 	}
 	if is_clean_clone(&link, url) {
 		set_aside(packages, name, version, &link)?;
@@ -1338,13 +1788,19 @@ fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_
 	}
 	if !cached.exists() {
 		let tags = package_version_tags(name, url)?;
-		let tag = tags.iter().find(|(_, tagged)| tagged == version).map(|(tag, _)| tag.as_str())
+		let tag = tags
+			.iter()
+			.find(|(_, tagged)| tagged == version)
+			.map(|(tag, _)| tag.as_str())
 			.ok_or(format!("package {name} has no tag of version {version} at {url}"))?;
 		clone(name, url, &cached, Some(tag))?;
 	}
 	make_package_directory(name, packages)?;
 	#[cfg(not(unix))]
-	return Err(format!("package {name}: not linked to {}: no symbolic links on this platform", cached.display()));
+	return Err(format!(
+		"package {name}: not linked to {}: no symbolic links on this platform",
+		cached.display()
+	));
 	#[cfg(unix)]
 	match std::os::unix::fs::symlink(&cached, &link) {
 		Err(failure) if !link.exists() => Err(format!("package {name}: not linked to {}: {failure}", cached.display())),
@@ -1354,8 +1810,16 @@ fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_
 
 /// A directory (not a link) holding a git clone of url without any change: what an unpinned fetch left there
 fn is_clean_clone(directory: &Path, url: &str) -> bool {
-	let git = |arguments: &[&str]| Command::new("git").arg("-C").arg(directory).args(arguments).output().ok()
-		.filter(|output| output.status.success()).map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
+	let git = |arguments: &[&str]| {
+		Command::new("git")
+			.arg("-C")
+			.arg(directory)
+			.args(arguments)
+			.output()
+			.ok()
+			.filter(|output| output.status.success())
+			.map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+	};
 	is_real_directory(directory)
 		&& directory.join(".git").exists()
 		&& git(&["remote", "get-url", "origin"]).as_deref() == Some(url)
@@ -1370,12 +1834,27 @@ fn is_real_directory(path: &Path) -> bool {
 fn set_aside(packages: &Path, name: &str, version: &Version, clone: &Path) -> Result<(), String> {
 	let replaced = packages.join(REPLACED_DIRECTORY);
 	make_package_directory(name, &replaced)?;
-	let seconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_secs());
-	let destination = replaced.join(format!("{}.{seconds}.{}", clone.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
+	let seconds = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map_or(0, |elapsed| elapsed.as_secs());
+	let destination = replaced.join(format!(
+		"{}.{seconds}.{}",
+		clone.file_name().unwrap_or_default().to_string_lossy(),
+		std::process::id()
+	));
 	match std::fs::rename(clone, &destination) {
-		Ok(()) => eprintln!("package {name}: {} was an unpinned clone, moved to {}; now the pinned {version}", clone.display(), destination.display()),
+		Ok(()) => eprintln!(
+			"package {name}: {} was an unpinned clone, moved to {}; now the pinned {version}",
+			clone.display(),
+			destination.display()
+		),
 		Err(_) if !is_real_directory(clone) => {} // another process moved it first
-		Err(failure) => return Err(format!("package {name}: {} not moved out of the pin's way: {failure}", clone.display())),
+		Err(failure) => {
+			return Err(format!(
+				"package {name}: {} not moved out of the pin's way: {failure}",
+				clone.display()
+			))
+		}
 	}
 	Ok(())
 }
@@ -1409,11 +1888,15 @@ fn package_cache() -> PathBuf {
 
 /// The tags of a repository that name versions, with their versions
 fn version_tags(url: &str) -> Result<Vec<(String, Version)>, String> {
-	let listing = Command::new("git").args(["ls-remote", "--tags", "--refs", url]).output().map_err(|failure| failure.to_string())?;
+	let listing = Command::new("git")
+		.args(["ls-remote", "--tags", "--refs", url])
+		.output()
+		.map_err(|failure| failure.to_string())?;
 	if !listing.status.success() {
 		return Err(String::from_utf8_lossy(&listing.stderr).trim().to_string());
 	}
-	Ok(String::from_utf8_lossy(&listing.stdout).lines()
+	Ok(String::from_utf8_lossy(&listing.stdout)
+		.lines()
 		.filter_map(|line| line.split("refs/tags/").nth(1))
 		.filter_map(|tag| Some((tag.to_string(), Version::parse(tag)?)))
 		.collect())
@@ -1434,9 +1917,16 @@ fn clone(name: &str, url: &str, directory: &Path, tag: Option<&str>) -> Result<P
 	if let Some(tag) = tag {
 		command.args(["--branch", tag]);
 	}
-	let clone = command.arg(url).arg(&staging).output().map_err(|failure| format!("package {name} not fetched: git: {failure}"))?;
+	let clone = command
+		.arg(url)
+		.arg(&staging)
+		.output()
+		.map_err(|failure| format!("package {name} not fetched: git: {failure}"))?;
 	if !clone.status.success() {
-		return Err(format!("package {name} not fetched from {url}: {}", String::from_utf8_lossy(&clone.stderr).trim()));
+		return Err(format!(
+			"package {name} not fetched from {url}: {}",
+			String::from_utf8_lossy(&clone.stderr).trim()
+		));
 	}
 	if std::fs::rename(&staging, directory).is_err() && directory.exists() {
 		std::fs::remove_dir_all(&staging).ok(); // another process fetched it first
@@ -1445,7 +1935,10 @@ fn clone(name: &str, url: &str, directory: &Path, tag: Option<&str>) -> Result<P
 }
 
 fn package_module(directory: &Path, name: &str) -> Option<PathBuf> {
-	MODULE_EXTENSIONS.iter().map(|extension| directory.join(format!("{name}.{extension}"))).find(|path| module_exists(path))
+	MODULE_EXTENSIONS
+		.iter()
+		.map(|extension| directory.join(format!("{name}.{extension}")))
+		.find(|path| module_exists(path))
 }
 
 fn module_exists(path: &Path) -> bool {
@@ -1460,8 +1953,13 @@ fn package_directory(name: &str) -> Result<PathBuf, String> {
 	#[cfg(not(feature = "native"))]
 	{
 		let package = registered_package(name)?;
-		let repository = package.url.trim_end_matches(".git").replace("https://github.com/", "https://raw.githubusercontent.com/");
-		let reference = package.pinned.map_or("HEAD".to_string(), |version| format!("v{version}"));
+		let repository = package
+			.url
+			.trim_end_matches(".git")
+			.replace("https://github.com/", "https://raw.githubusercontent.com/");
+		let reference = package
+			.pinned
+			.map_or("HEAD".to_string(), |version| format!("v{version}"));
 		Ok(PathBuf::from(format!("{repository}/{reference}")))
 	}
 }
@@ -1476,8 +1974,12 @@ fn module_version(path: &Path) -> Option<Version> {
 fn check_version(name: &str, path: &Path, requirement: &Requirement) -> Result<(), Node> {
 	match module_version(path) {
 		Some(version) if requirement.allows(&version) => Ok(()),
-		Some(version) => Err(error(&format!("module {name} is version {version}, {requirement} required"))),
-		None => Err(error(&format!("module {name} declares no version, {requirement} required"))),
+		Some(version) => Err(error(&format!(
+			"module {name} is version {version}, {requirement} required"
+		))),
+		None => Err(error(&format!(
+			"module {name} declares no version, {requirement} required"
+		))),
 	}
 }
 
@@ -1506,23 +2008,36 @@ fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 		return Some(vec![(used, node.clone())]);
 	}
 	let words = statement_words(node)?;
-	let [keyword, names @ ..] = words.as_slice() else { return None };
+	let [keyword, names @ ..] = words.as_slice() else {
+		return None;
+	};
 	let plain_name = |name: &&Node| matches!(name.drop_meta(), Node::Symbol(word) if !crate::foreign_modules::FOREIGN_RUNTIMES.contains(&word.as_str()) && ![MINIMUM_KEYWORD, "as", "from"].contains(&word.as_str()) && !is_version_keyword(name));
 	if names.len() < 2 || !names.iter().all(plain_name) {
 		return None;
 	}
-	names.iter().map(|name| {
-		let statement = Node::List(vec![(*keyword).clone(), (*name).clone()], Bracket::None, Separator::Space);
-		used_module(&statement).map(|used| (used, statement))
-	}).collect()
+	names
+		.iter()
+		.map(|name| {
+			let statement = Node::List(
+				vec![(*keyword).clone(), (*name).clone()],
+				Bracket::None,
+				Separator::Space,
+			);
+			used_module(&statement).map(|used| (used, statement))
+		})
+		.collect()
 }
 
 /// `from list import zip, unique`: the module, the statement that uses it, and the only words it brings (card std-import)
 fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 	let words = statement_words(node)?;
 	match words.as_slice() {
-		[from, module, import, names @ ..] if from.is_symbol(MINIMUM_KEYWORD) && import.is_symbol(IMPORT_KEYWORD) => words_from(module, names),
-		[import, names @ .., from, module] if import.is_symbol(IMPORT_KEYWORD) && from.is_symbol(MINIMUM_KEYWORD) => std_words_from(module, names),
+		[from, module, import, names @ ..] if from.is_symbol(MINIMUM_KEYWORD) && import.is_symbol(IMPORT_KEYWORD) => {
+			words_from(module, names)
+		}
+		[import, names @ .., from, module] if import.is_symbol(IMPORT_KEYWORD) && from.is_symbol(MINIMUM_KEYWORD) => {
+			std_words_from(module, names)
+		}
 		_ => None,
 	}
 }
@@ -1530,7 +2045,9 @@ fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 /// `import square from math`, `import (zip, unique) from list`: the from-import of a standard module defining every
 /// named word; any other `import f from lib` stays the foreign import (analyzer/imports.rs: `import sqrt from math` is libm's)
 fn std_words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, Vec<String>)> {
-	let Node::Symbol(module_name) = module.drop_meta() else { return None };
+	let Node::Symbol(module_name) = module.drop_meta() else {
+		return None;
+	};
 	let defined = std_module_definitions(std_module_name(module_name))?;
 	let imported = words_from(module, names)?;
 	imported.2.iter().all(|name| defined.contains(name)).then_some(imported)
@@ -1542,20 +2059,34 @@ fn words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, Vec<String>
 		[group] if matches!(group.drop_meta(), Node::List(_, Bracket::Round, _)) => group.drop_meta().iter().collect(),
 		_ => names.iter().map(|name| (*name).clone()).collect::<Vec<Node>>(),
 	};
-	let names = names.iter().map(|name| match name.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}).collect::<Option<Vec<String>>>().filter(|names| !names.is_empty())?;
-	let statement = Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
+	let names = names
+		.iter()
+		.map(|name| match name.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		})
+		.collect::<Option<Vec<String>>>()
+		.filter(|names| !names.is_empty())?;
+	let statement = Node::List(
+		vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()],
+		Bracket::None,
+		Separator::Space,
+	);
 	used_module(&statement).map(|used| (used, statement, names))
 }
 
 /// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.warp`.
 /// A version may follow: `use name version 1.2.3` exactly that one, `use name from 1.2.3` / `use name >= 1.2.3` that or later
 fn used_module(node: &Node) -> Option<Used> {
-	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	let [keyword, argument, rest @ ..] = items.as_slice() else { return None };
-	let Node::Symbol(keyword) = keyword.drop_meta() else { return None };
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return None;
+	};
+	let [keyword, argument, rest @ ..] = items.as_slice() else {
+		return None;
+	};
+	let Node::Symbol(keyword) = keyword.drop_meta() else {
+		return None;
+	};
 	let import = if USE_KEYWORDS.contains(&keyword.as_str()) {
 		Import::Use
 	} else if keyword == INCLUDE_KEYWORD {
@@ -1566,12 +2097,22 @@ fn used_module(node: &Node) -> Option<Used> {
 	let (name, requirement) = match (argument.drop_meta(), rest) {
 		(Node::Key(name, Op::Ge, minimum), []) => (path_of(name)?, Some(Requirement::Minimum(version_of(minimum)?))),
 		(name, []) => (path_of(name)?, None),
-		(name, [version]) if version_of(version).is_some() && is_version_list(version) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
-		(name, [word, version]) if word.is_symbol(MINIMUM_KEYWORD) => (path_of(name)?, Some(Requirement::Minimum(version_of(version)?))),
-		(name, [word, version]) if is_version_keyword(word) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
+		(name, [version]) if version_of(version).is_some() && is_version_list(version) => {
+			(path_of(name)?, Some(Requirement::Exact(version_of(version)?)))
+		}
+		(name, [word, version]) if word.is_symbol(MINIMUM_KEYWORD) => {
+			(path_of(name)?, Some(Requirement::Minimum(version_of(version)?)))
+		}
+		(name, [word, version]) if is_version_keyword(word) => {
+			(path_of(name)?, Some(Requirement::Exact(version_of(version)?)))
+		}
 		_ => return None,
 	};
-	Some(Used { import, name, requirement })
+	Some(Used {
+		import,
+		name,
+		requirement,
+	})
 }
 
 /// `version 1.2.3`, as the parser binds it
@@ -1595,18 +2136,27 @@ fn is_explicit_path(name: &str) -> bool {
 
 /// A relative path that stays below its directory
 fn is_plain_relative_path(name: &str) -> bool {
-	Path::new(name).components().all(|component| matches!(component, std::path::Component::Normal(_)))
+	Path::new(name)
+		.components()
+		.all(|component| matches!(component, std::path::Component::Normal(_)))
 }
 
 fn mentions_file_url(program: &Node) -> bool {
 	let mut file_url = false;
-	program.visit(&mut |node| if let Node::Text(text) = node { file_url |= text.starts_with(FILE_URL_PREFIX) });
+	program.visit(&mut |node| {
+		if let Node::Text(text) = node {
+			file_url |= text.starts_with(FILE_URL_PREFIX)
+		}
+	});
 	file_url
 }
 
 /// The program's main-level definition of `name`
 fn defined(program: &Node, name: &str) -> Option<Node> {
-	statements_of(program).iter().find(|statement| declared_name(statement).as_deref() == Some(name)).cloned()
+	statements_of(program)
+		.iter()
+		.find(|statement| declared_name(statement).as_deref() == Some(name))
+		.cloned()
 }
 
 /// The statements of a module, borrowed (statements takes them)
@@ -1632,7 +2182,9 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Type { .. } => true,
 		Node::Key(_, Op::Assign | Op::Define, _) => true,
-		Node::Key(scope, Op::Colon, _) => matches!(scope.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)),
+		Node::Key(scope, Op::Colon, _) => {
+			matches!(scope.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword))
+		}
 		Node::List(items, _, _) if items.len() >= 2 => {
 			matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword) || is_declaration_keyword(keyword))
 		}
@@ -1649,7 +2201,9 @@ fn declared_name(statement: &Node) -> Option<String> {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
 		// `global x = 0`, as the parser reads it: `global: (x = 0)`
-		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => declared_name(declared),
+		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => {
+			declared_name(declared)
+		}
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
 		_ => None,
 	}
@@ -1673,7 +2227,13 @@ fn binds_names(keyword: &str) -> bool {
 fn header(definition: &Node) -> &Node {
 	match definition.drop_meta() {
 		Node::Key(header, Op::Colon | Op::Assign | Op::Define, _) => header,
-		Node::List(items, _, _) if items.first().is_some_and(|first| matches!(first.drop_meta(), Node::List(..))) => &items[0],
+		Node::List(items, _, _)
+			if items
+				.first()
+				.is_some_and(|first| matches!(first.drop_meta(), Node::List(..))) =>
+		{
+			&items[0]
+		}
 		_ => definition,
 	}
 }
@@ -1682,7 +2242,9 @@ fn header(definition: &Node) -> &Node {
 /// Generous on purpose: a bound name never comes from a sibling
 fn bound_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
-		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define | Op::FatArrow) || op.is_compound_assign() => {
+		Node::Key(target, op, value)
+			if matches!(op, Op::Assign | Op::Define | Op::FatArrow) || op.is_compound_assign() =>
+		{
 			names.extend(mentioned_names(std::slice::from_ref(target.as_ref())));
 			bound_names(value, names);
 		}
@@ -1772,7 +2334,10 @@ fn mentioned_names(statements: &[Node]) -> Vec<String> {
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
 			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
-			Node::Meta { node: inner, .. } => crate::interpolation::holes(node).iter().chain([inner.as_ref()]).for_each(|part| collect(part, names)),
+			Node::Meta { node: inner, .. } => crate::interpolation::holes(node)
+				.iter()
+				.chain([inner.as_ref()])
+				.for_each(|part| collect(part, names)),
 			Node::Type { name, body } => {
 				collect(name, names);
 				collect(body, names);
@@ -1788,9 +2353,11 @@ fn mentioned_names(statements: &[Node]) -> Vec<String> {
 /// `require x` and `import x` of a native library stay in the program as `use x`
 fn as_use(statement: &Node) -> Node {
 	match statement {
-		Node::List(items, bracket, separator) if items.len() == 2 => {
-			Node::List(vec![Node::Symbol(USE_KEYWORD.to_string()), items[1].clone()], bracket.clone(), separator.clone())
-		}
+		Node::List(items, bracket, separator) if items.len() == 2 => Node::List(
+			vec![Node::Symbol(USE_KEYWORD.to_string()), items[1].clone()],
+			bracket.clone(),
+			separator.clone(),
+		),
 		other => other.clone(),
 	}
 }

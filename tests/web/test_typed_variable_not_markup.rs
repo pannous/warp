@@ -17,5 +17,8 @@ fn a_typed_variable_named_like_a_tag_is_no_element() {
 
 #[test]
 fn markup_assigned_to_a_variable_is_still_checked() {
-	assert_eq!(warnings_of("page = div{ a{ \"home\" } }"), vec!["a without href: not reachable by keyboard".to_string()]);
+	assert_eq!(
+		warnings_of("page = div{ a{ \"home\" } }"),
+		vec!["a without href: not reachable by keyboard".to_string()]
+	);
 }

@@ -25,7 +25,9 @@ fn mentions(node: &Node) -> bool {
 
 fn assigns_result(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Key(target, Op::Assign | Op::Define, _) if target.is_symbol(RESULT_WORD)));
+	node.visit(&mut |part| {
+		found |= matches!(part, Node::Key(target, Op::Assign | Op::Define, _) if target.is_symbol(RESULT_WORD))
+	});
 	found
 }
 
@@ -94,7 +96,11 @@ fn prints_last(node: &Node) -> bool {
 /// The statement assigning the value it ends with to `result`, a print the value it shows: `{result = x; print result}`
 fn remembering(node: Node) -> Node {
 	if let Some(value) = printed(&node) {
-		return Node::List(vec![result_of(value), print_call([symbol(RESULT_WORD)])], Bracket::Curly, Separator::Semicolon);
+		return Node::List(
+			vec![result_of(value), print_call([symbol(RESULT_WORD)])],
+			Bracket::Curly,
+			Separator::Semicolon,
+		);
 	}
 	match node.drop_meta().clone() {
 		Node::List(mut items, Bracket::Curly, separator) if !items.is_empty() => {

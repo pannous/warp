@@ -31,7 +31,8 @@ fn a_program_keeps_its_stored_values_in_a_file_beside_it() {
 	let run = || warp::modules::with_program_file(&program, || eval("stored launches = 0; launches += 1; launches"));
 	run();
 	run();
-	let kept: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&store).expect("the store file")).expect("json");
+	let kept: serde_json::Value =
+		serde_json::from_str(&std::fs::read_to_string(&store).expect("the store file")).expect("json");
 	assert_eq!(kept["launches"], 2);
 }
 

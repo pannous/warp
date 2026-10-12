@@ -1,13 +1,13 @@
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
+use crate::extensions::reals::{Exact, Rational, Real};
 use crate::extensions::strings::StringExtensions;
+use crate::lowering::nodes::call;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
-use crate::extensions::reals::{Exact, Rational, Real};
-use crate::lowering::nodes::call;
 use crate::node::{error, key_ops, Bracket, Node, Separator};
-use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
+use crate::operators::{glyph_operator, is_function_keyword, Op};
 use log::warn;
 use std::fs::read_to_string;
 
@@ -21,17 +21,17 @@ macro_rules! or_return_error {
 	};
 }
 
-mod user_operators;
-mod scanning;
-mod xml;
 mod lookahead;
+mod scanning;
+mod user_operators;
+mod xml;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
 mod expressions;
+mod lists;
+mod literals;
 mod statements;
 mod suffixes;
-mod literals;
-mod lists;
 use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
@@ -53,7 +53,14 @@ const MAP_WORD: &str = "map";
 const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
-const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
+const LITERAL_SUFFIXES: [(char, &str); 6] = [
+	('f', "float"),
+	('F', "float"),
+	('d', "float"),
+	('D', "float"),
+	('l', "exact"),
+	('L', "exact"),
+];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
 pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
@@ -65,8 +72,27 @@ const LIST_HEAD: &str = "list";
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
-const FOREIGN_MODIFIERS: [&str; 19] = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local",
-	"virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"];
+const FOREIGN_MODIFIERS: [&str; 19] = [
+	"public",
+	"private",
+	"protected",
+	"internal",
+	"static",
+	"extern",
+	"external",
+	"C",
+	"inline",
+	"local",
+	"virtual",
+	"override",
+	"abstract",
+	"constexpr",
+	"volatile",
+	"thread_local",
+	"synchronized",
+	"transient",
+	"native",
+];
 /// Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant)
 const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", "final", "mutable", "mut"];
 const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
@@ -78,14 +104,22 @@ const NONLOCAL_WORD: &str = "nonlocal";
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [('+', Op::Add), ('-', Op::Sub), ('*', Op::Mul), ('/', Op::Div), ('^', Op::Pow)];
+const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [
+	('+', Op::Add),
+	('-', Op::Sub),
+	('*', Op::Mul),
+	('/', Op::Div),
+	('^', Op::Pow),
+];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
 pub(crate) const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 /// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 /// `open`, `abstract`, `sealed`, `final`, visibility
-const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
+const CLASS_MODIFIERS: [&str; 8] = [
+	"data", "open", "abstract", "sealed", "final", "public", "private", "internal",
+];
 /// The keywords of a field: Kotlin's primary constructor `class Point(val x: Int, var y: Int)`, Swift's `var count = 0`
 pub(crate) const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
@@ -110,7 +144,19 @@ const REF_TYPE_WORD: &str = "ref";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
 const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in warp: Swift's `mutating func`, visibility, `override`
-pub const MEMBER_MODIFIERS: [&str; 11] = ["mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"];
+pub const MEMBER_MODIFIERS: [&str; 11] = [
+	"mutating",
+	"override",
+	"public",
+	"private",
+	"protected",
+	"internal",
+	"fileprivate",
+	"open",
+	"final",
+	"async",
+	"operator",
+];
 /// Python's root class `class Point(object):`, no parent of its own
 const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
@@ -122,10 +168,21 @@ const UPTO: &str = "upto";
 /// phrases first, so `is greater than` is no `is`
 const WORD_OPERATORS: [(&str, Op); 15] = [
 	// identity (P208): `same` is the word, `===` its alias; no `identical` (user)
-	("is not the same as", Op::NotIdentical), ("is the same as", Op::Identical), ("same as", Op::Identical), ("same", Op::Identical),
-	("is greater than", Op::Gt), ("is less than", Op::Lt), ("is at least", Op::Ge), ("is at most", Op::Le),
-	("greater than", Op::Gt), ("less than", Op::Lt), ("divided by", Op::Div), ("plus", Op::Add), ("minus", Op::Sub),
-	("equals", Op::Eq), ("through", Op::To),
+	("is not the same as", Op::NotIdentical),
+	("is the same as", Op::Identical),
+	("same as", Op::Identical),
+	("same", Op::Identical),
+	("is greater than", Op::Gt),
+	("is less than", Op::Lt),
+	("is at least", Op::Ge),
+	("is at most", Op::Le),
+	("greater than", Op::Gt),
+	("less than", Op::Lt),
+	("divided by", Op::Div),
+	("plus", Op::Add),
+	("minus", Op::Sub),
+	("equals", Op::Eq),
+	("through", Op::To),
 ];
 const IS_IN_PHRASE: &str = "is in";
 /// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
@@ -140,7 +197,12 @@ const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
-const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [("if", Op::If, false), ("unless", Op::If, true), ("while", Op::While, false), ("until", Op::While, true)];
+const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [
+	("if", Op::If, false),
+	("unless", Op::If, true),
+	("while", Op::While, false),
+	("until", Op::While, true),
+];
 /// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
 const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
 const FAILED_WORD: &str = "failed";
@@ -198,7 +260,9 @@ fn is_print_word(node: &Node) -> bool {
 /// `print` or the call `print(…)`: a print statement starts here
 pub(crate) fn starts_print(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space) => items.first().is_some_and(is_print_word),
+		Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space) => {
+			items.first().is_some_and(is_print_word)
+		}
 		other => is_print_word(other),
 	}
 }
@@ -213,7 +277,11 @@ fn one_expression(words: &[Node]) -> Node {
 
 /// The call print(a, b, …): its arguments are separated by commas, like Python's
 pub(crate) fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
-	Node::List([Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
+	Node::List(
+		[Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(),
+		Bracket::Round,
+		Separator::None,
+	)
 }
 
 /// The arguments of `print(…)`: words separated by spaces (`print(upper "a")`) are one, else each item is one
@@ -238,21 +306,36 @@ pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> 
 /// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
 /// so the comma list [[print a], b] becomes the call print(a, b)
 fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
-	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
+	let items = if separator == Separator::Space {
+		with_arrow_bodies(items)
+	} else {
+		items
+	};
 	let items = match (&separator, items.as_slice()) {
-		(Separator::Space, [print, value]) if is_print_word(print) => printed_when(print, value).map_or(items, |guarded| vec![guarded]),
-		(Separator::Space, [.., _]) if bracket == Bracket::None => looped_while(&items).map_or(items, |looped| vec![looped]),
+		(Separator::Space, [print, value]) if is_print_word(print) => {
+			printed_when(print, value).map_or(items, |guarded| vec![guarded])
+		}
+		(Separator::Space, [.., _]) if bracket == Bracket::None => {
+			looped_while(&items).map_or(items, |looped| vec![looped])
+		}
 		_ => items,
 	};
 	// `{ print upper n }`: a block of the one statement prints the one expression too
-	let is_print_block = bracket == Bracket::Curly && separator == Separator::Space && items.len() > 2 && is_print_word(&items[0]);
+	let is_print_block =
+		bracket == Bracket::Curly && separator == Separator::Space && items.len() > 2 && is_print_word(&items[0]);
 	if is_print_block {
 		return Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator);
 	}
 	// `{ print i, i*2 }`: the block of the one call print(i, i*2)
-	if let (Bracket::Curly, Separator::Colon, Some(Node::List(head, Bracket::None, Separator::Space))) = (&bracket, &separator, items.first().map(Node::drop_meta)) {
+	if let (Bracket::Curly, Separator::Colon, Some(Node::List(head, Bracket::None, Separator::Space))) =
+		(&bracket, &separator, items.first().map(Node::drop_meta))
+	{
 		if is_print_word(&head[0]) {
-			return Node::List(vec![print_call(head[1..].iter().chain(&items[1..]).cloned())], bracket, Separator::None);
+			return Node::List(
+				vec![print_call(head[1..].iter().chain(&items[1..]).cloned())],
+				bracket,
+				Separator::None,
+			);
 		}
 	}
 	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
@@ -275,9 +358,17 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 
 /// `print it if it%2`: the condition guards the print, as in Ruby and Perl, rather than printing ø when it fails
 fn printed_when(print: &Node, value: &Node) -> Option<Node> {
-	let Node::Key(condition, Op::Then, guarded) = value.drop_meta() else { return None };
-	let Node::Key(nothing, Op::If, _) = condition.drop_meta() else { return None };
-	let printed = Node::List(vec![print.clone(), (**guarded).clone()], Bracket::None, Separator::Space);
+	let Node::Key(condition, Op::Then, guarded) = value.drop_meta() else {
+		return None;
+	};
+	let Node::Key(nothing, Op::If, _) = condition.drop_meta() else {
+		return None;
+	};
+	let printed = Node::List(
+		vec![print.clone(), (**guarded).clone()],
+		Bracket::None,
+		Separator::Space,
+	);
 	(**nothing == Node::Empty).then(|| Node::Key(condition.clone(), Op::Then, Box::new(printed)))
 }
 
@@ -287,8 +378,12 @@ fn looped_while(items: &[Node]) -> Option<Node> {
 	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
 		return None;
 	}
-	let Node::Key(head, Op::Do, body) = last.drop_meta() else { return None };
-	let Node::Key(nothing, Op::While, condition) = head.drop_meta() else { return None };
+	let Node::Key(head, Op::Do, body) = last.drop_meta() else {
+		return None;
+	};
+	let Node::Key(nothing, Op::While, condition) = head.drop_meta() else {
+		return None;
+	};
 	let looped = Node::List([command, &[(**body).clone()]].concat(), Bracket::None, Separator::Space);
 	(**nothing == Node::Empty).then(|| while_do((**condition).clone(), looped))
 }
@@ -297,12 +392,16 @@ fn looped_while(items: &[Node]) -> Option<Node> {
 /// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
 fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::FatArrow, _));
-	let Some(arrow) = items.iter().position(is_arrow) else { return items };
+	let Some(arrow) = items.iter().position(is_arrow) else {
+		return items;
+	};
 	if arrow + 1 == items.len() || items[arrow + 1..].iter().any(is_arrow) {
 		return items;
 	}
 	let rest = items.split_off(arrow + 1);
-	let Node::Key(parameters, op, body) = items.pop().expect("the arrow").drop_meta().clone() else { unreachable!("an arrow") };
+	let Node::Key(parameters, op, body) = items.pop().expect("the arrow").drop_meta().clone() else {
+		unreachable!("an arrow")
+	};
 	let body = one_expression(&[vec![*body], rest].concat());
 	items.push(Node::Key(parameters, op, Box::new(body)));
 	items
@@ -311,7 +410,9 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 /// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
 /// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
 fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
-	let Node::Symbol(word) = variable.drop_meta() else { return None };
+	let Node::Symbol(word) = variable.drop_meta() else {
+		return None;
+	};
 	let mentions = |name: &str| {
 		let mut found = false;
 		body.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
@@ -322,10 +423,22 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	}
 	let walked = if word == BYTES_WORD {
 		let offset = Symbol("byte·offset".to_string());
-		let count = Node::Key(Box::new(iterable.clone()), Op::Dot, Box::new(Symbol(BYTES_WORD.to_string())));
+		let count = Node::Key(
+			Box::new(iterable.clone()),
+			Op::Dot,
+			Box::new(Symbol(BYTES_WORD.to_string())),
+		);
 		let offsets = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		let byte = Node::Key(Box::new(offset.clone()), Op::FatArrow, Box::new(call("byte_at", vec![iterable.clone(), offset])));
-		Node::Key(Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)), Op::Dot, Box::new(call("map", vec![byte])))
+		let byte = Node::Key(
+			Box::new(offset.clone()),
+			Op::FatArrow,
+			Box::new(call("byte_at", vec![iterable.clone(), offset])),
+		);
+		Node::Key(
+			Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)),
+			Op::Dot,
+			Box::new(call("map", vec![byte])),
+		)
 	} else {
 		call("chars", vec![iterable.clone()])
 	};
@@ -354,16 +467,28 @@ impl SpecialInfix {
 			SpecialInfix::Keyword(op) => Node::Key(Box::new(lhs), op, Box::new(operand)),
 			SpecialInfix::FloorDivision { compound } => {
 				let quotient = floor_division(lhs.clone(), operand);
-				if compound { Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient)) } else { quotient }
+				if compound {
+					Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
+				} else {
+					quotient
+				}
 			}
 			SpecialInfix::Pipeline => piped(lhs, operand),
 			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
 			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
-				crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "warp imports a module whole");
+				crate::normalize::hint(
+					&format!("{}.*", lhs.serialize()),
+					&lhs.serialize(),
+					"warp imports a module whole",
+				);
 				lhs
 			}
 			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
-			SpecialInfix::Membership(word) => Node::List(vec![lhs, Symbol(word.to_string()), operand], Bracket::None, Separator::Space),
+			SpecialInfix::Membership(word) => Node::List(
+				vec![lhs, Symbol(word.to_string()), operand],
+				Bracket::None,
+				Separator::Space,
+			),
 			SpecialInfix::DotCall => dot_call(lhs, operand),
 		}
 	}
@@ -381,7 +506,11 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 	}
 	let list = arguments.remove(0);
 	let item = Symbol(BROADCAST_ITEM.to_string());
-	let applied = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
+	let applied = Node::List(
+		[vec![function, item.clone()], arguments].concat(),
+		Bracket::Round,
+		Separator::None,
+	);
 	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
 	call(MAP_WORD, vec![list, each])
 }
@@ -393,7 +522,10 @@ fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(Strin
 		return None;
 	}
 	let collection = crate::normalize::operand_text(iterable);
-	Some((format!("for {name} in {collection}"), format!("for x in {collection}.filter(x => x is {name})")))
+	Some((
+		format!("for {name} in {collection}"),
+		format!("for x in {collection}.filter(x => x is {name})"),
+	))
 }
 
 fn is_unindexable_keyword(node: &Node) -> bool {
@@ -442,10 +574,17 @@ pub const ASSERTION_FAILED: &str = "assertion failed";
 fn item_named(node: Node, name: &str, item: &Node) -> Node {
 	match node {
 		Symbol(symbol) if symbol == name => item.clone(),
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(head)) if head == name) => {
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(head)) if head == name) =>
+		{
 			let mut items = items.into_iter();
 			let head = items.next().expect("a head");
-			Node::List(std::iter::once(head).chain(items.map(|part| item_named(part, name, item))).collect(), Bracket::Round, Separator::None)
+			Node::List(
+				std::iter::once(head)
+					.chain(items.map(|part| item_named(part, name, item)))
+					.collect(),
+				Bracket::Round,
+				Separator::None,
+			)
 		}
 		other => other.map_children(|child| item_named(child, name, item)),
 	}
@@ -459,9 +598,13 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == CODEPOINT_TYPE,
 		_ => return false,
 	};
-	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
+	let spec = crate::analyzer::type_word_kind(type_name)
+		.map(|_| type_name)
+		.unwrap_or(type_name);
 	items.iter().all(|item| match item.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
+		Node::Number(_) | Node::Text(_) | Node::Char(_) => {
+			crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec)
+		}
 		_ => false,
 	})
 }
@@ -469,7 +612,10 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 /// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
 fn iterates_keys(iterable: &Node) -> bool {
 	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::library_words::MAP_KEYS);
-	let is_keys_call = |call: &Node| is_keys_word(call) || matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word));
+	let is_keys_call = |call: &Node| {
+		is_keys_word(call)
+			|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word))
+	};
 	match iterable.drop_meta() {
 		Node::Key(_, Op::Dot, method) => is_keys_call(method),
 		call => is_keys_call(call),
@@ -515,8 +661,7 @@ const SUPERSCRIPT_DIGITS: &str = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 const FRACTION_SLASH: char = '⁄';
 
 /// Parser options for handling different file formats
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct ParserOptions {
 	/// XML mode: treat <tag> as XML tags, not C++ generics
 	pub xml_mode: bool,
@@ -527,18 +672,26 @@ pub struct ParserOptions {
 	pub wit_mode: bool,
 }
 
-
 impl ParserOptions {
 	pub fn wit() -> Self {
-		ParserOptions { wit_mode: true, ..Default::default() }
+		ParserOptions {
+			wit_mode: true,
+			..Default::default()
+		}
 	}
 
 	pub fn xml() -> Self {
-		ParserOptions { xml_mode: true, ..Default::default() }
+		ParserOptions {
+			xml_mode: true,
+			..Default::default()
+		}
 	}
 
 	pub fn data() -> Self {
-		ParserOptions { data_mode: true, ..Default::default() }
+		ParserOptions {
+			data_mode: true,
+			..Default::default()
+		}
 	}
 }
 
@@ -553,12 +706,20 @@ fn names_a_type(word: &str) -> bool {
 /// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
 fn type_application_name(name: &str, arguments: &str) -> String {
 	let arguments = arguments.replace('<', " of ").replace('>', "");
-	format!("{} of {}", noted_list_type_head(name), arguments.split_whitespace().collect::<Vec<_>>().join(" "))
+	format!(
+		"{} of {}",
+		noted_list_type_head(name),
+		arguments.split_whitespace().collect::<Vec<_>>().join(" ")
+	)
 }
 
 /// The head of a list type: `Vec`, `vector`, `Array`… are list
 pub(crate) fn list_type_head(name: &str) -> &str {
-	if FOREIGN_LIST_HEADS.contains(&name) { LIST_HEAD } else { name }
+	if FOREIGN_LIST_HEADS.contains(&name) {
+		LIST_HEAD
+	} else {
+		name
+	}
 }
 
 /// list_type_head, with a note naming warp's word for a foreign one
@@ -579,16 +740,46 @@ fn superscript_sign(ch: char) -> Option<i64> {
 }
 
 /// Superscript letters and the letters they raise: `2ⁿ` is 2^n
-const SUPERSCRIPT_LETTERS: [(char, char); 25] = [('ᵃ', 'a'), ('ᵇ', 'b'), ('ᶜ', 'c'), ('ᵈ', 'd'), ('ᵉ', 'e'), ('ᶠ', 'f'), ('ᵍ', 'g'),
-	('ʰ', 'h'), ('ⁱ', 'i'), ('ʲ', 'j'), ('ᵏ', 'k'), ('ˡ', 'l'), ('ᵐ', 'm'), ('ⁿ', 'n'), ('ᵒ', 'o'), ('ᵖ', 'p'), ('ʳ', 'r'),
-	('ˢ', 's'), ('ᵗ', 't'), ('ᵘ', 'u'), ('ᵛ', 'v'), ('ʷ', 'w'), ('ˣ', 'x'), ('ʸ', 'y'), ('ᶻ', 'z')];
+const SUPERSCRIPT_LETTERS: [(char, char); 25] = [
+	('ᵃ', 'a'),
+	('ᵇ', 'b'),
+	('ᶜ', 'c'),
+	('ᵈ', 'd'),
+	('ᵉ', 'e'),
+	('ᶠ', 'f'),
+	('ᵍ', 'g'),
+	('ʰ', 'h'),
+	('ⁱ', 'i'),
+	('ʲ', 'j'),
+	('ᵏ', 'k'),
+	('ˡ', 'l'),
+	('ᵐ', 'm'),
+	('ⁿ', 'n'),
+	('ᵒ', 'o'),
+	('ᵖ', 'p'),
+	('ʳ', 'r'),
+	('ˢ', 's'),
+	('ᵗ', 't'),
+	('ᵘ', 'u'),
+	('ᵛ', 'v'),
+	('ʷ', 'w'),
+	('ˣ', 'x'),
+	('ʸ', 'y'),
+	('ᶻ', 'z'),
+];
 
 fn superscript_letter(ch: char) -> Option<char> {
-	SUPERSCRIPT_LETTERS.iter().find(|(raised, _)| *raised == ch).map(|(_, letter)| *letter)
+	SUPERSCRIPT_LETTERS
+		.iter()
+		.find(|(raised, _)| *raised == ch)
+		.map(|(_, letter)| *letter)
 }
 
 fn superscript_digit(ch: char) -> Option<i64> {
-	SUPERSCRIPT_DIGITS.chars().position(|digit| digit == ch).map(|position| position as i64)
+	SUPERSCRIPT_DIGITS
+		.chars()
+		.position(|digit| digit == ch)
+		.map(|position| position as i64)
 }
 
 /// Numerator and denominator of a Unicode vulgar fraction character: ½ → (1, 2), ⅚ → (5, 6), ↉ → (0, 3)
@@ -632,7 +823,9 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 		_ => value,
 	};
 	match stage.drop_meta() {
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) => {
+		Node::List(items, Bracket::Round, Separator::None)
+			if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) =>
+		{
 			let mut items = items.clone();
 			items.insert(1, value);
 			Node::List(items, Bracket::Round, Separator::None)
@@ -657,17 +850,31 @@ fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, No
 		},
 		// `if x in xs {…}`: the block after the collection is the body
 		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_KEYWORD) => {
-			split_trailing_block(&items[2], empty_is_block)
-				.map(|(collection, block)| (Node::List(vec![items[0].clone(), items[1].clone(), collection], bracket.clone(), separator.clone()), block))
+			split_trailing_block(&items[2], empty_is_block).map(|(collection, block)| {
+				(
+					Node::List(
+						vec![items[0].clone(), items[1].clone(), collection],
+						bracket.clone(),
+						separator.clone(),
+					),
+					block,
+				)
+			})
 		}
-		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => split_trailing_block(right, empty_is_block)
-			.map(|(operand, block)| (Node::Key(left.clone(), *op, Box::new(operand)), block)),
+		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => {
+			split_trailing_block(right, empty_is_block)
+				.map(|(operand, block)| (Node::Key(left.clone(), *op, Box::new(operand)), block))
+		}
 		_ => None,
 	}
 }
 
 pub fn parse_file(path: &str) -> Node {
-	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
+	let options = if path.ends_with(".wit") {
+		ParserOptions::wit()
+	} else {
+		ParserOptions::default()
+	};
 	match read_to_string(path) {
 		Ok(content) => WarpParser::parse_with_options(&content, options),
 		_ => error(&format!("Failed to read {}", path)),
@@ -717,9 +924,20 @@ fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
 				(None, '/') if chars.get(column + 1) == Some(&'/') => {
 					let spaced = column > 0 && chars[column - 1] == ' ' && chars.get(column + 2) == Some(&' ');
 					let rest = &chars[column + 2..];
-					let closes = rest.iter().map(|c| match c { ')' | ']' | '}' => 1, '(' | '[' | '{' => -1, _ => 0 }).sum::<i32>();
+					let closes = rest
+						.iter()
+						.map(|c| match c {
+							')' | ']' | '}' => 1,
+							'(' | '[' | '{' => -1,
+							_ => 0,
+						})
+						.sum::<i32>();
 					if spaced && depth > 0 && closes > 0 {
-						let closer = rest.iter().find(|c| matches!(c, ')' | ']' | '}')).copied().unwrap_or(')');
+						let closer = rest
+							.iter()
+							.find(|c| matches!(c, ')' | ']' | '}'))
+							.copied()
+							.unwrap_or(')');
 						return Some((line_index + 1, column + 1, closer));
 					}
 					break;
@@ -735,8 +953,13 @@ fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
 fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column: usize) -> Diagnostic {
 	let text: Vec<char> = input.lines().nth(line - 1).unwrap_or_default().chars().collect();
 	let before = text[..column - 1].iter().rposition(|c| !c.is_whitespace());
-	let after = text[column + 1..].iter().position(|c| !c.is_whitespace()).map(|offset| column + 1 + offset);
-	let (Some(before), Some(after)) = (before, after) else { return diagnostic };
+	let after = text[column + 1..]
+		.iter()
+		.position(|c| !c.is_whitespace())
+		.map(|offset| column + 1 + offset);
+	let (Some(before), Some(after)) = (before, after) else {
+		return diagnostic;
+	};
 	let written: String = text[before..=after].iter().collect();
 	diagnostic.offer("floor division", written, format!("{}//{}", text[before], text[after]))
 }
@@ -744,12 +967,25 @@ fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column
 /// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
 /// `for variable in iterable body`, the loop for_loop.rs lowers
 pub(super) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
-	Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space)
+	Node::List(
+		vec![
+			Symbol("for".to_string()),
+			variable,
+			Symbol("in".to_string()),
+			iterable,
+			body,
+		],
+		Bracket::None,
+		Separator::Space,
+	)
 }
 
 pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
 	let closer = closer.into();
-	Diagnostic::default().message(message).offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at)).into_error()
+	Diagnostic::default()
+		.message(message)
+		.offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at))
+		.into_error()
 }
 
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
@@ -872,7 +1108,11 @@ impl UserOperatorKind {
 
 const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
 use crate::node::ATTRIBUTE_MARK;
-const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
+const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [
+	("prefix", UserOperatorKind::Prefix),
+	("suffix", UserOperatorKind::Suffix),
+	("infix", UserOperatorKind::Infix),
+];
 /// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
 const USER_SUFFIX_BP: u8 = Op::Square.binding_power().0;
 const USER_PREFIX_RIGHT_BP: u8 = Op::Neg.binding_power().1;
@@ -885,7 +1125,11 @@ const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", fal
 /// Superscript digits and signs too (P48, user-decided) (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
 fn is_operator_glyph(glyph: &str) -> bool {
 	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
-	!glyph.is_empty() && glyph.chars().all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace())) && !glyph.is_ascii()
+	!glyph.is_empty()
+		&& glyph
+			.chars()
+			.all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace()))
+		&& !glyph.is_ascii()
 }
 
 /// `suffix operator ⁰ := …` and the short `suffix ⁰ := …` (P48): the glyph and the words after `:=`
@@ -927,7 +1171,8 @@ fn is_plain_name(word: &str) -> bool {
 fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 	let source = code_only(source);
 	let words: Vec<&str> = source.split_whitespace().collect();
-	words.windows(2)
+	words
+		.windows(2)
 		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
 		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
 		// `record = find(…)` declares nothing
@@ -963,9 +1208,15 @@ fn code_only(source: &str) -> String {
 /// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
 pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
 	let (c, next) = (chars[at], chars.get(at + 1).copied());
-	let skip_until = |from: usize, end: &[char]| (from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len());
+	let skip_until = |from: usize, end: &[char]| {
+		(from..chars.len())
+			.find(|&i| chars[i..].starts_with(end))
+			.map_or(chars.len(), |i| i + end.len())
+	};
 	let after = match (c, next) {
-		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => (at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len()),
+		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => {
+			(at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len())
+		}
 		('/', Some('*')) => skip_until(at + 2, &['*', '/']),
 		('"' | '\'', _) => skip_until(at + 1, &[c]),
 		_ => return None,
@@ -983,18 +1234,29 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 			Some((declared_operator(*kind, rest)?, *kind))
 		});
 		let declared = by_kind.or_else(|| match words.as_slice() {
-			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) && is_operator_glyph(glyph) => Some((glyph.to_string(), UserOperatorKind::Infix)),
+			[left, glyph, right, ":=", ..]
+				if is_plain_name(left) && is_plain_name(right) && is_operator_glyph(glyph) =>
+			{
+				Some((glyph.to_string(), UserOperatorKind::Infix))
+			}
 			_ => None,
 		});
 		if let Some((glyph, kind)) = declared {
-			found.push(UserOperator { glyph: glyph.chars().collect(), kind, level: kind.default_level() });
+			found.push(UserOperator {
+				glyph: glyph.chars().collect(),
+				kind,
+				level: kind.default_level(),
+			});
 		}
 	}
 	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		if let Ok(Some((glyph, level))) = precedence_declaration(&words, &found) {
-			found.iter_mut().filter(|operator| operator.glyph == glyph.chars().collect::<Vec<char>>()).for_each(|operator| operator.level = level);
+			found
+				.iter_mut()
+				.filter(|operator| operator.glyph == glyph.chars().collect::<Vec<char>>())
+				.for_each(|operator| operator.level = level);
 		}
 	}
 	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
@@ -1004,26 +1266,48 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 /// `operator ⊕ has precedence above|below [operator] Y`: the glyph ⊕ and its new level; Ok(None) for any other statement,
 /// Err for a precedence declaration that cannot be followed (a built-in ⊕, an unknown Y)
 fn precedence_declaration<'a>(words: &[&'a str], declared: &[UserOperator]) -> Result<Option<(&'a str, u8)>, String> {
-	let ["operator", glyph, "has", "precedence", direction, rest @ ..] = words else { return Ok(None) };
-	let Some((_, above)) = PRECEDENCE_DIRECTIONS.iter().find(|(word, _)| word == direction) else { return Ok(None) };
+	let ["operator", glyph, "has", "precedence", direction, rest @ ..] = words else {
+		return Ok(None);
+	};
+	let Some((_, above)) = PRECEDENCE_DIRECTIONS.iter().find(|(word, _)| word == direction) else {
+		return Ok(None);
+	};
 	let other = match rest {
 		["operator", other] | [other] => *other,
 		_ => return Ok(None),
 	};
-	if !declared.iter().any(|operator| operator.glyph.iter().collect::<String>() == *glyph) {
+	if !declared
+		.iter()
+		.any(|operator| operator.glyph.iter().collect::<String>() == *glyph)
+	{
 		return Err(format!("operator {glyph} is built in: only a declared operator gets a precedence (`infix operator {glyph} := …` first)"));
 	}
-	let reference = match declared.iter().find(|operator| operator.glyph.iter().collect::<String>() == other) {
+	let reference = match declared
+		.iter()
+		.find(|operator| operator.glyph.iter().collect::<String>() == other)
+	{
 		Some(operator) => operator.level,
-		None => built_in_level(other).ok_or_else(|| format!("unknown operator {other} in `operator {glyph} has precedence {direction} {other}`"))?,
+		None => built_in_level(other).ok_or_else(|| {
+			format!("unknown operator {other} in `operator {glyph} has precedence {direction} {other}`")
+		})?,
 	};
-	let level = if *above { reference.saturating_add(PRECEDENCE_STEP) } else { reference.saturating_sub(PRECEDENCE_STEP) };
+	let level = if *above {
+		reference.saturating_add(PRECEDENCE_STEP)
+	} else {
+		reference.saturating_sub(PRECEDENCE_STEP)
+	};
 	Ok(Some((glyph, level)))
 }
 
 /// The left binding power of a built-in infix operator written as `text` (`*`, `+`, `and`)
 fn built_in_level(text: &str) -> Option<u8> {
-	let parser = WarpParser::new_with_options(text.to_string(), ParserOptions { data_mode: true, ..ParserOptions::default() });
+	let parser = WarpParser::new_with_options(
+		text.to_string(),
+		ParserOptions {
+			data_mode: true,
+			..ParserOptions::default()
+		},
+	);
 	match parser.peek_operator() {
 		Some((op, length)) if length == text.chars().count() => Some(op.binding_power().0),
 		_ => None,
@@ -1033,25 +1317,37 @@ fn built_in_level(text: &str) -> Option<u8> {
 /// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
 /// `(f T y)` never reads a parameter named like a type (`offset_of(text, byte, start)`) as the type of the next one
 fn typed_parameter(arguments: Node) -> Node {
-	let is_type_word = |node: &Node| matches!(node.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some());
+	let is_type_word =
+		|node: &Node| matches!(node.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some());
 	match arguments.drop_meta() {
 		Node::List(items, _, Separator::Space) => match items.as_slice() {
-			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone())),
+			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => {
+				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
+			}
 			// `x of int`: the parameter x of type int
-			[name, of, type_word] if of.drop_meta().is_symbol(OF_WORD) && is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) && !is_type_word(name) => {
+			[name, of, type_word]
+				if of.drop_meta().is_symbol(OF_WORD)
+					&& is_type_word(type_word)
+					&& matches!(name.drop_meta(), Symbol(_))
+					&& !is_type_word(name) =>
+			{
 				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
 			}
 			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
-			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => match name.drop_meta() {
-				Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
-				Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::tuples::STARRED, name.name())),
-				_ => arguments,
-			},
+			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => {
+				match name.drop_meta() {
+					Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
+					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::tuples::STARRED, name.name())),
+					_ => arguments,
+				}
+			}
 			// `int b = 2` (C#, C++): `b:int = 2`
 			[type_word, default] if is_type_word(type_word) => match default.drop_meta() {
-				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Symbol(_)) => {
-					Node::Key(Box::new(Node::Key(name.clone(), Op::Colon, Box::new(type_word.clone()))), Op::Assign, value.clone())
-				}
+				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Symbol(_)) => Node::Key(
+					Box::new(Node::Key(name.clone(), Op::Colon, Box::new(type_word.clone()))),
+					Op::Assign,
+					value.clone(),
+				),
 				_ => arguments,
 			},
 			_ => arguments,
@@ -1063,16 +1359,22 @@ fn typed_parameter(arguments: Node) -> Node {
 /// Every argument of `f(int x, float y)` as its typed parameter
 fn typed_parameters(arguments: Node) -> Node {
 	match arguments.drop_meta() {
-		Node::List(items, bracket, Separator::Colon) => {
-			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Colon)
-		}
+		Node::List(items, bracket, Separator::Colon) => Node::List(
+			items.iter().cloned().map(typed_parameter).collect(),
+			bracket.clone(),
+			Separator::Colon,
+		),
 		_ => typed_parameter(arguments),
 	}
 }
 
 fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
 	let name = format!("{OPERATOR_FUNCTION_PREFIX}{}", glyph.iter().collect::<String>());
-	Node::List([vec![Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
+	Node::List(
+		[vec![Symbol(name)], arguments].concat(),
+		Bracket::Round,
+		Separator::None,
+	)
 }
 
 enum ElseParseMode {
@@ -1092,12 +1394,24 @@ impl WarpParser {
 			unicode_normalization::IsNormalized::Yes => input,
 			_ => input.nfc().collect(),
 		};
-		let input = if options.data_mode { input } else { crate::uniscript_entities::expand_entities(&input) };
+		let input = if options.data_mode {
+			input
+		} else {
+			crate::uniscript_entities::expand_entities(&input)
+		};
 		let lines: Vec<String> = input.lines().map(String::from).collect();
 		let current_line = lines.first().cloned().unwrap_or_default();
 		let chars: Vec<char> = input.chars().collect();
-		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
-		let declared_types = if options == ParserOptions::default() { scan_declared_types(&input) } else { Default::default() };
+		let user_operators = if options == ParserOptions::default() {
+			scan_user_operators(&input)
+		} else {
+			Vec::new()
+		};
+		let declared_types = if options == ParserOptions::default() {
+			scan_declared_types(&input)
+		} else {
+			Default::default()
+		};
 		WarpParser {
 			user_operators,
 			declared_types,
@@ -1164,9 +1478,12 @@ impl WarpParser {
 			crate::normalize::check_style(&program);
 		}
 		// marked Empty (`ø!`) is P73 force-unwrap, not a vacant program (is_nothing looks through Meta)
-		if program.is_nothing() && crate::mutation::bang_target(&program).is_none() { Empty } else { program }
+		if program.is_nothing() && crate::mutation::bang_target(&program).is_none() {
+			Empty
+		} else {
+			program
+		}
 	}
-
 }
 
 /// The one element of `items`, moved out (cloning it copied a whole subtree, the whole program at the top)
@@ -1184,12 +1501,26 @@ fn real(exact: Exact) -> Node {
 /// The glyphs that are true or false (card keyword-glyphs), longest spelling first: `✔️` is `✔` with an emoji variation
 /// selector. Most start an emoji, which would otherwise be a codepoint (atoms.rs, parse_emoji)
 pub(crate) const TRUTH_GLYPHS: [(&str, bool); 13] = [
-	("✔️", true), ("✓️", true), ("☑️", true), ("⊤", true), ("✓", true), ("✔", true), ("☑", true), ("✅", true), ("🗸", true), ("🗹", true),
-	("⊥", false), ("❌", false), ("✗", false),
+	("✔️", true),
+	("✓️", true),
+	("☑️", true),
+	("⊤", true),
+	("✓", true),
+	("✔", true),
+	("☑", true),
+	("✅", true),
+	("🗸", true),
+	("🗹", true),
+	("⊥", false),
+	("❌", false),
+	("✗", false),
 ];
 
 pub(crate) fn truth_glyph(glyph: &str) -> Option<Node> {
-	TRUTH_GLYPHS.iter().find(|(spelling, _)| *spelling == glyph).map(|(_, truth)| if *truth { Node::True } else { Node::False })
+	TRUTH_GLYPHS
+		.iter()
+		.find(|(spelling, _)| *spelling == glyph)
+		.map(|(_, truth)| if *truth { Node::True } else { Node::False })
 }
 
 fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
@@ -1261,10 +1592,23 @@ fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
 		_ => left.clone(),
 	};
 	let symbol = op.as_str();
-	let (chained, grouped) = (format!("{left} and {middle} {symbol} {right}"), format!("({left}) {symbol} {right}"));
-	Diagnostic::default().fix(format!("{chained} or {grouped}")).message(format!("ambiguous: equality does not chain in {left} {symbol} {right}"))
-		.offer("both equalities, as Python chains them", format!("{left} {symbol} {right}"), chained)
-		.offer("compare the first result, as C does", format!("{left} {symbol} {right}"), grouped)
+	let (chained, grouped) = (
+		format!("{left} and {middle} {symbol} {right}"),
+		format!("({left}) {symbol} {right}"),
+	);
+	Diagnostic::default()
+		.fix(format!("{chained} or {grouped}"))
+		.message(format!("ambiguous: equality does not chain in {left} {symbol} {right}"))
+		.offer(
+			"both equalities, as Python chains them",
+			format!("{left} {symbol} {right}"),
+			chained,
+		)
+		.offer(
+			"compare the first result, as C does",
+			format!("{left} {symbol} {right}"),
+			grouped,
+		)
 }
 
 const COMPARISON_FIRST: &str = "the comparison first, as C";
@@ -1278,19 +1622,36 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 	};
 	let (left, right) = (lhs.serialize(), rhs.serialize());
 	let readings = match (comparison(lhs), comparison(rhs)) {
-		(None, Some((a, op, b))) => vec![(COMPARISON_FIRST.to_string(), format!("{left} {symbol} ({a} {op} {b})")), (format!("`{symbol}` first, as Python"), format!("({left} {symbol} {a}) {op} {b}"))],
-		(Some((a, op, b)), None) => vec![(COMPARISON_FIRST.to_string(), format!("({a} {op} {b}) {symbol} {right}")), (format!("`{symbol}` first, as Python"), format!("{a} {op} ({b} {symbol} {right})"))],
-		(Some(_), Some(_)) => vec![("both comparisons first".to_string(), format!("({left}) {symbol} ({right})"))],
+		(None, Some((a, op, b))) => vec![
+			(COMPARISON_FIRST.to_string(), format!("{left} {symbol} ({a} {op} {b})")),
+			(
+				format!("`{symbol}` first, as Python"),
+				format!("({left} {symbol} {a}) {op} {b}"),
+			),
+		],
+		(Some((a, op, b)), None) => vec![
+			(COMPARISON_FIRST.to_string(), format!("({a} {op} {b}) {symbol} {right}")),
+			(
+				format!("`{symbol}` first, as Python"),
+				format!("{a} {op} ({b} {symbol} {right})"),
+			),
+		],
+		(Some(_), Some(_)) => vec![(
+			"both comparisons first".to_string(),
+			format!("({left}) {symbol} ({right})"),
+		)],
 		(None, None) => return None,
 	};
 	let word = if symbol == '&' { "and" } else { "or" };
 	let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 	let written = format!("{left} {symbol} {right}");
-	let diagnostic = Diagnostic::default().fix(forms.join(" or "))
-		.message(format!("ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"));
-	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)))
+	let diagnostic = Diagnostic::default().fix(forms.join(" or ")).message(format!(
+		"ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"
+	));
+	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
+		diagnostic.offer(meaning, &written, form)
+	}))
 }
-
 
 /// The name before a minus written apart, `f - 2`: the subtraction, where `f -2` applies a callable f to -2, as the
 /// math words do (`abs - 2`, `abs -2`; analyzer::lower_negated_calls)
@@ -1311,7 +1672,11 @@ pub fn subscript(target: Node, index: Node) -> Node {
 		_ => vec![&index],
 	};
 	if let Some(negative) = positions.into_iter().find(|position| counts_from_the_end(position)) {
-		let message = format!("index out of range: negative index {} does not wrap around, the last element is last({})", negative.serialize(), target.serialize());
+		let message = format!(
+			"index out of range: negative index {} does not wrap around, the last element is last({})",
+			negative.serialize(),
+			target.serialize()
+		);
 		return Diagnostic::at(negative, message).into_error();
 	}
 	if let Some((start, end)) = slice_bounds(&index) {
@@ -1337,10 +1702,14 @@ fn counts_from_the_end(index: &Node) -> bool {
 /// The 0-based start and exclusive end of a slice index, ø where omitted (Python's `a[1:]`, `a[:2]`);
 /// an inclusive range `start...last` ends after last
 fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
-	let Node::Key(start, op, end) = index.drop_meta() else { return None };
+	let Node::Key(start, op, end) = index.drop_meta() else {
+		return None;
+	};
 	let end = match op {
 		Op::Colon | Op::Range => end.as_ref().clone(),
-		Op::To => unless_open(end, |end| Node::Key(Box::new(end.clone()), Op::Add, Box::new(Node::Number(Number::Int(1))))),
+		Op::To => unless_open(end, |end| {
+			Node::Key(Box::new(end.clone()), Op::Add, Box::new(Node::Number(Number::Int(1))))
+		}),
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
@@ -1349,25 +1718,43 @@ fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 /// `xs#a..b` reads as the range from the value xs#a; P58 (user: "create a strong warning"): a warning naming the slice
 /// `xs#(a..b)` and the range `(xs#a)..b`
 fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
-	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else { return None };
+	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else {
+		return None;
+	};
 	if !matches!(op, Op::Range | Op::To) {
 		return None;
 	}
 	let (target, index, end) = (target.serialize(), index.serialize(), rhs.serialize());
 	let (target, index, end) = (target.trim(), index.trim(), end.trim());
-	let (as_written, slice, range) = (format!("{target}#{index}{written}{end}"), format!("{target}#({index}{written}{end})"), format!("({target}#{index}){written}{end}"));
+	let (as_written, slice, range) = (
+		format!("{target}#{index}{written}{end}"),
+		format!("{target}#({index}{written}{end})"),
+		format!("({target}#{index}){written}{end}"),
+	);
 	let message = format!("{as_written} is the range from the value {target}#{index}: for the slice write {slice}, for the range write {range}");
-	Some(Diagnostic::at(lhs, message).offer("the slice", &as_written, slice).offer("the range from the value", &as_written, range))
+	Some(
+		Diagnostic::at(lhs, message)
+			.offer("the slice", &as_written, slice)
+			.offer("the range from the value", &as_written, range),
+	)
 }
 
 /// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
 /// parentheses, `xs#a..b` stays the range from the value xs#a
 fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, Bracket::Round, _) = index.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = index.drop_meta() else {
+		return None;
+	};
 	let [range] = items.as_slice() else { return None };
-	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
+	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else {
+		return None;
+	};
 	let minus_one = |bound: &Node| Node::Key(Box::new(bound.clone()), Op::Sub, Box::new(Node::Number(Number::Int(1))));
-	let end = if *op == Op::To { end.as_ref().clone() } else { unless_open(end, minus_one) };
+	let end = if *op == Op::To {
+		end.as_ref().clone()
+	} else {
+		unless_open(end, minus_one)
+	};
 	Some((unless_open(start, minus_one), end))
 }
 
@@ -1382,7 +1769,14 @@ fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
 /// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)
 pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 	match one_based_index.drop_meta() {
-		Node::Key(key, Op::Add, one) if matches!(one.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(1))) => Some(key),
+		Node::Key(key, Op::Add, one)
+			if matches!(
+				one.drop_meta(),
+				Node::Number(crate::extensions::numbers::Number::Int(1))
+			) =>
+		{
+			Some(key)
+		}
 		_ => None,
 	}
 }
@@ -1404,7 +1798,9 @@ pub(crate) fn while_do(condition: Node, body: Node) -> Node {
 /// The condition of the `if`/`while` head inside a parsed conditional or loop, negated: `unless c {…}` is `if not c {…}`
 fn negate_condition(conditional: Node) -> Node {
 	match conditional {
-		Node::Key(head, op @ (Op::Then | Op::Else | Op::Do), body) => Node::Key(Box::new(negate_condition(*head)), op, body),
+		Node::Key(head, op @ (Op::Then | Op::Else | Op::Do), body) => {
+			Node::Key(Box::new(negate_condition(*head)), op, body)
+		}
 		Node::Key(empty, op @ (Op::If | Op::While), condition) if matches!(empty.drop_meta(), Empty) => {
 			Node::Key(empty, op, Box::new(Node::Key(Box::new(Empty), Op::Not, condition)))
 		}
@@ -1414,7 +1810,9 @@ fn negate_condition(conditional: Node) -> Node {
 
 /// `f={it*2}` defines a function like `f:={it*2}`: a name assigned a block that uses `it`; other blocks are data
 fn is_function_block(name: &Node, block: &Node) -> bool {
-	matches!(name.drop_meta(), Node::Symbol(_)) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) && mentions(block, "it")
+	matches!(name.drop_meta(), Node::Symbol(_))
+		&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
+		&& mentions(block, "it")
 }
 
 /// A braceless call `sleep 1s`, `f 3`: a word applied to what follows it

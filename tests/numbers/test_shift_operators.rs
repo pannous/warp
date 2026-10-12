@@ -1,6 +1,6 @@
+use crate::common;
 use crate::is;
 use warp::*;
-use crate::common;
 
 const FLOAT_IN_EXACT_CONTEXT: &str = "is a float where an exact Int is expected";
 

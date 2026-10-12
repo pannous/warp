@@ -53,7 +53,7 @@ playground: <run id> <green|red>
 filters: <test filters>
 changes: <what it does, defaults chosen, existing tests touched and why>
 END
-A card you could not finish: push what you have, say why in the final message, and put no block for it."
+A card you could not finish: push what you have, then \`todo release <card> \"done: …; left: …; branch: …\"\` so it goes back to Next with no agent, say why in the final message, and put no block for it."
 
 [ -n "$CODEX_PROBE_PROMPT" ] && PROMPT=$CODEX_PROBE_PROMPT
 THREAD_NAME="codex cron $(date '+%F %H:%M')"

@@ -58,15 +58,35 @@ impl WasmGcEmitter {
 			return catching;
 		}
 		let tag = self.declare_i32_tag();
-		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
-		self.extra_global_names.push((self.next_global_idx, TRY_DEPTH_GLOBAL.to_string()));
+		self.globals.global(
+			GlobalType {
+				val_type: ValType::I32,
+				mutable: true,
+				shared: false,
+			},
+			&ConstExpr::i32_const(0),
+		);
+		self.extra_global_names
+			.push((self.next_global_idx, TRY_DEPTH_GLOBAL.to_string()));
 		let depth_global = self.next_global_idx;
 		self.next_global_idx += 1;
-		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(-1));
-		self.extra_global_names.push((self.next_global_idx, CAUGHT_ERROR_GLOBAL.to_string()));
+		self.globals.global(
+			GlobalType {
+				val_type: ValType::I32,
+				mutable: true,
+				shared: false,
+			},
+			&ConstExpr::i32_const(-1),
+		);
+		self.extra_global_names
+			.push((self.next_global_idx, CAUGHT_ERROR_GLOBAL.to_string()));
 		let caught_global = self.next_global_idx;
 		self.next_global_idx += 1;
-		let catching = ErrorCatching { tag, depth_global, caught_global };
+		let catching = ErrorCatching {
+			tag,
+			depth_global,
+			caught_global,
+		};
 		self.error_catching = Some(catching);
 		catching
 	}
@@ -75,7 +95,10 @@ impl WasmGcEmitter {
 	fn declare_i32_tag(&mut self) -> u32 {
 		let tag = self.tags.len();
 		let tag_type = self.type_manager.function_type(vec![ValType::I32], vec![]);
-		self.tags.tag(TagType { kind: TagKind::Exception, func_type_idx: tag_type });
+		self.tags.tag(TagType {
+			kind: TagKind::Exception,
+			func_type_idx: tag_type,
+		});
 		tag
 	}
 
@@ -85,17 +108,32 @@ impl WasmGcEmitter {
 			return catching;
 		}
 		let tag = self.declare_i32_tag();
-		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
-		self.extra_global_names.push((self.next_global_idx, ABORT_PAYLOAD_GLOBAL.to_string()));
-		let catching = AbortCatching { tag, payload_global: self.next_global_idx };
+		self.globals.global(
+			GlobalType {
+				val_type: ValType::I32,
+				mutable: true,
+				shared: false,
+			},
+			&ConstExpr::i32_const(0),
+		);
+		self.extra_global_names
+			.push((self.next_global_idx, ABORT_PAYLOAD_GLOBAL.to_string()));
+		let catching = AbortCatching {
+			tag,
+			payload_global: self.next_global_idx,
+		};
 		self.next_global_idx += 1;
 		self.abort_catching = Some(catching);
 		catching
 	}
 
 	pub(super) fn error_tag_names(&self) -> Option<NameMap> {
-		let tags: Vec<(u32, &str)> = self.error_catching.map(|catching| (catching.tag, ERROR_TAG_NAME)).into_iter()
-			.chain(self.abort_catching.map(|catching| (catching.tag, ABORT_TAG_NAME))).collect();
+		let tags: Vec<(u32, &str)> = self
+			.error_catching
+			.map(|catching| (catching.tag, ERROR_TAG_NAME))
+			.into_iter()
+			.chain(self.abort_catching.map(|catching| (catching.tag, ABORT_TAG_NAME)))
+			.collect();
 		(!tags.is_empty()).then(|| {
 			let mut names = NameMap::new();
 			let mut tags = tags;
@@ -130,7 +168,16 @@ impl WasmGcEmitter {
 		func.instruction(&I::GlobalSet(catching.payload_global));
 		Self::emit_list(func, &[I::GlobalGet(catching.payload_global), I::I64ExtendI32U]);
 		self.emit_numeric_value(func, handler);
-		Self::emit_list(func, &[I::I64Ne, I::If(BlockType::Empty), I::GlobalGet(catching.payload_global), I::Throw(catching.tag), I::End]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Ne,
+				I::If(BlockType::Empty),
+				I::GlobalGet(catching.payload_global),
+				I::Throw(catching.tag),
+				I::End,
+			],
+		);
 		if let Some(depth) = depth {
 			Self::emit_list(func, &[I::LocalGet(saved_depth), I::I32WrapI64, I::GlobalSet(depth)]);
 		}
@@ -140,11 +187,14 @@ impl WasmGcEmitter {
 	/// Opens the blocks `finished` (i64) and `caught` (i32, the thrown payload) and runs the statement in a try_table
 	/// catching `tag` into `caught`
 	fn emit_try_table(&mut self, func: &mut Function, tag: u32, statement: &Node) {
-		Self::emit_list(func, &[
-			I::Block(BlockType::Result(ValType::I64)),
-			I::Block(BlockType::Result(ValType::I32)),
-			I::TryTable(BlockType::Empty, vec![Catch::One { tag, label: 0 }].into()),
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::Block(BlockType::Result(ValType::I64)),
+				I::Block(BlockType::Result(ValType::I32)),
+				I::TryTable(BlockType::Empty, vec![Catch::One { tag, label: 0 }].into()),
+			],
+		);
 		self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
 		Self::emit_list(func, &[I::Drop, I::End]);
 	}
@@ -153,11 +203,16 @@ impl WasmGcEmitter {
 	/// the trapping function)
 	pub(super) fn emit_error_body(&self, func: &mut Function, error_id: i32) {
 		if let Some(catching) = self.error_catching {
-			Self::emit_list(func, &[
-				I::GlobalGet(catching.depth_global), I::If(BlockType::Empty),
-				I::I32Const(error_id), I::Throw(catching.tag),
-				I::End,
-			]);
+			Self::emit_list(
+				func,
+				&[
+					I::GlobalGet(catching.depth_global),
+					I::If(BlockType::Empty),
+					I::I32Const(error_id),
+					I::Throw(catching.tag),
+					I::End,
+				],
+			);
 		}
 		func.instruction(&I::Unreachable);
 	}
@@ -166,9 +221,24 @@ impl WasmGcEmitter {
 	/// drops by their count, as their normal end would have done. Every exit path takes this, whatever its keyword.
 	pub(super) fn emit_leave_tries(&self, func: &mut Function, target_frame: usize) {
 		let frames = super::loop_control::open_frames(func);
-		let left = frames.get(target_frame..).unwrap_or_default().iter().filter(|is_try| **is_try).count();
-		let Some(catching) = self.error_catching.filter(|_| left > 0) else { return };
-		Self::emit_list(func, &[I::GlobalGet(catching.depth_global), I::I32Const(left as i32), I::I32Sub, I::GlobalSet(catching.depth_global)]);
+		let left = frames
+			.get(target_frame..)
+			.unwrap_or_default()
+			.iter()
+			.filter(|is_try| **is_try)
+			.count();
+		let Some(catching) = self.error_catching.filter(|_| left > 0) else {
+			return;
+		};
+		Self::emit_list(
+			func,
+			&[
+				I::GlobalGet(catching.depth_global),
+				I::I32Const(left as i32),
+				I::I32Sub,
+				I::GlobalSet(catching.depth_global),
+			],
+		);
 	}
 
 	/// `ran_without_error{statement}` as i64: 1 when the statement finished, 0 when a runtime error was thrown in it.
@@ -178,7 +248,15 @@ impl WasmGcEmitter {
 		let statement = braces_removed(statement);
 		self.initialize_assigned_node(func, statement);
 		let step_depth = |func: &mut Function, step: I<'static>| {
-			Self::emit_list(func, &[I::GlobalGet(catching.depth_global), I::I32Const(1), step, I::GlobalSet(catching.depth_global)]);
+			Self::emit_list(
+				func,
+				&[
+					I::GlobalGet(catching.depth_global),
+					I::I32Const(1),
+					step,
+					I::GlobalSet(catching.depth_global),
+				],
+			);
 		};
 		step_depth(func, I::I32Add);
 		self.emit_try_table(func, catching.tag, statement); // caught: the error id
@@ -198,7 +276,15 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(node_ref))]);
 		let names = self.runtime_error_names();
 		for (id, name) in names.iter().enumerate() {
-			Self::emit_list(func, &[I::GlobalGet(catching.caught_global), I::I32Const(id as i32), I::I32Eq, I::If(BlockType::Result(node_ref))]);
+			Self::emit_list(
+				func,
+				&[
+					I::GlobalGet(catching.caught_global),
+					I::I32Const(id as i32),
+					I::I32Eq,
+					I::If(BlockType::Result(node_ref)),
+				],
+			);
 			if *name == super::list_ops::RETURNED_ERROR {
 				let detail = self.trap_detail_global();
 				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);
@@ -210,7 +296,9 @@ impl WasmGcEmitter {
 		}
 		self.emit_string_call(func, "error", "new_text");
 		self.emit_call(func, super::text_builtins::ERROR_OF);
-		names.iter().for_each(|_| { func.instruction(&I::End); });
+		names.iter().for_each(|_| {
+			func.instruction(&I::End);
+		});
 		func.instruction(&I::Else);
 		self.emit_node_instructions(func, value);
 		func.instruction(&I::End);
@@ -219,9 +307,18 @@ impl WasmGcEmitter {
 	/// A Node variable is a non-nullable local that wasm counts as set only after the block setting it: assigned inside
 	/// the `try_table`, it holds ø first
 	fn initialize_assigned_node(&mut self, func: &mut Function, statement: &Node) {
-		let Node::Key(target, crate::operators::Op::Assign, _) = statement.drop_meta() else { return };
+		let Node::Key(target, crate::operators::Op::Assign, _) = statement.drop_meta() else {
+			return;
+		};
 		let Node::Symbol(name) = target.drop_meta() else { return };
-		let Some(local) = self.scope.lookup(name).filter(|local| local.kind.is_ref()).map(|local| local.position) else { return };
+		let Some(local) = self
+			.scope
+			.lookup(name)
+			.filter(|local| local.kind.is_ref())
+			.map(|local| local.position)
+		else {
+			return;
+		};
 		self.emit_call(func, "new_empty");
 		func.instruction(&I::LocalSet(local));
 	}

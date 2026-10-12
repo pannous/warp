@@ -28,18 +28,29 @@ struct DevSite {
 impl DevSite {
 	fn new(program: &Path) -> DevSite {
 		let title = crate::site::program_stem(program);
-		DevSite { program: program.to_path_buf(), files: crate::site::dev_shell(&title), title, modified: None, version: 0, failure: None }
+		DevSite {
+			program: program.to_path_buf(),
+			files: crate::site::dev_shell(&title),
+			title,
+			modified: None,
+			version: 0,
+			failure: None,
+		}
 	}
 
 	/// Builds the program anew when its file changed since the last build
 	fn refresh(&mut self) {
-		let modified = std::fs::metadata(&self.program).and_then(|metadata| metadata.modified()).ok();
+		let modified = std::fs::metadata(&self.program)
+			.and_then(|metadata| metadata.modified())
+			.ok();
 		if self.version > 0 && modified == self.modified {
 			return;
 		}
 		self.modified = modified;
 		self.version += 1;
-		let built = crate::site::read_program(&self.program).and_then(|code| crate::modules::with_program_file(&self.program, || crate::site::files(&code, &self.title, true)));
+		let built = crate::site::read_program(&self.program).and_then(|code| {
+			crate::modules::with_program_file(&self.program, || crate::site::files(&code, &self.title, true))
+		});
 		match built {
 			Ok(files) => (self.files, self.failure) = (files, None),
 			Err(failure) => self.failure = Some(failure),
@@ -57,18 +68,24 @@ impl DevSite {
 
 /// Serves the site of `program` on `port` until the request limit (web_server::stop_after), if any
 pub fn serve(program: &Path, port: u16) -> Result<(), String> {
-	let server = tiny_http::Server::http(("127.0.0.1", port)).map_err(|problem| format!("warp dev on port {port}: {problem}"))?;
+	let server = tiny_http::Server::http(("127.0.0.1", port))
+		.map_err(|problem| format!("warp dev on port {port}: {problem}"))?;
 	let limit = crate::web_server::take_request_limit();
 	let mut site = DevSite::new(program);
 	site.refresh();
-	println!("warp dev: http://localhost:{port}/ shows {}, built anew when it changes", program.display());
+	println!(
+		"warp dev: http://localhost:{port}/ shows {}, built anew when it changes",
+		program.display()
+	);
 	for (served, request) in server.incoming_requests().enumerate() {
 		site.refresh();
 		let path = request.url().split('?').next().unwrap_or(INDEX_PATH).to_string();
 		let response = match (path.as_str(), site.file(&path)) {
 			(STATE_PATH, _) => answer(site.state().into_bytes(), JSON_TYPE),
 			(_, Some((name, bytes))) => answer(bytes.clone(), crate::site::content_type(name)),
-			(_, None) => answer(format!("warp dev: no file {path}").into_bytes(), TEXT_TYPE).with_status_code(NOT_FOUND),
+			(_, None) => {
+				answer(format!("warp dev: no file {path}").into_bytes(), TEXT_TYPE).with_status_code(NOT_FOUND)
+			}
 		};
 		let _ = request.respond(response);
 		if limit > 0 && served + 1 >= limit {

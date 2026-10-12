@@ -5,19 +5,24 @@
 
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
+use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::{WasmGcEmitter, ABORT_TO, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
-use crate::wasm_emitter::layout::BYTE;
 
 pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
 /// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
-const FLOAT_MAKERS: [&str; 4] = [super::float_text::FLOAT_TEXT, super::list_ops::TEXT_AS_FLOAT, super::casts::TEXT_AS_NUMBER, super::uncertain::UNCERTAIN_NEW];
+const FLOAT_MAKERS: [&str; 4] = [
+	super::float_text::FLOAT_TEXT,
+	super::list_ops::TEXT_AS_FLOAT,
+	super::casts::TEXT_AS_NUMBER,
+	super::uncertain::UNCERTAIN_NEW,
+];
 /// The builtins that read their text through text_argument
 const TEXT_ARGUMENT_USERS: [&str; 5] = [BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_STARTS_WITH, TEXT_ENDS_WITH];
 /// c_string(text) -> i32: a zero-terminated copy of a text known only at run time, for a C function's `char*`
@@ -68,12 +73,29 @@ pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
 const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
-	(MEMORY_BYTE, 1, Kind::Int), (MEMORY_SET_BYTE, 2, Kind::Int),
-	(crate::memoization::MEMO_KNOWN, 2, Kind::Int), (crate::memoization::MEMO_VALUE, 2, Kind::Int), (crate::memoization::MEMO_STORE, 3, Kind::Int),
-	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Empty), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
-	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
-	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint), (crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
-	(RAN_WITHOUT_ABORT, 2, Kind::Int), (ABORT_TO, 1, Kind::Int), (crate::uncertain::CERTAINLY, 1, Kind::Int), (crate::uncertain::POSSIBLY, 1, Kind::Int),
+	(MEMORY_BYTE, 1, Kind::Int),
+	(MEMORY_SET_BYTE, 2, Kind::Int),
+	(crate::memoization::MEMO_KNOWN, 2, Kind::Int),
+	(crate::memoization::MEMO_VALUE, 2, Kind::Int),
+	(crate::memoization::MEMO_STORE, 3, Kind::Int),
+	(READ, 1, Kind::Text),
+	(BYTE_AT, 2, Kind::Int),
+	(BYTE_SLICE, 3, Kind::Text),
+	(ERROR, 1, Kind::Empty),
+	(RAISE, 1, Kind::Text),
+	(IS_ERROR, 1, Kind::Int),
+	(WARNING, 1, Kind::Text),
+	(TEXT_FORM, 1, Kind::Text),
+	(RAN_WITHOUT_ERROR, 1, Kind::Int),
+	(TRIM, 1, Kind::Text),
+	(STARTS_WITH, 2, Kind::Int),
+	(ENDS_WITH, 2, Kind::Int),
+	(CHR, 1, Kind::Codepoint),
+	(crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
+	(RAN_WITHOUT_ABORT, 2, Kind::Int),
+	(ABORT_TO, 1, Kind::Int),
+	(crate::uncertain::CERTAINLY, 1, Kind::Int),
+	(crate::uncertain::POSSIBLY, 1, Kind::Int),
 ];
 
 /// The text builtins and the node words (node_api.rs), which are called the same way
@@ -82,12 +104,17 @@ fn builtins() -> impl Iterator<Item = &'static (&'static str, usize, Kind)> {
 }
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
-	builtins().find(|(builtin, arity, _)| *builtin == name && *arity == arguments).map(|(_, _, kind)| *kind)
+	builtins()
+		.find(|(builtin, arity, _)| *builtin == name && *arity == arguments)
+		.map(|(_, _, kind)| *kind)
 }
 
 /// The numbers of arguments a text builtin takes, empty for any other name
 pub fn text_builtin_arities(name: &str) -> Vec<usize> {
-	builtins().filter(|(builtin, _, _)| *builtin == name).map(|(_, arity, _)| *arity).collect()
+	builtins()
+		.filter(|(builtin, _, _)| *builtin == name)
+		.map(|(_, arity, _)| *arity)
+		.collect()
 }
 
 pub fn is_text_builtin(name: &str) -> bool {
@@ -116,7 +143,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::library_ops::NODE_SLICE) {
 		required.extend(["text_chars", "list_join", "list_reverse"]);
 	}
-	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
+	if crate::library_words::MAP_WORD_FUNCTIONS
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.insert("map_find");
 	}
 	if required.contains(super::list_ops::ELEMENT_BODY) {
@@ -140,15 +170,24 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or set
 	// by name gets an index of the same tables (map_index.rs)
-	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
+	if ["map_get", "map_find", "field_with"]
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.insert(super::map_backend::NODE_MAP_NEW);
 	}
-	if super::map_backend::NODE_MAP_FUNCTIONS.iter().any(|name| required.contains(name)) {
+	if super::map_backend::NODE_MAP_FUNCTIONS
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.extend(super::map_backend::NODE_MAP_FUNCTIONS);
 		required.insert("map_get");
 	}
 	// maps compare keys by name: map_key_name reads a character key as its text
-	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
+	if ["map_get", "map_find", "field_with"]
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
 	}
 	if required.contains("node_list_of") {
@@ -161,14 +200,39 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert("list_concat"); // of a non-list
 	}
 	if required.contains(super::list_ops::NODE_ADD) {
-		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::library_ops::LIST_JOIN]); // two lists added are concatenated, two texts too, a text and a number joined
+		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::library_ops::LIST_JOIN]);
+		// two lists added are concatenated, two texts too, a text and a number joined
 	}
 	if required.contains(super::casts::TEXT_AS_NUMBER) {
-		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_div", "new_text", "new_int", "new_float"]);
+		required.extend([
+			super::list_ops::TEXT_AS_FLOAT,
+			super::INT_RUNTIME,
+			"exact_div",
+			"new_text",
+			"new_int",
+			"new_float",
+		]);
 	}
-	if super::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
-		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);
-		required.extend(super::list_ops::NODE_ARITHMETIC.iter().filter(|(name, _, _)| required.contains(name)).map(|(_, _, exact)| *exact).collect::<Vec<_>>());
+	if super::list_ops::NODE_ARITHMETIC
+		.iter()
+		.any(|(name, _, _)| required.contains(name))
+	{
+		required.extend([
+			super::list_ops::TEXT_AS_FLOAT,
+			super::INT_RUNTIME,
+			"exact_add",
+			"exact_sub",
+			"exact_mul",
+			"exact_div",
+			"new_float",
+		]);
+		required.extend(
+			super::list_ops::NODE_ARITHMETIC
+				.iter()
+				.filter(|(name, _, _)| required.contains(name))
+				.map(|(_, _, exact)| *exact)
+				.collect::<Vec<_>>(),
+		);
 		if required.contains(super::list_ops::NODE_POW) {
 			required.extend(["is_ratio", "invalid_number"]);
 		}
@@ -191,11 +255,17 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::library_ops::LIST_SORTED_BY) {
 		required.extend([super::library_ops::NODE_ORDER, "text_chars", "list_join"]);
 	}
-	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH].iter().any(|name| required.contains(name)) {
+	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH]
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.insert(TEXT_MATCHES_AT);
 	}
 	// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
-	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
+	if crate::library_words::MAP_WORD_FUNCTIONS
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.extend([TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]);
 	}
 	if required.contains(super::wasi_emitter::PRINT_VALUE) || required.contains(super::wasi_emitter::PUT_VALUE) {
@@ -203,8 +273,12 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both
 	if required.contains("list_join") {
-		required.extend([TEXT_CONCAT, super::library_ops::LIST_TEXT, super::library_ops::TEXT_QUOTED]); // a nested list joins as "[…]", a text quoted
-		// a float joins as its text, made only by a program with floats (analyzer::makes_floats)
+		required.extend([
+			TEXT_CONCAT,
+			super::library_ops::LIST_TEXT,
+			super::library_ops::TEXT_QUOTED,
+		]); // a nested list joins as "[…]", a text quoted
+	  // a float joins as its text, made only by a program with floats (analyzer::makes_floats)
 		if FLOAT_MAKERS.iter().any(|name| required.contains(name)) {
 			required.insert(super::float_text::FLOAT_TEXT);
 		}
@@ -231,7 +305,25 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(TEXT_ARGUMENT) {
 		required.insert(TEXT_OF);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_ROUGH_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
+	let calls_text_of = [
+		crate::wasm_emitter::VALUES_EQUAL,
+		TEXT_CONCAT,
+		BYTE_AT,
+		BYTE_SLICE,
+		TEXT_TRIM,
+		TEXT_ROUGH_TRIM,
+		C_STRING,
+		ERROR_OF,
+		WARN_TEXT,
+		"list_join",
+		"text_upper",
+		"text_lower",
+		"text_split",
+		"list_reverse",
+		"text_chars",
+		"list_sort",
+		super::library_ops::NODE_ORDER,
+	];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -268,7 +360,10 @@ impl WasmGcEmitter {
 				self.emit_call(func, WARN_TEXT);
 			}
 			(WARNING, [message]) => {
-				let reason = format!("warning {} not reported: host imports are not available", message.serialize());
+				let reason = format!(
+					"warning {} not reported: host imports are not available",
+					message.serialize()
+				);
 				self.emit_runtime_error_value(func, &reason);
 			}
 			(ERROR, [message]) => {
@@ -285,7 +380,23 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | MEMORY_BYTE | MEMORY_SET_BYTE | IS_ERROR | RAN_WITHOUT_ERROR | RAN_WITHOUT_ABORT | ABORT_TO | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE | crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, _) => {
+			(
+				BYTE_AT
+				| MEMORY_BYTE
+				| MEMORY_SET_BYTE
+				| IS_ERROR
+				| RAN_WITHOUT_ERROR
+				| RAN_WITHOUT_ABORT
+				| ABORT_TO
+				| STARTS_WITH
+				| ENDS_WITH
+				| crate::memoization::MEMO_KNOWN
+				| crate::memoization::MEMO_VALUE
+				| crate::memoization::MEMO_STORE
+				| crate::uncertain::CERTAINLY
+				| crate::uncertain::POSSIBLY,
+				_,
+			) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -304,7 +415,10 @@ impl WasmGcEmitter {
 				func.instruction(&I::I32WrapI64);
 				self.emit_call(func, "new_codepoint");
 			}
-			_ if super::node_api::NODE_BUILTINS.iter().any(|(builtin, arity, _)| *builtin == name && *arity == arguments.len()) => {
+			_ if super::node_api::NODE_BUILTINS
+				.iter()
+				.any(|(builtin, arity, _)| *builtin == name && *arity == arguments.len()) =>
+			{
 				self.emit_node_builtin(func, name, arguments);
 			}
 			_ => unreachable!("text_builtin_kind admits {name} with {} arguments", arguments.len()),
@@ -337,23 +451,55 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, address);
 				func.instruction(&I::I32WrapI64);
 				self.emit_numeric_value(func, value);
-				Self::emit_list(func, &[I::LocalTee(written), I::I32WrapI64, I::I32Store8(BYTE), I::LocalGet(written)]);
+				Self::emit_list(
+					func,
+					&[
+						I::LocalTee(written),
+						I::I32WrapI64,
+						I::I32Store8(BYTE),
+						I::LocalGet(written),
+					],
+				);
 			}
 			(IS_ERROR, [value]) => {
 				self.emit_node_instructions(func, value);
-				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
-				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::I64ExtendI32U]);
+				func.instruction(&I::StructGet {
+					struct_type_index: self.type_manager.node_type,
+					field_index: 0,
+				});
+				Self::emit_list(
+					func,
+					&[
+						I::I64Const(KIND_MASK),
+						I::I64And,
+						I::I64Const(Kind::Error as i64),
+						I::I64Eq,
+						I::I64ExtendI32U,
+					],
+				);
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
 			(RAN_WITHOUT_ABORT, [handler, statement]) => self.emit_ran_without_abort(func, handler, statement),
 			(ABORT_TO, [handler]) => self.emit_abort_to(func, handler),
-			(crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, [comparison]) => self.emit_certainty(func, name, comparison),
+			(crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, [comparison]) => {
+				self.emit_certainty(func, name, comparison)
+			}
 			(STARTS_WITH | ENDS_WITH, [text, part]) => {
 				self.emit_text_argument(func, text);
 				self.emit_text_argument(func, part);
-				self.emit_call(func, if name == STARTS_WITH { TEXT_STARTS_WITH } else { TEXT_ENDS_WITH });
+				self.emit_call(
+					func,
+					if name == STARTS_WITH {
+						TEXT_STARTS_WITH
+					} else {
+						TEXT_ENDS_WITH
+					},
+				);
 			}
-			(crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, [id, argument, rest @ ..]) => {
+			(
+				crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE,
+				[id, argument, rest @ ..],
+			) => {
 				self.emit_memo_word(func, name, id, argument, rest.first());
 			}
 			_ => unreachable!("{name} is no integer text builtin with {} arguments", arguments.len()),
@@ -365,11 +511,23 @@ impl WasmGcEmitter {
 	/// first use
 	fn emit_memo_word(&mut self, func: &mut Function, name: &str, id: &Node, argument: &Node, value: Option<&Node>) {
 		use crate::memoization::{MEMO_KNOWN, MEMO_SIZE, MEMO_STORE};
-		let Node::Number(crate::extensions::numbers::Number::Int(id)) = id.drop_meta() else { unreachable!("memoization passes a constant id") };
+		let Node::Number(crate::extensions::numbers::Number::Int(id)) = id.drop_meta() else {
+			unreachable!("memoization passes a constant id")
+		};
 		let array = self.type_manager.int_array_type;
-		let array_ref = ValType::Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
+		let array_ref = ValType::Ref(RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(array),
+		});
 		let new_global = |emitter: &mut Self| {
-			emitter.globals.global(GlobalType { val_type: array_ref, mutable: true, shared: false }, &ConstExpr::ref_null(HeapType::Concrete(array)));
+			emitter.globals.global(
+				GlobalType {
+					val_type: array_ref,
+					mutable: true,
+					shared: false,
+				},
+				&ConstExpr::ref_null(HeapType::Concrete(array)),
+			);
 			emitter.next_global_idx += 1;
 			emitter.next_global_idx - 1
 		};
@@ -390,9 +548,28 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalSet(index));
 		// the arrays exist from the first word on
 		for global in [values, known] {
-			Self::emit_list(func, &[I::GlobalGet(global), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(MEMO_SIZE), I::ArrayNewDefault(array), I::GlobalSet(global), I::End]);
+			Self::emit_list(
+				func,
+				&[
+					I::GlobalGet(global),
+					I::RefIsNull,
+					I::If(BlockType::Empty),
+					I::I32Const(MEMO_SIZE),
+					I::ArrayNewDefault(array),
+					I::GlobalSet(global),
+					I::End,
+				],
+			);
 		}
-		let in_range = [I::LocalGet(index), I::I64Const(0), I::I64GeS, I::LocalGet(index), I::I64Const(MEMO_SIZE as i64), I::I64LtS, I::I32And];
+		let in_range = [
+			I::LocalGet(index),
+			I::I64Const(0),
+			I::I64GeS,
+			I::LocalGet(index),
+			I::I64Const(MEMO_SIZE as i64),
+			I::I64LtS,
+			I::I32And,
+		];
 		let element = |global: u32| [I::GlobalGet(global), I::RefAsNonNull, I::LocalGet(index), I::I32WrapI64];
 		if name == MEMO_STORE {
 			Self::emit_list(func, &in_range);
@@ -451,9 +628,35 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
 		self.emit_field(func, held, 0);
-		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Result(node_ref))]);
-		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held)]);
-		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(KIND_MASK),
+				I::I64And,
+				I::I64Const(Kind::Error as i64),
+				I::I64Eq,
+				I::If(BlockType::Result(node_ref)),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(held),
+				I::RefAsNonNull,
+				I::Else,
+				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND),
+				I::LocalGet(held),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::RefNull(HeapType::Concrete(node_type)),
+				I::StructNew(node_type),
+				I::I32Const(pointer as i32),
+				I::I32Const(length as i32),
+			],
+		);
 		self.emit_call(func, "new_text");
 		self.emit_call(func, super::library_ops::LIST_JOIN);
 		func.instruction(&I::End);
@@ -464,22 +667,45 @@ impl WasmGcEmitter {
 		let (ptr, len) = self.allocate_string(reason);
 		Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(-(len as i32))]);
 		let (length, pointer) = (self.scratch(0), self.scratch(1));
-		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(length), I::I64ExtendI32U, I::LocalSet(pointer)]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64ExtendI32S,
+				I::LocalSet(length),
+				I::I64ExtendI32U,
+				I::LocalSet(pointer),
+			],
+		);
 		self.emit_host_text_result(func, length, pointer);
 	}
 
 	/// i64 locals `length` and `pointer` from a host call → Node{kind: length < 0 ? Error : Text, $String(pointer, |length|)}
 	pub(super) fn emit_host_text_result(&self, func: &mut Function, length: u32, pointer: u32) {
-		Self::emit_list(func, &[
-			I::I64Const(Kind::Error as i64), I::I64Const(Kind::Text as i64),
-			I::LocalGet(length), I::I64Const(0), I::I64LtS, I::Select,
-			I::LocalGet(pointer), I::I32WrapI64,
-			I::I64Const(0), I::LocalGet(length), I::I64Sub, I::LocalGet(length),
-			I::LocalGet(length), I::I64Const(0), I::I64LtS, I::Select, I::I32WrapI64,
-			I::StructNew(self.type_manager.string_type),
-			I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
-			I::StructNew(self.type_manager.node_type),
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(Kind::Error as i64),
+				I::I64Const(Kind::Text as i64),
+				I::LocalGet(length),
+				I::I64Const(0),
+				I::I64LtS,
+				I::Select,
+				I::LocalGet(pointer),
+				I::I32WrapI64,
+				I::I64Const(0),
+				I::LocalGet(length),
+				I::I64Sub,
+				I::LocalGet(length),
+				I::LocalGet(length),
+				I::I64Const(0),
+				I::I64LtS,
+				I::Select,
+				I::I32WrapI64,
+				I::StructNew(self.type_manager.string_type),
+				I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
+				I::StructNew(self.type_manager.node_type),
+			],
+		);
 	}
 
 	/// text_of(node): a character as a text of its UTF-8 bytes, anything else unchanged; emitted before values_equal, which calls it
@@ -491,10 +717,16 @@ impl WasmGcEmitter {
 		let (placeholder, _) = self.allocate_string(" ");
 		self.runtime_function(TEXT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
 			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[
-				I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
-				I::I32Const(placeholder as i32), I::I32Const(1),
-			]);
+			Self::emit_list(
+				f,
+				&[
+					I::I64Const(Kind::Codepoint as i64),
+					I::I64Eq,
+					I::If(BlockType::Result(node_ref)),
+					I::I32Const(placeholder as i32),
+					I::I32Const(1),
+				],
+			);
 			s.call(f, "new_text");
 			f.instruction(&I::I64Const(1));
 			s.emit_field(f, 0, 1);
@@ -530,24 +762,47 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GeU]);
 				s.emit_fail_if(f, "index_out_of_range");
 				s.emit_text_field(f, 0, 0);
-				Self::emit_list(f, &[I::LocalGet(1), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(1),
+						I::I32WrapI64,
+						I::I32Add,
+						I::I32Load8U(BYTE),
+						I::I64ExtendI32U,
+					],
+				);
 			});
 		}
 
 		// byte_slice(text, start, end): the bytes start…end-1, sharing the memory of text
 		if self.should_emit_function(BYTE_SLICE) {
-			self.runtime_function(BYTE_SLICE, vec![node_ref, long, long], vec![node_ref], vec![], |s, f| {
-				Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64GtU, I::LocalGet(2)]);
-				s.emit_text_field(f, 0, 1);
-				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GtU, I::I32Or]);
-				s.emit_fail_if(f, "index_out_of_range");
-				s.emit_text_field(f, 0, 0);
-				Self::emit_list(f, &[
-					I::LocalGet(1), I::I32WrapI64, I::I32Add,
-					I::LocalGet(2), I::LocalGet(1), I::I64Sub, I::I32WrapI64,
-				]);
-				s.call(f, "new_text");
-			});
+			self.runtime_function(
+				BYTE_SLICE,
+				vec![node_ref, long, long],
+				vec![node_ref],
+				vec![],
+				|s, f| {
+					Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64GtU, I::LocalGet(2)]);
+					s.emit_text_field(f, 0, 1);
+					Self::emit_list(f, &[I::I64ExtendI32U, I::I64GtU, I::I32Or]);
+					s.emit_fail_if(f, "index_out_of_range");
+					s.emit_text_field(f, 0, 0);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(1),
+							I::I32WrapI64,
+							I::I32Add,
+							I::LocalGet(2),
+							I::LocalGet(1),
+							I::I64Sub,
+							I::I32WrapI64,
+						],
+					);
+					s.call(f, "new_text");
+				},
+			);
 		}
 	}
 
@@ -558,43 +813,131 @@ impl WasmGcEmitter {
 
 		// text_matches_at(text, part, offset): part's bytes at the offset of text, within its bounds
 		if self.should_emit_function(TEXT_MATCHES_AT) {
-			self.runtime_function(TEXT_MATCHES_AT, vec![node_ref, node_ref, ValType::I32], vec![ValType::I32], vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32], |s, f| {
-				let (offset, text_address, part_address, part_length, index) = (2, 3, 4, 5, 6);
-				s.emit_text_field(f, 0, 0);
-				f.instruction(&I::LocalSet(text_address));
-				s.emit_text_field(f, 1, 0);
-				f.instruction(&I::LocalSet(part_address));
-				s.emit_text_field(f, 1, 1);
-				f.instruction(&I::LocalSet(part_length));
-				// out of bounds: no match
-				Self::emit_list(f, &[I::LocalGet(offset), I::I32Const(0), I::I32LtS, I::LocalGet(offset), I::LocalGet(part_length), I::I32Add]);
-				s.emit_text_field(f, 0, 1);
-				Self::emit_list(f, &[I::I32GtU, I::I32Or, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End]);
-				Self::emit_list(f, &[
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-					I::LocalGet(index), I::LocalGet(part_length), I::I32GeU, I::BrIf(1),
-					I::LocalGet(text_address), I::LocalGet(offset), I::I32Add, I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE),
-					I::LocalGet(part_address), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE),
-					I::I32Ne, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End,
-					I::LocalGet(index), I::I32Const(1), I::I32Add, I::LocalSet(index), I::Br(0), I::End, I::End,
-					I::I32Const(1),
-				]);
-			});
+			self.runtime_function(
+				TEXT_MATCHES_AT,
+				vec![node_ref, node_ref, ValType::I32],
+				vec![ValType::I32],
+				vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+				|s, f| {
+					let (offset, text_address, part_address, part_length, index) = (2, 3, 4, 5, 6);
+					s.emit_text_field(f, 0, 0);
+					f.instruction(&I::LocalSet(text_address));
+					s.emit_text_field(f, 1, 0);
+					f.instruction(&I::LocalSet(part_address));
+					s.emit_text_field(f, 1, 1);
+					f.instruction(&I::LocalSet(part_length));
+					// out of bounds: no match
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(offset),
+							I::I32Const(0),
+							I::I32LtS,
+							I::LocalGet(offset),
+							I::LocalGet(part_length),
+							I::I32Add,
+						],
+					);
+					s.emit_text_field(f, 0, 1);
+					Self::emit_list(
+						f,
+						&[
+							I::I32GtU,
+							I::I32Or,
+							I::If(BlockType::Empty),
+							I::I32Const(0),
+							I::Return,
+							I::End,
+						],
+					);
+					Self::emit_list(
+						f,
+						&[
+							I::Block(BlockType::Empty),
+							I::Loop(BlockType::Empty),
+							I::LocalGet(index),
+							I::LocalGet(part_length),
+							I::I32GeU,
+							I::BrIf(1),
+							I::LocalGet(text_address),
+							I::LocalGet(offset),
+							I::I32Add,
+							I::LocalGet(index),
+							I::I32Add,
+							I::I32Load8U(BYTE),
+							I::LocalGet(part_address),
+							I::LocalGet(index),
+							I::I32Add,
+							I::I32Load8U(BYTE),
+							I::I32Ne,
+							I::If(BlockType::Empty),
+							I::I32Const(0),
+							I::Return,
+							I::End,
+							I::LocalGet(index),
+							I::I32Const(1),
+							I::I32Add,
+							I::LocalSet(index),
+							I::Br(0),
+							I::End,
+							I::End,
+							I::I32Const(1),
+						],
+					);
+				},
+			);
 		}
 		// text_find(text, part): the first offset where part matches, 1-based; 0 when it never does
 		if self.should_emit_function(TEXT_FIND) {
-			self.runtime_function(TEXT_FIND, vec![node_ref, node_ref], vec![long], vec![ValType::I32], |s, f| {
-				let offset = 2;
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(offset)]);
-				s.emit_text_field(f, 0, 1);
-				Self::emit_list(f, &[I::I32GtU, I::BrIf(1), I::LocalGet(0), I::LocalGet(1), I::LocalGet(offset)]);
-				s.call(f, TEXT_MATCHES_AT);
-				Self::emit_list(f, &[
-					I::If(BlockType::Empty), I::LocalGet(offset), I::I32Const(1), I::I32Add, I::I64ExtendI32U, I::Return, I::End,
-					I::LocalGet(offset), I::I32Const(1), I::I32Add, I::LocalSet(offset), I::Br(0), I::End, I::End,
-					I::I64Const(0),
-				]);
-			});
+			self.runtime_function(
+				TEXT_FIND,
+				vec![node_ref, node_ref],
+				vec![long],
+				vec![ValType::I32],
+				|s, f| {
+					let offset = 2;
+					Self::emit_list(
+						f,
+						&[
+							I::Block(BlockType::Empty),
+							I::Loop(BlockType::Empty),
+							I::LocalGet(offset),
+						],
+					);
+					s.emit_text_field(f, 0, 1);
+					Self::emit_list(
+						f,
+						&[
+							I::I32GtU,
+							I::BrIf(1),
+							I::LocalGet(0),
+							I::LocalGet(1),
+							I::LocalGet(offset),
+						],
+					);
+					s.call(f, TEXT_MATCHES_AT);
+					Self::emit_list(
+						f,
+						&[
+							I::If(BlockType::Empty),
+							I::LocalGet(offset),
+							I::I32Const(1),
+							I::I32Add,
+							I::I64ExtendI32U,
+							I::Return,
+							I::End,
+							I::LocalGet(offset),
+							I::I32Const(1),
+							I::I32Add,
+							I::LocalSet(offset),
+							I::Br(0),
+							I::End,
+							I::End,
+							I::I64Const(0),
+						],
+					);
+				},
+			);
 		}
 		// text_starts_with(text, part) / text_ends_with(text, part): 1 when part matches at the start / at the end
 		for (name, at_end) in [(TEXT_STARTS_WITH, false), (TEXT_ENDS_WITH, true)] {
@@ -630,7 +973,18 @@ impl WasmGcEmitter {
 			self.emit_trim(TEXT_ROUGH_TRIM, |f, byte| {
 				Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(ASCII_END), I::I32LtU]);
 				for (first, last) in ASCII_ALPHANUMERIC_RANGES {
-					Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(first as i32), I::I32Sub, I::I32Const((last - first) as i32), I::I32LeU, I::I32Eqz, I::I32And]);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(byte),
+							I::I32Const(first as i32),
+							I::I32Sub,
+							I::I32Const((last - first) as i32),
+							I::I32LeU,
+							I::I32Eqz,
+							I::I32And,
+						],
+					);
 				}
 			});
 		}
@@ -652,16 +1006,72 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32Add, I::I32Load8U(BYTE), I::LocalSet(byte)]);
 			};
 			// leading: start moves right while it is before end and at a trimmed byte
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(start), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(
+				f,
+				&[
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(start),
+					I::LocalGet(end),
+					I::I32GeU,
+					I::BrIf(1),
+				],
+			);
 			load(f, &[I::LocalGet(start)]);
 			is_trimmed(f, byte);
-			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(start), I::I32Const(1), I::I32Add, I::LocalSet(start), I::Br(0), I::End, I::End]);
+			Self::emit_list(
+				f,
+				&[
+					I::I32Eqz,
+					I::BrIf(1),
+					I::LocalGet(start),
+					I::I32Const(1),
+					I::I32Add,
+					I::LocalSet(start),
+					I::Br(0),
+					I::End,
+					I::End,
+				],
+			);
 			// trailing: end moves left while the byte before it is trimmed
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(end), I::LocalGet(start), I::I32LeU, I::BrIf(1)]);
+			Self::emit_list(
+				f,
+				&[
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(end),
+					I::LocalGet(start),
+					I::I32LeU,
+					I::BrIf(1),
+				],
+			);
 			load(f, &[I::LocalGet(end), I::I32Const(1), I::I32Sub]);
 			is_trimmed(f, byte);
-			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(end), I::I32Const(1), I::I32Sub, I::LocalSet(end), I::Br(0), I::End, I::End]);
-			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub]);
+			Self::emit_list(
+				f,
+				&[
+					I::I32Eqz,
+					I::BrIf(1),
+					I::LocalGet(end),
+					I::I32Const(1),
+					I::I32Sub,
+					I::LocalSet(end),
+					I::Br(0),
+					I::End,
+					I::End,
+				],
+			);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(address),
+					I::LocalGet(start),
+					I::I32Add,
+					I::LocalGet(end),
+					I::LocalGet(start),
+					I::I32Sub,
+				],
+			);
 			s.call(f, "new_text");
 		});
 	}
@@ -686,7 +1096,18 @@ impl WasmGcEmitter {
 				s.emit_text_field(f, 0, 0);
 				s.emit_text_field(f, 0, 1);
 				f.instruction(&I::MemoryCopy { src_mem: 0, dst_mem: 0 });
-				Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(length), I::I32Add, I::I32Const(1), I::I32Sub, I::I32Const(0), I::I32Store8(BYTE)]);
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(address),
+						I::LocalGet(length),
+						I::I32Add,
+						I::I32Const(1),
+						I::I32Sub,
+						I::I32Const(0),
+						I::I32Store8(BYTE),
+					],
+				);
 				f.instruction(&I::LocalGet(address));
 			});
 		}
@@ -698,7 +1119,13 @@ impl WasmGcEmitter {
 				s.call(f, TEXT_OF);
 				Self::emit_list(f, &[I::LocalSet(0), I::I64Const(Kind::Error as i64)]);
 				s.emit_field(f, 0, 1);
-				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(s.type_manager.node_type)), I::StructNew(s.type_manager.node_type)]);
+				Self::emit_list(
+					f,
+					&[
+						I::RefNull(HeapType::Concrete(s.type_manager.node_type)),
+						I::StructNew(s.type_manager.node_type),
+					],
+				);
 			});
 		}
 
@@ -721,47 +1148,118 @@ impl WasmGcEmitter {
 		if self.should_emit_function(TEXT_CONCAT) {
 			self.emit_text_heap_global();
 			let (left_length, right_length, length, copy) = (2, 3, 4, 5);
-			self.runtime_function(TEXT_CONCAT, vec![node_ref, node_ref], vec![node_ref], vec![int; 4], |s, f| {
-				for side in 0..2 {
-					s.emit_field(f, side, 0);
-					Self::emit_list(f, &[I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(side), I::Return, I::End]);
-				}
-				for side in 0..2 {
-					f.instruction(&I::LocalGet(side));
-					s.call(f, TEXT_OF);
-					f.instruction(&I::LocalSet(side));
-				}
-				s.emit_text_field(f, 0, 1);
-				f.instruction(&I::LocalTee(left_length));
-				s.emit_text_field(f, 1, 1);
-				Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
-				let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-				let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
-				// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
-				// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
-				// bytes) already follows left: nothing to copy
-				s.emit_text_field(f, 0, 0);
-				Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
-				s.emit_text_field(f, 1, 0);
-				Self::emit_list(f, &[I::I32Eq]);
-				s.emit_text_field(f, 1, 0);
-				Self::emit_list(f, &[I::LocalGet(right_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::I32And, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
-				Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(left_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
-				f.instruction(&I::If(BlockType::Empty));
-				s.emit_memory_room(f, heap, right_length);
-				f.instruction(&I::GlobalGet(heap));
-				s.emit_text_field(f, 1, 0);
-				Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes.clone(), I::GlobalGet(heap), I::LocalGet(right_length), I::I32Add, I::GlobalSet(heap)]);
-				f.instruction(&I::Else);
-				s.emit_text_allocation(f, length, copy);
-				f.instruction(&I::LocalGet(copy));
-				s.emit_text_field(f, 0, 0);
-				Self::emit_list(f, &[I::LocalGet(left_length), copy_bytes.clone(), I::LocalGet(copy), I::LocalGet(left_length), I::I32Add]);
-				s.emit_text_field(f, 1, 0);
-				Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes, I::End, I::End, I::LocalGet(copy), I::LocalGet(length)]);
-				s.call(f, "new_text");
-			});
+			self.runtime_function(
+				TEXT_CONCAT,
+				vec![node_ref, node_ref],
+				vec![node_ref],
+				vec![int; 4],
+				|s, f| {
+					for side in 0..2 {
+						s.emit_field(f, side, 0);
+						Self::emit_list(
+							f,
+							&[
+								I::I64Const(Kind::Error as i64),
+								I::I64Eq,
+								I::If(BlockType::Empty),
+								I::LocalGet(side),
+								I::Return,
+								I::End,
+							],
+						);
+					}
+					for side in 0..2 {
+						f.instruction(&I::LocalGet(side));
+						s.call(f, TEXT_OF);
+						f.instruction(&I::LocalSet(side));
+					}
+					s.emit_text_field(f, 0, 1);
+					f.instruction(&I::LocalTee(left_length));
+					s.emit_text_field(f, 1, 1);
+					Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
+					let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+					let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
+					// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
+					// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
+					// bytes) already follows left: nothing to copy
+					s.emit_text_field(f, 0, 0);
+					Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
+					s.emit_text_field(f, 1, 0);
+					Self::emit_list(f, &[I::I32Eq]);
+					s.emit_text_field(f, 1, 0);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(right_length),
+							I::I32Add,
+							I::GlobalGet(heap),
+							I::I32Eq,
+							I::I32And,
+							I::LocalGet(left_length),
+							I::I32Const(0),
+							I::I32Ne,
+							I::I32And,
+						],
+					);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(copy),
+							I::LocalGet(left_length),
+							I::I32Add,
+							I::GlobalGet(heap),
+							I::I32Eq,
+							I::LocalGet(left_length),
+							I::I32Const(0),
+							I::I32Ne,
+							I::I32And,
+						],
+					);
+					f.instruction(&I::If(BlockType::Empty));
+					s.emit_memory_room(f, heap, right_length);
+					f.instruction(&I::GlobalGet(heap));
+					s.emit_text_field(f, 1, 0);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(right_length),
+							copy_bytes.clone(),
+							I::GlobalGet(heap),
+							I::LocalGet(right_length),
+							I::I32Add,
+							I::GlobalSet(heap),
+						],
+					);
+					f.instruction(&I::Else);
+					s.emit_text_allocation(f, length, copy);
+					f.instruction(&I::LocalGet(copy));
+					s.emit_text_field(f, 0, 0);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(left_length),
+							copy_bytes.clone(),
+							I::LocalGet(copy),
+							I::LocalGet(left_length),
+							I::I32Add,
+						],
+					);
+					s.emit_text_field(f, 1, 0);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(right_length),
+							copy_bytes,
+							I::End,
+							I::End,
+							I::LocalGet(copy),
+							I::LocalGet(length),
+						],
+					);
+					s.call(f, "new_text");
+				},
+			);
 		}
 
 		// read_text(path): the file's bytes as text, or an Error node with the reason
@@ -772,10 +1270,16 @@ impl WasmGcEmitter {
 				self.runtime_function(READ_TEXT, vec![node_ref], vec![node_ref], vec![long; 2], |s, f| {
 					s.emit_text_field(f, 0, 0);
 					s.emit_text_field(f, 0, 1);
-					Self::emit_list(f, &[
-						I::Call(host_read),
-						I::I64ExtendI32S, I::LocalSet(length), I::I64ExtendI32U, I::LocalSet(pointer),
-					]);
+					Self::emit_list(
+						f,
+						&[
+							I::Call(host_read),
+							I::I64ExtendI32S,
+							I::LocalSet(length),
+							I::I64ExtendI32U,
+							I::LocalSet(pointer),
+						],
+					);
 					s.emit_host_text_result(f, length, pointer);
 				});
 			}

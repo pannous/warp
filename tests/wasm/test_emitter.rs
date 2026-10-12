@@ -2,9 +2,8 @@
 #![cfg(feature = "optimizer")]
 
 use crate::is;
-use warp::*;
 use warp::wasm_optimizer::{ExportMode, OptimizationMode, WasmOptimizer};
-
+use warp::*;
 
 #[test]
 fn test_compact_empty() {
@@ -13,14 +12,14 @@ fn test_compact_empty() {
 	emitter.emit_node_main(&Node::Empty);
 	let bytes = emitter.finish();
 	assert!(!bytes.is_empty());
-	parses_to!("ø",Empty);
-	parses_to!("null",Empty);
-	parses_to!("no",Empty);
-	parses_to!("none",Empty);
-	parses_to!("nix",Empty);
-	parses_to!("empty",Empty);
-	is!("ø",Empty);
-	is!("null",Empty);
+	parses_to!("ø", Empty);
+	parses_to!("null", Empty);
+	parses_to!("no", Empty);
+	parses_to!("none", Empty);
+	parses_to!("nix", Empty);
+	parses_to!("empty", Empty);
+	is!("ø", Empty);
+	is!("null", Empty);
 }
 
 #[test]
@@ -30,7 +29,7 @@ fn test_compact_int() {
 	emitter.emit_node_main(&Node::Number(Number::Int(42)));
 	let bytes = emitter.finish();
 	assert!(!bytes.is_empty());
-	is!("42",42);
+	is!("42", 42);
 }
 
 #[test]
@@ -40,9 +39,8 @@ fn test_compact_float() {
 	emitter.emit_node_main(&Node::Number(Number::Float(3.11)));
 	let bytes = emitter.finish();
 	assert!(!bytes.is_empty());
-	is!("3.11",3.11);
+	is!("3.11", 3.11);
 }
-
 
 #[test]
 fn test_tools_available() {
@@ -61,10 +59,7 @@ fn test_tools_available() {
 
 #[test]
 fn test_optimizer_graph_generation() {
-	let optimizer = WasmOptimizer::executable(
-		OptimizationMode::Standard,
-		vec!["main".to_string(), "init".to_string()],
-	);
+	let optimizer = WasmOptimizer::executable(OptimizationMode::Standard, vec!["main".to_string(), "init".to_string()]);
 
 	if let ExportMode::Executable { ref entry_points } = optimizer.export_mode {
 		let graph = optimizer.build_roots_graph(entry_points);

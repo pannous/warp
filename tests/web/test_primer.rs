@@ -20,12 +20,19 @@ struct Snippet {
 }
 
 fn snippets() -> Vec<Snippet> {
-	PRIMER.split(FENCE_START).skip(1).map(|fence| {
-		let (head, rest) = fence.split_once('\n').unwrap();
-		let (code, after) = rest.split_once(FENCE_END).unwrap();
-		let printed = after.strip_prefix('\n').and_then(|next| next.strip_prefix(PRINTED_FENCE)).map(|block| block.split(FENCE_END).next().unwrap());
-		Snippet { code, head, printed }
-	}).collect()
+	PRIMER
+		.split(FENCE_START)
+		.skip(1)
+		.map(|fence| {
+			let (head, rest) = fence.split_once('\n').unwrap();
+			let (code, after) = rest.split_once(FENCE_END).unwrap();
+			let printed = after
+				.strip_prefix('\n')
+				.and_then(|next| next.strip_prefix(PRINTED_FENCE))
+				.map(|block| block.split(FENCE_END).next().unwrap());
+			Snippet { code, head, printed }
+		})
+		.collect()
 }
 
 fn failures_of(check: impl Fn(&Snippet) -> Option<String>) -> String {
@@ -34,13 +41,19 @@ fn failures_of(check: impl Fn(&Snippet) -> Option<String>) -> String {
 
 #[test]
 fn the_primer_fits_a_system_prompt() {
-	assert!(PRIMER.len() < MOST_CHARACTERS, "the primer has {} characters", PRIMER.len());
+	assert!(
+		PRIMER.len() < MOST_CHARACTERS,
+		"the primer has {} characters",
+		PRIMER.len()
+	);
 }
 
 #[test]
 fn every_primer_snippet_runs_to_its_value() {
 	let failures = failures_of(|snippet| {
-		if snippet.head == COMPILE_MARK { return None; }
+		if snippet.head == COMPILE_MARK {
+			return None;
+		}
 		let result = evaluate(snippet.code, HashSet::new());
 		let shown = result["value"].as_str().unwrap_or_default().to_string();
 		let wrong = match snippet.head.strip_prefix(VALUE_MARK) {
@@ -56,7 +69,9 @@ fn every_primer_snippet_runs_to_its_value() {
 #[test]
 fn every_primer_compile_snippet_compiles() {
 	let failures = failures_of(|snippet| {
-		if snippet.head != COMPILE_MARK { return None; }
+		if snippet.head != COMPILE_MARK {
+			return None;
+		}
 		let failure = warp::pipeline::compile(snippet.code).err()?;
 		Some(format!("{}  fails: {failure:?}", snippet.code))
 	});
@@ -68,7 +83,11 @@ fn every_primer_compile_snippet_compiles() {
 fn every_primer_snippet_prints_what_the_primer_shows() {
 	let failures = failures_of(|snippet| {
 		let expected = snippet.printed?;
-		let shown: String = crate::common::printed(snippet.code).lines().filter(|line| !line.starts_with("» ")).map(|line| format!("{line}\n")).collect();
+		let shown: String = crate::common::printed(snippet.code)
+			.lines()
+			.filter(|line| !line.starts_with("» "))
+			.map(|line| format!("{line}\n"))
+			.collect();
 		(shown != expected).then(|| format!("{}  prints {shown:?}, the primer says {expected:?}", snippet.code))
 	});
 	assert!(failures.is_empty(), "{failures}");

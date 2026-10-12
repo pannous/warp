@@ -49,7 +49,9 @@ impl Language {
 	}
 
 	fn runs(runner: &str) -> Option<Language> {
-		[Language::Sql, Language::Shell].into_iter().find(|language| language.runner() == runner)
+		[Language::Sql, Language::Shell]
+			.into_iter()
+			.find(|language| language.runner() == runner)
 	}
 }
 
@@ -83,11 +85,21 @@ impl Template {
 	pub fn to_node(&self) -> Node {
 		let mut holes = self.holes.iter();
 		let items = match self.language {
-			Language::Sql => self.text.iter().flatten().map(|text| Node::Text(text.clone())).chain(holes.cloned()).collect(),
-			Language::Shell => self.text.iter().map(|word| match word {
-				Some(literal) => Node::Text(literal.clone()),
-				None => holes.next().expect("one hole per hole argument").clone(),
-			}).collect(),
+			Language::Sql => self
+				.text
+				.iter()
+				.flatten()
+				.map(|text| Node::Text(text.clone()))
+				.chain(holes.cloned())
+				.collect(),
+			Language::Shell => self
+				.text
+				.iter()
+				.map(|word| match word {
+					Some(literal) => Node::Text(literal.clone()),
+					None => holes.next().expect("one hole per hole argument").clone(),
+				})
+				.collect(),
 		};
 		Node::List(items, Bracket::Round, Separator::Space)
 	}
@@ -126,10 +138,17 @@ pub fn parts_with(source: &str, bare_names: bool) -> Result<Vec<Part>, TemplateE
 			Some('{') => {
 				chars.next();
 				let mut depth = 1;
-				let expression: String = chars.by_ref().take_while(|c| {
-					depth += match *c { '{' => 1, '}' => -1, _ => 0 };
-					depth > 0
-				}).collect();
+				let expression: String = chars
+					.by_ref()
+					.take_while(|c| {
+						depth += match *c {
+							'{' => 1,
+							'}' => -1,
+							_ => 0,
+						};
+						depth > 0
+					})
+					.collect();
 				if depth > 0 {
 					return Err(TemplateError(format!("unterminated hole ${{{expression}")));
 				}
@@ -202,7 +221,11 @@ fn sql(parts: Vec<Part>) -> Result<Template, TemplateError> {
 	if let Some(quote) = open_quote {
 		return Err(TemplateError(format!("unterminated {quote} in sql template")));
 	}
-	Ok(Template { language: Language::Sql, text: vec![Some(query)], holes })
+	Ok(Template {
+		language: Language::Sql,
+		text: vec![Some(query)],
+		holes,
+	})
 }
 
 /// Words split at whitespace; a hole is one whole argument, never re-split, globbed or parsed by a shell
@@ -244,8 +267,14 @@ fn shell(parts: Vec<Part>) -> Result<Template, TemplateError> {
 	}
 	match words.first() {
 		None => Err(TemplateError("empty sh command".into())),
-		Some(None) => Err(TemplateError("the program of a sh command must be literal, not a hole".into())),
-		Some(Some(_)) => Ok(Template { language: Language::Shell, text: words, holes }),
+		Some(None) => Err(TemplateError(
+			"the program of a sh command must be literal, not a hole".into(),
+		)),
+		Some(Some(_)) => Ok(Template {
+			language: Language::Shell,
+			text: words,
+			holes,
+		}),
 	}
 }
 
@@ -270,7 +299,10 @@ struct Lowering {
 impl Lowering {
 	fn node(&mut self, node: Node) -> Result<Node, Diagnostic> {
 		Ok(match node {
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node)?), data },
+			Node::Meta { node, data } => Node::Meta {
+				node: Box::new(self.node(*node)?),
+				data,
+			},
 			Node::List(mut items, bracket, separator) => {
 				// braceless application nests to the left: `execute sql "…"` → ((execute sql) "…")
 				if let Some(Node::List(inner, Bracket::None, _)) = items.first().map(Node::drop_meta) {
@@ -330,21 +362,30 @@ impl Lowering {
 
 	/// `execute q` runs only a sql template, `exec c` only a sh template
 	fn check_run(&self, language: Language, runner: &Node, argument: Option<&Node>) -> Result<(), Diagnostic> {
-		let given = argument.and_then(|argument| language_of(argument).or_else(|| match argument.drop_meta() {
-			Node::Symbol(name) => self.bound.get(name).copied(),
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => match items[0].drop_meta() {
+		let given = argument.and_then(|argument| {
+			language_of(argument).or_else(|| match argument.drop_meta() {
 				Node::Symbol(name) => self.bound.get(name).copied(),
-				_ => language_of(&items[0]),
-			},
-			_ => None,
-		}));
+				Node::List(items, Bracket::Round, _) if items.len() == 1 => match items[0].drop_meta() {
+					Node::Symbol(name) => self.bound.get(name).copied(),
+					_ => language_of(&items[0]),
+				},
+				_ => None,
+			})
+		});
 		if given == Some(language) {
 			return Ok(());
 		}
 		let got = argument.map_or("nothing".to_string(), |argument| argument.serialize());
-		Err(Diagnostic::at(runner, format!(
-			"{} takes a {} template, got {got}: text is never run as {}",
-			language.runner(), language.tag(), language.tag())).fix(format!("{} {} \"… $value …\"", language.runner(), language.tag())))
+		Err(Diagnostic::at(
+			runner,
+			format!(
+				"{} takes a {} template, got {got}: text is never run as {}",
+				language.runner(),
+				language.tag(),
+				language.tag()
+			),
+		)
+		.fix(format!("{} {} \"… $value …\"", language.runner(), language.tag())))
 	}
 }
 
@@ -389,8 +430,15 @@ fn literal_text(node: &Node) -> Option<String> {
 
 fn not_literal(language: Language, tag: &Node, argument: &Node) -> Diagnostic {
 	let tag_name = language.tag();
-	let got = if *argument == Node::Empty { "nothing".to_string() } else { argument.serialize() };
-	Diagnostic::at(tag, format!(
-		"{tag_name} takes a literal template, got {got}: values go into holes as parameters, never into the {tag_name} text"))
-		.fix(format!("{tag_name} \"… $value …\""))
+	let got = if *argument == Node::Empty {
+		"nothing".to_string()
+	} else {
+		argument.serialize()
+	};
+	Diagnostic::at(
+		tag,
+		format!(
+		"{tag_name} takes a literal template, got {got}: values go into holes as parameters, never into the {tag_name} text"),
+	)
+	.fix(format!("{tag_name} \"… $value …\""))
 }

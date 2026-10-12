@@ -53,11 +53,13 @@ fn is_data_node(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
 		Node::Symbol(s) => !is_function_keyword(s),
-		Node::List(items, bracket, separator) => !is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node),
-		Node::Key(_, Op::Colon, _) => true,  // Key-value pairs are data
+		Node::List(items, bracket, separator) => {
+			!is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node)
+		}
+		Node::Key(_, Op::Colon, _) => true, // Key-value pairs are data
 		Node::Key(left, op, right) if op.is_arithmetic() => is_data_node(left) && is_data_node(right), // `[1+2, 3]` keeps both items
 		Node::Key(left, Op::Hash, right) => is_data_node(left) && is_data_node(right), // a count or element: `[#a, a#1]`
-		Node::Key(value, Op::As, _) => is_data_node(value), // `[1.5f 2.5f]`
+		Node::Key(value, Op::As, _) => is_data_node(value),                            // `[1.5f 2.5f]`
 		_ => false,
 	}
 }
@@ -79,13 +81,24 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::Key(left, Op::Colon, _) => left.is_symbol("global"),
 		// a lowered `for` loop: `i=a; while …`; inside `[…]` a sequence ending in a value is a computed element (an awaited
 		// task, `[a, b]` of task variables)
-		Node::List(list_items, Bracket::None, separator) if is_unbracketed_block(list_items, &Bracket::None, separator) => {
+		Node::List(list_items, Bracket::None, separator)
+			if is_unbracketed_block(list_items, &Bracket::None, separator) =>
+		{
 			*bracket != Bracket::Square || list_items.last().is_some_and(|last| is_statement(last, &Bracket::None))
 		}
 		// a group that runs statements, `(y=1; y)`, or prints: in a block it runs, it is not an item
-		Node::List(list_items, Bracket::Round, _) if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) => true,
+		Node::List(list_items, Bracket::Round, _)
+			if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) =>
+		{
+			true
+		}
 		// as `sleep(10)`, which gives nothing
-		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if word.is_symbol(PRINT_CALL) || word.is_symbol(crate::host::SLEEP)) => true,
+		Node::List(list_items, _, _)
+			if *bracket != Bracket::Square
+				&& matches!(list_items.as_slice(), [word, _] if word.is_symbol(PRINT_CALL) || word.is_symbol(crate::host::SLEEP)) =>
+		{
+			true
+		}
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
 			// `$destructure (h, o) value` is `h, o = value` lowered (tuples.rs)
@@ -104,23 +117,23 @@ pub(crate) fn is_statement_block(node: &Node) -> bool {
 	}
 }
 
-mod inference;
-mod variables;
-mod checks;
-mod declaration_lowering;
-mod user_functions;
-mod counting;
-mod imports;
 mod booleans;
+mod checks;
+mod counting;
+mod declaration_lowering;
+mod imports;
+mod inference;
 mod upcast_fields;
+mod user_functions;
+mod variables;
 pub use upcast_fields::check_upcast_fields;
 mod list_views;
-pub(crate) use imports::signature_kind;
-pub use inference::*;
-pub use variables::*;
-pub use checks::*;
-pub use declaration_lowering::*;
-pub use user_functions::*;
-pub use counting::*;
-pub use imports::*;
 pub use booleans::*;
+pub use checks::*;
+pub use counting::*;
+pub use declaration_lowering::*;
+pub(crate) use imports::signature_kind;
+pub use imports::*;
+pub use inference::*;
+pub use user_functions::*;
+pub use variables::*;

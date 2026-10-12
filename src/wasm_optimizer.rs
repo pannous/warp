@@ -32,14 +32,18 @@ pub enum ExportMode {
 
 /// A file in the temp directory no other run uses: `<stem>_<process>_<nanoseconds>.<extension>`
 fn unique_temp_file(stem: &str, extension: &str) -> std::path::PathBuf {
-	let nanoseconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_nanos());
+	let nanoseconds = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map_or(0, |elapsed| elapsed.as_nanos());
 	std::env::temp_dir().join(format!("{stem}_{}_{nanoseconds}.{extension}", std::process::id()))
 }
 
 impl Default for ExportMode {
 	// fn default() -> Self { ExportMode::Library }
 	fn default() -> Self {
-		ExportMode::Executable { entry_points: ["main", "warp_main", "_start"].map(String::from).to_vec() }
+		ExportMode::Executable {
+			entry_points: ["main", "warp_main", "_start"].map(String::from).to_vec(),
+		}
 	}
 }
 
@@ -81,9 +85,7 @@ impl WasmOptimizer {
 
 	/// Optimize WASM bytes, returns optimized bytes
 	pub fn optimize(&self, wasm_bytes: &[u8]) -> Result<Vec<u8>, String> {
-		if self.optimization == OptimizationMode::None
-			&& matches!(self.export_mode, ExportMode::Library)
-		{
+		if self.optimization == OptimizationMode::None && matches!(self.export_mode, ExportMode::Library) {
 			return Ok(wasm_bytes.to_vec());
 		}
 
@@ -91,12 +93,10 @@ impl WasmOptimizer {
 		let input_path = unique_temp_file("warp_opt_input", "wasm");
 		let output_path = unique_temp_file("warp_opt_output", "wasm");
 
-		std::fs::write(&input_path, wasm_bytes)
-			.map_err(|e| format!("Failed to write temp input: {}", e))?;
+		std::fs::write(&input_path, wasm_bytes).map_err(|e| format!("Failed to write temp input: {}", e))?;
 
 		// Step 1: Tree-shaking with wasm-metadce if in executable mode
-		let intermediate_path = if let ExportMode::Executable { ref entry_points } = self.export_mode
-		{
+		let intermediate_path = if let ExportMode::Executable { ref entry_points } = self.export_mode {
 			self.run_tree_shaking(&input_path, entry_points)?
 		} else {
 			input_path.clone()
@@ -106,8 +106,7 @@ impl WasmOptimizer {
 		if self.optimization != OptimizationMode::None {
 			self.run_wasm_opt(&intermediate_path, &output_path)?;
 		} else {
-			std::fs::copy(&intermediate_path, &output_path)
-				.map_err(|e| format!("Failed to copy: {}", e))?;
+			std::fs::copy(&intermediate_path, &output_path).map_err(|e| format!("Failed to copy: {}", e))?;
 		}
 
 		// Clean up intermediate if created
@@ -116,8 +115,7 @@ impl WasmOptimizer {
 		}
 		let _ = std::fs::remove_file(&input_path);
 
-		let result = std::fs::read(&output_path)
-			.map_err(|e| format!("Failed to read output: {}", e))?;
+		let result = std::fs::read(&output_path).map_err(|e| format!("Failed to read output: {}", e))?;
 		let _ = std::fs::remove_file(&output_path);
 
 		Ok(result)
@@ -130,8 +128,7 @@ impl WasmOptimizer {
 
 		// Build graph JSON for wasm-metadce
 		let graph = self.build_roots_graph(entry_points);
-		std::fs::write(&graph_path, graph)
-			.map_err(|e| format!("Failed to write roots graph: {}", e))?;
+		std::fs::write(&graph_path, graph).map_err(|e| format!("Failed to write roots graph: {}", e))?;
 
 		let result = Command::new("wasm-metadce")
 			.args(BINARYEN_FEATURES)
@@ -160,10 +157,7 @@ impl WasmOptimizer {
 	pub fn build_roots_graph(&self, entry_points: &[String]) -> String {
 		let mut graph = String::from("[\n  {\n    \"name\": \"root\",\n    \"reaches\": [");
 
-		let reaches: Vec<String> = entry_points
-			.iter()
-			.map(|ep| format!("\"export_{}\"", ep))
-			.collect();
+		let reaches: Vec<String> = entry_points.iter().map(|ep| format!("\"export_{}\"", ep)).collect();
 		graph.push_str(&reaches.join(", "));
 		graph.push_str("],\n    \"root\": true\n  }");
 

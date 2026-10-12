@@ -1,7 +1,7 @@
 //! Functions broadcast over lists and pairs (wiki/broadcasting.md, notes/broadcasting.md): a function of one scalar
 //! parameter applied to a list is applied to each element, to each value of a pair list. Operators do not broadcast.
-use warp::wasm_emitter::eval;
 use crate::common::fails_with;
+use warp::wasm_emitter::eval;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()
@@ -72,7 +72,10 @@ fn a_function_of_several_values_broadcasts_over_its_list_argument() {
 	assert_eq!(eval("add(a, b) := a + b; add [1, 2] 10").serialize(), "[11 12]");
 	assert_eq!(eval("add(a, b) := a + b; add(10, [1, 2])").serialize(), "[11 12]");
 	assert_eq!(eval("add(a, b) := a + b; add(all [1, 2], 10)").serialize(), "[11 12]");
-	assert_eq!(eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(), "[1 4]");
+	assert_eq!(
+		eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(),
+		"[1 4]"
+	);
 }
 
 #[test] // cards sqrt-square and square-error: a range broadcasts like a list literal
@@ -89,6 +92,12 @@ fn a_range_broadcasts_like_a_list() {
 // card broadcast-examples (P142): samples/functions.warp chains and pipes a broadcast instead of a map
 #[test]
 fn broadcasting_composes_with_chaining_and_pipelines() {
-	assert_eq!(eval("square(x) := x*x; numbers = [1, 2, 3, 4, 5]; (square all numbers).filter(x => x > 5).sum()").serialize(), "50");
-	assert_eq!(eval("square(x) := x*x; numbers = [1, 2, 3, 4, 5]; (square numbers) |> filter(x => x > 5) |> sum").serialize(), "50");
+	assert_eq!(
+		eval("square(x) := x*x; numbers = [1, 2, 3, 4, 5]; (square all numbers).filter(x => x > 5).sum()").serialize(),
+		"50"
+	);
+	assert_eq!(
+		eval("square(x) := x*x; numbers = [1, 2, 3, 4, 5]; (square numbers) |> filter(x => x > 5) |> sum").serialize(),
+		"50"
+	);
 }

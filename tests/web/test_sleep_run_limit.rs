@@ -34,5 +34,8 @@ fn sleeping_does_not_count_toward_the_run_limit() {
 	let program = format!("const RUN_TIMEOUT_MS = 10000;\n{timers}\n{FAKE_CLOCK_RUN}");
 	let output = Command::new("node").arg("-e").arg(program).output().expect("node runs");
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-	assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), r#"["running","20000: stopped after 10 s: the program may not terminate"]"#);
+	assert_eq!(
+		String::from_utf8_lossy(&output.stdout).trim(),
+		r#"["running","20000: stopped after 10 s: the program may not terminate"]"#
+	);
 }
