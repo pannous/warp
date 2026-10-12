@@ -859,9 +859,18 @@ impl WasmGcEmitter {
 	) -> HashMap<String, Option<ElementType>> {
 		// a variable first assigned ø and appended to only in a branch (`out = ø; … if c {out = out + [x]}`) has the kind ø
 		let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
+		let kind_of = |name: &String| self.scope.lookup(name).map(|local| local.kind);
+		// as does one first assigned ø and then a list variable in a loop (`d = ø; for … { d = xs.map(…) }`)
+		let given_a_list = |name: &String| {
+			sources[name]
+				.iter()
+				.any(|source| matches!(source, Source::Variable(other) if kind_of(other) == Some(Kind::List)))
+		};
 		let is_list_local = |name: &String| {
 			self.scope.lookup(name).is_some_and(|local| {
-				!local.is_param && (local.kind == Kind::List || (local.kind == Kind::Empty && appended(name)))
+				!local.is_param
+					&& (local.kind == Kind::List
+						|| (local.kind == Kind::Empty && (appended(name) || given_a_list(name))))
 			})
 		};
 		let has_start = |name: &String| sources[name].iter().any(|source| !matches!(source, Source::Append(_)));

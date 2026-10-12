@@ -153,9 +153,10 @@ ms (release); a variable given a second map result (`d = d.map(…)`) stays line
 In a loop around both (card map-inside, 2026-10-12: a map in a `for round` body, 100k floats 3.8 s a round) the
 alias at the end of one round no longer counts for the next round's appends when the round first gives the variable
 a fresh list (`out = ø`, a literal, a call's result), unconditionally, in that loop and before the append (ListEvent
-Fresh). Tests: tests/lists/test_map_inside_loop.rs, probes/map_inside_loop.warp. Not covered yet: a result variable
-declared before the loop (`d = []; for … { d = xs.map(…) }`) is no typed array, the map appends to a Node list
-(list_concat, quadratic), with or without this change.
+Fresh). Tests: tests/lists/test_map_inside_loop.rs, probes/map_inside_loop.warp. A result variable
+declared before the loop (`d = []; for … { d = xs.map(…) }`, card map-predeclared) has the kind ø, as `[]` does; it
+counts as a list local once it is given a list variable (typed_list_elements given_a_list), else it was no typed array
+and turned its alias, the map's out list, into Nodes (list_concat, int[20000] 2.3 s → 0.17 s for int[100000]).
   a fitting element type (a subclass), is fine. The run-time half (a lax alias `ys = names`, an unannotated parameter
   `f(xs) := xs.add(420)`): a declared Node-held list's head cell carries an element mark, the node_kind_in kinds its
   element type admits, in kind bits 16+ (type_kinds::element_mark, set by list_mark at the assignment);
