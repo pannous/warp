@@ -434,10 +434,11 @@ impl WasmGcEmitter {
 		// Emit arguments; a missing argument evaluates its default anew at every call
 		// a default reads the parameters before it as the values given for them: `f(a, b = a * 2)`
 		let mut given: HashMap<String, Node> = HashMap::new();
+		let shown_name = crate::lowering::folding::unspecialised_name(&user_fn.name);
 		for (i, param) in user_fn.params.iter().enumerate() {
 			let defaulted = param.default.as_ref().map(|default| crate::law::substitute(default, &given));
 			let Some(argument) = args.get(i).or(defaulted.as_ref()).cloned() else {
-				self.emit_type_error(func, format!("{} needs a value for parameter {} (it has no default)", user_fn.name, param.name));
+				self.emit_type_error(func, format!("{} needs a value for parameter {} (it has no default)", shown_name, param.name));
 				return;
 			};
 			given.insert(param.name.clone(), argument.clone());
@@ -446,7 +447,7 @@ impl WasmGcEmitter {
 			let element = param.annotation.as_ref().and_then(crate::analyzer::declared_element_type);
 			let list_type = crate::analyzer::list_type_name(argument, &self.scope);
 			if let Some(element) = element.filter(|element| !crate::analyzer::elements_fit(element, &list_type)) {
-				let message = format!("{} needs a list of {element} for parameter {}, got {} (a {list_type})", user_fn.name, param.name, argument.serialize());
+				let message = format!("{} needs a list of {element} for parameter {}, got {} (a {list_type})", shown_name, param.name, argument.serialize());
 				self.emit_type_error(func, message);
 				return;
 			}
@@ -471,7 +472,7 @@ impl WasmGcEmitter {
 			// `f(b: bool)` refuses 2 but takes yes, no, 1 and 0 (card bool-assign, P199)
 			let annotated_bool = param.annotation.as_ref().map(Node::name).filter(|type_name| crate::analyzer::is_bool_type(type_name));
 			if annotated_bool.is_some_and(|type_name| crate::analyzer::literal_misfit(&type_name, argument).is_some()) {
-				let message = format!("{} needs a bool for parameter {}, got {} ({})", user_fn.name, param.name, argument.serialize(), kind_with_article(given));
+				let message = format!("{} needs a bool for parameter {}, got {} ({})", shown_name, param.name, argument.serialize(), kind_with_article(given));
 				self.emit_type_error(func, message);
 				return;
 			}
@@ -483,7 +484,7 @@ impl WasmGcEmitter {
 					Some(annotation) => crate::analyzer::with_article(&annotation.drop_meta().name()),
 					None => kind_with_article(expected),
 				};
-				let message = format!("{} needs {wanted} for parameter {}, got {} ({})", user_fn.name, param.name, argument.serialize(), kind_with_article(given));
+				let message = format!("{} needs {wanted} for parameter {}, got {} ({})", shown_name, param.name, argument.serialize(), kind_with_article(given));
 				self.emit_type_error(func, message);
 				return;
 			}

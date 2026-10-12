@@ -858,12 +858,18 @@ pub(super) fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node
 	}
 }
 
-/// `x: int | text` is `x:"int or text"` (card inline-union), before any pass reads `int | text` as a value
+/// `x: int | text` is `x:"int or text"` (card inline-union), before any pass reads `int | text` as a value; so is a
+/// union of declared classes, `s: Circle | Square` (card union-types)
 pub fn lower_inline_unions(node: Node) -> Node {
+	let classes = crate::analyzer::declared_classes(&node);
+	lower_unions_of(node, &|word: &str| classes.contains(word))
+}
+
+fn lower_unions_of(node: Node, is_class: &dyn Fn(&str) -> bool) -> Node {
 	match node {
-		Node::Key(name, Op::Colon, type_node) if let Some(union) = crate::analyzer::union_type_name(&type_node) => {
+		Node::Key(name, Op::Colon, type_node) if let Some(union) = crate::analyzer::union_of_types(&type_node, is_class) => {
 			Node::Key(name, Op::Colon, Box::new(Node::Symbol(union)))
 		}
-		other => other.map_children(lower_inline_unions),
+		other => other.map_children(|child| lower_unions_of(child, is_class)),
 	}
 }

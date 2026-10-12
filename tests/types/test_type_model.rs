@@ -101,6 +101,22 @@ const CORPUS: &[&str] = &[
 	"f(x: int | text) := x; f(\"ab\")",
 	"f(x: int or text) := x; f(3)",
 	"f(x: int | text) := x; f(2.5)",
+	// a union field and one of several union parameters (card w0-unions)
+	"class Shape { size: int | text }; s = Shape(3); s.size",
+	"class Shape { size: int | text }; s = Shape(\"big\"); s.size",
+	"class Shape { size: int | text }; s = Shape(2.5)",
+	"class Shape { size: int | text }; s = Shape(3); s.size = \"big\"; s.size",
+	"class Shape { size: int | text }; s = Shape(3); s.size = 2.5",
+	"class Shape { size: int | text }; s = Shape(3); s.size = [1]",
+	"f(a: int, b: int | text) := b; f(1, \"x\")",
+	"f(a: int, b: int | text) := b; f(1, 2.5)",
+	"f(a: int, b: int) := a + b; f(1, 2.5)",
+	// a union of classes (card union-types)
+	"class C{a:int}; class D{b:int}; f(s: C | D) := s; f(D(1))",
+	"class C{a:int}; class D{b:int}; f(s: C | D) := s; f(3)",
+	"class C{a:int}; class D{b:int}; class E{c:int}; f(s: C | D) := s; f(E(1))",
+	"class C{a:int}; class D{b:int}; s: C | D = C(1); s",
+	"class C{a:int}; class D{b:int}; f(n: int, s: C | D) := n; f(1, D(1))",
 	"x: int | ø = 3; x",
 	"x: int | ø = 3; x = \"a\"",
 	"class P { x }; p = P(1); p.x + 1",
@@ -580,6 +596,7 @@ const CORPUS: &[&str] = &[
 const KNOWN_HOLES: &[(&str, &str)] = &[
 	("b: bool = no; b++; b", "bool-assign"),
 	("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"),
+	("class C{a:int}; class D{b:int}; class E{c:int}; s: C | D = C(1); s = E(2)", "class-field"),
 ];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes

@@ -1,5 +1,7 @@
 mod test_array_types;
 mod test_inline_unions;
+// card union-types
+mod test_class_unions;
 mod test_list_element_types;
 mod test_cast_bugs;
 mod test_unknown_conversion; // card unknown-word

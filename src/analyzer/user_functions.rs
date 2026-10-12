@@ -208,12 +208,12 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 		return Some(Kind::List);
 	}
 	// `v:any`, as an untyped field: any value, held as a Node (lib/json.warp's to_json takes what parse_json gives)
-	// `x: int or text` (an inline union of builtin types, card inline-union) likewise
+	// `x: int or text` (an inline union, card inline-union) and `s: Circle or Square` (card union-types) likewise
 	if names_empty_type(type_node) {
 		return Some(Kind::Empty);
 	}
 	// `m:map`, `m: map of int`: a map, held as a Node; `{a:1}` given to it is upgraded to the map of its entry (one_entry_maps.rs)
-	if type_name == crate::type_kinds::UNTYPED_FIELD || is_map_type(&type_name) || annotated_builtin_type(type_node).is_some_and(|name| union_parts(name).is_some()) {
+	if type_name == crate::type_kinds::UNTYPED_FIELD || is_map_type(&type_name) || union_parts(&type_name).is_some() {
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
@@ -925,14 +925,14 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 					*given_bools.entry((name.clone(), index)).or_insert(true) &= is_bool_argument(argument);
 				}
 				// `real`, `exact` are Ints that may hold a ratio: only a whole type loses a decimal's digits
-				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::refuses_decimals(&annotation.name()));
-				if declared_int && has_digits_an_int_loses(argument) {
+				let declared = function.params[index].annotation.as_ref().map(|annotation| annotation.name()).filter(|declared| crate::analyzer::checks::refuses_decimals(declared));
+				if let Some(declared) = declared.filter(|_| has_digits_an_int_loses(argument)) {
 					// a whole float serializes as `2`; its decimal point is what makes it no int
 					let written = match argument.drop_meta() {
 						Node::Number(crate::extensions::numbers::Number::Float(value)) if value.fract() == 0.0 => format!("{value:.1}"),
 						other => other.serialize(),
 					};
-					float_for_int.push(format!("{written} is no int: write {written} as int"));
+					float_for_int.push(format!("{written} is no {declared}: write {written} as int"));
 				}
 				// `g("a")`: a one-character text is parsed as a Codepoint; the parameter holds any text, as for a default
 				if let Some(kind) = argument_kind(argument).map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind }) {

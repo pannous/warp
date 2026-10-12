@@ -21,6 +21,11 @@ const MAX_VARIANTS: usize = 32;
 /// Between a function's name and the constant arguments of its variant: `power·n3`
 const VARIANT_SEPARATOR: &str = "·";
 
+/// The function a variant was made of, as its messages name it: `f` of `f·a1`
+pub fn unspecialised_name(name: &str) -> &str {
+	name.split(VARIANT_SEPARATOR).next().unwrap_or(name)
+}
+
 /// The precomputed paths of a compiled module: constant free variables inlined, constant arguments specialised, the
 /// variants inlined where small, constant calls folded
 pub fn precompute(program: Node) -> Node {
@@ -326,7 +331,9 @@ impl Specialiser {
 		let plain = arguments.iter().all(|argument| matches!(argument.drop_meta(), Node::Symbol(_) | Node::Number(_)));
 		let Some((_, Node::Key(variant_head, Op::Define, body))) = self.variants.iter().find(|(name, _)| matches!(head.drop_meta(), Node::Symbol(called) if called == name)) else { return node };
 		let Node::List(head_items, _, _) = variant_head.drop_meta() else { return node };
-		if !plain || depth >= MAX_VARIANTS || !is_expression(body) {
+		// a declared parameter `b: int` checks its argument at the call: inlined, `f(1, 2.5)` would pass 2.5 unchecked
+		let declares_types = head_items[1..].iter().any(|parameter| !matches!(parameter.drop_meta(), Node::Symbol(_)));
+		if !plain || declares_types || depth >= MAX_VARIANTS || !is_expression(body) {
 			return node;
 		}
 		let mut inlined = body.as_ref().clone();

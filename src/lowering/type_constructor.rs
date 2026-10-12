@@ -3,11 +3,11 @@
 //! data (D4): an instance is the data key marked `Instance`, emitted with its own op code, so it never equals the data.
 
 use super::nodes::{children_rewritten, key};
-use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, list_element_type, literal_misfit, misfit_item};
+use crate::analyzer::{call_name, collect_all_types, list_element_type, literal_misfit, misfit_item, not_whole_note};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_kinds::{Kind, TypeDef, TypeRegistry};
+use crate::type_kinds::{TypeDef, TypeRegistry};
 
 /// Marks the data key `P:{…}` that a construction `P{…}` validated
 #[derive(Clone, Debug, PartialEq)]
@@ -265,10 +265,7 @@ fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entr
 			return Some(Diagnostic::at(located, message).into_error());
 		}
 		let actual = literal_misfit(declared_type, value)?;
-		let mut message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
-		if builtin_type_kind(declared_type) == Some(Kind::Int) && actual == Kind::Float {
-			message += ": an int must be a whole number"; // as the run-time check says (list_ops INT_NOT_WHOLE)
-		}
+		let message = format!("{name}.{field} is {declared_type}, got {} {}{}", format!("{actual:?}").to_lowercase(), value.serialize(), not_whole_note(declared_type, actual));
 		Some(Diagnostic::at(located, message).into_error())
 	});
 	wrong_entry.or_else(|| {
