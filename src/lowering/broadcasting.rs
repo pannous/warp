@@ -158,7 +158,8 @@ fn type_calls_used(program: &Node) -> HashSet<String> {
 			}
 		}
 	});
-	used.retain(|name| !crate::soft_keywords::program_names(program, name));
+	let names = crate::soft_keywords::names_given(program);
+	used.retain(|name| !names.contains(name));
 	used
 }
 

@@ -53,8 +53,9 @@ const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])
 const USE_WORD: &str = "use";
 
 pub fn lower(program: Node) -> Node {
-	let kept: Vec<&str> = STD_ALIASES.iter().map(|alias| alias.module).filter(|module| crate::soft_keywords::program_names(&program, module)).collect();
-	note_internal_words(&program);
+	let names = crate::soft_keywords::names_given(&program);
+	let kept: Vec<&str> = STD_ALIASES.iter().map(|alias| alias.module).filter(|module| names.contains(*module)).collect();
+	note_internal_words(&program, &names);
 	let mut used = HashSet::new();
 	let program = aliased(program, &kept, &mut used);
 	with_uses(program, used)
@@ -67,8 +68,8 @@ fn warp_form(word: &str) -> String {
 
 /// `parse_json(t)` written by hand, where the program defines no parse_json of its own: a got-it note naming
 /// `json.parse`
-fn note_internal_words(program: &Node) {
-	for form in WARP_FORMS.iter().filter(|form| !crate::soft_keywords::program_names(program, form.word)) {
+fn note_internal_words(program: &Node, names: &HashSet<String>) {
+	for form in WARP_FORMS.iter().filter(|form| !names.contains(form.word)) {
 		if let Some(call) = first_call_of(program, form.word) {
 			crate::normalize::set_position_of(call);
 			crate::diagnostic::note_alias(form.word, &warp_form(form.word));
