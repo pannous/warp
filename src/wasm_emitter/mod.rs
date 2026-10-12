@@ -15,7 +15,7 @@ mod values;
 pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
 pub(crate) mod exact;
-pub(crate) mod hex;
+pub(crate) mod radix;
 pub(crate) use casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
 mod config;
@@ -1520,8 +1520,8 @@ impl WasmGcEmitter {
 		if !matches!(node.drop_meta(), Node::True | Node::False) && crate::analyzer::is_boolean(node, &self.scope) {
 			self.emit_call(func, constructors::AS_BOOL);
 		}
-		if self.shows_hex(node) {
-			self.emit_call(func, hex::AS_HEX);
+		if let Some(radix) = self.shown_radix(node) {
+			self.emit_call(func, radix.as_function);
 		}
 	}
 

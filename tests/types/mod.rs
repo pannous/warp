@@ -8,6 +8,7 @@ mod test_any_into_annotated;
 mod test_any_into_annotated_types;
 mod test_as_number_variable; // card number-variable
 mod test_be_definitions;
+mod test_binary_int; // card binary-int
 mod test_block_data_paths;
 mod test_bool_assign;
 mod test_bool_conversion;

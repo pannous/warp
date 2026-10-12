@@ -10,14 +10,7 @@ pub const TEXT_AS_NUMBER: &str = "text_as_number";
 pub(super) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
 /// The words emit_cast converts to besides the number types (int, float, rational …)
-const CONVERSION_WORDS: [&str; 6] = [
-	"text",
-	"list",
-	"codepoint",
-	crate::analyzer::BOOL_TYPE,
-	"number",
-	super::hex::HEX_WORD,
-];
+const CONVERSION_WORDS: [&str; 5] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number"];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -79,7 +72,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
-		if let Some(computed) = super::hex::computed_type(target) {
+		if let Some(computed) = super::radix::computed_type(target) {
 			return self.emit_numeric_cast(func, located, value, &computed);
 		}
 		if let Some(refusal) = self.cast_refusal(value, target) {
@@ -287,7 +280,7 @@ impl WasmGcEmitter {
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
 	pub(super) fn emit_cast(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
-		if let Some(computed) = super::hex::computed_type(target_type) {
+		if let Some(computed) = super::radix::computed_type(target_type) {
 			return self.emit_cast(func, value, &computed);
 		}
 		let type_name = match target_type.drop_meta() {
@@ -768,6 +761,7 @@ impl WasmGcEmitter {
 fn converts_to(type_name: &str) -> bool {
 	let word = crate::type_tests::canonical_spec_word(type_name);
 	CONVERSION_WORDS.contains(&word)
+		|| super::radix::named_radix(word).is_some()
 		|| crate::type_tests::is_exact_fraction_type(word)
 		|| crate::type_tests::spells_decimals_exactly(word)
 		|| crate::analyzer::builtin_type_kind(word).is_some()
@@ -777,7 +771,7 @@ fn converts_to(type_name: &str) -> bool {
 /// built-in types have their calls (`int("12")`, analyzer::type_cast_of), a library word its function (`codepoint(c)`)
 pub(crate) fn is_called_conversion(type_name: &str) -> bool {
 	(converts_to(type_name) || type_name == super::exact::DECIMAL_WORD)
-		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::hex::shows_in_hex(type_name))
+		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::radix::shown_radix(type_name).is_some())
 		&& !library_ops::LIBRARY_FUNCTIONS
 			.iter()
 			.any(|(word, _)| *word == type_name)
