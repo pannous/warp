@@ -95,6 +95,7 @@ self.voiceAt = seconds => {
 	const origin = voice.origin ?? soundClock();
 	voice = { end: origin + seconds, seconds, origin };
 };
+self.insideAt = () => voicesBeforeAt.length > 0;
 self.voiceAtEnd = () => {
 	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
 };
@@ -112,7 +113,7 @@ function withTaskSounds(run, record) {
 
 // a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
 // page once that Worker is back in its event loop, not while it waits for the task
-const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles"];
+const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles", "fadeSound"];
 function relayed([method, ...values]) {
 	if (!RELAYED.includes(method)) throw new Error(`a task Worker relayed ${method}, which is no word of the page`);
 	self[method]?.(...values);
@@ -777,6 +778,8 @@ addHostPart({
 		task_inside: () => holder.inTask ? 1n : 0n,
 		// a parallel let forks from the program only: a task's Worker does not see how many others run (src/tasks.rs counts them)
 		task_forks: () => holder.inTask ? 0n : 1n,
+		// a split float map runs on one thread in the browser: 0 makes the program call its kernel itself (src/tasks.rs split_map)
+		task_split_mapf: () => 0n,
 		signal_send: (handler, values) => {
 			(holder.run.signals ??= []).push({ handler: decode(cString(handler)), values: readTaskValue(program(), values) });
 			return 0n;

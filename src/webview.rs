@@ -20,6 +20,8 @@ const CHECK_DELAY_MS: u32 = 500;
 /// A checked page that never reports its text ends the check as a failure after this long
 const CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 const DEFAULT_WIDTH: f64 = 900.0;
+/// What the page posts when its program ran `exit(code)`, the code after it
+const EXIT_MESSAGE: &str = "warp-exit ";
 const DEFAULT_HEIGHT: f64 = 700.0;
 
 /// The bytes a path of the page names and their content type, None when there is no such file
@@ -33,9 +35,14 @@ pub fn show_program(code: &str, title: &str, check: bool) -> Result<(), String> 
 
 /// The HTML file in a window, the files beside it at their relative paths
 pub fn show_file(page: &Path, check: bool) -> Result<(), String> {
-	let page = page.canonicalize().map_err(|failure| format!("cannot open {}: {failure}", page.display()))?;
+	let page = page
+		.canonicalize()
+		.map_err(|failure| format!("cannot open {}: {failure}", page.display()))?;
 	let folder = page.parent().map(Path::to_path_buf).unwrap_or_default();
-	let title = page.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+	let title = page
+		.file_stem()
+		.map(|stem| stem.to_string_lossy().into_owned())
+		.unwrap_or_default();
 	show(&title, check, Box::new(move |path| folder_file(&page, &folder, path)))
 }
 
@@ -45,10 +52,16 @@ fn site_file(files: &[SiteFile], path: &str) -> Option<(Vec<u8>, &'static str)> 
 
 /// "/" is the page, any other path a file inside its folder (never outside: `..` is refused by the containment check)
 fn folder_file(page: &Path, folder: &Path, path: &str) -> Option<(Vec<u8>, &'static str)> {
-	let file: PathBuf = if path == "/" { page.to_path_buf() } else { folder.join(path.trim_start_matches('/')).canonicalize().ok()? };
+	let file: PathBuf = if path == "/" {
+		page.to_path_buf()
+	} else {
+		folder.join(path.trim_start_matches('/')).canonicalize().ok()?
+	};
 	file.starts_with(folder).then_some(())?;
 	let name = file.to_string_lossy().into_owned();
-	std::fs::read(&file).ok().map(|bytes| (bytes, crate::site::content_type(&name)))
+	std::fs::read(&file)
+		.ok()
+		.map(|bytes| (bytes, crate::site::content_type(&name)))
 }
 
 fn show(title: &str, check: bool, files: Files) -> Result<(), String> {
@@ -56,7 +69,9 @@ fn show(title: &str, check: bool, files: Files) -> Result<(), String> {
 	let mut builder = EventLoop::builder();
 	if check {
 		// no Dock icon and no focus taken from the user's app (tests run beside them)
-		builder.with_activation_policy(ActivationPolicy::Prohibited).with_activate_ignoring_other_apps(false);
+		builder
+			.with_activation_policy(ActivationPolicy::Prohibited)
+			.with_activate_ignoring_other_apps(false);
 	}
 	if check {
 		std::thread::spawn(|| {
@@ -66,7 +81,14 @@ fn show(title: &str, check: bool, files: Files) -> Result<(), String> {
 		});
 	}
 	let event_loop = builder.build().map_err(|failure| format!("no window: {failure}"))?;
-	let mut viewer = Viewer { title: title.to_string(), check, files: Some(files), window: None, webview: None, failure: None };
+	let mut viewer = Viewer {
+		title: title.to_string(),
+		check,
+		files: Some(files),
+		window: None,
+		webview: None,
+		failure: None,
+	};
 	event_loop.run_app(&mut viewer).map_err(|failure| failure.to_string())?;
 	viewer.failure.map_or(Ok(()), Err)
 }
@@ -82,20 +104,35 @@ struct Viewer {
 
 impl Viewer {
 	fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<(), String> {
-		let attributes = Window::default_attributes().with_title(&self.title).with_visible(!self.check)
+		let attributes = Window::default_attributes()
+			.with_title(&self.title)
+			.with_visible(!self.check)
 			.with_inner_size(winit::dpi::LogicalSize::new(DEFAULT_WIDTH, DEFAULT_HEIGHT));
-		let window = event_loop.create_window(attributes).map_err(|failure| failure.to_string())?;
+		let window = event_loop
+			.create_window(attributes)
+			.map_err(|failure| failure.to_string())?;
 		let files = self.files.take().expect("the window opens once");
-		let mut builder = WebViewBuilder::new().with_url(START_URL)
+		let mut builder = WebViewBuilder::new()
+			.with_url(START_URL)
 			.with_custom_protocol(PROTOCOL.to_string(), move |_, request| answer(&files, &request));
+		// `exit` in a handler of the page's program (site.js endApp) ends the app with its code
+		builder = builder.with_initialization_script(format!(
+			"self.endApp = code => window.ipc.postMessage('{EXIT_MESSAGE}' + code)"
+		));
 		if self.check {
 			builder = builder.with_initialization_script(format!(
-				"addEventListener('load', () => setTimeout(() => window.ipc.postMessage(document.body.innerText), {CHECK_DELAY_MS}))"))
-				.with_ipc_handler(|text: Request<String>| {
-					println!("{}", text.body());
-					std::process::exit(0);
-				});
+				"addEventListener('load', () => setTimeout(() => window.ipc.postMessage(document.body.innerText), {CHECK_DELAY_MS}))"));
 		}
+		let check = self.check;
+		builder = builder.with_ipc_handler(move |message: Request<String>| {
+			if let Some(code) = message.body().strip_prefix(EXIT_MESSAGE) {
+				std::process::exit(code.trim().parse().unwrap_or(0));
+			}
+			if check {
+				println!("{}", message.body());
+				std::process::exit(0);
+			}
+		});
 		// a child of winit's view, never `build`: that swaps wry's view in as the window's content, which winit still
 		// reads as its own (a crash when the window loses focus, card focus-crash)
 		builder = builder.with_bounds(window_bounds(&window)).with_focused(true);
@@ -113,14 +150,19 @@ impl Viewer {
 /// through it too: it crashed winit while wry's view had replaced winit's (card focus-crash)
 fn window_bounds(window: &Window) -> wry::Rect {
 	let size = window.inner_size().to_logical::<f64>(window.scale_factor());
-	wry::Rect { position: winit::dpi::LogicalPosition::new(0.0, 0.0).into(), size: size.into() }
+	wry::Rect {
+		position: winit::dpi::LogicalPosition::new(0.0, 0.0).into(),
+		size: size.into(),
+	}
 }
 
 fn lose_focus(window: &Window) {
 	use objc2::{msg_send, runtime::AnyObject};
 	use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 	let Ok(handle) = window.window_handle() else { return };
-	let RawWindowHandle::AppKit(appkit) = handle.as_raw() else { return };
+	let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+		return;
+	};
 	// SAFETY: ns_view is the window's live NSView; window and delegate are AppKit's own getters
 	unsafe {
 		let view: &AnyObject = appkit.ns_view.cast().as_ref();
@@ -132,9 +174,17 @@ fn lose_focus(window: &Window) {
 
 fn answer(files: &Files, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
 	let found = files(request.uri().path());
-	let status = if found.is_some() { StatusCode::OK } else { StatusCode::NOT_FOUND };
+	let status = if found.is_some() {
+		StatusCode::OK
+	} else {
+		StatusCode::NOT_FOUND
+	};
 	let (bytes, content_type) = found.unwrap_or_default();
-	Response::builder().status(status).header(CONTENT_TYPE, content_type).body(Cow::Owned(bytes)).expect("a valid response")
+	Response::builder()
+		.status(status)
+		.header(CONTENT_TYPE, content_type)
+		.body(Cow::Owned(bytes))
+		.expect("a valid response")
 }
 
 impl ApplicationHandler for Viewer {

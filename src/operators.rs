@@ -1,5 +1,5 @@
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// Keywords that introduce function definitions
 pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];
@@ -13,17 +13,31 @@ const PREFIX_BP: u8 = 162;
 /// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
 /// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
 pub const GLYPH_OPERATORS: [(char, Op, &str); 17] = [
-	('∧', Op::And, "and"), ('⋀', Op::And, "and"),
-	('∨', Op::Or, "or"), ('⋁', Op::Or, "or"),
+	('∧', Op::And, "and"),
+	('⋀', Op::And, "and"),
+	('∨', Op::Or, "or"),
+	('⋁', Op::Or, "or"),
 	('⊻', Op::Xor, "xor"),
 	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
-	('·', Op::Mul, "*"), ('⋅', Op::Mul, "*"),
-	('≟', Op::Eq, "=="), ('≡', Op::Eq, "=="), ('﹦', Op::Eq, "=="),
-	('‐', Op::Sub, "-"), ('‑', Op::Sub, "-"), ('‒', Op::Sub, "-"), ('–', Op::Sub, "-"), ('—', Op::Sub, "-"), ('―', Op::Sub, "-"), ('−', Op::Sub, "-"),
+	('·', Op::Mul, "*"),
+	('⋅', Op::Mul, "*"),
+	('≟', Op::Eq, "=="),
+	('≡', Op::Eq, "=="),
+	('﹦', Op::Eq, "=="),
+	('‐', Op::Sub, "-"),
+	('‑', Op::Sub, "-"),
+	('‒', Op::Sub, "-"),
+	('–', Op::Sub, "-"),
+	('—', Op::Sub, "-"),
+	('―', Op::Sub, "-"),
+	('−', Op::Sub, "-"),
 ];
 
 pub fn glyph_operator(glyph: char) -> Option<(Op, &'static str)> {
-	GLYPH_OPERATORS.iter().find(|(known, _, _)| *known == glyph).map(|(_, op, canonical)| (*op, *canonical))
+	GLYPH_OPERATORS
+		.iter()
+		.find(|(known, _, _)| *known == glyph)
+		.map(|(_, op, canonical)| (*op, *canonical))
 }
 
 pub fn is_function_keyword(s: &str) -> bool {
@@ -61,17 +75,17 @@ pub enum Op {
 	FatArrow, // =>  fat arrow/lambda
 
 	// Arithmetic operators
-	Add,  // +
-	Sub,  // -
-	Mul,  // *  ×  ⋅
-	Div,  // /  ÷
-	Mod,  // %  mod  Euclidean: 0 ≤ a % b < |b|
-	Rem,  // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
-	Pow,  // ^  **
+	Add,     // +
+	Sub,     // -
+	Mul,     // *  ×  ⋅
+	Div,     // /  ÷
+	Mod,     // %  mod  Euclidean: 0 ≤ a % b < |b|
+	Rem,     // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
+	Pow,     // ^  **
 	LogBase, // ⌞  b⌞x: log base b of x (P226)
 	LogOf,   // ⌟  x⌟: the natural log of x, x⌟b: log base b of x (P226)
-	Shl,  // <<  shift left: a * 2^n
-	Shr,  // >>  shift right: floor(a / 2^n)
+	Shl,     // <<  shift left: a * 2^n
+	Shr,     // >>  shift right: floor(a / 2^n)
 
 	// Compound assignment operators (x op= y → x = x op y)
 	AddAssign, // +=
@@ -85,16 +99,16 @@ pub enum Op {
 	XorAssign, // ^=   xor=
 
 	// Comparison operators
-	Lt,  // <
-	Gt,  // >
-	Le,  // <=  ≤
-	Ge,  // >=  ≥
-	Eq,  // ==
-	Ne,  // !=  ≠
+	Lt,           // <
+	Gt,           // >
+	Le,           // <=  ≤
+	Ge,           // >=  ≥
+	Eq,           // ==
+	Ne,           // !=  ≠
 	Identical,    // ===  equal and of the same type: 0 === false is false (card zero-false)
 	NotIdentical, // !==
-	Similar, // ≈  ⋍  circa  approximately: equal within the relative `tolerance` (default 1e-9)
-	Rough,   // ~  ~~: looser than ≈, within `rough_tolerance` (default 1%), texts without surrounding punctuation (P211)
+	Similar,      // ≈  ⋍  circa  approximately: equal within the relative `tolerance` (default 1e-9)
+	Rough, // ~  ~~: looser than ≈, within `rough_tolerance` (default 1%), texts without surrounding punctuation (P211)
 
 	// Logical operators
 	And, // and  &&  ∧
@@ -137,7 +151,6 @@ pub enum Op {
 	PlusMinus, // ±  +-  a value with tolerance
 
 	// User(Node), allow user defined operators, name==symbol
-
 	None, // implicit/unknown
 }
 
@@ -161,7 +174,6 @@ impl Op {
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
 			Op::Pow => (160, 159),
 			Op::LogBase | Op::LogOf => (160, 161),
-
 
 			// Multiplicative (left-assoc)
 			Op::Mul | Op::Div | Op::Mod | Op::Rem => (150, 151),
@@ -215,9 +227,15 @@ impl Op {
 			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
 			// Compound assignment (same precedence as assignment)
-			Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign |
-			Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign |
-			Op::XorAssign => (60, 59),
+			Op::AddAssign
+			| Op::SubAssign
+			| Op::MulAssign
+			| Op::DivAssign
+			| Op::ModAssign
+			| Op::PowAssign
+			| Op::AndAssign
+			| Op::OrAssign
+			| Op::XorAssign => (60, 59),
 
 			// Prefix operators (no left operand, binds to right): looser than a suffix power (√x² is √(x²)) and member
 			// access (√p.x is √(p.x)), tighter than ^ (√x^2 is (√x)^2)
@@ -354,7 +372,10 @@ impl Op {
 
 	/// Check if this is a binary arithmetic operator
 	pub fn is_arithmetic(&self) -> bool {
-		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow)
+		matches!(
+			self,
+			Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow
+		)
 	}
 
 	/// Check if this is a shift operator, defined on exact Ints only
@@ -364,7 +385,10 @@ impl Op {
 
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
-		matches!(self, Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
+		matches!(
+			self,
+			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge
+		)
 	}
 
 	/// A comparison or a similarity (≈, ~): `combine 1.1 with 2.2 ≈ 3.3` compares the phrase's value
@@ -390,8 +414,15 @@ impl Op {
 	pub fn is_compound_assign(&self) -> bool {
 		matches!(
 			self,
-			Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign |
-			Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign | Op::XorAssign
+			Op::AddAssign
+				| Op::SubAssign
+				| Op::MulAssign
+				| Op::DivAssign
+				| Op::ModAssign
+				| Op::PowAssign
+				| Op::AndAssign
+				| Op::OrAssign
+				| Op::XorAssign
 		)
 	}
 
@@ -420,14 +451,70 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-const OP_CODES: [Op; 63] = [
-	Op::None, Op::Colon, Op::Assign, Op::Define, Op::Dot,
-	Op::SafeDot, Op::Scope, Op::Arrow, Op::FatArrow, Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow,
-	Op::Shl, Op::Shr, Op::AddAssign, Op::SubAssign, Op::MulAssign, Op::DivAssign, Op::ModAssign, Op::PowAssign,
-	Op::AndAssign, Op::OrAssign, Op::XorAssign, Op::Lt, Op::Gt, Op::Le, Op::Ge, Op::Eq, Op::Ne, Op::Similar, Op::And,
-	Op::Or, Op::Xor, Op::Not, Op::Neg, Op::Sqrt, Op::Cbrt, Op::Abs, Op::Inc, Op::Dec, Op::Square, Op::Cube,
-	Op::Question, Op::If, Op::Then, Op::Else, Op::While, Op::Do, Op::Hash, Op::Range, Op::To, Op::As, Op::PlusMinus,
-	Op::Coalesce, Op::Identical, Op::NotIdentical, Op::Rough, Op::LogBase, Op::LogOf,
+pub const OP_CODES: [Op; 63] = [
+	Op::None,
+	Op::Colon,
+	Op::Assign,
+	Op::Define,
+	Op::Dot,
+	Op::SafeDot,
+	Op::Scope,
+	Op::Arrow,
+	Op::FatArrow,
+	Op::Add,
+	Op::Sub,
+	Op::Mul,
+	Op::Div,
+	Op::Mod,
+	Op::Rem,
+	Op::Pow,
+	Op::Shl,
+	Op::Shr,
+	Op::AddAssign,
+	Op::SubAssign,
+	Op::MulAssign,
+	Op::DivAssign,
+	Op::ModAssign,
+	Op::PowAssign,
+	Op::AndAssign,
+	Op::OrAssign,
+	Op::XorAssign,
+	Op::Lt,
+	Op::Gt,
+	Op::Le,
+	Op::Ge,
+	Op::Eq,
+	Op::Ne,
+	Op::Similar,
+	Op::And,
+	Op::Or,
+	Op::Xor,
+	Op::Not,
+	Op::Neg,
+	Op::Sqrt,
+	Op::Cbrt,
+	Op::Abs,
+	Op::Inc,
+	Op::Dec,
+	Op::Square,
+	Op::Cube,
+	Op::Question,
+	Op::If,
+	Op::Then,
+	Op::Else,
+	Op::While,
+	Op::Do,
+	Op::Hash,
+	Op::Range,
+	Op::To,
+	Op::As,
+	Op::PlusMinus,
+	Op::Coalesce,
+	Op::Identical,
+	Op::NotIdentical,
+	Op::Rough,
+	Op::LogBase,
+	Op::LogOf,
 ];
 
 /// Encode Op as i64 for storage in kind field
@@ -442,7 +529,11 @@ pub fn op_named(text: &str) -> Option<Op> {
 
 /// Decode i64 back to Op
 pub fn code_to_op(code: i64) -> Op {
-	usize::try_from(code).ok().and_then(|index| OP_CODES.get(index)).copied().unwrap_or(Op::None)
+	usize::try_from(code)
+		.ok()
+		.and_then(|index| OP_CODES.get(index))
+		.copied()
+		.unwrap_or(Op::None)
 }
 
 /// What Node::serialize writes between an entry's key and value, by operator code: `x+1`, `0.1 as float`, nothing for

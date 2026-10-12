@@ -1,7 +1,7 @@
 //! `if f(1, 2) {…}`: the call's arguments stay the arguments, the block is the body
 
-use warp::parse;
 use crate::is;
+use warp::parse;
 
 #[test]
 fn a_call_with_arguments_as_condition_keeps_its_arguments() {
@@ -15,5 +15,8 @@ fn a_call_with_arguments_as_condition_keeps_its_arguments() {
 
 #[test]
 fn a_call_condition_parses_like_the_assigned_call() {
-	assert_eq!(parse("if f(1, 2) {ok=1}").to_string(), parse("if f(1, 2) then {ok=1}").to_string());
+	assert_eq!(
+		parse("if f(1, 2) {ok=1}").to_string(),
+		parse("if f(1, 2) then {ok=1}").to_string()
+	);
 }

@@ -250,8 +250,9 @@ is a method of the generic function `sum` (card dispatch, notes/dispatch.md; for
   `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
   Every class body is normalized to its members (with_members), not only those with methods. The declared-type
   pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
-Open (card class-forms-ruby): Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
-operators (`__add__`, `operator +`), a method named `norm` (the parser reads it as the operator ‖).
+Also (card class-forms-ruby, reviewed 2026-10-12): Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`, endless
+`def twice = @x * 2`), Go (`type P struct {…}`, `func (p P) M()`), operators (`__add__`, `operator +`, class_operators.md),
+a method named `norm` (tests/functions/test_operator_word_methods.rs).
 
 Smart scopes (classes-22, wiki/inventions.md, declarations.rs smart_scope): `Number { Square = it*it }` defines
 `Square(self:Number) := self*self` for a builtin type word, `it` the value the method is called on: `3.Square`.
@@ -278,9 +279,14 @@ method (`p.new(2)`, Rust's `Point::new(1, 2)`: method_calls_named) stays a metho
 Run-time dispatch (classes-27, card class-method): a library-word method (`sum`, the counting words `count`/`size`/…,
 type words) called on a variable of no known class outside the class bodies, `total(x) := x.sum()`, is
 `if x is Bag then x.method·sum() else x.sum()` (class_methods dispatched_by_class, one branch per class defining it).
-A list mutation (`xs.pop()`) on an unknown receiver stays the list's (an if around a mutation is not built; card mutation-unknown); inside
-class bodies receivers are fields of declared types. Open: operators on unknown operands (`f(a, b) := a + b` of two
-instances) still take the built-in operator (card class-operators).
+A list mutation (`x.pop()`) on an unknown receiver dispatches the same way (card mutation-unknown; the list's branch
+still writes the change back to x); inside
+class bodies receivers are fields of declared types. An operator on a variable of no known class
+(`for q in [V(1), W(9)] { q + q }`, card class-operators) is `if q is V then q.plus(q) else … else q + q` per class
+defining the operator's method (operators.rs dispatched_operator); variables assigned a number or a text, looping over
+a range or a list of them, and fields of a type word (`x:int`) keep the plain operator (plain_variables). A choice
+between an instance (or a map) and a number is a Node of its run-time kind (inference.rs branches_kind; it was Text,
+so `print(if c then V(7) else 5)` failed with "not a joinable item").
 
 Go (classes-28, tests/types/test_class_forms_ported.rs a_go_struct_with_methods): `type Point struct { X int; Y int }`
 (the parser skips `struct` after the name), fields `X int` (typed_field takes both orders, `X, Y int` gives an
@@ -344,7 +350,10 @@ Nested and constants (classes-39): a pattern is matched by matched_pattern into 
 tests (`p.x == 0`) and bindings with paths (`y = parts·from.start.y`): `_` matches anything, a name binds, a number or
 text is compared, `Point{x: 0, y}`, `Point(a, 0)`, `Line{start: Point{x, y}, end}` nest. The arm's guard is all tests
 joined with `and`; an assignment takes names only (a class in it no test, a constant leaves it as written).
-positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Still not built: rest patterns (card rest-patterns).
+positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Rest patterns (card rest-patterns,
+tests/control/test_rest_patterns.rs): Rust's `Point{x, ..}` leaves the other fields out, `Point(x, ..)` takes the first
+fields before the `..` and the last ones after it; lists in switch.rs: `[first, ...rest]` (`*rest`, `rest...`) binds the
+rest as a slice, `[.., last]` counts from the end.
 
 ## Class components (classes-40, tests/web/test_class_components.rs; notes/web_framework.md step 4)
 A class with a `render()` method (aliases `view`, `template`, `build` with a note) is a component: its construction

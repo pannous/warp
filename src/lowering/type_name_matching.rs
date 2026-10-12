@@ -9,19 +9,26 @@ use crate::operators::Op;
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
 /// The words that separate a phrase's slots; `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
-pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"];
+pub(crate) const PREPOSITIONS: [&str; 11] = [
+	"to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each",
+];
 const IT: &str = "it";
 /// The word that makes an error value, `error("e")`
 const ERROR_WORD: &str = "error";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 17] = [
-	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if", "while", "for", "else",
-	"then",
+	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if",
+	"while", "for", "else", "then",
 ];
 
 pub(crate) fn names_a_function(name: &str) -> bool {
-	!is_type_word(name) && !ARTICLES.contains(&name) && !PREPOSITIONS.contains(&name) && !STATEMENT_WORDS.contains(&name)
-		&& !crate::modules::is_import_keyword(name) && !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
+	!is_type_word(name)
+		&& !ARTICLES.contains(&name)
+		&& !PREPOSITIONS.contains(&name)
+		&& !STATEMENT_WORDS.contains(&name)
+		&& !crate::modules::is_import_keyword(name)
+		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name)
+		&& !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 
 fn is_type_word(word: &str) -> bool {
@@ -45,7 +52,11 @@ pub fn phrase_words(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) ->
 	for index in 1..words.len() {
 		let word = words[index];
 		let more_in_slot = words.get(index + 1).is_some_and(|next| !PREPOSITIONS.contains(next));
-		in_phrase[index] |= in_phrase[index - 1] && more_in_slot && !ARTICLES.contains(&word) && !is_known_type(word) && !uses_name(body, word);
+		in_phrase[index] |= in_phrase[index - 1]
+			&& more_in_slot
+			&& !ARTICLES.contains(&word)
+			&& !is_known_type(word)
+			&& !uses_name(body, word);
 	}
 	in_phrase
 }
@@ -62,7 +73,11 @@ pub fn phrase_words(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) ->
 ///   `combine(float·1:float, float·2:float) := float·1 + float·2`, the body read the same way
 ///
 /// Err when two parameters end up with one name (`a first name`, `a last name`).
-pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) -> bool) -> Result<(Vec<Node>, Node), String> {
+pub fn parameter_slots(
+	words: &[&str],
+	body: &Node,
+	is_known_type: &dyn Fn(&str) -> bool,
+) -> Result<(Vec<Node>, Node), String> {
 	let in_phrase = phrase_words(words, body, is_known_type);
 	let is_name = |word: &str| !PREPOSITIONS.contains(&word) && !is_known_type(word);
 	let mut parameters = vec![];
@@ -75,23 +90,43 @@ pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str)
 		if in_phrase[index] {
 			index += 1;
 		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !uses_name(body, word)) {
-			let noun: Vec<&str> = (index + 1..words.len()).take_while(|later| !ends_slot(*later) && !ARTICLES.contains(&words[*later])).map(|later| words[later]).collect();
+			let noun: Vec<&str> = (index + 1..words.len())
+				.take_while(|later| !ends_slot(*later) && !ARTICLES.contains(&words[*later]))
+				.map(|later| words[later])
+				.collect();
 			let head = noun[noun.len() - 1];
-			parameters.push(if is_known_type(head) { typed(head, head) } else { symbol(head) });
+			parameters.push(if is_known_type(head) {
+				typed(head, head)
+			} else {
+				symbol(head)
+			});
 			index += 1 + noun.len();
-		} else if is_known_type(word) && next.is_some_and(|next| is_name(next) && (!ARTICLES.contains(&next) || ends_slot(index + 2))) {
+		} else if is_known_type(word)
+			&& next.is_some_and(|next| is_name(next) && (!ARTICLES.contains(&next) || ends_slot(index + 2)))
+		{
 			parameters.push(typed(next.unwrap_or_default(), word));
 			index += 2;
 		} else {
-			parameters.push(if is_known_type(word) { typed(word, word) } else { symbol(word) });
+			parameters.push(if is_known_type(word) {
+				typed(word, word)
+			} else {
+				symbol(word)
+			});
 			index += 1;
 		}
 	}
 	let mut parameters = numbered_repeated_types(parameters);
 	let body = numbered_type_reads(body, &parameters);
 	let names: Vec<String> = parameters.iter().map(Node::name).collect();
-	if let Some(shared) = names.iter().enumerate().find(|(index, name)| names[..*index].contains(name)).map(|(_, name)| name) {
-		return Err(format!("two parameters are named {shared}: use one-word parameter names here (`first name`, `last name` need multi-word identifiers)"));
+	if let Some(shared) = names
+		.iter()
+		.enumerate()
+		.find(|(index, name)| names[..*index].contains(name))
+		.map(|(_, name)| name)
+	{
+		return Err(format!(
+			"two parameters are named {shared}: use one-word parameter names here (`first name`, `last name` need multi-word identifiers)"
+		));
 	}
 	if let [Node::Key(name, Op::Colon, type_name)] = parameters.as_slice() {
 		// `fibonacci number := … number … it …` uses both: the parameter keeps its name and `it` is the same value
@@ -110,21 +145,35 @@ fn numbered_repeated_types(parameters: Vec<Node>) -> Vec<Node> {
 		Node::Key(name, Op::Colon, type_name) if name == type_name => Some(type_name.name()),
 		_ => None,
 	};
-	let repeated = |type_name: &str| parameters.iter().filter(|parameter| lone_type(parameter).as_deref() == Some(type_name)).count() > 1;
+	let repeated = |type_name: &str| {
+		parameters
+			.iter()
+			.filter(|parameter| lone_type(parameter).as_deref() == Some(type_name))
+			.count() > 1
+	};
 	let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-	parameters.iter().map(|parameter| match lone_type(parameter).filter(|type_name| repeated(type_name)) {
-		Some(type_name) => {
-			let number = seen.entry(type_name.clone()).or_default();
-			*number += 1;
-			typed(&format!("{type_name}{NUMBER_JOINER}{number}"), &type_name)
-		}
-		None => parameter.clone(),
-	}).collect()
+	parameters
+		.iter()
+		.map(
+			|parameter| match lone_type(parameter).filter(|type_name| repeated(type_name)) {
+				Some(type_name) => {
+					let number = seen.entry(type_name.clone()).or_default();
+					*number += 1;
+					typed(&format!("{type_name}{NUMBER_JOINER}{number}"), &type_name)
+				}
+				None => parameter.clone(),
+			},
+		)
+		.collect()
 }
 
 /// `float#2` of the body as the numbered parameter `float·2` it names
 fn numbered_type_reads(body: &Node, parameters: &[Node]) -> Node {
-	let names: Vec<String> = parameters.iter().map(Node::name).filter(|name| name.contains(NUMBER_JOINER)).collect();
+	let names: Vec<String> = parameters
+		.iter()
+		.map(Node::name)
+		.filter(|name| name.contains(NUMBER_JOINER))
+		.collect();
 	if names.is_empty() {
 		return body.clone();
 	}
@@ -155,7 +204,10 @@ pub fn uses_it(node: &Node) -> bool {
 /// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
 /// word; None for `f x = …` without one, which keeps its old meaning (each word a parameter)
 pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node>, Node), String>> {
-	words.iter().any(|word| is_type_word(word)).then(|| parameter_slots(words, body, &is_type_word))
+	words
+		.iter()
+		.any(|word| is_type_word(word))
+		.then(|| parameter_slots(words, body, &is_type_word))
 }
 
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
@@ -176,7 +228,9 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 /// `def`) → `square(x) := (x*x) as int`
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
-	type_name.symbol_name().filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+	type_name
+		.symbol_name()
+		.filter(|word| (is_type_word(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
@@ -195,13 +249,16 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 fn flat_head(head: &Node) -> Node {
 	match head.drop_meta() {
 		Node::List(items, bracket, separator) if items.len() == 2 => match items[1].drop_meta() {
-			Node::List(parameters, _, _) => Node::List([vec![items[0].clone()], parameters.clone()].concat(), bracket.clone(), separator.clone()),
+			Node::List(parameters, _, _) => Node::List(
+				[vec![items[0].clone()], parameters.clone()].concat(),
+				bracket.clone(),
+				separator.clone(),
+			),
 			_ => head.clone(),
 		},
 		_ => head.clone(),
 	}
 }
-
 
 /// The value converted to the declared result type; an arithmetic value is grouped, `(x*2) as int`, as written it
 /// would be the ambiguous `x*2 as int`. The branches of a choice convert each, so an `error(…)` branch stays the
@@ -209,17 +266,67 @@ fn flat_head(head: &Node) -> Node {
 fn as_type(value: Node, type_name: &Node) -> Node {
 	match value.drop_meta() {
 		_ if is_error_value(&value) => value,
-		Node::Key(condition, Op::Question, branches) if let Node::Key(chosen, Op::Colon, otherwise) = branches.drop_meta() => {
-			key(condition.as_ref().clone(), Op::Question, key(as_type(chosen.as_ref().clone(), type_name), Op::Colon, as_type(otherwise.as_ref().clone(), type_name)))
+		Node::Key(condition, Op::Question, branches)
+			if let Node::Key(chosen, Op::Colon, otherwise) = branches.drop_meta() =>
+		{
+			key(
+				condition.as_ref().clone(),
+				Op::Question,
+				key(
+					as_type(chosen.as_ref().clone(), type_name),
+					Op::Colon,
+					as_type(otherwise.as_ref().clone(), type_name),
+				),
+			)
 		}
 		Node::Key(then, Op::Else, otherwise) if let Node::Key(head, Op::Then, chosen) = then.drop_meta() => {
-			let then = key(head.as_ref().clone(), Op::Then, as_type(chosen.as_ref().clone(), type_name));
+			let then = key(
+				head.as_ref().clone(),
+				Op::Then,
+				as_type(chosen.as_ref().clone(), type_name),
+			);
 			key(then, Op::Else, as_type(otherwise.as_ref().clone(), type_name))
 		}
-		Node::List(items, Bracket::Curly, _) if !items.is_empty() => converted_last(value, type_name),
-		Node::Key(_, op, _) if op.is_arithmetic() => key(Node::List(vec![value], Bracket::Round, Separator::None), Op::As, type_name.clone()),
+		_ if is_statement_block(&value) => converted_last(value, type_name),
+		_ if type_name.symbol_name().is_some_and(is_checked_result) => checked_result(value, type_name),
+		Node::Key(_, op, _) if op.is_arithmetic() => key(
+			Node::List(vec![value], Bracket::Round, Separator::None),
+			Op::As,
+			type_name.clone(),
+		),
 		_ => key(value, Op::As, type_name.clone()),
 	}
+}
+
+/// `{a; b}`: a block of statements, its last one the value; `{cube 3}` is the one statement `cube 3`
+fn is_statement_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::Curly, separator) if !items.is_empty() && (*separator != Separator::Space || items.len() == 1))
+}
+
+/// `int or text`, `Circle or Square`: the name of an inline union (analyzer lower_inline_unions)
+fn is_union(word: &str) -> bool {
+	crate::analyzer::union_parts(word.trim_end_matches('?')).is_some()
+}
+
+/// A result checked rather than converted, where converting could lose something: a union (user 2026-10-12, `-> int or
+/// text`) and a whole-number type (decision float-result: `-> int { 2.5 }` is no 2); `-> text { 3 }` still converts
+pub(crate) fn is_checked_result(word: &str) -> bool {
+	is_union(word) || (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
+}
+
+/// `{the result: int or text = value; the result}`: the value admitted as a variable declared of the type is, a
+/// literal when compiled, a fraction known at run time with "an int must be a whole number"
+fn checked_result(value: Node, type_name: &Node) -> Node {
+	let declared = key(
+		key(symbol(crate::analyzer::CHECKED_RESULT), Op::Colon, type_name.clone()),
+		Op::Assign,
+		value,
+	);
+	Node::List(
+		vec![declared, symbol(crate::analyzer::CHECKED_RESULT)],
+		Bracket::Curly,
+		Separator::Semicolon,
+	)
 }
 
 /// `error("e")`
@@ -245,12 +352,20 @@ fn converted(body: &Node, type_name: &Node) -> Node {
 /// The last statement of a block converted, the value itself outside a block; a `return` is converted already
 fn converted_last(body: Node, type_name: &Node) -> Node {
 	match body.drop_meta().clone() {
-		Node::List(mut items, Bracket::Curly, separator) if !items.is_empty() => {
+		Node::List(mut items, Bracket::Curly, separator) if is_statement_block(&body) => {
 			let last = items.pop().expect("not empty");
-			items.push(if is_return(&last) { last } else { as_type(last, type_name) });
+			items.push(if is_return(&last) {
+				last
+			} else {
+				as_type(last, type_name)
+			});
 			Node::List(items, Bracket::Curly, separator)
 		}
 		body if is_return(&body) => body,
+		// `{cube 3}`: its one statement, so the check reads `cube 3` as a call, not a block value
+		Node::List(items, Bracket::Curly, Separator::Space) => {
+			as_type(Node::List(items, Bracket::None, Separator::Space), type_name)
+		}
 		body => as_type(body, type_name),
 	}
 }
@@ -268,9 +383,43 @@ fn converted_returns(node: Node, type_name: &Node) -> Node {
 
 /// `square(x) as int := …` / `square(x) : int = …`: the head with its return type, as `typed_return`
 fn return_typed_definition(node: &Node) -> Option<Node> {
-	let Node::Key(target, op @ (Op::Assign | Op::Define), body) = node.drop_meta() else { return None };
-	let Node::Key(head, Op::As | Op::Colon, type_name) = target.drop_meta() else { return None };
-	typed_return(type_name, &Node::Key(head.clone(), *op, body.clone()))
+	let Node::Key(target, op @ (Op::Assign | Op::Define), body) = node.drop_meta() else {
+		return None;
+	};
+	let (head, type_name) = match target.drop_meta() {
+		Node::Key(head, Op::As | Op::Colon, type_name) => (head.as_ref().clone(), type_name.as_ref().clone()),
+		// `square(x) as int or text := …`
+		target => {
+			let (head, union) = crate::declarations::as_union_result(target)?;
+			(head, symbol(&crate::analyzer::union_of_types(&union, &|_| true)?))
+		}
+	};
+	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()))
+}
+
+/// `int age = 30` (C style) is `age: int = 30` (card bind-ignores), so every pass reads one form of a typed
+/// declaration: a handler's `age += 1` the main-level variable, `input{ bind: age }` a number field
+pub fn lower_prefixed_declarations(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, _) if prefixed_declaration(&items).is_some() => {
+			prefixed_declaration(&items).expect("guarded")
+		}
+		other => other.map_children(lower_prefixed_declarations),
+	}
+}
+
+fn prefixed_declaration(items: &[Node]) -> Option<Node> {
+	let [type_name, declaration] = items else { return None };
+	type_name.symbol_name().filter(|word| is_type_word(word))?;
+	let Node::Key(name, Op::Assign, value) = declaration.drop_meta() else {
+		return None;
+	};
+	name.drop_meta().symbol_name()?;
+	Some(Node::Key(
+		Box::new(key(name.drop_meta().clone(), Op::Colon, type_name.drop_meta().clone())),
+		Op::Assign,
+		value.clone(),
+	))
 }
 
 pub fn lower(node: Node) -> Node {
@@ -285,7 +434,10 @@ pub fn lower(node: Node) -> Node {
 			spaced_definition(&items).expect("guarded")
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(lower(*node)),
+			data,
+		},
 		other => other,
 	}
 }

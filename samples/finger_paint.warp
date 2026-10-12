@@ -27,6 +27,12 @@ def stroke(x1, y1, x2, y2) {
 	}
 }
 
+// any key wipes the canvas white (natively the window's keys, in the playground the page's)
+on key {
+	clear(white)
+	show()
+}
+
 // until the window closes; headless (no window) the loop never starts
 while window_open {
 	if mouse_down {
@@ -38,5 +44,5 @@ while window_open {
 		show()
 	}
 	was_down = mouse_down
-	sleep 16ms
+	sleep 2ms
 }

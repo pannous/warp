@@ -1,7 +1,10 @@
 //! paint(pixels, width, height) in a terminal (card g_gGsg): the frames in a window, drawn through a wgpu surface (Metal
 //! on macOS). A window owns the main thread there, which the program runs on, so a viewer process does: the same
 //! binary as `warp paint-window`, reading frames from its stdin, [width u32][height u32][width×height RGBA bytes]. Each
-//! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed.
+//! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed, the
+//! program waiting for that (wait_until_closed). The program ending otherwise ends its stdin and so the viewer.
+//! `use draw` on the GPU sends shapes instead (src/gpu_canvas.rs): [SHAPES_MARK][width][height][count][count shapes],
+//! drawn over the canvas texture this process keeps, which the window then shows; no pixels cross.
 
 use std::io::{BufRead, Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -23,6 +26,9 @@ const SHOWN_SIDE: u32 = 512;
 /// A frame this many pixels across or more shows pixel for pixel (crisp on a Retina screen, half as many points)
 const PIXEL_FOR_PIXEL_SIDE: u32 = 1024;
 const RGBA_BYTES: usize = 4;
+/// In a frame's width: shapes follow, not pixels
+const SHAPES_MARK: u32 = u32::MAX;
+const WORD_BYTES: usize = 4;
 /// One triangle covering the window, sampling the frame as a texture, nearest pixel (no blur when scaled up)
 const SHADER: &str = "
 @group(0) @binding(0) var frame: texture_2d<f32>;
@@ -36,11 +42,17 @@ struct Corner { @builtin(position) at: vec4f, @location(0) uv: vec2f }
 	return vec4f(textureSample(frame, nearest, corner.uv).rgb, 1.0); // a shader's alpha: paint shows opaque colors
 }";
 const TRIANGLE_CORNERS: u32 = 3;
-/// The line the viewer writes to its stdout on the pointer and the keys: `input x y down key`, the pointer in the
-/// frame's pixels, down 1 while a button is, key as shader_holes.rs BUILTIN_HOLES says
+/// The line the viewer writes to its stdout on the pointer and the keys, and with its first frame (the pointer in its
+/// middle then): `input x y down key`, the pointer in the frame's pixels, down 1 while a button is, key as
+/// shader_holes.rs BUILTIN_HOLES says
 const INPUT_LINE: &str = "input";
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
+/// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
+pub const TRACKING_OPTIONS: usize = TRACKING_MOUSE_MOVED | TRACKING_ACTIVE_ALWAYS | TRACKING_IN_VISIBLE_RECT;
+const TRACKING_MOUSE_MOVED: usize = 0x02;
+pub const TRACKING_ACTIVE_ALWAYS: usize = 0x80;
+const TRACKING_IN_VISIBLE_RECT: usize = 0x200;
 
 /// The viewer's input lines, read until it ends
 fn follow_input(lines: impl BufRead) {
@@ -56,7 +68,8 @@ fn follow_input(lines: impl BufRead) {
 	}
 }
 
-/// The code of a pressed key: its character's, an arrow's ARROW_CODES; None for the others
+/// The code of a pressed key: its character's, an arrow's ARROW_CODES, Enter, Escape, Backspace and Tab their control
+/// characters' (lowering/system_signals.rs KEY_NAMES names them); None for the others
 fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 	use winit::keyboard::{Key, NamedKey};
 	match key {
@@ -66,6 +79,10 @@ fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 		Key::Named(NamedKey::ArrowLeft) => Some(ARROW_CODES[2]),
 		Key::Named(NamedKey::ArrowRight) => Some(ARROW_CODES[3]),
 		Key::Named(NamedKey::Space) => Some(u32::from(' ')),
+		Key::Named(NamedKey::Enter) => Some(u32::from('\r')),
+		Key::Named(NamedKey::Escape) => Some(0x1B),
+		Key::Named(NamedKey::Backspace) => Some(0x08),
+		Key::Named(NamedKey::Tab) => Some(u32::from('\t')),
 		_ => None,
 	}
 }
@@ -76,6 +93,21 @@ pub struct Frame {
 	pub width: u32,
 	pub height: u32,
 	pub rgba: Vec<u8>,
+}
+
+/// Shapes for the canvas `use draw` keeps on the GPU
+#[derive(Debug, PartialEq)]
+pub struct Shapes {
+	pub width: u32,
+	pub height: u32,
+	pub shapes: Vec<u8>,
+}
+
+/// What the viewer reads from its stdin
+#[derive(Debug, PartialEq)]
+pub enum Message {
+	Frame(Frame),
+	Shapes(Shapes),
 }
 
 /// The pixels (paint's values, shaded as the PNG shades them) as one frame for the viewer's stdin
@@ -102,15 +134,56 @@ fn frame_header(width: usize, height: usize) -> Vec<u8> {
 	bytes
 }
 
-/// The next frame, None at the end of the stream
+/// The shapes drawn since the last show as one message for the viewer's stdin
+pub fn shapes_message(width: usize, height: usize, shapes: &[u8]) -> Vec<u8> {
+	let count = shapes.len() / crate::gpu_canvas::SHAPE_BYTES;
+	let words = [SHAPES_MARK, width as u32, height as u32, count as u32];
+	words
+		.iter()
+		.flat_map(|word| word.to_le_bytes())
+		.chain(shapes.iter().copied())
+		.collect()
+}
+
+/// The next frame, None at the end of the stream (or at shapes)
 pub fn read_frame(reader: &mut impl Read) -> Option<Frame> {
-	let mut size = [0u8; 8];
-	reader.read_exact(&mut size).ok()?;
-	let side = |at: usize| u32::from_le_bytes(size[at..at + 4].try_into().expect("four bytes"));
-	let (width, height) = (side(0), side(4));
-	let mut rgba = vec![0u8; width as usize * height as usize * RGBA_BYTES];
-	reader.read_exact(&mut rgba).ok()?;
-	Some(Frame { width, height, rgba })
+	match read_message(reader)? {
+		Message::Frame(frame) => Some(frame),
+		Message::Shapes(_) => None,
+	}
+}
+
+/// The next frame or shapes, None at the end of the stream
+pub fn read_message(reader: &mut impl Read) -> Option<Message> {
+	let [first, second] = read_words(reader)?;
+	if first == SHAPES_MARK {
+		let [height, count] = read_words(reader)?;
+		let shapes = read_bytes(reader, count as usize * crate::gpu_canvas::SHAPE_BYTES)?;
+		return Some(Message::Shapes(Shapes {
+			width: second,
+			height,
+			shapes,
+		}));
+	}
+	let rgba = read_bytes(reader, first as usize * second as usize * RGBA_BYTES)?;
+	Some(Message::Frame(Frame {
+		width: first,
+		height: second,
+		rgba,
+	}))
+}
+
+fn read_words<const COUNT: usize>(reader: &mut impl Read) -> Option<[u32; COUNT]> {
+	let bytes = read_bytes(reader, COUNT * WORD_BYTES)?;
+	Some(std::array::from_fn(|at| {
+		u32::from_le_bytes(bytes[at * WORD_BYTES..][..WORD_BYTES].try_into().expect("four bytes"))
+	}))
+}
+
+fn read_bytes(reader: &mut impl Read, count: usize) -> Option<Vec<u8>> {
+	let mut bytes = vec![0u8; count];
+	reader.read_exact(&mut bytes).ok()?;
+	Some(bytes)
 }
 
 /// The viewer of this run, started by the first paint
@@ -118,15 +191,20 @@ static VIEWER: Mutex<Option<Child>> = Mutex::new(None);
 
 /// Show the pixels in the viewer's window, or why not (no viewer: the caller writes a PNG instead)
 pub fn show(frame: &[u8]) -> Result<(), String> {
-	let mut viewer = VIEWER.lock().map_err(|_| "paint: the viewer lock is poisoned".to_string())?;
+	let mut viewer = VIEWER
+		.lock()
+		.map_err(|_| "paint: the viewer lock is poisoned".to_string())?;
 	if viewer.is_none() {
-		let binary = std::env::current_exe().map_err(|failure| format!("paint: no viewer, the warp binary is unknown: {failure}"))?;
+		let binary = std::env::current_exe()
+			.map_err(|failure| format!("paint: no viewer, the warp binary is unknown: {failure}"))?;
 		let mut command = Command::new(binary);
 		command.arg(COMMAND).stdin(Stdio::piped()).stdout(Stdio::piped());
-		// its own process group: the window outlives the program and the terminal's hangup when that closes
+		// its own process group: ctrl-c reaches the program, whose end closes the viewer's stdin and so the window
 		#[cfg(unix)]
 		std::os::unix::process::CommandExt::process_group(&mut command, 0);
-		let mut child = command.spawn().map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
+		let mut child = command
+			.spawn()
+			.map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
 		if let Some(output) = child.stdout.take() {
 			std::thread::spawn(move || {
 				follow_input(std::io::BufReader::new(output));
@@ -136,7 +214,10 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 		warp_runtime::system_values::tell_window_open(true);
 		*viewer = Some(child);
 	}
-	let input = viewer.as_mut().and_then(|child| child.stdin.as_mut()).expect("the viewer's stdin is piped");
+	let input = viewer
+		.as_mut()
+		.and_then(|child| child.stdin.as_mut())
+		.expect("the viewer's stdin is piped");
 	let written = input.write_all(frame).and_then(|_| input.flush());
 	written.map_err(|failure| {
 		*viewer = None;
@@ -145,30 +226,60 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 	})
 }
 
-/// `warp paint-window`: the window showing the frames arriving on stdin, until it is closed
+/// A program that ended well leaves its window up until the user closes it (card exit-key): any other end closes it
+pub fn wait_until_closed() {
+	let viewer = VIEWER.lock().ok().and_then(|mut viewer| viewer.take());
+	if let Some(mut child) = viewer {
+		let _ = child.wait();
+	}
+}
+
+/// `warp paint-window`: the window showing the frames arriving on stdin, until it is closed or its program ends
 pub fn run(check: bool) -> Result<(), String> {
-	let event_loop = EventLoop::<Frame>::with_user_event().build().map_err(|failure| format!("paint-window: no event loop: {failure}"))?;
+	let mut builder = EventLoop::<Message>::with_user_event();
+	#[cfg(target_os = "macos")]
+	if std::env::var_os(crate::paint::NO_WINDOW_VARIABLE).is_some() {
+		use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+		// no Dock icon and no focus taken from the user's app (tests run beside them)
+		builder
+			.with_activation_policy(ActivationPolicy::Prohibited)
+			.with_activate_ignoring_other_apps(false);
+	}
+	let event_loop = builder
+		.build()
+		.map_err(|failure| format!("paint-window: no event loop: {failure}"))?;
 	let proxy = event_loop.create_proxy();
 	std::thread::spawn(move || {
 		let mut input = std::io::stdin().lock();
-		while let Some(frame) = read_frame(&mut input) {
-			if proxy.send_event(frame).is_err() {
-				break;
+		while let Some(message) = read_message(&mut input) {
+			if proxy.send_event(message).is_err() {
+				return;
 			}
 		}
+		// the program is gone (it ended, exit(), a failure, ctrl-c, a kill), so is its window; a check ends by itself
+		if !check {
+			std::process::exit(0);
+		}
 	});
-	let mut viewer = Viewer { check, ..Viewer::default() };
-	event_loop.run_app(&mut viewer).map_err(|failure| format!("paint-window: {failure}"))?;
+	let mut viewer = Viewer {
+		check,
+		..Viewer::default()
+	};
+	event_loop
+		.run_app(&mut viewer)
+		.map_err(|failure| format!("paint-window: {failure}"))?;
 	viewer.failure.map_or(Ok(()), Err)
 }
 
 #[derive(Default)]
 struct Viewer {
 	screen: Option<Screen>,
-	/// The frame that came before the window could take it
-	waiting: Option<Frame>,
+	/// What came before the window could take it
+	waiting: Vec<Message>,
 	failure: Option<String>,
 	check: bool,
+	/// The event loop runs: a window may open
+	resumed: bool,
 }
 
 /// The window and what draws into it
@@ -182,18 +293,24 @@ struct Screen {
 	sampler: wgpu::Sampler,
 	texture_format: wgpu::TextureFormat,
 	bindings: Option<wgpu::BindGroup>,
+	/// The canvas `use draw` keeps on the GPU, made by its first shapes
+	canvas: Option<crate::gpu_canvas::Canvas>,
 	frame_size: (u32, u32),
 	pointer: (f64, f64),
 	button_down: bool,
 	key: u32,
 }
 
-impl ApplicationHandler<Frame> for Viewer {
-	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-		if self.screen.is_some() {
+impl Viewer {
+	/// The window, opened for the first frame (or shapes) at its size: none opens before one arrives
+	fn open_for_waiting(&mut self, event_loop: &ActiveEventLoop) {
+		let Some(first) = self.waiting.first().filter(|_| self.resumed && self.screen.is_none()) else {
 			return;
-		}
-		let (width, height) = self.waiting.as_ref().map_or((SHOWN_SIDE, SHOWN_SIDE), |frame| (frame.width, frame.height));
+		};
+		let (width, height) = match first {
+			Message::Frame(frame) => (frame.width, frame.height),
+			Message::Shapes(shapes) => (shapes.width, shapes.height),
+		};
 		match Screen::open(event_loop, width, height, self.check) {
 			Ok(screen) => self.screen = Some(screen),
 			Err(failure) => {
@@ -201,15 +318,26 @@ impl ApplicationHandler<Frame> for Viewer {
 				return event_loop.exit();
 			}
 		}
-		if let Some(frame) = self.waiting.take() {
-			self.user_event(event_loop, frame);
+		for message in std::mem::take(&mut self.waiting) {
+			self.user_event(event_loop, message);
 		}
 	}
+}
 
-	fn user_event(&mut self, _: &ActiveEventLoop, frame: Frame) {
-		match self.screen.as_mut() {
-			Some(screen) => screen.take(frame),
-			None => self.waiting = Some(frame),
+impl ApplicationHandler<Message> for Viewer {
+	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+		self.resumed = true;
+		self.open_for_waiting(event_loop);
+	}
+
+	fn user_event(&mut self, event_loop: &ActiveEventLoop, message: Message) {
+		match (self.screen.as_mut(), message) {
+			(Some(screen), Message::Frame(frame)) => screen.take(frame),
+			(Some(screen), Message::Shapes(shapes)) => screen.draw_shapes(shapes),
+			(None, message) => {
+				self.waiting.push(message);
+				self.open_for_waiting(event_loop);
+			}
 		}
 	}
 
@@ -243,6 +371,49 @@ impl ApplicationHandler<Frame> for Viewer {
 	}
 }
 
+/// The pointer's moves over the window reach it while another app is in front (card shader-brush): macOS sends mouse
+/// moves only to the key window, and a viewer started from a terminal does not become it, so a brush following $mouse
+/// stayed in its corner until a click. A tracking area active always sends them to winit's view (its mouseMoved:).
+#[cfg(target_os = "macos")]
+fn follow_pointer_unfocused(window: &Window) {
+	use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+	let Ok(handle) = window.window_handle() else { return };
+	let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+		return;
+	};
+	// SAFETY: ns_view is the window's live NSView
+	track_pointer_always(unsafe { appkit.ns_view.cast().as_ref() });
+}
+
+/// A tracking area sending `view` the pointer's moves whether or not its window is the key window
+#[cfg(target_os = "macos")]
+pub fn track_pointer_always(view: &objc2::runtime::AnyObject) {
+	use objc2::encode::{Encode, Encoding};
+	use objc2::{class, msg_send, runtime::AnyObject};
+	#[repr(C)]
+	struct Pair(f64, f64);
+	#[repr(C)]
+	struct Rect(Pair, Pair);
+	unsafe impl Encode for Pair {
+		const ENCODING: Encoding = Encoding::Struct("CGPoint", &[f64::ENCODING, f64::ENCODING]);
+	}
+	unsafe impl Encode for Rect {
+		const ENCODING: Encoding = Encoding::Struct(
+			"CGRect",
+			&[
+				Pair::ENCODING,
+				Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING]),
+			],
+		);
+	}
+	// SAFETY: NSTrackingArea's own initializer (the rect is ignored: IN_VISIBLE_RECT); the view keeps the area
+	unsafe {
+		let area: *mut AnyObject = msg_send![class!(NSTrackingArea), alloc];
+		let area: *mut AnyObject = msg_send![area, initWithRect: Rect(Pair(0.0, 0.0), Pair(0.0, 0.0)), options: TRACKING_OPTIONS, owner: view, userInfo: std::ptr::null::<AnyObject>()];
+		let _: () = msg_send![view, addTrackingArea: area];
+	}
+}
+
 /// The window's inner size for a frame: a small one scaled up by a whole factor, a large one pixel for pixel
 fn shown_size(width: u32, height: u32) -> winit::dpi::Size {
 	let side = width.max(height).max(1);
@@ -255,27 +426,62 @@ fn shown_size(width: u32, height: u32) -> winit::dpi::Size {
 
 impl Screen {
 	fn open(event_loop: &ActiveEventLoop, width: u32, height: u32, check: bool) -> Result<Screen, String> {
-		let attributes = Window::default_attributes().with_title(TITLE).with_inner_size(shown_size(width, height));
-		let window = Arc::new(event_loop.create_window(attributes).map_err(|failure| format!("paint-window: no window: {failure}"))?);
+		let attributes = Window::default_attributes()
+			.with_title(TITLE)
+			.with_inner_size(shown_size(width, height));
+		let window = Arc::new(
+			event_loop
+				.create_window(attributes)
+				.map_err(|failure| format!("paint-window: no window: {failure}"))?,
+		);
+		#[cfg(target_os = "macos")]
+		follow_pointer_unfocused(&window);
+		window.focus_window(); // its keys reach $key; macOS may still leave the terminal in front
 		let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-		let surface = instance.create_surface(window.clone()).map_err(|failure| format!("paint-window: no surface: {failure}"))?;
-		let options = wgpu::RequestAdapterOptions { compatible_surface: Some(&surface), ..Default::default() };
-		let adapter = pollster::block_on(instance.request_adapter(&options)).map_err(|problem| format!("paint-window: no GPU adapter: {problem}"))?;
-		let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).map_err(|problem| format!("paint-window: no GPU device: {problem}"))?;
+		let surface = instance
+			.create_surface(window.clone())
+			.map_err(|failure| format!("paint-window: no surface: {failure}"))?;
+		let options = wgpu::RequestAdapterOptions {
+			compatible_surface: Some(&surface),
+			..Default::default()
+		};
+		let adapter = pollster::block_on(instance.request_adapter(&options))
+			.map_err(|problem| format!("paint-window: no GPU adapter: {problem}"))?;
+		let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+			.map_err(|problem| format!("paint-window: no GPU device: {problem}"))?;
 		let size = window.inner_size();
-		let mut config = surface.get_default_config(&adapter, size.width.max(1), size.height.max(1)).ok_or("paint-window: the surface does not fit the GPU")?;
+		let mut config = surface
+			.get_default_config(&adapter, size.width.max(1), size.height.max(1))
+			.ok_or("paint-window: the surface does not fit the GPU")?;
 		if check {
 			config.usage |= wgpu::TextureUsages::COPY_SRC;
 		}
 		surface.configure(&device, &config);
 		// the frame's bytes are sRGB like the surface's: sampled linear, written back as sRGB
-		let texture_format = if config.format.is_srgb() { wgpu::TextureFormat::Rgba8UnormSrgb } else { wgpu::TextureFormat::Rgba8Unorm };
-		let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(TITLE), source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
+		let texture_format = if config.format.is_srgb() {
+			wgpu::TextureFormat::Rgba8UnormSrgb
+		} else {
+			wgpu::TextureFormat::Rgba8Unorm
+		};
+		let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: Some(TITLE),
+			source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+		});
 		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some(TITLE),
 			layout: None,
-			vertex: wgpu::VertexState { module: &module, entry_point: Some("vertex"), compilation_options: Default::default(), buffers: &[] },
-			fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some("fragment"), compilation_options: Default::default(), targets: &[Some(config.format.into())] }),
+			vertex: wgpu::VertexState {
+				module: &module,
+				entry_point: Some("vertex"),
+				compilation_options: Default::default(),
+				buffers: &[],
+			},
+			fragment: Some(wgpu::FragmentState {
+				module: &module,
+				entry_point: Some("fragment"),
+				compilation_options: Default::default(),
+				targets: &[Some(config.format.into())],
+			}),
 			primitive: Default::default(),
 			depth_stencil: None,
 			multisample: Default::default(),
@@ -283,12 +489,31 @@ impl Screen {
 			cache: None,
 		});
 		let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-		Ok(Screen { window, surface, config, device, queue, pipeline, sampler, texture_format, bindings: None, frame_size: (0, 0), pointer: (0.0, 0.0), button_down: false, key: 0 })
+		Ok(Screen {
+			window,
+			surface,
+			config,
+			device,
+			queue,
+			pipeline,
+			sampler,
+			texture_format,
+			bindings: None,
+			canvas: None,
+			frame_size: (0, 0),
+			pointer: (0.0, 0.0),
+			button_down: false,
+			key: 0,
+		})
 	}
 
 	/// The frame as the texture the next draw samples
 	fn take(&mut self, frame: Frame) {
-		let size = wgpu::Extent3d { width: frame.width.max(1), height: frame.height.max(1), depth_or_array_layers: 1 };
+		let size = wgpu::Extent3d {
+			width: frame.width.max(1),
+			height: frame.height.max(1),
+			depth_or_array_layers: 1,
+		};
 		let texture = self.device.create_texture(&wgpu::TextureDescriptor {
 			label: Some(TITLE),
 			size,
@@ -300,22 +525,57 @@ impl Screen {
 			view_formats: &[],
 		});
 		if frame.width > 0 && frame.height > 0 {
-			let layout = wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(frame.width * RGBA_BYTES as u32), rows_per_image: None };
-			self.queue.write_texture(texture.as_image_copy(), &frame.rgba, layout, size);
+			let layout = wgpu::TexelCopyBufferLayout {
+				offset: 0,
+				bytes_per_row: Some(frame.width * RGBA_BYTES as u32),
+				rows_per_image: None,
+			};
+			self.queue
+				.write_texture(texture.as_image_copy(), &frame.rgba, layout, size);
 		}
-		let view = texture.create_view(&Default::default());
+		self.show_texture(&texture.create_view(&Default::default()), (frame.width, frame.height));
+	}
+
+	/// The shapes drawn over the canvas on the GPU, which the window then shows
+	fn draw_shapes(&mut self, shapes: Shapes) {
+		let canvas = self
+			.canvas
+			.get_or_insert_with(|| crate::gpu_canvas::Canvas::new(&self.device));
+		let encoder = canvas.draw(&self.device, &self.queue, shapes.width, shapes.height, &shapes.shapes);
+		self.queue.submit([encoder.finish()]);
+		let view = canvas.texture().create_view(&wgpu::TextureViewDescriptor {
+			format: Some(self.texture_format),
+			..Default::default()
+		});
+		self.show_texture(&view, (shapes.width, shapes.height));
+	}
+
+	/// The texture the next draw samples, `size` pixels
+	fn show_texture(&mut self, view: &wgpu::TextureView, size: (u32, u32)) {
 		self.bindings = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: Some(TITLE),
 			layout: &self.pipeline.get_bind_group_layout(0),
 			entries: &[
-				wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-				wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+				wgpu::BindGroupEntry {
+					binding: 0,
+					resource: wgpu::BindingResource::TextureView(view),
+				},
+				wgpu::BindGroupEntry {
+					binding: 1,
+					resource: wgpu::BindingResource::Sampler(&self.sampler),
+				},
 			],
 		}));
-		if self.frame_size != (frame.width, frame.height) && self.frame_size != (0, 0) {
-			let _ = self.window.request_inner_size(shown_size(frame.width, frame.height));
+		if self.frame_size != size && self.frame_size != (0, 0) {
+			let _ = self.window.request_inner_size(shown_size(size.0, size.1));
 		}
-		self.frame_size = (frame.width, frame.height);
+		if self.frame_size == (0, 0) {
+			// before the pointer moves over the window it is in the middle of the first frame, where a brush following
+			// $mouse shows (user 2026-10-12, card shader-brush), not under the window's rounded corner
+			self.pointer = (f64::from(size.0) / 2.0, f64::from(size.1) / 2.0);
+			self.tell_input();
+		}
+		self.frame_size = size;
 		self.window.request_redraw();
 	}
 
@@ -323,13 +583,24 @@ impl Screen {
 	fn tell_input(&self) {
 		// the window outlives the program by design: once that exits, its end of the pipe is closed and nobody listens
 		let mut output = std::io::stdout().lock();
-		let _ = writeln!(output, "{INPUT_LINE} {} {} {} {}", self.pointer.0, self.pointer.1, u8::from(self.button_down), self.key).and_then(|_| output.flush());
+		let _ = writeln!(
+			output,
+			"{INPUT_LINE} {} {} {} {}",
+			self.pointer.0,
+			self.pointer.1,
+			u8::from(self.button_down),
+			self.key
+		)
+		.and_then(|_| output.flush());
 	}
 
 	/// A place in the window's physical pixels as one in the frame's pixels
 	fn in_frame(&self, x: f64, y: f64) -> (f64, f64) {
 		let (frame_width, frame_height) = self.frame_size;
-		(x * f64::from(frame_width) / f64::from(self.config.width.max(1)), y * f64::from(frame_height) / f64::from(self.config.height.max(1)))
+		(
+			x * f64::from(frame_width) / f64::from(self.config.width.max(1)),
+			y * f64::from(frame_height) / f64::from(self.config.height.max(1)),
+		)
 	}
 
 	fn resize(&mut self, width: u32, height: u32) {
@@ -353,8 +624,19 @@ impl Screen {
 		let target = output.texture.create_view(&Default::default());
 		let mut encoder = self.device.create_command_encoder(&Default::default());
 		{
-			let attachment = wgpu::RenderPassColorAttachment { view: &target, depth_slice: None, resolve_target: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store } };
-			let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { color_attachments: &[Some(attachment)], ..Default::default() });
+			let attachment = wgpu::RenderPassColorAttachment {
+				view: &target,
+				depth_slice: None,
+				resolve_target: None,
+				ops: wgpu::Operations {
+					load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+					store: wgpu::StoreOp::Store,
+				},
+			};
+			let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+				color_attachments: &[Some(attachment)],
+				..Default::default()
+			});
 			if let Some(bindings) = &self.bindings {
 				pass.set_pipeline(&self.pipeline);
 				pass.set_bind_group(0, bindings, &[]);
@@ -371,11 +653,35 @@ impl Screen {
 
 	/// The center pixel of `texture` copied into a buffer
 	fn copied_center(&self, encoder: &mut wgpu::CommandEncoder, texture: &wgpu::Texture) -> wgpu::Buffer {
-		let buffer = self.device.create_buffer(&wgpu::BufferDescriptor { label: Some(TITLE), size: COPY_ROW_BYTES.into(), usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+		let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+			label: Some(TITLE),
+			size: COPY_ROW_BYTES.into(),
+			usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+			mapped_at_creation: false,
+		});
 		let mut center = texture.as_image_copy();
-		center.origin = wgpu::Origin3d { x: self.config.width / 2, y: self.config.height / 2, z: 0 };
-		let layout = wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(COPY_ROW_BYTES), rows_per_image: None };
-		encoder.copy_texture_to_buffer(center, wgpu::TexelCopyBufferInfo { buffer: &buffer, layout }, wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 });
+		center.origin = wgpu::Origin3d {
+			x: self.config.width / 2,
+			y: self.config.height / 2,
+			z: 0,
+		};
+		let layout = wgpu::TexelCopyBufferLayout {
+			offset: 0,
+			bytes_per_row: Some(COPY_ROW_BYTES),
+			rows_per_image: None,
+		};
+		encoder.copy_texture_to_buffer(
+			center,
+			wgpu::TexelCopyBufferInfo {
+				buffer: &buffer,
+				layout,
+			},
+			wgpu::Extent3d {
+				width: 1,
+				height: 1,
+				depth_or_array_layers: 1,
+			},
+		);
 		buffer
 	}
 
@@ -385,9 +691,18 @@ impl Screen {
 		if let Err(problem) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
 			return format!("unread: {problem}");
 		}
-		let Ok(bytes) = buffer.slice(..).get_mapped_range() else { return "unread".into() };
-		let blue_first = matches!(self.config.format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
-		let [red, green, blue] = if blue_first { [bytes[2], bytes[1], bytes[0]] } else { [bytes[0], bytes[1], bytes[2]] };
+		let Ok(bytes) = buffer.slice(..).get_mapped_range() else {
+			return "unread".into();
+		};
+		let blue_first = matches!(
+			self.config.format,
+			wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+		);
+		let [red, green, blue] = if blue_first {
+			[bytes[2], bytes[1], bytes[0]]
+		} else {
+			[bytes[0], bytes[1], bytes[2]]
+		};
 		format!("{red} {green} {blue}")
 	}
 }

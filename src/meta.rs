@@ -10,8 +10,53 @@ pub struct LineInfo {
 	pub column: usize,
 	#[cfg(debug_assertions)]
 	pub line: String, // debug! expensive but useful
+	/// The module file the position is in, None for the program itself (card module-error-file)
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub file: Option<String>,
 }
 
+thread_local! {
+	static PARSED_FILE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+impl LineInfo {
+	/// A position the parser records, in the module file being parsed (parsing_file) if any
+	/// (`line` gives the source line, kept in debug builds only)
+	pub fn at(
+		line_nr: usize,
+		column: usize,
+		#[cfg_attr(not(debug_assertions), allow(unused))] line: impl FnOnce() -> String,
+	) -> Self {
+		LineInfo {
+			line_nr,
+			column,
+			#[cfg(debug_assertions)]
+			line: line(),
+			file: PARSED_FILE.with(|file| file.borrow().clone()),
+		}
+	}
+
+	/// `line:column`, or `file:line:column` in a module's file
+	pub fn place(&self) -> String {
+		place_text(self.file.as_deref(), self.line_nr, self.column)
+	}
+}
+
+/// `line:column`, prefixed with the module's `file:` when the position is in one
+pub fn place_text(file: Option<&str>, line: usize, column: usize) -> String {
+	match file {
+		Some(file) => format!("{file}:{line}:{column}"),
+		None => format!("{line}:{column}"),
+	}
+}
+
+/// `parse` with the positions it records marked as in `file`: a module's, so its failures name it
+pub fn parsing_file<T>(file: &str, parse: impl FnOnce() -> T) -> T {
+	let outer = PARSED_FILE.with(|parsed| parsed.replace(Some(file.to_string())));
+	let parsed = parse();
+	PARSED_FILE.with(|parsed_file| *parsed_file.borrow_mut() = outer);
+	parsed
+}
 
 // Custom trait for cloneable Any types with equality support
 pub trait CloneAny: Any {
@@ -35,7 +80,6 @@ impl<T: 'static + Clone + PartialEq> CloneAny for T {
 		}
 	}
 }
-
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum DataType {
@@ -119,7 +163,6 @@ impl fmt::Display for DataValue {
 		write!(f, "«DataValue({})»", self.type_name)
 	}
 }
-
 
 impl fmt::Debug for DataValue {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

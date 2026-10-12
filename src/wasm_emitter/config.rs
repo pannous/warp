@@ -26,7 +26,9 @@ impl Default for EmitterConfig {
 			emit_host_imports: false,
 			emit_wasi_imports: false,
 			emit_ffi_imports: false,
-			emit_reflection: cfg!(not(feature = "native")) || crate::pipeline::is_for_a_page() || crate::pipeline::is_for_any_host(),
+			emit_reflection: cfg!(not(feature = "native"))
+				|| crate::pipeline::is_for_a_page()
+				|| crate::pipeline::is_for_any_host(),
 		}
 	}
 }

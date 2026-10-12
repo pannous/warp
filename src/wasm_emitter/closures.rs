@@ -7,9 +7,9 @@
 //! casts the entry to $closure_entry_n and call_refs it, unboxing the result to the kind all closures of arity n return.
 
 use super::WasmGcEmitter;
+use crate::analyzer::param_kind;
 use crate::closures::closure_call_arity;
 use crate::context::UserFunctionDef;
-use crate::analyzer::param_kind;
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
@@ -57,9 +57,19 @@ impl ClosureTypes {
 	}
 
 	pub(super) fn entry_names(&self) -> Vec<(u32, String)> {
-		let carriers = self.carriers.into_iter().flat_map(|(rebuild, captured)| [(rebuild, CLOSURE_REBUILD.to_string()), (captured, CLOSURE_CAPTURED.to_string())]);
+		let carriers = self.carriers.into_iter().flat_map(|(rebuild, captured)| {
+			[
+				(rebuild, CLOSURE_REBUILD.to_string()),
+				(captured, CLOSURE_CAPTURED.to_string()),
+			]
+		});
 		let apply = self.apply.map(|apply| (apply, CLOSURE_APPLY.to_string()));
-		self.entry_functions.iter().map(|(target, index, _, _)| (*index, format!("{ENTRY_PREFIX}{target}"))).chain(carriers).chain(apply).collect()
+		self.entry_functions
+			.iter()
+			.map(|(target, index, _, _)| (*index, format!("{ENTRY_PREFIX}{target}")))
+			.chain(carriers)
+			.chain(apply)
+			.collect()
 	}
 }
 
@@ -73,8 +83,17 @@ impl WasmGcEmitter {
 			return closure;
 		}
 		let index = self.type_manager.types().len();
-		let entry = FieldType { element_type: Val(Ref(RefType { nullable: false, heap_type: HeapType::FUNC })), mutable: false };
-		let captured = FieldType { element_type: Val(self.nullable_node()), mutable: false };
+		let entry = FieldType {
+			element_type: Val(Ref(RefType {
+				nullable: false,
+				heap_type: HeapType::FUNC,
+			})),
+			mutable: false,
+		};
+		let captured = FieldType {
+			element_type: Val(self.nullable_node()),
+			mutable: false,
+		};
 		self.type_manager.types_mut().ty().struct_(vec![entry, captured]);
 		self.closures.closure = Some(index);
 		index
@@ -82,7 +101,10 @@ impl WasmGcEmitter {
 
 	/// Do the closures of `arity` take and return Ints (closures::type_closure_calls): their entries skip the Node boxes
 	fn typed_entry(&self, arity: usize) -> bool {
-		self.ctx.user_functions.get(&crate::closures::closure_call_name(arity)).is_some_and(crate::closures::is_typed_closure_call)
+		self.ctx
+			.user_functions
+			.get(&crate::closures::closure_call_name(arity))
+			.is_some_and(crate::closures::is_typed_closure_call)
 	}
 
 	fn entry_type(&mut self, arity: usize) -> u32 {
@@ -93,7 +115,9 @@ impl WasmGcEmitter {
 		let index = if self.typed_entry(arity) {
 			let helper = &self.ctx.user_functions[&crate::closures::closure_call_name(arity)];
 			let number = |kind: Kind| if kind.is_float() { ValType::F64 } else { ValType::I64 };
-			let params = std::iter::once(node).chain(helper.params[1..].iter().map(|param| number(param_kind(param)))).collect::<Vec<_>>();
+			let params = std::iter::once(node)
+				.chain(helper.params[1..].iter().map(|param| number(param_kind(param))))
+				.collect::<Vec<_>>();
 			let result = number(helper.return_kind);
 			self.type_manager.function_type(params, vec![result])
 		} else {
@@ -106,7 +130,9 @@ impl WasmGcEmitter {
 	/// Pass 1 of compile_user_functions: a function index for the entry of every closure target
 	pub(super) fn register_closure_entries(&mut self) {
 		for (target, captured) in self.ctx.closure_targets.clone() {
-			let Some(function) = self.ctx.user_functions.get(&target) else { continue };
+			let Some(function) = self.ctx.user_functions.get(&target) else {
+				continue;
+			};
 			let arity = function.params.len().saturating_sub(captured);
 			let entry_type = self.entry_type(arity);
 			let entry = self.reserve_function(entry_type);
@@ -118,7 +144,10 @@ impl WasmGcEmitter {
 			let node = self.nullable_node();
 			let rebuild_type = self.type_manager.function_type(vec![node, node], vec![node]);
 			let captured_type = self.type_manager.function_type(vec![node], vec![node]);
-			let (rebuild, captured) = (self.reserve_function(rebuild_type), self.reserve_function(captured_type));
+			let (rebuild, captured) = (
+				self.reserve_function(rebuild_type),
+				self.reserve_function(captured_type),
+			);
 			self.exports.export(CLOSURE_REBUILD, ExportKind::Func, rebuild);
 			self.exports.export(CLOSURE_CAPTURED, ExportKind::Func, captured);
 			self.closures.carriers = Some((rebuild, captured));
@@ -143,45 +172,94 @@ impl WasmGcEmitter {
 		let (node_type, closure) = (self.type_manager.node_type, self.closure_type());
 		let (arguments, closure_local, item) = (1, 2, 3);
 		let nullable_node = self.nullable_node();
-		self.function_body(vec![Ref(RefType { nullable: true, heap_type: HeapType::Concrete(closure) }), nullable_node], |s, func| {
-			Self::emit_list(func, &[
-				I::LocalGet(0), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
-				I::RefTestNonNull(HeapType::Concrete(closure)),
-			]);
-			s.emit_fail_unless(func, NOT_A_FUNCTION);
-			Self::emit_list(func, &[
-				I::LocalGet(0), I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
-				I::RefCastNonNull(HeapType::Concrete(closure)), I::LocalSet(closure_local),
-			]);
-			let mut arities = s.closures.entries.keys().copied().collect::<Vec<_>>();
-			arities.sort();
-			for arity in arities {
-				let entry = s.entry_type(arity);
-				let typed = s.typed_entry(arity);
-				let helper = s.ctx.user_functions.get(&crate::closures::closure_call_name(arity)).cloned();
-				Self::emit_list(func, &[
-					I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD },
-					I::RefTestNonNull(HeapType::Concrete(entry)), I::If(BlockType::Empty), I::LocalGet(closure_local),
-					I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
-				]);
-				for index in 0..arity {
-					s.emit_next_argument(func, arguments, item);
-					if let Some(helper) = helper.as_ref().filter(|_| typed) {
-						func.instruction(&I::RefAsNonNull);
-						s.emit_node_as_kind(func, param_kind(&helper.params[1 + index]));
+		self.function_body(
+			vec![
+				Ref(RefType {
+					nullable: true,
+					heap_type: HeapType::Concrete(closure),
+				}),
+				nullable_node,
+			],
+			|s, func| {
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(0),
+						I::RefAsNonNull,
+						I::StructGet {
+							struct_type_index: node_type,
+							field_index: NODE_DATA_FIELD,
+						},
+						I::RefTestNonNull(HeapType::Concrete(closure)),
+					],
+				);
+				s.emit_fail_unless(func, NOT_A_FUNCTION);
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(0),
+						I::StructGet {
+							struct_type_index: node_type,
+							field_index: NODE_DATA_FIELD,
+						},
+						I::RefCastNonNull(HeapType::Concrete(closure)),
+						I::LocalSet(closure_local),
+					],
+				);
+				let mut arities = s.closures.entries.keys().copied().collect::<Vec<_>>();
+				arities.sort();
+				for arity in arities {
+					let entry = s.entry_type(arity);
+					let typed = s.typed_entry(arity);
+					let helper = s
+						.ctx
+						.user_functions
+						.get(&crate::closures::closure_call_name(arity))
+						.cloned();
+					Self::emit_list(
+						func,
+						&[
+							I::LocalGet(closure_local),
+							I::StructGet {
+								struct_type_index: closure,
+								field_index: ENTRY_FIELD,
+							},
+							I::RefTestNonNull(HeapType::Concrete(entry)),
+							I::If(BlockType::Empty),
+							I::LocalGet(closure_local),
+							I::StructGet {
+								struct_type_index: closure,
+								field_index: CAPTURED_FIELD,
+							},
+						],
+					);
+					for index in 0..arity {
+						s.emit_next_argument(func, arguments, item);
+						if let Some(helper) = helper.as_ref().filter(|_| typed) {
+							func.instruction(&I::RefAsNonNull);
+							s.emit_node_as_kind(func, param_kind(&helper.params[1 + index]));
+						}
 					}
+					Self::emit_list(
+						func,
+						&[
+							I::LocalGet(closure_local),
+							I::StructGet {
+								struct_type_index: closure,
+								field_index: ENTRY_FIELD,
+							},
+							I::RefCastNonNull(HeapType::Concrete(entry)),
+							I::CallRef(entry),
+						],
+					);
+					if let Some(helper) = helper.filter(|_| typed) {
+						s.emit_primitive_as_node(func, helper.return_kind);
+					}
+					Self::emit_list(func, &[I::Return, I::End]);
 				}
-				Self::emit_list(func, &[
-					I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD },
-					I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry),
-				]);
-				if let Some(helper) = helper.filter(|_| typed) {
-					s.emit_primitive_as_node(func, helper.return_kind);
-				}
-				Self::emit_list(func, &[I::Return, I::End]);
-			}
-			s.emit_runtime_error(func, WRONG_ARGUMENT_COUNT);
-		});
+				s.emit_runtime_error(func, WRONG_ARGUMENT_COUNT);
+			},
+		);
 	}
 
 	/// The first item of the list in local `arguments` (ø when it has none), the list advanced to its rest
@@ -189,8 +267,20 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let nullable_node = BlockType::Result(self.nullable_node());
 		let field_or_null = |field_index| {
-			[I::LocalGet(arguments), I::RefIsNull, I::If(nullable_node), I::RefNull(HeapType::Concrete(node_type)), I::Else,
-				I::LocalGet(arguments), I::StructGet { struct_type_index: node_type, field_index }, I::RefCastNullable(HeapType::Concrete(node_type)), I::End]
+			[
+				I::LocalGet(arguments),
+				I::RefIsNull,
+				I::If(nullable_node),
+				I::RefNull(HeapType::Concrete(node_type)),
+				I::Else,
+				I::LocalGet(arguments),
+				I::StructGet {
+					struct_type_index: node_type,
+					field_index,
+				},
+				I::RefCastNullable(HeapType::Concrete(node_type)),
+				I::End,
+			]
 		};
 		Self::emit_list(func, &field_or_null(NODE_DATA_FIELD));
 		Self::emit_list(func, &[I::LocalTee(item), I::RefIsNull, I::If(nullable_node)]);
@@ -215,14 +305,39 @@ impl WasmGcEmitter {
 				s.emit_call(rebuild, super::equality::VALUES_EQUAL);
 				rebuild.instruction(&I::If(BlockType::Empty));
 				s.emit_kind(rebuild, Kind::Function);
-				Self::emit_list(rebuild, &[I::RefFunc(entry), I::LocalGet(1), I::StructNew(closure), I::LocalGet(0), I::StructNew(node_type), I::Return, I::End]);
+				Self::emit_list(
+					rebuild,
+					&[
+						I::RefFunc(entry),
+						I::LocalGet(1),
+						I::StructNew(closure),
+						I::LocalGet(0),
+						I::StructNew(node_type),
+						I::Return,
+						I::End,
+					],
+				);
 			}
 			s.emit_call(rebuild, "new_empty");
 		});
-		self.function_body(vec![], |_, captured| Self::emit_list(captured, &[
-			I::LocalGet(0), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
-			I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
-		]));
+		self.function_body(vec![], |_, captured| {
+			Self::emit_list(
+				captured,
+				&[
+					I::LocalGet(0),
+					I::RefAsNonNull,
+					I::StructGet {
+						struct_type_index: node_type,
+						field_index: NODE_DATA_FIELD,
+					},
+					I::RefCastNonNull(HeapType::Concrete(closure)),
+					I::StructGet {
+						struct_type_index: closure,
+						field_index: CAPTURED_FIELD,
+					},
+				],
+			)
+		});
 	}
 
 	/// Pass 2: the entry bodies, in the order of their registration
@@ -263,22 +378,35 @@ impl WasmGcEmitter {
 		}
 		self.refresh_enclosing_captures(func);
 		let captures = self.ctx.captures.get(target).cloned().unwrap_or_default();
-		captures.into_iter().map(|(_, (global, kind))| {
-			let name = format!("{CAPTURE_VALUE_PREFIX}{global}");
-			self.ctx.user_globals.insert(name.clone(), (global, kind));
-			Node::Symbol(name)
-		}).collect()
+		captures
+			.into_iter()
+			.map(|(_, (global, kind))| {
+				let name = format!("{CAPTURE_VALUE_PREFIX}{global}");
+				self.ctx.user_globals.insert(name.clone(), (global, kind));
+				Node::Symbol(name)
+			})
+			.collect()
 	}
 
 	/// The cons list on the stack → its `index`-th (0-based) item: the data of that cell
 	fn emit_nth_cell_data(&self, func: &mut Function, index: usize) {
 		let node_type = self.type_manager.node_type;
 		for _ in 0..index {
-			func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_VALUE_FIELD });
+			func.instruction(&I::StructGet {
+				struct_type_index: node_type,
+				field_index: NODE_VALUE_FIELD,
+			});
 		}
-		Self::emit_list(func, &[
-			I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD }, I::RefCastNonNull(HeapType::Concrete(node_type)),
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::StructGet {
+					struct_type_index: node_type,
+					field_index: NODE_DATA_FIELD,
+				},
+				I::RefCastNonNull(HeapType::Concrete(node_type)),
+			],
+		);
 	}
 
 	/// The entry of a nested function's closure: its capture globals set from the closure's captured values first
@@ -308,11 +436,20 @@ impl WasmGcEmitter {
 			return;
 		}
 		if kind.is_float() {
-			Self::emit_list(func, &[
-				I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD },
-				I::RefCastNonNull(HeapType::Concrete(self.type_manager.f64_box_type)),
-				I::StructGet { struct_type_index: self.type_manager.f64_box_type, field_index: 0 },
-			]);
+			Self::emit_list(
+				func,
+				&[
+					I::StructGet {
+						struct_type_index: self.type_manager.node_type,
+						field_index: NODE_DATA_FIELD,
+					},
+					I::RefCastNonNull(HeapType::Concrete(self.type_manager.f64_box_type)),
+					I::StructGet {
+						struct_type_index: self.type_manager.f64_box_type,
+						field_index: 0,
+					},
+				],
+			);
 		} else if kind == Kind::Codepoint {
 			self.emit_codepoint_of_node(func);
 		} else {
@@ -322,15 +459,28 @@ impl WasmGcEmitter {
 
 	/// Stack [Codepoint node] → [i64 code point]
 	pub(super) fn emit_codepoint_of_node(&self, func: &mut Function) {
-		Self::emit_list(func, &[
-			I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD }, I::RefCastNonNull(HeapType::I31),
-			I::I31GetU, I::I64ExtendI32U,
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::StructGet {
+					struct_type_index: self.type_manager.node_type,
+					field_index: NODE_DATA_FIELD,
+				},
+				I::RefCastNonNull(HeapType::I31),
+				I::I31GetU,
+				I::I64ExtendI32U,
+			],
+		);
 	}
 
 	/// Is `name` a helper `closure_call_n` whose body the emitter writes
 	pub(super) fn is_closure_call(&self, name: &str) -> bool {
-		closure_call_arity(name).is_some() && self.ctx.user_functions.get(name).is_some_and(|function| function.body.is_empty())
+		closure_call_arity(name).is_some()
+			&& self
+				.ctx
+				.user_functions
+				.get(name)
+				.is_some_and(|function| function.body.is_empty())
 	}
 
 	/// `closure_call_n(f, a1…an)`: the entry of f's $Closure, cast to its arity, called with the captured values and the arguments
@@ -339,50 +489,113 @@ impl WasmGcEmitter {
 		let arity = closure_call_arity(name).expect("a closure call");
 		let (closure, entry) = (self.closure_type(), self.entry_type(arity));
 		let closure_local = (arity + 1) as u32;
-		self.function_body(vec![Ref(RefType { nullable: true, heap_type: HeapType::Concrete(closure) })], |s, func| {
-			Self::emit_list(func, &[
-				I::LocalGet(0), I::StructGet { struct_type_index: s.type_manager.node_type, field_index: NODE_DATA_FIELD },
-				I::RefTestNonNull(HeapType::Concrete(closure)),
-			]);
-			s.emit_fail_unless(func, NOT_A_FUNCTION);
-			Self::emit_list(func, &[
-				I::LocalGet(0), I::StructGet { struct_type_index: s.type_manager.node_type, field_index: NODE_DATA_FIELD },
-				I::RefCastNonNull(HeapType::Concrete(closure)), I::LocalTee(closure_local),
-				I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD }, I::RefTestNonNull(HeapType::Concrete(entry)),
-			]);
-			s.emit_fail_unless(func, WRONG_ARGUMENT_COUNT);
-			Self::emit_list(func, &[I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD }]);
-			for argument in 1..=arity {
-				func.instruction(&I::LocalGet(argument as u32));
-			}
-			Self::emit_list(func, &[
-				I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD },
-				I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry),
-			]);
-			if !s.typed_entry(arity) {
-				func.instruction(&I::RefAsNonNull);
-				s.emit_node_as_kind(func, function.return_kind);
-			}
-		});
+		self.function_body(
+			vec![Ref(RefType {
+				nullable: true,
+				heap_type: HeapType::Concrete(closure),
+			})],
+			|s, func| {
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(0),
+						I::StructGet {
+							struct_type_index: s.type_manager.node_type,
+							field_index: NODE_DATA_FIELD,
+						},
+						I::RefTestNonNull(HeapType::Concrete(closure)),
+					],
+				);
+				s.emit_fail_unless(func, NOT_A_FUNCTION);
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(0),
+						I::StructGet {
+							struct_type_index: s.type_manager.node_type,
+							field_index: NODE_DATA_FIELD,
+						},
+						I::RefCastNonNull(HeapType::Concrete(closure)),
+						I::LocalTee(closure_local),
+						I::StructGet {
+							struct_type_index: closure,
+							field_index: ENTRY_FIELD,
+						},
+						I::RefTestNonNull(HeapType::Concrete(entry)),
+					],
+				);
+				s.emit_fail_unless(func, WRONG_ARGUMENT_COUNT);
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(closure_local),
+						I::StructGet {
+							struct_type_index: closure,
+							field_index: CAPTURED_FIELD,
+						},
+					],
+				);
+				for argument in 1..=arity {
+					func.instruction(&I::LocalGet(argument as u32));
+				}
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(closure_local),
+						I::StructGet {
+							struct_type_index: closure,
+							field_index: ENTRY_FIELD,
+						},
+						I::RefCastNonNull(HeapType::Concrete(entry)),
+						I::CallRef(entry),
+					],
+				);
+				if !s.typed_entry(arity) {
+					func.instruction(&I::RefAsNonNull);
+					s.emit_node_as_kind(func, function.return_kind);
+				}
+			},
+		);
 		let index = function.func_index.expect("registered in pass 1");
 		self.exports.export(name, ExportKind::Func, index);
 	}
 
 	/// `closure_call_n(h, a1…an)` where the variable h only ever holds closures of one target: that target's entry called
 	/// directly with h's captured values, no closure or arity test and no call_ref (what closure_call_n does)
-	pub(super) fn emit_direct_closure_call(&mut self, func: &mut Function, helper: &UserFunctionDef, args: &[Node]) -> bool {
-		let Some(arity) = closure_call_arity(&helper.name) else { return false };
-		let Some((callee, values)) = args.split_first() else { return false };
-		let Some((target, entry, captured, _)) = self.single_closure_target(callee, arity) else { return false };
+	pub(super) fn emit_direct_closure_call(
+		&mut self,
+		func: &mut Function,
+		helper: &UserFunctionDef,
+		args: &[Node],
+	) -> bool {
+		let Some(arity) = closure_call_arity(&helper.name) else {
+			return false;
+		};
+		let Some((callee, values)) = args.split_first() else {
+			return false;
+		};
+		let Some((target, entry, captured, _)) = self.single_closure_target(callee, arity) else {
+			return false;
+		};
 		if self.emit_hoisted_closure_call(func, helper, callee, &target, captured, values) {
 			return true;
 		}
 		let closure = self.closure_type();
 		self.emit_node_instructions(func, callee);
-		Self::emit_list(func, &[
-			I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD },
-			I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::StructGet {
+					struct_type_index: self.type_manager.node_type,
+					field_index: NODE_DATA_FIELD,
+				},
+				I::RefCastNonNull(HeapType::Concrete(closure)),
+				I::StructGet {
+					struct_type_index: closure,
+					field_index: CAPTURED_FIELD,
+				},
+			],
+		);
 		for (value, param) in values.iter().zip(&helper.params[1..]) {
 			self.emit_value_of_kind(func, value, param_kind(param));
 		}
@@ -396,17 +609,35 @@ impl WasmGcEmitter {
 
 	/// `closure_call_n(h, a1…an)` after `h·capture·0 = …` (lowering/closures.rs hoist_captures): the target itself called
 	/// with the captured values read once and the arguments, as a plain call
-	fn emit_hoisted_closure_call(&mut self, func: &mut Function, helper: &UserFunctionDef, callee: &Node, target: &str, captured: usize, values: &[Node]) -> bool {
-		let Node::Symbol(variable) = callee.drop_meta() else { return false };
+	fn emit_hoisted_closure_call(
+		&mut self,
+		func: &mut Function,
+		helper: &UserFunctionDef,
+		callee: &Node,
+		target: &str,
+		captured: usize,
+		values: &[Node],
+	) -> bool {
+		let Node::Symbol(variable) = callee.drop_meta() else {
+			return false;
+		};
 		// a nested function's closure restores its capture globals in its entry (emit_nested_captures_restored)
 		if captured == 0 || self.ctx.enclosing_functions.contains_key(target) {
 			return false;
 		}
-		let Some(function) = self.ctx.user_functions.get(target).cloned() else { return false };
+		let Some(function) = self.ctx.user_functions.get(target).cloned() else {
+			return false;
+		};
 		let Some(index) = function.func_index else { return false };
-		let locals: Vec<String> = (0..captured).map(|position| crate::closures::capture_local(variable, position)).collect();
-		let same_result = function.return_kind == helper.return_kind || (helper.return_kind.is_ref() && !function.return_kind.is_ref());
-		if !function.tuple_kinds.is_empty() || !same_result || !locals.iter().all(|local| self.scope.lookup(local).is_some()) {
+		let locals: Vec<String> = (0..captured)
+			.map(|position| crate::closures::capture_local(variable, position))
+			.collect();
+		let same_result = function.return_kind == helper.return_kind
+			|| (helper.return_kind.is_ref() && !function.return_kind.is_ref());
+		if !function.tuple_kinds.is_empty()
+			|| !same_result
+			|| !locals.iter().all(|local| self.scope.lookup(local).is_some())
+		{
 			return false;
 		}
 		let arguments = locals.into_iter().map(Node::Symbol).chain(values.iter().cloned());
@@ -427,27 +658,51 @@ impl WasmGcEmitter {
 		let closure = self.closure_type();
 		let node_type = self.type_manager.node_type;
 		self.function_body(vec![], |s, func| {
-			Self::emit_list(func, &[
-				I::LocalGet(0), I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
-				I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
-			]);
+			Self::emit_list(
+				func,
+				&[
+					I::LocalGet(0),
+					I::StructGet {
+						struct_type_index: node_type,
+						field_index: NODE_DATA_FIELD,
+					},
+					I::RefCastNonNull(HeapType::Concrete(closure)),
+					I::StructGet {
+						struct_type_index: closure,
+						field_index: CAPTURED_FIELD,
+					},
+				],
+			);
 			s.emit_nth_cell_data(func, position);
 			s.emit_node_as_kind(func, reader.return_kind);
 		});
-		self.exports.export(name, ExportKind::Func, reader.func_index.expect("registered in pass 1"));
+		self.exports
+			.export(name, ExportKind::Func, reader.func_index.expect("registered in pass 1"));
 	}
 
 	/// The entry a closure variable always calls: one target of that arity, and no parameter of that name anywhere
 	/// (closure_variable_targets joins the assignments to a name across all bodies, parameters are not among them)
 	fn single_closure_target(&self, callee: &Node, arity: usize) -> Option<(String, u32, usize, usize)> {
-		let Node::Symbol(variable) = callee.drop_meta() else { return None };
+		let Node::Symbol(variable) = callee.drop_meta() else {
+			return None;
+		};
 		let targets = self.ctx.closure_variable_targets.get(variable)?;
-		let [target] = targets.iter().collect::<Vec<_>>()[..] else { return None };
-		let is_parameter = self.ctx.user_functions.values().any(|function| function.params.iter().any(|param| param.name == *variable));
+		let [target] = targets.iter().collect::<Vec<_>>()[..] else {
+			return None;
+		};
+		let is_parameter = self
+			.ctx
+			.user_functions
+			.values()
+			.any(|function| function.params.iter().any(|param| param.name == *variable));
 		if is_parameter {
 			return None;
 		}
-		self.closures.entry_functions.iter().find(|(name, _, _, entry_arity)| name == target && *entry_arity == arity).cloned()
+		self.closures
+			.entry_functions
+			.iter()
+			.find(|(name, _, _, entry_arity)| name == target && *entry_arity == arity)
+			.cloned()
 	}
 
 	/// The runtime error `error` unless the i32 on the stack is true
@@ -459,7 +714,13 @@ impl WasmGcEmitter {
 
 	/// `closure_new(target, captured…)`: the Node holding the $Closure of the target's entry and the captured values
 	pub(super) fn emit_closure_new(&mut self, func: &mut Function, target: &str, captured: &[Node]) {
-		let Some(entry_function) = self.closures.entry_functions.iter().find(|(name, ..)| name == target).map(|(_, index, ..)| *index) else {
+		let Some(entry_function) = self
+			.closures
+			.entry_functions
+			.iter()
+			.find(|(name, ..)| name == target)
+			.map(|(_, index, ..)| *index)
+		else {
 			self.emit_type_error(func, format!("{target} is not a function value"));
 			return;
 		};
@@ -475,7 +736,9 @@ impl WasmGcEmitter {
 		} else {
 			self.emit_node_instructions(func, &Node::List(captured.clone(), Bracket::Square, Separator::Space));
 		}
-		self.ctx.user_globals.retain(|name, _| !name.starts_with(CAPTURE_VALUE_PREFIX));
+		self.ctx
+			.user_globals
+			.retain(|name, _| !name.starts_with(CAPTURE_VALUE_PREFIX));
 		func.instruction(&I::StructNew(closure));
 		self.emit_string_call(func, target, "new_symbol");
 		func.instruction(&I::StructNew(self.type_manager.node_type));

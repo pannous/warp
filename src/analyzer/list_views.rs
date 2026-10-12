@@ -11,7 +11,11 @@ use std::collections::HashMap;
 pub fn check_widened_list_views(program: &Node) -> Option<Diagnostic> {
 	let class_fields = crate::class_methods::class_fields(program);
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
-	let lists = DeclaredLists { variables: declared_lists(program), instances: crate::class_methods::instance_classes(program, &classes), class_fields };
+	let lists = DeclaredLists {
+		variables: declared_lists(program),
+		instances: crate::class_methods::instance_classes(program, &classes),
+		class_fields,
+	};
 	if lists.variables.is_empty() && lists.class_fields.is_empty() {
 		return None;
 	}
@@ -20,7 +24,9 @@ pub fn check_widened_list_views(program: &Node) -> Option<Diagnostic> {
 	let mut found = None;
 	program.visit(&mut |node| {
 		if found.is_none() {
-			found = lists.widened_argument(node, &context).or_else(|| lists.widened_alias(node, program));
+			found = lists
+				.widened_argument(node, &context)
+				.or_else(|| lists.widened_alias(node, program));
 		}
 	});
 	found
@@ -35,7 +41,10 @@ struct ListType {
 impl ListType {
 	fn of(annotation: &Node) -> Option<ListType> {
 		let element = declared_element_type(annotation)?.to_string();
-		Some(ListType { written: annotation.serialize().trim().to_string(), element })
+		Some(ListType {
+			written: annotation.serialize().trim().to_string(),
+			element,
+		})
 	}
 }
 
@@ -50,7 +59,9 @@ struct DeclaredLists {
 fn declared_lists(program: &Node) -> HashMap<String, ListType> {
 	let mut declared = HashMap::new();
 	let mut declare = |target: &Node| {
-		let Node::Key(name, Op::Colon, annotation) = target.drop_meta() else { return };
+		let Node::Key(name, Op::Colon, annotation) = target.drop_meta() else {
+			return;
+		};
 		let annotation = match annotation.drop_meta() {
 			Node::Text(written) => Node::Symbol(written.clone()), // `names:"list of text"`, as of_type_declaration writes it
 			other => other.clone(),
@@ -62,7 +73,10 @@ fn declared_lists(program: &Node) -> HashMap<String, ListType> {
 	program.visit(&mut |node| match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, _) => declare(target),
 		Node::List(items, bracket, separator) => {
-			if let Some(Node::Key(target, _, _)) = of_type_declaration(items, bracket, separator).as_ref().map(Node::drop_meta) {
+			if let Some(Node::Key(target, _, _)) = of_type_declaration(items, bracket, separator)
+				.as_ref()
+				.map(Node::drop_meta)
+			{
 				declare(target);
 			}
 		}
@@ -77,14 +91,33 @@ impl DeclaredLists {
 		match list.drop_meta() {
 			Node::Symbol(name) => {
 				let list_type = self.variables.get(name)?;
-				Some((name.clone(), ListType { written: list_type.written.clone(), element: list_type.element.clone() }))
+				Some((
+					name.clone(),
+					ListType {
+						written: list_type.written.clone(),
+						element: list_type.element.clone(),
+					},
+				))
 			}
 			// `b.items`, read as the subscript `b#(items+1)` by now
 			Node::Key(instance, op @ (Op::Dot | Op::Hash), field) => {
-				let field = if *op == Op::Hash { crate::warp_parser::subscript_key(field)? } else { field }.drop_meta().name();
+				let field = if *op == Op::Hash {
+					crate::warp_parser::subscript_key(field)?
+				} else {
+					field
+				}
+				.drop_meta()
+				.name();
 				let instance = instance.drop_meta().name();
-				let (_, type_name) = self.class_fields.get(self.instances.get(&instance)?)?.iter().find(|(name, _)| *name == field)?;
-				Some((format!("{instance}.{field}"), ListType::of(&Node::Symbol(type_name.clone()))?))
+				let (_, type_name) = self
+					.class_fields
+					.get(self.instances.get(&instance)?)?
+					.iter()
+					.find(|(name, _)| *name == field)?;
+				Some((
+					format!("{instance}.{field}"),
+					ListType::of(&Node::Symbol(type_name.clone()))?,
+				))
 			}
 			_ => None,
 		}
@@ -92,23 +125,33 @@ impl DeclaredLists {
 
 	/// `widen(names)` of a function that changes its parameter `xs: list`
 	fn widened_argument(&self, call: &Node, context: &Context) -> Option<Diagnostic> {
-		let Node::List(items, Bracket::Round, Separator::None) = call.drop_meta() else { return None };
+		let Node::List(items, Bracket::Round, Separator::None) = call.drop_meta() else {
+			return None;
+		};
 		let (callee, arguments) = items.split_first()?;
 		let function = context.user_functions.get(&callee.drop_meta().name())?;
 		arguments.iter().zip(&function.params).find_map(|(argument, param)| {
 			let view = param.annotation.as_ref()?;
 			let view_name = format!("{}({}: {})", function.name, param.name, view.serialize().trim());
-			self.widened_view(call, argument, view, &view_name).filter(|_| changes_list(&function.body, &param.name))
+			self.widened_view(call, argument, view, &view_name)
+				.filter(|_| changes_list(&function.body, &param.name))
 		})
 	}
 
 	/// `ys: list = names` where ys is changed later
 	fn widened_alias(&self, assignment: &Node, program: &Node) -> Option<Diagnostic> {
-		let Node::Key(target, Op::Assign | Op::Define, value) = assignment.drop_meta() else { return None };
-		let Node::Key(alias, Op::Colon, view) = target.drop_meta() else { return None };
-		let Node::Symbol(alias) = alias.drop_meta() else { return None };
+		let Node::Key(target, Op::Assign | Op::Define, value) = assignment.drop_meta() else {
+			return None;
+		};
+		let Node::Key(alias, Op::Colon, view) = target.drop_meta() else {
+			return None;
+		};
+		let Node::Symbol(alias) = alias.drop_meta() else {
+			return None;
+		};
 		let view_name = format!("{alias}: {}", view.serialize().trim());
-		self.widened_view(assignment, value, view, &view_name).filter(|_| changes_list(program, alias))
+		self.widened_view(assignment, value, view, &view_name)
+			.filter(|_| changes_list(program, alias))
 	}
 
 	/// The error of the view `view_name` of type `view` of the declared list `list`, when the view's elements do not all
@@ -129,7 +172,11 @@ impl DeclaredLists {
 	/// a class view admits its subclasses, whose fields start with its own (W0's `cls p ≤ cls q`)
 	fn view_fits(&self, element: &str, view_element: Option<&str>) -> bool {
 		let Some(view_element) = view_element else { return false };
-		let fields = |class: &str| self.class_fields.get(class).map(|fields| fields.iter().map(|(name, _)| name.clone()).collect::<Vec<_>>());
+		let fields = |class: &str| {
+			self.class_fields
+				.get(class)
+				.map(|fields| fields.iter().map(|(name, _)| name.clone()).collect::<Vec<_>>())
+		};
 		match (fields(element), fields(view_element)) {
 			(Some(element_fields), Some(view_fields)) => view_fields.starts_with(&element_fields),
 			_ => view_element == element || elements_fit(element, &format!("{LIST_OF_PREFIX}{view_element}")),

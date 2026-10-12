@@ -6,8 +6,8 @@
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
 use super::memoization::{definition_parts, Rebuild};
-use super::words::OF_WORD;
 use super::nodes::{call, children_rewritten, is_call_head, key, parameter_name};
+use super::words::OF_WORD;
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
@@ -50,8 +50,20 @@ struct BuiltinType {
 	kind_bits: &'static [i64],
 }
 
-const fn builtin(name: &'static str, aliases: &'static [&'static str], covers: &'static [&'static str], held_as: Option<K>, kind_bits: &'static [i64]) -> BuiltinType {
-	BuiltinType { name, aliases, covers, held_as, kind_bits }
+const fn builtin(
+	name: &'static str,
+	aliases: &'static [&'static str],
+	covers: &'static [&'static str],
+	held_as: Option<K>,
+	kind_bits: &'static [i64],
+) -> BuiltinType {
+	BuiltinType {
+		name,
+		aliases,
+		covers,
+		held_as,
+		kind_bits,
+	}
 }
 
 use crate::type_kinds::Kind as K;
@@ -60,25 +72,87 @@ use crate::type_kinds::Kind as K;
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/fixed_width.rs
 const BUILTIN_TYPES: [BuiltinType; 15] = [
-	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
-	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
-	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
-	builtin(FLOAT_WORD, &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
-	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
-	builtin(TEXT_WORD, &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
-	builtin("codepoint", &["char", "character"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
-	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], Some(K::Int), &[crate::type_kinds::BOOL_MASK_BIT]),
+	builtin(
+		"int",
+		&["integer", "long", "i64", "i32"],
+		&[],
+		Some(K::Int),
+		&[K::Int as i64],
+	),
+	builtin(
+		"rational",
+		&[],
+		&["int"],
+		Some(K::Int),
+		&[K::Int as i64, K::Float as i64],
+	),
+	builtin(
+		REAL_WORD,
+		&["exact"],
+		&["rational"],
+		Some(K::Empty),
+		&[K::Int as i64, K::Float as i64],
+	),
+	builtin(
+		FLOAT_WORD,
+		&["double", "f64", "f32", "float32", "float64", "fast"],
+		&[],
+		Some(K::Float),
+		&[K::Float as i64],
+	),
+	builtin(
+		"number",
+		&[],
+		&["real", "float"],
+		Some(K::Float),
+		&[K::Int as i64, K::Float as i64, K::Uncertain as i64],
+	),
+	builtin(
+		TEXT_WORD,
+		&["str", "string"],
+		&["codepoint"],
+		Some(K::Text),
+		&[K::Text as i64, K::Codepoint as i64],
+	),
+	builtin(
+		"codepoint",
+		&["char", "character"],
+		&[],
+		Some(K::Codepoint),
+		&[K::Codepoint as i64],
+	),
+	builtin(
+		crate::analyzer::BOOL_TYPE,
+		&["boolean"],
+		&[],
+		Some(K::Int),
+		&[crate::type_kinds::BOOL_MASK_BIT],
+	),
 	builtin("function", &["closure"], &[], Some(K::Function), &[]),
 	builtin(SYMBOL_TYPE, &[], &[], None, &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[], None, &[K::Key as i64]),
-	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
+	builtin(
+		EMPTY_TYPE,
+		&["unit", "nil", "ø", "none", "null", "void"],
+		&[],
+		None,
+		&[K::Empty as i64],
+	),
 	builtin(ERROR_TYPE, &[], &[], None, &[K::Error as i64]),
-	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
+	builtin(
+		LIST_WORD,
+		&[],
+		&[],
+		None,
+		&[K::List as i64, K::Block as i64, K::Empty as i64],
+	),
 	builtin(MAP_WORD, &[], &[], None, &[]),
 ];
 
 fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
-	BUILTIN_TYPES.iter().find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
+	BUILTIN_TYPES
+		.iter()
+		.find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
 }
 
 /// A word naming a built-in type: where it stands bare, it is that type as a value, never an undefined variable
@@ -88,7 +162,9 @@ pub fn is_type_word(word: &str) -> bool {
 
 /// Every word naming a built-in type, aliases too
 pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
-	BUILTIN_TYPES.iter().flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
+	BUILTIN_TYPES
+		.iter()
+		.flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
 }
 
 /// `int`, `i64`, `exact`, `real`, `f64` …: a word naming a type of numbers (one number is covers), `number` itself not
@@ -144,18 +220,25 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	for collection in COLLECTION_WORDS {
 		let of = format!("{collection} of ");
 		if let Some(element) = spec.strip_prefix(&of) {
-			return actual.strip_prefix(&of).is_some_and(|actual_element| type_matches(actual_element, element));
+			return actual
+				.strip_prefix(&of)
+				.is_some_and(|actual_element| type_matches(actual_element, element));
 		}
 		if spec == collection {
 			return actual == collection || actual.starts_with(&of);
 		}
 	}
-	actual == spec || builtin_type(spec).is_some_and(|builtin| builtin.covers.iter().any(|covered| type_matches(actual, covered)))
+	actual == spec
+		|| builtin_type(spec).is_some_and(|builtin| builtin.covers.iter().any(|covered| type_matches(actual, covered)))
 }
 
 /// The built-in types a value of type `spec` may have: `t is number` of a type value t is t == one of them
 pub fn builtin_types_matching(spec: &str) -> Vec<&'static str> {
-	BUILTIN_TYPES.iter().map(|builtin| builtin.name).filter(|name| type_matches(name, spec)).collect()
+	BUILTIN_TYPES
+		.iter()
+		.map(|builtin| builtin.name)
+		.filter(|name| type_matches(name, spec))
+		.collect()
 }
 
 /// The run-time kinds of a value of type `spec` as a mask of their bits (node_kind_in), for a value whose static type is
@@ -219,14 +302,25 @@ fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
 }
 
 pub fn lower(node: Node) -> Node {
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_outer_assigned_names(&node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, &node);
-	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
+	let types = registry
+		.types()
+		.iter()
+		.map(|definition| definition.name.clone())
+		.collect();
 	let loop_variables = super::for_loop::loop_variables(&node).into_iter().collect();
-	expand(node, &Names { variables, types, loop_variables })
+	expand(
+		node,
+		&Names {
+			variables,
+			types,
+			loop_variables,
+		},
+	)
 }
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
@@ -241,7 +335,9 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 	}
 	match (*first, rest) {
 		(word, []) if is_type_word(word) => Some(canonical_spec_word(word).to_string()),
-		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => Some(format!("{collection} of {}", type_spec(element, shadowed)?)),
+		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => {
+			Some(format!("{collection} of {}", type_spec(element, shadowed)?))
+		}
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),
 			None if crate::traits::is_builtin_trait(word) || shadowed.types.contains(word) => Some(word.to_string()),
@@ -252,10 +348,13 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 }
 
 fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
-	nodes.iter().map(|node| match node.drop_meta() {
-		Node::Symbol(word) => Some(word.as_str()),
-		_ => None,
-	}).collect()
+	nodes
+		.iter()
+		.map(|node| match node.drop_meta() {
+			Node::Symbol(word) => Some(word.as_str()),
+			_ => None,
+		})
+		.collect()
 }
 
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
@@ -274,19 +373,32 @@ pub fn equality_operand(subject: &Node, word: Node) -> Node {
 }
 
 fn marked_operand(word: &str) -> Node {
-	Node::Meta { node: Box::new(Node::Symbol(word.to_string())), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
+	Node::Meta {
+		node: Box::new(Node::Symbol(word.to_string())),
+		data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)),
+	}
 }
 
 /// `left == right` or `left != right`, a type word on either side by its canonical name
 fn comparison(left: Node, op: Op, right: Node, shadowed: &Names) -> Node {
-	key(canonical_operand(expand(left, shadowed), shadowed), op, canonical_operand(expand(right, shadowed), shadowed))
+	key(
+		canonical_operand(expand(left, shadowed), shadowed),
+		op,
+		canonical_operand(expand(right, shadowed), shadowed),
+	)
 }
 
 /// A marked side of == or != by the canonical name of its type; a variable of that name stays the variable
 fn canonical_operand(operand: Node, shadowed: &Names) -> Node {
 	match operand.drop_meta() {
-		Node::Symbol(word) if is_equality_operand(&operand) && (shadowed.contains(word) || shadowed.loop_variables.contains(word)) => Node::Symbol(word.clone()),
-		Node::Symbol(word) if is_equality_operand(&operand) => marked_operand(&type_spec(&[word.as_str()], &Names::default()).unwrap_or_else(|| word.clone())),
+		Node::Symbol(word)
+			if is_equality_operand(&operand) && (shadowed.contains(word) || shadowed.loop_variables.contains(word)) =>
+		{
+			Node::Symbol(word.clone())
+		}
+		Node::Symbol(word) if is_equality_operand(&operand) => {
+			marked_operand(&type_spec(&[word.as_str()], &Names::default()).unwrap_or_else(|| word.clone()))
+		}
 		_ => operand,
 	}
 }
@@ -297,7 +409,10 @@ pub const COMPARED_WITH: &str = "compared with";
 
 pub fn with_compared_text(subject: Node, written: &str) -> Node {
 	match subject.drop_meta() {
-		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, text(written))) },
+		Node::Symbol(_) => Node::Meta {
+			node: Box::new(subject),
+			data: Box::new(Node::key(COMPARED_WITH, text(written))),
+		},
 		_ => subject,
 	}
 }
@@ -341,13 +456,19 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			if let Some(call) = type_of_word(&items, shadowed).or_else(|| spaced_type_test(&items, shadowed)) {
 				return expand(call, shadowed);
 			}
-			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
+			Node::List(
+				items.into_iter().map(|item| expand(item, shadowed)).collect(),
+				bracket,
+				separator,
+			)
 		}
-		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
-			// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
-			Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
-			_ => comparison(*subject, Op::Eq, *right, shadowed),
-		},
+		Node::Key(subject, Op::Eq, right) => {
+			match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
+				// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
+				Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
+				_ => comparison(*subject, Op::Eq, *right, shadowed),
+			}
+		}
 		Node::Key(left, Op::Ne, right) => comparison(*left, Op::Ne, *right, shadowed),
 		other => children_rewritten(other, |child| expand(child, shadowed)),
 	}
@@ -356,8 +477,12 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 /// `x is a number` is the items `x is a` and `number`: the words after the comparison continue the type phrase
 fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let [first, tail @ ..] = items else { return None };
-	let Node::Key(subject, Op::Eq, right) = first.drop_meta() else { return None };
-	let Node::Symbol(word) = right.drop_meta() else { return None };
+	let Node::Key(subject, Op::Eq, right) = first.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(word) = right.drop_meta() else {
+		return None;
+	};
 	let mut words = vec![word.as_str()];
 	words.extend(symbol_words(tail)?);
 	Some(is_type_call(subject.as_ref().clone(), type_spec(&words, shadowed)?))
@@ -369,7 +494,9 @@ fn type_of_word(items: &[Node], shadowed: &Names) -> Option<Node> {
 	if argument.is_empty() || shadowed.contains(TYPE_WORD) {
 		return None;
 	}
-	let Node::Type { name, body } = head.drop_meta() else { return None };
+	let Node::Type { name, body } = head.drop_meta() else {
+		return None;
+	};
 	if !name.is_symbol(OF_WORD) || !matches!(body.drop_meta(), Node::Empty) {
 		return None;
 	}

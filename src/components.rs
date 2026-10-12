@@ -9,7 +9,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use wasmtime::component::types::ComponentItem;
-use wasmtime::component::{Component, ComponentExportIndex, Func, Instance, Linker, ResourceAny, ResourceTable, ResourceType, Type, Val};
+use wasmtime::component::{
+	Component, ComponentExportIndex, Func, Instance, Linker, ResourceAny, ResourceTable, ResourceType, Type, Val,
+};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
@@ -21,7 +23,10 @@ struct ComponentState {
 
 impl WasiView for ComponentState {
 	fn ctx(&mut self) -> WasiCtxView<'_> {
-		WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
+		WasiCtxView {
+			ctx: &mut self.wasi,
+			table: &mut self.table,
+		}
 	}
 }
 
@@ -33,7 +38,8 @@ struct Loaded {
 	functions: Vec<(String, ComponentExportIndex)>,
 	/// its resource types with their WIT names
 	kinds: Vec<(ResourceType, String)>,
-	held: Vec<ResourceAny>,
+	/// by handle id - 1; a dropped handle's slot is empty
+	held: Vec<Option<ResourceAny>>,
 }
 
 thread_local! {
@@ -50,6 +56,8 @@ const HANDLE_KEY: &str = "$handle";
 const COMPONENT_KEY: &str = "component";
 /// The import of a component that warp's host serves (serve_host_imports)
 const HOST_IMPORT: &str = "host";
+/// `c.drop()`: the resource's destructor runs now (a WIT method of that name stays the method)
+const DROP_METHOD: &str = "drop";
 
 fn engine() -> &'static Engine {
 	static ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -71,12 +79,34 @@ pub fn call(path: &str, member: &str, arguments: &[Value]) -> Result<Value, Stri
 
 /// `handle.member(arguments)`: the method of the resource a handle stands for
 pub fn call_method(handle: &Value, member: &str, arguments: &[Value]) -> Result<Value, String> {
-	let path = handle.get(COMPONENT_KEY).and_then(Value::as_str).ok_or_else(|| format!("{handle} is no handle of a component's resource"))?;
-	let kind = handle.get("type").and_then(Value::as_str).unwrap_or_default().to_string();
-	with_component(path, |loaded| {
-		let function = loaded.function(member, Some(&kind))?;
-		loaded.invoke(path, member, function, Some(handle), arguments)
+	let path = handle
+		.get(COMPONENT_KEY)
+		.and_then(Value::as_str)
+		.ok_or_else(|| format!("{handle} is no handle of a component's resource"))?;
+	let kind = handle
+		.get("type")
+		.and_then(Value::as_str)
+		.unwrap_or_default()
+		.to_string();
+	with_component(path, |loaded| match loaded.function(member, Some(&kind)) {
+		Err(_) if member == DROP_METHOD && arguments.is_empty() => loaded.dropped(handle),
+		function => loaded.invoke(path, member, function?, Some(handle), arguments),
 	})
+}
+
+/// The resource `member` gives when called, a function of the component at `path` or a method of its resource `kind`:
+/// `counter` for `r.counter(5)` and `a.add(b)`; None for a plain value or a component that does not load
+pub fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<String> {
+	with_component(path, |loaded| {
+		let function = loaded.function(member, kind)?;
+		let results: Vec<Type> = function.ty(&loaded.store).results().collect();
+		Ok(match results.as_slice() {
+			[Type::Own(resource) | Type::Borrow(resource)] => kind_name(&loaded.kinds, resource),
+			_ => None,
+		})
+	})
+	.ok()
+	.flatten()
 }
 
 fn with_component<R>(path: &str, body: impl FnOnce(&mut Loaded) -> Result<R, String>) -> Result<R, String> {
@@ -94,29 +124,10 @@ fn compiled(path: &str) -> Result<Component, String> {
 	if let Some(component) = components.get(path) {
 		return Ok(component.clone());
 	}
-	let component = Component::from_file(engine(), path).map_err(|failure| format!("cannot load the component {path}: {failure:#}"))?;
+	let component = Component::from_file(engine(), path)
+		.map_err(|failure| format!("cannot load the component {path}: {failure:#}"))?;
 	components.insert(path.to_string(), component.clone());
 	Ok(component)
-}
-
-/// The functions and resource types the component at `path` exports, also those of its exported interfaces, in warp's
-/// spelling (`stats_of` for `stats-of`), sorted; constructors and methods are its resources' own
-pub fn export_names(path: &str) -> Result<Vec<String>, String> {
-	let component = compiled(path)?;
-	let mut names = vec![];
-	let mut add = |name: &str, item: &ComponentItem| {
-		if matches!(item, ComponentItem::ComponentFunc(_) | ComponentItem::Resource(_)) && !name.starts_with('[') {
-			names.push(name.replace('-', "_"));
-		}
-	};
-	for (name, item) in component.component_type().exports(engine()) {
-		match &item.ty {
-			ComponentItem::ComponentInstance(interface) => interface.exports(engine()).for_each(|(inner, item)| add(inner, &item.ty)),
-			other => add(name, other),
-		}
-	}
-	names.sort();
-	Ok(names)
 }
 
 fn load(path: &str) -> Result<Loaded, String> {
@@ -124,44 +135,82 @@ fn load(path: &str) -> Result<Loaded, String> {
 	let mut linker = Linker::new(engine());
 	wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|failure| failure.to_string())?;
 	serve_host_imports(&mut linker, &component).map_err(|failure| format!("{path}: {failure:#}"))?;
-	let state = ComponentState { wasi: WasiCtx::builder().inherit_stdio().build(), table: ResourceTable::new() };
+	let state = ComponentState {
+		wasi: WasiCtx::builder().inherit_stdio().build(),
+		table: ResourceTable::new(),
+	};
 	let mut store = Store::new(engine(), state);
 	warp_runtime::engine::cap_memory(&mut store);
-	let instance = linker.instantiate(&mut store, &component).map_err(|failure| format!("cannot instantiate {path}: {failure:#}"))?;
+	let instance = linker
+		.instantiate(&mut store, &component)
+		.map_err(|failure| format!("cannot instantiate {path}: {failure:#}"))?;
 	let (mut functions, mut kinds) = (vec![], vec![]);
-	let mut add = |store: &mut Store<ComponentState>, name: &str, item: &ComponentItem, index: Option<ComponentExportIndex>| {
-		let Some(index) = index else { return };
-		match item {
-			ComponentItem::ComponentFunc(_) => functions.push((name.to_string(), index)),
-			ComponentItem::Resource(_) => kinds.extend(instance.get_resource(&mut *store, index).map(|ty| (ty, name.to_string()))),
-			_ => {}
-		}
-	};
+	let mut add =
+		|store: &mut Store<ComponentState>, name: &str, item: &ComponentItem, index: Option<ComponentExportIndex>| {
+			let Some(index) = index else { return };
+			match item {
+				ComponentItem::ComponentFunc(_) => functions.push((name.to_string(), index)),
+				ComponentItem::Resource(_) => kinds.extend(
+					instance
+						.get_resource(&mut *store, index)
+						.map(|ty| (ty, name.to_string())),
+				),
+				_ => {}
+			}
+		};
 	for (name, item) in component.component_type().exports(engine()) {
 		if let ComponentItem::ComponentInstance(interface) = &item.ty {
-			let Some(interface_index) = component.get_export_index(None, name) else { continue };
+			let Some(interface_index) = component.get_export_index(None, name) else {
+				continue;
+			};
 			for (inner, item) in interface.exports(engine()) {
-				add(&mut store, inner, &item.ty, component.get_export_index(Some(&interface_index), inner));
+				add(
+					&mut store,
+					inner,
+					&item.ty,
+					component.get_export_index(Some(&interface_index), inner),
+				);
 			}
 		} else {
 			add(&mut store, name, &item.ty, component.get_export_index(None, name));
 		}
 	}
-	Ok(Loaded { store, instance, functions, kinds, held: vec![] })
+	Ok(Loaded {
+		store,
+		instance,
+		functions,
+		kinds,
+		held: vec![],
+	})
 }
 
 /// What warp's host gives a component importing `host` (a warp component's world, `import host: { time: () -> i64 }`,
 /// component_worlds.rs): its words print, time (milliseconds since 1970) and read (a file's text); any other function
 /// of the import traps when called, naming itself
 fn serve_host_imports(linker: &mut Linker<ComponentState>, component: &Component) -> wasmtime::Result<()> {
-	if component.component_type().imports(engine()).any(|(name, _)| name == HOST_IMPORT) {
+	if component
+		.component_type()
+		.imports(engine())
+		.any(|(name, _)| name == HOST_IMPORT)
+	{
 		let mut host = linker.instance(HOST_IMPORT)?;
 		host.func_wrap("print", |_, (text,): (String,)| {
 			println!("{text}");
 			Ok(())
 		})?;
-		host.func_wrap("time", |_, (): ()| Ok((std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis() as i64,)))?;
-		host.func_wrap("read", |_, (path,): (String,)| Ok((std::fs::read_to_string(&path).map_err(|failure| wasmtime::format_err!("read {path}: {failure}"))?,)))?;
+		host.func_wrap("time", |_, (): ()| {
+			Ok((std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)?
+				.as_millis() as i64,))
+		})?;
+		host.func_wrap("read", |_, (path,): (String,)| {
+			Ok(
+				(
+					std::fs::read_to_string(&path)
+						.map_err(|failure| wasmtime::format_err!("read {path}: {failure}"))?,
+				),
+			)
+		})?;
 	}
 	linker.define_unknown_imports_as_traps(component)
 }
@@ -170,50 +219,111 @@ impl Loaded {
 	/// The function `member` names: a method of the resource `kind` for a handle, else a function, a constructor or a
 	/// static function; WIT names are kebab-case, so `stats_of` finds `stats-of` and `Counter` `counter`
 	fn function(&mut self, member: &str, kind: Option<&str>) -> Result<Func, String> {
-		let found = self.functions.iter().find(|(name, _)| match (kind, name.strip_prefix('[')) {
-			(Some(kind), Some(bracketed)) => bracketed.strip_prefix("method]").and_then(|rest| rest.split_once('.'))
-				.is_some_and(|(resource, method)| resource == kind && names_match(method, member)),
-			(Some(_), None) => false,
-			(None, None) => names_match(name, member),
-			(None, Some(bracketed)) => match bracketed.split_once(']') {
-				Some(("constructor", resource)) => names_match(resource, &member.to_lowercase()),
-				Some(("static", function)) => function.split_once('.').is_some_and(|(_, function)| names_match(function, member)),
-				_ => false,
-			},
-		});
+		let found = self
+			.functions
+			.iter()
+			.find(|(name, _)| match (kind, name.strip_prefix('[')) {
+				(Some(kind), Some(bracketed)) => bracketed
+					.strip_prefix("method]")
+					.and_then(|rest| rest.split_once('.'))
+					.is_some_and(|(resource, method)| resource == kind && names_match(method, member)),
+				(Some(_), None) => false,
+				(None, None) => names_match(name, member),
+				(None, Some(bracketed)) => match bracketed.split_once(']') {
+					Some(("constructor", resource)) => names_match(resource, &member.to_lowercase()),
+					Some(("static", function)) => function
+						.split_once('.')
+						.is_some_and(|(_, function)| names_match(function, member)),
+					_ => false,
+				},
+			});
 		let Some((_, index)) = found else {
-			let known: Vec<&str> = self.functions.iter().map(|(name, _)| name.as_str()).filter(|name| kind.is_none_or(|kind| name.contains(&format!("]{kind}.")))).collect();
+			let known: Vec<&str> = self
+				.functions
+				.iter()
+				.map(|(name, _)| name.as_str())
+				.filter(|name| kind.is_none_or(|kind| name.contains(&format!("]{kind}."))))
+				.collect();
 			return Err(match kind {
-				None => format!("the component exports no function {member}; it exports {}", known.join(", ")),
+				None => format!(
+					"the component exports no function {member}; it exports {}",
+					known.join(", ")
+				),
 				Some(kind) => format!("a {kind} has no method {member}; it has {}", known.join(", ")),
 			});
 		};
-		self.instance.get_func(&mut self.store, index).ok_or_else(|| format!("{member} is no function"))
+		self.instance
+			.get_func(&mut self.store, index)
+			.ok_or_else(|| format!("{member} is no function"))
+	}
+
+	/// Run the destructor of a handle's resource; its slot stays empty, so a later use is refused
+	fn dropped(&mut self, handle: &Value) -> Result<Value, String> {
+		let slot = held_slot(&self.held, handle)?;
+		let resource = self.held[slot].take().ok_or_else(|| dropped_error(handle))?;
+		resource
+			.resource_drop(&mut self.store)
+			.map_err(|failure| format!("{}: {failure:#}", handle_text(handle)))?;
+		Ok(Value::Null)
 	}
 
 	/// Call `function` with the receiver's resource first (a method) and the arguments as its WIT parameters want them
-	fn invoke(&mut self, path: &str, member: &str, function: Func, receiver: Option<&Value>, arguments: &[Value]) -> Result<Value, String> {
+	fn invoke(
+		&mut self,
+		path: &str,
+		member: &str,
+		function: Func,
+		receiver: Option<&Value>,
+		arguments: &[Value],
+	) -> Result<Value, String> {
 		let signature = function.ty(&self.store);
-		let parameters: Vec<(String, Type)> = signature.params().map(|(name, ty)| (name.to_string(), ty)).skip(receiver.is_some() as usize).collect();
+		let parameters: Vec<(String, Type)> = signature
+			.params()
+			.map(|(name, ty)| (name.to_string(), ty))
+			.skip(receiver.is_some() as usize)
+			.collect();
 		if parameters.len() != arguments.len() {
 			let names: Vec<&str> = parameters.iter().map(|(name, _)| name.as_str()).collect();
-			return Err(format!("{member} takes {} arguments ({}), got {}", parameters.len(), names.join(", "), arguments.len()));
+			return Err(format!(
+				"{member} takes {} arguments ({}), got {}",
+				parameters.len(),
+				names.join(", "),
+				arguments.len()
+			));
 		}
-		let handles = Handles { path, held: &mut self.held, kinds: &self.kinds };
+		let handles = Handles {
+			path,
+			held: &mut self.held,
+			kinds: &self.kinds,
+		};
 		let mut values = vec![];
 		if let (Some(receiver), Some((_, self_type))) = (receiver, signature.params().next()) {
 			values.push(handles.value_of(receiver, &self_type)?);
 		}
 		for ((name, ty), argument) in parameters.iter().zip(arguments) {
-			values.push(handles.value_of(argument, ty).map_err(|failure| format!("{member} {name}: {failure}"))?);
+			values.push(
+				handles
+					.value_of(argument, ty)
+					.map_err(|failure| format!("{member} {name}: {failure}"))?,
+			);
 		}
 		let mut results = vec![Val::Bool(false); signature.results().len()];
-		function.call(&mut self.store, &values, &mut results).map_err(|failure| format!("{member}: {failure:#}"))?;
-		let mut handles = Handles { path, held: &mut self.held, kinds: &self.kinds };
+		function
+			.call(&mut self.store, &values, &mut results)
+			.map_err(|failure| format!("{member}: {failure:#}"))?;
+		let mut handles = Handles {
+			path,
+			held: &mut self.held,
+			kinds: &self.kinds,
+		};
 		match results.as_slice() {
 			[] => Ok(Value::Null),
 			[result] => handles.json_of(result),
-			several => several.iter().map(|result| handles.json_of(result)).collect::<Result<Vec<Value>, String>>().map(Value::Array),
+			several => several
+				.iter()
+				.map(|result| handles.json_of(result))
+				.collect::<Result<Vec<Value>, String>>()
+				.map(Value::Array),
 		}
 	}
 }
@@ -227,7 +337,7 @@ fn names_match(exported: &str, member: &str) -> bool {
 /// ids never addresses, one table per runtime, kept until the process ends)
 struct Handles<'a> {
 	path: &'a str,
-	held: &'a mut Vec<ResourceAny>,
+	held: &'a mut Vec<Option<ResourceAny>>,
 	kinds: &'a [(ResourceType, String)],
 }
 
@@ -235,10 +345,19 @@ impl Handles<'_> {
 	/// A JSON argument as the WIT type `ty`
 	fn value_of(&self, argument: &Value, ty: &Type) -> Result<Val, String> {
 		let integer = || argument.as_i64().ok_or_else(|| format!("{argument} is no integer"));
-		let unsigned = || argument.as_u64().ok_or_else(|| format!("{argument} is no natural number"));
+		let unsigned = || {
+			argument
+				.as_u64()
+				.ok_or_else(|| format!("{argument} is no natural number"))
+		};
 		let fits = |what: &str| format!("{argument} does not fit a {what}");
 		Ok(match ty {
-			Type::Bool => Val::Bool(argument.as_bool().or_else(|| argument.as_i64().map(|number| number != 0)).ok_or_else(|| format!("{argument} is no boolean"))?),
+			Type::Bool => Val::Bool(
+				argument
+					.as_bool()
+					.or_else(|| argument.as_i64().map(|number| number != 0))
+					.ok_or_else(|| format!("{argument} is no boolean"))?,
+			),
 			Type::S8 => Val::S8(integer()?.try_into().map_err(|_| fits("s8"))?),
 			Type::S16 => Val::S16(integer()?.try_into().map_err(|_| fits("s16"))?),
 			Type::S32 => Val::S32(integer()?.try_into().map_err(|_| fits("s32"))?),
@@ -257,36 +376,75 @@ impl Handles<'_> {
 					_ => return Err(format!("{argument} is no single character")),
 				}
 			}
-			Type::String => Val::String(argument.as_str().ok_or_else(|| format!("{argument} is no text"))?.to_string()),
-			Type::List(list) => Val::List(items(argument)?.iter().map(|item| self.value_of(item, &list.ty())).collect::<Result<_, _>>()?),
+			Type::String => Val::String(
+				argument
+					.as_str()
+					.ok_or_else(|| format!("{argument} is no text"))?
+					.to_string(),
+			),
+			Type::List(list) => Val::List(
+				items(argument)?
+					.iter()
+					.map(|item| self.value_of(item, &list.ty()))
+					.collect::<Result<_, _>>()?,
+			),
 			Type::Tuple(tuple) => {
 				let items = items(argument)?;
 				if items.len() != tuple.types().len() {
-					return Err(format!("{argument} has {} items, the tuple {}", items.len(), tuple.types().len()));
+					return Err(format!(
+						"{argument} has {} items, the tuple {}",
+						items.len(),
+						tuple.types().len()
+					));
 				}
-				Val::Tuple(items.iter().zip(tuple.types()).map(|(item, ty)| self.value_of(item, &ty)).collect::<Result<_, _>>()?)
+				Val::Tuple(
+					items
+						.iter()
+						.zip(tuple.types())
+						.map(|(item, ty)| self.value_of(item, &ty))
+						.collect::<Result<_, _>>()?,
+				)
 			}
 			Type::Record(record) => {
-				let fields = argument.as_object().ok_or_else(|| format!("{argument} is no object of the record's fields"))?;
-				Val::Record(record.fields().map(|field| {
-					let value = fields.get(field.name).ok_or_else(|| format!("{argument} has no field {}", field.name))?;
-					Ok((field.name.to_string(), self.value_of(value, &field.ty)?))
-				}).collect::<Result<_, String>>()?)
+				let fields = argument
+					.as_object()
+					.ok_or_else(|| format!("{argument} is no object of the record's fields"))?;
+				Val::Record(
+					record
+						.fields()
+						.map(|field| {
+							let value = fields
+								.get(field.name)
+								.ok_or_else(|| format!("{argument} has no field {}", field.name))?;
+							Ok((field.name.to_string(), self.value_of(value, &field.ty)?))
+						})
+						.collect::<Result<_, String>>()?,
+				)
 			}
 			Type::Enum(cases) => {
 				let name = argument.as_str().ok_or_else(|| format!("{argument} is no case name"))?;
 				if !cases.names().any(|case| case == name) {
-					return Err(format!("{name} is none of {}", cases.names().collect::<Vec<_>>().join(", ")));
+					return Err(format!(
+						"{name} is none of {}",
+						cases.names().collect::<Vec<_>>().join(", ")
+					));
 				}
 				Val::Enum(name.to_string())
 			}
 			Type::Variant(variant) => {
 				let (name, payload) = match argument {
 					Value::String(name) => (name.as_str(), None),
-					Value::Object(entries) if entries.len() == 1 => entries.iter().next().map(|(name, payload)| (name.as_str(), Some(payload))).expect("one"),
+					Value::Object(entries) if entries.len() == 1 => entries
+						.iter()
+						.next()
+						.map(|(name, payload)| (name.as_str(), Some(payload)))
+						.expect("one"),
 					_ => return Err(format!("{argument} is no case: a name or {{case: value}}")),
 				};
-				let case = variant.cases().find(|case| case.name == name).ok_or_else(|| format!("{name} is no case of the variant"))?;
+				let case = variant
+					.cases()
+					.find(|case| case.name == name)
+					.ok_or_else(|| format!("{name} is no case of the variant"))?;
 				let payload = match (case.ty, payload) {
 					(Some(ty), Some(payload)) => Some(Box::new(self.value_of(payload, &ty)?)),
 					(None, _) => None,
@@ -299,9 +457,22 @@ impl Handles<'_> {
 				present => Val::Option(Some(Box::new(self.value_of(present, &option.ty())?))),
 			},
 			Type::Flags(flags) => {
-				let names: Vec<String> = items(argument)?.iter().map(|name| name.as_str().map(str::to_string).ok_or_else(|| format!("{name} is no flag name"))).collect::<Result<_, _>>()?;
-				if let Some(unknown) = names.iter().find(|name| !flags.names().any(|flag| flag == name.as_str())) {
-					return Err(format!("{unknown} is none of the flags {}", flags.names().collect::<Vec<_>>().join(", ")));
+				let names: Vec<String> = items(argument)?
+					.iter()
+					.map(|name| {
+						name.as_str()
+							.map(str::to_string)
+							.ok_or_else(|| format!("{name} is no flag name"))
+					})
+					.collect::<Result<_, _>>()?;
+				if let Some(unknown) = names
+					.iter()
+					.find(|name| !flags.names().any(|flag| flag == name.as_str()))
+				{
+					return Err(format!(
+						"{unknown} is none of the flags {}",
+						flags.names().collect::<Vec<_>>().join(", ")
+					));
 				}
 				Val::Flags(names)
 			}
@@ -310,7 +481,6 @@ impl Handles<'_> {
 			other => return Err(format!("arguments of the WIT type {other:?} are not supported yet")),
 		})
 	}
-
 
 	/// A component's value as JSON; the `err` of a result is the failure
 	fn json_of(&mut self, value: &Val) -> Result<Value, String> {
@@ -328,14 +498,27 @@ impl Handles<'_> {
 			Val::Float64(number) => Value::from(*number),
 			Val::Char(character) => serde_json::json!({ crate::foreign::CODEPOINT_KEY: character.to_string() }),
 			Val::String(text) => Value::String(text.clone()),
-			Val::List(items) | Val::Tuple(items) | Val::FixedLengthList(items) => Value::Array(items.iter().map(|item| self.json_of(item)).collect::<Result<_, _>>()?),
-			Val::Record(fields) => Value::Object(fields.iter().map(|(name, value)| Ok((name.clone(), self.json_of(value)?))).collect::<Result<Map<_, _>, String>>()?),
+			Val::List(items) | Val::Tuple(items) | Val::FixedLengthList(items) => {
+				Value::Array(items.iter().map(|item| self.json_of(item)).collect::<Result<_, _>>()?)
+			}
+			Val::Record(fields) => Value::Object(
+				fields
+					.iter()
+					.map(|(name, value)| Ok((name.clone(), self.json_of(value)?)))
+					.collect::<Result<Map<_, _>, String>>()?,
+			),
 			Val::Enum(name) => Value::String(name.clone()),
 			Val::Variant(name, None) => Value::String(name.clone()),
-			Val::Variant(name, Some(payload)) => Value::Object(Map::from_iter([(name.clone(), self.json_of(payload)?)])),
+			Val::Variant(name, Some(payload)) => {
+				Value::Object(Map::from_iter([(name.clone(), self.json_of(payload)?)]))
+			}
 			Val::Option(None) => Value::Null,
 			Val::Option(Some(present)) => self.json_of(present)?,
-			Val::Result(Ok(value)) => value.as_deref().map(|item| self.json_of(item)).transpose()?.unwrap_or(Value::Null),
+			Val::Result(Ok(value)) => value
+				.as_deref()
+				.map(|item| self.json_of(item))
+				.transpose()?
+				.unwrap_or(Value::Null),
 			Val::Result(Err(failure)) => {
 				let reason = failure.as_deref().map(|item| self.json_of(item)).transpose()?;
 				return Err(match reason {
@@ -345,7 +528,12 @@ impl Handles<'_> {
 				});
 			}
 			Val::Flags(names) => Value::Array(names.iter().cloned().map(Value::String).collect()),
-			Val::Map(entries) => Value::Array(entries.iter().map(|(key, value)| Ok(Value::Array(vec![self.json_of(key)?, self.json_of(value)?]))).collect::<Result<_, String>>()?),
+			Val::Map(entries) => Value::Array(
+				entries
+					.iter()
+					.map(|(key, value)| Ok(Value::Array(vec![self.json_of(key)?, self.json_of(value)?])))
+					.collect::<Result<_, String>>()?,
+			),
 			Val::Resource(resource) => self.handle(*resource),
 			other => return Err(format!("results of the kind {other:?} are not supported yet")),
 		})
@@ -353,26 +541,58 @@ impl Handles<'_> {
 
 	/// The resource of a handle, of the WIT resource type the parameter wants
 	fn held_resource(&self, argument: &Value, wanted: &ResourceType) -> Result<ResourceAny, String> {
-		let id = argument.get(HANDLE_KEY).and_then(Value::as_u64).ok_or_else(|| format!("{argument} is no handle of a resource"))?;
+		let slot = held_slot(self.held, argument)?;
 		if argument.get(COMPONENT_KEY).and_then(Value::as_str) != Some(self.path) {
 			return Err(format!("{argument} is a handle of another component"));
 		}
-		let resource = *self.held.get(id as usize - 1).ok_or_else(|| format!("no handle {id}"))?;
+		let resource = self.held[slot].ok_or_else(|| dropped_error(argument))?;
 		if resource.ty() != *wanted {
-			return Err(format!("{argument} is a {}, the parameter another resource", self.kind_of(&resource)));
+			return Err(format!(
+				"{argument} is a {}, the parameter another resource",
+				self.kind_of(&resource)
+			));
 		}
 		Ok(resource)
 	}
 
 	fn handle(&mut self, resource: ResourceAny) -> Value {
-		self.held.push(resource);
+		self.held.push(Some(resource));
 		let (id, kind) = (self.held.len(), self.kind_of(&resource));
 		serde_json::json!({ HANDLE_KEY: id, "type": kind, "text": format!("{kind}#{id}"), COMPONENT_KEY: self.path })
 	}
 
 	fn kind_of(&self, resource: &ResourceAny) -> String {
-		self.kinds.iter().find(|(ty, _)| *ty == resource.ty()).map_or_else(|| "resource".to_string(), |(_, name)| name.clone())
+		kind_name(self.kinds, &resource.ty()).unwrap_or_else(|| "resource".to_string())
 	}
+}
+
+/// The slot of a handle's resource among those its component handed out (empty once dropped)
+fn held_slot(held: &[Option<ResourceAny>], handle: &Value) -> Result<usize, String> {
+	let id = handle
+		.get(HANDLE_KEY)
+		.and_then(Value::as_u64)
+		.ok_or_else(|| format!("{handle} is no handle of a resource"))?;
+	(1..=held.len() as u64)
+		.contains(&id)
+		.then(|| id as usize - 1)
+		.ok_or_else(|| format!("no handle {id}"))
+}
+
+/// The WIT name of a resource type of a component
+fn kind_name(kinds: &[(ResourceType, String)], ty: &ResourceType) -> Option<String> {
+	kinds.iter().find(|(kind, _)| kind == ty).map(|(_, name)| name.clone())
+}
+
+fn handle_text(handle: &Value) -> String {
+	handle
+		.get("text")
+		.and_then(Value::as_str)
+		.unwrap_or("the handle")
+		.to_string()
+}
+
+fn dropped_error(handle: &Value) -> String {
+	format!("{} was dropped", handle_text(handle))
 }
 
 fn items(argument: &Value) -> Result<&Vec<Value>, String> {

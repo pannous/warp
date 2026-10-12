@@ -77,6 +77,13 @@ The only session that runs the full suite and the only one that pushes code to m
   even sooner, the worker's early-try binary (notes/agents/common.md) needs no merge at all.
 - Crash fixes first (user, 2026-10-12: "Crash fixes must be merged with highest priority"): a crash card or a branch
   fixing a panic or trap is always express, alone and next, ahead of any queued batch (a running suite finishes first).
+- User changes are signals (user, 2026-10-12): whenever a batch or a push meets changes by the user (commits on main,
+  uncommitted edits carried along), look for the wish behind them and a general pattern: a commented-out line or
+  TODO is a missing feature, a changed constant a complaint (speed, size), a new sample a use case. Each becomes a
+  card (`todo add`), or a question for the Interviewer when the intent is open.
+- Every landing gets a try line (user, 2026-10-12; notes/agents/common.md): the merge report names each user-visible
+  branch to its owner, who sends warp-interviewer the try line; an owner that has retired gets none, so the
+  Integrator sends that branch's try line itself.
 - Before every merge: Cargo.toml/Cargo.lock restored (a branch that changes Cargo.toml is otherwise refused, and a
   grep for "conflict" does not show that). Before reporting a branch merged: `git merge-base --is-ancestor
   origin/<branch> HEAD`.
@@ -93,7 +100,10 @@ The only session that runs the full suite and the only one that pushes code to m
   nothing compiled: notes, docs, wiki, probes, scripts, samples, playground text, go straight onto main in the main
   checkout /Users/me/dev/angles/warp, no worktree or branch. Anything in src/, crates/, tests/, Cargo.* or build.rs
   keeps its worktree, however small: a half-done edit there breaks every build of the main checkout (the user's and
-  every session's working on main). There: never touch the user's uncommitted files (commit only your own paths: `git commit -- <paths>`), run
+  every session's working on main). There: commit your own paths in their own commit (`git commit -- <paths>`), and
+  the user's uncommitted edits you meet are integrated too, not left lying (user, 2026-10-12: "integrate and commit
+  my changes instead of leaving them there"): read each diff, fix what it breaks (a deleted sample's references, a
+  test it changes the meaning of goes to the Interviewer), commit it as the user's change in a commit of its own; run
   the targeted tests through the queue, `git pull --rebase --autostash`, push, and tell the Integrator the commit and
   filters (its next full run is the check). Bigger or overlapping work keeps its worktree and branch.
   Moving on demand: a change that grows (more than a few files, many build/test rounds, or another session's files)

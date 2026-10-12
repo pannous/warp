@@ -23,6 +23,7 @@ const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
 	print: (text, stream) => post({ print: { text, stream } }),
+	dispatch: event => post({ dispatch: event }), // site-thread.js: markup.js dispatchToPage
 	paint: (pixels, width, height) => post({ paint: { pixels, width, height } }), // shown by the page (site-thread.js)
 	listen: holder => holder.timers && startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))), // host-timers.js
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
@@ -34,7 +35,7 @@ function showAfter(outcome) {
 		site?.stopTimers?.();
 		return post({ failure: outcome.failure ?? outcome.trap ?? outcome.error });
 	}
-	post(pageMarkup());
+	post({ ...pageMarkup(), exited: outcome.exited });
 }
 
 // the page's markup anew, as a message to the page

@@ -5,7 +5,6 @@
 //! Run one file with `cargo test --test tests <file_stem>::`.
 
 mod common;
-mod welcoming;
 mod control;
 mod ffi;
 mod functions;
@@ -22,3 +21,4 @@ mod text;
 mod types;
 mod wasm;
 mod web;
+mod welcoming;

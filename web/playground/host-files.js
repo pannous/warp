@@ -12,6 +12,17 @@ const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
+// play of a signal (src/sound.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
+const SIGNAL_BLOCK = 512;
+const FULL_SCALE = 32767;
+// played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
+// checked every SIGNAL_POLL_MS (src/sound.rs SIGNAL_AHEAD, SIGNAL_POLL)
+const SIGNAL_AHEAD_SECONDS = 0.1;
+const SIGNAL_POLL_MS = 10;
+// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound.rs PLAY_AHEAD)
+const PLAY_AHEAD_SECONDS = 0.5;
+// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
+const LINEAR_CELL_BYTES = 8;
 
 // MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
 const MIDI_TICKS_PER_QUARTER = 480;
@@ -270,7 +281,7 @@ const keptEntries = store => databaseObjects("readonly", store)
 // the console). A file written since (by a task) stays as written
 function loadKept() {
 	return databaseLoaded ??= Promise.all([
-		keptEntries(DATABASE.objects).then(entries => entries.forEach(([name, value]) => takeDatabaseValue(name, value)))
+		keptEntries(DATABASE.objects).then(entries => byRowId(entries).forEach(([name, value]) => takeDatabaseValue(name, value)))
 			.catch(failure => console.error("database values could not be read:", failure)),
 		keptEntries(DATABASE.files).then(entries => entries.forEach(([path, content]) => writtenFiles.has(path) || writtenFiles.set(path, content)))
 			.catch(failure => console.error("the files written before could not be read:", failure)),
@@ -308,16 +319,22 @@ function takeDatabaseValue(name, value) {
 	const row = name.match(ROW_KEY);
 	if (!row) {
 		const keptWhole = Array.isArray(value?.rows);
-		databaseValues[name] = name.startsWith(TABLE_PREFIX) && value ? { rows: databaseValues[name]?.rows ?? [], ...value, keptWhole } : value;
+		const rows = keptWhole ? [...value.rows].sort((first, second) => first[ID_COLUMN] - second[ID_COLUMN]) : databaseValues[name]?.rows ?? [];
+		databaseValues[name] = name.startsWith(TABLE_PREFIX) && value ? { ...value, rows, keptWhole } : value;
 		if (value === undefined) delete databaseValues[name];
 		return;
 	}
 	const [, table, id] = row;
 	const stored = databaseValues[table] ??= { types: {}, quantities: {}, rows: [] };
-	stored.rows = stored.rows.filter(kept => kept[ID_COLUMN] !== Number(id));
-	if (value !== undefined) stored.rows.push(value);
-	stored.rows.sort((first, second) => first[ID_COLUMN] - second[ID_COLUMN]);
+	const index = rowIndex(stored.rows, Number(id));
+	const replaced = stored.rows[index]?.[ID_COLUMN] === Number(id) ? 1 : 0;
+	if (value === undefined) stored.rows.splice(index, replaced); else stored.rows.splice(index, replaced, value);
 }
+
+// the kept entries with each table's rows in the order of their ids (IndexedDB gives keys as texts: #10 before #9), so
+// each row is appended
+const byRowId = entries => entries.map(entry => [entry, Number(entry[0].match(ROW_KEY)?.[2] ?? 0)])
+	.sort((first, second) => first[1] - second[1]).map(([entry]) => entry);
 
 // `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept in the database
 // store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types under the
@@ -378,7 +395,20 @@ function openTable(table, schema, file) {
 	return tableRows(table, schema, file);
 }
 
-const tableRows = (table, schema, file) => storedTable(file, table).rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+const rowCells = schema => row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])];
+const tableRows = (table, schema, file) => storedTable(file, table).rows.map(rowCells(schema));
+// `size` rows from the 1-based position `start`, without the others (a loop over a big table reads it page by page)
+const tablePage = (table, schema, file, start, size) => storedTable(file, table).rows.slice(start - 1, start - 1 + size).map(rowCells(schema));
+// a table's rows are in the order of their ids (inserted with the next id, told rows sorted in): the position of `id`,
+// or where it would go
+function rowIndex(rows, id) {
+	let [low, high] = [0, rows.length];
+	while (low < high) {
+		const middle = (low + high) >> 1;
+		if (rows[middle][ID_COLUMN] < id) low = middle + 1; else high = middle;
+	}
+	return low;
+}
 
 function migrateTable(table, schema, file) {
 	const stored = storedTable(file, table);
@@ -416,7 +446,7 @@ function renameColumn(stored, oldName, name) {
 
 function insertRow(table, columns, values, file) {
 	const stored = storedTable(file, table);
-	const id = Math.max(0, ...stored.rows.map(row => row[ID_COLUMN])) + 1;
+	const id = (stored.rows.at(-1)?.[ID_COLUMN] ?? 0) + 1;
 	const row = Object.fromEntries([[ID_COLUMN, id], ...columns.map((column, index) => [column, values[index]])]);
 	stored.rows.push(row);
 	databaseValues[tableKey(file, table)] = stored;
@@ -426,16 +456,18 @@ function insertRow(table, columns, values, file) {
 
 function deleteRow(table, id, file) {
 	const stored = storedTable(file, table);
-	stored.rows = stored.rows.filter(row => row[ID_COLUMN] !== id);
+	const index = rowIndex(stored.rows, id);
+	if (stored.rows[index]?.[ID_COLUMN] === id) stored.rows.splice(index, 1);
 	keep(rowKey(file, table, id), undefined, DATABASE_STORE);
 	return null;
 }
 
 function updateRow(table, id, column, value, file) {
 	const stored = storedTable(file, table);
-	const row = stored.rows.find(row => row[ID_COLUMN] === id);
-	if (row) row[column] = value;
-	if (row) keepRow(file, table, row);
+	const row = stored.rows[rowIndex(stored.rows, id)];
+	if (row?.[ID_COLUMN] !== id) return null;
+	row[column] = value;
+	keepRow(file, table, row);
 	return null;
 }
 
@@ -467,6 +499,42 @@ function rollBack(file) {
 // `at 1s beep()` keeps its second of silence
 // the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
 // render): the samples interleaved and the channels
+// play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
+// samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
+// the signal's handle, computed when the voice holds less than SIGNAL_AHEAD_SECONDS, the wait a sleep (no runaway
+// time); else all of them at once, one sound. Its handle
+function playedSignal(holder, seconds, rate, channels, block, blockOf) {
+	const total = Math.round(Math.max(0, Number(seconds)) * rate);
+	const paced = Boolean(self.pageSystemValues?.window_open);
+	let samples = [];
+	let handle;
+	const played = () => {
+		if (samples.length) handle = holder.sounded(samples, rate, channels, handle);
+		samples = [];
+	};
+	for (let first = 0; first < total; first += block) {
+		while (paced && (self.soundsQueued?.() ?? 0) > SIGNAL_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
+		const count = Math.min(block, total - first);
+		const blocks = blockOf(first, count);
+		for (let index = 0; index < count; index++)
+			for (const cells of blocks) samples.push(Math.round(Math.max(-1, Math.min(1, Number(cells[index] ?? 0))) * FULL_SCALE) + SAMPLE_OFFSET);
+		if (paced) played();
+	}
+	played();
+	return handle ?? 0;
+}
+
+// a function the program gives a sound word, of a float to a float: its export, called directly (closure_apply, which
+// builds nodes for each call, only for a closure without one)
+const exportedOr = (program, callable) => program[callable.warpName] ?? callable;
+
+// the cells of the linear float array at `address` in the program's memory
+function linearDoubles(program, address) {
+	const view = new DataView(program.memory.buffer);
+	const count = Number(view.getBigInt64(address, true));
+	return Array.from({ length: count }, (_, index) => view.getFloat64(address + LINEAR_CELL_BYTES * (index + 1), true));
+}
+
 function mixed(sounds, rate, run) {
 	const channels = Math.max(1, ...sounds.map(sound => sound.channels ?? 1));
 	const framesOf = sound => sound.samples.length / (sound.channels ?? 1);
@@ -479,14 +547,28 @@ function mixed(sounds, rate, run) {
 	const first = Math.min(run.renderedUntil ?? 0, ...starts);
 	const offsets = starts.map(place => Math.round((place - first) * rate));
 	const amplitudes = new Float64Array(channels * Math.max(0, ...sounds.map((sound, i) => offsets[i] + framesOf(sound))));
+	const fades = run.soundFades ?? [];
+	run.soundFades = [];
 	sounds.forEach((sound, i) => {
 		const own = sound.channels ?? 1;
-		for (let frame = 0; frame < framesOf(sound); frame++)
+		const ownFades = fades.filter(fade => fade.handle === 0 || fade.handle === sound.handle);
+		for (let frame = 0; frame < framesOf(sound); frame++) {
+			const gain = ownFades.length ? fadedGain(ownFades, starts[i] + frame / rate) : 1;
 			for (let channel = 0; channel < channels; channel++)
-				amplitudes[(offsets[i] + frame) * channels + channel] += Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET;
+				amplitudes[(offsets[i] + frame) * channels + channel] += Math.round((Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET) * gain);
+		}
 	});
 	run.renderedUntil = first + amplitudes.length / channels / rate;
 	return { samples: Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET), channels };
+}
+
+// the gain at the place after the fades (src/sound.rs faded_gain), in the order they were called: each ramps linearly
+// from the gain it finds there to its own
+function fadedGain(fades, place) {
+	const ramped = (fade, from, at) => from + (fade.gain - from) * (fade.seconds > 0 ? Math.min(1, Math.max(0, (at - fade.place) / fade.seconds)) : 1);
+	let ramp = [{ place: 0, gain: 1, seconds: 0 }, 1];
+	for (const fade of fades.filter(fade => fade.place <= place)) ramp = [fade, ramped(...ramp, fade.place)];
+	return ramped(...ramp, place);
 }
 
 function wavOf(samples, rate, channels = 1) {
@@ -506,11 +588,30 @@ function wavOf(samples, rate, channels = 1) {
 
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
+		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
+		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
+		// (but in an `at`, which places its sounds itself). The handle
+		holder.sounded = (samples, rate, channels, handle) => {
+			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
+			const sound = { samples, rate, channels };
+			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+			hooks.sound?.({ ...sound, at, handle });
+			const own = handle ?? self.lastSoundHandle?.() ?? 0;
+			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
+			return own;
+		};
 		const fetchUrl = (pointer, length, timeout) => {
 			const url = text(pointer, length);
 			return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
 		};
 		return {
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
+			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
+			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
+			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
+			sound_samples: (samples, count, rate, channels) => {
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
+			},
 			fetch: (pointer, length) => fetchUrl(pointer, length),
 			fetch_within: (pointer, length, milliseconds) => fetchUrl(pointer, length, Number(milliseconds)),
 			// the file's bytes as they are, like src/host.rs read; a URL (a package's own files) is fetched
@@ -547,7 +648,7 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
@@ -580,11 +681,43 @@ addHostPart({
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
+			// fade_sound(handle, gain, seconds) (src/sound.rs fade): the page ramps the playing sound, render_sound from where
+			// the speaker stood on this voice
+			fade(handle, gain, seconds) {
+				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
+				const last = self.lastSoundHandle?.() ?? 0;
+				if (handle > last) throw new Error(`fade_sound(${handle}): no sound ${handle} in this run, which played ${last}`);
+				if (!(gain >= 0 && gain <= 1) || seconds < 0) throw new Error(`fade_sound(${handle}, ${gain}, ${seconds}): the gain is 0…1 and the seconds not negative`);
+				const place = (self.currentVoice?.().seconds ?? 0) - (self.soundsQueued?.() ?? 0);
+				(this.holder.run.soundFades ??= []).push({ handle, place, gain, seconds });
+				self.fadeSound?.(handle, gain, seconds);
+				return null;
+			},
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			wait: () => null,
+			// play hum for 2s: hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
+			signal(functions, seconds, rate) {
+				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));
+				return playedSignal(this.holder, seconds, Number(rate), signals.length, SIGNAL_BLOCK, (first, count) => {
+					const blocks = signals.map(() => []);
+					for (let index = first; index < first + count; index++) signals.forEach((signal, channel) => blocks[channel].push(signal(index / Number(rate))));
+					return blocks;
+				});
+			},
+			// play fill for 2s of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
+			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
+			blocks(caller, addresses, seconds, rate) {
+				const blocks = [addresses].flat().map(Number);
+				const program = this.holder.exports;
+				const fill = exportedOr(program, caller);
+				return playedSignal(this.holder, seconds, Number(rate), blocks.length, linearDoubles(program, blocks[0]).length, first => {
+					fill(first / Number(rate));
+					return blocks.map(address => linearDoubles(program, address));
+				});
+			},
 			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
 			// offers it for download
 			render(path) {

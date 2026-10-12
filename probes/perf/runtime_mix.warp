@@ -1,0 +1,90 @@
+// runtime-speed: everyday operations timed one by one (ms), to find the hot spots of the whole runtime
+// run with the optimized binary: WARP_NO_WINDOW=1 ~/dev/bin/warp probes/perf/runtime_mix.warp
+n = 200000
+def timed(name, started) { print(name + " " + (clock() - started) + "ms") }
+
+t = clock()
+xs = []
+for i in 0..n { xs.push(i) }
+timed("push", t)
+
+t = clock()
+total = 0
+for i in 0..n { total += xs[i] }
+timed("index read", t)
+
+t = clock()
+for i in 0..n { xs[i] = i * 2 }
+timed("index write", t)
+
+t = clock()
+ys = int[n]
+for i in 0..n { ys[i] = i }
+timed("typed write", t)
+
+t = clock()
+total = 0
+for y in ys { total += y }
+timed("typed walk", t)
+
+t = clock()
+doubled = xs.map(x => x * 2)
+timed("map", t)
+
+t = clock()
+evens = xs.filter(x => x % 2 == 0)
+timed("filter", t)
+
+t = clock()
+s = sum(xs)
+timed("sum", t)
+
+t = clock()
+copied = xs + xs
+timed("concat", t)
+
+t = clock()
+part = xs[1000..150000]
+timed("slice", t)
+
+t = clock()
+text = ""
+for i in 0..20000 { text += "ab" }
+timed("text append", t)
+
+t = clock()
+words = text.split("b")
+timed("split", t)
+
+t = clock()
+joined = words.join(",")
+timed("join", t)
+
+t = clock()
+m = {}
+for i in 0..20000 { m["k" + i] = i }
+timed("map insert", t)
+
+t = clock()
+found = 0
+for i in 0..20000 { found += m["k" + i] }
+timed("map lookup", t)
+
+t = clock()
+f = 0.0
+for i in 0..n { f += sqrt(i) * 0.5 }
+timed("float math", t)
+
+def square(x) := x * x
+t = clock()
+total = 0
+for i in 0..n { total += square(i) }
+timed("calls", t)
+
+t = clock()
+sorted = sort(doubled.reverse())
+timed("sort", t)
+
+t = clock()
+filled = [0 for i in 0..n]
+timed("comprehension", t)

@@ -23,13 +23,22 @@ fn nearest_of_exact_values() {
 
 #[test]
 fn nearest_takes_two_to_four_arguments() {
-	fails_with("nearest(1.5, rational, 1, 0.1, 2)", "nearest takes 2 to 4 arguments, got 5");
+	fails_with(
+		"nearest(1.5, rational, 1, 0.1, 2)",
+		"nearest takes 2 to 4 arguments, got 5",
+	);
 }
 
 #[test]
 fn float_to_exact_refusals_name_nearest() {
-	fails_with("x: rational = sqrt(2)", "truncate with `as int`, or use nearest(√(2), rational) for the closest fraction");
-	fails_with("sqrt(2) as rational", "or use nearest(√(2), rational) for the closest fraction");
+	fails_with(
+		"x: rational = sqrt(2)",
+		"truncate with `as int`, or use nearest(√(2), rational) for the closest fraction",
+	);
+	fails_with(
+		"sqrt(2) as rational",
+		"or use nearest(√(2), rational) for the closest fraction",
+	);
 }
 
 #[test]
@@ -43,7 +52,10 @@ fn nearest_within_a_precision() {
 #[test]
 fn nearest_expands_exact_values_beyond_floats() {
 	// p² - 2q² = -1: a convergent of √2 itself, not of its float
-	is!("r = nearest(sqrt(2), rational, within: 1e-40); r * r - 2 == -1/4689566069222821420312720463003656425961", true);
+	is!(
+		"r = nearest(sqrt(2), rational, within: 1e-40); r * r - 2 == -1/4689566069222821420312720463003656425961",
+		true
+	);
 	is!("nearest(sqrt(2), rational, 10^38) == 133984184101103275326877813426364627544/94741125149636933417873079920900017937", true);
 	is!("nearest(π, rational) == 245850922/78256779", true);
 }

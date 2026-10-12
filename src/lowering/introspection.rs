@@ -18,10 +18,16 @@ pub fn lower(node: Node) -> Node {
 
 fn listed_names(node: Node, defined: &std::collections::HashSet<String>) -> Node {
 	match node {
-		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator) if items.len() == 2 && items[0].drop_meta().name() == DIR_WORD => {
+		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator)
+			if items.len() == 2 && items[0].drop_meta().name() == DIR_WORD =>
+		{
 			match module_names(&items[1], defined) {
 				Some(names) => crate::reflection::text_list(names),
-				None => Node::List(items.into_iter().map(|item| listed_names(item, defined)).collect(), bracket, separator),
+				None => Node::List(
+					items.into_iter().map(|item| listed_names(item, defined)).collect(),
+					bracket,
+					separator,
+				),
 			}
 		}
 		other => other.map_children(|child| listed_names(child, defined)),
@@ -30,7 +36,9 @@ fn listed_names(node: Node, defined: &std::collections::HashSet<String>) -> Node
 
 /// The names of the standard module `module` names, unless the program names something so itself
 fn module_names(module: &Node, defined: &std::collections::HashSet<String>) -> Option<&'static [String]> {
-	let Node::Symbol(name) = module.drop_meta() else { return None };
+	let Node::Symbol(name) = module.drop_meta() else {
+		return None;
+	};
 	if defined.contains(name) {
 		return None;
 	}

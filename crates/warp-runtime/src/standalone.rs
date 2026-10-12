@@ -5,7 +5,7 @@
 //! its program would end and runs what it carries.
 use crate::engine::{fueled_config, fueled_store};
 use crate::fuel::{fuel_from_environment, DEFAULT_FUEL};
-use crate::host_words::HANDLER_PREFIX;
+use crate::host_words::{FOREIGN_CALL, HANDLER_PREFIX};
 use crate::macho;
 use crate::system_signals::{NEW_EMPTY, NEW_INT};
 use std::fs::File;
@@ -28,7 +28,15 @@ const MEMORY_EXPORT: &str = "memory";
 /// Whether the stub looks up this export of a program: its entry point, memory, handlers and the constructors of their
 /// `event`. warp build drops every other export, and the functions only those reached (tree shaking, card g_gFs8)
 pub fn stub_calls_export(name: &str) -> bool {
-	ENTRY_POINTS.contains(&name) || [MEMORY_EXPORT, NEW_EMPTY, NEW_INT].contains(&name) || name.starts_with(HANDLER_PREFIX)
+	ENTRY_POINTS.contains(&name)
+		|| [MEMORY_EXPORT, NEW_EMPTY, NEW_INT].contains(&name)
+		|| name.starts_with(HANDLER_PREFIX)
+}
+
+/// The exports the stub looks up of a program calling python or js: those of every program, and what the answers are
+/// built with (gc_values.rs)
+pub fn stub_calls_export_with_foreign_calls(name: &str) -> bool {
+	stub_calls_export(name) || crate::gc_values::BUILDERS.contains(&name) || name == crate::gc_values::TEXT_HEAP
 }
 
 /// The engine an executable's machine code is compiled for (warp build) and run with (the stub): no address map, the
@@ -70,10 +78,20 @@ fn carried_range(executable: &[u8]) -> Option<Range<usize>> {
 
 /// The trailer at the end of `bytes` (after its zero padding): where it starts, and the length of the program it closes
 fn trailer_before(bytes: &[u8]) -> Option<(usize, usize)> {
-	let padding = bytes.iter().rev().take(ALIGNMENT - 1).take_while(|&&byte| byte == 0).count();
+	let padding = bytes
+		.iter()
+		.rev()
+		.take(ALIGNMENT - 1)
+		.take_while(|&&byte| byte == 0)
+		.count();
 	let trailer_start = (bytes.len() - padding).checked_sub(TRAILER_BYTES)?;
 	let trailer: &[u8; TRAILER_BYTES] = bytes[trailer_start..trailer_start + TRAILER_BYTES].try_into().ok()?;
-	(&trailer[8..] == TRAILER_MAGIC).then(|| (trailer_start, u64::from_le_bytes(trailer[..8].try_into().unwrap()) as usize))
+	(&trailer[8..] == TRAILER_MAGIC).then(|| {
+		(
+			trailer_start,
+			u64::from_le_bytes(trailer[..8].try_into().unwrap()) as usize,
+		)
+	})
 }
 
 /// The machine code the executable at `path` carries, reading only its load commands and end when it carries none
@@ -117,6 +135,13 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 	crate::host_words::link_host_words(&mut linker)?;
 	crate::output::link_output(&mut linker)?;
 	crate::libm::link_libm(&mut linker)?;
+	linker.func_wrap(
+		crate::host_words::HOST_LIBRARY,
+		FOREIGN_CALL,
+		|mut caller: wasmtime::Caller<'_, ()>, runtime, module, member, call, arguments| {
+			crate::gc_values::foreign_call(&mut caller, [runtime, module, member, call, arguments])
+		},
+	)?;
 	let mut store = fueled_store(&engine, (), fuel_from_environment().unwrap_or(DEFAULT_FUEL));
 	let instance = linker.instantiate(&mut store, &module)?;
 	let main = ENTRY_POINTS
@@ -125,8 +150,12 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 		.ok_or_else(|| wasmtime::Error::msg(format!("the program has no entry point {ENTRY_POINTS:?}")))?;
 	let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];
 	crate::system_signals::allow_staying();
-	let outcome = main.call(&mut store, &[], &mut results).and_then(|_| crate::system_signals::stay_while_listening(&mut store, &instance));
-	let outcome = crate::system_signals::with_exit_handler(outcome, &mut store, |store, name| instance.get_func(&mut *store, name));
+	let outcome = main
+		.call(&mut store, &[], &mut results)
+		.and_then(|_| crate::system_signals::stay_while_listening(&mut store, &instance));
+	let outcome = crate::system_signals::with_exit_handler(outcome, &mut store, |store, name| {
+		instance.get_func(&mut *store, name)
+	});
 	if let Ok(None) = outcome {
 		use std::io::Write;
 		let _ = std::io::stdout().flush();
@@ -137,7 +166,12 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 
 /// The imports a standalone executable provides: (module, name)
 pub fn provided_imports() -> impl Iterator<Item = (&'static str, &'static str)> {
-	let host_words = crate::host_words::BASIC_HOST_WORDS.into_iter().map(|word| (crate::host_words::HOST_LIBRARY, word));
+	let host_words = crate::host_words::BASIC_HOST_WORDS
+		.into_iter()
+		.map(|word| (crate::host_words::HOST_LIBRARY, word));
 	let libm = crate::libm::libm_names().map(|name| (crate::libm::LIBM, name));
-	host_words.chain(libm).chain([(crate::output::WASI_LIBRARY, crate::output::FD_WRITE)])
+	host_words.chain(libm).chain([
+		(crate::output::WASI_LIBRARY, crate::output::FD_WRITE),
+		(crate::host_words::HOST_LIBRARY, FOREIGN_CALL),
+	])
 }

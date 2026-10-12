@@ -12,6 +12,8 @@ guess (user 2026-10-10: show() without a canvas gets a default size, not an erro
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
+- Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
+  Claude spawns never notify it (user, 2026-10-12: a Claude spawn notice landing in Codex is "not at all what we want").
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
@@ -37,6 +39,11 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   written for an old version number silently changes nothing. The Integrator's version_tweak.sh does the same.
   In /Users/me/dev/angles/warp itself (the user's checkout) only small changes on main, and never the user's
   uncommitted files.
+- The user's uncommitted edits are the Integrator's to adopt (user 2026-10-12, "I told the agents ten times"): whoever
+  notices uncommitted user changes in the main checkout or wiki/ (`git status`), above all in files of their own task,
+  never leaves them lying and never reports them as "untouched": SendMessage warp-integrator the paths and what they
+  ask for (commented TODOs are wishes). The Integrator reviews, fixes and commits them on the user's behalf in their
+  own commit, and turns a TODO it cannot do at once into a card.
 - Word choices need no question (user 2026-10-06, the alias mechanism): when alternatives are only different words
   for the same thing, make the recommended word canonical and the others aliases that work with a got-it note and an
   "I meant: <word>" fix (diagnostic::note_alias; which hint call to use: notes/fixits.md "Hints, notes and
@@ -57,22 +64,36 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
+- Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
+  both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
+  A branch from before the whole-repo format (78607d62e) crosses it in three steps, which never drops main's changes:
+  `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
+  (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
+  Never "take your side" on a conflict that also holds main's changes.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
+- Never retire with a card still yours (user, 2026-10-12: "cards disconnected from their agent"): before you stop, or
+  hand over, every card you took is either `todo done <card> <commit>` or released with `todo release <card>
+  "done: …; left: …; branch: …"`, which puts it back in Next with that note and no agent. Partial work that isn't
+  merged gets pushed to its branch first. This applies to Codex runs too.
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
   `git -C /Users/me/dev/angles/warp worktree remove --force <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>`.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
-  Cargo.lock build tweak and whose commits a ref holds, a branch whose tip main or a remote branch holds. If it blocks,
+  Cargo.lock build tweak and whose commits a ref holds, a merged worktree (a remote branch holds its HEAD) whatever it
+  changes, saved first under refs/removed-worktrees, a branch whose tip main or a remote branch holds. If it blocks,
   something would be lost: look before you delete.
 - Un-ignoring tests (user, 2026-10-05): "it's allowed to un ignore test that are suddenly passing". Dropping
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
-  trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable).
+  trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; when the board stays unreachable it says "CARD QUEUED" and keeps the card in ~/.cache/todo-board/pending.json5, which `todo flush` and the hourly cron add later; never into todo.md).
 - GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out
   again); `todo list Now` costs as much, while commands naming a card by its key cost ~1.
+  Never `gh project item-list` (200-530 points a call, and its slow pages trip GitHub's secondary limit, which locks
+  every session out with 502/504; gh refuses it now): read the board with `todo list [--json] [column]`, served from a
+  60 s machine-wide snapshot.
 - JSON5, not strict JSON, for anything people or agents write (user, 2026-10-10): new hand-written configs, probe
   commands and data files use JSON5 (or warp notation). Strict JSON stays only where a tool or protocol requires it
   (package.json, .claude settings, Lake manifest, WebDriver BiDi, machine-to-machine buffers).
@@ -89,6 +110,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
   warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
+  Every landing gets a try line (user 2026-10-12, after "real-time-playback is on main" came without one): whenever
+  any change of yours reaches main that the user can see, hear or run (a whole card, one step of it, a fix), you send
+  warp-interviewer a fresh try line for exactly that change, the same moment you learn it merged; "X is on main"
+  never goes out without its line. The Integrator's merge report names each user-visible branch, so its owner knows.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06), and
   cards related to your current task (user, 2026-10-12).

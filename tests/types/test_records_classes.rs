@@ -1,9 +1,9 @@
 //! `record`, `struct` and `class` declare the same kind of type: constructor call, field access, optional fields
 
 use crate::common::fails_with;
-use warp::Node;
-use crate::{is, eq};
+use crate::{eq, is};
 use warp::wasm_emitter::eval;
+use warp::Node;
 
 #[test]
 fn a_record_is_a_struct() {
@@ -48,8 +48,14 @@ fn record_stays_usable_as_a_variable_name() {
 #[test]
 fn a_class_declares_a_nested_block_of_fields() {
 	let contact = "class contact {\n name\n email?\n phone?\n address {\n  street\n  city\n  zip?\n }\n}\n";
-	is!(&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.address.city"), "X");
-	is!(&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.name"), "Ann");
+	is!(
+		&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.address.city"),
+		"X"
+	);
+	is!(
+		&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.name"),
+		"Ann"
+	);
 }
 
 #[test]

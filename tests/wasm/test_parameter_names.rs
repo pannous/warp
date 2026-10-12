@@ -9,10 +9,16 @@ const PROGRAM: &str = "def square(side):=side*side; square(3)";
 fn local_names(bytes: &[u8]) -> Vec<String> {
 	let mut names = vec![];
 	for payload in Parser::new(0).parse_all(bytes) {
-		let Payload::CustomSection(section) = payload.expect("valid module") else { continue };
-		let KnownCustom::Name(reader) = section.as_known() else { continue };
+		let Payload::CustomSection(section) = payload.expect("valid module") else {
+			continue;
+		};
+		let KnownCustom::Name(reader) = section.as_known() else {
+			continue;
+		};
 		for subsection in reader {
-			let Ok(Name::Local(functions)) = subsection else { continue };
+			let Ok(Name::Local(functions)) = subsection else {
+				continue;
+			};
 			for function in functions {
 				for naming in function.expect("function locals").names {
 					names.push(naming.expect("local name").name.to_string());
@@ -24,7 +30,9 @@ fn local_names(bytes: &[u8]) -> Vec<String> {
 }
 
 fn compiled(program: &str) -> Vec<u8> {
-	compile(program).unwrap_or_else(|answer| panic!("{program} compiled to constant {answer:?}")).bytes
+	compile(program)
+		.unwrap_or_else(|answer| panic!("{program} compiled to constant {answer:?}"))
+		.bytes
 }
 
 #[test]

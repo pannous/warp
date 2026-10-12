@@ -7,6 +7,39 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- return-as (user, via warp-supervisor): return types are spelled `def f(x) as int or text`; `->` still works with
+  a hint and an "I meant" fix toward `as`; no `returns` keyword ("nah") (warp-dispatch).
+- union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
+  are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
+  position `or` stays the boolean or (warp-dispatch).
+- exe-foreign: an executable from `warp build` that uses python/js starts python3 or node from PATH when it runs and
+  fails loudly naming a missing interpreter ("cannot start python3; set WARP_PYTHON"); components and C calls stay
+  refused in executables (notes/aot.md).
+- lossy-return (asked; replaces the old todo.md note "a declared return type converts"): a fraction reaching a
+  declared int result is an error, "an int must be a whole number", fix "declare number, or truncate with as int";
+  lossless conversions (`-> text { 3 }` → "3") still convert. Test assertions pinning truncation may change.
+- cargo-fmt: format the whole repo once in one chore commit, right after an Integrator batch, then the gate enforces
+  `cargo fmt --check`.
+- web-keyframes (implied by P188, not asked): CSS's own form in warp syntax, `@keyframes pop {…}` in `style{}` and
+  `animation: pop 400ms`; warp adds only the delayed removal for leaving, `leave: pop 400ms reverse`.
+- web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
+  in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup). The long form
+  `Counter.all` (or `Counter.instances` if `all` is taken) means the same and hints to use `counters`.
+- signal-samples: the user renamed samples/signal.warp and samples/signal_blocks.warp to samples/siren_sound.warp and
+  samples/stereo_sound.warp (a6484f820); the "Signals" examples on the wiki sound page stay as documentation.
+- consistency (card #376, sub-card of #35 cleanup): an agent regularly checks the app against the documentation.
+  Clear mismatches: fix the docs (small cases: the app); ambiguous ones go through the Interviewer to the user.
+- self-hosting (user, asked directly; plan notes/self_hosting.md, topic card self-hosted): it is for dogfooding,
+  independence from Rust and as a showcase. Scope: the parser first (lexer, parser, serializer), and later parts are
+  planned once it matches. Each warp part is a twin of its Rust part, checked by a differential test over every sample
+  before the Rust part goes. Language gaps found on the way (text indexing, Node API, byte buffer) are fixed in the
+  language, not worked around.
+- site-budget (user, directly to warp-bundle-size, 2026-10-12; replaces the earlier modest raise + ratchet): the
+  hello-world site budget is 100 KB gzipped, "plenty compared to other huge web sites"; no ratchet. Today it is
+  19.8 KB; the test still prints the size.
+- no-executable-by-default (user, via warp-supervisor; replaces P103's default): a plain `warp file.warp` run no
+  longer writes the standalone executable next to the file; WARP_EXECUTABLE=1 turns it back on, `warp build` still
+  makes it (worker warp-executable-flag).
 - play-dispatch (warp-sound default, batch 240; user asked for no snake case): `play hum for 2s` dispatches on what
   hum is: a function of t, or a pair [left, right] of them, plays as a signal; a block function plays block-wise. No
   new word. Stereo: `play_signal([left, right], 2s)` or a fill with three parameters (left, right, t).
@@ -129,6 +162,10 @@ notes/open_decisions.md.
 - P239 (warp-class, cards lambda-def, unbound-lambda): in a lambda naming its parameter, `it` is the surrounding
   code's `it`: `scale := [1 2].map(x => x * it); scale 3` is [3 6]; with no outer `it`, `[1 2].map(x => it)` is
   the error "undefined variable: it". As implemented.
+- P241 (user directly to warp-dispatch, 2026-10-12, extends P157; "do we really need a new vector type or can we use our list"): no vector type and no Rust syntax in warp: warp's list holds any elements,
+  blocks and unboxed numbers alike, so a list type is `ints` (or `list of int`). Ported `Vec<int>`, `vector<int>`,
+  `vector of int`, `Array<int>`, `ArrayList<int>` read as that list with the note "warp says list"
+  (warp_parser FOREIGN_LIST_HEADS); `Vec<T>` of a type parameter drops with it.
 - P240 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
   so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
   (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and

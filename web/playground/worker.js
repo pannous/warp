@@ -6,7 +6,7 @@
 const stage = name => self.postMessage({ type: "stage", stage: name });
 
 stage("loading its scripts");
-importScripts("reader.js", "imports.js", "host.js");
+importScripts("reader.js", "imports.js", "exact.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
@@ -52,9 +52,10 @@ self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_
 self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
 self.sendMidi = (port, message) => post({ type: "midi", port, message }); // host-files.js STD_ADAPTERS.midi
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
+self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
 // a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
 // task's sound comes relayed with its own voice's start
-self.playSamples = sound => post({ type: "sound", ...sound, handle: nextSoundHandle() });
+self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() }); // a signal's blocks share one
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
@@ -65,6 +66,7 @@ const hooks = {
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
+	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder, handler => runHandler(holder, handler));

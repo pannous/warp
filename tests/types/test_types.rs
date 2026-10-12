@@ -1,13 +1,13 @@
 // Type system tests
 // Migrated from tests_*.rs files
 
+use crate::{is, skip};
 use warp::analyzer::analyze;
 use warp::extensions::assert_throws;
-use warp::Node;
 use warp::type_kinds::NodeKind;
 use warp::warp_parser::parse;
+use warp::Node;
 use warp::Number;
-use crate::{is, skip};
 
 // const functions : Map<String, Function> = warp::analyzer::FUNCTIONS;
 
@@ -57,7 +57,9 @@ fn stringp() -> Node {
 }
 
 #[allow(dead_code)]
-fn array() -> Node { Node::Empty }
+fn array() -> Node {
+	Node::Empty
+}
 
 // todo get real type for em all:
 // pub fn types(name: &str) -> Node {
@@ -80,7 +82,6 @@ fn test_auto_type() {
 	is!("-1÷6", -1.0 / 6.0); // Auto-promote int/int division to float
 }
 
-
 #[test]
 fn test_auto_type_nan() {
 	// Float division by zero produces special float values (semantically equal to Nan/Inf); P66: an Int division by
@@ -91,7 +92,7 @@ fn test_auto_type_nan() {
 	is!("-1.0/0.0", Node::Number(Number::NegInf));
 }
 
-	#[test]
+#[test]
 fn test_type_synonyms() {
 	// eq!(Type("i32"s),Type("int32"s));
 	// eq!(Type("i32"s),Type("int"s));
@@ -106,10 +107,7 @@ fn test_return_types() {
 	is!("fun addier(a,b){b+a};addier(42,1)+1", 44);
 	is!("fun addi(x,y){x+y};addi(2.2,2.2)", 4.4);
 	is!("float addi(x,y){x+y};addi(2.2,2.2)", 4.4);
-	is!(
-		"fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)",
-		55
-	);
+	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2)\nfib(10)", 55);
 	is!("add1 x:=x+1;add1 3", 4);
 	is!("int x = $bla", 123);
 	is!("`${1+1}`", "2");
@@ -215,25 +213,23 @@ fn test_deep_type() {
 fn test_type_confusion() {
 	assert_throws("x=1;x='ok'");
 	assert_throws("x=1;x=1.0");
-	// assert_throws("number:=it*2"); // number is a type! can't use type as variable name YES we can, see 
+	// assert_throws("number:=it*2"); // number is a type! can't use type as variable name YES we can, see
 	// assert_throws("double:=it*2"); // double is type i64! can't use type as variable name
-	                            // todo: get rid of stupid type name double, in C it's float64 OR int64 anyway
+	// todo: get rid of stupid type name double, in C it's float64 OR int64 anyway
 }
-
-
 
 #[test]
 fn test_function_return_types() {
 	let _result = analyze(parse("def f(x):float := 42.0"));
 	let _result = analyze(parse("def f(x):int := 42"));
-	let _result = analyze(parse("def f(x):float:=42"));// auto-cast
-	is!("def f(x):float := 42.0;f(0)",42.0);
-	is!("def f(x):int := 42;f(0)",42);
-	is!("def f(x):float := 42;f(0)",42.0);
-	is!("def f(x) as float := 42.0;f(0)",42.0);
-	is!("def f(x) as int := 42;f(0)",42);
-	is!("def f(x) as float := 42;f(0)",42.0);// auto-cast
-	is!("def f(x) as string := 42;f(0)","42");// auto-cast
+	let _result = analyze(parse("def f(x):float:=42")); // auto-cast
+	is!("def f(x):float := 42.0;f(0)", 42.0);
+	is!("def f(x):int := 42;f(0)", 42);
+	is!("def f(x):float := 42;f(0)", 42.0);
+	is!("def f(x) as float := 42.0;f(0)", 42.0);
+	is!("def f(x) as int := 42;f(0)", 42);
+	is!("def f(x) as float := 42;f(0)", 42.0); // auto-cast
+	is!("def f(x) as string := 42;f(0)", "42"); // auto-cast
 }
 
 #[test]
@@ -254,7 +250,6 @@ fn test_types_simple() {
 	// // eq!(result.name, "b");
 
 	let _result = analyze(parse("float a,string b"));
-
 
 	// let result0 = result[0];
 	// eq!(result0.kind(), AST::reference);
@@ -412,7 +407,10 @@ fn test_polymorphism3() {
 		"fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')",
 		"ok"
 	);
-	is!("fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)",2.0);
+	is!(
+		"fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)",
+		2.0
+	);
 }
 
 // a generic type: a list of int16, written [int16] or list<int16> (card vacuous-tests; checking its elements: card
@@ -429,7 +427,10 @@ fn test_generics() {
 fn test_function_argument_cast() {
 	is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
 	is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");
-	crate::common::fails_with("float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)", "2.2 is no int: write 2.2 as int");
+	crate::common::fails_with(
+		"float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)",
+		"2.2 is no int: write 2.2 as int",
+	);
 	//     is!("float addi(int x,int y){x+y};'hello'+addi(2,3)", "hello5.") // OK some float cast going on!
 
 	is!("fun addier(a,b){b+a};addier(42.0,1.0)", 43);
@@ -443,8 +444,8 @@ fn test_function_argument_cast() {
 #[test]
 fn test_type_node() {
 	use warp::node::{Bracket, Separator};
-	use warp::Op;
 	use warp::type_kinds::Kind;
+	use warp::Op;
 
 	// Create a Type node directly
 	let name = Box::new(Node::Symbol("Person".to_string()));
@@ -478,7 +479,7 @@ fn test_type_node() {
 
 #[test]
 fn test_type_registry() {
-	use warp::{TypeRegistry, FieldDef, USER_TYPE_TAG_START, Kind};
+	use warp::{FieldDef, Kind, TypeRegistry, USER_TYPE_TAG_START};
 
 	let mut registry = TypeRegistry::new();
 
@@ -486,8 +487,14 @@ fn test_type_registry() {
 	let tag = registry.register(
 		"Person".to_string(),
 		vec![
-			FieldDef { name: "name".to_string(), type_name: "Text".to_string() },
-			FieldDef { name: "age".to_string(), type_name: "Int".to_string() },
+			FieldDef {
+				name: "name".to_string(),
+				type_name: "Text".to_string(),
+			},
+			FieldDef {
+				name: "age".to_string(),
+				type_name: "Int".to_string(),
+			},
 		],
 	);
 	assert_eq!(tag, USER_TYPE_TAG_START);
@@ -505,10 +512,19 @@ fn test_type_registry() {
 	assert_eq!(def2.name, "Person");
 
 	// Register another type
-	let tag2 = registry.register("Point".to_string(), vec![
-		FieldDef { name: "x".to_string(), type_name: "Float".to_string() },
-		FieldDef { name: "y".to_string(), type_name: "Float".to_string() },
-	]);
+	let tag2 = registry.register(
+		"Point".to_string(),
+		vec![
+			FieldDef {
+				name: "x".to_string(),
+				type_name: "Float".to_string(),
+			},
+			FieldDef {
+				name: "y".to_string(),
+				type_name: "Float".to_string(),
+			},
+		],
+	);
 	assert_eq!(tag2, USER_TYPE_TAG_START + 1);
 
 	// Re-registering same name returns same tag
@@ -521,9 +537,9 @@ fn test_type_registry() {
 
 #[test]
 fn test_type_registry_from_node() {
-	use warp::{TypeRegistry, USER_TYPE_TAG_START};
 	use warp::node::{Bracket, Separator};
 	use warp::Op;
+	use warp::{TypeRegistry, USER_TYPE_TAG_START};
 
 	let mut registry = TypeRegistry::new();
 
@@ -563,7 +579,7 @@ fn test_type_registry_from_node() {
 
 #[test]
 fn test_user_type_wasm_emission() {
-	use warp::{TypeRegistry, FieldDef, WasmGcEmitter};
+	use warp::{FieldDef, TypeRegistry, WasmGcEmitter};
 
 	let mut registry = TypeRegistry::new();
 
@@ -571,8 +587,14 @@ fn test_user_type_wasm_emission() {
 	registry.register(
 		"Person".to_string(),
 		vec![
-			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
-			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
+			FieldDef {
+				name: "name".to_string(),
+				type_name: "String".to_string(),
+			},
+			FieldDef {
+				name: "age".to_string(),
+				type_name: "i64".to_string(),
+			},
 		],
 	);
 
@@ -580,8 +602,14 @@ fn test_user_type_wasm_emission() {
 	registry.register(
 		"Point".to_string(),
 		vec![
-			FieldDef { name: "x".to_string(), type_name: "f32".to_string() },
-			FieldDef { name: "y".to_string(), type_name: "f32".to_string() },
+			FieldDef {
+				name: "x".to_string(),
+				type_name: "f32".to_string(),
+			},
+			FieldDef {
+				name: "y".to_string(),
+				type_name: "f32".to_string(),
+			},
 		],
 	);
 
@@ -606,7 +634,6 @@ fn test_user_type_wasm_emission() {
 	assert!(!wasm_bytes.is_empty(), "WASM bytes should not be empty");
 
 	// Verify with wasmparser
-	let valid = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
-		.validate_all(&wasm_bytes);
+	let valid = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all()).validate_all(&wasm_bytes);
 	assert!(valid.is_ok(), "Generated WASM should be valid: {:?}", valid.err());
 }

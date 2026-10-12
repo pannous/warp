@@ -14,7 +14,12 @@ const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetc
 
 /// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs);
 /// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
-pub use warp_runtime::host_words::{CLOCK, LOCAL_OFFSET, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, NOTIFY, GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, PAGE_PATH, TEXT_COVERAGE, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
+pub use warp_runtime::host_words::{
+	CLIPBOARD_TEXT, CLOCK, EXIT, FETCH_HANDLER_PREFIX, FILE_HANDLER_PREFIX, GPU_COMPUTE, GPU_COMPUTE_LINEAR,
+	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, INTERRUPT_HANDLER, LOCAL_OFFSET, NOTIFY, PAGE_PATH,
+	RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_FRAME,
+	SIGNAL_POLL, SIGNAL_WATCH, SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
+};
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
@@ -41,6 +46,10 @@ pub const TASK_INSIDE: &str = "task_inside";
 /// task_forks(): 1 while a new task would find a free core (fewer tasks run than there are cores), else 0: a parallel
 /// let (parallel.rs) then calls in sequence (notes/bend.md, BendRT's fork cutoff)
 pub const TASK_FORKS: &str = "task_forks";
+/// task_split_mapf(kernel, xs) → a new block of xs's cells mapped by the float kernel (linear_arrays.rs), its slices in
+/// instances of their own on threads of their own (tasks.rs split_map); 0 where the program maps alone (inside a task, in
+/// the browser). `go xs.map(x => …)` of a linear float array (card go-split-kernel)
+pub const TASK_SPLIT_MAPF: &str = "task_split_mapf";
 pub const SIGNAL_SEND: &str = "signal_send";
 /// `try f(args) else Y` of a user function: guarded_call("f·node", [args]) calls f's node wrapper in the same instance
 /// through the host, which turns the engine's stack overflow into the Error "call stack exhausted" that `try` catches
@@ -72,11 +81,14 @@ pub const RUN_BLOCK: &str = "run_block";
 /// block·value(index): the number a block run at run time reads, of the values its run_block call passed
 /// (pipeline::eval_block): the block is compiled as a function of them, the same module for other values
 pub const BLOCK_VALUE: &str = "block·value";
-/// foreign_call(runtime, module, member, call, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
-pub const FOREIGN_CALL: &str = "foreign_call";
+pub use warp_runtime::host_words::FOREIGN_CALL;
 /// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
 /// browser playground (host.js); natively a PNG file (src/paint.rs)
 pub const PAINT: &str = "paint";
+/// `use draw` on the GPU (src/gpu_canvas.rs, lib/draw.warp): draw_shape(kind, a, b, c, d, color) adds a shape,
+/// draw_show(width, height) shows the canvas with the shapes added since the last show
+pub const DRAW_SHAPE: &str = "draw_shape";
+pub const DRAW_SHOW: &str = "draw_show";
 /// sound_samples(samples, count, rate): 16-bit mono samples offset by 32768 (lib/sound.warp) played by the browser playground
 /// (host.js, WebAudio); natively a WAV file the system's player plays (src/sound.rs)
 pub const SOUND: &str = "sound_samples";
@@ -88,6 +100,9 @@ pub const CHANNEL_LISTEN: &str = "channel_listen";
 pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
+/// dispatch_event(name, detail): an emit no handler of a page's program receives, as a DOM CustomEvent on the page
+/// (card page-custom-event, lowering/event_signals.rs; host.js; natively the headless page keeps it)
+pub const DISPATCH_EVENT: &str = "dispatch_event";
 /// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/std_adapters.rs, host.js),
 /// called by the words of lib/<module>.warp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
@@ -95,6 +110,10 @@ pub const STD_IO: &str = "std_io";
 /// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
+/// response_header(name, value): `header "name" "value"` in a route's body, `status 418` the CGI header Status
+/// (card web-route-header, lowering/serve.rs with_answer_headers): natively the route's HTTP answer carries it
+pub const RESPONSE_HEADER: &str = "response_header";
+pub const STATUS_HEADER: &str = "Status";
 /// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
 /// `users := fetch url` (lowering/fetch_signals.rs)
@@ -106,42 +125,209 @@ pub const ANY_VALUE_WORDS: [&str; 4] = [FETCH_REPLY, FOREIGN_CALL, STD_PURE, STD
 /// Channels inside one run (P155, notes/channels.md, tasks.rs Channels), Go's unbuffered channel: channel_new() → id,
 /// channel_put(id, value) waits until a receiver took it, channel_take(id) waits for a value (ø once closed and empty),
 /// channel_more(id) waits until a value is offered (1) or the channel is closed (0), channel_close(id)
-pub const CHANNEL_WORDS: [&str; 5] = ["channel_new", "channel_put", "channel_take", "channel_more", "channel_close"];
+pub const CHANNEL_WORDS: [&str; 5] = [
+	"channel_new",
+	"channel_put",
+	"channel_take",
+	"channel_more",
+	"channel_close",
+];
 /// The host words of tasks, their signals and channels: a module calling one runs tasks (tasks.rs), a function that
 /// calls one has the effect Async (effects.rs)
-pub const TASK_WORDS: [&str; 17] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
-	TASK_INSIDE, TASK_FORKS, SIGNAL_SEND, CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
+pub const TASK_WORDS: [&str; 18] = [
+	TASK_SPAWN,
+	TASK_AWAIT,
+	TASK_CONTROL,
+	TASK_SPAWN_VALUES,
+	TASK_AWAIT_VALUE,
+	TASK_JOIN,
+	TASK_FAILURE,
+	TASK_STATUS,
+	TASK_POLL,
+	TASK_INSIDE,
+	TASK_FORKS,
+	TASK_SPLIT_MAPF,
+	SIGNAL_SEND,
+	CHANNEL_WORDS[0],
+	CHANNEL_WORDS[1],
+	CHANNEL_WORDS[2],
+	CHANNEL_WORDS[3],
+	CHANNEL_WORDS[4],
+];
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 14] = [GPU_COMPUTE, GPU_RENDER, TEXT_COVERAGE, FETCH_REPLY, RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, PAGE_PATH, CHANNEL_WORDS[2], STD_PURE, STD_IO, SERVE_ROUTES];
-pub const HOST_WORDS: [&str; 63] = [GPU_COMPUTE, GPU_RENDER, TEXT_COVERAGE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, NOTIFY, PAGE_PATH, GUARDED_CALL, PAINT, SOUND, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, LOCAL_OFFSET, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, TASK_FORKS, SIGNAL_SEND,
-	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_WRITES, SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2],
-	CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
+pub const VALUE_GIVING_WORDS: [&str; 14] = [
+	GPU_COMPUTE,
+	GPU_RENDER,
+	TEXT_COVERAGE,
+	FETCH_REPLY,
+	RUN_BLOCK,
+	FOREIGN_CALL,
+	BLOCK_VALUE,
+	CHANNEL_NEXT,
+	CLIPBOARD_TEXT,
+	PAGE_PATH,
+	CHANNEL_WORDS[2],
+	STD_PURE,
+	STD_IO,
+	SERVE_ROUTES,
+];
+pub const HOST_WORDS: [&str; 69] = [
+	DRAW_SHAPE,
+	DRAW_SHOW,
+	GPU_COMPUTE,
+	GPU_RENDER,
+	TEXT_COVERAGE,
+	GPU_COMPUTE_LINEAR,
+	GPU_MAP_LINEAR,
+	GPU_REDUCE_LINEAR,
+	FETCH_START,
+	FETCH_REPLY,
+	SERVE_ROUTES,
+	RESPONSE_HEADER,
+	STD_PURE,
+	STD_IO,
+	CHANNEL_LISTEN,
+	CHANNEL_PENDING,
+	CHANNEL_NEXT,
+	CHANNEL_SEND,
+	DISPATCH_EVENT,
+	CLIPBOARD_TEXT,
+	NOTIFY,
+	PAGE_PATH,
+	GUARDED_CALL,
+	PAINT,
+	SOUND,
+	RUN_BLOCK,
+	BLOCK_VALUE,
+	FOREIGN_CALL,
+	SLEEP,
+	RANDOM,
+	RANDOM_BELOW,
+	RANDOM_SEED,
+	CLOCK,
+	LOCAL_OFFSET,
+	SIGNAL_POLL,
+	SIGNAL_EVERY,
+	SIGNAL_DAILY,
+	SIGNAL_AT,
+	SIGNAL_FRAME,
+	SIGNAL_WATCH,
+	SYSTEM_VALUE,
+	EXIT,
+	TASK_SPAWN,
+	TASK_AWAIT,
+	TASK_CONTROL,
+	TASK_SPAWN_VALUES,
+	TASK_AWAIT_VALUE,
+	TASK_JOIN,
+	TASK_FAILURE,
+	TASK_STATUS,
+	TASK_POLL,
+	TASK_INSIDE,
+	TASK_FORKS,
+	TASK_SPLIT_MAPF,
+	SIGNAL_SEND,
+	SHARED_WORDS[0],
+	SHARED_WORDS[1],
+	SHARED_WORDS[2],
+	SHARED_WORDS[3],
+	SHARED_WORDS[4],
+	SHARED_WRITES,
+	SHARED_FLOAT_WORDS[0],
+	SHARED_FLOAT_WORDS[1],
+	SHARED_FLOAT_WORDS[2],
+	CHANNEL_WORDS[0],
+	CHANNEL_WORDS[1],
+	CHANNEL_WORDS[2],
+	CHANNEL_WORDS[3],
+	CHANNEL_WORDS[4],
+];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 63] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 69] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (TEXT_COVERAGE, vec![node, I64], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (GPU_MAP_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
-		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64, node], vec![]), (SOUND, vec![node, I64, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (LOCAL_OFFSET, vec![I64], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
-		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
-		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
-		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
-		(TASK_INSIDE, vec![], vec![I64]), (TASK_FORKS, vec![], vec![I64]), (SIGNAL_SEND, vec![I32, node], vec![I64]),
-		(SHARED_WORDS[0], vec![I64], vec![I64]), (SHARED_WORDS[1], vec![I64, I64], vec![I64]), (SHARED_WORDS[2], vec![I64, I64, I64], vec![I64]),
-		(SHARED_WORDS[3], vec![I64, I64, I64], vec![I64]), (SHARED_WORDS[4], vec![I64], vec![I64]), (SHARED_WRITES, vec![I64], vec![I64]),
-		(SHARED_FLOAT_WORDS[0], vec![I64, I64], vec![F64]), (SHARED_FLOAT_WORDS[1], vec![I64, I64, F64], vec![F64]), (SHARED_FLOAT_WORDS[2], vec![I64, I64, F64], vec![F64]),
-		(CHANNEL_WORDS[0], vec![], vec![I64]), (CHANNEL_WORDS[1], vec![I64, node], vec![]), (CHANNEL_WORDS[2], vec![I64], vec![node]),
-		(CHANNEL_WORDS[3], vec![I64], vec![I64]), (CHANNEL_WORDS[4], vec![I64], vec![])]
+	[
+		(DRAW_SHAPE, vec![I64, F64, F64, F64, F64, I64], vec![]),
+		(DRAW_SHOW, vec![I64, I64], vec![]),
+		(GPU_COMPUTE, vec![node, node, I64], vec![node]),
+		(GPU_RENDER, vec![node, I64, I64, node], vec![node]),
+		(TEXT_COVERAGE, vec![node, I64], vec![node]),
+		(GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]),
+		(GPU_MAP_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]),
+		(GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]),
+		(FETCH_START, vec![I64, node], vec![]),
+		(FETCH_REPLY, vec![I64], vec![node]),
+		(SERVE_ROUTES, vec![I64, node], vec![node]),
+		(RESPONSE_HEADER, vec![node, node], vec![]),
+		(STD_PURE, vec![node, node, node], vec![node]),
+		(STD_IO, vec![node, node, node], vec![node]),
+		(CHANNEL_LISTEN, vec![I64, node], vec![]),
+		(CHANNEL_PENDING, vec![I64], vec![I64]),
+		(CHANNEL_NEXT, vec![I64], vec![node]),
+		(CLIPBOARD_TEXT, vec![], vec![node]),
+		(PAGE_PATH, vec![], vec![node]),
+		(NOTIFY, vec![node], vec![]),
+		(CHANNEL_SEND, vec![node, node], vec![]),
+		(DISPATCH_EVENT, vec![node, node], vec![]),
+		(GUARDED_CALL, vec![I32, node], vec![node]),
+		(PAINT, vec![node, I64, I64, node], vec![]),
+		(SOUND, vec![node, I64, I64, I64], vec![]),
+		(RUN_BLOCK, vec![node, node, node, node], vec![node]),
+		(BLOCK_VALUE, vec![I64], vec![node]),
+		(FOREIGN_CALL, vec![node, node, node, node, node], vec![node]),
+		(SLEEP, vec![I64], vec![]),
+		(RANDOM, vec![], vec![F64]),
+		(RANDOM_BELOW, vec![I64], vec![I64]),
+		(RANDOM_SEED, vec![I64], vec![]),
+		(CLOCK, vec![], vec![I64]),
+		(LOCAL_OFFSET, vec![I64], vec![I64]),
+		(SIGNAL_POLL, vec![], vec![]),
+		(SIGNAL_EVERY, vec![I64, I64], vec![]),
+		(SIGNAL_DAILY, vec![I64, I64, I64], vec![]),
+		(SIGNAL_AT, vec![I64, I64], vec![]),
+		(SIGNAL_FRAME, vec![I64, I64], vec![]),
+		(SIGNAL_WATCH, vec![I64, I32], vec![]),
+		(SYSTEM_VALUE, vec![I32], vec![I64]),
+		(EXIT, vec![I64], vec![]),
+		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]),
+		(TASK_AWAIT, vec![I64], vec![I64]),
+		(TASK_CONTROL, vec![I64, I64], vec![I64]),
+		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]),
+		(TASK_AWAIT_VALUE, vec![I64], vec![node]),
+		(TASK_JOIN, vec![I64], vec![I64]),
+		(TASK_FAILURE, vec![I64], vec![node]),
+		(TASK_STATUS, vec![I64], vec![I64]),
+		(TASK_POLL, vec![], vec![]),
+		(TASK_INSIDE, vec![], vec![I64]),
+		(TASK_FORKS, vec![], vec![I64]),
+		(TASK_SPLIT_MAPF, vec![I32, I64], vec![I64]),
+		(SIGNAL_SEND, vec![I32, node], vec![I64]),
+		(SHARED_WORDS[0], vec![I64], vec![I64]),
+		(SHARED_WORDS[1], vec![I64, I64], vec![I64]),
+		(SHARED_WORDS[2], vec![I64, I64, I64], vec![I64]),
+		(SHARED_WORDS[3], vec![I64, I64, I64], vec![I64]),
+		(SHARED_WORDS[4], vec![I64], vec![I64]),
+		(SHARED_WRITES, vec![I64], vec![I64]),
+		(SHARED_FLOAT_WORDS[0], vec![I64, I64], vec![F64]),
+		(SHARED_FLOAT_WORDS[1], vec![I64, I64, F64], vec![F64]),
+		(SHARED_FLOAT_WORDS[2], vec![I64, I64, F64], vec![F64]),
+		(CHANNEL_WORDS[0], vec![], vec![I64]),
+		(CHANNEL_WORDS[1], vec![I64, node], vec![]),
+		(CHANNEL_WORDS[2], vec![I64], vec![node]),
+		(CHANNEL_WORDS[3], vec![I64], vec![I64]),
+		(CHANNEL_WORDS[4], vec![I64], vec![]),
+	]
 }
 
 /// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
 pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
-use crate::extensions::utils::download_within;
 use crate::extensions::numbers::Number;
+use crate::extensions::utils::download_within;
+use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
-use crate::lowering::nodes::children_rewritten;
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
@@ -182,7 +368,9 @@ pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
 	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == FETCH_WORD);
 	match parts(node).as_slice() {
 		[head, url] if is_fetch(head) => Some((url.clone(), None)),
-		[head, url, keyword, Node::Number(seconds)] if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") => {
+		[head, url, keyword, Node::Number(seconds)]
+			if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") =>
+		{
 			let seconds = match seconds {
 				Number::Complex(..) => return None,
 				real => f64::from(*real),
@@ -199,7 +387,10 @@ pub fn lower_aliases(node: Node) -> Node {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
+	let aliases: Vec<_> = HOST_ALIASES
+		.into_iter()
+		.filter(|(alias, _, _)| !defined.contains(*alias))
+		.collect();
 	if aliases.is_empty() {
 		return node;
 	}
@@ -212,7 +403,10 @@ fn renamed_heads(node: Node, aliases: &[(&str, Option<usize>, &str)]) -> Node {
 			let mut items: Vec<Node> = items.into_iter().map(|item| renamed_heads(item, aliases)).collect();
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
 				let arguments = items.len() - 1;
-				if let Some((_, _, word)) = aliases.iter().find(|(alias, arity, _)| alias == name && arity.is_none_or(|arity| arity == arguments)) {
+				if let Some((_, _, word)) = aliases
+					.iter()
+					.find(|(alias, arity, _)| alias == name && arity.is_none_or(|arity| arity == arguments))
+				{
 					items[0] = Node::Symbol(word.to_string());
 				}
 			}

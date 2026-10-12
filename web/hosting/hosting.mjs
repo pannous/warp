@@ -8,6 +8,8 @@
 import readerScript from "../playground/reader.js";
 import hostScript from "../playground/host.js";
 import importsScript from "../playground/imports.js";
+import exactScript from "../playground/exact.js";
+import stdScript from "../playground/std.js";
 import filesScript from "../playground/host-files.js";
 import hashesScript from "../playground/host-hashes.js";
 import tasksScript from "../playground/host-tasks.js";
@@ -17,21 +19,23 @@ import routesScript from "../playground/host-routes.js";
 import gpuScript from "../playground/host-gpu.js";
 import timersScript from "../playground/host-timers.js";
 import randomScript from "../playground/host-random.js";
+import mediaScript from "../playground/host-media.js";
 import cloudWorkerScript from "../playground/cloud-worker.js";
 
 // the host scripts by the names src/site.rs host_scripts_of gives them (HOST_SCRIPTS, HOST_PARTS)
 const HOST_SCRIPTS = {
 	"reader.js": readerScript,
 	"host.js": hostScript,
-	"host-files.js": filesScript,
-	"host-hashes.js": hashesScript,
-	"host-tasks.js": importsScript + tasksScript,
-	"host-foreign.js": foreignScript,
-	"host-compiler.js": compilerScript,
+	"host-files.js": stdScript + filesScript,
+	"host-hashes.js": stdScript + hashesScript,
+	"host-tasks.js": importsScript + exactScript + tasksScript,
+	"host-foreign.js": exactScript + foreignScript,
+	"host-compiler.js": exactScript + compilerScript,
 	"host-routes.js": importsScript + routesScript,
 	"host-gpu.js": gpuScript,
 	"host-timers.js": timersScript,
 	"host-random.js": randomScript,
+	"host-media.js": mediaScript,
 };
 const ALWAYS_SCRIPTS = ["reader.js", "host.js"];
 
@@ -59,6 +63,10 @@ const TICKET_PREFIX = "ticket:";
 const TICKET_PATTERN = /^[A-Za-z0-9_-]{22,64}$/;
 const TICKET_SECONDS = 600; // KV keeps a value at least 60 s
 const TICKET_POLL_MS = 1500;
+const DEPLOYING_PATH = "/deploying";
+const PROGRAM_LATE_MS = 60 * 1000; // a program that doesn't answer a minute after its link shows gets a note
+const UP_TIMEOUT_MS = 5000;
+const CLOUDFLARE_ERROR = "error code:";
 const PROGRAM_ADDRESS = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(workers\.dev|lambda\.pannous\.com)\/?$/;
 
 class Refusal extends Error {
@@ -119,24 +127,68 @@ function allowedOrigin(origin) {
 }
 
 // the login's answer to the playground: by postMessage while the popup still has its opener, always under the ticket;
-// with a ticket the page then waits for the deployed program and turns into its tab
+// with a ticket the window then becomes the deploy window (deployingPage), which turns into the program's tab
 async function handOver(env, state, message) {
 	const { origin, ticket } = state;
 	if (ticket) await storeTicket(env, ticket, { login: message });
 	const posted = `if (opener) opener.postMessage(${JSON.stringify(message)}, ${JSON.stringify(origin)});`;
-	const waiting = `const status = document.querySelector("p");
+	const deploying = ticket && !message.error ? `location.replace("${DEPLOYING_PATH}?ticket=${ticket}");` : "";
+	const login = message.warpHosting?.login ? ` as ${escapedHtml(message.warpHosting.login)}` : "";
+	const text = message.error ? "Login failed: " + escapedHtml(message.error) : `Logged in${login}, ${ticket ? "deploying…" : "you can close this window."}`;
+	return page(text, posted + deploying);
+}
+
+const page = (html, script = "") => new Response(`<!doctype html><meta charset="utf-8"><title>warp hosting</title><p id="status">${html}</p><script>${script}</script>`,
+	{ headers: { "content-type": "text/html; charset=utf-8" } });
+
+function escapedHtml(text) {
+	return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
+// what the deploy window says about a ticket, {login, program, error}; runs here and, as its source, in the window
+function deployingStatus({ login, program, error }, late) {
+	const who = login?.warpHosting?.login ? `Logged in as ${escapedHtml(login.warpHosting.login)}. ` : "";
+	if (error) return `${who}Not deployed: ${escapedHtml(error)}`;
+	if (!program) return `${who}Deploying: the program's link shows here as soon as it is known.`;
+	const link = `<a href="${escapedHtml(program)}">${escapedHtml(program)}</a>`;
+	return `${who}Deployed at ${link}: ${late ? "it does not answer yet, the link works once it does." : "this window opens it as soon as it answers…"}`;
+}
+
+// GET /deploying?ticket=: the deploy window (card user-click): the program's link as soon as the ticket knows it, and
+// the program itself once it answers (/up), which on a fresh workers.dev or lambda.pannous.com name takes a while
+async function deployingPage(request, env) {
+	const ticket = checkedTicket(new URL(request.url).searchParams.get("ticket"));
+	const state = await ticketState(env, ticket);
+	const waiting = `${escapedHtml}${deployingStatus}
+		const status = document.getElementById("status");
+		const read = address => fetch(address).then(reply => reply.json()).catch(() => ({}));
+		let known, shown;
 		const wait = async () => {
-			const { program, error } = await (await fetch("/ticket?ticket=${ticket}")).json().catch(() => ({}));
-			if (program) return location.replace(program);
-			if (error) return status.textContent = "Not deployed: " + error;
+			const state = await read("/ticket?ticket=${ticket}");
+			known ??= state.program && Date.now();
+			const late = known && Date.now() - known > ${PROGRAM_LATE_MS};
+			const text = deployingStatus(state, late);
+			if (shown !== text) status.innerHTML = shown = text;
+			if (state.error) return;
+			if (state.program && (await read("/up?program=" + encodeURIComponent(state.program))).up) return location.replace(state.program);
 			setTimeout(wait, ${TICKET_POLL_MS});
 		};
 		wait();`;
-	const escaped = text => text.replace(/</g, "&lt;");
-	const login = message.warpHosting?.login ? ` as ${escaped(message.warpHosting.login)}` : "";
-	const done = ticket ? "deploying: this window opens the program when it is up." : "you can close this window.";
-	const page = `<!doctype html><meta charset="utf-8"><title>warp hosting</title><p>${message.error ? "Login failed: " + escaped(message.error) : `Logged in${login}, ${done}`}</p><script>${posted}${ticket && !message.error ? waiting : ""}</script>`;
-	return new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } });
+	return page(deployingStatus(state), state.error ? "" : waiting);
+}
+
+function checkedProgram(program) {
+	if (!PROGRAM_ADDRESS.test(program ?? "")) throw new Refusal(400, `${program} is no deployed program's address`);
+	return program;
+}
+
+// GET /up?program=: does the program answer yet; Cloudflare answers "error code: 1042" for a workers.dev name that
+// has no Worker (yet), and a new lambda.pannous.com name fails until its certificate is issued
+async function upRequest(request) {
+	const program = checkedProgram(new URL(request.url).searchParams.get("program"));
+	const reply = await fetch(program, { redirect: "manual", signal: AbortSignal.timeout(UP_TIMEOUT_MS) }).catch(() => null);
+	const up = Boolean(reply) && reply.status < 500 && !(await reply.text()).startsWith(CLOUDFLARE_ERROR);
+	return json({ up });
 }
 
 function checkedTicket(ticket) {
@@ -144,8 +196,10 @@ function checkedTicket(ticket) {
 	return ticket;
 }
 
+const ticketState = async (env, ticket) => JSON.parse(await env.NAMES.get(TICKET_PREFIX + ticket) ?? "{}");
+
 async function storeTicket(env, ticket, value) {
-	const stored = JSON.parse(await env.NAMES.get(TICKET_PREFIX + ticket) ?? "{}");
+	const stored = await ticketState(env, ticket);
 	await env.NAMES.put(TICKET_PREFIX + ticket, JSON.stringify({ ...stored, ...value }), { expirationTtl: TICKET_SECONDS });
 }
 
@@ -154,9 +208,9 @@ async function storeTicket(env, ticket, value) {
 async function ticketRequest(request, env) {
 	const url = new URL(request.url);
 	const ticket = checkedTicket(url.searchParams.get("ticket"));
-	if (request.method === "GET") return json(JSON.parse(await env.NAMES.get(TICKET_PREFIX + ticket) ?? "{}"));
+	if (request.method === "GET") return json(await ticketState(env, ticket));
 	const [program, error] = ["program", "error"].map(field => url.searchParams.get(field));
-	if (program && !PROGRAM_ADDRESS.test(program)) throw new Refusal(400, `${program} is no deployed program's address`);
+	if (program) checkedProgram(program);
 	if (!program && !error) throw new Refusal(400, "POST /ticket?ticket=…&program=… or &error=…");
 	await storeTicket(env, ticket, program ? { program } : { error: error.slice(0, 500) });
 	return json({ stored: true });
@@ -260,12 +314,24 @@ function scriptForm({ wasm, scripts }) {
 	return form;
 }
 
-async function upload({ token, account, script, program }) {
+// the program's address goes under the deploy's ticket (?ticket=) before the upload, so the deploy window links it at once
+async function upload(env, request, { token, account, script, program }) {
+	const { subdomain } = await cloudflare(token, `/accounts/${account}/workers/subdomain`);
+	const url = `https://${script}.${subdomain}.workers.dev`;
+	const ticket = new URL(request.url).searchParams.get("ticket");
+	if (ticket) await storeTicket(env, checkedTicket(ticket), { program: url });
 	await cloudflare(token, `/accounts/${account}/workers/scripts/${script}`, { method: "PUT", body: scriptForm(program) });
 	await cloudflare(token, `/accounts/${account}/workers/scripts/${script}/subdomain`, { method: "POST",
 		headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: true, previews_enabled: false }) });
-	const { subdomain } = await cloudflare(token, `/accounts/${account}/workers/subdomain`);
-	return `https://${script}.${subdomain}.workers.dev`;
+	return url;
+}
+
+// a Worker nobody claimed, as warp-hosting itself: the account's own, never a program's name
+async function scriptExists(env, script) {
+	const reply = await fetch(`${CLOUDFLARE_API}/accounts/${env.ACCOUNT_ID}/workers/scripts/${script}/settings`, { headers: { authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } });
+	if (reply.status === 404) return false;
+	if (!reply.ok) throw new Refusal(502, `Cloudflare workers/scripts: HTTP ${reply.status}`);
+	return true;
 }
 
 // a name belongs to the first GitHub user who deploys it; the caps keep spam within the free plan (notes/hosting.md
@@ -274,6 +340,7 @@ async function claim(env, name, owner) {
 	const holder = await env.NAMES.get(name);
 	if (holder && holder !== String(owner.id)) throw new Refusal(409, `${name} belongs to someone else: choose another name`);
 	if (holder) return;
+	if (await scriptExists(env, SCRIPT_PREFIX + name)) throw new Refusal(409, `${name} is taken by this account's own Worker: choose another name`);
 	const keys = (await env.NAMES.list()).keys.filter(key => !key.name.startsWith(TICKET_PREFIX));
 	if (keys.length >= Number(env.MAX_PROGRAMS)) throw new Refusal(507, "warp-hosting is full for now: deploy to your own Cloudflare account");
 	const own = keys.filter(key => key.metadata?.owner === String(owner.id)).map(key => key.name);
@@ -286,11 +353,11 @@ async function deployHere(request, env, name) {
 	if (!env.CLOUDFLARE_API_TOKEN) throw new Refusal(501, "warp-hosting has no CLOUDFLARE_API_TOKEN yet (notes/hosting.md)");
 	const program = await programOf(request);
 	await claim(env, name, owner);
-	const url = await upload({ token: env.CLOUDFLARE_API_TOKEN, account: env.ACCOUNT_ID, script: SCRIPT_PREFIX + name, program });
+	const url = await upload(env, request, { token: env.CLOUDFLARE_API_TOKEN, account: env.ACCOUNT_ID, script: SCRIPT_PREFIX + name, program });
 	return json({ url, owner: owner.login });
 }
 
-async function deployToOwnAccount(request, name) {
+async function deployToOwnAccount(request, env, name) {
 	const token = request.headers.get("x-cloudflare-token");
 	let account = request.headers.get("x-cloudflare-account");
 	if (!account) {
@@ -299,7 +366,7 @@ async function deployToOwnAccount(request, name) {
 		account = accounts[0].id;
 	}
 	const program = await programOf(request);
-	return json({ url: await upload({ token, account, script: name, program }) });
+	return json({ url: await upload(env, request, { token, account, script: name, program }) });
 }
 
 async function undeploy(request, env, name) {
@@ -320,11 +387,13 @@ async function route(request, env) {
 	if (callback) return finishLogin(request, env, callback[1] ?? "github");
 	if (url.pathname === "/me") return json(await user(request, env));
 	if (url.pathname === "/ticket") return ticketRequest(request, env);
+	if (url.pathname === DEPLOYING_PATH) return deployingPage(request, env);
+	if (url.pathname === "/up") return upRequest(request);
 	if (url.pathname === "/deploy") {
 		const name = checkedName(url.searchParams.get("name"));
 		if (request.method === "DELETE") return undeploy(request, env, name);
 		if (request.method !== "POST") throw new Refusal(405, "POST the module to /deploy?name=…&scripts=…");
-		return request.headers.has("x-cloudflare-token") ? deployToOwnAccount(request, name) : deployHere(request, env, name);
+		return request.headers.has("x-cloudflare-token") ? deployToOwnAccount(request, env, name) : deployHere(request, env, name);
 	}
 	if (url.pathname === "/") return new Response("warp-hosting: deploys warp programs, see https://github.com/pannous/warp/blob/main/notes/hosting.md\n");
 	throw new Refusal(404, `no ${url.pathname} here`);

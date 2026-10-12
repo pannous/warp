@@ -1,5 +1,5 @@
-use warp::extensions::print;
 use crate::is;
+use warp::extensions::print;
 
 #[test]
 fn test_arithmetic() {
@@ -67,7 +67,6 @@ fn test_hyphen_units() {
 	is!("1900 - 2000 cm == 1950 ± 50 cm ", true);
 }
 
-
 #[test]
 fn test_variable_minus() {
 	is!("a=-1; b=2; b - a", 3); // spaces needed, b-a is kebab-case identifier
@@ -105,10 +104,23 @@ fn test_modulo_with_variables() {
 #[test]
 fn test_sin() {
 	const TOLERANCE: f64 = 1e-12;
-	macro_rules! near { ($actual:expr, $expected:expr) => { assert!(($actual - $expected).abs() < TOLERANCE, "{} != {}", $actual, $expected) }; }
+	macro_rules! near {
+		($actual:expr, $expected:expr) => {
+			assert!(
+				($actual - $expected).abs() < TOLERANCE,
+				"{} != {}",
+				$actual,
+				$expected
+			)
+		};
+	}
 	use std::f64::consts::PI as pi;
-	fn sin(x: f64) -> f64 { x.sin() }
-	fn cos(x: f64) -> f64 { x.cos() }
+	fn sin(x: f64) -> f64 {
+		x.sin()
+	}
+	fn cos(x: f64) -> f64 {
+		x.cos()
+	}
 	near!(sin(0.), 0.);
 	near!(sin(pi / 2.), 1.);
 	near!(sin(-pi / 2.), -1.);
@@ -173,29 +185,29 @@ fn test_runtime_equality_autocast() {
 	// A very general autocast mechanism works pretty well in C++. see there for inspiration.
 	is!("3==3.0", true);
 	/* if (node.length == 2) {  // binary operator would be our Key() node
-        Node lhs = node.children[0]; //["lhs"];
-        Node rhs = node.children[1]; //["rhs"];
-        const Code &lhs_code = emitExpression(lhs, context);
-        Type lhs_type = last_type;
-        arg_type = last_type; 
-        if (isGeneric(last_type))
-            arg_type = last_type.generics.value_type;
-        const Code &rhs_code = emitExpression(rhs, context);
-        Type rhs_type = last_type;
-        Type common_type = commonType(lhs_type, rhs_type, name); // 3.1 + 3 => 6.1 etc, -1/6 => float
-        bool same_domain = common_type != none; // todo: only some operators * / + - only sometimes autocast!
-        code.push(lhs_code); // might be empty ok
-        if (same_domain)
-            code.add(cast(lhs_type, common_type));
-        code.push(rhs_code); // might be empty ok
-        if (name == "#") // todo unhack!!
-            code.add(cast(rhs_type, int32t)); // index operator, cast to int32
-        else if (same_domain)
-            code.add(cast(rhs_type, common_type));
-        if (common_type != void_block)
-            last_type = common_type;
-        else last_type = rhs_type;
-    */
+		Node lhs = node.children[0]; //["lhs"];
+		Node rhs = node.children[1]; //["rhs"];
+		const Code &lhs_code = emitExpression(lhs, context);
+		Type lhs_type = last_type;
+		arg_type = last_type;
+		if (isGeneric(last_type))
+			arg_type = last_type.generics.value_type;
+		const Code &rhs_code = emitExpression(rhs, context);
+		Type rhs_type = last_type;
+		Type common_type = commonType(lhs_type, rhs_type, name); // 3.1 + 3 => 6.1 etc, -1/6 => float
+		bool same_domain = common_type != none; // todo: only some operators * / + - only sometimes autocast!
+		code.push(lhs_code); // might be empty ok
+		if (same_domain)
+			code.add(cast(lhs_type, common_type));
+		code.push(rhs_code); // might be empty ok
+		if (name == "#") // todo unhack!!
+			code.add(cast(rhs_type, int32t)); // index operator, cast to int32
+		else if (same_domain)
+			code.add(cast(rhs_type, common_type));
+		if (common_type != void_block)
+			last_type = common_type;
+		else last_type = rhs_type;
+	*/
 }
 
 #[test]
@@ -241,8 +253,8 @@ fn test_compound_assignment() {
 	is!("x=10; x /= 2; x", 5);
 	is!("x=10; x %= 3; x", 1);
 	// In expressions
-	is!("x=5; x += 3", 8);  // returns the new value
-	// Chained with while
+	is!("x=5; x += 3", 8); // returns the new value
+						// Chained with while
 	is!("x=0; i=3; while i>0 { x += i; i -= 1 }; x", 6); // 3+2+1=6
 }
 
@@ -267,7 +279,7 @@ fn test_global_with_pi() {
 	use std::f64::consts::PI;
 	is!("global x=1+π", 1.0 + PI);
 	is!("global x=1+π;x+2", 3.0 + PI); // x = 1+π ≈ 4.14, then x+2 ≈ 6.14 = 3+π
-	is!("pi", PI);       // pi is alias for π
+	is!("pi", PI); // pi is alias for π
 	is!("1+pi", 1.0 + PI);
 }
 

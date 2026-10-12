@@ -15,7 +15,10 @@ fn the_envelope_rises_decays_sustains_and_releases() {
 
 #[test]
 fn noise_is_a_wave() {
-	is!("use sound\nxs = [wave(\"noise\", 0.25) for i in 0..100]\nmin(xs) >= -1 and max(xs) <= 1 and min(xs) < max(xs)", true);
+	is!(
+		"use sound\nxs = [wave(\"noise\", 0.25) for i in 0..100]\nmin(xs) >= -1 and max(xs) <= 1 and min(xs) < max(xs)",
+		true
+	);
 	is!("wave_shape = \"noise\"\nplay C4 for 5ms\n7", 7);
 }
 

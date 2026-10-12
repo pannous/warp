@@ -4,6 +4,8 @@
 //! its compiler, the network or threads (host.rs); these need nothing.
 //! `signal_poll()` and `signal_every(id, ms)` serve the handlers of system signals (system_signals.rs).
 pub const HOST_LIBRARY: &str = "host";
+/// foreign_call(runtime, module, member, call, arguments): a module of another runtime (foreign.rs), Nodes in and out
+pub const FOREIGN_CALL: &str = "foreign_call";
 pub const SLEEP: &str = "sleep";
 pub const RANDOM: &str = "random";
 pub const RANDOM_BELOW: &str = "random_below";
@@ -20,6 +22,9 @@ pub const SIGNAL_DAILY: &str = "signal_daily";
 /// `signal_at(id, minute_of_day)`: `at 9:00 {…}`, on·every·id once at the next such local time
 pub const SIGNAL_AT: &str = "signal_at";
 pub const SIGNAL_WATCH: &str = "signal_watch";
+/// `signal_frame(id, ms)`: `on frame {…}`, on·every·id every frame of the paint window while it shows; without a window
+/// once (system_signals.rs Trigger::WindowShows)
+pub const SIGNAL_FRAME: &str = "signal_frame";
 /// `system_value(name)`: the machine's `battery` percent, `charging`, `online`, `dark mode` (system_values.rs)
 pub const SYSTEM_VALUE: &str = "system_value";
 pub const BATTERY: &str = "battery";
@@ -41,8 +46,25 @@ pub const TIME_OF_DAY: &str = "time of day";
 /// the size a picture gets: the playground's output pane, natively the paint window's first size (system_values.rs)
 pub const VIEW_WIDTH: &str = "view_width";
 pub const VIEW_HEIGHT: &str = "view_height";
-pub const SYSTEM_VALUES: [(&str, bool); 11] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
-	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true), (WINDOW_OPEN, true), (VIEW_WIDTH, false), (VIEW_HEIGHT, false)];
+/// Whether `use draw` draws on the GPU (src/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
+pub const GPU_DRAWING: &str = "gpu_drawing";
+/// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
+/// (lowering/system_signals.rs); not a value a program names
+pub const KEY_PRESSED: &str = "key_pressed";
+pub const SYSTEM_VALUES: [(&str, bool); 12] = [
+	(BATTERY, false),
+	(CHARGING, true),
+	(ONLINE, true),
+	(DARK_MODE, true),
+	(CLIPBOARD_COUNT, false),
+	(MOUSE_X, false),
+	(MOUSE_Y, false),
+	(MOUSE_DOWN, true),
+	(WINDOW_OPEN, true),
+	(VIEW_WIDTH, false),
+	(VIEW_HEIGHT, false),
+	(GPU_DRAWING, true),
+];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
 pub const CLIPBOARD_TEXT: &str = "clipboard_text";
@@ -86,7 +108,22 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 13] = [SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, LOCAL_OFFSET, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT];
+pub const BASIC_HOST_WORDS: [&str; 14] = [
+	SLEEP,
+	RANDOM,
+	RANDOM_BELOW,
+	RANDOM_SEED,
+	CLOCK,
+	LOCAL_OFFSET,
+	SIGNAL_POLL,
+	SIGNAL_EVERY,
+	SIGNAL_DAILY,
+	SIGNAL_AT,
+	SIGNAL_WATCH,
+	SIGNAL_FRAME,
+	SYSTEM_VALUE,
+	EXIT,
+];
 
 #[cfg(feature = "engine")]
 pub use linking::*;
@@ -94,8 +131,8 @@ pub use linking::*;
 #[cfg(feature = "engine")]
 mod linking {
 	use super::*;
-	use std::time::Duration;
 	use crate::system_signals;
+	use std::time::Duration;
 	use wasmtime::{Caller, Func, Linker, Result};
 
 	/// Link sleep, random, random_below and clock, for a store of any state
@@ -104,37 +141,70 @@ mod linking {
 		RANDOM_STATE.set(0); // and starts unseeded
 		linker.func_wrap(HOST_LIBRARY, SLEEP, |mut caller: Caller<'_, T>, milliseconds: i64| {
 			system_signals::end_at_first_frame()?;
-			system_signals::sleep_with_handlers(&mut caller, Duration::from_millis(milliseconds.max(0) as u64), exported)
+			system_signals::sleep_with_handlers(
+				&mut caller,
+				Duration::from_millis(milliseconds.max(0) as u64),
+				exported,
+			)
 		})?;
 		// the top 53 bits make a uniform f64 in [0, 1)
-		linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
-		linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| if bound <= 0 { 0 } else { (next_random() % bound as u64) as i64 })?;
-		linker.func_wrap(HOST_LIBRARY, RANDOM_SEED, |seed: i64| RANDOM_STATE.set(seeded_state(seed as u64)))?;
+		linker.func_wrap(HOST_LIBRARY, RANDOM, || {
+			(next_random() >> 11) as f64 / (1u64 << 53) as f64
+		})?;
+		linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| {
+			if bound <= 0 {
+				0
+			} else {
+				(next_random() % bound as u64) as i64
+			}
+		})?;
+		linker.func_wrap(HOST_LIBRARY, RANDOM_SEED, |seed: i64| {
+			RANDOM_STATE.set(seeded_state(seed as u64))
+		})?;
 		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
 		linker.func_wrap(HOST_LIBRARY, LOCAL_OFFSET, system_signals::local_offset_at)?;
-		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| system_signals::run_due_handlers(&mut caller, exported))?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| {
+			system_signals::run_due_handlers(&mut caller, exported)
+		})?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_DAILY, system_signals::start_daily_timer)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_AT, system_signals::start_one_shot_timer)?;
-		linker.func_wrap(HOST_LIBRARY, SIGNAL_WATCH, |mut caller: Caller<'_, T>, id: i64, path: i32| -> Result<()> {
-			let path = c_string(&mut caller, path)?;
-			system_signals::watch_file(id, path);
-			Ok(())
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_FRAME, system_signals::start_frame_timer)?;
+		linker.func_wrap(
+			HOST_LIBRARY,
+			SIGNAL_WATCH,
+			|mut caller: Caller<'_, T>, id: i64, path: i32| -> Result<()> {
+				let path = c_string(&mut caller, path)?;
+				system_signals::watch_file(id, path);
+				Ok(())
+			},
+		)?;
+		linker.func_wrap(
+			HOST_LIBRARY,
+			SYSTEM_VALUE,
+			|mut caller: Caller<'_, T>, name: i32| -> Result<i64> {
+				let name = c_string(&mut caller, name)?;
+				crate::system_values::read(&name).map_err(wasmtime::Error::msg)
+			},
+		)?;
+		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> {
+			Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32)))
 		})?;
-		linker.func_wrap(HOST_LIBRARY, SYSTEM_VALUE, |mut caller: Caller<'_, T>, name: i32| -> Result<i64> {
-			let name = c_string(&mut caller, name)?;
-			crate::system_values::read(&name).map_err(wasmtime::Error::msg)
-		})?;
-		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> { Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32))) })?;
 		Ok(())
 	}
 
 	/// The NUL-terminated text a text literal passes as an i32 (the emitter's C strings)
 	fn c_string<T>(caller: &mut Caller<'_, T>, pointer: i32) -> Result<String> {
-		let memory = caller.get_export("memory").and_then(|export| export.into_memory()).ok_or_else(|| wasmtime::Error::msg("no memory export"))?;
+		let memory = caller
+			.get_export("memory")
+			.and_then(|export| export.into_memory())
+			.ok_or_else(|| wasmtime::Error::msg("no memory export"))?;
 		let bytes = memory.data(&*caller);
 		let start = (pointer as usize).min(bytes.len());
-		let end = bytes[start..].iter().position(|byte| *byte == 0).map_or(bytes.len(), |length| start + length);
+		let end = bytes[start..]
+			.iter()
+			.position(|byte| *byte == 0)
+			.map_or(bytes.len(), |length| start + length);
 		Ok(String::from_utf8_lossy(&bytes[start..end]).into_owned())
 	}
 
@@ -171,6 +241,8 @@ mod linking {
 	}
 
 	fn milliseconds_since_epoch() -> i64 {
-		std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map_or(0, |elapsed| elapsed.as_millis() as i64)
 	}
 }

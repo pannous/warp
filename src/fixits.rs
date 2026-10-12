@@ -18,7 +18,13 @@ pub struct Fix {
 }
 
 pub fn fix(meaning: impl Into<String>, written: impl Into<String>, replacement: impl Into<String>) -> Fix {
-	Fix { meaning: meaning.into(), written: written.into(), replacement: replacement.into(), at: None, also: vec![] }
+	Fix {
+		meaning: meaning.into(),
+		written: written.into(),
+		replacement: replacement.into(),
+		at: None,
+		also: vec![],
+	}
 }
 
 /// A fix that adds `line` above the first line of the source: a missing `use math`
@@ -28,7 +34,13 @@ pub fn added_first_line(meaning: impl Into<String>, line: impl Into<String>) -> 
 
 /// A fix that adds `text` at `at` (line, column): a missing closing quote
 pub fn inserted(meaning: impl Into<String>, text: impl Into<String>, at: (usize, usize)) -> Fix {
-	Fix { meaning: meaning.into(), written: String::new(), replacement: text.into(), at: Some(at), also: vec![] }
+	Fix {
+		meaning: meaning.into(),
+		written: String::new(),
+		replacement: text.into(),
+		at: Some(at),
+		also: vec![],
+	}
 }
 
 /// The position after the last character of `line` (1-based) of `source`, trailing spaces aside
@@ -59,12 +71,21 @@ impl Fix {
 	}
 
 	pub fn at(self, line: usize, column: usize) -> Self {
-		Fix { at: Some((line, column)), ..self }
+		Fix {
+			at: Some((line, column)),
+			..self
+		}
 	}
 
 	/// The same reading also replaces `written` at `line`:`column` with `replacement`
-	pub fn and(mut self, written: impl Into<String>, replacement: impl Into<String>, (line, column): (usize, usize)) -> Self {
-		self.also.push(fix(self.meaning.clone(), written, replacement).at(line, column));
+	pub fn and(
+		mut self,
+		written: impl Into<String>,
+		replacement: impl Into<String>,
+		(line, column): (usize, usize),
+	) -> Self {
+		self.also
+			.push(fix(self.meaning.clone(), written, replacement).at(line, column));
 		self
 	}
 
@@ -118,7 +139,9 @@ fn on_word_boundaries(source: &str, range: &Range<usize>) -> bool {
 	let last_inside = source[range.clone()].chars().next_back();
 	let before = source[..range.start].chars().next_back();
 	let after = source[range.end..].chars().next();
-	let glued = |inside: Option<char>, outside: Option<char>| inside.is_some_and(is_word_char) && outside.is_some_and(is_word_char);
+	let glued = |inside: Option<char>, outside: Option<char>| {
+		inside.is_some_and(is_word_char) && outside.is_some_and(is_word_char)
+	};
 	!glued(first_inside, before) && !glued(last_inside, after)
 }
 
@@ -141,7 +164,8 @@ pub fn locate(source: &str, line: usize, column: usize, written: &str) -> Option
 		let (at_line, at_column) = line_and_column(source, range.start);
 		(at_line.abs_diff(line), at_column.abs_diff(column))
 	};
-	source.char_indices()
+	source
+		.char_indices()
 		.filter(|(_, c)| *c == wanted[0])
 		.filter_map(|(start, _)| match_at(source, start, &wanted).map(|end| start..end))
 		.filter(|range| on_word_boundaries(source, range))
@@ -155,7 +179,11 @@ fn offset_of(source: &str, line: usize, column: usize) -> Option<usize> {
 		_ => source.match_indices('\n').nth(line - 2)?.0 + 1,
 	};
 	let line_text = source[line_start..].split('\n').next().unwrap_or_default();
-	let within = line_text.char_indices().map(|(offset, _)| offset).chain([line_text.len()]).nth(column - 1)?;
+	let within = line_text
+		.char_indices()
+		.map(|(offset, _)| offset)
+		.chain([line_text.len()])
+		.nth(column - 1)?;
 	Some(line_start + within)
 }
 
@@ -163,15 +191,24 @@ fn offset_of(source: &str, line: usize, column: usize) -> Option<usize> {
 pub fn edit(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Edit> {
 	let (line, column) = fix.at.unwrap_or((line, column));
 	if fix.is_insertion() {
-		return offset_of(source, line, column).map(|offset| Edit { range: offset..offset, replacement: fix.replacement.clone() });
+		return offset_of(source, line, column).map(|offset| Edit {
+			range: offset..offset,
+			replacement: fix.replacement.clone(),
+		});
 	}
-	locate(source, line, column, &fix.written).map(|range| Edit { range, replacement: fix.replacement.clone() })
+	locate(source, line, column, &fix.written).map(|range| Edit {
+		range,
+		replacement: fix.replacement.clone(),
+	})
 }
 
 /// Every edit of `fix` (its own and those it also needs), the last in the source first so each applies to the source
 /// as the earlier ones left it; `None` when any text is not there or two edits overlap
 pub fn edits(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Vec<Edit>> {
-	let mut edits = std::iter::once(fix).chain(&fix.also).map(|part| edit(source, line, column, part)).collect::<Option<Vec<_>>>()?;
+	let mut edits = std::iter::once(fix)
+		.chain(&fix.also)
+		.map(|part| edit(source, line, column, part))
+		.collect::<Option<Vec<_>>>()?;
 	edits.sort_by_key(|edit| std::cmp::Reverse(edit.range.start));
 	let overlapping = edits.windows(2).any(|pair| pair[1].range.end > pair[0].range.start);
 	(!overlapping).then_some(edits)
@@ -181,7 +218,11 @@ pub fn edits(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Vec<
 /// (a later `warp fix` and IDE quick fixes start here)
 pub fn fixed(source: &str, line: usize, column: usize, fix: &Fix) -> Option<String> {
 	let edits = edits(source, line, column, fix)?;
-	Some(edits.iter().fold(source.to_string(), |changed, edit| apply(&changed, edit)))
+	Some(
+		edits
+			.iter()
+			.fold(source.to_string(), |changed, edit| apply(&changed, edit)),
+	)
 }
 
 pub fn apply(source: &str, edit: &Edit) -> String {

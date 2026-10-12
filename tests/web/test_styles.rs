@@ -10,14 +10,23 @@ fn html_of(code: &str) -> String {
 
 #[test]
 fn an_inline_style_is_a_block_of_properties() {
-	assert_eq!(html_of("theme = \"red\"\ndiv{ style: { color: theme padding: 8 } \"x\" }"), "<div style=\"color: red; padding: 8px\">x</div>");
-	assert_eq!(html_of("p{ style: { fontSize: 12 opacity: 0.5 zIndex: 2 } \"x\" }"), "<p style=\"font-size: 12px; opacity: 0.5; z-index: 2\">x</p>");
+	assert_eq!(
+		html_of("theme = \"red\"\ndiv{ style: { color: theme padding: 8 } \"x\" }"),
+		"<div style=\"color: red; padding: 8px\">x</div>"
+	);
+	assert_eq!(
+		html_of("p{ style: { fontSize: 12 opacity: 0.5 zIndex: 2 } \"x\" }"),
+		"<p style=\"font-size: 12px; opacity: 0.5; z-index: 2\">x</p>"
+	);
 }
 
 #[test]
 fn a_style_sheet_is_a_block_of_rules() {
 	let sheet = html_of("div{ style{ \".card\": { padding: 8 color: \"navy\" } \"ul > li\": { margin: 0 } } p{ class:\"card\" \"x\" } }");
-	assert_eq!(sheet, "<div><style>.card { padding: 8px; color: navy } ul > li { margin: 0px }</style><p class=\"card\">x</p></div>");
+	assert_eq!(
+		sheet,
+		"<div><style>.card { padding: 8px; color: navy } ul > li { margin: 0px }</style><p class=\"card\">x</p></div>"
+	);
 }
 
 // a component's style sheet styles only its own elements (card web-scoped): its root element names the component
@@ -25,6 +34,10 @@ fn a_style_sheet_is_a_block_of_rules() {
 #[test]
 fn a_style_sheet_in_a_component_is_scoped_to_it() {
 	let card = "def Card(title) = div{ style{ \"h2\": { color: \"navy\" } } h2{ title } }\n";
-	let scoped = "<div data-warp-scope=\"Card\"><style>[data-warp-scope=\"Card\"] h2 { color: navy }</style><h2>A</h2></div>";
-	assert_eq!(html_of(&format!("{card}section{{ Card(\"A\") h2{{\"outside\"}} }}")), format!("<section>{scoped}<h2>outside</h2></section>"));
+	let scoped =
+		"<div data-warp-scope=\"Card\"><style>[data-warp-scope=\"Card\"] h2 { color: navy }</style><h2>A</h2></div>";
+	assert_eq!(
+		html_of(&format!("{card}section{{ Card(\"A\") h2{{\"outside\"}} }}")),
+		format!("<section>{scoped}<h2>outside</h2></section>")
+	);
 }

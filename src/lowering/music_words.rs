@@ -18,7 +18,7 @@ use super::memoization::definition_parts;
 use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
 /// A note letter's semitone above C is its place here, from 0 (as lib/sound.warp's note(name))
@@ -27,7 +27,13 @@ const SHARPS: [&str; 2] = ["#", "♯"];
 const FLATS: [&str; 2] = ["b", "♭"];
 /// a unit word of music and the word of lib/sound.warp that makes a plain number of that many: seconds of beats and
 /// bars at the tempo, the gain factor of decibels
-const UNIT_WORDS: [(&str, &str); 5] = [("beat", "beat_seconds"), ("beats", "beat_seconds"), ("bar", "bar_seconds"), ("bars", "bar_seconds"), ("dB", "decibels")];
+const UNIT_WORDS: [(&str, &str); 5] = [
+	("beat", "beat_seconds"),
+	("beats", "beat_seconds"),
+	("bar", "bar_seconds"),
+	("bars", "bar_seconds"),
+	("dB", "decibels"),
+];
 const AT_WORD: &str = "at";
 const DEF_WORD: &str = "def";
 const AT_CALL: &str = "sound_at";
@@ -41,6 +47,23 @@ const LIVE_BODY: &str = "live_body";
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
 const SIGNAL_WORD: &str = "play_signal";
 const FLOAT_TYPE: &str = "float";
+/// `play_blocks(fill, seconds)` → BLOCKS_CALLS: the host (native.rs played_blocks) calls fill·blocks(t) for each block,
+/// which hands fill the linear float array fill·block of BLOCK_SAMPLES cells to fill (BLOCK_TEMPLATES), in stereo
+/// (fill of three parameters: left, right, t) fill·block and fill·right; mono first, then stereo
+const BLOCKS_WORD: &str = "play_blocks";
+const BLOCKS_CALLS: [&str; 2] = [
+	"std_io(\"sound\", \"blocks\", [block_caller, linear_address(block_cells), si_amount(block_seconds), sample_rate])",
+	"std_io(\"sound\", \"blocks\", [block_caller, [linear_address(block_cells), linear_address(block_right)], si_amount(block_seconds), sample_rate])",
+];
+const BLOCK_TEMPLATES: [&str; 2] = [
+	"linear block_cells = float[block_samples]\nblock_caller(t: float) := { block_fill(block_cells, t); 0.0 as float }",
+	"linear block_cells = float[block_samples]\nlinear block_right = float[block_samples]\nblock_caller(t: float) := { block_fill(block_cells, block_right, t); 0.0 as float }",
+];
+const STEREO_FILL_PARAMETERS: usize = 3;
+const PLAY_WORD: &str = "play";
+const FOR_WORD: &str = "for";
+/// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
+pub const BLOCK_SAMPLES: usize = 512;
 
 /// Before the go blocks are lowered (pipeline.rs): `live_loop 4 { … }` becomes the `go { … }` it stands for
 pub fn lower_live_loops(program: Node) -> Node {
@@ -63,9 +86,12 @@ pub fn lower(program: Node) -> Node {
 		return program;
 	}
 	let defined = defined_names(&program);
-	let program = with_float_signals(program);
+	let counts = parameter_counts(&program);
+	let program = with_block_signals(with_float_signals(with_played_functions(program, &counts)), &counts);
 	match with_music_words(program, &defined) {
-		Node::List(statements, bracket, separator) if separator.separates_statements() => Node::List(with_scheduled(statements, &defined), bracket, separator),
+		Node::List(statements, bracket, separator) if separator.separates_statements() => {
+			Node::List(with_scheduled(statements, &defined), bracket, separator)
+		}
 		statement => match scheduled(&statement, &defined) {
 			Some(statements) => Node::List(statements, crate::node::Bracket::None, crate::node::Separator::Newline),
 			None => statement,
@@ -81,20 +107,161 @@ fn with_float_signals(program: Node) -> Node {
 		if let Node::List(items, _, _) = node.drop_meta() {
 			if let [word, signal, ..] = items.as_slice() {
 				if word.is_symbol(SIGNAL_WORD) {
-					signals.extend(signal.symbol_name().map(str::to_string));
+					// in stereo a pair [left, right]
+					let channels = match signal.drop_meta() {
+						Node::List(pair, _, _) => pair.clone(),
+						mono => vec![mono.clone()],
+					};
+					signals.extend(
+						channels
+							.iter()
+							.filter_map(|channel| channel.symbol_name().map(str::to_string)),
+					);
 				}
 			}
 		}
 	});
-	if signals.is_empty() { program } else { with_float_parameters(program, &signals) }
+	if signals.is_empty() {
+		program
+	} else {
+		with_float_parameters(program, &signals)
+	}
+}
+
+/// The functions `play_blocks(fill, 2s)` plays fill a block of samples at a time (BLOCKS_WORD): each gets its block
+/// and the function the host calls, before the program's statements
+fn with_block_signals(program: Node, counts: &HashMap<String, usize>) -> Node {
+	let mut fills = Vec::new();
+	let program = with_block_calls(program, counts, &mut fills);
+	if fills.is_empty() {
+		return program;
+	}
+	let declarations = fills.iter().flat_map(|(fill, stereo)| {
+		match block_template(BLOCK_TEMPLATES[*stereo as usize], fill, Node::Empty) {
+			Node::List(statements, _, separator) if separator.separates_statements() => statements,
+			other => vec![other],
+		}
+	});
+	let (statements, bracket, separator) = match program {
+		Node::List(statements, bracket, separator) if separator.separates_statements() => {
+			(statements, bracket, separator)
+		}
+		statement => (vec![statement], Bracket::None, Separator::Newline),
+	};
+	Node::List(declarations.chain(statements).collect(), bracket, separator)
+}
+
+/// The template's placeholders replaced by the names of the block-wise signal fill, played for `seconds`
+fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
+	let part = |name: &str| Node::Symbol(format!("{fill}{}{name}", crate::analyzer::TEMPORARY_SEPARATOR));
+	let names = [
+		("block_cells", part("block")),
+		("block_right", part("right")),
+		("block_caller", part("blocks")),
+		("block_fill", Node::symbol(fill)),
+		("block_samples", crate::node::int(BLOCK_SAMPLES as i64)),
+		("block_seconds", seconds),
+	];
+	names
+		.into_iter()
+		.fold(crate::warp_parser::parse(template), |node, (placeholder, value)| {
+			crate::library_words::substitute(node, placeholder, &value)
+		})
+}
+
+/// `play hum for 2s` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
+/// a pair [left, right] of them), play_blocks(hum, 2s) of a block function (hum(block, t), hum(left, right, t))
+fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
+	match node.map_children(|child| with_played_functions(child, counts)) {
+		Node::List(ref items, _, _)
+			if let [play, played, for_word, seconds] = items.as_slice()
+				&& play.is_symbol(PLAY_WORD)
+				&& for_word.is_symbol(FOR_WORD)
+				&& let Some(word) = signal_word(played, counts) =>
+		{
+			call(word, vec![played.clone(), seconds.clone()])
+		}
+		other => other,
+	}
+}
+
+/// The word playing `played` if it is a function of the time, a pair of them, or a block function
+fn signal_word(played: &Node, counts: &HashMap<String, usize>) -> Option<&'static str> {
+	let count = |node: &Node| node.symbol_name().and_then(|name| counts.get(name)).copied();
+	match played.drop_meta() {
+		Node::List(pair, Bracket::Square, _)
+			if pair.len() == 2 && pair.iter().all(|function| count(function) == Some(1)) =>
+		{
+			Some(SIGNAL_WORD)
+		}
+		function => match count(function)? {
+			1 => Some(SIGNAL_WORD),
+			2 | STEREO_FILL_PARAMETERS => Some(BLOCKS_WORD),
+			_ => None,
+		},
+	}
+}
+
+/// The functions the program defines and how many parameters each takes
+fn parameter_counts(program: &Node) -> HashMap<String, usize> {
+	let mut counts = HashMap::new();
+	program.visit(&mut |node| {
+		if let Some(Node::List(items, _, _)) = definition_parts(node).map(|(head, _, _)| head.drop_meta().clone()) {
+			counts.extend(
+				items
+					.first()
+					.and_then(Node::symbol_name)
+					.map(|name| (name.to_string(), items.len() - 1)),
+			);
+		}
+	});
+	counts
+}
+
+/// Each play_blocks call written out, its fill and whether it is in stereo in `fills`
+fn with_block_calls(node: Node, parameter_counts: &HashMap<String, usize>, fills: &mut Vec<(String, bool)>) -> Node {
+	match node.map_children(|child| with_block_calls(child, parameter_counts, fills)) {
+		Node::List(ref items, _, _)
+			if let [word, fill, seconds] = items.as_slice()
+				&& word.is_symbol(BLOCKS_WORD)
+				&& let Some(name) = fill.symbol_name() =>
+		{
+			let stereo = parameter_counts.get(name) == Some(&STEREO_FILL_PARAMETERS);
+			if !fills.iter().any(|(known, _)| known == name) {
+				fills.push((name.to_string(), stereo));
+			}
+			block_template(BLOCKS_CALLS[stereo as usize], name, seconds.clone())
+		}
+		other => other,
+	}
 }
 
 fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {
-	let Some((head, body, rebuild)) = definition_parts(&node) else { return node.map_children(|child| with_float_parameters(child, functions)) };
+	let Some((head, body, rebuild)) = definition_parts(&node) else {
+		return node.map_children(|child| with_float_parameters(child, functions));
+	};
 	match head.drop_meta() {
-		Node::List(items, bracket, separator) if items.first().and_then(Node::symbol_name).is_some_and(|name| functions.contains(name)) => {
-			let typed = items.iter().enumerate().map(|(index, item)| if index > 0 && item.symbol_name().is_some() { key(item.clone(), Op::Colon, Node::symbol(FLOAT_TYPE)) } else { item.clone() });
-			rebuild(Node::List(typed.collect(), bracket.clone(), separator.clone()), key(Node::List(vec![body], Bracket::Round, Separator::None), Op::As, Node::symbol(FLOAT_TYPE)))
+		Node::List(items, bracket, separator)
+			if items
+				.first()
+				.and_then(Node::symbol_name)
+				.is_some_and(|name| functions.contains(name)) =>
+		{
+			let typed = items.iter().enumerate().map(|(index, item)| {
+				if index > 0 && item.symbol_name().is_some() {
+					key(item.clone(), Op::Colon, Node::symbol(FLOAT_TYPE))
+				} else {
+					item.clone()
+				}
+			});
+			rebuild(
+				Node::List(typed.collect(), bracket.clone(), separator.clone()),
+				key(
+					Node::List(vec![body], Bracket::Round, Separator::None),
+					Op::As,
+					Node::symbol(FLOAT_TYPE),
+				),
+			)
 		}
 		_ => node,
 	}
@@ -108,8 +275,14 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 		return call(word, vec![with_music_words(amount, defined)]);
 	}
 	match node.map_children(|child| with_music_words(child, defined)) {
-		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(with_kind_text(with_unit_words(items, defined), defined), bracket, separator),
-		Node::List(statements, bracket, separator) => Node::List(with_scheduled(statements, defined), bracket, separator),
+		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(
+			with_kind_text(with_unit_words(items, defined), defined),
+			bracket,
+			separator,
+		),
+		Node::List(statements, bracket, separator) => {
+			Node::List(with_scheduled(statements, defined), bracket, separator)
+		}
 		other => other,
 	}
 }
@@ -128,37 +301,69 @@ fn glued_unit(node: &Node, defined: &HashSet<String>) -> Option<(&'static str, N
 }
 
 fn with_scheduled(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
-	statements.into_iter().flat_map(|statement| scheduled(&statement, defined).unwrap_or_else(|| vec![statement])).collect()
+	statements
+		.into_iter()
+		.flat_map(|statement| scheduled(&statement, defined).unwrap_or_else(|| vec![statement]))
+		.collect()
 }
 
 /// `at 2 beats play C4` → `sound_at(beat_seconds(2))`, `play C4`, `sound_at_end()`; a block's statements in place
 fn scheduled(statement: &Node, defined: &HashSet<String>) -> Option<Vec<Node>> {
-	let Node::List(items, _, separator) = statement.drop_meta() else { return None };
-	let [at, time, action @ ..] = items.as_slice() else { return None };
+	let Node::List(items, _, separator) = statement.drop_meta() else {
+		return None;
+	};
+	let [at, time, action @ ..] = items.as_slice() else {
+		return None;
+	};
 	if separator.separates_statements() || action.is_empty() || defined.contains(AT_WORD) || !at.is_symbol(AT_WORD) {
 		return None;
 	}
 	let actions = match action {
 		[block] => match block.drop_meta() {
-			Node::List(statements, crate::node::Bracket::Curly, inner) if inner.separates_statements() || statements.len() == 1 => statements.clone(),
-			Node::List(words, crate::node::Bracket::Curly, inner) => vec![Node::List(words.clone(), crate::node::Bracket::None, inner.clone())],
+			Node::List(statements, crate::node::Bracket::Curly, inner)
+				if inner.separates_statements() || statements.len() == 1 =>
+			{
+				statements.clone()
+			}
+			Node::List(words, crate::node::Bracket::Curly, inner) => {
+				vec![Node::List(words.clone(), crate::node::Bracket::None, inner.clone())]
+			}
 			single => vec![single.clone()],
 		},
-		_ => vec![Node::List(action.to_vec(), crate::node::Bracket::None, separator.clone())],
+		_ => vec![Node::List(
+			action.to_vec(),
+			crate::node::Bracket::None,
+			separator.clone(),
+		)],
 	};
-	Some([call(AT_CALL, vec![time.clone()])].into_iter().chain(actions).chain([call(AT_END_CALL, vec![])]).collect())
+	Some(
+		[call(AT_CALL, vec![time.clone()])]
+			.into_iter()
+			.chain(actions)
+			.chain([call(AT_END_CALL, vec![])])
+			.collect(),
+	)
 }
 
 /// `live_loop 4 { body }` → `go { for live_cycle in 0..4 { body } }`
 fn live_loop_statement(statement: &Node, defined: &HashSet<String>) -> Option<Node> {
-	let Node::List(items, _, separator) = statement.drop_meta() else { return None };
-	let [word, cycles, rest @ ..] = items.as_slice() else { return None };
+	let Node::List(items, _, separator) = statement.drop_meta() else {
+		return None;
+	};
+	let [word, cycles, rest @ ..] = items.as_slice() else {
+		return None;
+	};
 	let [block] = rest else { return None };
-	let Node::List(_, crate::node::Bracket::Curly, _) = block.drop_meta() else { return None };
+	let Node::List(_, crate::node::Bracket::Curly, _) = block.drop_meta() else {
+		return None;
+	};
 	if separator.separates_statements() || defined.contains(LIVE_LOOP_WORD) || !word.is_symbol(LIVE_LOOP_WORD) {
 		return None;
 	}
-	let made = substituted(crate::warp_parser::parse(LIVE_LOOP_TEMPLATE), &[(LIVE_CYCLES, cycles.clone()), (LIVE_BODY, block.clone())]);
+	let made = substituted(
+		crate::warp_parser::parse(LIVE_LOOP_TEMPLATE),
+		&[(LIVE_CYCLES, cycles.clone()), (LIVE_BODY, block.clone())],
+	);
 	Some(match made {
 		Node::List(mut statements, _, _) if statements.len() == 1 => statements.remove(0),
 		made => made,
@@ -205,7 +410,10 @@ fn with_unit_words(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 	for item in items {
 		match (unit_amount_word(&item, defined), written.pop()) {
 			(Some(word), Some(amount)) => written.push(match amount.drop_meta() {
-				Node::Key(target, Op::Assign, value) => Node::Key(target.clone(), Op::Assign, Box::new(call(word, vec![*value.clone()]))).with_meta_of(&amount),
+				Node::Key(target, Op::Assign, value) => {
+					Node::Key(target.clone(), Op::Assign, Box::new(call(word, vec![*value.clone()])))
+						.with_meta_of(&amount)
+				}
 				_ => call(word, vec![amount]),
 			}),
 			(_, before) => written.extend(before.into_iter().chain([item])),
@@ -216,7 +424,10 @@ fn with_unit_words(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 
 fn unit_amount_word(node: &Node, defined: &HashSet<String>) -> Option<&'static str> {
 	match node.drop_meta() {
-		Node::Symbol(name) if !defined.contains(name) => UNIT_WORDS.iter().find(|(word, _)| word == name).map(|(_, seconds)| *seconds),
+		Node::Symbol(name) if !defined.contains(name) => UNIT_WORDS
+			.iter()
+			.find(|(word, _)| word == name)
+			.map(|(_, seconds)| *seconds),
 		_ => None,
 	}
 }
@@ -226,7 +437,9 @@ fn note_midi(node: &Node, defined: &HashSet<String>) -> Option<i64> {
 	let (written, name) = match node.drop_meta() {
 		Node::Symbol(name) => (name.clone(), name.clone()),
 		Node::Key(letter, Op::Hash, octave) => match (letter.drop_meta(), octave.drop_meta()) {
-			(Node::Symbol(letter), Node::Number(crate::Number::Int(octave))) if letter.len() == 1 => (letter.clone(), format!("{letter}#{octave}")),
+			(Node::Symbol(letter), Node::Number(crate::Number::Int(octave))) if letter.len() == 1 => {
+				(letter.clone(), format!("{letter}#{octave}"))
+			}
 			_ => return None,
 		},
 		_ => return None,
@@ -245,7 +458,15 @@ fn midi_of(name: &str) -> Option<i64> {
 	let rest: String = chars.collect();
 	let octave_digit = rest.chars().last().filter(char::is_ascii_digit)?;
 	let accidental = &rest[..rest.len() - 1];
-	let shift = if accidental.is_empty() { 0 } else if SHARPS.contains(&accidental) { 1 } else if FLATS.contains(&accidental) { -1 } else { return None };
+	let shift = if accidental.is_empty() {
+		0
+	} else if SHARPS.contains(&accidental) {
+		1
+	} else if FLATS.contains(&accidental) {
+		-1
+	} else {
+		return None;
+	};
 	Some(12 * (octave_digit.to_digit(10)? as i64 + 1) + semitone + shift)
 }
 
@@ -255,7 +476,9 @@ fn defined_names(program: &Node) -> HashSet<String> {
 	let mut names: HashSet<String> = super::for_loop::loop_variables(program).into_iter().collect();
 	program.visit(&mut |node| match node {
 		Node::Key(target, Op::Assign | Op::Define, _) => names.extend(definition_names(target)),
-		Node::List(items, _, _) if items.first().is_some_and(|keyword| keyword.is_symbol(DEF_WORD)) => names.extend(items.get(1).map(definition_signature_names).unwrap_or_default()),
+		Node::List(items, _, _) if items.first().is_some_and(|keyword| keyword.is_symbol(DEF_WORD)) => {
+			names.extend(items.get(1).map(definition_signature_names).unwrap_or_default())
+		}
 		_ => {}
 	});
 	names
@@ -264,7 +487,13 @@ fn defined_names(program: &Node) -> HashSet<String> {
 /// `def h(v) { play C4 }` is `def ((h (v)) {body})`: the names of the signature, not of the body
 fn definition_signature_names(definition: &Node) -> Vec<String> {
 	match definition.drop_meta() {
-		Node::List(parts, _, _) if parts.last().is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) => parts[..parts.len() - 1].iter().flat_map(definition_names).collect(),
+		Node::List(parts, _, _)
+			if parts
+				.last()
+				.is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) =>
+		{
+			parts[..parts.len() - 1].iter().flat_map(definition_names).collect()
+		}
 		_ => definition_names(definition),
 	}
 }
@@ -277,4 +506,3 @@ fn definition_names(target: &Node) -> Vec<String> {
 		_ => vec![],
 	}
 }
-

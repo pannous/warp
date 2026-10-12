@@ -1,11 +1,14 @@
 // The type model W0 (notes/type_theory.md) types a call f(e) only when e fits f's declared parameter, and a variable
 // keeps the kind of its first value, a call's result included: warp refuses both at compile time
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 #[test]
 fn a_declared_parameter_refuses_an_argument_of_another_kind() {
-	fails_with("f(x: text) := x; f(3)", "f needs a Text for parameter x, got 3 (an Int)");
+	fails_with(
+		"f(x: text) := x; f(3)",
+		"f needs a Text for parameter x, got 3 (an Int)",
+	);
 	fails_with("f(x: int) := x; f(\"ab\")", "f needs an Int for parameter x");
 	fails_with("f(x: text) := x; n = 3; f(n)", "f needs a Text for parameter x");
 }
@@ -23,7 +26,10 @@ fn a_declared_parameter_takes_its_subtypes() {
 
 #[test]
 fn a_variable_keeps_the_kind_of_a_call_result() {
-	fails_with("f(x: int) := x + 1; y = f(2); y = \"a\"", "y was an Int, is given a Text");
+	fails_with(
+		"f(x: int) := x + 1; y = f(2); y = \"a\"",
+		"y was an Int, is given a Text",
+	);
 	fails_with("f() := \"a\"; y = f(); y = 2", "y was a Text, is given an Int");
 	is!("f(x: int) := x + 1; y = f(2); y = 7; y", 7);
 	is!("f(x: int) := x + 1; y = f(2); y = 1.5; y", 1.5);
@@ -31,12 +37,28 @@ fn a_variable_keeps_the_kind_of_a_call_result() {
 
 #[test]
 fn a_declared_list_parameter_refuses_other_elements() {
-	fails_with("f(xs: texts) := xs; f([420])", "f needs a list of text for parameter xs, got [420] (a list of int)");
-	fails_with("f(xs: ints) := xs; f([\"a\"])", "f needs a list of int for parameter xs");
+	fails_with(
+		"f(xs: texts) := xs; f([420])",
+		"f needs a list of text for parameter xs, got [420] (a list of int)",
+	);
+	fails_with(
+		"f(xs: ints) := xs; f([\"a\"])",
+		"f needs a list of int for parameter xs",
+	);
 	fails_with("f(xs: [int]) := xs; f([1.5])", "f needs a list of int for parameter xs");
-	fails_with("f(xs: texts) := count xs; ys = [1]; f(ys)", "f needs a list of text for parameter xs");
+	fails_with(
+		"f(xs: texts) := count xs; ys = [1]; f(ys)",
+		"f needs a list of text for parameter xs",
+	);
 	is!("f(xs: texts) := count xs; f([\"a\", \"bc\"])", 2);
 	is!("f(xs: numbers) := count xs; f([1, 2.5])", 2);
 	is!("f(xs: floats) := count xs; f([1, 2])", 2);
 	is!("f(xs: ints) := count xs; f([])", 0);
+}
+
+#[test]
+fn a_map_parameter_refuses_a_plain_value() {
+	fails_with("g(m: map) := m; g(3)", "g needs a map for parameter m, got 3 (an Int)");
+	fails_with("g(m: map) := m; g(\"ab\")", "g needs a map for parameter m");
+	is!("g(m: map) := m.a; g({a:1})", 1);
 }

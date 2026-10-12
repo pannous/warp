@@ -17,16 +17,34 @@ fn build_finds_or_builds_the_runtime_stub_by_itself() {
 	std::fs::write(&source, "3 + 4").unwrap();
 	let executable = source.with_extension(std::env::consts::EXE_EXTENSION);
 	let _ = std::fs::remove_file(&executable);
-	let build = || std::process::Command::new(&warp).env_remove("WARP_RUNTIME_STUB").args(["build", "--exe"]).arg(&source).output().unwrap();
+	let build = || {
+		std::process::Command::new(&warp)
+			.env_remove("WARP_RUNTIME_STUB")
+			.args(["build", "--exe"])
+			.arg(&source)
+			.output()
+			.unwrap()
+	};
 
 	let stubless = build();
 	let complaint = String::from_utf8_lossy(&stubless.stderr);
-	assert!(!stubless.status.success() && complaint.contains("warp-runtime ships next to warp"), "{complaint}");
-	assert!(!complaint.contains("building the runtime stub"), "an installed warp never builds the stub: {complaint}");
+	assert!(
+		!stubless.status.success() && complaint.contains("warp-runtime ships next to warp"),
+		"{complaint}"
+	);
+	assert!(
+		!complaint.contains("building the runtime stub"),
+		"an installed warp never builds the stub: {complaint}"
+	);
 
 	std::fs::copy(crate::common::runtime_stub(), &stub).unwrap();
 	let built = build();
 	assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
 	let run = std::process::Command::new(&executable).output().unwrap();
-	assert_eq!(String::from_utf8_lossy(&run.stdout), "7\n", "{}", String::from_utf8_lossy(&run.stderr));
+	assert_eq!(
+		String::from_utf8_lossy(&run.stdout),
+		"7\n",
+		"{}",
+		String::from_utf8_lossy(&run.stderr)
+	);
 }

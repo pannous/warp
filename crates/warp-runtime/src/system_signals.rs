@@ -8,12 +8,12 @@
 //! FILE_CHECK_PERIOD that fires only when the file's modification time or size changed (it appeared, was written, or went).
 //! `users := fetch url` runs on·fetch·0 once the reply arrived (await_ready, src/fetches.rs).
 //! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
-use std::cell::{Cell, RefCell};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
 use crate::host_words::{EXIT_HANDLER, FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
+use std::time::{Duration, Instant};
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
 
 /// The constructors a handler's `event` is built with: exports the stub calls besides the handlers
@@ -41,6 +41,11 @@ enum Trigger {
 	FileChange(PathBuf, Option<FileStamp>),
 	/// something awaited (a fetch's reply), described for "listening: …": the handler runs once, when `ready()`
 	Ready(String, Box<dyn FnMut() -> bool>),
+	/// the paint window shows (frames): the handler runs while it does and the timer ends as it closes; without a
+	/// window it runs once (`ran`), as a single paint would, so a headless run ends
+	WindowShows {
+		ran: bool,
+	},
 }
 
 impl Trigger {
@@ -61,6 +66,14 @@ impl Trigger {
 				}
 				holds
 			}
+			Trigger::WindowShows { ran } => {
+				let holds = crate::system_values::window_shows() || !*ran;
+				*ran = true;
+				if !holds {
+					*due = None;
+				}
+				holds
+			}
 		}
 	}
 }
@@ -69,7 +82,11 @@ impl Trigger {
 enum Repeat {
 	Every(Duration),
 	/// a local time of day on the weekdays of the mask (bit 0 Sunday), every week or only `once`
-	Clock { minute_of_day: i64, weekdays: i64, once: bool },
+	Clock {
+		minute_of_day: i64,
+		weekdays: i64,
+		once: bool,
+	},
 }
 
 impl Repeat {
@@ -77,7 +94,11 @@ impl Repeat {
 	fn first(self, now: Instant) -> Instant {
 		match self {
 			Repeat::Every(period) => now + period,
-			Repeat::Clock { minute_of_day, weekdays, .. } => {
+			Repeat::Clock {
+				minute_of_day,
+				weekdays,
+				..
+			} => {
 				let (weekday, second_of_day) = local_time();
 				now + Duration::from_secs(seconds_until_on(minute_of_day, weekdays, weekday, second_of_day) as u64)
 			}
@@ -97,20 +118,42 @@ impl Repeat {
 	fn spoken(self) -> String {
 		match self {
 			Repeat::Every(period) => format!("every {}", spoken(period)),
-			Repeat::Clock { minute_of_day, once: true, .. } => format!("at {}", clock_time(minute_of_day)),
-			Repeat::Clock { minute_of_day, weekdays, once: false } => format!("every {} at {}", spoken_days(weekdays), clock_time(minute_of_day)),
+			Repeat::Clock {
+				minute_of_day,
+				once: true,
+				..
+			} => format!("at {}", clock_time(minute_of_day)),
+			Repeat::Clock {
+				minute_of_day,
+				weekdays,
+				once: false,
+			} => format!("every {} at {}", spoken_days(weekdays), clock_time(minute_of_day)),
 		}
 	}
 }
 
-const WEEKDAY_NAMES: [&str; 7] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const WEEKDAY_NAMES: [&str; 7] = [
+	"sunday",
+	"monday",
+	"tuesday",
+	"wednesday",
+	"thursday",
+	"friday",
+	"saturday",
+];
 pub const EVERY_DAY: i64 = 0b111_1111;
 
 fn spoken_days(weekdays: i64) -> String {
 	if weekdays & EVERY_DAY == EVERY_DAY {
 		return "day".to_string();
 	}
-	WEEKDAY_NAMES.iter().enumerate().filter(|(day, _)| weekdays & (1 << day) != 0).map(|(_, name)| *name).collect::<Vec<_>>().join(" and ")
+	WEEKDAY_NAMES
+		.iter()
+		.enumerate()
+		.filter(|(day, _)| weekdays & (1 << day) != 0)
+		.map(|(_, name)| *name)
+		.collect::<Vec<_>>()
+		.join(" and ")
 }
 
 fn clock_time(minute_of_day: i64) -> String {
@@ -118,7 +161,12 @@ fn clock_time(minute_of_day: i64) -> String {
 }
 
 fn add_timer(handler: String, repeat: Repeat, trigger: Trigger) {
-	let timer = Timer { handler, repeat, due: Some(repeat.first(Instant::now())), trigger };
+	let timer = Timer {
+		handler,
+		repeat,
+		due: Some(repeat.first(Instant::now())),
+		trigger,
+	};
 	TIMERS.with(|timers| timers.borrow_mut().push(timer));
 }
 
@@ -166,8 +214,13 @@ impl std::error::Error for ExitRequest {}
 
 /// Whether the run ended by `exit`: the code is kept for take_exit_code
 pub fn ended_by_exit<R>(outcome: &Result<R>) -> bool {
-	let code = outcome.as_ref().err().and_then(|error| error.downcast_ref::<ExitRequest>()).map(|request| request.0);
-	code.inspect(|code| EXIT_CODE.with(|kept| kept.set(Some(*code)))).is_some()
+	let code = outcome
+		.as_ref()
+		.err()
+		.and_then(|error| error.downcast_ref::<ExitRequest>())
+		.map(|request| request.0);
+	code.inspect(|code| EXIT_CODE.with(|kept| kept.set(Some(*code))))
+		.is_some()
 }
 
 /// The code of the `exit` that ended the last run on this thread (once)
@@ -182,25 +235,59 @@ pub fn forget_timers() {
 
 /// `signal_every(id, milliseconds)`: the handler on·every·id runs every that many milliseconds from now on
 pub fn start_timer(id: i64, milliseconds: i64) {
-	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)), Trigger::Always);
+	add_timer(
+		format!("{TIMER_HANDLER_PREFIX}{id}"),
+		Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)),
+		Trigger::Always,
+	);
 }
 
 /// `signal_daily(id, minute_of_day, weekdays)`: the handler on·every·id runs at that local time of day on the
 /// weekdays of the mask (bit 0 Sunday … bit 6 Saturday)
 pub fn start_daily_timer(id: i64, minute_of_day: i64, weekdays: i64) {
-	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays, once: false }, Trigger::Always);
+	add_timer(
+		format!("{TIMER_HANDLER_PREFIX}{id}"),
+		Repeat::Clock {
+			minute_of_day,
+			weekdays,
+			once: false,
+		},
+		Trigger::Always,
+	);
+}
+
+/// `signal_frame(id, milliseconds)`: the handler on·every·id runs each frame (that many milliseconds) while the paint
+/// window shows, once without one
+pub fn start_frame_timer(id: i64, milliseconds: i64) {
+	add_timer(
+		format!("{TIMER_HANDLER_PREFIX}{id}"),
+		Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)),
+		Trigger::WindowShows { ran: false },
+	);
 }
 
 /// `signal_at(id, minute_of_day)`: the handler on·every·id runs once, at the next such local time of day
 pub fn start_one_shot_timer(id: i64, minute_of_day: i64) {
-	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), Repeat::Clock { minute_of_day, weekdays: EVERY_DAY, once: true }, Trigger::Always);
+	add_timer(
+		format!("{TIMER_HANDLER_PREFIX}{id}"),
+		Repeat::Clock {
+			minute_of_day,
+			weekdays: EVERY_DAY,
+			once: true,
+		},
+		Trigger::Always,
+	);
 }
 
 /// The handler `handler` runs once, at the first check point after `ready()` holds (a fetch's reply arrived); it
 /// replaces a timer of that handler still waiting (a fetch started anew)
 pub fn await_ready(handler: String, awaited: String, ready: impl FnMut() -> bool + 'static) {
 	TIMERS.with(|timers| timers.borrow_mut().retain(|timer| timer.handler != handler));
-	add_timer(handler, Repeat::Every(AWAIT_CHECK_PERIOD), Trigger::Ready(awaited, Box::new(ready)));
+	add_timer(
+		handler,
+		Repeat::Every(AWAIT_CHECK_PERIOD),
+		Trigger::Ready(awaited, Box::new(ready)),
+	);
 }
 
 const DAY: Duration = Duration::from_secs(24 * 3600);
@@ -225,12 +312,18 @@ pub fn seconds_until_on(minute_of_day: i64, weekdays: i64, weekday: i64, second_
 
 /// The local weekday (0 Sunday) and seconds since local midnight (UTC where the platform gives no time zone)
 fn local_time() -> (i64, i64) {
-	local_time_at(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default())
+	local_time_at(
+		SystemTime::now()
+			.duration_since(SystemTime::UNIX_EPOCH)
+			.unwrap_or_default(),
+	)
 }
 
 /// The local time of day in milliseconds since midnight (system value "time of day", the word `time`)
 pub fn millisecond_of_day() -> i64 {
-	let since = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
+	let since = SystemTime::now()
+		.duration_since(SystemTime::UNIX_EPOCH)
+		.unwrap_or_default();
 	local_time_at(since).1 * 1000 + since.subsec_millis() as i64
 }
 
@@ -261,7 +354,11 @@ pub fn local_offset_at(milliseconds: i64) -> i64 {
 pub fn watch_file(id: i64, path: String) {
 	let path = PathBuf::from(path);
 	let seen = stamp(&path);
-	add_timer(format!("{FILE_HANDLER_PREFIX}{id}"), Repeat::Every(FILE_CHECK_PERIOD), Trigger::FileChange(path, seen));
+	add_timer(
+		format!("{FILE_HANDLER_PREFIX}{id}"),
+		Repeat::Every(FILE_CHECK_PERIOD),
+		Trigger::FileChange(path, seen),
+	);
 }
 
 /// Modification time and size: a rewrite within one tick of a coarse clock still changes the size, mostly
@@ -287,7 +384,9 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 	TIMERS.with(|timers| {
 		let mut timers = timers.borrow_mut();
 		for timer in timers.iter_mut() {
-			let Some(when) = timer.due.filter(|when| *when <= now) else { continue };
+			let Some(when) = timer.due.filter(|when| *when <= now) else {
+				continue;
+			};
 			timer.due = timer.repeat.after(when, now);
 			if !timer.trigger.holds(&mut timer.due) {
 				continue;
@@ -301,7 +400,10 @@ fn due_handlers(handles_interrupt: bool) -> Vec<String> {
 
 /// Run the due handlers, then the checks of the listeners on shared values (each check point looks at them);
 /// `export` finds a function of the instance by name
-pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+pub fn run_due_handlers<S: AsContextMut>(
+	store: &mut S,
+	mut export: impl FnMut(&mut S, &str) -> Option<Func>,
+) -> Result<()> {
 	let handles_interrupt = export(store, INTERRUPT_HANDLER).is_some();
 	let shared_checks = export(store, SHARED_HANDLER).map(|_| SHARED_HANDLER.to_string());
 	for name in due_handlers(handles_interrupt).into_iter().chain(shared_checks) {
@@ -311,7 +413,12 @@ pub fn run_due_handlers<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&
 	Ok(())
 }
 
-fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, event: Option<i64>, export: &mut impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+fn call_handler<S: AsContextMut>(
+	store: &mut S,
+	handler: Func,
+	event: Option<i64>,
+	export: &mut impl FnMut(&mut S, &str) -> Option<Func>,
+) -> Result<()> {
 	let mut arguments = vec![];
 	// a handler that reads `event` gets it (the exit code of `on exit`, P134), as a number or a Node; else ø
 	if let Some(parameter) = handler.ty(&*store).params().next() {
@@ -326,7 +433,12 @@ fn call_handler<S: AsContextMut>(store: &mut S, handler: Func, event: Option<i64
 }
 
 /// The Node a constructor export of the program builds (`new_empty()`, `new_int(n)`)
-fn node_of<S: AsContextMut>(store: &mut S, export: &mut impl FnMut(&mut S, &str) -> Option<Func>, constructor: &str, arguments: &[Val]) -> Result<Val> {
+fn node_of<S: AsContextMut>(
+	store: &mut S,
+	export: &mut impl FnMut(&mut S, &str) -> Option<Func>,
+	constructor: &str,
+	arguments: &[Val],
+) -> Result<Val> {
 	let function = export(store, constructor).ok_or_else(|| wasmtime::Error::msg(format!("no {constructor}")))?;
 	let mut built = [Val::AnyRef(None)];
 	function.call(&mut *store, arguments, &mut built)?;
@@ -335,15 +447,24 @@ fn node_of<S: AsContextMut>(store: &mut S, export: &mut impl FnMut(&mut S, &str)
 
 /// `on exit {…}`: the run ends (main returned, the timers stopped, or `exit(code)`), so on·exit runs once; an `exit`
 /// inside it ends it with that code (ended_by_exit keeps it)
-pub fn run_exit_handler<S: AsContextMut>(store: &mut S, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
-	let Some(handler) = export(store, EXIT_HANDLER) else { return Ok(()) };
+pub fn run_exit_handler<S: AsContextMut>(
+	store: &mut S,
+	mut export: impl FnMut(&mut S, &str) -> Option<Func>,
+) -> Result<()> {
+	let Some(handler) = export(store, EXIT_HANDLER) else {
+		return Ok(());
+	};
 	let code = EXIT_CODE.with(Cell::get).unwrap_or(0);
 	call_handler(store, handler, Some(code.into()), &mut export)
 }
 
 /// The outcome of a run and its exit handler: the handler runs after a normal end and after `exit(code)` (whose code
 /// stays, unless the handler exits with its own), never after a failure
-pub fn with_exit_handler<S: AsContextMut, R>(outcome: Result<R>, store: &mut S, export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<Option<R>> {
+pub fn with_exit_handler<S: AsContextMut, R>(
+	outcome: Result<R>,
+	store: &mut S,
+	export: impl FnMut(&mut S, &str) -> Option<Func>,
+) -> Result<Option<R>> {
 	let exited = ended_by_exit(&outcome);
 	let value = match outcome {
 		Ok(value) => Some(value),
@@ -359,12 +480,20 @@ pub fn with_exit_handler<S: AsContextMut, R>(outcome: Result<R>, store: &mut S, 
 }
 
 /// Sleep for `duration`, running the handlers that come due on the way; a ctrl-c ends the sleep early
-pub fn sleep_with_handlers<S: AsContextMut>(store: &mut S, duration: Duration, mut export: impl FnMut(&mut S, &str) -> Option<Func>) -> Result<()> {
+pub fn sleep_with_handlers<S: AsContextMut>(
+	store: &mut S,
+	duration: Duration,
+	mut export: impl FnMut(&mut S, &str) -> Option<Func>,
+) -> Result<()> {
 	let end = Instant::now() + duration;
 	let checks_shared = export(store, SHARED_HANDLER).is_some();
 	loop {
 		let wake = next_due().map_or(end, |due| due.min(end));
-		let wake = if checks_shared { wake.min(Instant::now() + SHARED_CHECK_PERIOD) } else { wake };
+		let wake = if checks_shared {
+			wake.min(Instant::now() + SHARED_CHECK_PERIOD)
+		} else {
+			wake
+		};
 		let interrupted = interrupt::wait_until(wake);
 		run_due_handlers(store, &mut export)?;
 		if interrupted || Instant::now() >= end {
@@ -392,12 +521,22 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	if !STAYING_ALLOWED.load(Ordering::SeqCst) || next_due().is_none() {
 		return Ok(());
 	}
-	let listening: Vec<String> = TIMERS.with(|timers| timers.borrow().iter().map(|timer| match &timer.trigger {
-		Trigger::FileChange(path, _) => format!("file {} change", path.display()),
-		Trigger::Ready(awaited, _) => awaited.clone(),
-		Trigger::Always => timer.repeat.spoken(),
-	}).collect());
-	eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
+	// a window's frames say nothing: the window shows that the program goes on, and closing it ends the run
+	let listening: Vec<String> = TIMERS.with(|timers| {
+		timers
+			.borrow()
+			.iter()
+			.filter_map(|timer| match &timer.trigger {
+				Trigger::FileChange(path, _) => Some(format!("file {} change", path.display())),
+				Trigger::Ready(awaited, _) => Some(awaited.clone()),
+				Trigger::WindowShows { .. } => None,
+				Trigger::Always => Some(timer.repeat.spoken()),
+			})
+			.collect()
+	});
+	if !listening.is_empty() {
+		eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
+	}
 	while let Some(due) = next_due() {
 		interrupt::wait_until(due);
 		run_due_handlers(store, |store, name| instance.get_func(&mut *store, name))?;
@@ -458,7 +597,12 @@ mod interrupt {
 	#[cfg(unix)]
 	mod platform {
 		pub fn install() {
-			unsafe { libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t) };
+			unsafe {
+				libc::signal(
+					libc::SIGINT,
+					on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t,
+				)
+			};
 		}
 
 		/// async-signal-safe (atomics, clock_gettime, _exit)

@@ -1,5 +1,5 @@
-use wasmtime::{Engine, Linker, Module, Store};
 use crate::eq;
+use wasmtime::{Engine, Linker, Module, Store};
 
 /// Demonstration of WASM GC reading patterns inspired by ~/dev/script/rust/rasm
 /// NOTE: This test requires wasmtime 28.0+ for full GC introspection support
@@ -40,9 +40,7 @@ fn test_wasm_gc_node_reading_concept() {
 	let wasm_bytes = wat::parse_str(wat).expect("Failed to parse WAT");
 	let module = Module::new(&engine, wasm_bytes).expect("Failed to create module");
 	let linker = Linker::new(&engine);
-	let instance = linker
-		.instantiate(&mut store, &module)
-		.expect("Failed to instantiate");
+	let instance = linker.instantiate(&mut store, &module).expect("Failed to instantiate");
 
 	println!("✓ Step 1: Loaded WASM module");
 
@@ -50,9 +48,7 @@ fn test_wasm_gc_node_reading_concept() {
 	let make_number = instance
 		.get_typed_func::<i64, i32>(&mut store, "make_number")
 		.expect("Failed to get function");
-	let tag = make_number
-		.call(&mut store, 42)
-		.expect("Failed to call function");
+	let tag = make_number.call(&mut store, 42).expect("Failed to call function");
 
 	println!("✓ Step 2: Called WASM function");
 	println!("  make_number(42) returned tag: {}", tag);

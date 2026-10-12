@@ -9,7 +9,8 @@ const NEEDS_A_WINDOW: [&str; 2] = ["raylib", "sdl"];
 const MINIMUM_SAMPLES: usize = 50; // guards against an empty directory listing (the browser reads it over HTTP)
 
 fn runnable_samples() -> Vec<String> {
-	let mut names: Vec<String> = fs::read_dir("samples").expect("samples/")
+	let mut names: Vec<String> = fs::read_dir("samples")
+		.expect("samples/")
 		.filter_map(|entry| entry.ok().map(|entry| entry.path().to_string_lossy().to_string()))
 		.filter(|name| name.ends_with(".warp") && !NEEDS_A_WINDOW.iter().any(|word| name.contains(word)))
 		.collect();
@@ -22,14 +23,27 @@ fn compiler_failure(sample: &str) -> Option<String> {
 		Ok(result) => result,
 		Err(_) => "panicked".to_string(),
 	};
-	COMPILER_FAILURES.iter().any(|failure| result.contains(failure)).then(|| format!("{sample}: {result}"))
+	COMPILER_FAILURES
+		.iter()
+		.any(|failure| result.contains(failure))
+		.then(|| format!("{sample}: {result}"))
 }
 
 fn slice_runs_cleanly(slice: usize) {
 	let samples = runnable_samples();
-	assert!(samples.len() >= MINIMUM_SAMPLES, "only {} samples found: {samples:?}", samples.len());
-	let failures: Vec<String> = crate::common::sample_slice(&samples, slice).filter_map(|sample| compiler_failure(sample)).collect();
-	assert!(failures.is_empty(), "compiler errors in samples:\n{}", failures.join("\n"));
+	assert!(
+		samples.len() >= MINIMUM_SAMPLES,
+		"only {} samples found: {samples:?}",
+		samples.len()
+	);
+	let failures: Vec<String> = crate::common::sample_slice(&samples, slice)
+		.filter_map(|sample| compiler_failure(sample))
+		.collect();
+	assert!(
+		failures.is_empty(),
+		"compiler errors in samples:\n{}",
+		failures.join("\n")
+	);
 }
 
 #[test]

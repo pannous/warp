@@ -14,7 +14,7 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
 // window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
-const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0 };
+const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
@@ -43,55 +43,6 @@ function writeBytes(program, bytes) {
 	return [pointer, bytes.length];
 }
 
-// free memory for `byteCount` bytes above the program's text heap, which its next text may take again (src/host.rs
-// scratch, src/wasm_emitter/int_lists.rs); undefined without a text heap
-function scratch(program, byteCount) {
-	const heap = program[TEXT_HEAP_EXPORT];
-	if (!heap) return undefined;
-	if (heap.value === 0) heap.value = program.memory.buffer.byteLength;
-	const address = Math.ceil(heap.value / BigInt64Array.BYTES_PER_ELEMENT) * BigInt64Array.BYTES_PER_ELEMENT;
-	const missing = address + byteCount - program.memory.buffer.byteLength;
-	if (missing > 0) program.memory.grow(Math.ceil(missing / (1 << PAGE_BITS)));
-	return address;
-}
-
-// [width, height, then how much each pixel is covered from 0 to 255, row by row] of the words set in a sans-serif font
-// `size` pixels per em on one line, as src/text_raster.rs does natively: an OffscreenCanvas works in the run's Worker too
-const TEXT_FONT = "sans-serif";
-function textCoverage(words, size) {
-	const font = `${size}px ${TEXT_FONT}`;
-	const measured = new OffscreenCanvas(1, 1).getContext("2d");
-	measured.font = font;
-	const metrics = measured.measureText(words);
-	const width = Math.max(1, Math.ceil(metrics.width));
-	const height = Math.max(1, Math.ceil(metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent));
-	const context = new OffscreenCanvas(width, height).getContext("2d");
-	context.font = font;
-	context.fillText(words, 0, metrics.fontBoundingBoxAscent);
-	const pixels = context.getImageData(0, 0, width, height).data;
-	const covered = new Uint32Array(2 + width * height);
-	covered.set([width, height]);
-	for (let pixel = 0; pixel < width * height; pixel++) covered[2 + pixel] = pixels[pixel * 4 + 3];
-	return covered;
-}
-
-// u32s as a list of Ints, built in one call of the program's ints_to_list (gpu_render's pixels); undefined without it
-function listOfInts(program, ints) {
-	const address = program.ints_to_list && scratch(program, ints.byteLength);
-	if (address === undefined) return undefined;
-	new Uint32Array(program.memory.buffer, address, ints.length).set(ints);
-	return program.ints_to_list(address, ints.length);
-}
-
-// the first `room` items of a list of Ints, read in one call of the program's list_to_ints (paint's pixels, their
-// magnitudes); undefined for any other value or without it, which the caller reads node by node
-function intsOfList(program, list, room) {
-	const address = program.list_to_ints && scratch(program, room * BigInt64Array.BYTES_PER_ELEMENT);
-	if (address === undefined) return undefined;
-	const count = program.list_to_ints(list, address, room);
-	return count < 0 ? undefined : Array.from(new BigInt64Array(program.memory.buffer, address, count), Number);
-}
-
 // the Error of `reason`, built with the program's own error_of: a failure its `try` catches (src/host.rs error_in_program)
 function errorInProgram(program, reason) {
 	return program.error_of(program.new_text(...writeBytes(program, utf8.encode(reason))));
@@ -99,7 +50,7 @@ function errorInProgram(program, reason) {
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
 // host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
-// host-gpu.js, host-timers.js, host-random.js. A built site
+// host-gpu.js (needs host-media.js), host-timers.js, host-random.js, host-media.js. A built site
 // ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
@@ -107,7 +58,7 @@ function errorInProgram(program, reason) {
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
-const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js"];
+const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -118,6 +69,19 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
 	const program = () => holder.exports;
+	// the host word sleep (src/host.rs): a page cannot block, so it busy-waits
+	holder.sleep = milliseconds => {
+		hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
+		const until = Date.now() + Number(milliseconds);
+		let check = Date.now() + SHARED_CHECK_MILLISECONDS;
+		while (Date.now() < until) {
+			if (Date.now() >= check) {
+				checkPoint();
+				check = Date.now() + SHARED_CHECK_MILLISECONDS;
+			}
+		}
+		checkPoint();
+	};
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
 		const bytes = new Uint8Array(program().memory.buffer);
@@ -144,25 +108,12 @@ function programImports(holder, hooks) {
 					return errorInProgram(module, "call stack exhausted");
 				}
 			},
-			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the
-			// adapters the parts add (host-hashes.js hash, json and regex; host-files.js file, net, store and os)
-			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
-			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
-			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
-			sleep: milliseconds => {
-				hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
-				const until = Date.now() + Number(milliseconds);
-				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
-				while (Date.now() < until) {
-					if (Date.now() >= check) {
-						checkPoint();
-						check = Date.now() + SHARED_CHECK_MILLISECONDS;
-					}
-				}
-				checkPoint();
-			},
+			// `header "name" "value"` in a route the page itself answers (a form without a server): no HTTP answer to carry it
+			response_header: () => {},
+			// the host words (src/host.rs)
+			sleep: holder.sleep,
 			clock: () => BigInt(Date.now()),
 			// seconds east of UTC in the browser's time zone at that instant: an instant's wall clock (wasm_emitter/times.rs)
 			local_offset: milliseconds => BigInt(-new Date(Number(milliseconds)).getTimezoneOffset() * 60),
@@ -187,41 +138,18 @@ function programImports(holder, hooks) {
 				if (!hooks.notify) throw new Error(`notify ${JSON.stringify(shown)}: this page shows no notifications`);
 				hooks.notify(typeof shown === "string" ? shown : JSON.stringify(shown));
 			},
-			// text_coverage(words, size) (label of use draw, card paint-text): the words set by the browser's canvas
-			text_coverage: (words, size) => {
-				const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
-				return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
+			// an emit no handler of a page's program receives (card page-custom-event): a Worker posts it to its page
+			// (hooks.dispatch), a page's own thread dispatches it (markup.js dispatchToPage)
+			dispatch_event: (name, detail) => {
+				const dispatch = hooks.dispatch ?? globalThis.dispatchToPage;
+				const event = { name: plainOfTree(readNode(program(), name)), detail: plainOfTree(readNode(program(), detail)) };
+				if (!dispatch) throw new Error(`emit ${event.name}: this host has no page to dispatch it to`);
+				dispatch(event);
 			},
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);
 				throw new Error(`exit(${code})`);
-			},
-			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings);
-			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234), in the
-			// playground straight into the page's canvas (host-gpu.js gpuPainted), which the hook gets by its id
-			paint: (pixels, width, height, values) => {
-				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
-				const room = Number(width) * Number(height);
-				let painted = intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels));
-				if (typeof painted === "string") {
-					if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
-					const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
-					if (typeof rendered === "number") return hooks.paint(undefined, Number(width), Number(height), rendered);
-					painted = Array.from(rendered);
-				}
-				hooks.paint(painted, Number(width), Number(height));
-			},
-			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
-			// the page plays them with WebAudio
-			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
-			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
-			sound_samples: (samples, count, rate, channels) => {
-				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				const sound = { samples: values, rate: Number(rate), channels: Number(channels) };
-				const { place, at } = self.voiceSounded?.(values.length / sound.channels / sound.rate) ?? {};
-				(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
-				hooks.sound?.({ ...sound, at });
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
@@ -268,10 +196,11 @@ function buildValue(module, tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
 		case 1: {
-			const exact = exactOfPayload(payload);
+			if (payload.int !== undefined) return module.new_int(BigInt(payload.int));
+			// beyond the fixnums: exact.js starts the parts that carry such numbers (tasks, foreign calls, run blocks)
+			const exact = typeof exactOfPayload === "function" ? exactOfPayload(payload) : undefined;
 			if (exact) return module.new_int(exactHandle(module, ...exact));
-			if (payload.int === undefined) throw new Error(`an Int payload of no known form: ${JSON.stringify(payload)}`);
-			return module.new_int(BigInt(payload.int));
+			throw new Error(`an Int payload of no known form (or exact.js not loaded): ${JSON.stringify(payload)}`);
 		}
 		case 2: return module.new_float(Number(payload.float));
 		case 3: case 5: {
@@ -288,21 +217,6 @@ function buildValue(module, tree) {
 			return items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, kind >> 8n), null) ?? module.new_empty();
 		}
 		default: throw new Error(`a value of kind ${kind & KIND_MASK} cannot cross to another task yet`);
-	}
-}
-
-// an adapter reports a runtime warning with this.warn(message) (host-files.js openTable) and reaches its run's state as
-// this.holder (host-files.js sound.render)
-function stdCall(program_, module, member, argumentList, holder) {
-	const [moduleName, memberName, given] = [module, member, argumentList].map(node => plainOfTree(readNode(program_, node)));
-	const adapter = STD_ADAPTERS[moduleName]?.[memberName];
-	if (!adapter) throw new Error(`${moduleName}.${memberName}: no such word in the browser`);
-	try {
-		const context = { warn: message => holder.warnings.push(message), holder };
-		return buildValue(program_, treeOfPlain(adapter.apply(context, Array.isArray(given) ? given : [given])));
-	} catch (error) {
-		// the program raises it (src/wasm_emitter/ffi_emitter.rs emit_ffi_result): `try` catches it
-		return errorInProgram(program_, `${moduleName}.${memberName}: ${error.message}`);
 	}
 }
 
@@ -332,7 +246,8 @@ function plainOfTree(tree) {
 			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
-		case Number(KIND_FUNCTION): return tree.warpFunction ? callableOf(tree.warpFunction) : null;
+		// its value the function's name (src/wasm_emitter/closures.rs), kept for a host word calling the export itself
+		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
 		default: return null;
 	}
 }
@@ -370,37 +285,6 @@ function treeOfPlain(value) {
 	if (typeof value === "object" && Object.keys(value).length === 1 && typeof value.$int === "string") return { kind: KIND_INT, data: { exact: [value.$int, "1"] }, chain: [] };
 	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
 	return textTree(String(value));
-}
-
-// the Int handle of an exact number beyond the fixnums, composed from fixnum pieces with the module's exported Int
-// operations (src/tasks.rs EXACT_BUILDERS, integer_handle)
-// an integer as reader.js reads it (src/web.rs int_payload): a fixnum, or a big one's 32-bit limbs, least significant first
-function integerOfPayload(payload) {
-	if (payload.int !== undefined) return BigInt(payload.int);
-	const magnitude = payload.big.limbs.reduceRight((value, limb) => (value << 32n) | BigInt(limb), 0n);
-	return payload.big.negative ? -magnitude : magnitude;
-}
-
-// numerator and denominator of an exact number beyond the fixnums: digits (src/web.rs tree_of, Python), a big integer
-// or a ratio as reader.js reads them (a task's value); undefined for a fixnum
-function exactOfPayload(payload) {
-	if (payload.exact) return payload.exact.map(BigInt);
-	if (payload.ratio) return payload.ratio.map(integerOfPayload);
-	if (payload.big) return [integerOfPayload(payload), 1n];
-}
-
-const FIXNUM_MIN = -(2n ** 62n - 1n);
-const FIXNUM_MAX = 2n ** 62n;
-const isExactHandle = value => typeof value === "bigint" && (value < FIXNUM_MIN || value > FIXNUM_MAX);
-function exactHandle(module, numerator, denominator) {
-	const integer = n => {
-		if (n >= FIXNUM_MIN && n <= FIXNUM_MAX) return n;
-		const limbs = [];
-		for (let rest = n < 0n ? -n : n; rest > 0n; rest >>= 32n) limbs.push(rest & 0xffffffffn);
-		const magnitude = limbs.reduceRight((handle, limb) => module.exact_add(module.int_shift_left(handle, 32n), limb), 0n);
-		return n < 0n ? module.exact_sub(0n, magnitude) : magnitude;
-	};
-	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
 }
 
 // a run's timers and channels end with it (the next run, worker.js)
@@ -518,7 +402,7 @@ function outcomeOf(holder, hooks, call) {
 	};
 	const failed = trap => {
 		eachHostPart("ended", holder);
-		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
+		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, exited: holder.exitCode, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };

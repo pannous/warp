@@ -52,7 +52,9 @@ impl Node {
 			False => Value::Bool(false),
 			Empty => Value::Null,
 			Node::Number(Number::Int(n)) => Value::Number((*n).into()),
-			Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null),
+			Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f)
+				.map(Value::Number)
+				.unwrap_or(Value::Null),
 			Node::Number(n) => Value::String(n.to_string()),
 			Text(s) | Symbol(s) => Value::String(s.clone()),
 			Char(c) => Value::String(c.to_string()),
@@ -62,7 +64,9 @@ impl Node {
 				for item in items {
 					match item {
 						Key(..) => insert_json_entry(&mut map, item),
-						List(nested, Bracket::Curly, _) => nested.iter().for_each(|entry| insert_json_entry(&mut map, entry)),
+						List(nested, Bracket::Curly, _) => {
+							nested.iter().for_each(|entry| insert_json_entry(&mut map, entry))
+						}
 						other => {
 							map.insert(map.len().to_string(), other.to_json_value());
 						}
@@ -80,10 +84,13 @@ impl Node {
 			Meta { node, data } => match data.as_ref() {
 				// metadata keys as dotted keys, other metadata as .meta
 				List(items, ..) if items.iter().any(|item| matches!(item, Key(..))) => {
-					let mut map: Map<String, Value> = items.iter().filter_map(|item| match item {
-						Key(key, _, value) => Some((format!(".{key}"), value.to_json_value())),
-						_ => None,
-					}).collect();
+					let mut map: Map<String, Value> = items
+						.iter()
+						.filter_map(|item| match item {
+							Key(key, _, value) => Some((format!(".{key}"), value.to_json_value())),
+							_ => None,
+						})
+						.collect();
 					map.insert("_value".to_string(), node.to_json_value());
 					Value::Object(map)
 				}
@@ -154,7 +161,11 @@ pub fn json_of_json5(text: &str) -> String {
 					word.push(next);
 				}
 				while chars.next_if(|next| next.is_whitespace()).is_some() {}
-				if chars.peek() == Some(&':') { json.push_str(&format!("\"{word}\"")) } else { json.push_str(&word) }
+				if chars.peek() == Some(&':') {
+					json.push_str(&format!("\"{word}\""))
+				} else {
+					json.push_str(&word)
+				}
 			}
 			_ => json.push(char),
 		}
@@ -164,8 +175,12 @@ pub fn json_of_json5(text: &str) -> String {
 
 /// `.name=value` of an item `.name: value` (a flag `.name: true` is just the name); None for content
 fn xml_attribute(item: &Node) -> Option<String> {
-	let Key(key, _, value) = item.drop_meta() else { return None };
-	let (Symbol(key) | Text(key)) = key.drop_meta() else { return None };
+	let Key(key, _, value) = item.drop_meta() else {
+		return None;
+	};
+	let (Symbol(key) | Text(key)) = key.drop_meta() else {
+		return None;
+	};
 	let name = key.strip_prefix('.')?;
 	Some(match value.as_ref() {
 		True => name.to_string(),
@@ -185,5 +200,10 @@ fn insert_json_entry(map: &mut Map<String, Value>, entry: &Node) {
 }
 
 fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value {
-	Value::Object(entries.into_iter().map(|(key, value)| (key.to_string(), value)).collect())
+	Value::Object(
+		entries
+			.into_iter()
+			.map(|(key, value)| (key.to_string(), value))
+			.collect(),
+	)
 }

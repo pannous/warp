@@ -1,160 +1,26 @@
 //! The host side of foreign_call(runtime, module, member, arguments) (lowering/foreign_modules.rs,
-//! notes/stdlib_connectors.md): one long-lived child per runtime and warp process, started on first use, speaking one
-//! JSON line per request and per answer. Python: `python3 -u` running FOREIGN_PYTHON_LOOP (`WARP_PYTHON` names another
-//! interpreter); JavaScript: `node` running FOREIGN_JS_LOOP (`WARP_NODE`), a global (`Math`) or a module it requires.
-//! A read gives the member itself, a call gives its result (a promise awaited); an exception is an error with the
-//! runtime's message. A value without a JSON form stays in its runtime behind an id, a handle: it crosses as the record
-//! `{$handle: 7, type: "date", text: "datetime.date(2020, 1, 2)"}` and is that object again when it comes back, as an
-//! argument or as the receiver of `d.isoformat()` (the module position). Handles live until warp ends.
-//! A warp function given as an argument crosses as `{$warp_function: 0}`, its index among the call's functions; node
-//! calls it back with the line `{callback: 0, arguments: […]}` and waits for its `{value}` or `{error}` (card js-callbacks).
+//! notes/stdlib_connectors.md): python and js go to the bridge warp_runtime::foreign shares with executables (its
+//! children, JSON lines, handles and callbacks), components to src/components.rs; Nodes cross as JSON (json_of, node_of).
 
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use serde_json::Value;
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::cell::RefCell;
-use std::sync::{Condvar, Mutex};
+pub use warp_runtime::foreign::{BIG_INTEGER_KEY, CODEPOINT_KEY, WARP_FUNCTION_KEY};
 
-/// A runtime: its name in `use <runtime> …`, the variable naming its interpreter, the default interpreter, and how it
-/// runs its loop script
-struct Interpreter {
-	runtime: &'static str,
-	variable: &'static str,
-	default: &'static str,
-	arguments: [&'static str; 2],
-	script: &'static str,
-}
-
-const INTERPRETERS: [Interpreter; 2] = [
-	Interpreter { runtime: "python", variable: "WARP_PYTHON", default: "python3", arguments: ["-u", "-c"], script: FOREIGN_PYTHON_LOOP },
-	Interpreter { runtime: "js", variable: "WARP_NODE", default: "node", arguments: ["--no-warnings", "-e"], script: FOREIGN_JS_LOOP },
-];
-/// An integer beyond 64 bits, sent as its digits: `{"$int": "15511210043330985984000000"}`
-const BIG_INTEGER_KEY: &str = "$int";
-/// A codepoint (a WIT `char`, P94), which JSON would make a text: `{"$char": "b"}`
-pub const CODEPOINT_KEY: &str = "$char";
-/// A warp function among a call's arguments: `{"$warp_function": 0}`
-pub const WARP_FUNCTION_KEY: &str = "$warp_function";
 /// How a call's warp functions are called back: by their index, with the arguments the runtime gave them as a list
 pub type Callback<'a> = &'a mut dyn FnMut(usize, Node) -> Result<Node, String>;
-thread_local! {
-	/// The children this thread's calls hold while they call a warp function back: a foreign call that function makes
-	/// goes to the same child, which answers it while it waits
-	static HELD: RefCell<Vec<(&'static str, Runtime)>> = const { RefCell::new(Vec::new()) };
-}
-/// The request loop the child runs: {"module", "member", "arguments"} → {"value"} or {"error"}
-const FOREIGN_PYTHON_LOOP: &str = include_str!("../web/playground/foreign_python.py");
-
-/// The same loop for node: a global (`Math`, `JSON`) or a module it requires or imports; a method keeps its object
-const FOREIGN_JS_LOOP: &str = r#"
-const handles = [];
-const handle = value => (handles.push(value), { "$handle": handles.length, type: value?.constructor?.name ?? typeof value, text: String(value).slice(0, 200) });
-const unplain = value => Array.isArray(value) ? value.map(unplain)
-	: value !== null && typeof value === "object" ? ("$handle" in value ? handles[value.$handle - 1] : "$warp_function" in value ? warpFunction(value.$warp_function)
-		: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, unplain(item)])))
-	: value;
-const plain = value => {
-	if (typeof value === "bigint") return value >= -(2n ** 63n) && value < 2n ** 63n ? Number(value) : { "$int": value.toString() };
-	if (value === undefined || value === null || typeof value === "symbol") return null; // ø, not a handle of null
-	if (Array.isArray(value)) return value.map(plain);
-	const prototype = value !== null && typeof value === "object" ? Object.getPrototypeOf(value) : undefined;
-	if (prototype === Object.prototype || prototype === null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plain(item)]));
-	if (typeof value === "function" || typeof value === "object") return handle(value); // a Date, a Map, an instance, a function
-	return value;
-};
-// what warp's operators on a value of this runtime forward to (lowering/foreign_modules.rs)
-const operator = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
-	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
-	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
-// `use js self` / `use js window`: node mirrors a page, its global object is globalThis
-const load = name => name === "operator" ? operator : name === "self" || name === "window" ? globalThis : name in globalThis ? globalThis[name] : (() => { try { return require(name); } catch (failure) { return import(name); } })();
-// the answers own stdout: what a module prints (console.log) goes to stderr
-const reply = answer => require("fs").writeSync(1, JSON.stringify(answer) + "\n");
-process.stdout.write = process.stderr.write.bind(process.stderr);
-// stdin read synchronously, so a warp function called back answers before the JavaScript calling it goes on
-const decoder = new (require("string_decoder").StringDecoder)("utf8");
-let buffered = "";
-const readLine = () => {
-	const chunk = Buffer.alloc(65536);
-	while (!buffered.includes("\n")) {
-		let count;
-		try { count = require("fs").readSync(0, chunk, 0, chunk.length, null); } catch (failure) { if (failure.code === "EAGAIN") continue; throw failure; }
-		if (count === 0) return null;
-		buffered += decoder.write(chunk.subarray(0, count));
-	}
-	const line = buffered.slice(0, buffered.indexOf("\n"));
-	buffered = buffered.slice(line.length + 1);
-	return line;
-};
-// a request's answer; each `yield` waits for what may be a promise (lowering/foreign_modules.rs CONSTRUCTOR_MEMBER: member
-// "" constructs the module, `new URL(…)`; SETTER_PREFIX: "set innerHTML" sets the member to the one argument)
-const SETTER = /^set (.+)$/;
-function* answerOf(request) {
-	try {
-		let owner = null, value = typeof request.module === "object" ? unplain(request.module) : yield load(request.module);
-		const set = request.member.match(SETTER);
-		if (request.member === "") value = new value(...unplain(request.arguments));
-		else if (set) value = value[set[1]] = unplain(request.arguments)[0];
-		else {
-			for (const part of request.member.split(".")) {
-				if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);
-				[owner, value] = [value, value[part]];
-			}
-			if (request.arguments !== null) value = yield value.apply(owner, unplain(request.arguments));
-		}
-		return { value: plain(value) };
-	} catch (failure) {
-		return { error: failure instanceof Error ? failure.name + ": " + failure.message : String(failure) };
-	}
-}
-// a request of the program: its promises awaited
-const awaited = async steps => {
-	let step = steps.next();
-	while (!step.done) step = await Promise.resolve(step.value).then(value => steps.next(value), failure => steps.throw(failure));
-	return step.value;
-};
-// a request of a warp function called back, which the JavaScript calling it waits for: no promise can be awaited there
-const immediate = steps => {
-	let step = steps.next();
-	while (!step.done) {
-		const promised = typeof step.value?.then === "function";
-		if (promised) step.value.then(undefined, () => {}); // its failure is not the program's: no unhandled rejection
-		step = promised ? steps.throw(new Error("gives a promise, which a warp function called back cannot wait for")) : steps.next(step.value);
-	}
-	return step.value;
-};
-// a warp function given as an argument: called back through warp, answering the foreign calls it makes meanwhile
-const warpFunction = index => (...values) => {
-	reply({ callback: index, arguments: values.map(plain) });
-	for (let line; (line = readLine()) !== null;) {
-		const message = JSON.parse(line);
-		if ("module" in message) reply(immediate(answerOf(message)));
-		else if ("error" in message) throw new Error(message.error);
-		else return unplain(message.value);
-	}
-	throw new Error("warp ended");
-};
-(async () => {
-	for (let line; (line = readLine()) !== null;) reply(await awaited(answerOf(JSON.parse(line))));
-})();
-"#;
-
-struct Runtime {
-	_child: Child,
-	input: ChildStdin,
-	output: BufReader<ChildStdout>,
-}
-
-/// The running children, by runtime; None while a call holds its child, which another thread waits for (RETURNED)
-static RUNNING: Mutex<Vec<(&'static str, Option<Runtime>)>> = Mutex::new(Vec::new());
-static RETURNED: Condvar = Condvar::new();
 
 /// `runtime.module.member(arguments…)`, or the member itself when it is no call, as a Node; `module` is a module's name
 /// or a handle
-pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments: &Node, callback: Callback) -> Result<Node, String> {
+pub fn call(
+	runtime: &str,
+	module: &Node,
+	member: &str,
+	is_call: bool,
+	arguments: &Node,
+	callback: Callback,
+) -> Result<Node, String> {
 	let arguments = match arguments.drop_meta() {
 		_ if !is_call => Value::Null,
 		Node::Empty => Value::Array(vec![]),
@@ -164,137 +30,74 @@ pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments
 	if runtime == crate::foreign_modules::COMPONENT_RUNTIME {
 		return component_call(module, member, &arguments);
 	}
-	let Some(interpreter) = INTERPRETERS.iter().find(|interpreter| interpreter.runtime == runtime) else {
-		return Err(format!("no foreign runtime {runtime}: known are {}", crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")));
-	};
+	if !warp_runtime::foreign::is_interpreted(runtime) {
+		return Err(format!(
+			"no foreign runtime {runtime}: known are {}",
+			crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")
+		));
+	}
 	let (module, module_json) = match module.drop_meta() {
 		Node::Text(name) | Node::Symbol(name) => (name.clone(), Value::String(name.clone())),
 		handle => (handle.serialize(), json_of(handle)),
 	};
-	let request = serde_json::json!({"module": module_json, "member": member, "arguments": arguments});
-	let answer = exchange(interpreter, &request.to_string(), callback).map_err(|failure| format!("{runtime}: {failure}"))?;
-	match (answer.get("value"), answer.get("error")) {
-		(_, Some(Value::String(error))) => Err(format!("{runtime} {module}.{member}: {error}")),
-		(Some(value), _) => Ok(node_of(value)),
-		_ => Err(format!("{runtime} answered neither a value nor an error: {answer}")),
-	}
+	let mut callback_on_values =
+		|index: usize, arguments: Value| callback(index, node_of(&arguments)).map(|node| json_of(&node));
+	warp_runtime::foreign::call(
+		runtime,
+		&module,
+		module_json,
+		member,
+		arguments,
+		&mut callback_on_values,
+	)
+	.map(|value| node_of(&value))
 }
 
 /// `lib.f(x)` of a component (src/components.rs), or `handle.method(x)` of a resource it gave: only calls
 fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node, String> {
 	let receiver = match module.drop_meta() {
 		Node::Text(path) | Node::Symbol(path) => path.clone(),
-		handle => json_of(handle).get("text").and_then(Value::as_str).map_or_else(|| handle.serialize(), str::to_string),
+		handle => json_of(handle)
+			.get("text")
+			.and_then(Value::as_str)
+			.map_or_else(|| handle.serialize(), str::to_string),
 	};
 	let Value::Array(arguments) = arguments else {
-		return Err(format!("wasm {receiver}: {member} is a function of the component, call it: {member}(…)"));
+		return Err(format!(
+			"wasm {receiver}: {member} is a function of the component, call it: {member}(…)"
+		));
 	};
 	let result = match module.drop_meta() {
 		Node::Text(path) | Node::Symbol(path) => crate::components::call(path, member, arguments),
 		handle => crate::components::call_method(&json_of(handle), member, arguments),
 	};
-	result.map(|value| node_of(&value)).map_err(|failure| format!("wasm {receiver}: {failure}"))
-}
-
-/// One request line out, one answer line back, each callback line before it answered; the child is started on first
-/// use and again after it ended
-fn exchange(interpreter: &'static Interpreter, request: &str, callback: Callback) -> Result<Value, String> {
-	let held = take_held(interpreter.runtime);
-	let nested = held.is_some();
-	let child = match held {
-		Some(child) => child,
-		None => borrow(interpreter)?,
-	};
-	let (answer, child) = talk(interpreter.runtime, child, request, callback);
-	match (nested, child) {
-		(true, Some(child)) => HELD.with_borrow_mut(|held| held.push((interpreter.runtime, child))),
-		(true, None) => {}
-		(false, child) => give_back(interpreter.runtime, child),
-	}
-	answer
-}
-
-/// The request to the child and its answer; a callback line calls the warp function back meanwhile, the child held by
-/// this thread for the foreign calls it makes. The child is gone when it ended
-fn talk(runtime: &'static str, mut child: Runtime, request: &str, callback: Callback) -> (Result<Value, String>, Option<Runtime>) {
-	let mut line = request.to_string();
-	loop {
-		let mut answer = String::new();
-		let sent = writeln!(child.input, "{line}").and_then(|_| child.input.flush());
-		if sent.is_err() || child.output.read_line(&mut answer).unwrap_or(0) == 0 {
-			return (Err("the interpreter ended".into()), None);
-		}
-		let answer: Value = match serde_json::from_str(&answer) {
-			Ok(answer) => answer,
-			Err(failure) => return (Err(format!("answered no JSON: {failure}")), Some(child)),
-		};
-		let Some(function) = answer.get("callback").and_then(Value::as_u64) else { return (Ok(answer), Some(child)) };
-		HELD.with_borrow_mut(|held| held.push((runtime, child)));
-		let result = callback(function as usize, node_of(answer.get("arguments").unwrap_or(&Value::Null)));
-		let Some(held) = take_held(runtime) else { return (Err("the interpreter ended".into()), None) };
-		child = held;
-		line = match result {
-			Ok(value) => serde_json::json!({"value": json_of(&value)}),
-			Err(failure) => serde_json::json!({"error": failure}),
-		}.to_string();
-	}
-}
-
-/// The child of `runtime` this thread holds, while a warp function is called back
-fn take_held(runtime: &str) -> Option<Runtime> {
-	HELD.with_borrow_mut(|held| held.iter().rposition(|(name, _)| *name == runtime).map(|index| held.remove(index).1))
-}
-
-/// The child of the interpreter for one call: started when there is none, waited for while another thread's call holds it
-fn borrow(interpreter: &'static Interpreter) -> Result<Runtime, String> {
-	let mut running = RUNNING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	loop {
-		let Some((_, slot)) = running.iter_mut().find(|(runtime, _)| *runtime == interpreter.runtime) else {
-			running.push((interpreter.runtime, None));
-			drop(running);
-			return start(interpreter).inspect_err(|_| give_back(interpreter.runtime, None));
-		};
-		if let Some(child) = slot.take() {
-			return Ok(child);
-		}
-		running = RETURNED.wait(running).unwrap_or_else(|poisoned| poisoned.into_inner());
-	}
-}
-
-/// The child back for the next call, or none: it ended, the next call starts another
-fn give_back(runtime: &'static str, child: Option<Runtime>) {
-	let mut running = RUNNING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	match child {
-		Some(child) => {
-			if let Some((_, slot)) = running.iter_mut().find(|(name, _)| *name == runtime) {
-				*slot = Some(child);
-			}
-		}
-		None => running.retain(|(name, _)| *name != runtime),
-	}
-	RETURNED.notify_all();
-}
-
-fn start(interpreter: &Interpreter) -> Result<Runtime, String> {
-	let program = std::env::var(interpreter.variable).unwrap_or_else(|_| interpreter.default.to_string());
-	let mut child = Command::new(&program).args(interpreter.arguments).arg(interpreter.script).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit())
-		.spawn().map_err(|failure| format!("cannot start {program} ({failure}); set {} to an interpreter", interpreter.variable))?;
-	let input = child.stdin.take().ok_or("no stdin")?;
-	let output = BufReader::new(child.stdout.take().ok_or("no stdout")?);
-	Ok(Runtime { _child: child, input, output })
+	result
+		.map(|value| node_of(&value))
+		.map_err(|failure| format!("wasm {receiver}: {failure}"))
 }
 
 pub(crate) fn json_of(node: &Node) -> Value {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => Value::Array(items.iter().map(json_of).collect()),
+		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => {
+			Value::Array(items.iter().map(json_of).collect())
+		}
 		Node::Key(key, Op::Colon, value) => serde_json::json!({ key.name(): json_of(value) }),
 		// an object, a handle among them: `{$handle: 7, …}`
-		Node::List(items, Bracket::Curly, _) if items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) => Value::Object(
-			items.iter().filter_map(|item| match item.drop_meta() {
-				Node::Key(key, _, value) => Some((key.name(), json_of(value))),
-				_ => None,
-			}).collect(),
-		),
+		Node::List(items, Bracket::Curly, _)
+			if items
+				.iter()
+				.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
+			Value::Object(
+				items
+					.iter()
+					.filter_map(|item| match item.drop_meta() {
+						Node::Key(key, _, value) => Some((key.name(), json_of(value))),
+						_ => None,
+					})
+					.collect(),
+			)
+		}
 		// an exact rational (`2.5` is 5/2) crosses as a float, an integer as itself
 		Node::Number(Number::Int(integer)) => Value::from(*integer),
 		Node::Number(number) => Value::from(f64::from(*number)),
@@ -324,11 +127,17 @@ pub(crate) fn node_of(value: &Value) -> Node {
 		Value::Array(items) => Node::List(items.iter().map(node_of).collect(), Bracket::Square, Separator::Space),
 		Value::Object(entries) if entries.len() == 1 && entries.get(BIG_INTEGER_KEY).is_some_and(Value::is_string) => {
 			let digits = entries[BIG_INTEGER_KEY].as_str().unwrap_or_default();
-			digits.parse::<num_bigint::BigInt>().map(|big| Node::Number(Number::BigInt(Box::leak(Box::new(big))))).unwrap_or_else(|_| Node::Text(digits.to_string()))
+			digits
+				.parse::<num_bigint::BigInt>()
+				.map(|big| Node::Number(Number::BigInt(Box::leak(Box::new(big)))))
+				.unwrap_or_else(|_| Node::Text(digits.to_string()))
 		}
 		Value::Object(entries) if let Some(character) = codepoint_of(entries) => Node::Char(character),
 		Value::Object(entries) => Node::List(
-			entries.iter().map(|(key, value)| Node::key(key, node_of(value))).collect(),
+			entries
+				.iter()
+				.map(|(key, value)| Node::key(key, node_of(value)))
+				.collect(),
 			Bracket::Curly,
 			Separator::Space,
 		),

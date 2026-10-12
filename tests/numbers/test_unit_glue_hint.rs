@@ -10,7 +10,11 @@ fn hints_of(code: &str) -> (String, Vec<CapturedHint>) {
 }
 
 fn glue_hints(hints: &[CapturedHint]) -> Vec<(String, String)> {
-	hints.iter().filter(|hint| hint.reason.contains("unit")).map(|hint| (hint.original.clone(), hint.canonical.clone())).collect()
+	hints
+		.iter()
+		.filter(|hint| hint.reason.contains("unit"))
+		.map(|hint| (hint.original.clone(), hint.canonical.clone()))
+		.collect()
 }
 
 #[test]

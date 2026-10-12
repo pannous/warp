@@ -19,7 +19,10 @@ impl WarpParser {
 			// BUT: a hyphen joins only a following word, so `i--` and `x-1` end the symbol at the hyphen
 			let next = self.peek_char(1);
 			let is_hyphen_in_symbol = ch == '-' && (next.is_alphabetic() || next == '_');
-			if (ch.is_alphanumeric() && !is_number_glyph(ch)) || ch == '_' || is_hyphen_in_symbol || !symbol.is_empty() && is_music_accidental(ch) {
+			if (ch.is_alphanumeric() && !is_number_glyph(ch))
+				|| ch == '_' || is_hyphen_in_symbol
+				|| !symbol.is_empty() && is_music_accidental(ch)
+			{
 				symbol.push(ch);
 				self.advance();
 			} else {
@@ -87,10 +90,12 @@ impl WarpParser {
 		let outer_start = std::mem::replace(&mut self.group_start, start);
 		self.advance(); // skip opening bracket
 		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
-		// `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
+																		 // `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
 		let inner_header = self.in_for_header && bracket_type == Bracket::Round;
 		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
-		let list = self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
+		let list = self.with_equals_comparing(compares, |parser| {
+			parser.parse_list_with_separators(Some(close), bracket_type)
+		});
 		self.in_for_header = outer_header;
 		self.group_start = outer_start;
 		list
@@ -116,7 +121,9 @@ impl WarpParser {
 			if at_end {
 				if let Some(closer) = close.filter(|_| ch == '\0') {
 					let (line, column) = self.group_start;
-					let message = format!("`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input");
+					let message = format!(
+						"`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input"
+					);
 					return missing_closer(message, closer, crate::fixits::end_of_source(&self.input));
 				}
 				if close.is_some() {
@@ -127,20 +134,30 @@ impl WarpParser {
 
 			let pos_before = self.pos;
 			// an argument of a braceless call at statement level (`sleep 1s`): `and print "x"` after it starts the next statement
-			let statement_start = items_with_seps.iter().rposition(|(_, separator)| *separator != Separator::Space).map_or(0, |last| last + 1);
-			let in_command = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
+			let statement_start = items_with_seps
+				.iter()
+				.rposition(|(_, separator)| *separator != Separator::Space)
+				.map_or(0, |last| last + 1);
+			let in_command = items_with_seps
+				.get(statement_start)
+				.is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
 			let outer_command = std::mem::replace(&mut self.in_command, in_command);
 			// `square xs |> sum` is `sum(square xs)`: the call of a function on its one argument is the piped value
-			let calls_function = in_command && items_with_seps.len() == statement_start + 1
+			let calls_function = in_command
+				&& items_with_seps.len() == statement_start + 1
 				&& matches!(items_with_seps[statement_start].0.drop_meta(), Symbol(name) if crate::type_name_matching::names_a_function(name));
 			let outer_pipe = std::mem::replace(&mut self.pipe_takes_call, calls_function);
 			// `ul { li: "a" li: "b" }`: a block after a name and a blank is that tag's block
-			self.tag_block = ch == '{' && matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
+			self.tag_block = ch == '{'
+				&& matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
 			let item = self.parse_value();
 			self.tag_block = false;
 			self.pipe_takes_call = outer_pipe;
 			self.in_command = outer_command;
-			let item = if calls_function && { self.skip_spaces_and_inline_comments(); self.at_pipeline() } {
+			let item = if calls_function && {
+				self.skip_spaces_and_inline_comments();
+				self.at_pipeline()
+			} {
 				let (function, _) = items_with_seps.pop().expect("the function before its argument");
 				self.continue_expr(Node::List(vec![function, item], Bracket::None, Separator::Space), 0)
 			} else {
@@ -159,14 +176,19 @@ impl WarpParser {
 
 			// `def f(n)` and the lines indented below it by spaces, as `def f(n):` (by tabs the rule below takes them); Ruby's
 			// `def f(n) … end` is read by its end
-			let defines = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
-			let item = if defines { self.with_definition_block(item) } else { item };
+			let defines = items_with_seps
+				.get(statement_start)
+				.is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
+			let item = if defines {
+				self.with_definition_block(item)
+			} else {
+				item
+			};
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 
 			// Handle indentation-based blocks
-			let item = if had_newline && line_indent > self.base_indent && bracket == Bracket::None
-			{
+			let item = if had_newline && line_indent > self.base_indent && bracket == Bracket::None {
 				// Indented block follows - parse it as body of current item
 				let old_indent = self.base_indent;
 				self.base_indent = line_indent;
@@ -174,7 +196,11 @@ impl WarpParser {
 				self.base_indent = old_indent;
 				// Combine item with indented body as Key; a call keeps its parameters (Ruby's `def f(x)` and its lines)
 				let head = match item.drop_meta() {
-					Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Symbol(_))) => item,
+					Node::List(call, Bracket::Round, _)
+						if matches!(call.first().map(Node::drop_meta), Some(Symbol(_))) =>
+					{
+						item
+					}
 					_ => Symbol(item.name()),
 				};
 				Node::Key(Box::new(head), Op::Colon, Box::new(body))
@@ -200,7 +226,9 @@ impl WarpParser {
 			};
 			match declarations_of_several_globals(&item) {
 				// `global a, b`: its declarations are statements of this block
-				Some(declarations) => items_with_seps.extend(declarations.into_iter().map(|declaration| (declaration, sep.clone()))),
+				Some(declarations) => {
+					items_with_seps.extend(declarations.into_iter().map(|declaration| (declaration, sep.clone())))
+				}
 				None => items_with_seps.push((item, sep)),
 			}
 
@@ -226,7 +254,9 @@ impl WarpParser {
 		if (ruby_definition && !tab_indented_ruby) || !self.only_blanks_before_newline() {
 			return definition;
 		}
-		let Some(body) = self.parse_indented_block() else { return definition };
+		let Some(body) = self.parse_indented_block() else {
+			return definition;
+		};
 		if tab_indented_ruby {
 			self.skip_end_line();
 		}
@@ -243,7 +273,11 @@ impl WarpParser {
 			}
 			';' => {
 				self.advance();
-				if self.only_blanks_before_newline() { Separator::Newline } else { Separator::Semicolon }
+				if self.only_blanks_before_newline() {
+					Separator::Newline
+				} else {
+					Separator::Semicolon
+				}
 			}
 			_ if had_newline => Separator::Newline,
 			_ if in_command && self.and_starts_statement() => {
@@ -254,13 +288,13 @@ impl WarpParser {
 		}
 	}
 
-	pub(super) fn group_by_separators(
-		&self,
-		items_with_seps: Vec<(Node, Separator)>,
-		bracket: Bracket,
-	) -> Node {
+	pub(super) fn group_by_separators(&self, items_with_seps: Vec<(Node, Separator)>, bracket: Bracket) -> Node {
 		if items_with_seps.is_empty() {
-			return if bracket == Bracket::Curly { Node::List(Vec::new(), bracket, Separator::None) } else { Empty }; // an empty block is a value
+			return if bracket == Bracket::Curly {
+				Node::List(Vec::new(), bracket, Separator::None)
+			} else {
+				Empty
+			}; // an empty block is a value
 		}
 
 		// only implicit groupings unwrap a single item: explicit brackets like {x} or [x] keep the wrapper
@@ -268,10 +302,24 @@ impl WarpParser {
 			return only(items_with_seps).0;
 		}
 		// the loosest separator splits first, the groups between split by the tighter ones (None ends the list)
-		let Some(loosest) = items_with_seps.iter().map(|(_, sep)| sep.precedence()).filter(|&precedence| precedence < 255).max() else {
-			return grouped_list(items_with_seps.into_iter().map(|(node, _)| node).collect(), bracket, Separator::Space);
+		let Some(loosest) = items_with_seps
+			.iter()
+			.map(|(_, sep)| sep.precedence())
+			.filter(|&precedence| precedence < 255)
+			.max()
+		else {
+			return grouped_list(
+				items_with_seps.into_iter().map(|(node, _)| node).collect(),
+				bracket,
+				Separator::Space,
+			);
 		};
-		let split_sep = items_with_seps.iter().map(|(_, sep)| sep).find(|sep| sep.precedence() == loosest).cloned().expect("the loosest is among them");
+		let split_sep = items_with_seps
+			.iter()
+			.map(|(_, sep)| sep)
+			.find(|sep| sep.precedence() == loosest)
+			.cloned()
+			.expect("the loosest is among them");
 		let mut groups: Vec<Vec<(Node, Separator)>> = Vec::new();
 		let mut current_group = Vec::new();
 		for (item, sep) in items_with_seps {
@@ -286,10 +334,13 @@ impl WarpParser {
 			groups.push(current_group);
 		}
 		// inner groups take no brackets, which would add braces in serialization
-		let grouped_nodes: Vec<Node> = groups.into_iter().map(|group| match group.as_slice() {
-			[(_, Separator::None)] => only(group).0,
-			_ => self.group_by_separators(group, Bracket::None),
-		}).collect();
+		let grouped_nodes: Vec<Node> = groups
+			.into_iter()
+			.map(|group| match group.as_slice() {
+				[(_, Separator::None)] => only(group).0,
+				_ => self.group_by_separators(group, Bracket::None),
+			})
+			.collect();
 		if grouped_nodes.len() == 1 && bracket == Bracket::None {
 			only(grouped_nodes)
 		} else {
@@ -301,9 +352,11 @@ impl WarpParser {
 	/// (`{int bar(){ 42 }}`) groups as the words `int` and `bar(){…}`: it is one member, not two fields
 	pub(crate) fn class_body(block: Node) -> Node {
 		let block = match block {
-			Node::List(items, Bracket::Curly, Separator::Space) if is_typed_method(&items) => {
-				Node::List(vec![Node::List(items, Bracket::None, Separator::Space)], Bracket::Curly, Separator::Semicolon)
-			}
+			Node::List(items, Bracket::Curly, Separator::Space) if is_typed_method(&items) => Node::List(
+				vec![Node::List(items, Bracket::None, Separator::Space)],
+				Bracket::Curly,
+				Separator::Semicolon,
+			),
 			other => other,
 		};
 		Self::transform_fields_to_types(block)
@@ -319,9 +372,15 @@ impl WarpParser {
 				Node::List(items, bracket, sep)
 			}
 			Node::List(items, bracket, sep) => {
-				let mut transformed: Vec<Node> = with_type_phrases(without_ref_words(items)).into_iter().map(Self::transform_fields_to_types).collect();
+				let mut transformed: Vec<Node> = with_type_phrases(without_ref_words(items))
+					.into_iter()
+					.map(Self::transform_fields_to_types)
+					.collect();
 				// the line `left: ref Node?` is the one field once its `ref` is read
-				if bracket == Bracket::None && transformed.len() == 1 && matches!(transformed[0].drop_meta(), Node::Key(_, Op::Colon, _)) {
+				if bracket == Bracket::None
+					&& transformed.len() == 1
+					&& matches!(transformed[0].drop_meta(), Node::Key(_, Op::Colon, _))
+				{
 					return transformed.remove(0);
 				}
 				// the line `left: ref Node? right: ref Node?` among others: its fields are fields of the body
@@ -329,10 +388,13 @@ impl WarpParser {
 				let is_field = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)));
 				let row_of_fields = |item: &Node| matches!(item.drop_meta(), Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field));
 				if sep != Separator::Space && transformed.iter().any(row_of_fields) {
-					transformed = transformed.into_iter().flat_map(|item| match item.drop_meta() {
-						Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field) => row.clone(),
-						_ => vec![item],
-					}).collect();
+					transformed = transformed
+						.into_iter()
+						.flat_map(|item| match item.drop_meta() {
+							Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field) => row.clone(),
+							_ => vec![item],
+						})
+						.collect();
 				}
 				Node::List(transformed, bracket, sep)
 			}
@@ -342,9 +404,10 @@ impl WarpParser {
 				let type_node = Self::symbol_to_type(*value);
 				Node::Key(name, op, Box::new(type_node))
 			}
-			Node::Meta { node, data } => {
-				Node::Meta { node: Box::new(Self::transform_fields_to_types(*node)), data }
-			}
+			Node::Meta { node, data } => Node::Meta {
+				node: Box::new(Self::transform_fields_to_types(*node)),
+				data,
+			},
 			other => other,
 		}
 	}
@@ -356,9 +419,10 @@ impl WarpParser {
 				name: Box::new(Node::Symbol(s)),
 				body: Box::new(Empty),
 			},
-			Node::Meta { node, data } => {
-				Node::Meta { node: Box::new(Self::symbol_to_type(*node)), data }
-			}
+			Node::Meta { node, data } => Node::Meta {
+				node: Box::new(Self::symbol_to_type(*node)),
+				data,
+			},
 			other => other,
 		}
 	}
@@ -372,7 +436,9 @@ fn without_ref_words(items: Vec<Node>) -> Vec<Node> {
 		let after_ref = matches!(fields.last().map(Node::drop_meta), Some(Node::Key(_, Op::Colon, value)) if value.is_symbol(REF_TYPE_WORD));
 		match (after_ref, item.drop_meta()) {
 			(true, Node::Symbol(_)) => {
-				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else { unreachable!("checked") };
+				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else {
+					unreachable!("checked")
+				};
 				fields.push(Node::Key(name, op, Box::new(item)));
 			}
 			_ => fields.push(item),
@@ -402,8 +468,18 @@ fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
 		match (is_of, field_type, element) {
 			(true, Some(type_name), Some(element)) => {
 				items.next();
-				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else { unreachable!("checked") };
-				fields.push(Node::Key(name, op, Box::new(Node::Symbol(format!("{type_name} {} {element}", OF_WORD)))));
+				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else {
+					unreachable!("checked")
+				};
+				fields.push(Node::Key(
+					name,
+					op,
+					Box::new(Node::Symbol(format!(
+						"{} {} {element}",
+						super::noted_list_type_head(&type_name),
+						OF_WORD
+					))),
+				));
 			}
 			_ => fields.push(item),
 		}
@@ -416,9 +492,14 @@ fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
 /// `x => x * 2`. A typed lambda `{x: int => x * 2}` or `{p: Person => p.name}` stays one.
 fn field_holding_lambda(item: Node) -> Node {
 	match item {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(field_holding_lambda(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(field_holding_lambda(*node)),
+			data,
+		},
 		Node::Key(head, Op::FatArrow, body) => match head.drop_meta() {
-			Node::Key(key, Op::Colon, parameter) if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) => {
+			Node::Key(key, Op::Colon, parameter)
+				if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) =>
+			{
 				let lambda = Node::Key(parameter.clone(), Op::FatArrow, body);
 				Node::Key(key.clone(), Op::Colon, Box::new(lambda))
 			}
@@ -446,7 +527,11 @@ fn is_typed_method(words: &[Node]) -> bool {
 
 fn starts_code(first: &Node) -> bool {
 	match first.drop_meta() {
-		Node::Symbol(word) => crate::operators::is_function_keyword(word) || super::ACCESSOR_WORDS.contains(&word.as_str()) || super::MEMBER_MODIFIERS.contains(&word.as_str()),
+		Node::Symbol(word) => {
+			crate::operators::is_function_keyword(word)
+				|| super::ACCESSOR_WORDS.contains(&word.as_str())
+				|| super::MEMBER_MODIFIERS.contains(&word.as_str())
+		}
 		// `init(n) {…}`, JavaScript's `sum() {…}` and `constructor(x, y) {…}`
 		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))),
 		_ => false,
@@ -458,7 +543,8 @@ fn starts_code(first: &Node) -> bool {
 fn assigned_method_call(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Key(_, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, value) => {
-			matches!(value.drop_meta(), Node::Key(_, Op::Dot, method) if matches!(method.drop_meta(), Symbol(_))) || assigned_method_call(value)
+			matches!(value.drop_meta(), Node::Key(_, Op::Dot, method) if matches!(method.drop_meta(), Symbol(_)))
+				|| assigned_method_call(value)
 		}
 		_ => false,
 	}
@@ -471,16 +557,27 @@ fn is_block(node: &Node) -> bool {
 /// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement
 fn with_trailing_block(assignment: Node, block: Node) -> Node {
 	match assignment {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_trailing_block(*node, block)), data },
-		Node::Key(target, op, value) if assigned_method_call(&value) => Node::Key(target, op, Box::new(with_trailing_block(*value, block))),
-		Node::Key(target, op, value) => Node::Key(target, op, Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space))),
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_trailing_block(*node, block)),
+			data,
+		},
+		Node::Key(target, op, value) if assigned_method_call(&value) => {
+			Node::Key(target, op, Box::new(with_trailing_block(*value, block)))
+		}
+		Node::Key(target, op, value) => Node::Key(
+			target,
+			op,
+			Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)),
+		),
 		other => other,
 	}
 }
 
 /// `global a, b` as parsed: the declarations `global: a`, `global: b`
 fn declarations_of_several_globals(item: &Node) -> Option<Vec<Node>> {
-	let Node::List(declarations, Bracket::None, Separator::Semicolon) = item.drop_meta() else { return None };
+	let Node::List(declarations, Bracket::None, Separator::Semicolon) = item.drop_meta() else {
+		return None;
+	};
 	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(crate::node::GLOBAL_DECLARATION));
 	declarations.iter().all(is_global).then(|| declarations.clone())
 }

@@ -16,6 +16,11 @@ interface text-tools {
     increment: func(by: s64) -> s64;
     value: func() -> s64;
     merged: static func(a: borrow<counter>, b: borrow<counter>) -> counter;
+    /// how many counters are alive: dropping a handle runs a counter's destructor
+    live: static func() -> u32;
+    /// named like operators: `a + b`, `a < b` of two counters call them
+    add: func(other: borrow<counter>) -> counter;
+    lt: func(other: borrow<counter>) -> bool;
   }
   total: func(counters: list<borrow<counter>>) -> s64;
 }

@@ -1,4 +1,3 @@
-
 // shared code with warp tests etc
 // only lib.rs allows reexporting as:
 // use warp::extensions::*; etc
@@ -11,136 +10,156 @@ pub use extensions::utils::*;
 pub mod util; // reexported for tests
 #[cfg(feature = "native")]
 pub use util::gc_engine;
-pub mod analyzer;
 pub mod analysis_memo;
-pub mod dead_functions;
+pub mod analyzer;
 pub mod binaryen;
+pub mod context;
+pub mod dead_functions;
+#[cfg(feature = "native")]
+pub mod gc_traits;
+/// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
+pub mod lowering;
 pub mod node;
+pub mod pipeline;
 #[cfg(feature = "native")]
 pub mod run;
 pub mod type_kinds;
-#[cfg(feature = "native")]
-pub mod gc_traits;
-pub mod context;
 pub mod wasm_emitter;
-pub mod pipeline;
-/// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
-pub mod lowering;
-pub use lowering::{ambiguous_forms, blocks, broadcasting, class_methods, closures, component_state, component_worlds, comprehensions, declarations, element_events, event_signals, scoped_handlers, fetch_signals, field_elements, system_signals, system_values, folding, for_loop, function_values, generator_consumers, generator_expressions, generator_objects, generators, getters, go_blocks, gpu_maps, inlining, introspection, reflection, channel_words, lambdas, lazy_ranges, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, markup_tags, style_rules, meta_entries, min_max, mutation, named_arguments, nested_index, number_keys, music_words, object_groups, one_entry_maps, shared_arrays, signal_values, overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, list_phrases, word_slices, optional_casts, picked_calls, pipes, printable, references, result_word, routes, ruby_blocks, run_time_blocks, serve, soft_keywords, std_aliases, stored_values, database_tables, switch, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history, variable_signals, variadic, versions, welcome_forms, word_operators};
-#[cfg(feature = "native")]
-pub mod wasm_reader;
-#[cfg(feature = "native")]
-pub mod tasks;
+pub use lowering::{
+	ambiguous_forms, blocks, broadcasting, channel_words, class_methods, closures, component_state, component_worlds,
+	comprehensions, database_tables, declarations, element_events, event_signals, fetch_signals, field_elements,
+	folding, for_loop, foreign_modules, function_values, generator_consumers, generator_expressions, generator_objects,
+	generators, getters, go_blocks, gpu_maps, inlining, introspection, lambdas, late_binding, lazy_ranges,
+	library_words, list_phrases, markup_tags, memoization, meta_entries, min_max, music_words, mutation,
+	named_arguments, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps, optional_casts,
+	overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, picked_calls, pipes, printable,
+	references, reflection, result_word, routes, ruby_blocks, run_time_blocks, scoped_handlers, serve, shared_arrays,
+	signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals, system_values,
+	traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history,
+	variable_signals, variadic, versions, welcome_forms, word_operators, word_slices,
+};
+pub mod accessibility;
 #[cfg(feature = "native")]
 pub mod channels;
+mod compile_time;
 #[cfg(feature = "native")]
-pub mod web_sockets;
+pub mod component_builder;
+#[cfg(feature = "native")]
+pub mod components;
+#[cfg(feature = "native")]
+pub mod crash_card;
+#[cfg(feature = "native")]
+pub mod database;
+#[cfg(feature = "native")]
+pub mod deploy;
+#[cfg(feature = "native")]
+pub mod dev_server;
+pub mod diagnostic;
+pub mod effects;
+#[cfg(feature = "native")]
+pub mod fetches;
+pub mod ffi;
+pub mod ffi_parser;
+#[cfg(all(feature = "native", target_os = "macos"))]
+pub mod file_type;
+pub mod fixed_width;
+pub mod fixits;
+#[cfg(feature = "native")]
+pub mod foreign;
+pub mod function;
+pub mod function_equality;
 #[cfg(feature = "native")]
 pub mod gpu;
 #[cfg(feature = "native")]
-pub mod shared;
+pub mod gpu_canvas;
+pub mod headless;
+pub mod host;
+pub mod host_parts;
+pub mod injection;
+pub mod interpolation;
+pub mod law;
+pub mod local;
+pub mod markup;
+pub mod meta;
+pub mod meta_section;
+#[cfg(feature = "native")]
+pub mod midi;
+pub mod modules;
+pub mod normalize;
+pub mod operators;
+#[cfg(feature = "native")]
+pub mod package_tools;
+pub mod page_tests;
 #[cfg(feature = "native")]
 pub mod paint;
 #[cfg(feature = "native")]
 pub mod paint_window;
+pub mod real;
 #[cfg(feature = "native")]
-pub mod sound_engine;
-#[cfg(all(feature = "native", target_os = "macos"))]
-pub mod webview;
+pub mod route_split;
+pub mod shader_holes;
 #[cfg(feature = "native")]
-pub mod crash_card;
+pub mod shared;
 #[cfg(feature = "native")]
-pub mod midi;
+pub mod site;
 #[cfg(feature = "native")]
 pub mod sound;
 #[cfg(feature = "native")]
-pub mod text_raster;
-pub mod wasm_optimizer;
-pub mod warp_parser;
-pub mod wisp_parser;
-pub mod uniscript_entities;
-pub mod operators;
-pub mod meta;
-pub mod meta_section;
-pub mod host;
-pub mod host_parts;
-#[cfg(feature = "native")]
-pub mod foreign;
+pub mod sound_engine;
 #[cfg(feature = "native")]
 pub mod std_adapters;
 pub mod std_docs;
 #[cfg(feature = "native")]
+pub mod tasks;
+#[cfg(feature = "native")]
+pub mod text_raster;
+pub mod time;
+pub mod uncertain;
+pub mod uniscript_entities;
+pub mod units;
+pub mod warp_parser;
+pub mod wasm_modules;
+pub mod wasm_optimizer;
+#[cfg(feature = "native")]
+pub mod wasm_reader;
+pub mod web;
+pub mod web_idl;
+#[cfg(feature = "native")]
 pub mod web_server;
 #[cfg(feature = "native")]
-pub mod site;
-#[cfg(feature = "native")]
-pub mod deploy;
-#[cfg(feature = "native")]
-pub mod route_split;
-#[cfg(feature = "native")]
-pub mod dev_server;
+pub mod web_sockets;
 #[cfg(all(feature = "native", target_os = "macos"))]
-pub mod file_type;
-#[cfg(feature = "native")]
-pub mod fetches;
-#[cfg(feature = "native")]
-pub mod database;
-#[cfg(feature = "native")]
-pub mod components;
-#[cfg(feature = "native")]
-pub mod component_builder;
-pub mod ffi;
-pub mod ffi_parser;
-pub mod web_idl;
-pub mod function;
-pub mod normalize;
-pub mod local;
-pub mod law;
-pub mod function_equality;
-pub mod effects;
-pub mod injection;
-pub mod interpolation;
-pub mod shader_holes;
-pub mod diagnostic;
-pub mod markup;
-pub mod headless;
-pub mod page_tests;
-pub mod accessibility;
-pub mod fixits;
-pub mod time;
-mod compile_time;
-pub mod real;
-pub mod units;
-pub mod uncertain;
-pub mod fixed_width;
-pub mod modules;
-pub mod wasm_modules;
-#[cfg(feature = "native")]
-pub mod package_tools;
-pub mod web;
+pub mod webview;
+pub mod wisp_parser;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of warp
 pub use node::{Bracket, Node, Separator};
 pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
 // Node convenience constructors
-pub use node::{block, codepoint, error, error_node, float, floats, data, int, ints, key, key_op, key_ops, list, parens, symbol, symbols, text, texts};
+pub use node::{
+	block, codepoint, data, error, error_node, float, floats, int, ints, key, key_op, key_ops, list, parens, symbol,
+	symbols, text, texts,
+};
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
 pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
-pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START, extract_instance_values, RawFieldValue};
+pub use type_kinds::{
+	extract_instance_values, AstKind, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry,
+	USER_TYPE_TAG_START,
+};
 // Metadata
-pub use meta::{DataValue, LineInfo, DataType};
+pub use meta::{DataType, DataValue, LineInfo};
 // WASM
-pub use wasm_emitter::{WasmGcEmitter};
+pub use wasm_emitter::WasmGcEmitter;
 // Host functions
 #[cfg(feature = "native")]
-pub use host::{HostState, link_host_functions, create_host_linker};
+pub use host::{create_host_linker, link_host_functions, HostState};
 // Functions
-pub use function::{Function, FunctionRegistry, Signature, Arg, ABI, kind_to_valtype};
+pub use function::{kind_to_valtype, Arg, Function, FunctionRegistry, Signature, ABI};
 // Local (unified struct for variables)
 pub use local::Local;
 // Legacy GcObject for backward compatibility (3-field Node layout)
@@ -149,7 +168,7 @@ pub use wasm_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]
-pub use gc_traits::{register_gc_types_from_wasm, FromVal, ToVal, FieldIndex, GcStructWrapper, GcReadable};
+pub use gc_traits::{register_gc_types_from_wasm, FieldIndex, FromVal, GcReadable, GcStructWrapper, ToVal};
 // GcComparable trait for Node comparison with wasm_struct types
 #[cfg(feature = "native")]
 pub use node::GcComparable;

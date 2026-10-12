@@ -28,13 +28,22 @@ pub fn may_be_stage(operand: &Node) -> bool {
 
 /// The right operand of a single `|` as the parser marks it (may_be_stage)
 pub fn pipe_stage(stage: Node) -> Node {
-	Node::Meta { node: Box::new(stage), data: Box::new(Node::key(PIPE_STAGE, Node::True)) }
+	Node::Meta {
+		node: Box::new(stage),
+		data: Box::new(Node::key(PIPE_STAGE, Node::True)),
+	}
 }
 
 /// `sqrt`, `abs` alone: the operator
 fn operator_stage(node: &Node) -> Option<Op> {
 	match node.drop_meta() {
-		Node::Key(left, op, right) if OPERATOR_STAGES.contains(op) && matches!(left.drop_meta(), Node::Empty) && matches!(right.drop_meta(), Node::Empty) => Some(*op),
+		Node::Key(left, op, right)
+			if OPERATOR_STAGES.contains(op)
+				&& matches!(left.drop_meta(), Node::Empty)
+				&& matches!(right.drop_meta(), Node::Empty) =>
+		{
+			Some(*op)
+		}
 		_ => None,
 	}
 }
@@ -44,7 +53,7 @@ pub fn is_pipe_stage(node: &Node) -> bool {
 }
 
 pub fn lower(node: Node) -> Node {
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let mut variables = HashSet::new();
 	let mut spaced_functions = HashSet::new();
 	node.visit(&mut |part| match part {
@@ -56,7 +65,12 @@ pub fn lower(node: Node) -> Node {
 		Node::List(items, Bracket::None, Separator::Space) => spaced_functions.extend(spaced_function(items)),
 		_ => {}
 	});
-	Pipes { context, variables, spaced_functions }.rewrite(node)
+	Pipes {
+		context,
+		variables,
+		spaced_functions,
+	}
+	.rewrite(node)
 }
 
 struct Pipes {
@@ -73,35 +87,52 @@ impl Pipes {
 			// `sum|print`: functions on both sides compose, `it => print(sum(it))` (wiki/pipe.md, card pipe-compose)
 			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) && self.is_function_chain(&value) => {
 				let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
-				key(it.clone(), Op::FatArrow, self.applied(&stage, self.chain_applied(*value, it)))
+				key(
+					it.clone(),
+					Op::FatArrow,
+					self.applied(&stage, self.chain_applied(*value, it)),
+				)
 			}
 			// `sum|print 1 2 3` parses as `sum | (print 1 2 3)`: the composition applied, `print(sum([1 2 3]))` (card pipe-applied)
-			Node::Key(value, Op::Or, applied) if self.is_function_chain(&value) && self.applied_stage(&applied).is_some() => {
+			Node::Key(value, Op::Or, applied)
+				if self.is_function_chain(&value) && self.applied_stage(&applied).is_some() =>
+			{
 				let (stage, argument) = self.applied_stage(&applied).expect("guarded");
 				self.applied(&stage, self.chain_applied(*value, self.rewrite(argument)))
 			}
 			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) => self.applied(&stage, self.rewrite(*value)),
 			// `cond then a else b`: the condition, also without `if` (P158)
 			Node::Key(then, Op::Else, otherwise) if is_bare_then(&then) => {
-				let Node::Key(condition, _, body) = then.drop_meta().clone() else { unreachable!("guarded") };
+				let Node::Key(condition, _, body) = then.drop_meta().clone() else {
+					unreachable!("guarded")
+				};
 				let condition = if_then(self.rewrite(*condition), self.rewrite(*body));
 				key(condition, Op::Else, self.rewrite(*otherwise))
 			}
 			// `3 then f then g` parses as `3 then (f then g)`: a pipeline reads left to right, `(3 then f) then g`
 			Node::Key(value, Op::Then, stage) if !is_if_head(&value) && is_bare_then(&stage) => {
-				let Node::Key(first, _, rest) = stage.drop_meta().clone() else { unreachable!("guarded") };
+				let Node::Key(first, _, rest) = stage.drop_meta().clone() else {
+					unreachable!("guarded")
+				};
 				self.rewrite(Node::Key(Box::new(Node::Key(value, Op::Then, first)), Op::Then, rest))
 			}
-			Node::Key(value, Op::Then, stage) if !is_if_head(&value) => self.then_reading(self.rewrite(*value), self.rewrite(*stage)),
+			Node::Key(value, Op::Then, stage) if !is_if_head(&value) => {
+				self.then_reading(self.rewrite(*value), self.rewrite(*stage))
+			}
 			// `square numbers then filter(p)`: the braceless call is the piped value
 			Node::List(mut items, Bracket::None, Separator::Space) if self.then_pipes_braceless_call(&items) => {
-				let Some(Node::Key(argument, Op::Then, stage)) = items.pop().map(|last| last.drop_meta().clone()) else { unreachable!("guarded") };
+				let Some(Node::Key(argument, Op::Then, stage)) = items.pop().map(|last| last.drop_meta().clone())
+				else {
+					unreachable!("guarded")
+				};
 				items.push(*argument);
 				let value = self.rewrite(Node::List(items, Bracket::None, Separator::Space));
 				self.then_call(&self.rewrite(*stage), &value).expect("guarded")
 			}
 			Node::List(mut items, Bracket::None, Separator::Space) if self.pipes_braceless_call(&items) => {
-				let Some(Node::Key(argument, Op::Or, stage)) = items.pop().map(|last| last.drop_meta().clone()) else { unreachable!("guarded") };
+				let Some(Node::Key(argument, Op::Or, stage)) = items.pop().map(|last| last.drop_meta().clone()) else {
+					unreachable!("guarded")
+				};
 				items.push(*argument);
 				self.applied(&stage, self.rewrite(Node::List(items, Bracket::None, Separator::Space)))
 			}
@@ -119,7 +150,12 @@ impl Pipes {
 				// parenthesized: `a<b |> f` would pipe b alone
 				let piped = format!("({}) |> {}", value.serialize(), stage.serialize());
 				let reason = "then after a comparison is the condition; to pipe the truth value write |>";
-				crate::normalize::advise(&written, &piped, reason, Some(crate::normalize::rewrite(&written, &piped, reason)));
+				crate::normalize::advise(
+					&written,
+					&piped,
+					reason,
+					Some(crate::normalize::rewrite(&written, &piped, reason)),
+				);
 				if_then(value, stage)
 			}
 			Some(call) => call,
@@ -149,7 +185,8 @@ impl Pipes {
 		if let Some(function) = self.context.user_functions.get(name) {
 			return function.params.len() > given;
 		}
-		self.spaced_functions.contains(name) || (!self.variables.contains(name) && is_function_word(name, &self.context))
+		self.spaced_functions.contains(name)
+			|| (!self.variables.contains(name) && is_function_word(name, &self.context))
 	}
 
 	/// `filter(p)`: a call of anything but a variable, short of an argument when it is the program's function
@@ -162,8 +199,11 @@ impl Pipes {
 
 	/// `square numbers then filter(p)`: a braceless call whose last argument pipes on with `then`
 	fn then_pipes_braceless_call(&self, items: &[Node]) -> bool {
-		let head_is_function = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.names_function(name, 0));
-		head_is_function && items.len() >= 2 && matches!(items.last().map(Node::drop_meta), Some(Node::Key(argument, Op::Then, stage)) if !is_truth_value(argument) && self.then_call(stage, argument).is_some())
+		let head_is_function =
+			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.names_function(name, 0));
+		head_is_function
+			&& items.len() >= 2
+			&& matches!(items.last().map(Node::drop_meta), Some(Node::Key(argument, Op::Then, stage)) if !is_truth_value(argument) && self.then_call(stage, argument).is_some())
 	}
 
 	/// A marked stage that pipes: a function or a word operator
@@ -185,16 +225,29 @@ impl Pipes {
 	/// arguments as one list (`sum 1 2 3` sums them)
 	fn applied_stage(&self, applied: &Node) -> Option<(Node, Node)> {
 		let (stage, mut arguments) = match applied.drop_meta() {
-			Node::List(items, Bracket::None, Separator::Space) | Node::List(items, Bracket::Round, Separator::None) if items.len() >= 2 => {
+			Node::List(items, Bracket::None, Separator::Space) | Node::List(items, Bracket::Round, Separator::None)
+				if items.len() >= 2 =>
+			{
 				let mut words: Vec<Node> = items.iter().flat_map(spread).collect();
 				(pipe_stage(words.remove(0)), words)
 			}
-			Node::Key(left, op, operand) if OPERATOR_STAGES.contains(op) && matches!(left.drop_meta(), Node::Empty) && !matches!(operand.drop_meta(), Node::Empty) => {
-				(pipe_stage(key(Node::Empty, *op, Node::Empty)), vec![operand.as_ref().clone()])
+			Node::Key(left, op, operand)
+				if OPERATOR_STAGES.contains(op)
+					&& matches!(left.drop_meta(), Node::Empty)
+					&& !matches!(operand.drop_meta(), Node::Empty) =>
+			{
+				(
+					pipe_stage(key(Node::Empty, *op, Node::Empty)),
+					vec![operand.as_ref().clone()],
+				)
 			}
 			_ => return None,
 		};
-		let argument = if arguments.len() == 1 { arguments.remove(0) } else { Node::List(arguments, Bracket::Square, Separator::Space) };
+		let argument = if arguments.len() == 1 {
+			arguments.remove(0)
+		} else {
+			Node::List(arguments, Bracket::Square, Separator::Space)
+		};
 		self.is_stage(&stage).then_some((stage, argument))
 	}
 
@@ -217,8 +270,15 @@ impl Pipes {
 	/// The function a marked stage names: the word itself, unless it is a variable
 	fn function(&self, stage: &Node) -> Option<Node> {
 		let Node::Meta { node, .. } = stage else { return None };
-		let Node::Symbol(name) = node.drop_meta() else { return None };
-		let is_user_function = self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) || self.spaced_functions.contains(name);
+		let Node::Symbol(name) = node.drop_meta() else {
+			return None;
+		};
+		let is_user_function = self
+			.context
+			.user_functions
+			.get(name)
+			.is_some_and(|function| !function.params.is_empty())
+			|| self.spaced_functions.contains(name);
 		let is_word = !self.variables.contains(name) && is_function_word(name, &self.context);
 		(is_pipe_stage(stage) && (is_user_function || is_word)).then(|| node.as_ref().clone())
 	}
@@ -226,10 +286,16 @@ impl Pipes {
 	/// `square 2 | root`: a braceless call of a function whose last argument pipes into a function
 	fn pipes_braceless_call(&self, items: &[Node]) -> bool {
 		let head_is_function = match items.first().map(Node::drop_meta) {
-			Some(Node::Symbol(name)) => self.context.user_functions.contains_key(name) || self.spaced_functions.contains(name) || is_function_word(name, &self.context),
+			Some(Node::Symbol(name)) => {
+				self.context.user_functions.contains_key(name)
+					|| self.spaced_functions.contains(name)
+					|| is_function_word(name, &self.context)
+			}
 			_ => false,
 		};
-		head_is_function && items.len() >= 2 && matches!(items.last().map(Node::drop_meta), Some(Node::Key(_, Op::Or, stage)) if self.is_stage(stage))
+		head_is_function
+			&& items.len() >= 2
+			&& matches!(items.last().map(Node::drop_meta), Some(Node::Key(_, Op::Or, stage)) if self.is_stage(stage))
 	}
 }
 

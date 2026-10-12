@@ -8,15 +8,18 @@
 //! `send(v)` (card generators-send) resumes it like next() and gives `x = yield …` the value v where it resumes; next()
 //! gives it ø.
 
-use crate::for_loop::block_items;
-use crate::generators::{generators, yield_statement, holds_own, holds_stop, is_return, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, NAME_SEPARATOR, NEXT_METHOD};
-use super::words::{FOR_WORD, RETURN_WORD};
 use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol};
+use super::words::{FOR_WORD, RETURN_WORD};
+use crate::for_loop::block_items;
+use crate::generators::{
+	generators, holds_own, holds_stop, is_return, yield_statement, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD,
+	NAME_SEPARATOR, NEXT_METHOD,
+};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::ruby_blocks::arguments;
-use crate::wasm_emitter::{is_step, split_step};
 use crate::warp_parser::{parse, while_do};
+use crate::wasm_emitter::{is_step, split_step};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// `iter(count_to(3))` makes the object explicitly
@@ -58,20 +61,31 @@ pub(crate) fn advanced_variables(node: &Node) -> HashSet<String> {
 	let mut advanced = HashSet::new();
 	node.visit(&mut |part| match part {
 		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].is_symbol(NEXT_METHOD) => {
-			advanced.extend(arguments(&items[1]).first().and_then(Node::symbol_name).map(String::from));
+			advanced.extend(
+				arguments(&items[1])
+					.first()
+					.and_then(Node::symbol_name)
+					.map(String::from),
+			);
 		}
-		Node::Key(object, Op::Dot, call) if is_next_call(call) => advanced.extend(object.symbol_name().map(String::from)),
+		Node::Key(object, Op::Dot, call) if is_next_call(call) => {
+			advanced.extend(object.symbol_name().map(String::from))
+		}
 		_ => {}
 	});
 	advanced
 }
 
 fn is_next_call(call: &Node) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && items[0].is_symbol(NEXT_METHOD)) || call.is_symbol(NEXT_METHOD)
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && items[0].is_symbol(NEXT_METHOD))
+		|| call.is_symbol(NEXT_METHOD)
 }
 
 /// `g(args)` of a generator: its name and arguments; an argument `naturals()` is parsed as the bare name
-pub(crate) fn generator_call<'a>(node: &Node, generators: &'a HashMap<String, Generator>) -> Option<(&'a String, &'a Generator, Vec<Node>)> {
+pub(crate) fn generator_call<'a>(
+	node: &Node,
+	generators: &'a HashMap<String, Generator>,
+) -> Option<(&'a String, &'a Generator, Vec<Node>)> {
 	let (name, arguments) = match node.drop_meta() {
 		Node::List(items, Bracket::Round | Bracket::None, _) => items.split_first()?,
 		Node::Symbol(_) => (node, &[][..]),
@@ -83,7 +97,12 @@ pub(crate) fn generator_call<'a>(node: &Node, generators: &'a HashMap<String, Ge
 }
 
 /// `v = g(args)` of an advanced v and `iter(g(args))` as the construction of g's object, `next(v)` as `v.next()`
-fn with_objects(node: Node, generators: &HashMap<String, Generator>, advanced: &HashSet<String>, classes: &mut BTreeMap<String, Node>) -> Node {
+fn with_objects(
+	node: Node,
+	generators: &HashMap<String, Generator>,
+	advanced: &HashSet<String>,
+	classes: &mut BTreeMap<String, Node>,
+) -> Node {
 	let node = node.map_children(|child| with_objects(child, generators, advanced, classes));
 	let constructed = |call: &Node, classes: &mut BTreeMap<String, Node>| -> Option<Node> {
 		let (name, generator, arguments) = generator_call(call, generators)?;
@@ -100,7 +119,9 @@ fn with_objects(node: Node, generators: &HashMap<String, Generator>, advanced: &
 			arguments(&items[1]).first().and_then(|call| constructed(call, classes))
 		}
 		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].is_symbol(NEXT_METHOD) => {
-			arguments(&items[1]).first().map(|object| key(object.clone(), Op::Dot, call(NEXT_METHOD, vec![])))
+			arguments(&items[1])
+				.first()
+				.map(|object| key(object.clone(), Op::Dot, call(NEXT_METHOD, vec![])))
 		}
 		_ => None,
 	};
@@ -117,8 +138,15 @@ fn class_name(generator: &str) -> String {
 /// `count_to·generator(args…, ø for each local, 0)`
 fn construction(name: &str, generator: &Generator, arguments: Vec<Node>) -> Node {
 	let locals = fields(generator).len() - generator.parameters.len();
-	let values = arguments.into_iter().chain(std::iter::repeat_n(Node::Empty, locals)).chain([int(0), Node::Empty]);
-	Node::List(std::iter::once(symbol(&class_name(name))).chain(values).collect(), Bracket::Round, Separator::None)
+	let values = arguments
+		.into_iter()
+		.chain(std::iter::repeat_n(Node::Empty, locals))
+		.chain([int(0), Node::Empty]);
+	Node::List(
+		std::iter::once(symbol(&class_name(name))).chain(values).collect(),
+		Bracket::Round,
+		Separator::None,
+	)
 }
 
 /// The fields in order: the parameters, the locals, (then the state and what was sent)
@@ -128,15 +156,20 @@ fn fields(generator: &Generator) -> Vec<String> {
 	locals.remove(STATE_FIELD);
 	locals.remove(SENT_FIELD);
 	let parameters = generator.parameters.iter().cloned();
-	parameters.clone().chain(locals.into_iter().filter(|local| !generator.parameters.contains(local))).collect()
+	parameters
+		.clone()
+		.chain(locals.into_iter().filter(|local| !generator.parameters.contains(local)))
+		.collect()
 }
 
 /// The names a body assigns: the `for` lowering's `x·items` and `x·index` too
 fn assigned_names(body: &Node) -> BTreeSet<String> {
 	let mut names = BTreeSet::new();
-	body.visit(&mut |part| if let Node::Key(target, op, _) = part {
-		if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) {
-			names.extend(target.symbol_name().map(String::from));
+	body.visit(&mut |part| {
+		if let Node::Key(target, op, _) = part {
+			if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) {
+				names.extend(target.symbol_name().map(String::from));
+			}
 		}
 	});
 	names
@@ -145,7 +178,9 @@ fn assigned_names(body: &Node) -> BTreeSet<String> {
 /// `class count_to·generator { n: any; k: any; generator·state: any; next() := machine }`
 fn generator_class(name: &str, generator: &Generator) -> Option<Node> {
 	let body = machine_body(generator)?;
-	let template = parse(&format!("class {FIELD_PLACEHOLDER} {{ {FIELD_PLACEHOLDER}: {FIELD_TYPE} }}"));
+	let template = parse(&format!(
+		"class {FIELD_PLACEHOLDER} {{ {FIELD_PLACEHOLDER}: {FIELD_TYPE} }}"
+	));
 	let field_template = template_field(&template)?;
 	let field = |field_name: &str| match field_template.drop_meta() {
 		Node::Key(_, op, kind) => Node::Key(Box::new(symbol(field_name)), *op, kind.clone()),
@@ -155,17 +190,25 @@ fn generator_class(name: &str, generator: &Generator) -> Option<Node> {
 	members.extend([field(STATE_FIELD), field(SENT_FIELD)]);
 	let head = call(NEXT_METHOD, vec![]);
 	members.push(key(head, Op::Define, block(vec![body])));
-	members.extend(crate::generator_consumers::template(SEND, &[("VALUE", &symbol(SENT_VALUE)), ("SENT", &symbol(SENT_FIELD))]));
-	Some(Node::Type { name: Box::new(symbol(&class_name(name))), body: Box::new(block(members)) })
+	members.extend(crate::generator_consumers::template(
+		SEND,
+		&[("VALUE", &symbol(SENT_VALUE)), ("SENT", &symbol(SENT_FIELD))],
+	));
+	Some(Node::Type {
+		name: Box::new(symbol(&class_name(name))),
+		body: Box::new(block(members)),
+	})
 }
 
 fn template_field(template: &Node) -> Option<Node> {
 	let mut found = None;
-	template.visit(&mut |part| if let Node::Type { body, .. } = part {
-		found = match body.drop_meta() {
-			Node::List(items, _, _) => items.first().cloned(),
-			single => Some(single.clone()),
-		};
+	template.visit(&mut |part| {
+		if let Node::Type { body, .. } = part {
+			found = match body.drop_meta() {
+				Node::List(items, _, _) => items.first().cloned(),
+				single => Some(single.clone()),
+			};
+		}
 	});
 	found
 }
@@ -229,7 +272,10 @@ impl Machine {
 			let resume = self.state();
 			self.states[at].extend([set_state(resume as i64), returned(yielded_value(values))]);
 			if let Some(target) = target {
-				self.states[resume].extend([assign(target, symbol(SENT_FIELD)), assign(symbol(SENT_FIELD), Node::Empty)]);
+				self.states[resume].extend([
+					assign(target, symbol(SENT_FIELD)),
+					assign(symbol(SENT_FIELD), Node::Empty),
+				]);
 			}
 			return Some(resume);
 		}
@@ -256,21 +302,29 @@ impl Machine {
 				_ => None,
 			},
 			Node::Key(head, Op::Then, then) => {
-				let Node::Key(_, Op::If, condition) = head.drop_meta() else { return None };
+				let Node::Key(_, Op::If, condition) = head.drop_meta() else {
+					return None;
+				};
 				self.branches(condition.as_ref().clone(), then, None, at, exits)
 			}
 			Node::Key(head, Op::Else, otherwise) => {
-				let Node::Key(test, Op::Then, then) = head.drop_meta() else { return None };
-				let Node::Key(_, Op::If, condition) = test.drop_meta() else { return None };
+				let Node::Key(test, Op::Then, then) = head.drop_meta() else {
+					return None;
+				};
+				let Node::Key(_, Op::If, condition) = test.drop_meta() else {
+					return None;
+				};
 				self.branches(condition.as_ref().clone(), then, Some(otherwise), at, exits)
 			}
 			Node::List(items, _, _) if items.first().is_some_and(|word| word.is_symbol(FOR_WORD)) => {
 				let lowered = crate::for_loop::lower(statement.clone()).ok()?;
 				self.compile(sequence_items(&lowered), at, exits)
 			}
-			Node::List(_, Bracket::None | Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) => {
-				self.compile(sequence_items(&statement), at, exits)
-			}
+			Node::List(
+				_,
+				Bracket::None | Bracket::Round | Bracket::Curly,
+				Separator::Semicolon | Separator::Newline,
+			) => self.compile(sequence_items(&statement), at, exits),
 			_ => None,
 		}
 	}
@@ -291,12 +345,23 @@ impl Machine {
 			}
 			None => test,
 		};
-		let end = self.compile(block_items(&body).into_iter().filter(|item| !is_step(item)).collect(), start, Some(Exits { after, again }))?;
+		let end = self.compile(
+			block_items(&body).into_iter().filter(|item| !is_step(item)).collect(),
+			start,
+			Some(Exits { after, again }),
+		)?;
 		self.jump(end, again);
 		Some(after)
 	}
 
-	fn branches(&mut self, condition: Node, then: &Node, otherwise: Option<&Node>, at: usize, exits: Option<Exits>) -> Option<usize> {
+	fn branches(
+		&mut self,
+		condition: Node,
+		then: &Node,
+		otherwise: Option<&Node>,
+		at: usize,
+		exits: Option<Exits>,
+	) -> Option<usize> {
 		let (then_start, after) = (self.state(), self.state());
 		self.states[at].push(condition_jump(condition, then_start));
 		let then_end = self.compile(block_items(then), then_start, exits)?;
@@ -315,10 +380,16 @@ impl Machine {
 
 	/// `while 1 { if generator·state == 0 {…}; …; return ø }`
 	fn dispatch(self) -> Node {
-		let mut cases: Vec<Node> = self.states.into_iter().enumerate().filter(|(_, code)| !code.is_empty()).map(|(state, code)| {
-			let test = key(state_field(), Op::Eq, int(state as i64));
-			if_then(test, block(code))
-		}).collect();
+		let mut cases: Vec<Node> = self
+			.states
+			.into_iter()
+			.enumerate()
+			.filter(|(_, code)| !code.is_empty())
+			.map(|(state, code)| {
+				let test = key(state_field(), Op::Eq, int(state as i64));
+				if_then(test, block(code))
+			})
+			.collect();
 		cases.push(returned(Node::Empty));
 		while_do(int(1), block(cases))
 	}

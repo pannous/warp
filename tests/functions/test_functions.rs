@@ -1,11 +1,11 @@
 // Function tests
 // Migrated from tests_*.rs files
 
+use crate::{eq, is};
 use warp::analyzer::{analyze, collect_functions};
 use warp::type_kinds::Kind;
 use warp::warp_parser::parse;
 use warp::Node;
-use crate::{is, eq};
 
 #[test]
 fn test2def() {
@@ -40,10 +40,10 @@ fn test_function_declaration() {
 #[test]
 fn test_default_params() {
 	// Default parameter values
-	is!("def x(a=3): 42+a; x()", 45);      // use default
-	is!("def x(a=3): 42+a; x(10)", 52);    // override default
-	is!("f(a=5, b=10) = a+b; f()", 15);    // multiple defaults
-	is!("f(a=5, b=10) = a+b; f(1)", 11);   // override first
+	is!("def x(a=3): 42+a; x()", 45); // use default
+	is!("def x(a=3): 42+a; x(10)", 52); // override default
+	is!("f(a=5, b=10) = a+b; f()", 15); // multiple defaults
+	is!("f(a=5, b=10) = a+b; f(1)", 11); // override first
 	is!("f(a=5, b=10) = a+b; f(1, 2)", 3); // override both
 }
 
@@ -94,13 +94,14 @@ fn test_float_return_through_main() {
 #[test]
 // #[ignore]
 fn test_graph_params() {
-	let result = parse("{\n  empireHero: hero(episode: EMPIRE){\n    name\n  }\n  jediHero: hero(episode: JEDI){\n    name\n  }\n}");
+	let result = parse(
+		"{\n  empireHero: hero(episode: EMPIRE){\n    name\n  }\n  jediHero: hero(episode: JEDI){\n    name\n  }\n}",
+	);
 	// let hero : Node = result["empireHero"].clone();
 	let hero: &Node = &result["empireHero"];
 	hero.print();
 	eq!(hero["episode"], "EMPIRE");
 }
-
 
 #[test]
 // #[ignore]
@@ -142,14 +143,14 @@ fn test_fibonacci_auto_typed() {
 #[test]
 fn test_fibonacci_auto_param() {
 	// DONE: use newline once parser precedence is fixed for := vs newline
-	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)",55);
+	is!("fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)", 55);
 }
 
 #[test]
 fn test_fibonacci_typed() {
 	// DONE: use newline once parser precedence is fixed for := vs newline
-	is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",55);
-	is!("fib(n:number) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)",55);
+	is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
+	is!("fib(n:number) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
 }
 
 #[test]
@@ -157,7 +158,6 @@ fn test_fibonacci_typed2() {
 	// Working syntaxes (alread in test_fibonacci_typed etc):
 	// is!("fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
 	// is!("fib(n:int) = n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10)", 55);
-
 
 	// C-like syntaxes - not warp style, use n:type instead of type n:
 	// is!("int fib(int n){n < 2 ? n : fib(n - 1) + fib(n - 2)}; fib(10)", 55);
@@ -229,7 +229,7 @@ fn test_variables() {
 }
 
 #[test]
-fn test_variable_reassignment(){
+fn test_variable_reassignment() {
 	is!("x=1; x=2; x", 2);
 	is!("v=10; v=v+1; v", 11);
 }

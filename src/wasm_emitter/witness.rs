@@ -25,7 +25,13 @@ pub(super) struct WitnessTable {
 impl WasmGcEmitter {
 	/// The declared types that define `compare(a:T, b:T)`, in a stable order
 	fn comparable_types(&self) -> Vec<String> {
-		let mut types: Vec<String> = self.ctx.user_functions.keys().filter_map(|name| witness_type(name, COMPARE)).map(str::to_string).collect();
+		let mut types: Vec<String> = self
+			.ctx
+			.user_functions
+			.keys()
+			.filter_map(|name| witness_type(name, COMPARE))
+			.map(str::to_string)
+			.collect();
 		types.sort();
 		types
 	}
@@ -39,23 +45,59 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let order_type = self.type_manager.function_type(vec![node_ref, node_ref], vec![ValType::I32]);
-		let witness_ref = RefType { nullable: true, heap_type: HeapType::Concrete(order_type) };
-		self.globals.global(GlobalType { val_type: Ref(witness_ref), mutable: true, shared: false }, &ConstExpr::ref_null(HeapType::Concrete(order_type)));
-		self.exports.export(WITNESS_GLOBAL, ExportKind::Global, self.next_global_idx);
-		let table = WitnessTable { global: self.next_global_idx, order_type, dispatcher: None };
+		let order_type = self
+			.type_manager
+			.function_type(vec![node_ref, node_ref], vec![ValType::I32]);
+		let witness_ref = RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(order_type),
+		};
+		self.globals.global(
+			GlobalType {
+				val_type: Ref(witness_ref),
+				mutable: true,
+				shared: false,
+			},
+			&ConstExpr::ref_null(HeapType::Concrete(order_type)),
+		);
+		self.exports
+			.export(WITNESS_GLOBAL, ExportKind::Global, self.next_global_idx);
+		let table = WitnessTable {
+			global: self.next_global_idx,
+			order_type,
+			dispatcher: None,
+		};
 		self.next_global_idx += 1;
 		self.compare_witness = Some(table);
 		Some(table)
 	}
 
 	/// In node_order: two instances (Key nodes) in locals `first` and `second` return the witness's order
-	pub(super) fn emit_instance_order(&self, func: &mut Function, table: WitnessTable, kinds: [u32; 2], first: u32, second: u32) {
+	pub(super) fn emit_instance_order(
+		&self,
+		func: &mut Function,
+		table: WitnessTable,
+		kinds: [u32; 2],
+		first: u32,
+		second: u32,
+	) {
 		for kind in kinds {
 			Self::emit_list(func, &[I::LocalGet(kind), I::I64Const(Kind::Key as i64), I::I64Eq]);
 		}
-		Self::emit_list(func, &[I::I32And, I::If(BlockType::Empty), I::LocalGet(first), I::LocalGet(second), I::GlobalGet(table.global)]);
-		Self::emit_list(func, &[I::RefAsNonNull, I::CallRef(table.order_type), I::Return, I::End]);
+		Self::emit_list(
+			func,
+			&[
+				I::I32And,
+				I::If(BlockType::Empty),
+				I::LocalGet(first),
+				I::LocalGet(second),
+				I::GlobalGet(table.global),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[I::RefAsNonNull, I::CallRef(table.order_type), I::Return, I::End],
+		);
 	}
 
 	/// instance_compare(a, b): the order of two instances by the witness of a's type; a type without one is not comparable
@@ -63,39 +105,89 @@ impl WasmGcEmitter {
 		let Some(table) = self.compare_witness else { return };
 		let node_type = self.type_manager.node_type;
 		let node_ref = Ref(self.node_ref(false));
-		let index = self.host_only_function(INSTANCE_COMPARE, vec![node_ref; 2], vec![ValType::I32], vec![ValType::I64, ValType::F64], |s, func| {
-			let (first, second, order, float_order) = (0, 1, 2, 3);
-			for type_name in s.comparable_types() {
-				let witness = s.ctx.user_functions[&witness_name(COMPARE, &type_name)].clone();
-				let Some(index) = witness.func_index else { continue };
-				// the type name of an instance is the data of its Key node
-				s.emit_field(func, first, 1);
-				func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-				let (pointer, length) = s.allocate_string(&type_name);
-				Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-				s.emit_call(func, "new_symbol");
-				s.emit_call(func, super::VALUES_EQUAL);
-				Self::emit_list(func, &[I::If(BlockType::Empty), I::LocalGet(first), I::LocalGet(second), I::Call(index)]);
-				if witness.return_kind.is_float() {
-					let zero = I::F64Const(Ieee64::new(0f64.to_bits()));
-					Self::emit_list(func, &[I::LocalTee(float_order), zero.clone(), I::F64Gt, I::LocalGet(float_order), zero, I::F64Lt, I::I32Sub, I::Return, I::End]);
-					continue;
+		let index = self.host_only_function(
+			INSTANCE_COMPARE,
+			vec![node_ref; 2],
+			vec![ValType::I32],
+			vec![ValType::I64, ValType::F64],
+			|s, func| {
+				let (first, second, order, float_order) = (0, 1, 2, 3);
+				for type_name in s.comparable_types() {
+					let witness = s.ctx.user_functions[&witness_name(COMPARE, &type_name)].clone();
+					let Some(index) = witness.func_index else { continue };
+					// the type name of an instance is the data of its Key node
+					s.emit_field(func, first, 1);
+					func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+					let (pointer, length) = s.allocate_string(&type_name);
+					Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+					s.emit_call(func, "new_symbol");
+					s.emit_call(func, super::VALUES_EQUAL);
+					Self::emit_list(
+						func,
+						&[
+							I::If(BlockType::Empty),
+							I::LocalGet(first),
+							I::LocalGet(second),
+							I::Call(index),
+						],
+					);
+					if witness.return_kind.is_float() {
+						let zero = I::F64Const(Ieee64::new(0f64.to_bits()));
+						Self::emit_list(
+							func,
+							&[
+								I::LocalTee(float_order),
+								zero.clone(),
+								I::F64Gt,
+								I::LocalGet(float_order),
+								zero,
+								I::F64Lt,
+								I::I32Sub,
+								I::Return,
+								I::End,
+							],
+						);
+						continue;
+					}
+					if witness.return_kind.is_ref() {
+						s.emit_call(func, "get_int_value");
+					}
+					// the sign of the i64: (order > 0) - (order < 0)
+					Self::emit_list(
+						func,
+						&[
+							I::LocalTee(order),
+							I::I64Const(0),
+							I::I64GtS,
+							I::LocalGet(order),
+							I::I64Const(0),
+							I::I64LtS,
+							I::I32Sub,
+							I::Return,
+							I::End,
+						],
+					);
 				}
-				if witness.return_kind.is_ref() {
-					s.emit_call(func, "get_int_value");
-				}
-				// the sign of the i64: (order > 0) - (order < 0)
-				Self::emit_list(func, &[I::LocalTee(order), I::I64Const(0), I::I64GtS, I::LocalGet(order), I::I64Const(0), I::I64LtS, I::I32Sub, I::Return, I::End]);
-			}
-			s.emit_call(func, "not_comparable");
-			func.instruction(&I::Unreachable);
+				s.emit_call(func, "not_comparable");
+				func.instruction(&I::Unreachable);
+			},
+		);
+		self.compare_witness = Some(WitnessTable {
+			dispatcher: Some(index),
+			..table
 		});
-		self.compare_witness = Some(WitnessTable { dispatcher: Some(index), ..table });
 	}
 
 	/// At the start of main: fill the witness table
 	pub(super) fn emit_witness_installation(&self, func: &mut Function) {
-		let Some(WitnessTable { global, dispatcher: Some(dispatcher), .. }) = self.compare_witness else { return };
+		let Some(WitnessTable {
+			global,
+			dispatcher: Some(dispatcher),
+			..
+		}) = self.compare_witness
+		else {
+			return;
+		};
 		Self::emit_list(func, &[I::RefFunc(dispatcher), I::GlobalSet(global)]);
 	}
 

@@ -22,12 +22,26 @@ const SUMMARY: &str = r#"if tests_failed_ > 0 then raise(str(tests_failed_) + " 
 
 pub fn lower(program: Node) -> Node {
 	let written = statements(&program);
-	if !written.iter().any(|statement| test_of(statement).is_some()) || crate::soft_keywords::program_names(&program, TEST_WORD) {
+	if !written.iter().any(|statement| test_of(statement).is_some())
+		|| crate::soft_keywords::program_names(&program, TEST_WORD)
+	{
 		return program;
 	}
 	match crate::pipeline::is_for_tests() {
-		true => sequence([statements(&template(PROLOGUE)), written.into_iter().flat_map(run_test).collect(), statements(&template(SUMMARY))].concat()),
-		false => sequence(written.into_iter().filter(|statement| test_of(statement).is_none()).collect()),
+		true => sequence(
+			[
+				statements(&template(PROLOGUE)),
+				written.into_iter().flat_map(run_test).collect(),
+				statements(&template(SUMMARY)),
+			]
+			.concat(),
+		),
+		false => sequence(
+			written
+				.into_iter()
+				.filter(|statement| test_of(statement).is_none())
+				.collect(),
+		),
 	}
 }
 
@@ -38,7 +52,9 @@ enum Test<'a> {
 
 /// `test C` or `test "name" { … }`; C may be a phrase of several parts: `test switch 3 {…} == "three"`
 fn test_of(statement: &Node) -> Option<Test<'_>> {
-	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else {
+		return None;
+	};
 	let (head, rest) = items.split_first()?;
 	if !head.is_symbol(TEST_WORD) {
 		return None;
@@ -64,8 +80,16 @@ fn run_test(statement: Node) -> Vec<Node> {
 			substitute(substitute(template(SOFT_CHECK), CONDITION, &condition), NAME, &written)
 		}
 		Some(Test::Named(name, body)) => {
-			let body = Node::List(statements(body).into_iter().flat_map(run_test).collect(), Bracket::Curly, Separator::Newline);
-			substitute(substitute(template(NAMED_TEST), BODY, &body), NAME, &Node::Text(format!("\"{name}\"")))
+			let body = Node::List(
+				statements(body).into_iter().flat_map(run_test).collect(),
+				Bracket::Curly,
+				Separator::Newline,
+			);
+			substitute(
+				substitute(template(NAMED_TEST), BODY, &body),
+				NAME,
+				&Node::Text(format!("\"{name}\"")),
+			)
 		}
 		None => return vec![statement],
 	};
@@ -74,7 +98,11 @@ fn run_test(statement: Node) -> Vec<Node> {
 
 /// A template's source with the hidden names, which a program cannot write
 fn template(source: &str) -> Node {
-	[COUNT, FAILED, CAUGHT].iter().fold(parse(source), |node, (placeholder, hidden)| substitute(node, placeholder, &symbol(hidden)))
+	[COUNT, FAILED, CAUGHT]
+		.iter()
+		.fold(parse(source), |node, (placeholder, hidden)| {
+			substitute(node, placeholder, &symbol(hidden))
+		})
 }
 
 fn statements(node: &Node) -> Vec<Node> {

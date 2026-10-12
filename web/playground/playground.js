@@ -8,6 +8,9 @@ const HINTS_KEY = "warp-playground-hints"; // the hints checkbox, on by default 
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
+// the most sounds sounding at once and how fast a stolen one fades out (src/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
+const MAX_VOICES = 32;
+const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
@@ -188,6 +191,7 @@ function startWorker(restarts = 0) {
 		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
+			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
 			if (data.type === "stage") return workerStage = data.stage;
@@ -208,6 +212,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "midi") return sendMidi(data.port, data.message);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
+			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
@@ -316,9 +321,13 @@ function playSound({ samples, rate, channels, at, handle }) {
 		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
-	source.connect(audio.destination);
+	source.gainNode = audio.createGain(); // fade_sound ramps it
+	source.connect(source.gainNode).connect(audio.destination);
 	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
-	source.start(Math.max(audio.currentTime, at + clockOffset));
+	source.startsAt = Math.max(audio.currentTime, at + clockOffset);
+	source.endsAt = source.startsAt + buffer.duration;
+	stealFor(source.startsAt);
+	source.start(source.startsAt);
 	source.handle = handle;
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
@@ -365,6 +374,30 @@ function silenced(handle) {
 	playingFiles.filter(player => player.handle === handle).forEach(player => player.pause());
 	sounding = sounding.filter(source => source.handle !== handle);
 	playingFiles = playingFiles.filter(player => player.handle !== handle);
+}
+
+// room for one more sound sounding at that time (src/sound_engine.rs MAX_VOICES): the oldest of MAX_VOICES sounding then
+// fades out in STEAL_SECONDS and stops
+function stealFor(time) {
+	const playing = sounding.filter(source => !source.stolen && source.startsAt <= time && time < source.endsAt);
+	if (playing.length < MAX_VOICES) return;
+	const oldest = playing.reduce((first, source) => source.startsAt < first.startsAt ? source : first);
+	oldest.stolen = true;
+	const level = oldest.gainNode.gain;
+	const from = Math.max(audio.currentTime, time);
+	level.setValueAtTime(level.value, from);
+	level.linearRampToValueAtTime(0, from + STEAL_SECONDS);
+	oldest.stop(from + STEAL_SECONDS);
+}
+
+// fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
+function faded(handle, gain, seconds) {
+	for (const source of sounding.filter(source => handle === 0 || source.handle === handle)) {
+		const level = source.gainNode.gain;
+		level.cancelScheduledValues(audio.currentTime);
+		level.setValueAtTime(level.value, audio.currentTime);
+		level.linearRampToValueAtTime(gain, audio.currentTime + seconds);
+	}
 }
 
 function silence() {
@@ -589,11 +622,14 @@ function renderedRoot(host) {
 	return root;
 }
 
-// a form of the shown markup asks the program's own route (lowering/serve.rs page·submitted), as `warp serve` would:
-// its fields are the body of a POST, the query of a GET (src/web_server.rs request_node), not a request leaving here
+// a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
+// route (lowering/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
+// GET (src/web_server.rs request_node), not a request leaving here
 function submitForm(submitted) {
 	submitted.preventDefault();
 	const form = submitted.target;
+	const handled = elementEvent("submit", submitted, submitDetail(submitted));
+	if (handled) return sendPageEvent(handled.event, handled.detail);
 	const method = (form.getAttribute("method") ?? "get").toUpperCase();
 	const fields = Object.fromEntries(new FormData(form, submitted.submitter));
 	const path = new URL(form.getAttribute("action") ?? "", PROGRAM_ORIGIN + ($("address").value || "/")).pathname;

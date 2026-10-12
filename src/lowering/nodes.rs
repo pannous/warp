@@ -9,7 +9,11 @@ pub(crate) use crate::node::{int, symbol};
 
 /// `function(arguments…)`
 pub(crate) fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![symbol(function)], arguments].concat(), Bracket::Round, Separator::None)
+	Node::List(
+		[vec![symbol(function)], arguments].concat(),
+		Bracket::Round,
+		Separator::None,
+	)
 }
 
 pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
@@ -23,10 +27,14 @@ pub(crate) fn assign(target: Node, value: Node) -> Node {
 /// Where an entry is and its key: `x[k]` (parsed as `x#(k+1)`) and `x.k` (the text "k") as `x#k` was written, which
 /// counts positions from 1 (`true`)
 pub(crate) fn written_entry(target: &Node) -> Option<(&Node, Node, bool)> {
-	let Node::Key(place, op, index) = target.drop_meta() else { return None };
+	let Node::Key(place, op, index) = target.drop_meta() else {
+		return None;
+	};
 	match (op, index.drop_meta()) {
 		(Op::Dot, Node::Symbol(field)) => Some((place, Node::Text(field.clone()), false)),
-		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == int(1) => Some((place, key.as_ref().clone(), false)),
+		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == int(1) => {
+			Some((place, key.as_ref().clone(), false))
+		}
 		(Op::Hash, key) => Some((place, key.clone(), true)),
 		_ => None,
 	}
@@ -58,7 +66,10 @@ pub(crate) fn is_assigned_data(target: &Node, value: &Node) -> bool {
 /// The parts of a node rewritten, the node itself kept as written
 pub(crate) fn with_parts_rewritten(node: Node, rewrite: &mut dyn FnMut(Node) -> Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_parts_rewritten(*node, rewrite)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_parts_rewritten(*node, rewrite)),
+			data,
+		},
 		other => children_rewritten(other, rewrite),
 	}
 }
@@ -80,7 +91,9 @@ pub(crate) fn is_block(node: &Node) -> bool {
 /// The words `for i in …` of a loop: i
 pub(crate) fn for_in_variable(items: &[Node]) -> Option<String> {
 	match items {
-		[keyword, variable, within, ..] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => variable.symbol_name().map(String::from),
+		[keyword, variable, within, ..] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => {
+			variable.symbol_name().map(String::from)
+		}
 		_ => None,
 	}
 }
@@ -111,7 +124,8 @@ pub(crate) fn is_function_keyword(node: &Node) -> bool {
 
 /// `int`, `float`, `text`, …: a word naming a type
 pub(crate) fn is_type_word(node: &Node) -> bool {
-	node.symbol_name().is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
+	node.symbol_name()
+		.is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
 }
 
 /// The name a parameter declares: `x`, `x:int`, `x=1`
@@ -133,8 +147,14 @@ pub(crate) fn is_call_head(head: &Node) -> bool {
 pub(crate) fn spaced_statement(items: &[Node]) -> Option<(&Node, Vec<&str>, &Node)> {
 	let (name, rest) = items.split_first()?;
 	let (last, middle) = rest.split_last()?;
-	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else { return None };
-	let words = middle.iter().chain(std::iter::once(last_word.as_ref())).map(Node::symbol_name).collect::<Option<_>>()?;
+	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else {
+		return None;
+	};
+	let words = middle
+		.iter()
+		.chain(std::iter::once(last_word.as_ref()))
+		.map(Node::symbol_name)
+		.collect::<Option<_>>()?;
 	Some((name, words, body))
 }
 
@@ -146,8 +166,13 @@ pub(crate) fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> No
 			let left = rewrite(*left);
 			key(left, op, rewrite(*right))
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(rewrite).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(rewrite).collect(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(rewrite(*node)),
+			data,
+		},
 		other => other,
 	}
 }

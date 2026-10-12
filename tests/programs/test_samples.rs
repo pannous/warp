@@ -1,38 +1,58 @@
+use crate::is;
 use std::fs;
 use std::path::Path;
-use warp::Node;
 use warp::warp_parser::WarpParser;
-use crate::is;
+use warp::Node;
 
 #[test]
-fn test_fibonacci() { is!("samples/fibonacci.warp", 55); }
+fn test_fibonacci() {
+	is!("samples/fibonacci.warp", 55);
+}
 
 #[test]
-fn test_factorial() { is!("samples/factorial.warp", 120); }
+fn test_factorial() {
+	is!("samples/factorial.warp", 120);
+}
 
 #[test]
-fn test_primes() { is!("samples/primes.warp", 1); }
+fn test_primes() {
+	is!("samples/primes.warp", 1);
+}
 
 #[test]
-fn test_gcd() { is!("samples/gcd.warp", 6); }
+fn test_gcd() {
+	is!("samples/gcd.warp", 6);
+}
 
 #[test]
-fn test_sum() { is!("samples/sum.warp", 55); }
+fn test_sum() {
+	is!("samples/sum.warp", 55);
+}
 
 #[test]
-fn test_power() { is!("samples/power.warp", 1024); }
+fn test_power() {
+	is!("samples/power.warp", 1024);
+}
 
 #[test]
-fn test_collatz() { is!("samples/collatz.warp", 111); }
+fn test_collatz() {
+	is!("samples/collatz.warp", 111);
+}
 
 #[test]
-fn test_ackermann() { is!("samples/ackermann.warp", 61); }
+fn test_ackermann() {
+	is!("samples/ackermann.warp", 61);
+}
 
 #[test]
-fn test_quadratic() { is!("samples/quadratic.warp", 6); }
+fn test_quadratic() {
+	is!("samples/quadratic.warp", 6);
+}
 
 #[test]
-fn test_fizzbuzz() { is!("samples/fizzbuzz.warp", "FizzBuzz"); }
+fn test_fizzbuzz() {
+	is!("samples/fizzbuzz.warp", "FizzBuzz");
+}
 
 /// Test that all sample .warp files can be parsed without errors
 #[test]
@@ -120,49 +140,82 @@ fn test_parse_all_samples() {
 }
 
 #[test] // first row of the solution: 5 3 4
-fn test_sudoku() { is!("samples/sudoku.warp", 534); }
+fn test_sudoku() {
+	is!("samples/sudoku.warp", 534);
+}
 
 #[test] // the self-playing snake eats four foods in 60 turns
-fn test_snake() { is!("samples/snake.warp", 40); }
+fn test_snake() {
+	is!("samples/snake.warp", 40);
+}
 
 #[test] // both quicksorts agree
-fn test_quicksort() { is!("samples/quicksort.warp", true); }
+fn test_quicksort() {
+	is!("samples/quicksort.warp", true);
+}
 
-#[test] // the glider moved by (2, 2) in 8 generations
-fn test_game_of_life() { is!("samples/game_of_life.warp", 2726); }
+#[test] // the glider moved by (4, 4) in 16 generations on 16×16
+fn test_game_of_life() {
+	is!("samples/game_of_life.warp", 3736);
+}
 
 #[test] // three spheres on a floor, as shades of " .:-=+*#%@"
-fn test_raytracer() { is!("samples/raytracer.warp", 8230); }
+fn test_raytracer() {
+	is!("samples/raytracer.warp", 8230);
+}
 
 #[test] // height 4, nine values
-fn test_binary_tree() { is!("samples/binary_tree.warp", 409); }
+fn test_binary_tree() {
+	is!("samples/binary_tree.warp", 409);
+}
 
 #[test] // nested block comments, doc comments, factorial(5)
-fn test_comments() { is!("samples/comments.warp", 120); }
+fn test_comments() {
+	is!("samples/comments.warp", 120);
+}
 
 #[test] // fdlibm's sine kernel: sin(1) to six digits
-fn test_sin() { is!("samples/sin.warp", 841471); }
+fn test_sin() {
+	is!("samples/sin.warp", 841471);
+}
 
 #[test] // the Taylor kernel at π/2
-fn test_sine() { assert!(warp::wasm_emitter::eval("samples/sine.warp").serialize().starts_with("1.0000000")); }
+fn test_sine() {
+	assert!(warp::wasm_emitter::eval("samples/sine.warp")
+		.serialize()
+		.starts_with("1.0000000"));
+}
 
 #[test] // 14 + 20 + 5
-fn test_calculator() { is!("samples/calculator.warp", 39); }
+fn test_calculator() {
+	is!("samples/calculator.warp", 39);
+}
 
 #[test] // age 30 + first score 95
-fn test_json_parser() { is!("samples/json_parser.warp", 125.0); }
+fn test_json_parser() {
+	is!("samples/json_parser.warp", 125.0);
+}
 
 #[test] // the iteration counts of a 40x30 grid
-fn test_mandelbrot() { is!("samples/mandelbrot.warp", 17748); }
+fn test_mandelbrot() {
+	is!("samples/mandelbrot.warp", 17748);
+}
 
 #[test] // the third employee, 9 squares + 2 evens, a tuple field
-fn test_data_structures() { is!("samples/data_structures.warp", "Dave 11 20"); }
+fn test_data_structures() {
+	is!("samples/data_structures.warp", "Dave 11 20");
+}
 
 #[test] // every feature in one program (card g-_c-A): each part checks itself, a new check needs no change here
 fn test_kitchensink() {
 	let value = warp::pipeline::for_tests(|| warp::wasm_emitter::eval("samples/kitchensink.warp")).serialize();
-	assert!(value.starts_with("\"✓ ") && value.ends_with(" tests passed\""), "{value}");
+	assert!(
+		value.starts_with("\"✓ ") && value.ends_with(" tests passed\""),
+		"{value}"
+	);
 }
 
 #[test] // fact(10) and fib(20) through the Z combinator (card y-combinator)
-fn test_y_combinator() { is!("samples/y_combinator.warp", 6765); }
+fn test_y_combinator() {
+	is!("samples/y_combinator.warp", 6765);
+}

@@ -4,7 +4,9 @@
 use crate::is;
 
 fn lowered(code: &str) -> String {
-	warp::pipeline::lower(code).expect("a program that needs a module").serialize()
+	warp::pipeline::lower(code)
+		.expect("a program that needs a module")
+		.serialize()
 }
 
 #[test]
@@ -47,7 +49,19 @@ fn the_delay_until_a_weekday_skips_the_other_days() {
 	const HOUR: i64 = 3600;
 	// weekday 1 is Monday, 0 Sunday (as C's tm_wday)
 	assert_eq!(seconds_until_on(9 * 60, MONDAY, 1, 8 * HOUR), HOUR);
-	assert_eq!(seconds_until_on(9 * 60, MONDAY, 1, 9 * HOUR), 7 * 24 * HOUR, "at Monday 9:00 sharp the next is next week's");
-	assert_eq!(seconds_until_on(9 * 60, MONDAY, 0, 10 * HOUR), 23 * HOUR, "Sunday 10:00 to Monday 9:00");
-	assert_eq!(seconds_until_on(9 * 60, 0b0111110, 5, 10 * HOUR), (2 * 24 + 23) * HOUR, "Friday 10:00 to Monday 9:00");
+	assert_eq!(
+		seconds_until_on(9 * 60, MONDAY, 1, 9 * HOUR),
+		7 * 24 * HOUR,
+		"at Monday 9:00 sharp the next is next week's"
+	);
+	assert_eq!(
+		seconds_until_on(9 * 60, MONDAY, 0, 10 * HOUR),
+		23 * HOUR,
+		"Sunday 10:00 to Monday 9:00"
+	);
+	assert_eq!(
+		seconds_until_on(9 * 60, 0b0111110, 5, 10 * HOUR),
+		(2 * 24 + 23) * HOUR,
+		"Friday 10:00 to Monday 9:00"
+	);
 }

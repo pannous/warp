@@ -2,8 +2,8 @@
 //! type does not admit, going into an annotated place (`x: int = y`, `t: text = y`, a parameter `f(p: P)`), is checked
 //! when it runs: it has the declared type, else the error "not a <type>". Unannotated places stay lax.
 use super::WasmGcEmitter;
-use crate::node::Node;
 use crate::extensions::numbers::Number;
+use crate::node::Node;
 use crate::type_kinds::{Kind, BOOL_MASK_BIT};
 use wasm_encoder::*;
 use Instruction as I;
@@ -38,12 +38,19 @@ impl WasmGcEmitter {
 		let spec = match crate::analyzer::annotated_kind(declared) {
 			Some(Kind::Empty) if crate::uncertain::is_interval_number(declared) => "number",
 			// an inline union admits what its parts admit; any admits everything
-			Some(Kind::Empty) => return crate::analyzer::union_parts(type_name.trim_end_matches('?')).and_then(|parts| {
-				parts.iter().map(|part| self.admitted(&Node::Symbol(part.to_string()))).try_fold(0, |mask, admitted| match admitted? {
-					Admitted::Kinds(kinds) => Some(mask | kinds),
-					Admitted::Bool => Some(mask | 1 << Kind::Int as i64),
-				})
-			}).map(Admitted::Kinds),
+			Some(Kind::Empty) => {
+				return crate::analyzer::union_parts(type_name.trim_end_matches('?'))
+					.and_then(|parts| {
+						parts
+							.iter()
+							.map(|part| self.admitted(&Node::Symbol(part.to_string())))
+							.try_fold(0, |mask, admitted| match admitted? {
+								Admitted::Kinds(kinds) => Some(mask | kinds),
+								Admitted::Bool => Some(mask | 1 << Kind::Int as i64),
+							})
+					})
+					.map(Admitted::Kinds)
+			}
 			Some(Kind::Key) => return Some(Admitted::Kinds(object_mask)),
 			Some(Kind::List) => "list", // `xs: [int]`, `xs: ints`
 			_ if crate::analyzer::is_bool_type(&type_name) => return Some(Admitted::Bool),
@@ -67,16 +74,29 @@ impl WasmGcEmitter {
 
 	/// The fields `{x: v …}` of an instance of `class`, each value marked with its field's declared type
 	pub(super) fn with_declared_field_types(&self, class: &Node, fields: &Node) -> Node {
-		let Some(type_def) = self.ctx.type_registry.get_by_name(&class.name()) else { return fields.clone() };
-		let Node::List(entries, bracket, separator) = fields.drop_meta() else { return fields.clone() };
+		let Some(type_def) = self.ctx.type_registry.get_by_name(&class.name()) else {
+			return fields.clone();
+		};
+		let Node::List(entries, bracket, separator) = fields.drop_meta() else {
+			return fields.clone();
+		};
 		let marked = entries.iter().map(|entry| match entry.drop_meta() {
-			Node::Key(field, op, value) => match type_def.fields.iter().find(|declared| declared.name == field.name()) {
-				Some(declared) => {
-					let data = Node::key(DECLARED_TYPE, Node::Symbol(declared.type_name.clone()));
-					Node::Key(field.clone(), *op, Box::new(Node::Meta { node: value.clone(), data: Box::new(data) }))
+			Node::Key(field, op, value) => {
+				match type_def.fields.iter().find(|declared| declared.name == field.name()) {
+					Some(declared) => {
+						let data = Node::key(DECLARED_TYPE, Node::Symbol(declared.type_name.clone()));
+						Node::Key(
+							field.clone(),
+							*op,
+							Box::new(Node::Meta {
+								node: value.clone(),
+								data: Box::new(data),
+							}),
+						)
+					}
+					None => entry.clone(),
 				}
-				None => entry.clone(),
-			},
+			}
 			_ => entry.clone(),
 		});
 		Node::List(marked.collect(), bracket.clone(), separator.clone())
@@ -84,18 +104,35 @@ impl WasmGcEmitter {
 
 	/// The declared type of the variable `target` (`x: int`, a parameter `f(x: int)` of the function compiled), if it has one
 	pub(super) fn declared_type_of(&self, target: &Node) -> Option<Node> {
-		let Node::Symbol(name) = target.drop_meta() else { return None };
+		let Node::Symbol(name) = target.drop_meta() else {
+			return None;
+		};
 		let local = self.scope.lookup(name)?;
 		if let Some(type_node) = &local.type_node {
 			return Some(type_node.as_ref().clone());
 		}
-		let function = self.ctx.user_functions.get(self.compiling.as_deref()?).filter(|_| local.is_param)?;
-		function.params.iter().find(|param| param.name == *name)?.annotation.clone()
+		let function = self
+			.ctx
+			.user_functions
+			.get(self.compiling.as_deref()?)
+			.filter(|_| local.is_param)?;
+		function
+			.params
+			.iter()
+			.find(|param| param.name == *name)?
+			.annotation
+			.clone()
 	}
 
 	/// `value` stored into a place declared `declared` that holds a `kind`: checked at run time when its static kind leaves
 	/// open whether it fits (P204)
-	pub(super) fn emit_declared_value(&mut self, func: &mut Function, declared: Option<&Node>, value: &Node, kind: Kind) {
+	pub(super) fn emit_declared_value(
+		&mut self,
+		func: &mut Function,
+		declared: Option<&Node>,
+		value: &Node,
+		kind: Kind,
+	) {
 		// a decimal written for an exact place (`exact x = 0.1`, `x: rational = 0.5`, `real x = 3.3`) is the fraction it spells
 		if let (Some(declared), Node::Number(Number::Float(decimal))) = (declared, value.drop_meta()) {
 			if crate::type_tests::spells_decimals_exactly(&declared.name()) && !kind.is_float() {
@@ -107,14 +144,21 @@ impl WasmGcEmitter {
 			}
 		}
 		// a float stored in a place declared exact (`x: rational = √2`, `f(x: int)`, `x: rational|int`) is refused while compiling
-		if let Some(declared) = declared.filter(|declared| crate::analyzer::refuses_floats(&declared.name())).filter(|_| self.get_type(value) == Kind::Float) {
+		if let Some(declared) = declared
+			.filter(|declared| crate::analyzer::refuses_floats(&declared.name()))
+			.filter(|_| self.get_type(value) == Kind::Float)
+		{
 			let value = value.serialize();
 			let message = format!("{value} is a float where an exact {} is expected: declare it `number` to keep the float, truncate with `as int`, {}",
 				declared.name(), super::casts::nearest_hint(&value));
 			return self.emit_type_error(func, message);
 		}
-		let check = declared.and_then(|declared| self.admitted(declared)).filter(|admitted| self.needs_run_time_check(admitted, value));
-		let (Some(admitted), Some(declared)) = (check, declared) else { return self.emit_value_of_kind(func, value, kind) };
+		let check = declared
+			.and_then(|declared| self.admitted(declared))
+			.filter(|admitted| self.needs_run_time_check(admitted, value));
+		let (Some(admitted), Some(declared)) = (check, declared) else {
+			return self.emit_value_of_kind(func, value, kind);
+		};
 		self.emit_node_instructions(func, value);
 		self.emit_admitted_node(func, &admitted, declared, kind);
 	}
@@ -143,7 +187,10 @@ impl WasmGcEmitter {
 			func.instruction(&I::I64Or);
 		}
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Empty)]);
-		self.emit_trap_detail(func, &Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))));
+		self.emit_trap_detail(
+			func,
+			&Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))),
+		);
 		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
 		Self::emit_list(func, &[I::End, I::LocalGet(held), I::RefAsNonNull]);
 		if kind.is_float() {
@@ -160,9 +207,28 @@ impl WasmGcEmitter {
 			Admitted::Bool => {
 				self.emit_kind_in(func, held, 1 << BOOL_MASK_BIT);
 				self.emit_kind_in(func, held, 1 << Kind::Int as i64);
-				Self::emit_list(func, &[I::I32WrapI64, I::If(BlockType::Result(ValType::I64)), I::LocalGet(held), I::RefAsNonNull]);
+				Self::emit_list(
+					func,
+					&[
+						I::I32WrapI64,
+						I::If(BlockType::Result(ValType::I64)),
+						I::LocalGet(held),
+						I::RefAsNonNull,
+					],
+				);
 				self.emit_call(func, "get_int_value");
-				Self::emit_list(func, &[I::I64Const(1), I::I64LeU, I::I64ExtendI32U, I::Else, I::I64Const(0), I::End, I::I64Or]);
+				Self::emit_list(
+					func,
+					&[
+						I::I64Const(1),
+						I::I64LeU,
+						I::I64ExtendI32U,
+						I::Else,
+						I::I64Const(0),
+						I::End,
+						I::I64Or,
+					],
+				);
 			}
 		}
 	}
@@ -183,7 +249,11 @@ pub(super) const LIST_ITEM_CHECK: &str = "list_item_check";
 pub(super) const LIST_ITEMS_CHECK: &str = "list_items_check";
 pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
 /// The in-place writers of a list, which check their items against its element mark
-const MARK_CHECKING_WRITERS: [&str; 3] = [super::list_ops::LIST_EXTEND, crate::analyzer::INSERT_AT_CALL, "node_with_at"];
+const MARK_CHECKING_WRITERS: [&str; 3] = [
+	super::list_ops::LIST_EXTEND,
+	crate::analyzer::INSERT_AT_CALL,
+	"node_with_at",
+];
 
 /// Whether the program declares a list type anywhere (`names: texts`, its lowered form the type as the target's Meta, a
 /// field `items: [text]`); a program without one emits no element marks and no item checks
@@ -191,7 +261,11 @@ pub(super) fn declares_list_types(node: &Node) -> bool {
 	let is_list_type = |declared: &Node| crate::analyzer::list_element_type(&declared.name()).is_some();
 	match node {
 		Node::Meta { node, data } => is_list_type(data) || declares_list_types(node),
-		Node::Key(left, op, right) => (*op == crate::operators::Op::Colon && is_list_type(right)) || declares_list_types(left) || declares_list_types(right),
+		Node::Key(left, op, right) => {
+			(*op == crate::operators::Op::Colon && is_list_type(right))
+				|| declares_list_types(left)
+				|| declares_list_types(right)
+		}
 		Node::List(items, _, _) => items.iter().any(declares_list_types),
 		_ => false,
 	}
@@ -218,8 +292,17 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn require_list_marks(&mut self) {
-		if self.declares_list_types && MARK_CHECKING_WRITERS.iter().any(|writer| self.should_emit_function(writer)) {
-			self.ctx.required_functions.extend([crate::type_tests::NODE_KIND_IN, LIST_MARK, LIST_ITEM_CHECK, LIST_ITEMS_CHECK]);
+		if self.declares_list_types
+			&& MARK_CHECKING_WRITERS
+				.iter()
+				.any(|writer| self.should_emit_function(writer))
+		{
+			self.ctx.required_functions.extend([
+				crate::type_tests::NODE_KIND_IN,
+				LIST_MARK,
+				LIST_ITEM_CHECK,
+				LIST_ITEMS_CHECK,
+			]);
 		}
 	}
 
@@ -230,32 +313,105 @@ impl WasmGcEmitter {
 		}
 		let node_type = self.type_manager.node_type;
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
-		let is_list = [I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq];
-		let is_list_or_empty = [I::I64Const(KIND_MASK), I::I64And, I::LocalTee(2), I::I64Const(Kind::List as i64), I::I64Eq,
-			I::LocalGet(2), I::I64Const(Kind::Empty as i64), I::I64Eq, I::I32Or];
-		self.runtime_function(LIST_MARK, vec![node_ref, ValType::I64], vec![node_ref], vec![ValType::I64], |s, f| {
-			let (list, mark) = (0, 1);
-			s.emit_field(f, list, 0);
-			Self::emit_list(f, &is_list_or_empty);
-			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list)]);
-			s.emit_field(f, list, 0);
-			Self::emit_list(f, &[I::LocalGet(mark), I::I64Or, I::StructSet { struct_type_index: node_type, field_index: 0 }, I::End, I::LocalGet(list)]);
-		});
-		self.runtime_function(LIST_ITEM_CHECK, vec![nullable, node_ref], vec![], vec![ValType::I64], |s, f| {
-			let (list, item, mark) = (0, 1, 2);
-			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Return, I::End]);
-			s.emit_field(f, list, 0);
-			Self::emit_list(f, &is_list_or_empty);
-			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Return, I::End]);
-			s.emit_field(f, list, 0);
-			Self::emit_list(f, &[I::I64Const(ELEMENT_MARK_SHIFT), I::I64ShrU, I::LocalTee(mark), I::I64Eqz, I::If(BlockType::Empty), I::Return, I::End]);
-			// the node_kind_in mask of the mark: its kind bits, its bool bit back at BOOL_MASK_BIT
-			Self::emit_list(f, &[I::LocalGet(item), I::LocalGet(mark), I::I64Const(MARK_KINDS_MASK), I::I64And,
-				I::LocalGet(mark), I::I64Const(MARK_BOOL_BIT), I::I64ShrU, I::I64Const(1), I::I64And, I::I64Const(BOOL_MASK_BIT), I::I64Shl, I::I64Or]);
-			s.call(f, crate::type_tests::NODE_KIND_IN);
-			f.instruction(&I::I64Eqz);
-			s.emit_fail_if(f, LIST_CANNOT_HOLD);
-		});
+		let is_list = [
+			I::I64Const(KIND_MASK),
+			I::I64And,
+			I::I64Const(Kind::List as i64),
+			I::I64Eq,
+		];
+		let is_list_or_empty = [
+			I::I64Const(KIND_MASK),
+			I::I64And,
+			I::LocalTee(2),
+			I::I64Const(Kind::List as i64),
+			I::I64Eq,
+			I::LocalGet(2),
+			I::I64Const(Kind::Empty as i64),
+			I::I64Eq,
+			I::I32Or,
+		];
+		self.runtime_function(
+			LIST_MARK,
+			vec![node_ref, ValType::I64],
+			vec![node_ref],
+			vec![ValType::I64],
+			|s, f| {
+				let (list, mark) = (0, 1);
+				s.emit_field(f, list, 0);
+				Self::emit_list(f, &is_list_or_empty);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list)]);
+				s.emit_field(f, list, 0);
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(mark),
+						I::I64Or,
+						I::StructSet {
+							struct_type_index: node_type,
+							field_index: 0,
+						},
+						I::End,
+						I::LocalGet(list),
+					],
+				);
+			},
+		);
+		self.runtime_function(
+			LIST_ITEM_CHECK,
+			vec![nullable, node_ref],
+			vec![],
+			vec![ValType::I64],
+			|s, f| {
+				let (list, item, mark) = (0, 1, 2);
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(list),
+						I::RefIsNull,
+						I::If(BlockType::Empty),
+						I::Return,
+						I::End,
+					],
+				);
+				s.emit_field(f, list, 0);
+				Self::emit_list(f, &is_list_or_empty);
+				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Return, I::End]);
+				s.emit_field(f, list, 0);
+				Self::emit_list(
+					f,
+					&[
+						I::I64Const(ELEMENT_MARK_SHIFT),
+						I::I64ShrU,
+						I::LocalTee(mark),
+						I::I64Eqz,
+						I::If(BlockType::Empty),
+						I::Return,
+						I::End,
+					],
+				);
+				// the node_kind_in mask of the mark: its kind bits, its bool bit back at BOOL_MASK_BIT
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(item),
+						I::LocalGet(mark),
+						I::I64Const(MARK_KINDS_MASK),
+						I::I64And,
+						I::LocalGet(mark),
+						I::I64Const(MARK_BOOL_BIT),
+						I::I64ShrU,
+						I::I64Const(1),
+						I::I64And,
+						I::I64Const(BOOL_MASK_BIT),
+						I::I64Shl,
+						I::I64Or,
+					],
+				);
+				s.call(f, crate::type_tests::NODE_KIND_IN);
+				f.instruction(&I::I64Eqz);
+				s.emit_fail_if(f, LIST_CANNOT_HOLD);
+			},
+		);
 		self.runtime_function(LIST_ITEMS_CHECK, vec![nullable, nullable], vec![], vec![], |s, f| {
 			let (list, cell) = (0, 1);
 			s.emit_cell_walk(f, cell, |f| {
