@@ -273,6 +273,8 @@ pub struct WasmGcEmitter {
 	int_count_global: u32, // used slots in that heap
 	/// the cursor of cons-list indexing: the first of the globals list, cell, index (list_ops.rs emit_list_cursor_globals)
 	list_cursor_global: Option<u32>,
+	/// the cursors of text indexing: the first of the globals text, index, at (list_ops.rs emit_text_cursor_globals)
+	text_cursor_global: Option<u32>,
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
 	returns_float: bool, // the function being compiled returns an f64, so `return 7` returns 7.0
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
@@ -357,6 +359,7 @@ impl WasmGcEmitter {
 			int_heap_global: 0,
 			int_count_global: 0,
 			list_cursor_global: None,
+			text_cursor_global: None,
 			returns_node: true,
 			returns_float: false,
 			returned_tuple: vec![],
@@ -979,6 +982,7 @@ impl WasmGcEmitter {
 		// Emit basic Node constructors using macros
 		self.emit_int_heap_globals();
 		self.emit_list_cursor_globals();
+		self.emit_text_cursor_globals();
 		constructors::emit_all_constructors(self);
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_int_runtime();

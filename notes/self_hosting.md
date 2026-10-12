@@ -24,8 +24,9 @@ Works:
 - `data (x: 3)` with `.x`
 
 Gaps (each a card below):
-- `text[i]` costs O(n): lexing 8 KB char by char takes 0.69 s and 16 KB takes 2.6 s, and the parser's own 35 KB file
-  runs out of fuel (index_cost.warp, scan_speed.warp). → self-text-index
+- ~~`text[i]` costs O(n)~~ fixed (self-text-index): text_grapheme_offset keeps two text cursors and steps back by the
+  ASCII bytes before one, so a char-by-char scan with look-backs is linear (scan_speed.warp: 35 KB in 0.14 s, was out
+  of fuel; tests/text/test_scan_by_index.rs). It relies on runtime texts never changing in place.
 - No Node API on data values: a key's name, a node's kind, a call's head and children, and making a symbol are not
   reachable (`p.name`, `kind(p)`, `c[0]` and `symbol("x")` fail; node_access.warp, build_nodes.warp). → self-node-api
 - Bytes grow by copying (`bytes = bytes + [b]`, lib/memory.warp). → self-byte-buffer
