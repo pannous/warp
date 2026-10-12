@@ -290,6 +290,11 @@ const CORPUS: &[&str] = &[
 	"p = {x:1}; q = p; q.x = 5; p.x",
 	"p = {x:1}; q = {x:1}; p === q",
 	"p = {x:1}; q = p; p same q",
+	// a list is one list in every name holding it (card w0-list-writes): typed arrays compared by their list struct
+	"xs = [1]; ys = xs; ys === xs",
+	"xs = [1]; ys = [1]; ys === xs",
+	"xs = [1.5]; xs === xs",
+	"xs = [1, \"a\"]; ys = xs; xs !== ys",
 	"p = {x:1}; p.x = \"s\"; p.x",
 	"p = {x:1}; p.z = 5; p.z",
 	"f(m) := m.x; f({x:3})",
