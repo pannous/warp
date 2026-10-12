@@ -115,7 +115,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 				s.emit_text_field(f, node, 0);
 				s.emit_text_field(f, node, 1);
-				s.emit_call(f, "new_text");
+				s.call(f, "new_text");
 				Self::emit_list(f, &[I::Return, I::End, I::End, I::RefNull(HeapType::Concrete(node_type))]);
 			});
 		}
@@ -128,7 +128,7 @@ impl WasmGcEmitter {
 				let code = 3;
 				s.emit_code_or_error(f, op, code, OPERATOR_CODE, UNKNOWN_OPERATOR);
 				Self::emit_list(f, &[I::LocalGet(left), I::LocalGet(right), I::LocalGet(code)]);
-				s.emit_call(f, "new_key");
+				s.call(f, "new_key");
 			});
 		}
 
@@ -162,7 +162,7 @@ impl WasmGcEmitter {
 			let (pointer, length) = self.allocate_string(text);
 			Self::emit_list(func, &[I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty),
 				I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-			self.emit_call(func, "new_text");
+			self.call(func, "new_text");
 			Self::emit_list(func, &[I::Return, I::End]);
 		}
 		func.instruction(&I::End);
@@ -193,16 +193,16 @@ impl WasmGcEmitter {
 	/// The code of the text in Node local `text` by `coder`, in i64 local `code`; for none, return the Error `prefix` + the text
 	fn emit_code_or_error(&mut self, func: &mut Function, text: u32, code: u32, coder: &'static str, prefix: &str) {
 		func.instruction(&I::LocalGet(text));
-		self.emit_call(func, TEXT_OF);
+		self.call(func, TEXT_OF);
 		func.instruction(&I::LocalTee(text));
-		self.emit_call(func, coder);
+		self.call(func, coder);
 		Self::emit_list(func, &[I::LocalTee(code), I::I64Const(-1), I::I64Eq, I::If(BlockType::Empty)]);
 		let (pointer, length) = self.allocate_string(prefix);
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-		self.emit_call(func, "new_text");
+		self.call(func, "new_text");
 		func.instruction(&I::LocalGet(text));
-		self.emit_call(func, TEXT_CONCAT);
-		self.emit_call(func, super::text_builtins::ERROR_OF);
+		self.call(func, TEXT_CONCAT);
+		self.call(func, super::text_builtins::ERROR_OF);
 		Self::emit_list(func, &[I::Return, I::End]);
 	}
 }
