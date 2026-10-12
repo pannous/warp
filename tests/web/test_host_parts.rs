@@ -89,3 +89,15 @@ fn exact_numbers_cross_only_with_the_parts_that_carry_them() {
 		assert!(part.contains("function exactHandle") && part.contains("function exactOfPayload"), "{file}");
 	}
 }
+
+// card web-bundle-growth: std_pure and std_io (stdCall, std.js) start the hashes and files parts that give them, so a
+// hello-world site's host.js has neither
+#[test]
+fn std_calls_ship_only_with_the_std_parts() {
+	assert!(!HOST_SCRIPT.contains("function stdCall") && !HOST_SCRIPT.contains("std_pure:"));
+	for file in ["host-hashes.js", "host-files.js"] {
+		let part = HOST_PARTS.iter().find(|part| part.script.0 == file).expect("the part").script.1;
+		assert!(part.contains("function stdCall"), "{file}");
+	}
+	assert!(part_files("use json\nprint(json.to_json([1, 2]))").contains(&"host-hashes.js"));
+}

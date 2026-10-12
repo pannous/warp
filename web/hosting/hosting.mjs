@@ -9,6 +9,7 @@ import readerScript from "../playground/reader.js";
 import hostScript from "../playground/host.js";
 import importsScript from "../playground/imports.js";
 import exactScript from "../playground/exact.js";
+import stdScript from "../playground/std.js";
 import filesScript from "../playground/host-files.js";
 import hashesScript from "../playground/host-hashes.js";
 import tasksScript from "../playground/host-tasks.js";
@@ -25,8 +26,8 @@ import cloudWorkerScript from "../playground/cloud-worker.js";
 const HOST_SCRIPTS = {
 	"reader.js": readerScript,
 	"host.js": hostScript,
-	"host-files.js": filesScript,
-	"host-hashes.js": hashesScript,
+	"host-files.js": stdScript + filesScript,
+	"host-hashes.js": stdScript + hashesScript,
 	"host-tasks.js": importsScript + exactScript + tasksScript,
 	"host-foreign.js": exactScript + foreignScript,
 	"host-compiler.js": exactScript + compilerScript,

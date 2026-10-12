@@ -35,15 +35,15 @@ pub struct HostPart {
 }
 
 /// The parts of host.js, in load order (host.js HOST_PART_FILES); the tasks and routes parts start with imports.js, which they
-/// read their module's imports with; the tasks, foreign and compiler parts with exact.js, the exact numbers they carry. std_pure and std_io are coarse: they carry every std
+/// read their module's imports with; the tasks, foreign and compiler parts with exact.js, the exact numbers they carry; the files and hashes parts with std.js, the std words. std_pure and std_io are coarse: they carry every std
 /// module's words, so a program using json (std_pure) also gets the hashes
 pub const HOST_PARTS: [HostPart; 10] = [
 	HostPart {
-		script: ("host-files.js", script_text!("host-files.js")),
+		script: ("host-files.js", script_text!("std.js", "host-files.js")),
 		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", SOUND, STD_IO].contains(&name),
 		needs: &[],
 	},
-	HostPart { script: ("host-hashes.js", script_text!("host-hashes.js")), gives: |module, name| module == HOST_LIBRARY && name == STD_PURE, needs: &[] },
+	HostPart { script: ("host-hashes.js", script_text!("std.js", "host-hashes.js")), gives: |module, name| module == HOST_LIBRARY && name == STD_PURE, needs: &[] },
 	HostPart {
 		script: ("host-tasks.js", script_text!("imports.js", "exact.js", "host-tasks.js")),
 		gives: |module, name| module == HOST_LIBRARY && (TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)) || [FETCH_START, FETCH_REPLY, SIGNAL_SEND, CLIPBOARD_TEXT].contains(&name)),
