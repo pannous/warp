@@ -563,11 +563,18 @@ fn matched_pattern(pattern: &Node, path: &Node, fields: &ClassFields, matched: &
 		}
 		Node::List(items, Bracket::Round, _) if items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()) => {
 			let class = items[0].drop_meta().name();
-			if items.len() - 1 != fields[&class].len() {
-				return None;
-			}
+			let class_fields = &fields[&class];
+			let parts = &items[1..];
+			// `Point(x, ..)`: the parts before an unnamed rest take the first fields, those after it the last ones
+			let (before, after) = match parts.iter().position(|part| super::switch::rest_pattern(part) == Some(None)) {
+				Some(rest) if parts.len() - 1 <= class_fields.len() => (&parts[..rest], &parts[rest + 1..]),
+				Some(_) => return None,
+				None if parts.len() == class_fields.len() => (parts, &[][..]),
+				None => return None,
+			};
 			matched.class_tests.push(class_test(&class));
-			for ((field, _), part) in fields[&class].iter().zip(&items[1..]) {
+			let last_fields = &class_fields[class_fields.len() - after.len()..];
+			for ((field, _), part) in class_fields.iter().zip(before).chain(last_fields.iter().zip(after)) {
 				matched_pattern(part, &field_of(path, field), fields, matched)?;
 			}
 		}
@@ -587,6 +594,8 @@ fn matched_fields(parts: &Node, path: &Node, fields: &ClassFields) -> Option<Mat
 		match item.drop_meta() {
 			Node::Symbol(name) => matched.bindings.push((field_of(path, name), name.clone())),
 			Node::Key(field, Op::Colon, part) if matches!(field.drop_meta(), Node::Symbol(_)) => matched_pattern(part, &field_of(path, &field.drop_meta().name()), fields, &mut matched)?,
+			// Rust's `Point{x, ..}`: the other fields left out
+			_ if super::switch::rest_pattern(item) == Some(None) => {}
 			_ => return None,
 		}
 	}

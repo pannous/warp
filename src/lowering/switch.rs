@@ -2,12 +2,15 @@
 //! subject, so only the chosen body runs; the `default` (or `_`) key catches the rest, without it a miss is the error
 //! `no case for <subject> = <value>`. A list key is a structural pattern (wiki/pattern-matching.md): `["", middle, ""]`
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
-//! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
+//! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
+//! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use super::words::COUNT_WORD;
 use super::nodes::{Counter, call, children_rewritten, if_then, key};
 use crate::node::{text, Bracket, Node, Separator};
+use crate::library_words::SLICE;
 use crate::operators::Op;
+use crate::tuples::STARRED;
 
 pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const DEFAULT_KEYS: [&str; 2] = ["default", WILDCARD];
@@ -141,14 +144,51 @@ fn item(path: &Node, position: usize) -> Node {
 	key(path.clone(), Op::Hash, Node::int(position as i64))
 }
 
+/// A rest in a pattern, with its name: `...rest` and `*rest` (parsed alike), `rest...`; `..` and `...` unnamed
+pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
+	match part.drop_meta() {
+		Node::Symbol(name) => name.strip_prefix(STARRED).filter(|rest| !rest.is_empty()).map(|rest| Some(rest.to_string())),
+		Node::Key(start, Op::Range | Op::To, end) if matches!(end.drop_meta(), Node::Empty) => match start.drop_meta() {
+			Node::Empty => Some(None),
+			Node::Symbol(name) => Some(Some(name.clone())),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 /// The tests the value at `path` passes when it matches `pattern`, and the assignments of the names the pattern binds
 fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	match pattern.drop_meta() {
 		Node::List(items, Bracket::Square, _) => {
 			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
-			tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
+			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
+				tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
+				for (index, part) in items.iter().enumerate() {
+					pattern_tests(part, item(&path, index + 1), tests, bindings);
+				}
+				return;
+			};
+			// `[first, ...middle, last]`: the items before the rest count from the start, those after it from the end
+			let fixed = items.len() - 1;
+			let after = fixed - rest_index;
+			let count = call(COUNT_WORD, vec![path.clone()]);
+			tests.push(key(count.clone(), Op::Ge, Node::int(fixed as i64)));
+			let from_end = |distance: usize| match distance {
+				0 => count.clone(),
+				_ => key(count.clone(), Op::Sub, Node::int(distance as i64)),
+			};
 			for (index, part) in items.iter().enumerate() {
-				pattern_tests(part, item(&path, index + 1), tests, bindings);
+				match index.cmp(&rest_index) {
+					std::cmp::Ordering::Less => pattern_tests(part, item(&path, index + 1), tests, bindings),
+					std::cmp::Ordering::Greater => pattern_tests(part, key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)), tests, bindings),
+					std::cmp::Ordering::Equal => {
+						if let Some(Some(name)) = rest_pattern(part) {
+							let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
+							bindings.push(key(Node::Symbol(name), Op::Assign, rest));
+						}
+					}
+				}
 			}
 		}
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
