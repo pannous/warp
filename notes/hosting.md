@@ -123,5 +123,14 @@ lambda's DNS moves to Cloudflare):
 ## Decisions (user, via the Interviewer, 2026-10-09)
 Free plan now, programs at warp-<name>.pannous.workers.dev, no Workers for Platforms yet; GitHub login with the
 callback on lambda.pannous.com behind a proxy on pannous.com (not workers.dev); a private Cloudflare OAuth client now
-with the token-paste fallback. Open: publishing the Cloudflare client (TXT record; card oauth-client-publish), pannous.com nameservers (card warp-subdomains) (mixed
-orderbox + Cloudflare, so `*.warp.pannous.com` is unreliable).
+with the token-paste fallback. Open: publishing the Cloudflare client (TXT record; card oauth-client-publish), pannous.com nameservers (card warp-subdomains).
+State on 2026-10-12 (sent to the Interviewer as user steps):
+- The registrar (alpinedomains / orderbox) delegates to the 4 orderbox nameservers only, but the orderbox zone also
+  lists houston/sky.ns.cloudflare.com. Cloudflare's pannous.com zone is "pending" and answers authoritatively with
+  empty answers (`dig A pannous.com @sky.ns.cloudflare.com`: NOERROR, aa, 0 answers), so a resolver that asks it
+  caches "no address" for pannous.com, lambda.pannous.com and the mail records. Fix: delete those two NS records in
+  the orderbox zone. Moving the domain to Cloudflare instead would change pannous.com itself: that zone points it at
+  Workers (AAAA 100::) and has no lambda record.
+- Publishing the OAuth client needs the TXT record on the client URL's host. warp.pannous.com is a CNAME to GitHub
+  Pages, so no TXT can go there: the client URL should be https://lambda.pannous.com (A record) with the TXT on
+  `lambda`, then visibility Public in the dashboard. Our API token can't read or edit OAuth clients.
