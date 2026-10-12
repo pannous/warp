@@ -630,13 +630,13 @@ const POPPED_REST_CALL: &str = "popped_rest";
 const CLEAR_METHOD: &str = "clear";
 const CLEARED_CALL: &str = "cleared";
 pub(super) const POP_TEMPORARY: &str = "pop_tmp";
-pub(crate) const INSERT_METHOD: &str = "insert";
+pub(super) const INSERT_METHOD: &str = "insert";
 
 /// Pseudo-call `list_insert_at(list, position, value)`: the list with value inserted at the 0-based position
 pub const INSERT_AT_CALL: &str = "list_insert_at";
 /// Pseudo-call `insert_in_either_order(list, a, b)`: `xs.insert(a, b)` before the kinds decide which is the position
 pub const INSERT_EITHER_CALL: &str = "insert_in_either_order";
-pub(crate) const AT_WORD: &str = "at";
+pub(super) const AT_WORD: &str = "at";
 
 /// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits, `_` and `-` (`phone-number`, P164):
 /// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.
@@ -806,15 +806,33 @@ pub(super) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
 	if !method.is_symbol(INSERT_METHOD) {
 		return None;
 	}
-	let position_of = |node: &Node| match node.drop_meta() {
-		Node::Key(word, Op::Colon, position) if word.is_symbol(AT_WORD) => Some(position.as_ref().clone()),
-		_ => None,
-	};
-	Some(match (position_of(first), position_of(second)) {
-		(None, Some(position)) => Inserted::At(position, first.clone()),
-		(Some(position), None) => Inserted::At(position, second.clone()),
-		_ => Inserted::EitherOrder(first.clone(), second.clone()),
+	Some(match insert_arguments(call) {
+		Some((value, position)) => Inserted::At(position.clone(), value.clone()),
+		None => Inserted::EitherOrder(first.clone(), second.clone()),
 	})
+}
+
+/// The value a and the position i of the call `insert(a, at: i)`, in either order
+pub(crate) fn insert_arguments(call: &Node) -> Option<(&Node, &Node)> {
+	let Node::List(items, _, _) = call.drop_meta() else {
+		return None;
+	};
+	match items.as_slice() {
+		[method, value, at] | [method, at, value]
+			if method.is_symbol(INSERT_METHOD) && insert_position(value).is_none() =>
+		{
+			Some((value, insert_position(at)?))
+		}
+		_ => None,
+	}
+}
+
+/// i of the argument `at: i`
+pub(crate) fn insert_position(argument: &Node) -> Option<&Node> {
+	match argument.drop_meta() {
+		Node::Key(word, Op::Colon, position) if word.is_symbol(AT_WORD) => Some(position),
+		_ => None,
+	}
 }
 
 /// The arguments of `xs.insert(…)`: `insert(x, at: i)` names the position, `insert(a, b)` leaves the order to the kinds

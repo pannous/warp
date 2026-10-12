@@ -2227,26 +2227,7 @@ pub(crate) fn inserted_item(call: &Node) -> Option<&[Node]> {
 	let Node::Key(_, Op::Dot, method_call) = call.drop_meta() else {
 		return None;
 	};
-	let Node::List(items, _, _) = method_call.drop_meta() else {
-		return None;
-	};
-	match items.as_slice() {
-		[method, first, second]
-			if method.is_symbol(INSERT_METHOD) && is_insert_position(first) != is_insert_position(second) =>
-		{
-			Some(std::slice::from_ref(if is_insert_position(first) {
-				second
-			} else {
-				first
-			}))
-		}
-		_ => None,
-	}
-}
-
-/// `at: i` of `xs.insert(a, at: i)`
-pub(crate) fn is_insert_position(argument: &Node) -> bool {
-	matches!(argument.drop_meta(), Node::Key(word, Op::Colon, _) if word.is_symbol(AT_WORD))
+	insert_arguments(method_call).map(|(value, _)| std::slice::from_ref(value))
 }
 
 /// The items of an append call `xs.add(a)`, `xs.push(a, b)`

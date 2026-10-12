@@ -9,7 +9,7 @@
 use super::nodes::{assign, key, Counter};
 use crate::analyzer::{
 	added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list,
-	inserted_item, is_insert_position, list_element_type, of_type_declaration,
+	insert_position, inserted_item, list_element_type, of_type_declaration,
 };
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
@@ -182,7 +182,7 @@ impl ElementChecks {
 		// `xs.insert(v, at: i)`: the value is checked, not its position
 		let arguments: Vec<Node> = arguments
 			.iter()
-			.flat_map(|argument| match is_insert_position(argument) {
+			.flat_map(|argument| match insert_position(argument).is_some() {
 				true => vec![argument.clone()],
 				false => self.checked_items(vec![argument.clone()], tests, &mut checks),
 			})
