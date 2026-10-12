@@ -20,7 +20,29 @@ const VALUES_INDEX: usize = 4;
 /// Holes every shader has, filled by the host: the image's size in pixels, seconds since the first render, the renders
 /// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
 /// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
-pub const BUILTIN_HOLES: [&str; 8] = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key"];
+/// and `$previous(at)`, the shader's own previous frame at a pixel (src/gpu.rs PREVIOUS_FRAME)
+pub const BUILTIN_HOLES: [&str; 9] = [
+	"width",
+	"height",
+	"size",
+	"time",
+	"frame",
+	"mouse",
+	"mouse_down",
+	"key",
+	PREVIOUS_HOLE,
+];
+pub const PREVIOUS_HOLE: &str = "previous";
+/// other words for $previous, which stay the program's own names: a value missing under one of them hints at $previous
+pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
+
+/// what a shader missing the value `name` may have meant ("" for nothing)
+pub fn missing_value_hint(name: &str) -> &'static str {
+	match PREVIOUS_WORDS.contains(&name) {
+		true => "; the shader's own previous frame is $previous(at)",
+		false => "",
+	}
+}
 
 /// The WGSL of a shader block with each `$name` as `values.name`, and the names in order (none: no hole)
 pub fn written(wgsl: &str) -> (String, Vec<String>) {

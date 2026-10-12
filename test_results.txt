@@ -1634,6 +1634,7 @@ PASSED:
   ✓ lists::test_list_compound_add::a_function_is_no_number
   ✓ lists::test_list_compound_add::a_list_plus_equals_a_list_concatenates
   ✓ lists::test_list_compound_add::a_list_plus_equals_an_item_is_the_type_error_of_plus
+  ✓ lists::test_list_identity::a_list_is_identical_to_itself_in_every_name
   ✓ lists::test_list_methods::a_list_module_word_is_a_method_without_use
   ✓ lists::test_list_methods::text_and_map_module_words_are_methods_too
   ✓ lists::test_list_number_comparison::a_list_is_not_equal_to_a_number
@@ -1777,6 +1778,7 @@ PASSED:
   ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
   ✓ lists::test_tuples::test_tuple_of_computed_items
   ✓ lists::test_type_word_items::a_type_word_variable_heads_a_list
+  ✓ lists::test_typed_list_insert::insert_checks_declared_element_type
   ✓ lists::test_typed_lists::test_appended_int_list_is_an_array
   ✓ lists::test_typed_lists::test_float_array_elements_are_numbers
   ✓ lists::test_typed_lists::test_float_list_is_a_float_array
@@ -3026,6 +3028,8 @@ PASSED:
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
   ✓ programs::test_shader_blocks::shader_stays_a_name
+  ✓ programs::test_shader_builtins::a_shader_reads_its_previous_frame
+  ✓ programs::test_shader_builtins::a_word_for_the_previous_frame_hints_at_previous
   ✓ programs::test_shader_builtins::builtin_holes_are_left_to_the_host
   ✓ programs::test_shader_builtins::the_host_fills_the_builtin_holes
   ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
@@ -3182,6 +3186,7 @@ PASSED:
   ✓ scope::test_result_word::result_is_the_value_of_the_statement_before
   ✓ scope::test_several_globals::a_block_declares_several_globals
   ✓ scope::test_several_globals::global_names_several_variables
+  ✓ scope::test_typed_globals::a_global_keeps_its_type_word
   ✓ scope::test_undefined_variable::test_undefined_variable_compound_assignment_is_an_error_value
   ✓ scope::test_undefined_variable::test_undefined_variable_increment_is_an_error_value
   ✓ scope::test_undefined_variable::test_undefined_variable_use_is_an_error_value
@@ -4884,4 +4889,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4879 passed, 0 failed, 4879 total tested
+10 ignored, 4884 passed, 0 failed, 4884 total tested

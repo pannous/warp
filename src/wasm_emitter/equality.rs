@@ -108,9 +108,15 @@ impl WasmGcEmitter {
 
 	/// Push i64 1/0: are the two objects one
 	pub(super) fn emit_object_identity(&mut self, func: &mut Function, (left, right, negated): (&Node, &Node, bool)) {
-		self.emit_node_instructions(func, left);
-		self.emit_node_instructions(func, right);
-		self.emit_call(func, SAME_NODE);
+		match (self.typed_list(left), self.typed_list(right)) {
+			// two typed arrays are one list when their list structs are one: their Nodes would be fresh copies
+			(Some((left, _)), Some((right, _))) => Self::emit_list(func, &[left.get(), right.get(), I::RefEq]),
+			_ => {
+				self.emit_node_instructions(func, left);
+				self.emit_node_instructions(func, right);
+				self.emit_call(func, SAME_NODE);
+			}
+		}
 		if negated {
 			func.instruction(&I::I32Eqz);
 		}
