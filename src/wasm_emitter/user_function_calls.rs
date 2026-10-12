@@ -4,6 +4,8 @@ use super::*;
 
 /// The kinds a call's argument has for sure when inference names them: what a declared parameter type is checked against
 const SCALAR_KINDS: [Kind; 5] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List];
+/// The kinds that are never a map
+const PLAIN_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 
 impl WasmGcEmitter {
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -463,6 +465,9 @@ impl WasmGcEmitter {
 			let refused: &[Kind] = if declared_list { &[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint] } else { &[Kind::List, Kind::Text] };
 			// a declared builtin type takes only its subtypes, `f(x: text)` refuses 3 (W0, notes/type_theory.md)
 			let declared_misfit = param.annotation.as_ref().and_then(crate::analyzer::annotated_builtin_type).is_some_and(|type_name| SCALAR_KINDS.contains(&given) && !crate::analyzer::admits(type_name, given));
+			// `g(m: map)` refuses 3 and "ab"
+			let declared_map = param.annotation.as_ref().is_some_and(|annotation| crate::analyzer::is_map_type(&annotation.drop_meta().name()));
+			let declared_misfit = declared_misfit || (declared_map && PLAIN_KINDS.contains(&given));
 			// `f(b: bool)` refuses 2 but takes yes, no, 1 and 0 (card bool-assign, P199)
 			let annotated_bool = param.annotation.as_ref().map(Node::name).filter(|type_name| crate::analyzer::is_bool_type(type_name));
 			if annotated_bool.is_some_and(|type_name| crate::analyzer::literal_misfit(&type_name, argument).is_some()) {
