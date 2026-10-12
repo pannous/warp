@@ -26,6 +26,9 @@ pub const CLOSURE_CAPTURED: &str = "closure_captured";
 /// closure_apply(f, arguments): f called with the items of the list `arguments`, as many as f takes (missing ones ø,
 /// extra ones dropped, as JavaScript calls a function): how a foreign runtime calls back a warp function it was given
 pub const CLOSURE_APPLY: &str = "closure_apply";
+/// function_text(f): how print and a list's text show a function value: a named function by its name, a lambda as
+/// written (`x => x + n`) (card print-closure)
+pub const FUNCTION_TEXT: &str = "function_text";
 /// Runtime errors of a closure call: the value called is no closure, or a closure of another arity
 pub(super) const NOT_A_FUNCTION: &str = "not_a_function";
 pub(super) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
@@ -341,12 +344,11 @@ impl WasmGcEmitter {
 						I::RefFunc(entry),
 						I::LocalGet(1),
 						I::StructNew(closure),
-						I::LocalGet(0),
-						I::StructNew(node_type),
-						I::Return,
-						I::End,
 					],
 				);
+				// the name from this module's string table, as closure_new makes it (function_text finds it there)
+				s.emit_string_call(rebuild, &target, "new_symbol");
+				Self::emit_list(rebuild, &[I::StructNew(node_type), I::Return, I::End]);
 			}
 			s.emit_call(rebuild, "new_empty");
 		});
@@ -816,5 +818,94 @@ impl WasmGcEmitter {
 			);
 		}
 		Self::emit_list(f, &[I::Call(recurse), I::Return, I::End]);
+	}
+}
+
+impl WasmGcEmitter {
+	/// A program whose function values may be shown needs function_text
+	pub(super) fn require_function_text(&mut self) {
+		let required = &mut self.ctx.required_functions;
+		let shows_values = [
+			super::wasi_emitter::PRINT_VALUE,
+			super::wasi_emitter::PUT_VALUE,
+			"list_join",
+		]
+		.iter()
+		.any(|name| required.contains(name));
+		if shows_values && !self.ctx.closure_targets.is_empty() {
+			required.insert(FUNCTION_TEXT);
+		}
+	}
+
+	/// The text of a closure target: a named function's name (without its enclosing function's), a lambda's
+	/// parameters and body
+	fn function_text_of(&self, target: &str, captured: usize) -> String {
+		let Some(function) = self
+			.ctx
+			.user_functions
+			.get(target)
+			.filter(|_| crate::closures::is_lambda_function(target))
+		else {
+			return target.rsplit('·').next().unwrap_or(target).to_string();
+		};
+		let params: Vec<&str> = function
+			.params
+			.iter()
+			.skip(captured)
+			.map(|param| param.name.as_str())
+			.collect();
+		let params = match params.as_slice() {
+			[one] => one.to_string(),
+			more => format!("({})", more.join(", ")),
+		};
+		format!("{params} => {}", function.body.serialize())
+	}
+
+	pub(super) fn emit_function_text(&mut self) {
+		if !self.should_emit_function(FUNCTION_TEXT) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		let texts: Vec<((u32, u32), String)> = self
+			.ctx
+			.closure_targets
+			.clone()
+			.into_iter()
+			.map(|(target, captured)| (self.allocate_string(&target), self.function_text_of(&target, captured)))
+			.collect();
+		let name = 1;
+		let locals = vec![Ref(RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(string),
+		})];
+		self.runtime_function(FUNCTION_TEXT, vec![node_ref], vec![node_ref], locals, |s, f| {
+			// a closure's name is the string table's text of its target (closure_new, closure_rebuild): one place each
+			Self::field(f, 0, node, NODE_VALUE_FIELD);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node))]);
+			f.instruction(&I::StructGet {
+				struct_type_index: node,
+				field_index: NODE_DATA_FIELD,
+			});
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(string)), I::LocalSet(name)]);
+			for ((pointer, length), text) in &texts {
+				Self::field(f, name, string, 0);
+				Self::emit_list(f, &[I::I32Const(*pointer as i32), I::I32Eq]);
+				Self::field(f, name, string, 1);
+				Self::emit_list(
+					f,
+					&[
+						I::I32Const(*length as i32),
+						I::I32Eq,
+						I::I32And,
+						I::If(BlockType::Empty),
+					],
+				);
+				s.emit_string_call(f, text, "new_text");
+				Self::emit_list(f, &[I::Return, I::End]);
+			}
+			s.emit_string_call(f, crate::type_kinds::Kind::Function.to_string().as_str(), "new_text");
+			// none of this module's
+		});
 	}
 }
