@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- type-library-words (warp-dispatch, user): the list/map/text library words are always available, without `use`, as
+  both `x.f()` and `f(x)` (one call, Julia style): `[3 1 2].unique()` and `unique([3 1 2])`, `words("a b")`. `use list`
+  only for the qualified `list.zip`. Replaces the dot-only part of list-methods (2026-10-10).
 - crash-fixes-first (user): crash fixes are merged with the highest priority (notes/roles.md, warp-integrator).
 - small-changes-on-main (user): agents may work on main without a worktree when their change is small or doesn't
   conflict with other work; moving onto or off a worktree on demand is fine (notes/roles.md "Small changes on main").
