@@ -87,6 +87,7 @@ mod test_if_value_kind;
 mod test_implicit_await;
 mod test_iteration_words;
 mod test_job_lists;
+mod test_key_names; // card key-if
 mod test_library_signatures; // card reflect-library-signatures
 mod test_list_without; // people without team (card people-where)
 mod test_listener_removal;

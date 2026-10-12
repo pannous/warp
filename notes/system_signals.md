@@ -179,6 +179,10 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   adds a frame handler after the first `on key` that emits `key{key: …}` per press, named as the page's
   KeyboardEvent.key: the character, ArrowUp/Down/Left/Right, Enter, Escape, Backspace, Tab (KEY_NAMES). Not for a page
   or a program serving its page (the page raises key itself). Not yet: keys in a terminal, the `warp app` web view.
+- Key names (card key-if, lowering/key_names.rs): inside `on key {…}` a bare `key` is `event.key` (a program's own
+  variable `key` wins) and key words name keys: Escape/ESC, Enter/RETURN, Tab, Backspace, Space, Delete, the arrows
+  (UP, DOWN, LEFT, RIGHT), F1 … F12, so `on key { if key == ESC { exit } }`. Letters stay texts (`key == "a"`). Only a
+  handler statement, not yet an element's `on key` among its items.
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
   `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
 - System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),
