@@ -315,6 +315,15 @@ whose failed allocation frees its own garbage. Still possible: the other test wo
 (TESTS_PER_WORKER recycling bounds it). Not usable: `--js-flags=--expose-gc` through agent-browser `--args` (the tab
 ends on about:blank), a declared memory maximum (still ~8 GB reserved).
 
+### Stalled tests on CI (card find-why, 2026-10-12)
+CI runs timed out random ordinary tests (ruby_symbol_blocks_methods_and_block_sums, an_interpolated_method_result_uses_its_text)
+that passed on rerun and locally: no test of its own hangs. What hung was invisible: the runner had no `worker.onerror`
+(a crashed worker looked like a 120 s hang) and did not know whether the worker was still compiling, waiting for its
+task Workers (taskPoolReady) or running. Now (tests.js runner): test-worker.js posts its stage, a crash fails the test
+at once with the stage and message, and a timed-out test runs once more on a fresh worker; the summary's
+`timeoutRetries` names each with its stage, test_in_browser.py prints them and a CI `::warning`. Only a second timeout
+fails. Next time a warning shows, its stage says where to look.
+
 ## First markup run (card guide-warmup, 2026-10-08)
 - The first markup program a worker compiles pays a one-time cost (the markup renderer, lib/markup.warp's to_html):
   live, a fresh page measured 470–560 ms in headless Chrome and 0.6–4.4 s in WebKit 26, later markup runs ~80–120 ms,
