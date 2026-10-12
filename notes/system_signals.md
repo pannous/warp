@@ -182,7 +182,11 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
 - Key names (card key-if, lowering/key_names.rs): inside `on key {…}` a bare `key` is `event.key` (a program's own
   variable `key` wins) and key words name keys: Escape/ESC, Enter/RETURN, Tab, Backspace, Space, Delete, the arrows
   (UP, DOWN, LEFT, RIGHT), F1 … F12, so `on key { if key == ESC { exit } }`. Letters stay texts (`key == "a"`). Only a
-  handler statement, not yet an element's `on key` among its items.
+  handler statement, not yet an element's `on key` among its items. A comparison there with a word naming nothing
+  (`key == ESCAPEE`, `key == q`) warns: it never holds.
+- Keyboard state (card keyboard-state): `key_down` is the system value whether a key is held now (natively the paint
+  window's held key, in the playground canvas.js trackKey's), for loops as mouse_down: `if key_down { clear(white) }`.
+  Which key is held is not a value yet; `on key` names each press.
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
   `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
 - System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),
