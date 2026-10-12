@@ -6,7 +6,8 @@ A big goal (a web framework, a type system, sound) has three parts that point at
    and per step "what is done and what is left". Its first line under the title names the topic card:
    `Roadmap card: <topic-key> (board, topic n/m done)`.
 2. **The topic card** on the board (key = the goal, e.g. `web-framework`): one line of goal, the body links the plan
-   note. It stays in the column of the goal's priority (Soon, Later…) until every sub-card is Done.
+   note. It lives in the board's column Roadmaps (user, 2026-10-12; moved there by `--topic` / `todo sub`), or in
+   Now while someone actively drives it, until every sub-card is Done; then `todo done <topic> <last commit>`.
 3. **The sub-cards**: one per step of the note's table and one per open "what is left" item, made with
    `todo add "…" --topic <topic-key>` or attached later with `todo sub <topic-key> <card>…`. The note's step table
    uses the same card keys, so a reader can go note → card → commit and back.
