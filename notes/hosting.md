@@ -1,5 +1,7 @@
 # Hosting warp programs (card cloud-hosting, cloud-deploy step 2)
 
+Roadmap card: hosting (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 The user asked on 2026-10-09: "determine the hosting options; let's start with our own login and let people log in with
 their own button". Step 1, `warp deploy` through wrangler, belongs to warp-web. This note covers hosting and login.
 
@@ -111,5 +113,5 @@ lambda's DNS moves to Cloudflare):
 ## Decisions (user, via the Interviewer, 2026-10-09)
 Free plan now, programs at warp-<name>.pannous.workers.dev, no Workers for Platforms yet; GitHub login with the
 callback on lambda.pannous.com behind a proxy on pannous.com (not workers.dev); a private Cloudflare OAuth client now
-with the token-paste fallback. Open: publishing the Cloudflare client (TXT record), pannous.com nameservers (mixed
+with the token-paste fallback. Open: publishing the Cloudflare client (TXT record; card oauth-client-publish), pannous.com nameservers (card warp-subdomains) (mixed
 orderbox + Cloudflare, so `*.warp.pannous.com` is unreliable).

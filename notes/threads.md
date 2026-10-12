@@ -1,5 +1,7 @@
 # Real threads for `go` (user decision P33, 2026-10-04)
 
+Roadmap card: threads (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 Native `go` tasks run on a fixed pool of host threads; browser tasks run in Web Workers. Each task has a separate
 WebAssembly instance, while shared values use host-owned atomic arrays. The stages below record how this landed.
 
@@ -56,7 +58,7 @@ matches warp's value semantics (index assignment already copies, aliases never c
   declarations::resolve_tasks decides (inferred kinds), src/tasks.rs runs. `await` binds like a unary minus.
 - Step 2 done (2026-10-04): stop/cancel/pause/resume through epoch interruption (util::task_engine, only for modules
   importing the task words, checked by wasmparser before compiling). Awaiting a stopped task is the error
-  `task f: task stopped`, but not yet catchable with `try`: a host function cannot throw the `warp_error` tag, so the
+  `task f: task stopped`, but not yet catchable with `try` (card stopped-catchable): a host function cannot throw the `warp_error` tag, so the
   wasm side would have to check a failure flag after task_await and call a runtime error function.
 
 - Step 3 done (2026-10-04): numbers, texts, characters, lists and keys of them cross (tasks::TaskValue, rebuilt in

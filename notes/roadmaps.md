@@ -19,4 +19,8 @@ Rules
 - A new plan note gets its topic card in the same commit; a worker that finds a plan note without one creates it.
 - Roadmap of the whole project = `todo list` filtered to topic cards; no separate roadmap file to keep in sync.
 
-Applied first to notes/web_framework.md (topic card web-framework, 2026-10-12).
+Applied first to notes/web_framework.md (topic card web-framework, 2026-10-12; notes/server_routes.md joins it), then
+the same day to: signals.md → signals, sound.md → sound, type_theory.md → type-theory, classes.md → class-system,
+orm.md → database-tables, simd.md + gpu.md → fast-numbers, threads.md → threads, reflection.md → reflection-words,
+stdlib_connectors.md → connectors, effect_handlers.md → effects, web_playground.md → playground, hosting.md → hosting.
+Leftovers found already fixed by a Done card were corrected in the note instead of getting a new card.

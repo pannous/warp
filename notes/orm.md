@@ -1,5 +1,7 @@
 # Plain classes as database tables (card orm, 2026-10-08)
 
+Roadmap card: database-tables (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 User decisions (notes/decisions.md "ORM"): plain classes, no base class or annotations, only registered; transactions
 optional; filters work for any warp expression; a smart lazy-loading default chosen by us; migrations as proposed.
 
@@ -104,7 +106,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   of a list of a class's instances (comprehensions.rs field_of_elements, `[of·element.name for of·element in …]`), and
   `with` after such a list is `where` (with_as_where); on a table the filter stays its query
   (tests/control/test_field_of_elements.rs). `name of people#1` stays the field of one instance.
-- Not yet: the IN (…) batching. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
+- Not yet: the IN (…) batching (card orm-batched). An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 
 ## Writes and transactions
@@ -196,16 +198,16 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
    - migrations for added/removed columns;
    - the table loaded whole at registration, filters in memory.
 2. Queries instead of loading: SQL translation of filters (done, card orm-filters), lazy load + count + add without
-   loading + identity of added instances (done, orm-updates), #i/paging.
+   loading + identity of added instances (done, orm-updates), #i/paging (card orm-paging).
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
-4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables.
+4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables (card orm-batched).
 5. `transaction { }` (done, branch orm-transaction).
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the
    key-value store). Done simply (branch orm-updates): web/playground/host-files.js `table` keeps each table as
    one value `table <file> <name>` = {types, rows: [{id, column…}]} of the `database[k]` store, so it is loaded
    before the run and written back on every change. The browser-built compiler keeps a filter as the comprehension
    over the rows (database_tables::queried is native-only), since the browser has no SQL. One value per table rewrites
-   the whole table on each change: fine for samples, slow for big tables (then one object store per table).
+   the whole table on each change: fine for samples, slow for big tables (then one object store per table; card orm-browser-stores).
 7. Unit and type conversions in migrations, `@was` renames. Type conversions done (branch orm-updates):
    - database.rs `converted`: INTEGER → REAL → TEXT converts forward (rename the column aside, add it with the new
      type, `UPDATE … SET c = CAST(old AS type)`, drop the old one, in a SAVEPOINT); a fresh column because SQLite's
