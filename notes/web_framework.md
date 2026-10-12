@@ -552,4 +552,6 @@ Each step is useful on its own and is what the next ones stand on.
   (`markup built at run time: h3 after h1 skips a heading level; fix: h2`), each once a run. Sample
   samples/computed_tags.warp. Not checked: markup only a later page event builds (the playground renders it in its
   module, headless Page re-renders through page·html).
-- Not here: live regions for async content (card web-a11y-live).
+- Live regions (card web-a11y-live): the outermost element whose own content reads a fetched value (`users := fetch …`)
+  gets aria-live="polite" (fetch_signals.rs with_live_regions), so a screen reader announces it when it arrives; an
+  element setting aria-live keeps its own. Sample samples/live_region.warp.

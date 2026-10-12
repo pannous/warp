@@ -5,10 +5,13 @@
 //! reply arrived, so `on change users {…}` and the page's markup see it. A URL reading main-level variables is fetched
 //! anew when one of them changes (`on change id {…}`). `users.loading` and `users.error` are the variables
 //! users·loading and users·error.
+//! The outermost element showing a fetched value is a live region, `aria-live: "polite"` (card web-a11y-live): a screen
+//! reader announces the value when it arrives; an element setting aria-live itself keeps its own.
 
 use crate::host::FETCH_WORD;
 use crate::event_signals::{function_with_globals, main_level_variables};
-use crate::node::Node;
+use crate::element_events::{element_items, with_element_items};
+use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -22,6 +25,8 @@ const ARRIVED_VALUE: &str = "REPLY#1";
 const ARRIVED_OR_DEFAULT: &str = "REPLY#1 ?? DEFAULT";
 const REFETCH_TEMPLATE: &str = "on change SOURCE { LOADING = true; fetch_start(ID, URL) }";
 const REPLY_FIELD: &str = "reply";
+const LIVE_ATTRIBUTE: &str = "aria-live";
+const POLITE: &str = "polite";
 
 pub fn lower(program: Node) -> Node {
 	if !program.mentions_any(&[FETCH_WORD]) {
@@ -55,7 +60,22 @@ pub fn lower(program: Node) -> Node {
 		count += 1;
 	}
 	let names: Vec<String> = fetched.into_iter().map(|fetched| fetched.name).collect();
+	let lowered = lowered.into_iter().map(|statement| with_live_regions(statement, &names)).collect();
 	with_state_variables(Node::List(lowered, bracket, separator), &names)
+}
+
+/// The outermost elements whose own content (not a child element's) reads a fetched value, marked live
+fn with_live_regions(node: Node, names: &[String]) -> Node {
+	let names_read: Vec<&str> = names.iter().map(String::as_str).collect();
+	let shows_fetched = element_items(&node).is_some_and(|items| items.iter().any(|item| element_items(item.drop_meta()).is_none() && item.mentions_any(&names_read)));
+	if !shows_fetched {
+		return node.map_children(|child| with_live_regions(child, names));
+	}
+	with_element_items(node, |items| {
+		let sets_live = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(LIVE_ATTRIBUTE)));
+		let live = (!sets_live).then(|| Node::Key(Box::new(symbol(LIVE_ATTRIBUTE)), Op::Colon, Box::new(Node::Text(POLITE.to_string()))));
+		live.into_iter().chain(items).collect()
+	})
 }
 
 struct Fetched {
