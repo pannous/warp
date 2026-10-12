@@ -437,8 +437,6 @@ pub fn is_compiler_temporary(name: &str) -> bool {
 pub(super) const LIST_OF_PREFIX: &str = "list of ";
 /// The type words of a bool, held as an Int (builtin_type_kind)
 const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
-/// The type every value has: `x: any`, `xs: list of any`
-const ANY_TYPE: &str = "any";
 pub(super) const OF_WORD: &str = "of";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
@@ -1702,7 +1700,7 @@ impl KnownTypes {
 
 	fn is_known_name(&self, name: &str) -> bool {
 		type_word_kind(name).is_some()
-			|| name == ANY_TYPE
+			|| name == crate::type_kinds::UNTYPED_FIELD
 			|| crate::lowering::declarations::is_collection_type_word(name)
 			|| self.user_types.get_by_name(name).is_some()
 			|| self.traits.is_trait(name)

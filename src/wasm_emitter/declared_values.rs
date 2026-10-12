@@ -49,6 +49,15 @@ fn with_float_items(declared: &Node, value: &Node) -> Option<Node> {
 	Some(Node::List(marked.collect(), bracket.clone(), separator.clone()))
 }
 
+/// An int place takes a bool held as a Node as its Int 1 or 0, as it takes a bool known when compiled (`x: int = yes`)
+fn with_bools_as_ints(mask: i64) -> i64 {
+	if mask & (1 << Kind::Int as i64) != 0 {
+		mask | 1 << BOOL_MASK_BIT
+	} else {
+		mask
+	}
+}
+
 impl WasmGcEmitter {
 	fn admitted(&self, declared: &Node) -> Option<Admitted> {
 		let type_name = declared.name();
@@ -77,7 +86,7 @@ impl WasmGcEmitter {
 			Some(Kind::Float) => "real", // an int fits a float, a ± value does not
 			_ => &type_name,
 		};
-		crate::type_tests::runtime_kind_mask(spec).map(Admitted::Kinds)
+		crate::type_tests::runtime_kind_mask(spec).map(|mask| Admitted::Kinds(with_bools_as_ints(mask)))
 	}
 
 	/// The static kind of `value` leaves open whether it fits: held as a Node, or of a kind the type does not admit

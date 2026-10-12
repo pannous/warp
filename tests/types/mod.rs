@@ -6,6 +6,7 @@ mod test_class_unions;
 mod test_any_field_text;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
+mod test_any_place;
 mod test_as_number_variable; // card number-variable
 mod test_be_definitions;
 mod test_binary_int; // card binary-int
@@ -164,4 +165,4 @@ mod test_unknown_type;
 mod test_upcast_fields;
 mod test_value_constructor;
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card unknown-type
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card unknown-type // card yes-stores
