@@ -7,8 +7,9 @@ const FOLDER: &str = "scratch/bundle_budget";
 /// 2026-10-07: 46.2 KB (host.js 23.8, app.wasm 17.5, markup.js 2.4, site.js 1.1, reader.js 1.1, index.html 0.2);
 /// 40.5 KB with the case table as ranges (app.wasm 11.9); 32.1 KB with compacted scripts (host.js 16.7); 21.9 KB with
 /// host.js split into parts a site ships only when its module imports them (host.js 6.1); 2026-10-12: 23.0 KB (app.wasm
-/// 12.0, host.js 6.9), budget raised by 2 KB so it stops blocking branches while card web-bundle-growth wins it back
-const BUDGET_GZIPPED_BYTES: usize = 25_000;
+/// 12.0, host.js 6.9), budget raised by 2 KB so it stops blocking branches while card web-bundle-growth wins it back;
+/// 22.1 KB with paint, text_coverage and sound_samples in host-media.js (host.js 5.9), the budget a ratchet: today + 1 KB
+const BUDGET_GZIPPED_BYTES: usize = 23_000;
 
 fn gzipped_size(bytes: &[u8]) -> usize {
 	let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
