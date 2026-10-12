@@ -176,7 +176,7 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 /// `def`) → `square(x) := (x*x) as int`
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
-	type_name.symbol_name().filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+	type_name.symbol_name().filter(|word| (is_type_word(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
@@ -217,9 +217,25 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 			key(then, Op::Else, as_type(otherwise.as_ref().clone(), type_name))
 		}
 		Node::List(items, Bracket::Curly, _) if !items.is_empty() => converted_last(value, type_name),
+		_ if type_name.symbol_name().is_some_and(is_union) => checked_as_union(value, type_name),
 		Node::Key(_, op, _) if op.is_arithmetic() => key(Node::List(vec![value], Bracket::Round, Separator::None), Op::As, type_name.clone()),
 		_ => key(value, Op::As, type_name.clone()),
 	}
+}
+
+/// `int or text`, `Circle or Square`: the name of an inline union (analyzer lower_inline_unions)
+fn is_union(word: &str) -> bool {
+	crate::analyzer::union_parts(word.trim_end_matches('?')).is_some()
+}
+
+/// The local a union result passes through: errors read "the result is declared int or text, …"
+const UNION_RESULT: &str = "the result";
+
+/// A result of a union type is checked, not converted (user 2026-10-12: `-> int or text`): `{the result: int or text =
+/// value; the result}`, admitted as any variable declared of the union is
+fn checked_as_union(value: Node, union: &Node) -> Node {
+	let declared = key(key(symbol(UNION_RESULT), Op::Colon, union.clone()), Op::Assign, value);
+	Node::List(vec![declared, symbol(UNION_RESULT)], Bracket::Curly, Separator::Semicolon)
 }
 
 /// `error("e")`

@@ -1776,9 +1776,28 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 	let (result_type, body) = match typed_body.drop_meta() {
 		Node::List(parts, _, Separator::Space) if parts.len() == 2 && is_type_word(&parts[0]) && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => (parts[0].clone(), parts[1].clone()),
 		Node::Key(result_type, Op::Colon, body) if is_type_word(result_type) => (result_type.as_ref().clone(), body.as_ref().clone()),
+		union @ Node::Key(_, Op::Or, _) => {
+			let (union, body) = union_result(union)?;
+			// named as lower_inline_unions names a union, which has run; the analyzer refuses a part naming no type
+			(Node::Symbol(crate::analyzer::union_of_types(&union, &|_| true)?), body)
+		}
 		_ => return None,
 	};
 	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// `-> int or text { body }` arrives as `int or (text { body })`: the parts `int or text` and the body
+fn union_result(typed_body: &Node) -> Option<(Node, Node)> {
+	match typed_body.drop_meta() {
+		Node::Key(part, Op::Or, rest) => {
+			let (rest, body) = union_result(rest)?;
+			Some((key(part.as_ref().clone(), Op::Or, rest), body))
+		}
+		Node::List(parts, _, Separator::Space) if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			Some((parts[0].clone(), parts[1].clone()))
+		}
+		_ => None,
+	}
 }
 
 /// Scala's curried `def add(x: Int)(y: Int): Int = x + y`: `add(x: Int) := (y: Int) => x + y`, so `add(1)(2)` calls the

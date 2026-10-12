@@ -1609,6 +1609,11 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	let value_text = value.serialize();
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
 	let actual = format!("{actual:?}").to_lowercase();
+	// a union converts nothing: `int or text(2.5)` is no call, the union grows a part instead
+	if union_parts(type_name).is_some() {
+		let widened = format!("{type_name}{UNION_JOINER}{actual}");
+		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{widened}")).offer(format!("{name} holds {actual} too"), format!("{name}:{type_name}"), format!("{name}:{widened}")));
+	}
 	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{actual}"))
 		.offer(format!("the {type_name} of the value"), &value_text, format!("{type_name}({value_text})"))
 		.offer(format!("{name} holds {actual}"), format!("{name}:{type_name}"), format!("{name}:{actual}")))
