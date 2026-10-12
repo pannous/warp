@@ -758,7 +758,7 @@ const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 };
 
 /// `task·go(f, args)`, `task·value(job, f)` and `task·control(job, f, word)` (lower_tasks). A function runs in a fresh
-/// instance, natively on its own thread (tasks.rs), in the browser through host.js: one of at most four surely-Int
+/// instance, natively on the fixed worker pool (tasks.rs), in the browser through host.js: one of at most four surely-Int
 /// arguments that gives an Int through task_spawn / task_await, one of numbers, texts, characters and lists through
 /// task_spawn_values / task_await_value. Any other runs where it starts, as a plain call, and its task variable is its
 /// value

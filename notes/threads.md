@@ -1,8 +1,7 @@
 # Real threads for `go` (user decision P33, 2026-10-04)
 
-Today (wiki/async.md, declarations::lower_tasks): a module runs on one thread, `go f(x)` runs the task to its end where
-it starts, `await job` is its value, pause/stop handlers never run. The user wants real threads: WASM threads with
-shared memory natively, Web Workers in the browser. This note is the design; the steps below land one at a time.
+Native `go` tasks run on a fixed pool of host threads; browser tasks run in Web Workers. Each task has a separate
+WebAssembly instance, while shared values use host-owned atomic arrays. The stages below record how this landed.
 
 ## The constraint that shapes everything
 warp values are WASM GC objects ($Node structs, typed arrays). GC references cannot cross threads: the threads proposal
@@ -10,11 +9,11 @@ shares *linear memory* only, and "shared-everything threads" (shared GC types) i
 wasmtime 49 nor any browser ships. So two tasks can never hold the same Node.
 
 Consequence: **an instance per task** (an isolate, like a Worker or an Erlang process). Each task runs in its own
-instance of the same compiled module, on its own thread; arguments and results are *copied* between instances. That
+instance of the same compiled module on a fixed worker pool; arguments and results are *copied* between instances. That
 matches warp's value semantics (index assignment already copies, aliases never change), so it costs no language rule.
 
 ## Semantics
-- `job = go f(x)`: starts f(x) in a new instance on a new thread and returns at once with the task.
+- `job = go f(x)`: queues f(x) in a new instance on the run's worker pool and returns at once with the task.
 - `await job`, and `job` used as its value (the auto-cast): blocks until the task finishes, then is its result.
 - Arguments and results are values: copied, never shared. A task sees the main-level variables as they were when the
   module started (its own instance), not later changes; a write to a `global` inside a task stays in that task.
@@ -26,8 +25,10 @@ matches warp's value semantics (index assignment already copies, aliases never c
 - Errors inside a task are its result: `await` gives the error value (errors are values, decision #1).
 
 ## Native (wasmtime)
-- One `Engine`, one compiled `Module` (both Send + Sync); a task is `std::thread::spawn` with its own `Store`, instance
-  and fuel budget. The host keeps the task table: id → JoinHandle / result slot / control flags.
+- One `Engine`, one compiled `Module` (both Send + Sync); a run has a fixed pool of twice the available parallelism,
+  since task host calls may block. Every task gets its own `Store`, instance and fuel budget. The host keeps the task
+  table: id → queued/running/result slot/control flags. A worker awaiting a nested task runs queued work itself, so a
+  full pool of parent tasks cannot deadlock waiting for its children.
 - Host imports: `task.spawn(function, arguments) -> id`, `task.await(id) -> result`, `task.control(id, op)`.
   The function goes by name through an exported entry `task_entry(name, arguments)` generated per program for the
   functions a `go` starts (the program knows them statically: lower_tasks already collects them).
@@ -84,6 +85,11 @@ matches warp's value semantics (index assignment already copies, aliases never c
   SharedArrayBuffer handed to the task Workers). Not wasm shared memory: an imported memory would take index 0 ahead of
   the module's own, and every memory instruction assumes 0; the host call per access is the price.
 
+- Fixed native pool (2026-10-12, card fork-join): twice the available parallelism. One worker per core missed the
+  established 300 sleeping-task concurrency bound because blocked workers left capacity idle; 20 workers on the
+  10-core development machine completed it in 7.94 seconds while remaining bounded. Workers awaiting nested tasks
+  run queued work so a full pool of parent tasks cannot deadlock waiting for its children.
+
 ## Steps (each its own commit with tests)
 1. Native spawn/await for functions of numbers and texts: lowering `go f(x)` → `task_spawn`, `await` → `task_await`
    typed by f's result kind; the runner's task table; tests that two tasks really overlap (each sleeps 200 ms, total
@@ -98,7 +104,6 @@ matches warp's value semantics (index assignment already copies, aliases never c
 ## Open questions (for open_decisions.md when a step needs them)
 - Does a task see main-level variables assigned before the `go` (snapshot by copying them in) or only the module's
   initial values? Proposed: the values at `go` time, copied in, like arguments.
-- How many threads: one per task (simple, step 1) or a pool sized to the cores.
 - Job lists (P47, 2026-10-05, user: "jobs are asynchronous by definition; awaiting one must not affect the others"):
   `jobs.add(go f(i))` keeps the started task unawaited (its id; declarations::job_lists). A read of the list is
   `task·list` (every result, `jobs.map(awaited_job => checked await)` through task_await_value, which serves Int tasks

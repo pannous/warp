@@ -79,6 +79,7 @@ mod test_threads;
 mod test_task_values;
 mod test_task_exact;
 mod test_many_tasks;
+mod test_task_pool;
 mod test_for_it;
 mod test_task_closures;
 mod test_async_ports;
