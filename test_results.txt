@@ -3718,6 +3718,10 @@ PASSED:
   ✓ types::test_float_fields::test_float_conditionals
   ✓ types::test_float_fields::test_global_from_a_call
   ✓ types::test_float_fields::test_zero_argument_call_in_float_context
+  ✓ types::test_floats_add_exact::a_concatenated_ratio_converts
+  ✓ types::test_floats_add_exact::a_floats_field_converts_an_added_ratio
+  ✓ types::test_floats_add_exact::a_numbers_list_keeps_an_added_ratio
+  ✓ types::test_floats_add_exact::an_added_ratio_converts
   ✓ types::test_fraction_text::a_fraction_text_as_number_is_exact
   ✓ types::test_fraction_text::a_text_that_spells_no_number_fails_as_number
   ✓ types::test_generic_classes::a_generic_class_holds_any_value
@@ -3798,6 +3802,9 @@ PASSED:
   ✓ types::test_number_converts::a_floats_list_converts_its_ratios
   ✓ types::test_number_field::a_number_field_holds_a_float
   ✓ types::test_number_field::a_whole_text_as_number_is_a_number
+  ✓ types::test_number_keeps_exact::a_float_variable_still_converts
+  ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_float
+  ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_ratio
   ✓ types::test_optional_casts::a_function_of_empty_returns_empty
   ✓ types::test_optional_casts::a_javascript_null_is_empty
   ✓ types::test_optional_casts::an_optional_cast_keeps_empty
@@ -4981,4 +4988,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4976 passed, 0 failed, 4976 total tested
+10 ignored, 4983 passed, 0 failed, 4983 total tested
