@@ -70,9 +70,19 @@ lambda's DNS moves to Cloudflare):
   `ticket:<ticket>` (10 minutes) and the playground polls `GET /ticket?ticket=`. After deploying it posts
   `POST /ticket?ticket=&program=<url>` (only *.workers.dev and *.lambda.pannous.com addresses) or `&error=`, and the
   login window, waiting on the same ticket, turns into the program's tab. Already logged in, the click opens a tab
-  at once ("deploying …") that goes to the program: only a click may open a window, so each deploy opens exactly one.
+  at once at the same deploy window: only a click may open a window, so each deploy opens exactly one.
+- The deploy window (card user-click; user: "they should give one the link or a redirect to the link"):
+  `GET /deploying?ticket=` shows the program's link as soon as the ticket holds it (`/deploy?…&ticket=` stores the
+  address before uploading; the playground posts it again, and native deploys only post it), and opens the program
+  once `GET /up?program=` says it answers: Cloudflare's "error code: 1042" means no Worker under that name yet, a new
+  *.lambda.pannous.com name fails until its certificate is issued. After a minute without an answer the window says
+  so and keeps the link. /up fetches Workers of our own account, which Cloudflare refuses (1042) unless the control
+  Worker has the compatibility flag `global_fetch_strictly_public`. Probe: probes/hosting/login_ticket.sh runs the
+  window's script in node (deploying_window.mjs).
+- Names of the account's own Workers (warp-hosting itself, warp-assistant) can't be claimed: `claim` refuses a name
+  whose warp-<name> Worker exists without an owner in NAMES (before 2026-10-12 a GitHub user could have overwritten
+  the control Worker by deploying the name `hosting`).
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
-  Probe: probes/hosting/login_ticket.sh (wrangler dev + curl; the popup itself only in CI).
 - Clients: `warp deploy --hosted app.warp` (src/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
   scripts, src/web.rs worker_bundle → src/host_parts.rs).
@@ -113,5 +123,14 @@ lambda's DNS moves to Cloudflare):
 ## Decisions (user, via the Interviewer, 2026-10-09)
 Free plan now, programs at warp-<name>.pannous.workers.dev, no Workers for Platforms yet; GitHub login with the
 callback on lambda.pannous.com behind a proxy on pannous.com (not workers.dev); a private Cloudflare OAuth client now
-with the token-paste fallback. Open: publishing the Cloudflare client (TXT record; card oauth-client-publish), pannous.com nameservers (card warp-subdomains) (mixed
-orderbox + Cloudflare, so `*.warp.pannous.com` is unreliable).
+with the token-paste fallback. Open: publishing the Cloudflare client (TXT record; card oauth-client-publish), pannous.com nameservers (card warp-subdomains).
+State on 2026-10-12 (sent to the Interviewer as user steps):
+- The registrar (alpinedomains / orderbox) delegates to the 4 orderbox nameservers only, but the orderbox zone also
+  lists houston/sky.ns.cloudflare.com. Cloudflare's pannous.com zone is "pending" and answers authoritatively with
+  empty answers (`dig A pannous.com @sky.ns.cloudflare.com`: NOERROR, aa, 0 answers), so a resolver that asks it
+  caches "no address" for pannous.com, lambda.pannous.com and the mail records. Fix: delete those two NS records in
+  the orderbox zone. Moving the domain to Cloudflare instead would change pannous.com itself: that zone points it at
+  Workers (AAAA 100::) and has no lambda record.
+- Publishing the OAuth client needs the TXT record on the client URL's host. warp.pannous.com is a CNAME to GitHub
+  Pages, so no TXT can go there: the client URL should be https://lambda.pannous.com (A record) with the TXT on
+  `lambda`, then visibility Public in the dashboard. Our API token can't read or edit OAuth clients.
