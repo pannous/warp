@@ -935,9 +935,8 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			let member = renamed(&member).or_else(|| renamed_call(&member)).unwrap_or_else(|| recurse(*member));
 			key(recurse(*receiver), Op::Dot, member)
 		}
-		// `x.count()` of an x of no known class, outside the classes (whose fields have declared types); a list mutation
-		// (`xs.pop()`) stays the list's
-		Node::Key(receiver, Op::Dot, member) if !in_class && matches!(receiver.drop_meta(), Node::Symbol(variable) if !methods.instances.contains(variable)) && !crate::analyzer::is_list_mutating_method(&leading_name(&member)) && (renamed(&member).is_some() || renamed_call(&member).is_some()) => {
+		// `x.count()`, `x.pop()` of an x of no known class, outside the classes (whose fields have declared types)
+		Node::Key(receiver, Op::Dot, member) if !in_class && matches!(receiver.drop_meta(), Node::Symbol(variable) if !methods.instances.contains(variable)) && (renamed(&member).is_some() || renamed_call(&member).is_some()) => {
 			let member = with_arguments(*member, recurse);
 			let renamed_member = renamed(&member).or_else(|| renamed_call(&member)).expect("guarded");
 			dispatched_by_class(&receiver, member, methods, renamed_member)

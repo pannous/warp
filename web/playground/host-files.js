@@ -584,6 +584,7 @@ addHostPart({
 			return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
 		};
 		return {
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
 			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
 			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)

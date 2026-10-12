@@ -273,6 +273,25 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 	typed_return(type_name, &Node::Key(head.clone(), *op, body.clone()))
 }
 
+/// `int age = 30` (C style) is `age: int = 30` (card bind-ignores), so every pass reads one form of a typed
+/// declaration: a handler's `age += 1` the main-level variable, `input{ bind: age }` a number field
+pub fn lower_prefixed_declarations(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, _) if prefixed_declaration(&items).is_some() => {
+			prefixed_declaration(&items).expect("guarded")
+		}
+		other => other.map_children(lower_prefixed_declarations),
+	}
+}
+
+fn prefixed_declaration(items: &[Node]) -> Option<Node> {
+	let [type_name, declaration] = items else { return None };
+	type_name.symbol_name().filter(|word| is_type_word(word))?;
+	let Node::Key(name, Op::Assign, value) = declaration.drop_meta() else { return None };
+	name.drop_meta().symbol_name()?;
+	Some(Node::Key(Box::new(key(name.drop_meta().clone(), Op::Colon, type_name.drop_meta().clone())), Op::Assign, value.clone()))
+}
+
 pub fn lower(node: Node) -> Node {
 	if let Some(definition) = return_typed_definition(&node) {
 		return definition;

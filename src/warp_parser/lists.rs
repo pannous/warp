@@ -403,7 +403,7 @@ fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
 			(true, Some(type_name), Some(element)) => {
 				items.next();
 				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else { unreachable!("checked") };
-				fields.push(Node::Key(name, op, Box::new(Node::Symbol(format!("{type_name} {} {element}", OF_WORD)))));
+				fields.push(Node::Key(name, op, Box::new(Node::Symbol(format!("{} {} {element}", super::noted_list_type_head(&type_name), OF_WORD)))));
 			}
 			_ => fields.push(item),
 		}

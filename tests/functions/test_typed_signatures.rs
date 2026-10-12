@@ -13,3 +13,10 @@ fn several_typed_parameters() {
 fn spaced_typed_signature() {
 	is!("f int x := x+1; f(2)", 3);
 }
+
+#[test]
+fn a_parameter_of_a_type() {
+	is!("f(x of int) := x+1; f(2)", 3);
+	is!("f(n of number, m of number) := n+m; f(1,2)", 3);
+	is!("f(s of text) := count(s); f(\"abc\")", 3);
+}

@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+// Reading a component's state from outside it (card web-outside-state): outside Counter, `Counter.count` is the list
+// of every Counter's count in page order, `Counter.count#1` the first one's. Run it in the playground and click.
+def Counter(start) {
+	count = start
+	div{ button{ on click { count += 1 } "+" } p{ "n " + count } }
+}
+div{
+	Counter(0)
+	Counter(10)
+	button{ on click { Counter.count#1 = 0 } "Reset the first" }
+	p{ "sum " + sum(Counter.count) }
+}

@@ -843,7 +843,7 @@ fn word_of(node: &Node) -> Option<&str> {
 /// `x:list of int=[1 2]` is the items `x:list`, `of`, `int=[1 2]`: the element words after `of`, and the node of the head word `list`
 fn of_list_type(items: &[Node], of_index: usize) -> Option<(&Node, Vec<&str>)> {
     let Node::Key(_, Op::Colon, head) = items.get(of_index.checked_sub(1)?)?.drop_meta() else { return None };
-    (word_of(head)? == LIST_TYPE_HEAD).then_some(())?;
+    (crate::warp_parser::list_type_head(word_of(head)?) == LIST_TYPE_HEAD).then_some(())?;
     let mut words = Vec::new();
     for item in &items[of_index + 1..] {
         match item.drop_meta() {
@@ -927,6 +927,7 @@ fn check_items(items: &[Node], positioned: &Node) {
     if let Some(of_index) = items.iter().position(|item| word_of(item) == Some(OF_WORD)) {
         if let Some((head, words)) = of_list_type(items, of_index) {
             set_position_of(head);
+            let _ = crate::warp_parser::noted_list_type_head(word_of(head).unwrap_or_default());
             hints::list_type(ListTypeStyle::Of, &words);
         }
     }
