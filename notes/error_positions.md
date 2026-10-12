@@ -6,7 +6,7 @@
   them in. The pipeline reports them via `diagnostic::first_located_error`, which takes the nearest enclosing
   position; `Node::first_error` strips it and is for "is there an error" checks.
 - **Run time** (card runtime-parser): every statement of a statement sequence (`emit_statement_sequence`) stores its
-  position, `line << 32 | column`, in the exported i64 global `trap_position`. A user function call stores the caller's
+  position, `line << 12 | column`, in the exported i32 global `trap_position`. A user function call stores the caller's
   statement again after it returns, because the callee's statements overwrote it. After a trap the runner reads it:
   `wasm_reader::with_trap_detail` natively, host.js `failed` → `"position"` → web.rs `run_outcome` in the playground.
   It reaches the trace as `trap position: <n>`, and `trap_error` appends ` at line:col`.

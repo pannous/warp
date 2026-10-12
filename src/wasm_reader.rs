@@ -462,7 +462,8 @@ pub(crate) fn with_trap_detail<T, R>(
 		let mut failure = anyhow::Error::from(failure);
 		let position = instance
 			.get_global(&mut *store, TRAP_POSITION)
-			.and_then(|global| global.get(&mut *store).i64())
+			.and_then(|global| global.get(&mut *store).i32())
+			.map(i64::from)
 			.and_then(trap_position_line);
 		if let Some(position) = position {
 			failure = failure.context(position);

@@ -180,14 +180,17 @@ const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant ex
 const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 /// The exported global where a program leaves the source position of the statement it runs, for its runtime errors
 pub const TRAP_POSITION: &str = "trap_position";
-/// How a trapped run carries that position into its error: `trap position: <line << 32 | column>`
+/// How a trapped run carries that position into its error: `trap position: <line << 12 | column>`
 pub const TRAP_POSITION_PREFIX: &str = "trap position: ";
 /// The global behind the export `trap_position`
 const TRAP_POSITION_GLOBAL: &str = "trap·position";
 
-/// A source position of the program as the i64 `trap_position` holds: the line above, the column below
-fn encoded_position(position: &crate::meta::LineInfo) -> i64 {
-	((position.line_nr as i64) << 32) | position.column as i64
+/// The bits of the column in `trap_position`, an i32 (smaller code than an i64 per statement): columns to 4095
+const COLUMN_BITS: u32 = 12;
+
+/// A source position of the program as the i32 `trap_position` holds: the line above, the column below
+fn encoded_position(position: &crate::meta::LineInfo) -> i32 {
+	((position.line_nr as i32) << COLUMN_BITS) | position.column.min((1 << COLUMN_BITS) - 1) as i32
 }
 
 /// The `trap position: …` line of a trapped run, from the value of `trap_position`; none before the first statement
@@ -206,8 +209,8 @@ fn trap_position(trace: &str) -> Option<crate::meta::LineInfo> {
 		.parse()
 		.ok()?;
 	Some(crate::meta::LineInfo {
-		line_nr: (encoded >> 32) as usize,
-		column: (encoded & 0xffff_ffff) as usize,
+		line_nr: (encoded >> COLUMN_BITS) as usize,
+		column: (encoded & ((1 << COLUMN_BITS) - 1)) as usize,
 		..Default::default()
 	})
 }
