@@ -989,6 +989,8 @@ impl WasmGcEmitter {
 				}
 				continue;
 			}
+			self.statement_position = crate::diagnostic::line_info(item);
+			self.emit_trap_position(func);
 			if Some(i) == last_statement {
 				emit(self, func, item);
 			} else if self.emit_loop_jump(func, item) { // `break`, `continue`: a jump, or its own error outside a loop

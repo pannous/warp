@@ -338,6 +338,35 @@ impl WasmGcEmitter {
 		func.instruction(&I::Drop);
 	}
 
+	/// Leave the position of the statement being emitted in the exported global `trap_position`, for a runtime error of
+	/// it to name: the runner reads it after the trap (wasm_reader::with_trap_detail). Again after a call, whose
+	/// statements left theirs. A module's statements leave none: a position in another file would be read as the program's
+	pub(super) fn emit_trap_position(&mut self, func: &mut Function) {
+		let Some(encoded) = self
+			.statement_position
+			.as_ref()
+			.filter(|position| position.file.is_none() && position.line_nr > 0)
+			.map(encoded_position)
+		else {
+			return;
+		};
+		let global = self.trap_position_global();
+		Self::emit_list(func, &[I::I64Const(encoded), I::GlobalSet(global)]);
+	}
+
+	/// The index of the exported global `trap_position`, declared on first use
+	fn trap_position_global(&mut self) -> u32 {
+		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_POSITION_GLOBAL) {
+			return *index;
+		}
+		let index = self.declare_mutable_global(Kind::Int);
+		self.exports.export(TRAP_POSITION, ExportKind::Global, index);
+		self.ctx
+			.user_globals
+			.insert(TRAP_POSITION_GLOBAL.to_string(), (index, Kind::Int));
+		index
+	}
+
 	/// The index of the exported global `trap_detail`, declared on first use
 	pub(super) fn trap_detail_global(&mut self) -> u32 {
 		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_DETAIL_GLOBAL) {

@@ -37,6 +37,7 @@ mod test_list_phrases;
 mod test_lone_words;
 mod test_lowered_error_text;
 mod test_open_range_slices; // card golf-open
+mod test_parser_runtime_positions; // card runtime-parser
 mod test_plain_hint_got_it; // card hints-dismissed
 mod test_quiet_hints;
 mod test_slash_comment_after_value;

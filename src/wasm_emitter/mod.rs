@@ -78,8 +78,6 @@ const DEBUG_MODULE: &str = ".cache/warp/last.wasm";
 const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "none"];
 /// wasmtime's words for an integer division or remainder by zero
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
-/// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
-const UNKNOWN_POSITION: &str = " at 0:0";
 /// Node locals every function has after its Int scratch: node_scratch and container_scratch (globals.rs)
 const NODE_SCRATCH_LOCALS: u32 = 2;
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
@@ -93,8 +91,6 @@ const MEMORY: MemoryType = MemoryType {
 	shared: false,
 	page_size_log2: None,
 };
-/// Between a diagnostic's message and its fix
-const FIX_SEPARATOR: &str = "; fix: ";
 /// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
 /// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
@@ -182,6 +178,39 @@ fn trap_detail(trace: &str) -> Option<String> {
 const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
 /// The global behind the export `trap_detail`: not a warp name, so no user global meets it
 const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
+/// The exported global where a program leaves the source position of the statement it runs, for its runtime errors
+pub const TRAP_POSITION: &str = "trap_position";
+/// How a trapped run carries that position into its error: `trap position: <line << 32 | column>`
+pub const TRAP_POSITION_PREFIX: &str = "trap position: ";
+/// The global behind the export `trap_position`
+const TRAP_POSITION_GLOBAL: &str = "trap·position";
+
+/// A source position of the program as the i64 `trap_position` holds: the line above, the column below
+fn encoded_position(position: &crate::meta::LineInfo) -> i64 {
+	((position.line_nr as i64) << 32) | position.column as i64
+}
+
+/// The `trap position: …` line of a trapped run, from the value of `trap_position`; none before the first statement
+pub fn trap_position_line(encoded: i64) -> Option<String> {
+	(encoded != 0).then(|| format!("{TRAP_POSITION_PREFIX}{encoded}"))
+}
+
+/// The position a trace's `trap position: …` line carries
+fn trap_position(trace: &str) -> Option<crate::meta::LineInfo> {
+	let encoded: i64 = trace
+		.split_once(TRAP_POSITION_PREFIX)?
+		.1
+		.lines()
+		.next()?
+		.trim()
+		.parse()
+		.ok()?;
+	Some(crate::meta::LineInfo {
+		line_nr: (encoded >> 32) as usize,
+		column: (encoded & 0xffff_ffff) as usize,
+		..Default::default()
+	})
+}
 
 const TERNARY_BRANCHES: &str = "`condition ? then : else`";
 const IF_THEN: &str = "`if condition then ...`";
@@ -336,6 +365,8 @@ pub struct WasmGcEmitter {
 	std_modules: std::collections::BTreeSet<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<crate::meta::LineInfo>,
+	/// The position of the statement being emitted, which `trap_position` holds while it runs (emit_trap_position)
+	statement_position: Option<crate::meta::LineInfo>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
@@ -418,6 +449,7 @@ impl WasmGcEmitter {
 			type_errors: Vec::new(),
 			std_modules: Default::default(),
 			source_position: None,
+			statement_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
 			typed_globals: HashMap::new(),
@@ -874,19 +906,9 @@ impl WasmGcEmitter {
 
 	/// An emitter error at the source position of the statement being emitted, unless it names one already
 	fn located(&self, message: String) -> String {
-		let Some(position) = &self.source_position else {
-			return message;
-		};
-		let at = format!(" at {}", position.place());
-		if message.contains(UNKNOWN_POSITION) {
-			return message.replacen(UNKNOWN_POSITION, &at, 1);
-		}
-		if crate::diagnostic::names_position(&message) {
-			return message;
-		}
-		match message.split_once(FIX_SEPARATOR) {
-			Some((what, fix)) => format!("{what}{at}{FIX_SEPARATOR}{fix}"),
-			None => format!("{message}{at}"),
+		match &self.source_position {
+			Some(position) => crate::diagnostic::located_at(message, position),
+			None => message,
 		}
 	}
 
@@ -2397,5 +2419,8 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.ends_with(ENGINE_DIVIDE_BY_ZERO)
 		.then(|| list_ops::runtime_error_message(list_ops::DIVIDE_BY_ZERO));
 	let message = runtime_error.or(exact_trap).or(divide_trap).unwrap_or(trap);
-	crate::node::error(&message)
+	match trap_position(trace) {
+		Some(position) => crate::node::error(&crate::diagnostic::located_at(message, &position)),
+		None => crate::node::error(&message),
+	}
 }
