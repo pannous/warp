@@ -76,17 +76,22 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(RAN_WITHOUT_ABORT, 2, Kind::Int), (ABORT_TO, 1, Kind::Int), (crate::uncertain::CERTAINLY, 1, Kind::Int), (crate::uncertain::POSSIBLY, 1, Kind::Int),
 ];
 
+/// The text builtins and the node words (node_api.rs), which are called the same way
+fn builtins() -> impl Iterator<Item = &'static (&'static str, usize, Kind)> {
+	TEXT_BUILTINS.iter().chain(super::node_api::NODE_BUILTINS.iter())
+}
+
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
-	TEXT_BUILTINS.iter().find(|(builtin, arity, _)| *builtin == name && *arity == arguments).map(|(_, _, kind)| *kind)
+	builtins().find(|(builtin, arity, _)| *builtin == name && *arity == arguments).map(|(_, _, kind)| *kind)
 }
 
 /// The numbers of arguments a text builtin takes, empty for any other name
 pub fn text_builtin_arities(name: &str) -> Vec<usize> {
-	TEXT_BUILTINS.iter().filter(|(builtin, _, _)| *builtin == name).map(|(_, arity, _)| *arity).collect()
+	builtins().filter(|(builtin, _, _)| *builtin == name).map(|(_, arity, _)| *arity).collect()
 }
 
 pub fn is_text_builtin(name: &str) -> bool {
-	TEXT_BUILTINS.iter().any(|(builtin, _, _)| *builtin == name)
+	builtins().any(|(builtin, _, _)| *builtin == name)
 }
 
 /// `+` of two texts or characters is a text; anything else joins a text in its text form, as str() writes it
@@ -100,6 +105,7 @@ pub fn concatenates(left: Kind, right: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
+	super::node_api::add_dependencies(required);
 	// `catch e`: the caught error becomes an Error through error_of
 	if required.contains(crate::wasm_emitter::CAUGHT_ERROR) {
 		required.insert(ERROR_OF);
@@ -297,6 +303,9 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, code);
 				func.instruction(&I::I32WrapI64);
 				self.emit_call(func, "new_codepoint");
+			}
+			_ if super::node_api::NODE_BUILTINS.iter().any(|(builtin, arity, _)| *builtin == name && *arity == arguments.len()) => {
+				self.emit_node_builtin(func, name, arguments);
 			}
 			_ => unreachable!("text_builtin_kind admits {name} with {} arguments", arguments.len()),
 		}

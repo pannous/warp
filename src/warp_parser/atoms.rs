@@ -358,7 +358,7 @@ impl WarpParser {
 			let word: String = self.chars[word_start..word_end].iter().collect();
 			match word.as_str() {
 				END_KEYWORD => open -= 1,
-				opener if openers.contains(&opener) => open += 1,
+				opener if openers.contains(&opener) && !is_endless_definition(&self.chars, word_end) => open += 1,
 				_ => {}
 			}
 			if open == 0 {
@@ -1429,6 +1429,19 @@ fn without_end_lines(body: Node) -> Node {
 
 /// The spans of the words of the code from `start` on: an `end` in a text or a comment is no word of the code
 /// (`// … would end it`)
+/// Ruby's endless method `def twice = x * 2`, warp's `def twice := x * 2` (after the `def` at `def_end`): its name,
+/// parameters and `=` on one line, closed by no `end`
+fn is_endless_definition(chars: &[char], def_end: usize) -> bool {
+	let line: String = chars[def_end..].iter().take_while(|&&ch| ch != '\n').collect();
+	let head = line.trim_start().trim_start_matches(|ch: char| is_identifier_char(ch) || ch == '?' || ch == '!').trim_start();
+	let after_parameters = match head.strip_prefix('(') {
+		Some(parameters) => parameters.find(')').map_or("", |close| &parameters[close + 1..]),
+		None => head,
+	};
+	let after_parameters = after_parameters.trim_start();
+	after_parameters.starts_with(":=") || (after_parameters.starts_with('=') && !after_parameters.starts_with("==") && !after_parameters.starts_with("=>"))
+}
+
 fn code_words(chars: &[char], start: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
 	let mut position = start;
 	std::iter::from_fn(move || {

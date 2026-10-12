@@ -2197,6 +2197,12 @@ impl WasmGcEmitter {
 					}
 					self.emit_uncertain_field_lookup(func, held, &name);
 					self.emit_time_field_lookup(func, held, &name);
+					// a key's key, value, op and name, a list's bracket (node_api.rs)
+					if let Some(part) = super::node_api::node_part(&name) {
+						Self::emit_list(func, &[I::LocalGet(held), I32Const(part)]);
+						self.emit_call(func, super::node_api::NODE_PART);
+						func.instruction(&I::BrOnNonNull(0));
+					}
 					if name == MESSAGE_FIELD {
 						Self::emit_list(func, &[I::LocalGet(held)]);
 						self.emit_call(func, ERROR_MESSAGE);

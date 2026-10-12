@@ -2045,6 +2045,9 @@ PASSED:
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
   ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
   ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
+  ✓ node::test_node_api::a_key_shows_its_parts
+  ✓ node::test_node_api::a_list_shows_its_bracket
+  ✓ node::test_node_api::nodes_are_built_from_parts
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -3036,6 +3039,8 @@ PASSED:
   ✓ programs::test_sound_engine::one_voice_over_the_cap_steals_the_oldest
   ✓ programs::test_sound_engine::sounds_back_to_back_follow_to_the_sample
   ✓ programs::test_sound_engine::stop_drops_one_sound_or_all
+  ✓ programs::test_sound_fades::a_headless_fade_waits_for_no_clock
+  ✓ programs::test_sound_fades::fade_sound_of_one_handle_leaves_the_others
   ✓ programs::test_sound_fades::fade_sound_ramps_a_sound_down_in_the_render
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
@@ -3476,6 +3481,7 @@ PASSED:
   ✓ types::test_class_forms_ported::a_swift_struct_with_a_mutating_method
   ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
   ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
+  ✓ types::test_class_forms_ported::ruby_endless_methods
   ✓ types::test_class_interfaces::a_class_method_satisfies_a_trait_operation
   ✓ types::test_class_interfaces::interfaces_as_other_languages_write_them
   ✓ types::test_class_json::a_named_instance_from_json_is_of_its_class
@@ -4182,9 +4188,12 @@ PASSED:
   ✓ web::test_components::a_bound_field_in_a_component_binds_its_instance
   ✓ web::test_components::a_component_handler_changes_state_outside_it
   ✓ web::test_components::a_component_is_a_function_returning_markup
+  ✓ web::test_components::a_components_plural_names_its_instances
   ✓ web::test_components::a_handler_outside_a_component_reads_its_state
   ✓ web::test_components::a_trailing_block_fills_a_function_parameter
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
+  ✓ web::test_components::keyed_component_state_survives_a_removal
+  ✓ web::test_components::keyed_component_state_survives_reordering
   ✓ web::test_components::on_mount_runs_once_per_new_instance
   ✓ web::test_components::the_block_after_the_call_is_the_children
   ✓ web::test_css_transitions::a_css_transition_is_the_inline_style
@@ -4388,6 +4397,7 @@ PASSED:
   ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_wagi::each_route_answers_as_wagi
+  ✓ web::test_warp_serve::a_program_of_routes_alone_has_no_page
   ✓ web::test_warp_serve::a_program_without_serve_is_served_with_its_server_functions_and_routes
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
   ✓ web::test_web_apis::notify_is_a_host_word
@@ -4832,7 +4842,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_fades::fade_sound_of_one_handle_leaves_the_others
 
 SUMMARY:
-10 ignored, 4829 passed, 1 failed, 4830 total tested
+10 ignored, 4839 passed, 0 failed, 4839 total tested
