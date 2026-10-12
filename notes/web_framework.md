@@ -45,6 +45,9 @@ Each step is useful on its own and is what the next ones stand on.
   body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/serve.rs
   with_answer_headers makes them the host word response_header, `status` as the CGI header Status; natively
   web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/route_headers.warp).
+  A WAGI build (`warp build --wagi`, card wagi-build) has no host: there they are lib/wagi.warp wagi_header calls,
+  which globals collect for the CGI answer; a set Content-Type replaces the answer's own, a failing route answers 500
+  whatever status it set (tests/web/test_wagi_headers.rs, probes/hosting/wagi_routes.sh /teapot).
 - **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a warp value (arrays ↔ lists, objects ↔
   maps); a status of 400 or more is an Error value carrying the status and the body text.
 - **Typed RPC**: `server def users(min_age) {…}` in the same program. The server build exposes it as
@@ -378,8 +381,12 @@ Each step is useful on its own and is what the next ones stand on.
   imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
   steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
-  a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
-  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it; card web-host-parts-std).
+  a part gives selects it. std modules (2026-10-12, card web-host-parts-std): the emitter names the std modules a
+  program calls through std_pure/std_io in the custom section warp.std_modules (`*` for one named at run time: every
+  part), host_parts.rs reads them as imports of that pseudo-module. host-sound.js (sound_samples, std sound and midi,
+  17.7 KB) is split from host-files.js (41.6 → 24.2 KB), so `stored` values ship no sound code (tests/web/test_host_parts_std.rs).
+  Still coarse: json ships the hashes (host-hashes.js, 5.5 KB) and tables stay in host-files.js: a tables part would
+  give no host word, which test_host_parts each_part_is_chosen_by_the_words_it_gives allows only for host-hashes.js.
 - Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
   probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
   functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
@@ -388,10 +395,14 @@ Each step is useful on its own and is what the next ones stand on.
   instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
   instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
   module once. Without wasm-split on PATH the site ships one module with a note; a dev site never splits.
-  Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
-  its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
-  functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
-  calls them before the route loads (card web-split-helpers).
+  User functions only one route reaches move too (2026-10-12, card web-split-helpers, tests/web/test_route_helpers.rs):
+  the emitter lists them in the custom section `warp.user_functions` (host.rs USER_FUNCTIONS_SECTION); they are
+  exported only for tasks and other modules, so route_split.rs leaves them out of the call graph's roots, and
+  wasm-split keeps each export as a `trampoline_<name>` thunk through the table. A module spawning tasks (task_spawn,
+  task_spawn_values) keeps them all: a task's Worker calls one by name in a fresh instance without the route's module.
+  wasm-split runs with --debuginfo, so app.wasm and the route modules keep their name sections.
+  Limits: the runtime the module exports stays in app.wasm; data segments stay too. A user function the compiler folded
+  away (fib(15) → "610") stays as dead code in app.wasm: nothing drops unreached user functions of a site yet.
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
@@ -557,7 +568,9 @@ Each step is useful on its own and is what the next ones stand on.
 - Browser (card dev-opens-browser): `warp dev` from a terminal opens its page in the default browser
   (dev_server::serve_and_open, `open` / `xdg-open` / `start`); piped, under WARP_NO_WINDOW or CI it only prints the
   address, and `dev_server::serve` (tests) never opens. Test warp_dev_opens_no_browser_when_piped.
-- Left: the playground editor's error marks in the overlay (card web-dev-marks).
+- Error marks (card web-dev-marks, 2026-10-12): dev.js devErrorPieces turns the failure's excerpt (`  2 | source` over
+  its carets) into the source line with the failing word underlined as playground.css .marked-error, the message on
+  hover (tests/web/test_dev_marks.rs runs it under node). Warnings of a good build are not shown.
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
 - Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of

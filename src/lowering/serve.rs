@@ -56,6 +56,8 @@ const NAME_DOT: &str = "_dot_";
 /// What a WAGI build (`warp build --wagi`, lib/wagi.warp, which the build uses) ends in: the routes' answer to the request
 const WAGI_ANSWER: &str =
 	"try { wagi_answer(page·submitted(wagi_request())) } catch error { wagi_failed(error.message) }";
+/// A WAGI build's routes set their answer's headers in lib/wagi.warp, not through the host (no host there, only WASI)
+const WAGI_HEADER: &str = "wagi_header";
 
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
@@ -326,6 +328,7 @@ fn with_route_data(program: Node) -> Node {
 	lowered.splice(first_route..first_route, data_functions);
 	// the shipped page asks the server, so the server data's definitions stay on the server
 	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
+		lowered.retain(|statement| !changes_server_data_only(statement, &reads_server_data));
 		let page_reads = |name: &String| {
 			lowered
 				.iter()
@@ -350,6 +353,21 @@ fn with_route_data(program: Node) -> Node {
 			.collect();
 	}
 	Node::List(lowered, bracket, separator)
+}
+
+/// A main-level statement that only changes server data (`if count(users) == 0 { users.add(…) }`): it defines nothing
+/// and shows nothing, so it runs on the server, which runs main, and the shipped page leaves it out (card
+/// web-page-server-data); in the browser it would open a table of the page's own
+fn changes_server_data_only(statement: &Node, reads_server_data: &dyn Fn(&Node) -> bool) -> bool {
+	let mut shows = false;
+	statement.visit(&mut |node| shows |= crate::markup::is_markup(node));
+	reads_server_data(statement)
+		&& !shows
+		&& server_variable(statement).is_none()
+		&& server_definition(statement).is_none()
+		&& !is_serving(statement)
+		&& !crate::routes::is_route(statement)
+		&& crate::event_signals::main_level_variables(std::slice::from_ref(statement)).is_empty()
 }
 
 /// `stored todos: [Todo]` or `todos: [Todo] = database.todos`: the class of the table's rows
@@ -723,20 +741,21 @@ fn route_function(name: &str, body: Node) -> Node {
 /// In a route's body `header "name" "value"` and `status 418` are response_header calls, which the route's HTTP answer
 /// carries (card web-route-header; `status` is the CGI header Status); `header{…}` stays the markup tag
 fn with_answer_headers(node: Node) -> Node {
+	let setter = match crate::pipeline::is_for_wagi() {
+		true => WAGI_HEADER,
+		false => crate::host::RESPONSE_HEADER,
+	};
 	let is_operand = |item: &Node| !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
 	match node.drop_meta() {
 		Node::List(items, Bracket::None | Bracket::Round, _)
 			if items.len() == 3 && word(&items[0]) == HEADER_WORD && items[1..].iter().all(is_operand) =>
 		{
-			call(crate::host::RESPONSE_HEADER, items[1..].to_vec())
+			call(setter, items[1..].to_vec())
 		}
 		Node::List(items, Bracket::None | Bracket::Round, _)
 			if items.len() == 2 && word(&items[0]) == STATUS_WORD && is_operand(&items[1]) =>
 		{
-			call(
-				crate::host::RESPONSE_HEADER,
-				vec![text(crate::host::STATUS_HEADER), items[1].clone()],
-			)
+			call(setter, vec![text(crate::host::STATUS_HEADER), items[1].clone()])
 		}
 		_ => node.map_children(with_answer_headers),
 	}

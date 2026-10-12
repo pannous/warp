@@ -4,3 +4,8 @@ get "/" { "hello from the edge" }
 get "/fib/:n:int" { {n: n, fib: fib(n)} }
 get "/list" { [1, 2.5, "a", yes, [3]] }
 get "/nested" { {name: "x", tags: ["a", "b"], inner: {k: no}} }
+get "/teapot" {
+	status 418
+	header "X-Warp" "yes"
+	"short and stout"
+}
