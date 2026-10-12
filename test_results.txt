@@ -914,6 +914,7 @@ PASSED:
   ✓ ffi::test_web_idl::the_dom_is_typed
   ✓ ffi::test_web_idl::the_global_object_is_typed
   ✓ ffi::test_web_idl::what_the_interface_declares_runs
+  ✓ foreign::tests::json_conversion_keeps_nested_values_and_node_layout
   ✓ function::tests::test_arg
   ✓ function::tests::test_function_builder
   ✓ function::tests::test_function_host
@@ -3737,6 +3738,12 @@ PASSED:
   ✓ types::test_hex_int::print_shows_hex
   ✓ types::test_hex_word::hex_literals_are_written_0x
   ✓ types::test_hex_word::hex_word_is_the_hex_call
+  ✓ types::test_index_position::a_missing_position_is_out_of_range
+  ✓ types::test_index_position::a_position_meets_brackets
+  ✓ types::test_index_position::an_index_meets_the_hash
+  ✓ types::test_index_position::arithmetic_keeps_the_dimension
+  ✓ types::test_index_position::declared_positions_and_indexes
+  ✓ types::test_index_position::insert_at_takes_an_index
   ✓ types::test_inline_unions::a_covered_part_is_dropped
   ✓ types::test_inline_unions::a_part_that_is_no_builtin_type_is_refused
   ✓ types::test_inline_unions::an_inline_union_holds_either_kind
@@ -4304,6 +4311,10 @@ PASSED:
   ✓ web::test_completion_words::claude_reads_the_whole_program_unless_it_is_too_long
   ✓ web::test_completion_words::enter_after_a_whole_word_is_a_new_line
   ✓ web::test_completion_words::the_programs_own_words_come_first
+  ✓ web::test_component_holes::a_hole_is_its_element_of_the_rendering
+  ✓ web::test_component_holes::an_instances_lone_text_is_a_text_hole
+  ✓ web::test_component_holes::each_instance_binds_its_own_holes
+  ✓ web::test_component_holes::the_hole_readers_find_elements_and_texts_by_path
   ✓ web::test_components::a_bound_field_in_a_component_binds_its_instance
   ✓ web::test_components::a_component_handler_changes_state_outside_it
   ✓ web::test_components::a_component_is_a_function_returning_markup
@@ -4988,4 +4999,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4983 passed, 0 failed, 4983 total tested
+10 ignored, 4994 passed, 0 failed, 4994 total tested

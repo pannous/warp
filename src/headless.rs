@@ -279,7 +279,7 @@ mod native {
 
 		/// Runs the handler `on·click·1·node` with `[detail]`, then reads page·value
 		pub(super) fn handled(&mut self, page_event: &str, detail: &Value) -> Result<Node, String> {
-			let arguments = Node::List(vec![node_of_json(detail)], Bracket::Square, Separator::None);
+			let arguments = Node::List(vec![crate::foreign::node_of(detail)], Bracket::Square, Separator::None);
 			self.call(&format!("{HANDLER_PREFIX}{page_event}{NODE_SUFFIX}"), Some(arguments))?;
 			self.call(PAGE_VALUE, None)
 		}
@@ -316,27 +316,6 @@ mod native {
 			builders
 				.build(&value, &mut self.store.as_context_mut())
 				.map_err(|problem| problem.to_string())
-		}
-	}
-
-	/// An event's detail as the page's treeOfPlain gives it: an object of texts and numbers, a boolean as 1 or 0
-	fn node_of_json(value: &Value) -> Node {
-		match value {
-			Value::Object(fields) => Node::List(
-				fields
-					.iter()
-					.map(|(name, value)| Node::key(name, node_of_json(value)))
-					.collect(),
-				Bracket::Curly,
-				Separator::None,
-			),
-			Value::String(text) => Node::Text(text.clone()),
-			Value::Bool(truth) => Node::int(*truth as i64),
-			Value::Number(number) => number
-				.as_i64()
-				.map(Node::int)
-				.unwrap_or_else(|| Node::from(number.as_f64().unwrap_or_default())),
-			_ => Node::Empty,
 		}
 	}
 }

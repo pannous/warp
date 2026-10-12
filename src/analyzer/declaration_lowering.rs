@@ -632,13 +632,13 @@ const POPPED_REST_CALL: &str = "popped_rest";
 const CLEAR_METHOD: &str = "clear";
 const CLEARED_CALL: &str = "cleared";
 pub(super) const POP_TEMPORARY: &str = "pop_tmp";
-pub(super) const INSERT_METHOD: &str = "insert";
+pub(crate) const INSERT_METHOD: &str = "insert";
 
 /// Pseudo-call `list_insert_at(list, position, value)`: the list with value inserted at the 0-based position
 pub const INSERT_AT_CALL: &str = "list_insert_at";
 /// Pseudo-call `insert_in_either_order(list, a, b)`: `xs.insert(a, b)` before the kinds decide which is the position
 pub const INSERT_EITHER_CALL: &str = "insert_in_either_order";
-pub(super) const AT_WORD: &str = "at";
+pub(crate) const AT_WORD: &str = "at";
 
 /// The name of a constant field key (`p.x`, `p["x"]`) when it is spelled with letters, digits, `_` and `-` (`phone-number`, P164):
 /// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.

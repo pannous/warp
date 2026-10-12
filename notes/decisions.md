@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- key-if (warp-markup): contextual key names. Inside `on key {…}` a bare `key` reads event.key (like bare fields
+  read self, P115; a program variable `key` wins), and named keys compare as words: Escape/ESC, Enter/RETURN/ENTER,
+  Tab, Space, Backspace, ArrowUp…/UP DOWN LEFT RIGHT, F1–F12: `on key { if key == ESC { exit } }`. Letters stay
+  text (`key == "a"`); no `keys.` namespace. Today both were silently false (unbound symbols).
 - Soundness review (Interviewer, all of this file re-read 2026-10-12; each case verified on main 64ff51cf5):
   - approx-zero (reopens D8): `≈` gets an absolute floor near zero, |a-b| ≤ max(1e-9·max(|a|,|b|), 1e-12) (numpy
     allclose style); `sin(3.141592653589793) ≈ 0` and `1e-20 ≈ 0` are yes (were no); `tolerance = …` still overrides.
@@ -30,6 +34,12 @@ notes/open_decisions.md.
     without commas (`[a -1, 2]` stays [4, 2]) and never inside an index (`xs[a -2]` subtracts); a comma-less
     `[1 -1]` no longer warns. `xs.has(x)` gives yes/no like `in`. binary-int (user): `5 as binary` shows 0b101,
     `0b101 + 1` is 6.
+  - position-arithmetic (user, refines index-position): arithmetic keeps the dimension, as with size_t or a
+    pointer: position ± int stays a position, index ± int an index, so with xs = [10 20 30]
+    `xs[xs.index_of(10) + 1]` is 20, the next item; position − position is a plain count; position + position is
+    an error. Defaults kept (warp-semantics, notes/index_position.md): a position meeting `[ ]` and an index
+    meeting `#` convert silently; both print as their plain number (index_of 1-based, argmax 0-based); a missing
+    element is an error, never -1; `index`/`position` bound as a variable name stop being type words there.
 - return-as (user, via warp-supervisor): return types are spelled `def f(x) as int or text`; `->` still works with
   a hint and an "I meant" fix toward `as`; no `returns` keyword ("nah") (warp-dispatch).
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`

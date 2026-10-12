@@ -176,3 +176,45 @@ html_escaped(text:any) := replace(replace(replace(replace(text, "&", "&amp;"), "
 
 // `js{…}` is the element script
 html_tag(name:any) := if name == "js" then "script" else name
+
+// The playground reads a component's holes from the page's rendering (card web-fine-components,
+// lowering/component_state.rs): the element at `path`, its element indices from the root down as the page's
+// `children` count them, and the text after `after` of its child elements
+html_element_at(value:any, path:any) := {
+	var element = value
+	for index in path { element = html_child_elements(element)#(index + 1) }
+	element
+}
+
+html_text_at(value:any, path:any, after:any) := {
+	let element = html_element_at(value, path)
+	var before = 0
+	for item in html_child_items(element) {
+		let shown = html_elements_in(item)
+		if before == after and #shown == 0 { return item }
+		before = before + #shown
+	}
+	ø
+}
+
+html_child_elements(element:any) := {
+	var children = []
+	for item in html_child_items(element) { for child in html_elements_in(item) { children.add(child) } }
+	children
+}
+
+// an element's items that are no attributes
+html_child_items(element:any) := {
+	let tag = keys(element)#1
+	var items = []
+	for item in html_items(values(element)#1) { if not html_is_attribute(item, tag) { items.add(item) } }
+	items
+}
+
+// the elements an item shows: itself, or those of a group
+html_elements_in(item:any) := {
+	if html_is_element(item) { return [item] }
+	var elements = []
+	if html_is_group(item) { for part in item { for child in html_elements_in(part) { elements.add(child) } } }
+	elements
+}
