@@ -75,9 +75,12 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count, typed_first: typed, converts: false });
 		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count), typed_first: arity.typed_first && typed, converts: false };
 	}
-	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter
+	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter.
+	// Next to a comparison it follows the user functions' rule: its value is typed as the type itself, `int 3 == 3` is
+	// `(int 3) == 3` like `f(x: int)`; a truth type (`bool 3 == 3`) takes anything and is ambiguous like `same(x) := x`
 	for name in type_calls_used(&program) {
-		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: false, converts: true });
+		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
+		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true });
 	}
 	if arities.is_empty() {
 		return program;
@@ -141,7 +144,7 @@ struct Arity {
 	most: usize,
 	/// Every definition's first parameter declares a type that is no truth value (`x: int`, `square number`)
 	typed_first: bool,
-	/// A built-in type converting its value (`int 3.7`, `hex 255`): nests like a function, its comparisons keep their reading
+	/// A built-in type converting its value (`int 3.7`, `hex 255`): nests like a function, compares like one
 	converts: bool,
 }
 
@@ -219,7 +222,7 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
 		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some_and(|takes| !takes.converts) && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) => {
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) => {
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
 			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
 			if !arity(&head).expect("guarded").typed_first {
@@ -230,7 +233,7 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		}
 		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
 		// ambiguous when the body accepts anything (`f := print it`)
-		Node::Key(left, op, right) if op.is_comparison() && matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first && !takes.converts))) => {
+		Node::Key(left, op, right) if op.is_comparison() && matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) => {
 			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
 			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
 		}

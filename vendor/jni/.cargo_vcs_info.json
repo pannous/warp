@@ -1,6 +1,6 @@
 {
   "git": {
-    "sha1": "09a5911358ffa846b5c85451c050a0e64669e863"
+    "sha1": "5ae9458a4ec44c5318f37ddc7569c1d4ae8a69e7"
   },
-  "path_in_vcs": ""
+  "path_in_vcs": "crates/jni"
 }

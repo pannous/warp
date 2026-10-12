@@ -1,5 +1,7 @@
 # Signals as first-class citizens (investigation 2026-10-06, branch signals)
 
+Roadmap card: signals (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 User: "investigate how we could make signals first-class citizens in Warp". Spec: wiki/signal.md, wiki/thread.md,
 wiki/charged.md. Board card signals-first.
 
@@ -192,7 +194,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
      variable of `for s in xs {…}` over its parameter xs takes a list of signals; the variables of a list literal
      passed there (`watch_all([a, b])`, or `watched = [a, b]; watch_all(watched)`) become signals and the list holds
      the signals themselves (the one place a list keeps no copy).
-   - Open: escaping into an object field (objects copy values, so nothing there keeps the cell yet); `on change p.age` inside a function on a parameter p (only plain names subscribe);
+   - Open: escaping into an object field (objects copy values, so nothing there keeps the cell yet; card signal-field-escape); `on change p.age` inside a function on a parameter p (only plain names subscribe; card signal-param-field);
      reflecting over listeners (g-3HmY).
 6. **Signals across tasks** (done): events raised in tasks reach `on` handlers of the starting thread (b8da08417:
    task_inside / signal_send, run at the program's next await, loop start or the end of the run;
@@ -210,7 +212,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    handler takes `event` only when it reads it. The worker keeps the run (host.js runPageEvent), the page sends clicks
    on the output (`{x, y}`, a canvas pixel on a canvas) and keys typed there (`{key}`); the handler's prints and
    paintings appear, and the last line, when it is a name, is the output binding `page·value()` shown anew after each
-   handler (else the handler's value). An unhandled raise stays the exception (P110), no CustomEvent yet. Tour
+   handler (else the handler's value). An unhandled raise stays the exception (P110), no CustomEvent yet (card page-custom-event). Tour
    example `events`; tests/control/test_page_events.rs). `broadcast` / channel listeners: done natively (notes/system_signals.md, Channels); still open
    (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.
 

@@ -1,16 +1,19 @@
 //! A crash of a warp built from a source checkout files a card on the project's to-do board (`todo add`, column Now),
 //! so crashes met by whoever runs warp reach the board, not only those of tests. Each panic location and message files
-//! one card ever (listed in data/crash_cards.txt of that checkout). Builds without the checkout (brew, releases)
-//! and CI runs file nothing; WARP_CRASH_CARDS=0 (set by tests/queue.sh) turns it off.
+//! one card ever, across all checkouts and worktrees (listed in ~/.cache/warp/crash_cards.txt; the board's
+//! urgent-card-watch also folds a card into an open one with the same fingerprint). The card names the checkout and
+//! branch the crashing build came from, so a crash in a worker's worktree build goes to that worker. Builds without
+//! the checkout (brew, releases) and CI runs file nothing; WARP_CRASH_CARDS=0 (set by tests/queue.sh) turns it off.
 
 use std::io::Write;
 use std::panic::PanicHookInfo;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 const SOURCE_CHECKOUT: &str = env!("CARGO_MANIFEST_DIR");
-const FILED_LIST: &str = "data/crash_cards.txt";
+/// Below $HOME: shared by the user's checkout and every worktree, which re-filed the same panic each (2026-10-12)
+const FILED_LIST: &str = ".cache/warp/crash_cards.txt";
 const OFF_SWITCH: &str = "WARP_CRASH_CARDS";
 const BOARD_COLUMN: &str = "Now";
 const TITLE_CHARS: usize = 110;
@@ -43,13 +46,17 @@ fn file_card(info: &PanicHookInfo) {
 	let location = first_warp_frame(&backtrace).unwrap_or_else(panic_place);
 	// without the line: an edit above the crash moves it, the crash stays the same
 	let fingerprint = format!("{} {headline}", location.split(" at ").next().unwrap_or_default());
-	let filed_list = checkout.join(FILED_LIST);
+	let filed_list = filed_list(checkout);
 	if std::fs::read_to_string(&filed_list).unwrap_or_default().lines().any(|line| line == fingerprint) {
-		return eprintln!("warp: this crash has a card on the to-do board already ({FILED_LIST})");
+		return eprintln!("warp: this crash has a card on the to-do board already ({})", filed_list.display());
 	}
 	let title: String = format!("crash in {location}: {headline}").chars().take(TITLE_CHARS).collect();
 	let command_line = std::env::args().collect::<Vec<_>>().join(" ");
-	let body = format!("Filed by warp's panic hook (src/crash_card.rs).\n\n`{command_line}`\n\n```\n{message}\n```\n\n```\n{backtrace}\n```");
+	// todo urgent reads the Fingerprint and Build lines (~/dev/bin/todo, CRASH_FINGERPRINT and CRASH_BUILD)
+	let body = format!(
+		"Filed by warp's panic hook (src/crash_card.rs).\n\nFingerprint: `{fingerprint}`\nBuild: `{SOURCE_CHECKOUT}` on branch `{}`\n\n`{command_line}`\n\n```\n{message}\n```\n\n```\n{backtrace}\n```",
+		current_branch(checkout)
+	);
 	let mut todo = Command::new("todo");
 	todo.args(["add", &title, BOARD_COLUMN, "-b", &body]).current_dir(checkout).stdin(Stdio::null()).stdout(Stdio::null());
 	// its own process group: it outlives this process, which may abort right after the hook
@@ -62,6 +69,22 @@ fn file_card(info: &PanicHookInfo) {
 		}
 		Err(failure) => eprintln!("warp: could not file a card for this crash, `todo` failed: {failure}"),
 	}
+}
+
+fn filed_list(checkout: &Path) -> PathBuf {
+	std::env::var_os("HOME").map_or_else(|| checkout.join("data/crash_cards.txt"), |home| Path::new(&home).join(FILED_LIST))
+}
+
+/// The branch checked out where this warp was built (a worker's worktree, or main in the user's checkout)
+fn current_branch(checkout: &Path) -> String {
+	Command::new("git")
+		.args(["branch", "--show-current"])
+		.current_dir(checkout)
+		.stdin(Stdio::null())
+		.stderr(Stdio::null())
+		.output()
+		.map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+		.unwrap_or_default()
 }
 
 /// The innermost frame in warp's own code, `name at src/file.rs:line`: a panic inside std (a failed print) names its

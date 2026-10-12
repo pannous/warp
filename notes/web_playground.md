@@ -1,5 +1,7 @@
 # Browser playground (web/playground)
 
+Roadmap card: playground (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 Run it: `web/playground/build.sh && python3 -m http.server 8000` in the repository root, then open
 http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or a samples/ file).
 Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's,
@@ -210,7 +212,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   trickle_server.py [--stall] + progress.sh (warp.wasm at 400 KB/s, or stopping after 1 MB: the note at 30 s).
 - The hang caught (2026-10-09, verify run 37895933962, live site, Firefox): isolated and service-worker controlled, but
   playground.state() said worker "not started": worker.js never posted a single message, nothing in the console; the
-  run queued behind it. Root cause (a Worker spawned under coi-serviceworker in Firefox that never runs) still open.
+  run queued behind it. Root cause (a Worker spawned under coi-serviceworker in Firefox that never runs) still open (card firefox-coi-worker).
   Now playground.js restarts a starting worker silent for STALLED_START_MS (60 s; every message restarts the clock, so a
   slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
   loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of

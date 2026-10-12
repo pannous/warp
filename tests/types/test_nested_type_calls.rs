@@ -34,3 +34,19 @@ fn a_braceless_type_call_nests_like_a_user_function() {
 fn a_type_named_by_the_program_keeps_its_meaning() {
 	is!("hex(x) := x * 2; text hex 4", "8");
 }
+
+#[test]
+fn a_braceless_type_call_compares_like_a_user_function() {
+	is!("int 3 == 3", true);
+	is!("int 3.7 == 3", true);
+	is!("hex 255 == 255", true);
+	is!("int 3 == 4", false);
+	is!("f(x) := x*2; f 3 == 6", true);
+	same("int 3.7 == 3", "(int 3.7) == 3");
+}
+
+#[test]
+fn a_braceless_truth_type_call_next_to_a_comparison_is_ambiguous_like_an_untyped_function() {
+	crate::common::fails_with("same(x) := x; same 3 == 9", "write (same 3) == 9 or same(3 == 9)");
+	crate::common::fails_with("bool 3 == 9", "write (bool 3) == 9 or bool(3 == 9)");
+}

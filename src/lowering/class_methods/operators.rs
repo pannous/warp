@@ -402,6 +402,6 @@ pub(super) fn is_call_of(call: &Node, method: &str) -> bool {
 
 /// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
 /// instance
-pub(super) fn is_library_method(name: &str) -> bool {
+pub(crate) fn is_library_method(name: &str) -> bool {
 	crate::analyzer::is_list_mutating_method(name) || crate::library_words::is_library_word(name) || crate::analyzer::is_counting_property(name)
 }

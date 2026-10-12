@@ -78,8 +78,10 @@ impl WarpParser {
 				})
 			}
 			'"' | '\'' | '«' | '`' => self.parse_string(),
+			'#' if let Some(length) = self.css_color_length() => Node::Text(self.take_chars(length)),
 			// `://warp.pannous.com/lib/libc.h`: a URL taking the page's protocol (card pannous-com, with_default_scheme)
 			':' if self.url_follows() => self.parse_url(String::new()),
+			':' if self.at_pseudo_class_selector() => self.symbol_after(1, |name| Node::Symbol(format!(":{name}"))),
 			'.' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
@@ -1271,7 +1273,9 @@ impl WarpParser {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
-				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, op == Op::Colon && symbol == STYLE_WORD);
+				// a rule `p { … }` of a style sheet is still the sheet
+				let in_style_sheet = op == Op::Colon && (symbol == STYLE_WORD || self.in_style_sheet);
+				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, in_style_sheet);
 				self.tag_block = op == Op::Colon;
 				let mut blocks = vec![self.parse_bracketed('{')];
 				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`

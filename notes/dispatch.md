@@ -42,3 +42,46 @@ probes/agent_types.sh.
 src/lowering/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
 library_words, so `x = render "x" as pdf; x.body` reads a field: traits::InstanceTypes knows the result shape of a user
 function from its body.
+
+# Methods: dispatch on the first argument's class (card dispatch, user 2026-10-12)
+
+User: "a more Julia-like approach where we just have functions and if the function takes the class as argument, then
+it's kind of a class method. sort(list) <=> list.sort(). Make this a very general concept."
+
+A function name is a generic function, a set of methods told apart by the class of their first argument.
+`sort(d:Deck) := …` adds a method to sort; sort of lists and texts stays the library's. `x.f(args)` is `f(x, args)`.
+```warp
+class Deck{n:int}; sort(d:Deck) := d.n
+Deck(3).sort()     // 3
+[3, 1].sort()      // [1 3]: the library sort
+class Animal{name:text}; class Dog extends Animal{}
+speak(a:Animal) := "..."; speak(d:Dog) := "woof"
+speak(Dog("rex"))  // woof: the most specific method wins (a class over its parent, nearest first)
+```
+- Which names: a name with a method for a declared class and either a fallback (a library word, class_methods
+  `is_library_method`, or an untyped definition `sort(x)` of the program) or methods for several classes. A name with
+  one method and nothing else stays a plain function (function values, reflection see it unchanged). Declared trait
+  operations keep their own path (witness_of); both name a method `f·T` (traits::witness_name).
+- Calls (traits.rs `generic_calls`, in lower_conformances: before library_words, which would expand `sort` itself):
+  an argument of a known class calls its method statically (direct `call $sort·Deck`); a literal or a variable only
+  holding literals (analyzer::literal_variable_kinds) calls the fallback; a value of unknown class goes through the
+  generated `f·dispatch`, which tests `instance_of` per class (each class mapped to its most specific method) and
+  otherwise calls the fallback.
+- Errors: a class without method and no fallback: `area has no method for circle; methods: area(square), area(rect);
+  fix: define area(s:circle) := …`. A class like two classes at the same distance that both have a method:
+  `f of an image is ambiguous: image is like both photo and sketch, …; fix: define f(x:image) := … to pick one`.
+- An untyped definition `sort(x) := …` replaces the library function on purpose (the fallback) and stays a plain
+  definition.
+
+Open (later steps): dispatch on every positional argument (Julia), not only the first; class-body methods named like
+library words still take class_methods' `method·sort` + `dispatched_by_class` route and should become methods of the
+generic function too; the list/map/text library as methods where that simplifies the code.
+
+## Methods: what came after (2026-10-12)
+- The fallback counts only when it takes the call's arguments: `b.take()` of a class Box never falls back to list's
+  `take(xs, n)` (traits.rs Generic::falls_back), so a single method is called directly.
+- list/text/map words are standard functions (decision type-library-words): modules.rs with_type_module_uses adds the
+  module for `f(x)`, `f x` and `x.f()`; a class's method of that name (body or `take(b:Box)`) is not the program's own
+  word (own_functions), so the module still comes and the method joins its generic function. `from list import zip`
+  keeps list's other words out. Sound's words other than play, beep, stop_sound and wait_sound still need `use sound`.
+- Follow-up cards: dispatch-positional, warn-field, library-words (step d).

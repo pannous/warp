@@ -71,7 +71,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable).
 - GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
-  `todo list` in a loop.
+  `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out
+  again); `todo list Now` costs as much, while commands naming a card by its key cost ~1.
 - JSON5, not strict JSON, for anything people or agents write (user, 2026-10-10): new hand-written configs, probe
   commands and data files use JSON5 (or warp notation). Strict JSON stays only where a tool or protocol requires it
   (package.json, .claude settings, Lake manifest, WebDriver BiDi, machine-to-machine buffers).
@@ -79,20 +80,41 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
   the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
-  (main's debug build, refreshed per pushed batch; plain `warp` is the older brew release). Run `todo done` only
+  (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed
+  batch by the Integrator's refresh_main_binary.sh; plain `warp` is the older brew release). Agents who want main's
+  debug build (assertions, backtraces) run /Users/me/dev/bin/warp-debug, installed right at the push. Time
+  performance only with an optimized build: debug made finger paint's show() 250 ms instead of 20-40 ms. Run `todo done` only
   after your branch is on main; the Interviewer announces it (notes/roles.md "Ready to try").
   Early try (user 2026-10-10: "if it runs the test just for this one feature, we could already present it"): as soon
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
   warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
-  the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
+  the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06), and
+  cards related to your current task (user, 2026-10-12).
+  A session is named for its task (user, 2026-10-12: "whenever an agent picks a new ticket, that this will also
+  trigger its rename"; "the agent can keep its name if the new ticket is related to the old task"): `todo take <card>`
+  run in your own tmux session (the agent defaults to it) renames you warp-<card key> when the card is unrelated: no
+  word of your name in its key or title (warp-sound taking sound-latency is related) and no topic shared with a card
+  you took. The tmux session is renamed at once, the Claude session (title, SendMessage address) once you are idle,
+  and warp-supervisor and warp-integrator are told old → new. Pass `--keep-name` when you know the card belongs to
+  your task. Services (supervisor, integrator, interviewer, fixer) and takes for another agent never rename.
   A long title is shortened on take, with the old one kept at the top of the description (user, 2026-10-10): pass
   `--title "short title naming the problem"` yourself; otherwise todo picks one.
   Card keys (user, 2026-10-09): every card has a meaningful key, never a GitHub id like g_oncU. Cron
   (urgent-card-watch) runs `todo keys` every 2 minutes, which gives each new card a key from its title. Whoever takes
   a card renames a poor key at once (`todo key <card> <short-meaningful-name>`) and uses the key in branch names and
   messages.
+  Topics (user, 2026-10-12: "connecting one big issue to many sub-issues"): a big topic card holds sub-cards, GitHub
+  sub-issues. `todo add "…" --topic <card>` adds a sub-card, `todo sub <topic> <card>...` moves cards into a topic,
+  `todo unsub <card>...` takes them out; `todo list` shows "(in <topic>)" after a sub-card and "(topic 2/5 done)"
+  after a topic. Only issues have sub-issues, so these cards become issues of pannous/warp (others stay drafts).
+- Crash cards (user, 2026-10-12: "on a crash a new agent is spawned. I will paste him the trace log"): a panic of a
+  warp built from a checkout files a card in Now (src/crash_card.rs) naming its fingerprint and the branch it was
+  built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a
+  worktree build to the session on that branch (the Agent of the card keyed like the branch, else tmux warp-<branch>),
+  and spawns a new worker warp-<card key> for a crash of a main build; the user pastes the trace there. Crash fixes
+  are express: mark the merge request "express (crash fix)".
 - Deleting old stuff needs no confirmation (user, 2026-10-03): merged branches, stale copies, leftover stashes.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.

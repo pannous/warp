@@ -396,8 +396,8 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			if name == LIST_DROP_LAST {
 				return Kind::List;
 			}
-			if name == crate::analyzer::LIST_BECOME {
-				// the place itself, changed
+			if name == crate::analyzer::LIST_BECOME || name == crate::one_entry_maps::MAP_OF_ENTRY {
+				// the place itself, changed; the map of `{a:1}` a node as the pair is
 				return infer_type(&items[1], scope);
 			}
 			if name == REMOVED_VALUE_CALL {

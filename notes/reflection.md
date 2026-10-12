@@ -1,5 +1,7 @@
 # Reflection: one model for every metadata word (card reflection, user 2026-10-08)
 
+Roadmap card: reflection-words (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 Decision (notes/decisions.md "Reflection streamlined"): `dir(x)` and the words below answer at compile time when the
 target is known, else at run time from the module's WASM metadata. Lookup order field → meta → reflection. One warp
 custom section, `warp.meta`, kept unstripped.
@@ -52,11 +54,11 @@ Warp notation text (parsed by the reader we already have), one map:
 2. Compile-time objects: `x.class`, `x.fields` (+ aliases), `x.methods`, `dir(object|class|map)`. Done:
    `reflection::lower_objects`, a source pass right before class_methods::lower (class bodies still as written; the
    layout from class_methods::class_layouts, instances from instance_classes: constructions, `p:P` annotations and
-   typed parameters). Not yet: instances only the analyzer infers (a call's result), `fun P.sum()` extension methods
+   typed parameters). Not yet (card reflect-inferred): instances only the analyzer infers (a call's result), `fun P.sum()` extension methods
    in `methods`.
 3. Functions: `f.params`, `f.signature`. Done in reflection::lower: constants from the user function's definition;
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
-   is `(x) -> int`). Not yet: library and host words (`sqrt.signature`).
+   is `(x) -> int`). Not yet: library and host words (`sqrt.signature`; card reflect-library-signatures).
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
    `x.doc` done (meta_entries.rs; a function's comment survived no lowering before: declarations::lower_c_functions
    and nonlocal_cells rebuilt the definition without its Meta, now `Node::with_meta_of`). `x.unit` waits for quantities
@@ -64,7 +66,7 @@ Warp notation text (parsed by the reader we already have), one map:
    lib/fourty_two`) done: reflection::lower_module_words after modules::resolve, the sorted names from
    wasm_modules::exports. Components (`use wasm "x.wasm" as lib`, card reflection-components): `lib.exports` and `dir(lib)` natively from
    the compiled component (components::export_names, functions and resource types of it and its exported interfaces,
-   snake_case), reflection::lower_component_words right before foreign_modules. Not yet in the page: the compiler
+   snake_case), reflection::lower_component_words right before foreign_modules. Not yet in the page (card reflect-page-meta): the compiler
    there cannot read the component (components.js loads it by name at its first call).
 5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
@@ -76,7 +78,7 @@ Warp notation text (parsed by the reader we already have), one map:
    at compile time, the module's path is known then, so no host call: `adder.exports` are the module's own functions
    (not warp's runtime exports), `adder.add.params` and `.signature` come from the entry (Objects::module_function_word;
    wasm_modules::qualify leaves `m.f.word` of an exported function unqualified for it). The run-time host call stays
-   for `any`-typed values only. Not yet: the page reader.
+   for `any`-typed values only. Not yet: the page reader (card reflect-page-meta).
    Done (card reflection-classes, on that entry): `m.P.fields`, `m.P.methods`, `dir(m.P)` of an imported module's class
    (Objects::module_member_word, which also answers `m.f.params`). The entries hold names as symbols (`[x y]`), a
    one-letter text reads back as a character; `classes` lists inherited fields first. wasm_emitter emit_names also

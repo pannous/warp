@@ -1,5 +1,5 @@
 //! A standard module using another one (card std-module-uses-module, notes/stdlib.md §8): lib/text.warp's camel_case
-//! calls list's drop; the program sees list's words only with its own `use list`
+//! calls list's drop
 use crate::is;
 use warp::warp_parser::parse;
 
@@ -11,7 +11,9 @@ fn a_std_module_calls_another_modules_word() {
 
 #[test]
 fn the_used_modules_words_stay_hidden_from_the_program() {
-	crate::common::fails_with("use text; take([1, 2, 3], 2)", "take is in the standard module list: write `use list`");
+	// list's words are standard functions anyway (decision type-library-words); a selective import still hides the rest
+	is!("use text; take([1, 2, 3], 2)", parse("[1 2]"));
+	crate::common::fails_with("from list import zip; unique([1, 1])", "unique is in the standard module list: write `use list`");
 }
 
 #[test]

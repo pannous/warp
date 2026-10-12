@@ -53,3 +53,9 @@ fn ternaries_and_number_fields_are_no_elements() {
 fn head_attributes_count() {
 	assert!(warnings_of("html{ lang:\"en\" body{ label(for:pwd):\"Password\"\n input{ id:pwd type:password } } }").is_empty());
 }
+
+// a style sheet's `html { … }` and `a { … }` are rules, no elements (card markup-style-block)
+#[test]
+fn style_sheet_rules_are_no_elements() {
+	assert!(warnings_of("html{ lang:\"en\" style{\n\thtml { margin: 0 }\n\ta { color: red }\n\timg { width: 100% }\n} body{ \"x\" } }").is_empty());
+}

@@ -13,6 +13,7 @@ mod operators;
 mod other_languages;
 use inheritance::*;
 use operators::*;
+pub(crate) use operators::is_library_method;
 use other_languages::*;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -743,7 +744,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
-			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))).collect();
+			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || crate::analyzer::is_list_mutating_method(name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
@@ -1526,7 +1527,8 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 	let mut traits = vec![];
 	for (index, (name, requirement)) in methods.iter().enumerate() {
 		let first = methods.iter().position(|(other, _)| other == name) == Some(index);
-		let shared = methods.iter().filter(|(other, _)| other == name).count() > 1;
+		// a library word's methods stay methods of its generic function, so other values keep the library's (traits.rs)
+		let shared = methods.iter().filter(|(other, _)| other == name).count() > 1 && !is_library_method(name);
 		if first && shared {
 			let requirements = Node::List(vec![requirement.clone()], Bracket::Curly, Separator::Space);
 			let declaration = key(Node::Symbol(format!("{IMPLICIT_TRAIT_PREFIX}{name}")), Op::Colon, requirements);

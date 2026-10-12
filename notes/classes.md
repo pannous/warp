@@ -1,11 +1,14 @@
 # Classes with methods (issue #14, card g-1nug)
 
+Roadmap card: class-system (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 ## What works today (2026-10-06)
 - `class`/`struct`/`type`/`record` declare a type: fields, typed fields (`age:int`), optional fields (`left?`).
   Construction: positional `person("Ann" 40)` or named `person{name:"Ann"}`. Field access `p.age`.
   Trees as values: the issue's `Tree`/`insert` example runs.
 - Methods as free functions over the type: `greet(p:person) := "hi " + p.name`, called as `greet(p)` or `p.greet()`
-  (uniform call syntax, library_words). Dispatch on the parameter type (overloads.rs).
+  (uniform call syntax, library_words). Methods are functions dispatching on their first argument's class: a method
+  adds to the function of that name, the most specific wins, at run time when needed (notes/dispatch.md "Methods").
 - Traits (wiki/trait.md): Comparable, Equatable, declared traits; conformance is structural, by free functions.
 - Missing: methods written **inside** the class body. `class person{name; greet() := "hi " + name}` counts `greet` as
   a field ("person takes 2 fields, got 1").
@@ -65,8 +68,9 @@
 - It declares `dog like animal` (traits.rs likeness), so a dog is accepted where an animal is wanted (`greet(a:animal)`).
 - The methods dog inherits or overrides are defined for dog itself, so a name both classes define dispatches per
   class like any shared method.
-- library_words: a class's own `sum·point` (any `name·Type` variant) shadows the library word `sum`, so a shared
-  method named like a library word stays the class's.
+- library_words: a class's own `sum·point` shadows the library word `sum` only for an arity overload or a trait
+  operation; a method named like a library word is a method of the generic function `sum` (notes/dispatch.md), and
+  `sum([1, 2])` stays the library's.
 
 ## Ported cases (tests/types/test_class_cases_ported.rs, probe probes/class_cases.sh)
 Cases from Python, Java, Kotlin, Swift, C# and Ruby. Batch 1 (branch classes-1) added:
@@ -240,13 +244,13 @@ The same class as other languages write it (parser atoms.rs, class_methods.rs cl
   with_impls; `impl Trait for Point` too), `&self` is the receiver.
 - Kotlin `p.copy(y = 5)` is `field_with(p, "y", 5)` (class_methods copies).
 Constructors of all of them are `init(params){…}` (classes-10, P162). A method named like a library word (`sum`, `count`)
-is renamed `method·sum` and called so only on instances, like list-mutation names (classes-16). - classes-21: Java's typed fields `int x;`, a constructor named like the class `Point(int x, int y) {…}`, C-style
+is a method of the generic function `sum` (card dispatch, notes/dispatch.md; formerly renamed `method·sum`, classes-16). - classes-21: Java's typed fields `int x;`, a constructor named like the class `Point(int x, int y) {…}`, C-style
   methods `int sum() {…}`, `Point p = new Point(3, 4);` (`p:Point = …`, the type kept for D10 dispatch);
   TypeScript `twice(): number {…}`; C# auto-properties `int X { get; set; }` and the object initializer
   `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
   Every class body is normalized to its members (with_members), not only those with methods. The declared-type
   pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
-Open: Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
+Open (card class-forms-ruby): Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
 operators (`__add__`, `operator +`), a method named `norm` (the parser reads it as the operator ‖).
 
 Smart scopes (classes-22, wiki/inventions.md, declarations.rs smart_scope): `Number { Square = it*it }` defines
@@ -274,9 +278,9 @@ method (`p.new(2)`, Rust's `Point::new(1, 2)`: method_calls_named) stays a metho
 Run-time dispatch (classes-27, card class-method): a library-word method (`sum`, the counting words `count`/`size`/…,
 type words) called on a variable of no known class outside the class bodies, `total(x) := x.sum()`, is
 `if x is Bag then x.method·sum() else x.sum()` (class_methods dispatched_by_class, one branch per class defining it).
-A list mutation (`xs.pop()`) on an unknown receiver stays the list's (an if around a mutation is not built); inside
+A list mutation (`xs.pop()`) on an unknown receiver stays the list's (an if around a mutation is not built; card mutation-unknown); inside
 class bodies receivers are fields of declared types. Open: operators on unknown operands (`f(a, b) := a + b` of two
-instances) still take the built-in operator.
+instances) still take the built-in operator (card class-operators).
 
 Go (classes-28, tests/types/test_class_forms_ported.rs a_go_struct_with_methods): `type Point struct { X int; Y int }`
 (the parser skips `struct` after the name), fields `X int` (typed_field takes both orders, `X, Y int` gives an
@@ -340,7 +344,7 @@ Nested and constants (classes-39): a pattern is matched by matched_pattern into 
 tests (`p.x == 0`) and bindings with paths (`y = parts·from.start.y`): `_` matches anything, a name binds, a number or
 text is compared, `Point{x: 0, y}`, `Point(a, 0)`, `Line{start: Point{x, y}, end}` nest. The arm's guard is all tests
 joined with `and`; an assignment takes names only (a class in it no test, a constant leaves it as written).
-positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Still not built: rest patterns.
+positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Still not built: rest patterns (card rest-patterns).
 
 ## Class components (classes-40, tests/web/test_class_components.rs; notes/web_framework.md step 4)
 A class with a `render()` method (aliases `view`, `template`, `build` with a note) is a component: its construction

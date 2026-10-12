@@ -1,5 +1,7 @@
 # One source for the server and its page (card route-sample, 2026-10-08)
 
+Roadmap card: web-framework (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 The user's sample: `route "/" { div{…} } route "/users/:id:int" { … users#id … }`. Can the same mechanism drive a
 server? How do the page's code (in the browser) and the backend logic (on the server) fit together in one source?
 
@@ -94,7 +96,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      browser's network log misses a Worker's fetches): app.warp's links home, first, second, home, first, second ask
      "/users/1" and "/users/2" once each; worker_app.warp's direct visit of /users/2 asks nothing (one call before).
    - Left: (c) A main-level statement of the page that reads server data (`if count(users) == 0
-     { users.add(…) }`) fails loudly in the browser ("table.open: no such word in the browser"). (d) Access rules: card
+     { users.add(…) }`) fails loudly in the browser ("table.open: no such word in the browser"; card web-page-server-data). (d) Access rules: card
      route-access.
    - Found on the way: route functions now stand where the first route stood instead of before everything, because a
      function reads a typed main-level list from where it is defined (cards typed-global-capture, route-typed-list).

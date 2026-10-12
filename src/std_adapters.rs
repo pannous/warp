@@ -121,6 +121,9 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			Node::Number(crate::extensions::numbers::Number::Int(handle)) => crate::sound::stop_one((*handle).max(0) as usize).map(|_| Node::Empty).map_err(failure),
 			other => Err(failure(format!("needs a sound handle, got {}", other.serialize().trim()))),
 		},
+		// fade_sound(handle, gain, seconds): a playing sound's gain ramped (card native-sound)
+		#[cfg(feature = "native")]
+		("sound", "fade", [handle, gain, seconds]) => crate::sound::fade(number_of(handle)?.max(0.0) as usize, number_of(gain)?, number_of(seconds)?).map(|_| Node::Empty).map_err(failure),
 		#[cfg(feature = "native")]
 		("sound", "last", []) => Ok(Node::int(crate::sound::last_handle() as i64)),
 		#[cfg(feature = "native")]

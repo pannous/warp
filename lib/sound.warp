@@ -228,6 +228,12 @@ to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), 
 play_file(path) := std_io("sound", "play_file", [path])
 // play gives the sound's handle: h = play C4 for 2s; stop_sound(h) stops that one alone, stop_sound (handle 0) all
 stop_sound(handle = 0) := std_io("sound", "stop", [handle])
+// a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play C4 for 4s;
+// fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all
+fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
+// a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t); play_signal(hum, 2s) calls
+// hum for every sample, t its time in seconds, a block ahead of the speaker; returns the handle when the last is queued
+play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])

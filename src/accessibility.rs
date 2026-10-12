@@ -14,6 +14,8 @@ const LINK: &str = "a";
 const BUTTON: &str = "button";
 const LABEL: &str = "label";
 const HTML: &str = "html";
+/// a style sheet's items are rules: `html { … }` there styles the element, it makes none
+const STYLE: &str = "style";
 const FORM_FIELDS: [&str; 3] = ["input", "select", "textarea"];
 /// input types that need no label: they say what they do or are not shown
 const SELF_LABELED_INPUTS: [&str; 5] = ["hidden", "submit", "button", "reset", "image"];
@@ -125,6 +127,9 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 			has_content: items.iter().any(|item| attribute_parts(item).is_none() && !is_handler(item) && says_something(item)),
 			inside_label,
 		});
+		if tag == STYLE {
+			return;
+		}
 		let inside_label = inside_label || tag == LABEL;
 		return items.into_iter().for_each(|item| collect(item, inside_label, found));
 	}
