@@ -221,7 +221,8 @@ pub fn is_whole_type(name: &str) -> bool {
 /// one (`int or text` refuses 2.5, `int or float` takes it)
 pub fn refuses_decimals(type_name: &str) -> bool {
 	match union_parts(type_name.trim_end_matches('?')) {
-		Some(parts) => parts.iter().any(|part| is_whole_type(part)) && !parts.iter().any(|part| admits(part, Kind::Float)),
+		// a class part (`point or int`) takes no number
+		Some(parts) => parts.iter().any(|part| is_whole_type(part)) && !parts.iter().any(|part| builtin_type_kind(part).is_some() && admits(part, Kind::Float)),
 		None => is_whole_type(type_name),
 	}
 }
@@ -463,7 +464,7 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_type_word_functions(program)
 		.or_else(|| check_parameter_annotations(program))
-		.or_else(|| check_declared_types(program, &mut HashMap::new(), &mut Scope::new()))
+		.or_else(|| check_declared_types(program, &mut HashMap::new(), &mut Scope::new(), &declared_classes(program)))
 		.or_else(|| super::list_views::check_widened_list_views(program))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
@@ -1339,6 +1340,11 @@ pub(crate) fn union_parts(type_name: &str) -> Option<Vec<&str>> {
 /// (`int | float` is `float`, `bool | int` is `int`) and an empty part made optional (`int | ø` is `int?`); None unless
 /// the parts are words and one of them is a builtin type, so a value `ok: a or b` stays a value
 pub(crate) fn union_type_name(node: &Node) -> Option<String> {
+	union_of_types(node, &|_| false)
+}
+
+/// The type name of an inline union whose parts may also be declared classes: `Circle | Square` is `Circle or Square`
+pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) -> Option<String> {
 	fn collect_parts(node: &Node, parts: &mut Vec<String>) -> Option<()> {
 		match node.drop_meta() {
 			Node::Key(left, Op::Or, right) => {
@@ -1360,13 +1366,14 @@ pub(crate) fn union_type_name(node: &Node) -> Option<String> {
 	let Node::Key(_, Op::Or, _) = strip_round(node).drop_meta() else { return None };
 	let mut parts = vec![];
 	collect_parts(node, &mut parts)?;
-	if !parts.iter().any(|part| builtin_type_kind(part).is_some()) {
+	if !parts.iter().any(|part| builtin_type_kind(part).is_some() || is_declared(part)) {
 		return None;
 	}
 	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
 	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
 	parts.dedup();
-	let admits_part = |wide: &String, narrow: &String| !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind));
+	// a class covers no builtin type: `Point | text` keeps both
+	let admits_part = |wide: &String, narrow: &String| !is_bool_type(wide) && !is_declared(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind));
 	// two parts held alike (`rational | int`) admit each other: the subtype goes
 	let covers = |wide: &String, narrow: &String| {
 		wide != narrow && admits_part(wide, narrow) && (!admits_part(narrow, wide) || crate::type_tests::type_matches(narrow, wide))
@@ -1388,13 +1395,22 @@ fn strip_round(node: &Node) -> &Node {
 	}
 }
 
-/// The first part of an inline union that is no builtin type: `point` of `point or text` (unions of classes come later)
-pub(crate) fn unsupported_union_part(type_name: &str) -> Option<&str> {
-	union_parts(type_name.trim_end_matches('?'))?.into_iter().find(|part| builtin_type_kind(part).is_none())
+/// The first part of an inline union that is neither a builtin type nor a declared class: `point` of `point or text`
+pub(crate) fn unsupported_union_part<'a>(type_name: &'a str, classes: &HashSet<String>) -> Option<&'a str> {
+	union_parts(type_name.trim_end_matches('?'))?.into_iter().find(|part| builtin_type_kind(part).is_none() && !classes.contains(*part))
+}
+
+/// The names of the classes a program declares
+pub(crate) fn declared_classes(program: &Node) -> HashSet<String> {
+	let mut classes = HashSet::new();
+	program.visit(&mut |part| if let Node::Type { name, .. } = part {
+		classes.insert(name.drop_meta().name());
+	});
+	classes
 }
 
 /// `x:int=…` declares x's type; every value assigned to x later must fit it
-pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>, lists: &mut Scope) -> Option<Diagnostic> {
+pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, String>, lists: &mut Scope, classes: &HashSet<String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		// `names#1 = 420`: an element of a declared list
 		Node::Key(target, Op::Assign, value) if indexed_list(target).is_some_and(|name| declared.contains_key(name)) => {
@@ -1405,7 +1421,7 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			list_items_mismatch(node, name, type_name, element, &item)
 		}
 		Node::Key(target, Op::Assign | Op::Define, value) if super::variables::function_definition_body(node).is_some() => {
-			check_declared_types(value, &mut with_parameters_declared(target, declared), &mut Scope::new())
+			check_declared_types(value, &mut with_parameters_declared(target, declared), &mut Scope::new(), classes)
 		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let declaration = match target.drop_meta() {
@@ -1413,8 +1429,8 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 				declaring => declaring_name_and_type(declaring),
 			};
 			if let Some((name, type_name)) = declaration {
-				if let Some(part) = unsupported_union_part(&type_name) {
-					let message = format!("{name} is declared {type_name}: an inline union joins builtin types only so far, {part} is none");
+				if let Some(part) = unsupported_union_part(&type_name, classes) {
+					let message = format!("{name} is declared {type_name}: an inline union joins builtin types and declared classes, {part} is neither");
 					return Some(Diagnostic::at(node, message).fix(format!("declare {name}:any to hold any value")));
 				}
 				declared.insert(name.clone(), type_name.clone());
@@ -1428,7 +1444,7 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 				let (kind, type_node) = super::variables::value_binding(value, lists);
 				lists.define(name.clone(), type_node, kind);
 			}
-			check_declared_types(value, declared, lists)
+			check_declared_types(value, declared, lists, classes)
 		}
 		// `names.add(420)`: the method call appends before mutation lowers it to `names = names + [420]`
 		Node::Key(list, Op::Dot, _) if appended_items(node).is_some() => {
@@ -1438,15 +1454,15 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			let appended = Node::List(appended_items(node)?.to_vec(), Bracket::Square, Separator::Space);
 			list_items_mismatch(node, name, type_name, element, &appended)
 		}
-		Node::Key(left, _, right) => check_declared_types(left, declared, lists).or_else(|| check_declared_types(right, declared, lists)),
+		Node::Key(left, _, right) => check_declared_types(left, declared, lists, classes).or_else(|| check_declared_types(right, declared, lists, classes)),
 		_ if crate::tuples::destructuring(node).is_some() => destructured_mismatch(node, declared),
 		Node::List(items, bracket, separator) => {
 			// `names: list of text = […]` still arrives as the items `names:list`, `of`, `text=[…]`
 			if let Some(declaration) = of_type_declaration(items, bracket, separator) {
-				return check_declared_types(&declaration, declared, lists);
+				return check_declared_types(&declaration, declared, lists, classes);
 			}
 			let prefixed = items.windows(2).filter_map(|pair| prefixed_declaration(&pair[0], &pair[1]));
-			prefixed.chain(items.iter().cloned()).find_map(|item| check_declared_types(&item, declared, lists))
+			prefixed.chain(items.iter().cloned()).find_map(|item| check_declared_types(&item, declared, lists, classes))
 		}
 		_ => None,
 	}

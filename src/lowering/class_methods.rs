@@ -643,9 +643,9 @@ fn field_type_name(item: &Node) -> String {
 	}
 }
 
-/// The type an annotation names: `int`, and an inline union `int | text` whole, as `int or text`
+/// The type an annotation names: `int`, and an inline union `int | text` or `Circle | Square` whole, as `int or text`
 pub(crate) fn type_word(annotation: &Node) -> String {
-	crate::analyzer::union_type_name(annotation).unwrap_or_else(|| annotation.name())
+	crate::analyzer::union_of_types(annotation, &|word| crate::analyzer::builtin_type_kind(word).is_none()).unwrap_or_else(|| annotation.name())
 }
 
 fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Node {

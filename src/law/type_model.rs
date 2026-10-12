@@ -610,7 +610,7 @@ impl Exporter {
 	}
 
 	fn annotation_type(&self, annotation: &Node) -> Lean {
-		if let Some(union) = crate::analyzer::union_type_name(annotation) {
+		if let Some(union) = crate::analyzer::union_of_types(annotation, &|word| self.classes.contains_key(word)) {
 			return self.union_type(&union);
 		}
 		match annotation.drop_meta() {

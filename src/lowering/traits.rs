@@ -355,7 +355,18 @@ fn field_warnings(value: &Node, data: &Node, declared: &str, registry: &TypeRegi
 fn typed_target(target: &Node, registry: &TypeRegistry) -> Option<(String, String)> {
 	let Node::Key(name, Op::Colon, type_node) = target.drop_meta() else { return None };
 	let (Node::Symbol(name), Node::Symbol(type_name)) = (name.drop_meta(), type_node.drop_meta()) else { return None };
-	registry.get_by_name(type_name).map(|_| (name.clone(), type_name.clone()))
+	names_classes(type_name, registry).then(|| (name.clone(), type_name.clone()))
+}
+
+/// The types a declared type names: `Circle`, and each part of a union `Circle or Square`, `Point or text` (card union-types)
+fn class_parts(type_name: &str) -> Vec<&str> {
+	crate::analyzer::union_parts(type_name).unwrap_or_else(|| vec![type_name])
+}
+
+/// A class, or a union of classes and builtin types with at least one class
+fn names_classes(type_name: &str, registry: &TypeRegistry) -> bool {
+	let parts = class_parts(type_name);
+	parts.iter().any(|part| registry.get_by_name(part).is_some()) && parts.iter().all(|part| registry.get_by_name(part).is_some() || crate::analyzer::builtin_type_kind(part).is_some())
 }
 
 /// `image is not a photo`, with the fix `declare image like photo`
@@ -1529,14 +1540,21 @@ impl Dispatch {
 	/// field it lacks or has extra; a known non-object is an error; anything else is judged by its uses
 	fn admit(&self, value: &Node, declared: &str, needs: &str) -> Result<Node, Node> {
 		let got = format!("{needs}, got {}", value.serialize());
+		let parts = class_parts(declared);
 		if let Some(type_name) = self.instance_type(value) {
-			return if self.is_like(&type_name, declared) { Ok(value.clone()) } else { Err(not_like(value, &got, &type_name, declared)) };
+			let classes: Vec<&str> = parts.iter().copied().filter(|part| self.types.registry.get_by_name(part).is_some()).collect();
+			return match parts.as_slice() {
+				_ if classes.iter().any(|class| self.is_like(&type_name, class)) => Ok(value.clone()),
+				[_] => Err(not_like(value, &got, &type_name, declared)),
+				_ => Err(Diagnostic::at(value, format!("{got}: {type_name} is none of them")).fix(format!("declare `{type_name} like {}` to use it as one", classes[0])).into_error()),
+			};
 		}
 		if let Some(data) = written_data(value, &self.types.registry) {
 			crate::diagnostic::report(&field_warnings(value, &data, declared, &self.types.registry))?;
 			return Ok(data);
 		}
-		match crate::analyzer::argument_literal_kind(value) {
+		// `p: Point | text` takes a text too
+		match crate::analyzer::argument_literal_kind(value).filter(|kind| !parts.iter().any(|part| crate::analyzer::builtin_type_kind(part).is_some() && crate::analyzer::admits(part, *kind))) {
 			Some(kind) => Err(Diagnostic::at(value, format!("{got} ({})", crate::analyzer::kind_with_article(kind))).into_error()),
 			None => Ok(value.clone()),
 		}
@@ -1597,7 +1615,7 @@ fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) 
 /// Every function's parameters with the declared type each one takes, for the functions that take any
 fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, Vec<(String, Option<String>)>> {
 	let context = crate::analyzer::function_definitions(node);
-	let declared = |param: &crate::context::Param| param.annotation.as_ref().map(Node::name).filter(|type_name| registry.get_by_name(type_name).is_some());
+	let declared = |param: &crate::context::Param| param.annotation.as_ref().map(Node::name).filter(|type_name| names_classes(type_name, registry));
 	let signature = |function: &crate::context::UserFunctionDef| function.params.iter().map(|param| (param.name.clone(), declared(param))).collect::<Vec<_>>();
 	context.user_functions.values().map(|function| (function.name.clone(), signature(function))).filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some())).collect()
 }

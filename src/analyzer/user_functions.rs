@@ -208,12 +208,12 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 		return Some(Kind::List);
 	}
 	// `v:any`, as an untyped field: any value, held as a Node (lib/json.warp's to_json takes what parse_json gives)
-	// `x: int or text` (an inline union of builtin types, card inline-union) likewise
+	// `x: int or text` (an inline union, card inline-union) and `s: Circle or Square` (card union-types) likewise
 	if names_empty_type(type_node) {
 		return Some(Kind::Empty);
 	}
 	// `m:map`, `m: map of int`: a map, held as a Node; `{a:1}` given to it is upgraded to the map of its entry (one_entry_maps.rs)
-	if type_name == crate::type_kinds::UNTYPED_FIELD || is_map_type(&type_name) || annotated_builtin_type(type_node).is_some_and(|name| union_parts(name).is_some()) {
+	if type_name == crate::type_kinds::UNTYPED_FIELD || is_map_type(&type_name) || union_parts(&type_name).is_some() {
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
