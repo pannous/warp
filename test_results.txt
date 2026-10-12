@@ -249,6 +249,9 @@ PASSED:
   ✓ control::test_for_over_a_number::a_for_loop_over_a_number_is_a_compile_error
   ✓ control::test_for_underscore::a_loop_over_underscore_runs
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
+  ✓ control::test_frame_event::a_frame_handler_leaves_main_running
+  ✓ control::test_frame_event::a_frame_handler_runs_once_without_a_window
+  ✓ control::test_frame_event::on_key_hears_the_paint_windows_keys
   ✓ control::test_function_body::a_field_named_body_wins
   ✓ control::test_function_body::a_functions_body_is_its_code_as_data
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
@@ -3004,6 +3007,7 @@ PASSED:
   ✓ programs::test_paint_lists::paint_saturates_a_big_int_in_a_typed_list
   ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
   ✓ programs::test_paint_lists::show_before_canvas_paints_the_default_canvas
+  ✓ programs::test_paint_shader::paint_of_a_shader_without_a_size_takes_width_and_height
   ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
   ✓ programs::test_paint_shader::paint_renders_a_shader_text
   ✓ programs::test_paint_shader::use_graphics_is_use_draw
@@ -4917,4 +4921,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4912 passed, 0 failed, 4912 total tested
+10 ignored, 4916 passed, 0 failed, 4916 total tested
