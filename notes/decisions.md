@@ -7,11 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
-- single-entry (warp-worker): `{a:1}` is a map with one entry: braces always make a map. type_of({a:1}) is map,
-  `.count`/`.pop` work; data_blocks_stay_data:13 and a_value_of_a_pair_is_held_as_a_node:9 change meaning.
-  User addition: "a map with one entry shall be considered equivalent to just a pair in many situations": wherever a
-  pair is expected (==, .key/.value, a Pair parameter, destructuring, adding to a map) a one-entry map acts as its
-  pair, so `{a:1} == (a:1)` stays yes.
+- single-entry (warp-worker; user, final wording): "keep everything as it is and automatically upgrade it to a map".
+  `{a:1}` stays the pair internally (`{a:1} == (a:1)` yes, existing tests unchanged) and is upgraded to a one-entry
+  map wherever a map is needed: a map parameter, map methods (`m = {a:1}; m.count` 1), inserting into a map.
+  Replaces the earlier "braces always make a map" wording the same day.
 
 ## Decided 2026-10-11 (user; via warp-supervisor or the Interviewer)
 - repeating-decimals (user, via warp-integrator): no parentheses syntax for repeating decimals; only the overline form
