@@ -83,9 +83,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 						"list_at",
 					]);
 					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
-						if name == crate::wasm_emitter::list_ops::MESSAGE_FIELD {
-							ctx.required_functions
-								.insert(crate::wasm_emitter::list_ops::ERROR_MESSAGE);
+						let fallbacks = crate::wasm_emitter::list_ops::FIELD_FALLBACKS.iter();
+						if let Some((_, fallback)) = fallbacks.into_iter().find(|(field, _)| *field == name) {
+							ctx.required_functions.insert(fallback);
 						}
 						ctx.missing_field_names.insert(name);
 					}
