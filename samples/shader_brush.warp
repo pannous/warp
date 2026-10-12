@@ -21,6 +21,10 @@ brush = shader {
 // the first paint opens the window; then until it closes (headless: no window, so the loop never starts)
 paint(brush, width, height)
 while window_open {
+	// TODO: on frame { }
 	paint(brush, width, height)
+	// TODO: feed width, height via Global variables above
+	// paint(brush)
 	sleep 16ms
+	// TODO: remove Artificial sleeps
 }
