@@ -6,7 +6,7 @@ use super::*;
 const GLOBAL_EXPORT_LABEL: &str = "global·";
 
 impl WasmGcEmitter {
-	/// `error("…")` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
+	/// `error "…"` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
 	/// so it fails the run with its message through `returned_error`, which `try` catches; true when it was one
 	pub(super) fn emit_raised_error(&mut self, func: &mut Function, node: &Node) -> bool {
 		let Some(message) = returned_error_message(node) else {
@@ -17,7 +17,7 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error("…")` from a
+	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error "…"` from a
 	/// function of numbers fails the run with the message, it cannot give back an Error value
 	pub(super) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
 		if self.returns_list {

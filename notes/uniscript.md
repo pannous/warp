@@ -10,7 +10,7 @@ Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tes
   An Error operand is the result: errors propagate through concatenation.
 - `read(path)` → the file's bytes as Text, or an Error with the reason (host import `host.read`, like `fetch`).
 - `byte_at(text, offset)`, `byte_slice(text, start, end)`: 0-based byte offsets, end exclusive; slices share memory.
-- `error(message)` makes an Error value.
+- `error message` makes an Error value.
 - The module exports its text heap global `text_heap`; the host allocates `read`/`fetch` results from it. Before, the host
   wrote at 65536+ by its own counter, which could overlap texts the module allocated at runtime.
 
