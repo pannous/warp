@@ -168,7 +168,8 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    audio callback itself only mixes (no wasm, no allocation). Headless, or on afplay, it is one sound: render_sound
    and the tests read the same samples. The call blocks the program while it plays; `go { play_signal(…) }` plays it
    beside it. State between samples lives in globals declared `as float`: an exact decimal global
-   (`global level = 0.0`) grows with every sample and runs out of fuel within 220 samples.
+   (`global level = 0.0`) is an exact ratio whose denominator gains about a bit a sample (the blow-up beyond that,
+   unreduced ratios, is fixed: card exact-decimals), so floats stay the way for DSP state.
    About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
    Block-wise built (samples/signal_blocks.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
    a block, block a linear float array (notes/linear_arrays.md) of 512 cells to write, t its first sample's time.
