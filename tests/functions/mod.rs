@@ -59,6 +59,7 @@ mod test_foreign_modifiers;
 mod test_free_var_if_arms;
 mod test_function_aliases;
 mod test_function_keyword;
+mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_values;
 mod test_functions;
@@ -117,6 +118,7 @@ mod test_phrase_slot_words;
 mod test_picked_calls;
 mod test_ported_calls;
 mod test_precomputed;
+mod test_print_closure; // card print-closure
 mod test_property_access;
 mod test_property_assign;
 mod test_property_words;

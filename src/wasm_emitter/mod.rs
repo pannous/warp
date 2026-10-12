@@ -819,6 +819,7 @@ impl WasmGcEmitter {
 		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
+		self.require_function_text(); // before the similarity's: function_text needs values_equal
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
@@ -1190,6 +1191,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 					   // Emit list and string operation functions
+		self.emit_function_text(); // before the list ops: a function value joins as its text
 		self.emit_list_ops();
 		self.emit_linear_arrays();
 		self.emit_cells();

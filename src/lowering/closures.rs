@@ -43,6 +43,11 @@ const CLOSURE_CALL_PREFIX: &str = "closure_call_";
 const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
+
+/// A function the compiler made of a lambda (`x => x + n`), no name the program wrote
+pub fn is_lambda_function(name: &str) -> bool {
+	name.starts_with(LIFTED_PREFIX) || name.starts_with(crate::function_values::LAMBDA_PREFIX)
+}
 const IMPLICIT_PARAMETER: &str = "it";
 
 pub fn closure_call_name(arity: usize) -> String {
@@ -584,6 +589,10 @@ impl Lifting {
 	}
 
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
+		// `&g` wherever it stands: the function itself (a bare `g` needs its arguments, P83)
+		if referenced_function(&node).is_some() {
+			return self.function_value(node, bound);
+		}
 		if let Some(params) = definition_parameters(&node, &self.functions) {
 			let Node::Key(head, op, body) = node.drop_meta().clone() else {
 				unreachable!("a definition")
