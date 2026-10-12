@@ -3047,7 +3047,6 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
-  ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
   ✓ programs::test_sound_synth::the_envelope_rises_decays_sustains_and_releases
@@ -4356,6 +4355,7 @@ PASSED:
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
   ✓ web::test_webview::a_page_survives_losing_focus
+  ✓ web::test_webview::a_program_ending_in_an_html_page_is_shown
   ✓ web::test_webview::a_program_shows_its_page_with_what_a_command_printed
   ✓ web::test_webview::an_html_file_shows_in_the_web_view
   ✓ web::test_webview::without_check_no_window_opens_under_warp_no_window
@@ -4753,6 +4753,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
 
 SUMMARY:
-10 ignored, 4750 passed, 0 failed, 4750 total tested
+10 ignored, 4750 passed, 1 failed, 4751 total tested
