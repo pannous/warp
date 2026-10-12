@@ -137,3 +137,30 @@ fn the_dev_server_watches_the_modules_used() {
 		"{error}"
 	);
 }
+
+// card dev-opens-browser: `warp dev` opens its page in the default browser when run from a terminal; piped, as here,
+// and under WARP_NO_WINDOW (tests, probes) it only prints the address
+#[test]
+#[cfg(feature = "native")]
+fn warp_dev_opens_no_browser_when_piped() {
+	use std::io::BufRead;
+	const OWN_PORT: u16 = 18441;
+	std::fs::create_dir_all(FOLDER).expect("scratch folder");
+	let program = std::path::Path::new(FOLDER).join("opened.warp");
+	std::fs::write(&program, "p{ \"hi\" }").expect("the program");
+	let mut dev = crate::common::warp_command()
+		.args(["dev", &program.to_string_lossy(), &OWN_PORT.to_string()])
+		.stdout(std::process::Stdio::piped())
+		.spawn()
+		.expect("warp dev");
+	let mut first_line = String::new();
+	std::io::BufReader::new(dev.stdout.take().expect("its output"))
+		.read_line(&mut first_line)
+		.expect("its first line");
+	let _ = dev.kill();
+	let _ = dev.wait();
+	assert!(
+		first_line.contains(&format!("http://localhost:{OWN_PORT}/")) && !first_line.contains("browser"),
+		"{first_line}"
+	);
+}
