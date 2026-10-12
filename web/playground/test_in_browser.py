@@ -82,6 +82,10 @@ NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
 RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
+# card shader-brush: samples/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
+BRUSH = "(samples/shader_brush colors the paper under the pointer)"
+BRUSH_FRAMES_MS = 1500  # the sample paints a frame every 16 ms; a slow software GPU takes longer per frame
+PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -369,6 +373,28 @@ def gpu_page_wrong():
 	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
 
 
+def brush_wrong():
+	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper"""
+	run_sample("shader_brush")
+	shown = browser("eval", f"""(async () => {{
+		const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
+		if (!canvas) return "no canvas";
+		const bounds = canvas.getBoundingClientRect();
+		const middle = {{ clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2, bubbles: true }};
+		canvas.dispatchEvent(new PointerEvent("pointermove", middle));
+		await new Promise(done => setTimeout(done, {BRUSH_FRAMES_MS}));
+		const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
+		copy.drawImage(canvas, 0, 0);
+		const failed = document.getElementById("status").classList.contains("failed") ? document.getElementById("status").textContent : "";
+		return `${{[...copy.getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data.slice(0, 3)].join(" ")}} ${{failed}}`;
+	}})()""")
+	if NO_GPU in shown:
+		print(f"skip {BRUSH}: this browser {NO_GPU}")
+		return []
+	rgb = [int(channel) for channel in json.loads(shown).split()[:3]] if shown.startswith('"') and json.loads(shown)[:1].isdigit() else None
+	return [] if rgb and min(rgb) < PAPER_FROM else [f"the middle of the canvas under the pointer: {shown!r}, expected a color, not paper"]
+
+
 def completion_keys_wrong():
 	"""the editor's code after each of COMPLETIONS' keys, pressed through CodeMirror's own key handling: what differs"""
 	script = f"""(() => {{
@@ -476,7 +502,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (BRUSH, brush_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
