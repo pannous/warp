@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+// cards raise-boom, error-neg: warn says and goes on, fail raises (also throw, panic)
+warn "careful"
+fail "boom"

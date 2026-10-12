@@ -161,6 +161,7 @@ mod test_task_bools;
 mod test_task_char; // card task-char
 mod test_task_closures;
 mod test_task_dir;
+mod test_task_error_positions; // card runtime-errors
 mod test_task_exact;
 mod test_task_globals; // card error-undefined
 mod test_task_list_literal;
