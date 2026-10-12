@@ -31,3 +31,23 @@
 - Reuse `TaskTable`; do not add a second scheduler abstraction or a new dependency.
 - Remove the per-task `JoinHandle` model once the pool owns worker handles.
 - Keep the worktree-only Cargo version suffix uncommitted.
+
+# Runtime and parser source-position cleanup
+
+## Scope
+
+- Reproduce one parser error and one runtime error whose diagnostics omit the originating line and column.
+- Preserve source metadata through the existing parse, lowering, emission, and runtime-error paths instead of introducing a parallel diagnostic representation.
+- Report missing metadata loudly at the ownership boundary rather than silently inventing a position.
+
+## Verification
+
+- Establish focused parser and runtime diagnostic baselines through `tests/queue.sh` before implementation.
+- Add focused regression coverage in the existing test hierarchy without changing established tests.
+- Re-run only the affected queued filters and hand the full-suite gate to the Integrator.
+
+## Cleanup
+
+- Reuse the existing `Meta`, diagnostic, and runtime-error helpers.
+- Remove any temporary probes or debug output once the focused tests pass.
+- Keep the worktree-only Cargo version suffix uncommitted.
