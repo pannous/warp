@@ -27,6 +27,7 @@ const TASK_CHECK_MS = 100; // how often a run waiting for a task looks after its
 const TASK_WORKER = "task-worker.js";
 const TASK_WORKER_READY = "ready"; // a task Worker's first message: loaded
 const FETCH_DONE = "fetched"; // a task Worker's message after a fetch it made (startFetch)
+const POSITION_COLUMN_BITS = 12; // src/wasm_emitter COLUMN_BITS: trap_position is line << 12 | column
 const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its result into, grown as needed
 const TASK_RESULT_LIMIT = 1 << 28;
 const TASK_HEADER = 8; // [state, length] as Int32, then the result's JSON
@@ -355,7 +356,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : portableInt(instance.exports, result), signals, sounds };
 	} catch (trap) {
 		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
-		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
+		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}${trapPosition(instance?.exports)}`, unstarted: !instance, signals: taskHolder.run.signals };
 	}
 }
 
@@ -478,6 +479,12 @@ function raisedText(exports) {
 	if (!detail) return null;
 	const tree = readNode(exports, detail);
 	return tree.data?.text ?? tree.data?.node?.data?.text ?? null;
+}
+
+// " at line:column" of the statement the task trapped in (src/diagnostic.rs located_at), from its trap_position
+function trapPosition(exports) {
+	const position = exports?.[TRAP_POSITION_EXPORT]?.value;
+	return position ? ` at ${position >> POSITION_COLUMN_BITS}:${position & ((1 << POSITION_COLUMN_BITS) - 1)}` : "";
 }
 
 // the runtime error a trap means: the first runtime error function on its stack (`index_out_of_range` reads "index out

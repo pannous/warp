@@ -118,6 +118,7 @@ impl Route {
 		let missing = failure
 			.message
 			.strip_prefix(crate::wasm_emitter::list_ops::NO_FIELD_MESSAGE)
+			.and_then(|rest| rest.split_whitespace().next()) // the field, without the ` at line:column` of the program
 			.filter(|field| !has_field(request, field));
 		match missing {
 			Some(field) => self.failed_with(BAD_REQUEST, &format!("{MISSING_FIELD}{field}")),
