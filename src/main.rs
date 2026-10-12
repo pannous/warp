@@ -272,6 +272,9 @@ fn run_command(args: &[String]) {
             // Read from stdin pipe
             let mut input = String::new();
             if io::stdin().read_to_string(&mut input).is_ok() && !input.is_empty() {
+                if shows_in_window(&input) {
+                    return show_in_webview(&input, false);
+                }
                 show_and_fail_on_error(&eval(&input), "");
                 return;
             }
@@ -402,7 +405,7 @@ fn run_command(args: &[String]) {
             serve_file(path, SERVE_PORT, "routes found; ");
         }
         // a page shows in a window, as `warp app` shows it; piped or redirected it prints its HTML
-        if io::stdout().is_terminal() && warp::paint::shows_windows() && warp::serve::shows_page(&source_of(path)) {
+        if shows_in_window(&source_of(path)) {
             show_in_webview(path, false);
             return;
         }
@@ -465,7 +468,10 @@ fn run_command(args: &[String]) {
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         print_version();
     } else {
-        // Default: eval and print
+        // Default: eval and print; a page shows in a window
+        if shows_in_window(&arg_string) {
+            return show_in_webview(&arg_string, false);
+        }
         show_and_fail_on_error(&eval(&arg_string), RESULT_MARK);
     }
 }
@@ -695,6 +701,12 @@ fn write_wagi(code: &str, target: &str) {
             std::process::exit(1);
         }
     }
+}
+
+/// A program ending in markup (`html{…}`, `div{…}`, card div-opens-app) run with a terminal for its output: shown in a
+/// window as `warp app` shows it; piped, redirected or under WARP_NO_WINDOW it prints its HTML
+fn shows_in_window(code: &str) -> bool {
+    io::stdout().is_terminal() && warp::paint::shows_windows() && warp::serve::shows_page(code)
 }
 
 fn is_html_file(target: &str) -> bool {

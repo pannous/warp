@@ -49,10 +49,20 @@ fn a_page_survives_losing_focus() {
 fn a_program_ending_in_an_html_page_is_shown() {
 	assert!(warp::serve::shows_page("jobs = [1]\nhtml{ lang:\"en\" body{ \"hi\" } }"));
 	assert!(warp::serve::shows_page("html { body{ \"hi\" } }"));
-	assert!(!warp::serve::shows_page("div{ \"hi\" }"));
+	assert!(warp::serve::shows_page("div{ \"hi\" }"), "any element is a page (card div-opens-app, user)");
 	assert!(!warp::serve::shows_page("page = html{ body{ \"hi\" } }\ncount(page)"));
 	let page = folder().join("printed.warp");
 	std::fs::write(&page, "html{ body{ \"hi\" } }").unwrap();
 	let output = crate::common::warp_command().arg("run").arg(&page).env("WARP_NO_WINDOW", "1").output().unwrap();
 	assert!(String::from_utf8_lossy(&output.stdout).contains("<body>hi</body>"), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
+// card div-opens-app (user: "div should spawn the app like HTML"): a program ending in any element shows as a page, an
+// element word that is no tag, a variable or a list does not
+#[test]
+fn a_program_ending_in_any_element_is_shown() {
+	assert!(warp::serve::shows_page("p{ \"hi\" }"));
+	assert!(warp::serve::shows_page("ul{ li{ \"a\" } li{ \"b\" } }"));
+	assert!(!warp::serve::shows_page("person{ name: \"Ada\" }"));
+	assert!(!warp::serve::shows_page("div = 3\ndiv"));
 }
