@@ -1667,6 +1667,11 @@ pub struct SpacedMinus;
 #[derive(Clone, Debug, PartialEq)]
 pub struct WrittenIndex(pub Number);
 
+/// The `1` a subscript adds to its index, `xs[i]` read `xs#(i+1)`: unlike a `+ 1` written by hand, a position meeting
+/// the brackets drops it (index_positions.rs, card index-position)
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubscriptOffset;
+
 /// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time.
 /// A slice `target[start:end]`, `target[start..end]`, `target[start...last]` is the call `slice(target, start, end)`.
 /// A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md).
@@ -1686,7 +1691,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 	if let Some((start, end)) = slice_bounds(&index) {
 		return call(SLICE_WORD, vec![target, start, end]);
 	}
-	let one = Node::Number(Number::Int(1));
+	let one = Node::meta(Node::Number(Number::Int(1)), Node::data(SubscriptOffset));
 	let one_based = match index.drop_meta() {
 		Node::Number(n) => Node::meta(Node::Number(*n + Number::Int(1)), Node::data(WrittenIndex(*n))),
 		_ => Node::Key(Box::new(index), Op::Add, Box::new(one)),
