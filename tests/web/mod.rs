@@ -107,6 +107,7 @@ mod test_page_rendered_sound; // card playground-refuses
 mod test_rendered_task_sounds; // card playground-drops
 mod test_rendered_at; // card sample-accurate
 mod test_rendered_pan; // card stereo-pan
+mod test_rendered_fades; // card sound-gain-ramps
 mod test_signal_sound; // card real-time
 mod test_task_files; // card task-sound-play
 mod test_page_play_file; // card browser-play
