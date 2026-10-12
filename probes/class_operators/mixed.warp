@@ -1,0 +1,5 @@
+class V{x:int; plus(o) := V(x + o.x)}
+class W{y:int; plus(o) := W(y - o.y)}
+t = 0
+for q in [V(1), W(9)] { r = q + q; t = t * 100 + (r is V ? r.x : r.y) }
+print(t)
