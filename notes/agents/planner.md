@@ -16,3 +16,7 @@ Per sub-card:
 When a card is ready, send warp-supervisor: card, branch, test filter, label. The supervisor spawns the
 implementer (`notes/agents/start.sh implementer <card> <label>`). Cards an implementer returns come back to you.
 Compiler features whose design only shows while implementing stay with one careful worker: don't split those.
+
+Pilot 2026-10-12 (cleanup-html-escape, mechanical, medium effort): spec complete, 3 edits and one test run, no
+judgment calls, clean merge request. Lesson: the planner removes its plan worktree after pushing the branch and says
+so; the implementer creates its own from the branch (`cowtree add <path> plan-<card>`).
