@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- signal-samples: samples/signal.warp (siren, play_signal) and samples/signal_blocks.warp (stereo chord, play_blocks)
+  leave samples/ but are kept as examples under "Signals" on the wiki sound page (warp-sound).
+- consistency (card #376, sub-card of #35 cleanup): an agent regularly checks the app against the documentation.
+  Clear mismatches: fix the docs (small cases: the app); ambiguous ones go through the Interviewer to the user.
 - self-hosting (user, asked directly; plan notes/self_hosting.md, topic card self-hosted): it is for dogfooding,
   independence from Rust and as a showcase. Scope: the parser first (lexer, parser, serializer), and later parts are
   planned once it matches. Each warp part is a twin of its Rust part, checked by a differential test over every sample
