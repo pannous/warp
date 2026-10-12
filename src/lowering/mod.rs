@@ -12,6 +12,7 @@ pub mod comprehensions;
 pub mod declarations;
 pub mod go_blocks;
 pub mod object_groups;
+pub mod one_entry_maps;
 pub mod channel_words;
 pub mod parallel;
 pub mod gpu_maps;

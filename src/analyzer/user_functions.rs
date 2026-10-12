@@ -212,10 +212,15 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if names_empty_type(type_node) {
 		return Some(Kind::Empty);
 	}
-	if type_name == crate::type_kinds::UNTYPED_FIELD || annotated_builtin_type(type_node).is_some_and(|name| union_parts(name).is_some()) {
+	// `m:map`, `m: map of int`: a map, held as a Node; `{a:1}` given to it is upgraded to the map of its entry (one_entry_maps.rs)
+	if type_name == crate::type_kinds::UNTYPED_FIELD || is_map_type(&type_name) || annotated_builtin_type(type_node).is_some_and(|name| union_parts(name).is_some()) {
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
+}
+
+fn is_map_type(type_name: &str) -> bool {
+	type_name == super::checks::MAP_TYPE || type_name.starts_with(super::checks::MAP_TYPE_PREFIX)
 }
 
 /// `x:ø` / `x:nil` / `x:unit`: the empty type, ø is held as a Node
