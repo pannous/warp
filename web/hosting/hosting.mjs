@@ -17,6 +17,7 @@ import routesScript from "../playground/host-routes.js";
 import gpuScript from "../playground/host-gpu.js";
 import timersScript from "../playground/host-timers.js";
 import randomScript from "../playground/host-random.js";
+import mediaScript from "../playground/host-media.js";
 import cloudWorkerScript from "../playground/cloud-worker.js";
 
 // the host scripts by the names src/site.rs host_scripts_of gives them (HOST_SCRIPTS, HOST_PARTS)
@@ -32,6 +33,7 @@ const HOST_SCRIPTS = {
 	"host-gpu.js": gpuScript,
 	"host-timers.js": timersScript,
 	"host-random.js": randomScript,
+	"host-media.js": mediaScript,
 };
 const ALWAYS_SCRIPTS = ["reader.js", "host.js"];
 
