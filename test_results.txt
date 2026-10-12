@@ -4210,6 +4210,7 @@ PASSED:
   ✓ web::test_headless_pages::typing_into_a_bound_field_sets_its_variable
   ✓ web::test_host_parts::a_hello_world_page_ships_no_part_of_the_host
   ✓ web::test_host_parts::a_page_keeping_values_ships_the_store
+  ✓ web::test_host_parts::a_page_painting_or_sounding_ships_the_media_part
   ✓ web::test_host_parts::a_page_ships_the_parts_its_module_imports
   ✓ web::test_host_parts::a_page_with_routes_ships_the_routes_part
   ✓ web::test_host_parts::each_part_is_chosen_by_the_words_it_gives
@@ -4803,4 +4804,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4798 passed, 0 failed, 4798 total tested
+10 ignored, 4799 passed, 0 failed, 4799 total tested
