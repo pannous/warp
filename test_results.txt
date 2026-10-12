@@ -297,6 +297,10 @@ PASSED:
   ✓ control::test_job_lists::counting_jobs_does_not_await_them
   ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
   ✓ control::test_job_lists::the_extremes_of_job_results_are_numbers
+  ✓ control::test_library_signatures::a_prelude_words_signature_as_its_head
+  ✓ control::test_library_signatures::an_operator_words_signature
+  ✓ control::test_library_signatures::table_words_positional
+  ✓ control::test_library_signatures::the_programs_own_definition_wins
   ✓ control::test_list_without::without_a_condition_keeps_the_elements_failing_it
   ✓ control::test_list_without::without_a_field_keeps_the_elements_lacking_it
   ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_block
@@ -669,6 +673,9 @@ PASSED:
   ✓ control::test_try_stack_overflow::the_instance_keeps_working_after_a_caught_overflow
   ✓ control::test_try_stack_overflow::try_catches_the_stack_overflow_of_a_call
   ✓ control::test_try_stack_overflow::untrusted_code_may_guard_a_call
+  ✓ control::test_type_field_fallback::a_type_key_is_read_as_written
+  ✓ control::test_type_field_fallback::another_missing_field_stays_loud
+  ✓ control::test_type_field_fallback::the_type_of_a_calls_result
   ✓ control::test_type_word_filter_loops::test_a_literal_list_of_matching_items_needs_no_filter
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
@@ -741,6 +748,7 @@ PASSED:
   ✓ ffi::header::tests::test_parse_header_file_math
   ✓ ffi::test_component_drop::a_dropped_handle_is_refused
   ✓ ffi::test_component_drop::dropping_a_handle_runs_the_destructor
+  ✓ ffi::test_component_exports_anywhere::a_components_exports_in_every_host
   ✓ ffi::test_component_operators::an_operator_without_its_method_is_loud
   ✓ ffi::test_component_operators::operators_of_handles_call_their_methods
   ✓ ffi::test_component_operators::plain_results_keep_warps_operators
@@ -1689,6 +1697,9 @@ PASSED:
   ✓ lists::test_map_get_kind::get_gives_the_value_kind_of_the_map
   ✓ lists::test_map_index::a_map_parameter_fills_and_finds_in_linear_time
   ✓ lists::test_map_index::an_indexed_map_changed_in_place_finds_the_change
+  ✓ lists::test_map_inside_loop::an_alias_after_the_fresh_list_still_parts_on_append
+  ✓ lists::test_map_inside_loop::map_and_filter_in_a_loop_body_take_linear_time
+  ✓ lists::test_map_inside_loop::map_into_a_variable_declared_before_the_loop_takes_linear_time
   ✓ lists::test_map_literal_number_keys::a_number_subscript_keys_a_map_literal
   ✓ lists::test_map_literal_number_keys::number_and_text_keys_of_a_map_literal_agree
   ✓ lists::test_map_parameter_keys::keys_of_a_one_entry_map_parameter
@@ -4906,4 +4917,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4901 passed, 0 failed, 4901 total tested
+10 ignored, 4912 passed, 0 failed, 4912 total tested
