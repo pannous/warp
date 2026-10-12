@@ -163,7 +163,7 @@ pub const VALUE_GIVING_WORDS: [&str; 14] = [
 	STD_IO,
 	SERVE_ROUTES,
 ];
-pub const HOST_WORDS: [&str; 66] = [
+pub const HOST_WORDS: [&str; 67] = [
 	DRAW_SHAPE,
 	DRAW_SHOW,
 	GPU_COMPUTE,
@@ -234,7 +234,7 @@ pub const HOST_WORDS: [&str; 66] = [
 ];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 66] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 67] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[
