@@ -76,3 +76,12 @@ speak(Dog("rex"))  // woof: the most specific method wins (a class over its pare
 Open (later steps): dispatch on every positional argument (Julia), not only the first; class-body methods named like
 library words still take class_methods' `method·sort` + `dispatched_by_class` route and should become methods of the
 generic function too; the list/map/text library as methods where that simplifies the code.
+
+## Methods: what came after (2026-10-12)
+- The fallback counts only when it takes the call's arguments: `b.take()` of a class Box never falls back to list's
+  `take(xs, n)` (traits.rs Generic::falls_back), so a single method is called directly.
+- list/text/map words are standard functions (decision type-library-words): modules.rs with_type_module_uses adds the
+  module for `f(x)`, `f x` and `x.f()`; a class's method of that name (body or `take(b:Box)`) is not the program's own
+  word (own_functions), so the module still comes and the method joins its generic function. `from list import zip`
+  keeps list's other words out. Sound's words other than play, beep, stop_sound and wait_sound still need `use sound`.
+- Follow-up cards: dispatch-positional, warn-field, library-words (step d).
