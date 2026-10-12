@@ -106,8 +106,18 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   of a list of a class's instances (comprehensions.rs field_of_elements, `[of·element.name for of·element in …]`), and
   `with` after such a list is `where` (with_as_where); on a table the filter stays its query
   (tests/control/test_field_of_elements.rs). `name of people#1` stays the field of one instance.
-- Not yet: the IN (…) batching (card orm-batched). An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
-  separator types `xs += [x]` as int + list.
+- A slice of an unloaded table (card orm-paging), `people#(11…20)`, `people[10:20]`, `first 3 of people`,
+  `people.first(3)`, `last 2 of people`, is `people·sliced(from, until)` (0-based start, exclusive end, an open bound 0 or
+  the count): the page query `std_io("table", "page", …)` (LIMIT … OFFSET …) for only those rows, each kept by
+  `people·kept`; a loaded table (or one with a required foreign key) slices its list. `loaded_table` knows a slice as
+  the table's list (static units). Test tests/control/test_table_paging.rs.
+- Batched foreign keys (card orm-batched, native): every read of rows before loading (one row, a loop's page, a slice,
+  a filter's rows, the load) first calls `teams·fetched([the rows' team ids])`, which selects the ids not met yet in
+  one query `"id" IN (?, ?, …)` (more than 500 of them load the other table whole); `teams·of(id)` then finds each in
+  the identity map, and a single key read alone fetches only its row. So `for p in people { p.team.name }` reads a page
+  of people and that page's teams, not the whole teams table. The browser has no SQL: `teams·of` loads the table
+  there. Test tests/control/test_table_batched_keys.rs.
+- An empty list must be `parse("[]")` (ø): a built `[]` List node with Space separator types `xs += [x]` as int + list.
 
 ## Writes and transactions
 - Default autocommit: each add/remove/field change is its own statement.
@@ -185,7 +195,8 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   key (`team: Team`) leaves its row out of the opened list with a runtime warning naming the row and suggesting
   `team: Team?`; the row stays in the database. An optional key (`team: Team?`) reads ø and is stored as 0
   (database_tables.rs opened, referenced, key_id).
-- Gaps: a loop reading `t.players` of every team runs a SELECT per team (no IN (…) batching yet); a required back key
+- Gaps: a loop reading `t.players` of every team runs a SELECT per team (the getter is a query at each read, so a moved
+  row shows at once; foreign keys are batched, one-to-many lists are not); a required back key
   (`team: Team`) makes `people·found` load the table, as any filter of such a table does.
 - Sample: samples/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
   the sample wrote before the column read ø (card orm-dangling); `climbers.players.add(bo)` writes bo.team through.
@@ -198,16 +209,21 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
    - migrations for added/removed columns;
    - the table loaded whole at registration, filters in memory.
 2. Queries instead of loading: SQL translation of filters (done, card orm-filters), lazy load + count + add without
-   loading + identity of added instances (done, orm-updates), #i/paging (card orm-paging).
+   loading + identity of added instances (done, orm-updates), #i and slices as page queries (done, card orm-paging).
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
-4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables (card orm-batched).
+4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), foreign keys of a page read with one
+   `id IN (…)` (done, card orm-batched).
 5. `transaction { }` (done, branch orm-transaction).
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the
-   key-value store). Done simply (branch orm-updates): web/playground/host-files.js `table` keeps each table as
-   one value `table <file> <name>` = {types, rows: [{id, column…}]} of the `database[k]` store, so it is loaded
-   before the run and written back on every change. The browser-built compiler keeps a filter as the comprehension
-   over the rows (database_tables::queried is native-only), since the browser has no SQL. One value per table rewrites
-   the whole table on each change: fine for samples, slow for big tables (then one object store per table; card orm-browser-stores).
+   key-value store). Done (branch orm-updates): web/playground/host-files.js `table` keeps each table's column types
+   under `table <file> <name>` of the `database[k]` store, loaded before the run with the rows. The browser-built compiler keeps a filter as the comprehension
+   over the rows (database_tables::queried is native-only), since the browser has no SQL. Each row is its own key
+   (`table <file> <name> #<id>`, card playground-two), so a change writes only its row, and the rows stay in id order
+   in memory (card orm-browser-stores): an insert takes the last id + 1, update and delete find their row by binary
+   search, a page slices before converting, and the kept rows are taken in id order at load. 200 000 inserts take
+   0.3 s (they spread every id before: 20 000 took 1.5 s, 200 000 overflowed). Separate IndexedDB object stores per
+   table would need a database version upgrade per new table and gain nothing over row keys. Test
+   tests/web/test_browser_tables.rs, timing probe probes/orm_browser_stores.mjs.
 7. Unit and type conversions in migrations, `@was` renames. Type conversions done (branch orm-updates):
    - database.rs `converted`: INTEGER → REAL → TEXT converts forward (rename the column aside, add it with the new
      type, `UPDATE … SET c = CAST(old AS type)`, drop the old one, in a SAVEPOINT); a fresh column because SQLite's
