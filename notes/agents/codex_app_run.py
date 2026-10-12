@@ -149,6 +149,7 @@ try:
     thread = request("thread/start", {"cwd": cwd, "approvalPolicy": "never", "sandbox": "danger-full-access"})["thread"]
     request("thread/name/set", {"threadId": thread["id"], "name": thread_name})
     signal.alarm(0)
+    print(f"started {thread['id']}", flush=True)
     sys.exit(run_turn(thread["id"]))
 except (BrokenPipeError, EOFError, TimeoutError):
     sys.exit(2)

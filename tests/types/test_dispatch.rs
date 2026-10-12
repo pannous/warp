@@ -125,3 +125,12 @@ fn a_method_named_like_a_field_keeps_both_and_warns() {
 	let warnings = warp::diagnostic::take_warnings();
 	assert!(warnings.iter().any(|warning| warning.message.contains("Box has a field size and a method size")), "{warnings:?}");
 }
+
+#[test]
+fn a_method_named_like_any_standard_function_keeps_it() {
+	is!("class P{x:int; def max():=x}; P(4).max() + [1,2].max() + max(3, 5)", 11);
+	is!("class Rope{s:text; def trim():=\"rope\"}; Rope(\"a\").trim() + \" a \".trim()", "ropea");
+	is!("class Coin{v:float; def round():=7}; Coin(1.5).round() + round(2.0)", 9);
+	is!("class Box{n:int; def int():=n}; Box(3).int() + \"42\".int()", 45);
+	is!("class C{x:int; def double():=x*2}; C(3).double() + 2.double()", 8);
+}

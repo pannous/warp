@@ -3560,6 +3560,7 @@ PASSED:
   ✓ types::test_dispatch::a_call_with_more_arguments_is_the_same_call_either_way
   ✓ types::test_dispatch::a_method_for_a_class_keeps_the_library_function
   ✓ types::test_dispatch::a_method_in_a_class_body_is_a_method_of_the_generic_function
+  ✓ types::test_dispatch::a_method_named_like_any_standard_function_keeps_it
   ✓ types::test_dispatch::a_value_of_run_time_type_dispatches_at_run_time
   ✓ types::test_dispatch::an_untyped_definition_is_the_fallback
   ✓ types::test_dispatch::classes_sharing_a_library_named_method_keep_the_library_function
@@ -4800,4 +4801,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4795 passed, 0 failed, 4795 total tested
+10 ignored, 4796 passed, 0 failed, 4796 total tested
