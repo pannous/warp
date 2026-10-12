@@ -21,7 +21,11 @@ fn a_slice_of_a_table_reads_only_its_rows() {
 	let read = |rest: &str, expected: i64, rows: usize| {
 		let before = warp::database::rows_read();
 		is!(&program("people_sliced", rest), expected);
-		assert_eq!(warp::database::rows_read(), before + rows, "{rest} read other rows than its {rows}");
+		assert_eq!(
+			warp::database::rows_read(),
+			before + rows,
+			"{rest} read other rows than its {rows}"
+		);
 	};
 	read("page = people#(11…20)\ncount(page) * 100 + page#1.age", 1011, 10);
 	read("page = people#(11..20)\ncount(page)", 9, 9);
@@ -46,7 +50,7 @@ fn a_sliced_row_is_the_one_instance_of_its_row() {
 	is!(
 		&program(
 			"people_sliced_identity",
-			"n = count(people)\npage = people#(48..50)\npage#3.age + n"
+			"n = count(people)\npage = people#(48…50)\npage#3.age + n"
 		),
 		100
 	);

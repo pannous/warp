@@ -970,7 +970,7 @@ fn table_statements(
 	[vec![with_tables(statement, tables, file, open)], updates].concat()
 }
 
-/// `people#1.age = 5`, `(people where …)#1.age += 1`: a column of an element of a table changed in place, as the
+/// `people#1.age = 5`, `(people where …)#1.age += 1`, `page#1.age = 5`: a column of an element of a table changed in place, as the
 /// element bound first, `people·element = people#1; people·element.age = 5`, whose change written_through writes to
 /// its row
 fn with_bound_element(statement: &Node, tables: &BTreeMap<String, Table>) -> Option<Vec<Node>> {
@@ -986,10 +986,12 @@ fn with_bound_element(statement: &Node, tables: &BTreeMap<String, Table>) -> Opt
 	if matches!(instance.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let variable = tables.keys().find(|name| instance.mentions_any(&[name.as_str()]))?;
-	if !columns_of(&tables[variable]).contains(&field.drop_meta().name()) {
-		return None;
-	}
+	// an element of another list, `page#1.name = …`, may be a row of any table with the column: written_through asks
+	let has_column = |name: &&String| columns_of(&tables[*name]).contains(&field.drop_meta().name());
+	let variable = match tables.keys().find(|name| instance.mentions_any(&[name.as_str()])) {
+		Some(mentioned) => Some(mentioned).filter(has_column)?,
+		None => tables.keys().find(has_column)?,
+	};
 	let element = Node::Symbol(lazy_name(variable, "element"));
 	let changed = Node::Key(
 		Box::new(Node::Key(Box::new(element.clone()), Op::Dot, field.clone())),
@@ -1417,14 +1419,9 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 			let count = called(lazy_name(&variable, "count"), None);
 			sliced(&variable, bound(&parts[2], Node::int(0)), bound(&parts[3], count))
 		}
-		Node::List(parts, _, _)
-			if parts.len() == 4
-				&& END_WORDS.contains(&parts[0].drop_meta().name().as_str())
-				&& parts[2].is_symbol(OF_WORD)
-				&& table_of(&parts[3]).is_some() =>
-		{
-			let variable = table_of(&parts[3]).unwrap_or_default();
-			end_slice(&variable, &parts[0].drop_meta().name(), rewrite(parts[1].clone()))
+		Node::List(_, Bracket::None, _) if end_phrase(&node).is_some_and(|(.., list)| table_of(&list).is_some()) => {
+			let (word, size, list) = end_phrase(&node).expect("matched");
+			end_slice(&table_of(&list).unwrap_or_default(), &word, rewrite(size))
 		}
 		Node::List(parts, _, _)
 			if parts.len() == 5
@@ -1527,6 +1524,15 @@ fn sliced(variable: &str, from: Node, until: Node) -> Node {
 			.into_iter()
 			.chain(lazy_names(variable)),
 	)
+}
+
+/// `first n of xs`, also as an assignment's value, where it comes grouped `((first n) of) xs`: the word, n and xs
+fn end_phrase(phrase: &Node) -> Option<(String, Node, Node)> {
+	let mut words = vec![];
+	crate::lambdas::flatten_phrase(phrase, &mut words);
+	let [word, size, of, list] = <[Node; 4]>::try_from(words).ok()?;
+	let word = word.drop_meta().name();
+	(END_WORDS.contains(&word.as_str()) && of.is_symbol(OF_WORD)).then_some((word, size, list))
 }
 
 /// `first n of people` (`people.first(n)`) and `last n of people` as slices
