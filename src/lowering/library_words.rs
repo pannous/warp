@@ -29,7 +29,7 @@ pub const COLLECTION_POSITION: &str = "collection_position";
 pub const MAP_GET_OR: &str = "map_get_or";
 /// map_without(map, key): the map without the key's entry, what `m.remove(k)` stores in m (analyzer removed_key)
 pub const MAP_WITHOUT: &str = "map_without";
-pub const MAP_WORD_FUNCTIONS: [&str; 7] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT];
+pub const MAP_WORD_FUNCTIONS: [&str; 8] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT, crate::one_entry_maps::MAP_OF_ENTRY];
 const IN_WORD: &str = "in";
 /// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
 const COUNT_WORD: &str = "count";
@@ -88,11 +88,11 @@ const SYNONYMS: [(&str, &[&str]); 29] = [
 pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 19] = [
+pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	(crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT, 0),
 	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
-	(MAP_WITHOUT, 2), (INSTANCE_COPY, 2),
+	(MAP_WITHOUT, 2), (INSTANCE_COPY, 2), (crate::one_entry_maps::MAP_OF_ENTRY, 1),
 ];
 /// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
 /// compiler it is `ord`, since `codepoint` is also a type word

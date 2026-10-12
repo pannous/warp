@@ -3047,6 +3047,7 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
+  ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
   ✓ programs::test_sound_synth::the_envelope_rises_decays_sustains_and_releases
@@ -3619,6 +3620,8 @@ PASSED:
   ✓ types::test_list_element_types::list_fields_check_run_time_items
   ✓ types::test_list_element_types::list_fields_check_their_items
   ✓ types::test_list_test_of_a_map::a_map_argument_is_no_list
+  ✓ types::test_list_test_of_a_map::a_one_entry_map_argument_is_a_map
+  ✓ types::test_list_test_of_a_map::a_one_entry_map_is_upgraded_where_a_map_is_needed
   ✓ types::test_loop_item_into_annotated::a_local_annotated_inside_a_loop_body_is_checked_too
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
   ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
@@ -4753,7 +4756,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
 
 SUMMARY:
-10 ignored, 4750 passed, 1 failed, 4751 total tested
+10 ignored, 4753 passed, 0 failed, 4753 total tested

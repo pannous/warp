@@ -1,5 +1,7 @@
 # warp as a web framework (plan, 2026-10-07)
 
+Roadmap card: web-framework (board topic; its sub-cards are the steps below, notes/roadmaps.md).
+
 Goal (user, 2026-10-07): replace React / Svelte / Next with warp itself: markup is warp data, reactivity is warp's
 signals, the server is the same program. The cards are the web-* cards on the board (column Soon); this note is their
 order and what each builds on. Defaults below are undoable; open questions go to the Interviewer.

@@ -29,7 +29,7 @@ const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 const EMPTY_TEXT: &str = "ø";
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 19] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
 	(super::wasi_emitter::WASI_ENVIRONMENT, super::wasi_emitter::WASI_ENVIRONMENT),
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
@@ -38,6 +38,7 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 19] = [
 	(crate::library_words::COLLECTION_POSITION, crate::library_words::COLLECTION_POSITION),
 	(crate::library_words::MAP_GET_OR, crate::library_words::MAP_GET_OR),
 	(crate::library_words::MAP_WITHOUT, crate::library_words::MAP_WITHOUT),
+	(crate::one_entry_maps::MAP_OF_ENTRY, crate::one_entry_maps::MAP_OF_ENTRY),
 	(crate::library_words::ORD, CODEPOINT_OF),
 	("chars", "text_chars"),
 	("field_with", "field_with"),
