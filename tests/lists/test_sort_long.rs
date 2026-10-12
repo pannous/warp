@@ -23,3 +23,13 @@ fn equal_keys_keep_their_order() {
 	is!("sort(\"hello\")", "ehllo");
 	is!("sort([])", warp::parse("[]"));
 }
+
+#[test]
+fn ordered_input_sorts_in_linear_time() {
+	is!(&timed("n - i", "sort(xs)"), 1);
+	is!(&timed("i", "sort(xs)"), 0);
+	// descending with equal keys is no strict reversal: the merge keeps their order
+	is!("xs = [{k:2 v:1} {k:2 v:2} {k:1 v:3}]; xs.sort_by(p => p.k).map(p => p.v)", warp::parse("[3 1 2]"));
+	is!("sort([5 4 3 2 1])", warp::parse("[1 2 3 4 5]"));
+	is!("sort([1 2 2 3])", warp::parse("[1 2 2 3]"));
+}

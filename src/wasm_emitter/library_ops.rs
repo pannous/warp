@@ -324,8 +324,32 @@ impl WasmGcEmitter {
 				rank_of_cell(f);
 				Self::emit_list(f, &increment(index));
 			});
+			// in order already (ascending: as it is; strictly descending: reversed, so equal keys keep their order) takes
+			// n - 1 comparisons and no merging
+			let (ascending, descending) = (left, right);
+			Self::emit_list(f, &[I::I32Const(1), I::LocalSet(ascending), I::I32Const(1), I::LocalSet(descending), I::I32Const(1), I::LocalSet(low)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(low), I::LocalGet(count), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(f, &get(ranks, low));
+			Self::emit_list(f, &[I::RefAsNonNull, I::LocalGet(ranks), I::LocalGet(low), I::I32Const(1), I::I32Sub, I::ArrayGet(array), I::RefAsNonNull]);
+			s.call(f, NODE_ORDER);
+			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::If(BlockType::Empty), I::I32Const(0), I::LocalSet(ascending), I::Else, I::I32Const(0), I::LocalSet(descending), I::End]);
+			Self::emit_list(f, &[I::LocalGet(ascending), I::LocalGet(descending), I::I32Or, I::I32Eqz, I::BrIf(1)]);
+			Self::emit_list(f, &increment(low));
+			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(descending), I::If(BlockType::Empty), I::I32Const(0), I::LocalSet(low), I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(high)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(low), I::LocalGet(high), I::I32GeS, I::BrIf(1)]);
+			for array_local in [cells, ranks] {
+				Self::emit_list(f, &get(array_local, low));
+				f.instruction(&I::LocalSet(cell));
+				Self::emit_list(f, &[I::LocalGet(array_local), I::LocalGet(low)]);
+				Self::emit_list(f, &get(array_local, high));
+				Self::emit_list(f, &[I::ArraySet(array), I::LocalGet(array_local), I::LocalGet(high), I::LocalGet(cell), I::ArraySet(array)]);
+			}
+			Self::emit_list(f, &increment(low));
+			Self::emit_list(f, &[I::LocalGet(high), I::I32Const(1), I::I32Sub, I::LocalSet(high), I::Br(0), I::End, I::End, I::End]);
 			// runs of width merged pairwise into the other arrays, which then take their place
-			Self::emit_list(f, &[I::I32Const(1), I::LocalSet(width), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::LocalGet(ascending), I::LocalGet(descending), I::I32Or, I::Select, I::LocalSet(width)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &[I::LocalGet(width), I::LocalGet(count), I::I32GeU, I::BrIf(1), I::I32Const(0), I::LocalSet(low)]);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(low), I::LocalGet(count), I::I32GeU, I::BrIf(1)]);
 			smaller(f, &[I::LocalGet(low), I::LocalGet(width), I::I32Add], &[I::LocalGet(count)]);
