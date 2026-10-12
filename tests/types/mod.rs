@@ -4,6 +4,8 @@ mod test_inline_unions;
 mod test_class_unions;
 // card class-field
 mod test_class_fields_checked;
+// card undeclared-union
+mod test_union_spellings;
 mod test_list_element_types;
 mod test_cast_bugs;
 mod test_unknown_conversion; // card unknown-word

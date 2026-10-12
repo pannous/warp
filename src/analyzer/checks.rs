@@ -464,6 +464,7 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_type_word_functions(program)
 		.or_else(|| check_parameter_annotations(program))
+		.or_else(|| check_union_fields(program))
 		.or_else(|| check_declared_types(program, &mut HashMap::new(), &mut Scope::new(), &declared_classes(program)))
 		.or_else(|| super::list_views::check_widened_list_views(program))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
@@ -1294,6 +1295,9 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 		let annotation = param.annotation.as_ref()?;
 		let type_name = annotation.name();
 		let is_known_name = |name: &str| type_word_kind(name).is_some() || user_types.get_by_name(name).is_some() || traits.is_trait(name);
+		if let Some(part) = union_parts(type_name.trim_end_matches('?')).and_then(|parts| parts.into_iter().find(|part| !is_known_name(part))) {
+			return Some(unknown_union_part(annotation, &format!("parameter {}", param.name), &param.name, &type_name, part));
+		}
 		let known = match type_name.strip_prefix(LIST_OF_PREFIX) {
 			Some(element) => is_known_name(element) || names_list_type(element),
 			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some() || traits.is_trait(&type_name),
@@ -1372,8 +1376,8 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
 	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
 	parts.dedup();
-	// a class covers no builtin type: `Point | text` keeps both
-	let admits_part = |wide: &String, narrow: &String| !is_bool_type(wide) && !is_declared(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind));
+	// only a builtin type covers another: `Point | text` keeps both, `int | zork` keeps zork to be refused
+	let admits_part = |wide: &String, narrow: &String| !is_bool_type(wide) && builtin_type_kind(wide).is_some() && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind));
 	// two parts held alike (`rational | int`) admit each other: the subtype goes
 	let covers = |wide: &String, narrow: &String| {
 		wide != narrow && admits_part(wide, narrow) && (!admits_part(narrow, wide) || crate::type_tests::type_matches(narrow, wide))
@@ -1393,6 +1397,30 @@ fn strip_round(node: &Node) -> &Node {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => strip_round(&items[0]),
 		other => other,
 	}
+}
+
+/// `x: int | zork`: the refusal of a union part that names no type, at the variable, parameter or field declared so
+fn unknown_union_part(at: &Node, place: &str, name: &str, type_name: &str, part: &str) -> Diagnostic {
+	let message = format!("{place} is declared {type_name}: an inline union joins builtin types and declared classes, {part} is neither");
+	Diagnostic::at(at, message).fix(format!("declare {name}:any to hold any value"))
+}
+
+/// A field `size: int | zork` of a class: its union names no type zork
+pub(super) fn check_union_fields(program: &Node) -> Option<Diagnostic> {
+	let classes = declared_classes(program);
+	let mut class_nodes = vec![];
+	program.visit(&mut |part| if let Node::Type { .. } = part {
+		class_nodes.push(part.clone());
+	});
+	class_nodes.iter().find_map(|class| {
+		let mut registry = crate::type_kinds::TypeRegistry::new();
+		registry.register_from_node(class)?;
+		let type_def = registry.types().first()?;
+		type_def.fields.iter().find_map(|field| {
+			let part = unsupported_union_part(&field.type_name, &classes)?;
+			Some(unknown_union_part(class, &format!("field {}.{}", type_def.name, field.name), &field.name, &field.type_name, part))
+		})
+	})
 }
 
 /// The first part of an inline union that is neither a builtin type nor a declared class: `point` of `point or text`
@@ -1430,8 +1458,7 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			};
 			if let Some((name, type_name)) = declaration {
 				if let Some(part) = unsupported_union_part(&type_name, classes) {
-					let message = format!("{name} is declared {type_name}: an inline union joins builtin types and declared classes, {part} is neither");
-					return Some(Diagnostic::at(node, message).fix(format!("declare {name}:any to hold any value")));
+					return Some(unknown_union_part(node, &name, &name, &type_name, part));
 				}
 				declared.insert(name.clone(), type_name.clone());
 				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value).or_else(|| evident_items_mismatch(node, &name, &type_name, value, lists)) {
