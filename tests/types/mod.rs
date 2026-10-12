@@ -9,7 +9,6 @@ mod test_any_into_annotated_types;
 mod test_as_number_variable; // card number-variable
 mod test_be_definitions;
 mod test_binary_int; // card binary-int
-mod test_index_position; // card index-position
 mod test_block_data_paths;
 mod test_bool_assign;
 mod test_bool_conversion;
@@ -70,6 +69,7 @@ mod test_generic_classes;
 mod test_generic_types;
 mod test_hex_int; // card hex-printing
 mod test_hex_word; // hex x is hex(x), literals are 0x…
+mod test_index_position; // card index-position
 mod test_instance_arguments;
 mod test_instance_final_text; // card instance-final
 mod test_instance_size; // card size-instance

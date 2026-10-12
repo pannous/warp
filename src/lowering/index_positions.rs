@@ -78,8 +78,12 @@ fn converted(node: Node, counted: &HashMap<String, Count>) -> Node {
 	if !matches!(node, Node::Meta { .. }) {
 		if let Some((head, body, rebuild)) = definition_parts(&node) {
 			let parameters = head.children();
-			let mut bindings: Vec<Binding> =
-				parameters.iter().skip(1).filter_map(parameter_name).map(Binding::Plain).collect();
+			let mut bindings: Vec<Binding> = parameters
+				.iter()
+				.skip(1)
+				.filter_map(parameter_name)
+				.map(Binding::Plain)
+				.collect();
 			collect_bindings(&head, &mut bindings);
 			let own = scope_counts(&body, bindings, counted);
 			return rebuild(head, converted(body, &own));
@@ -189,11 +193,17 @@ fn scope_counts(body: &Node, mut bindings: Vec<Binding>, outer: &HashMap<String,
 			.or_insert(count);
 	}
 	let inherited = outer.iter().filter(|(name, _)| !own.contains_key(*name));
-	inherited.map(|(name, count)| (name.clone(), *count)).chain(counted(&own)).collect()
+	inherited
+		.map(|(name, count)| (name.clone(), *count))
+		.chain(counted(&own))
+		.collect()
 }
 
 fn counted(names: &HashMap<String, Option<Count>>) -> HashMap<String, Count> {
-	names.iter().filter_map(|(name, count)| Some((name.clone(), (*count)?))).collect()
+	names
+		.iter()
+		.filter_map(|(name, count)| Some((name.clone(), (*count)?)))
+		.collect()
 }
 
 enum Binding {
@@ -234,7 +244,10 @@ fn collect_bindings(node: &Node, bindings: &mut Vec<Binding>) {
 }
 
 fn collect_parts(node: &Node, bindings: &mut Vec<Binding>) {
-	node.drop_meta().parts().into_iter().for_each(|part| collect_bindings(part, bindings));
+	node.drop_meta()
+		.parts()
+		.into_iter()
+		.for_each(|part| collect_bindings(part, bindings));
 }
 
 fn declared_count(annotation: &Node) -> Option<Count> {
