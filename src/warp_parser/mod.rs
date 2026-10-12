@@ -1272,6 +1272,11 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 }
 
 
+/// The name before a minus written apart, `f - 2`: the subtraction, where `f -2` applies a callable f to -2, as the
+/// math words do (`abs - 2`, `abs -2`; analyzer::lower_negated_calls)
+#[derive(Clone, Debug, PartialEq)]
+pub struct SpacedMinus;
+
 /// The number a subscript was written with, `1` of `d[1]`, kept on its shifted index `d#2`: a map keyed by numbers
 /// reads it (number_keys.rs, P34)
 #[derive(Clone, Debug, PartialEq)]

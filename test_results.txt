@@ -560,6 +560,7 @@ PASSED:
   ✓ control::test_task_name_scope::a_loop_variable_leaves_the_main_variable_alone
   ✓ control::test_task_name_scope::a_loop_variable_named_like_a_task_is_the_loop_variable
   ✓ control::test_task_parameter_shadows::a_parameter_named_like_a_function_is_the_parameter
+  ✓ control::test_task_pool::queued_and_nested_tasks_finish_on_the_fixed_pool
   ✓ control::test_task_signals::a_raise_in_a_task_runs_the_programs_handler
   ✓ control::test_task_signals::a_raise_nobody_awaits_is_handled_before_the_run_ends
   ✓ control::test_task_signals::a_raise_without_handler_fails_the_task
@@ -2564,6 +2565,11 @@ PASSED:
   ✓ operators::test_logical_calls::test_node_operand_of_and_or
   ✓ operators::test_logical_values_in_functions::or_of_numbers_in_a_function_stays_a_number
   ✓ operators::test_logical_values_in_functions::or_of_texts_in_a_function
+  ✓ operators::test_minus_after_callable::a_library_word_takes_a_negative_argument
+  ✓ operators::test_minus_after_callable::a_minus_written_apart_subtracts
+  ✓ operators::test_minus_after_callable::a_type_takes_a_negative_argument
+  ✓ operators::test_minus_after_callable::a_user_function_takes_a_negative_argument
+  ✓ operators::test_minus_after_callable::a_variable_minus_a_number_subtracts
   ✓ operators::test_mutating_bang::a_function_with_bang_on_its_argument_assigns_back
   ✓ operators::test_mutating_bang::a_method_with_bang_assigns_back
   ✓ operators::test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
@@ -3636,6 +3642,9 @@ PASSED:
   ✓ types::test_mutating_methods::a_method_setting_an_element_of_a_list_field_changes_its_object
   ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
+  ✓ types::test_nested_type_calls::a_braceless_type_call_nests_in_a_type_call
+  ✓ types::test_nested_type_calls::a_braceless_type_call_nests_like_a_user_function
+  ✓ types::test_nested_type_calls::a_type_named_by_the_program_keeps_its_meaning
   ✓ types::test_number_field::a_number_field_holds_a_float
   ✓ types::test_number_field::a_whole_text_as_number_is_a_number
   ✓ types::test_optional_casts::a_function_of_empty_returns_empty
@@ -3745,6 +3754,8 @@ PASSED:
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_text_as_number::a_literal_text_as_number_is_its_number_in_a_variable_too
   ✓ types::test_text_as_number::a_run_time_text_as_number_is_its_number
+  ✓ types::test_text_of_text::text_of_a_text_conversion_is_its_value
+  ✓ types::test_text_of_text::text_of_data_stays_its_source
   ✓ types::test_time_programs_run::a_duration_in_a_unit_is_its_quantity_in_a_running_program
   ✓ types::test_time_programs_run::a_placement_in_parentheses_has_fields
   ✓ types::test_time_programs_run::a_zoned_times_rules_version_is_read_at_run_time
@@ -4344,6 +4355,7 @@ PASSED:
   ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
+  ✓ web::test_webview::a_page_survives_losing_focus
   ✓ web::test_webview::a_program_shows_its_page_with_what_a_command_printed
   ✓ web::test_webview::an_html_file_shows_in_the_web_view
   ✓ web::test_webview::without_check_no_window_opens_under_warp_no_window
@@ -4743,4 +4755,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4738 passed, 0 failed, 4738 total tested
+10 ignored, 4750 passed, 0 failed, 4750 total tested

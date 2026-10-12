@@ -11,3 +11,23 @@
 - Re-evaluate only state-changing lines before the current expression, so ordinary queries and prints are not replayed.
 - Add a headless console probe that exercises assignment followed by a variable read through the real CLI.
 - Record the replay-based persistence boundary in the console notes, then run the focused CLI test, clippy, and wasm32 check.
+
+# Fork-join scheduler cleanup
+
+## Scope
+
+- Replace native task-per-thread spawning with one fixed worker pool per program run.
+- Keep task ids, copied values, task controls, result ordering, nested tasks, and error delivery unchanged.
+- Bound concurrent worker threads to twice the machine's available parallelism while allowing queued tasks to start as workers become free. The second worker per core keeps blocking tasks from idling the CPU.
+
+## Verification
+
+- Establish the existing task-test baseline before implementation.
+- Add a focused regression proving that more submitted tasks than workers complete through the bounded pool.
+- Run the targeted task filters, clippy, and the wasm32 check through the project-prescribed commands.
+
+## Cleanup
+
+- Reuse `TaskTable`; do not add a second scheduler abstraction or a new dependency.
+- Remove the per-task `JoinHandle` model once the pool owns worker handles.
+- Keep the worktree-only Cargo version suffix uncommitted.

@@ -96,9 +96,37 @@ impl Viewer {
 					std::process::exit(0);
 				});
 		}
-		self.webview = Some(builder.build(&window).map_err(|failure| failure.to_string())?);
+		// a child of winit's view, never `build`: that swaps wry's view in as the window's content, which winit still
+		// reads as its own (a crash when the window loses focus, card focus-crash)
+		builder = builder.with_bounds(window_bounds(&window)).with_focused(true);
+		let webview = builder.build_as_child(&window).map_err(|failure| failure.to_string())?;
+		if self.check {
+			lose_focus(&window);
+		}
+		self.webview = Some(webview);
 		self.window = Some(window);
 		Ok(())
+	}
+}
+
+/// What AppKit sends when the user switches to another app (Cmd+Tab), sent directly so a hidden checked window goes
+/// through it too: it crashed winit while wry's view had replaced winit's (card focus-crash)
+fn window_bounds(window: &Window) -> wry::Rect {
+	let size = window.inner_size().to_logical::<f64>(window.scale_factor());
+	wry::Rect { position: winit::dpi::LogicalPosition::new(0.0, 0.0).into(), size: size.into() }
+}
+
+fn lose_focus(window: &Window) {
+	use objc2::{msg_send, runtime::AnyObject};
+	use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+	let Ok(handle) = window.window_handle() else { return };
+	let RawWindowHandle::AppKit(appkit) = handle.as_raw() else { return };
+	// SAFETY: ns_view is the window's live NSView; window and delegate are AppKit's own getters
+	unsafe {
+		let view: &AnyObject = appkit.ns_view.cast().as_ref();
+		let ns_window: *mut AnyObject = msg_send![view, window];
+		let delegate: *mut AnyObject = msg_send![ns_window, delegate];
+		let _: () = msg_send![delegate, windowDidResignKey: std::ptr::null::<AnyObject>()];
 	}
 }
 
@@ -121,8 +149,14 @@ impl ApplicationHandler for Viewer {
 	}
 
 	fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-		if matches!(event, WindowEvent::CloseRequested) {
-			event_loop.exit();
+		match event {
+			WindowEvent::CloseRequested => event_loop.exit(),
+			WindowEvent::Resized(_) => {
+				if let (Some(window), Some(webview)) = (&self.window, &self.webview) {
+					let _ = webview.set_bounds(window_bounds(window));
+				}
+			}
+			_ => {}
 		}
 	}
 }

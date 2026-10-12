@@ -6,6 +6,16 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- small-changes-on-main (user): agents may work on main without a worktree when their change is small or doesn't
+  conflict with other work; moving onto or off a worktree on demand is fine (notes/roles.md "Small changes on main").
+- session-names (user): a session is named for the task it is on now (the card key until the area is known), never a
+  guessed area (notes/agents/supervisor.md).
+- single-entry (warp-worker; user, final wording): "keep everything as it is and automatically upgrade it to a map".
+  `{a:1}` stays the pair internally (`{a:1} == (a:1)` yes, existing tests unchanged) and is upgraded to a one-entry
+  map wherever a map is needed: a map parameter, map methods (`m = {a:1}; m.count` 1), inserting into a map.
+  Replaces the earlier "braces always make a map" wording the same day.
+
 ## Decided 2026-10-11 (user; via warp-supervisor or the Interviewer)
 - repeating-decimals (user, via warp-integrator): no parentheses syntax for repeating decimals; only the overline form
   `0.3̅` (U+0305 after each period digit) is the exact ratio 1/3. `0.(3)` is not a repeating decimal and `0.5(3)` stays

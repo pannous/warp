@@ -36,3 +36,4 @@ mod test_comma_next_to_comparison; // P227
 mod test_infix_word_operators; // card g_mnvA
 mod test_text_or_number; // cards golf-text, golf-sum
 mod test_natural_phrases;
+mod test_minus_after_callable; // int -3 is int(-3), f - 2 subtracts

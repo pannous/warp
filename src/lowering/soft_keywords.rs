@@ -36,6 +36,15 @@ pub fn program_names(program: &Node, word: &str) -> bool {
 	named
 }
 
+/// Every name the program gives: its variables, parameters, fields and functions
+pub fn names_given(program: &Node) -> std::collections::HashSet<String> {
+	let mut names = std::collections::HashSet::new();
+	walk_names(program, &mut |name, _| {
+		names.insert(name.to_string());
+	});
+	names
+}
+
 /// A hard keyword assigned anywhere, a soft one defined at the top level: the loud error
 fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 	if let Some(name) = defined_name(node) {
