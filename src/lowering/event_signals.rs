@@ -955,6 +955,17 @@ pub(crate) fn statements_of(block: &Node) -> Vec<Node> {
 	}
 }
 
+/// The last of statements_of, borrowed where it can be
+pub(crate) fn last_statement(block: &Node) -> std::borrow::Cow<'_, Node> {
+	match block.drop_meta() {
+		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => {
+			std::borrow::Cow::Owned(Node::List(words.clone(), Bracket::None, Separator::Space))
+		}
+		Node::List(statements, Bracket::Curly, _) => std::borrow::Cow::Borrowed(statements.last().unwrap_or(block)),
+		other => std::borrow::Cow::Borrowed(other),
+	}
+}
+
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
 pub(crate) fn global_declaration(name: &str) -> Node {
 	crate::law::substitute(

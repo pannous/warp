@@ -1512,40 +1512,34 @@ fn std_module_name(name: &str) -> &str {
 		.map_or(name, |(_, module)| *module)
 }
 
-/// Each standard module with the names it defines, in their order
-fn std_module_words() -> &'static [(&'static str, Vec<String>)] {
-	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	DEFINED.get_or_init(|| {
-		STD_MODULES
+/// The names the standard module at `index` of STD_MODULES defines, in their order; each module is parsed for them
+/// once, when first asked (a compile asks for a few of them)
+fn std_module_words(index: usize) -> &'static [String] {
+	static DEFINED: [std::sync::OnceLock<Vec<String>>; STD_MODULES.len()] =
+		[const { std::sync::OnceLock::new() }; STD_MODULES.len()];
+	DEFINED[index].get_or_init(|| {
+		let source = STD_MODULES[index].1;
+		statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
 			.iter()
-			.map(|(module, source)| {
-				(
-					*module,
-					statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
-						.iter()
-						.filter(|statement| used_module(statement).is_none())
-						.filter_map(declared_name)
-						.collect(),
-				)
-			})
+			.filter(|statement| used_module(statement).is_none())
+			.filter_map(declared_name)
 			.collect()
 	})
 }
 
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
-	std_module_words()
-		.iter()
-		.find(|(_, names)| names.iter().any(|name| name == word))
-		.map(|(module, _)| *module)
+	(0..STD_MODULES.len())
+		.find(|index| std_module_words(*index).iter().any(|name| name == word))
+		.map(|index| STD_MODULES[index].0)
 }
 
 /// The names a standard module defines, in their order (`dir(time)`); None for no standard module
 pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
-	std_module_words()
+	STD_MODULES
 		.iter()
-		.find(|(name, _)| *name == module)
-		.map(|(_, names)| names.as_slice())
+		.position(|(name, _)| *name == module)
+		.map(std_module_words)
 }
 
 /// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word
