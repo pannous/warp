@@ -122,6 +122,49 @@ pub fn paint(color: Color, text: &str) -> String {
 	}
 }
 
+/// The position a diagnostic without a recorded one names (Diagnostic::at)
+const UNKNOWN_POSITION: &str = " at 0:0";
+/// Between a diagnostic's message and its fix
+const FIX_SEPARATOR: &str = "; fix: ";
+
+/// `message` at `position`, before its fix, unless it names a position already
+pub fn located_at(message: String, position: &crate::meta::LineInfo) -> String {
+	let at = format!(" at {}", position.place());
+	if message.contains(UNKNOWN_POSITION) {
+		return message.replacen(UNKNOWN_POSITION, &at, 1);
+	}
+	if names_position(&message) {
+		return message;
+	}
+	match message.split_once(FIX_SEPARATOR) {
+		Some((what, fix)) => format!("{what}{at}{FIX_SEPARATOR}{fix}"),
+		None => format!("{message}{at}"),
+	}
+}
+
+/// The first Error in the tree, its message located at the nearest position around it: a parser error is wrapped in
+/// the position where it was read
+pub fn first_located_error(node: &Node) -> Option<Node> {
+	located_error_below(node, None)
+}
+
+fn located_error_below(node: &Node, around: Option<&crate::meta::LineInfo>) -> Option<Node> {
+	let own = node.get_lineinfo();
+	let around = own.as_ref().or(around);
+	let below = |part: &Node| located_error_below(part, around);
+	match node {
+		Node::Error(message) => Some(match (message.drop_meta(), around) {
+			(Node::Text(text), Some(position)) => crate::node::error(&located_at(text.clone(), position)),
+			_ => node.clone(),
+		}),
+		Node::Key(left, _, right) => below(left).or_else(|| below(right)),
+		Node::List(items, _, _) => items.iter().find_map(below),
+		Node::Meta { node, .. } => below(node),
+		Node::Type { name, body } => below(name).or_else(|| below(body)),
+		_ => None,
+	}
+}
+
 /// Does a message end its description with a position ` at line:column`
 pub fn names_position(message: &str) -> bool {
 	message_position(message).is_some() || message_file_position(message).is_some()

@@ -450,7 +450,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::wasm_emitter::{trap_detail_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX};
+pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX, TRAP_POSITION};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
@@ -459,7 +459,15 @@ pub(crate) fn with_trap_detail<T, R>(
 	instance: &Instance,
 ) -> Result<R> {
 	outcome.map_err(|failure| {
-		let failure = anyhow::Error::from(failure);
+		let mut failure = anyhow::Error::from(failure);
+		let position = instance
+			.get_global(&mut *store, TRAP_POSITION)
+			.and_then(|global| global.get(&mut *store).i32())
+			.map(i64::from)
+			.and_then(trap_position_line);
+		if let Some(position) = position {
+			failure = failure.context(position);
+		}
 		let detail = instance
 			.get_global(&mut *store, TRAP_DETAIL)
 			.map(|global| global.get(&mut *store));

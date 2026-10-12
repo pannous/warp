@@ -553,8 +553,8 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
 	let node = run_passes(node, SOURCE_PASSES);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
@@ -579,16 +579,16 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = run_passes(node, MEANING_PASSES);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
 	let node = effects.answer_queries(node);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
 		return Err(crate::node::error(&format!(

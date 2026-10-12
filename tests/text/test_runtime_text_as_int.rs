@@ -13,9 +13,9 @@ fn a_text_variable_converts_to_int() {
 
 #[test]
 fn a_text_without_a_number_is_a_runtime_error() {
-	is!("x=\"ab\"; x as int", error("invalid number"));
-	is!("x=\"\"; x as int", error("invalid number"));
-	is!("x=\"1x\"; x as int", error("invalid number"));
+	is!("x=\"ab\"; x as int", error("invalid number at 1:9"));
+	is!("x=\"\"; x as int", error("invalid number at 1:7"));
+	is!("x=\"1x\"; x as int", error("invalid number at 1:9"));
 }
 
 #[test]
