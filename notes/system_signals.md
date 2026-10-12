@@ -179,6 +179,17 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   adds a frame handler after the first `on key` that emits `key{key: …}` per press, named as the page's
   KeyboardEvent.key: the character, ArrowUp/Down/Left/Right, Enter, Escape, Backspace, Tab (KEY_NAMES). Not for a page
   or a program serving its page (the page raises key itself). Not yet: keys in a terminal, the `warp app` web view.
+- Native clicks (card native-window): `on click {…}` likewise hears the clicks over the paint window. system_values.rs
+  queues each button press (down that was up) with its place; a frame handler pops them (`click_pressed`, then
+  `click_x`, `click_y`) and emits `click{x, y}` in the painted frame's pixels, as the page's canvas raises it.
+- Key names (card key-if, lowering/key_names.rs): inside `on key {…}` a bare `key` is `event.key` (a program's own
+  variable `key` wins) and key words name keys: Escape/ESC, Enter/RETURN, Tab, Backspace, Space, Delete, the arrows
+  (UP, DOWN, LEFT, RIGHT), F1 … F12, so `on key { if key == ESC { exit } }`. Letters stay texts (`key == "a"`). Only a
+  handler statement, not yet an element's `on key` among its items. A comparison there with a word naming nothing
+  (`key == ESCAPEE`, `key == q`) warns: it never holds.
+- Keyboard state (card keyboard-state): `key_down` is the system value whether a key is held now (natively the paint
+  window's held key, in the playground canvas.js trackKey's), for loops as mouse_down: `if key_down { clear(white) }`.
+  Which key is held is not a value yet; `on key` names each press.
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
   `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
 - System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),

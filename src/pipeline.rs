@@ -425,6 +425,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::system_values::read,
 	crate::shared_arrays::lower,
 	crate::fetch_signals::lower,
+	// `on key { if key == ESC … }`: the pressed key and the key words, before system_signals reads the key handlers
+	crate::key_names::lower,
 	crate::system_signals::lower,
 	crate::element_events::lower_binds,
 	crate::component_state::lower,
