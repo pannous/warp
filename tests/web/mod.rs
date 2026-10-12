@@ -17,8 +17,12 @@ mod test_completion_terse; // card completion-terse: the gray continuation is co
 mod test_completion_words; // cards code-completion-should, completion-must
 mod test_components;
 mod test_css_transitions;
+#[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
+mod test_database_site; // database[k] in a built site
 #[cfg(feature = "native")] // wrangler dev runs the Worker (card cloud-deploy)
 mod test_deploy;
+#[cfg(feature = "native")] // runs node
+mod test_dev_marks; // the dev overlay marks the failing word as the editor does
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
 mod test_dev_server;
 #[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
@@ -37,6 +41,8 @@ mod test_guide_sections; // card guide-lists
 mod test_headless_pages;
 #[cfg(feature = "native")] // src/site.rs is native
 mod test_host_parts; // the parts of host.js a site ships
+#[cfg(feature = "native")] // src/site.rs is native
+mod test_host_parts_std; // std_pure / std_io parts chosen by the std modules a program calls
 mod test_html_escape; // card cleanup-html-escape
 #[cfg(feature = "native")] // lib/markup.warp against src/html.rs, natively
 mod test_html_render;
@@ -55,6 +61,8 @@ mod test_missing_use; // card clickable-hint
 mod test_page_custom_events; // card page-custom-event
 mod test_page_play_file; // card browser-play
 mod test_page_rendered_sound; // card playground-refuses
+#[cfg(feature = "native")] // builds a site natively
+mod test_page_server_data; // a main-level statement changing server data stays on the server
 mod test_page_tests;
 #[cfg(feature = "native")] // runs node
 mod test_playground_paint; // card canvas-zero
