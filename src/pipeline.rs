@@ -316,6 +316,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
+	crate::lowering::index_positions::mark_declarations,
 	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
 	crate::type_name_matching::lower_prefixed_declarations,
 	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
@@ -499,6 +501,8 @@ const MEANING_PASSES: &[fn(Node) -> Node] = &[
 	crate::switch::lower,
 	crate::phrase_words::lower,
 	crate::library_words::lower,
+	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
+	crate::lowering::index_positions::lower,
 	crate::number_keys::lower_key_words,
 	crate::traits::lower_dispatch,
 	crate::memoization::lower,

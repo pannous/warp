@@ -34,6 +34,7 @@ pub mod lambdas;
 pub mod late_binding;
 pub mod lazy_ranges;
 pub mod library_signatures;
+pub mod index_positions;
 pub mod library_words;
 pub mod list_element_checks;
 pub mod list_phrases;
