@@ -3479,6 +3479,10 @@ PASSED:
   ✓ types::test_class_field_names::operator_words_name_fields
   ✓ types::test_class_field_names::own_parameter_field_inside_function_of_its_name
   ✓ types::test_class_field_type_phrases::a_field_type_of_words_is_one_field
+  ✓ types::test_class_fields_checked::a_declared_variable_keeps_its_class
+  ✓ types::test_class_fields_checked::a_field_of_a_class_takes_its_declared_class
+  ✓ types::test_class_fields_checked::a_field_write_takes_its_declared_class
+  ✓ types::test_class_fields_checked::a_function_local_of_the_same_name_is_its_own
   ✓ types::test_class_forms_ported::a_copy_with_changed_fields
   ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
   ✓ types::test_class_forms_ported::a_go_struct_with_methods
@@ -4861,4 +4865,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4856 passed, 0 failed, 4856 total tested
+10 ignored, 4860 passed, 0 failed, 4860 total tested
