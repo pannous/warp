@@ -577,6 +577,14 @@ pub(crate) fn class_layouts(node: &Node) -> std::collections::HashMap<String, Cl
 			);
 		}
 	});
+	for (class, method) in crate::declarations::extension_methods(node) {
+		if let Some(layout) = layouts
+			.get_mut(&class)
+			.filter(|layout| !layout.methods.contains(&method))
+		{
+			layout.methods.push(method);
+		}
+	}
 	layouts
 }
 
