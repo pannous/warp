@@ -107,7 +107,6 @@ mod test_on_error_of_function;
 mod test_page_events;
 mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;
-mod test_split_kernel; // card go-split-kernel
 mod test_print_empty; // card print-error
 mod test_print_empty_map;
 mod test_raise;
@@ -129,6 +128,7 @@ mod test_signal_lists;
 mod test_signal_reflection;
 mod test_signal_values;
 mod test_soft_tests;
+mod test_split_kernel; // card go-split-kernel
 mod test_storage;
 mod test_store_values;
 mod test_stored_default; // card stored-visits
