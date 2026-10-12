@@ -333,8 +333,8 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	])
 }
 
-/// `[p.name for p in people if p.age > 20]` of a table: `[p.name for p in people where it.age > 20]`, whose query reads
-/// only the rows it keeps instead of loading the table
+/// `[p.name for p in people if p.age > 20]` (or `where p.age > 20`, card people-where-cond) of a table:
+/// `[p.name for p in people where it.age > 20]`, whose query reads only the rows it keeps instead of loading the table
 fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
 	let rest = &items[at + 1..];
@@ -344,7 +344,8 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 	let [for_word, variable, in_word, sequence, if_word] = words.as_slice() else {
 		return None;
 	};
-	if !in_word.is_symbol(IN_WORD) || !if_word.is_symbol(IF_WORD) || rest.is_empty() || rest.iter().any(starts_with_for)
+	let filters = if_word.is_symbol(IF_WORD) || if_word.is_symbol(WHERE_KEYWORD);
+	if !in_word.is_symbol(IN_WORD) || !filters || rest.is_empty() || rest.iter().any(starts_with_for)
 	{
 		return None;
 	}
