@@ -17,7 +17,8 @@ pub const BOOL_INFO: i64 = 1;
 pub const BOOL_KIND: i64 = (BOOL_INFO << KIND_BITS) | Kind::Int as i64;
 /// An Int shown in hex, 0xFF (card hex-printing, wasm_emitter/hex.rs): marked only where it becomes a Node
 pub const HEX_INFO: i64 = 2;
-pub const HEX_KIND: i64 = (HEX_INFO << KIND_BITS) | Kind::Int as i64;
+/// An Int shown in binary, 0b101 (card binary-int, wasm_emitter/radix.rs)
+pub const BINARY_INFO: i64 = 3;
 /// The bit of a bool in the kind masks of run-time type tests (node_kind_in): no Kind is that high
 pub const BOOL_MASK_BIT: i64 = 62;
 /// P215: the head cell of a declared list carries the run-time kinds its element type admits, its element mark, in the

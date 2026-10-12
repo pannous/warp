@@ -5,7 +5,8 @@ use super::*;
 
 pub const BOOL_TYPE: &str = "bool";
 /// Calls whose value is a bool
-const BOOL_CALLS: [&str; 7] = [
+const BOOL_CALLS: [&str; 8] = [
+	crate::library_words::COLLECTION_CONTAINS,
 	crate::type_tests::IS_TYPE,
 	crate::traits::INSTANCE_OF,
 	crate::wasm_emitter::text_builtins::IS_ERROR,

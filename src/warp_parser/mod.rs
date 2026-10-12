@@ -1035,6 +1035,9 @@ pub struct WarpParser {
 	branch_bp: Option<u8>,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
 	signed_list_element: Option<usize>,
+	/// Directly inside a list literal `[…]` without commas: a space and a glued sign start the next item (`[a -1]`,
+	/// decision list-sign)
+	in_spaced_list: bool,
 	/// Inside `do … end`: the `end` keyword closes the statement list
 	stops_at_end: bool,
 	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
@@ -1438,6 +1441,7 @@ impl WarpParser {
 			type_fields: None,
 			branch_bp: None,
 			signed_list_element: None,
+			in_spaced_list: false,
 			stops_at_end: false,
 			brace_holes: false,
 			generic_names: None,

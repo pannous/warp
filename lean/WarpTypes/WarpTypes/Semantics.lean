@@ -211,7 +211,7 @@ def floatText (f : Float) : String :=
 /-- a value as `+` joins it to a text -/
 def render : Expr → String
   | .text s => s
-  | .bool b => if b then "true" else "false"
+  | .bool b => if b then "yes" else "no"
   | .int n => toString n
   | .num q => ratDisplay q
   | .flt f => floatText (Float.ofBits f)

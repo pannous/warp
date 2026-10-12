@@ -551,13 +551,15 @@ fn struct_node<T>(
 			Ok(Number::Int(0)) => Node::False,
 			_ => Node::True,
 		},
-		t if t == Kind::Int as u8 && high_byte == crate::type_kinds::HEX_INFO => match read_payload(store, &data) {
-			Ok(Number::Int(value)) => {
-				Node::Number(Number::Int(value)).with_source_literal(&crate::wasm_emitter::hex::hex_literal(value))
+		t if t == Kind::Int as u8 && crate::wasm_emitter::radix::radix_of_info(high_byte).is_some() => {
+			match read_payload(store, &data) {
+				Ok(Number::Int(value)) => Node::Number(Number::Int(value)).with_source_literal(
+					&crate::wasm_emitter::radix::marked_literal(high_byte, value).expect("a radix mark"),
+				),
+				Ok(number) => Node::Number(number),
+				Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
 			}
-			Ok(number) => Node::Number(number),
-			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
-		},
+		}
 		t if t == Kind::Int as u8 => match read_payload(store, &data) {
 			Ok(number) => Node::Number(number),
 			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),

@@ -6,7 +6,7 @@ use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::wasm_emitter::list_dispatch::Slot;
-use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
+use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, VALUES_EQUAL};
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
@@ -5089,9 +5089,11 @@ impl WasmGcEmitter {
 				s.call(f, MAP_COLUMN);
 			});
 		}
-		// collection_contains(xs, x): 1 when a map has the key x or a list the element x, else 0;
-		// collection_position(xs, x) (`x in xs`): the 1-based position of x in a list instead of the 1 (user decision D14)
+		// collection_contains(xs, x) (`x in xs`, `xs.has(x)`): yes when a map has the key x or a list the element x, else
+		// no (decision in-bool); collection_position(xs, x) (`xs.index_of(x)`): the 1-based position of x in a list, 1/0
+		// for a map key
 		for (name, positional) in [(COLLECTION_CONTAINS, false), (COLLECTION_POSITION, true)] {
+			let answer_constructor = if positional { "new_int" } else { NEW_BOOL };
 			self.runtime_function(
 				name,
 				vec![node_ref, node_ref],
@@ -5105,7 +5107,7 @@ impl WasmGcEmitter {
 						} else {
 							I::I64Const(value)
 						});
-						s.call(f, "new_int");
+						s.call(f, answer_constructor);
 						f.instruction(&I::Return);
 					};
 					f.instruction(&I::LocalGet(0));
@@ -5114,7 +5116,7 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 					s.call(f, "map_find");
 					Self::emit_list(f, &[I::RefIsNull, I::I64ExtendI32U, I::I64Const(1), I::I64Xor]);
-					s.call(f, "new_int");
+					s.call(f, answer_constructor);
 					Self::emit_list(f, &[I::Return, I::End]);
 					s.emit_field(f, 0, 0);
 					Self::emit_list(
@@ -5147,7 +5149,7 @@ impl WasmGcEmitter {
 					if !positional {
 						Self::emit_list(f, &[I::I64Const(0), I::I64Ne, I::I64ExtendI32U]);
 					}
-					s.call(f, "new_int");
+					s.call(f, answer_constructor);
 					Self::emit_list(f, &[I::Return, I::End]);
 					Self::emit_list(
 						f,

@@ -33,3 +33,12 @@ fn a_bool_is_approximately_any_value_of_its_truthiness() {
 	is!("yes ≈ 0", false);
 	is!("no ≈ \"\"", true);
 }
+
+#[test]
+fn numbers_near_zero_are_approximately_zero() {
+	// decision approx-zero: |a-b| ≤ max(1e-9·max(|a|,|b|), 1e-12)
+	is!("sin(3.141592653589793) ≈ 0", true);
+	is!("1e-20 ≈ 0", true);
+	is!("1e-11 ≈ 0", false);
+	is!("tolerance = 0.5; 3 ≈ 2", true);
+}
