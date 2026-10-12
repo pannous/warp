@@ -539,9 +539,12 @@ Each step is useful on its own and is what the next ones stand on.
   sessionStorage (`warp dev <name>`), in memory natively. Only a changed value is saved, so a variable never changed
   takes its new initial value from the edited source; one changed keeps its value (as React Fast Refresh does).
   site.js hydrate loads the kept values and shows what main left (page·html).
+  Component instance state too (card web-dev-instances): in a dev build component_state.rs declares each state list
+  (`Counter·count`, and a keyed component's keys) from the dev store and saves it after every render, so each instance
+  keeps its state across a reload (instances are found by call order or key, as within one run).
 - Tests: tests/web/test_dev_server.rs; probes/dev/counter.warp (click, edit the label: the count stays),
   probes/dev/stored_check.py.
-- Left: watching used modules (only the program's file counts; card web-dev-modules), component instance state (`Counter·count` lists; card web-dev-instances) and
+- Left: watching used modules (only the program's file counts; card web-dev-modules) and
   the playground editor's error marks in the overlay (card web-dev-marks); a failure's source line is that of the program, not of a module.
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
