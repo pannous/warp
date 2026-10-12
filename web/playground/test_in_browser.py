@@ -88,6 +88,19 @@ BRUSH_SAMPLE = "shader_brush"
 BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU takes far longer for its 1280×800
 BRUSH_POLL_MS = 250
 PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
+# card shader-read: $previous(at) reads the frame the shader left before, as natively (tests/programs/
+# test_shader_builtins.rs a_shader_reads_its_previous_frame): three renders of a quarter red more give 192 red
+PREVIOUS_FRAME = "(a shader reads its previous frame)"
+PREVIOUS_FRAME_CODE = """use graphics
+s = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		return $previous(at.xy) + vec4f(0.25, 0.0, 0.0, 1.0);
+	}
+}
+gpu_render(s, 2, 2)
+gpu_render(s, 2, 2)
+gpu_render(s, 2, 2)#2"""
+PREVIOUS_FRAME_SHOWN = str(0xFFC0_0000)
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -375,6 +388,15 @@ def gpu_page_wrong():
 	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
 
 
+def previous_frame_wrong():
+	"""a shader reading $previous adds to what its last render left; skipped loudly without WebGPU"""
+	rendered = run_code(PREVIOUS_FRAME_CODE)
+	if NO_GPU in rendered:
+		print(f"skip {PREVIOUS_FRAME}: this browser {NO_GPU}")
+		return []
+	return [] if PREVIOUS_FRAME_SHOWN in rendered else [f"third render: {rendered!r}, expected {PREVIOUS_FRAME_SHOWN} in it"]
+
+
 def brush_wrong():
 	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper. Its
 	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
@@ -516,7 +538,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

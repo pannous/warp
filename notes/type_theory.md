@@ -85,14 +85,17 @@ visible covariant alias that writes is a compile error (the compile-time half, w
 
 **Shared lists in W0 (Semantics.lean `Store.lists`).** A stored list is a cell of the store, `lref a t`, made by
 `share e t` from a list value whose items fit t (else "type mismatch") and typed `list t`. `push l v` (`xs.add(v)`)
-appends v to the cell if v fits t, else it is a run-time error, and `setAt l i v` (`xs#i = v`, `xs[i-1] = v`) replaces the i-th item the same way (an index outside the list is an error); list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
+appends v to the cell if v fits t, else it is a run-time error, and `setAt l i v` (`xs#i = v`, `xs[i-1] = v`) replaces the i-th item the same way (an index outside the list is an error); `insertAt l i v` (`xs.insert(v, at: i)`) puts v before the
+item i (from 0), at the end when i is no position in the list (warp appends for `at: 7` and `at: -1`), checked like
+`push`, giving xs; list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
 read the cell's items (`Store.items`). The store invariant `ListsOk` (each cell's items are a value whose type is
 below `list t`) is what each write keeps, and since `t ≤ τ` for every `list τ` alias, every read through it fits τ:
 covariance stays sound (preservation, progress and safety proved, no sorry). The exporter shares a list where a
 main-level list name takes it (`xs = [1]`, `xs: ints = …`, `xs = []`), tagged with the declared element type (`any`
 when undeclared: warp's undeclared lists take anything); `ys = xs` stores the same cell. Function locals' lists
-stay values (`xs = xs ++ [v]` in their cell). Not yet (card w0-list-writes): insert as a write, list identity for `===`
-beyond names. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
+stay values (`xs = xs ++ [v]` in their cell; their inserts are not exported yet). `xs === ys` compares the cells; warp
+compares a typed array's slots by reference (it boxed each side into a fresh Node before, card w0-list-writes), but a
+typed array against a call's result (`f(xs) === xs`) is still no. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
 lists `ys: numbers = xs; ys.add(2.5)` and `ys#1 = 2.5` as known value differences (W0: error, warp: adds it; card p215-user).
 
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.
@@ -281,8 +284,9 @@ for a whole number when they run. This is stricter than warp, never unsound, so 
 assigns only globals); `global y` inside a function, or bare at main level before `y = …`, only declares. The
 exporter collects every name declared `global` anywhere first. In warp a function's assignment to a name without
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
-(`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet (card w0-globals): `global float y = …`
-(the exporter does not read the type word yet), `global x; x` (read before any value).
+(`elaborateTyped`: the second pass infers functions seeing the first pass's names). `global float y = 2` declares y as `global y: float = 2` does (the
+parser had dropped the type word); `global x` read before any value is warp's unset 0 (`.var x 0`), unless the first
+statement naming x assigns it (card w0-globals).
 
 ## Lambdas
 
@@ -582,8 +586,10 @@ or codepoint) replaces `= text` in `+` (`plus`), `*` (`repeatTy`) and `#`/`for` 
 codepoints, which the walk (`peel_codepoint`) and `#` give. A name given no annotation widens a codepoint to text
 (`widen`: `x = "a"; x = "bc"` is accepted, `x = "a"; x = 1` is "x was a Text"). The checker rejects, as warp does,
 `x: codepoint = "ab"`, `f(c: codepoint) := c; f("ab")` and `x: codepoint = 97`. The exporter maps the words
-`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet (card w0-conversions): `97 as codepoint` (W0 converts
-only by `fits`).
+`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). `97 as codepoint` converts a number to the character it numbers
+(`codepointOf`, an error for no Unicode scalar value); a text literal of other than one character is refused statically
+(`evidentMisconversion`), a text name converts when it runs (card w0-conversions). Warp gives `5 as codepoint` the
+digit '5' but `x = 5; x as codepoint` U+0005, and an invalid code point quietly '?' (card codepoint-digit).
 
 ## Exact numbers and floats
 Warp computes exactly until a float comes in: `0.1 + 0.2` is 0.3, `7/2` is 3.5, `1/3` stays 1/3, a whole result is an
@@ -601,8 +607,12 @@ zero. Printing follows warp's `Number` display: a terminating decimal (`3.5`, `0
 warp's analyzer sees a decimal and a float as one Kind (Float), so admits is compared on the decimal (`.exact`).
 Found: card rational-float (`x: rational = sqrt(2)`, `x: rational = 0.5 as float` fail with an internal WASM
 validation error rather than the compile error a parameter gets: `f(r: rational) := r; f(0.5 as float)`).
-Not yet (card w0-conversions): `as rational` (a cast, not a conversion, in W0), float display, `x: float = 1/3` converting (W0 keeps 1/3, of
-type number; warp converts to 0.333…, which the comparison skips as a float).
+Conversions (card w0-conversions): `as int`, `as number` and `as rational` read a text as warp's number_in_text
+does (`textNumber`: `12`, `-4.5`, `1/3`); `as rational` keeps an exact number and refuses a float when it runs (warp
+refuses it statically; W0's `number` is floats and exact numbers alike, so the corpus leaves it out). An exact number
+given to a float place (`x: float = 1/3`, a name already holding a float, a float parameter) is converted
+(`castDynamicValues` inserts `.conv v .number`), and the model prints floats as warp's float_text does (`floatText`).
+Warp keeps 1/3 for a `number` parameter, a float field and a `floats` list (card number-converts).
 
 ## Stored errors (errors as values)
 

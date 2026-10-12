@@ -642,10 +642,11 @@ fn ungrouped(items: &[Node]) -> Vec<Node> {
 	if !items.first().is_some_and(is_group) {
 		return items.to_vec();
 	}
+	// `on change p.age {…}` arrives nested a level deeper: `((on change) p.age) {…}`
 	items
 		.iter()
 		.flat_map(|item| match item.drop_meta() {
-			Node::List(parts, Bracket::None, _) => parts.clone(),
+			Node::List(parts, Bracket::None, _) => ungrouped(parts),
 			_ => vec![item.clone()],
 		})
 		.collect()

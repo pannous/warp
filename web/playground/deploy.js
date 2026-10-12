@@ -14,7 +14,6 @@ const LOGIN_WINDOW = "width=520,height=720";
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const TICKET_POLL_MS = 1500; // hosting.mjs TICKET_POLL_MS
 const TICKET_BYTES = 24;
-const DEPLOYING_TEXT = "deploying …";
 const REFUSED_LOGIN = [401, 403];
 
 // the pasted-token field is optional: index.html may leave it out, then only the Cloudflare login deploys there
@@ -25,18 +24,16 @@ const newTicket = () => btoa(String.fromCharCode(...crypto.getRandomValues(new U
 const ticketAddress = ticket => `${HOSTING}/ticket?ticket=${ticket}`;
 
 // the one window a deploy opens, while the click still lets the page open one: the login popup when a login is
-// needed, which turns into the program's tab once it is deployed (hosting.mjs handOver), else a tab waiting for it
+// needed, else a tab; both end on warp-hosting's deploy window (hosting.mjs deployingPage), which links the program
+// as soon as its ticket knows the address and turns into the program's tab once it answers
 function programWindow(provider) {
 	const ticket = newTicket();
 	if (needsLogin(provider)) {
 		const popup = open(`${HOSTING}/auth/${provider}?origin=${encodeURIComponent(location.origin)}&ticket=${ticket}`, "warp-hosting-login", LOGIN_WINDOW);
 		if (!popup) throw new Error("the login window was blocked: allow pop-ups for this page");
-		const told = fields => fetch(`${ticketAddress(ticket)}&${new URLSearchParams(fields)}`, { method: "POST" }).catch(() => {});
-		return { ticket, show: program => told({ program }), fail: error => told({ error }) };
-	}
-	const tab = open("", "_blank");
-	try { tab.document.body.textContent = DEPLOYING_TEXT; } catch { /* blocked or not ours to write */ }
-	return { ticket, show: program => tab ? tab.location.replace(program) : open(program, "_blank"), fail: () => tab?.close() };
+	} else open(`${HOSTING}/deploying?ticket=${ticket}`, "_blank");
+	const told = fields => fetch(`${ticketAddress(ticket)}&${new URLSearchParams(fields)}`, { method: "POST" }).catch(() => {});
+	return { ticket, show: program => told({ program }), fail: error => told({ error }) };
 }
 
 // the login's answer (hosting.mjs handOver), {session, login} from GitHub, {cloudflareToken} from Cloudflare: posted
@@ -110,11 +107,11 @@ const TARGETS = {
 	native: ["github", "deploying to pannous.com…", async name => [`${HOSTING}/native/deploy?name=${name}`, editor.getValue()]],
 };
 
-async function workerUpload(name) {
+async function workerUpload(name, ticket) {
 	setStatus("building the Worker…");
 	const { module, scripts, error } = await bundleOf(editor.getValue());
 	if (error) throw new Error(error);
-	return [`${HOSTING}/deploy?name=${name}&scripts=${scripts.join(",")}`, module];
+	return [`${HOSTING}/deploy?name=${name}&scripts=${scripts.join(",")}&ticket=${ticket}`, module];
 }
 
 async function deploy(target) {
@@ -125,7 +122,7 @@ async function deploy(target) {
 	let opened;
 	try {
 		opened = programWindow(provider);
-		const [address, body] = await request(name);
+		const [address, body] = await request(name, opened.ticket);
 		setStatus(deploying);
 		const url = await upload(provider, address, body, opened.ticket);
 		setStatus(`deployed: ${url}`);

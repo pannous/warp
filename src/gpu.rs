@@ -30,6 +30,16 @@ const PAINTERS_KEPT: usize = 16;
 /// gpu_render's values as the shader names them: `values.<name>`
 const VALUES_NAME: &str = "values";
 const VALUES_BINDING: u32 = 0;
+/// `$previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size, black
+/// before the first; the frame is kept on the GPU, bound next to the values
+const PREVIOUS_FRAME_BINDING: u32 = 1;
+const PREVIOUS_FUNCTION: &str = "warp_previous";
+const PREVIOUS_FRAME: &str = "
+@group(0) @binding(1) var warp_previous_frame: texture_2d<f32>;
+fn warp_previous(at: vec2f) -> vec4f {
+	let last = vec2i(textureDimensions(warp_previous_frame)) - vec2i(1);
+	return textureLoad(warp_previous_frame, clamp(vec2i(at), vec2i(0), last), 0);
+}";
 /// A uniform struct is a whole number of 16-byte rows
 const UNIFORM_ALIGNMENT: usize = 16;
 
@@ -418,21 +428,32 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let (declarations, bytes) = uniform_layout(values)?;
+	let reads_previous = reads_value(shader, crate::shader_holes::PREVIOUS_HOLE);
+	let source = match reads_previous {
+		true => format!(
+			"{}{FULL_IMAGE_VERTICES}{declarations}{PREVIOUS_FRAME}",
+			shader.replace(
+				&format!("{VALUES_NAME}.{}", crate::shader_holes::PREVIOUS_HOLE),
+				PREVIOUS_FUNCTION
+			)
+		),
+		false => format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"),
+	};
 	let Painter {
 		pipeline,
-		values_layout,
-	} = painter(
-		device,
-		format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"),
-		!bytes.is_empty(),
-	)?;
-	let value_bindings = values_layout.map(|layout| value_bindings(device, &layout, &bytes));
+		bindings_layout,
+	} = painter(device, source, !bytes.is_empty(), reads_previous)?;
 	let size = wgpu::Extent3d {
 		width,
 		height,
 		depth_or_array_layers: 1,
 	};
-	let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
+	let previous = reads_previous.then(|| previous_frame(device, shader, size));
+	let bindings = bindings_layout.map(|layout| bindings(device, &layout, &bytes, previous.as_ref()));
+	let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
+	if reads_previous {
+		usage |= wgpu::TextureUsages::TEXTURE_BINDING;
+	}
 	let image = device.create_texture(&wgpu::TextureDescriptor {
 		label: Some("gpu_render image"),
 		size,
@@ -443,6 +464,9 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 		usage,
 		view_formats: &[],
 	});
+	if reads_previous {
+		keep_previous_frame(shader, image.clone());
+	}
 	let view = image.create_view(&wgpu::TextureViewDescriptor::default());
 	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 	{
@@ -458,7 +482,7 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 			..Default::default()
 		});
 		pass.set_pipeline(&pipeline);
-		if let Some(bindings) = &value_bindings {
+		if let Some(bindings) = &bindings {
 			pass.set_bind_group(0, bindings, &[]);
 		}
 		pass.draw(0..TRIANGLE_CORNERS, 0..1);
@@ -521,6 +545,40 @@ fn checked_image_rgba(
 	Ok(rgba)
 }
 
+/// The frames shaders reading $previous left, by shader text: each render draws into a new image and keeps it
+static PREVIOUS_FRAMES: LazyLock<Mutex<HashMap<String, wgpu::Texture>>> = LazyLock::new(Default::default);
+
+/// The view of the frame the shader left last, a black one when it left none of this size
+fn previous_frame(device: &wgpu::Device, shader: &str, size: wgpu::Extent3d) -> wgpu::TextureView {
+	let kept = PREVIOUS_FRAMES
+		.lock()
+		.unwrap()
+		.get(shader)
+		.filter(|frame| frame.size() == size)
+		.cloned();
+	let frame = kept.unwrap_or_else(|| {
+		device.create_texture(&wgpu::TextureDescriptor {
+			label: Some("gpu_render previous frame"),
+			size,
+			mip_level_count: 1,
+			sample_count: 1,
+			dimension: wgpu::TextureDimension::D2,
+			format: IMAGE_FORMAT,
+			usage: wgpu::TextureUsages::TEXTURE_BINDING,
+			view_formats: &[],
+		})
+	});
+	frame.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+fn keep_previous_frame(shader: &str, frame: wgpu::Texture) {
+	let mut frames = PREVIOUS_FRAMES.lock().unwrap();
+	if frames.len() >= PAINTERS_KEPT && !frames.contains_key(shader) {
+		frames.clear();
+	}
+	frames.insert(shader.to_string(), frame);
+}
+
 /// The values with the built-in holes the shader reads and the program gave no value (shader_holes.rs BUILTIN_HOLES)
 fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Vec<ShaderValue> {
 	static FIRST_RENDER: LazyLock<std::time::Instant> = LazyLock::new(std::time::Instant::now);
@@ -530,6 +588,7 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 	let [mouse_x, mouse_y, mouse_down, key] = warp_runtime::system_values::window_input();
 	let filled = crate::shader_holes::BUILTIN_HOLES
 		.into_iter()
+		.filter(|name| *name != crate::shader_holes::PREVIOUS_HOLE)
 		.filter(|name| reads_value(shader, name) && !values.iter().any(|value| value.name == *name));
 	let builtins = filled.map(|name| ShaderValue {
 		name: name.to_string(),
@@ -596,16 +655,17 @@ pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), Strin
 	Ok((declarations, bytes))
 }
 
-/// A fragment shader compiled into its pipeline, with the layout of its values (none: the shader takes no values)
+/// A fragment shader compiled into its pipeline, with the layout of its values and previous frame (none: it takes
+/// neither)
 #[derive(Clone)]
 struct Painter {
 	pipeline: wgpu::RenderPipeline,
-	values_layout: Option<wgpu::BindGroupLayout>,
+	bindings_layout: Option<wgpu::BindGroupLayout>,
 }
 
 /// The painter of a shader text, compiled once: compiling a pipeline anew for every frame costs more than drawing it
 /// (over 100 ms for a raymarching shader on Metal, samples/gpu_visualizer.warp)
-fn painter(device: &wgpu::Device, source: String, takes_values: bool) -> Result<Painter, String> {
+fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_previous: bool) -> Result<Painter, String> {
 	static PAINTERS: LazyLock<Mutex<HashMap<String, Painter>>> = LazyLock::new(Default::default);
 	let mut painters = PAINTERS.lock().unwrap();
 	if let Some(painter) = painters.get(&source) {
@@ -613,23 +673,34 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool) -> Result<
 	}
 	let module = compiled(device, &source)?;
 	// explicit, so a shader that leaves `values` unread still binds them
-	let values_layout = takes_values.then(|| {
-		let entry = wgpu::BindGroupLayoutEntry {
-			binding: VALUES_BINDING,
-			visibility: wgpu::ShaderStages::FRAGMENT,
-			ty: wgpu::BindingType::Buffer {
-				ty: wgpu::BufferBindingType::Uniform,
-				has_dynamic_offset: false,
-				min_binding_size: None,
-			},
-			count: None,
-		};
+	let values = takes_values.then_some(wgpu::BindGroupLayoutEntry {
+		binding: VALUES_BINDING,
+		visibility: wgpu::ShaderStages::FRAGMENT,
+		ty: wgpu::BindingType::Buffer {
+			ty: wgpu::BufferBindingType::Uniform,
+			has_dynamic_offset: false,
+			min_binding_size: None,
+		},
+		count: None,
+	});
+	let previous = reads_previous.then_some(wgpu::BindGroupLayoutEntry {
+		binding: PREVIOUS_FRAME_BINDING,
+		visibility: wgpu::ShaderStages::FRAGMENT,
+		ty: wgpu::BindingType::Texture {
+			sample_type: wgpu::TextureSampleType::Float { filterable: false },
+			view_dimension: wgpu::TextureViewDimension::D2,
+			multisampled: false,
+		},
+		count: None,
+	});
+	let entries: Vec<_> = values.into_iter().chain(previous).collect();
+	let bindings_layout = (!entries.is_empty()).then(|| {
 		device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: Some("gpu_render values"),
-			entries: &[entry],
+			entries: &entries,
 		})
 	});
-	let layout = values_layout.as_ref().map(|values| {
+	let layout = bindings_layout.as_ref().map(|values| {
 		device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: Some("gpu_render"),
 			bind_group_layouts: &[Some(values)],
@@ -662,26 +733,40 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool) -> Result<
 	}
 	let painter = Painter {
 		pipeline,
-		values_layout,
+		bindings_layout,
 	};
 	painters.insert(source, painter.clone());
 	Ok(painter)
 }
 
 /// This frame's values bound to the painter's layout
-fn value_bindings(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, bytes: &[u8]) -> wgpu::BindGroup {
-	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-		label: Some("gpu_render values"),
-		contents: bytes,
-		usage: wgpu::BufferUsages::UNIFORM,
+/// The values' bytes (none: the shader takes none) and the previous frame, bound as `layout` says
+fn bindings(
+	device: &wgpu::Device,
+	layout: &wgpu::BindGroupLayout,
+	bytes: &[u8],
+	previous: Option<&wgpu::TextureView>,
+) -> wgpu::BindGroup {
+	let buffer = (!bytes.is_empty()).then(|| {
+		device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+			label: Some("gpu_render values"),
+			contents: bytes,
+			usage: wgpu::BufferUsages::UNIFORM,
+		})
 	});
+	let values = buffer.as_ref().map(|buffer| wgpu::BindGroupEntry {
+		binding: VALUES_BINDING,
+		resource: buffer.as_entire_binding(),
+	});
+	let previous = previous.map(|view| wgpu::BindGroupEntry {
+		binding: PREVIOUS_FRAME_BINDING,
+		resource: wgpu::BindingResource::TextureView(view),
+	});
+	let entries: Vec<_> = values.into_iter().chain(previous).collect();
 	device.create_bind_group(&wgpu::BindGroupDescriptor {
 		label: Some("gpu_render values"),
 		layout,
-		entries: &[wgpu::BindGroupEntry {
-			binding: VALUES_BINDING,
-			resource: buffer.as_entire_binding(),
-		}],
+		entries: &entries,
 	})
 }
 

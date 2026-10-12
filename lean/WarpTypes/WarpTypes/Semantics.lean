@@ -441,17 +441,13 @@ def fits : Expr → Ty → Bool
     | some tv => sub tv t
     | none => false
 
-/-- a whole float prints as its int (`x: float = 2` is 2); W0 does not print other floats as warp does -/
-def floatDisplay (f : Float) : String :=
-  if f == f.floor && f.abs < 9007199254740992.0 then toString (floatWhole f) else "?"
-
 /-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
-what warp prints (numbers, instances) -/
+what warp prints (instances) -/
 def display (μ : Store) : Nat → Expr → String
   | _, .bool b => if b then "yes" else "no"
   | _, .int n => toString n
   | _, .num q => ratDisplay q
-  | _, .flt f => floatDisplay (Float.ofBits f)
+  | _, .flt f => floatText (Float.ofBits f)
   | _, .text s => s!"\"{s}\""
   | _, .fail _ => "error"
   | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
@@ -471,16 +467,41 @@ def textForm (μ : Store) (v : Expr) : String :=
   | .nil => "ø"
   | v => display μ DISPLAY_DEPTH v
 
+/-- the exact number a text spells, as warp's number_in_text reads it: `12`, `-4.5`, `1/3` -/
+def textNumber (s : String) : Option Rat :=
+  match s.splitOn "/" with
+  | [n, d] => do
+    let n ← n.toInt?
+    let d ← d.toInt?
+    if d = 0 then none else some ((n : Rat) / (d : Rat))
+  | [t] =>
+    match t.splitOn "." with
+    | [w] => w.toInt?.map fun n => (n : Rat)
+    | [w, f] => do
+      let whole ← w.toInt?
+      let fraction ← f.toNat?
+      let part : Rat := mkRat fraction (10 ^ f.length)
+      some (if w.startsWith "-" then whole - part else whole + part)
+    | _ => none
+  | _ => none
+
+/-- the character of the code point n, if n is a Unicode scalar value -/
+def codepointOf (n : Int) : Expr :=
+  if n.toNat.isValidChar && 0 ≤ n then .text (String.singleton (Char.ofNat n.toNat)) else .error "invalid codepoint"
+
 /-- `v as t` of a value: a scalar converts to text, int, number or bool (a number to int keeps its whole part, a text
-is parsed); to any other type the value is checked as a cast checks it -/
+is parsed), a number to the codepoint it numbers, a number or a text to an exact number (a float only by a cast); to
+any other type the value is checked as a cast checks it -/
 def convertValue (μ : Store) (v : Expr) : Ty → Expr
   | .text => .text (textForm μ v)
   | .bool => .bool (truthy (μ.items v))
-  | .int => if isNumber v then .int (asNumber v) else parsed .int v
-  | .number => if isNumber v then floatValue (asFloat v) else parsed (fun n => floatValue (Float.ofInt n)) v
+  | .int => if isNumber v then .int (asNumber v) else parsed (fun q => .int (asNumber (.num q))) v
+  | .number => if isNumber v then floatValue (asFloat v) else parsed (fun q => floatValue (ratToFloat q)) v
+  | .exact => if fits v .exact then v else parsed exactValue v
+  | .codepoint => if isNumber v then codepointOf (asNumber v) else if fits v .codepoint then v else .error "cannot cast"
   | t => if fits v t then v else .error "cannot cast"
-where parsed (make : Int → Expr) : Expr → Expr
-  | .text s => (s.toInt?.map make).getD (.error "invalid number")
+where parsed (make : Rat → Expr) : Expr → Expr
+  | .text s => ((textNumber s.trimAscii.copy).map make).getD (.error "invalid number")
   | _ => .error "cannot cast"
 
 /-- `xs.add(v)` of values: v joins the shared list if it fits the list's element type -/
@@ -519,6 +540,21 @@ def setAtValues (P : Program) (μ : Store) : Expr → Expr → Expr → Expr × 
     match P.fieldTy p k with
     | some t => if (μ.obj a p).isSome && fits v t then (v, μ.write a k v) else (.error "type mismatch", μ)
     | none => (.error "no field", μ)
+  | _, _, _ => (.error "not a list", μ)
+
+/-- the list value xs with v before its n-th item (from 0), or at its end when it has no such item -/
+def insertItems : Expr → Int → Expr → Expr
+  | .cons h t, n, v => if n = 0 then .cons v (.cons h t) else .cons h (insertItems t (n - 1) v)
+  | _, _, v => .cons v .nil
+
+/-- `xs.insert(v, at: i)` of values: v joins the shared list at the int i if it fits the list's element type -/
+def insertAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
+  | .lref a t, i, v =>
+    match μ.listAt a t, asInt i with
+    | some items, some n =>
+      if fits v t then (.lref a t, μ.writeList a (insertItems items n v)) else (.error "type mismatch", μ)
+    | none, _ => (.error "dangling list", μ)
+    | _, none => (.error "not an int", μ)
   | _, _, _ => (.error "not a list", μ)
 
 /-- the k ints from m: `[m, m+1, …]` -/
@@ -564,6 +600,7 @@ inductive Frame where
   | share (t : Ty)
   | pushL (v : Expr) | pushR (l : Expr)
   | setAtL (i v : Expr) | setAtI (l v : Expr) | setAtR (l i : Expr)
+  | insertAtL (i v : Expr) | insertAtI (l v : Expr) | insertAtR (l i : Expr)
 
 namespace Frame
 
@@ -612,12 +649,16 @@ def plug : Frame → Expr → Expr
   | setAtL i v, e => .setAt e i v
   | setAtI l v, e => .setAt l e v
   | setAtR l i, e => .setAt l i e
+  | insertAtL i v, e => .insertAt e i v
+  | insertAtI l v, e => .insertAt l e v
+  | insertAtR l i, e => .insertAt l i e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
   | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _ | pushR h | setAtI h _
+  | insertAtI h _
   | forInLast _ h _ => h.isValue
-  | setAtR l i => l.isValue && i.isValue
+  | setAtR l i | insertAtR l i => l.isValue && i.isValue
   | _ => true
 
 end Frame
@@ -664,6 +705,8 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | push {l v μ} : l.isValue = true → v.isValue = true → Step P (.push l v, μ) (pushValues μ l v)
   | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
       Step P (.setAt l i v, μ) (setAtValues P μ l i v)
+  | insertAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
+      Step P (.insertAt l i v, μ) (insertAtValues μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | conv {v t μ} : v.isValue = true → Step P (.conv v t, μ) (convertValue μ v t, μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)

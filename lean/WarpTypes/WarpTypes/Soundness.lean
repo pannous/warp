@@ -82,6 +82,9 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case setAtL => cases h with | setAt hl hi hv => exact ⟨_, hl, fun h' _ => ⟨_, .setAt h' hi hv, sub_refl _⟩⟩
   case setAtI => cases h with | setAt hl hi hv => exact ⟨_, hi, fun h' _ => ⟨_, .setAt hl h' hv, sub_refl _⟩⟩
   case setAtR => cases h with | setAt hl hi hv => exact ⟨_, hv, fun h' s => ⟨_, .setAt hl hi h', s⟩⟩
+  case insertAtL => cases h with | insertAt hl hi hv => exact ⟨_, hl, fun h' s => ⟨_, .insertAt h' hi hv, s⟩⟩
+  case insertAtI => cases h with | insertAt hl hi hv => exact ⟨_, hi, fun h' _ => ⟨_, .insertAt hl h' hv, sub_refl _⟩⟩
+  case insertAtR => cases h with | insertAt hl hi hv => exact ⟨_, hv, fun h' _ => ⟨_, .insertAt hl hi h', sub_refl _⟩⟩
   case forIn =>
     cases h with
     | forIn hl sT hb hd => exact ⟨_, hl, fun h' s => ⟨_, .forIn h' (sub_trans (elementTy_mono s) sT) hb hd, sub_refl _⟩⟩
@@ -229,6 +232,29 @@ theorem push_typed {μ : Store} (hμ : StoreOk P μ) {l v tl tv} (hl : HasType P
         exact join_least sei (join_least stv (sub_never _))
       · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
     · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | _ => exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+
+/-- `xs.insert(v, at: i)`: the shared list itself, its new item checked against its element type, or an error -/
+theorem insertAt_typed {μ : Store} (hμ : StoreOk P μ) {l i v tl tv} (hl : HasType P Ctx.empty l tl)
+    (_hv : HasType P Ctx.empty v tv) (vv : v.isValue = true) :
+    (∃ t', HasType P Ctx.empty (insertAtValues μ l i v).1 t' ∧ sub t' tl = true) ∧ StoreOk P (insertAtValues μ l i v).2 := by
+  cases l with
+  | lref a t =>
+    cases hl
+    simp only [insertAtValues]
+    split
+    · rename_i items n hx _
+      split
+      · rename_i hfit
+        simp only [Store.listAt, Option.map_eq_some_iff, Option.filter_eq_some_iff, beq_iff_eq] at hx
+        obtain ⟨⟨t0, xs⟩, ⟨hget, ht0⟩, rfl⟩ := hx
+        simp only at ht0; subst ht0
+        obtain ⟨vi, ti, hti, sti⟩ := hμ.2.2.2 a _ _ hget
+        obtain ⟨tv', hv', stv⟩ := fits_typed (P := P) (Γ := Ctx.empty) hfit
+        obtain ⟨vr, tr, htr, str⟩ := insertItems_typed hv' vv stv n vi hti sti
+        exact ⟨⟨_, .lref, sub_refl _⟩, hμ.1, hμ.2.1, hμ.2.2.1, hμ.2.2.2.write hget vr htr str⟩
+      · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+    all_goals exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
   | _ => exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
 
 /-- `xs#i = v`: v, written into the shared list if it fits its element type, or an error -/
@@ -563,6 +589,10 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     intro t h hμ
     cases h with
     | setAt _ _ hv => exact setAt_typed hμ hv vv
+  | insertAt _ _ vv =>
+    intro t h hμ
+    cases h with
+    | insertAt hl _ hv => exact insertAt_typed hμ hl hv vv
   | @forText y s b v μ _ =>
     intro t h hμ
     cases h with
@@ -694,6 +724,9 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | @setAt _ l i v _ _ _ _ _ _ ih1 ih2 ih3 =>
     exact in_frame (.setAtL i v) rfl (ih1 hΓ hμ) fun vl => in_frame (.setAtI l v) vl (ih2 hΓ hμ) fun vi =>
       in_frame (.setAtR l i) (by simp [Frame.ready, vl, vi]) (ih3 hΓ hμ) fun vv => steps (.setAt vl vi vv)
+  | @insertAt _ l i v _ _ _ _ _ _ ih1 ih2 ih3 =>
+    exact in_frame (.insertAtL i v) rfl (ih1 hΓ hμ) fun vl => in_frame (.insertAtI l v) vl (ih2 hΓ hμ) fun vi =>
+      in_frame (.insertAtR l i) (by simp [Frame.ready, vl, vi]) (ih3 hΓ hμ) fun vv => steps (.insertAt vl vi vv)
   | new => exact steps .new
   | @get _ e f _ _ ih => exact in_frame (.get f) rfl (ih hΓ hμ) fun v => steps (.get v)
   | @set _ e f v _ _ _ _ _ _ _ ih1 ih2 =>

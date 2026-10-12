@@ -118,6 +118,7 @@ mod test_scoped_handlers;
 mod test_shared_arrays;
 mod test_shared_signals;
 mod test_shared_values;
+mod test_signal_fields;
 mod test_signal_in_loop;
 mod test_signal_lists;
 mod test_signal_reflection;

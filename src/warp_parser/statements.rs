@@ -23,12 +23,12 @@ impl WarpParser {
 	pub(super) fn try_parse_global_declaration(&mut self, keyword: &str) -> Option<Node> {
 		let before_declaration = self.mark();
 		self.skip_whitespace();
-		self.skip_declaration_modifiers();
+		let type_word = self.skip_declaration_modifiers();
 		if keyword == "export" && !self.at_identifier_start() {
 			self.rewind(before_declaration);
 			return None;
 		}
-		let declaration = self.parse_expr(0); // name, name=value or name:=value
+		let declaration = typed_global(self.parse_expr(0), type_word); // name, name=value or name:=value
 		let defines_function =
 			matches!(declaration.drop_meta(), Node::Key(name, Op::Define, _) if self.functions.contains(&name.name()));
 		if keyword == "export" && defines_function {
@@ -167,7 +167,9 @@ impl WarpParser {
 	}
 
 	/// Modifier and type words between the keyword and the name (`global const int k=7`): the global holds the value, the words are dropped
-	pub(super) fn skip_declaration_modifiers(&mut self) {
+	/// Skips the modifiers before a global's name: the last type word among them, `float` of `global float y = 2`
+	pub(super) fn skip_declaration_modifiers(&mut self) -> Option<String> {
+		let mut type_word = None;
 		loop {
 			let before_word = self.mark();
 			let word = self.parse_symbol().unwrap_or_default();
@@ -177,7 +179,10 @@ impl WarpParser {
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
 				self.rewind(before_word); // `global int` names the variable int
-				return;
+				return type_word;
+			}
+			if crate::analyzer::type_word_kind(&word).is_some() {
+				type_word = Some(word);
 			}
 		}
 	}
@@ -800,4 +805,16 @@ fn guarded_body(test: Node, body: Node) -> Node {
 		Box::new(body),
 	);
 	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
+}
+
+/// `global float y = 2` as `global y: float = 2` (card w0-globals: the type word was dropped, so y held the int 2);
+/// `global int k` without a value stays the declaration of k
+fn typed_global(declaration: Node, type_word: Option<String>) -> Node {
+	match (declaration.drop_meta(), type_word) {
+		(Node::Key(name, Op::Assign, value), Some(type_word)) if matches!(name.drop_meta(), Symbol(_)) => {
+			let typed_name = Node::Key(name.clone(), Op::Colon, Box::new(Symbol(type_word)));
+			Node::Key(Box::new(typed_name), Op::Assign, value.clone())
+		}
+		_ => declaration,
+	}
 }

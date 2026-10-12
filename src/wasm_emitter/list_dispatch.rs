@@ -1019,7 +1019,7 @@ impl WasmGcEmitter {
 
 	/// The slot and element type of `target` when it is a list variable held as a typed array: a local of the body, else
 	/// a typed global
-	fn typed_list(&self, target: &Node) -> Option<(Slot, TypedList)> {
+	pub(super) fn typed_list(&self, target: &Node) -> Option<(Slot, TypedList)> {
 		let Node::Symbol(name) = target.drop_meta() else {
 			return None;
 		};
