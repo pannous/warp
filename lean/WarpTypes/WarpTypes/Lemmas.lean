@@ -376,12 +376,12 @@ theorem fits_typed {Γ} : ∀ {v : Expr} {t}, fits v t = true → ∃ tv, HasTyp
 /-- a conversion gives a value of the target type, or an error -/
 theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
     ∃ t', HasType P Γ (convertValue μ v t) t' ∧ sub t' t = true := by
-  have parsed (make : Int → Expr) (u : Ty) (hm : ∀ n, HasType P Γ (make n) u) (hu : sub u u = true) :
+  have parsed (make : Rat → Expr) (u : Ty) (hm : ∀ q, ∃ t', HasType P Γ (make q) t' ∧ sub t' u = true) :
       ∃ t', HasType P Γ (convertValue.parsed make v) t' ∧ sub t' u = true := by
     unfold convertValue.parsed
     split
-    · cases (‹String›).toInt? with
-      | some n => exact ⟨_, hm n, hu⟩
+    · cases textNumber _ with
+      | some q => exact hm q
       | none => exact ⟨_, .error, sub_never _⟩
     · exact ⟨_, .error, sub_never _⟩
   have checked (t : Ty) : ∃ t', HasType P Γ (if fits v t then v else .error "cannot cast") t' ∧ sub t' t = true := by
@@ -394,11 +394,21 @@ theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
   case int =>
     simp only [convertValue]; split
     · exact ⟨_, .int, sub_refl _⟩
-    · exact parsed _ _ (fun _ => .int) (sub_refl _)
+    · exact parsed _ _ (fun _ => ⟨_, .int, sub_refl _⟩)
   case number =>
     simp only [convertValue]; split
     · exact ⟨_, .flt, sub_refl _⟩
-    · exact parsed _ _ (fun _ => .flt) (sub_refl _)
+    · exact parsed _ _ (fun _ => ⟨_, .flt, sub_refl _⟩)
+  case exact =>
+    simp only [convertValue]; split
+    · exact fits_typed ‹_›
+    · exact parsed _ _ (fun q => exactValue_typed q)
+  case codepoint =>
+    simp only [convertValue]; split
+    · unfold codepointOf; split
+      · exact ⟨_, .codepoint (by simp [String.length_singleton]), sub_refl _⟩
+      · exact ⟨_, .error, sub_never _⟩
+    · exact checked _
   all_goals exact checked _
 
 /-- a smaller object type reads a smaller field type -/

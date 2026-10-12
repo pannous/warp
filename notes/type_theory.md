@@ -586,8 +586,10 @@ or codepoint) replaces `= text` in `+` (`plus`), `*` (`repeatTy`) and `#`/`for` 
 codepoints, which the walk (`peel_codepoint`) and `#` give. A name given no annotation widens a codepoint to text
 (`widen`: `x = "a"; x = "bc"` is accepted, `x = "a"; x = 1` is "x was a Text"). The checker rejects, as warp does,
 `x: codepoint = "ab"`, `f(c: codepoint) := c; f("ab")` and `x: codepoint = 97`. The exporter maps the words
-`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet (card w0-conversions): `97 as codepoint` (W0 converts
-only by `fits`).
+`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). `97 as codepoint` converts a number to the character it numbers
+(`codepointOf`, an error for no Unicode scalar value); a text literal of other than one character is refused statically
+(`evidentMisconversion`), a text name converts when it runs (card w0-conversions). Warp gives `5 as codepoint` the
+digit '5' but `x = 5; x as codepoint` U+0005, and an invalid code point quietly '?' (card codepoint-digit).
 
 ## Exact numbers and floats
 Warp computes exactly until a float comes in: `0.1 + 0.2` is 0.3, `7/2` is 3.5, `1/3` stays 1/3, a whole result is an
@@ -605,8 +607,12 @@ zero. Printing follows warp's `Number` display: a terminating decimal (`3.5`, `0
 warp's analyzer sees a decimal and a float as one Kind (Float), so admits is compared on the decimal (`.exact`).
 Found: card rational-float (`x: rational = sqrt(2)`, `x: rational = 0.5 as float` fail with an internal WASM
 validation error rather than the compile error a parameter gets: `f(r: rational) := r; f(0.5 as float)`).
-Not yet (card w0-conversions): `as rational` (a cast, not a conversion, in W0), float display, `x: float = 1/3` converting (W0 keeps 1/3, of
-type number; warp converts to 0.333…, which the comparison skips as a float).
+Conversions (card w0-conversions): `as int`, `as number` and `as rational` read a text as warp's number_in_text
+does (`textNumber`: `12`, `-4.5`, `1/3`); `as rational` keeps an exact number and refuses a float when it runs (warp
+refuses it statically; W0's `number` is floats and exact numbers alike, so the corpus leaves it out). An exact number
+given to a float place (`x: float = 1/3`, a name already holding a float, a float parameter) is converted
+(`castDynamicValues` inserts `.conv v .number`), and the model prints floats as warp's float_text does (`floatText`).
+Warp keeps 1/3 for a `number` parameter, a float field and a `floats` list (card number-converts).
 
 ## Stored errors (errors as values)
 

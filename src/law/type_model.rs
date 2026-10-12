@@ -2148,7 +2148,7 @@ pub fn admits_disagreements() -> Result<Vec<String>, String> {
 }
 
 /// What each exported program gives when the model runs it: `rejected`, `error`, a value as warp prints it, or `?`
-/// where the model does not keep the value (numbers other than ints, instances)
+/// where the model does not keep the value (instances)
 pub fn outcomes(exported: &[String]) -> Result<Vec<String>, String> {
 	let requests = exported.iter().map(|items| format!("outcome {items}")).collect();
 	ask_each("outcomes", requests, "programs", |line| Some(line.to_string()))
@@ -2160,6 +2160,7 @@ pub fn warp_value(code: &str) -> String {
 		match value.drop_meta() {
 			Node::Number(Number::Int(n)) => n.to_string(),
 			Node::Number(exact @ (Number::Quotient(..) | Number::BigQuotient(_))) => exact.to_string(),
+			Node::Number(Number::Float(x)) => crate::extensions::numbers::float_text(*x),
 			Node::True => "yes".to_string(),
 			Node::False => "no".to_string(),
 			Node::Text(text) => format!("\"{text}\""),

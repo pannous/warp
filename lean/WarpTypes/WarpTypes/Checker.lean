@@ -40,8 +40,16 @@ def evidentMisfit (v : Expr) (t : Ty) : Bool := v.isValue && !fits v t
 admits (`[1] as int` is refused) -/
 def convertible (te : Ty) : Ty → Bool
   | .text | .bool => true
-  | .int | .exact | .number => consub te .number || consub te .text
+  | .int | .exact | .number | .codepoint => consub te .number || consub te .text
   | t => consub te t
+
+/-- a conversion warp refuses when it compiles: a text literal of other than one character to a codepoint
+(`"ab" as codepoint`); a text that is no literal is converted when it runs -/
+def evidentMisconversion (e : Expr) : Ty → Bool
+  | .codepoint => match e with
+    | .text s => s.length != 1
+    | _ => false
+  | _ => false
 
 /-- a quantity meets only its own dimensions (or a dynamic value, or an error): `1 m + 1 s`, `1 m == 1`, `1 m < "a"`
 and `if c { 1 m } else { 2 }` are DimensionErrors when warp compiles them (src/units/static_units.rs) -/
@@ -145,7 +153,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | some ta, some tb => some (join (strip ta) tb)
     | _, _ => none
   | .cast e ts => (typeOf P Γ e).bind fun te => if ts.any (consub te) then some (joinAll ts) else none
-  | .conv e t => (typeOf P Γ e).bind fun te => if convertible te t then some t else none
+  | .conv e t => (typeOf P Γ e).bind fun te => if convertible te t && !evidentMisconversion e t then some t else none
   | .broadcast f e =>
     match P.funs f, typeOf P Γ e with
     | some fd, some te =>
@@ -638,12 +646,16 @@ def resolveCalls (P : Program) : Ctx → Expr → Expr :=
 
 /-- gradual typing: a value of static type any given to a narrower name or parameter is checked when it runs
 (`level = event.level` is `level = cast event.level [int]`), and so is an optional given to a place that takes no ø
-(`a: int? = 3; b: int = a`: warp unwraps it when it runs); warp admits these at compile time -/
+(`a: int? = 3; b: int = a`: warp unwraps it when it runs); warp admits these at compile time. An exact number given
+to a float place is converted (`x: float = 1/3` holds 0.333…) -/
 def castDynamicValues (P : Program) : Ctx → Expr → Expr :=
   Expr.rewrite P fun Γ e =>
     let checked (place : Option Ty) (v : Expr) (give : Expr → Expr) :=
       match place, typeOf P Γ v with
-      | some t, some tv => if (tv == .any || tv.isOptional) && !sub tv t then give (.cast v [t]) else e
+      | some t, some tv =>
+        if (tv == .any || tv.isOptional) && !sub tv t then give (.cast v [t])
+        else if t == .number && tv != .never && sub tv .exact then give (.conv v .number)
+        else e
       | _, _ => e
     match e with
     | .assign x v => checked ((P.names x).map (·.2)) v (.assign x)

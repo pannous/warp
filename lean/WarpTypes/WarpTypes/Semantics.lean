@@ -441,17 +441,13 @@ def fits : Expr → Ty → Bool
     | some tv => sub tv t
     | none => false
 
-/-- a whole float prints as its int (`x: float = 2` is 2); W0 does not print other floats as warp does -/
-def floatDisplay (f : Float) : String :=
-  if f == f.floor && f.abs < 9007199254740992.0 then toString (floatWhole f) else "?"
-
 /-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
-what warp prints (numbers, instances) -/
+what warp prints (instances) -/
 def display (μ : Store) : Nat → Expr → String
   | _, .bool b => if b then "yes" else "no"
   | _, .int n => toString n
   | _, .num q => ratDisplay q
-  | _, .flt f => floatDisplay (Float.ofBits f)
+  | _, .flt f => floatText (Float.ofBits f)
   | _, .text s => s!"\"{s}\""
   | _, .fail _ => "error"
   | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
@@ -471,16 +467,41 @@ def textForm (μ : Store) (v : Expr) : String :=
   | .nil => "ø"
   | v => display μ DISPLAY_DEPTH v
 
+/-- the exact number a text spells, as warp's number_in_text reads it: `12`, `-4.5`, `1/3` -/
+def textNumber (s : String) : Option Rat :=
+  match s.splitOn "/" with
+  | [n, d] => do
+    let n ← n.toInt?
+    let d ← d.toInt?
+    if d = 0 then none else some ((n : Rat) / (d : Rat))
+  | [t] =>
+    match t.splitOn "." with
+    | [w] => w.toInt?.map fun n => (n : Rat)
+    | [w, f] => do
+      let whole ← w.toInt?
+      let fraction ← f.toNat?
+      let part : Rat := mkRat fraction (10 ^ f.length)
+      some (if w.startsWith "-" then whole - part else whole + part)
+    | _ => none
+  | _ => none
+
+/-- the character of the code point n, if n is a Unicode scalar value -/
+def codepointOf (n : Int) : Expr :=
+  if n.toNat.isValidChar && 0 ≤ n then .text (String.singleton (Char.ofNat n.toNat)) else .error "invalid codepoint"
+
 /-- `v as t` of a value: a scalar converts to text, int, number or bool (a number to int keeps its whole part, a text
-is parsed); to any other type the value is checked as a cast checks it -/
+is parsed), a number to the codepoint it numbers, a number or a text to an exact number (a float only by a cast); to
+any other type the value is checked as a cast checks it -/
 def convertValue (μ : Store) (v : Expr) : Ty → Expr
   | .text => .text (textForm μ v)
   | .bool => .bool (truthy (μ.items v))
-  | .int => if isNumber v then .int (asNumber v) else parsed .int v
-  | .number => if isNumber v then floatValue (asFloat v) else parsed (fun n => floatValue (Float.ofInt n)) v
+  | .int => if isNumber v then .int (asNumber v) else parsed (fun q => .int (asNumber (.num q))) v
+  | .number => if isNumber v then floatValue (asFloat v) else parsed (fun q => floatValue (ratToFloat q)) v
+  | .exact => if fits v .exact then v else parsed exactValue v
+  | .codepoint => if isNumber v then codepointOf (asNumber v) else if fits v .codepoint then v else .error "cannot cast"
   | t => if fits v t then v else .error "cannot cast"
-where parsed (make : Int → Expr) : Expr → Expr
-  | .text s => (s.toInt?.map make).getD (.error "invalid number")
+where parsed (make : Rat → Expr) : Expr → Expr
+  | .text s => ((textNumber s.trimAscii.copy).map make).getD (.error "invalid number")
   | _ => .error "cannot cast"
 
 /-- `xs.add(v)` of values: v joins the shared list if it fits the list's element type -/
