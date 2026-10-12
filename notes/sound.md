@@ -192,6 +192,14 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    typed in (window_open, so audible): the Worker computes a block when the voice holds less than 100 ms
    (playedSignal, host-tasks.js soundsQueued), each block a sound of the signal's handle (stop_sound ends them all),
    the wait a sleep without runaway time. Unclicked (CI) everything at once, one sound.
+   Real-time playback (card real-time-playback, the user's `loop { go {melody…}; melody…; tempo *= 1.05 }`, kept in
+   probes/sound_experiments/voices.warp): heard, a voice's next sound waits until its queued sounds end within
+   PLAY_AHEAD (0.5 s; sound.rs paced, host-files.js holder.sounded), except in an `at`, which places its sounds itself.
+   Before, the loop computed minutes ahead, a new task thread a round, its exact tempo growing digits a round (card
+   exact-tempo-growth). In the browser a task's sounds still reach the page only when the program's Worker is back in
+   its event loop, so a paced endless loop with tasks hears the main voice only (a MessagePort per task Worker to the
+   page would fix it). Measured (release, probes/sound/voices_loop_timing.warp): a round computes in 15-60 ms for
+   0.4-2.2 s of sound, so pacing, not speed, was missing.
    Still to build: an AudioWorklet running the module (glitch-free under a busy Worker), input (a microphone as the
    signal's argument).
 
