@@ -89,6 +89,7 @@ mod test_loop_text_arithmetic;
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
 mod test_match_static_variant;
+mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
 mod test_method_result_text; // card instance-result
 mod test_mutating_methods;

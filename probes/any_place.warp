@@ -1,0 +1,5 @@
+// card yes-stores: a variable declared any keeps a bool a bool (yes, not 1); a later text replaces it
+y: any = yes
+print y
+y = "a"
+print y

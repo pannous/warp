@@ -350,10 +350,12 @@ impl WasmGcEmitter {
 				let reason = format!("read {} failed: host imports are not available", path.serialize());
 				self.emit_runtime_error_value(func, &reason);
 			}
-			// warnings are errors: the message is an Error value, which text concatenation propagates
-			(WARNING, [message]) if crate::diagnostic::warning_mode() == crate::diagnostic::WarningMode::Error => {
-				self.emit_node_instructions(func, message);
-				self.emit_call(func, ERROR_OF);
+			// warnings are errors: the run stops as at `raise`, also where the warning's value is dropped (card under-use)
+			(WARNING | RAISE, [message])
+				if name == RAISE || crate::diagnostic::warning_mode() == crate::diagnostic::WarningMode::Error =>
+			{
+				self.emit_trap_detail(func, message);
+				self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
 			}
 			(WARNING, [message]) if self.ctx.func_registry.get(HOST_WARN).is_some() => {
 				self.emit_node_instructions(func, message);
@@ -371,10 +373,6 @@ impl WasmGcEmitter {
 				self.emit_call(func, ERROR_OF);
 			}
 			(crate::wasm_emitter::CAUGHT_ERROR, [finished, value]) => self.emit_caught_error(func, finished, value),
-			(RAISE, [message]) => {
-				self.emit_trap_detail(func, message);
-				self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
-			}
 			// a hole names a variable: a word that names nothing is loud, never its own spelling
 			(TEXT_FORM, [value]) => match value.drop_meta() {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
