@@ -861,8 +861,14 @@ impl WasmGcEmitter {
 		format!("{params} => {}", function.body.serialize())
 	}
 
+	/// Whether function_text is emitted: a program that shows values and has function values (an emit without a
+	/// program, which emits everything, has none to show)
+	pub(super) fn shows_functions(&self) -> bool {
+		!self.ctx.closure_targets.is_empty() && self.should_emit_function(FUNCTION_TEXT)
+	}
+
 	pub(super) fn emit_function_text(&mut self) {
-		if !self.should_emit_function(FUNCTION_TEXT) {
+		if !self.shows_functions() {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));

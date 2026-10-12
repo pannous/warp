@@ -1511,7 +1511,7 @@ impl WasmGcEmitter {
 					s.call(f, super::uncertain::UNCERTAIN_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				if s.should_emit_function(super::closures::FUNCTION_TEXT) {
+				if s.shows_functions() {
 					masked_kind_is(f, Kind::Function); // its class in the info bits
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
 					s.call(f, super::closures::FUNCTION_TEXT);
