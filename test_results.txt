@@ -381,6 +381,9 @@ PASSED:
   ✓ control::test_reactive_ports::rxjs_node_qt_events
   ✓ control::test_reactive_ports::svelte_vue_solid_derivations
   ✓ control::test_reactive_ports::the_signals_note_example_runs
+  ✓ control::test_reflect_inferred::a_field_named_type_is_read_as_written
+  ✓ control::test_reflect_inferred::extension_methods_are_listed
+  ✓ control::test_reflect_inferred::the_class_of_a_calls_result
   ✓ control::test_reflection_words::a_bindings_doc
   ✓ control::test_reflection_words::a_classes_methods
   ✓ control::test_reflection_words::a_functions_dump
@@ -4899,4 +4902,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4894 passed, 0 failed, 4894 total tested
+10 ignored, 4897 passed, 0 failed, 4897 total tested
