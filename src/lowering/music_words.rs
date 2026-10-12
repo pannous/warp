@@ -275,6 +275,16 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 		return call(word, vec![with_music_words(amount, defined)]);
 	}
 	match node.map_children(|child| with_music_words(child, defined)) {
+		// a block of one statement, a loop's or an if's body: `for i in 1 to 3 { at 0 bars play C4 for 1s }`
+		Node::List(items, Bracket::Curly, separator)
+			if !separator.separates_statements()
+				&& let Some(statements) = scheduled(
+					&Node::List(with_unit_words(items.clone(), defined), Bracket::None, separator.clone()),
+					defined,
+				) =>
+		{
+			Node::List(statements, Bracket::Curly, Separator::Newline)
+		}
 		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(
 			with_kind_text(with_unit_words(items, defined), defined),
 			bracket,
