@@ -4,7 +4,8 @@
 use warp::util::fetch;
 use warp::wasm_emitter::eval;
 use warp::type_kinds::NodeKind;
-use crate::{is, eq};
+use crate::{is, eq, is_online};
+use crate::common::retried_on_network_failure;
 
 #[test]
 fn test_html_warp() {
@@ -37,15 +38,16 @@ fn test_inner_html() {
 	calls_the_page("use js document; results = document.getElementById(\"results\"); results.innerHTML = \"<i>ok</i>\"", &["getElementById", "innerHTML"]);
 }
 
+// pannous.com: a real public host is the point; retried once when only the network failed (common::online_eval)
 #[test]
 fn test_fetch() {
-	is!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
-	let res = fetch("https://pannous.com/files/test");
+	is_online!("x=fetch https://pannous.com/files/test;i=7;x", "test 2 5 3 7\n");
+	let res = retried_on_network_failure("fetch", || fetch("https://pannous.com/files/test"), |body| body.is_empty().then(|| "nothing downloaded, reason above".to_string()));
 	eq!(res, "test 2 5 3 7");
-	is!("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-	is!("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
-	is!("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
-	is!("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
+	is_online!("fetch https://pannous.com/files/test", "test 2 5 3 7\n");
+	is_online!("x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
+	is_online!("string x=fetch https://pannous.com/files/test;y=7;x", "test 2 5 3 7\n");
+	is_online!("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 }
 
 // a red rectangle on a canvas: drawn by `use draw` (the playground's canvas, natively a PNG), or on a page's canvas

@@ -148,6 +148,8 @@ def serve(binary, root=REPOSITORY):
 
 		def do_POST(self):
 			"""tests.html posts its summary here: scratch/browser_tests_<browser>.json, e.g. from a Firefox tab"""
+			if urllib.parse.urlsplit(self.path).path == STUB_PATH:
+				return self.echo()
 			if self.path != RESULTS_PATH:
 				return self.send_error(404)
 			summary = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -156,6 +158,17 @@ def serve(binary, root=REPOSITORY):
 				json.dump(summary, file, indent=1)
 			self.send_response(204)
 			self.end_headers()
+
+		def echo(self):
+			"""a POST to the stub answers what it got, as httpbin.org/post does: {data, headers} (tests/common echo_url)"""
+			data = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
+			headers = {"-".join(part.capitalize() for part in name.split("-")): value for name, value in self.headers.items()}
+			body = json.dumps({"data": data, "headers": headers}).encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "application/json")
+			self.send_header("Content-Length", str(len(body)))
+			self.end_headers()
+			self.wfile.write(body)
 
 		def end_headers(self):
 			# cross-origin isolation: SharedArrayBuffer for tasks on Workers (host.js startTask)
