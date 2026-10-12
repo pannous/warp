@@ -3527,6 +3527,9 @@ PASSED:
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
+  ✓ types::test_class_unions::a_union_of_a_class_and_a_builtin_type
+  ✓ types::test_class_unions::a_union_of_classes_refuses_another_class
+  ✓ types::test_class_unions::a_union_of_classes_takes_an_instance_of_each
   ✓ types::test_class_witnesses::a_compare_method_is_how_instances_order
   ✓ types::test_class_witnesses::a_text_method_is_how_an_instance_prints
   ✓ types::test_class_witnesses::an_equals_method_is_how_instances_compare
@@ -4858,4 +4861,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4853 passed, 0 failed, 4853 total tested
+10 ignored, 4856 passed, 0 failed, 4856 total tested
