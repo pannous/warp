@@ -22,6 +22,11 @@ notes/agents/common.md.
   rename leaves alone: `~/dev/bin/rename-when-idle warp-<new>` types `/rename warp-<new>` once it is idle, which also
   makes `warp-<new>` its SendMessage address: tell the Integrator and Interviewer); one doing many unrelated tasks in a row or
   in parallel gets a generic name (worker, fixer). Tell the renamed session its new role.
+- Name what it is working on now, never a guess (user, 2026-10-12, after a web-view focus crash went to a session
+  named warp-classes because the card title said "instance variable"): a session is named for the task it is on at
+  this moment, so the user can tell from the session list what each one does. Before the cause is known, use the
+  card key (`warp-<card key>`, e.g. warp-focus-crash; urgent-card-watch names crash workers so); rename the card key
+  and the session once the real area shows, and again whenever the session moves to another task.
 - Urgent cards (user, 2026-10-07): the user drops them into column Now without an Agent. Cron runs
   ~/dev/bin/urgent-card-watch every 2 minutes, which types "[urgent-card-watch] …" into tmux warp-supervisor when a
   card appears and again every 30 minutes while it stays untaken (at most 3 times: a prompt typed into a busy session
