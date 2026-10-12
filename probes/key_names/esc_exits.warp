@@ -1,0 +1,8 @@
+// card key-if: in the paint window, keys print their names; ESC ends the program
+use draw
+clear(white)
+show()
+on key {
+	if key == ESC { print "bye"; exit }
+	print key
+}
