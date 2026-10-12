@@ -345,8 +345,7 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 		return None;
 	};
 	let filters = if_word.is_symbol(IF_WORD) || if_word.is_symbol(WHERE_KEYWORD);
-	if !in_word.is_symbol(IN_WORD) || !filters || rest.is_empty() || rest.iter().any(starts_with_for)
-	{
+	if !in_word.is_symbol(IN_WORD) || !filters || rest.is_empty() || rest.iter().any(starts_with_for) {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else {

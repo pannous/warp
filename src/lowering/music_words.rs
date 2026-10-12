@@ -279,7 +279,11 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 		Node::List(items, Bracket::Curly, separator)
 			if !separator.separates_statements()
 				&& let Some(statements) = scheduled(
-					&Node::List(with_unit_words(items.clone(), defined), Bracket::None, separator.clone()),
+					&Node::List(
+						with_unit_words(items.clone(), defined),
+						Bracket::None,
+						separator.clone(),
+					),
 					defined,
 				) =>
 		{

@@ -27,5 +27,8 @@ fn a_comprehension_with_where_over_a_table_reads_only_its_rows() {
 
 #[test]
 fn a_comprehension_with_where_over_a_list_filters() {
-	is!("xs = [1, 5, 2, 7]; [x * 10 for x in xs where x > 2]", warp::ints(vec![50, 70]));
+	is!(
+		"xs = [1, 5, 2, 7]; [x * 10 for x in xs where x > 2]",
+		warp::ints(vec![50, 70])
+	);
 }
