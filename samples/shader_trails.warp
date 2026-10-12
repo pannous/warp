@@ -20,6 +20,9 @@ trails = shader {
 
 // the first paint opens the window; then until it closes (headless: no window, so the loop never starts)
 paint(trails, width, height)
+on key {
+	exit()
+}
 while window_open {
 	paint(trails, width, height)
 	sleep 16ms
