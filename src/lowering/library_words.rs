@@ -318,7 +318,7 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 		.or((name == SUM_WORD).then_some(SUM_WORD))
 }
 
-fn arity(word: &str) -> usize {
+pub(crate) fn arity(word: &str) -> usize {
 	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
 	let built_in = RUNTIME_WORDS
 		.into_iter()

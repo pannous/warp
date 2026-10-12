@@ -42,6 +42,8 @@ const BODY_WORD: &str = "body";
 const DUMP_WORD: &str = "dump";
 /// What `dir(f)` lists of a function: the words reflection answers for it
 const FUNCTION_WORDS: [&str; 4] = [PARAMS_WORDS[0], SIGNATURE_WORD, BODY_WORD, EFFECTS_WORD];
+/// `dir(sqrt)`: a library word has no body to show
+const LIBRARY_FUNCTION_WORDS: [&str; 2] = [PARAMS_WORDS[0], SIGNATURE_WORD];
 /// The entries of the module's warp.meta section that name its functions and classes
 pub const META_FUNCTIONS: &str = "functions";
 pub const META_CLASSES: &str = "classes";
@@ -148,8 +150,10 @@ fn as_reflection_words(
 		return reflected;
 	}
 	if let Node::Key(subject, Op::Dot, word) = node.drop_meta() {
+		let subject = super::ambiguous_forms::written_word(subject);
 		if let (Some(name), Some(word)) = (subject.symbol_name(), word.symbol_name()) {
 			let function = functions.get(name).filter(|_| !defined.contains(word));
+			let library = || library_signature(name, functions, defined).filter(|_| !defined.contains(word));
 			let reflected = match (word, function) {
 				(EFFECTS_WORD, Some(_)) => Some(of_phrase(word, name)),
 				(LISTENERS_WORD, _) if listened.contains(name) => Some(of_phrase(word, name)),
@@ -167,6 +171,8 @@ fn as_reflection_words(
 					Bracket::None,
 					Separator::Space,
 				)),
+				(word, None) if PARAMS_WORDS.contains(&word) => library().map(|(params, _)| text_list(&params)),
+				(SIGNATURE_WORD, None) => library().map(|(_, signature)| Node::Text(signature)),
 				_ => None,
 			};
 			if let Some(reflected) = reflected {
@@ -177,15 +183,32 @@ fn as_reflection_words(
 	node.map_children(|child| as_reflection_words(child, functions, listened, defined))
 }
 
+/// A library word's parameter names and signature, unless the program defines that name itself
+fn library_signature(name: &str, functions: &Functions, defined: &HashSet<String>) -> Option<(Vec<String>, String)> {
+	if functions.contains_key(name) || defined.contains(name) {
+		return None;
+	}
+	super::library_signatures::library_signature(name)
+}
+
 /// `dir(f)`: the reflection words of a user function; `type(f)`: function. A program's own dir or type wins
 fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) -> Option<Node> {
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
 		return None;
 	};
 	let [word, subject] = items.as_slice() else { return None };
+	let subject = super::ambiguous_forms::written_word(subject);
 	let (word, name) = (word.symbol_name()?, subject.symbol_name()?);
-	if defined.contains(word) || !functions.contains_key(name) {
+	if defined.contains(word) {
 		return None;
+	}
+	if !functions.contains_key(name) {
+		let (_, signature) = library_signature(name, functions, defined)?;
+		return match word {
+			DIR_WORD => Some(text_list(&LIBRARY_FUNCTION_WORDS.map(String::from))),
+			HELP_WORD => Some(Node::Text(format!("{name}{signature}"))),
+			_ => None,
+		};
 	}
 	match word {
 		DIR_WORD => Some(text_list(&FUNCTION_WORDS.map(String::from))),
