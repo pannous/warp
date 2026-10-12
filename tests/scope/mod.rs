@@ -20,6 +20,7 @@ mod test_node_widening_in_loops;
 mod test_prefixed_declarations;
 mod test_result_word;
 mod test_several_globals;
+mod test_typed_globals; // card w0-globals
 mod test_undefined_variable;
 mod test_use_scopes;
 mod test_variable_kind_change;
