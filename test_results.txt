@@ -3030,6 +3030,8 @@ PASSED:
   ✓ programs::test_sound_engine::fade_sound_takes_a_handle_of_the_run
   ✓ programs::test_sound_engine::sounds_back_to_back_follow_to_the_sample
   ✓ programs::test_sound_engine::stop_drops_one_sound_or_all
+  ✓ programs::test_sound_fades::fade_sound_of_one_handle_leaves_the_others
+  ✓ programs::test_sound_fades::fade_sound_ramps_a_sound_down_in_the_render
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
@@ -4813,4 +4815,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4808 passed, 0 failed, 4808 total tested
+10 ignored, 4810 passed, 0 failed, 4810 total tested
