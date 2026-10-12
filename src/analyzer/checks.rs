@@ -1587,6 +1587,12 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 		.offer(format!("{name} holds {actual}"), format!("{name}:{type_name}"), format!("{name}:{actual}")))
 }
 
+/// `: an int must be a whole number` after the refusal of a fraction for an int, as the run-time check says
+/// (list_ops INT_NOT_WHOLE); nothing for any other misfit
+pub(crate) fn not_whole_note(type_name: &str, given: Kind) -> &'static str {
+	if builtin_type_kind(type_name) == Some(Kind::Int) && given == Kind::Float { ": an int must be a whole number" } else { "" }
+}
+
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
 pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	if is_bool_type(type_name) {
