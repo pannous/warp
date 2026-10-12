@@ -113,3 +113,5 @@ mod test_page_play_file; // card browser-play
 mod test_wagi; // card fermyon-hosting
 #[cfg(feature = "native")] // runs wrangler dev and node
 mod test_assistant_proxy; // card assistant-proxy
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
+mod test_webview; // card read-chron

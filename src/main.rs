@@ -57,6 +57,9 @@ const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 const TOOL_COMMAND: &str = "tool";
 /// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
+/// `warp app page.warp`: the program's page in a window (src/webview.rs, card read-chron)
+const APP_COMMAND: &str = "app";
+const APP_CHECK: &str = "--check";
 /// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/deploy.rs)
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
@@ -277,8 +280,11 @@ fn run_command(args: &[String]) {
         return;
     }
 
-    if arg_string.ends_with(".html") || arg_string.ends_with(".htm") {
-        println!("warp compiled without webview");
+    if args[1] == APP_COMMAND && args.len() >= 3 {
+        let check = args[2] == APP_CHECK;
+        show_in_webview(&args[if check { 3 } else { 2 }..].join(" "), check);
+    } else if is_html_file(&arg_string) {
+        show_in_webview(&arg_string, false);
     } else if let Some(target) = arg_string.strip_prefix("verify ") {
         let code = source_of(target);
         let reports = law::verify(&code);
@@ -676,6 +682,30 @@ fn write_wagi(code: &str, target: &str) {
             eprintln!("warp build --wagi: {failure}");
             std::process::exit(1);
         }
+    }
+}
+
+fn is_html_file(target: &str) -> bool {
+    target.ends_with(".html") || target.ends_with(".htm")
+}
+
+/// `warp page.html`, `warp app [--check] page.warp`: the page in a web view window (src/webview.rs); --check prints
+/// its text from a hidden window instead
+fn show_in_webview(target: &str, check: bool) {
+    if !check && !warp::paint::shows_windows() {
+        fail(format!("warp {APP_COMMAND}: no window under {} or CI; `warp {APP_COMMAND} {APP_CHECK} {target}` prints the page's text", warp::paint::NO_WINDOW_VARIABLE));
+    }
+    #[cfg(target_os = "macos")]
+    let shown = if is_html_file(target) {
+        warp::webview::show_file(std::path::Path::new(target), check)
+    } else {
+        let title = std::path::Path::new(target).file_stem().filter(|_| file_exists(target)).map_or(DEFAULT_SITE_NAME.into(), |stem| stem.to_string_lossy());
+        warp::webview::show_program(&source_of(target), &title, check)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let shown: Result<(), String> = Err(format!("warp is compiled without a web view here (macOS only for now); `warp build --site {target}` writes the page"));
+    if let Err(failure) = shown {
+        fail(format!("warp {APP_COMMAND}: {failure}"));
     }
 }
 

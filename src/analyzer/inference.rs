@@ -270,6 +270,11 @@ pub fn type_cast_of<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separa
 	(!is_variable(name) && type_word_kind(&name.to_lowercase()).is_some()).then_some(name)
 }
 
+/// A built-in type word that converts the value it is applied to: `int 3.7`, `text 5`, `hex 255`, `byte 65`
+pub fn is_type_call_word(name: &str) -> bool {
+	type_word_kind(&name.to_lowercase()).is_some() || crate::wasm_emitter::is_called_conversion(name)
+}
+
 /// A word applied to one value: `f(x)` and `f x` are the same call, braced or not. A list `[f, x]`, a comma group
 /// `(f, x)`, the statements `f; x` or a typed declaration `byte b = 10` apply nothing
 pub fn applied_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<(&'a str, &'a Node)> {

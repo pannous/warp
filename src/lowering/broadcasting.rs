@@ -72,15 +72,19 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 		let count = definition.params.len();
 		// P149 (user): an untyped parameter the body uses in arithmetic (`x + 1`, `it*it`) is no truth value either
 		let typed = definition.params.first().is_some_and(|first| rules_out_a_truth_value(first) || is_arithmetic_operand(&definition.body, &first.name()));
-		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count, typed_first: typed });
-		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count), typed_first: arity.typed_first && typed };
+		let arity = arities.entry(definition.name.clone()).or_insert(Arity { fewest: count, most: count, typed_first: typed, converts: false });
+		*arity = Arity { fewest: arity.fewest.min(count), most: arity.most.max(count), typed_first: arity.typed_first && typed, converts: false };
+	}
+	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter
+	for name in type_calls_used(&program) {
+		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: false, converts: true });
 	}
 	if arities.is_empty() {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
-		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1, typed_first: false });
+		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1, typed_first: false, converts: false });
 	}
 	nest_prefix_calls(program, &arities)
 }
@@ -137,6 +141,22 @@ struct Arity {
 	most: usize,
 	/// Every definition's first parameter declares a type that is no truth value (`x: int`, `square number`)
 	typed_first: bool,
+	/// A built-in type converting its value (`int 3.7`, `hex 255`): nests like a function, its comparisons keep their reading
+	converts: bool,
+}
+
+/// The built-in type words the program calls and does not name itself: `int`, `text`, `hex`, `byte` … (analyzer::applied_word)
+fn type_calls_used(program: &Node) -> HashSet<String> {
+	let mut used = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Symbol(name) = node {
+			if crate::analyzer::is_type_call_word(name) {
+				used.insert(name.clone());
+			}
+		}
+	});
+	used.retain(|name| !crate::soft_keywords::program_names(program, name));
+	used
 }
 
 /// `x: int`, `number` (P50, the type-named parameter, as `number: number`): not `b: bool`, not untyped
@@ -187,9 +207,10 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			items.push(nest_prefix_calls(nested, arities));
 			nest_prefix_calls(Node::List(items, bracket, separator), arities)
 		}
-		// `sum square [1 2 3]`, `sum(square xs)`: a library word of one value takes the call of a user function after it
+		// `sum square [1 2 3]`, `sum(square xs)`: a library word of one value takes the call of a user function after it;
+		// a type word there is the library word's argument, `x.nearest(rational, 1000)`
 		Node::List(items, bracket @ (Bracket::None | Bracket::Round), separator @ (Separator::Space | Separator::None))
-			if items.len() > 2 && is_one_value_word(&items[0], arities) && arity(&items[1]).is_some_and(|takes| items.len() - 2 <= takes.most) =>
+			if items.len() > 2 && is_one_value_word(&items[0], arities) && arity(&items[1]).is_some_and(|takes| !takes.converts && items.len() - 2 <= takes.most) =>
 		{
 			let mut items = items;
 			let call = Node::List(items.split_off(1), Bracket::None, Separator::Space);
@@ -198,7 +219,7 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
 		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) => {
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some_and(|takes| !takes.converts) && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) => {
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
 			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
 			if !arity(&head).expect("guarded").typed_first {
@@ -209,7 +230,7 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		}
 		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
 		// ambiguous when the body accepts anything (`f := print it`)
-		Node::Key(left, op, right) if op.is_comparison() && matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) => {
+		Node::Key(left, op, right) if op.is_comparison() && matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first && !takes.converts))) => {
 			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
 			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
 		}

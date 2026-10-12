@@ -434,6 +434,8 @@ impl WarpParser {
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			let glued_before = !self.prev_char().is_whitespace();
 			self.advance_by(chars);
+			// `f - 2` subtracts, `f -2` may pass -2 to f (SpacedMinus)
+			let spaced_minus = op == Op::Sub && !glued_before && self.current_char().is_whitespace() && matches!(lhs.drop_meta(), Node::Symbol(_));
 			// `for:email "Email"`: the glued pair is for:email, the text the next item (card parser-tag)
 			let glued_pair = op == Op::Colon && glued_before && !self.current_char().is_whitespace();
 			let block_body = match op {
@@ -528,7 +530,8 @@ impl WarpParser {
 					continue;
 				}
 			}
-			lhs = combined(lhs, op, &written, rhs.clone(), previous_comparand.take());
+			let lhs_operand = if spaced_minus { lhs.with_meta_data(super::SpacedMinus) } else { lhs };
+			lhs = combined(lhs_operand, op, &written, rhs.clone(), previous_comparand.take());
 			if op.is_ordering() {
 				previous_comparand = Some(rhs);
 			}

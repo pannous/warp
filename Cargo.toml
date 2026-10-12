@@ -46,7 +46,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph", "dep:wry"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -123,6 +123,11 @@ sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (s
 #parity-wasm = "*" # Low-level WebAssembly format library for serializing, deserializing, and building .wasm binaries.
 #Good support for well-known custom sections, such as the "names" section and "reloc.WHATEVER" sections.
 # parity-wasm is INCOMPLETE: pub enum Type { Function(FunctionType),
+
+# `warp app page.warp`, `warp page.html` (src/webview.rs, card read-chron): the page in the system's web view (WKWebView);
+# macOS only for now, Linux needs webkit2gtk's dev packages on every builder
+[target.'cfg(target_os = "macos")'.dependencies]
+wry = { version = "0.57", optional = true, default-features = false }
 
 #[test-dependencies] no such thing. it's :
 [dev-dependencies]

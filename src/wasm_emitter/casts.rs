@@ -366,11 +366,22 @@ impl WasmGcEmitter {
 			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
 			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
 			// text of its value
-			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !computes_value(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
+			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !computes_value(value) && !self.mentions_conversion(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
 				self.emit_string_call(func, &value.serialize(), "new_text");
 			}
 			_ => self.emit_runtime_text_cast(func, value),
 		}
+	}
+
+	/// Does the node convert a value: `text 5`, `str(5)`, `5 as text`, so `text(text(5))` is "5", not its source
+	fn mentions_conversion(&self, node: &Node) -> bool {
+		let mut found = false;
+		node.visit(&mut |part| found |= match part {
+			Node::Key(_, Op::As, _) => true,
+			Node::List(items, bracket, separator) => crate::analyzer::type_cast_of(items, bracket, separator, &|name| self.scope.lookup(name).is_some()).is_some(),
+			_ => false,
+		});
+		found
 	}
 
 	/// `x as char`: a digit 0…9 is its character, another number its code point
