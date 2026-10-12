@@ -32,14 +32,17 @@ fn byte_at_reads_one_byte() {
 	is!("t=\"héllo\"; byte_at(t, 0)", 104);
 	is!("t=\"héllo\"; byte_at(t, 1)", 0xC3);
 	is!("t=\"héllo\"; byte_at(t, 1) * 256 + byte_at(t, 2)", 0xC3A9);
-	is!("t=\"héllo\"; byte_at(t, 6)", warp::error("index out of range"));
+	is!("t=\"héllo\"; byte_at(t, 6)", warp::error("index out of range at 1:12"));
 }
 
 #[test]
 fn byte_slice_cuts_by_byte_offsets() {
 	is!("t=\"héllo\"; byte_slice(t, 1, 3)", "é");
 	is!("t=\"héllo\"; byte_slice(t, 3, 6)", "llo");
-	is!("t=\"héllo\"; byte_slice(t, 2, 1)", warp::error("index out of range"));
+	is!(
+		"t=\"héllo\"; byte_slice(t, 2, 1)",
+		warp::error("index out of range at 1:12")
+	);
 }
 
 #[test]
