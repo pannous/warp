@@ -114,8 +114,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    the voice's first sound (Voice origin), then the voice goes on where it stood. Exact to the sample in render_sound,
    which now counts from where the last render ended (so the silence before an `at` stays) and in the browser's
    WebAudio start(at); native live playback only to the millisecond (a sleeping thread per sound, then afplay).
-   Still to build: ramping a handle's gain (card sound-gain-ramps), and native live sample accuracy: both need our own output engine (cpal,
-   "Our own API" below) instead of one player process per sound (card native-engine).
+   Ramping a handle's gain is fade_sound (card sound-gain-ramps, "Native output built" below).
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
@@ -269,6 +268,9 @@ to the sample and `at 2 beats` lands to the sample live, not only in render_soun
 `try_lock`, silence when a queueing sound holds the lock. `fade_sound(handle, gain, seconds)` (lib/sound.warp) ramps a
 playing sound's gain linearly, frame by frame, 0 = all handles. Fallbacks: no output device → afplay as before
 (fade_sound then fails loudly); not audible (WARP_NO_WINDOW, CI) → nothing plays, the WAVs are still collected for
-render_sound. Not yet: Linux/Windows output (cpal supports them; only the macOS dependency is declared), fade_sound in
-the browser (playground: a GainNode per sound with linearRampToValueAtTime), fades in render_sound, and DSP in the
-callback itself (card real-time builds on this Mixer).
+render_sound. fade_sound everywhere (card sound-gain-ramps, tests/programs/test_sound_fades.rs,
+tests/web/test_rendered_fades.rs): the browser ramps a GainNode per sound (playground.js faded), and render_sound
+applies the same ramps (sound.rs faded_gain, host-files.js fadedGain): each fade starts where the speaker stood on the
+caller's voice (its place minus what is still queued) and ramps from the gain it finds there. Not yet: Linux/Windows
+output (cpal supports them; only the macOS dependency is declared), LFOs (a gain following a function of the time),
+and DSP in the callback itself (card real-time builds on this Mixer).

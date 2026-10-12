@@ -21,6 +21,7 @@ mod test_paint_shader; // P234
 mod test_gpu_draw; // card gpu-draw
 mod test_sound;
 mod test_sound_files; // card sound-library
+mod test_sound_fades; // card sound-gain-ramps
 mod test_sound_clock; // card sound-pro
 mod test_sound_render; // card sound-pro
 mod test_sound_wavs; // card sound-wavs

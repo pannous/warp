@@ -208,6 +208,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "midi") return sendMidi(data.port, data.message);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
+			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
@@ -316,7 +317,8 @@ function playSound({ samples, rate, channels, at, handle }) {
 		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
-	source.connect(audio.destination);
+	source.gainNode = audio.createGain(); // fade_sound ramps it
+	source.connect(source.gainNode).connect(audio.destination);
 	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
 	source.start(Math.max(audio.currentTime, at + clockOffset));
 	source.handle = handle;
@@ -365,6 +367,16 @@ function silenced(handle) {
 	playingFiles.filter(player => player.handle === handle).forEach(player => player.pause());
 	sounding = sounding.filter(source => source.handle !== handle);
 	playingFiles = playingFiles.filter(player => player.handle !== handle);
+}
+
+// fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
+function faded(handle, gain, seconds) {
+	for (const source of sounding.filter(source => handle === 0 || source.handle === handle)) {
+		const level = source.gainNode.gain;
+		level.cancelScheduledValues(audio.currentTime);
+		level.setValueAtTime(level.value, audio.currentTime);
+		level.linearRampToValueAtTime(gain, audio.currentTime + seconds);
+	}
 }
 
 function silence() {
