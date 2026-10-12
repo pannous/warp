@@ -806,15 +806,33 @@ pub(super) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
 	if !method.is_symbol(INSERT_METHOD) {
 		return None;
 	}
-	let position_of = |node: &Node| match node.drop_meta() {
-		Node::Key(word, Op::Colon, position) if word.is_symbol(AT_WORD) => Some(position.as_ref().clone()),
-		_ => None,
-	};
-	Some(match (position_of(first), position_of(second)) {
-		(None, Some(position)) => Inserted::At(position, first.clone()),
-		(Some(position), None) => Inserted::At(position, second.clone()),
-		_ => Inserted::EitherOrder(first.clone(), second.clone()),
+	Some(match insert_arguments(call) {
+		Some((value, position)) => Inserted::At(position.clone(), value.clone()),
+		None => Inserted::EitherOrder(first.clone(), second.clone()),
 	})
+}
+
+/// The value a and the position i of the call `insert(a, at: i)`, in either order
+pub(crate) fn insert_arguments(call: &Node) -> Option<(&Node, &Node)> {
+	let Node::List(items, _, _) = call.drop_meta() else {
+		return None;
+	};
+	match items.as_slice() {
+		[method, value, at] | [method, at, value]
+			if method.is_symbol(INSERT_METHOD) && insert_position(value).is_none() =>
+		{
+			Some((value, insert_position(at)?))
+		}
+		_ => None,
+	}
+}
+
+/// i of the argument `at: i`
+pub(crate) fn insert_position(argument: &Node) -> Option<&Node> {
+	match argument.drop_meta() {
+		Node::Key(word, Op::Colon, position) if word.is_symbol(AT_WORD) => Some(position),
+		_ => None,
+	}
 }
 
 /// The arguments of `xs.insert(…)`: `insert(x, at: i)` names the position, `insert(a, b)` leaves the order to the kinds
