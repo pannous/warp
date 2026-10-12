@@ -41,11 +41,17 @@ struct Corner { @builtin(position) at: vec4f, @location(0) uv: vec2f }
 	return vec4f(textureSample(frame, nearest, corner.uv).rgb, 1.0); // a shader's alpha: paint shows opaque colors
 }";
 const TRIANGLE_CORNERS: u32 = 3;
-/// The line the viewer writes to its stdout on the pointer and the keys: `input x y down key`, the pointer in the
-/// frame's pixels, down 1 while a button is, key as shader_holes.rs BUILTIN_HOLES says
+/// The line the viewer writes to its stdout on the pointer and the keys, and with its first frame (the pointer in its
+/// middle then): `input x y down key`, the pointer in the frame's pixels, down 1 while a button is, key as
+/// shader_holes.rs BUILTIN_HOLES says
 const INPUT_LINE: &str = "input";
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
+/// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
+pub const TRACKING_OPTIONS: usize = TRACKING_MOUSE_MOVED | TRACKING_ACTIVE_ALWAYS | TRACKING_IN_VISIBLE_RECT;
+const TRACKING_MOUSE_MOVED: usize = 0x02;
+pub const TRACKING_ACTIVE_ALWAYS: usize = 0x80;
+const TRACKING_IN_VISIBLE_RECT: usize = 0x200;
 
 /// The viewer's input lines, read until it ends
 fn follow_input(lines: impl BufRead) {
@@ -296,6 +302,41 @@ impl ApplicationHandler<Message> for Viewer {
 	}
 }
 
+/// The pointer's moves over the window reach it while another app is in front (card shader-brush): macOS sends mouse
+/// moves only to the key window, and a viewer started from a terminal does not become it, so a brush following $mouse
+/// stayed in its corner until a click. A tracking area active always sends them to winit's view (its mouseMoved:).
+#[cfg(target_os = "macos")]
+fn follow_pointer_unfocused(window: &Window) {
+	use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+	let Ok(handle) = window.window_handle() else { return };
+	let RawWindowHandle::AppKit(appkit) = handle.as_raw() else { return };
+	// SAFETY: ns_view is the window's live NSView
+	track_pointer_always(unsafe { appkit.ns_view.cast().as_ref() });
+}
+
+/// A tracking area sending `view` the pointer's moves whether or not its window is the key window
+#[cfg(target_os = "macos")]
+pub fn track_pointer_always(view: &objc2::runtime::AnyObject) {
+	use objc2::encode::{Encode, Encoding};
+	use objc2::{class, msg_send, runtime::AnyObject};
+	#[repr(C)]
+	struct Pair(f64, f64);
+	#[repr(C)]
+	struct Rect(Pair, Pair);
+	unsafe impl Encode for Pair {
+		const ENCODING: Encoding = Encoding::Struct("CGPoint", &[f64::ENCODING, f64::ENCODING]);
+	}
+	unsafe impl Encode for Rect {
+		const ENCODING: Encoding = Encoding::Struct("CGRect", &[Pair::ENCODING, Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING])]);
+	}
+	// SAFETY: NSTrackingArea's own initializer (the rect is ignored: IN_VISIBLE_RECT); the view keeps the area
+	unsafe {
+		let area: *mut AnyObject = msg_send![class!(NSTrackingArea), alloc];
+		let area: *mut AnyObject = msg_send![area, initWithRect: Rect(Pair(0.0, 0.0), Pair(0.0, 0.0)), options: TRACKING_OPTIONS, owner: view, userInfo: std::ptr::null::<AnyObject>()];
+		let _: () = msg_send![view, addTrackingArea: area];
+	}
+}
+
 /// The window's inner size for a frame: a small one scaled up by a whole factor, a large one pixel for pixel
 fn shown_size(width: u32, height: u32) -> winit::dpi::Size {
 	let side = width.max(height).max(1);
@@ -310,6 +351,9 @@ impl Screen {
 	fn open(event_loop: &ActiveEventLoop, width: u32, height: u32, check: bool) -> Result<Screen, String> {
 		let attributes = Window::default_attributes().with_title(TITLE).with_inner_size(shown_size(width, height));
 		let window = Arc::new(event_loop.create_window(attributes).map_err(|failure| format!("paint-window: no window: {failure}"))?);
+		#[cfg(target_os = "macos")]
+		follow_pointer_unfocused(&window);
+		window.focus_window(); // its keys reach $key; macOS may still leave the terminal in front
 		let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 		let surface = instance.create_surface(window.clone()).map_err(|failure| format!("paint-window: no surface: {failure}"))?;
 		let options = wgpu::RequestAdapterOptions { compatible_surface: Some(&surface), ..Default::default() };
@@ -380,6 +424,12 @@ impl Screen {
 		}));
 		if self.frame_size != size && self.frame_size != (0, 0) {
 			let _ = self.window.request_inner_size(shown_size(size.0, size.1));
+		}
+		if self.frame_size == (0, 0) {
+			// before the pointer moves over the window it is in the middle of the first frame, where a brush following
+			// $mouse shows (user 2026-10-12, card shader-brush), not under the window's rounded corner
+			self.pointer = (f64::from(size.0) / 2.0, f64::from(size.1) / 2.0);
+			self.tell_input();
 		}
 		self.frame_size = size;
 		self.window.request_redraw();

@@ -55,3 +55,23 @@ fn paint_frames_for_the_window_read_back_as_sent() {
 	assert_eq!(read_frame(&mut reader), Some(Frame { width: 1, height: 1, rgba: vec![ink, ink, ink, 255] }));
 	assert_eq!(read_frame(&mut reader), None);
 }
+
+// card shader-brush: macOS sends mouse moves only to the key window, and the paint window started from a terminal is
+// not it, so samples/shader_brush.warp's glow never followed the hovering pointer; the viewer's view gets a tracking
+// area active always (src/paint_window.rs track_pointer_always). Checked on a view of no window: none opens here
+#[test]
+#[cfg(all(feature = "native", target_os = "macos"))]
+fn the_paint_window_hears_the_pointer_unfocused() {
+	use objc2::{class, msg_send, runtime::AnyObject};
+	// SAFETY: a fresh NSView and AppKit's own getters on it
+	unsafe {
+		let view: *mut AnyObject = msg_send![class!(NSView), new];
+		warp::paint_window::track_pointer_always(&*view);
+		let areas: *mut AnyObject = msg_send![&*view, trackingAreas];
+		let count: usize = msg_send![&*areas, count];
+		assert_eq!(count, 1);
+		let area: *mut AnyObject = msg_send![&*areas, firstObject];
+		let options: usize = msg_send![&*area, options];
+		assert_ne!(options & warp::paint_window::TRACKING_ACTIVE_ALWAYS, 0, "options {options:#x}");
+	}
+}
