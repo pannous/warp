@@ -61,6 +61,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
   both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
+  A branch from before the whole-repo format (78607d62e) crosses it in three steps, which never drops main's changes:
+  `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
+  (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
+  Never "take your side" on a conflict that also holds main's changes.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
