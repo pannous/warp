@@ -56,3 +56,19 @@ div{ Tally(2) Tally(7) }"#;
 		.expect("the text hole reads");
 	assert_eq!(read[1].serialize(), "\"clicked 7 times\"");
 }
+
+// the readers the holes call: html_element_at walks the element indices, as the page's `children` count them,
+// through groups; html_text_at is the text after that many child elements
+#[test]
+fn the_hole_readers_find_elements_and_texts_by_path() {
+	let page = r#"use markup
+shown = div{ h1{ "T" } [ p{ "a" } section{ b{ "x" } "after b" i{ "y" } } ] }"#;
+	assert_eq!(
+		warp::wasm_emitter::eval(&format!("{page}\nto_html(html_element_at(shown, [2, 0]))")),
+		warp::node::Node::Text("<b>x</b>".into())
+	);
+	assert_eq!(
+		warp::wasm_emitter::eval(&format!("{page}\nhtml_text_at(shown, [2], 1)")),
+		warp::node::Node::Text("after b".into())
+	);
+}
