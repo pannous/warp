@@ -344,11 +344,17 @@ Each step is useful on its own and is what the next ones stand on.
   wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
   lines and indentation, host.js 23.8 → 16.7); 2026-10-12: 23.0 → 22.4 KB (also without a statement's trailing
   `; // comment`, card web-submit). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+- Card web-bundle-growth (2026-10-12): 23.0 → 19.8 KB. host-media.js (paint, text_coverage, int-list helpers), html_kebab
+  ASCII-only (the Unicode case table was reached only through html_kebab → lower: app.wasm 12.0 → 10.8), exact.js
+  (exact numbers, starts the tasks, foreign and compiler parts) and std.js (stdCall with std_pure/std_io, starts the
+  hashes and files parts). Helper files prepended to parts hold function declarations only (a site may load them twice).
+  Find growth with integrator_tools/site_size.sh per merge, then scratch tools: gzip per JS block, wasm export →
+  function reachability. User, 2026-10-12: the budget is 100 KB, so it never blocks a branch; the test still prints sizes.
 - Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
 - What is left in app.wasm is the runtime lib/markup.warp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
 - host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
-  page events, values between JS and warp, std_pure/std_io's dispatch); the parts add themselves with addHostPart:
+  page events, values between JS and warp); the parts add themselves with addHostPart:
   host-files.js (fetch, read, std file, net, store and os), host-hashes.js (std_pure: hash, json, regex), host-timers.js
   (on every …, at 9:00), host-random.js (random, seeded), host-tasks.js (tasks, channels,
   BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm

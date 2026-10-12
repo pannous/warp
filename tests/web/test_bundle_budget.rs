@@ -9,8 +9,10 @@ const FOLDER: &str = "scratch/bundle_budget";
 /// host.js split into parts a site ships only when its module imports them (host.js 6.1); 2026-10-12: 23.0 KB (app.wasm
 /// 12.0, host.js 6.9), budget raised by 2 KB so it stops blocking branches while card web-bundle-growth wins it back;
 /// 22.1 KB with paint, text_coverage and sound_samples in host-media.js (host.js 5.9), the budget a ratchet: today + 1 KB;
-/// 20.9 KB with html_kebab ASCII-only, no Unicode case table in app.wasm (10.8)
-const BUDGET_GZIPPED_BYTES: usize = 22_000;
+/// 20.9 KB with html_kebab ASCII-only, no Unicode case table in app.wasm (10.8); 19.8 KB with exact numbers (exact.js) and
+/// std calls (std.js) only in the parts that carry them, plus markup's trimming (host.js 5.2); user, 2026-10-12: the
+/// budget is 100 KB, plenty next to other sites, so it never blocks a branch again; the size is still printed
+const BUDGET_GZIPPED_BYTES: usize = 100_000;
 
 fn gzipped_size(bytes: &[u8]) -> usize {
 	let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
