@@ -212,8 +212,11 @@ Each step is useful on its own and is what the next ones stand on.
   animates on the first render or with prefers-reduced-motion. Tests: tests/web/test_css_transitions.rs,
   test_transitions.rs; tour example transitions (`animated` check of test_in_browser.py);
   probes/transitions/leave_check.py.
-- Left: custom keyframes as data (card web-keyframes), `0.3s` (card fractional-durations), leaving items still take
-  their space until removed (no absolute positioning while leaving; card web-leave-space).
+- Leaving space (card web-leave-space): a leaving item keeps its space while it animates out (no absolute
+  positioning); when it is removed, its keyed siblings with a transform transition glide into the space (FLIP in
+  markup-transitions.js leave) instead of jumping. Sample samples/leaving_list.warp; probes/transitions/leave_check.py
+  reports `glided`.
+- Left: custom keyframes as data (card web-keyframes), `0.3s` (card fractional-durations).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-warp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
   `[data-warp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested

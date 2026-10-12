@@ -33,12 +33,18 @@ function enter(node) {
 	if (transition?.from) node.animate([transition.from, {}], transition.timing);
 }
 
-// a node gone from the markup: with a starting style it stays in place, unmatched, until it has animated out
+// a node gone from the markup: with a starting style it stays in place, unmatched, until it has animated out; then
+// its moving siblings glide into the space it leaves instead of jumping (card web-leave-space)
 function leave(node) {
 	const transition = transitionOf(node);
 	if (!transition?.from) return node.remove();
 	node.setAttribute(LEAVING_ATTRIBUTE, "");
-	node.animate([{}, transition.from], { ...transition.timing, fill: "forwards" }).finished.then(() => node.remove(), () => node.remove());
+	const removed = () => {
+		const places = node.parentNode ? transitionPlaces(node.parentNode) : new Map();
+		node.remove();
+		places.forEach((before, element) => moveFrom(element, before));
+	};
+	node.animate([{}, transition.from], { ...transition.timing, fill: "forwards" }).finished.then(removed, removed);
 }
 
 // where each keyed element that moves with a transition is shown now: after the morph it glides from there (FLIP)
