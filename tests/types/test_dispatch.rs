@@ -1,0 +1,62 @@
+// Generic functions (notes/dispatch.md "Methods"): a function name is a set of methods told apart by the type of their
+// first argument. `def sort(d:Deck)` adds a method to sort, it never replaces sort for lists and texts; `x.f(args)` is
+// `f(x, args)`; the most specific method wins (a class over its parent, a typed one over the library or an untyped one)
+use crate::common::fails_with;
+use crate::is;
+
+const DECK: &str = "class Deck{n:int}; def sort(d:Deck):=d.n; ";
+const SHAPES: &str = "class square{side:int}; class rect{w:int h:int}; area(s:square) := s.side*s.side; area(r:rect) := r.w*r.h; ";
+const ANIMALS: &str = "class Animal{name:text}; class Dog extends Animal{}; def speak(a:Animal):=\"...\"; def speak(d:Dog):=\"woof\"; ";
+
+fn with(prelude: &str, code: &str) -> String {
+	format!("{prelude}{code}")
+}
+
+#[test]
+fn a_method_for_a_class_keeps_the_library_function() {
+	is!(&with(DECK, "Deck(3).sort()"), 3);
+	is!(&with(DECK, "sort(Deck(5))"), 5);
+	is!(&with(DECK, "[3,1].sort()"), warp::ints(vec![1, 3]));
+	is!(&with(DECK, "sort([2,1])"), warp::ints(vec![1, 2]));
+	is!(&with(DECK, "xs=[3,1]; xs.sort()"), warp::ints(vec![1, 3]));
+	is!("class Deck{n:int}; def size(d:Deck):=d.n; size(\"abc\") + size(Deck(2))", 5);
+}
+
+#[test]
+fn methods_of_several_classes_share_a_name() {
+	is!(&with(SHAPES, "area(rect(2,5)) + area(square(3))"), 19);
+	is!(&with(SHAPES, "rect(2,5).area() + square(3).area"), 19);
+}
+
+#[test]
+fn the_most_specific_method_wins() {
+	is!(&with(ANIMALS, "speak(Dog(\"rex\"))"), "woof");
+	is!(&with(ANIMALS, "speak(Animal(\"x\"))"), "...");
+	is!("class Animal{name:text}; class Dog extends Animal{}; def speak(a:Animal):=\"...\"; Dog(\"rex\").speak()", "...");
+}
+
+#[test]
+fn no_method_for_a_type_is_a_welcoming_error() {
+	fails_with(&with(SHAPES, "class circle{r:int}; area(circle(1))"), "area has no method for circle");
+	fails_with(&with(SHAPES, "class circle{r:int}; area(circle(1))"), "area(s:circle)");
+}
+
+#[test]
+fn two_equally_specific_methods_are_an_ambiguity_error() {
+	let program = "class photo{x:int}; class sketch{x:int}; class image{x:int}; image like photo; image like sketch; f(a:photo):=1; f(b:sketch):=2; f(image(1))";
+	fails_with(program, "f of an image is ambiguous");
+}
+
+#[test]
+fn a_value_of_run_time_type_dispatches_at_run_time() {
+	is!(&with(SHAPES, "t=0; for s in [square(3), rect(2, 5)] { t += area(s) }; t"), 19);
+	is!(&with(DECK, "def g(x) := sort(x); g(Deck(7))"), 7);
+	is!(&with(DECK, "def g(x) := sort(x); g([3,1,2])"), warp::ints(vec![1, 2, 3]));
+	is!(&with(ANIMALS, "def g(x) := speak(x); g(Dog(\"rex\"))"), "woof");
+}
+
+#[test]
+fn an_untyped_definition_is_the_fallback() {
+	is!("class Deck{n:int}; def sort(d:Deck):=d.n; def sort(x):=0; sort([2,1]) + sort(Deck(4))", 4);
+	is!("def sort(x):=0; sort([2,1])", 0);
+}
