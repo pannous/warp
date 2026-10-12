@@ -1956,6 +1956,9 @@ PASSED:
   ✓ modules::test_std_named_program::a_file_shadowing_a_std_module_is_named
   ✓ modules::test_std_named_program::a_program_named_like_a_std_module_uses_the_std_module
   ✓ modules::test_std_names_offline::a_std_module_name_needs_no_file_lookup
+  ✓ modules::test_std_net::only_a_network_failure_is_retried
+  ✓ modules::test_std_net::post_sends_the_headers_of_a_map
+  ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_prelude::a_local_named_like_a_prelude_word_is_the_local
   ✓ modules::test_std_prelude::a_module_word_inside_an_interpolation_comes_along
   ✓ modules::test_std_prelude::a_programs_own_prelude_word_wins
@@ -4817,8 +4820,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ modules::test_std_net::post_sends_the_headers_of_a_map
-  ✗ modules::test_std_net::use_net_posts_a_text
 
 SUMMARY:
-10 ignored, 4814 passed, 2 failed, 4816 total tested
+10 ignored, 4817 passed, 0 failed, 4817 total tested
