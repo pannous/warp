@@ -989,12 +989,14 @@ fn assigned_literal_kinds(body: &Node, name: &str) -> Vec<Kind> {
 }
 
 /// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),
-/// until the kinds settle: a call of a float-returning function is itself Float
+/// until the kinds settle: a call of a float-returning function is itself Float. After the first round only the
+/// functions naming one whose kinds changed are inferred again (a closure call's kind joins its targets', unnamed)
 pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
 	let mut function_kinds: HashMap<String, Kind> = ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
+	let mut stale: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	for _ in 0..=ctx.user_functions.len() {
-		let inferred: Vec<(String, Kind)> = ctx.user_functions.values()
+		let inferred: Vec<(String, Kind)> = stale.iter()
 			.map(|function| {
 				let kind = crate::closures::closure_call_kind(&function.name, ctx, &function_kinds)
 					.unwrap_or_else(|| infer_function_return_kind(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets));
@@ -1010,18 +1012,25 @@ pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, L
 				(function.name.clone(), kind)
 			})
 			.collect();
-		let tuples: Vec<(String, Kind)> = ctx.user_functions.values()
+		let tuples: Vec<(String, String, Kind)> = stale.iter()
 			.flat_map(|function| {
 				let kinds = infer_tuple_kinds(&function.params, &function.body, &function_kinds, globals, &ctx.closure_variable_targets);
-				kinds.into_iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
+				kinds.into_iter().enumerate().map(|(index, kind)| (function.name.clone(), crate::tuples::element_key(&function.name, index), kind)).collect::<Vec<_>>()
 			})
 			.collect();
-		let settled = inferred.iter().chain(&tuples).all(|(name, kind)| function_kinds.get(name) == Some(kind));
-		function_kinds.extend(inferred);
-		function_kinds.extend(tuples);
-		if settled {
+		let changed: HashSet<String> = inferred.iter().map(|(name, kind)| (name, name, kind)).chain(tuples.iter().map(|(function, key, kind)| (function, key, kind)))
+			.filter(|(_, key, kind)| function_kinds.get(key.as_str()) != Some(kind))
+			.map(|(function, _, _)| function.clone())
+			.collect();
+		if changed.is_empty() {
 			break;
 		}
+		let changed: Vec<&str> = changed.iter().map(String::as_str).collect();
+		stale = ctx.user_functions.values()
+			.filter(|function| crate::closures::closure_call_kind(&function.name, ctx, &function_kinds).is_some() || function.body.mentions_any(&changed))
+			.collect();
+		function_kinds.extend(inferred);
+		function_kinds.extend(tuples.into_iter().map(|(_, key, kind)| (key, kind)));
 	}
 	for function in ctx.user_functions.values_mut() {
 		function.return_kind = function_kinds[&function.name];

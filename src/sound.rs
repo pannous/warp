@@ -62,6 +62,9 @@ const SIGNAL_BLOCK: usize = crate::music_words::BLOCK_SAMPLES;
 /// How far ahead of the speaker a signal is computed: its latency, and room for a slow block
 const SIGNAL_AHEAD: Duration = Duration::from_millis(100);
 const SIGNAL_POLL: Duration = Duration::from_millis(5);
+/// How far ahead of the speaker a heard voice may queue before its next sound waits (card real-time-playback): room
+/// to compute the next one, so `loop { melody … }` plays along instead of running minutes ahead
+const PLAY_AHEAD: Duration = Duration::from_millis(500);
 type Player = Arc<Mutex<std::process::Child>>;
 /// The sounds and music files playing by their handles, stopped by stop_sound
 static PLAYING: Mutex<Vec<(usize, Player)>> = Mutex::new(Vec::new());
@@ -89,6 +92,7 @@ static PENDING: AtomicUsize = AtomicUsize::new(0);
 static RENDERED_UNTIL: Mutex<f64> = Mutex::new(0.0);
 /// A sound since the last render_sound: its place in its voice (seconds), sample rate, channels and 16-bit samples
 struct Unrendered {
+	handle: usize,
 	place: f64,
 	rate: u32,
 	channels: u16,
@@ -97,6 +101,17 @@ struct Unrendered {
 /// The sounds since the last render_sound, in memory (44 KB a second at 22050 Hz mono: the WAV files are shared by all
 /// warp processes, another run may overwrite them)
 static UNRENDERED: Mutex<Vec<Unrendered>> = Mutex::new(Vec::new());
+/// fade_sound(handle, gain, seconds) as render_sound applies it: from its place, where the speaker stood on the caller's
+/// voice, the handle's gain (0: every sound's) ramps linearly to `gain` over the seconds
+#[derive(Clone, Copy)]
+struct Fade {
+	handle: usize,
+	place: f64,
+	gain: f64,
+	seconds: f64,
+}
+/// The fades since the last render_sound
+static FADES: Mutex<Vec<Fade>> = Mutex::new(Vec::new());
 /// A queued sound: its WAV, when it starts, the stop count it was queued at and its handle
 struct Queued {
 	path: PathBuf,
@@ -205,6 +220,10 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 	}
 	if !(0.0..=1.0).contains(&gain) || seconds < 0.0 {
 		return Err(format!("fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"));
+	}
+	let place = voice().seconds - queued_seconds();
+	if let Ok(mut fades) = FADES.lock() {
+		fades.push(Fade { handle, place, gain, seconds });
 	}
 	let faded = crate::sound_engine::fade(handle, gain as f32, seconds);
 	if !faded && crate::paint::shows_windows() && last_handle() > 0 {
@@ -424,8 +443,8 @@ pub fn play_blocks(seconds: f64, rate: u32, block: usize, channels: u16, mut fil
 	let streamed = crate::paint::shows_windows() && crate::sound_engine::available();
 	let mut samples = Vec::new();
 	for first in (0..total).step_by(block.max(1)) {
-		while streamed && queued_seconds() > SIGNAL_AHEAD.as_secs_f64() {
-			std::thread::sleep(SIGNAL_POLL);
+		if streamed {
+			paced(SIGNAL_AHEAD);
 		}
 		if stopped_since(handle, stops) {
 			break;
@@ -448,11 +467,22 @@ fn signal_pcm(value: f64) -> i16 {
 	(value.clamp(-1.0, 1.0) * i16::MAX as f64).round() as i16
 }
 
-/// The 16-bit samples queued as the sound of the handle
+/// Until this voice's queued sounds end within `ahead` (stop_sound ends the wait)
+pub fn paced(ahead: Duration) {
+	while queued_seconds() > ahead.as_secs_f64() {
+		std::thread::sleep(SIGNAL_POLL);
+	}
+}
+
+/// The 16-bit samples queued as the sound of the handle; heard, once the voice is within PLAY_AHEAD of the speaker,
+/// except in an `at`, which places its sounds itself (an arrangement's later bars come before its earlier ones)
 fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result<(), String> {
+	let audible = crate::paint::shows_windows();
+	if audible && BEFORE_AT.with(|before| before.borrow().is_empty()) {
+		paced(PLAY_AHEAD);
+	}
 	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
 	let (start, place) = scheduled(seconds);
-	let audible = crate::paint::shows_windows();
 	if audible && crate::sound_engine::play(handle, start, &samples, rate, channels) {
 		wait_at_exit();
 	} else {
@@ -464,7 +494,7 @@ fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result
 		}
 	}
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
-		unrendered.push(Unrendered { place, rate, channels, samples });
+		unrendered.push(Unrendered { handle, place, rate, channels, samples });
 	}
 	Ok(())
 }
@@ -490,10 +520,18 @@ pub fn render(path: &str) -> Result<f64, String> {
 	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
 	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
 	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until, f64::min);
+	let fades = std::mem::take(&mut *FADES.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
 	let mut mixed: Vec<i32> = vec![];
 	for sound in sounds {
 		let start = ((sound.place - first_place) * rate as f64).round() as usize * channels as usize;
-		let samples: Vec<i16> = sound.samples.chunks(sound.channels as usize).flat_map(|frame| (0..channels as usize).map(|channel| frame[channel.min(frame.len() - 1)])).collect();
+		let own: Vec<Fade> = fades.iter().filter(|fade| fade.handle == 0 || fade.handle == sound.handle).copied().collect();
+		let gain = |frame: usize| if own.is_empty() { 1.0 } else { faded_gain(&own, sound.place + frame as f64 / rate as f64) };
+		let samples: Vec<i16> = sound.samples.chunks(sound.channels as usize).enumerate()
+			.flat_map(|(index, frame)| {
+				let gain = gain(index);
+				(0..channels as usize).map(move |channel| (frame[channel.min(frame.len() - 1)] as f64 * gain).round() as i16)
+			})
+			.collect();
 		if mixed.len() < start + samples.len() {
 			mixed.resize(start + samples.len(), 0);
 		}
@@ -504,6 +542,20 @@ pub fn render(path: &str) -> Result<f64, String> {
 	let samples: Vec<i16> = mixed.iter().map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
 	std::fs::write(path, wav_of(&samples, rate, channels)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
 	Ok(seconds)
+}
+
+/// The gain at the place after the fades, in the order they were called: each ramps linearly from the gain it finds
+/// there to its own
+fn faded_gain(fades: &[Fade], place: f64) -> f64 {
+	let ramped = |fade: &Fade, from: f64, place: f64| {
+		let share = if fade.seconds > 0.0 { ((place - fade.place) / fade.seconds).clamp(0.0, 1.0) } else { 1.0 };
+		from + (fade.gain - from) * share
+	};
+	let mut ramp = (&Fade { handle: 0, place: 0.0, gain: 1.0, seconds: 0.0 }, 1.0);
+	for fade in fades.iter().filter(|fade| fade.place <= place) {
+		ramp = (fade, ramped(ramp.0, ramp.1, fade.place));
+	}
+	ramped(ramp.0, ramp.1, place)
 }
 
 /// A 16-bit mono PCM WAV of the offset samples

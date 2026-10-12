@@ -12,9 +12,8 @@ guess (user 2026-10-10: show() without a canvas gets a default size, not an erro
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
-- Every spawned session is announced to the user's Codex thread "Warp Boss" (user, 2026-10-12: inform the Codex Boss
-  every time we spawn a session): ~/dev/bin/claude-remote.sh (start.sh through it) and the Codex cron run (start and
-  end) do it; other spawns send name, folder and URL themselves with `~/dev/bin/codex-notify.sh "Warp Boss" "<text>"`.
+- Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
+  Claude spawns never notify it (user, 2026-10-12: a Claude spawn notice landing in Codex is "not at all what we want").
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
@@ -66,7 +65,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
   `git -C /Users/me/dev/angles/warp worktree remove --force <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>`.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
-  Cargo.lock build tweak and whose commits a ref holds, a branch whose tip main or a remote branch holds. If it blocks,
+  Cargo.lock build tweak and whose commits a ref holds, a merged worktree (a remote branch holds its HEAD) whatever it
+  changes, saved first under refs/removed-worktrees, a branch whose tip main or a remote branch holds. If it blocks,
   something would be lost: look before you delete.
 - Un-ignoring tests (user, 2026-10-05): "it's allowed to un ignore test that are suddenly passing". Dropping
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
@@ -92,6 +92,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
   warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
+  Every landing gets a try line (user 2026-10-12, after "real-time-playback is on main" came without one): whenever
+  any change of yours reaches main that the user can see, hear or run (a whole card, one step of it, a fix), you send
+  warp-interviewer a fresh try line for exactly that change, the same moment you learn it merged; "X is on main"
+  never goes out without its line. The Integrator's merge report names each user-visible branch, so its owner knows.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06), and
   cards related to your current task (user, 2026-10-12).

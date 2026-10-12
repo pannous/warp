@@ -44,3 +44,17 @@ fn voices_add_up() {
 	let loudest = |samples: &[i16]| samples.iter().map(|sample| u32::from(sample.unsigned_abs())).max().unwrap();
 	assert!(loudest(&both) > loudest(&alone) * 19 / 10, "{} {}", loudest(&both), loudest(&alone));
 }
+
+// card real-time-playback: a voice queued further ahead of the speaker than the program may run waits until it is
+// within (heard, each sound waits so: `loop { melody … }` plays in real time instead of computing minutes ahead)
+#[test]
+fn a_voice_far_ahead_of_the_speaker_waits() {
+	use std::time::{Duration, Instant};
+	warp::sound::at(0.3);
+	let started = Instant::now();
+	warp::sound::paced(Duration::from_millis(100));
+	let waited = started.elapsed();
+	assert!(waited >= Duration::from_millis(150) && waited < Duration::from_secs(1), "waited {waited:?}");
+	assert!(warp::sound::queued_seconds() <= 0.1);
+	warp::sound::at_end();
+}

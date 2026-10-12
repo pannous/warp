@@ -19,6 +19,8 @@ const FULL_SCALE = 32767;
 // checked every SIGNAL_POLL_MS (src/sound.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
 const SIGNAL_POLL_MS = 10;
+// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound.rs PLAY_AHEAD)
+const PLAY_AHEAD_SECONDS = 0.5;
 // a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
@@ -524,14 +526,28 @@ function mixed(sounds, rate, run) {
 	const first = Math.min(run.renderedUntil ?? 0, ...starts);
 	const offsets = starts.map(place => Math.round((place - first) * rate));
 	const amplitudes = new Float64Array(channels * Math.max(0, ...sounds.map((sound, i) => offsets[i] + framesOf(sound))));
+	const fades = run.soundFades ?? [];
+	run.soundFades = [];
 	sounds.forEach((sound, i) => {
 		const own = sound.channels ?? 1;
-		for (let frame = 0; frame < framesOf(sound); frame++)
+		const ownFades = fades.filter(fade => fade.handle === 0 || fade.handle === sound.handle);
+		for (let frame = 0; frame < framesOf(sound); frame++) {
+			const gain = ownFades.length ? fadedGain(ownFades, starts[i] + frame / rate) : 1;
 			for (let channel = 0; channel < channels; channel++)
-				amplitudes[(offsets[i] + frame) * channels + channel] += Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET;
+				amplitudes[(offsets[i] + frame) * channels + channel] += Math.round((Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET) * gain);
+		}
 	});
 	run.renderedUntil = first + amplitudes.length / channels / rate;
 	return { samples: Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET), channels };
+}
+
+// the gain at the place after the fades (src/sound.rs faded_gain), in the order they were called: each ramps linearly
+// from the gain it finds there to its own
+function fadedGain(fades, place) {
+	const ramped = (fade, from, at) => from + (fade.gain - from) * (fade.seconds > 0 ? Math.min(1, Math.max(0, (at - fade.place) / fade.seconds)) : 1);
+	let ramp = [{ place: 0, gain: 1, seconds: 0 }, 1];
+	for (const fade of fades.filter(fade => fade.place <= place)) ramp = [fade, ramped(...ramp, fade.place)];
+	return ramped(...ramp, place);
 }
 
 function wavOf(samples, rate, channels = 1) {
@@ -552,13 +568,16 @@ function wavOf(samples, rate, channels = 1) {
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
-		// signal's blocks keep its first one's handle. The handle
+		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
+		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
+			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const sound = { samples, rate, channels };
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
-			(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
 			hooks.sound?.({ ...sound, at, handle });
-			return handle ?? self.lastSoundHandle?.() ?? 0;
+			const own = handle ?? self.lastSoundHandle?.() ?? 0;
+			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
+			return own;
 		};
 		const fetchUrl = (pointer, length, timeout) => {
 			const url = text(pointer, length);
@@ -640,6 +659,18 @@ addHostPart({
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
+			// fade_sound(handle, gain, seconds) (src/sound.rs fade): the page ramps the playing sound, render_sound from where
+			// the speaker stood on this voice
+			fade(handle, gain, seconds) {
+				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
+				const last = self.lastSoundHandle?.() ?? 0;
+				if (handle > last) throw new Error(`fade_sound(${handle}): no sound ${handle} in this run, which played ${last}`);
+				if (!(gain >= 0 && gain <= 1) || seconds < 0) throw new Error(`fade_sound(${handle}, ${gain}, ${seconds}): the gain is 0…1 and the seconds not negative`);
+				const place = (self.currentVoice?.().seconds ?? 0) - (self.soundsQueued?.() ?? 0);
+				(this.holder.run.soundFades ??= []).push({ handle, place, gain, seconds });
+				self.fadeSound?.(handle, gain, seconds);
+				return null;
+			},
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },

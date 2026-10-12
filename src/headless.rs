@@ -21,6 +21,9 @@ const INSTANCE_ATTRIBUTE: &str = "data-warp-instance";
 const INSTANCE: &str = "instance";
 const CLICK: &str = "click";
 const INPUT: &str = "input";
+const SUBMIT: &str = "submit";
+/// the submitted form's named fields, as markup.js submitDetail hands them over
+const FIELDS: &str = "fields";
 /// the labels a form field is found by besides its text
 const FIELD_LABELS: [&str; 3] = ["placeholder", "name", "id"];
 /// elements without content or closing tag
@@ -73,6 +76,11 @@ impl Page {
 	pub fn type_into(&mut self, label: &str, text: &str) -> Result<(), String> {
 		let detail = json!({ "value": text, "checked": false });
 		self.fire(INPUT, label, detail.as_object().cloned().unwrap_or_default())
+	}
+
+	/// The form showing `label` (its text, name or id) sent with `fields`, its named fields (`on submit { event.fields }`)
+	pub fn submit(&mut self, label: &str, fields: Value) -> Result<(), String> {
+		self.fire(SUBMIT, label, Map::from_iter([(FIELDS.to_string(), fields)]))
 	}
 
 	/// The event on the element showing `label`, with `detail` as its `event` (and the element's component instance)

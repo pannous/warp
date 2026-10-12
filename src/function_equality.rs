@@ -105,33 +105,41 @@ fn canonical(node: &Node, names: &HashMap<String, String>) -> Node {
 /// Replace every comparison of two named functions by its decided value.
 /// An undecidable comparison makes the whole program its error.
 pub fn decide_comparisons(node: Node) -> Node {
-	if !compares_symbols(&node) {
+	let compared = compared_names(&node);
+	if compared.is_empty() {
 		return node;
 	}
-	let functions = collect_functions(&node);
-	if functions.is_empty() {
+	// analysing every definition is costly (a fresh analysis each): first only those naming a compared word
+	let words: Vec<&str> = compared.iter().flat_map(|(left, right)| [left.as_str(), right.as_str()]).collect();
+	let candidates = collect_functions_where(&node, |item| item.mentions_any(&words));
+	let is_function = |name: &str| candidates.iter().any(|function| function.name() == name);
+	if !compared.iter().any(|(left, right)| is_function(left) && is_function(right)) {
 		return node;
 	}
+	let functions = collect_functions_where(&node, |_| true);
 	let mut failure = None;
 	let decided = rewrite(node, &functions, &mut failure);
 	failure.unwrap_or(decided)
 }
 
-fn compares_symbols(node: &Node) -> bool {
-	let mut found = false;
+/// The names compared in `a == b` and `a != b`
+fn compared_names(node: &Node) -> Vec<(String, String)> {
+	let mut compared = vec![];
 	node.visit(&mut |inner| {
 		if let Node::Key(left, Op::Eq | Op::Ne, right) = inner {
-			if matches!(left.drop_meta(), Node::Symbol(_)) && matches!(right.drop_meta(), Node::Symbol(_)) {
-				found = true;
+			if let (Node::Symbol(left), Node::Symbol(right)) = (left.drop_meta(), right.drop_meta()) {
+				compared.push((left.clone(), right.clone()));
 			}
 		}
 	});
-	found
+	compared
 }
 
-fn collect_functions(node: &Node) -> Vec<Function> {
+/// The functions defined by the top-level items `wanted` picks
+fn collect_functions_where(node: &Node, wanted: impl Fn(&Node) -> bool) -> Vec<Function> {
 	law::top_level_items(node)
 		.iter()
+		.filter(|item| wanted(item))
 		.filter_map(|item| {
 			let definition = law::function_definition(item)?;
 			let types = law::declared_parameter_types(item);

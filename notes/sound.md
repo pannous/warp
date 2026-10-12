@@ -114,8 +114,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    the voice's first sound (Voice origin), then the voice goes on where it stood. Exact to the sample in render_sound,
    which now counts from where the last render ended (so the silence before an `at` stays) and in the browser's
    WebAudio start(at); native live playback only to the millisecond (a sleeping thread per sound, then afplay).
-   Still to build: ramping a handle's gain (card sound-gain-ramps), and native live sample accuracy: both need our own output engine (cpal,
-   "Our own API" below) instead of one player process per sound (card native-engine).
+   Ramping a handle's gain is fade_sound (card sound-gain-ramps, "Native output built" below).
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
@@ -192,6 +191,14 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    typed in (window_open, so audible): the Worker computes a block when the voice holds less than 100 ms
    (playedSignal, host-tasks.js soundsQueued), each block a sound of the signal's handle (stop_sound ends them all),
    the wait a sleep without runaway time. Unclicked (CI) everything at once, one sound.
+   Real-time playback (card real-time-playback, the user's `loop { go {melody…}; melody…; tempo *= 1.05 }`, kept in
+   probes/sound_experiments/voices.warp): heard, a voice's next sound waits until its queued sounds end within
+   PLAY_AHEAD (0.5 s; sound.rs paced, host-files.js holder.sounded), except in an `at`, which places its sounds itself.
+   Before, the loop computed minutes ahead, a new task thread a round, its exact tempo growing digits a round (card
+   exact-tempo-growth). In the browser a task's sounds still reach the page only when the program's Worker is back in
+   its event loop, so a paced endless loop with tasks hears the main voice only (a MessagePort per task Worker to the
+   page would fix it). Measured (release, probes/sound/voices_loop_timing.warp): a round computes in 15-60 ms for
+   0.4-2.2 s of sound, so pacing, not speed, was missing.
    Still to build: an AudioWorklet running the module (glitch-free under a busy Worker), input (a microphone as the
    signal's argument).
 
@@ -261,6 +268,9 @@ to the sample and `at 2 beats` lands to the sample live, not only in render_soun
 `try_lock`, silence when a queueing sound holds the lock. `fade_sound(handle, gain, seconds)` (lib/sound.warp) ramps a
 playing sound's gain linearly, frame by frame, 0 = all handles. Fallbacks: no output device → afplay as before
 (fade_sound then fails loudly); not audible (WARP_NO_WINDOW, CI) → nothing plays, the WAVs are still collected for
-render_sound. Not yet: Linux/Windows output (cpal supports them; only the macOS dependency is declared), fade_sound in
-the browser (playground: a GainNode per sound with linearRampToValueAtTime), fades in render_sound, and DSP in the
-callback itself (card real-time builds on this Mixer).
+render_sound. fade_sound everywhere (card sound-gain-ramps, tests/programs/test_sound_fades.rs,
+tests/web/test_rendered_fades.rs): the browser ramps a GainNode per sound (playground.js faded), and render_sound
+applies the same ramps (sound.rs faded_gain, host-files.js fadedGain): each fade starts where the speaker stood on the
+caller's voice (its place minus what is still queued) and ramps from the gain it finds there. Not yet: Linux/Windows
+output (cpal supports them; only the macOS dependency is declared), LFOs (a gain following a function of the time),
+and DSP in the callback itself (card real-time builds on this Mixer).

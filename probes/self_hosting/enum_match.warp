@@ -1,0 +1,3 @@
+// tagged token kinds and matching on them
+def kind(c) := if c >= '0' and c <= '9' then "number" else if c == ' ' then "space" else "word"
+[kind('a'), kind('7'), kind(' ')]
