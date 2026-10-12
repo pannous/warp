@@ -98,3 +98,13 @@ fn a_block_function_of_two_blocks_plays_in_stereo() {
 	let program = "hum(left, right, t) := for i in 1 to #left {\n  time = t + (i - 1) / sample_rate\n  left#i = 0.5 * sin(2 * pi * 441 * time)\n  right#i = 0.25 * sin(2 * pi * 220.5 * time)\n}\nplay_blocks(hum, 0.1)";
 	assert_stereo(&rendered(program, "signal_blocks_stereo", "rendered", "10"));
 }
+
+// `play hum for 2s` (user, 2026-10-12: no snake case for signals): play of a function of the time is play_signal, of a
+// block function play_blocks, of a pair of functions stereo
+#[test]
+fn play_of_a_function_plays_it_as_a_signal() {
+	assert_sine(&rendered("hum(t) := 0.5 * sin(2 * pi * 441 * t)\nplay hum for 0.1s", "play_function", "rendered", "10"), 0.5, 441.0);
+	assert_sine(&rendered(&BLOCK_SINE.replace("play_blocks(hum, 0.1)", "play hum for 0.1s"), "play_block_function", "calls", "5"), 0.5, 441.0);
+	let pair = "left(t) := 0.5 * sin(2 * pi * 441 * t)\nright(t) := 0.25 * sin(2 * pi * 220.5 * t)\nplay [left, right] for 0.1s";
+	assert_stereo(&rendered(pair, "play_function_pair", "rendered", "10"));
+}

@@ -54,6 +54,8 @@ const BLOCK_TEMPLATES: [&str; 2] = [
 	"linear block_cells = float[block_samples]\nlinear block_right = float[block_samples]\nblock_caller(t: float) := { block_fill(block_cells, block_right, t); 0.0 as float }",
 ];
 const STEREO_FILL_PARAMETERS: usize = 3;
+const PLAY_WORD: &str = "play";
+const FOR_WORD: &str = "for";
 /// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
 pub const BLOCK_SAMPLES: usize = 512;
 
@@ -78,7 +80,8 @@ pub fn lower(program: Node) -> Node {
 		return program;
 	}
 	let defined = defined_names(&program);
-	let program = with_block_signals(with_float_signals(program));
+	let counts = parameter_counts(&program);
+	let program = with_block_signals(with_float_signals(with_played_functions(program, &counts)), &counts);
 	match with_music_words(program, &defined) {
 		Node::List(statements, bracket, separator) if separator.separates_statements() => Node::List(with_scheduled(statements, &defined), bracket, separator),
 		statement => match scheduled(&statement, &defined) {
@@ -111,10 +114,9 @@ fn with_float_signals(program: Node) -> Node {
 
 /// The functions `play_blocks(fill, 2s)` plays fill a block of samples at a time (BLOCKS_WORD): each gets its block
 /// and the function the host calls, before the program's statements
-fn with_block_signals(program: Node) -> Node {
+fn with_block_signals(program: Node, counts: &HashMap<String, usize>) -> Node {
 	let mut fills = Vec::new();
-	let counts = parameter_counts(&program);
-	let program = with_block_calls(program, &counts, &mut fills);
+	let program = with_block_calls(program, counts, &mut fills);
 	if fills.is_empty() {
 		return program;
 	}
@@ -134,6 +136,30 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 	let part = |name: &str| Node::Symbol(format!("{fill}{}{name}", crate::analyzer::TEMPORARY_SEPARATOR));
 	let names = [("block_cells", part("block")), ("block_right", part("right")), ("block_caller", part("blocks")), ("block_fill", Node::symbol(fill)), ("block_samples", crate::node::int(BLOCK_SAMPLES as i64)), ("block_seconds", seconds)];
 	names.into_iter().fold(crate::warp_parser::parse(template), |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, &value))
+}
+
+/// `play hum for 2s` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
+/// a pair [left, right] of them), play_blocks(hum, 2s) of a block function (hum(block, t), hum(left, right, t))
+fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
+	match node.map_children(|child| with_played_functions(child, counts)) {
+		Node::List(ref items, _, _) if let [play, played, for_word, seconds] = items.as_slice() && play.is_symbol(PLAY_WORD) && for_word.is_symbol(FOR_WORD) && let Some(word) = signal_word(played, counts) => {
+			call(word, vec![played.clone(), seconds.clone()])
+		}
+		other => other,
+	}
+}
+
+/// The word playing `played` if it is a function of the time, a pair of them, or a block function
+fn signal_word(played: &Node, counts: &HashMap<String, usize>) -> Option<&'static str> {
+	let count = |node: &Node| node.symbol_name().and_then(|name| counts.get(name)).copied();
+	match played.drop_meta() {
+		Node::List(pair, Bracket::Square, _) if pair.len() == 2 && pair.iter().all(|function| count(function) == Some(1)) => Some(SIGNAL_WORD),
+		function => match count(function)? {
+			1 => Some(SIGNAL_WORD),
+			2 | STEREO_FILL_PARAMETERS => Some(BLOCKS_WORD),
+			_ => None,
+		},
+	}
 }
 
 /// The functions the program defines and how many parameters each takes

@@ -180,6 +180,9 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Stereo built (undoable default): `play_signal([left, right], 2s)` calls left(t) then right(t) for each sample;
    `play_blocks(fill, 2s)` with fill of three parameters `(left, right, t)` gets two blocks (fill·block, fill·right).
    The host takes one value or a pair (native.rs channels_of) and interleaves the frames (sound.rs play_blocks).
+   `play hum for 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
+   one of the program's functions is play_signal of it (one parameter, or a pair [left, right] of such), play_blocks
+   (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
    Still to build: the browser (an AudioWorklet running the module), input (a microphone as the signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
