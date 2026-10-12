@@ -1290,6 +1290,11 @@ pub(super) fn check_walked_numbers(program: &Node) -> Option<Diagnostic> {
 			}
 		}
 	});
+	// a parameter of the same name holds whatever it is given (`pitch = 440` in one function, `transpose(pitch, …)`
+	// walking its list in another)
+	for parameter in crate::lowering::memoization::parameter_names(program) {
+		numbers.insert(parameter, false);
+	}
 	let mut found = None;
 	program.visit(&mut |part| if let (None, Node::List(items, _, _)) = (&found, part) {
 		let [keyword, variable, within, walked, ..] = items.as_slice() else { return };
