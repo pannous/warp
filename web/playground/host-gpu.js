@@ -28,6 +28,18 @@ const ROW_ALIGNMENT = 256; // a copied row is padded to 256 bytes
 const OPAQUE = 0xFF000000;
 const VALUES_NAME = "values"; // gpu_render's values as the shader names them
 const VALUES_BINDING = 0;
+// `$previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size, black
+// before the first, kept on the GPU (src/gpu.rs PREVIOUS_FRAME)
+const PREVIOUS_HOLE = "previous";
+const PREVIOUS_FUNCTION = "warp_previous";
+const PREVIOUS_FRAME_BINDING = 1;
+const PREVIOUS_FRAME = `
+@group(0) @binding(${PREVIOUS_FRAME_BINDING}) var warp_previous_frame: texture_2d<f32>;
+fn ${PREVIOUS_FUNCTION}(at: vec2f) -> vec4f {
+	let last = vec2i(textureDimensions(warp_previous_frame)) - vec2i(1);
+	return textureLoad(warp_previous_frame, clamp(vec2i(at), vec2i(0), last), 0);
+}`;
+const previousFrames = new Map(); // the task Worker's: shader → the texture it drew last
 const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte rows
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
@@ -126,7 +138,8 @@ async function gpuCanvas({ id, port, replaces }) {
 	paintCanvases.delete(replaces);
 	const context = canvas.getContext("webgpu");
 	const format = navigator.gpu.getPreferredCanvasFormat();
-	context.configure({ device, format, alphaMode: "opaque" });
+	// COPY_DST: a shader reading $previous draws into a texture it keeps, copied here
+	context.configure({ device, format, alphaMode: "opaque", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
 	paintCanvases.set(id, { context, format });
 	return id;
 }
@@ -137,13 +150,18 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const painted = paintCanvases.get(canvas);
 	if (canvas !== undefined && !painted) throw new Error(CANVAS_MISSING);
 	const { declarations, bytes: valueBytes } = uniformLayout(values);
-	const code = shader + FULL_IMAGE_VERTICES + declarations;
+	const readsPrevious = new RegExp(`\\b${VALUES_NAME}\\.${PREVIOUS_HOLE}\\b`).test(shader);
+	const code = readsPrevious
+		? shader.replaceAll(`${VALUES_NAME}.${PREVIOUS_HOLE}`, PREVIOUS_FUNCTION) + FULL_IMAGE_VERTICES + declarations + PREVIOUS_FRAME
+		: shader + FULL_IMAGE_VERTICES + declarations;
 	const module = await gpuModule(device, code);
 	const format = painted?.format ?? "rgba8unorm";
-	const image = painted?.context.getCurrentTexture() ?? device.createTexture({ size: [width, height], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+	const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | (readsPrevious ? GPUTextureUsage.TEXTURE_BINDING : 0);
+	const canvasImage = painted?.context.getCurrentTexture();
+	const image = canvasImage && !readsPrevious ? canvasImage : device.createTexture({ size: [width, height], format, usage });
 	device.pushErrorScope("validation");
 	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, `${format}\n${code}`, () => {
-		const groupLayout = declarations ? valuesGroupLayout(device) : undefined;
+		const groupLayout = declarations || readsPrevious ? bindingsGroupLayout(device, !!declarations, readsPrevious) : undefined;
 		const layout = groupLayout ? device.createPipelineLayout({ bindGroupLayouts: [groupLayout] }) : "auto";
 		const pipeline = device.createRenderPipeline({
 			layout,
@@ -152,20 +170,23 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 		});
 		return { pipeline, groupLayout };
 	});
-	const uniform = groupLayout ? uniformBinding(device, groupLayout, valueBytes) : undefined;
+	const previous = readsPrevious ? previousFrame(device, `${format}\n${shader}`, image) : undefined;
+	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous) : undefined;
 	const encoder = device.createCommandEncoder();
 	const pass = encoder.beginRenderPass({ colorAttachments: [{ view: image.createView(), loadOp: "clear", storeOp: "store" }] });
 	pass.setPipeline(pipeline);
 	if (uniform) pass.setBindGroup(0, uniform.bindings);
 	pass.draw(TRIANGLE_CORNERS);
 	pass.end();
-	if (painted) return gpuSubmitted(device, encoder).finally(() => uniform?.buffer.destroy());
+	if (canvasImage && image !== canvasImage)
+		encoder.copyTextureToTexture({ texture: image }, { texture: canvasImage }, [Math.min(width, canvasImage.width), Math.min(height, canvasImage.height)]);
+	if (painted) return gpuSubmitted(device, encoder).finally(() => uniform?.buffer?.destroy());
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
 	const readback = device.createBuffer({ size: rowBytes * height, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
-	image.destroy();
-	uniform?.buffer.destroy();
+	if (!readsPrevious) image.destroy();
+	uniform?.buffer?.destroy();
 	const pixels = new Uint32Array(width * height);
 	for (let row = 0, pixel = 0; row < height; row++)
 		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
@@ -199,15 +220,33 @@ function uniformLayout(values) {
 	return { declarations, bytes: new Float32Array(floats).buffer };
 }
 
-// an explicit layout holding the uniform, so a shader that leaves `values` unread still binds them
-const valuesGroupLayout = device => device.createBindGroupLayout({ entries: [{ binding: VALUES_BINDING, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] });
+// an explicit layout holding the uniform and the previous frame, so a shader that leaves `values` unread still binds them
+const bindingsGroupLayout = (device, takesValues, readsPrevious) => device.createBindGroupLayout({ entries: [
+	...takesValues ? [{ binding: VALUES_BINDING, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] : [],
+	...readsPrevious ? [{ binding: PREVIOUS_FRAME_BINDING, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "unfilterable-float" } }] : [],
+] });
 
-// this frame's values in a uniform buffer, bound as the layout says; the buffer is destroyed once the frame is read
-function uniformBinding(device, groupLayout, bytes) {
-	const buffer = device.createBuffer({ size: bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-	device.queue.writeBuffer(buffer, 0, bytes);
-	const bindings = device.createBindGroup({ layout: groupLayout, entries: [{ binding: VALUES_BINDING, resource: { buffer } }] });
-	return { buffer, bindings };
+// this frame's values in a uniform buffer (no bytes: none) and the previous frame, bound as the layout says; the buffer
+// is destroyed once the frame is read
+function uniformBinding(device, groupLayout, bytes, previous) {
+	const buffer = bytes && device.createBuffer({ size: bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+	if (buffer) device.queue.writeBuffer(buffer, 0, bytes);
+	const entries = [
+		...buffer ? [{ binding: VALUES_BINDING, resource: { buffer } }] : [],
+		...previous ? [{ binding: PREVIOUS_FRAME_BINDING, resource: previous.createView() }] : [],
+	];
+	return { buffer, bindings: device.createBindGroup({ layout: groupLayout, entries }) };
+}
+
+// the frame `shader` drew last when it has the size of `image` (a black one otherwise), and `image` kept as the next
+function previousFrame(device, shader, image) {
+	const kept = previousFrames.get(shader);
+	const fits = kept?.width === image.width && kept?.height === image.height;
+	const previous = fits ? kept : device.createTexture({ size: [image.width, image.height], format: image.format, usage: GPUTextureUsage.TEXTURE_BINDING });
+	if (!fits) kept?.destroy();
+	previousFrames.delete(shader);
+	compiledOnce(previousFrames, shader, () => image);
+	return previous;
 }
 
 // the value made for `key` before, or made now; the oldest of more than MOST_COMPILED goes
@@ -232,7 +271,7 @@ async function gpuDeviceOrFailure() {
 function forgetDevice(device) {
 	if (gpuDevice !== device) return;
 	gpuDevice = undefined;
-	[compiledModules, compiledPipelines, keptBuffers, paintCanvases].forEach(made => made.clear());
+	[compiledModules, compiledPipelines, keptBuffers, paintCanvases, previousFrames].forEach(made => made.clear());
 }
 
 // after a failed job: a device lost by it is forgotten before the program asks again (its loss is said a moment later)
