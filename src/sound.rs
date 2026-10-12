@@ -221,7 +221,8 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 	if !(0.0..=1.0).contains(&gain) || seconds < 0.0 {
 		return Err(format!("fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"));
 	}
-	let place = voice().seconds - queued_seconds();
+	// headless nothing is heard: the render places the fade at the start, not wherever the program's slowness put it
+	let place = if crate::paint::shows_windows() { voice().seconds - queued_seconds() } else { 0.0 };
 	if let Ok(mut fades) = FADES.lock() {
 		fades.push(Fade { handle, place, gain, seconds });
 	}

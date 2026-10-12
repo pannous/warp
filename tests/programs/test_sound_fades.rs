@@ -28,6 +28,13 @@ fn fade_sound_ramps_a_sound_down_in_the_render() {
 	assert!(loudest(&samples, 0.5, 0.95) < QUIET, "silent after the ramp");
 }
 
+/// Headless nothing plays, so the speaker stays at the start: however long the program takes, its fade begins there
+#[test]
+fn a_headless_fade_waits_for_no_clock() {
+	let samples = rendered_samples("a = tone 440Hz for 1s\nsleep 500ms\nfade_sound(a, 0, 0.1)", "slow");
+	assert!(loudest(&samples, 0.3, 0.9) < QUIET, "a faded out from the start");
+}
+
 #[test]
 fn fade_sound_of_one_handle_leaves_the_others() {
 	let samples = rendered_samples("a = tone 440Hz for 1s\nb = tone 440Hz for 1s\nfade_sound(a, 0, 0.1)", "one");
