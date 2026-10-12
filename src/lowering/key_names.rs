@@ -1,8 +1,10 @@
 //! Key names in a key handler (card key-if): inside `on key {…}` a bare `key` is the pressed key, `event.key`, and the
 //! key words name keys as the page's KeyboardEvent.key does (natively lowering/system_signals.rs KEY_NAMES), so
-//! `on key { if key == ESC { exit } }` reads as written. A program's own variable (`key`, `UP`) stays its own.
+//! `on key { if key == ESC { exit } }` reads as written. A program's own variable (`key`, `UP`) stays its own. A
+//! comparison with a word that names nothing (`key == ESCAPEE`, `key == q`) never holds, which a warning says.
 
 use super::nodes::key;
+use crate::diagnostic::Diagnostic;
 use crate::event_signals::{main_level_variables, EVENT_WORD};
 use crate::node::{symbol, Node};
 use crate::operators::Op;
@@ -39,20 +41,61 @@ const FUNCTION_KEYS: std::ops::RangeInclusive<u8> = 1..=12;
 
 pub fn lower(program: Node) -> Node {
 	let (statements, _, _) = crate::variable_signals::main_statements(&program);
-	with_key_names(program, &main_level_variables(&statements))
+	let mut warnings = vec![];
+	let named = with_key_names(program, &main_level_variables(&statements), &mut warnings);
+	match crate::diagnostic::report(&warnings) {
+		Ok(()) => named,
+		Err(error) => error,
+	}
 }
 
-fn with_key_names(node: Node, own: &HashSet<String>) -> Node {
+fn with_key_names(node: Node, own: &HashSet<String>, warnings: &mut Vec<Diagnostic>) -> Node {
 	match key_handler_body(&node) {
 		Some(index) => {
 			let Node::List(mut items, bracket, separator) = node.drop_meta().clone() else {
 				unreachable!("a handler is a list")
 			};
-			items[index] = named(items[index].clone(), own);
+			let body = &items[index];
+			let mut known = own.clone();
+			known.extend(assigned_names(body));
+			unbound_comparisons(body, &known, warnings);
+			items[index] = named(body.clone(), own);
 			Node::List(items, bracket, separator)
 		}
-		None => node.map_children(|child| with_key_names(child, own)),
+		None => node.map_children(|child| with_key_names(child, own, warnings)),
 	}
+}
+
+/// The names the handler's body assigns itself
+fn assigned_names(body: &Node) -> Vec<String> {
+	match body.drop_meta() {
+		Node::Key(name, Op::Assign | Op::Define, value) => name
+			.symbol_name()
+			.map(str::to_string)
+			.into_iter()
+			.chain(assigned_names(value))
+			.collect(),
+		other => other.parts().into_iter().flat_map(assigned_names).collect(),
+	}
+}
+
+/// `key == ESCAPEE`: a side of a comparison that is a word naming nothing, neither a key nor a variable
+fn unbound_comparisons(body: &Node, known: &HashSet<String>, warnings: &mut Vec<Diagnostic>) {
+	let body = body.drop_meta();
+	if let Node::Key(left, Op::Eq | Op::Ne, right) = body {
+		for side in [left, right] {
+			if let Some(word) = side.symbol_name().filter(|word| names_nothing(word, known)) {
+				warnings.push(Diagnostic::at(side, format!("on key: {word} names nothing, so the comparison never holds; write a key name (ESC, ENTER, UP, F1 …) or a text such as \"{word}\"")));
+			}
+		}
+	}
+	for part in body.parts() {
+		unbound_comparisons(part, known, warnings);
+	}
+}
+
+fn names_nothing(word: &str, known: &HashSet<String>) -> bool {
+	word != KEY_EVENT && word != EVENT_WORD && !known.contains(word) && key_name(word).is_none()
 }
 
 /// `on key {body}`, `once key {body}`, `on key: body`: the index of the item holding the body

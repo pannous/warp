@@ -32,3 +32,24 @@ fn a_programs_own_key_variable_stays_its_own() {
 		"q"
 	);
 }
+
+// a key handler comparing with a word that names nothing (`ESCAPEE`, a letter `q`) never matches: a warning says so
+fn key_warnings(program: &str) -> Vec<String> {
+	warp::diagnostic::take_warnings();
+	warp::wasm_emitter::eval(program);
+	warp::diagnostic::take_warnings()
+		.into_iter()
+		.map(|warning| warning.message)
+		.filter(|message| message.contains("names nothing"))
+		.collect()
+}
+
+#[test]
+fn a_key_handler_comparing_with_an_unbound_word_warns() {
+	let warned = key_warnings("n = 0\non key { if key == ESCAPEE { n += 1 } }\nn");
+	assert!(warned.iter().any(|message| message.contains("ESCAPEE")), "{warned:?}");
+	assert_eq!(
+		key_warnings("n = 0\nmine = \"q\"\non key { local = \"w\"\n if key == ESC or key == mine or key == local { n += 1 } }\nn"),
+		Vec::<String>::new()
+	);
+}
