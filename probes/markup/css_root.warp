@@ -1,0 +1,5 @@
+div{ style{
+	:root { color-scheme: light dark }
+	html { margin: 0 }
+	h1, :hover { margin: 0 }
+} }

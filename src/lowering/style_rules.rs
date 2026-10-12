@@ -26,20 +26,35 @@ fn style_block(node: &Node) -> Option<Node> {
 		.then(|| Node::Key(name.clone(), Op::Colon, Box::new(Node::List(styled(items.clone(), separator), Bracket::Curly, separator.clone()))))
 }
 
+/// A selector word waiting for its block, with the combinator before it: `ul li` waits with `ul`, `h1, h2` with `h1`
+struct PendingSelector {
+	text: String,
+	joiner: &'static str,
+	item: Node,
+}
+
 /// The items of a style block: rules with their selectors as texts, declarations with their lengths as texts
 fn styled(items: Vec<Node>, separator: &Separator) -> Vec<Node> {
+	let (mut output, mut pending) = (vec![], vec![]);
+	style_items(items, separator, None, &mut output, &mut pending);
+	output.extend(pending.into_iter().map(|selector| selector.item));
+	output
+}
+
+/// The items of a block or of a group in it (`h1, .x { … }` is `h1` and the group `.x { … }`): a selector started
+/// before the group continues in it
+fn style_items(items: Vec<Node>, separator: &Separator, leading_joiner: Option<&'static str>, output: &mut Vec<Node>, pending: &mut Vec<PendingSelector>) {
 	// Separator::Colon is the comma: `h1, h2 { … }`
-	let joiner = if *separator == Separator::Colon { ", " } else { " " };
-	let mut output: Vec<Node> = vec![];
-	let mut pending: Vec<(String, Node)> = vec![];
-	for item in items.into_iter().flat_map(split_chained) {
+	let list_joiner = if *separator == Separator::Colon { ", " } else { " " };
+	for (index, item) in items.into_iter().flat_map(split_chained).enumerate() {
+		let joiner = if index == 0 { leading_joiner.unwrap_or(list_joiner) } else { list_joiner };
 		if let Node::List(group, Bracket::None, group_separator) = item.drop_meta() {
-			output.extend(styled(group.clone(), group_separator));
+			style_items(group.clone(), group_separator, Some(joiner), output, pending);
 		} else if let Some((selector, body)) = rule_parts(&item) {
-			output.push(rule(joined_selector(&mut pending, Some(selector), joiner), body));
+			output.push(rule(joined_selector(pending, Some((selector, joiner))), body));
 		} else if !pending.is_empty() && matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 			// `.card { … }`: a leading-dot name stays apart from its block
-			output.push(rule(joined_selector(&mut pending, None, joiner), &item));
+			output.push(rule(joined_selector(pending, None), &item));
 		} else if let Some((selector, value)) = selector_value(&item) {
 			output.push(rule(selector, &key(symbol(SELECTOR_VALUE_PROPERTY), Op::Colon, value.clone())));
 		} else if let Some((name, value)) = declaration_value(&item) {
@@ -51,13 +66,11 @@ fn styled(items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 				None => output.push(item),
 			}
 		} else if let Some(text) = selector_text(&item) {
-			pending.push((text, item));
+			pending.push(PendingSelector { text, joiner, item });
 		} else {
 			output.push(item);
 		}
 	}
-	output.extend(pending.into_iter().map(|(_, item)| item));
-	output
 }
 
 /// `ul li { … }` and `.a { … }` on the next line: the parser chains the leading dot onto the rule before it
@@ -77,8 +90,9 @@ fn split_chained(node: Node) -> Vec<Node> {
 }
 
 /// `ul li`, `h1, h2`: the selector words waiting for their block, joined with the last one
-fn joined_selector(pending: &mut Vec<(String, Node)>, last: Option<String>, joiner: &str) -> String {
-	pending.drain(..).map(|(text, _)| text).chain(last).collect::<Vec<_>>().join(joiner)
+fn joined_selector(pending: &mut Vec<PendingSelector>, last: Option<(String, &'static str)>) -> String {
+	let parts = pending.drain(..).map(|selector| (selector.text, selector.joiner)).chain(last);
+	parts.enumerate().map(|(index, (text, joiner))| if index == 0 { text } else { format!("{joiner}{text}") }).collect()
 }
 
 fn rule(selector: String, body: &Node) -> Node {

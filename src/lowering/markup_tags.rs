@@ -88,9 +88,10 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 					.collect();
 				Node::Key(name, Op::Colon, Box::new(Node::List(items, Bracket::Curly, separator)))
 			}
-			body => Node::Key(name, Op::Colon, Box::new(body)),
+			body => Node::Key(name, Op::Colon, Box::new(tag_with_attributes(body, defined))),
 		},
-		other => other,
+		// `[td{…} for job in jobs]`, also from a loop among the children: its elements read as the others do
+		other => other.map_children(|child| tag_with_attributes(child, defined)),
 	}
 }
 
@@ -209,10 +210,14 @@ fn is_computed_children(item: &Node) -> bool {
 	match item.drop_meta() {
 		Node::List(items, Bracket::Square, _) => items.iter().any(|part| matches!(part.drop_meta(), Node::List(words, _, _) if matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD))),
 		Node::Key(_, Op::Dot, _) => true,
-		// `(if shown then Fruit() else [])`: a condition, which in a block would run as a statement
-		Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [single] if matches!(single.drop_meta(), Node::Key(_, Op::Then | Op::Else, _))),
-		_ => false,
+		// `(if shown then Fruit() else [])`, also without parentheses: a condition, which in a block would run as a statement
+		Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [single] if is_condition(single)),
+		_ => is_condition(item),
 	}
+}
+
+fn is_condition(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Then | Op::Else, _))
 }
 
 /// `ul{ for t in todos { li{t} } }`: a loop among an element's children gives one child per item, as the comprehension

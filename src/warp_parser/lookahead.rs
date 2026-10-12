@@ -11,6 +11,12 @@ pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt",
 const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
 /// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
 const BLOCK_COLON_WORDS: [&str; 3] = ["then", "else", "do"];
+/// The digits of a CSS hex color: `#fff`, `#8884`, `#1e1e1e`, `#00ff0080`
+const CSS_COLOR_DIGITS: [usize; 4] = [3, 4, 6, 8];
+/// What follows an id selector of hex letters (`#fed { … }`, `#add, #b`, `#bad:hover`), never a color
+const SELECTOR_FOLLOWERS: [char; 8] = ['{', ',', '.', ':', '>', '+', '~', '['];
+/// What a style sheet's selector starts after: the sheet's or a rule's brace, a declaration's end, a selector list's comma
+const SELECTOR_STARTS_AFTER: [char; 5] = ['{', '}', ';', ',', '\0'];
 
 /// What ends a path literal: whitespace, a closing bracket or a separator
 pub(super) fn ends_path(c: char) -> bool {
@@ -196,6 +202,9 @@ impl WarpParser {
 		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
 		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
 
+		if self.css_color_length().is_some() || self.at_pseudo_class_selector() {
+			return None; // `solid #8884`: the color is the next word of the value
+		}
 		if self.in_style_sheet && matches!(c1, '.' | '#') && self.prev_char().is_whitespace() && self.is_identifier_start(1) {
 			return None; // `#main .x`: the descendant selector's next part
 		}
@@ -477,6 +486,29 @@ impl WarpParser {
 		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
 	}
 
+	/// In a style sheet `#8884` or `#fff` in a value is a CSS hex color, not the count or index operator (card
+	/// css-block): its length with the `#`. Ids starting with a letter stay selectors where one is followed by a block
+	/// or another selector part (`#fed { … }`); an id never starts with a digit
+	pub(super) fn css_color_length(&self) -> Option<usize> {
+		if !self.in_style_sheet || self.current_char() != '#' {
+			return None;
+		}
+		let digits = (1..).take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit()).count();
+		let after = self.peek_char(digits + 1);
+		if !CSS_COLOR_DIGITS.contains(&digits) || after.is_alphanumeric() || matches!(after, '_' | '-') {
+			return None;
+		}
+		let next = (digits + 1..).map(|offset| self.peek_char(offset)).find(|ch| !ch.is_whitespace()).unwrap_or('\0');
+		(self.peek_char(1).is_ascii_digit() || !SELECTOR_FOLLOWERS.contains(&next)).then_some(digits + 1)
+	}
+
+	/// `:root { … }`, `:hover { … }` starting a rule of a style sheet: a selector, not the colon of a declaration (card
+	/// markup-style-block)
+	pub(super) fn at_pseudo_class_selector(&self) -> bool {
+		let previous = self.chars[..self.pos].iter().rev().find(|ch| !ch.is_whitespace()).copied().unwrap_or('\0');
+		self.in_style_sheet && self.current_char() == ':' && self.is_identifier_start(1) && SELECTOR_STARTS_AFTER.contains(&previous)
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
@@ -501,7 +533,7 @@ impl WarpParser {
 			'√' | FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
 			'∛' => Some((Op::Cbrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
-			'#' => Some((Op::Hash, 1)), // prefix # means count/length
+			'#' => self.css_color_length().is_none().then_some((Op::Hash, 1)), // prefix # means count/length
 			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
 			// subject; a glued `<tag` stays a bracket
 			'>' | '<' if !self.options.xml_mode && !self.options.data_mode => {

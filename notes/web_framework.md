@@ -140,8 +140,12 @@ Each step is useful on its own and is what the next ones stand on.
   lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
   solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. In a style sheet a blank before
   `.x` / `#x` is the descendant combinator (`#main .x`, `.a .b #c`; parser flag in_style_sheet), and `.a {…} #main {…}`
-  are two rules on one line (card web-styles-parser). Limits: `50%` followed by another declaration without `;`, and
-  several rules on one line with a comma selector need their own lines.
+  are two rules on one line (card web-styles-parser). In a style sheet (the flag holds inside its rules too) a hex
+  color is CSS's: `#8884`, `#fff`, `#1e1e1e` in a value are texts, not the count or index operator; an id of hex letters
+  followed by a block or selector part stays a selector (`#fed { … }`), an id never starts with a digit (card css-block,
+  parser css_color_length). `:root {…}` starting a rule is the pseudo-class selector, and a selector before a comma
+  continues into the group after it (`h1, :hover {…}`, `ul li, .x {…}`); a sheet's `html {…}` is a rule, no element
+  (no accessibility warning; card markup-style-block). Limit: `50%` followed by another declaration without `;`.
 - Left: scoping a component's sheet to its own elements (a generated class per component), warp-cd.
 
 ## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
