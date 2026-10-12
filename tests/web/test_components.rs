@@ -45,3 +45,14 @@ fn on_mount_runs_once_per_new_instance() {
 	let code = "mounted = 0\ndef Tag(label) {\n\ton mount { mounted += 1 }\n\ton cleanup { mounted -= 1 }\n\tspan{ label }\n}\ndiv{ Tag(\"a\") Tag(\"b\") p{ \"mounted \" + mounted } }";
 	assert_eq!(html_of(code), "<div><span>a</span><span>b</span><p>mounted 2</p></div>");
 }
+
+// `bind:` inside a component binds the instance's own state: typing into one Greeter changes only its greeting
+// (card web-bind-component)
+#[test]
+#[cfg(feature = "native")]
+fn a_bound_field_in_a_component_binds_its_instance() {
+	let greeter = "def Greeter(start) {\n\tname = start\n\tdiv{ input{ bind: name placeholder: \"name\" } p{ \"Hi \" + name } }\n}\n";
+	let mut page = warp::headless::Page::render(&format!("{greeter}div{{ Greeter(\"you\") Greeter(\"there\") }}")).expect("the page");
+	page.type_into("name", "Ann").expect("typed");
+	assert!(page.text().contains("Hi Ann") && page.text().contains("Hi there"), "{}", page.html());
+}
