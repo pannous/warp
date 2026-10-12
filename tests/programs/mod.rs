@@ -18,6 +18,7 @@ mod test_code_golf; // card code-golf
 mod test_paint;
 mod test_paint_lists;
 mod test_paint_shader; // P234
+mod test_gpu_draw; // card gpu-draw
 mod test_sound;
 mod test_sound_files; // card sound-library
 mod test_sound_clock; // card sound-pro

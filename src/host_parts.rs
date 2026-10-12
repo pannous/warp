@@ -3,7 +3,7 @@
 //! (src/deploy.rs) ship their texts; the playground's Deploy (src/web.rs web_worker_bundle) only names them for
 //! warp-hosting, so the wasm32 compiler carries the names without the texts.
 
-use crate::host::{CLIPBOARD_TEXT, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{CLIPBOARD_TEXT, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY};
 
@@ -56,8 +56,9 @@ pub const HOST_PARTS: [HostPart; 9] = [
 	},
 	HostPart { script: ("host-compiler.js", script_text!("host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", script_text!("imports.js", "host-routes.js")), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
-	// paint may be given a shader (P234), which renders on the GPU (host.js paint, holder.gpuRendered)
-	HostPart { script: ("host-gpu.js", script_text!("host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && (GPU_WORDS.contains(&name) || name == PAINT), needs: &["host-tasks.js"] },
+	// paint may be given a shader (P234), which renders on the GPU (host.js paint, holder.gpuRendered); use draw's
+	// GPU words come with paint, as lib/draw.warp imports both
+	HostPart { script: ("host-gpu.js", script_text!("host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && (GPU_WORDS.contains(&name) || [PAINT, DRAW_SHAPE, DRAW_SHOW].contains(&name)), needs: &["host-tasks.js"] },
 	HostPart { script: ("host-timers.js", script_text!("host-timers.js")), gives: |module, name| module == HOST_LIBRARY && [SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT].contains(&name), needs: &[] },
 	HostPart { script: ("host-random.js", script_text!("host-random.js")), gives: |module, name| module == HOST_LIBRARY && [RANDOM, RANDOM_BELOW, RANDOM_SEED].contains(&name), needs: &[] },
 ];

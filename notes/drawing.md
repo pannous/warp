@@ -16,3 +16,17 @@ Worker), natively ab_glyph over a system font (src/text_raster.rs: Helvetica on 
 on Linux, Arial on Windows, WARP_FONT names another; none is a loud error). label blends it into canvas_pixels, so
 show()/paint stays the one pipeline. `text` cannot be the word: "text is a type". A first version with a 3×5 pixel
 font was dropped (user: "the classical canvas"). samples/paint_text.warp, tests/programs/test_draw_label.rs.
+
+## On the GPU (card gpu-draw)
+A second implementation of `use draw`, chosen by the system value `gpu_drawing` (crates/warp-runtime system_values,
+set by paint.rs allow_windows): with a window on by default, `WARP_DRAW=gpu|cpu` forces either; an unknown value warns.
+- lib/draw.warp: clear, dot, rect, circle call the host word `draw_shape(kind, a, b, c, d, color)`; line and label go
+  through dot; canvas() allocates no pixel list; show() calls `draw_show(width, height)`.
+- src/gpu_canvas.rs gathers the shapes (kind u32, color u32, 4×f32) and draws them instanced with one WGSL shader into
+  an Rgba8Unorm canvas texture that stays on the GPU between shows (alpha blending as the CPU's mixed(); a circle
+  colors the pixel centers within its radius, a rect cells cell(x)..cell(x+width), so both paths give the same PNG).
+- In a window only the shapes since the last show cross the pipe (paint_window.rs `shapes_message`, marked by
+  u32::MAX where a frame has its width); the paint-window process owns the canvas and blits it to the surface.
+  Headless, an offscreen canvas is read back and written as paint's PNG.
+- The playground keeps the CPU path (gpu_drawing is 0 there); its draw_shape/draw_show stubs are in host-gpu.js.
+- Checks: tests/programs/test_gpu_draw.rs (GPU vs CPU pixels), probes/gpu_draw/compare.py <warp> scene.warp.

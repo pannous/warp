@@ -19,7 +19,7 @@ const FOLDER: &str = "warp-paint";
 pub const NO_WINDOW_VARIABLE: &str = "WARP_NO_WINDOW";
 const CI_VARIABLE: &str = "CI";
 /// `WARP_DRAW=gpu` or `cpu` picks how `use draw` draws (src/gpu_canvas.rs); without it, on the GPU when a window shows
-const DRAW_VARIABLE: &str = "WARP_DRAW";
+pub const DRAW_VARIABLE: &str = "WARP_DRAW";
 const DRAW_CHOICES: [&str; 2] = ["gpu", "cpu"];
 /// Whether paint shows a window: only the warp binary turns it on (allow_windows); a library caller writes PNGs
 static WINDOWS: AtomicBool = AtomicBool::new(false);
