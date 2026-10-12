@@ -5,6 +5,7 @@ mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 mod test_assistant_proxy; // card assistant-proxy
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
 #[cfg(feature = "native")] // builds a site natively
+mod test_browser_tables;
 mod test_bundle_budget;
 mod test_class_components;
 #[cfg(feature = "native")] // runs node

@@ -281,7 +281,7 @@ const keptEntries = store => databaseObjects("readonly", store)
 // the console). A file written since (by a task) stays as written
 function loadKept() {
 	return databaseLoaded ??= Promise.all([
-		keptEntries(DATABASE.objects).then(entries => entries.forEach(([name, value]) => takeDatabaseValue(name, value)))
+		keptEntries(DATABASE.objects).then(entries => byRowId(entries).forEach(([name, value]) => takeDatabaseValue(name, value)))
 			.catch(failure => console.error("database values could not be read:", failure)),
 		keptEntries(DATABASE.files).then(entries => entries.forEach(([path, content]) => writtenFiles.has(path) || writtenFiles.set(path, content)))
 			.catch(failure => console.error("the files written before could not be read:", failure)),
@@ -319,16 +319,22 @@ function takeDatabaseValue(name, value) {
 	const row = name.match(ROW_KEY);
 	if (!row) {
 		const keptWhole = Array.isArray(value?.rows);
-		databaseValues[name] = name.startsWith(TABLE_PREFIX) && value ? { rows: databaseValues[name]?.rows ?? [], ...value, keptWhole } : value;
+		const rows = keptWhole ? [...value.rows].sort((first, second) => first[ID_COLUMN] - second[ID_COLUMN]) : databaseValues[name]?.rows ?? [];
+		databaseValues[name] = name.startsWith(TABLE_PREFIX) && value ? { ...value, rows, keptWhole } : value;
 		if (value === undefined) delete databaseValues[name];
 		return;
 	}
 	const [, table, id] = row;
 	const stored = databaseValues[table] ??= { types: {}, quantities: {}, rows: [] };
-	stored.rows = stored.rows.filter(kept => kept[ID_COLUMN] !== Number(id));
-	if (value !== undefined) stored.rows.push(value);
-	stored.rows.sort((first, second) => first[ID_COLUMN] - second[ID_COLUMN]);
+	const index = rowIndex(stored.rows, Number(id));
+	const replaced = stored.rows[index]?.[ID_COLUMN] === Number(id) ? 1 : 0;
+	if (value === undefined) stored.rows.splice(index, replaced); else stored.rows.splice(index, replaced, value);
 }
+
+// the kept entries with each table's rows in the order of their ids (IndexedDB gives keys as texts: #10 before #9), so
+// each row is appended
+const byRowId = entries => entries.map(entry => [entry, Number(entry[0].match(ROW_KEY)?.[2] ?? 0)])
+	.sort((first, second) => first[1] - second[1]).map(([entry]) => entry);
 
 // `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept in the database
 // store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types under the
@@ -389,7 +395,20 @@ function openTable(table, schema, file) {
 	return tableRows(table, schema, file);
 }
 
-const tableRows = (table, schema, file) => storedTable(file, table).rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+const rowCells = schema => row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])];
+const tableRows = (table, schema, file) => storedTable(file, table).rows.map(rowCells(schema));
+// `size` rows from the 1-based position `start`, without the others (a loop over a big table reads it page by page)
+const tablePage = (table, schema, file, start, size) => storedTable(file, table).rows.slice(start - 1, start - 1 + size).map(rowCells(schema));
+// a table's rows are in the order of their ids (inserted with the next id, told rows sorted in): the position of `id`,
+// or where it would go
+function rowIndex(rows, id) {
+	let [low, high] = [0, rows.length];
+	while (low < high) {
+		const middle = (low + high) >> 1;
+		if (rows[middle][ID_COLUMN] < id) low = middle + 1; else high = middle;
+	}
+	return low;
+}
 
 function migrateTable(table, schema, file) {
 	const stored = storedTable(file, table);
@@ -427,7 +446,7 @@ function renameColumn(stored, oldName, name) {
 
 function insertRow(table, columns, values, file) {
 	const stored = storedTable(file, table);
-	const id = Math.max(0, ...stored.rows.map(row => row[ID_COLUMN])) + 1;
+	const id = (stored.rows.at(-1)?.[ID_COLUMN] ?? 0) + 1;
 	const row = Object.fromEntries([[ID_COLUMN, id], ...columns.map((column, index) => [column, values[index]])]);
 	stored.rows.push(row);
 	databaseValues[tableKey(file, table)] = stored;
@@ -437,16 +456,18 @@ function insertRow(table, columns, values, file) {
 
 function deleteRow(table, id, file) {
 	const stored = storedTable(file, table);
-	stored.rows = stored.rows.filter(row => row[ID_COLUMN] !== id);
+	const index = rowIndex(stored.rows, id);
+	if (stored.rows[index]?.[ID_COLUMN] === id) stored.rows.splice(index, 1);
 	keep(rowKey(file, table, id), undefined, DATABASE_STORE);
 	return null;
 }
 
 function updateRow(table, id, column, value, file) {
 	const stored = storedTable(file, table);
-	const row = stored.rows.find(row => row[ID_COLUMN] === id);
-	if (row) row[column] = value;
-	if (row) keepRow(file, table, row);
+	const row = stored.rows[rowIndex(stored.rows, id)];
+	if (row?.[ID_COLUMN] !== id) return null;
+	row[column] = value;
+	keepRow(file, table, row);
 	return null;
 }
 
@@ -627,7 +648,7 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
