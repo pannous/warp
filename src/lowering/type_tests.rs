@@ -219,7 +219,7 @@ fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
 }
 
 pub fn lower(node: Node) -> Node {
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_outer_assigned_names(&node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();

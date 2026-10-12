@@ -271,7 +271,7 @@ pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
 
 pub fn lower(node: Node) -> Node {
 	let node = bind_read_data_objects(node);
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `sum·1` (an arity overload), `sum·point` of a declared trait's operation: the program defines `sum`, no library
 	// word; a class's method `sum·Bag` of the generic function sum keeps the library's sum for other values
@@ -389,7 +389,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 /// text or libm function the program does not define. Runs first, so the passes that know these calls see their plain form; user
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
@@ -623,8 +623,7 @@ fn bind_read_data_objects(program: Node) -> Node {
 pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 	let mut defined = HashSet::new();
 	collect_assigned_names(node, &mut defined);
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, node);
+	let context = crate::analyzer::function_definitions(node);
 	defined.extend(context.user_functions.into_keys());
 	defined
 }

@@ -494,6 +494,14 @@ pub fn function_context(node: &Node) -> Context {
 	context
 }
 
+/// A fresh context holding only what the program defines (defined_functions), no inferred kinds: for the passes that
+/// read names, parameters and bodies, which so cost no analysis of the program as it stands
+pub fn function_definitions(node: &Node) -> Context {
+	let mut context = Context::new();
+	defined_functions(&mut context, node);
+	context
+}
+
 /// The functions a program defines (nested ones lifted as `outer·inner`) and the closure helpers it calls, without the
 /// kinds the inference gives their parameters and results: what a pass that needs names, parameters and bodies reads
 pub fn defined_functions(ctx: &mut Context, node: &Node) {

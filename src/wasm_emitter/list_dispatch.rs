@@ -98,6 +98,8 @@ struct ElementRuntime {
 	at: &'static str,
 	set: &'static str,
 	copy: &'static str,
+	/// concat(a, b) -> list: a's items then b's, copied in bulk (array.copy); ø counts as empty
+	concat: &'static str,
 	as_node: &'static str,
 	/// as_node_list(list) -> $NodeList: the element nodes in an array, what a list parameter of the array convention takes
 	as_node_list: &'static str,
@@ -109,15 +111,15 @@ struct ElementRuntime {
 }
 
 const INT_RUNTIME: ElementRuntime = ElementRuntime {
-	at: "int_list_at", set: "int_list_set", copy: "int_list_copy", as_node: "int_list_as_node", as_node_list: "int_list_as_node_list", filled: "int_list_filled",
+	at: "int_list_at", set: "int_list_set", copy: "int_list_copy", concat: "int_list_concat", as_node: "int_list_as_node", as_node_list: "int_list_as_node_list", filled: "int_list_filled",
 	push: "int_list_push", sum: "int_list_sum", new_node: "new_int",
 };
 const FLOAT_RUNTIME: ElementRuntime = ElementRuntime {
-	at: "float_list_at", set: "float_list_set", copy: "float_list_copy", as_node: "float_list_as_node", as_node_list: "float_list_as_node_list",
+	at: "float_list_at", set: "float_list_set", copy: "float_list_copy", concat: "float_list_concat", as_node: "float_list_as_node", as_node_list: "float_list_as_node_list",
 	filled: "float_list_filled", push: "float_list_push", sum: "float_list_sum", new_node: "new_float",
 };
 const NODE_RUNTIME: ElementRuntime = ElementRuntime {
-	at: "node_list_at", set: "node_list_set", copy: "node_list_copy", as_node: "node_list_as_node", as_node_list: "",
+	at: "node_list_at", set: "node_list_set", copy: "node_list_copy", concat: "", as_node: "node_list_as_node", as_node_list: "",
 	filled: "node_list_filled", push: "node_list_push", sum: "", new_node: "",
 };
 /// node_list_of(node) -> $NodeList: the items of a Node list in an array, what a Node list variable starts from
@@ -212,6 +214,8 @@ enum Source {
 	/// a list held as Nodes (a call's result, a parameter, a field): converted once into an array of its items. Fresh:
 	/// a call's result, which no one else holds
 	Converted { fresh: bool },
+	/// `xs + ys + [4]`: a new list of list variables and literals, an array of their element type when they agree
+	Concat(Vec<Source>),
 	Other,
 }
 
@@ -330,6 +334,8 @@ fn agreed_element(sources: &[Source], typed: &HashMap<String, Option<ElementType
 			// an untyped list variable converts like any Node list
 			Source::Variable(name) => typed.get(name).copied().or_else(|| globals.get(name).map(|(_, list)| Some(list.element))).unwrap_or(Some(ElementType::Node)),
 			Source::Converted { .. } => Some(ElementType::Node),
+			// parts of other element types are converted like any Node list
+			Source::Concat(parts) => agreed_element(parts, typed, globals).unwrap_or(Some(ElementType::Node)),
 			Source::Other => return Err(()),
 		};
 		match (agreed, element) {
@@ -374,6 +380,20 @@ impl WasmGcEmitter {
 	fn items_element(&self, items: &[Node]) -> Option<ElementType> {
 		let first = items.first()?;
 		ElementType::ALL.into_iter().find(|element| self.is_element(first, *element) && items.iter().all(|item| self.is_element(item, *element)))
+	}
+
+	/// The lists `a + b + [4]` concatenates, each a variable or a literal of numbers: none for anything else
+	fn concatenated_lists<'n>(&self, value: &'n Node) -> Option<Vec<&'n Node>> {
+		let Node::Key(left, Op::Add, right) = value.drop_meta() else { return None };
+		if self.get_type(value) != Kind::List {
+			return None;
+		}
+		let part = |node: &'n Node| match node.drop_meta() {
+			Node::Symbol(_) => Some(vec![node]),
+			Node::List(items, Bracket::Square, _) if self.items_element(items).is_some() => Some(vec![node]),
+			_ => self.concatenated_lists(node),
+		};
+		Some([part(left)?, part(right)?].concat())
 	}
 
 	/// The source of `target = value`
@@ -445,6 +465,9 @@ impl WasmGcEmitter {
 				_ => Source::Other,
 			},
 			Node::Symbol(name) => Source::Variable(name.clone()),
+			_ if self.concatenated_lists(value).is_some() => {
+				Source::Concat(self.concatenated_lists(value).expect("guarded").into_iter().map(|part| self.number_source_of(target, part)).collect())
+			}
 			_ if zero_fill_parts(value).is_some() => literal(std::slice::from_ref(zero_fill_parts(value).expect("guarded").1)),
 			Node::List(items, Bracket::Square, _) => literal(items),
 			_ => Source::Other,
@@ -931,6 +954,18 @@ impl WasmGcEmitter {
 				}
 				self.emit_typed_pushes(func, items, list.element);
 			}
+			// `xs + ys + [4]` of arrays of this element type: copied in bulk, no Node made of an item
+			_ if list.element != ElementType::Node && self.concatenated_arrays(value, list.element).is_some() => {
+				for (index, part) in self.concatenated_arrays(value, list.element).expect("guarded").into_iter().enumerate() {
+					match part.drop_meta() {
+						Node::List(items, _, _) => self.emit_typed_list_of(func, items, list.element),
+						_ => { func.instruction(&self.typed_list(part).expect("a typed list part").0.get()); }
+					}
+					if index > 0 {
+						self.emit_call(func, runtime.concat);
+					}
+				}
+			}
 			Node::Empty => self.emit_typed_list_of(func, &[], list.element),
 			Node::List(items, Bracket::Square, _) if self.number_source_of(name, value).is_literal() || items.is_empty() => {
 				self.emit_typed_list_of(func, items, list.element)
@@ -965,6 +1000,16 @@ impl WasmGcEmitter {
 			self.emit_element_value(func, item, element);
 			self.emit_call(func, element.runtime().push);
 		}
+	}
+
+	/// The parts of `xs + ys + [4]` when each is an array of `element` (a typed list variable or a literal of such numbers)
+	fn concatenated_arrays<'n>(&self, value: &'n Node, element: ElementType) -> Option<Vec<&'n Node>> {
+		let parts = self.concatenated_lists(value)?;
+		let is_array = |part: &Node| match part.drop_meta() {
+			Node::List(items, _, _) => self.items_element(items) == Some(element),
+			_ => self.typed_list(part).is_some_and(|(_, list)| list.element == element),
+		};
+		parts.iter().all(|part| is_array(part)).then_some(parts)
 	}
 
 	/// A new typed list of `items`
@@ -1196,6 +1241,21 @@ impl WasmGcEmitter {
 					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 					I::LocalGet(0), length.clone(), I::LocalGet(1), I::RefAsNonNull, I::StructNew(list),
 				]);
+			});
+		}
+		if self.should_emit_function(runtime.concat) {
+			let (first, second, first_length, second_length, joined) = (0, 1, 2, 3, 4);
+			let length_or_zero = |list: u32, local: u32| [I::LocalGet(list), I::RefIsNull, I::If(BlockType::Result(ValType::I32)), I::I32Const(0), I::Else,
+				I::LocalGet(list), length.clone(), I::End, I::LocalSet(local)];
+			let copied = |list: u32, at: Vec<I<'static>>, count: u32| [vec![I::LocalGet(count), I::If(BlockType::Empty), I::LocalGet(joined)], at,
+				vec![I::LocalGet(list), items.clone(), I::I32Const(0), I::LocalGet(count), I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array }, I::End]].concat();
+			self.runtime_function(runtime.concat, vec![list_ref, list_ref], vec![list_ref], vec![ValType::I32, ValType::I32, array_ref], |_, f| {
+				Self::emit_list(f, &length_or_zero(first, first_length));
+				Self::emit_list(f, &length_or_zero(second, second_length));
+				Self::emit_list(f, &[I::LocalGet(first_length), I::LocalGet(second_length), I::I32Add, I::ArrayNewDefault(array), I::LocalSet(joined)]);
+				Self::emit_list(f, &copied(first, vec![I::I32Const(0)], first_length));
+				Self::emit_list(f, &copied(second, vec![I::LocalGet(first_length)], second_length));
+				Self::emit_list(f, &[I::LocalGet(first_length), I::LocalGet(second_length), I::I32Add, I::LocalGet(joined), I::RefAsNonNull, I::StructNew(list)]);
 			});
 		}
 		// filled(count, zero) -> list: count times zero, empty when count is not positive

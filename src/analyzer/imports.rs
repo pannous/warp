@@ -331,8 +331,7 @@ pub(super) fn add_called_library_imports(ctx: &mut Context, node: &Node, library
 	if called.is_empty() {
 		return;
 	}
-	let mut defined = Context::new();
-	extract_user_functions(&mut defined, node);
+	let defined = super::function_definitions(node);
 	for name in called.iter().filter(|name| !defined.user_functions.contains_key(*name)) {
 		add_ffi_import(ctx, name, library);
 	}

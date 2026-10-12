@@ -7,7 +7,7 @@
 //! demonstrably shrink a parameter toward a guarded base case, or mutual recursion. When unsure, Div.
 //! Later the `EffectSet` moves onto semantic `Expr`/`FunctionDecl`; the report stays the query API.
 
-use crate::analyzer::{extract_ffi_imports, extract_user_functions};
+use crate::analyzer::{extract_ffi_imports, function_definitions};
 use crate::context::Context;
 use crate::node::{Bracket, Node};
 use crate::operators::{is_function_keyword, Op};
@@ -244,8 +244,7 @@ pub struct EffectReport {
 
 impl EffectReport {
 	pub fn of(program: &Node) -> Self {
-		let mut context = Context::new();
-		extract_user_functions(&mut context, program);
+		let mut context = function_definitions(program);
 		extract_ffi_imports(&mut context, program);
 		crate::analyzer::extract_host_words(&mut context, program);
 		let resolver = Resolver { context: &context };
@@ -603,8 +602,7 @@ fn effect_names(effects: EffectSet, events: &BTreeSet<String>) -> String {
 /// Each function's events, own and with its callees' (main for the top level): an `emit ask` adds ask, a call inside
 /// `on ask {…} in {…}` passes on its callee's events but ask (card effect-handlers step 2)
 pub fn event_effects(program: &Node) -> BTreeMap<String, (BTreeSet<String>, BTreeSet<String>)> {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, program);
+	let context = function_definitions(program);
 	let functions: BTreeSet<String> = context.user_functions.keys().cloned().collect();
 	let verbs = crate::event_signals::emit_verbs(program);
 	let mut uses: BTreeMap<String, EventUses> = context.user_functions.iter()

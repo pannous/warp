@@ -478,8 +478,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 /// `sin(0, 5)`, `pow(2)`, `√(16, 2)`: a math function or a one-value operator given another number of values, which
 /// used to drop or invent values silently
 pub(super) fn check_call_arity(program: &Node) -> Option<Diagnostic> {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, program);
+	let context = function_definitions(program);
 	call_arity_error(program, &context)
 }
 
@@ -819,8 +818,7 @@ pub(super) fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(usize, usize)
 /// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
 pub fn resolve_data_scope(program: Node) -> Node {
 	let mut variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &program);
+	let context = function_definitions(&program);
 	variables.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));
 	let resolved = resolve_blocks(program, &variables);
 	subtract_kebab_variables(resolved, &variables)
@@ -1287,8 +1285,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 
 /// A parameter annotation must name a builtin or a user-defined type, `x:flaot` is a typo
 pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, program);
+	let context = function_definitions(program);
 	let mut user_types = crate::type_kinds::TypeRegistry::new();
 	collect_all_types(&mut user_types, program);
 	let traits = crate::traits::Traits::of(program);
