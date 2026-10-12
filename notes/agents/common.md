@@ -92,6 +92,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
   warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
+  Every landing gets a try line (user 2026-10-12, after "real-time-playback is on main" came without one): whenever
+  any change of yours reaches main that the user can see, hear or run (a whole card, one step of it, a fix), you send
+  warp-interviewer a fresh try line for exactly that change, the same moment you learn it merged; "X is on main"
+  never goes out without its line. The Integrator's merge report names each user-visible branch, so its owner knows.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06), and
   cards related to your current task (user, 2026-10-12).
