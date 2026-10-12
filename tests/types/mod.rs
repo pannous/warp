@@ -112,6 +112,7 @@ mod test_records_classes;
 mod test_recursive_fields;
 mod test_repeated_type_parameters;
 mod test_returned_instances; // card units-dynamic
+mod test_returned_list_alias; // card identity-copies-list
 mod test_runtime_text_ratio;
 mod test_same_identity;
 mod test_self_typed_field; // card empty-field

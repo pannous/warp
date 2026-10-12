@@ -51,7 +51,7 @@ fn list_parameters(function: &UserFunctionDef) -> Vec<Option<String>> {
 }
 
 /// What a body gives back: its last statement (or what its final `return` returns) and every `return` value
-fn results(body: &Node) -> Vec<&Node> {
+pub(super) fn results(body: &Node) -> Vec<&Node> {
 	let mut found = vec![];
 	body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
@@ -85,7 +85,7 @@ pub(super) fn body_statements(body: &Node) -> Vec<Node> {
 }
 
 /// The last value of a block `(…; x)`
-fn last_value(node: &Node) -> &Node {
+pub(super) fn last_value(node: &Node) -> &Node {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline)
 			if !items.is_empty() =>

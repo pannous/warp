@@ -89,9 +89,11 @@ impl<'n> Holders<'_, 'n> {
 				let function = self.functions.get(&callee);
 				let imported_changing = function.is_none() && (self.changes_arguments)(&callee);
 				for (index, argument) in items.iter().enumerate().skip(1) {
-					// a function that never changes the list it gets only reads it
-					let changed =
-						imported_changing || function.is_some_and(|function| changes_parameter(function, index - 1));
+					// a function that never changes the list it gets, nor gives it back (`ys = f(xs)`), only reads it
+					let changed = imported_changing
+						|| function.is_some_and(|function| {
+							changes_parameter(function, index - 1) || returns_parameter(function, index - 1)
+						});
 					let passing = std::mem::replace(&mut self.passing, changed);
 					self.value(argument, !changed);
 					self.passing = passing;
@@ -151,6 +153,20 @@ fn changes_parameter(function: &UserFunctionDef, index: usize) -> bool {
 		.params
 		.get(index)
 		.is_some_and(|param| changes_list(&function.body, &param.name))
+}
+
+/// May the function give back the list its parameter `index` holds: `f(a) := a`, `return a`
+fn returns_parameter(function: &UserFunctionDef, index: usize) -> bool {
+	function.params.get(index).is_some_and(|param| {
+		super::list_abi::results(&function.body)
+			.into_iter()
+			.any(|result| matches!(super::list_abi::last_value(result), Node::Symbol(name) if *name == param.name))
+	})
+}
+
+/// May the function give back a list one of its parameters holds
+pub(super) fn returns_a_parameter(function: &UserFunctionDef) -> bool {
+	(0..function.params.len()).any(|index| returns_parameter(function, index))
 }
 
 /// Does `body` change the list `name` holds in place: `name#i = v`, `name += …`, `name.add(v)`, `name.pop()`

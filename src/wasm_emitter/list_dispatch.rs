@@ -614,7 +614,14 @@ impl WasmGcEmitter {
 		match self.number_source_of(target, value) {
 			// not a tuple `(1, 2)` or an object `{a:1}`, whose brackets a typed list would lose
 			Source::Other if self.get_type(value) == Kind::List && !is_tuple_or_object(value) => Source::Converted {
-				fresh: super::list_abi::called_function(value).is_some(),
+				// a function giving back the list it got (`f(a) := a`) returns the caller's list, no new one
+				fresh: super::list_abi::called_function(value).is_some_and(|name| {
+					!self
+						.ctx
+						.user_functions
+						.get(name)
+						.is_some_and(super::list_sharing::returns_a_parameter)
+				}),
 			},
 			source => source,
 		}
