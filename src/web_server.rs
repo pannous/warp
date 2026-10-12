@@ -130,7 +130,7 @@ impl Answer {
 	/// A page with `message` shown at its top, as an alert: the first thing after <body>, else before the whole page
 	fn with_message(self, message: &str) -> Answer {
 		let page = String::from_utf8_lossy(&self.body).to_string();
-		let alert = format!("<p role=\"alert\">{}</p>", crate::site::escaped(message));
+		let alert = format!("<p role=\"alert\">{}</p>", crate::markup::escaped(message));
 		let at = page.find(PAGE_BODY_TAG).map_or(0, |start| start + PAGE_BODY_TAG.len());
 		Answer { body: format!("{}{alert}{}", &page[..at], &page[at..]).into_bytes(), ..self }
 	}
