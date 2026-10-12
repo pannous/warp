@@ -24,6 +24,8 @@ const INPUT: &str = "input";
 const SUBMIT: &str = "submit";
 /// the submitted form's named fields, as markup.js submitDetail hands them over
 const FIELDS: &str = "fields";
+/// Fields whose typed value reaches the handler as a number, as the page's valueAsNumber gives it (markup.js)
+const NUMBER_FIELDS: [&str; 2] = ["number", "range"];
 /// the labels a form field is found by besides its text
 const FIELD_LABELS: [&str; 4] = ["placeholder", "aria-label", "name", "id"];
 /// elements without content or closing tag
@@ -84,22 +86,32 @@ impl Page {
 
 	/// A click on the element showing `label` (its text) with a click handler
 	pub fn click(&mut self, label: &str) -> Result<(), String> {
-		self.fire(CLICK, label, Map::new())
+		self.fire(CLICK, label, |_| Map::new())
 	}
 
 	/// `text` typed into the form field found by its placeholder, name or id (`input{ bind: name }`)
 	pub fn type_into(&mut self, label: &str, text: &str) -> Result<(), String> {
-		let detail = json!({ "value": text, "checked": false });
-		self.fire(INPUT, label, detail.as_object().cloned().unwrap_or_default())
+		self.fire(INPUT, label, |field| {
+			let value = match field.attribute("type") {
+				Some(kind) if NUMBER_FIELDS.contains(&kind) => number_typed(text),
+				_ => json!(text),
+			};
+			Map::from_iter([("value".to_string(), value), ("checked".to_string(), json!(false))])
+		})
 	}
 
 	/// The form showing `label` (its text, name or id) sent with `fields`, its named fields (`on submit { event.fields }`)
 	pub fn submit(&mut self, label: &str, fields: Value) -> Result<(), String> {
-		self.fire(SUBMIT, label, Map::from_iter([(FIELDS.to_string(), fields)]))
+		self.fire(SUBMIT, label, |_| Map::from_iter([(FIELDS.to_string(), fields)]))
 	}
 
 	/// The event on the element showing `label`, with `detail` as its `event` (and the element's component instance)
-	fn fire(&mut self, event: &str, label: &str, mut detail: Map<String, Value>) -> Result<(), String> {
+	fn fire(
+		&mut self,
+		event: &str,
+		label: &str,
+		detail_of: impl FnOnce(&Element) -> Map<String, Value>,
+	) -> Result<(), String> {
 		let handler_attribute = format!("{HANDLER_ATTRIBUTE_PREFIX}{event}");
 		let shows = |element: &Element| {
 			element.text.trim() == label || FIELD_LABELS.iter().any(|name| element.attribute(name) == Some(label))
@@ -114,6 +126,7 @@ impl Page {
 					self.html()
 				)
 			})?;
+		let mut detail = detail_of(&element);
 		if let Some(instance) = element
 			.attribute(INSTANCE_ATTRIBUTE)
 			.and_then(|instance| instance.parse::<i64>().ok())
@@ -325,5 +338,14 @@ mod native {
 				.unwrap_or_else(|| Node::from(number.as_f64().unwrap_or_default())),
 			_ => Node::Empty,
 		}
+	}
+}
+
+/// What a number field gives for `text`: a whole number as an int, as JSON.stringify writes valueAsNumber, no number null
+fn number_typed(text: &str) -> Value {
+	match text.trim().parse::<f64>() {
+		Ok(number) if number.fract() == 0.0 && number.abs() < i64::MAX as f64 => json!(number as i64),
+		Ok(number) => json!(number),
+		Err(_) => Value::Null,
 	}
 }
