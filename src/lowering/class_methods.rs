@@ -493,6 +493,31 @@ pub(crate) fn class_fields(node: &Node) -> ClassFields {
 	fields
 }
 
+/// `class Tree{left: Tree}`: a field of the class's own type without `?` could never be filled, every Tree needing a
+/// Tree first (card empty-field, user decision: strict, the fix `left: Tree?`)
+pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
+	let mut unfillable = None;
+	program.visit(&mut |part| {
+		let Node::Type { name, body } = part else { return };
+		let class = name.drop_meta().name();
+		let field = class_items(body)
+			.into_iter()
+			.filter(|item| method_parts(item).is_none())
+			.find(|item| field_type_name(item) == class);
+		if let Some(field) = field.filter(|_| unfillable.is_none()) {
+			let field_name = field_name(&field).unwrap_or_default();
+			unfillable = Some(
+				crate::diagnostic::Diagnostic::at(
+					&field,
+					format!("{field_name} can never be filled: every {class} needs a {class} first"),
+				)
+				.fix(format!("{field_name}: {class}?")),
+			);
+		}
+	});
+	unfillable
+}
+
 /// Each field of a class body: its name, type name (empty when untyped) and default value (`legs: int = 4`)
 pub(crate) fn field_declarations(body: &Node) -> Vec<(String, String, Option<Node>)> {
 	class_items(body)

@@ -56,6 +56,8 @@ const NAME_DOT: &str = "_dot_";
 /// What a WAGI build (`warp build --wagi`, lib/wagi.warp, which the build uses) ends in: the routes' answer to the request
 const WAGI_ANSWER: &str =
 	"try { wagi_answer(page·submitted(wagi_request())) } catch error { wagi_failed(error.message) }";
+/// A WAGI build's routes set their answer's headers in lib/wagi.warp, not through the host (no host there, only WASI)
+const WAGI_HEADER: &str = "wagi_header";
 
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
@@ -739,20 +741,21 @@ fn route_function(name: &str, body: Node) -> Node {
 /// In a route's body `header "name" "value"` and `status 418` are response_header calls, which the route's HTTP answer
 /// carries (card web-route-header; `status` is the CGI header Status); `header{…}` stays the markup tag
 fn with_answer_headers(node: Node) -> Node {
+	let setter = match crate::pipeline::is_for_wagi() {
+		true => WAGI_HEADER,
+		false => crate::host::RESPONSE_HEADER,
+	};
 	let is_operand = |item: &Node| !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
 	match node.drop_meta() {
 		Node::List(items, Bracket::None | Bracket::Round, _)
 			if items.len() == 3 && word(&items[0]) == HEADER_WORD && items[1..].iter().all(is_operand) =>
 		{
-			call(crate::host::RESPONSE_HEADER, items[1..].to_vec())
+			call(setter, items[1..].to_vec())
 		}
 		Node::List(items, Bracket::None | Bracket::Round, _)
 			if items.len() == 2 && word(&items[0]) == STATUS_WORD && is_operand(&items[1]) =>
 		{
-			call(
-				crate::host::RESPONSE_HEADER,
-				vec![text(crate::host::STATUS_HEADER), items[1].clone()],
-			)
+			call(setter, vec![text(crate::host::STATUS_HEADER), items[1].clone()])
 		}
 		_ => node.map_children(with_answer_headers),
 	}

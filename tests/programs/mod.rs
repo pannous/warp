@@ -32,6 +32,7 @@ mod test_small_samples; // cards text-samples, error-examples
 mod test_sound;
 mod test_sound_aliasing; // card reason-beep
 mod test_sound_at; // card sample-accurate
+mod test_sound_at_in_blocks; // card inside-loop
 mod test_sound_clock; // card sound-pro
 mod test_sound_effects; // card signal-graph
 mod test_sound_engine; // card native-sound

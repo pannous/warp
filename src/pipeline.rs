@@ -543,6 +543,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
 		return Err(misread.into_error());
 	}
+	if let Some(unfillable) = crate::class_methods::check_self_typed_fields(&node) {
+		return Err(unfillable.into_error());
+	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them

@@ -45,6 +45,9 @@ Each step is useful on its own and is what the next ones stand on.
   body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/serve.rs
   with_answer_headers makes them the host word response_header, `status` as the CGI header Status; natively
   web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/route_headers.warp).
+  A WAGI build (`warp build --wagi`, card wagi-build) has no host: there they are lib/wagi.warp wagi_header calls,
+  which globals collect for the CGI answer; a set Content-Type replaces the answer's own, a failing route answers 500
+  whatever status it set (tests/web/test_wagi_headers.rs, probes/hosting/wagi_routes.sh /teapot).
 - **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a warp value (arrays ↔ lists, objects ↔
   maps); a status of 400 or more is an Error value carrying the status and the body text.
 - **Typed RPC**: `server def users(min_age) {…}` in the same program. The server build exposes it as
@@ -92,8 +95,14 @@ Each step is useful on its own and is what the next ones stand on.
   reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
   value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
   part, when the last line is a name (components: `page·markup`), or when a hole fails.
-- Left (card web-fine-text-nodes): holes inside components (an instance's elements by instance), text-node
-  granularity (a hole is an element).
+- Done (card web-fine-text-nodes, 2026-10-12): a computed text standing alone between an element's children
+  (`section{ h1{…} button{…} "clicked " + n + " times" }`) is a text hole `page·hole·<path>·text·<n>` (markup.rs
+  text_holes, n the child elements before it); worker.js sends its plain text, playground.js showText sets that text
+  node only, and the element is no element hole. Only a sum starting with a literal text counts (a bare `n` may be
+  markup); a text beside it (one DOM text node), a computed attribute, no child elements, or style/script/option/
+  select/textarea keep the element hole. Browser check: test_in_browser.py TEXT_HOLE (CI).
+- Left: holes inside components (an instance's elements by instance); the root's own text holes (a computed part in
+  the root still means no holes); built sites (site.js) morph the whole page·html, holes are the playground's.
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left
@@ -392,10 +401,14 @@ Each step is useful on its own and is what the next ones stand on.
   instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
   instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
   module once. Without wasm-split on PATH the site ships one module with a note; a dev site never splits.
-  Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
-  its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
-  functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
-  calls them before the route loads (card web-split-helpers).
+  User functions only one route reaches move too (2026-10-12, card web-split-helpers, tests/web/test_route_helpers.rs):
+  the emitter lists them in the custom section `warp.user_functions` (host.rs USER_FUNCTIONS_SECTION); they are
+  exported only for tasks and other modules, so route_split.rs leaves them out of the call graph's roots, and
+  wasm-split keeps each export as a `trampoline_<name>` thunk through the table. A module spawning tasks (task_spawn,
+  task_spawn_values) keeps them all: a task's Worker calls one by name in a fresh instance without the route's module.
+  wasm-split runs with --debuginfo, so app.wasm and the route modules keep their name sections.
+  Limits: the runtime the module exports stays in app.wasm; data segments stay too. A user function the compiler folded
+  away (fib(15) → "610") stays as dead code in app.wasm: nothing drops unreached user functions of a site yet.
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`

@@ -70,13 +70,14 @@ const ITERATIONS: [Iteration; 9] = [
 		function_arguments: 2,
 		template: "(list=loop_list; if count(list) == 0 then empty_extremum(reduce) else (acc=list#1; index=2; while index <= count(list) { item=list#index; acc = loop_call; index=index+1 }; acc))",
 	},
-	// a stable insertion sort of a copy; loop_call is whether acc sorts before item (sort_order); sorting by a key of
+	// a stable bottom-up merge sort of a copy in n log n (card comparator-sort): runs of width items merged in pairs,
+	// the right run's item first only when loop_call, whether acc sorts before item (sort_order); sorting by a key of
 	// one item takes key_sort_template
 	Iteration {
 		word: SORT_WORD,
 		extra_arguments: 0,
 		function_arguments: 2,
-		template: "(out=[]; for value in loop_list { out = out + [value]; index=count(out); moving=1; while moving and index > 1 { acc=out#index; item=out#(index-1); if loop_call { out#index=item; out#(index-1)=acc; index=index-1 } else { moving=0 } } }; out)",
+		template: "(out=[]; for value in loop_list { out = out + [value] }; size=count(out); width=1; while width < size { merged=[]; low=1; while low <= size { middle=low+width; if middle > size+1 { middle=size+1 }; high=middle+width; if high > size+1 { high=size+1 }; left=low; right=middle; while left < middle or right < high { if left >= middle { moving=1 } else { if right >= high { moving=0 } else { acc=out#right; item=out#left; if loop_call { moving=1 } else { moving=0 } } }; if moving { merged = merged + [out#right]; right=right+1 } else { merged = merged + [out#left]; left=left+1 } }; low=high }; out=merged; width=width*2 }; out)",
 	},
 ];
 
@@ -1049,10 +1050,13 @@ impl Lowering {
 
 	/// The loop of an iteration word with the body of a literal function inlined
 	fn iterate(&self, iteration: &Iteration, list: Node, extras: Vec<Node>, function: Node) -> Option<Node> {
-		let names: Vec<(&str, String)> = ["out", "item", "acc", "list", "index", "value", "moving"]
-			.into_iter()
-			.map(|name| (name, self.fresh(&format!("loop_{name}"))))
-			.collect();
+		let names: Vec<(&str, String)> = [
+			"out", "item", "acc", "list", "index", "value", "moving", "size", "width", "merged", "low", "middle",
+			"high", "left", "right",
+		]
+		.into_iter()
+		.map(|name| (name, self.fresh(&format!("loop_{name}"))))
+		.collect();
 		let symbol = |name: &str| {
 			Node::Symbol(
 				names

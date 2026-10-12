@@ -155,11 +155,16 @@ fn std_module(module: &str, name: &str, adapters: &[&str]) -> bool {
 /// The std modules a module calls through std_pure / std_io (its STD_MODULES_SECTION), ANY_STD_MODULE for one it
 /// names at run time
 pub fn std_modules_of(module: &[u8]) -> Result<Vec<String>, String> {
+	section_names(module, STD_MODULES_SECTION, STD_MODULES_SEPARATOR)
+}
+
+/// The names a custom section of the module lists, joined by the separator; none without that section
+pub fn section_names(module: &[u8], section_name: &str, separator: &str) -> Result<Vec<String>, String> {
 	for payload in wasmparser::Parser::new(0).parse_all(module) {
 		if let wasmparser::Payload::CustomSection(section) = payload.map_err(|failure| failure.to_string())? {
-			if section.name() == STD_MODULES_SECTION {
+			if section.name() == section_name {
 				let names = std::str::from_utf8(section.data()).map_err(|failure| failure.to_string())?;
-				return Ok(names.split(STD_MODULES_SEPARATOR).map(str::to_string).collect());
+				return Ok(names.split(separator).map(str::to_string).collect());
 			}
 		}
 	}
@@ -197,7 +202,7 @@ pub fn exports(module: &[u8], name: &str) -> bool {
 pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 	// the reflection getters the JavaScript host reads values with
 	let module = crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
-		.map_err(|failure| format!("nothing to compile: {}", with_excerpt(code, message_of(&failure))))?;
+		.map_err(|failure| compile_failure(code, &failure))?;
 	if !exports(&module.bytes, crate::lowering::serve::PAGE_SUBMITTED) {
 		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
 	}
@@ -206,6 +211,16 @@ pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 }
 
 /// The text of an error, else the value written out
+/// Why `code` gave no module: its error with the excerpt, as the CLI says it; a program whose value is all it has
+/// (no error) has nothing to compile
+pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
+	let message = with_excerpt(code, message_of(failure));
+	match failure.drop_meta() {
+		Node::Error(_) => message,
+		_ => format!("nothing to compile: {message}"),
+	}
+}
+
 pub(crate) fn message_of(failure: &Node) -> String {
 	match failure.drop_meta() {
 		Node::Error(message) => match message.drop_meta() {

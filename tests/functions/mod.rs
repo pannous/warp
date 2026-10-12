@@ -134,6 +134,7 @@ mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;
 mod test_soft_keywords;
+mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
 mod test_spaced_assign_definition;
 mod test_specialised_variants;

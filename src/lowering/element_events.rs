@@ -84,7 +84,7 @@ fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
 					.take()
 					.unwrap_or_default()
 					.into_iter()
-					.chain(bound(variable, property))
+					.chain(bound(variable, property, declared))
 					.collect(),
 				None => vec![item.clone()],
 			})
@@ -170,15 +170,23 @@ fn bound_property(items: &[Node]) -> &'static str {
 	}
 }
 
-/// `bind: name` as the attribute `value: name` and the handler `on input { name = event.value }`
-fn bound(variable: Node, property: &str) -> [Node; 4] {
+/// `bind: name` as the attribute `value: name` and the handler `on input { name = event.value }`; a whole-number
+/// variable takes only whole numbers (card guest-type): `if event.value is int then name = event.value`
+fn bound(variable: Node, property: &str, declared: &HashMap<String, Option<String>>) -> [Node; 4] {
 	let attribute = key(symbol(property), Op::Colon, variable.clone());
 	let read = key(symbol(crate::event_signals::EVENT_WORD), Op::Dot, symbol(property));
-	let update = Node::List(
-		vec![key(variable, Op::Assign, read)],
-		Bracket::Curly,
-		Separator::Semicolon,
-	);
+	let assign = key(variable.clone(), Op::Assign, read);
+	let assign = match declared.get(&variable.drop_meta().name()) {
+		Some(Some(kind)) if crate::analyzer::is_whole_type(kind) => {
+			let check = crate::warp_parser::parse(&format!(
+				"{} is {kind}",
+				crate::event_signals::EVENT_WORD.to_string() + "." + property
+			));
+			super::nodes::if_then(check, assign)
+		}
+		_ => assign,
+	};
+	let update = Node::List(vec![assign], Bracket::Curly, Separator::Semicolon);
 	[attribute, symbol(ON_WORD), symbol(INPUT_EVENT), update]
 }
 
