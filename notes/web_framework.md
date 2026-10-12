@@ -146,8 +146,9 @@ Each step is useful on its own and is what the next ones stand on.
   followed by a block or selector part stays a selector (`#fed { … }`), an id never starts with a digit (card css-block,
   parser css_color_length). `:root {…}` starting a rule is the pseudo-class selector, and a selector before a comma
   continues into the group after it (`h1, :hover {…}`, `ul li, .x {…}`); a sheet's `html {…}` is a rule, no element
-  (no accessibility warning; card markup-style-block). Limit (card web-styles-limits): `50%` followed by another
-  declaration without `;`.
+  (no accessibility warning; card markup-style-block). A `%` glued to a number is a percentage, also before the
+  next declaration on its line (`width: 50% height: 10px`), and rules with comma selectors may share a line (card
+  web-styles-limits).
 - Scoping a component's sheet to its own elements: done (card web-scoped, under step 15 below).
 
 ## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
