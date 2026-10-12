@@ -16,4 +16,7 @@ fn known_variable_types_stay_accepted() {
 	is!("x: float = 2.5; x", 2.5);
 	is!("class Point { x: int }; p: Point = Point(1); p.x", 1);
 	is!("x: int? = 3; x", 3);
+	is!("xs: list of any = [1]; xs#1", 1);
+	is!("f(xs: list of any) := xs#1; f([1])", 1);
+	is!("tuple t = (1, 2, 3); t#3", 3);
 }
