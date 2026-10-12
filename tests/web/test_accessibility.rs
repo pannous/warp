@@ -74,3 +74,15 @@ fn markup_built_at_run_time_is_checked() {
 	assert_eq!(runtime_warnings_of("div{ img{ src: \"a.png\" } }"), Vec::<String>::new(), "warned as written");
 	assert_eq!(runtime_warnings_of("tag = \"img\"\ndiv{ (tag): { src: \"a.png\" alt: \"an apple\" } }"), Vec::<String>::new());
 }
+
+// The outermost element showing a fetched value is a live region: a screen reader announces the value when it arrives
+// (card web-a11y-live)
+#[test]
+fn fetched_content_is_announced() {
+	let url = crate::common::serve("200 OK", "[\"Ann\"]");
+	let code = format!("users := fetch \"{url}\"\nmain{{ h1{{ \"Users\" }} div{{ if users.loading then p{{ \"Loading…\" }} else ul{{ [li{{ name }} for name in users] }} }} }}");
+	let html = warp::markup::to_html(&eval(&code));
+	assert!(html.contains("<div aria-live=\"polite\">") && html.matches("aria-live").count() == 1, "{html}");
+	let own = format!("users := fetch \"{url}\"\ndiv{{ aria-live: \"assertive\" \"\" + users.loading }}");
+	assert!(warp::markup::to_html(&eval(&own)).contains("aria-live=\"assertive\"") && !warp::markup::to_html(&eval(&own)).contains("polite"));
+}
