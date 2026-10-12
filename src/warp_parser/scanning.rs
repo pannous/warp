@@ -197,10 +197,16 @@ impl WarpParser {
 	}
 
 	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
-	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`
+	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`.
+	/// Inside a list literal a space and a glued sign start the next item after anything (decision list-sign):
+	/// `a=5; [a -1]` is [5 -1], while `[a - 1]` and `[a-1]` subtract
 	pub(super) fn signed_number_starts_a_list(&mut self, lhs: &Node) -> Result<bool, Node> {
 		if self.signed_list_element == Some(self.pos) {
 			return Ok(true); // answered for the operand inside
+		}
+		if self.in_spaced_list && self.prev_char().is_whitespace() && self.sign_glued_to_operand() {
+			self.signed_list_element = Some(self.pos);
+			return Ok(true);
 		}
 		if !matches!(lhs.drop_meta(), Node::Number(_)) || !self.prev_char().is_whitespace() || !self.number_starts_at(1)
 		{
@@ -229,6 +235,12 @@ impl WarpParser {
 			self.signed_list_element = Some(self.pos);
 		}
 		Ok(is_list)
+	}
+
+	/// `-1`, `-x`, `+(…)`: the sign at the cursor is glued to the operand after it, no operator like `->` or `-=`
+	fn sign_glued_to_operand(&self) -> bool {
+		let next = self.peek_char(1);
+		next.is_alphanumeric() || matches!(next, '(' | '[' | '"' | '\'' | '.' | '_' | '√')
 	}
 
 	/// R's `<-` at the cursor (P145): `x <- 3` assigns with a note to write `x = 3`; the cramped `x<-3` is an error

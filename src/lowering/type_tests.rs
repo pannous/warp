@@ -183,6 +183,12 @@ pub fn is_float_type_word(word: &str) -> bool {
 	canonical_spec_word(word) == FLOAT_WORD
 }
 
+/// `number`: a place declared so keeps the number it is given, exact or float, converting none (decisions
+/// rational-float, exact-decimals; card number-keeps-exact)
+pub fn holds_any_number(word: &str) -> bool {
+	canonical_spec_word(word) == NUMBER_WORD
+}
+
 /// `real` or `exact`: a value declared so keeps an exact real (`√2`, `π`) as it is
 pub fn is_real_type_word(word: &str) -> bool {
 	canonical_spec_word(word) == REAL_WORD

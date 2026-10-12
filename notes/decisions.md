@@ -30,6 +30,12 @@ notes/open_decisions.md.
     without commas (`[a -1, 2]` stays [4, 2]) and never inside an index (`xs[a -2]` subtracts); a comma-less
     `[1 -1]` no longer warns. `xs.has(x)` gives yes/no like `in`. binary-int (user): `5 as binary` shows 0b101,
     `0b101 + 1` is 6.
+  - position-arithmetic (user, refines index-position): arithmetic keeps the dimension, as with size_t or a
+    pointer: position ± int stays a position, index ± int an index, so with xs = [10 20 30]
+    `xs[xs.index_of(10) + 1]` is 20, the next item; position − position is a plain count; position + position is
+    an error. Defaults kept (warp-semantics, notes/index_position.md): a position meeting `[ ]` and an index
+    meeting `#` convert silently; both print as their plain number (index_of 1-based, argmax 0-based); a missing
+    element is an error, never -1; `index`/`position` bound as a variable name stop being type words there.
 - return-as (user, via warp-supervisor): return types are spelled `def f(x) as int or text`; `->` still works with
   a hint and an "I meant" fix toward `as`; no `returns` keyword ("nah") (warp-dispatch).
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`

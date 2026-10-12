@@ -524,6 +524,18 @@ impl WarpParser {
 			self.advance();
 		}
 
+		if self.current_char() == '0'
+			&& matches!(self.peek_char(1), 'b' | 'B')
+			&& matches!(self.peek_char(2), '0' | '1')
+		{
+			self.advance_by(2);
+			let bits: String = self
+				.take_while_char(|ch| matches!(ch, '0' | '1' | '_'))
+				.replace('_', "");
+			return i64::from_str_radix(&format!("{num_str}{bits}"), 2)
+				.map(Node::int)
+				.unwrap_or_else(|_| error(&format!("Invalid binary: 0b{bits}")));
+		}
 		if self.current_char() == '0' && matches!(self.peek_char(1), 'x' | 'X') {
 			self.advance_by(2);
 			let hex_str = self.take_while_char(|ch| ch.is_ascii_hexdigit());

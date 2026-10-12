@@ -23,14 +23,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Symbol(name) if crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()) => ctx
 			.required_functions
 			.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
-		// `as hex`, `byte b`: values shown in hex (card hex-printing)
-		Node::Symbol(name) if crate::wasm_emitter::hex::shows_in_hex(name) => {
-			ctx.required_functions.extend([
-				crate::wasm_emitter::hex::AS_HEX,
-				crate::wasm_emitter::hex::HEX_TEXT,
-				"list_join",
-				"new_text",
-			]);
+		// `as hex`, `byte b`, `as binary`: values shown in hex or binary (cards hex-printing, binary-int)
+		Node::Symbol(name) if let Some(radix) = crate::wasm_emitter::radix::shown_radix(name) => {
+			ctx.required_functions
+				.extend([radix.as_function, radix.text_function, "list_join", "new_text"]);
 		}
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {

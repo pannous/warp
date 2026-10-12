@@ -61,9 +61,9 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 		// `x = 255 as hex`, `x = 255 as byte`: x shows in hex too (card hex-printing), without the byte's range
 		Kind::Int
 			if let Node::Key(_, Op::As, target) = value.drop_meta()
-				&& crate::wasm_emitter::hex::shows_in_hex(&target.name()) =>
+				&& let Some(radix) = crate::wasm_emitter::radix::shown_radix(&target.name()) =>
 		{
-			Some(crate::wasm_emitter::hex::HEX_WORD.to_string())
+			Some(radix.word.to_string())
 		}
 		_ => None,
 	};
@@ -693,6 +693,8 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 		None if super::user_functions::names_empty_type(type_node) => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
+		// `number` keeps whatever number it is given, an exact 1/3 or a float (card number-keeps-exact)
+		None if crate::type_tests::holds_any_number(type_name) => Some(Kind::Empty),
 		None => builtin_type_kind(type_name),
 	}
 }

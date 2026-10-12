@@ -1198,7 +1198,7 @@ PASSED:
   ✓ functions::test_it_arguments::an_it_argument_of_an_iteration_word_is_a_function
   ✓ functions::test_it_arguments::an_it_argument_reads_the_variables_around_it
   ✓ functions::test_it_arguments::the_it_of_the_argument_is_not_the_parameter_of_the_function_around_it
-  ✓ functions::test_kebab_members::a_missing_kebab_field_subtracts_the_variable
+  ✓ functions::test_kebab_members::a_missing_kebab_field_is_an_error_offering_the_subtraction
   ✓ functions::test_kebab_members::an_existing_kebab_field_is_read
   ✓ functions::test_lambda_global::a_lambda_with_global_changes_mains_variable
   ✓ functions::test_lambda_spaced_body::a_lambda_body_may_be_a_spaced_call
@@ -1670,6 +1670,8 @@ PASSED:
   ✓ lists::test_list_compound_add::a_list_plus_equals_a_list_concatenates
   ✓ lists::test_list_compound_add::a_list_plus_equals_an_item_is_the_type_error_of_plus
   ✓ lists::test_list_identity::a_list_is_identical_to_itself_in_every_name
+  ✓ lists::test_list_literal_sign::a_glued_sign_starts_the_next_item_after_anything
+  ✓ lists::test_list_literal_sign::spaced_and_glued_operators_still_subtract
   ✓ lists::test_list_methods::a_list_module_word_is_a_method_without_use
   ✓ lists::test_list_methods::text_and_map_module_words_are_methods_too
   ✓ lists::test_list_number_comparison::a_list_is_not_equal_to_a_number
@@ -2578,6 +2580,7 @@ PASSED:
   ✓ operators::test_approximately::a_bool_is_approximately_any_value_of_its_truthiness
   ✓ operators::test_approximately::instances_are_approximately_equal_field_by_field
   ✓ operators::test_approximately::lists_and_objects_are_approximately_equal_element_by_element
+  ✓ operators::test_approximately::numbers_near_zero_are_approximately_zero
   ✓ operators::test_approximately::texts_are_approximately_equal_in_any_case_and_accent
   ✓ operators::test_bar_pipe::a_bar_after_a_braceless_call_pipes_its_result
   ✓ operators::test_bar_pipe::a_bar_before_a_function_pipes_the_value_into_it
@@ -2596,7 +2599,7 @@ PASSED:
   ✓ operators::test_floor_quotient::floor_of_an_exact_number_beyond_f64
   ✓ operators::test_floor_quotient::the_dividend_is_evaluated_once
   ✓ operators::test_in_position::a_found_first_element_is_truthy
-  ✓ operators::test_in_position::in_gives_the_one_based_position
+  ✓ operators::test_in_position::in_gives_yes_or_no
   ✓ operators::test_in_position::maps_and_has_keep_their_truth_value
   ✓ operators::test_in_position::the_position_never_warns
   ✓ operators::test_increment_places::a_field_of_an_element_changes
@@ -3462,6 +3465,9 @@ PASSED:
   ✓ types::test_as_number_variable::a_text_known_at_run_time_casts_to_its_number
   ✓ types::test_as_number_variable::a_variable_holds_the_cast_number
   ✓ types::test_be_definitions::test_be_defines_with_a_type
+  ✓ types::test_binary_int::binary_acts_as_its_int
+  ✓ types::test_binary_int::binary_literals_read_as_ints
+  ✓ types::test_binary_int::binary_shows_as_binary
   ✓ types::test_block_data_paths::test_a_sibling_path_inside_a_block
   ✓ types::test_block_data_paths::test_the_top_level_form_still_reads_it
   ✓ types::test_bool_assign::a_bool_parameter_refuses_other_ints
@@ -3712,6 +3718,10 @@ PASSED:
   ✓ types::test_float_fields::test_float_conditionals
   ✓ types::test_float_fields::test_global_from_a_call
   ✓ types::test_float_fields::test_zero_argument_call_in_float_context
+  ✓ types::test_floats_add_exact::a_concatenated_ratio_converts
+  ✓ types::test_floats_add_exact::a_floats_field_converts_an_added_ratio
+  ✓ types::test_floats_add_exact::a_numbers_list_keeps_an_added_ratio
+  ✓ types::test_floats_add_exact::an_added_ratio_converts
   ✓ types::test_fraction_text::a_fraction_text_as_number_is_exact
   ✓ types::test_fraction_text::a_text_that_spells_no_number_fails_as_number
   ✓ types::test_generic_classes::a_generic_class_holds_any_value
@@ -3792,6 +3802,9 @@ PASSED:
   ✓ types::test_number_converts::a_floats_list_converts_its_ratios
   ✓ types::test_number_field::a_number_field_holds_a_float
   ✓ types::test_number_field::a_whole_text_as_number_is_a_number
+  ✓ types::test_number_keeps_exact::a_float_variable_still_converts
+  ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_float
+  ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_ratio
   ✓ types::test_optional_casts::a_function_of_empty_returns_empty
   ✓ types::test_optional_casts::a_javascript_null_is_empty
   ✓ types::test_optional_casts::an_optional_cast_keeps_empty
@@ -4473,6 +4486,7 @@ PASSED:
   ✓ web::test_server_rpc_stub::an_uncalled_server_function_stays_out_of_the_page
   ✓ web::test_site_animation::an_endless_animation_builds
   ✓ web::test_site_animation::an_endless_sleeping_loop_builds
+  ✓ web::test_site_failure::a_site_that_does_not_compile_says_why
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
@@ -4499,6 +4513,9 @@ PASSED:
   ✓ web::test_tag_lists::a_tag_over_all_items_of_a_list
   ✓ web::test_task_voices::a_task_starts_where_its_starter_stands
   ✓ web::test_task_voices::the_starter_does_not_queue_behind_its_task
+  ✓ web::test_text_holes::a_computed_text_between_children_is_a_text_hole
+  ✓ web::test_text_holes::a_page_binds_each_text_hole
+  ✓ web::test_text_holes::an_element_whose_text_is_not_alone_stays_an_element_hole
   ✓ web::test_transitions::a_keyed_item_keeps_its_transition
   ✓ web::test_transitions::a_style_transition_is_css
   ✓ web::test_transitions::a_transition_ends_before_the_children
@@ -4629,6 +4646,7 @@ PASSED:
   ✓ welcoming::test_fixits::local_or_global_fixes
   ✓ welcoming::test_fixits::loop_it_fix
   ✓ welcoming::test_fixits::missing_closer_fixes
+  ✓ welcoming::test_fixits::missing_kebab_field_fix
   ✓ welcoming::test_fixits::misspelled_name_fixes
   ✓ welcoming::test_fixits::misspelled_parameter_and_type_fixes
   ✓ welcoming::test_fixits::operator_ambiguity_fixes
@@ -4970,4 +4988,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4965 passed, 0 failed, 4965 total tested
+10 ignored, 4983 passed, 0 failed, 4983 total tested

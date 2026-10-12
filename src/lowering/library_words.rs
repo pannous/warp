@@ -24,7 +24,7 @@ pub const MAP_VALUES: &str = "map_values";
 /// map_entries(xs): the `key:value` entries of a map as a list (a one-entry map `{a:1}` is the entry itself), else xs
 pub const MAP_ENTRIES: &str = "map_entries";
 pub const COLLECTION_CONTAINS: &str = "collection_contains";
-/// collection_position(xs, x): `x in xs`, the 1-based position of x in a list (0 when absent), 1/0 for a map key
+/// collection_position(xs, x): `xs.index_of(x)`, the 1-based position of x in a list (0 when absent), 1/0 for a map key
 pub const COLLECTION_POSITION: &str = "collection_position";
 pub const MAP_GET_OR: &str = "map_get_or";
 /// map_without(map, key): the map without the key's entry, what `m.remove(k)` stores in m (analyzer removed_key)
@@ -65,7 +65,7 @@ const SYNONYMS: [(&str, &[&str]); 29] = [
 	(MAP_ENTRIES, &[]),
 	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
 	(MAP_GET_OR, &["get"]),
-	// P35 default: `xs.index_of(x)` is the 1-based position, as `x in xs` (0 when absent)
+	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
 	("chars", &[]),
 	("upper", &["uppercase"]),
@@ -1254,7 +1254,8 @@ impl Lowering {
 		crate::diagnostic::ask(&question).map(|_| ())
 	}
 
-	/// `x in xs`: whether a map has the key x or a list the element x; `byte in t` and `"äb" in bytes` count text units
+	/// `x in xs`: yes/no whether a map has the key x or a list the element x (decision in-bool; its position is
+	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units
 	fn membership(&self, items: &[Node]) -> Option<Node> {
 		let [element, in_word, collection] = items else {
 			return None;
@@ -1267,7 +1268,7 @@ impl Lowering {
 			return None;
 		}
 		Some(self.call(
-			COLLECTION_POSITION,
+			COLLECTION_CONTAINS,
 			in_word,
 			vec![collection.clone(), element.clone()],
 			false,

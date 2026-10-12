@@ -1,7 +1,8 @@
 /-! Types of the core calculus W0 (notes/type_theory.md) and their order.
 
-`bool ≤ int ≤ exact ≤ number` is the chain of numbers (true/false act as 1/0; an exact number is a rational, as warp's
-`0.5` and `7/2` are; a number is a float, as `sqrt(2)` is), `never` is the bottom (the type of `error`
+`bool ≤ int ≤ exact ≤ number` and `int ≤ float ≤ number` order the numbers (true/false act as 1/0; an exact number is
+a rational, as warp's `0.5` and `7/2` are; a float an IEEE float, as `sqrt(2)` is; a number either, kept as it is given),
+`never` is the bottom (the type of `error`
 and of the elements of `[]`), `any` the top (a Node), and lists are covariant: warp lists are values. A function
 value (a lambda, `x => x*2`) takes anything (its parameter is unannotated) and is covariant in its result.
 A class type is its chain of ancestors, root first (`cls ["Shape", "Circle"]`): a subclass extends the chain, so
@@ -19,8 +20,10 @@ namespace Warp
 
 inductive Ty where
   | never | bool | int | number | text | unit
-  /-- a rational: `0.5`, `7/2`, `1/3` (warp's `rational`, the exact numbers); a float is a `number` -/
+  /-- a rational: `0.5`, `7/2`, `1/3` (warp's `rational`, the exact numbers) -/
   | exact
+  /-- a float: `sqrt(2)`, `0.5 as float`; neither above nor below `exact`, both are `number`s -/
+  | float
   /-- a one-character text (`"a"` parses as one): a text wherever a text is taken -/
   | codepoint
   | list (element : Ty)
@@ -74,9 +77,10 @@ def isOptional : Ty → Bool
   | _, any => true
   | cls p, cls q => decide (q <+: p)
   | ranged a b, ranged c d => decide (c ≤ a ∧ b ≤ d)
-  | ranged _ _, int | ranged _ _, exact | ranged _ _, number => true
+  | ranged _ _, int | ranged _ _, exact | ranged _ _, float | ranged _ _, number => true
   | quantity d, quantity e => d == e
   | bool, bool | bool, int | bool, exact | bool, number | int, int | int, exact | int, number => true
+  | bool, float | int, float | float, float | float, number => true
   | exact, exact | exact, number | number, number => true
   | text, text | codepoint, codepoint | codepoint, text => true
   | _, _ => false
@@ -111,6 +115,7 @@ def name : Ty → String
   | int => "int"
   | number => "number"
   | exact => "rational"
+  | float => "float"
   | text => "text"
   | codepoint => "codepoint"
   | unit => "empty"
@@ -167,6 +172,7 @@ def scalarJoin : Ty → Ty → Ty
   | cls p, cls q => cls (commonPrefix p q)
   | ranged a b, ranged c d => ranged (min a c) (max b d)
   | bool, ranged _ _ | ranged _ _, bool => int
+  | exact, float | float, exact => number
   | a, b => if sub a b then b else if sub b a then a else any
 
 /-- least upper bound: ø joins into an optional (`int | ø` is `int?`) -/
@@ -189,8 +195,11 @@ def element : Ty → Option Ty
   | list a => some a
   | _ => none
 
-/-- the result of `+`: an int when both operands are, exact when both are, otherwise a number (a float) -/
-def arith (a b : Ty) : Ty := if sub a int && sub b int then int else if sub a exact && sub b exact then exact else number
+/-- the result of `+`: an int when both operands are, exact when both are, a float when both are ints or floats,
+otherwise a number -/
+def arith (a b : Ty) : Ty :=
+  if sub a int && sub b int then int else if sub a exact && sub b exact then exact
+  else if sub a float && sub b float then float else number
 
 @[simp] theorem sub_never (t : Ty) : sub never t = true := rfl
 
@@ -267,7 +276,7 @@ theorem sub_refl : ∀ t : Ty, sub t t = true
   | cls p => by simp [sub, base, scalarSub]
   | ranged a b => by simp [sub, base, scalarSub]
   | quantity d => by simp [sub, base, scalarSub]
-  | never | bool | int | exact | number | text | codepoint | unit | any => rfl
+  | never | bool | int | exact | float | number | text | codepoint | unit | any => rfl
 
 theorem sub_base_left : ∀ {b c : Ty}, sub b c = true → sub (base b) c = true := by
   intro b; induction b with
@@ -514,6 +523,21 @@ def consub : Ty → Ty → Bool
   | list a, list b => consub a b
   | a, b => sub a b
 
+/-- below both `exact` and `float`: below `int` (the ints are the numbers that are both) -/
+theorem sub_int_of_exact_float {t : Ty} (e : sub t exact = true) (f : sub t float = true) : sub t int = true := by
+  cases t <;> simp_all [sub, base, scalarSub, admitsUnit]
+
+/-- an exact number given to a float place, which converts it (`x: float = 1/3` holds 0.333…) -/
+def convertsToFloat (v t : Ty) : Bool := t == float && v != never && sub v exact
+
+/-- what a place declared t takes, as warp's analyzer admits it: a value of a subtype, or an exact number a float
+place converts -/
+def admits (v t : Ty) : Bool := sub v t || convertsToFloat v t
+
+/-- P45 widening over the numbers a name is given: their join, but a float where a float meets an exact number, as
+warp makes such a name a float place and converts the exact values it is given -/
+def widenNumber (a b : Ty) : Ty := if a == float && sub b exact || sub a exact && b == float then float else join a b
+
 theorem arith_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
     sub (arith a' b') (arith a b) = true := by
   unfold arith
@@ -525,7 +549,19 @@ theorem arith_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true
   · simp at e
     simp only [sub_trans ha e.1, sub_trans hb e.2, Bool.and_self, ↓reduceIte, e.1, e.2]
     split <;> simp [sub]
-  · simp only [e, Bool.false_eq_true, ↓reduceIte]; (repeat' split) <;> simp [sub]
+  simp only [e, Bool.false_eq_true, ↓reduceIte]
+  by_cases f : (sub a float && sub b float) = true
+  · simp at f
+    have fa := sub_trans ha f.1
+    have fb := sub_trans hb f.2
+    simp only [fa, fb, Bool.and_self, ↓reduceIte, f.1, f.2]
+    split
+    · simp [sub]
+    · rename_i whole; split
+      · rename_i exact'; simp only [Bool.and_eq_true] at whole exact'
+        exact absurd ⟨sub_int_of_exact_float exact'.1 fa, sub_int_of_exact_float exact'.2 fb⟩ whole
+      · exact sub_refl _
+  · simp only [f, Bool.false_eq_true, ↓reduceIte]; (repeat' split) <;> simp [sub]
 
 theorem arith_sub_number (a b : Ty) : sub (arith a b) number = true := by
   unfold arith; (repeat' split) <;> simp [sub]

@@ -109,6 +109,8 @@ mod test_site;
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_animation; // card site-build
 #[cfg(feature = "native")] // builds a site natively
+mod test_site_failure; // the dev overlay's message
+#[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
 mod test_sleep_run_limit; // card sleep-run-limit
@@ -117,6 +119,7 @@ mod test_styles;
 mod test_tag_lists;
 mod test_task_files; // card task-sound-play
 mod test_task_voices; // card playground-go
+mod test_text_holes; // card web-fine-text-nodes
 mod test_transitions;
 mod test_typed_variable_not_markup; // card annotation-html
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build

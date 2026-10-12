@@ -445,6 +445,14 @@ const CORPUS: &[&str] = &[
 	"f(x: float) := x; f(1/3)",
 	"x: float = 1; x + 1/3",
 	"0.1 as float + 0.2",
+	// a number place keeps what it is given, exact or float (card number-keeps-exact); a name given a float and an
+	// exact number is a float place
+	"x: number = 1/3; x",
+	"x: number = 0.5 as float; x = 1/3; x",
+	"(1/3) as number",
+	"yes as number",
+	"x = 1/3; x = 0.5 as float; x",
+	"x = 1; x = 0.5 as float; x = 1/3; x",
 	// `xs#i = v` writes into the shared list: checked against its element type and its length when it runs
 	"xs = [1, 2]; xs#1 = 5; xs",
 	"xs = [1]; ys = xs; ys#1 = 7; xs",

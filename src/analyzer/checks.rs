@@ -1019,15 +1019,42 @@ pub fn resolve_data_scope(program: Node) -> Node {
 	subtract_kebab_variables(resolved, &variables)
 }
 
-/// P168 (user): `p.phone-number` of an object without that field, `number` a variable, is the subtraction
-/// `p.phone - number`; an object whose fields are unknown keeps the field read. Early, before member reads become indexes
+/// field-or-minus (user 2026-10-12, replaced P168's subtraction): `p.phone-number` of an object without that field,
+/// `number` a variable, is the error "p has no field phone-number" with the fix `p.phone - number`; an object whose
+/// fields are unknown keeps the field read. Early, before member reads become indexes
 pub fn lower_kebab_members(program: Node) -> Node {
 	let objects = literal_object_fields(&program);
 	if objects.is_empty() {
 		return program;
 	}
 	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
-	subtract_kebab_members(program, &variables, &objects)
+	let mut missing = None;
+	program.visit(&mut |node| {
+		if let Node::Key(receiver, Op::Dot, member) = node {
+			if missing.is_none() && is_missing_kebab_field(receiver, member, &variables, &objects) {
+				missing = Some(node.clone());
+			}
+		}
+	});
+	match missing {
+		Some(read) => missing_kebab_field(&read),
+		None => program,
+	}
+}
+
+/// "p has no field phone-number", offering the subtraction `p.phone - number`
+fn missing_kebab_field(read: &Node) -> Node {
+	let Node::Key(receiver, _, member) = read else {
+		unreachable!("lower_kebab_members finds member reads");
+	};
+	let (object, name) = (receiver.drop_meta().name(), member.drop_meta().name());
+	let subtraction = format!("{object}.{}", name.replace('-', " - "));
+	Diagnostic::at(
+		read,
+		format!("{object} has no field {name}: write `{subtraction}` to subtract"),
+	)
+	.offer("the subtraction", format!("{object}.{name}"), subtraction)
+	.into_error()
 }
 
 /// The fields of the variables assigned object literals (`p = {phone: 7}`), over every such assignment
@@ -1055,34 +1082,20 @@ fn literal_object_fields(program: &Node) -> HashMap<String, HashSet<String>> {
 	objects
 }
 
-fn subtract_kebab_members(node: Node, variables: &HashSet<String>, objects: &HashMap<String, HashSet<String>>) -> Node {
-	match node {
-		Node::Key(receiver, Op::Dot, member)
-			if let Some((field, rest)) = kebab_member(&receiver, &member, variables, objects) =>
-		{
-			let read = Node::Key(receiver, Op::Dot, Box::new(Node::Symbol(field)));
-			rest.into_iter().fold(read, |difference, term| {
-				Node::Key(Box::new(difference), Op::Sub, Box::new(Node::Symbol(term)))
-			})
-		}
-		other => other.map_children(|child| subtract_kebab_members(child, variables, objects)),
-	}
-}
-
-/// `p.a-b-c`: the field a and the variables b, c, when p's known fields lack `a-b-c`
-fn kebab_member(
+/// `p.a-b-c` where p's known fields lack `a-b-c` and b, c are variables: what reads like `p.a - b - c`
+fn is_missing_kebab_field(
 	receiver: &Node,
 	member: &Node,
 	variables: &HashSet<String>,
 	objects: &HashMap<String, HashSet<String>>,
-) -> Option<(String, Vec<String>)> {
+) -> bool {
 	let (Node::Symbol(object), Node::Symbol(name)) = (receiver.drop_meta(), member.drop_meta()) else {
-		return None;
+		return false;
 	};
-	let fields = objects.get(object)?;
-	let (field, rest) = name.split_once('-')?;
-	let rest: Vec<String> = rest.split('-').map(str::to_string).collect();
-	(!fields.contains(name) && rest.iter().all(|part| variables.contains(part))).then(|| (field.to_string(), rest))
+	let (Some(fields), Some((_, rest))) = (objects.get(object), name.split_once('-')) else {
+		return false;
+	};
+	!fields.contains(name) && rest.split('-').all(|part| variables.contains(part))
 }
 
 /// A hyphenated name that is no data key and whose parts are all variables is their difference: `a=5; b=1; a-b` is 4.

@@ -79,7 +79,7 @@ const EVENT_CLASS_SUFFIX: &str = "·event";
 /// Maps `{a:1}` (P200b: they share, like instances) are instances of one class `map` whose fields are every key the
 /// program writes, in a literal or with `m.key = v`; reading a key never written is W0's run-time "unset field"
 const MAP_CLASS: &str = "map";
-/// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
+/// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (yes when x has a first position from 1) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
 /// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
@@ -124,6 +124,7 @@ fn type_of_word(word: &str) -> Option<String> {
 				crate::analyzer::BOOL_TYPE => BOOL_TYPE,
 				"any" => ANY_TYPE,
 				exact if crate::type_tests::is_exact_fraction_type(exact) => EXACT_TYPE,
+				float if crate::type_tests::is_float_type_word(float) => ".float",
 				number if crate::type_tests::type_matches(number, "number") => ".number",
 				_ => return None,
 			}
@@ -575,6 +576,11 @@ fn late_binding(statements: &[&Node], globals: &[String]) -> Option<String> {
 		}
 	}
 	None
+}
+
+/// yes when e is truthy
+fn truthiness(lean: String) -> String {
+	format!(".ite ({lean}) (.bool true) (.bool false)")
 }
 
 /// `not e`: yes when e is falsy
@@ -1799,7 +1805,10 @@ impl Exporter {
 						_ => self.tally(list, None, false),
 					}
 				}
-				[item, in_word, list] if in_word.is_symbol(IN_KEYWORD) => self.tally(list, Some(item), true),
+				// decision in-bool: `x in xs` is yes when x has a position in xs
+				[item, in_word, list] if in_word.is_symbol(IN_KEYWORD) => {
+					Ok(truthiness(self.tally(list, Some(item), true)?))
+				}
 				[call, a, b]
 					if EXTREMA.iter().any(|word| call.is_symbol(word))
 						&& !self.functions.contains_key(&call.name()) =>
@@ -2124,7 +2133,8 @@ fn ask_each<T>(
 	Ok(answers)
 }
 
-/// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
+/// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.admits` (its
+/// `Ty.sub`, plus an exact number a float place converts), for
 /// every builtin type word W0 has a type for and every W0 scalar value type: "word ← value type: warp admits / W0 sub"
 pub fn admits_disagreements() -> Result<Vec<String>, String> {
 	let words = crate::type_tests::builtin_type_words()
@@ -2134,7 +2144,7 @@ pub fn admits_disagreements() -> Result<Vec<String>, String> {
 		.collect();
 	let requests = pairs
 		.iter()
-		.map(|(word, value, _)| format!("Ty.sub ({value}) ({})", type_of_word(word).expect("a W0 type word")))
+		.map(|(word, value, _)| format!("Ty.admits ({value}) ({})", type_of_word(word).expect("a W0 type word")))
 		.collect();
 	let answers: Vec<bool> = ask_each("admits", requests, "pairs", |line| line.parse().ok())?;
 	Ok(pairs
