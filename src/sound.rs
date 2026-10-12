@@ -171,6 +171,7 @@ fn watched(child: Player, player: &str, queued: &Queued, label: &str) {
 /// stop_sound: the queued sounds dropped, the playing sounds and music files stopped
 pub fn stop() {
 	STOPS.fetch_add(1, Ordering::Relaxed);
+	crate::sound_engine::stop(0);
 	killed(|_| true);
 }
 
@@ -182,6 +183,7 @@ pub fn stop_one(handle: usize) -> Result<(), String> {
 	if let Ok(mut stopped) = STOPPED.lock() {
 		stopped.push(handle);
 	}
+	crate::sound_engine::stop(handle);
 	killed(|playing| playing == handle);
 	Ok(())
 }
@@ -203,9 +205,10 @@ pub fn queued_seconds() -> f64 {
 	end.map_or(0.0, |end| end.saturating_duration_since(Instant::now()).as_secs_f64())
 }
 
-/// wait_sound, and the process's end: until the player thread played what is queued (headless nothing is)
+/// wait_sound, and the process's end: until the players and our output stream played what is queued (headless
+/// nothing is)
 pub fn wait() {
-	while PENDING.load(Ordering::Relaxed) > 0 {
+	while PENDING.load(Ordering::Relaxed) > 0 || crate::sound_engine::busy() {
 		std::thread::sleep(PLAYER_POLL);
 	}
 }
@@ -365,22 +368,28 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 		.ok_or_else(|| format!("{path} is not a sound file (wav, mp3, ogg, flac, aiff, m4a)"))
 }
 
-/// Write the samples as a WAV and queue it on the audio clock: played when the user may hear it, else say where it is
-pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<PathBuf, String> {
+/// Queue the samples on the audio clock: when the user may hear them in our own output stream (sound_engine.rs), else
+/// as a WAV for the system's player; headless the WAV only, its place said
+pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<(), String> {
 	let samples = pcm(samples);
 	let handle = next_handle();
-	let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
 	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
 	let (start, place) = scheduled(seconds);
+	let audible = crate::paint::shows_windows();
+	if audible && crate::sound_engine::play(handle, start, &samples, rate, channels) {
+		wait_at_exit();
+	} else {
+		let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
+		if audible {
+			queued(Queued { path, start, stops: STOPS.load(Ordering::Relaxed), handle });
+		} else {
+			eprintln!("sound {seconds:.2} s: {}", path.display());
+		}
+	}
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
 		unrendered.push(Unrendered { place, rate, channels, samples });
 	}
-	if crate::paint::shows_windows() {
-		queued(Queued { path: path.clone(), start, stops: STOPS.load(Ordering::Relaxed), handle });
-	} else {
-		eprintln!("sound {seconds:.2} s: {}", path.display());
-	}
-	Ok(path)
+	Ok(())
 }
 
 fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
