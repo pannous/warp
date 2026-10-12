@@ -272,6 +272,8 @@ PASSED:
   ✓ control::test_go_blocks::go_blocks_fill_a_job_list
   ✓ control::test_go_blocks::lines_printed_by_tasks_stay_whole
   ✓ control::test_go_blocks::sleep_takes_a_duration
+  ✓ control::test_go_heavy_map::a_go_map_of_a_heavy_kernel_takes_the_gpu_switch
+  ✓ control::test_go_heavy_map::a_small_go_map_of_a_heavy_kernel_is_exact_on_the_cpu
   ✓ control::test_go_statement::a_go_block_of_one_statement_runs_it
   ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
@@ -279,6 +281,7 @@ PASSED:
   ✓ control::test_handler_unwinding::a_block_that_ends_still_answers_inside
   ✓ control::test_handler_unwinding::an_error_caught_outside_the_block_leaves_its_handler
   ✓ control::test_handler_unwinding::another_events_abort_leaves_the_inner_handler
+  ✓ control::test_held_key::held_key_names_the_key_held_now
   ✓ control::test_help_word::a_programs_own_help_wins
   ✓ control::test_help_word::help_of_a_class_and_of_its_instance
   ✓ control::test_help_word::help_of_a_function_is_its_signature
@@ -495,7 +498,7 @@ PASSED:
   ✓ control::test_soft_tests::under_test_the_value_is_the_summary
   ✓ control::test_soft_tests::warp_test_prints_the_failures_and_exits_nonzero
   ✓ control::test_split_kernel::a_go_map_of_a_float_kernel_splits_on_the_host
-  ✓ control::test_split_kernel::a_go_map_of_another_function_still_starts_tasks
+  ✓ control::test_split_kernel::a_go_map_of_a_user_call_still_starts_tasks
   ✓ control::test_split_kernel::a_small_go_map_of_a_float_kernel_maps_on_one_thread
   ✓ control::test_storage::a_program_variable_named_database_stays_its_own
   ✓ control::test_storage::a_program_variable_named_local_or_session_stays_its_own
@@ -883,6 +886,8 @@ PASSED:
   ✓ ffi::test_foreign_python::test_python_calls_and_reads
   ✓ ffi::test_foreign_python::test_python_values_cross_exactly
   ✓ ffi::test_foreign_python::test_untrusted_code_gets_no_python
+  ✓ ffi::test_foreign_type_tests::test_python_bool_stays_bool
+  ✓ ffi::test_foreign_type_tests::test_type_test_of_a_python_result
   ✓ ffi::test_glibc_math_header::a_glibc_style_math_header_declares_libm
   ✓ ffi::test_glibc_math_header::glibc_math_macros_expand_to_double_declarations
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
@@ -1441,6 +1446,10 @@ PASSED:
   ✓ functions::test_round8_call_forms::php_array_functions
   ✓ functions::test_round8_call_forms::ruby_symbol_blocks_methods_and_block_sums
   ✓ functions::test_rounding_builtins::rounding_words_stay_ints_when_libm_is_used
+  ✓ functions::test_runtime_function_equality::a_function_value_equals_itself
+  ✓ functions::test_runtime_function_equality::closures_compare_their_captured_values
+  ✓ functions::test_runtime_function_equality::different_definitions_are_different_functions
+  ✓ functions::test_runtime_function_equality::equal_definitions_are_equal_functions
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -3470,6 +3479,8 @@ PASSED:
   ✓ types::test_any_into_annotated_types::values_of_the_annotated_type_pass
   ✓ types::test_any_into_annotated::any_into_an_annotated_int_is_checked_at_run_time
   ✓ types::test_any_into_annotated::unannotated_places_stay_lax
+  ✓ types::test_any_place::any_keeps_a_bool
+  ✓ types::test_any_place::any_takes_a_value_of_another_kind
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
   ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
   ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
@@ -3837,6 +3848,7 @@ PASSED:
   ✓ types::test_param_named_like_global::a_parameter_named_like_an_instance_variable_compares_as_its_own_value
   ✓ types::test_parameter_text::a_typed_parameter_prints_by_its_text_method
   ✓ types::test_parameter_text::a_typed_parameter_types_only_its_own_function
+  ✓ types::test_passed_list_identity::test_list_through_a_function_is_the_same
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
@@ -3870,6 +3882,8 @@ PASSED:
   ✓ types::test_returned_instances::a_parameter_shadows_an_instance_variable
   ✓ types::test_returned_instances::an_instance_returned_by_a_function_takes_its_class_operators
   ✓ types::test_returned_instances::an_operation_of_instances_is_an_instance_too
+  ✓ types::test_returned_list_alias::test_change_through_a_returned_list
+  ✓ types::test_returned_list_alias::test_fresh_result_stays_apart
   ✓ types::test_runtime_text_ratio::a_run_time_ratio_of_no_integers_fails
   ✓ types::test_runtime_text_ratio::a_run_time_ratio_text_is_exact
   ✓ types::test_same_identity::an_alias_is_the_same_object
@@ -3901,6 +3915,8 @@ PASSED:
   ✓ types::test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
   ✓ types::test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
   ✓ types::test_spaced_construction::test_spaced_construction_of_a_declared_type
+  ✓ types::test_static_result::test_fitting_constant_call_compiles
+  ✓ types::test_static_result::test_misfit_constant_call_is_refused
   ✓ types::test_struct_field_of_constructor::a_field_in_arithmetic
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructed_struct_variable
   ✓ types::test_struct_field_of_constructor::a_field_of_a_constructor_call
@@ -4110,9 +4126,12 @@ PASSED:
   ✓ types::test_unknown_conversion::fixed_width_casts
   ✓ types::test_unknown_conversion::known_as_words_still_convert
   ✓ types::test_unknown_conversion::u8_and_uint8_are_byte
+  ✓ types::test_unknown_type::an_unknown_variable_type_warns
+  ✓ types::test_unknown_type::known_variable_types_stay_accepted
   ✓ types::test_upcast_fields::a_cast_or_a_match_reads_it
   ✓ types::test_upcast_fields::a_subclass_field_through_the_declared_parent_is_an_error
   ✓ types::test_upcast_fields::unannotated_code_reads_it_at_run_time
+  ✓ types::test_user_counting_word::test_user_size_changes_the_callers_map
   ✓ types::test_value_constructor::a_value_block_runs_at_every_construction
   ✓ types::test_value_constructor::a_value_constructor_takes_parameters
   ✓ types::test_variant_payloads::a_payload_free_variant_is_its_symbol_and_of_its_type
@@ -4430,6 +4449,11 @@ PASSED:
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
   ✓ web::test_markup_lines::a_line_of_attributes_renders_as_attributes
   ✓ web::test_markup_lines::an_aria_attribute_renders
+  ✓ web::test_markup_mistakes::an_unknown_attribute_warns
+  ✓ web::test_markup_mistakes::an_unknown_event_warns
+  ✓ web::test_markup_mistakes::an_unknown_input_type_warns
+  ✓ web::test_markup_mistakes::content_of_a_void_element_warns
+  ✓ web::test_markup_mistakes::right_markup_stays_quiet
   ✓ web::test_markup_renderer::a_style_sheet_inside_a_scoped_element_styles_only_its_elements
   ✓ web::test_markup_renderer::an_element_of_a_loop_keeps_its_attributes_beside_a_condition
   ✓ web::test_markup_renderer::the_renderer_keeps_its_locals_apart_from_the_programs_variables
@@ -4486,6 +4510,10 @@ PASSED:
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
   ✓ web::test_sandboxed_programs::a_sandboxed_program_calls_no_c_and_no_other_runtime
   ✓ web::test_sandboxed_programs::a_sandboxed_program_keeps_the_host_words
+  ✓ web::test_select_options::a_list_after_the_bound_variable_is_no_part_of_it
+  ✓ web::test_select_options::a_list_gives_the_options
+  ✓ web::test_select_options::a_map_gives_values_and_labels
+  ✓ web::test_select_options::a_variable_list_gives_the_options
   ✓ web::test_serve_error_body::a_failing_route_answers_its_message
   ✓ web::test_serve_opens_page::a_listening_server_hands_its_address_over_once
   ✓ web::test_served_forms::a_failing_route_answers_its_failure
@@ -5021,4 +5049,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5016 passed, 0 failed, 5016 total tested
+10 ignored, 5044 passed, 0 failed, 5044 total tested
