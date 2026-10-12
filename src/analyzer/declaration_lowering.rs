@@ -548,8 +548,11 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 }
 
 /// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
-/// nested applications chain: `list of list of int`
+/// nested applications chain: `list of list of int`. `x: maybe int = 1` (the items `x:maybe`, `int=1`) is `x:int? = 1`
 pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	if let Some(declaration) = maybe_type_declaration(items, bracket, separator) {
+		return Some(declaration);
+	}
 	let [declaration, of, ..] = items else { return None };
 	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else {
 		return None;
@@ -596,6 +599,41 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 	}
 }
 
+/// `x: maybe int = 1`, `x: maybe int`: the optional type `int?`
+fn maybe_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	let [declaration, typed, rest @ ..] = items else {
+		return None;
+	};
+	let Node::Key(name, Op::Colon, maybe) = declaration.drop_meta() else {
+		return None;
+	};
+	if !maybe.is_symbol(MAYBE_WORD) {
+		return None;
+	}
+	let optional = |word: &Node| match word.drop_meta() {
+		Node::Symbol(word) => Some(Node::Key(
+			name.clone(),
+			Op::Colon,
+			Box::new(Node::Symbol(format!("{word}?"))),
+		)),
+		_ => None,
+	};
+	let declared = match typed.drop_meta() {
+		Node::Key(word, op, value) if matches!(op, Op::Assign | Op::Define) => {
+			Node::Key(Box::new(optional(word)?), *op, value.clone())
+		}
+		word => optional(word)?,
+	};
+	Some(match rest {
+		[] => declared,
+		rest => Node::List(
+			[vec![declared], rest.to_vec()].concat(),
+			bracket.clone(),
+			separator.clone(),
+		),
+	})
+}
+
 /// `{a:1 b:2}(key)`: applying an object to a key looks it up, like `{a:1 b:2}[key]`
 pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 	let [object, argument] = items else { return None };
@@ -608,6 +646,8 @@ pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 		_ => None,
 	}
 }
+
+const MAYBE_WORD: &str = "maybe";
 
 /// Methods that append one element: `x.add(v)` is `x += [v]`, in place
 const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
