@@ -1,190 +1,192 @@
-mod test_block_assigns_outer;
-mod test_blocks;
-mod test_condition_block;
-mod test_control_words;
-mod test_do_block;
-mod test_on_error_of_function;
-mod test_empty_block_binding;
-mod test_empty_block;
-mod test_for_loop;
-mod test_for_forms; // cards print-comma, forms-space, chain-block
-mod test_help_word;
-mod test_for_over_a_number;
-mod test_mixed_range_bounds;
-mod test_if_call_condition;
-mod test_if_value_kind;
-mod test_if_then_assign;
-mod test_if_empty_branch;
-mod test_iteration_words;
-mod test_loop_forms;
-mod test_loops_in_functions;
-mod test_not_condition_block;
-mod test_error_branch_kind;
-mod test_error_value_return;
-mod test_filter_loops;
-mod test_type_word_filter_loops;
-mod test_structural_patterns;
-mod test_switch_match;
-mod test_match_guards_and_finally;
-mod test_relational_arms;
-mod test_block_parameters;
-mod test_block_parameter_calls; // card repeats-loop
-mod test_charged_fields;
-mod test_object_blocks;
-mod test_object_functions;
-mod test_uncharged_blocks;
-mod test_unwrap;
-mod test_unwrap_message;
-mod test_switch_no_case_value;
-mod test_switch_value;
-mod test_task_dir;
-mod test_times_count_once;
-mod test_top_level_block;
-mod test_trap_messages;
-mod test_try_else;
-mod test_try_finally;
-mod test_try_exits_and_naming;
-mod test_try_deep;
-mod test_while_paren_condition;
-mod test_while_value;
-mod test_text_loop_value;
-mod test_loop_value_at_run_time;
-mod test_loop_if_value;
-mod test_try_else_value;
-mod test_block_statements;
-mod test_try_named_traps;
-mod test_tasks;
-mod test_branch_assigned_variables;
-mod test_try_index_and_float;
-mod test_for_implicit_it;
-mod test_for_unit_words;
-mod test_each_colon;
-mod test_event_signals; mod test_event_footguns;
-mod test_channels;
-#[cfg(feature = "native")] // a WebSocket server on a local port
-mod test_web_sockets;
-mod test_page_events;
-mod test_system_signals;
-mod test_system_values;
-mod test_empty_bodies;
-mod test_colon_handlers;
-mod test_clipboard;
-mod test_reactive_ports;
-mod test_when_signals;
-mod test_unhandled_emits;
-mod test_variable_signals;
-mod test_welcome_forms;
-mod test_loop_value;
-mod test_threads;
-mod test_task_values;
-mod test_task_exact;
-mod test_many_tasks;
-mod test_task_pool;
-mod test_for_it;
-mod test_task_closures;
+mod test_aborting_handlers;
+mod test_after;
+mod test_all_with_condition;
 mod test_async_ports;
+mod test_atomic_arrays;
+mod test_await_any_values;
 mod test_await_any_variables;
 mod test_await_go;
-mod test_signal_in_loop;
-mod test_shared_arrays;
+mod test_bare_try; // card failed-raised
+mod test_block_assigns_outer;
+mod test_block_parameter_calls; // card repeats-loop
+mod test_block_parameters;
+mod test_block_statements;
+mod test_blocks;
+mod test_braceless_call_in_branch;
 mod test_braceless_output_calls;
-mod test_try_division;
-mod test_try_list_index;
-mod test_try_braceless_call;
-mod test_raise;
-mod test_try_catch_except;
-mod test_atomic_arrays;
-mod test_task_list_literal;
-mod test_job_lists;
-mod test_word_statements; // card error-beep
-mod test_go_statement; // card go-play
-mod test_glued_block_words; // card glued-loop
-mod test_try_stack_overflow;
-mod test_try_host_failure; // card try-catch
-mod test_run_time_blocks;
-mod test_run_time_block_cache;
-mod test_catch_binding;
-mod test_filter_loop_over_variable;
-mod test_all_with_condition;
-mod test_go_blocks;
-mod test_task_globals; // card error-undefined
-mod test_shared_values;
-mod test_after;
-mod test_parallel_map;
-mod test_parallel_let; // card lower-parallel
-mod test_implicit_await;
-mod test_task_parameter_shadows;
-mod test_task_name_scope;
-mod test_task_signals;
-mod test_empty_reset_in_if;
-mod test_signal_values;
-mod test_stored_signals;
-mod test_stored_default; // card stored-visits
-mod test_storage;
-mod test_store_values;
-mod test_undo_history;
-mod test_scoped_handlers;
-mod test_shared_signals;
-mod test_signal_reflection;
+mod test_branch_assigned_variables;
 mod test_broadcast;
-mod test_named_broadcast;
-mod test_signal_lists;
+mod test_catch_binding;
+mod test_cell_truth;
+mod test_channels;
+mod test_charged_fields;
+mod test_check_assert;
+mod test_clipboard;
+mod test_colon_handlers;
+mod test_condition_block;
+mod test_constant_listener;
+mod test_control_words;
 mod test_ctrl_c_rule;
 mod test_daily_timer;
-mod test_time_of_day;
-mod test_exit_signal;
-mod test_listener_removal;
-mod test_listener_removal_in_functions;
-mod test_cell_truth;
-mod test_braceless_call_in_branch;
-mod test_event_handler_lists;
-mod test_for_underscore;
-mod test_await_any_values;
-mod test_constant_listener;
-mod test_task_bools;
-mod test_error_values;
-mod test_emit_operands;
-mod test_handler_globals;
-mod test_aborting_handlers;
-mod test_check_assert;
-mod test_soft_tests;
-mod test_reflection_words; // card reflection
-mod test_function_dir; // card dir-function
-mod test_function_body; // card g_X_3s
-mod test_data_string; // card data-string
-mod test_multiline_errors;
-mod test_run_tests; // card run-tests
 mod test_data_quoting; // card data-quoting
-mod test_database_tables; // card orm
+mod test_data_string; // card data-string
+mod test_database_bool_column; // card todo-app
+mod test_database_busy; // card orm-sample-lock
+mod test_database_dangling_key; // card orm-dangling
 mod test_database_field_named; // card orm-size-field
 mod test_database_filters; // card orm-filters
-mod test_database_relations; // card orm, step 4
-mod test_database_nested_add; // card orm-nested
-mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
 #[cfg(feature = "native")] // its one test counts native database queries: not in the browser build
 mod test_database_members_query; // card orm, one-to-many as a query
+mod test_database_nested_add; // card orm-nested
 mod test_database_optional; // card orm-optional
 mod test_database_optional_units; // card unit-field
-mod test_database_units_everywhere; // card browser-unit
+mod test_database_relations; // card orm, step 4
 mod test_database_short_names; // card orm-one-letter-column
+mod test_database_tables; // card orm
+mod test_database_units_everywhere; // card browser-unit
+mod test_do_block;
+mod test_each_colon;
+mod test_emit_operands;
+mod test_empty_block;
+mod test_empty_block_binding;
+mod test_empty_bodies;
+mod test_empty_reset_in_if;
+mod test_error_branch_kind;
+mod test_error_value_return;
+mod test_error_values;
+mod test_event_footguns;
+mod test_event_handler_lists;
+mod test_event_signals;
+mod test_exit_signal;
+mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
+mod test_filter_loop_over_variable;
+mod test_filter_loops;
+mod test_for_forms; // cards print-comma, forms-space, chain-block
+mod test_for_implicit_it;
+mod test_for_it;
+mod test_for_loop;
+mod test_for_over_a_number;
+mod test_for_underscore;
+mod test_for_unit_words;
+mod test_function_body; // card g_X_3s
+mod test_function_dir; // card dir-function
+mod test_glued_block_words; // card glued-loop
+mod test_go_blocks;
+mod test_go_statement; // card go-play
+mod test_handler_globals;
+mod test_help_word;
+mod test_if_call_condition;
+mod test_if_empty_branch;
+mod test_if_instance_branches; // card if-instance-branch
+mod test_if_then_assign;
+mod test_if_value_kind;
+mod test_implicit_await;
+mod test_iteration_words;
+mod test_job_lists;
+mod test_list_without; // people without team (card people-where)
+mod test_listener_removal;
+mod test_listener_removal_in_functions;
+mod test_loop_forms;
+mod test_loop_if_value;
+mod test_loop_value;
+mod test_loop_value_at_run_time;
+mod test_loops_in_functions;
+mod test_many_tasks;
+mod test_match_guards_and_finally;
+mod test_mixed_range_bounds;
+mod test_multiline_errors;
+mod test_named_broadcast;
+mod test_not_condition_block;
+mod test_object_blocks;
+mod test_object_functions;
+mod test_on_error_of_function;
+mod test_page_events;
+mod test_parallel_let; // card lower-parallel
+mod test_parallel_map;
 mod test_print_empty; // card print-error
 mod test_print_empty_map;
-mod test_database_bool_column; // card todo-app
-mod test_try_else_print; // card try-print
-mod test_database_busy; // card orm-sample-lock
-mod test_if_instance_branches; // card if-instance-branch
-mod test_table_remove; // card table-remove
-mod test_table_key_filter; // card table-key-filter
-mod test_table_transactions; // card orm step 5
-mod test_table_query_loading; // orm: a filter reads only its rows
+mod test_raise;
+mod test_reactive_ports;
+mod test_reflection_words; // card reflection
+mod test_relational_arms;
+mod test_rest_patterns;
+mod test_run_tests; // card run-tests
+mod test_run_time_block_cache;
+mod test_run_time_blocks;
+mod test_scoped_handlers;
+mod test_shared_arrays;
+mod test_shared_signals;
+mod test_shared_values;
+mod test_signal_in_loop;
+mod test_signal_lists;
+mod test_signal_reflection;
+mod test_signal_values;
+mod test_soft_tests;
+mod test_storage;
+mod test_store_values;
+mod test_stored_default; // card stored-visits
+mod test_stored_signals;
+mod test_structural_patterns;
+mod test_switch_match;
+mod test_switch_no_case_value;
+mod test_switch_value;
+mod test_system_signals;
+mod test_system_values;
 #[cfg(feature = "native")] // its one test counts the table rows read natively: not in the browser build
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
-mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
-mod test_list_without; // people without team (card people-where)
+mod test_table_element_writes; // orm: people#1.age = 5 writes through
+mod test_table_key_filter; // card table-key-filter
 mod test_table_linear_lookups; // card orm-linear
 mod test_table_method_reads;
-mod test_table_element_writes; // orm: people#1.age = 5 writes through
-mod test_unit_tasks; // card units-tasks
+mod test_table_query_loading; // orm: a filter reads only its rows
+mod test_table_remove; // card table-remove
+mod test_table_transactions; // card orm step 5
+mod test_task_bools;
 mod test_task_char; // card task-char
-mod test_bare_try; // card failed-raised
+mod test_task_closures;
+mod test_task_dir;
+mod test_task_exact;
+mod test_task_globals; // card error-undefined
+mod test_task_list_literal;
+mod test_task_name_scope;
+mod test_task_parameter_shadows;
+mod test_task_pool;
+mod test_task_signals;
+mod test_task_values;
+mod test_tasks;
+mod test_text_loop_value;
+mod test_threads;
+mod test_time_of_day;
+mod test_times_count_once;
+mod test_top_level_block;
+mod test_trap_messages;
+mod test_try_braceless_call;
+mod test_try_catch_except;
+mod test_try_deep;
+mod test_try_division;
+mod test_try_else;
+mod test_try_else_print; // card try-print
+mod test_try_else_value;
+mod test_try_exits_and_naming;
+mod test_try_finally;
+mod test_try_host_failure; // card try-catch
+mod test_try_index_and_float;
+mod test_try_list_index;
+mod test_try_named_traps;
+mod test_try_stack_overflow;
+mod test_type_word_filter_loops;
+mod test_uncharged_blocks;
+mod test_undo_history;
+mod test_unhandled_emits;
+mod test_unit_tasks; // card units-tasks
+mod test_unwrap;
+mod test_unwrap_message;
+mod test_variable_signals;
+#[cfg(feature = "native")] // a WebSocket server on a local port
+mod test_web_sockets;
+mod test_welcome_forms;
+mod test_when_signals;
+mod test_while_paren_condition;
+mod test_while_value;
+mod test_word_statements; // card error-beep // card rest-patterns

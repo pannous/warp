@@ -1,7 +1,7 @@
-use warp::{block, float, int, key, list, parens, symbol, text, Node};
-use warp::wasm_emitter::WasmGcEmitter;
 use warp::warp_parser::WarpParser;
+use warp::wasm_emitter::WasmGcEmitter;
 use warp::write_wasm;
+use warp::{block, float, int, key, list, parens, symbol, text, Node};
 
 /// Comprehensive test covering all Node types and their WASM encoding
 #[test]
@@ -150,9 +150,7 @@ fn test_kitchensink_complex_tree() {
 
 	// Verify with wasm-tools
 	use std::process::Command;
-	let output = Command::new("wasm-tools")
-		.args(["print", filename])
-		.output();
+	let output = Command::new("wasm-tools").args(["print", filename]).output();
 
 	if let Ok(result) = output {
 		let wat = String::from_utf8_lossy(&result.stdout);
@@ -164,18 +162,9 @@ fn test_kitchensink_complex_tree() {
 		}
 
 		// Verify specific strings are present
-		assert!(
-			wat.contains("hello"),
-			"String 'hello' not found in data section"
-		);
-		assert!(
-			wat.contains("world"),
-			"String 'world' not found in data section"
-		);
-		assert!(
-			wat.contains("key"),
-			"String 'key' not found in data section"
-		);
+		assert!(wat.contains("hello"), "String 'hello' not found in data section");
+		assert!(wat.contains("world"), "String 'world' not found in data section");
+		assert!(wat.contains("key"), "String 'key' not found in data section");
 		println!("\n✅ All expected strings found in data section");
 	}
 }
@@ -208,10 +197,7 @@ fn test_kitchensink_wasmtime_execution() {
 		// Note: Actually running the WASM module would require proper host function setup
 		// and GC support which is complex. For now, we verify the file is valid.
 		println!("✓ WASM module generated successfully for wasmtime");
-		println!(
-			"  To run manually: wasmtime run --wasm-features=gc {}",
-			filename
-		);
+		println!("  To run manually: wasmtime run --wasm-features=gc {}", filename);
 	} else {
 		println!("⚠ Wasmtime not found, skipping execution test");
 	}

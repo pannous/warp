@@ -6,15 +6,14 @@ use crate::node::Node;
 pub struct Local {
 	pub name: String,
 	pub type_node: Option<Box<Node>>,  // Type as Node (Symbol or complex type)
-	pub declared: bool,                 // type_node written in the source (`names: texts`), not inferred
-	pub position: u32,                  // WASM local index
-	pub is_param: bool,                 // Parameter vs local variable
-	pub kind: crate::type_kinds::Kind,  // Value kind (Int, Float, Text, etc.)
-	pub data_pointer: u32,              // Linear memory offset for reference data
-	pub data_length: u32,               // Length of data in memory (for strings)
-	pub may_be_ratio: bool,             // an exact number given a value that may be a fraction (`l = -0.45`, `y = n/12`)
+	pub declared: bool,                // type_node written in the source (`names: texts`), not inferred
+	pub position: u32,                 // WASM local index
+	pub is_param: bool,                // Parameter vs local variable
+	pub kind: crate::type_kinds::Kind, // Value kind (Int, Float, Text, etc.)
+	pub data_pointer: u32,             // Linear memory offset for reference data
+	pub data_length: u32,              // Length of data in memory (for strings)
+	pub may_be_ratio: bool,            // an exact number given a value that may be a fraction (`l = -0.45`, `y = n/12`)
 }
-
 
 impl Local {
 	pub fn new(position: u32, name: impl Into<String>, kind: crate::type_kinds::Kind) -> Self {
@@ -32,7 +31,10 @@ impl Local {
 	}
 
 	pub fn param(position: u32, name: impl Into<String>, kind: crate::type_kinds::Kind) -> Self {
-		Local { is_param: true, ..Local::new(position, name, kind) }
+		Local {
+			is_param: true,
+			..Local::new(position, name, kind)
+		}
 	}
 }
 

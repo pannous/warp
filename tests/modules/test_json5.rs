@@ -10,8 +10,14 @@ fn json_of_a_text_parses_it() {
 
 #[test]
 fn json_parse_reads_json5() {
-	is!("use json; x = json.parse(\"{'a': 1, // note\n b: [2, 3,], /* more */ }\"); x.b", warp::warp_parser::parse("[2 3]"));
-	is!("use json; json.parse(\"{'quote': 'say \\\"hi\\\"'}\").quote", "say \"hi\"");
+	is!(
+		"use json; x = json.parse(\"{'a': 1, // note\n b: [2, 3,], /* more */ }\"); x.b",
+		warp::warp_parser::parse("[2 3]")
+	);
+	is!(
+		"use json; json.parse(\"{'quote': 'say \\\"hi\\\"'}\").quote",
+		"say \"hi\""
+	);
 	is!("use json; json.parse(\"{'a': 'it\\\\'s'}\").a", "it's");
 }
 

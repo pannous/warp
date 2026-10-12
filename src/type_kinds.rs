@@ -1,7 +1,7 @@
-use wasm_encoder::{AbstractHeapType, HeapType, RefType, ValType};
-use wasm_encoder::ValType::Ref;
 use crate::type_kinds;
 use crate::wasm_emitter::WasmGcEmitter;
+use wasm_encoder::ValType::Ref;
+use wasm_encoder::{AbstractHeapType, HeapType, RefType, ValType};
 
 /// A node's kind field holds the `Kind` in its low KIND_BITS bits and extra info above them:
 /// the bracket of a list (Curly=0, Square=1, Round=2 …) or the operator of a key
@@ -25,12 +25,18 @@ pub const BOOL_MASK_BIT: i64 = 62;
 pub const ELEMENT_MARK_SHIFT: i64 = 16;
 /// A mark holds the kind mask's bits of every Kind, room for new kinds included, then the bool bit
 const MARK_KIND_BITS: i64 = 24;
-const _: () = assert!((Kind::Function as i64) < MARK_KIND_BITS, "every Kind has its bit in the element mark");
+const _: () = assert!(
+	(Kind::Function as i64) < MARK_KIND_BITS,
+	"every Kind has its bit in the element mark"
+);
 pub const MARK_KINDS_MASK: i64 = (1 << MARK_KIND_BITS) - 1;
 pub const MARK_BOOL_BIT: i64 = MARK_KIND_BITS;
 /// A kind field without its element mark, for the comparisons of whole kinds (bracket and kind)
 pub const UNMARKED_KIND: i64 = (1 << ELEMENT_MARK_SHIFT) - 1;
-const _: () = assert!(MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < 63, "the element mark fits in the kind field");
+const _: () = assert!(
+	MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < 63,
+	"the element mark fits in the kind field"
+);
 
 /// The element mark of a node_kind_in mask, shifted to its place in the kind field
 pub fn element_mark(mask: i64) -> i64 {
@@ -44,41 +50,50 @@ pub fn element_mark(mask: i64) -> i64 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Kind {
 	#[default]
-	Empty = 0,     // void / no value
-	Int = 1,       // i64 value (boxed in $i64box)
-	Float = 2,     // f64 value (boxed in $f64box)
-	Text = 3,      // string (via $String struct)
-	Codepoint = 4, // char/i32 as i31ref
-	Symbol = 5,    // string (via $String struct)
-	Key = 6,       // data=key node, value=value node (also used for pairs)
-	Block = 7,     // curly braces {}
-	List = 8,      // square brackets []
-	Data = 9,      // arbitrary data container
-	Meta = 10,     // metadata wrapper
-	Error = 11,    // error node
-	TypeDef = 12,  // type definition: name + body (fields)
-	Pointer = 13,  // FFI pointer (i64 handle)
-	Int32 = 14,    // explicit i32 (for FFI)
-	Float32 = 15,  // explicit f32 (for FFI)
-	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
+	Empty = 0, // void / no value
+	Int = 1,        // i64 value (boxed in $i64box)
+	Float = 2,      // f64 value (boxed in $f64box)
+	Text = 3,       // string (via $String struct)
+	Codepoint = 4,  // char/i32 as i31ref
+	Symbol = 5,     // string (via $String struct)
+	Key = 6,        // data=key node, value=value node (also used for pairs)
+	Block = 7,      // curly braces {}
+	List = 8,       // square brackets []
+	Data = 9,       // arbitrary data container
+	Meta = 10,      // metadata wrapper
+	Error = 11,     // error node
+	TypeDef = 12,   // type definition: name + body (fields)
+	Pointer = 13,   // FFI pointer (i64 handle)
+	Int32 = 14,     // explicit i32 (for FFI)
+	Float32 = 15,   // explicit f32 (for FFI)
+	Function = 16,  // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
 	Uncertain = 17, // x ± σ: data = $f64 array [value, source id, contribution, …] (wasm_emitter/uncertain.rs)
-	Time = 18,     // an instant: data = $i64box(nanoseconds since 1970 UTC) (wasm_emitter/times.rs)
+	Time = 18,      // an instant: data = $i64box(nanoseconds since 1970 UTC) (wasm_emitter/times.rs)
 }
 
 impl Kind {
 	/// Check if this is an integer type (WASM i64 local)
-	pub fn is_int(&self) -> bool { matches!(self, Kind::Int | Kind::Int32) }
+	pub fn is_int(&self) -> bool {
+		matches!(self, Kind::Int | Kind::Int32)
+	}
 
 	/// Check if this is a float type (WASM f64 local)
-	pub fn is_float(&self) -> bool { matches!(self, Kind::Float | Kind::Float32) }
+	pub fn is_float(&self) -> bool {
+		matches!(self, Kind::Float | Kind::Float32)
+	}
 
 	/// Check if this is a primitive numeric type (stored as WASM primitive)
 	pub fn is_primitive(&self) -> bool {
-		matches!(self, Kind::Int | Kind::Int32 | Kind::Float | Kind::Float32 | Kind::Codepoint | Kind::Pointer)
+		matches!(
+			self,
+			Kind::Int | Kind::Int32 | Kind::Float | Kind::Float32 | Kind::Codepoint | Kind::Pointer
+		)
 	}
 
 	/// Check if this is a reference type (stored as WASM ref $Node)
-	pub fn is_ref(&self) -> bool { !self.is_primitive() }
+	pub fn is_ref(&self) -> bool {
+		!self.is_primitive()
+	}
 
 	/// Parse a C type string to Kind with smart defaults
 	pub fn from_c_type(s: &str) -> Kind {
@@ -107,7 +122,7 @@ impl Kind {
 			"short" | "int16_t" | "uint16_t" => Kind::Int32,
 			"char" | "int8_t" | "uint8_t" => Kind::Codepoint,
 			"Color" => Kind::Int32, // raylib Color is 4 bytes packed
-			_ => Kind::Data, // unknown types as generic data
+			_ => Kind::Data,        // unknown types as generic data
 		}
 	}
 }
@@ -116,11 +131,11 @@ impl std::fmt::Display for Kind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Kind::Empty => write!(f, "empty"),
-			Kind::Int => write!(f, "int"),      // warp uses "int" for i64
+			Kind::Int => write!(f, "int"), // warp uses "int" for i64
 			Kind::Int32 => write!(f, "i32"),
-			Kind::Float => write!(f, "float"),  // warp uses "float" for f64
+			Kind::Float => write!(f, "float"), // warp uses "float" for f64
 			Kind::Float32 => write!(f, "f32"),
-			Kind::Text => write!(f, "text"),    // warp uses "text" for strings
+			Kind::Text => write!(f, "text"), // warp uses "text" for strings
 			Kind::Codepoint => write!(f, "codepoint"),
 			Kind::Symbol => write!(f, "symbol"),
 			Kind::Key => write!(f, "key"),
@@ -155,7 +170,7 @@ pub struct FieldDef {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeDef {
 	pub name: String,
-	pub tag: u32,               // tag value (>= USER_TYPE_TAG_START)
+	pub tag: u32, // tag value (>= USER_TYPE_TAG_START)
 	pub fields: Vec<FieldDef>,
 	pub wasm_type_idx: Option<u32>, // WASM GC type index when emitted
 }
@@ -166,8 +181,15 @@ pub const UNTYPED_FIELD: &str = "any";
 impl FieldDef {
 	/// A field written as a bare word, `name`, optional as `email?`
 	pub fn untyped(word: &str) -> FieldDef {
-		let type_name = if word.ends_with(OPTIONAL_SUFFIX) { format!("{UNTYPED_FIELD}{OPTIONAL_SUFFIX}") } else { UNTYPED_FIELD.to_string() };
-		FieldDef { name: word.trim_end_matches(OPTIONAL_SUFFIX).to_string(), type_name }
+		let type_name = if word.ends_with(OPTIONAL_SUFFIX) {
+			format!("{UNTYPED_FIELD}{OPTIONAL_SUFFIX}")
+		} else {
+			UNTYPED_FIELD.to_string()
+		};
+		FieldDef {
+			name: word.trim_end_matches(OPTIONAL_SUFFIX).to_string(),
+			type_name,
+		}
 	}
 
 	/// A field declared `email?` or `x:int?` may be left out of the constructor call (it is then ø)
@@ -181,8 +203,6 @@ impl FieldDef {
 /// Returns (type_name, field_values) for use with emit_raw_struct
 pub fn extract_instance_values(node: &crate::node::Node) -> Option<(String, Vec<RawFieldValue>)> {
 	use crate::node::Node;
-	
-	
 
 	// Instance is Key(TypeName, :, List([Key(field, :, value), ...]))
 	match node.drop_meta() {
@@ -196,9 +216,9 @@ pub fn extract_instance_values(node: &crate::node::Node) -> Option<(String, Vec<
 }
 
 fn extract_field_values(body: &crate::node::Node) -> Vec<type_kinds::RawFieldValue> {
+	use crate::extensions::numbers::Number;
 	use crate::node::Node;
 	use crate::type_kinds::RawFieldValue;
-	use crate::extensions::numbers::Number;
 
 	let mut values = Vec::new();
 
@@ -308,7 +328,12 @@ impl TypeRegistry {
 				Node::Key(name, Op::Colon, _) => Some((name.drop_meta().to_string(), value.drop_meta().clone())),
 				name => Some((name.to_string(), value.drop_meta().clone())),
 			},
-			Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False) => {
+			Node::Key(name, Op::Colon, value)
+				if matches!(
+					value.drop_meta(),
+					Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False
+				) =>
+			{
 				Some((name.drop_meta().to_string(), value.drop_meta().clone()))
 			}
 			_ => None,
@@ -357,18 +382,26 @@ impl TypeRegistry {
 		let node = node.drop_meta();
 		match node {
 			// `x:int=0`: the typed field x with a default
-			Node::Key(target, crate::operators::Op::Assign, _) if matches!(target.drop_meta(), Node::Key(_, crate::operators::Op::Colon, _)) => {
+			Node::Key(target, crate::operators::Op::Assign, _)
+				if matches!(target.drop_meta(), Node::Key(_, crate::operators::Op::Colon, _)) =>
+			{
 				Self::extract_field(target)
 			}
 			// `email?: text` parses as the elvis `email ? email : text`; in a type body it is the optional typed field
-			Node::Key(name_node, crate::operators::Op::Question, rest) if matches!(rest.drop_meta(), Node::Key(same, crate::operators::Op::Colon, _) if same == name_node) => {
+			Node::Key(name_node, crate::operators::Op::Question, rest) if matches!(rest.drop_meta(), Node::Key(same, crate::operators::Op::Colon, _) if same == name_node) =>
+			{
 				let field = Self::extract_field(rest)?;
-				Some(FieldDef { type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name), ..field })
+				Some(FieldDef {
+					type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name),
+					..field
+				})
 			}
 			Node::Key(name_node, _, type_node) => {
 				let name = Self::written_name(name_node)?;
 				let type_name = match type_node.drop_meta() {
-					Node::Type { name: type_name_node, .. } => Self::written_name(type_name_node),
+					Node::Type {
+						name: type_name_node, ..
+					} => Self::written_name(type_name_node),
 					// `size: int | text`: the union's name, `int or text`
 					written => Self::written_name(written).or_else(|| crate::analyzer::union_type_name(written)), // none for a default value `x=0` or `x:0`
 				};
@@ -398,7 +431,6 @@ pub enum AstKind {
 	Identifier,
 }
 
-
 /// How a struct field of a declared type is stored, by the field's type name
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum FieldStorage {
@@ -424,7 +456,9 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 	let optional = word.len() < type_name.len();
 	match word {
 		// `age: int?` may be ø: a number has no room for it, a Node does (card optional-int)
-		"Int" | "i64" | "long" | "Float" | "f64" | "double" | "i32" | "int" | "f32" | "float" if optional => FieldStorage::Node,
+		"Int" | "i64" | "long" | "Float" | "f64" | "double" | "i32" | "int" | "f32" | "float" if optional => {
+			FieldStorage::Node
+		}
 		"Int" | "i64" | "long" => FieldStorage::I64,
 		"Float" | "f64" | "double" => FieldStorage::F64,
 		"i32" | "int" => FieldStorage::I32,
@@ -432,14 +466,25 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 		"Text" | "String" | "string" | "text" => FieldStorage::Text,
 		"Node" | UNTYPED_FIELD => FieldStorage::Node,
 		_ if crate::analyzer::union_parts(word).is_some() => FieldStorage::Node,
-		_ if crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || word == "list" || word.starts_with("list of ") => FieldStorage::Node,
+		_ if crate::analyzer::type_word_kind(word).is_some()
+			|| crate::analyzer::plural_element_type(word).is_some()
+			|| word == "list"
+			|| word.starts_with("list of ") =>
+		{
+			FieldStorage::Node
+		}
 		_ => FieldStorage::Named,
 	}
 }
 
 /// Convert FieldDef to ValType for function parameters
 pub fn field_def_to_val_type(field: &FieldDef, emitter: &WasmGcEmitter) -> ValType {
-	let reference = |heap_type| Ref(RefType { nullable: true, heap_type });
+	let reference = |heap_type| {
+		Ref(RefType {
+			nullable: true,
+			heap_type,
+		})
+	};
 	match field_storage(&field.type_name) {
 		FieldStorage::I64 => ValType::I64,
 		FieldStorage::F64 => ValType::F64,
@@ -461,7 +506,6 @@ pub fn any_heap_type() -> HeapType {
 		ty: AbstractHeapType::Any,
 	}
 }
-
 
 /// Raw field values for emit_raw_struct
 /// todo we can most likely get rid of this. We already have three different containers for types

@@ -5,11 +5,11 @@
 //! 1. WasmGcEmitter::emit_raw_struct - uses emitter for WASM generation
 //! 2. gc_struct! macro - ergonomic typed wrappers with index-based access
 
-use wasmtime::*;
 use anyhow::Result;
+use wasmtime::*;
 
 // Import emitter and type system
-use warp::{WasmGcEmitter, RawFieldValue, TypeDef, FieldDef};
+use warp::{FieldDef, RawFieldValue, TypeDef, WasmGcEmitter};
 
 // Import gc_struct! macro and gc_traits module for ergonomic access
 use warp::gc_struct;
@@ -24,7 +24,10 @@ pub struct Person {
 
 impl Person {
 	pub fn new(name: &str, age: i64) -> Self {
-		Self { name: name.to_string(), age }
+		Self {
+			name: name.to_string(),
+			age,
+		}
 	}
 }
 
@@ -56,7 +59,8 @@ fn read_string_field(val: &Val, store: &mut Store<()>, instance: &Instance) -> R
 		return Ok(String::new());
 	}
 
-	let memory = instance.get_memory(&mut *store, "memory")
+	let memory = instance
+		.get_memory(&mut *store, "memory")
 		.ok_or_else(|| anyhow::anyhow!("no memory"))?;
 	let mut buf = vec![0u8; len as usize];
 	memory.read(&*store, ptr as usize, &mut buf)?;
@@ -69,8 +73,14 @@ fn person_type_def() -> TypeDef {
 		name: "Person".to_string(),
 		tag: 100, // arbitrary tag for testing
 		fields: vec![
-			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
-			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
+			FieldDef {
+				name: "name".to_string(),
+				type_name: "String".to_string(),
+			},
+			FieldDef {
+				name: "age".to_string(),
+				type_name: "i64".to_string(),
+			},
 		],
 		wasm_type_idx: None,
 	}
@@ -82,8 +92,14 @@ fn point_type_def() -> TypeDef {
 		name: "Point".to_string(),
 		tag: 101, // arbitrary tag for testing
 		fields: vec![
-			FieldDef { name: "x".to_string(), type_name: "i64".to_string() },
-			FieldDef { name: "y".to_string(), type_name: "i64".to_string() },
+			FieldDef {
+				name: "x".to_string(),
+				type_name: "i64".to_string(),
+			},
+			FieldDef {
+				name: "y".to_string(),
+				type_name: "i64".to_string(),
+			},
 		],
 		wasm_type_idx: None,
 	}
@@ -102,7 +118,8 @@ fn run_wasm_gc(wasm_bytes: &[u8]) -> Result<(Store<()>, Instance, Val)> {
 	let linker = Linker::new(&engine);
 	let instance = linker.instantiate(&mut store, &module)?;
 
-	let main = instance.get_func(&mut store, "main")
+	let main = instance
+		.get_func(&mut store, "main")
 		.ok_or_else(|| anyhow::anyhow!("no main"))?;
 
 	let mut results = vec![Val::I32(0)];
@@ -156,10 +173,10 @@ fn test_class_instance_raw() -> Result<()> {
 
 // Define a typed Point wrapper using gc_struct! macro
 gc_struct! {
-    Point {
-        x: 0 => i64,
-        y: 1 => i64,
-    }
+	Point {
+		x: 0 => i64,
+		y: 1 => i64,
+	}
 }
 
 #[test]

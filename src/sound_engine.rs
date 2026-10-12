@@ -45,14 +45,23 @@ impl Mixed {
 	fn sample(&self, frame: u64, channel: usize) -> f32 {
 		let position = frame as f64 * self.ratio;
 		let (before, share) = (position.floor() as usize, position.fract() as f32);
-		let at = |frame: usize| self.samples.get(frame * self.channels + channel.min(self.channels - 1)).copied().unwrap_or(0.0);
+		let at = |frame: usize| {
+			self.samples
+				.get(frame * self.channels + channel.min(self.channels - 1))
+				.copied()
+				.unwrap_or(0.0)
+		};
 		at(before) * (1.0 - share) + at(before + 1) * share
 	}
 
 	/// The gain of the frame played now, then one step on toward the target
 	fn next_gain(&mut self) -> f32 {
 		let gain = self.gain;
-		self.gain = if (self.target - gain).abs() <= self.step.abs() { self.target } else { gain + self.step };
+		self.gain = if (self.target - gain).abs() <= self.step.abs() {
+			self.target
+		} else {
+			gain + self.step
+		};
 		gain
 	}
 }
@@ -67,7 +76,12 @@ pub struct Mixer {
 
 impl Mixer {
 	pub fn new(rate: u32, channels: u16) -> Mixer {
-		Mixer { rate, channels, frame: 0, sounds: Vec::new() }
+		Mixer {
+			rate,
+			channels,
+			frame: 0,
+			sounds: Vec::new(),
+		}
 	}
 
 	/// The 16-bit samples (`channels` interleaved, at `rate`) starting at the frame, played at the device's rate and
@@ -75,12 +89,27 @@ impl Mixer {
 	pub fn add(&mut self, handle: usize, start: u64, samples: &[i16], rate: u32, channels: u16) {
 		let (channels, ratio) = (channels.max(1) as usize, rate as f64 / self.rate as f64);
 		let samples = samples.iter().map(|&sample| sample as f32 / AMPLITUDE);
-		let continued = self.sounds.iter_mut().find(|sound| sound.handle == handle && sound.channels == channels && sound.ratio == ratio && (sound.start + sound.frames()).abs_diff(start) <= SEAM_FRAMES);
+		let continued = self.sounds.iter_mut().find(|sound| {
+			sound.handle == handle
+				&& sound.channels == channels
+				&& sound.ratio == ratio
+				&& (sound.start + sound.frames()).abs_diff(start) <= SEAM_FRAMES
+		});
 		match continued {
 			Some(sound) => sound.samples.extend(samples),
 			None => {
 				self.steal_for(start);
-				self.sounds.push(Mixed { handle, start, samples: samples.collect(), channels, ratio, gain: 1.0, target: 1.0, step: 0.0, stolen: false });
+				self.sounds.push(Mixed {
+					handle,
+					start,
+					samples: samples.collect(),
+					channels,
+					ratio,
+					gain: 1.0,
+					target: 1.0,
+					step: 0.0,
+					stolen: false,
+				});
 			}
 		}
 	}
@@ -88,7 +117,11 @@ impl Mixer {
 	/// Room for one more sound sounding at the frame: the oldest of MAX_VOICES sounding then fades out and leaves
 	fn steal_for(&mut self, start: u64) {
 		let rate = self.rate;
-		let mut sounding: Vec<&mut Mixed> = self.sounds.iter_mut().filter(|sound| !sound.stolen && sound.start <= start && start < sound.start + sound.frames()).collect();
+		let mut sounding: Vec<&mut Mixed> = self
+			.sounds
+			.iter_mut()
+			.filter(|sound| !sound.stolen && sound.start <= start && start < sound.start + sound.frames())
+			.collect();
 		if sounding.len() >= MAX_VOICES {
 			sounding.sort_by_key(|sound| sound.start);
 			let oldest = &mut sounding[0];
@@ -107,7 +140,11 @@ impl Mixer {
 	/// sample by sample, so no click; 0 fades all of them
 	pub fn fade(&mut self, handle: usize, gain: f32, seconds: f64) {
 		let frames = (seconds * self.rate as f64).round().max(1.0) as f32;
-		for sound in self.sounds.iter_mut().filter(|sound| handle == 0 || sound.handle == handle) {
+		for sound in self
+			.sounds
+			.iter_mut()
+			.filter(|sound| handle == 0 || sound.handle == handle)
+		{
 			sound.target = gain;
 			sound.step = (gain - sound.gain) / frames;
 		}
@@ -136,7 +173,8 @@ impl Mixer {
 		}
 		self.frame += frames;
 		let frame = self.frame;
-		self.sounds.retain(|sound| sound.start + sound.frames() > frame && !(sound.stolen && sound.gain == 0.0));
+		self.sounds
+			.retain(|sound| sound.start + sound.frames() > frame && !(sound.stolen && sound.gain == 0.0));
 		buffer.iter_mut().for_each(|sample| *sample = sample.clamp(-1.0, 1.0));
 	}
 
@@ -163,7 +201,13 @@ mod output {
 	static ENGINE: OnceLock<Option<Engine>> = OnceLock::new();
 
 	fn engine() -> Option<&'static Engine> {
-		ENGINE.get_or_init(|| started().map_err(|failure| eprintln!("sound: no output stream ({failure}), playing by afplay")).ok()).as_ref()
+		ENGINE
+			.get_or_init(|| {
+				started()
+					.map_err(|failure| eprintln!("sound: no output stream ({failure}), playing by afplay"))
+					.ok()
+			})
+			.as_ref()
 	}
 
 	/// The default output device playing the mixer, on a thread that keeps the stream (not Send on every platform)
@@ -172,15 +216,31 @@ mod output {
 		std::thread::spawn(move || {
 			let opened = (|| {
 				let device = cpal::default_host().default_output_device().ok_or("no output device")?;
-				let config: cpal::StreamConfig = device.default_output_config().map_err(|failure| failure.to_string())?.into();
+				let config: cpal::StreamConfig = device
+					.default_output_config()
+					.map_err(|failure| failure.to_string())?
+					.into();
 				let mixer = Arc::new(Mutex::new(Mixer::new(config.sample_rate, config.channels)));
 				let fed = mixer.clone();
-				let stream = device.build_output_stream::<f32, _, _>(config, move |buffer, _| match fed.try_lock() {
-					Ok(mut mixer) => mixer.fill(buffer),
-					Err(_) => buffer.fill(0.0), // never wait in the audio callback; a queueing sound holds the lock briefly
-				}, |failure| eprintln!("sound: {failure}"), None).map_err(|failure| failure.to_string())?;
+				let stream = device
+					.build_output_stream::<f32, _, _>(
+						config,
+						move |buffer, _| match fed.try_lock() {
+							Ok(mut mixer) => mixer.fill(buffer),
+							Err(_) => buffer.fill(0.0), // never wait in the audio callback; a queueing sound holds the lock briefly
+						},
+						|failure| eprintln!("sound: {failure}"),
+						None,
+					)
+					.map_err(|failure| failure.to_string())?;
 				stream.play().map_err(|failure| failure.to_string())?;
-				Ok::<_, String>((stream, Engine { mixer, anchor: Instant::now() }))
+				Ok::<_, String>((
+					stream,
+					Engine {
+						mixer,
+						anchor: Instant::now(),
+					},
+				))
 			})();
 			match opened {
 				Ok((stream, engine)) => {
@@ -190,7 +250,9 @@ mod output {
 						std::thread::park();
 					}
 				}
-				Err(failure) => { let _ = sender.send(Err(failure)); }
+				Err(failure) => {
+					let _ = sender.send(Err(failure));
+				}
 			}
 		});
 		receiver.recv().map_err(|failure| failure.to_string())?
@@ -204,7 +266,9 @@ mod output {
 	/// The sound queued on the device at its start, false without an output stream
 	pub fn play(handle: usize, start: Instant, samples: &[i16], rate: u32, channels: u16) -> bool {
 		let Some(engine) = engine() else { return false };
-		let Ok(mut mixer) = engine.mixer.lock() else { return false };
+		let Ok(mut mixer) = engine.mixer.lock() else {
+			return false;
+		};
 		let frame = mixer.frame_at(start, engine.anchor);
 		mixer.add(handle, frame, samples, rate, channels);
 		true

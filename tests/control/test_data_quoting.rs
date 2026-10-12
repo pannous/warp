@@ -19,7 +19,8 @@ fn data_of_a_tag_reads_as_written() {
 }
 
 // card data-tag: a tag held in a variable reads as written too, a map entry keeps its braces
-#[test] fn a_tag_in_a_variable_reads_as_written() {
+#[test]
+fn a_tag_in_a_variable_reads_as_written() {
 	is!("p = data point{x:1}; string p", "point{x:1}");
 	is!("m = {a: data point{x:1}}; string m", "{a:point{x:1}}");
 	is!("m = {a:{b:1}}; string m", "{a:{b:1}}");
@@ -27,7 +28,8 @@ fn data_of_a_tag_reads_as_written() {
 }
 
 // card data-list: quoted data in a list reads as written, as the list held in a variable does
-#[test] fn data_in_a_list_reads_as_written() {
+#[test]
+fn data_in_a_list_reads_as_written() {
 	is!("string [data a or b, 3]", "[a or b 3]");
 	is!("xs = [data a or b, 3]; string xs", "[a or b 3]");
 }

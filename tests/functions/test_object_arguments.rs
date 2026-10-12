@@ -27,18 +27,27 @@ fn a_missing_field_of_a_map_argument_is_an_error() {
 #[test]
 fn a_class_instance_is_passed_to_a_class_typed_parameter() {
 	is!(&with_photo(&format!("{KEEP}keep(photo{{width:3 height:4}})")), 3);
-	is!(&with_photo("area(p:photo) := p.width * p.height; area(photo{width:3 height:4})"), 12);
+	is!(
+		&with_photo("area(p:photo) := p.width * p.height; area(photo{width:3 height:4})"),
+		12
+	);
 	is!(&with_photo(&format!("{KEEP}x = photo{{width:5 height:1}}; keep(x)")), 5);
 }
 
 #[test]
 fn a_class_instance_is_passed_to_an_untyped_parameter() {
-	is!(&with_photo("measure(p) := p.height; measure(photo{width:3 height:4})"), 4);
+	is!(
+		&with_photo("measure(p) := p.height; measure(photo{width:3 height:4})"),
+		4
+	);
 }
 
 #[test]
 fn the_to_phrase_types_its_parameter_by_the_class() {
-	is!(&with_photo("to keep a photo: photo.width; keep(photo{width:3 height:4})"), 3);
+	is!(
+		&with_photo("to keep a photo: photo.width; keep(photo{width:3 height:4})"),
+		3
+	);
 }
 
 #[test]

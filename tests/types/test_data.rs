@@ -139,10 +139,7 @@ fn test_node_data_metadata() {
 	let s = Node::data("hello".to_string());
 	if let Node::Data(dada) = &s {
 		eq!(dada.data_type, DataType::String);
-		println!(
-			"String type: {:?}, name: {}",
-			dada.data_type, dada.type_name
-		);
+		println!("String type: {:?}, name: {}", dada.data_type, dada.type_name);
 	}
 
 	// Primitive metadata
@@ -150,10 +147,7 @@ fn test_node_data_metadata() {
 	if let Node::Data(dada) = &p {
 		eq!(dada.data_type, DataType::Primitive);
 		eq!(dada.type_name, "i32");
-		println!(
-			"Primitive type: {:?}, name: {}",
-			dada.data_type, dada.type_name
-		);
+		println!("Primitive type: {:?}, name: {}", dada.data_type, dada.type_name);
 	}
 
 	// Custom struct metadata
@@ -164,10 +158,7 @@ fn test_node_data_metadata() {
 	if let Node::Data(dada) = &c {
 		eq!(dada.data_type, DataType::Struct);
 		assert!(dada.type_name.contains("CustomDataExample"));
-		println!(
-			"Struct type: {:?}, name: {}",
-			dada.data_type, dada.type_name
-		);
+		println!("Struct type: {:?}, name: {}", dada.data_type, dada.type_name);
 	}
 
 	// Debug output shows metadata

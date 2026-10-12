@@ -36,7 +36,9 @@ fn named_body(node: &Node) -> Option<(String, &[Node])> {
 /// The id a body declares with `@id:n`
 fn declared_id(items: &[Node]) -> Option<String> {
 	items.iter().find_map(|item| match item.drop_meta() {
-		Node::Key(key, Op::Colon, value) if key.name() == format!("{ATTRIBUTE_MARK}{ID_KEY}") => Some(value.serialize()),
+		Node::Key(key, Op::Colon, value) if key.name() == format!("{ATTRIBUTE_MARK}{ID_KEY}") => {
+			Some(value.serialize())
+		}
 		_ => None,
 	})
 }
@@ -45,7 +47,11 @@ fn declared_id(items: &[Node]) -> Option<String> {
 /// the parameter, with a note naming `@1`
 fn named_references(node: Node, enclosing: &mut Vec<(String, Option<String>)>, word_is_free: bool) -> Node {
 	let name_with_id = |id: &str, enclosing: &[(String, Option<String>)]| {
-		enclosing.iter().rev().find(|(_, declared)| declared.as_deref() == Some(id)).map(|(name, _)| Node::Symbol(format!("{REFERENCE_MARK}{name}")))
+		enclosing
+			.iter()
+			.rev()
+			.find(|(_, declared)| declared.as_deref() == Some(id))
+			.map(|(name, _)| Node::Symbol(format!("{REFERENCE_MARK}{name}")))
 	};
 	let digits = |text: &str| !text.is_empty() && text.chars().all(|ch| ch.is_ascii_digit());
 	match &node {
@@ -56,13 +62,23 @@ fn named_references(node: Node, enclosing: &mut Vec<(String, Option<String>)>, w
 			let id = &word[REFERENCE_MARK.len_utf8()..];
 			if name_with_id(id, enclosing).is_some() {
 				crate::normalize::set_position_of(&node);
-				let (node_reference, reason) = (format!("{ATTRIBUTE_MARK}{id}"), format!("{word} is a parameter; the node with id {id} is {ATTRIBUTE_MARK}{id}"));
-				crate::normalize::advise(word, &node_reference, &reason, Some(crate::normalize::rewrite(word, &node_reference, &reason)));
+				let (node_reference, reason) = (
+					format!("{ATTRIBUTE_MARK}{id}"),
+					format!("{word} is a parameter; the node with id {id} is {ATTRIBUTE_MARK}{id}"),
+				);
+				crate::normalize::advise(
+					word,
+					&node_reference,
+					&reason,
+					Some(crate::normalize::rewrite(word, &node_reference, &reason)),
+				);
 			}
 			return node;
 		}
 		// `ref 1`, `ref a`
-		Node::List(items, _, _) if word_is_free && items.len() == 2 && items[0].drop_meta().name() == REFERENCE_WORD => {
+		Node::List(items, _, _)
+			if word_is_free && items.len() == 2 && items[0].drop_meta().name() == REFERENCE_WORD =>
+		{
 			match items[1].drop_meta() {
 				Node::Number(id) => return name_with_id(&id.to_string(), enclosing).unwrap_or(node),
 				Node::Symbol(name) => return Node::Symbol(format!("{REFERENCE_MARK}{name}")),
@@ -90,15 +106,20 @@ fn referencing_literals(node: &Node) -> HashMap<String, Node> {
 			}
 		}
 	});
-	assignments.into_iter().filter_map(|(variable, values)| match values.as_slice() {
-		[literal] if refers_back(literal, &mut Vec::new()) => Some((variable, literal.drop_meta().clone())),
-		_ => None,
-	}).collect()
+	assignments
+		.into_iter()
+		.filter_map(|(variable, values)| match values.as_slice() {
+			[literal] if refers_back(literal, &mut Vec::new()) => Some((variable, literal.drop_meta().clone())),
+			_ => None,
+		})
+		.collect()
 }
 
 fn refers_back(node: &Node, enclosing: &mut Vec<String>) -> bool {
 	if let Node::Symbol(word) = node.drop_meta() {
-		return word.strip_prefix(REFERENCE_MARK).is_some_and(|name| enclosing.iter().any(|enclosing_name| enclosing_name == name));
+		return word
+			.strip_prefix(REFERENCE_MARK)
+			.is_some_and(|name| enclosing.iter().any(|enclosing_name| enclosing_name == name));
 	}
 	let named = named_body(node).map(|(name, _)| name);
 	let pushed = named.is_some();
@@ -118,7 +139,9 @@ fn refers_back(node: &Node, enclosing: &mut Vec<String>) -> bool {
 fn followed_paths(node: Node, literals: &HashMap<String, Node>) -> Node {
 	if let Some((variable, fields)) = dot_chain(&node) {
 		if let Some(path) = literals.get(&variable).and_then(|literal| followed(literal, &fields)) {
-			return path.into_iter().fold(Node::Symbol(variable), |reader, field| key(reader, Op::Dot, Node::Symbol(field)));
+			return path.into_iter().fold(Node::Symbol(variable), |reader, field| {
+				key(reader, Op::Dot, Node::Symbol(field))
+			});
 		}
 	}
 	node.map_children(|child| followed_paths(child, literals))
@@ -128,7 +151,9 @@ fn followed_paths(node: Node, literals: &HashMap<String, Node>) -> Node {
 fn dot_chain(node: &Node) -> Option<(String, Vec<String>)> {
 	match node.drop_meta() {
 		Node::Key(reader, Op::Dot, field) => {
-			let Node::Symbol(field) = field.drop_meta() else { return None };
+			let Node::Symbol(field) = field.drop_meta() else {
+				return None;
+			};
 			let (variable, mut fields) = match reader.drop_meta() {
 				Node::Symbol(variable) => (variable.clone(), Vec::new()),
 				other => dot_chain(other)?,
@@ -148,12 +173,18 @@ fn followed(literal: &Node, fields: &[String]) -> Option<Vec<String>> {
 	let mut followed_any = false;
 	for field in fields {
 		let (_, items) = named_body(nodes.last()?)?;
-		let entry = items.iter().find(|item| matches!(item.drop_meta(), Node::Key(key, _, _) if key.name() == *field))?;
-		let Node::Key(_, _, value) = entry.drop_meta() else { unreachable!("found a key") };
+		let entry = items
+			.iter()
+			.find(|item| matches!(item.drop_meta(), Node::Key(key, _, _) if key.name() == *field))?;
+		let Node::Key(_, _, value) = entry.drop_meta() else {
+			unreachable!("found a key")
+		};
 		match value.drop_meta() {
 			Node::Symbol(word) if word.starts_with(REFERENCE_MARK) => {
 				let name = &word[REFERENCE_MARK.len_utf8()..];
-				let depth = nodes.iter().rposition(|node| named_body(node).is_some_and(|(node_name, _)| node_name == name))?;
+				let depth = nodes
+					.iter()
+					.rposition(|node| named_body(node).is_some_and(|(node_name, _)| node_name == name))?;
 				nodes.truncate(depth + 1);
 				path.truncate(depth);
 				followed_any = true;

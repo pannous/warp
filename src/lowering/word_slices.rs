@@ -12,6 +12,7 @@ use crate::extensions::numbers::Number;
 use crate::library_words::SLICE;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use std::collections::HashSet;
 
 const FROM: &str = "from";
 const TO: &str = "to";
@@ -21,7 +22,9 @@ const STARTING: &str = "starting";
 const LAST: &str = "last";
 /// `xs up to nth`: the position n
 const NTH: (&str, &str) = ("nth", "n");
-const ORDINAL_WORDS: [&str; 10] = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+const ORDINAL_WORDS: [&str; 10] = [
+	"first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+];
 
 /// A bound of a word slice
 enum Bound {
@@ -38,26 +41,31 @@ pub fn lower(program: Node) -> Node {
 	if !program.mentions_any(&[FROM, UP]) {
 		return program;
 	}
-	slices(program.clone(), &program)
+	let names = crate::soft_keywords::names_given(&program);
+	slices(program, &names)
 }
 
-fn slices(node: Node, program: &Node) -> Node {
+fn slices(node: Node, names: &HashSet<String>) -> Node {
 	let mut words = vec![];
 	match node.drop_meta() {
 		// `print(xs up to #3)`, `f(xs up to #3)`: the words inside a group or call
-		Node::List(items, bracket, _) if *bracket != Bracket::Square => items.iter().for_each(|item| flat_words(item, &mut words)),
+		Node::List(items, bracket, _) if *bracket != Bracket::Square => {
+			items.iter().for_each(|item| flat_words(item, &mut words))
+		}
 		_ => flat_words(&node, &mut words),
 	}
-	match word_slice(&words, program).or_else(|| sliced_argument(&words, program)) {
+	match word_slice(&words, names).or_else(|| sliced_argument(&words, names)) {
 		Some(slice) => slice,
-		None => node.map_children(|child| slices(child, program)),
+		None => node.map_children(|child| slices(child, names)),
 	}
 }
 
 /// `[f, xs, up, to, #3]`: the call of f on the slice
-fn sliced_argument(words: &[Node], program: &Node) -> Option<Node> {
-	let (callee @ Node::Symbol(_), argument) = words.split_first()? else { return None };
-	let slice = word_slice(argument, program)?;
+fn sliced_argument(words: &[Node], names: &HashSet<String>) -> Option<Node> {
+	let (callee @ Node::Symbol(_), argument) = words.split_first()? else {
+		return None;
+	};
+	let slice = word_slice(argument, names)?;
 	Some(Node::List(vec![callee.clone(), slice], Bracket::Round, Separator::None))
 }
 
@@ -80,9 +88,9 @@ fn flat_words(node: &Node, words: &mut Vec<Node>) {
 }
 
 /// `[xs, from, P, to, Q]`, `[xs, starting, from, P]`, `[xs, up, to, Q]`: the slice of xs, or the error of a bare number
-fn word_slice(words: &[Node], program: &Node) -> Option<Node> {
+fn word_slice(words: &[Node], names: &HashSet<String>) -> Option<Node> {
 	let (receiver, rest) = words.split_first()?;
-	if !is_sliceable(receiver, program) {
+	if !is_sliceable(receiver, names) {
 		return None;
 	}
 	let at = |index: usize, word: &str| rest.get(index).is_some_and(|node| is_word(node, &[word]));
@@ -119,9 +127,9 @@ fn word_slice(words: &[Node], program: &Node) -> Option<Node> {
 }
 
 /// A variable the program names or a list literal; a word of the language (`count from 1 to 10`) is no list
-fn is_sliceable(receiver: &Node, program: &Node) -> bool {
+fn is_sliceable(receiver: &Node, names: &HashSet<String>) -> bool {
 	match receiver.drop_meta() {
-		Node::Symbol(name) => crate::soft_keywords::program_names(program, name),
+		Node::Symbol(name) => names.contains(name),
 		Node::List(_, Bracket::Square, _) | Node::Text(_) => true,
 		_ => false,
 	}
@@ -136,14 +144,22 @@ fn only_bound(words: &[Node]) -> Option<Bound> {
 /// The bound at the start of `words` and how many words it takes: `#2`, `second`, `2nd`, `(n)th`, `nth`, `last`, `2`
 fn bound(words: &[Node]) -> Option<(Bound, usize)> {
 	let first = words.first()?;
-	let ordinal_suffix = words.get(1).is_some_and(|word| is_word(word, &crate::warp_parser::ORDINAL_SUFFIXES));
+	let ordinal_suffix = words
+		.get(1)
+		.is_some_and(|word| is_word(word, &crate::warp_parser::ORDINAL_SUFFIXES));
 	match first.drop_meta() {
-		Node::Key(empty, Op::Hash, position) if matches!(empty.drop_meta(), Node::Empty) => Some((Bound::Position(position.as_ref().clone()), 1)),
-		Node::Number(_) | Node::List(_, Bracket::Round, _) if ordinal_suffix => Some((Bound::Position(first.clone()), 2)),
+		Node::Key(empty, Op::Hash, position) if matches!(empty.drop_meta(), Node::Empty) => {
+			Some((Bound::Position(position.as_ref().clone()), 1))
+		}
+		Node::Number(_) | Node::List(_, Bracket::Round, _) if ordinal_suffix => {
+			Some((Bound::Position(first.clone()), 2))
+		}
 		Node::Number(number) => Some((Bound::Bare(*number), 1)),
 		Node::Symbol(word) if word == LAST => Some((Bound::Open, 1)),
 		Node::Symbol(word) if word == NTH.0 => Some((Bound::Position(symbol(NTH.1)), 1)),
-		Node::Symbol(word) => ORDINAL_WORDS.iter().position(|ordinal| ordinal == word)
+		Node::Symbol(word) => ORDINAL_WORDS
+			.iter()
+			.position(|ordinal| ordinal == word)
 			.map(|index| (Bound::Position(Node::int(index as i64 + 1)), 1)),
 		_ => None,
 	}
@@ -152,14 +168,20 @@ fn bound(words: &[Node]) -> Option<(Bound, usize)> {
 /// `xs up to 2`: "a position: xs up to #2 or xs up to second"
 fn bare_number_error(words: &[Node], start: &Bound, end: &Bound) -> Node {
 	let written = |marked: &dyn Fn(&Number) -> String| {
-		let mut bounds = [start, end].into_iter().filter(|bound| matches!(bound, Bound::Bare(_) | Bound::Position(_)));
-		words.iter().map(|word| match word.drop_meta() {
-			Node::Number(_) => match bounds.next() {
-				Some(Bound::Bare(number)) => marked(number),
+		let mut bounds = [start, end]
+			.into_iter()
+			.filter(|bound| matches!(bound, Bound::Bare(_) | Bound::Position(_)));
+		words
+			.iter()
+			.map(|word| match word.drop_meta() {
+				Node::Number(_) => match bounds.next() {
+					Some(Bound::Bare(number)) => marked(number),
+					_ => word.serialize(),
+				},
 				_ => word.serialize(),
-			},
-			_ => word.serialize(),
-		}).collect::<Vec<_>>().join(" ")
+			})
+			.collect::<Vec<_>>()
+			.join(" ")
 	};
 	let hashed = written(&|number| format!("#{number}"));
 	let ordinal = written(&ordinal_word);
@@ -186,4 +208,3 @@ fn minus_one(position: Node) -> Node {
 fn is_word(node: &Node, words: &[&str]) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if words.contains(&word.as_str()))
 }
-

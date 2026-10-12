@@ -26,7 +26,9 @@ impl WasmGcEmitter {
 			self.emit_tuple_return(func, values);
 			return true;
 		}
-		let Some((names, values)) = destructuring(node) else { return false };
+		let Some((names, values)) = destructuring(node) else {
+			return false;
+		};
 		self.emit_destructuring(func, &names, values);
 		read(self, func, &Self::destructured_value(&names));
 		true
@@ -64,7 +66,16 @@ impl WasmGcEmitter {
 		let kinds: Vec<Kind> = match values {
 			[call] => match self.tuple_call(call) {
 				Some((function, kinds)) if kinds.len() != names.len() => {
-					self.emit_type_error(func, format!("{function} returns {} values, not {}: {} = {}", kinds.len(), names.len(), names.join(", "), call.serialize().trim()));
+					self.emit_type_error(
+						func,
+						format!(
+							"{function} returns {} values, not {}: {} = {}",
+							kinds.len(),
+							names.len(),
+							names.join(", "),
+							call.serialize().trim()
+						),
+					);
 					return;
 				}
 				Some((function, kinds)) => {
@@ -134,12 +145,20 @@ impl WasmGcEmitter {
 	/// A call of a function returning several values: its name and their kinds
 	fn tuple_call(&self, call: &Node) -> Option<(String, Vec<Kind>)> {
 		let (name, _) = call_parts(call)?;
-		let function = self.ctx.user_functions.get(name).filter(|function| !function.tuple_kinds.is_empty())?;
+		let function = self
+			.ctx
+			.user_functions
+			.get(name)
+			.filter(|function| !function.tuple_kinds.is_empty())?;
 		Some((name.to_string(), function.tuple_kinds.clone()))
 	}
 
 	fn variable_kind(&self, name: &str) -> Kind {
-		self.scope.lookup(name).map(|local| local.kind).or_else(|| self.ctx.user_globals.get(name).map(|(_, kind)| *kind)).unwrap_or(Kind::Data)
+		self.scope
+			.lookup(name)
+			.map(|local| local.kind)
+			.or_else(|| self.ctx.user_globals.get(name).map(|(_, kind)| *kind))
+			.unwrap_or(Kind::Data)
 	}
 
 	/// The value on top of the stack, of `kind`, into the variable `name`
@@ -149,7 +168,10 @@ impl WasmGcEmitter {
 			// `a = 0; a, b = [5, 6]`: a number item into a variable that holds a number
 			self.emit_node_as_number(func, variable_kind);
 		} else if self.storage_type(variable_kind) != self.storage_type(kind) {
-			self.emit_type_error(func, format!("{name} holds {variable_kind:?}, the destructured value is {kind:?}"));
+			self.emit_type_error(
+				func,
+				format!("{name} holds {variable_kind:?}, the destructured value is {kind:?}"),
+			);
 			return;
 		}
 		if variable_kind == Kind::Int {

@@ -4,9 +4,12 @@ use crate::is;
 
 #[test]
 fn a_map_local_stays_in_its_function() {
-	is!("tally(xs) := { out = {}; for x in xs { out[x] = 1 }; out }
+	is!(
+		"tally(xs) := { out = {}; for x in xs { out[x] = 1 }; out }
 uniq(xs) := { out = []; for x in xs { if not (x in out) { out = out + [x] } }; out }
-uniq([1,2,1])", warp::ints(vec![1, 2]));
+uniq([1,2,1])",
+		warp::ints(vec![1, 2])
+	);
 	is!("include list; unique([1,2,1])", warp::ints(vec![1, 2]));
 }
 

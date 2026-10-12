@@ -1,8 +1,8 @@
 // Precomputed paths (wiki/charged.md §3, package 3): a pure call with constant arguments inside a function body or a
 // loop is computed once at compile time, not at every call; the program's value is unchanged
-use crate::is;
 #[cfg(feature = "native")]
 use crate::eq;
+use crate::is;
 #[cfg(feature = "native")]
 use warp::*;
 

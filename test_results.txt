@@ -404,6 +404,9 @@ PASSED:
   ✓ control::test_relational_arms::a_comparison_without_its_left_side_is_an_error
   ✓ control::test_relational_arms::a_match_arm_compares_the_subject
   ✓ control::test_relational_arms::the_operator_value_stays
+  ✓ control::test_rest_patterns::a_class_pattern_leaves_other_fields_out
+  ✓ control::test_rest_patterns::a_rest_binds_the_remaining_items
+  ✓ control::test_rest_patterns::items_after_a_rest_count_from_the_end
   ✓ control::test_run_tests::a_build_leaves_the_tests_out
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
   ✓ control::test_run_time_block_cache::a_block_run_in_a_loop_with_changing_numbers_compiles_once
@@ -490,6 +493,7 @@ PASSED:
   ✓ control::test_stored_signals::a_local_named_stored_keeps_the_word
   ✓ control::test_stored_signals::a_program_keeps_its_stored_values_in_a_file_beside_it
   ✓ control::test_stored_signals::a_stored_value_starts_with_its_default
+  ✓ control::test_structural_patterns::a_call_as_the_subject
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
   ✓ control::test_structural_patterns::test_list_patterns_bind_names
   ✓ control::test_structural_patterns::test_nested_lists_and_pairs
@@ -1540,6 +1544,7 @@ PASSED:
   ✓ lists::test_empty_list_argument::a_function_receives_the_empty_list
   ✓ lists::test_empty_list_argument::an_empty_list_inside_a_list_is_an_item
   ✓ lists::test_empty_list_argument::an_empty_list_literal_is_a_call_argument
+  ✓ lists::test_empty_list_concat::an_empty_list_variable_concatenates
   ✓ lists::test_empty_list_count::a_counting_property_is_a_number_in_arithmetic
   ✓ lists::test_empty_list_count::a_loop_over_an_empty_list_does_not_run
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
@@ -1664,6 +1669,8 @@ PASSED:
   ✓ lists::test_long_list_copies::copies_keep_the_order_and_share_nothing_they_change
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
   ✓ lists::test_map_get_kind::get_gives_the_value_kind_of_the_map
+  ✓ lists::test_map_index::a_map_parameter_fills_and_finds_in_linear_time
+  ✓ lists::test_map_index::an_indexed_map_changed_in_place_finds_the_change
   ✓ lists::test_map_literal_number_keys::a_number_subscript_keys_a_map_literal
   ✓ lists::test_map_literal_number_keys::number_and_text_keys_of_a_map_literal_agree
   ✓ lists::test_map_parameter_keys::keys_of_a_one_entry_map_parameter
@@ -1757,6 +1764,9 @@ PASSED:
   ✓ lists::test_size_count::test_size_of_text_is_character_count
   ✓ lists::test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ lists::test_size_property_word::test_property_word_agrees_with_size_of
+  ✓ lists::test_sort_long::a_long_list_sorts_in_n_log_n
+  ✓ lists::test_sort_long::equal_keys_keep_their_order
+  ✓ lists::test_sort_long::ordered_input_sorts_in_linear_time
   ✓ lists::test_sorted_by_phrase::a_list_sorted_by_a_key_of_it
   ✓ lists::test_tuple_items_of_lists::a_tuple_from_a_list_keeps_its_items
   ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
@@ -2045,6 +2055,9 @@ PASSED:
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
   ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
   ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
+  ✓ node::test_node_api::a_key_shows_its_parts
+  ✓ node::test_node_api::a_list_shows_its_bracket
+  ✓ node::test_node_api::nodes_are_built_from_parts
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -3236,6 +3249,7 @@ PASSED:
   ✓ text::test_count_method::count_as_a_method_or_a_call_of_two
   ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ text::test_error_as_text::a_text_builtin_of_an_error_fails_with_the_error
+  ✓ text::test_for_each_char::a_loop_over_the_characters_of_a_text_takes_linear_time
   ✓ text::test_guillemet_strings::guillemets_close_with_the_right_one
   ✓ text::test_interpolated_source_forms::reflection_words_in_holes
   ✓ text::test_interpolation::a_dollar_before_a_digit_or_space_is_a_dollar_sign
@@ -3465,6 +3479,10 @@ PASSED:
   ✓ types::test_class_field_names::operator_words_name_fields
   ✓ types::test_class_field_names::own_parameter_field_inside_function_of_its_name
   ✓ types::test_class_field_type_phrases::a_field_type_of_words_is_one_field
+  ✓ types::test_class_fields_checked::a_declared_variable_keeps_its_class
+  ✓ types::test_class_fields_checked::a_field_of_a_class_takes_its_declared_class
+  ✓ types::test_class_fields_checked::a_field_write_takes_its_declared_class
+  ✓ types::test_class_fields_checked::a_function_local_of_the_same_name_is_its_own
   ✓ types::test_class_forms_ported::a_copy_with_changed_fields
   ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
   ✓ types::test_class_forms_ported::a_go_struct_with_methods
@@ -3478,6 +3496,7 @@ PASSED:
   ✓ types::test_class_forms_ported::a_swift_struct_with_a_mutating_method
   ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
   ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
+  ✓ types::test_class_forms_ported::ruby_endless_methods
   ✓ types::test_class_interfaces::a_class_method_satisfies_a_trait_operation
   ✓ types::test_class_interfaces::interfaces_as_other_languages_write_them
   ✓ types::test_class_json::a_named_instance_from_json_is_of_its_class
@@ -3512,6 +3531,9 @@ PASSED:
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
+  ✓ types::test_class_unions::a_union_of_a_class_and_a_builtin_type
+  ✓ types::test_class_unions::a_union_of_classes_refuses_another_class
+  ✓ types::test_class_unions::a_union_of_classes_takes_an_instance_of_each
   ✓ types::test_class_witnesses::a_compare_method_is_how_instances_order
   ✓ types::test_class_witnesses::a_text_method_is_how_an_instance_prints
   ✓ types::test_class_witnesses::an_equals_method_is_how_instances_compare
@@ -4153,6 +4175,7 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_no_optimization
   ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
+  ✓ web::test_accessibility::fetched_content_is_announced
   ✓ web::test_accessibility::head_attributes_count
   ✓ web::test_accessibility::markup_built_at_run_time_is_checked
   ✓ web::test_accessibility::style_sheet_rules_are_no_elements
@@ -4196,11 +4219,13 @@ PASSED:
   ✓ web::test_css_transitions::a_css_transition_joins_the_element_style
   ✓ web::test_css_transitions::a_made_up_kind_is_css_with_a_hint
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
+  ✓ web::test_css_transitions::css_keyframes_animate_an_element_and_its_leaving
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
   ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
+  ✓ web::test_dev_server::a_dev_build_keeps_component_state
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
@@ -4393,6 +4418,7 @@ PASSED:
   ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_wagi::each_route_answers_as_wagi
+  ✓ web::test_warp_serve::a_program_of_routes_alone_has_no_page
   ✓ web::test_warp_serve::a_program_without_serve_is_served_with_its_server_functions_and_routes
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
   ✓ web::test_web_apis::notify_is_a_host_word
@@ -4440,6 +4466,7 @@ PASSED:
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
   ✓ web::test_webview::a_page_survives_losing_focus
   ✓ web::test_webview::a_program_ending_in_an_html_page_is_shown
+  ✓ web::test_webview::a_program_ending_in_any_element_is_shown
   ✓ web::test_webview::a_program_shows_its_page_with_what_a_command_printed
   ✓ web::test_webview::an_html_file_shows_in_the_web_view
   ✓ web::test_webview::without_check_no_window_opens_under_warp_no_window
@@ -4839,4 +4866,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4834 passed, 0 failed, 4834 total tested
+10 ignored, 4861 passed, 0 failed, 4861 total tested

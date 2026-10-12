@@ -11,12 +11,42 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 26] = [
-	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
-	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
-	crate::analyzer::LIST_DROP_LAST, crate::analyzer::LIST_BECOME, crate::library_words::VALUES_SIMILAR, super::list_ops::LIST_EXTEND, crate::library_words::VALUES_ROUGH,
-	crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE,
+/// Runtime functions called from lowered code with their node arguments, and how many those are
+const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
+	(crate::analyzer::LIST_DROP_LAST, 1),
+	(crate::analyzer::LIST_BECOME, 2),
+	(super::list_ops::LIST_EXTEND, 2),
+	(super::library_ops::LIST_SORTED_BY, 2),
+];
+
+const BUILTIN_CALLS: [&str; 27] = [
+	"return",
+	"fetch",
+	"puts",
+	"puti",
+	"putl",
+	"putf",
+	"fd_write",
+	"range",
+	"type",
+	"use",
+	crate::min_max::EMPTY_EXTREMUM_CALL,
+	crate::switch::NO_CASE_CALL,
+	crate::analyzer::ZERO_FILL_CALL,
+	crate::analyzer::INSERT_AT_CALL,
+	crate::analyzer::INSERT_EITHER_CALL,
+	crate::library_words::LIST_SUM,
+	crate::traits::INSTANCE_OF,
+	crate::analyzer::REMOVED_VALUE_CALL,
+	crate::analyzer::LIST_DROP_LAST,
+	crate::analyzer::LIST_BECOME,
+	crate::library_words::VALUES_SIMILAR,
+	super::list_ops::LIST_EXTEND,
+	crate::library_words::VALUES_ROUGH,
+	crate::time::INSTANT_AT,
+	crate::time::TIME_OF,
+	crate::time::TIME_IN_ZONE,
+	super::library_ops::LIST_SORTED_BY,
 ];
 
 const PRINT: &str = "print";
@@ -27,7 +57,8 @@ const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 /// The word a list calls: `f a b`, `f(a, b)`, `(f)`; none for a `;`/newline sequence, whose first statement may be a
 /// word of its own (`{beep⏎ play 440}` runs beep, then play; card error-beep)
 pub(super) fn called_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
-	let calls = (items.len() >= 2 && !separator.separates_statements()) || *bracket == Bracket::Round && items.len() == 1;
+	let calls =
+		(items.len() >= 2 && !separator.separates_statements()) || *bracket == Bracket::Round && items.len() == 1;
 	items.first().filter(|_| calls)?.symbol_name()
 }
 
@@ -41,7 +72,9 @@ fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 /// `print "x changed to " value` (wiki/signal.md): a text followed by values prints them joined, without separator
 fn juxtaposed_text(argument: &Node) -> Option<Node> {
 	match argument.drop_meta() {
-		Node::List(parts, Bracket::None, Separator::Space) if matches!(parts.first().map(Node::drop_meta), Some(Node::Text(_))) => {
+		Node::List(parts, Bracket::None, Separator::Space)
+			if matches!(parts.first().map(Node::drop_meta), Some(Node::Text(_))) =>
+		{
 			Some(super::joined_text(parts, ""))
 		}
 		_ => None,
@@ -57,7 +90,7 @@ const NEAR_MISS_TOPIC: &str = "near-miss";
 /// Words the near-miss warning compares with besides the program's own names
 const TEXT_TYPE: &str = "text";
 const CODEPOINT_TYPE: &str = "codepoint";
-const KNOWN_WORDS: [&str; 6] =["print", "count", "sum", "first", "last", "reverse"];
+const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -83,9 +116,22 @@ impl WasmGcEmitter {
 	}
 
 	/// `reverse(xs)`, `split(text, separator)` …: the library words with a runtime function; returns whether it was one
-	fn emit_library_word_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
-		let Some(name) = call_name(items, bracket, separator) else { return false };
-		let Some((_, function)) = super::library_ops::LIBRARY_FUNCTIONS.iter().find(|(word, _)| *word == name) else { return false };
+	fn emit_library_word_call(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> bool {
+		let Some(name) = call_name(items, bracket, separator) else {
+			return false;
+		};
+		let Some((_, function)) = super::library_ops::LIBRARY_FUNCTIONS
+			.iter()
+			.find(|(word, _)| *word == name)
+		else {
+			return false;
+		};
 		if self.emit_typed_map_membership(func, items) {
 			return true;
 		}
@@ -102,7 +148,13 @@ impl WasmGcEmitter {
 	}
 
 	/// A call nothing resolves is an error value at the call; returns whether it was one
-	pub(super) fn reject_unresolved_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+	pub(super) fn reject_unresolved_call(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> bool {
 		let Some(name) = call_name(items, bracket, separator) else {
 			return false;
 		};
@@ -117,8 +169,16 @@ impl WasmGcEmitter {
 	}
 
 	/// `f(a, b…)` or `(f)` of a user function, an FFI import or a text builtin
-	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
-		let Some(fn_name) = called_word(items, bracket, separator) else { return false };
+	fn emit_function_call(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> bool {
+		let Some(fn_name) = called_word(items, bracket, separator) else {
+			return false;
+		};
 		// `(angle)` of a variable is its value
 		if items.len() < 2 && self.is_variable(fn_name) {
 			return false;
@@ -159,11 +219,17 @@ impl WasmGcEmitter {
 		match self.get_type(repeated) {
 			crate::Kind::Text | crate::Kind::Codepoint => self.emit_text_repeat(func, repeated, count),
 			kind if kind.is_int() || kind.is_float() => {
-				let product = self.numeric_times(&Node::List(items.to_vec(), Bracket::Round, Separator::None)).expect("a number repeated");
+				let product = self
+					.numeric_times(&Node::List(items.to_vec(), Bracket::Round, Separator::None))
+					.expect("a number repeated");
 				self.emit_node_instructions(func, &product);
 			}
 			kind => {
-				let reason = format!("`n times x` repeats a text (or a list: `n times [x]`), {} is {}", repeated.serialize(), crate::analyzer::kind_with_article(kind));
+				let reason = format!(
+					"`n times x` repeats a text (or a list: `n times [x]`), {} is {}",
+					repeated.serialize(),
+					crate::analyzer::kind_with_article(kind)
+				);
 				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
 			}
 		}
@@ -172,8 +238,12 @@ impl WasmGcEmitter {
 
 	/// English `it times it` of numbers: the product `it * it` (alias rule, with a note naming `*`)
 	pub(super) fn numeric_times(&self, node: &Node) -> Option<Node> {
-		let Node::List(items, _, _) = node.drop_meta() else { return None };
-		let [word, count, repeated] = items.as_slice() else { return None };
+		let Node::List(items, _, _) = node.drop_meta() else {
+			return None;
+		};
+		let [word, count, repeated] = items.as_slice() else {
+			return None;
+		};
 		let is_times = matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::TEXT_TIMES);
 		let kind = self.get_type(repeated);
 		if !is_times || !(kind.is_int() || kind.is_float()) {
@@ -181,7 +251,11 @@ impl WasmGcEmitter {
 		}
 		let (count_text, repeated_text) = (count.serialize(), repeated.serialize());
 		crate::normalize::set_position_of(word);
-		crate::normalize::hint(&format!("{count_text} times {repeated_text}"), &format!("{count_text} * {repeated_text}"), "`times` of two numbers multiplies");
+		crate::normalize::hint(
+			&format!("{count_text} times {repeated_text}"),
+			&format!("{count_text} * {repeated_text}"),
+			"`times` of two numbers multiplies",
+		);
 		Some(Node::Key(Box::new(count.clone()), Op::Mul, Box::new(repeated.clone())))
 	}
 
@@ -190,7 +264,9 @@ impl WasmGcEmitter {
 		if items.len() < 2 || !self.config.emit_wasi_imports {
 			return false;
 		}
-		let Node::Symbol(word) = items[0].drop_meta() else { return false };
+		let Node::Symbol(word) = items[0].drop_meta() else {
+			return false;
+		};
 		match word.as_str() {
 			PRINT if items.as_ptr() as usize == self.result_print => {
 				self.emit_result_print(func, &printed_value(items, bracket));
@@ -230,7 +306,13 @@ impl WasmGcEmitter {
 
 	/// Emit instructions for List(items, bracket, separator) nodes
 	/// Dispatches based on list contents and bracket type
-	pub(super) fn emit_list_node(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
+	pub(super) fn emit_list_node(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) {
 		if items.is_empty() || self.emit_task_check(func, items) {
 			self.emit_call(func, "new_empty");
 			return;
@@ -241,27 +323,38 @@ impl WasmGcEmitter {
 
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
-			if !self.emit_function_call(func, items, bracket, separator) && !self.emit_empty_print(func, items) && !self.emit_library_word_call(func, items, bracket, separator) && !self.reject_unresolved_call(func, items, bracket, separator) {
+			if !self.emit_function_call(func, items, bracket, separator)
+				&& !self.emit_empty_print(func, items)
+				&& !self.emit_library_word_call(func, items, bracket, separator)
+				&& !self.reject_unresolved_call(func, items, bracket, separator)
+			{
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;
 		}
 
 		// a lone import or use statement (the whole program) is worth ø
-		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)) && items.len() >= 2 {
+		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word))
+			&& items.len() >= 2
+		{
 			self.emit_call(func, "new_empty");
 			return;
 		}
 
 		// Check for fetch call: [Symbol("fetch"), url_node], optionally `… timeout SECONDS`
 		if self.config.emit_host_imports {
-			if let Some((url, timeout)) = crate::host::fetch_call(&Node::List(items.to_vec(), Bracket::None, Separator::Space)) {
+			if let Some((url, timeout)) =
+				crate::host::fetch_call(&Node::List(items.to_vec(), Bracket::None, Separator::Space))
+			{
 				self.emit_fetch_call(func, &url, timeout);
 				return;
 			}
 		}
 
-		if self.emit_return_statement(func, items) || self.emit_text_times(func, items) || self.emit_wasi_call(func, items, bracket) {
+		if self.emit_return_statement(func, items)
+			|| self.emit_text_times(func, items)
+			|| self.emit_wasi_call(func, items, bracket)
+		{
 			return;
 		}
 
@@ -269,15 +362,23 @@ impl WasmGcEmitter {
 		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
 		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.emit_shadowed_counting(func, fn_name, &items[1]) || (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1])) {
+				if self.emit_shadowed_counting(func, fn_name, &items[1])
+					|| (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1]))
+				{
 					return;
 				}
 			}
 		}
 
 		// Check for type constructor calls: int('123'), str(123), char(0x41), etc.
-		let is_typed_decl = matches!(items.get(1).map(Node::drop_meta), Some(Node::Key(_, Op::Assign | Op::Define, _)));
-		if !is_typed_decl && crate::analyzer::type_cast_of(items, bracket, separator, &|name| self.scope.lookup(name).is_some()).is_some() {
+		let is_typed_decl = matches!(
+			items.get(1).map(Node::drop_meta),
+			Some(Node::Key(_, Op::Assign | Op::Define, _))
+		);
+		if !is_typed_decl
+			&& crate::analyzer::type_cast_of(items, bracket, separator, &|name| self.scope.lookup(name).is_some())
+				.is_some()
+		{
 			self.emit_cast(func, &items[1], &items[0]);
 			return;
 		}
@@ -320,7 +421,9 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		if self.emit_library_word_call(func, items, bracket, separator) || self.emit_type_test(func, items, bracket, separator) {
+		if self.emit_library_word_call(func, items, bracket, separator)
+			|| self.emit_type_test(func, items, bracket, separator)
+		{
 			return;
 		}
 
@@ -360,26 +463,15 @@ impl WasmGcEmitter {
 				return;
 			}
 		}
-		if let [Node::Symbol(call), list] = items {
-			if call == crate::analyzer::LIST_DROP_LAST {
-				self.emit_node_instructions(func, list);
-				self.emit_call(func, crate::analyzer::LIST_DROP_LAST);
-				return;
-			}
-		}
-		if let [Node::Symbol(call), list, fresh] = items {
-			if call == crate::analyzer::LIST_BECOME {
-				self.emit_node_instructions(func, list);
-				self.emit_node_instructions(func, fresh);
-				self.emit_call(func, crate::analyzer::LIST_BECOME);
-				return;
-			}
-		}
-		if let [Node::Symbol(call), list, added] = items {
-			if call == super::list_ops::LIST_EXTEND {
-				self.emit_node_instructions(func, list);
-				self.emit_node_instructions(func, added);
-				self.emit_call(func, super::list_ops::LIST_EXTEND);
+		if let Some((Node::Symbol(call), arguments)) = items.split_first() {
+			if let Some((name, _)) = NODE_ARGUMENT_CALLS
+				.iter()
+				.find(|(name, count)| name == call && *count == arguments.len())
+			{
+				for argument in arguments {
+					self.emit_node_instructions(func, argument);
+				}
+				self.emit_call(func, name);
 				return;
 			}
 		}
@@ -393,7 +485,9 @@ impl WasmGcEmitter {
 		}
 		if let [Node::Symbol(call), list, first, second] = items {
 			if call == crate::analyzer::INSERT_AT_CALL || call == crate::analyzer::INSERT_EITHER_CALL {
-				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else { return };
+				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else {
+					return;
+				};
 				self.emit_node_instructions(func, list);
 				self.emit_numeric_value(func, position);
 				self.emit_node_instructions(func, value);
@@ -416,7 +510,8 @@ impl WasmGcEmitter {
 		}
 
 		// Check if this is a statement sequence
-		let is_statement_sequence = is_unbracketed_block(items, bracket, separator) || items.iter().any(|item| is_statement(item, bracket));
+		let is_statement_sequence =
+			is_unbracketed_block(items, bracket, separator) || items.iter().any(|item| is_statement(item, bracket));
 
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
@@ -425,10 +520,15 @@ impl WasmGcEmitter {
 			// whatever they compute
 			let is_tuple = *separator == Separator::Colon && items.len() > 1;
 			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
-			let has_field = items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
-			let has_arithmetic = *bracket != Bracket::Square && !is_tuple && !has_field && items.iter().any(|item| {
-				matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic())
-			});
+			let has_field = items.len() > 1
+				&& items
+					.iter()
+					.any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
+			let has_arithmetic = *bracket != Bracket::Square
+				&& !is_tuple && !has_field
+				&& items
+					.iter()
+					.any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
 			if has_arithmetic {
 				let node = Node::List(items.to_vec(), bracket.clone(), Separator::None);
 				if self.get_type(&node).is_float() {
@@ -467,14 +567,17 @@ impl WasmGcEmitter {
 
 	/// A value held as a Node whose type only the run time knows: an optional, an `any` parameter, an item of a mixed list
 	fn has_unknown_static_type(&self, subject: &Node) -> bool {
-		!matches!(subject.drop_meta(), Node::Number(_)) && matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
+		!matches!(subject.drop_meta(), Node::Number(_))
+			&& matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
 	}
 
 	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
 	/// number of Int kind), a Key that may be an instance of a declared type
 	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
-		if crate::analyzer::is_boolean(subject, &self.scope) || matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
-			|| crate::analyzer::held_map_type(subject, &self.scope).is_some() {
+		if crate::analyzer::is_boolean(subject, &self.scope)
+			|| matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
+			|| crate::analyzer::held_map_type(subject, &self.scope).is_some()
+		{
 			return false;
 		}
 		match self.get_type(subject) {
@@ -494,16 +597,36 @@ impl WasmGcEmitter {
 	/// `t is number` of a type value t (`t = type(x)`, `int is number`): t names one of the types number covers, `t == int or
 	/// t == rational or …`; None for a value that is no symbol, or a test for a symbol
 	fn type_value_test(&self, subject: &Node, spec: &str) -> Option<Node> {
-		if self.get_type(subject) != crate::Kind::Symbol || crate::type_tests::type_matches(crate::type_tests::SYMBOL_TYPE, spec) {
+		if self.get_type(subject) != crate::Kind::Symbol
+			|| crate::type_tests::type_matches(crate::type_tests::SYMBOL_TYPE, spec)
+		{
 			return None;
 		}
-		let names_type = |name: &str| Node::Key(Box::new(subject.clone()), Op::Eq, Box::new(Node::Symbol(name.to_string())));
-		let tests = crate::type_tests::builtin_types_matching(spec).into_iter().map(names_type);
-		Some(tests.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test))).unwrap_or(Node::False))
+		let names_type = |name: &str| {
+			Node::Key(
+				Box::new(subject.clone()),
+				Op::Eq,
+				Box::new(Node::Symbol(name.to_string())),
+			)
+		};
+		let tests = crate::type_tests::builtin_types_matching(spec)
+			.into_iter()
+			.map(names_type);
+		Some(
+			tests
+				.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test)))
+				.unwrap_or(Node::False),
+		)
 	}
 
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
-	fn emit_type_test(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+	fn emit_type_test(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> bool {
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		if !self.emit_type_test_value(func, &call) {
 			return false;
@@ -515,24 +638,33 @@ impl WasmGcEmitter {
 	/// `is_type(x, "spec")` as an i64 1 or 0: from the static type of x when it is known, else from the run-time kind of the
 	/// value (node_kind_in) or, for a declared type, the instance's type (instance_of); true when it was one
 	pub(super) fn emit_type_test_value(&mut self, func: &mut Function, node: &Node) -> bool {
-		let Node::List(items, bracket, separator) = node.drop_meta() else { return false };
+		let Node::List(items, bracket, separator) = node.drop_meta() else {
+			return false;
+		};
 		if call_name(items, bracket, separator) != Some(crate::type_tests::IS_TYPE) {
 			return false;
 		}
-		let [_, subject, spec] = items.as_slice() else { return false };
-		let Node::Text(spec) = spec.drop_meta() else { return false };
+		let [_, subject, spec] = items.as_slice() else {
+			return false;
+		};
+		let Node::Text(spec) = spec.drop_meta() else {
+			return false;
+		};
 		if let Some(names_a_covered_type) = self.type_value_test(subject, spec) {
 			self.emit_numeric_value(func, &names_a_covered_type);
 			return true;
 		}
 		let filter_loop = filter_loop_of(node);
 		// `for char in s` of a text s: every item is a code point
-		if filter_loop.as_ref().is_some_and(|filter| self.get_type(&filter.iterable) == Kind::Text && crate::type_tests::type_matches(CODEPOINT_TYPE, spec)) {
+		if filter_loop.as_ref().is_some_and(|filter| {
+			self.get_type(&filter.iterable) == Kind::Text && crate::type_tests::type_matches(CODEPOINT_TYPE, spec)
+		}) {
 			func.instruction(&I::I64Const(1));
 			return true;
 		}
 		// `s#1 is char`: an item of a text is typed text but is a code point at run time
-		let item_of_text = self.static_type_name(subject) == TEXT_TYPE && crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
+		let item_of_text = self.static_type_name(subject) == TEXT_TYPE
+			&& crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
 		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == crate::analyzer::MAP_TYPE;
@@ -543,7 +675,10 @@ impl WasmGcEmitter {
 		if map_test || kind_mask.is_some() || declared_type {
 			let announced = filter_loop.map_or(Ok(0), |filter| crate::diagnostic::ask(&filter.question));
 			if let Err(error) = announced {
-				let message = match error { Node::Error(reason) => reason.drop_meta().name(), other => other.serialize() };
+				let message = match error {
+					Node::Error(reason) => reason.drop_meta().name(),
+					other => other.serialize(),
+				};
 				self.emit_type_error(func, message);
 				return true;
 			}
@@ -568,7 +703,15 @@ impl WasmGcEmitter {
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
 			None if declared_type => {
-				let instance_test = Node::List(vec![Node::Symbol(crate::traits::INSTANCE_OF.to_string()), subject.clone(), Node::Text(spec.clone())], Bracket::Round, Separator::None);
+				let instance_test = Node::List(
+					vec![
+						Node::Symbol(crate::traits::INSTANCE_OF.to_string()),
+						subject.clone(),
+						Node::Text(spec.clone()),
+					],
+					Bracket::Round,
+					Separator::None,
+				);
 				self.emit_numeric_value(func, &instance_test);
 			}
 			None => {
@@ -585,10 +728,15 @@ impl WasmGcEmitter {
 	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
 	/// functions, which call it (lib/markup.warp's count(items))
 	pub(super) fn emit_shadowed_counting(&mut self, func: &mut Function, name: &str, argument: &Node) -> bool {
-		let shadowed = self.scope.lookup(name).is_some() && !self.ctx.user_functions.contains_key(name) && crate::analyzer::counting_function(name, &self.ctx).is_some();
+		let shadowed = self.scope.lookup(name).is_some()
+			&& !self.ctx.user_functions.contains_key(name)
+			&& crate::analyzer::counting_function(name, &self.ctx).is_some();
 		if shadowed {
 			let argument = crate::normalize::operand_text(argument);
-			self.emit_type_error(func, format!("`{name}` is a variable here, so {name}({argument}) cannot count: rename the variable"));
+			self.emit_type_error(
+				func,
+				format!("`{name}` is a variable here, so {name}({argument}) cannot count: rename the variable"),
+			);
 		}
 		shadowed
 	}
@@ -605,16 +753,28 @@ impl WasmGcEmitter {
 		}
 		match fn_name {
 			crate::switch::NO_CASE_CALL => {
-				let Node::Key(label, Op::Colon, value) = arg.drop_meta() else { return false };
-				let Node::Text(label) = label.drop_meta() else { return false };
+				let Node::Key(label, Op::Colon, value) = arg.drop_meta() else {
+					return false;
+				};
+				let Node::Text(label) = label.drop_meta() else {
+					return false;
+				};
 				self.emit_trap_detail(func, value);
-				let error: &'static str = Box::leak(format!("{}{label}", crate::switch::NO_CASE_PREFIX).into_boxed_str());
+				let error: &'static str =
+					Box::leak(format!("{}{label}", crate::switch::NO_CASE_PREFIX).into_boxed_str());
 				self.emit_runtime_error(func, error);
 				true
 			}
 			crate::min_max::EMPTY_EXTREMUM_CALL => {
-				let Node::Symbol(extremum) = arg.drop_meta() else { return false };
-				let Some((_, error)) = crate::min_max::EMPTY_LIST_ERRORS.iter().find(|(name, _)| name == extremum) else { return false };
+				let Node::Symbol(extremum) = arg.drop_meta() else {
+					return false;
+				};
+				let Some((_, error)) = crate::min_max::EMPTY_LIST_ERRORS
+					.iter()
+					.find(|(name, _)| name == extremum)
+				else {
+					return false;
+				};
 				self.emit_runtime_error(func, error);
 				true
 			}
@@ -649,11 +809,25 @@ impl WasmGcEmitter {
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				Self::emit_list(func, &[
-					I::I64ReinterpretF64, I::LocalTee(bits), I::F64ReinterpretI64, I::F64Floor, I::LocalGet(bits), I::F64ReinterpretI64,
-					I::LocalGet(bits), I::F64ReinterpretI64, I::F64Floor, I::F64Sub, I::F64Const(0.5f64.into()), I::F64Ge,
-					I::F64ConvertI32U, I::F64Add,
-				]);
+				Self::emit_list(
+					func,
+					&[
+						I::I64ReinterpretF64,
+						I::LocalTee(bits),
+						I::F64ReinterpretI64,
+						I::F64Floor,
+						I::LocalGet(bits),
+						I::F64ReinterpretI64,
+						I::LocalGet(bits),
+						I::F64ReinterpretI64,
+						I::F64Floor,
+						I::F64Sub,
+						I::F64Const(0.5f64.into()),
+						I::F64Ge,
+						I::F64ConvertI32U,
+						I::F64Add,
+					],
+				);
 				self.emit_integral_float_as_int(func);
 				true
 			}
@@ -681,10 +855,16 @@ impl WasmGcEmitter {
 		let instance_local = self.node_scratch();
 		func.instruction(&I::LocalSet(instance_local));
 		self.emit_field(func, instance_local, 0);
-		Self::emit_list(func, &[
-			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(crate::Kind::Key as i64), I::I64Eq,
-			I::If(BlockType::Result(ValType::I64)),
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(crate::type_kinds::KIND_MASK),
+				I::I64And,
+				I::I64Const(crate::Kind::Key as i64),
+				I::I64Eq,
+				I::If(BlockType::Result(ValType::I64)),
+			],
+		);
 		self.emit_field(func, instance_local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
 		let (pointer, length) = self.allocate_string(type_name);
@@ -707,15 +887,33 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		Self::emit_list(func, &[
-			I::I64ReinterpretF64, I::LocalTee(divisor_bits), I::F64ReinterpretI64, I::F64Div, I::I64ReinterpretF64, I::LocalSet(quotient),
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64ReinterpretF64,
+				I::LocalTee(divisor_bits),
+				I::F64ReinterpretI64,
+				I::F64Div,
+				I::I64ReinterpretF64,
+				I::LocalSet(quotient),
+			],
+		);
 		// a negative divisor rounds the quotient up, a positive one down
-		Self::emit_list(func, &[
-			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil,
-			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Floor,
-			I::LocalGet(divisor_bits), I::I64Const(0), I::I64LtS, I::Select,
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(quotient),
+				I::F64ReinterpretI64,
+				I::F64Ceil,
+				I::LocalGet(quotient),
+				I::F64ReinterpretI64,
+				I::F64Floor,
+				I::LocalGet(divisor_bits),
+				I::I64Const(0),
+				I::I64LtS,
+				I::Select,
+			],
+		);
 		self.emit_truncating_cast(func);
 	}
 
@@ -726,8 +924,18 @@ impl WasmGcEmitter {
 	}
 
 	/// A type definition declares and runs nothing (types are registered beforehand): emit the other items
-	fn emit_without_type_definitions(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) {
-		let rest: Vec<Node> = items.iter().filter(|item| !matches!(item.drop_meta(), Node::Type { .. })).cloned().collect();
+	fn emit_without_type_definitions(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) {
+		let rest: Vec<Node> = items
+			.iter()
+			.filter(|item| !matches!(item.drop_meta(), Node::Type { .. }))
+			.cloned()
+			.collect();
 		match rest.as_slice() {
 			[] => self.emit_call(func, "new_empty"),
 			[only] => self.emit_node_instructions(func, only),
@@ -737,10 +945,20 @@ impl WasmGcEmitter {
 
 	/// Emit a statement sequence: execute in order, keep the last value.
 	/// Function definitions leave no value; they snapshot the variables they capture.
-	pub(super) fn emit_statement_sequence(&mut self, func: &mut Function, items: &[Node], emit: fn(&mut Self, &mut Function, &Node)) {
+	pub(super) fn emit_statement_sequence(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
 		let last_statement = items.iter().rposition(|item| !self.is_definition(item));
 		// `a;b;c` is data; among code (`x=1; foo; x`) a word that names nothing would be silently dropped
-		let is_code = items.iter().any(|item| !matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_)));
+		let is_code = items.iter().any(|item| {
+			!matches!(
+				item.drop_meta(),
+				Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_)
+			)
+		});
 		for (i, item) in items.iter().enumerate() {
 			if self.is_definition(item) {
 				if let Some(name) = self.defined_function_name(item) {
@@ -766,29 +984,52 @@ impl WasmGcEmitter {
 
 	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;
 	/// two Ints are ambiguous (Python `insert(i, x)` vs warp `insert(x, i)`): the user is asked, unanswered it is an error
-	fn insert_position_and_value<'a>(&mut self, func: &mut Function, call: &str, first: &'a Node, second: &'a Node) -> Option<(&'a Node, &'a Node)> {
+	fn insert_position_and_value<'a>(
+		&mut self,
+		func: &mut Function,
+		call: &str,
+		first: &'a Node,
+		second: &'a Node,
+	) -> Option<(&'a Node, &'a Node)> {
 		use crate::diagnostic::{ask, reading, Ask, Fallback};
 		if call == crate::analyzer::INSERT_AT_CALL {
 			return Some((first, second));
 		}
 		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
-		let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
+		let (a, b) = (
+			crate::normalize::operand_text(first),
+			crate::normalize::operand_text(second),
+		);
 		match (is_int(self.get_type(first)), is_int(self.get_type(second))) {
 			(true, false) => Some((first, second)),
 			(false, true) => Some((second, first)),
 			(false, false) => {
-				self.emit_type_error(func, format!("insert({a}, {b}) needs an integer position: insert(value, at: position)"));
+				self.emit_type_error(
+					func,
+					format!("insert({a}, {b}) needs an integer position: insert(value, at: position)"),
+				);
 				None
 			}
 			(true, true) => {
-				let question = Ask::new(INSERT_ORDER_TOPIC, format!("does insert({a}, {b}) put {b} at {a} (Python) or {a} at {b} (warp)?"),
-					vec![reading("position first, as Python", &format!("insert({b}, at: {a})")), reading("value first, as warp", &format!("insert({a}, at: {b})"))],
-					Fallback::Error).written(&format!("insert({a}, {b})")).at_node(first);
+				let question = Ask::new(
+					INSERT_ORDER_TOPIC,
+					format!("does insert({a}, {b}) put {b} at {a} (Python) or {a} at {b} (warp)?"),
+					vec![
+						reading("position first, as Python", &format!("insert({b}, at: {a})")),
+						reading("value first, as warp", &format!("insert({a}, at: {b})")),
+					],
+					Fallback::Error,
+				)
+				.written(&format!("insert({a}, {b})"))
+				.at_node(first);
 				match ask(&question) {
 					Ok(0) => Some((first, second)),
 					Ok(_) => Some((second, first)),
 					Err(error) => {
-						let message = match error { Node::Error(reason) => reason.drop_meta().name(), other => other.serialize() };
+						let message = match error {
+							Node::Error(reason) => reason.drop_meta().name(),
+							other => other.serialize(),
+						};
 						self.emit_type_error(func, message);
 						None
 					}
@@ -800,8 +1041,16 @@ impl WasmGcEmitter {
 	/// P51/P62 (user): an unknown word next to a value in code (`cube 3`, `(cube 3)`, `[cube 3]`) is an error, never silent
 	/// data. Data contexts keep it: a `quote`/`data` prefix and the values of an object literal (`data_context`); all-word
 	/// lists (`hello world`) are not judged here
-	pub(super) fn unknown_word_error(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<String> {
-		let in_code = matches!((bracket, separator), (Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _));
+	pub(super) fn unknown_word_error(
+		&self,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> Option<String> {
+		let in_code = matches!(
+			(bracket, separator),
+			(Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _)
+		);
 		// an argument: a value or a name the program defines (`cube x`); unknown words alone are symbols (`[red green]`)
 		let is_value = |item: &Node| match item.drop_meta() {
 			Node::Symbol(name) => self.unknown_word(item).is_none() && !name.is_empty(),
@@ -810,7 +1059,16 @@ impl WasmGcEmitter {
 		};
 		// only lists of atoms: a list with an operator (`foo x = 3`) names its undefined variable on its own
 		// a cast value counts too: `cube 3 as int` parses as `cube (3 as int)`
-		let is_atom = |item: &Node| matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(..) | Node::Key(_, Op::As, _));
+		let is_atom = |item: &Node| {
+			matches!(
+				item.drop_meta(),
+				Node::Symbol(_)
+					| Node::Number(_)
+					| Node::Text(_) | Node::Char(_)
+					| Node::List(..)
+					| Node::Key(_, Op::As, _)
+			)
+		};
 		// a word after an assignment's value (`y = 1 zork`) would be dropped: card trailing-symbol
 		let is_assignment = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 		let assigned = items.first().filter(|first| is_assignment(first));
@@ -820,7 +1078,10 @@ impl WasmGcEmitter {
 		}
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = crate::diagnostic::written_text(&written);
-		let Some(name) = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name))) else {
+		let Some(name) = items
+			.iter()
+			.find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))
+		else {
 			let assigned = crate::diagnostic::written_text(assigned?);
 			let dropped = crate::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
 			let message = format!("`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement");
@@ -828,7 +1089,14 @@ impl WasmGcEmitter {
 		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
 			Some(_) => crate::ffi::undefined_function_diagnostic(&written, &name),
-			None => self.offer_near_name(crate::diagnostic::Diagnostic::at(&written, format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data")), &name)
+			None => self
+				.offer_near_name(
+					crate::diagnostic::Diagnostic::at(
+						&written,
+						format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data"),
+					),
+					&name,
+				)
 				.offer("data", &text, format!("data {text}")),
 		};
 		Some(diagnostic.remembered())
@@ -845,9 +1113,19 @@ impl WasmGcEmitter {
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}
-		let Some(near) = self.near_name(word) else { return Ok(()) };
-		let question = Ask::new(NEAR_MISS_TOPIC, format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
-			vec![reading("the symbol", &format!("data {word}")), reading(&format!("the name {near}"), &near)], Fallback::Warning).written(word);
+		let Some(near) = self.near_name(word) else {
+			return Ok(());
+		};
+		let question = Ask::new(
+			NEAR_MISS_TOPIC,
+			format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
+			vec![
+				reading("the symbol", &format!("data {word}")),
+				reading(&format!("the name {near}"), &near),
+			],
+			Fallback::Warning,
+		)
+		.written(word);
 		let (line, column) = self.source_position.unwrap_or((0, 0));
 		let question = question.at(line, column);
 		ask(&question).map(|_| ())
@@ -855,14 +1133,24 @@ impl WasmGcEmitter {
 
 	/// The name of the program or the language `word` is a typo of: `pirnt` → print
 	fn near_name(&self, word: &str) -> Option<String> {
-		let mut names: Vec<String> = self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
+		let mut names: Vec<String> = self
+			.ctx
+			.user_functions
+			.keys()
+			.chain(self.ctx.user_globals.keys())
+			.cloned()
+			.collect();
 		names.extend(self.scope.local_names());
 		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
 		crate::extensions::strings::near_miss(word, names)
 	}
 
 	/// The fix of a misspelled `word`, when it is near a name
-	pub(super) fn offer_near_name(&self, diagnostic: crate::diagnostic::Diagnostic, word: &str) -> crate::diagnostic::Diagnostic {
+	pub(super) fn offer_near_name(
+		&self,
+		diagnostic: crate::diagnostic::Diagnostic,
+		word: &str,
+	) -> crate::diagnostic::Diagnostic {
 		match self.near_name(word) {
 			Some(near) => diagnostic.offer(format!("the name {near}"), word, near),
 			None => diagnostic,
@@ -876,7 +1164,11 @@ impl WasmGcEmitter {
 	/// `data cube 3`: the words after the prefix as data (P62); true when it was one
 	fn emit_quoted(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 		let [prefix, rest @ ..] = items else { return false };
-		if *bracket != Bracket::None || *separator != Separator::Space || rest.is_empty() || !matches!(prefix.drop_meta(), Node::Symbol(word) if QUOTE_WORDS.contains(&word.as_str())) {
+		if *bracket != Bracket::None
+			|| *separator != Separator::Space
+			|| rest.is_empty()
+			|| !matches!(prefix.drop_meta(), Node::Symbol(word) if QUOTE_WORDS.contains(&word.as_str()))
+		{
 			return false;
 		}
 		// data never runs: the expression as it is written (`data 1+2` is 1+2)
@@ -889,8 +1181,12 @@ impl WasmGcEmitter {
 
 	/// A bare word that is no variable, global or function
 	fn unknown_word(&self, item: &Node) -> Option<String> {
-		let Node::Symbol(name) = item.drop_meta() else { return None };
-		let known = self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name) || self.ctx.user_functions.contains_key(name);
+		let Node::Symbol(name) = item.drop_meta() else {
+			return None;
+		};
+		let known = self.scope.lookup(name).is_some()
+			|| self.ctx.user_globals.contains_key(name)
+			|| self.ctx.user_functions.contains_key(name);
 		(!known).then(|| name.clone())
 	}
 
@@ -906,7 +1202,12 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_discarded_statement(&mut self, func: &mut Function, item: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
+	pub(super) fn emit_discarded_statement(
+		&mut self,
+		func: &mut Function,
+		item: &Node,
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
 		if self.emit_discarded_branches(func, item) {
 			return;
 		}
@@ -917,12 +1218,19 @@ impl WasmGcEmitter {
 				return;
 			}
 			// `out = ø; while … do {…}`, statements a call like count hoists: their last one is dropped too
-			Node::List(items, bracket, Separator::Semicolon | Separator::Newline) if *bracket != Bracket::Square && items.len() > 1 => {
+			Node::List(items, bracket, Separator::Semicolon | Separator::Newline)
+				if *bracket != Bracket::Square && items.len() > 1 =>
+			{
 				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
 				return;
 			}
 			// `S1 = -0.16, S2 = 0.0083`: assignments separated by commas are statements too, each of its own kind
-			Node::List(items, bracket, Separator::Colon) if *bracket != Bracket::Square && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) => {
+			Node::List(items, bracket, Separator::Colon)
+				if *bracket != Bracket::Square
+					&& items
+						.iter()
+						.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) =>
+			{
 				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
 				return;
 			}
@@ -933,11 +1241,19 @@ impl WasmGcEmitter {
 			self.emit_typed_list_extend(func, &name, &items); // the array itself is dropped, it needs no Node
 		} else if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
-		} else if self.is_float_assignment(item) || self.is_float_read(item) || destructured.is_some_and(|kind| kind.is_float()) {
+		} else if self.is_float_assignment(item)
+			|| self.is_float_read(item)
+			|| destructured.is_some_and(|kind| kind.is_float())
+		{
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
 		} else if self.is_int_local_assignment(item) {
 			self.emit_numeric_value(func, item); // `i = start` of a range loop: the i64 stored, never an Int node
-		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) || destructured.is_some_and(|kind| kind.is_ref()) {
+		} else if self.is_ref_update(item)
+			|| self.is_output_call(item)
+			|| self.is_ref_value(item)
+			|| matches!(item.drop_meta(), Node::Empty)
+			|| destructured.is_some_and(|kind| kind.is_ref())
+		{
 			self.emit_node_instructions(func, item);
 		} else {
 			emit(self, func, item);
@@ -970,8 +1286,12 @@ impl WasmGcEmitter {
 	/// keeps in another representation (a float, text or list update, a typed list store), no float
 	pub(super) fn ends_in_number(&self, statements: &[Node]) -> bool {
 		statements.last().is_some_and(|last| {
-			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
-				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_read(last)
+			!self.is_float_assignment(last)
+				&& !self.is_ref_update(last)
+				&& !self.is_ref_value(last)
+				&& self.typed_list_store(last).is_none()
+				&& !self.get_type(last).is_ref()
+				&& !self.is_float_read(last)
 				&& self.get_type(last) != Kind::Float
 		})
 	}
@@ -984,11 +1304,17 @@ impl WasmGcEmitter {
 			Node::Key(if_then, Op::Else, otherwise) => (if_then.as_ref(), Some(otherwise.as_ref())),
 			other => (other, None),
 		};
-		let Node::Key(condition, Op::Then, then) = if_then.drop_meta() else { return false };
-		let Node::Key(_, Op::If, condition) = condition.drop_meta() else { return false };
+		let Node::Key(condition, Op::Then, then) = if_then.drop_meta() else {
+			return false;
+		};
+		let Node::Key(_, Op::If, condition) = condition.drop_meta() else {
+			return false;
+		};
 		let stores_typed_list = |branch: &Node| {
 			let mut found = false;
-			branch.visit(&mut |part| found |= self.typed_list_store(part).is_some() || self.typed_list_extension(part).is_some());
+			branch.visit(&mut |part| {
+				found |= self.typed_list_store(part).is_some() || self.typed_list_extension(part).is_some()
+			});
 			found
 		};
 		if !stores_typed_list(then) && !otherwise.is_some_and(stores_typed_list) {
@@ -1018,7 +1344,9 @@ impl WasmGcEmitter {
 	fn is_ref_update(&self, item: &Node) -> bool {
 		match item.drop_meta() {
 			// `p.items += [v]`, `m#2 += [v]`: items added to the list a field or item holds (emit_member_list_extend)
-			Node::Key(left, Op::AddAssign, right) if matches!(left.drop_meta(), Node::Key(_, Op::Hash | Op::Dot, _)) => {
+			Node::Key(left, Op::AddAssign, right)
+				if matches!(left.drop_meta(), Node::Key(_, Op::Hash | Op::Dot, _)) =>
+			{
 				matches!(right.drop_meta(), Node::List(_, Bracket::Square, _))
 			}
 			Node::Key(left, op, _) if *op == Op::Assign || op.is_compound_assign() => {
@@ -1038,7 +1366,9 @@ impl WasmGcEmitter {
 			Node::Symbol(_) | Node::List(_, Bracket::Round, _) => self.get_type(item).is_ref(),
 			Node::Key(_, op, _) if op.is_arithmetic() => self.get_type(item).is_ref(),
 			// `levels[i]` of a list a function gave: an element held as a Node, whatever number it is
-			Node::Key(list, Op::Hash, _) if !matches!(list.drop_meta(), Node::Empty) => matches!(self.get_type(item), Kind::Empty) || self.get_type(item).is_ref(),
+			Node::Key(list, Op::Hash, _) if !matches!(list.drop_meta(), Node::Empty) => {
+				matches!(self.get_type(item), Kind::Empty) || self.get_type(item).is_ref()
+			}
 			_ => false,
 		}
 	}
@@ -1052,10 +1382,15 @@ impl WasmGcEmitter {
 			other => self.is_float_assignment(other),
 		};
 		match item.drop_meta() {
-			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign | Op::Inc | Op::Dec) || op.is_compound_assign() => self.is_float_variable(left),
+			Node::Key(left, op, _)
+				if matches!(op, Op::Define | Op::Assign | Op::Inc | Op::Dec) || op.is_compound_assign() =>
+			{
+				self.is_float_variable(left)
+			}
 			Node::Key(_, Op::Then, then) => branch_assigns_float(then),
 			Node::Key(if_then, Op::Else, otherwise) => {
-				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then)) || branch_assigns_float(otherwise)
+				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then))
+					|| branch_assigns_float(otherwise)
 			}
 			_ => false,
 		}
@@ -1063,12 +1398,13 @@ impl WasmGcEmitter {
 
 	/// Function definitions and imports: compiled ahead, no runtime value
 	pub(super) fn is_definition(&self, item: &Node) -> bool {
-		self.defined_function_name(item).is_some() || match item.drop_meta() {
-			Node::List(list_items, _, _) if list_items.len() >= 2 => {
-				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s))
+		self.defined_function_name(item).is_some()
+			|| match item.drop_meta() {
+				Node::List(list_items, _, _) if list_items.len() >= 2 => {
+					matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s))
+				}
+				_ => false,
 			}
-			_ => false,
-		}
 	}
 
 	/// Name of the user function this item defines: `f := …`, `f(x…) := …`, `f(x…) = …`, `def f(x…): …`
@@ -1097,7 +1433,10 @@ impl WasmGcEmitter {
 /// The loop `for T in xs` a type test filters, carried from the parser (warp_parser FilterLoop)
 fn filter_loop_of(test: &Node) -> Option<crate::warp_parser::FilterLoop> {
 	let Node::Meta { data, node } = test else { return None };
-	data.data_value().downcast_ref::<crate::warp_parser::FilterLoop>().cloned().or_else(|| filter_loop_of(node))
+	data.data_value()
+		.downcast_ref::<crate::warp_parser::FilterLoop>()
+		.cloned()
+		.or_else(|| filter_loop_of(node))
 }
 
 /// The wasm instruction rounding an f64 like `floor`, `ceil` or `round` (half even, IEEE 754's default)

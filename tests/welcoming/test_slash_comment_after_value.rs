@@ -4,7 +4,11 @@ use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledgi
 use warp::normalize::capture_hints;
 
 fn slash_notes(code: &str) -> usize {
-	capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count()
+	capture_hints(|| warp::wasm_emitter::eval(code))
+		.1
+		.iter()
+		.filter(|hint| hint.canonical == "a//b")
+		.count()
 }
 
 #[test]
@@ -14,7 +18,10 @@ fn a_comment_after_a_text_gets_no_division_note() {
 	let _ = std::fs::remove_file(path);
 	with_acknowledger(Acknowledging(vec![]), || {
 		use_acknowledgements_file(path);
-		assert_eq!(slash_notes("div{ class:\"form-group\" // free form values need to be quoted\n}"), 0);
+		assert_eq!(
+			slash_notes("div{ class:\"form-group\" // free form values need to be quoted\n}"),
+			0
+		);
 		assert_eq!(slash_notes("xs = [1, // the first\n2]\nxs"), 0);
 		assert_eq!(slash_notes("x = 7 // 2\nx"), 1);
 	});

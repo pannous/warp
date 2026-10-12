@@ -1,7 +1,7 @@
 // card unknown-word: `as` with a word that names no type, unit or class is a compile-time error naming the word; it
 // used to stay a silent `255 as hex` node, or fail as "not a joinable item" / "cannot extract a numeric value"
-use warp::wasm_emitter::eval;
 use crate::is;
+use warp::wasm_emitter::eval;
 
 fn unknown_conversion_error(code: &str) {
 	let result = format!("{:?}", eval(code));

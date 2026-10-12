@@ -4,116 +4,112 @@ use super::*;
 use std::sync::LazyLock;
 use wasmparser as wp;
 
-
-static REGISTRY: LazyLock<Mutex<FieldNameRegistry>> =
-    LazyLock::new(|| Mutex::new(FieldNameRegistry::default()));
+static REGISTRY: LazyLock<Mutex<FieldNameRegistry>> = LazyLock::new(|| Mutex::new(FieldNameRegistry::default()));
 
 /// The registry only caches parsed name sections, so a panic elsewhere while it was locked (a should_panic test,
 /// say) leaves it usable; that panic already reported itself, and poisoning would fail every later lookup
 fn registry() -> std::sync::MutexGuard<'static, FieldNameRegistry> {
-    REGISTRY.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+	REGISTRY.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 pub fn register_module(bytes: &[u8]) -> Result<u64> {
-    let mut registry = registry();
-    registry.register_module(bytes)
+	let mut registry = registry();
+	registry.register_module(bytes)
 }
 
 pub fn lookup_field_index(struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
-    let mut registry = registry();
-    registry.lookup(struct_type, field_name, module)
+	let mut registry = registry();
+	registry.lookup(struct_type, field_name, module)
 }
 
 pub fn field_names(struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
-    let mut registry = registry();
-    registry.field_names(struct_type, module)
+	let mut registry = registry();
+	registry.field_names(struct_type, module)
 }
 
 pub fn type_name(struct_type: &StructType, module: Option<u64>) -> Result<Option<String>> {
-    let mut registry = registry();
-    registry.type_name(struct_type, module)
+	let mut registry = registry();
+	registry.type_name(struct_type, module)
 }
 
 #[derive(Default)]
 struct FieldNameRegistry {
-    modules: Vec<Arc<ParsedModule>>,
-    cache: HashMap<(StructTypeKey, Option<u64>), Arc<StructFieldMapping>>,
+	modules: Vec<Arc<ParsedModule>>,
+	cache: HashMap<(StructTypeKey, Option<u64>), Arc<StructFieldMapping>>,
 }
 
 impl FieldNameRegistry {
-    fn register_module(&mut self, bytes: &[u8]) -> Result<u64> {
-        let hash = module_hash(bytes);
-        if self.modules.iter().any(|m| m.hash == hash) {
-            return Ok(hash);
-        }
-        let module = Arc::new(ParsedModule::parse(bytes, hash)?);
-        self.modules.push(module);
-        Ok(hash)
-    }
+	fn register_module(&mut self, bytes: &[u8]) -> Result<u64> {
+		let hash = module_hash(bytes);
+		if self.modules.iter().any(|m| m.hash == hash) {
+			return Ok(hash);
+		}
+		let module = Arc::new(ParsedModule::parse(bytes, hash)?);
+		self.modules.push(module);
+		Ok(hash)
+	}
 
-    fn lookup(&mut self, struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
-        let mapping = self.ensure_mapping(struct_type, module)?;
-        mapping
-            .index_of(field_name)
-            .ok_or_else(|| unknown_field_error(field_name, &mapping))
-    }
+	fn lookup(&mut self, struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
+		let mapping = self.ensure_mapping(struct_type, module)?;
+		mapping
+			.index_of(field_name)
+			.ok_or_else(|| unknown_field_error(field_name, &mapping))
+	}
 
-    fn field_names(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
-        let mapping = self.ensure_mapping(struct_type, module)?;
-        Ok(mapping.names.clone())
-    }
+	fn field_names(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
+		let mapping = self.ensure_mapping(struct_type, module)?;
+		Ok(mapping.names.clone())
+	}
 
-    fn type_name(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Option<String>> {
-        let mapping = self.ensure_mapping(struct_type, module)?;
-        Ok(mapping.type_name.clone())
-    }
+	fn type_name(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Option<String>> {
+		let mapping = self.ensure_mapping(struct_type, module)?;
+		Ok(mapping.type_name.clone())
+	}
 
-    /// Resolve names for a struct type: the owning module when known, otherwise
-    /// the most recently registered structurally matching one.
-    fn ensure_mapping(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Arc<StructFieldMapping>> {
-        if self.modules.is_empty() {
-            return Err(anyhow!(
-                "No WASM metadata registered. Call `register_gc_types_from_wasm` before accessing fields by name."
-            ));
-        }
+	/// Resolve names for a struct type: the owning module when known, otherwise
+	/// the most recently registered structurally matching one.
+	fn ensure_mapping(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Arc<StructFieldMapping>> {
+		if self.modules.is_empty() {
+			return Err(anyhow!(
+				"No WASM metadata registered. Call `register_gc_types_from_wasm` before accessing fields by name."
+			));
+		}
 
-        let key = (StructTypeKey(struct_type.clone()), module);
-        if let Some(mapping) = self.cache.get(&key) {
-            return Ok(mapping.clone());
-        }
+		let key = (StructTypeKey(struct_type.clone()), module);
+		if let Some(mapping) = self.cache.get(&key) {
+			return Ok(mapping.clone());
+		}
 
-        let owning = module.and_then(|hash| self.modules.iter().find(|m| m.hash == hash));
-        let candidates: Vec<Arc<ParsedModule>> = match owning {
-            Some(module) => vec![module.clone()],
-            None => self.modules.iter().rev().cloned().collect(),
-        };
+		let owning = module.and_then(|hash| self.modules.iter().find(|m| m.hash == hash));
+		let candidates: Vec<Arc<ParsedModule>> = match owning {
+			Some(module) => vec![module.clone()],
+			None => self.modules.iter().rev().cloned().collect(),
+		};
 
-        for module in candidates {
-            if let Some(mapping) = module.try_match(struct_type) {
-                let mapping = Arc::new(mapping);
-                self.cache.insert(key.clone(), mapping.clone());
-                return Ok(mapping);
-            }
-        }
+		for module in candidates {
+			if let Some(mapping) = module.try_match(struct_type) {
+				let mapping = Arc::new(mapping);
+				self.cache.insert(key.clone(), mapping.clone());
+				return Ok(mapping);
+			}
+		}
 
-        Err(anyhow!(
-            "Failed to resolve struct fields from registered modules"
-        ))
-    }
+		Err(anyhow!("Failed to resolve struct fields from registered modules"))
+	}
 }
 
 fn unknown_field_error(field_name: &str, mapping: &StructFieldMapping) -> anyhow::Error {
-    let mut available: Vec<&str> = mapping.available_names();
-    available.sort_unstable();
-    anyhow!(
-        "Unknown field '{}'. Available fields: {}",
-        field_name,
-        if available.is_empty() {
-            "<none>".to_string()
-        } else {
-            available.join(", ")
-        }
-    )
+	let mut available: Vec<&str> = mapping.available_names();
+	available.sort_unstable();
+	anyhow!(
+		"Unknown field '{}'. Available fields: {}",
+		field_name,
+		if available.is_empty() {
+			"<none>".to_string()
+		} else {
+			available.join(", ")
+		}
+	)
 }
 
 fn module_hash(bytes: &[u8]) -> u64 {
@@ -261,9 +257,7 @@ impl ParsedModule {
 		}
 		// Apply field names
 		for (type_index, entries) in field_names {
-			if let Some(ParsedTypeInfo::Struct(struct_ty)) =
-				self.types.get_mut(type_index as usize)
-			{
+			if let Some(ParsedTypeInfo::Struct(struct_ty)) = self.types.get_mut(type_index as usize) {
 				for (field_idx, name) in entries {
 					if let Some(slot) = struct_ty.field_names.get_mut(field_idx as usize) {
 						*slot = Some(name);
@@ -362,10 +356,7 @@ impl ParsedFuncType {
 			.iter()
 			.map(|r| ParsedValType::from_parser(r, group_start))
 			.collect::<Result<Vec<_>>>()?;
-		Ok(Self {
-			params,
-			results,
-		})
+		Ok(Self { params, results })
 	}
 }
 
@@ -396,9 +387,7 @@ impl ParsedStorageType {
 		Ok(match ty {
 			wp::StorageType::I8 => ParsedStorageType::I8,
 			wp::StorageType::I16 => ParsedStorageType::I16,
-			wp::StorageType::Val(v) => {
-				ParsedStorageType::Val(ParsedValType::from_parser(v, group_start)?)
-			}
+			wp::StorageType::Val(v) => ParsedStorageType::Val(ParsedValType::from_parser(v, group_start)?),
 		})
 	}
 }
@@ -452,7 +441,9 @@ impl ParsedHeapType {
 	fn from_parser(ty: &wp::HeapType, group_start: u32) -> Result<Self> {
 		Ok(match ty {
 			wp::HeapType::Abstract { ty, .. } => ParsedHeapType::Abstract(ParsedAbstractHeapType::from_parser(*ty)),
-			wp::HeapType::Concrete(idx) | wp::HeapType::Exact(idx) => ParsedHeapType::Concrete(resolve_index(*idx, group_start)?),
+			wp::HeapType::Concrete(idx) | wp::HeapType::Exact(idx) => {
+				ParsedHeapType::Concrete(resolve_index(*idx, group_start)?)
+			}
 		})
 	}
 }
@@ -539,8 +530,7 @@ impl<'a> MatchContext<'a> {
 		if parsed.fields.len() != runtime_fields.len() {
 			return false;
 		}
-		for (parsed_field, runtime_field) in parsed.fields.iter().zip(runtime_fields.by_ref())
-		{
+		for (parsed_field, runtime_field) in parsed.fields.iter().zip(runtime_fields.by_ref()) {
 			if parsed_field.mutable != runtime_field.mutability().is_var() {
 				return false;
 			}
@@ -574,9 +564,7 @@ impl<'a> MatchContext<'a> {
 			_ => return false,
 		};
 		self.bindings.insert(idx, RuntimeTypeId::Func(ty.clone()));
-		if parsed.params.len() != ty.params().len()
-			|| parsed.results.len() != ty.results().len()
-		{
+		if parsed.params.len() != ty.params().len() || parsed.results.len() != ty.results().len() {
 			return false;
 		}
 		for (parsed_val, runtime_val) in parsed.params.iter().zip(ty.params()) {
@@ -594,8 +582,7 @@ impl<'a> MatchContext<'a> {
 
 	fn match_storage_type(&mut self, parsed: &ParsedStorageType, ty: &StorageType) -> bool {
 		match (parsed, ty) {
-			(ParsedStorageType::I8, StorageType::I8)
-			| (ParsedStorageType::I16, StorageType::I16) => true,
+			(ParsedStorageType::I8, StorageType::I8) | (ParsedStorageType::I16, StorageType::I16) => true,
 			(ParsedStorageType::Val(p), StorageType::ValType(v)) => self.match_val_type(p, v),
 			_ => false,
 		}
@@ -622,15 +609,9 @@ impl<'a> MatchContext<'a> {
 	fn match_heap_type(&mut self, parsed: &ParsedHeapType, ty: &HeapType) -> bool {
 		match (parsed, ty) {
 			(ParsedHeapType::Abstract(kind), _) => matches_abstract_heap(*kind, ty),
-			(ParsedHeapType::Concrete(idx), HeapType::ConcreteStruct(s)) => {
-				self.match_struct(*idx, s)
-			}
-			(ParsedHeapType::Concrete(idx), HeapType::ConcreteArray(a)) => {
-				self.match_array(*idx, a)
-			}
-			(ParsedHeapType::Concrete(idx), HeapType::ConcreteFunc(f)) => {
-				self.match_func(*idx, f)
-			}
+			(ParsedHeapType::Concrete(idx), HeapType::ConcreteStruct(s)) => self.match_struct(*idx, s),
+			(ParsedHeapType::Concrete(idx), HeapType::ConcreteArray(a)) => self.match_array(*idx, a),
+			(ParsedHeapType::Concrete(idx), HeapType::ConcreteFunc(f)) => self.match_func(*idx, f),
 			_ => false,
 		}
 	}
@@ -639,18 +620,18 @@ impl<'a> MatchContext<'a> {
 fn matches_abstract_heap(kind: ParsedAbstractHeapType, ty: &HeapType) -> bool {
 	use ParsedAbstractHeapType::*;
 	matches!(
-    (kind, ty),
-    (Extern,   HeapType::Extern)
-    | (NoExtern, HeapType::NoExtern)
-    | (Func,     HeapType::Func)
-    | (NoFunc,   HeapType::NoFunc)
-    | (Any,      HeapType::Any)
-    | (None,     HeapType::None)
-    | (Eq,       HeapType::Eq)
-    | (Struct,   HeapType::Struct)
-    | (Array,    HeapType::Array)
-    | (I31,      HeapType::I31)
-)
+		(kind, ty),
+		(Extern, HeapType::Extern)
+			| (NoExtern, HeapType::NoExtern)
+			| (Func, HeapType::Func)
+			| (NoFunc, HeapType::NoFunc)
+			| (Any, HeapType::Any)
+			| (None, HeapType::None)
+			| (Eq, HeapType::Eq)
+			| (Struct, HeapType::Struct)
+			| (Array, HeapType::Array)
+			| (I31, HeapType::I31)
+	)
 }
 
 enum RuntimeTypeId {

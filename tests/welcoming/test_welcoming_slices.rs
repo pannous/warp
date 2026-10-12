@@ -75,7 +75,11 @@ fn a_fractional_index_in_a_variable_must_be_an_integer() {
 #[test]
 fn a_hint_is_given_once_per_compilation() {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval("xs=[1,2,3]; reverse(xs)#(3/2)"));
-	assert_eq!(hints.iter().filter(|hint| hint.canonical == "3//2").count(), 1, "{hints:?}");
+	assert_eq!(
+		hints.iter().filter(|hint| hint.canonical == "3//2").count(),
+		1,
+		"{hints:?}"
+	);
 }
 
 /// The trap knows no source, so the message itself names the fix of a fractional index (samples/sorting.warp: `mid = len(items)/2`)

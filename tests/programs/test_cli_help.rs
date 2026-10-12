@@ -5,6 +5,9 @@
 fn help_prints_the_usage() {
 	for flag in ["--help", "help", "-h"] {
 		let printed = crate::common::printed(flag);
-		assert!(printed.contains("warp eval <code>") && printed.contains("github.com/pannous/warp/wiki"), "{flag}: {printed}");
+		assert!(
+			printed.contains("warp eval <code>") && printed.contains("github.com/pannous/warp/wiki"),
+			"{flag}: {printed}"
+		);
 	}
 }

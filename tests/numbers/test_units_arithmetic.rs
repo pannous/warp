@@ -1,7 +1,7 @@
 // Unit words are values: `3km` is 3*km, sums convert to the finer unit (wiki/unit.md)
+use crate::common;
 use crate::is;
 use warp::*;
-use crate::common;
 
 #[test]
 fn test_unit_sum_uses_the_finer_unit() {

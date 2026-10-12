@@ -1,7 +1,7 @@
 //! D9 (user, 2026-10-03): every function has a suffix form (`square 2 == 2 squared`, wiki/function.md); an ungrouped mix
 //! with infix operators (`1+2 squared`) asks `1+(2 squared)` or `(1+2) squared`
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 const SQUARE: &str = "square:=it*it; ";
 
@@ -23,7 +23,10 @@ fn a_function_name_with_ed_is_its_suffix_form() {
 fn an_ungrouped_mix_asks() {
 	fails_with(&with_square("1+2 squared"), "(too ambiguous to guess)");
 	fails_with(&with_square("1+2 squared"), "`1+(2 squared)` for squared binds to 2");
-	fails_with(&with_square("1+2 squared"), "`(1+2) squared` for squared applies to 1+2");
+	fails_with(
+		&with_square("1+2 squared"),
+		"`(1+2) squared` for squared applies to 1+2",
+	);
 }
 
 #[test]
@@ -39,7 +42,10 @@ fn an_unknown_word_is_no_suffix_form() {
 
 #[test] // samples/sudoku.warp: `solved = solve(c); return solved` read as `solve(return)`
 fn a_variable_is_no_suffix_form() {
-	is!("def solve(n) { if n > 2 { return n }; solved = solve(n + 1); return solved }; solve(0)", 3);
+	is!(
+		"def solve(n) { if n > 2 { return n }; solved = solve(n + 1); return solved }; solve(0)",
+		3
+	);
 }
 
 #[test]

@@ -2,9 +2,9 @@
 // definition and never changed is read as that constant in the body (`k = 3; def f(x){x+k}` → `x+3`), and Int
 // arithmetic left constant is computed. A `global` variable, a changed one or a non-constant value stays a variable.
 // Compiled modules only, like folding; the program's value is unchanged.
-use crate::is;
 #[cfg(feature = "native")]
 use crate::eq;
+use crate::is;
 #[cfg(feature = "native")]
 use warp::*;
 
@@ -42,7 +42,10 @@ fn constant_arithmetic_is_computed_after_inlining() {
 	same_value(code, 10);
 	let code = "def f(x){x + 3*4}; f(1)";
 	let program = inlined(code);
-	assert!(program.contains("x+3*4"), "a body without inlined variable keeps its form: {program}");
+	assert!(
+		program.contains("x+3*4"),
+		"a body without inlined variable keeps its form: {program}"
+	);
 }
 
 #[test]

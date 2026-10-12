@@ -3,8 +3,10 @@
 //! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
+use super::nodes::{
+	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key, Counter,
+};
 use super::words::{ON_WORD, RETURN_WORD};
-use super::nodes::{Counter, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -12,7 +14,13 @@ use crate::operators::{is_function_keyword, Op};
 const THIS_WORD: &str = "this";
 /// `map data = {…}`: the collection words a typed declaration takes, as the annotation they mean (type() answers map,
 /// list, tuple); dict and array are other languages' words for map and list (card declaration-type)
-const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [("map", "map"), ("list", "list"), ("tuple", "tuple"), ("dict", "map"), ("array", "list")];
+const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [
+	("map", "map"),
+	("list", "list"),
+	("tuple", "tuple"),
+	("dict", "map"),
+	("array", "list"),
+];
 const SELF_WORD: &str = "self";
 /// Swift's block of methods added to a type: `extension Int {…}`
 const EXTENSION_WORD: &str = "extension";
@@ -45,7 +53,11 @@ const TASK_VALUE: &str = "task·value";
 /// until resolve_tasks knows whether the started functions run on threads
 const TASK_LIST: &str = "task·list";
 /// The reads `await` names: `await job`, `await all jobs`; the others (`job + 1`) wait unsaid, which warns
-const AWAITED_MARKERS: [(&str, &str); 3] = [(TASK_VALUE, "task·awaited"), (TASK_LIST, "task·awaited·list"), (TASK_ELEMENT, "task·awaited·element")];
+const AWAITED_MARKERS: [(&str, &str); 3] = [
+	(TASK_VALUE, "task·awaited"),
+	(TASK_LIST, "task·awaited·list"),
+	(TASK_ELEMENT, "task·awaited·element"),
+];
 const IMPLICIT_WAIT_TOPIC: &str = "implicit-await";
 const TASK_ELEMENT: &str = "task·element";
 /// `await all jobs`: the results of every job of a list
@@ -86,10 +98,16 @@ const HANDLED_PREFIX: &str = "handled·";
 
 pub fn lower(node: Node) -> Node {
 	let mut enums = vec![];
-	node.visit(&mut |part| if let Node::List(items, _, _) = part {
-		enums.extend(enum_cases(items));
+	node.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			enums.extend(enum_cases(items));
+		}
 	});
-	let node = if enums.is_empty() { node } else { enum_paths(node, &enums) };
+	let node = if enums.is_empty() {
+		node
+	} else {
+		enum_paths(node, &enums)
+	};
 	lower_lists(lower_flags(node), enum_object)
 }
 
@@ -98,7 +116,11 @@ fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
 	let is_enum = |name: &Node| matches!(name.drop_meta(), Node::Symbol(name) if enums.iter().any(|(declared, _)| declared == name));
 	let enum_of = |case: &Node| {
 		let case = case.drop_meta().name();
-		let owners: Vec<&String> = enums.iter().filter(|(_, cases)| cases.contains(&case)).map(|(name, _)| name).collect();
+		let owners: Vec<&String> = enums
+			.iter()
+			.filter(|(_, cases)| cases.contains(&case))
+			.map(|(name, _)| name)
+			.collect();
 		(owners.len() == 1).then(|| owners[0].clone())
 	};
 	match node {
@@ -114,8 +136,12 @@ fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
 fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let [word, name, cases] = items else { return None };
 	let is_enum = word.is_symbol(ENUM_WORD);
-	let Node::Symbol(name) = name.drop_meta() else { return None };
-	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else { return None };
+	let Node::Symbol(name) = name.drop_meta() else {
+		return None;
+	};
+	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else {
+		return None;
+	};
 	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
 	is_enum.then_some((name.clone(), names?))
 }
@@ -124,7 +150,9 @@ fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 fn case_name(case: &Node) -> Option<String> {
 	match case.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
-		Node::List(words, _, _) if matches!(words.as_slice(), [keyword, name] if keyword.drop_meta().name() == CASE_WORD && matches!(name.drop_meta(), Node::Symbol(_))) => Some(words[1].drop_meta().name()),
+		Node::List(words, _, _) if matches!(words.as_slice(), [keyword, name] if keyword.drop_meta().name() == CASE_WORD && matches!(name.drop_meta(), Node::Symbol(_))) => {
+			Some(words[1].drop_meta().name())
+		}
 		_ => None,
 	}
 }
@@ -154,8 +182,13 @@ fn flags_declaration(items: &[Node]) -> Option<(String, Vec<String>)> {
 		[word, name, members] if is_flags_word(word) => (name, members),
 		_ => return None,
 	};
-	let (Node::Symbol(name), Node::List(members, Bracket::Curly, _)) = (name.drop_meta(), members.drop_meta()) else { return None };
-	let members: Option<Vec<String>> = members.iter().map(|member| member.symbol_name().map(String::from)).collect();
+	let (Node::Symbol(name), Node::List(members, Bracket::Curly, _)) = (name.drop_meta(), members.drop_meta()) else {
+		return None;
+	};
+	let members: Option<Vec<String>> = members
+		.iter()
+		.map(|member| member.symbol_name().map(String::from))
+		.collect();
 	Some((name.clone(), members?))
 }
 
@@ -165,11 +198,18 @@ fn is_flags_word(word: &Node) -> bool {
 
 fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
 	let record = |name: &Node, members: &[String], set: &[String]| {
-		let entries = members.iter().map(|member| {
-			let value = if set.contains(member) { Node::True } else { Node::False };
-			key(Node::Symbol(member.clone()), Op::Colon, value)
-		}).collect();
-		key(name.clone(), Op::Assign, Node::List(entries, Bracket::Curly, Separator::Space))
+		let entries = members
+			.iter()
+			.map(|member| {
+				let value = if set.contains(member) { Node::True } else { Node::False };
+				key(Node::Symbol(member.clone()), Op::Colon, value)
+			})
+			.collect();
+		key(
+			name.clone(),
+			Op::Assign,
+			Node::List(entries, Bracket::Curly, Separator::Space),
+		)
 	};
 	match node {
 		Node::List(items, bracket, separator) => {
@@ -178,17 +218,26 @@ fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
 			}
 			// `virtues goal = fast+safe`
 			if let [type_name, declaration] = items.as_slice() {
-				if let (Node::Symbol(type_name), Node::Key(variable, Op::Assign, value)) = (type_name.drop_meta(), declaration.drop_meta()) {
+				if let (Node::Symbol(type_name), Node::Key(variable, Op::Assign, value)) =
+					(type_name.drop_meta(), declaration.drop_meta())
+				{
 					if let Some((_, members)) = types.iter().find(|(name, _)| name == type_name) {
 						let set = named_flags(value);
 						if let Some(unknown) = set.iter().find(|flag| !members.contains(flag)) {
-							return crate::node::error(&format!("{type_name} has no flag {unknown}; its flags: {}", members.join(", ")));
+							return crate::node::error(&format!(
+								"{type_name} has no flag {unknown}; its flags: {}",
+								members.join(", ")
+							));
 						}
 						return record(variable, members, &set);
 					}
 				}
 			}
-			Node::List(items.into_iter().map(|item| rewrite_flags(item, types)).collect(), bracket, separator)
+			Node::List(
+				items.into_iter().map(|item| rewrite_flags(item, types)).collect(),
+				bracket,
+				separator,
+			)
 		}
 		other => children_rewritten(other, |child| rewrite_flags(child, types)),
 	}
@@ -215,22 +264,24 @@ pub fn lower_tasks(node: Node) -> Node {
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
 	let mut started = std::collections::HashMap::new();
-	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part {
-		let name = match head.drop_meta() {
-			Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		};
-		if let Some((variable, items)) = task_start(part) {
-			tasks.insert(variable.clone());
-			if let Some((function, _)) = started_call(&items[1..]) {
-				started.insert(variable.clone(), function);
+	node.visit(&mut |part| {
+		if let Node::Key(head, Op::Define | Op::Assign, _) = part {
+			let name = match head.drop_meta() {
+				Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
+				Node::Symbol(name) => Some(name.clone()),
+				_ => None,
+			};
+			if let Some((variable, items)) = task_start(part) {
+				tasks.insert(variable.clone());
+				if let Some((function, _)) = started_call(&items[1..]) {
+					started.insert(variable.clone(), function);
+				}
 			}
+			if matches!(head.drop_meta(), Node::List(..)) {
+				functions.extend(name.clone());
+			}
+			defined.extend(name);
 		}
-		if matches!(head.drop_meta(), Node::List(..)) {
-			functions.extend(name.clone());
-		}
-		defined.extend(name);
 	});
 	let words: Vec<&str> = TASK_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
 	if words.is_empty() {
@@ -240,28 +291,42 @@ pub fn lower_tasks(node: Node) -> Node {
 	let context = crate::analyzer::function_definitions(&node);
 	functions.extend(context.user_functions.into_keys());
 	// the functions a `go` starts: `once the download finishes` names the task by its function
-	node.visit(&mut |part| if let Node::List(items, _, _) = part {
-		if let [word, started, ..] = items.as_slice() {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == TASK_WORDS[0]) {
-				let function = match started.drop_meta() {
-					Node::List(call, _, _) => call.first().map(|name| name.drop_meta().name()),
-					other => Some(other.name()),
-				};
-				tasks.extend(function);
+	node.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			if let [word, started, ..] = items.as_slice() {
+				if matches!(word.drop_meta(), Node::Symbol(name) if name == TASK_WORDS[0]) {
+					let function = match started.drop_meta() {
+						Node::List(call, _, _) => call.first().map(|name| name.drop_meta().name()),
+						other => Some(other.name()),
+					};
+					tasks.extend(function);
+				}
 			}
 		}
 	});
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
 	let own_dir = defined.contains(DIR_WORD);
-	Tasks { words, own_dir, tasks, started, functions, job_lists }.lower(node)
+	Tasks {
+		words,
+		own_dir,
+		tasks,
+		started,
+		functions,
+		job_lists,
+	}
+	.lower(node)
 }
 
 /// `job = go f(x)`: the task variable and the words of its start
 fn task_start(node: &Node) -> Option<(&String, &Vec<Node>)> {
-	let Node::Key(head, Op::Define | Op::Assign, value) = node else { return None };
+	let Node::Key(head, Op::Define | Op::Assign, value) = node else {
+		return None;
+	};
 	match (head.drop_meta(), value.drop_meta()) {
-		(Node::Symbol(variable), Node::List(items, _, _)) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) => Some((variable, items)),
+		(Node::Symbol(variable), Node::List(items, _, _)) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) => {
+			Some((variable, items))
+		}
 		_ => None,
 	}
 }
@@ -274,7 +339,9 @@ fn spoken_words(items: &[Node]) -> Vec<Node> {
 	};
 	match items {
 		[first, rest @ ..] if pair(first).is_some() => [pair(first).expect("guarded"), rest.to_vec()].concat(),
-		[head, second] if head.name() == TASK_WORDS[1] && pair(second).is_some() => [vec![head.clone()], pair(second).expect("guarded")].concat(),
+		[head, second] if head.name() == TASK_WORDS[1] && pair(second).is_some() => {
+			[vec![head.clone()], pair(second).expect("guarded")].concat()
+		}
 		_ => items.to_vec(),
 	}
 }
@@ -284,9 +351,15 @@ fn awaited_starts(node: Node, counter: &Counter) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			match spoken_words(&items).as_slice() {
-				[await_word, go_word, started @ ..] if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] => {
+				[await_word, go_word, started @ ..]
+					if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] =>
+				{
 					let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
-					let start = Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
+					let start = Node::List(
+						[vec![go_word.clone()], started.to_vec()].concat(),
+						Bracket::None,
+						Separator::Space,
+					);
 					let assignment = key(job.clone(), Op::Assign, start);
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
 					Node::List(vec![assignment, awaited], Bracket::Round, Separator::Semicolon)
@@ -294,32 +367,66 @@ fn awaited_starts(node: Node, counter: &Counter) -> Node {
 				// `await all [go f(1), go f(2)]` (Promise.all, asyncio.gather): every task starts, then each is awaited;
 				// `await any [go f(1), go f(2)]` (Promise.race): every task starts, then the first to finish is awaited
 				// `await first [go a(), go b()]`: the first task's result, whichever ends first (P153, with a note naming the race)
-				[await_word, all_word, list] if await_word.name() == TASK_WORDS[1] && [ALL_WORD, ANY_WORD, FIRST_WORD].contains(&all_word.name().as_str()) && matches!(list.drop_meta(), Node::List(listed, Bracket::Square, _) if listed.iter().any(is_start)) => {
+				[await_word, all_word, list]
+					if await_word.name() == TASK_WORDS[1]
+						&& [ALL_WORD, ANY_WORD, FIRST_WORD].contains(&all_word.name().as_str())
+						&& matches!(list.drop_meta(), Node::List(listed, Bracket::Square, _) if listed.iter().any(is_start)) =>
+				{
 					let racing = all_word.name() == ANY_WORD;
 					let first = all_word.name() == FIRST_WORD;
 					if first {
 						crate::normalize::set_position_of(list);
-						crate::diagnostic::educate_once(FIRST_TOPIC, "await first […]", "await any […]", "await first is the first task's result; for the first to finish: await any […]");
+						crate::diagnostic::educate_once(
+							FIRST_TOPIC,
+							"await first […]",
+							"await any […]",
+							"await first is the first task's result; for the first to finish: await any […]",
+						);
 					}
-					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else { unreachable!("guarded") };
+					let Node::List(listed, list_bracket, list_separator) = list.drop_meta().clone() else {
+						unreachable!("guarded")
+					};
 					let mut starts = vec![];
-					let results: Vec<Node> = listed.into_iter().map(|item| match is_start(&item) {
-						true => {
-							let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
-							starts.push(key(job.clone(), Op::Assign, item));
-							if racing { job } else { Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space) }
-						}
-						false => item,
-					}).collect();
+					let results: Vec<Node> = listed
+						.into_iter()
+						.map(|item| match is_start(&item) {
+							true => {
+								let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
+								starts.push(key(job.clone(), Op::Assign, item));
+								if racing {
+									job
+								} else {
+									Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space)
+								}
+							}
+							false => item,
+						})
+						.collect();
 					if first {
 						let first_result = results.into_iter().next().expect("a started task");
-						return Node::List([starts, vec![first_result]].concat(), Bracket::Round, Separator::Semicolon);
+						return Node::List(
+							[starts, vec![first_result]].concat(),
+							Bracket::Round,
+							Separator::Semicolon,
+						);
 					}
 					let results = Node::List(results, list_bracket, list_separator);
-					let value = if racing { Node::List(vec![await_word.clone(), all_word.clone(), results], Bracket::None, Separator::Space) } else { results };
+					let value = if racing {
+						Node::List(
+							vec![await_word.clone(), all_word.clone(), results],
+							Bracket::None,
+							Separator::Space,
+						)
+					} else {
+						results
+					};
 					Node::List([starts, vec![value]].concat(), Bracket::Round, Separator::Semicolon)
 				}
-				_ => Node::List(items.into_iter().map(|item| awaited_starts(item, counter)).collect(), bracket, separator),
+				_ => Node::List(
+					items.into_iter().map(|item| awaited_starts(item, counter)).collect(),
+					bracket,
+					separator,
+				),
 			}
 		}
 		other => children_rewritten(other, |child| awaited_starts(child, counter)),
@@ -333,16 +440,25 @@ fn is_start(node: &Node) -> bool {
 
 /// The list variables that collect started tasks, `jobs.add(go f(i))` (P47) or `jobs = [go f(3), go f(1)]`, with the
 /// functions they start
-fn job_lists(node: &Node, functions: &std::collections::HashSet<String>) -> std::collections::HashMap<String, Vec<String>> {
+fn job_lists(
+	node: &Node,
+	functions: &std::collections::HashSet<String>,
+) -> std::collections::HashMap<String, Vec<String>> {
 	let mut lists: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 	node.visit(&mut |part| {
 		let (list, started_functions) = match part {
-			Node::Key(receiver, Op::Dot, method) => (receiver, added_start(method).map(|(function, _)| function).into_iter().collect()),
+			Node::Key(receiver, Op::Dot, method) => (
+				receiver,
+				added_start(method).map(|(function, _)| function).into_iter().collect(),
+			),
 			Node::Key(target, Op::Assign | Op::Define, value) => (target, listed_starts(value)),
 			_ => return,
 		};
 		let Node::Symbol(list) = list.drop_meta() else { return };
-		for function in started_functions.into_iter().filter(|function| functions.contains(function)) {
+		for function in started_functions
+			.into_iter()
+			.filter(|function| functions.contains(function))
+		{
 			let started = lists.entry(list.clone()).or_default();
 			if !started.contains(&function) {
 				started.push(function);
@@ -354,17 +470,27 @@ fn job_lists(node: &Node, functions: &std::collections::HashSet<String>) -> std:
 
 /// `[go f(3), go g(1)]`: the functions its items start
 fn listed_starts(value: &Node) -> Vec<String> {
-	let Node::List(items, Bracket::Square, _) = value.drop_meta() else { return vec![] };
-	items.iter().filter(|item| is_start(item)).filter_map(|item| match item.drop_meta() {
-		Node::List(words, _, _) => started_call(&words[1..]).map(|(function, _)| function),
-		_ => None,
-	}).collect()
+	let Node::List(items, Bracket::Square, _) = value.drop_meta() else {
+		return vec![];
+	};
+	items
+		.iter()
+		.filter(|item| is_start(item))
+		.filter_map(|item| match item.drop_meta() {
+			Node::List(words, _, _) => started_call(&words[1..]).map(|(function, _)| function),
+			_ => None,
+		})
+		.collect()
 }
 
 /// `add(go f(x))`, `add go f(x)`: the `go …` items after `add`
 fn added_task(method: &Node) -> Option<Vec<Node>> {
-	let Node::List(items, _, _) = method.drop_meta() else { return None };
-	let [add, rest @ ..] = items.as_slice() else { return None };
+	let Node::List(items, _, _) = method.drop_meta() else {
+		return None;
+	};
+	let [add, rest @ ..] = items.as_slice() else {
+		return None;
+	};
 	if word(add) != ADD_WORD {
 		return None;
 	}
@@ -386,11 +512,17 @@ fn added_start(method: &Node) -> Option<(String, Vec<Node>)> {
 fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
 	match rest {
 		[call] => match call.drop_meta() {
-			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => Some((items[0].name(), items[1..].to_vec())),
+			Node::List(items, Bracket::Round, _)
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
+			{
+				Some((items[0].name(), items[1..].to_vec()))
+			}
 			Node::List(items, Bracket::None, Separator::Space) => started_call(items),
 			_ => None,
 		},
-		[function, arguments @ ..] if matches!(function.drop_meta(), Node::Symbol(_)) => Some((function.name(), arguments.to_vec())),
+		[function, arguments @ ..] if matches!(function.drop_meta(), Node::Symbol(_)) => {
+			Some((function.name(), arguments.to_vec()))
+		}
 		_ => None,
 	}
 }
@@ -398,20 +530,33 @@ fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
 /// A read of a task that `await` names: no warning that it waits
 fn awaited(node: Node) -> Node {
 	match node {
-		Node::List(mut items, bracket, separator) if AWAITED_MARKERS.iter().any(|(read, _)| word(items.first().unwrap_or(&Node::Empty)) == *read) => {
+		Node::List(mut items, bracket, separator)
+			if AWAITED_MARKERS
+				.iter()
+				.any(|(read, _)| word(items.first().unwrap_or(&Node::Empty)) == *read) =>
+		{
 			let read = word(&items[0]);
-			let (_, named) = AWAITED_MARKERS.iter().find(|(marker, _)| *marker == read).expect("guarded");
+			let (_, named) = AWAITED_MARKERS
+				.iter()
+				.find(|(marker, _)| *marker == read)
+				.expect("guarded");
 			items[0] = symbol(named);
 			Node::List(items, bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(awaited(*node)),
+			data,
+		},
 		other => other,
 	}
 }
 
 /// The read as `await` would name it, and whether it was named so: `task·awaited` is `task·value` said
 fn read_marker(head: &str) -> (&str, bool) {
-	AWAITED_MARKERS.iter().find(|(_, named)| *named == head).map_or((head, false), |(read, _)| (*read, true))
+	AWAITED_MARKERS
+		.iter()
+		.find(|(_, named)| *named == head)
+		.map_or((head, false), |(read, _)| (*read, true))
 }
 
 fn marker(word: &str, parts: Vec<Node>) -> Node {
@@ -437,7 +582,12 @@ impl Tasks<'_> {
 	/// `dir(job)`: await, the controls and the finish event, as texts
 	fn task_dir(&self, items: &[Node]) -> Option<Node> {
 		let [dir, subject] = items else { return None };
-		let names: Vec<String> = [TASK_WORDS[1]].iter().chain(&TASK_CONTROLS).chain(&[FINISH_EVENT]).map(|name| name.to_string()).collect();
+		let names: Vec<String> = [TASK_WORDS[1]]
+			.iter()
+			.chain(&TASK_CONTROLS)
+			.chain(&[FINISH_EVENT])
+			.map(|name| name.to_string())
+			.collect();
 		(word(dir) == DIR_WORD && !self.own_dir && self.is_task(subject)).then(|| crate::reflection::text_list(&names))
 	}
 
@@ -456,7 +606,10 @@ impl Tasks<'_> {
 			other => other.name(),
 		};
 		match self.started.get(&variable) {
-			Some(function) => marker(TASK_CONTROL_MARK, vec![Node::Symbol(variable), Node::Symbol(function.clone()), symbol(control)]),
+			Some(function) => marker(
+				TASK_CONTROL_MARK,
+				vec![Node::Symbol(variable), Node::Symbol(function.clone()), symbol(control)],
+			),
 			None => nothing_to_stop(&Node::Symbol(variable), control),
 		}
 	}
@@ -464,14 +617,20 @@ impl Tasks<'_> {
 	/// A read of a task variable: its value once the task is done (`await job`, `job + 1`)
 	fn value_of(&self, variable: &str) -> Option<Node> {
 		let function = self.started.get(variable)?;
-		Some(marker(TASK_VALUE, vec![symbol(variable), Node::Symbol(function.clone())]))
+		Some(marker(
+			TASK_VALUE,
+			vec![symbol(variable), Node::Symbol(function.clone())],
+		))
 	}
 
 	/// `count(jobs)`, `count jobs`, `#jobs`, `jobs.size` (count, length) of a job list: a count needs no result (P47)
 	fn counted_job_list(&self, node: &Node) -> bool {
-		let is_job_list = |list: &Node| matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name));
+		let is_job_list =
+			|list: &Node| matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name));
 		match node.drop_meta() {
-			Node::List(items, _, _) => matches!(items.as_slice(), [counter, list] if crate::analyzer::is_counting_word(&word(counter)) && is_job_list(list)),
+			Node::List(items, _, _) => {
+				matches!(items.as_slice(), [counter, list] if crate::analyzer::is_counting_word(&word(counter)) && is_job_list(list))
+			}
 			Node::Key(empty, Op::Hash, list) => matches!(empty.drop_meta(), Node::Empty) && is_job_list(list),
 			Node::Key(list, Op::Dot, counter) => is_job_list(list) && crate::analyzer::is_counting_word(&word(counter)),
 			_ => false,
@@ -480,7 +639,9 @@ impl Tasks<'_> {
 
 	/// A read of a job list or of one of its jobs: its results once the jobs are done
 	fn job_list_read(&self, list: &str, read: Node, marker_word: &str) -> Node {
-		let functions = self.job_lists[list].iter().map(|function| Node::Symbol(function.clone()));
+		let functions = self.job_lists[list]
+			.iter()
+			.map(|function| Node::Symbol(function.clone()));
 		marker(marker_word, [vec![read], functions.collect()].concat())
 	}
 
@@ -490,8 +651,14 @@ impl Tasks<'_> {
 	fn lower(&self, node: Node) -> Node {
 		let mut own_tasks = vec![];
 		node.visit(&mut |part| own_tasks.extend(task_start(part).map(|(variable, _)| variable.clone())));
-		let shadowed: Vec<String> = crate::lowering::getters::shadowed_names(&node).into_iter().filter(|name| !own_tasks.contains(name)).collect();
-		if !shadowed.iter().any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name)) {
+		let shadowed: Vec<String> = crate::lowering::getters::shadowed_names(&node)
+			.into_iter()
+			.filter(|name| !own_tasks.contains(name))
+			.collect();
+		if !shadowed
+			.iter()
+			.any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name))
+		{
 			return self.lower_unshadowed(node);
 		}
 		let mut narrowed = self.clone();
@@ -506,18 +673,30 @@ impl Tasks<'_> {
 	fn lower_unshadowed(&self, node: Node) -> Node {
 		match node {
 			Node::Symbol(name) if self.started.contains_key(&name) => self.value_of(&name).expect("a started task"),
-			Node::Symbol(name) if self.job_lists.contains_key(&name) => self.job_list_read(&name, Node::Symbol(name.clone()), TASK_LIST),
+			Node::Symbol(name) if self.job_lists.contains_key(&name) => {
+				self.job_list_read(&name, Node::Symbol(name.clone()), TASK_LIST)
+			}
 			// `count(jobs)`, `#jobs`, `jobs.size`: how many jobs, without waiting for any
 			node if self.counted_job_list(&node) => node,
 			// `jobs.add(go f(i))`: the list keeps the task, unawaited
-			Node::Key(receiver, Op::Dot, method) if matches!(receiver.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) && added_task(&method).is_some() => {
-				let started = self.task_statement(&added_task(&method).expect("guarded")).expect("a go of a user function");
+			Node::Key(receiver, Op::Dot, method)
+				if matches!(receiver.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name))
+					&& added_task(&method).is_some() =>
+			{
+				let started = self
+					.task_statement(&added_task(&method).expect("guarded"))
+					.expect("a go of a user function");
 				Node::Key(receiver, Op::Dot, Box::new(call(ADD_WORD, vec![started])))
 			}
 			// `jobs#2`: the result of that job
-			Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) => {
+			Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) =>
+			{
 				let name = word(&list);
-				self.job_list_read(&name, Node::Key(list, Op::Hash, Box::new(self.lower(*index))), TASK_ELEMENT)
+				self.job_list_read(
+					&name,
+					Node::Key(list, Op::Hash, Box::new(self.lower(*index))),
+					TASK_ELEMENT,
+				)
 			}
 			// `jobs = []`: the variable itself
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) => {
@@ -535,7 +714,11 @@ impl Tasks<'_> {
 					return if is_task_handler { handled } else { self.lower(handled) };
 				}
 				// `await any [a, b]` and `await job within 100 ms` read the tasks themselves, before a read of one waits
-				if let Some(race) = self.raced(&items).or_else(|| self.within(&items, None)).or_else(|| self.within_or(&items)) {
+				if let Some(race) = self
+					.raced(&items)
+					.or_else(|| self.within(&items, None))
+					.or_else(|| self.within_or(&items))
+				{
 					return race;
 				}
 				if let Some(names) = self.task_dir(&items) {
@@ -550,12 +733,17 @@ impl Tasks<'_> {
 				}
 			}
 			// `job.stop()`, `job.pause`
-			Node::Key(subject, Op::Dot, word) if self.is_task(&subject) && TASK_CONTROLS.contains(&control_word(&word).as_str()) => {
+			Node::Key(subject, Op::Dot, word)
+				if self.is_task(&subject) && TASK_CONTROLS.contains(&control_word(&word).as_str()) =>
+			{
 				self.control(&subject, &control_word(&word))
 			}
 			// `x = await job within 100 ms or 0`
-			Node::Key(left, Op::Or, right) if matches!(left.drop_meta(), Node::List(items, _, _) if self.within(items, Some(right.as_ref().clone())).is_some()) => {
-				let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
+			Node::Key(left, Op::Or, right) if matches!(left.drop_meta(), Node::List(items, _, _) if self.within(items, Some(right.as_ref().clone())).is_some()) =>
+			{
+				let Node::List(items, _, _) = left.drop_meta() else {
+					unreachable!("guarded")
+				};
 				self.within(items, Some(*right)).expect("guarded")
 			}
 			other => children_rewritten(other, |child| self.lower(child)),
@@ -564,7 +752,9 @@ impl Tasks<'_> {
 
 	/// `x = await job within 100 ms or 5` arrives as go_blocks' `try·else((await job) (within 100 ms), 5)`
 	fn within_or(&self, items: &[Node]) -> Option<Node> {
-		let [marker_word, awaited, fallback] = items else { return None };
+		let [marker_word, awaited, fallback] = items else {
+			return None;
+		};
 		if word(marker_word) != crate::warp_parser::TRY_MARKER {
 			return None;
 		}
@@ -586,19 +776,27 @@ impl Tasks<'_> {
 		// `(await job) within …`: the await arrives grouped
 		let items: Vec<Node> = match items.split_first() {
 			Some((first, rest)) => match first.drop_meta() {
-				Node::List(inner, Bracket::None, _) if inner.first().is_some_and(|head| word(head) == TASK_WORDS[1]) => [inner.clone(), rest.to_vec()].concat(),
+				Node::List(inner, Bracket::None, _)
+					if inner.first().is_some_and(|head| word(head) == TASK_WORDS[1]) =>
+				{
+					[inner.clone(), rest.to_vec()].concat()
+				}
 				_ => items.to_vec(),
 			},
 			None => return None,
 		};
-		let [head, job, within, deadline @ ..] = items.as_slice() else { return None };
+		let [head, job, within, deadline @ ..] = items.as_slice() else {
+			return None;
+		};
 		if word(head) != TASK_WORDS[1] || word(within) != WITHIN_WORD || !self.is_task(job) || deadline.is_empty() {
 			return None;
 		}
 		// `await job within 100 ms or 0` as one statement: the `or` holds the duration and the fallback
 		let (deadline, fallback) = match (deadline, fallback) {
 			([single], None) if matches!(single.drop_meta(), Node::Key(_, Op::Or, _)) => {
-				let Node::Key(duration, _, value) = single.drop_meta() else { unreachable!("guarded") };
+				let Node::Key(duration, _, value) = single.drop_meta() else {
+					unreachable!("guarded")
+				};
 				(duration.as_ref().clone(), Some(value.as_ref().clone()))
 			}
 			([single], fallback) => (single.clone(), fallback),
@@ -612,46 +810,97 @@ impl Tasks<'_> {
 		let started = format!("{STARTED_PREFIX}{}", RACES.with(Counter::next_number));
 		let status = marker(crate::host::TASK_STATUS, vec![job_name.clone()]);
 		let runs = key(status, Op::Eq, crate::node::int(TASK_RUNNING));
-		let elapsed = key(marker(crate::host::CLOCK, vec![]), Op::Sub, Node::Symbol(started.clone()));
+		let elapsed = key(
+			marker(crate::host::CLOCK, vec![]),
+			Op::Sub,
+			Node::Symbol(started.clone()),
+		);
 		let in_time = key(elapsed, Op::Lt, crate::node::int(milliseconds));
-		let waiting = key(key(Node::Empty, Op::While, key(runs.clone(), Op::And, in_time)), Op::Do, block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]));
+		let waiting = key(
+			key(Node::Empty, Op::While, key(runs.clone(), Op::And, in_time)),
+			Op::Do,
+			block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
+		);
 		let timed_out = match &fallback {
 			Some(value) => value.clone(),
-			None => Node::List(vec![symbol(RAISE_WORD), symbol(TIMEOUT_EVENT)], Bracket::None, Separator::Space),
+			None => Node::List(
+				vec![symbol(RAISE_WORD), symbol(TIMEOUT_EVENT)],
+				Bracket::None,
+				Separator::Space,
+			),
 		};
 		let written = format!("await {} within {milliseconds} ms", job_name.serialize().trim());
-		let outcome = fallback.as_ref().map_or_else(|| "it fails with timeout".to_string(), |value| format!("the result is {}", value.serialize().trim()));
-		crate::diagnostic::educate_once(WITHIN_TOPIC, &written, &written, &format!("on timeout the job is stopped and {outcome}"));
+		let outcome = fallback.as_ref().map_or_else(
+			|| "it fails with timeout".to_string(),
+			|value| format!("the result is {}", value.serialize().trim()),
+		);
+		crate::diagnostic::educate_once(
+			WITHIN_TOPIC,
+			&written,
+			&written,
+			&format!("on timeout the job is stopped and {outcome}"),
+		);
 		let awaited_job = self.value_of(&word(&job_name))?;
-		let result = if_then_else(runs, block(vec![self.control(job, TASK_CONTROLS[0]), timed_out]), awaited_job);
-		Some(Node::List(vec![assign(&started, marker(crate::host::CLOCK, vec![])), waiting, result], Bracket::Round, Separator::Semicolon))
+		let result = if_then_else(
+			runs,
+			block(vec![self.control(job, TASK_CONTROLS[0]), timed_out]),
+			awaited_job,
+		);
+		Some(Node::List(
+			vec![assign(&started, marker(crate::host::CLOCK, vec![])), waiting, result],
+			Bracket::Round,
+			Separator::Semicolon,
+		))
 	}
 
 	fn task_statement(&self, items: &[Node]) -> Option<Node> {
 		match items {
 			// `go f(x)` of a user function: a task, on a thread when resolve_tasks finds f runs there
-			[head, rest @ ..] if word(head) == TASK_WORDS[0] && self.words.contains(&TASK_WORDS[0]) && started_call(rest).is_some_and(|(f, _)| self.functions.contains(&f)) => {
+			[head, rest @ ..]
+				if word(head) == TASK_WORDS[0]
+					&& self.words.contains(&TASK_WORDS[0])
+					&& started_call(rest).is_some_and(|(f, _)| self.functions.contains(&f)) =>
+			{
 				let (function, arguments) = started_call(rest).expect("guarded");
 				Some(marker(TASK_GO, [vec![Node::Symbol(function)], arguments].concat()))
 			}
 			// `await all jobs` (also read as `await (all jobs)`): every result, a job list read awaits them all
-			[head, phrase] if word(head) == TASK_WORDS[1] && self.words.contains(&TASK_WORDS[1]) && matches!(phrase.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ALL_WORD) => {
-				let Node::List(inner, _, _) = phrase.drop_meta() else { unreachable!("guarded") };
+			[head, phrase]
+				if word(head) == TASK_WORDS[1]
+					&& self.words.contains(&TASK_WORDS[1])
+					&& matches!(phrase.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ALL_WORD) =>
+			{
+				let Node::List(inner, _, _) = phrase.drop_meta() else {
+					unreachable!("guarded")
+				};
 				Some(awaited(inner[1].clone()))
 			}
-			[head, all, rest @ ..] if word(head) == TASK_WORDS[1] && word(all) == ALL_WORD && !rest.is_empty() && self.words.contains(&TASK_WORDS[1]) => Some(awaited(match rest {
-				[single] => single.clone(),
-				_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
-			})),
+			[head, all, rest @ ..]
+				if word(head) == TASK_WORDS[1]
+					&& word(all) == ALL_WORD
+					&& !rest.is_empty()
+					&& self.words.contains(&TASK_WORDS[1]) =>
+			{
+				Some(awaited(match rest {
+					[single] => single.clone(),
+					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
+				}))
+			}
 			[head, rest @ ..] if !rest.is_empty() && self.words.contains(&word(head).as_str()) => {
 				let value = match rest {
 					[single] => single.clone(),
 					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
 				};
-				Some(if word(head) == TASK_WORDS[1] { awaited(value) } else { value })
+				Some(if word(head) == TASK_WORDS[1] {
+					awaited(value)
+				} else {
+					value
+				})
 			}
 			// `stop job`
-			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => Some(self.control(subject, &word(control))),
+			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => {
+				Some(self.control(subject, &word(control)))
+			}
 			_ => None,
 		}
 	}
@@ -673,7 +922,9 @@ impl Tasks<'_> {
 	/// {sleep(1)} }; if race·0 == 1 then await a else …)`: the tasks keep running, the first one's result (or failure)
 	fn race(&self, list: &Node) -> Option<Node> {
 		use crate::variable_signals::assign;
-		let Node::List(listed, Bracket::Square, _) = list.drop_meta() else { return None };
+		let Node::List(listed, Bracket::Square, _) = list.drop_meta() else {
+			return None;
+		};
 		if listed.is_empty() || !listed.iter().all(|item| self.is_task(item)) {
 			return None;
 		}
@@ -692,17 +943,35 @@ impl Tasks<'_> {
 			let is = |code: i64| key(status.clone(), Op::Eq, crate::node::int(code));
 			key(is(crate::host::TASK_FINISHED), Op::Or, is(crate::host::TASK_FAILED))
 		};
-		let mut checks: Vec<Node> = listed.iter().enumerate().map(|(index, job)| {
-			if_then(key(winner_is(0), Op::And, ended(job)), block(vec![assign(&winner, crate::node::int(index as i64 + 1))]))
-		}).collect();
-		checks.push(if_then(winner_is(0), block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])])));
+		let mut checks: Vec<Node> = listed
+			.iter()
+			.enumerate()
+			.map(|(index, job)| {
+				if_then(
+					key(winner_is(0), Op::And, ended(job)),
+					block(vec![assign(&winner, crate::node::int(index as i64 + 1))]),
+				)
+			})
+			.collect();
+		checks.push(if_then(
+			winner_is(0),
+			block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
+		));
 		let waiting = key(key(Node::Empty, Op::While, winner_is(0)), Op::Do, block(checks));
 		let awaited_job = |job: &Node| self.value_of(&word(&job_of(job))).unwrap_or_else(|| job.clone());
 		let (last, first) = listed.split_last().expect("not empty");
-		let result = first.iter().enumerate().rev().fold(awaited_job(last), |otherwise, (index, job)| {
-			if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
-		});
-		Some(Node::List(vec![assign(&winner, crate::node::int(0)), waiting, result], Bracket::Round, Separator::Semicolon))
+		let result = first
+			.iter()
+			.enumerate()
+			.rev()
+			.fold(awaited_job(last), |otherwise, (index, job)| {
+				if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
+			});
+		Some(Node::List(
+			vec![assign(&winner, crate::node::int(0)), waiting, result],
+			Bracket::Round,
+			Separator::Semicolon,
+		))
 	}
 
 	fn signal_handler(&self, items: &[Node]) -> Option<Node> {
@@ -711,13 +980,17 @@ impl Tasks<'_> {
 			[once, subject @ .., handler] if word(once) == ONCE_WORD => {
 				let subject = subject.iter().find(|item| word(item) != "the")?;
 				let (event, body) = handler_parts(handler)?;
-				self.is_task(subject).then(|| self.handler(subject, &word(&event), &body))
+				self.is_task(subject)
+					.then(|| self.handler(subject, &word(&event), &body))
 			}
 			// `on download.stop : body`
 			[on, handler] if word(on) == ON_WORD => {
 				let (signal, body) = handler_parts(handler)?;
-				let Node::Key(subject, Op::Dot, event) = signal.drop_meta() else { return None };
-				self.is_task(subject).then(|| self.handler(subject, &control_word(event), &body))
+				let Node::Key(subject, Op::Dot, event) = signal.drop_meta() else {
+					return None;
+				};
+				self.is_task(subject)
+					.then(|| self.handler(subject, &control_word(event), &body))
 			}
 			_ => None,
 		}
@@ -727,8 +1000,20 @@ impl Tasks<'_> {
 	/// never runs
 	fn handler(&self, subject: &Node, event: &str, body: &Node) -> Node {
 		if let Some(function) = self.started.get(&subject.name()) {
-			let event = if FINISH_EVENTS.contains(&event) { FINISH_EVENT } else { event };
-			return marker(TASK_ON, vec![Node::Symbol(subject.name()), Node::Symbol(function.clone()), symbol(event), self.lower(body.clone())]);
+			let event = if FINISH_EVENTS.contains(&event) {
+				FINISH_EVENT
+			} else {
+				event
+			};
+			return marker(
+				TASK_ON,
+				vec![
+					Node::Symbol(subject.name()),
+					Node::Symbol(function.clone()),
+					symbol(event),
+					self.lower(body.clone()),
+				],
+			);
 		}
 		if FINISH_EVENTS.contains(&event) {
 			return match self.value_of(&subject.name()) {
@@ -736,7 +1021,13 @@ impl Tasks<'_> {
 				None => body.clone(),
 			};
 		}
-		never_happens(subject, &format!("`{event}` of {} never happens: a task finishes where it starts, its handler never runs", subject.name()))
+		never_happens(
+			subject,
+			&format!(
+				"`{event}` of {} never happens: a task finishes where it starts, its handler never runs",
+				subject.name()
+			),
+		)
 	}
 }
 
@@ -773,24 +1064,44 @@ pub fn resolve_tasks(node: Node) -> Node {
 	crate::analyzer::note_bool_functions(context.user_functions.values());
 	let int_starts = int_starts(&node, &crate::analyzer::literal_variable_kinds(&node, &context));
 	let path = |function: &str| {
-		let Some(definition) = context.user_functions.get(function) else { return TaskPath::Inline };
+		let Some(definition) = context.user_functions.get(function) else {
+			return TaskPath::Inline;
+		};
 		let parameters: Vec<Kind> = definition.params.iter().map(crate::analyzer::param_kind).collect();
-		if !definition.tuple_kinds.is_empty() || !CROSSING_KINDS.contains(&definition.return_kind) || !parameters.iter().all(|kind| CROSSING_KINDS.contains(kind)) {
+		if !definition.tuple_kinds.is_empty()
+			|| !CROSSING_KINDS.contains(&definition.return_kind)
+			|| !parameters.iter().all(|kind| CROSSING_KINDS.contains(kind))
+		{
 			return TaskPath::Inline;
 		}
-		let ints = definition.return_kind == Kind::Int && parameters.len() <= crate::host::MAX_TASK_ARGUMENTS && parameters.iter().all(|kind| *kind == Kind::Int)
+		let ints = definition.return_kind == Kind::Int
+			&& parameters.len() <= crate::host::MAX_TASK_ARGUMENTS
+			&& parameters.iter().all(|kind| *kind == Kind::Int)
 			&& int_starts.get(function).copied().unwrap_or(false);
-		if ints { TaskPath::Ints } else { TaskPath::Values(parameters, definition.return_kind) }
+		if ints {
+			TaskPath::Ints
+		} else {
+			TaskPath::Values(parameters, definition.return_kind)
+		}
 	};
-	let node = TaskHandlers { path: &path, count: Counter::default() }.lower(node, &[]);
+	let node = TaskHandlers {
+		path: &path,
+		count: Counter::default(),
+	}
+	.lower(node, &[]);
 	let wrapped = std::cell::RefCell::new(std::collections::BTreeMap::new());
 	// the guardable functions, with the type word their Node result converts back to (it comes back from the host as a Node)
-	let guardable = |function: &str| context.user_functions.get(function).filter(|definition| definition.tuple_kinds.is_empty())
-		.map(|definition| match definition.return_kind {
-			Kind::Int => Some("int"),
-			Kind::Float => Some("float"),
-			_ => None, // a Node (a text, a list, an Error) is used as it comes
-		});
+	let guardable = |function: &str| {
+		context
+			.user_functions
+			.get(function)
+			.filter(|definition| definition.tuple_kinds.is_empty())
+			.map(|definition| match definition.return_kind {
+				Kind::Int => Some("int"),
+				Kind::Float => Some("float"),
+				_ => None, // a Node (a text, a list, an Error) is used as it comes
+			})
+	};
 	let node = guarded_calls(node, &guardable, &wrapped);
 	let node = resolved(node, &path, &wrapped);
 	let node = forwarded_raises(node, &wrapped);
@@ -800,21 +1111,28 @@ pub fn resolve_tasks(node: Node) -> Node {
 /// Per started function: whether every `go` of it passes surely Ints (Int literals, variables only ever assigned Int
 /// literals, arithmetic of them), which the Int words carry raw; anything else, like a list a `.map` gives, takes the
 /// value words
-fn int_starts(node: &Node, literal_kinds: &std::collections::HashMap<String, crate::type_kinds::Kind>) -> std::collections::HashMap<String, bool> {
+fn int_starts(
+	node: &Node,
+	literal_kinds: &std::collections::HashMap<String, crate::type_kinds::Kind>,
+) -> std::collections::HashMap<String, bool> {
 	fn surely_int(argument: &Node, literal_kinds: &std::collections::HashMap<String, crate::type_kinds::Kind>) -> bool {
 		match argument.drop_meta() {
 			Node::Number(crate::extensions::numbers::Number::Int(_)) => true,
 			Node::Symbol(name) => literal_kinds.get(name) == Some(&crate::type_kinds::Kind::Int),
-			Node::Key(left, Op::Add | Op::Sub | Op::Mul, right) => surely_int(left, literal_kinds) && surely_int(right, literal_kinds),
+			Node::Key(left, Op::Add | Op::Sub | Op::Mul, right) => {
+				surely_int(left, literal_kinds) && surely_int(right, literal_kinds)
+			}
 			_ => false,
 		}
 	}
 	let mut starts = std::collections::HashMap::new();
-	node.visit(&mut |part| if let Node::List(items, _, _) = part {
-		if word(items.first().unwrap_or(&Node::Empty)) == TASK_GO {
-			let all_int = items[2..].iter().all(|argument| surely_int(argument, literal_kinds));
-			let entry = starts.entry(word(&items[1])).or_insert(true);
-			*entry &= all_int;
+	node.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			if word(items.first().unwrap_or(&Node::Empty)) == TASK_GO {
+				let all_int = items[2..].iter().all(|argument| surely_int(argument, literal_kinds));
+				let entry = starts.entry(word(&items[1])).or_insert(true);
+				*entry &= all_int;
+			}
 		}
 	});
 	starts
@@ -834,15 +1152,25 @@ impl TaskHandler {
 	fn check(&self) -> Node {
 		use crate::variable_signals::assign;
 		let not_handled = key(Node::Empty, Op::Not, Node::Symbol(self.flag.clone()));
-		let status = key(marker(crate::host::TASK_STATUS, vec![self.job.clone()]), Op::Eq, Node::Number(crate::extensions::numbers::Number::Int(self.status)));
+		let status = key(
+			marker(crate::host::TASK_STATUS, vec![self.job.clone()]),
+			Op::Eq,
+			Node::Number(crate::extensions::numbers::Number::Int(self.status)),
+		);
 		let condition = key(not_handled, Op::And, status);
-		if_then(condition, block(vec![assign(&self.flag, Node::True), self.body.clone()]))
+		if_then(
+			condition,
+			block(vec![assign(&self.flag, Node::True), self.body.clone()]),
+		)
 	}
 
 	/// At the end of the block: a finish or stop handler waits for the task, a pause handler does not
 	fn final_check(&self) -> Option<Node> {
 		(self.status != crate::host::TASK_PAUSED).then(|| {
-			block(vec![marker(crate::host::TASK_JOIN, vec![self.job.clone()]), self.check()])
+			block(vec![
+				marker(crate::host::TASK_JOIN, vec![self.job.clone()]),
+				self.check(),
+			])
 		})
 	}
 }
@@ -855,7 +1183,9 @@ struct TaskHandlers<'a> {
 impl TaskHandlers<'_> {
 	fn lower(&self, node: Node, active: &[TaskHandler]) -> Node {
 		match node {
-			Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) => {
+			Node::List(items, bracket, separator)
+				if crate::variable_signals::is_statement_list(&bracket, &separator) =>
+			{
 				Node::List(self.statements(items, active), bracket, separator)
 			}
 			other => other.map_children(|child| self.lower(child, active)),
@@ -882,13 +1212,26 @@ impl TaskHandlers<'_> {
 				}
 				continue;
 			}
-			let Node::List(parts, _, _) = item.drop_meta() else { unreachable!("a handler is a list") };
-			let (job, function, event, body) = (parts[1].clone(), word(&parts[2]), word(&parts[3]), self.lower(parts[4].clone(), &[]));
+			let Node::List(parts, _, _) = item.drop_meta() else {
+				unreachable!("a handler is a list")
+			};
+			let (job, function, event, body) = (
+				parts[1].clone(),
+				word(&parts[2]),
+				word(&parts[3]),
+				self.lower(parts[4].clone(), &[]),
+			);
 			if (self.path)(&function) == TaskPath::Inline {
 				// the task finished where it started: a finish handler runs now, one of a stop or pause never
 				out.push(match event.as_str() {
 					FINISH_EVENT => body,
-					_ => never_happens(&job, &format!("`{event}` of {} never happens: a task finishes where it starts, its handler never runs", job.name())),
+					_ => never_happens(
+						&job,
+						&format!(
+							"`{event}` of {} never happens: a task finishes where it starts, its handler never runs",
+							job.name()
+						),
+					),
 				});
 				continue;
 			}
@@ -899,7 +1242,12 @@ impl TaskHandlers<'_> {
 			};
 			let flag = format!("{HANDLED_PREFIX}{}", self.count.next_number());
 			out.push(crate::variable_signals::assign(&flag, Node::False));
-			let handler = TaskHandler { job, status, body, flag };
+			let handler = TaskHandler {
+				job,
+				status,
+				body,
+				flag,
+			};
 			active.push(handler.clone());
 			own.push(handler);
 		}
@@ -921,26 +1269,44 @@ const WRAPPER_ARGUMENTS: &str = "arguments·node";
 pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {
 	// a page event's handler has its wrapper already (event_signals.rs), a task may want it too
 	let mut defined = std::collections::HashSet::new();
-	node.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
-		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
-			defined.insert(word(&items[0]));
+	node.visit(&mut |part| {
+		if let Node::Key(head, Op::Define, _) = part {
+			if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+				defined.insert(word(&items[0]));
+			}
 		}
 	});
-	let wrapped: Vec<(&String, &usize)> = wrapped.iter().filter(|(function, _)| !defined.contains(&format!("{function}{NODE_WRAPPER_SUFFIX}"))).collect();
+	let wrapped: Vec<(&String, &usize)> = wrapped
+		.iter()
+		.filter(|(function, _)| !defined.contains(&format!("{function}{NODE_WRAPPER_SUFFIX}")))
+		.collect();
 	if wrapped.is_empty() {
 		return node;
 	}
-	let items: Vec<Node> = wrapped.into_iter().map(|(function, count)| {
-		let arguments = symbol(WRAPPER_ARGUMENTS);
-		// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
-		let declared = key(arguments.clone(), Op::Colon, symbol("list"));
-		let head = call(&format!("{function}{NODE_WRAPPER_SUFFIX}"), vec![declared]);
-		let argument = |index: usize| key(arguments.clone(), Op::Hash, Node::Number(crate::extensions::numbers::Number::Int(index as i64 + 1)));
-		let call = call(&function.clone(), (0..*count).map(argument).collect());
-		let result = symbol(WRAPPER_RESULT);
-		let body = Node::List(vec![key(result.clone(), Op::Assign, call), result], Bracket::Curly, Separator::Semicolon);
-		key(head, Op::Define, body)
-	}).collect();
+	let items: Vec<Node> = wrapped
+		.into_iter()
+		.map(|(function, count)| {
+			let arguments = symbol(WRAPPER_ARGUMENTS);
+			// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
+			let declared = key(arguments.clone(), Op::Colon, symbol("list"));
+			let head = call(&format!("{function}{NODE_WRAPPER_SUFFIX}"), vec![declared]);
+			let argument = |index: usize| {
+				key(
+					arguments.clone(),
+					Op::Hash,
+					Node::Number(crate::extensions::numbers::Number::Int(index as i64 + 1)),
+				)
+			};
+			let call = call(&function.clone(), (0..*count).map(argument).collect());
+			let result = symbol(WRAPPER_RESULT);
+			let body = Node::List(
+				vec![key(result.clone(), Op::Assign, call), result],
+				Bracket::Curly,
+				Separator::Semicolon,
+			);
+			key(head, Op::Define, body)
+		})
+		.collect();
 	with_definitions_first(node, items)
 }
 
@@ -965,20 +1331,40 @@ pub(crate) fn with_definitions_first(node: Node, mut definitions: Vec<Node>) -> 
 /// `on·alarm(event) := body` (event_signals.rs) becomes `if task_inside() { signal_send("on·alarm·node", [event]) } else
 /// { body }`, so in a task's instance it forwards the event, and the program runs it through the node wrapper
 fn forwarded_raises(node: Node, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
-	let handlers: std::collections::HashSet<String> = crate::event_signals::handled_signals(&node).into_iter().map(|(_, function)| function).collect();
+	let handlers: std::collections::HashSet<String> = crate::event_signals::handled_signals(&node)
+		.into_iter()
+		.map(|(_, function)| function)
+		.collect();
 	if handlers.is_empty() {
 		return node;
 	}
-	fn forward(node: Node, handlers: &std::collections::HashSet<String>, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+	fn forward(
+		node: Node,
+		handlers: &std::collections::HashSet<String>,
+		wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>,
+	) -> Node {
 		match node {
-			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if handlers.contains(&word(&items[0]))) => {
-				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
+			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if handlers.contains(&word(&items[0]))) =>
+			{
+				let Node::List(items, _, _) = head.drop_meta() else {
+					unreachable!("guarded")
+				};
 				let function = word(&items[0]);
 				wrapped.borrow_mut().insert(function.clone(), items.len() - 1);
 				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon);
-				let send = marker(crate::host::SIGNAL_SEND, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
-				let template = crate::warp_parser::parse(&format!("if {}() {{ {FORWARD_PLACEHOLDER} }} else {{ {BODY_PLACEHOLDER} }}", crate::host::TASK_INSIDE));
-				let body = crate::library_words::substitute(crate::library_words::substitute(template, FORWARD_PLACEHOLDER, &send), BODY_PLACEHOLDER, &body);
+				let send = marker(
+					crate::host::SIGNAL_SEND,
+					vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments],
+				);
+				let template = crate::warp_parser::parse(&format!(
+					"if {}() {{ {FORWARD_PLACEHOLDER} }} else {{ {BODY_PLACEHOLDER} }}",
+					crate::host::TASK_INSIDE
+				));
+				let body = crate::library_words::substitute(
+					crate::library_words::substitute(template, FORWARD_PLACEHOLDER, &send),
+					BODY_PLACEHOLDER,
+					&body,
+				);
 				Node::Key(head, Op::Define, Box::new(body))
 			}
 			other => other.map_children(|child| forward(child, handlers, wrapped)),
@@ -994,7 +1380,13 @@ const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 /// `try` catches, before the result is read
 fn checked_await(await_word: &str, job: &Node, crossing: Crossing) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
-	let check = marker(TASK_CHECK, vec![marker(TASK_JOIN, vec![job.clone()]), marker(TASK_FAILURE, vec![job.clone()])]);
+	let check = marker(
+		TASK_CHECK,
+		vec![
+			marker(TASK_JOIN, vec![job.clone()]),
+			marker(TASK_FAILURE, vec![job.clone()]),
+		],
+	);
 	let result = marker(await_word, vec![job.clone()]);
 	let result = match crossing {
 		Crossing::AsIs => result,
@@ -1017,7 +1409,8 @@ enum Crossing {
 /// How the results of the started functions cross: a bool or a character when every one gives it
 /// (analyzer::note_bool_functions)
 fn crossing(functions: &[Node], path: &dyn Fn(&str) -> TaskPath) -> Crossing {
-	let every = |gives: &dyn Fn(&str) -> bool| !functions.is_empty() && functions.iter().all(|function| gives(&word(function)));
+	let every =
+		|gives: &dyn Fn(&str) -> bool| !functions.is_empty() && functions.iter().all(|function| gives(&word(function)));
 	if every(&crate::analyzer::is_bool_function) {
 		Crossing::Bool
 	} else if every(&|function| matches!(path(function), TaskPath::Values(_, crate::type_kinds::Kind::Codepoint))) {
@@ -1030,16 +1423,29 @@ fn crossing(functions: &[Node], path: &dyn Fn(&str) -> TaskPath) -> Crossing {
 /// `try f(a, b) else Y` of a user function f: the guarded call goes through the host, `guarded_call("f·node", [a, b])`,
 /// whose stack overflow is an Error `try` catches (host.rs guarded_call); f's node wrapper is the one tasks use. Any other
 /// guarded expression stays as it is
-fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static str>>, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+fn guarded_calls(
+	node: Node,
+	guardable: &dyn Fn(&str) -> Option<Option<&'static str>>,
+	wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>,
+) -> Node {
 	match node {
-		Node::List(items, bracket, separator) if items.len() >= 3 && word(&items[0]) == crate::warp_parser::TRY_MARKER => {
-			let items: Vec<Node> = items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect();
+		Node::List(items, bracket, separator)
+			if items.len() >= 3 && word(&items[0]) == crate::warp_parser::TRY_MARKER =>
+		{
+			let items: Vec<Node> = items
+				.into_iter()
+				.map(|item| guarded_calls(item, guardable, wrapped))
+				.collect();
 			let guarded = match items[1].drop_meta() {
-				Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) => {
+				Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) =>
+				{
 					let function = word(&call[0]);
 					wrapped.borrow_mut().insert(function.clone(), call.len() - 1);
 					let arguments = Node::List(call[1..].to_vec(), Bracket::Square, Separator::Colon);
-					let guarded = marker(crate::host::GUARDED_CALL, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
+					let guarded = marker(
+						crate::host::GUARDED_CALL,
+						vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments],
+					);
 					// an Int or Float result is that again (a caught overflow's Error fails the conversion, which `try` catches)
 					match guardable(&function).flatten() {
 						Some(type_word) => key(guarded, Op::As, symbol(type_word)),
@@ -1048,7 +1454,11 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 				}
 				_ => items[1].clone(),
 			};
-			Node::List([vec![items[0].clone(), guarded], items[2..].to_vec()].concat(), bracket, separator)
+			Node::List(
+				[vec![items[0].clone(), guarded], items[2..].to_vec()].concat(),
+				bracket,
+				separator,
+			)
 		}
 		other => other.map_children(|child| guarded_calls(child, guardable, wrapped)),
 	}
@@ -1057,7 +1467,9 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
 fn awaited_jobs(list: &Node, crossing: Crossing) -> Node {
 	use crate::host::TASK_AWAIT_VALUE;
-	let template = crate::warp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
+	let template = crate::warp_parser::parse(&format!(
+		"{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"
+	));
 	let awaited = checked_await(TASK_AWAIT_VALUE, &symbol(AWAITED_JOB), crossing);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
@@ -1066,7 +1478,11 @@ fn awaited_jobs(list: &Node, crossing: Crossing) -> Node {
 const TASK_LIST_PLACEHOLDER: &str = "awaited_jobs_list";
 const AWAITED_PLACEHOLDER: &str = "awaited_job_result";
 
-fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
+fn resolved(
+	node: Node,
+	path: &dyn Fn(&str) -> TaskPath,
+	wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>,
+) -> Node {
 	use crate::host::{TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_SPAWN, TASK_SPAWN_VALUES};
 	match node {
 		Node::List(items, bracket, separator) => {
@@ -1085,16 +1501,29 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 						TaskPath::Values(parameters, _) => {
 							let float = |argument: Node| key(argument, Op::As, symbol("float"));
 							// a character crosses as a one-character text, as a variable holds it
-							let arguments = arguments.into_iter().zip(parameters.iter().chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)))
+							let arguments = arguments
+								.into_iter()
+								.zip(
+									parameters
+										.iter()
+										.chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)),
+								)
 								.map(|(argument, kind)| match argument.drop_meta() {
 									Node::Char(character) => Node::Text(character.to_string()),
 									_ if *kind == crate::type_kinds::Kind::Float => float(argument),
 									_ => argument,
-								}).collect();
+								})
+								.collect();
 							// through the wrapper: whether f takes a list as an array is decided later (list_abi)
 							wrapped.borrow_mut().insert(function.clone(), parameters.len());
 							let started = format!("{function}{NODE_WRAPPER_SUFFIX}");
-							marker(TASK_SPAWN_VALUES, vec![Node::Text(started), Node::List(arguments, Bracket::Square, Separator::Colon)])
+							marker(
+								TASK_SPAWN_VALUES,
+								vec![
+									Node::Text(started),
+									Node::List(arguments, Bracket::Square, Separator::Colon),
+								],
+							)
 						}
 						TaskPath::Inline => Node::List(items[1..].to_vec(), Bracket::Round, Separator::None),
 					}
@@ -1108,7 +1537,9 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 					}
 				}
 				TASK_LIST | TASK_ELEMENT => {
-					let threaded = items[2..].iter().all(|function| path(&word(function)) != TaskPath::Inline);
+					let threaded = items[2..]
+						.iter()
+						.all(|function| path(&word(function)) != TaskPath::Inline);
 					let crossing = crossing(&items[2..], path);
 					match (threaded, read == TASK_LIST) {
 						(false, _) => items[1].clone(),
@@ -1118,7 +1549,15 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 				}
 				TASK_CONTROL_MARK => match path(&word(&items[2])) {
 					TaskPath::Inline => nothing_to_stop(&items[1], &word(&items[3])),
-					_ => marker(TASK_CONTROL, vec![items[1].clone(), Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(&items[3]))))]),
+					_ => marker(
+						TASK_CONTROL,
+						vec![
+							items[1].clone(),
+							Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(
+								&items[3],
+							)))),
+						],
+					),
 				},
 				_ => Node::List(items, bracket, separator),
 			}
@@ -1135,14 +1574,29 @@ fn unsaid_wait(read: &str, items: &[Node], path: &dyn Fn(&str) -> TaskPath) -> O
 		TASK_LIST | TASK_ELEMENT => &items[2..],
 		_ => return None,
 	};
-	if functions.iter().any(|function| path(&word(function)) == TaskPath::Inline) {
+	if functions
+		.iter()
+		.any(|function| path(&word(function)) == TaskPath::Inline)
+	{
 		return None; // it ran where it started: nothing to wait for
 	}
 	let written = crate::diagnostic::written_text(&items[1]);
-	let (all, verb) = if read == TASK_LIST { ("all ", "waits for every task in it") } else { ("", "waits for the task") };
-	let question = crate::diagnostic::Ask::new(IMPLICIT_WAIT_TOPIC, format!("{written} is used as its value: the program {verb} here; write `await {all}{written}` to say so"),
-		vec![crate::diagnostic::reading("wait here", &format!("await {all}{written}"))], crate::diagnostic::Fallback::Warning)
-		.written(&written).at_node(&items[1]);
+	let (all, verb) = if read == TASK_LIST {
+		("all ", "waits for every task in it")
+	} else {
+		("", "waits for the task")
+	};
+	let question = crate::diagnostic::Ask::new(
+		IMPLICIT_WAIT_TOPIC,
+		format!("{written} is used as its value: the program {verb} here; write `await {all}{written}` to say so"),
+		vec![crate::diagnostic::reading(
+			"wait here",
+			&format!("await {all}{written}"),
+		)],
+		crate::diagnostic::Fallback::Warning,
+	)
+	.written(&written)
+	.at_node(&items[1]);
 	crate::diagnostic::ask(&question).err()
 }
 
@@ -1151,7 +1605,9 @@ pub(crate) fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
 	match handler.drop_meta() {
 		Node::Key(event, Op::Colon, body) => Some((event.drop_meta().clone(), body.as_ref().clone())),
 		Node::Key(head, op, value) => match head.drop_meta() {
-			Node::Key(event, Op::Colon, target) => Some((event.drop_meta().clone(), Node::Key(target.clone(), *op, value.clone()))),
+			Node::Key(event, Op::Colon, target) => {
+				Some((event.drop_meta().clone(), Node::Key(target.clone(), *op, value.clone())))
+			}
 			_ => None,
 		},
 		_ => None,
@@ -1179,7 +1635,13 @@ fn control_word(node: &Node) -> String {
 }
 
 fn nothing_to_stop(subject: &Node, control: &str) -> Node {
-	never_happens(subject, &format!("{control} {} has nothing to stop: a task finishes where it starts", subject.name()))
+	never_happens(
+		subject,
+		&format!(
+			"{control} {} has nothing to stop: a task finishes where it starts",
+			subject.name()
+		),
+	)
 }
 
 /// The task_control operation of a control word
@@ -1209,7 +1671,12 @@ fn never_happens(located: &Node, message: &str) -> Node {
 /// P28 (user, 2026-10-05: "Zero value (Go)"): `real x;` declares x with the zero value of its type, `x:real = 0.0`.
 /// Only a fresh name: after `x = "5"`, `int x` is the conversion of x
 pub fn lower_bare_declarations(program: Node) -> Node {
-	let named: Vec<&str> = COLLECTION_DECLARATION_WORDS.iter().map(|(word, _)| *word).filter(|word| crate::soft_keywords::program_names(&program, word)).collect();
+	let names = crate::soft_keywords::names_given(&program);
+	let named: Vec<&str> = COLLECTION_DECLARATION_WORDS
+		.iter()
+		.map(|(word, _)| *word)
+		.filter(|word| names.contains(*word))
+		.collect();
 	let program = collection_declarations(program, &named);
 	// a program of only `int n` is one statement
 	match zero_declaration(&program, &std::collections::HashSet::new()) {
@@ -1224,9 +1691,12 @@ fn collection_declarations(node: Node, named: &[&str]) -> Node {
 	let declared = match node.drop_meta() {
 		Node::List(items, _, _) => match items.as_slice() {
 			[word, assignment] => match assignment.drop_meta() {
-				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(_)) => COLLECTION_DECLARATION_WORDS.iter()
-					.find(|(written, _)| word.drop_meta().name() == *written && !named.contains(written))
-					.map(|(written, meaning)| (*written, *meaning, name.clone(), value.clone())),
+				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+					COLLECTION_DECLARATION_WORDS
+						.iter()
+						.find(|(written, _)| word.drop_meta().name() == *written && !named.contains(written))
+						.map(|(written, meaning)| (*written, *meaning, name.clone(), value.clone()))
+				}
 				_ => None,
 			},
 			_ => None,
@@ -1251,12 +1721,19 @@ fn declarations_in(node: Node) -> Node {
 		Node::List(items, bracket, separator) => {
 			let statements = matches!(separator, Separator::Semicolon | Separator::Newline);
 			let mut assigned = std::collections::HashSet::new();
-			let items = items.into_iter().map(|item| {
-				let item = declarations_in(item);
-				let declared = if statements { zero_declaration(&item, &assigned) } else { None };
-				crate::library_words::collect_assigned_names(&item, &mut assigned);
-				declared.unwrap_or(item)
-			}).collect();
+			let items = items
+				.into_iter()
+				.map(|item| {
+					let item = declarations_in(item);
+					let declared = if statements {
+						zero_declaration(&item, &assigned)
+					} else {
+						None
+					};
+					crate::library_words::collect_assigned_names(&item, &mut assigned);
+					declared.unwrap_or(item)
+				})
+				.collect();
 			Node::List(items, bracket, separator)
 		}
 		other => children_rewritten(other, declarations_in),
@@ -1265,9 +1742,15 @@ fn declarations_in(node: Node) -> Node {
 
 /// `T name` of a type word with a zero value and a name not assigned before: `name:T = zero`
 fn zero_declaration(statement: &Node, assigned: &std::collections::HashSet<String>) -> Option<Node> {
-	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
-	let [type_word, name] = items.as_slice() else { return None };
-	let (Node::Symbol(type_name), Node::Symbol(variable)) = (type_word.drop_meta(), name.drop_meta()) else { return None };
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else {
+		return None;
+	};
+	let [type_word, name] = items.as_slice() else {
+		return None;
+	};
+	let (Node::Symbol(type_name), Node::Symbol(variable)) = (type_word.drop_meta(), name.drop_meta()) else {
+		return None;
+	};
 	if assigned.contains(variable) || crate::analyzer::type_word_kind(variable).is_some() {
 		return None;
 	}
@@ -1293,32 +1776,54 @@ pub(crate) fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
 /// zero-filled typed array of that many elements, written `surface = height*width * int` (issue #15)
 pub fn lower_sized_arrays(node: Node) -> Node {
 	match node {
-		Node::List(items, Bracket::None, Separator::Space) if sized_array(&items).is_some() => sized_array(&items).expect("guarded"),
+		Node::List(items, Bracket::None, Separator::Space) if sized_array(&items).is_some() => {
+			sized_array(&items).expect("guarded")
+		}
 		other => children_rewritten(other, lower_sized_arrays),
 	}
 }
 
 fn sized_array(items: &[Node]) -> Option<Node> {
 	let [binding, element_type] = items else { return None };
-	let Node::Symbol(type_name) = element_type.drop_meta() else { return None };
-	let Node::Key(name, Op::Assign | Op::Colon, count) = binding.drop_meta() else { return None };
-	let is_count = !matches!(count.drop_meta(), Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square | Bracket::Curly, _));
-	(matches!(name.drop_meta(), Node::Symbol(_)) && is_count && crate::analyzer::type_word_kind(type_name).is_some()).then(|| {
-		let array = key(Node::List(vec![count.as_ref().clone()], Bracket::Round, Separator::None), Op::Mul, element_type.clone());
-		Node::Key(name.clone(), Op::Assign, Box::new(array))
-	})
+	let Node::Symbol(type_name) = element_type.drop_meta() else {
+		return None;
+	};
+	let Node::Key(name, Op::Assign | Op::Colon, count) = binding.drop_meta() else {
+		return None;
+	};
+	let is_count = !matches!(
+		count.drop_meta(),
+		Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square | Bracket::Curly, _)
+	);
+	(matches!(name.drop_meta(), Node::Symbol(_)) && is_count && crate::analyzer::type_word_kind(type_name).is_some())
+		.then(|| {
+			let array = key(
+				Node::List(vec![count.as_ref().clone()], Bracket::Round, Separator::None),
+				Op::Mul,
+				element_type.clone(),
+			);
+			Node::Key(name.clone(), Op::Assign, Box::new(array))
+		})
 }
 
 pub fn lower_spaced_definitions(node: Node) -> Node {
 	match node {
-		Node::List(items, _, _) if colon_iteration(&items).is_some() => lower_spaced_definitions(colon_iteration(&items).expect("guarded")),
+		Node::List(items, _, _) if colon_iteration(&items).is_some() => {
+			lower_spaced_definitions(colon_iteration(&items).expect("guarded"))
+		}
 		// `1…5 do print it` (wiki/range.md): a loop over the range, the item is `it`
 		Node::Key(range, Op::Do, body) if matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) => {
-			let block = Node::List(vec![lower_spaced_definitions(*body)], Bracket::Curly, Separator::Semicolon);
+			let block = Node::List(
+				vec![lower_spaced_definitions(*body)],
+				Bracket::Curly,
+				Separator::Semicolon,
+			);
 			Node::List(vec![symbol("for"), *range, block], Bracket::None, Separator::Space)
 		}
 		// a phrase `name p… = body`, never the items of a comma list (`(a, b = a * 2) => …` has a default)
-		Node::List(items, bracket, separator @ (Separator::Space | Separator::None)) if spaced_definition(&items).is_some() => {
+		Node::List(items, bracket, separator @ (Separator::Space | Separator::None))
+			if spaced_definition(&items).is_some() =>
+		{
 			let (name, parameters, body) = spaced_definition(&items).expect("guarded");
 			let body = lower_spaced_definitions(body);
 			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
@@ -1337,7 +1842,11 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		}
 		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let items = haskell_definitions(items);
-			Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator)
+			Node::List(
+				items.into_iter().map(lower_spaced_definitions).collect(),
+				bracket,
+				separator,
+			)
 		}
 		other => children_rewritten(other, lower_spaced_definitions),
 	}
@@ -1346,18 +1855,38 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 /// Haskell's `twice x = x * 2` among statements: the definition `twice x := x * 2` when a later statement uses
 /// `twice` and the body uses every parameter (`int x = 3`, `print x = 5`, `my x = 3` stay assignments)
 fn haskell_definitions(statements: Vec<Node>) -> Vec<Node> {
-	let defined: Vec<Option<Node>> = statements.iter().enumerate().map(|(index, statement)| haskell_definition(statement, &statements[index + 1..])).collect();
-	statements.into_iter().zip(defined).map(|(statement, definition)| definition.unwrap_or(statement)).collect()
+	let defined: Vec<Option<Node>> = statements
+		.iter()
+		.enumerate()
+		.map(|(index, statement)| haskell_definition(statement, &statements[index + 1..]))
+		.collect();
+	statements
+		.into_iter()
+		.zip(defined)
+		.map(|(statement, definition)| definition.unwrap_or(statement))
+		.collect()
 }
 
 fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
-	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
-	let [name, parameters @ .., last] = items.as_slice() else { return None };
-	let Node::Key(last_name, Op::Assign, body) = last.drop_meta() else { return None };
-	let Node::Symbol(function) = name.drop_meta() else { return None };
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else {
+		return None;
+	};
+	let [name, parameters @ .., last] = items.as_slice() else {
+		return None;
+	};
+	let Node::Key(last_name, Op::Assign, body) = last.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(function) = name.drop_meta() else {
+		return None;
+	};
 	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == PLACEHOLDER || crate::warp_parser::mentions(body, word));
-	let is_free_name = !is_function_keyword(function) && !crate::library_words::is_library_word(function) && crate::analyzer::type_word_kind(function).is_none();
-	let is_used_later = later.iter().any(|statement| crate::warp_parser::mentions(statement, function));
+	let is_free_name = !is_function_keyword(function)
+		&& !crate::library_words::is_library_word(function)
+		&& crate::analyzer::type_word_kind(function).is_none();
+	let is_used_later = later
+		.iter()
+		.any(|statement| crate::warp_parser::mentions(statement, function));
 	if !is_free_name || !is_used_later || !parameters.iter().chain([last_name.as_ref()]).all(is_parameter) {
 		return None;
 	}
@@ -1368,7 +1897,9 @@ fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
 
 /// `each [1,2,3]: print it`, `all xs: …` (wiki/iteration.md): a for loop over the list whose item is `it`
 fn colon_iteration(items: &[Node]) -> Option<Node> {
-	let [word, list_and_body, rest @ ..] = items else { return None };
+	let [word, list_and_body, rest @ ..] = items else {
+		return None;
+	};
 	if !matches!(word.drop_meta(), Node::Symbol(word) if COLON_ITERATION_WORDS.contains(&word.as_str())) {
 		return None;
 	}
@@ -1381,10 +1912,25 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 	let (list, body) = match list.drop_meta() {
 		Node::Key(collection, op, value) if op.is_comparison() => {
 			let condition = Node::Key(Box::new(symbol(IT_PARAMETER)), *op, value.clone());
-			let written = format!("{} {op} {}", word.drop_meta().name(), crate::normalize::operand_text(value));
-			let question = crate::diagnostic::Ask::new(crate::warp_parser::FILTER_LOOP_TOPIC, format!("`{written}: …` visits only the items that pass its filter"),
-				vec![crate::diagnostic::reading("filter the items", &format!("for it in … {{ if it {op} {} {{ … }} }}", crate::normalize::operand_text(value)))],
-				crate::diagnostic::Fallback::Warning).written(&written).at_node(word);
+			let written = format!(
+				"{} {op} {}",
+				word.drop_meta().name(),
+				crate::normalize::operand_text(value)
+			);
+			let question = crate::diagnostic::Ask::new(
+				crate::warp_parser::FILTER_LOOP_TOPIC,
+				format!("`{written}: …` visits only the items that pass its filter"),
+				vec![crate::diagnostic::reading(
+					"filter the items",
+					&format!(
+						"for it in … {{ if it {op} {} {{ … }} }}",
+						crate::normalize::operand_text(value)
+					),
+				)],
+				crate::diagnostic::Fallback::Warning,
+			)
+			.written(&written)
+			.at_node(word);
 			if let Err(error) = crate::diagnostic::ask(&question) {
 				return Some(error);
 			}
@@ -1394,7 +1940,11 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 		_ => (list, body),
 	};
 	let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
-	Some(Node::List(vec![symbol("for"), list, block], Bracket::None, Separator::Space))
+	Some(Node::List(
+		vec![symbol("for"), list, block],
+		Bracket::None,
+		Separator::Space,
+	))
 }
 
 /// `[1,2,3]: s += it`, parsed as `([1,2,3]: s) += it`: the part before the colon and the body after it
@@ -1424,12 +1974,18 @@ pub(crate) fn spaced_definition_words(items: &[Node]) -> Option<(&Node, &[Node],
 fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 	let (name, parameters, rest) = spaced_definition_words(items)?;
 	let (definition, extra) = rest.split_first()?;
-	let Node::Key(last, op, body) = definition.drop_meta() else { return None };
+	let Node::Key(last, op, body) = definition.drop_meta() else {
+		return None;
+	};
 	// with `=` only a recursive definition (wiki/Home.md `fibonacci number = … fibonacci …`): `print x = 5` stays
 	if *op == Op::Assign && !crate::warp_parser::mentions(body, &name.name()) {
 		return None;
 	}
-	let words: Vec<Node> = parameters.iter().map(|parameter| parameter.drop_meta().clone()).chain(std::iter::once(last.drop_meta().clone())).collect();
+	let words: Vec<Node> = parameters
+		.iter()
+		.map(|parameter| parameter.drop_meta().clone())
+		.chain(std::iter::once(last.drop_meta().clone()))
+		.collect();
 	let names: Vec<String> = words.iter().map(Node::name).collect();
 	let names: Vec<&str> = names.iter().map(String::as_str).collect();
 	// one parse with type_name_matching: `square of a number := …` takes the same slots as with `=`
@@ -1448,29 +2004,54 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 	let values = |items: Vec<Node>| -> Vec<Node> {
 		let head = items.first().cloned().unwrap_or(Node::Empty);
 		let mut items = items.into_iter();
-		let bound = |item: Node| if crate::lambdas::has_own_it(&head, &item) { item } else { bind_it(item, parameter, true) };
-		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(bound)).collect()
+		let bound = |item: Node| {
+			if crate::lambdas::has_own_it(&head, &item) {
+				item
+			} else {
+				bind_it(item, parameter, true)
+			}
+		};
+		items
+			.next()
+			.map(|head| bind_it(head, parameter, false))
+			.into_iter()
+			.chain(items.map(bound))
+			.collect()
 	};
 	match node {
 		Node::Symbol(name) if name == IT_PARAMETER => symbol(parameter),
 		// a lambda of its own `it`: `mk(k) := it => it * k`
 		Node::Key(ref parameters, Op::FatArrow, _) if names_it(parameters) => node,
 		// `{it * k}`, Swift's `{ $0 + k }`
-		Node::List(_, Bracket::Curly, _) if is_value && crate::lambdas::block_as_arrow(&node).is_some() => crate::lambdas::block_as_arrow(&node).unwrap_or(node),
-		Node::Key(target, op @ (Op::Assign | Op::Define), value) => key(bind_it(*target, parameter, false), op, bind_it(*value, parameter, true)),
-		// `return {…}`, `f({…})`, `f {…}`
-		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator @ (Separator::Space | Separator::None | Separator::Colon))
-			if items.len() > 1 && is_callee(&items[0]) =>
-		{
-			Node::List(values(items), bracket, separator)
+		Node::List(_, Bracket::Curly, _) if is_value && crate::lambdas::block_as_arrow(&node).is_some() => {
+			crate::lambdas::block_as_arrow(&node).unwrap_or(node)
 		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
+			key(bind_it(*target, parameter, false), op, bind_it(*value, parameter, true))
+		}
+		// `return {…}`, `f({…})`, `f {…}`
+		Node::List(
+			items,
+			bracket @ (Bracket::Round | Bracket::None),
+			separator @ (Separator::Space | Separator::None | Separator::Colon),
+		) if items.len() > 1 && is_callee(&items[0]) => Node::List(values(items), bracket, separator),
 		// `xs.map{ it + x }` glued: the block is the method's lambda, its `it` is its own
-		Node::Key(receiver, Op::Dot, method) if glued_block(&method).is_some() => Node::Key(Box::new(bind_it(*receiver, parameter, false)), Op::Dot, method),
+		Node::Key(receiver, Op::Dot, method) if glued_block(&method).is_some() => {
+			Node::Key(Box::new(bind_it(*receiver, parameter, false)), Op::Dot, method)
+		}
 		// the last statement of a body is its value
 		Node::List(items, bracket, separator) => {
 			let last = items.len().saturating_sub(1);
 			let is_body = bracket == Bracket::Curly || separator == Separator::Semicolon;
-			Node::List(items.into_iter().enumerate().map(|(index, item)| bind_it(item, parameter, is_body && index == last && !is_value)).collect(), bracket, separator)
+			Node::List(
+				items
+					.into_iter()
+					.enumerate()
+					.map(|(index, item)| bind_it(item, parameter, is_body && index == last && !is_value))
+					.collect(),
+				bracket,
+				separator,
+			)
 		}
 		Node::Key(left, op, right) => key(bind_it(*left, parameter, false), op, bind_it(*right, parameter, false)),
 		other => children_rewritten(other, |child| bind_it(child, parameter, is_value)),
@@ -1488,9 +2069,12 @@ fn names_it(parameters: &Node) -> bool {
 
 /// `map{ it + x }` after a dot: the method name and its block
 pub(crate) fn glued_block(method: &Node) -> Option<(Node, Node)> {
-	let Node::Key(word, Op::Colon, block) = method.drop_meta() else { return None };
+	let Node::Key(word, Op::Colon, block) = method.drop_meta() else {
+		return None;
+	};
 	let Node::Symbol(_) = word.drop_meta() else { return None };
-	matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)).then(|| (word.as_ref().clone(), block.as_ref().clone()))
+	matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
+		.then(|| (word.as_ref().clone(), block.as_ref().clone()))
 }
 
 /// The function of a call: a name `f`, or a method `xs.map`
@@ -1499,8 +2083,12 @@ pub(crate) fn is_callee(node: &Node) -> bool {
 }
 
 fn one_parameter(head: &Node) -> Option<String> {
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
-	let [name, parameter] = items.as_slice() else { return None };
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
+	let [name, parameter] = items.as_slice() else {
+		return None;
+	};
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameter = match parameter.drop_meta() {
 		Node::Key(parameter, Op::Colon, _) => parameter.drop_meta(),
@@ -1519,13 +2107,22 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 	}
 	match body {
 		Node::Key(left, op, right) => Node::Key(left, op, Box::new(applied_to_last(*right, extra))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(applied_to_last(*node, extra)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(applied_to_last(*node, extra)),
+			data,
+		},
 		last => Node::List([vec![last], extra.to_vec()].concat(), Bracket::Round, Separator::None),
 	}
 }
 
 pub fn lower_c_functions(node: Node) -> Node {
-	lower_lists(end_definitions(node), |items| definition_then_statements(items).or_else(|| function_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
+	lower_lists(end_definitions(node), |items| {
+		definition_then_statements(items)
+			.or_else(|| function_definition(items))
+			.or_else(|| extension_block(items))
+			.or_else(|| smart_scope(items))
+			.or_else(|| partial_application(items))
+	})
 }
 
 /// The definition keeps the comment and position of its first word (`// doubles` before `def f(x) {…}`)
@@ -1546,10 +2143,12 @@ fn definition_then_statements(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let (definition, rest) = items.split_at(body_end + 1);
-	let definition = function_definition(definition).unwrap_or_else(|| Node::List(definition.to_vec(), Bracket::None, Separator::Space));
+	let definition = function_definition(definition)
+		.unwrap_or_else(|| Node::List(definition.to_vec(), Bracket::None, Separator::Space));
 	let rest = match rest {
 		[single] => single.clone(),
-		several => definition_then_statements(several).unwrap_or_else(|| Node::List(several.to_vec(), Bracket::None, Separator::Space)),
+		several => definition_then_statements(several)
+			.unwrap_or_else(|| Node::List(several.to_vec(), Bracket::None, Separator::Space)),
 	};
 	Some(Node::List(vec![definition, rest], Bracket::None, Separator::Semicolon))
 }
@@ -1566,7 +2165,9 @@ fn ends_in_block(node: &Node) -> bool {
 
 /// `add(1, _)`: a call with placeholders is the lambda of the missing arguments, `partial_1 => add(1, partial_1)`
 fn partial_application(items: &[Node]) -> Option<Node> {
-	let [Node::Symbol(head), arguments @ ..] = items else { return None };
+	let [Node::Symbol(head), arguments @ ..] = items else {
+		return None;
+	};
 	// `for _ in 0..3 {…}`: a keyword is no call, its `_` an unused loop variable
 	if crate::soft_keywords::HARD_KEYWORDS.contains(&head.as_str()) {
 		return None;
@@ -1576,9 +2177,16 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	// Swift's `func twice(_ x: Int)`, `func sum(_ xs: Int...)`: `_` labels a typed parameter, no placeholder
-	let is_type = |type_node: &Node| is_type_word(type_node) || matches!(type_node.drop_meta(), Node::Key(element, Op::To, end) if is_type_word(element) && matches!(end.drop_meta(), Node::Empty));
-	let typed_parameter = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type(type_node));
-	if arguments.windows(2).any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1])) {
+	let is_type = |type_node: &Node| {
+		is_type_word(type_node)
+			|| matches!(type_node.drop_meta(), Node::Key(element, Op::To, end) if is_type_word(element) && matches!(end.drop_meta(), Node::Empty))
+	};
+	let typed_parameter =
+		|node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type(type_node));
+	if arguments
+		.windows(2)
+		.any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1]))
+	{
 		return None;
 	}
 	let mut parameters = vec![];
@@ -1589,7 +2197,11 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 		}
 		false => argument.clone(),
 	});
-	let call = Node::List(std::iter::once(items[0].clone()).chain(arguments).collect(), Bracket::Round, Separator::None);
+	let call = Node::List(
+		std::iter::once(items[0].clone()).chain(arguments).collect(),
+		Bracket::Round,
+		Separator::None,
+	);
 	let head = match parameters.as_slice() {
 		[single] => single.clone(),
 		_ => Node::List(parameters, Bracket::Round, Separator::Colon),
@@ -1600,26 +2212,64 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
 pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (keyword, definition, mut result_type) = match items {
-		[keyword, glued] if glued_curried_definition(glued).is_some() => (keyword, glued_curried_definition(glued).expect("guarded"), None),
+		[keyword, glued] if glued_curried_definition(glued).is_some() => {
+			(keyword, glued_curried_definition(glued).expect("guarded"), None)
+		}
 		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
 		// a tuple result type `-> (Int, Int) {…}` (Swift): the body's tuple as it is
 		[keyword, head, body] if tuple_result(head).is_some() => {
-			let Node::Key(_, _, result_types) = head.drop_meta() else { unreachable!("guarded") };
-			(keyword, Node::List(vec![tuple_result(head).expect("guarded").clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
+			let Node::Key(_, _, result_types) = head.drop_meta() else {
+				unreachable!("guarded")
+			};
+			(
+				keyword,
+				Node::List(
+					vec![
+						tuple_result(head).expect("guarded").clone(),
+						typed_returns(body.clone(), result_types),
+					],
+					Bracket::Round,
+					Separator::None,
+				),
+				None,
+			)
 		}
-		[keyword, head, rest] if curried_definition(head, rest).is_some() => (keyword, curried_definition(head, rest).expect("guarded"), None),
+		[keyword, head, rest] if curried_definition(head, rest).is_some() => {
+			(keyword, curried_definition(head, rest).expect("guarded"), None)
+		}
 		// `def f(x) as int { … }`: the result type before a block body, read as `-> int { … }` is (user 2026-10-12, return-as)
-		[keyword, head, body] if let Node::Key(head, Op::As, result_type) = head.drop_meta() && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			let typed_body = Node::List(vec![result_type.as_ref().clone(), body.clone()], Bracket::None, Separator::Space);
+		[keyword, head, body]
+			if let Node::Key(head, Op::As, result_type) = head.drop_meta()
+				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			let typed_body = Node::List(
+				vec![result_type.as_ref().clone(), body.clone()],
+				Bracket::None,
+				Separator::Space,
+			);
 			(keyword, key(head.as_ref().clone(), Op::As, typed_body), None)
 		}
-		[keyword, head, body] => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), None),
+		[keyword, head, body] => (
+			keyword,
+			Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None),
+			None,
+		),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
-		[keyword, head, result_type, body] if is_type_word(result_type) => (keyword, Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None), Some(result_type.clone())),
+		[keyword, head, result_type, body] if is_type_word(result_type) => (
+			keyword,
+			Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None),
+			Some(result_type.clone()),
+		),
 		// Go's `func divmod(a, b int) (int, int) {…}`: a tuple of result types, each returned value converted
-		[keyword, head, result_types, body] if is_type_tuple(result_types) => {
-			(keyword, Node::List(vec![head.clone(), typed_returns(body.clone(), result_types)], Bracket::Round, Separator::None), None)
-		}
+		[keyword, head, result_types, body] if is_type_tuple(result_types) => (
+			keyword,
+			Node::List(
+				vec![head.clone(), typed_returns(body.clone(), result_types)],
+				Bracket::Round,
+				Separator::None,
+			),
+			None,
+		),
 		_ => return None,
 	};
 	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
@@ -1637,28 +2287,44 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		None => definition,
 	};
 	let (head, op, body) = match definition {
-		Node::Key(head, op @ (Op::Define | Op::Assign), body) => (*head, op, *body),
-		// `def test: print "test"` (wiki/signal.md): a function without parameters
-		Node::Key(name, Op::Colon, body) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-			(Node::List(vec![*name], Bracket::Round, Separator::None), Op::Define, *body)
+		// `def test: print "test"` (wiki/signal.md), Ruby's endless `def twice = x * 2`: a function without parameters;
+		// `def square := it * it` and `def add := a + b` keep their implicit parameters (later passes)
+		Node::Key(name, op @ (Op::Colon | Op::Assign), body)
+			if matches!(name.drop_meta(), Node::Symbol(_))
+				&& (op == Op::Colon || !crate::type_name_matching::uses_it(&body)) =>
+		{
+			(
+				Node::List(vec![*name], Bracket::Round, Separator::None),
+				Op::Define,
+				*body,
+			)
 		}
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) => (*head, op, *body),
 		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
 		// parameters it stays a def form for late_binding, which would read `z() := e` as a getter (P71); a generator
 		// (`def numbers(): yield 1`) is no getter
 		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::ruby_blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
 			(*head, Op::Define, *body)
 		}
-		Node::List(parts, Bracket::Round, _) if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => (parts[0].clone(), Op::Define, parts[1].clone()),
+		Node::List(parts, Bracket::Round, _)
+			if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			(parts[0].clone(), Op::Define, parts[1].clone())
+		}
 		_ => return None,
 	};
-	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
 	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
 	let is_swift = keyword.is_symbol(SWIFT_FUNCTION_KEYWORD);
 	let arguments = match arguments {
-		[label, typed] if is_swift && argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
+		[label, typed] if is_swift && argument_label(label, typed).is_some() => {
+			vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)]
+		}
 		_ => arguments.to_vec(),
 	};
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
@@ -1672,7 +2338,9 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(left, Op::Mul | Op::Div, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty))))
 	.map(name_then_type);
 	let mut labeled_names = vec![];
-	let mut parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, &mut labeled_names)).collect();
+	let mut parameters: Vec<Node> = parameters
+		.map(|parameter| labeled_parameter(parameter, &mut labeled_names))
+		.collect();
 	let body = with_label_names(body, labeled_names);
 	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type
 	if let [parameter, type_word] = parameters.as_slice() {
@@ -1683,7 +2351,11 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	}
 	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
 	let op = if parameters.is_empty() { op } else { Op::Define };
-	let head = Node::List(std::iter::once(name.clone()).chain(parameters).collect(), Bracket::Round, Separator::None);
+	let head = Node::List(
+		std::iter::once(name.clone()).chain(parameters).collect(),
+		Bracket::Round,
+		Separator::None,
+	);
 	let target = match result_type {
 		Some(result_type) => key(head, Op::Colon, result_type),
 		None => head,
@@ -1694,10 +2366,18 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 /// Kotlin's extension method `fun Int.twice() = this * 2`: the function `twice(this:Int) := this * 2`, its receiver the
 /// first parameter, named as the body names it (`this`, or Swift's `self`), so `3.twice()` calls it as a method
 fn extension_definition(definition: Node) -> Node {
-	let Node::Key(head, op, rest) = definition else { return definition };
-	let Node::Key(receiver_type, Op::Dot, call) = head.drop_meta() else { return Node::Key(head, op, rest) };
-	let Node::List(call, Bracket::Round, separator) = call.drop_meta() else { return Node::Key(head, op, rest) };
-	if !matches!(receiver_type.drop_meta(), Node::Symbol(_)) || !matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
+	let Node::Key(head, op, rest) = definition else {
+		return definition;
+	};
+	let Node::Key(receiver_type, Op::Dot, call) = head.drop_meta() else {
+		return Node::Key(head, op, rest);
+	};
+	let Node::List(call, Bracket::Round, separator) = call.drop_meta() else {
+		return Node::Key(head, op, rest);
+	};
+	if !matches!(receiver_type.drop_meta(), Node::Symbol(_))
+		|| !matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_)))
+	{
 		return Node::Key(head, op, rest);
 	}
 	let head = with_receiver(call, separator, receiver_type, &rest);
@@ -1706,30 +2386,58 @@ fn extension_definition(definition: Node) -> Node {
 
 /// The head `name(receiver:T, parameters…)` of a method on T whose call is `name(parameters…)`
 fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
-	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
+	let receiver = if body.mentions_any(&[SELF_WORD]) {
+		SELF_WORD
+	} else {
+		THIS_WORD
+	};
 	let receiver = key(symbol(receiver), Op::Colon, receiver_type.clone());
 	let parameters = call[1..].iter().flat_map(grouped_parameters);
-	Node::List(std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(), Bracket::Round, separator.clone())
+	Node::List(
+		std::iter::once(call[0].clone())
+			.chain(std::iter::once(receiver))
+			.chain(parameters)
+			.collect(),
+		Bracket::Round,
+		separator.clone(),
+	)
 }
 
 /// A smart scope (wiki/inventions.md) `Number { Square = it*it }`: in the scope of a type each `name = body` defines a
 /// method of the type, `it` the value it is called on: `Square(self:Number) := self*self`, so `3.Square` is 9
 fn smart_scope(items: &[Node]) -> Option<Node> {
 	let [receiver_type, block] = items else { return None };
-	let Node::Symbol(type_name) = receiver_type.drop_meta() else { return None };
-	let Node::List(definitions, Bracket::Curly, separator) = block.drop_meta() else { return None };
-	let separated = matches!(separator, Separator::Semicolon | Separator::Newline | Separator::Colon) || definitions.len() == 1;
+	let Node::Symbol(type_name) = receiver_type.drop_meta() else {
+		return None;
+	};
+	let Node::List(definitions, Bracket::Curly, separator) = block.drop_meta() else {
+		return None;
+	};
+	let separated =
+		matches!(separator, Separator::Semicolon | Separator::Newline | Separator::Colon) || definitions.len() == 1;
 	if !separated {
 		return None;
 	}
 	let is_method = |definition: &Node| matches!(definition.drop_meta(), Node::Key(name, Op::Assign | Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(_)));
-	if crate::analyzer::type_word_kind(&type_name.to_lowercase()).is_none() || definitions.is_empty() || !definitions.iter().all(is_method) {
+	if crate::analyzer::type_word_kind(&type_name.to_lowercase()).is_none()
+		|| definitions.is_empty()
+		|| !definitions.iter().all(is_method)
+	{
 		return None;
 	}
 	let receiver = symbol(SELF_WORD);
 	let methods = definitions.iter().map(|definition| {
-		let Node::Key(name, _, body) = definition.drop_meta() else { unreachable!("guarded") };
-		let head = Node::List(vec![name.as_ref().clone(), key(receiver.clone(), Op::Colon, receiver_type.clone())], Bracket::Round, Separator::None);
+		let Node::Key(name, _, body) = definition.drop_meta() else {
+			unreachable!("guarded")
+		};
+		let head = Node::List(
+			vec![
+				name.as_ref().clone(),
+				key(receiver.clone(), Op::Colon, receiver_type.clone()),
+			],
+			Bracket::Round,
+			Separator::None,
+		);
 		key(head, Op::Define, renamed_it(body.as_ref().clone(), &receiver))
 	});
 	Some(Node::List(methods.collect(), Bracket::None, Separator::Semicolon))
@@ -1746,7 +2454,9 @@ fn renamed_it(node: Node, receiver: &Node) -> Node {
 /// Swift's `extension Int { func twice() -> Int { self * 2 } }`: each function of the block a method on the type, as
 /// `fun Int.twice()` defines it
 fn extension_block(items: &[Node]) -> Option<Node> {
-	let [word, receiver_type, block] = items else { return None };
+	let [word, receiver_type, block] = items else {
+		return None;
+	};
 	let is_extension = word.is_symbol(EXTENSION_WORD) && matches!(receiver_type.drop_meta(), Node::Symbol(_));
 	// a block of one function arrives as that definition
 	let definitions = match block.drop_meta() {
@@ -1758,12 +2468,16 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let method = |definition: &Node| {
-		let Node::Key(head, op @ (Op::Define | Op::Assign), body) = definition.drop_meta() else { return definition.clone() };
+		let Node::Key(head, op @ (Op::Define | Op::Assign), body) = definition.drop_meta() else {
+			return definition.clone();
+		};
 		let (call, result_type) = match head.drop_meta() {
 			Node::Key(call, Op::Colon, result_type) => (call.drop_meta(), Some(result_type)),
 			call => (call, None),
 		};
-		let Node::List(call, Bracket::Round, separator) = call else { return definition.clone() };
+		let Node::List(call, Bracket::Round, separator) = call else {
+			return definition.clone();
+		};
 		let head = with_receiver(call, separator, receiver_type, body);
 		let head = match result_type {
 			Some(result_type) => Node::Key(Box::new(head), Op::Colon, result_type.clone()),
@@ -1771,20 +2485,35 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 		};
 		Node::Key(Box::new(head), *op, body.clone())
 	};
-	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
+	Some(Node::List(
+		definitions.iter().map(method).collect(),
+		Bracket::None,
+		Separator::Semicolon,
+	))
 }
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
 pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 	let rotated = as_union_result(definition).map(|(head, union)| key(head, Op::As, union));
-	let Node::Key(head, Op::Arrow | Op::Colon | Op::As, typed_body) = rotated.as_ref().unwrap_or(definition) else { return None };
-	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) {
+	let Node::Key(head, Op::Arrow | Op::Colon | Op::As, typed_body) = rotated.as_ref().unwrap_or(definition) else {
+		return None;
+	};
+	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+	{
 		return None;
 	}
 	let (result_type, body) = match typed_body.drop_meta() {
-		Node::List(parts, _, Separator::Space) if parts.len() == 2 && is_type_word(&parts[0]) && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => (parts[0].clone(), parts[1].clone()),
-		Node::Key(result_type, Op::Colon, body) if is_type_word(result_type) => (result_type.as_ref().clone(), body.as_ref().clone()),
+		Node::List(parts, _, Separator::Space)
+			if parts.len() == 2
+				&& is_type_word(&parts[0])
+				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			(parts[0].clone(), parts[1].clone())
+		}
+		Node::Key(result_type, Op::Colon, body) if is_type_word(result_type) => {
+			(result_type.as_ref().clone(), body.as_ref().clone())
+		}
 		union @ Node::Key(_, Op::Or, _) => {
 			let (union, body) = union_result(union)?;
 			// named as lower_inline_unions names a union, which has run; the analyzer refuses a part naming no type
@@ -1798,7 +2527,9 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
 /// spells canonically (user 2026-10-12, return-as)
 pub(crate) fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
-	let Node::Key(left, Op::Or, rest) = definition.drop_meta() else { return None };
+	let Node::Key(left, Op::Or, rest) = definition.drop_meta() else {
+		return None;
+	};
 	let (head, first) = match left.drop_meta() {
 		Node::Key(head, Op::As, first) => (head.as_ref().clone(), first.as_ref().clone()),
 		left => as_union_result(left)?,
@@ -1809,7 +2540,11 @@ pub(crate) fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
 /// `def f(x) -> int` keeps working; warp writes a result type with `as`, unions too (user 2026-10-12, return-as)
 fn hint_as_result(result_type: &Node) {
 	let written = result_type.serialize();
-	crate::normalize::hint(&format!("-> {written}"), &format!("as {written}"), &format!("prefer `def f(x) as {written}`"));
+	crate::normalize::hint(
+		&format!("-> {written}"),
+		&format!("as {written}"),
+		&format!("prefer `def f(x) as {written}`"),
+	);
 }
 
 /// `-> int or text { body }` arrives as `int or (text { body })`: the parts `int or text` and the body
@@ -1819,7 +2554,11 @@ fn union_result(typed_body: &Node) -> Option<(Node, Node)> {
 			let (rest, body) = union_result(rest)?;
 			Some((key(part.as_ref().clone(), Op::Or, rest), body))
 		}
-		Node::List(parts, _, Separator::Space) if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+		Node::List(parts, _, Separator::Space)
+			if parts.len() == 2
+				&& matches!(parts[0].drop_meta(), Node::Symbol(_))
+				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
 			Some((parts[0].clone(), parts[1].clone()))
 		}
 		_ => None,
@@ -1829,13 +2568,19 @@ fn union_result(typed_body: &Node) -> Option<(Node, Node)> {
 /// Scala's curried `def add(x: Int)(y: Int): Int = x + y`: `add(x: Int) := (y: Int) => x + y`, so `add(1)(2)` calls the
 /// function add(1) returns
 fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
-	let Node::Key(second, Op::Assign, body) = rest.drop_meta() else { return None };
+	let Node::Key(second, Op::Assign, body) = rest.drop_meta() else {
+		return None;
+	};
 	let second = match second.drop_meta() {
 		Node::Key(group, Op::Colon, result_type) if is_type_word(result_type) => group.as_ref(),
 		other => other,
 	};
-	let Node::List(_, Bracket::Round, _) = second.drop_meta() else { return None };
-	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let Node::List(_, Bracket::Round, _) = second.drop_meta() else {
+		return None;
+	};
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
 	if !matches!(head_items.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
 		return None;
 	}
@@ -1846,9 +2591,13 @@ fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
 /// The glued groups `add(x)(y)` arrive as one operand (the parser's curried call): `def add(x)(y) = x + y` and
 /// `def add(x: Int)(y: Int): Int = …` as curried_definition takes them
 fn glued_curried_definition(definition: &Node) -> Option<Node> {
-	let Node::Key(left, Op::Assign, body) = definition.drop_meta() else { return None };
+	let Node::Key(left, Op::Assign, body) = definition.drop_meta() else {
+		return None;
+	};
 	let groups = |node: &Node| match node.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => Some((items[0].clone(), items[1].clone())),
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => {
+			Some((items[0].clone(), items[1].clone()))
+		}
 		_ => None,
 	};
 	let (head, second) = match left.drop_meta() {
@@ -1864,13 +2613,29 @@ fn glued_curried_definition(definition: &Node) -> Option<Node> {
 /// Swift's `f(k) -> (Int) -> Int { body }`, a function as the result: the definition `f(k) { body }`, the closure it
 /// returns carries its own types
 fn function_typed_result(definition: Node) -> Node {
-	let Node::Key(head, Op::Arrow, result) = &definition else { return definition };
-	let Node::Key(parameter_types, Op::Arrow, typed_body) = result.drop_meta() else { return definition };
-	let Node::List(types, Bracket::Round, _) = parameter_types.drop_meta() else { return definition };
-	let Node::List(parts, _, Separator::Space) = typed_body.drop_meta() else { return definition };
+	let Node::Key(head, Op::Arrow, result) = &definition else {
+		return definition;
+	};
+	let Node::Key(parameter_types, Op::Arrow, typed_body) = result.drop_meta() else {
+		return definition;
+	};
+	let Node::List(types, Bracket::Round, _) = parameter_types.drop_meta() else {
+		return definition;
+	};
+	let Node::List(parts, _, Separator::Space) = typed_body.drop_meta() else {
+		return definition;
+	};
 	match parts.as_slice() {
-		[result_type, body] if types.iter().all(is_type_word) && is_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			Node::List(vec![head.as_ref().clone(), body.clone()], Bracket::Round, Separator::None)
+		[result_type, body]
+			if types.iter().all(is_type_word)
+				&& is_type_word(result_type)
+				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			Node::List(
+				vec![head.as_ref().clone(), body.clone()],
+				Bracket::Round,
+				Separator::None,
+			)
 		}
 		_ => definition,
 	}
@@ -1878,28 +2643,46 @@ fn function_typed_result(definition: Node) -> Node {
 
 /// `f(a, b) -> (Int, Int)`: the head of a function whose result type is a tuple of types
 fn tuple_result(head: &Node) -> Option<&Node> {
-	let Node::Key(head, Op::Arrow, result) = head.drop_meta() else { return None };
+	let Node::Key(head, Op::Arrow, result) = head.drop_meta() else {
+		return None;
+	};
 	is_type_tuple(result).then_some(head.as_ref())
 }
 
 /// `return a / b, a % b` of a function returning `(int, int)`: `return (a / b) as int, (a % b) as int`
 fn typed_returns(body: Node, result_types: &Node) -> Node {
-	let Node::List(types, _, _) = result_types.drop_meta() else { return body };
+	let Node::List(types, _, _) = result_types.drop_meta() else {
+		return body;
+	};
 	let converted = |values: &[Node]| -> Option<Vec<Node>> {
-		(values.len() == types.len()).then(|| values.iter().zip(types).map(|(value, kind)| {
-			let grouped = Node::List(vec![value.clone()], Bracket::Round, Separator::None);
-			key(grouped, Op::As, kind.clone())
-		}).collect())
+		(values.len() == types.len()).then(|| {
+			values
+				.iter()
+				.zip(types)
+				.map(|(value, kind)| {
+					let grouped = Node::List(vec![value.clone()], Bracket::Round, Separator::None);
+					key(grouped, Op::As, kind.clone())
+				})
+				.collect()
+		})
 	};
 	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(RETURN_WORD));
 	match body {
 		// `return a, b` parses as `(return a), b`
 		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
-			let Node::List(words, _, _) = items[0].drop_meta() else { unreachable!("guarded") };
-			let values: Vec<Node> = std::iter::once(words[1].clone()).chain(items[1..].iter().cloned()).collect();
+			let Node::List(words, _, _) = items[0].drop_meta() else {
+				unreachable!("guarded")
+			};
+			let values: Vec<Node> = std::iter::once(words[1].clone())
+				.chain(items[1..].iter().cloned())
+				.collect();
 			match converted(&values) {
 				Some(mut values) => {
-					let first = Node::List(vec![words[0].clone(), values.remove(0)], Bracket::None, Separator::Space);
+					let first = Node::List(
+						vec![words[0].clone(), values.remove(0)],
+						Bracket::None,
+						Separator::Space,
+					);
 					Node::List([vec![first], values].concat(), bracket, Separator::Colon)
 				}
 				None => Node::List(items, bracket, Separator::Colon),
@@ -1916,7 +2699,9 @@ fn is_type_tuple(node: &Node) -> bool {
 
 /// Swift's `label name: T`: the label (`_` for none)
 fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a str> {
-	let Node::Symbol(label) = label.drop_meta() else { return None };
+	let Node::Symbol(label) = label.drop_meta() else {
+		return None;
+	};
 	typed_parameter_name(typed).is_some().then_some(label.as_str())
 }
 
@@ -1933,7 +2718,9 @@ fn typed_parameter_name(typed: &Node) -> Option<&Node> {
 fn renamed_parameter(typed: &Node, label: &str) -> Node {
 	match typed.drop_meta() {
 		Node::Key(_, Op::Colon, type_node) => Node::Key(Box::new(symbol(label)), Op::Colon, type_node.clone()),
-		Node::Key(parameter, op, result) => Node::Key(Box::new(renamed_parameter(parameter, label)), *op, result.clone()),
+		Node::Key(parameter, op, result) => {
+			Node::Key(Box::new(renamed_parameter(parameter, label)), *op, result.clone())
+		}
 		other => other.clone(),
 	}
 }
@@ -1941,15 +2728,29 @@ fn renamed_parameter(typed: &Node, label: &str) -> Node {
 /// `person name: String` is the parameter `person: String` whose value the body reads as name (`labeled_names` gets
 /// `name = person`); `_ name: String` is `name: String`
 fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
-	let Node::List(words, _, _) = parameter.drop_meta() else { return parameter };
-	let [label, typed] = words.as_slice() else { return parameter };
-	let Some(label) = argument_label(label, typed) else { return parameter };
+	let Node::List(words, _, _) = parameter.drop_meta() else {
+		return parameter;
+	};
+	let [label, typed] = words.as_slice() else {
+		return parameter;
+	};
+	let Some(label) = argument_label(label, typed) else {
+		return parameter;
+	};
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
 	// user 2026-10-06: warp names a parameter once, Swift's label and name are redundant; ported code still compiles
 	let written = format!("{label} {}", typed.serialize());
-	let preferred = if label == WILDCARD_LABEL { typed.clone() } else { renamed_parameter(typed, label) };
+	let preferred = if label == WILDCARD_LABEL {
+		typed.clone()
+	} else {
+		renamed_parameter(typed, label)
+	};
 	crate::normalize::set_position_of(&parameter);
-	crate::normalize::hint(&written, &preferred.serialize(), "warp names a parameter once, no label");
+	crate::normalize::hint(
+		&written,
+		&preferred.serialize(),
+		"warp names a parameter once, no label",
+	);
 	if label == WILDCARD_LABEL {
 		return preferred;
 	}
@@ -1967,7 +2768,11 @@ fn with_label_names(body: Node, labeled_names: Vec<Node>) -> Node {
 			_ => None,
 		})
 		.collect();
-	if bindings.is_empty() { body } else { crate::law::substitute(&body, &bindings) }
+	if bindings.is_empty() {
+		body
+	} else {
+		crate::law::substitute(&body, &bindings)
+	}
 }
 
 /// Go's parameter `x int` (the name, then its type) is `x:int`
@@ -1975,8 +2780,14 @@ fn name_then_type(parameter: Node) -> Node {
 	let is_function_type = |node: &Node| matches!(node.drop_meta(), Node::List(words, _, _) if matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
 	match parameter.drop_meta() {
 		// Go's function parameter `f func(int) int`: the name, a function (its calls tell the rest)
-		Node::List(parts, _, Separator::Space) if parts.len() >= 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_function_type(&parts[1]) => parts[0].clone(),
-		Node::List(parts, _, Separator::Space) if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_type_word(&parts[1]) => {
+		Node::List(parts, _, Separator::Space)
+			if parts.len() >= 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_function_type(&parts[1]) =>
+		{
+			parts[0].clone()
+		}
+		Node::List(parts, _, Separator::Space)
+			if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_type_word(&parts[1]) =>
+		{
 			key(parts[0].clone(), Op::Colon, parts[1].clone())
 		}
 		_ => parameter,
@@ -1986,11 +2797,17 @@ fn name_then_type(parameter: Node) -> Node {
 /// Ruby's `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`: the definition `def f(a, b: 2) {…}`
 fn end_definitions(node: Node) -> Node {
 	let node = children_rewritten(node, end_definitions);
-	let Node::List(items, bracket, separator) = node else { return node };
+	let Node::List(items, bracket, separator) = node else {
+		return node;
+	};
 	// one line: `def head body… end`
 	if let ([keyword, head, body @ .., end], Separator::Space) = (items.as_slice(), &separator) {
 		if is_function_keyword(&keyword.drop_meta().name()) && is_end(end) && !body.is_empty() {
-			return Node::List(vec![keyword.clone(), function_head(head), block(body.to_vec())], bracket, separator);
+			return Node::List(
+				vec![keyword.clone(), function_head(head), block(body.to_vec())],
+				bracket,
+				separator,
+			);
 		}
 	}
 	if !matches!(separator, Separator::Newline | Separator::Semicolon) || !items.iter().any(is_end) {
@@ -2024,11 +2841,17 @@ fn is_end(node: &Node) -> bool {
 
 /// `def f(a)` or `def h` without a body, also with Crystal's result type `def f(a) : Int`
 fn bodiless_definition(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else {
+		return None;
+	};
 	let [keyword, head] = items.as_slice() else { return None };
-	let is_head = |head: &Node| matches!(head.drop_meta(), Node::Symbol(_)) || matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+	let is_head = |head: &Node| {
+		matches!(head.drop_meta(), Node::Symbol(_))
+			|| matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+	};
 	let is_typed_head = matches!(head.drop_meta(), Node::Key(inner, Op::Colon, _) if is_head(inner));
-	(is_function_keyword(&keyword.drop_meta().name()) && (is_head(head) || is_typed_head)).then(|| (keyword.clone(), head.clone()))
+	(is_function_keyword(&keyword.drop_meta().name()) && (is_head(head) || is_typed_head))
+		.then(|| (keyword.clone(), head.clone()))
 }
 
 /// `h` → `h()`; `(f a b:2)` → `(f (a, b:2))`, the parameters as one comma group as `def f(a, b: 2) {…}` has them (two
@@ -2067,7 +2890,6 @@ fn enum_object(items: &[Node]) -> Option<Node> {
 	Some(key(name.clone(), Op::Assign, object))
 }
 
-
 /// Swift's label for an argument without a label
 const WILDCARD_LABEL: &str = "_";
 const DART_REQUIRED: &str = "required";
@@ -2077,7 +2899,9 @@ const SWIFT_FUNCTION_KEYWORD: &str = "func";
 /// block); the result kind is inferred as for any definition
 pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let [result_type, definition] = items else { return None };
-	let Node::Symbol(result_type) = result_type.drop_meta() else { return None };
+	let Node::Symbol(result_type) = result_type.drop_meta() else {
+		return None;
+	};
 	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
 		return None;
 	}
@@ -2090,17 +2914,23 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 		Node::Key(head, Op::FatArrow, body) => (head.as_ref(), body.as_ref()),
 		_ => return None,
 	};
-	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
 		Node::List(group, Bracket::Curly, _) => group.clone(), // Dart's named parameters `{required int a, int b = 2}`
-		Node::Empty => vec![], // `f()`
+		Node::Empty => vec![],                                 // `f()`
 		_ => vec![argument.clone()],
 	});
 	let parameters: Option<Vec<Node>> = parameters.map(|parameter| c_parameter(&parameter)).collect();
-	let head = Node::List([vec![name.clone()], parameters?].concat(), Bracket::Round, Separator::Colon);
+	let head = Node::List(
+		[vec![name.clone()], parameters?].concat(),
+		Bracket::Round,
+		Separator::Colon,
+	);
 	Some(key(head, Op::Define, body.clone()))
 }
 
@@ -2109,17 +2939,30 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 	match parameter.drop_meta() {
 		Node::Symbol(_) | Node::Key(_, Op::Colon, _) => Some(parameter.clone()),
 		// Dart's `int b = 2` among the named parameters
-		Node::Key(declared, Op::Assign, default) => Some(Node::Key(Box::new(c_parameter(declared)?), Op::Assign, default.clone())),
+		Node::Key(declared, Op::Assign, default) => {
+			Some(Node::Key(Box::new(c_parameter(declared)?), Op::Assign, default.clone()))
+		}
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
 			// Dart's `required int a`: every parameter needs its value anyway
-			[required, rest @ ..] if required.is_symbol(DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
+			[required, rest @ ..] if required.is_symbol(DART_REQUIRED) => {
+				c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space))
+			}
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(key(name.clone(), Op::Colon, kind.clone()))
 			}
 			// `int b = 2` as the parser groups it, the type then the assignment
-			[kind, assignment] if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_))) && matches!(kind.drop_meta(), Node::Symbol(_)) => {
-				let Node::Key(name, _, default) = assignment.drop_meta() else { unreachable!("guarded") };
-				Some(Node::Key(Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))), Op::Assign, default.clone()))
+			[kind, assignment]
+				if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)))
+					&& matches!(kind.drop_meta(), Node::Symbol(_)) =>
+			{
+				let Node::Key(name, _, default) = assignment.drop_meta() else {
+					unreachable!("guarded")
+				};
+				Some(Node::Key(
+					Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))),
+					Op::Assign,
+					default.clone(),
+				))
 			}
 			_ => None,
 		},

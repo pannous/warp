@@ -2,7 +2,8 @@
 //! call in an interpolation hole, as it does held in a variable
 use crate::is;
 
-const QUANTITY: &str = "class Q{v:float; u:text; text() := \"\\(v) \\(u)\"; to(w:text) := Q(v*2, w)}\nq0 = Q(1.5, \"m\")\n";
+const QUANTITY: &str =
+	"class Q{v:float; u:text; text() := \"\\(v) \\(u)\"; to(w:text) := Q(v*2, w)}\nq0 = Q(1.5, \"m\")\n";
 
 #[test]
 fn an_interpolated_method_result_uses_its_text() {

@@ -21,9 +21,15 @@ pub fn lower(node: Node) -> Node {
 
 /// `type Name = string`: (Name, string)
 fn alias(node: &Node) -> Option<(String, String)> {
-	let Node::Key(declared, Op::Assign, target) = node else { return None };
-	let Node::Type { name, body } = declared.drop_meta() else { return None };
-	let Node::Symbol(target) = target.drop_meta() else { return None };
+	let Node::Key(declared, Op::Assign, target) = node else {
+		return None;
+	};
+	let Node::Type { name, body } = declared.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(target) = target.drop_meta() else {
+		return None;
+	};
 	matches!(body.drop_meta(), Node::Empty).then(|| (name.drop_meta().name(), target.clone()))
 }
 
@@ -46,12 +52,22 @@ fn target(written: &str, aliases: &HashMap<String, String>) -> Option<String> {
 fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 	match node {
 		declaration @ Node::Key(..) if alias(&declaration).is_some() => declaration,
-		Node::Type { name, body } if matches!(body.drop_meta(), Node::Empty) => match target(&name.drop_meta().name(), aliases) {
-			Some(target) => Node::Type { name: Box::new(Node::Symbol(target)), body },
-			None => Node::Type { name, body },
+		Node::Type { name, body } if matches!(body.drop_meta(), Node::Empty) => {
+			match target(&name.drop_meta().name(), aliases) {
+				Some(target) => Node::Type {
+					name: Box::new(Node::Symbol(target)),
+					body,
+				},
+				None => Node::Type { name, body },
+			}
+		}
+		Node::Type { name, body } => Node::Type {
+			name,
+			body: Box::new(resolved(*body, aliases)),
 		},
-		Node::Type { name, body } => Node::Type { name, body: Box::new(resolved(*body, aliases)) },
-		Node::Key(name, Op::Colon, annotation) => key(resolved(*name, aliases), Op::Colon, annotated(*annotation, aliases)),
+		Node::Key(name, Op::Colon, annotation) => {
+			key(resolved(*name, aliases), Op::Colon, annotated(*annotation, aliases))
+		}
 		other => other.map_children(|child| resolved(child, aliases)),
 	}
 }

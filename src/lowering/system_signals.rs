@@ -13,12 +13,12 @@
 //! listener of that sub-channel; `send "file system full"` alone is that named event on "warp" without data, heard by
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
-use super::words::{FROM_WORD, ON_WORD};
 use super::nodes::call;
+use super::words::{FROM_WORD, ON_WORD};
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
-use crate::extensions::numbers::Number;
 use crate::event_signals::{function_with_globals, main_level_variables};
+use crate::extensions::numbers::Number;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -44,15 +44,27 @@ const CHANNEL_CHECK_MILLISECONDS: i64 = 20;
 const MESSAGES_TEMPLATE: &str = "while channel_pending(ID) > 0 { event = channel_next(ID); BODY }";
 
 pub fn lower(program: Node) -> Node {
-	let program = if defines(&program, crate::host::EXIT) { program } else { bare_exits(program) };
-	let verbs: Vec<&str> = [BROADCAST_WORD, SEND_WORD].into_iter().filter(|verb| !defines(&program, verb)).collect();
+	let program = if defines(&program, crate::host::EXIT) {
+		program
+	} else {
+		bare_exits(program)
+	};
+	let verbs: Vec<&str> = [BROADCAST_WORD, SEND_WORD]
+		.into_iter()
+		.filter(|verb| !defines(&program, verb))
+		.collect();
 	let program = broadcasts(program, &verbs);
 	lower_timers(program)
 }
 
 fn lower_timers(program: Node) -> Node {
 	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
-	if !statements.iter().any(|statement| one_shot(statement).is_some() || timer(statement).is_some() || file_watch(statement).is_some() || message_listener(statement).is_some()) {
+	if !statements.iter().any(|statement| {
+		one_shot(statement).is_some()
+			|| timer(statement).is_some()
+			|| file_watch(statement).is_some()
+			|| message_listener(statement).is_some()
+	}) {
 		return program;
 	}
 	let main_variables = main_level_variables(&statements);
@@ -62,10 +74,21 @@ fn lower_timers(program: Node) -> Node {
 		if let Some((channel, body)) = message_listener(&statement) {
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			let id = Node::int(count as i64);
-			let messages = crate::law::substitute(&crate::warp_parser::parse(MESSAGES_TEMPLATE), &std::collections::HashMap::from([("ID".to_string(), id.clone()), ("BODY".to_string(), body)]));
-			lowered.push(function_with_globals(&handler, false, &[messages.drop_meta().clone()], &main_variables));
+			let messages = crate::law::substitute(
+				&crate::warp_parser::parse(MESSAGES_TEMPLATE),
+				&std::collections::HashMap::from([("ID".to_string(), id.clone()), ("BODY".to_string(), body)]),
+			);
+			lowered.push(function_with_globals(
+				&handler,
+				false,
+				&[messages.drop_meta().clone()],
+				&main_variables,
+			));
 			lowered.push(call(crate::host::CHANNEL_LISTEN, vec![id.clone(), channel]));
-			lowered.push(call(crate::host::SIGNAL_EVERY, vec![id, Node::int(CHANNEL_CHECK_MILLISECONDS)]));
+			lowered.push(call(
+				crate::host::SIGNAL_EVERY,
+				vec![id, Node::int(CHANNEL_CHECK_MILLISECONDS)],
+			));
 			count += 1;
 			continue;
 		}
@@ -78,10 +101,15 @@ fn lower_timers(program: Node) -> Node {
 			continue;
 		}
 		if let Some((time, body)) = one_shot(&statement) {
-			let Some(minute_of_day) = time else { return no_time_of_day(&statement, AT_WORD) };
+			let Some(minute_of_day) = time else {
+				return no_time_of_day(&statement, AT_WORD);
+			};
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-			lowered.push(call(crate::host::SIGNAL_AT, vec![Node::int(count as i64), Node::int(minute_of_day)]));
+			lowered.push(call(
+				crate::host::SIGNAL_AT,
+				vec![Node::int(count as i64), Node::int(minute_of_day)],
+			));
 			count += 1;
 			continue;
 		}
@@ -93,22 +121,40 @@ fn lower_timers(program: Node) -> Node {
 			let (minute_of_day, weekdays) = match schedule {
 				Ok(schedule) => schedule,
 				Err(ClockError::Days(days)) => {
-					return Diagnostic::at(&statement, format!("on every … at needs day, a weekday (monday … sunday), weekday or weekend, got {days}")).into_error();
+					return Diagnostic::at(
+						&statement,
+						format!("on every … at needs day, a weekday (monday … sunday), weekday or weekend, got {days}"),
+					)
+					.into_error();
 				}
 				Err(ClockError::Time) => return no_time_of_day(&statement, "on every day at"),
 			};
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-			lowered.push(call(crate::host::SIGNAL_DAILY, vec![Node::int(count as i64), Node::int(minute_of_day), Node::int(weekdays)]));
+			lowered.push(call(
+				crate::host::SIGNAL_DAILY,
+				vec![Node::int(count as i64), Node::int(minute_of_day), Node::int(weekdays)],
+			));
 			count += 1;
 			continue;
 		}
 		let Some(milliseconds) = crate::units::milliseconds(&duration) else {
-			return Diagnostic::at(&statement, format!("on every needs a constant duration like `on every 5 seconds {{…}}`, got {}", duration.serialize().trim())).into_error();
+			return Diagnostic::at(
+				&statement,
+				format!(
+					"on every needs a constant duration like `on every 5 seconds {{…}}`, got {}",
+					duration.serialize().trim()
+				),
+			)
+			.into_error();
 		};
 		let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 		lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-		let start = [symbol(crate::host::SIGNAL_EVERY), Node::int(count as i64), Node::int(milliseconds)];
+		let start = [
+			symbol(crate::host::SIGNAL_EVERY),
+			Node::int(count as i64),
+			Node::int(milliseconds),
+		];
 		lowered.push(Node::List(start.to_vec(), Bracket::Round, Separator::None));
 		count += 1;
 	}
@@ -118,7 +164,9 @@ fn lower_timers(program: Node) -> Node {
 /// `on message {body}`, `on message from "chat" {body}`, and named events from other programs:
 /// `on stop the machine from "chat" {body}`, `on "file system full" {body}`: the channel (a text) and the body
 fn message_listener(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
 	let (on, rest) = items.split_first()?;
 	if word(on) != ON_WORD {
 		return None;
@@ -161,7 +209,9 @@ fn event_channel(channel: &str, event: &str) -> String {
 fn named_event(value: &[Node]) -> Option<(String, Node)> {
 	let (last, words) = value.split_last()?;
 	let (last_word, data) = match last.drop_meta() {
-		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => (name.as_ref().clone(), Some(data.as_ref().clone())),
+		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			(name.as_ref().clone(), Some(data.as_ref().clone()))
+		}
 		_ => (last.clone(), None),
 	};
 	if words.is_empty() && data.is_none() {
@@ -181,7 +231,9 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 			return None;
 		}
 		let (value, channel) = match (verb.as_str(), rest) {
-			(BROADCAST_WORD, [value @ .., on, channel]) if word(on) == ON_WORD && !value.is_empty() => (value.to_vec(), Some(text(channel)?)),
+			(BROADCAST_WORD, [value @ .., on, channel]) if word(on) == ON_WORD && !value.is_empty() => {
+				(value.to_vec(), Some(text(channel)?))
+			}
 			(SEND_WORD, [value @ .., last]) => match last.drop_meta() {
 				Node::Key(left, Op::To, channel) => ([value, &[left.as_ref().clone()]].concat(), Some(text(channel)?)),
 				// `send alarm{…}` without `to` is emit, inside the program (P163, event_signals.rs); `send "disk full"`
@@ -198,12 +250,18 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 		let channel = channel.unwrap_or(DEFAULT_CHANNEL.to_string());
 		let (channel, value) = match named {
 			Some((name, data)) => (event_channel(&channel, &name), data),
-			None => (channel, match value.as_slice() {
-				[single] => single.clone(),
-				several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-			}),
+			None => (
+				channel,
+				match value.as_slice() {
+					[single] => single.clone(),
+					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
+				},
+			),
 		};
-		Some(call(crate::host::CHANNEL_SEND, vec![Node::Text(channel), broadcasts(value, verbs)]))
+		Some(call(
+			crate::host::CHANNEL_SEND,
+			vec![Node::Text(channel), broadcasts(value, verbs)],
+		))
 	};
 	match node {
 		Node::List(items, _, _) if sent(&items).is_some() => sent(&items).expect("checked"),
@@ -213,17 +271,26 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 
 /// `on file "notes.txt" change {body}`: the path (a text) and the body
 fn file_watch(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let [on, file, path, change, body] = items.as_slice() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let [on, file, path, change, body] = items.as_slice() else {
+		return None;
+	};
 	let watched = word(on) == ON_WORD && word(file) == FILE_WORD && CHANGE_WORDS.contains(&word(change).as_str());
 	let path_is_text = matches!(path.drop_meta(), Node::Text(_));
-	(watched && path_is_text && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))).then(|| (path.clone(), body.clone()))
+	(watched && path_is_text && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
+		.then(|| (path.clone(), body.clone()))
 }
 
 /// `on every 50 ms {body}`, `on every 5 seconds: body`: the duration and the body
 fn timer(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let [on, every, rest @ ..] = items.as_slice() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let [on, every, rest @ ..] = items.as_slice() else {
+		return None;
+	};
 	if word(on) != ON_WORD || word(every) != EVERY_WORD {
 		return None;
 	}
@@ -243,7 +310,9 @@ fn words_and_body(rest: &[Node]) -> Option<(Vec<Node>, Node)> {
 		return Some((words.to_vec(), last.clone()));
 	}
 	// `on every 5 seconds: print n` arrives as `on every (5 seconds: print) n`: the words after the colon are the body's
-	let colon = rest.iter().position(|item| crate::declarations::handler_parts(item).is_some())?;
+	let colon = rest
+		.iter()
+		.position(|item| crate::declarations::handler_parts(item).is_some())?;
 	let (end, body) = crate::declarations::handler_parts(&rest[colon])?;
 	let body = match &rest[colon + 1..] {
 		[] => body,
@@ -255,7 +324,9 @@ fn words_and_body(rest: &[Node]) -> Option<(Vec<Node>, Node)> {
 /// `at 9:00 {body}`, `at 9pm: body`: the minute of the day (None for a time that is no time of day) and the body;
 /// None for any other use of `at`
 fn one_shot(statement: &Node) -> Option<(Option<i64>, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
 	let (at, rest) = items.split_first()?;
 	if word(at) != AT_WORD {
 		return None;
@@ -265,7 +336,11 @@ fn one_shot(statement: &Node) -> Option<(Option<i64>, Node)> {
 }
 
 fn no_time_of_day(statement: &Node, form: &str) -> Node {
-	Diagnostic::at(statement, format!("{form} needs a time of day from 0:00 to 23:59 or 12am to 11:59pm")).into_error()
+	Diagnostic::at(
+		statement,
+		format!("{form} needs a time of day from 0:00 to 23:59 or 12am to 11:59pm"),
+	)
+	.into_error()
 }
 
 enum ClockError {
@@ -276,16 +351,35 @@ enum ClockError {
 /// `day at 9:00` of `on every day at 9:00 {…}` (`monday at 9:30pm`, `weekday at 7am`): the minute of the day and the
 /// weekdays (bit 0 Sunday); None when the duration has no `at`
 fn clock_schedule(duration: &Node) -> Option<Result<(i64, i64), ClockError>> {
-	let Node::List(words, _, _) = duration.drop_meta() else { return None };
-	let [days, at, time @ ..] = words.as_slice() else { return None };
+	let Node::List(words, _, _) = duration.drop_meta() else {
+		return None;
+	};
+	let [days, at, time @ ..] = words.as_slice() else {
+		return None;
+	};
 	if word(at) != AT_WORD {
 		return None;
 	}
-	let Some(weekdays) = weekdays(&word(days)) else { return Some(Err(ClockError::Days(days.serialize().trim().to_string()))) };
-	Some(minute_of_day(time).flatten().map(|minute| (minute, weekdays)).ok_or(ClockError::Time))
+	let Some(weekdays) = weekdays(&word(days)) else {
+		return Some(Err(ClockError::Days(days.serialize().trim().to_string())));
+	};
+	Some(
+		minute_of_day(time)
+			.flatten()
+			.map(|minute| (minute, weekdays))
+			.ok_or(ClockError::Time),
+	)
 }
 
-const WEEKDAY_NAMES: [&str; 7] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const WEEKDAY_NAMES: [&str; 7] = [
+	"sunday",
+	"monday",
+	"tuesday",
+	"wednesday",
+	"thursday",
+	"friday",
+	"saturday",
+];
 const EVERY_DAY: i64 = 0b111_1111;
 const WORKDAYS: i64 = 0b011_1110;
 const WEEKEND: i64 = 0b100_0001;
@@ -298,7 +392,10 @@ fn weekdays(name: &str) -> Option<i64> {
 		DAY_WORD => Some(EVERY_DAY),
 		WEEKDAY_WORD => Some(WORKDAYS),
 		WEEKEND_WORD => Some(WEEKEND),
-		_ => WEEKDAY_NAMES.iter().position(|day| *day == singular).map(|day| 1 << day),
+		_ => WEEKDAY_NAMES
+			.iter()
+			.position(|day| *day == singular)
+			.map(|day| 1 << day),
 	}
 }
 
@@ -317,7 +414,9 @@ fn minute_of_day(words: &[Node]) -> Option<Option<i64>> {
 	let hour_minute = |node: &Node| match node.drop_meta() {
 		Node::Key(hour, Op::Colon, minute) => {
 			let hour = int(hour)?;
-			int(minute).map(|minute| (hour, minute, None)).or_else(|| with_half(minute).map(|(minute, half)| (hour, minute, Some(half))))
+			int(minute)
+				.map(|minute| (hour, minute, None))
+				.or_else(|| with_half(minute).map(|(minute, half)| (hour, minute, Some(half))))
 		}
 		_ => None,
 	};
@@ -325,15 +424,23 @@ fn minute_of_day(words: &[Node]) -> Option<Option<i64>> {
 		[time] => hour_minute(time).or_else(|| with_half(time).map(|(hour, half)| (hour, 0, Some(half))))?,
 		[time, spoken_half] => {
 			let half = Some(half(spoken_half)?);
-			hour_minute(time).filter(|(_, _, written)| written.is_none()).map(|(hour, minute, _)| (hour, minute, half)).or_else(|| Some((int(time)?, 0, half)))?
+			hour_minute(time)
+				.filter(|(_, _, written)| written.is_none())
+				.map(|(hour, minute, _)| (hour, minute, half))
+				.or_else(|| Some((int(time)?, 0, half)))?
 		}
 		_ => return None,
 	};
 	let hour = match half {
 		None => Some(hour).filter(|hour| (0..24).contains(hour)),
-		Some(half) => Some(hour).filter(|hour| (1..=12).contains(hour)).map(|hour| hour % 12 + 12 * half as i64),
+		Some(half) => Some(hour)
+			.filter(|hour| (1..=12).contains(hour))
+			.map(|hour| hour % 12 + 12 * half as i64),
 	};
-	Some(hour.filter(|_| (0..60).contains(&minute)).map(|hour| hour * 60 + minute))
+	Some(
+		hour.filter(|_| (0..60).contains(&minute))
+			.map(|hour| hour * 60 + minute),
+	)
 }
 
 /// `exit` or `exit()` as a statement: `exit(0)`
@@ -345,8 +452,17 @@ fn bare_exits(node: Node) -> Node {
 	};
 	let exit_zero = || call(crate::host::EXIT, vec![Node::int(0)]);
 	match node {
-		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) || bracket == Bracket::Curly => {
-			Node::List(items.into_iter().map(|item| if is_exit(&item) { exit_zero() } else { bare_exits(item) }).collect(), bracket, separator)
+		Node::List(items, bracket, separator)
+			if crate::variable_signals::is_statement_list(&bracket, &separator) || bracket == Bracket::Curly =>
+		{
+			Node::List(
+				items
+					.into_iter()
+					.map(|item| if is_exit(&item) { exit_zero() } else { bare_exits(item) })
+					.collect(),
+				bracket,
+				separator,
+			)
 		}
 		other => other.map_children(bare_exits),
 	}
@@ -355,12 +471,14 @@ fn bare_exits(node: Node) -> Node {
 /// Does the program define or assign the name itself (`exit := …`, `def exit(…)`, `exit = …`)
 fn defines(program: &Node, name: &str) -> bool {
 	let mut defined = false;
-	program.visit(&mut |part| if let Node::Key(target, op, _) = part {
-		let head = match target.drop_meta() {
-			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
-			other => word(other),
-		};
-		defined |= head == name && matches!(op, crate::operators::Op::Assign | crate::operators::Op::Define);
+	program.visit(&mut |part| {
+		if let Node::Key(target, op, _) = part {
+			let head = match target.drop_meta() {
+				Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
+				other => word(other),
+			};
+			defined |= head == name && matches!(op, crate::operators::Op::Assign | crate::operators::Op::Define);
+		}
 	});
 	defined
 }

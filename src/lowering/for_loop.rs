@@ -8,8 +8,8 @@
 use super::nodes::{block, call, for_in_variable, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasm_emitter::{is_step, mark_step};
 use crate::warp_parser::while_do;
+use crate::wasm_emitter::{is_step, mark_step};
 
 const FOR_KEYWORD: &str = "for";
 const IN_KEYWORD: &str = "in";
@@ -49,12 +49,20 @@ pub fn lower(node: Node) -> Result<Node, Node> {
 /// destructuring `k·v·index++`): the loop's own names, never an outer variable
 pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 	let mut variables = vec![];
-	body.visit(&mut |part| if let Node::List(items, _, _) = part {
-		variables.extend(for_in_variable(items));
-		for step in items.iter().filter(|item| is_step(item)) {
-			if let Node::Key(counter, Op::Inc, _) = step.drop_meta() {
-				let counter = counter.name();
-				variables.extend(counter.strip_suffix(INDEX_SUFFIX).unwrap_or(&counter).split('·').map(str::to_string));
+	body.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			variables.extend(for_in_variable(items));
+			for step in items.iter().filter(|item| is_step(item)) {
+				if let Node::Key(counter, Op::Inc, _) = step.drop_meta() {
+					let counter = counter.name();
+					variables.extend(
+						counter
+							.strip_suffix(INDEX_SUFFIX)
+							.unwrap_or(&counter)
+							.split('·')
+							.map(str::to_string),
+					);
+				}
 			}
 		}
 	});
@@ -65,7 +73,9 @@ pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 pub(crate) fn block_items(body: &Node) -> Vec<Node> {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => items.clone(),
-		Node::List(items, Bracket::Curly, separator) if items.len() > 1 => vec![Node::List(items.clone(), Bracket::None, separator.clone())],
+		Node::List(items, Bracket::Curly, separator) if items.len() > 1 => {
+			vec![Node::List(items.clone(), Bracket::None, separator.clone())]
+		}
 		Node::List(items, Bracket::Curly, _) => items.clone(),
 		single => vec![single.clone()],
 	}
@@ -74,21 +84,34 @@ pub(crate) fn block_items(body: &Node) -> Vec<Node> {
 /// `for(init;test;step){body}`, parsed as `((for (init;test;step)) {body})`
 fn classic_for(items: &[Node]) -> Option<Node> {
 	let [header, body] = items else { return None };
-	let Node::List(header, _, _) = header.drop_meta() else { return None };
-	let [keyword, parts] = header.as_slice() else { return None };
-	let Node::List(parts, Bracket::Round, Separator::Semicolon) = parts.drop_meta() else { return None };
-	let [init, test, step] = parts.as_slice() else { return None };
+	let Node::List(header, _, _) = header.drop_meta() else {
+		return None;
+	};
+	let [keyword, parts] = header.as_slice() else {
+		return None;
+	};
+	let Node::List(parts, Bracket::Round, Separator::Semicolon) = parts.drop_meta() else {
+		return None;
+	};
+	let [init, test, step] = parts.as_slice() else {
+		return None;
+	};
 	if !keyword.is_symbol(FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let mut statements = block_items(body);
 	statements.push(mark_step(step.clone()));
-	Some(statement_list(vec![init.clone(), while_do(test.clone(), block(statements))], Bracket::None))
+	Some(statement_list(
+		vec![init.clone(), while_do(test.clone(), block(statements))],
+		Bracket::None,
+	))
 }
 
 /// `for x in iterable {body}` and `for x in iterable: body`
 fn for_in(items: &[Node]) -> Option<Node> {
-	let [keyword, variable, in_word, rest @ ..] = items else { return None };
+	let [keyword, variable, in_word, rest @ ..] = items else {
+		return None;
+	};
 	if !keyword.is_symbol(FOR_KEYWORD) || !in_word.is_symbol(IN_KEYWORD) {
 		return None;
 	}
@@ -96,7 +119,10 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	let (iterable, body) = match rest {
 		[iterable, body] => (iterable.clone(), body.clone()),
 		// `for i in 1 to 5\n  puti i`: the words after the iterable are the body
-		[iterable, words @ ..] if words.len() > 1 => (iterable.clone(), Node::List(words.to_vec(), Bracket::None, Separator::Space)),
+		[iterable, words @ ..] if words.len() > 1 => (
+			iterable.clone(),
+			Node::List(words.to_vec(), Bracket::None, Separator::Space),
+		),
 		[colon] => match colon.drop_meta() {
 			Node::Key(iterable, Op::Colon, body) => (iterable.as_ref().clone(), body.as_ref().clone()),
 			_ => return None,
@@ -105,7 +131,8 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	};
 	let mut body = block_items(&body);
 	// `for word in text: print it`: it is the loop variable too
-	if matches!(names.as_slice(), [name] if name != IMPLICIT_VARIABLE && !crate::lambdas::is_inlined_loop_variable(&name.name())) {
+	if matches!(names.as_slice(), [name] if name != IMPLICIT_VARIABLE && !crate::lambdas::is_inlined_loop_variable(&name.name()))
+	{
 		body = body.into_iter().map(|statement| it_as(statement, variable)).collect();
 	}
 	if names.len() > 1 {
@@ -127,7 +154,9 @@ fn it_as(node: Node, variable: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == IMPLICIT_VARIABLE => variable.clone(),
 		// an if's branches are the loop's own statements: `if x > 2 { s += it }`
-		Node::Key(left, op @ (Op::Then | Op::Else), right) => key(it_as(*left, variable), op, branch_it_as(*right, variable)),
+		Node::Key(left, op @ (Op::Then | Op::Else), right) => {
+			key(it_as(*left, variable), op, branch_it_as(*right, variable))
+		}
 		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow | Op::FatArrow, _) => node,
 		other => other.map_children(|child| it_as(child, variable)),
 	}
@@ -135,8 +164,15 @@ fn it_as(node: Node, variable: &Node) -> Node {
 
 fn branch_it_as(branch: Node, variable: &Node) -> Node {
 	match branch {
-		Node::List(items, Bracket::Curly, separator) => Node::List(items.into_iter().map(|item| it_as(item, variable)).collect(), Bracket::Curly, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(branch_it_as(*node, variable)), data },
+		Node::List(items, Bracket::Curly, separator) => Node::List(
+			items.into_iter().map(|item| it_as(item, variable)).collect(),
+			Bracket::Curly,
+			separator,
+		),
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(branch_it_as(*node, variable)),
+			data,
+		},
 		other => it_as(other, variable),
 	}
 }
@@ -144,9 +180,18 @@ fn branch_it_as(branch: Node, variable: &Node) -> Node {
 /// The range an iterable spells: `(a..b)` is `a..b`, Python's `range(n)` is `0..n` and `range(a, b)` is `a..b`
 /// `'a' to 'e'` (Kotlin's `'a'..'e'`): the letters as a list, `..` without the last
 fn letters(start: &Node, op: Op, end: &Node) -> Option<Node> {
-	let (Node::Char(first), Node::Char(last)) = (start.drop_meta(), end.drop_meta()) else { return None };
-	let last = if op == Op::To { *last as u32 } else { (*last as u32).checked_sub(1)? };
-	let letters = (*first as u32..=last).filter_map(char::from_u32).map(Node::Char).collect();
+	let (Node::Char(first), Node::Char(last)) = (start.drop_meta(), end.drop_meta()) else {
+		return None;
+	};
+	let last = if op == Op::To {
+		*last as u32
+	} else {
+		(*last as u32).checked_sub(1)?
+	};
+	let letters = (*first as u32..=last)
+		.filter_map(char::from_u32)
+		.map(Node::Char)
+		.collect();
 	Some(Node::List(letters, Bracket::Square, Separator::Space))
 }
 
@@ -159,7 +204,13 @@ fn letter_loop(variable: &Node, start: &Node, op: Op, end: &Node, body: Vec<Node
 	let code = symbol(&format!("{}{CODE_SUFFIX}", variable.name()));
 	let codepoint = |letter: &Node| call(ORD_WORD, vec![letter.clone()]);
 	let letter = key(variable.clone(), Op::Assign, call(CHR_WORD, vec![code.clone()]));
-	counting_loop(&code, &codepoint(start), op, &codepoint(end), [vec![letter], body].concat())
+	counting_loop(
+		&code,
+		&codepoint(start),
+		op,
+		&codepoint(end),
+		[vec![letter], body].concat(),
+	)
 }
 
 /// A variable start counts as a number: `x to 3` of an undefined x is the error "undefined variable: x" (and a
@@ -187,7 +238,9 @@ fn counting_range(iterable: &Node) -> Node {
 fn loop_names(variable: &Node) -> Option<Vec<Node>> {
 	match variable.drop_meta() {
 		Node::Symbol(_) => Some(vec![variable.clone()]),
-		Node::List(names, Bracket::Round | Bracket::None, _) if !names.is_empty() && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => {
+		Node::List(names, Bracket::Round | Bracket::None, _)
+			if !names.is_empty() && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) =>
+		{
 			Some(names.clone())
 		}
 		_ => None,
@@ -199,7 +252,13 @@ fn loop_names(variable: &Node) -> Option<Vec<Node>> {
 fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 	let element = symbol(&names.iter().map(Node::name).collect::<Vec<_>>().join("·"));
 	let entries = call(crate::library_words::MAP_ENTRIES, vec![iterable]);
-	let parts = names.iter().enumerate().map(|(position, name)| key(name.clone(), Op::Assign, key(element.clone(), Op::Hash, int(position as i64 + 1))));
+	let parts = names.iter().enumerate().map(|(position, name)| {
+		key(
+			name.clone(),
+			Op::Assign,
+			key(element.clone(), Op::Hash, int(position as i64 + 1)),
+		)
+	});
 	walking_loop(&element, entries, parts.chain(body).collect())
 }
 
@@ -209,7 +268,13 @@ fn for_it(items: &[Node]) -> Option<Node> {
 	if !keyword.is_symbol(FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
-	for_in(&[keyword.clone(), symbol(IMPLICIT_VARIABLE), symbol(IN_KEYWORD), iterable.clone(), body.clone()])
+	for_in(&[
+		keyword.clone(),
+		symbol(IMPLICIT_VARIABLE),
+		symbol(IN_KEYWORD),
+		iterable.clone(),
+		body.clone(),
+	])
 }
 
 fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {
@@ -230,22 +295,32 @@ fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body:
 
 fn walked_units(iterable: Node) -> Node {
 	match iterable.drop_meta() {
-		Node::Key(text, Op::Dot, unit) if crate::analyzer::text_unit(&unit.drop_meta().name()) == Some(CODEPOINT_UNIT) => call(CHARS_CALL, vec![(**text).clone()]),
+		Node::Key(text, Op::Dot, unit)
+			if crate::analyzer::text_unit(&unit.drop_meta().name()) == Some(CODEPOINT_UNIT) =>
+		{
+			call(CHARS_CALL, vec![(**text).clone()])
+		}
 		_ => iterable,
 	}
 }
 
 fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	let name = variable.name();
-	let (items, index) = (symbol(&format!("{name}{ITEMS_SUFFIX}")), symbol(&format!("{name}{INDEX_SUFFIX}")));
+	let (items, index) = (
+		symbol(&format!("{name}{ITEMS_SUFFIX}")),
+		symbol(&format!("{name}{INDEX_SUFFIX}")),
+	);
 	let element = key(items.clone(), Op::Hash, key(index.clone(), Op::Add, int(1)));
 	let mut statements = vec![key(variable.clone(), Op::Assign, element)];
 	statements.append(&mut body);
 	statements.push(mark_step(key(index.clone(), Op::Inc, Node::Empty)));
 	let test = key(index.clone(), Op::Lt, key(Node::Empty, Op::Hash, items.clone()));
-	statement_list(vec![
-		key(items, Op::Assign, walked_units(iterable)),
-		key(index, Op::Assign, int(FIRST_INDEX)),
-		while_do(test, block(statements)),
-	], Bracket::None)
+	statement_list(
+		vec![
+			key(items, Op::Assign, walked_units(iterable)),
+			key(index, Op::Assign, int(FIRST_INDEX)),
+			while_do(test, block(statements)),
+		],
+		Bracket::None,
+	)
 }

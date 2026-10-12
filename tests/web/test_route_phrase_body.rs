@@ -13,7 +13,11 @@ get \"/api/users/:id:int\" { users#id.name }";
 /// The body of GET path
 fn fetched(path: &str) -> String {
 	let mut stream = std::net::TcpStream::connect(("127.0.0.1", PORT)).expect("the server");
-	write!(stream, "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").expect("the request");
+	write!(
+		stream,
+		"GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+	)
+	.expect("the request");
 	let mut answer = String::new();
 	stream.read_to_string(&mut answer).expect("the answer");
 	answer.split_once("\r\n\r\n").map_or("", |(_, body)| body).to_string()
@@ -28,7 +32,10 @@ fn a_one_line_route_block_reading_a_table_is_one_statement() {
 	std::fs::write(&program, PROGRAM).expect("the program file");
 	let server = std::thread::spawn(move || {
 		warp::web_server::stop_after(2);
-		warp::modules::with_program_file(&program, || warp::pipeline::serving_at(PORT, || warp::wasm_emitter::eval(PROGRAM))).serialize()
+		warp::modules::with_program_file(&program, || {
+			warp::pipeline::serving_at(PORT, || warp::wasm_emitter::eval(PROGRAM))
+		})
+		.serialize()
 	});
 	let started = std::time::Instant::now();
 	while std::net::TcpStream::connect(("127.0.0.1", PORT)).is_err() {

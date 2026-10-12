@@ -9,12 +9,22 @@ const REFLECTION_CALLS: [&str; 2] = ["WebAssembly.Module.imports(", "WebAssembly
 
 #[test]
 fn the_page_never_asks_the_engine_for_import_or_export_descriptors() {
-	let scripts = PAGES.iter().flat_map(|page| std::fs::read_dir(page).unwrap()).map(|entry| entry.unwrap().path()).filter(|path| path.extension().is_some_and(|extension| extension == "js"));
-	let callers: Vec<String> = scripts.filter(|path| {
-		let source = std::fs::read_to_string(path).unwrap();
-		REFLECTION_CALLS.iter().any(|call| source.contains(call))
-	}).map(|path| path.display().to_string()).collect();
-	assert!(callers.is_empty(), "Safari 27 cannot describe GC-typed imports/exports: {callers:?}");
+	let scripts = PAGES
+		.iter()
+		.flat_map(|page| std::fs::read_dir(page).unwrap())
+		.map(|entry| entry.unwrap().path())
+		.filter(|path| path.extension().is_some_and(|extension| extension == "js"));
+	let callers: Vec<String> = scripts
+		.filter(|path| {
+			let source = std::fs::read_to_string(path).unwrap();
+			REFLECTION_CALLS.iter().any(|call| source.contains(call))
+		})
+		.map(|path| path.display().to_string())
+		.collect();
+	assert!(
+		callers.is_empty(),
+		"Safari 27 cannot describe GC-typed imports/exports: {callers:?}"
+	);
 }
 
 // Safari's own engine, where macOS has its shell: the page's import reader on a compiled task program
@@ -29,16 +39,39 @@ fn safaris_engine_reads_the_imports_of_a_task_program() {
 	let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
 	let source = directory.join("safari_threads.warp");
 	std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/threads.warp"), &source).unwrap();
-	let compiled = crate::common::warp_command().args(["compile", "--wasm"]).arg(&source).output().unwrap();
-	assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
+	let compiled = crate::common::warp_command()
+		.args(["compile", "--wasm"])
+		.arg(&source)
+		.output()
+		.unwrap();
+	assert!(
+		compiled.status.success(),
+		"{}",
+		String::from_utf8_lossy(&compiled.stderr)
+	);
 
 	let reader = std::fs::read_to_string(format!("{PLAYGROUND}/imports.js")).unwrap();
 	let script = directory.join("safari_imports.js");
-	std::fs::write(&script, format!("class TextDecoder {{ decode(bytes) {{ return String.fromCharCode(...bytes); }} }}\n{reader}\n\
+	std::fs::write(
+		&script,
+		format!(
+			"class TextDecoder {{ decode(bytes) {{ return String.fromCharCode(...bytes); }} }}\n{reader}\n\
 		const bytes = read(arguments[0], 'binary');\n\
 		new WebAssembly.Module(bytes);\n\
-		print(importDescriptors(bytes).map(entry => entry.kind + ':' + entry.name).join(' '));\n")).unwrap();
-	let shown = std::process::Command::new(SAFARI_SHELL).arg(&script).arg("--").arg(source.with_extension("wasm")).output().unwrap();
+		print(importDescriptors(bytes).map(entry => entry.kind + ':' + entry.name).join(' '));\n"
+		),
+	)
+	.unwrap();
+	let shown = std::process::Command::new(SAFARI_SHELL)
+		.arg(&script)
+		.arg("--")
+		.arg(source.with_extension("wasm"))
+		.output()
+		.unwrap();
 	let names = String::from_utf8_lossy(&shown.stdout);
-	assert!(shown.status.success() && names.contains("function:task_spawn"), "{names}{}", String::from_utf8_lossy(&shown.stderr));
+	assert!(
+		shown.status.success() && names.contains("function:task_spawn"),
+		"{names}{}",
+		String::from_utf8_lossy(&shown.stderr)
+	);
 }

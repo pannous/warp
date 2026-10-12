@@ -4,13 +4,22 @@ use crate::is;
 
 #[test]
 fn alias_as_field_type() {
-	is!("type Name = string; type P: { name: Name }; p = P{name: \"Al\"}; p.name", "Al");
-	is!("type Age = int; type Years = Age; class P { age: Years }; P(3).age + 1", 4);
+	is!(
+		"type Name = string; type P: { name: Name }; p = P{name: \"Al\"}; p.name",
+		"Al"
+	);
+	is!(
+		"type Age = int; type Years = Age; class P { age: Years }; P(3).age + 1",
+		4
+	);
 }
 
 #[test]
 fn alias_as_optional_field_and_parameter() {
-	is!("type Email = string; type P: { name: string; email: Email? }; p = P{name: \"Al\"}; p.name", "Al");
+	is!(
+		"type Email = string; type P: { name: string; email: Email? }; p = P{name: \"Al\"}; p.name",
+		"Al"
+	);
 	is!("type Age = int; older(a: Age) := a + 1; older(41)", 42);
 }
 
