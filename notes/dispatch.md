@@ -84,7 +84,10 @@ generic function too; the list/map/text library as methods where that simplifies
   module for `f(x)`, `f x` and `x.f()`; a class's method of that name (body or `take(b:Box)`) is not the program's own
   word (own_functions), so the module still comes and the method joins its generic function. `from list import zip`
   keeps list's other words out. Sound's words other than play, beep, stop_sound and wait_sound still need `use sound`.
-- Follow-up cards: dispatch-positional (done), warn-field, library-words (step d, done: every standard function is a
+- A field and a method of one name (card warn-field): `class Box{size:int}; size(b:Box) := …` keeps both, `b.size`
+  reads the field (traits.rs operation_calls; it used to call size(b), recursing forever inside the method),
+  `b.size()` and `size(b)` call the method, and the definition warns (field_method_warnings).
+- Follow-up cards: dispatch-positional (done), warn-field (done), library-words (step d, done: every standard function is a
   fallback, one builtin method rule in lower_function_methods).
 
 ## Every positional argument (card dispatch-positional, 2026-10-12)
