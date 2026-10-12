@@ -1,7 +1,7 @@
 //! `serve 8080 { get "/api/users" { users } post "/echo" { request.body } }` (card web-server, notes/web_framework.md):
 //! lowering/web_server.rs makes each route a function `route·N(request:any)` and the statement the host call
 //! `serve_routes(port, [[method, path, function] …])`; this serves HTTP on the port and calls the route's function with
-//! the request {method, path, query, body} (a JSON body parsed). The value answers: a text as text/plain, any other
+//! the request {method, path, query, body, headers} (a JSON body parsed, header names as `Content-Type`). The value answers: a text as text/plain, any other
 //! value as JSON (as std json's to_json writes it, an instance as a plain object); a route's path may have typed
 //! parameters as a page route's (`get "/api/users/:id:int"`). No route is 404, a failing route 500 with its message,
 //! a refused request 400 or 404 (Route::failure_answer); a page path no route of the page matches is 404 too.
@@ -209,9 +209,10 @@ pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl Fn
 		let from_a_browser_form = is_form && header_of("Accept").is_some_and(|accepted| accepted.contains(PAGE_TYPE));
 		let back = header_of("Referer").map_or(HOME.to_string(), |referer| page_of(&referer));
 		let body = if is_form { form_fields(&body) } else { value_of_body(body) };
+		let headers = headers_node(request.headers());
 		let mut answer_at = |method: &str, path: &str, query: &str, body: Node| match route_at(routes, method, path) {
 			Some(route) => {
-				let request = request_node(method, path, query, body);
+				let request = request_node(method, path, query, body, headers.clone());
 				answer(route, request.clone()).map_err(|failure| (route, failure, request))
 			}
 			None => Ok(site_file(site, method, path).unwrap_or_else(|| answer_failing(path, NOT_FOUND, &format!("no route {method} {path}")))),
@@ -298,14 +299,30 @@ fn form_fields(encoded: &str) -> Node {
 	Node::List(fields, Bracket::Curly, crate::node::Separator::Space)
 }
 
-/// The request as the route's `request`: {method, path, query, body}, the body a JSON value or a form's fields
-fn request_node(method: &str, path: &str, query: &str, body: Node) -> Node {
+/// The request as the route's `request`: {method, path, query, body, headers}, the body a JSON value or a form's fields
+fn request_node(method: &str, path: &str, query: &str, body: Node, headers: Node) -> Node {
 	Node::List(vec![
 		Node::key("method", Node::Text(method.to_string())),
 		Node::key("path", Node::Text(path.to_string())),
 		Node::key("query", form_fields(query)),
 		Node::key("body", body),
+		Node::key("headers", headers),
 	], Bracket::Curly, crate::node::Separator::Space)
+}
+
+/// The request's headers as the map {Content-Type: "…", X-Warp: "yes"}: names as httpbin.org gives them, whatever
+/// case the client sent (HTTP/2 and ureq send them lowercase)
+fn headers_node(headers: &[tiny_http::Header]) -> Node {
+	let fields = headers.iter().map(|header| Node::key(&header_name(header.field.as_str().as_str()), Node::Text(header.value.to_string()))).collect();
+	Node::List(fields, Bracket::Curly, crate::node::Separator::Space)
+}
+
+/// `x-warp` → `X-Warp`
+fn header_name(name: &str) -> String {
+	name.split('-').map(|part| {
+		let mut letters = part.chars();
+		letters.next().map_or(String::new(), |first| first.to_ascii_uppercase().to_string() + &letters.as_str().to_ascii_lowercase())
+	}).collect::<Vec<_>>().join("-")
 }
 
 /// Whether the request's body or query holds the field
