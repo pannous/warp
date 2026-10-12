@@ -33,3 +33,10 @@ fn a_site_script_is_compacted() {
 	let script = "// what it does\nfunction f() {\n\t// a comment\n\treturn `a\n  // kept\n  b`;\n}\n\n";
 	assert_eq!(warp::site::compacted(script), "function f() {\nreturn `a\n  // kept\n  b`;\n}\n");
 }
+
+// a comment after a statement goes too; a template literal's line keeps it
+#[test]
+fn a_site_script_loses_its_trailing_comments() {
+	let script = "const KEY = \"data-warp-key\"; // a list item's element\nconst LINES = `a; // kept\n b`;\n";
+	assert_eq!(warp::site::compacted(script), "const KEY = \"data-warp-key\";\nconst LINES = `a; // kept\n b`;\n");
+}

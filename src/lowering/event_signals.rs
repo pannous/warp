@@ -59,7 +59,8 @@ pub(crate) const EVENT_WORD: &str = "event";
 /// The event as raised, kept while a handler that changes its `event` runs before the next one
 const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
-pub const PAGE_EVENTS: [&str; 3] = ["click", "key", "input"];
+/// `form{ on submit { … event.fields … } }`: a form sent, its named fields in event.fields (card web-submit)
+pub const PAGE_EVENTS: [&str; 4] = ["click", "key", "input", "submit"];
 /// `click·1`: the page event of one element's handler (element_events.rs), the page event and the element's number
 pub const ELEMENT_EVENT_JOINER: char = '·';
 

@@ -128,9 +128,15 @@ Each step is useful on its own and is what the next ones stand on.
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
 - Boolean attributes (checked, disabled, …) are present or absent (lib/markup.warp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
+- `form{ on submit { … event.fields.name … } }` (card web-submit): `submit` is a page event; the page sends
+  {fields}, the form's named fields (a number field's a number, a checkbox's checked), and keeps a form with the
+  handler on the page (markup-forms.js, a part a built site ships only when its module has `on·submit`); a form without
+  one still goes to its route. Headless: `Page::submit(label, fields)`. Sample samples/form_submit.warp.
+- A handler on a line of its own inside an element (`form{⏎ on submit { … }⏎ button{…} }`) is the element's, not the
+  tag `on{submit{…}}` (markup_tags.rs attributes, element_events.rs handler_at).
 - Left: `select{ bind: choice }` (its first render shows the first option; card web-bind-select), `bind:` inside a
-  component's state (component_state.rs sees only handlers; card web-bind-component), form submit as an event with the
-  fields as an object (card web-submit), validation from types (card web-validate).
+  component's state (component_state.rs sees only handlers; card web-bind-component), validation from types (card
+  web-validate).
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
@@ -146,8 +152,9 @@ Each step is useful on its own and is what the next ones stand on.
   followed by a block or selector part stays a selector (`#fed { … }`), an id never starts with a digit (card css-block,
   parser css_color_length). `:root {…}` starting a rule is the pseudo-class selector, and a selector before a comma
   continues into the group after it (`h1, :hover {…}`, `ul li, .x {…}`); a sheet's `html {…}` is a rule, no element
-  (no accessibility warning; card markup-style-block). Limit (card web-styles-limits): `50%` followed by another
-  declaration without `;`.
+  (no accessibility warning; card markup-style-block). A `%` glued to a number is a percentage, also before the
+  next declaration on its line (`width: 50% height: 10px`), and rules with comma selectors may share a line (card
+  web-styles-limits).
 - Scoping a component's sheet to its own elements: done (card web-scoped, under step 15 below).
 
 ## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
@@ -322,7 +329,8 @@ Each step is useful on its own and is what the next ones stand on.
 - Budget: tests/web/test_bundle_budget.rs builds `p{ "hello world" }` as a site and holds its gzipped total under a
   budget, printing each file (the suite's log tracks it). 2026-10-07: 46.2 KB → 40.5 KB (case table as ranges,
   wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
-  lines and indentation, host.js 23.8 → 16.7). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+  lines and indentation, host.js 23.8 → 16.7); 2026-10-12: 23.0 → 22.4 KB (also without a statement's trailing
+  `; // comment`, card web-submit). Svelte's hello world is about 3 KB, Solid's about 5 KB.
 - Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
 - What is left in app.wasm is the runtime lib/markup.warp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
@@ -514,4 +522,10 @@ Each step is useful on its own and is what the next ones stand on.
 - Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
   focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
   focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
-- Not here: live regions for async content (card web-a11y-live). Markup built at run time (strings, computed tags) is not checked (card web-a11y-runtime).
+- Markup built at run time (card web-a11y-runtime): the markup a run hands back (pipeline checked_markup) goes through the
+  same rules; a computed tag comes back as a text (`("h" + level): title` as `"h2": …`) and is named like a tag as
+  written. Problems the markup as written already showed are not repeated; the others are runtime warnings
+  (`markup built at run time: h3 after h1 skips a heading level; fix: h2`), each once a run. Sample
+  samples/computed_tags.warp. Not checked: markup only a later page event builds (the playground renders it in its
+  module, headless Page re-renders through page·html).
+- Not here: live regions for async content (card web-a11y-live).

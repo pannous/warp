@@ -55,3 +55,11 @@ fn root_and_element_rules_in_a_style_sheet() {
 	assert_eq!(html_of("div{ style{ h1, :hover { margin: 0 } h2, .x { margin: 0 } ul li, .y { margin: 0 } } }"),
 		"<div><style>h1, :hover { margin: 0px } h2, .x { margin: 0px } ul li, .y { margin: 0px }</style></div>");
 }
+
+// a percentage followed by the next declaration on its line, and several rules with comma selectors on one line
+// (card web-styles-limits)
+#[test]
+fn percentages_and_comma_rules_on_one_line() {
+	assert_eq!(html_of("div{ style{ .a { width: 50% height: 10px } } }"), "<div><style>.a { width: 50%; height: 10px }</style></div>");
+	assert_eq!(html_of("div{ style{ h1, h2 { margin: 0 } h3, h4 { margin: 1px } } }"), "<div><style>h1, h2 { margin: 0px } h3, h4 { margin: 1px }</style></div>");
+}

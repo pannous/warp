@@ -11,7 +11,7 @@
 const SITE_ROOT = "warp-root";
 const SITE_MODULE = "app.wasm";
 const PAGE_HTML = "page·html";
-const SITE_EVENTS = { click: () => ({}), input: happened => inputDetail(happened.composedPath()[0]) };
+const SITE_EVENTS = { click: () => ({}), input: happened => inputDetail(happened.composedPath()[0]), ...self.FORM_EVENTS };
 
 let site; // the program's run (host.js runProgram's holder)
 

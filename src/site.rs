@@ -18,6 +18,9 @@ const PAGE_SCRIPTS: [Script; 2] = [("markup.js", include_str!("../web/playground
 /// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
 const TRANSITIONS_SCRIPT: Script = ("markup-transitions.js", include_str!("../web/playground/markup-transitions.js"));
 const TRANSITION_WORD: &[u8] = b"transition";
+/// The part of markup.js for forms with `on submit` (card web-submit): only a module with such a handler has them
+const FORMS_SCRIPT: Script = ("markup-forms.js", include_str!("../web/playground/markup-forms.js"));
+const SUBMIT_HANDLER_WORD: &[u8] = "on·submit".as_bytes();
 /// The canvas a module that paints shows its paintings and animation frames in, and the pointer over it (mouse_x, …)
 const PAINT_SCRIPT: Script = ("canvas.js", include_str!("../web/playground/canvas.js"));
 /// A page whose program runs in a Worker (card site-worker) loads this before them, and site.js hands over to it
@@ -41,6 +44,8 @@ const LIST_SEPARATOR: &str = ",";
 /// moves the focus, which only the page can (site-thread.js)
 const PAGE_SIDE_PARTS: [&str; 1] = ["host-routes.js"];
 const LINE_COMMENT: &str = "//";
+/// `const KEY = "data-warp-key"; // a list item's element`: the statement ends before the comment
+const TRAILING_COMMENT: &str = "; //";
 /// The element holding the program's markup (site.js SITE_ROOT)
 const ROOT_ID: &str = "warp-root";
 /// The element holding the replies of a rendered page's server calls (host-tasks.js SERVER_REPLIES_ID)
@@ -283,12 +288,18 @@ pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
 	Ok(host_scripts_of(module)?.into_iter().chain(page_scripts_of(module)?).chain(dev.then_some(DEV_SCRIPT)).collect())
 }
 
-/// canvas.js when the module paints, markup.js, its transitions part when the module names a transition, and site.js
+/// canvas.js when the module paints, markup.js, its transitions part when the module names a transition, its forms part
+/// when it has an `on submit` handler, and site.js
 fn page_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 	let [markup, site] = PAGE_SCRIPTS;
 	let canvas = paints(&imports_of(module)?).then_some(PAINT_SCRIPT);
-	let transitions = module.windows(TRANSITION_WORD.len()).any(|window| window == TRANSITION_WORD).then_some(TRANSITIONS_SCRIPT);
-	Ok(canvas.into_iter().chain([markup]).chain(transitions).chain([site]).collect())
+	let transitions = names(module, TRANSITION_WORD).then_some(TRANSITIONS_SCRIPT);
+	let forms = names(module, SUBMIT_HANDLER_WORD).then_some(FORMS_SCRIPT);
+	Ok(canvas.into_iter().chain([markup]).chain(transitions).chain(forms).chain([site]).collect())
+}
+
+fn names(module: &[u8], word: &[u8]) -> bool {
+	module.windows(word.len()).any(|window| window == word)
 }
 
 fn paints(imports: &[(String, String)]) -> bool {
@@ -323,13 +334,17 @@ fn page(title: &str, body: &str, replies: &str, scripts: &[Script], worker_scrip
 	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{worker}}", &worker).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{replies}}", replies).replace("{{body}}", body)
 }
 
-/// A script without its comment lines, blank lines and indentation (card web-bundle: host.js gzipped 24 → 17 KB); the
-/// lines of a template literal stay as written
+/// A script without its comment lines, trailing comments after a statement, blank lines and indentation (card
+/// web-bundle: host.js gzipped 24 → 17 KB); the lines of a template literal stay as written
 pub fn compacted(script: &str) -> String {
 	let mut in_template = false;
 	let mut kept = String::new();
 	for line in script.lines() {
 		let shown = if in_template { line } else { line.trim_start() };
+		let shown = match shown.find(TRAILING_COMMENT) {
+			Some(end) if !in_template && !shown[..end].contains('`') => &shown[..=end],
+			_ => shown,
+		};
 		if in_template || !(shown.is_empty() || shown.starts_with(LINE_COMMENT)) {
 			kept.push_str(shown);
 			kept.push('\n');
