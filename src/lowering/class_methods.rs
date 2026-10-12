@@ -13,6 +13,7 @@ mod operators;
 mod other_languages;
 use inheritance::*;
 use operators::*;
+pub(crate) use operators::is_library_method;
 use other_languages::*;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -743,7 +744,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
-			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))).collect();
+			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || crate::analyzer::is_list_mutating_method(name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
@@ -906,7 +907,8 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 		}
 		_ => None,
 	};
-	// a type word is a method on anything but a number (`3.double()` stays the conversion), a list word on an instance
+	// a type word is a method on anything but a literal value (`3.double()`, `"42".int()` stay the conversion), a list
+	// word on an instance
 	let calls_method = |receiver: &Node, member: &Node| {
 		let name = match member.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|first| first.drop_meta().name()).unwrap_or_default(),
@@ -920,7 +922,7 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 				Node::Key(class, Op::None | Op::Colon, _) => methods.classes.contains(&class.drop_meta().name()),
 				_ => false,
 			},
-			false => !matches!(receiver.drop_meta(), Node::Number(_)),
+			false => !matches!(receiver.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _)),
 		}
 	};
 	let recurse = |child: Node| with_method_names(child, methods, in_class);
@@ -1526,7 +1528,8 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 	let mut traits = vec![];
 	for (index, (name, requirement)) in methods.iter().enumerate() {
 		let first = methods.iter().position(|(other, _)| other == name) == Some(index);
-		let shared = methods.iter().filter(|(other, _)| other == name).count() > 1;
+		// a library word's methods stay methods of its generic function, so other values keep the library's (traits.rs)
+		let shared = methods.iter().filter(|(other, _)| other == name).count() > 1 && !is_library_method(name);
 		if first && shared {
 			let requirements = Node::List(vec![requirement.clone()], Bracket::Curly, Separator::Space);
 			let declaration = key(Node::Symbol(format!("{IMPLICIT_TRAIT_PREFIX}{name}")), Op::Colon, requirements);

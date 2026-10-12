@@ -297,8 +297,10 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, INT_GCD);
-			// gcd 0 only for 0/0 (NaN)
-			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(1), I::I64GtS, I::If(BlockType::Empty)]);
+			// gcd 0 only for 0/0 (NaN); compared as an Int: a big gcd's handle is negative (card exact-decimals)
+			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(1)]);
+			s.call(f, "int_cmp");
+			Self::emit_list(f, &[I::I32Const(0), I::I32GtS, I::If(BlockType::Empty)]);
 			for local in [0, 1] {
 				Self::emit_list(f, &[I::LocalGet(local), I::LocalGet(2)]);
 				s.call(f, "int_quot");

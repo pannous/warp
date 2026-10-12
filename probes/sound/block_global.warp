@@ -1,0 +1,5 @@
+linear samples = float[4]
+fill(block, t) := { for i in 1 to #block { block#i = t + i } ; 0 }
+wrap(t: float) := { fill(samples, t); 0.0 }
+wrap(10.0)
+samples#3

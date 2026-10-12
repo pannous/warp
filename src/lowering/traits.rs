@@ -30,6 +30,8 @@ const DEFAULT_PARAMETER: &str = "x";
 const LIST_WORD: &str = "list";
 /// The receiver a foreign signature names, Rust's `fn area(&self)`
 const SELF_WORD: &str = "self";
+/// A method's position taking any value, in its name `describe·any·Ship` and its messages
+const ANY_WORD: &str = "any";
 /// Static type names (`type(x)`) of the built-in kinds that `node_order` orders
 const BUILTIN_COMPARABLE: [&str; 6] = ["int", "rational", "real", "float", "text", "codepoint"];
 
@@ -47,6 +49,9 @@ const MISSING_FIELDS_WARNING: &str = "DATA lacks FIELDS of DECLARED";
 const MISSING_FIELDS_FIX: &str = "give FIELDS, or declare THEM optional (x?) or with a default in DECLARED";
 const EXTRA_FIELDS_WARNING: &str = "DATA has FIELDS, which DECLARED does not declare";
 const EXTRA_FIELDS_FIX: &str = "drop FIELDS, or declare THEM in DECLARED";
+/// A function named like a field of its parameter's class (NAME, CLASS, PARAMETER)
+const FIELD_METHOD_WARNING: &str = "CLASS has a field NAME and a method NAME(PARAMETER:CLASS): PARAMETER.NAME reads the field, PARAMETER.NAME() and NAME(PARAMETER) call the method";
+const FIELD_METHOD_FIX: &str = "rename the field or the method";
 pub const COMPARE: &str = "compare";
 /// T4: every value is Equatable by value; `equals` overrides it for a type
 pub const EQUATABLE: &str = "Equatable";
@@ -137,6 +142,11 @@ impl Traits {
 
 	pub fn is_trait(&self, name: &str) -> bool {
 		self.named(name).is_some()
+	}
+
+	/// Is `name` an operation of a trait (a declared one, a built-in one, a class method several classes share)
+	pub fn is_operation(&self, name: &str) -> bool {
+		self.operation(name).is_some()
 	}
 
 	fn named(&self, name: &str) -> Option<&Trait> {
@@ -499,7 +509,18 @@ pub fn lower_conformances(node: Node) -> Node {
 		return node;
 	}
 	let traits = Traits::of(&node);
-	let node = conform(operation_calls(node, &traits), &registry, &traits);
+	if let Err(error) = crate::diagnostic::report(&field_method_warnings(&node, &registry)) {
+		return error;
+	}
+	let generics = generic_functions(&node, &registry, &traits);
+	let node = conform(operation_calls(node, &registry, &traits, &generics), &registry, &traits, &generics);
+	let node = match generics.is_empty() {
+		true => node,
+		false => match generic_calls(node, generics) {
+			Ok(node) => node,
+			Err(error) => return error,
+		},
+	};
 	let witnesses = defined_functions(&node);
 	match first_unkept_claim(&node, &traits, &witnesses) {
 		Some(error) => error,
@@ -507,35 +528,63 @@ pub fn lower_conformances(node: Node) -> Node {
 	}
 }
 
-/// `s.area()` of a declared trait's operation: the call `area(s)`, which picks the witness of s's type like any call
-/// of the operation (a class method `area(): number {…}` is the witness area·Square)
-fn operation_calls(node: Node, traits: &Traits) -> Node {
+/// `s.area()` of a declared trait's operation or of a generic function: the call `area(s)`, which picks the witness of
+/// s's type like any call of the operation (a class method `area(): number {…}` is the witness area·Square); an uncalled
+/// `b.size` of a declared field reads the field
+fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {
+	let is_operation = |member: &Node| {
+		let name = crate::lowering::class_methods::leading_name(member);
+		let reads_field = matches!(member.drop_meta(), Node::Symbol(_)) && is_declared_field(registry, &name);
+		!reads_field && (traits.operation(&name).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name)) || generics.contains_key(&name))
+	};
 	match node {
-		Node::Key(receiver, Op::Dot, member) if traits.operation(&crate::lowering::class_methods::leading_name(&member)).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name)) => {
+		Node::Key(receiver, Op::Dot, member) if is_operation(&member) => {
 			let arguments = match member.drop_meta() {
 				Node::List(items, _, _) => items[1..].to_vec(),
 				_ => vec![],
 			};
 			let name = Node::Symbol(crate::lowering::class_methods::leading_name(&member));
-			let arguments = std::iter::once(*receiver).chain(arguments).map(|argument| operation_calls(argument, traits));
+			let arguments = std::iter::once(*receiver).chain(arguments).map(|argument| operation_calls(argument, registry, traits, generics));
 			Node::List(std::iter::once(name).chain(arguments).collect(), Bracket::Round, Separator::None)
 		}
-		other => other.map_children(|child| operation_calls(child, traits)),
+		other => other.map_children(|child| operation_calls(child, registry, traits, generics)),
 	}
 }
 
-fn conform(node: Node, registry: &TypeRegistry, traits: &Traits) -> Node {
+fn is_declared_field(registry: &TypeRegistry, name: &str) -> bool {
+	registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
+}
+
+/// A warning per definition `size(b:Box)` where Box has a field size: `b.size` and `b.size()` then mean different things
+fn field_method_warnings(node: &Node, registry: &TypeRegistry) -> Vec<Diagnostic> {
+	let mut warnings = vec![];
+	node.visit(&mut |child| {
+		let Node::Key(head, Op::Assign | Op::Define, _) = child else { return };
+		if let Some(items) = definition_head(head) {
+			let name = items[0].name();
+			for (parameter, class) in instance_parameters(head, registry) {
+				if registry.get_by_name(&class).is_some_and(|type_def| type_def.fields.iter().any(|field| field.name == name)) {
+					let fill = |template: &str| template.replace("NAME", &name).replace("CLASS", &class).replace("PARAMETER", &parameter);
+					warnings.push(Diagnostic::at(head, fill(FIELD_METHOD_WARNING)).fix(fill(FIELD_METHOD_FIX)));
+				}
+			}
+		}
+	});
+	warnings
+}
+
+fn conform(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
 			let body = instance_parameters(&head, registry).iter().fold(*body, |body, (name, type_name)| typed_uses(body, name, type_name));
 			let head = typed_parameters(*head, registry);
-			let head = match witness_of(&head, registry, traits) {
+			let head = match witness_of(&head, registry, traits).or_else(|| method_of(&head, registry, generics)) {
 				Some(witness) => renamed_head(head, witness),
 				None => head,
 			};
-			key(head, op, conform(body, registry, traits))
+			key(head, op, conform(body, registry, traits, generics))
 		}
-		other => children_rewritten(other, |child| conform(child, registry, traits)),
+		other => children_rewritten(other, |child| conform(child, registry, traits, generics)),
 	}
 }
 
@@ -686,6 +735,331 @@ fn without_claims(node: Node, traits: &Traits) -> Node {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Generic functions: methods told apart by the classes of their arguments
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// The class each positional parameter of a method takes, None where it takes any value: `collide(a:Ship, b:Rock)`
+type Signature = Vec<Option<String>>;
+/// A method: its signature and the numbers of arguments it takes, fewest and most
+type Method = (Signature, (usize, usize));
+
+/// How far an argument fits a parameter that takes any value: further than any class it is like
+const ANY_DISTANCE: usize = usize::MAX;
+
+/// A function name with methods for declared classes (`def sort(d:Deck)`, `collide(a:Ship, b:Rock)`, notes/dispatch.md
+/// "Methods"): a definition adds a method, it never replaces the function for other values
+pub(crate) struct Generic {
+	/// The methods in declaration order: their signatures and the numbers of arguments they take
+	methods: Vec<Method>,
+	/// The parameter names of the first method, for the fix of a missing method
+	parameters: Vec<String>,
+	/// Other values call the library word: `sort` of lists
+	library: bool,
+	/// The untyped definitions other values call, by the arguments they take: `sort(x)` (1, 1), `take(xs, n)` (2, 2)
+	untyped_arities: Vec<(usize, usize)>,
+}
+
+/// The method a call picks: its index, none fitting, or two fitting equally well
+type Picked = Result<Option<usize>, (usize, usize)>;
+
+impl Generic {
+	/// The method for arguments of these classes (None: no instance): of the methods taking them, the one at least as
+	/// close as every other at each position (a class's own method before its parent's, a class before any value);
+	/// two methods each closer somewhere are ambiguous
+	fn method_for(&self, classes: &[Option<String>], likenesses: &[Likeness]) -> Picked {
+		let fitting: Vec<(usize, Vec<usize>)> = self.methods.iter().enumerate()
+			.filter(|(_, (_, (required, all)))| (*required..=*all).contains(&classes.len()))
+			.filter_map(|(index, (signature, _))| Some((index, distances(signature, classes, likenesses)?)))
+			.collect();
+		let dominates = |closer: &[usize], further: &[usize]| closer.iter().zip(further).all(|(a, b)| a <= b) && closer != further;
+		let best: Vec<usize> = fitting.iter().filter(|(_, own)| !fitting.iter().any(|(_, other)| dominates(other, own))).map(|(index, _)| *index).collect();
+		match best.as_slice() {
+			[] => Ok(None),
+			[one] => Ok(Some(*one)),
+			[first, second, ..] => Err((*first, *second)),
+		}
+	}
+
+	/// The positions some method takes a class at: those a dispatcher tests
+	fn typed_positions(&self) -> Vec<usize> {
+		let mut positions: Vec<usize> = self.methods.iter().flat_map(|(signature, _)| signature.iter().enumerate().filter(|(_, class)| class.is_some()).map(|(position, _)| position)).collect();
+		positions.sort();
+		positions.dedup();
+		positions
+	}
+
+	/// Whether other values of a call with `arity` arguments have a function to call: `b.take()` of a class Box
+	/// never calls list's `take(xs, n)`
+	fn falls_back(&self, arity: usize) -> bool {
+		self.library || self.untyped_arities.iter().any(|(required, all)| (*required..=*all).contains(&arity))
+	}
+
+	fn variant(&self, method: usize) -> String {
+		signature_variant(&self.methods[method].0)
+	}
+
+	fn signatures(&self, name: &str) -> String {
+		self.methods.iter().map(|(signature, _)| format!("{name}({})", classes_text(signature))).collect::<Vec<_>>().join(", ")
+	}
+}
+
+/// Per position, how many likeness steps lead from the argument's class to the parameter's (0: its own class); None
+/// where the method does not take the argument
+fn distances(signature: &Signature, classes: &[Option<String>], likenesses: &[Likeness]) -> Option<Vec<usize>> {
+	classes.iter().enumerate().map(|(position, class)| match signature.get(position).cloned().flatten() {
+		None => Some(ANY_DISTANCE),
+		Some(parameter) => likeness_steps(class.as_deref()?, &parameter, likenesses),
+	}).collect()
+}
+
+/// The likeness steps from `class` to `target`: a dog is 1 step from an animal it is like
+fn likeness_steps(class: &str, target: &str, likenesses: &[Likeness]) -> Option<usize> {
+	let (mut level, mut seen) = (vec![class.to_string()], vec![class.to_string()]);
+	for steps in 0.. {
+		if level.is_empty() {
+			return None;
+		}
+		if level.iter().any(|kind| kind == target) {
+			return Some(steps);
+		}
+		let mut parents: Vec<String> = level.iter().flat_map(|kind| likenesses.iter().filter(move |likeness| likeness.kind == *kind).map(|likeness| likeness.like.clone())).collect();
+		parents.retain(|parent| !seen.contains(parent));
+		parents.dedup();
+		seen.extend(parents.iter().cloned());
+		level = parents;
+	}
+	None
+}
+
+/// `Ship·Rock` of `collide(a:Ship, b:Rock)`, `Deck` of `sort(d:Deck)`, `any·Ship` of `describe(k, s:Ship)`
+fn signature_variant(signature: &Signature) -> String {
+	let last_class = signature.iter().rposition(Option::is_some).map_or(0, |position| position + 1);
+	signature[..last_class].iter().map(|class| class.as_deref().unwrap_or(ANY_WORD)).collect::<Vec<_>>().join(&WITNESS_SEPARATOR.to_string())
+}
+
+/// `Ship, Rock`; `Deck` alone
+fn classes_text(classes: &[Option<String>]) -> String {
+	classes.iter().map(|class| class.as_deref().unwrap_or(ANY_WORD)).collect::<Vec<_>>().join(", ")
+}
+
+/// The class a parameter `s:square` takes, if it is a declared one, per positional parameter of a definition
+fn signature_of(parameters: &[Node], registry: &TypeRegistry) -> Signature {
+	parameters.iter().map(|parameter| parameter_type(parameter, registry).map(String::from)).collect()
+}
+
+/// The functions with methods for declared classes that need telling apart: methods of several signatures, or of a
+/// name with a fallback. A declared trait's operations stay the traits' (witness_of)
+fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &Traits) -> HashMap<String, Generic> {
+	let mut typed: Vec<(String, Method, Vec<String>)> = vec![];
+	let mut untyped: Vec<(String, (usize, usize))> = vec![];
+	node.visit(&mut |part| if let Node::Key(head, Op::Assign | Op::Define, _) = part {
+		let Some(items) = definition_head(head) else { return };
+		let Node::Symbol(name) = items[0].drop_meta() else { return };
+		if name.contains(WITNESS_SEPARATOR) || traits.operation(name).is_some() {
+			return;
+		}
+		let signature = signature_of(&items[1..], registry);
+		match signature.iter().any(Option::is_some) {
+			true => typed.push((name.clone(), (signature, arities(&items[1..])), items[1..].iter().map(|parameter| parameter.drop_meta().name()).collect())),
+			false => untyped.push((name.clone(), arities(&items[1..]))),
+		}
+	});
+	let mut generics: HashMap<String, Generic> = HashMap::new();
+	for (name, (signature, arity), parameters) in typed {
+		let library = crate::lowering::class_methods::is_library_method(&name);
+		let untyped_arities = untyped.iter().filter(|(untyped_name, _)| *untyped_name == name).map(|(_, arity)| *arity).collect();
+		let generic = generics.entry(name).or_insert(Generic { methods: vec![], parameters, library, untyped_arities });
+		if !generic.methods.iter().any(|(known, _)| *known == signature) {
+			generic.methods.push((signature, arity));
+		}
+	}
+	generics.retain(|_, generic| generic.library || !generic.untyped_arities.is_empty() || generic.methods.len() > 1);
+	generics
+}
+
+/// The arguments a definition takes, fewest and most: `add(a, b = 1)` takes 1 or 2
+fn arities(parameters: &[Node]) -> (usize, usize) {
+	let required = parameters.iter().filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _))).count();
+	(required, parameters.len())
+}
+
+/// `collide(a:Ship, b:Rock)` of a generic function: the method `collide·Ship·Rock`
+fn method_of(head: &Node, registry: &TypeRegistry, generics: &HashMap<String, Generic>) -> Option<String> {
+	let items = definition_head(head)?;
+	let Node::Symbol(name) = items[0].drop_meta() else { return None };
+	generics.contains_key(name).then_some(())?;
+	let signature = signature_of(&items[1..], registry);
+	signature.iter().any(Option::is_some).then(|| witness_name(name, &signature_variant(&signature)))
+}
+
+/// Every call of a generic function calls the method for its arguments' classes: statically where they are known,
+/// through a dispatcher `f·dispatch` where they are known only at run time; other values call the fallback
+fn generic_calls(node: Node, functions: HashMap<String, Generic>) -> Result<Node, Node> {
+	let types = InstanceTypes::of(&node);
+	let mut likenesses = vec![];
+	collect_declared(&node, &mut likenesses);
+	let plain = crate::analyzer::literal_variable_kinds(&node, &crate::analyzer::function_context(&node));
+	let classes = types.registry.types().iter().map(|type_def| type_def.name.clone()).collect();
+	let calls = GenericCalls { functions, types, likenesses, plain, classes, failed: RefCell::new(None), dispatched: RefCell::new(Default::default()) };
+	let node = calls.resolve(node);
+	if let Some(error) = calls.failed.into_inner() {
+		return Err(error);
+	}
+	let dispatchers: Vec<Node> = calls.dispatched.into_inner().into_iter().map(|((name, arity), (cases, fallback))| dispatcher_of_cases(&name, arity, &cases, fallback)).collect();
+	Ok(match dispatchers.is_empty() {
+		true => node,
+		false => Node::List([dispatchers, vec![node]].concat(), Bracket::None, Separator::Semicolon),
+	})
+}
+
+struct GenericCalls {
+	functions: HashMap<String, Generic>,
+	types: InstanceTypes,
+	likenesses: Vec<Likeness>,
+	/// The variables only ever holding literals, which are no instances
+	plain: HashMap<String, crate::type_kinds::Kind>,
+	classes: Vec<String>,
+	failed: RefCell<Option<Node>>,
+	/// (function, number of arguments) → its dispatcher's cases
+	dispatched: RefCell<std::collections::BTreeMap<(String, usize), DispatchCases>>,
+}
+
+/// A dispatcher's case: the classes its arguments are instances of (position, class), and the method variant it calls
+type DispatchCase = (Vec<(usize, String)>, String);
+/// A dispatcher's cases and whether other values call the fallback
+type DispatchCases = (Vec<DispatchCase>, bool);
+
+/// What a call knows of an argument: its class, no instance at all (None), or nothing until run time
+enum Known {
+	Class(Option<String>),
+	AtRunTime,
+}
+
+impl GenericCalls {
+	fn fail(&self, error: Node) -> Option<Node> {
+		self.failed.borrow_mut().get_or_insert(error.clone());
+		Some(error)
+	}
+
+	fn resolve(&self, node: Node) -> Node {
+		match node {
+			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
+				let body = self.types.in_definition(&head, || self.resolve(*body));
+				Node::Key(head, op, Box::new(body))
+			}
+			Node::List(items, bracket, separator) => {
+				let items: Vec<Node> = items.into_iter().map(|item| self.resolve(item)).collect();
+				self.call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
+			}
+			other => children_rewritten(other, |child| self.resolve(child)),
+		}
+	}
+
+	/// The kind of a value certainly no instance: a literal, a variable only ever holding literals, a list of instances
+	fn plain_kind(&self, value: &Node) -> Option<crate::type_kinds::Kind> {
+		let literal = crate::analyzer::argument_literal_kind(value).or_else(|| match value.drop_meta() {
+			Node::Symbol(name) if !self.types.is_parameter(name) => self.plain.get(name).copied(),
+			_ => None,
+		});
+		literal.or_else(|| matches!(self.types.shape(value), Some(Shape::ListOf(_))).then_some(crate::type_kinds::Kind::List))
+	}
+
+	fn known(&self, argument: &Node) -> Known {
+		match (self.types.shape(argument), self.plain_kind(argument)) {
+			(Some(Shape::Instance(class)), _) => Known::Class(Some(class)),
+			(_, Some(_)) => Known::Class(None),
+			_ => Known::AtRunTime,
+		}
+	}
+
+	fn call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let [head, _, ..] = items else { return None };
+		let name = called_name(items, bracket, separator)?;
+		let generic = self.functions.get(name)?;
+		let arguments = items[1..].to_vec();
+		let fallback = generic.falls_back(arguments.len());
+		let known: Vec<Known> = arguments.iter().map(|argument| self.known(argument)).collect();
+		let positions = generic.typed_positions();
+		let is_known = |position: &usize| known.get(*position).is_none_or(|known| matches!(known, Known::Class(_)));
+		if positions.iter().all(is_known) {
+			let classes: Vec<Option<String>> = known.iter().map(|known| match known {
+				Known::Class(class) => class.clone(),
+				Known::AtRunTime => None,
+			}).collect();
+			return match generic.method_for(&classes, &self.likenesses) {
+				Ok(Some(method)) => Some(witness_call(name, &generic.variant(method), arguments)),
+				Ok(None) if fallback => None,
+				Ok(None) => self.fail(no_method(head, name, &classes, generic)),
+				Err((first, second)) => self.fail(ambiguous_method(head, name, &classes, generic, first, second)),
+			};
+		}
+		let cases = self.cases(generic, &positions, arguments.len());
+		let variants: std::collections::HashSet<&String> = cases.iter().map(|(_, variant)| variant).collect();
+		match (variants.len(), fallback) {
+			(0, true) => None,
+			(1, false) => Some(witness_call(name, &cases[0].1, arguments)),
+			_ => {
+				self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), (cases, fallback));
+				Some(witness_call(name, DISPATCH, arguments))
+			}
+		}
+	}
+
+	/// Per combination of classes at the typed positions (or no instance there), the method it calls: the combinations
+	/// testing more classes first, so a value of no class reaches only methods taking any value there
+	fn cases(&self, generic: &Generic, positions: &[usize], arity: usize) -> Vec<DispatchCase> {
+		let positions: Vec<usize> = positions.iter().copied().filter(|position| *position < arity).collect();
+		let candidates = |position: usize| -> Vec<Option<String>> {
+			let parameters: Vec<&String> = generic.methods.iter().filter_map(|(signature, _)| signature.get(position)?.as_ref()).collect();
+			let fitting = self.classes.iter().filter(|class| parameters.iter().any(|parameter| likeness_steps(class, parameter, &self.likenesses).is_some()));
+			fitting.cloned().map(Some).chain([None]).collect()
+		};
+		let mut combinations: Vec<Vec<(usize, Option<String>)>> = vec![vec![]];
+		for position in &positions {
+			combinations = combinations.into_iter().flat_map(|combination| candidates(*position).into_iter().map(move |class| [combination.clone(), vec![(*position, class)]].concat())).collect();
+		}
+		let mut cases: Vec<DispatchCase> = combinations.into_iter().filter_map(|combination| {
+			let mut classes: Vec<Option<String>> = vec![None; arity];
+			combination.iter().for_each(|(position, class)| classes[*position] = class.clone());
+			let method = generic.method_for(&classes, &self.likenesses).ok()??;
+			let tests = combination.into_iter().filter_map(|(position, class)| Some((position, class?))).collect();
+			Some((tests, generic.variant(method)))
+		}).collect();
+		cases.sort_by_key(|(tests, _)| std::cmp::Reverse(tests.len()));
+		cases
+	}
+}
+
+/// `area(circle(1))` of a generic function without a method for circle
+fn no_method(located: &Node, name: &str, classes: &[Option<String>], generic: &Generic) -> Node {
+	let typed: Vec<&Option<String>> = classes.iter().filter(|class| class.is_some()).collect();
+	let described = match typed.as_slice() {
+		[class] if classes.len() == 1 || generic.typed_positions() == [0] => class.as_deref().unwrap_or_default().to_string(),
+		_ => format!("({})", classes_text(classes)),
+	};
+	let parameters: Vec<String> = generic.parameters.iter().zip(classes).map(|(parameter, class)| match class {
+		Some(class) => format!("{parameter}:{class}"),
+		None => parameter.clone(),
+	}).collect();
+	let message = format!("{name} has no method for {described}; methods: {}", generic.signatures(name));
+	Diagnostic::at(located, message).fix(format!("define {name}({}) := …", parameters.join(", "))).into_error()
+}
+
+/// `f(C(1))` of methods f(A) and f(B) where C is like both; `meet(dog, dog)` of meet(dog, animal) and meet(animal, dog)
+fn ambiguous_method(located: &Node, name: &str, classes: &[Option<String>], generic: &Generic, first: usize, second: usize) -> Node {
+	let (first, second) = (&generic.methods[first].0, &generic.methods[second].0);
+	let message = match (classes, first.as_slice(), second.as_slice()) {
+		([Some(class)], [Some(a)], [Some(b)]) => format!("{name} of {} is ambiguous: {class} is like both {a} and {b}, which have a method {name} each", crate::analyzer::with_article(class)),
+		_ => format!("{name}({}) is ambiguous: {name}({}) and {name}({}) fit equally well", classes_text(classes), classes_text(first), classes_text(second)),
+	};
+	let parameters: Vec<String> = classes.iter().enumerate().map(|(position, class)| match class {
+		Some(class) => format!("{}:{class}", generic.parameters.get(position).map_or(DEFAULT_PARAMETER, String::as_str)),
+		None => generic.parameters.get(position).cloned().unwrap_or_default(),
+	}).collect();
+	Diagnostic::at(located, message).fix(format!("define {name}({}) := … to pick one", parameters.join(", "))).into_error()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Static instance types
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -804,6 +1178,11 @@ impl InstanceTypes {
 		let rewritten = rewrite();
 		self.parameters.borrow_mut().pop();
 		rewritten
+	}
+
+	/// Is `name` a parameter of a definition being rewritten
+	fn is_parameter(&self, name: &str) -> bool {
+		self.parameters.borrow().iter().any(|scope| scope.contains_key(name))
 	}
 
 	/// The declared type of the elements of `[C]`
@@ -953,16 +1332,35 @@ fn with_dispatchers(node: Node, dispatched: &std::collections::BTreeMap<(String,
 }
 
 fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
+	let cases: Vec<DispatchCase> = types.iter().map(|type_name| (vec![(0, type_name.clone())], type_name.clone())).collect();
+	dispatcher_of_cases(operation, arity, &cases, false)
+}
+
+/// `op·dispatch(x, …)`: per case (the classes its arguments are instances of, the method variant that calls) the
+/// method; the last case unchecked, or with a `fallback` every case checked and any other value calling `op` itself
+fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[DispatchCase], fallback: bool) -> Node {
 	let parameters: Vec<Node> = (0..arity).map(|index| Node::Symbol(format!("dispatched_{index}"))).collect();
-	let (last, checked) = types.split_last().expect("two or more types define the operation");
-	let witness = |type_name: &str| witness_call(operation, type_name, parameters.clone());
-	let body = checked.iter().rev().fold(witness(last), |otherwise, type_name| {
-		let test = call(INSTANCE_OF, vec![parameters[0].clone(), Node::Text(type_name.clone())]);
-		if_then_else(test, witness(type_name), otherwise)
+	let method = |variant: &str| witness_call(operation, variant, parameters.clone());
+	let (checked, otherwise) = match fallback {
+		true => (cases, call(operation, parameters.clone())),
+		false => {
+			let (last, checked) = cases.split_last().expect("two or more methods");
+			(checked, method(&last.1))
+		}
+	};
+	let test = |tests: &[(usize, String)]| tests.iter().map(|(position, class)| call(INSTANCE_OF, vec![parameters[*position].clone(), Node::Text(class.clone())])).reduce(|all, test| key(all, Op::And, test));
+	let body = checked.iter().rev().fold(otherwise, |otherwise, (tests, variant)| match test(tests) {
+		Some(test) => if_then_else(test, method(variant), otherwise),
+		None => method(variant),
 	});
-	// the first parameter is an instance of some type: held as a Node, like a parameter `s:square`
-	let instance = key(parameters[0].clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance)));
-	let head = Node::List([vec![Node::Symbol(witness_name(operation, DISPATCH)), instance], parameters[1..].to_vec()].concat(), Bracket::Round, Separator::None);
+	// a tested parameter is an instance of some type: held as a Node, like a parameter `s:square`
+	let tested: Vec<usize> = cases.iter().flat_map(|(tests, _)| tests.iter().map(|(position, _)| *position)).collect();
+	let instance = |position: usize, parameter: &Node| match tested.contains(&position) || position == 0 {
+		true => key(parameter.clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance))),
+		false => parameter.clone(),
+	};
+	let head_parameters = parameters.iter().enumerate().map(|(position, parameter)| instance(position, parameter));
+	let head = Node::List(std::iter::once(Node::Symbol(witness_name(operation, DISPATCH))).chain(head_parameters).collect(), Bracket::Round, Separator::None);
 	key(head, Op::Define, body)
 }
 

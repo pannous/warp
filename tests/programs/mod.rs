@@ -18,6 +18,7 @@ mod test_code_golf; // card code-golf
 mod test_paint;
 mod test_paint_lists;
 mod test_paint_shader; // P234
+mod test_gpu_draw; // card gpu-draw
 mod test_sound;
 mod test_sound_files; // card sound-library
 mod test_sound_clock; // card sound-pro
@@ -37,6 +38,8 @@ mod test_sound_pan; // card stereo-pan
 mod test_sound_spectrum; // card winamp-like
 mod test_sound_use; // card bizarre-global
 mod test_sound_aliasing; // card reason-beep
+mod test_sound_engine; // card native-sound
+mod test_sound_signal; // card real-time
 mod test_task_sound; // card task-sound
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_holes; // card shader-holes

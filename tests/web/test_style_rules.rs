@@ -38,3 +38,20 @@ fn a_selector_with_a_value_is_its_color() {
 	assert_eq!(html_of("div{ style{ .done: \"red\"; .open = green } }"), "<div><style>.done { color: red } .open { color: green }</style></div>");
 	assert_eq!(html_of("div{ style{ .done{color:red} #main{margin:0} } }"), "<div><style>.done { color: red } #main { margin: 0px }</style></div>");
 }
+
+// a hex color is CSS's, not the count or index operator: `solid #8884`, `color: #fff` (card css-block); an id
+// selector of hex letters stays a selector
+#[test]
+fn hex_colors_in_a_style_sheet() {
+	assert_eq!(html_of("div{ style{\n\ttd { border: 1px solid #8884 }\n\t#main { color: #fff }\n\tp { color: #0a0 }\n\tb { color: #1e1e1e }\n\ti { color: #00ff00 }\n\t#fed { color: #abc }\n} }"),
+		"<div><style>td { border: 1px solid #8884 } #main { color: #fff } p { color: #0a0 } b { color: #1e1e1e } i { color: #00ff00 } #fed { color: #abc }</style></div>");
+}
+
+// `:root` and a rule named after an element (`html { … }`, `body { … }`) are rules of the sheet (card markup-style-block)
+#[test]
+fn root_and_element_rules_in_a_style_sheet() {
+	assert_eq!(html_of("div{ style{\n\t:root { color-scheme: light dark }\n\thtml { margin: 0 }\n\tbody { margin: 0 }\n} }"),
+		"<div><style>:root { color-scheme: light dark } html { margin: 0px } body { margin: 0px }</style></div>");
+	assert_eq!(html_of("div{ style{ h1, :hover { margin: 0 } h2, .x { margin: 0 } ul li, .y { margin: 0 } } }"),
+		"<div><style>h1, :hover { margin: 0px } h2, .x { margin: 0px } ul li, .y { margin: 0px }</style></div>");
+}

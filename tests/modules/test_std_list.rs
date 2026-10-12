@@ -21,8 +21,10 @@ fn a_programs_own_word_wins_over_the_module() {
 
 #[test]
 fn a_module_word_without_its_use_names_the_module() {
-	crate::common::fails_with("zip([1], [2])", "zip is in the standard module list: write `use list`");
-	crate::common::fails_with("unique [1, 1]", "unique is in the standard module list: write `use list`");
+	// list's words are standard functions without `use` (decision type-library-words), sound's rarer words are not
+	is!("zip([1], [2])", parse("[[1 2]]"));
+	is!("unique [1, 1]", parse("[1]"));
+	crate::common::fails_with("midi(440Hz)", "midi is in the standard module sound: write `use sound`");
 }
 
 #[test]

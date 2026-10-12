@@ -38,11 +38,15 @@ pub mod web_sockets;
 #[cfg(feature = "native")]
 pub mod gpu;
 #[cfg(feature = "native")]
+pub mod gpu_canvas;
+#[cfg(feature = "native")]
 pub mod shared;
 #[cfg(feature = "native")]
 pub mod paint;
 #[cfg(feature = "native")]
 pub mod paint_window;
+#[cfg(feature = "native")]
+pub mod sound_engine;
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub mod webview;
 #[cfg(feature = "native")]

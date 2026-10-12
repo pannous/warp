@@ -11,6 +11,7 @@
 // come back (card web-apis-rest).
 
 const GPU_ENTRY_POINT = "main";
+const NO_GPU_DRAWING = "use draw draws through pixels on a page (gpu_drawing is no here), so draw_shape and draw_show never run";
 const GPU_BINDING = 0;
 // `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type (src/gpu.rs STORAGE_ARRAY)
 const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\s+(\w+)\s*:\s*array<(\w+)/g;
@@ -502,6 +503,9 @@ addHostPart({
 				const pixels = holder.gpuRendered(plain(shader), width, height, values);
 				return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
 			},
+			// use draw on the GPU (src/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
+			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
+			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 		};
 	},
 });

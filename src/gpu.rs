@@ -63,6 +63,11 @@ fn gpu() -> Result<&'static Gpu, String> {
 	.map_err(Clone::clone)
 }
 
+/// Work with the process's device and queue (gpu_canvas.rs), or why there is none
+pub fn with_device<T>(work: impl FnOnce(&wgpu::Device, &wgpu::Queue) -> T) -> Result<T, String> {
+	gpu().map(|Gpu { device, queue }| work(device, queue))
+}
+
 /// Whether this machine has a GPU to run shaders on, or why not
 pub fn available() -> Result<(), String> {
 	gpu().map(|_| ())
@@ -300,9 +305,6 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 	let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
 	let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
 	let image = device.create_texture(&wgpu::TextureDescriptor { label: Some("gpu_render image"), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: IMAGE_FORMAT, usage, view_formats: &[] });
-	// a copied row is padded to 256 bytes
-	let row_bytes = (width * PIXEL_BYTES).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_render readback"), size: u64::from(row_bytes * height), usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
 	let view = image.create_view(&wgpu::TextureViewDescriptor::default());
 	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 	{
@@ -314,6 +316,20 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 		}
 		pass.draw(0..TRIANGLE_CORNERS, 0..1);
 	}
+	checked_image_rgba(device, queue, encoder, &image, validation)
+}
+
+/// The RGBA bytes of a 4-byte-per-pixel image, row by row, once the encoder's work on it is done
+pub fn image_rgba(device: &wgpu::Device, queue: &wgpu::Queue, encoder: wgpu::CommandEncoder, image: &wgpu::Texture) -> Result<Vec<u8>, String> {
+	checked_image_rgba(device, queue, encoder, image, device.push_error_scope(wgpu::ErrorFilter::Validation))
+}
+
+fn checked_image_rgba(device: &wgpu::Device, queue: &wgpu::Queue, mut encoder: wgpu::CommandEncoder, image: &wgpu::Texture, validation: wgpu::ErrorScopeGuard) -> Result<Vec<u8>, String> {
+	let size = image.size();
+	let (width, height) = (size.width, size.height);
+	// a copied row is padded to 256 bytes
+	let row_bytes = (width * PIXEL_BYTES).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
+	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("image readback"), size: u64::from(row_bytes * height), usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
 	let layout = wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row_bytes), rows_per_image: Some(height) };
 	encoder.copy_texture_to_buffer(image.as_image_copy(), wgpu::TexelCopyBufferInfo { buffer: &readback, layout }, size);
 	queue.submit([encoder.finish()]);

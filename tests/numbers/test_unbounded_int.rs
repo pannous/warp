@@ -112,3 +112,12 @@ fn test_multi_limb_division_is_fast_and_exact() {
 	is!("half = 1/2; 3^500 //(7^200 + 1)", int("3475516518550762914662807823601793779906187633587117288128683009218530"));
 	is!("half = 1/2; (2^640 - 1) % (2^320 + 12345)", 152399024);
 }
+
+// card exact-decimals: a ratio whose reducing gcd is itself a big integer is reduced too. ratio_new compared the gcd's
+// handle (negative, HANDLE_BASE) with 1, kept the unreduced ratio, and its digits doubled every step: gliding to 0.8
+// ran out of fuel after about 70 steps
+#[test]
+fn test_ratio_reduced_by_a_big_gcd() {
+	is!("x = 0.0; for i in 0..200 { x = x + (0.8 - x) / 2 }; x * 5 * 2^200 == 4 * 2^200 - 4", true);
+	is!("a = 3^50; (a * 7) / (a * 11) == 7/11", true);
+}

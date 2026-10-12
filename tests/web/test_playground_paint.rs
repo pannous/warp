@@ -4,14 +4,14 @@
 //! view_height)
 use std::process::Command;
 
-/// Runs the module in reader.js + host.js with a paint hook that says each painting's size, the page's system values
+/// Runs the module in reader.js + host.js + host-media.js (its paint) with a paint hook that says each painting's size, the page's system values
 /// (playground.js tellSystemValues) as the optional JSON after the module; the outcome as JSON
 const HOST_RUN: &str = r#"
 const { readFileSync } = await import("node:fs");
 globalThis.self = globalThis;
 const [playground, module, systemValues] = process.argv.slice(1);
 if (systemValues) self.pageSystemValues = JSON.parse(systemValues);
-const source = ["reader.js", "host.js"].map(file => readFileSync(`${playground}/${file}`, "utf8")).join("\n");
+const source = ["reader.js", "host.js", "host-media.js"].map(file => readFileSync(`${playground}/${file}`, "utf8")).join("\n");
 const runProgram = new Function(`${source}\nreturn runProgram;`)();
 const outcome = await runProgram(readFileSync(module), { paint: (pixels, width, height) => console.log(`painted ${width}×${height}`) });
 console.log(outcome.failure ?? "ran");

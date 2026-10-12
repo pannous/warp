@@ -161,6 +161,39 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    browser and in a CoreAudio render callback natively: the same code both ways, which is where wasm-first warp beats
    other languages. Needs f32 arrays without boxing (today samples cross as a list of Ints), no allocation in the
    callback, 44.1/48 kHz stereo.
+   Native first step built (card real-time, samples/signal.warp, tests/programs/test_sound_signal.rs):
+   `play_signal(hum, 2s)` calls the program's `hum(t)` for every sample (t in seconds, at sample_rate), mono. The
+   host word (host/native.rs played_signal) calls the export typed (f64) -> f64; music_words.rs makes the function
+   of floats to a float (untyped parameters `: float`, body `as float`, so `hum(t) := 3.0` works too). On warp's own
+   output (sound_engine) the samples go out in blocks of 512 queued at most 100 ms ahead of the speaker
+   (sound.rs play_signal), each block a sound of the same handle on the Mixer, so stop_sound(handle) ends it; the
+   audio callback itself only mixes (no wasm, no allocation). Headless, or on afplay, it is one sound: render_sound
+   and the tests read the same samples. The call blocks the program while it plays; `go { play_signal(…) }` plays it
+   beside it. State between samples lives in globals declared `as float`: an exact decimal global
+   (`global level = 0.0`) is an exact ratio whose denominator gains about a bit a sample (the blow-up beyond that,
+   unreduced ratios, is fixed: card exact-decimals), so floats stay the way for DSP state.
+   About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
+   Block-wise built (samples/signal_blocks.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
+   a block, block a linear float array (notes/linear_arrays.md) of 512 cells to write, t its first sample's time.
+   music_words.rs with_block_signals declares `linear fill·block = float[512]` and `fill·blocks(t: float)`, which
+   calls fill with it (so fill's parameter is the linear array), and writes the call out as std_io("sound", "blocks",
+   [fill·blocks, linear_address(fill·block), …]); the host (native.rs played_blocks) calls fill·blocks and reads the
+   cells straight from memory. 20 s of a sine: 2.0 s against play_signal's 4.6 s (debug, compile included). Cells are
+   f64 (linear arrays have no f32 yet); the host takes them as they are.
+   Stereo built (undoable default): `play_signal([left, right], 2s)` calls left(t) then right(t) for each sample;
+   `play_blocks(fill, 2s)` with fill of three parameters `(left, right, t)` gets two blocks (fill·block, fill·right).
+   The host takes one value or a pair (native.rs channels_of) and interleaves the frames (sound.rs play_blocks).
+   `play hum for 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
+   one of the program's functions is play_signal of it (one parameter, or a pair [left, right] of such), play_blocks
+   (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
+   Browser first step built (tests/web/test_signal_sound.rs): host-files.js STD_ADAPTERS.sound.signal / blocks compute
+   all samples at once in the program's Worker (the function as closure_apply's callable, blocks read from memory)
+   and play them as one sound (host.js holder.sounded), as natively headless. Paced once the page was clicked or
+   typed in (window_open, so audible): the Worker computes a block when the voice holds less than 100 ms
+   (playedSignal, host-tasks.js soundsQueued), each block a sound of the signal's handle (stop_sound ends them all),
+   the wait a sleep without runaway time. Unclicked (CI) everything at once, one sound.
+   Still to build: an AudioWorklet running the module (glitch-free under a busy Worker), input (a microphone as the
+   signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 
@@ -218,3 +251,16 @@ output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase
 tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
 own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
 and buses as values, shared buses between voices, compressor, EQ, effects on a running handle (card sound-pipe-graph).
+
+## Native output built (card native-sound, 2026-10-12, src/sound_engine.rs, tests/programs/test_sound_engine.rs)
+On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`
+holds the sounds, each converted to the device's rate (linear interpolation) and channels, starting at its frame;
+the device callback calls `fill`, which mixes them, advances the frame and drops finished ones. `sound.rs scheduled()`
+gives an Instant; the frame is (instant + 60 ms lead − stream start) × rate, so back-to-back sounds stay contiguous
+to the sample and `at 2 beats` lands to the sample live, not only in render_sound. The callback never waits:
+`try_lock`, silence when a queueing sound holds the lock. `fade_sound(handle, gain, seconds)` (lib/sound.warp) ramps a
+playing sound's gain linearly, frame by frame, 0 = all handles. Fallbacks: no output device → afplay as before
+(fade_sound then fails loudly); not audible (WARP_NO_WINDOW, CI) → nothing plays, the WAVs are still collected for
+render_sound. Not yet: Linux/Windows output (cpal supports them; only the macOS dependency is declared), fade_sound in
+the browser (playground: a GainNode per sound with linearRampToValueAtTime), fades in render_sound, and DSP in the
+callback itself (card real-time builds on this Mixer).

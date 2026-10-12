@@ -229,6 +229,12 @@ pub fn is_library_word(name: &str) -> bool {
 	is_runtime_word(name) || canonical_word(name).is_some()
 }
 
+/// A function every program has: a library word, an extremum, a rounding function or a text builtin. A class's method
+/// of that name adds to it, other values keep calling it (notes/dispatch.md "Methods")
+pub fn is_standard_function(name: &str) -> bool {
+	is_library_word(name) || crate::min_max::is_extremum(name) || crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::wasm_emitter::text_builtins::is_text_builtin(name)
+}
+
 /// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
 /// does: `word == reverse word` compares with `reverse(word)`, `1 == first xs` with `first(xs)`. A type word stays a
 /// type: `x: list int`
@@ -267,8 +273,11 @@ pub fn lower(node: Node) -> Node {
 	let node = bind_read_data_objects(node);
 	let context = crate::analyzer::function_context(&node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
-	// `sum·point`, a class's own `sum` (traits.rs witness, an overload): the program defines `sum`, no library word
-	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).map(|(operation, _)| operation.to_string()).collect();
+	// `sum·1` (an arity overload), `sum·point` of a declared trait's operation: the program defines `sum`, no library
+	// word; a class's method `sum·Bag` of the generic function sum keeps the library's sum for other values
+	let traits = crate::traits::Traits::of(&node);
+	let replaces_word = |operation: &str, variant: &str| variant.parse::<usize>().is_ok() || traits.is_operation(operation);
+	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).filter(|(operation, variant)| replaces_word(operation, variant)).map(|(operation, _)| operation.to_string()).collect();
 	shadowed.extend(variants);
 	collect_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
@@ -376,8 +385,8 @@ fn count_in(items: &[Node]) -> Option<Node> {
 	Some(substitute(substitute(parse(template), COUNT_HAYSTACK, &haystack), COUNT_NEEDLE, needle))
 }
 
-/// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding or libm
-/// function the program does not define. Runs first, so the passes that know these calls see their plain form; user
+/// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding, extremum,
+/// text or libm function the program does not define. Runs first, so the passes that know these calls see their plain form; user
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
 	let context = crate::analyzer::function_context(&node);
@@ -385,12 +394,16 @@ pub fn lower_function_methods(node: Node) -> Node {
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
-	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
+	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
+	let is_builtin = |name: &str, arguments: usize| {
+		let is_text_builtin = crate::wasm_emitter::text_builtins::text_builtin_kind(name, arguments + 1).is_some();
+		crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::min_max::is_extremum(name) || is_text_builtin || is_libm(name)
+	};
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
 	let node = list_constructor_calls(node, &defined);
-	function_methods_as_calls(node, &|name, arguments| (is_builtin(name) && !defined.contains(name)) || takes_receiver(name, arguments))
+	function_methods_as_calls(node, &|name, arguments| (is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments))
 }
 
 /// Python's `list()`: the empty list, as `[]` parses; Kotlin's `listOf(1, 2)`, `arrayOf`, `mutableListOf`: the list
@@ -409,8 +422,7 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 				false if is_list_word => Node::List(items.into_iter().map(|item| list_constructor_calls(item, defined)).collect(), Bracket::Round, Separator::None), // `list(x)` is `x as list`
 				false => Node::List(elements.into_iter().map(|element| list_constructor_calls(element, defined)).collect(), Bracket::Square, Separator::Colon),
 			}
-		}
-		other => other.map_children(|child| list_constructor_calls(child, defined)),
+		}		other => other.map_children(|child| list_constructor_calls(child, defined)),
 	}
 }
 
@@ -1015,14 +1027,11 @@ impl Lowering {
 			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
 			return Some(Node::List(call, Bracket::Round, Separator::None));
 		}
-		// `s.trim()`, `s.byte_at(2)`: a text builtin with the receiver as first argument
-		if is_called && crate::wasm_emitter::text_builtins::text_builtin_kind(name, arguments.len() + 1).is_some() {
-			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
-			return Some(Node::List(call, Bracket::Round, Separator::None));
-		}
-		// `x.string`, `t.int`, `x.float()`: the conversion `string(x)`, as written in call form
-		// (not `xs.number`, a count, nor `e.text`, a common field)
-		if CONVERSION_METHODS.contains(&name.as_str()) && arguments.is_empty() && !self.instances.is_declared_field(name) {
+		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
+		// only the common conversions (not `e.text`, a common field); a counting word stays a count (`xs.number()`)
+		let is_type_word_call = is_called && crate::analyzer::type_word_kind(name).is_some() && counting_method(name, &self.context).is_none();
+		let is_conversion = CONVERSION_METHODS.contains(&name.as_str()) || is_type_word_call;
+		if is_conversion && arguments.is_empty() && !self.instances.is_declared_field(name) {
 			return Some(Node::List(vec![word_node.clone(), receiver.clone()], Bracket::Round, Separator::None));
 		}
 		let is_known = counting_method(name, &self.context).is_some() || is_list_mutating_method(name) || self.context.user_functions.contains_key(name);

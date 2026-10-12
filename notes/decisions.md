@@ -7,6 +7,12 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- site-budget (user, via warp-supervisor): the hello-world site budget is raised modestly to today's size plus 2 KB,
+  not doubled (the 23 KB was the measured 21.9 KB plus headroom, nothing deeper). warp-bundle-size finds what grew
+  every program's app.wasm and host.js and lowers the budget again as bytes are won back (a ratchet).
+- no-executable-by-default (user, via warp-supervisor; replaces P103's default): a plain `warp file.warp` run no
+  longer writes the standalone executable next to the file; WARP_EXECUTABLE=1 turns it back on, `warp build` still
+  makes it (worker warp-executable-flag).
 - play-dispatch (warp-sound default, batch 240; user asked for no snake case): `play hum for 2s` dispatches on what
   hum is: a function of t, or a pair [left, right] of them, plays as a signal; a block function plays block-wise. No
   new word. Stereo: `play_signal([left, right], 2s)` or a fill with three parameters (left, right, t).
