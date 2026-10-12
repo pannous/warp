@@ -3,6 +3,8 @@
 //! decoration), a form field a label (label{for:…}, a label around it, aria-label, aria-labelledby or title; a
 //! placeholder alone vanishes on typing), a button or link something to say, a link an href, headings no skipped level,
 //! ids no duplicates, html a lang.
+//! Markup that would render wrong is warned about the same way (card our-html): a key that is no attribute (shown as
+//! text), a handler of no event, an input type the browser does not know, content of an element that takes none.
 //! Markup built at run time (a computed tag, card web-a11y-runtime) is checked as the run hands it back: its problems
 //! that the markup as written did not show are runtime warnings, each once a run.
 
@@ -27,6 +29,36 @@ const HEADINGS: [&str; 6] = ["h1", "h2", "h3", "h4", "h5", "h6"];
 /// `on click { … }` among an element's items is a handler, not content
 const HANDLER_WORD: &str = "on";
 const RUN_TIME_NOTICE: &str = "markup built at run time";
+const INPUT: &str = "input";
+const TYPE: &str = "type";
+/// the keys of an element warp reads itself before rendering (element_events.rs; transitions.rs has its own) and
+/// one lib/markup.warp writes as an attribute besides html_attributes
+const WARP_ELEMENT_WORDS: [&str; 2] = ["bind", "key"];
+const OWN_ATTRIBUTE_PREFIXES: [&str; 2] = ["data-", "aria-"];
+const INPUT_TYPES: [&str; 22] = [
+	"button",
+	"checkbox",
+	"color",
+	"date",
+	"datetime-local",
+	"email",
+	"file",
+	"hidden",
+	"image",
+	"month",
+	"number",
+	"password",
+	"radio",
+	"range",
+	"reset",
+	"search",
+	"submit",
+	"tel",
+	"text",
+	"time",
+	"url",
+	"week",
+];
 
 thread_local! {
 	/// The problems of the markup as written, said where it is written: the markup a run hands back does not repeat them
@@ -86,6 +118,7 @@ fn problems<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
 		.iter()
 		.filter_map(|element| element_problem(element, &labeled_ids))
 		.collect();
+	problems.extend(elements.iter().flat_map(markup_mistakes));
 	problems.extend(skipped_headings(elements));
 	problems.extend(duplicate_ids(elements));
 	problems
@@ -98,6 +131,8 @@ struct Element<'a> {
 	attributes: Vec<(String, Option<String>)>,
 	has_content: bool,
 	inside_label: bool,
+	/// the events of its handlers (`on click {…}`)
+	events: Vec<String>,
 }
 
 impl Element<'_> {
@@ -168,6 +203,122 @@ fn attribute_parts(item: &Node) -> Option<(String, Option<String>)> {
 	Some((name.clone(), value))
 }
 
+/// An element's items without its handlers (`on click {…}`, as a line of its own or as the items `on`, `click: {…}`),
+/// the events they handle and their bodies
+fn without_handlers(items: Vec<&Node>) -> (Vec<&Node>, Vec<String>, Vec<&Node>) {
+	let (mut kept, mut events, mut bodies) = (vec![], vec![], vec![]);
+	let mut index = 0;
+	while index < items.len() {
+		let item = items[index];
+		let handler: Vec<&Node> = match item.drop_meta() {
+			Node::List(line, _, _) if is_handler(item) => line.iter().skip(1).collect(),
+			_ if item.is_symbol(HANDLER_WORD) => match items.get(index + 1).map(|event| event.drop_meta()) {
+				Some(Node::Symbol(_)) => items[index + 1..items.len().min(index + 3)].to_vec(),
+				Some(Node::Key(_, Op::Colon, _)) => vec![items[index + 1]],
+				_ => vec![],
+			},
+			_ => {
+				kept.push(item);
+				index += 1;
+				continue;
+			}
+		};
+		index += match item.drop_meta() {
+			Node::List(..) => 1,
+			_ => 1 + handler.len(),
+		};
+		for part in handler {
+			match part.drop_meta() {
+				Node::Key(event, Op::Colon, body) => {
+					events.extend(event_word(event));
+					bodies.push(body.as_ref());
+				}
+				Node::Symbol(event) => events.push(event.clone()),
+				_ => bodies.push(part),
+			}
+		}
+	}
+	(kept, events, bodies)
+}
+
+fn event_word(event: &Node) -> Option<String> {
+	match event.drop_meta() {
+		Node::Key(event, Op::Colon, _) => event_word(event),
+		Node::Symbol(event) => Some(event.clone()),
+		_ => None,
+	}
+}
+
+/// The markup an element as written would render wrong, each with the near name as its fix
+fn markup_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
+	let near = |word: &str, names: Vec<String>, otherwise: String| {
+		crate::extensions::strings::near_miss(word, names).unwrap_or(otherwise)
+	};
+	let mut mistakes = vec![];
+	// a style sheet's items are rules, no attributes
+	if element.tag == STYLE {
+		return mistakes;
+	}
+	for (name, _) in &element.attributes {
+		let renders = crate::markup::names_attribute(name)
+			|| WARP_ELEMENT_WORDS.contains(&name.as_str())
+			|| crate::transitions::ELEMENT_WORDS.contains(&name.as_str())
+			|| OWN_ATTRIBUTE_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
+		if !renders {
+			let fix = near(name, crate::markup::attribute_names().to_vec(), format!("data-{name}"));
+			mistakes.push((
+				element.node,
+				format!("{name} is no attribute of {}: it shows as text", element.tag),
+				fix,
+			));
+		}
+	}
+	let events = || {
+		crate::event_signals::PAGE_EVENTS
+			.iter()
+			.map(|event| event.to_string())
+			.collect::<Vec<_>>()
+	};
+	for event in element
+		.events
+		.iter()
+		.filter(|event| !crate::event_signals::PAGE_EVENTS.contains(&event.as_str()))
+	{
+		let message = format!("{event} is no event of {}: the handler shows as text", element.tag);
+		mistakes.push((
+			element.node,
+			message,
+			near(event, events(), format!("one of {}", events().join(", "))),
+		));
+	}
+	if element.tag == INPUT {
+		if let Some(kind) = element
+			.attribute(TYPE)
+			.filter(|kind| !INPUT_TYPES.contains(&kind.as_str()))
+		{
+			let fix = near(
+				&kind,
+				INPUT_TYPES.iter().map(|kind| kind.to_string()).collect(),
+				"text".to_string(),
+			);
+			mistakes.push((
+				element.node,
+				format!("{kind} is no input type: the browser shows a text field"),
+				fix,
+			));
+		}
+	}
+	if element.has_content && crate::markup::is_void_element(&element.tag) {
+		let fix = format!("the content beside {}, or an element that holds it", element.tag);
+		mistakes.push((
+			element.node,
+			format!("{} takes no content: it is dropped", element.tag),
+			fix,
+		));
+	}
+	mistakes
+}
+
 fn is_handler(item: &Node) -> bool {
 	matches!(item.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HANDLER_WORD))
 }
@@ -189,7 +340,7 @@ fn says_something(item: &Node) -> bool {
 
 fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>) {
 	if let Some((tag, content, head_attributes)) = element_parts(node) {
-		let items = content_items(content);
+		let (items, events, handler_bodies) = without_handlers(content_items(content));
 		found.push(Element {
 			node,
 			tag: tag.to_string(),
@@ -200,14 +351,18 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 				.collect(),
 			has_content: items
 				.iter()
-				.any(|item| attribute_parts(item).is_none() && !is_handler(item) && says_something(item)),
+				.any(|item| attribute_parts(item).is_none() && says_something(item)),
 			inside_label,
+			events,
 		});
 		if tag == STYLE {
 			return;
 		}
 		let inside_label = inside_label || tag == LABEL;
-		return items.into_iter().for_each(|item| collect(item, inside_label, found));
+		return items
+			.into_iter()
+			.chain(handler_bodies)
+			.for_each(|item| collect(item, inside_label, found));
 	}
 	match node.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, found)),

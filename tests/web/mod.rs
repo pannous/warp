@@ -55,6 +55,7 @@ mod test_keyed_lists;
 mod test_keyword_registry; // card where-infix
 mod test_markup_holes;
 mod test_markup_lines; // card todo-app
+mod test_markup_mistakes; // card our-html
 mod test_markup_renderer;
 mod test_markup_scripts;
 mod test_markup_tags;

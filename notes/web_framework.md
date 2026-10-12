@@ -169,6 +169,10 @@ Each step is useful on its own and is what the next ones stand on.
 - `select{ bind: choice }` (card web-bind-select): lib/markup.warp hands a select's value to its options (html_render's
   `chosen`), and the option whose value, else text, equals it is `selected`, from the first render on; later the page
   sets select.value (morphElement). Sample samples/select_binding.warp.
+- Markup mistakes (card our-html, accessibility.rs markup_mistakes, beside the a11y warnings): a key that is no
+  attribute (`hreff:`, shown as text; fix the near attribute, else `data-…`), a handler of no page event (`on clik`), an
+  input type the browser does not know (`nubmer`), content of a void element (`img{ "x" }`, dropped). Handlers are taken
+  out of an element's items first, so `input{ on input {…} }` no longer reads its event as a nested input.
 - Options from a list (card select-shorthand, select_options.rs, a source pass before markup_tags): a list item in a
   select is one `option{}` per value (`select{ bind: fruit; ["apple" "pear"] }`), a map item `"s": "small"` the option
   `option{ value: "s" "small" }`, a list variable `select{ fruits }` the loop `for … in fruits { option{…} }`. A list

@@ -23,6 +23,8 @@ const LEAVE: &str = "leave";
 pub const LEAVE_ATTRIBUTE: &str = "data-warp-leave";
 /// The element words whose CSS words lower here: the inline style's transition and animation, the page's leave
 const CSS_WORDS: [&str; 3] = [TRANSITION, ANIMATION, LEAVE];
+/// The element words this pass reads, no attributes as written
+pub const ELEMENT_WORDS: [&str; 4] = [TRANSITION, ANIMATION, LEAVE, STARTING_STYLE];
 /// CSS timing words that may follow a transition's duration as words of their own (`opacity 200ms ease-out`)
 const TIMING_WORDS: [&str; 15] = [
 	"ease",
