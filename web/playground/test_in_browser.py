@@ -84,7 +84,8 @@ CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the sha
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card shader-brush: samples/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
 BRUSH = "(samples/shader_brush colors the paper under the pointer)"
-BRUSH_FRAMES_MS = 1500  # the sample paints a frame every 16 ms; a slow software GPU takes longer per frame
+BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU takes far longer for its 1280×800
+BRUSH_POLL_MS = 250
 PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
@@ -377,22 +378,29 @@ def brush_wrong():
 	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper"""
 	run_sample("shader_brush")
 	shown = browser("eval", f"""(async () => {{
-		const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
-		if (!canvas) return "no canvas";
-		const bounds = canvas.getBoundingClientRect();
-		const middle = {{ clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2, bubbles: true }};
-		canvas.dispatchEvent(new PointerEvent("pointermove", middle));
-		await new Promise(done => setTimeout(done, {BRUSH_FRAMES_MS}));
-		const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
-		copy.drawImage(canvas, 0, 0);
-		const failed = document.getElementById("status").classList.contains("failed") ? document.getElementById("status").textContent : "";
-		return `${{[...copy.getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data.slice(0, 3)].join(" ")}} ${{failed}}`;
+		const pixel = (canvas, x, y) => {{
+			const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
+			copy.drawImage(canvas, 0, 0);
+			return [...copy.getImageData(x, y, 1, 1).data.slice(0, 3)];
+		}};
+		const page = () => `value ${{document.getElementById("value").textContent}} status ${{document.getElementById("status").textContent}}`;
+		for (let waited = 0; waited < {BRUSH_WAIT_MS}; waited += {BRUSH_POLL_MS}) {{
+			const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
+			if (canvas) {{
+				const bounds = canvas.getBoundingClientRect();
+				canvas.dispatchEvent(new PointerEvent("pointermove", {{ clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2, bubbles: true }}));
+				const middle = pixel(canvas, canvas.width >> 1, canvas.height >> 1);
+				if (Math.min(...middle) < {PAPER_FROM}) return "colored";
+				if (waited + {BRUSH_POLL_MS} >= {BRUSH_WAIT_MS}) return `middle ${{middle}} corner ${{pixel(canvas, 0, 0)}} gpu ${{canvas.gpu === true}} ${{canvas.width}}×${{canvas.height}} ${{page()}}`;
+			}}
+			await new Promise(done => setTimeout(done, {BRUSH_POLL_MS}));
+		}}
+		return `no canvas ${{page()}}`;
 	}})()""")
 	if NO_GPU in shown:
 		print(f"skip {BRUSH}: this browser {NO_GPU}")
 		return []
-	rgb = [int(channel) for channel in json.loads(shown).split()[:3]] if shown.startswith('"') and json.loads(shown)[:1].isdigit() else None
-	return [] if rgb and min(rgb) < PAPER_FROM else [f"the middle of the canvas under the pointer: {shown!r}, expected a color, not paper"]
+	return [] if "colored" in shown else [f"the middle of the canvas under the pointer: {shown!r}, expected a color, not paper"]
 
 
 def completion_keys_wrong():
