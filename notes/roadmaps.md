@@ -18,6 +18,10 @@ Rules
   note). A topic whose sub-cards are all Done but whose note still lists open items is not done.
 - A new plan note gets its topic card in the same commit; a worker that finds a plan note without one creates it.
 - Roadmap of the whole project = `todo list` filtered to topic cards; no separate roadmap file to keep in sync.
+- A sub-card that is a regular chore rather than a one-off step gets a period: `todo repeat <card> <days>`. The daily
+  cron `todo recur` moves it from Done back to Next once that many days have passed (~/dev/bin/notes/todo-board.md).
+  The cleanup topic repeats: cargo-fmt and clippy-reports every 7 days, cleanup-dead-scan every 14 days, and the area
+  sweeps, big files, stale notes, probe scripts and closed lists every 30 days.
 
 Applied first to notes/web_framework.md (topic card web-framework, 2026-10-12; notes/server_routes.md joins it), then
 the same day to: signals.md → signals, sound.md → sound, type_theory.md → type-theory, classes.md → class-system,
