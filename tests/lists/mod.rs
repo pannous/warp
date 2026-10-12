@@ -1,5 +1,6 @@
 mod test_aliased_changes; // card aliased-list
 mod test_append_words;
+mod test_auto_linear_floats; // card auto-linear-floats
 mod test_bare_list_assignment;
 mod test_byte_size;
 mod test_captured_call_lists;

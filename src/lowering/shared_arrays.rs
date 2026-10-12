@@ -8,7 +8,8 @@
 //! Linear arrays (notes/linear_arrays.md): `linear xs = int[n]`, `linear xs = float[n]` are rewritten the same way into
 //! the module's own words over a block of linear memory (`linear_get`, `linear_set` … in wasm_emitter/linear_arrays.rs);
 //! they stay in their task's memory, so a `go` cannot take one. Declaring one is discouraged: the compiler picks where
-//! number lists live by itself; plain `xs = float[n]` arrays paired by dot or `.*` become linear ones (picked_linear).
+//! number lists live by itself; plain `xs = float[n]` arrays paired by dot or `.*`, or mapped by a numeric kernel,
+//! become linear ones (picked_linear).
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
@@ -139,9 +140,10 @@ pub fn lower(node: Node) -> Node {
 	.node(node, None)
 }
 
-/// Plain `xs = float[n]` arrays paired by dot or `.*` with another float array, every other use one linear arrays
-/// support (cells, count, `for x in xs`): declared `linear`, so dot runs as linear_dotf over the blocks (10^6: 3 ms
-/// instead of 13 ms over GC lists). The names picked, those declared linear already included
+/// Plain `xs = float[n]` arrays paired by dot or `.*` with another float array, or mapped by a numeric kernel, every
+/// other use one linear arrays support (cells, count, `for x in xs`): declared `linear`, so dot runs as linear_dotf over
+/// the blocks (10^6: 3 ms instead of 13 ms over GC lists) and the map as one loop into a new block. The names picked,
+/// those declared linear already included
 fn picked_linear(node: Node) -> (Node, HashSet<String>) {
 	let mut assignments: HashMap<String, usize> = HashMap::new();
 	node.visit(&mut |part| {
@@ -183,7 +185,8 @@ fn float_array_assignment(node: &Node) -> Option<String> {
 	FLOAT_WORDS.contains(&element.name().as_str()).then(|| name.clone())
 }
 
-/// Whether every mention of name is one a linear array supports, and one of them pairs it with another of `picked`
+/// Whether every mention of name is one a linear array supports, and one of them pairs it with another of `picked` or
+/// maps it by a kernel
 fn only_linear_uses(node: &Node, name: &str, picked: &HashSet<String>) -> bool {
 	let (mut mentions, mut supported, mut pairings) = (0, 0, 0);
 	node.visit(&mut |part| {
@@ -210,6 +213,11 @@ fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usi
 	};
 	if let Some((receiver, _, operand)) = crate::broadcasting::element_wise_parts(part) {
 		return paired(&receiver, &operand);
+	}
+	// a numeric kernel maps a linear array as one loop into a new block (f64x2 lanes where it can)
+	if let Some((_, lambda)) = map_parts(part).filter(|(array, _)| is_name(array)) {
+		let kernel = usize::from(crate::gpu_maps::kernel(lambda).is_some());
+		return (kernel, kernel);
 	}
 	let single = match part.drop_meta() {
 		Node::Key(..) if float_array_assignment(part).as_deref() == Some(name) => true,

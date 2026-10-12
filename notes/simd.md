@@ -78,8 +78,8 @@ Measured (probes/simd/linear_map_bench.py, ns per item of one map, wasmtime unde
 So 40x for linear arrays and 8x against the automatic array, almost all from the typed loop over memory; f64x2 itself
 adds 5-15% here. The rest is warp's engine settings, not the kernel: the raw f64x2 loop is 0.17-0.4 ns (table above),
 and fuel plus NaN canonicalization (the Interviewer question above) apply to every lane; each map also takes fresh
-zeroed pages (blocks are never freed). Next: the automatic array choosing linear memory for float maps by itself (card auto-linear-floats), then
-`go` splitting a kernel into tasks over shared arrays (card go-split-kernel).
+zeroed pages (blocks are never freed). The automatic array chooses linear memory for float maps by itself (card auto-linear-floats, notes/linear_arrays.md).
+Next: `go` splitting a kernel into tasks over shared arrays (card go-split-kernel).
 
 ## Steps
 1. (smallest, next) Typed map kernel: `xs.map(x => numeric body)` over a float array known statically as one emits
