@@ -1,0 +1,4 @@
+seen = "none"
+on key { if key == ESC { seen = "esc" } }
+emit key{key:"Escape"}
+seen

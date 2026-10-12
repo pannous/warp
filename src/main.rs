@@ -276,14 +276,20 @@ fn served_program(arguments: &[String]) -> Result<(&str, u16), String> {
 	Ok((file, port))
 }
 
-/// The program served at the port until it is stopped; `reason` says why a plain `warp app.warp` serves
+/// The program served at the port until it is stopped; `reason` says why a plain `warp app.warp` serves, which opens
+/// its page in the browser from a terminal (`warp serve` doesn't)
 #[cfg(not(test))]
-fn serve_file(path: &str, port: u16, reason: &str) -> ! {
+fn serve_file(path: &str, port: u16, reason: &str, open: bool) -> ! {
 	let code = source_of(path);
 	if !warp::serve::serves_itself(&code) {
 		println!("serving http://localhost:{port} ({reason}`warp run {path}` runs it once without serving)");
 	}
 	diagnostic::show_lines_of(&code);
+	if open && opens_browser() {
+		warp::web_server::when_listening(|address| {
+			warp::dev_server::open_in_browser(address);
+		});
+	}
 	print_and_exit(warp::pipeline::serving_at(port, || eval(path)))
 }
 
@@ -365,7 +371,7 @@ fn run_command(args: &[String]) {
 		register_file_type();
 	} else if args[1] == SERVE_COMMAND {
 		match served_program(&args[2..]) {
-			Ok((path, port)) => serve_file(path, port, ""),
+			Ok((path, port)) => serve_file(path, port, "", false),
 			Err(failure) => fail(format!("warp serve: {failure}")),
 		}
 	} else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
@@ -461,7 +467,7 @@ fn run_command(args: &[String]) {
 		}
 		warp_runtime::system_signals::allow_staying(); // a program with a live timer stays after main
 		if !only_run && warp::serve::serves(&source_of(path)) {
-			serve_file(path, SERVE_PORT, "routes found; ");
+			serve_file(path, SERVE_PORT, "routes found; ", true);
 		}
 		// a page shows in a window, as `warp app` shows it; piped or redirected it prints its HTML
 		if shows_in_window(&source_of(path)) {
@@ -865,7 +871,7 @@ fn shows_in_window(code: &str) -> bool {
 	io::stdout().is_terminal() && warp::paint::shows_windows() && warp::serve::shows_page(code)
 }
 
-/// `warp dev` run from a terminal opens its page (card dev-opens-browser); piped, under WARP_NO_WINDOW or CI it doesn't
+/// `warp dev` and a served program run from a terminal open their page (cards dev-opens-browser, samples-serving); piped, under WARP_NO_WINDOW or CI it doesn't
 fn opens_browser() -> bool {
 	io::stdout().is_terminal() && warp::paint::shows_windows()
 }

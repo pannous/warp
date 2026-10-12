@@ -38,6 +38,8 @@ pub const CLIPBOARD_COUNT: &str = "clipboard count";
 pub const MOUSE_X: &str = "mouse_x";
 pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
+/// Whether a key is held now, over the paint window or the page (card keyboard-state): `on key` hears each press
+pub const KEY_DOWN: &str = "key_down";
 /// Whether a window shows the pictures: natively the paint window until it closes (no before the first paint and
 /// headless), on a page its canvas, always; `while window_open { … }` is a drawing loop that ends with its window
 pub const WINDOW_OPEN: &str = "window_open";
@@ -51,7 +53,12 @@ pub const GPU_DRAWING: &str = "gpu_drawing";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
 /// (lowering/system_signals.rs); not a value a program names
 pub const KEY_PRESSED: &str = "key_pressed";
-pub const SYSTEM_VALUES: [(&str, bool); 12] = [
+/// Whether a click over the paint window is left to read (1, then it is the click read) or none (0), each click read
+/// once, and that click's place: natively `on click {…}` (lowering/system_signals.rs); not values a program names
+pub const CLICK_PRESSED: &str = "click_pressed";
+pub const CLICK_X: &str = "click_x";
+pub const CLICK_Y: &str = "click_y";
+pub const SYSTEM_VALUES: [(&str, bool); 13] = [
 	(BATTERY, false),
 	(CHARGING, true),
 	(ONLINE, true),
@@ -60,6 +67,7 @@ pub const SYSTEM_VALUES: [(&str, bool); 12] = [
 	(MOUSE_X, false),
 	(MOUSE_Y, false),
 	(MOUSE_DOWN, true),
+	(KEY_DOWN, true),
 	(WINDOW_OPEN, true),
 	(VIEW_WIDTH, false),
 	(VIEW_HEIGHT, false),

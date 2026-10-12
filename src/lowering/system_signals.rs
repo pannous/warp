@@ -6,7 +6,8 @@
 //! Frames (card frame-event): `on frame {body}` is the handler `on·every·N` started by `signal_frame(N, 16)`, which
 //! runs it each frame while the paint window shows and ends with it (once without a window). Natively, `on key {…}`
 //! (card native-keys) gets the keys pressed over the paint window: a frame handler reads each press
-//! (`system_value("key_pressed")`) and emits `key{key: "a"}` as the playground page does, arrows and Enter by name.
+//! (`system_value("key_pressed")`) and emits `key{key: "a"}` as the playground page does, arrows and Enter by name;
+//! `on click {…}` (card native-window) likewise gets the clicks, `click{x: 30, y: 40}` in the painted frame's pixels.
 //! `exit` and `exit()` as statements are `exit(0)` (P121: the host word ends the run with that code).
 //! Channels (src/channels.rs): `on message from "chat" {body}` (`on message {body}` for the channel "warp") is the timer
 //! handler `on·every·0() := {global …; while channel_pending(0) > 0 { event = channel_next(0); body }}`, started by
@@ -41,6 +42,15 @@ const KEYS_TEMPLATE: &str = "on frame {
 		NAMED
 		emit key{key: NAME}
 		CODE = system_value(\"key_pressed\")
+	}
+}";
+/// Each click over the paint window, where the button went down
+#[cfg(feature = "native")]
+const CLICK_EVENT: &str = "click";
+#[cfg(feature = "native")]
+const CLICKS_TEMPLATE: &str = "on frame {
+	while system_value(\"click_pressed\") != 0 {
+		emit click{x: system_value(\"click_x\"), y: system_value(\"click_y\")}
 	}
 }";
 #[cfg(feature = "native")]
@@ -88,20 +98,36 @@ pub fn lower(program: Node) -> Node {
 		.filter(|verb| !defines(&program, verb))
 		.collect();
 	let program = broadcasts(program, &verbs);
-	lower_timers(with_window_keys(program))
+	lower_timers(with_window_events(program))
 }
 
-/// Natively, a program with `on key {…}` gets the paint window's key presses (KEYS_TEMPLATE); a page raises key itself
+/// Natively, a program with `on key {…}` or `on click {…}` gets the paint window's key presses (KEYS_TEMPLATE) and
+/// clicks (CLICKS_TEMPLATE); a page raises them itself
 #[cfg(feature = "native")]
-fn with_window_keys(program: Node) -> Node {
+fn with_window_events(program: Node) -> Node {
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
-	let listener = statements
-		.iter()
-		.position(|statement| event_listener(statement, KEY_EVENT).is_some());
-	let Some(listener) = listener else { return program };
 	if crate::pipeline::is_for_a_page() || crate::event_signals::serves_its_page(&statements) {
 		return program;
 	}
+	let mut listened = false;
+	for (event, reader) in [(KEY_EVENT, keys_reader as fn() -> Node), (CLICK_EVENT, clicks_reader)] {
+		let listener = statements
+			.iter()
+			.position(|statement| event_listener(statement, event).is_some());
+		if let Some(listener) = listener {
+			// right after the listener: the program's last statement stays its value
+			statements.insert(listener + 1, reader().drop_meta().clone());
+			listened = true;
+		}
+	}
+	if !listened {
+		return program;
+	}
+	Node::List(statements, bracket, separator)
+}
+
+#[cfg(feature = "native")]
+fn keys_reader() -> Node {
 	let mut bindings = std::collections::HashMap::from([
 		("CODE".to_string(), symbol("key·code")),
 		("NAME".to_string(), symbol("key·name")),
@@ -118,15 +144,17 @@ fn with_window_keys(program: Node) -> Node {
 		"NAMED".to_string(),
 		Node::List(named, Bracket::None, Separator::Newline),
 	);
-	let reader = crate::law::substitute(&crate::warp_parser::parse(KEYS_TEMPLATE), &bindings);
-	// right after the listener: the program's last statement stays its value
-	statements.insert(listener + 1, reader.drop_meta().clone());
-	Node::List(statements, bracket, separator)
+	crate::law::substitute(&crate::warp_parser::parse(KEYS_TEMPLATE), &bindings)
 }
 
-/// The browser compiler's programs are for a page, which raises key itself
+#[cfg(feature = "native")]
+fn clicks_reader() -> Node {
+	crate::warp_parser::parse(CLICKS_TEMPLATE)
+}
+
+/// The browser compiler's programs are for a page, which raises key and click itself
 #[cfg(not(feature = "native"))]
-fn with_window_keys(program: Node) -> Node {
+fn with_window_events(program: Node) -> Node {
 	program
 }
 

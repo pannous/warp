@@ -31,7 +31,7 @@ pub const SOFT_KEYWORDS: [&str; 12] = [
 ];
 /// Keyword-like words in neither list: the playground editor colors them like soft keywords (web/playground/keywords.py
 /// makes keywords.js; it also colors every `const …_KEYWORD: &str` in src/, so a pass registers its word by that name). Display only: P165 gives them no meaning; moving one into a list above is a user decision
-pub const HIGHLIGHTED_WORDS: [&str; 59] = [
+pub const HIGHLIGHTED_WORDS: [&str; 62] = [
 	"try",
 	"catch",
 	"except",
@@ -83,6 +83,9 @@ pub const HIGHLIGHTED_WORDS: [&str; 59] = [
 	"meta",
 	"raise",
 	"throw",
+	"fail",
+	"panic",
+	"warn",
 	"require",
 	"and",
 	"or",

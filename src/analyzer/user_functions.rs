@@ -185,7 +185,7 @@ pub(super) fn infer_function_return_kind(
 		return Kind::List; // used whole, a tuple function's values are packed into a list
 	}
 	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
-	// `return error("…")` is the failure path: it does not decide what the function returns
+	// `return error "…"` is the failure path: it does not decide what the function returns
 	let is_error = |value: &Node| {
 		let value = match value.drop_meta() {
 			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol("return") => &items[1],

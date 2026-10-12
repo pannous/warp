@@ -49,7 +49,7 @@ def apply(name, arg) {
     if name == "abs" { return abs(arg) }
     if name == "log" { return log(arg) }
     if name == "exp" { return exp(arg) }
-    return error("Unknown function: " + name)
+    return error "Unknown function: " + name
 }
 
 def parse_factor() {
@@ -79,7 +79,7 @@ def parse_factor() {
         }
         if name == "pi" { return 3.14159265359 as float }
         if name == "e" { return 2.71828182846 as float }
-        return error("Unknown constant: " + name)
+        return error "Unknown constant: " + name
     }
     return parse_number()
 }

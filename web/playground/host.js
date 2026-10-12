@@ -127,6 +127,8 @@ function programImports(holder, hooks) {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
 				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
+				// key_down: whether the page's held key (canvas.js trackKey) is any
+				if (value === "key_down") return BigInt(self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) !== 0 : 0);
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
