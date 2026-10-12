@@ -147,9 +147,10 @@ html_scoped(selectors:any, scope:any) := {
 	join(["[data-warp-scope=\"" + scope + "\"] " + trim(selector) for selector in split(selectors, ",")], ", ")
 }
 
+// CSS names are ASCII: lowered by hand, so a page carries no Unicode case table (card web-bundle-growth)
 html_kebab(name:any) := {
 	var out = ""
-	for c in name { out = if c != lower(c) then out + "-" + lower(c) else out + c }
+	for c in name { out = if c >= 'A' and c <= 'Z' then out + "-" + chr(ord(c) - ord('A') + ord('a')) else out + c }
 	out
 }
 
