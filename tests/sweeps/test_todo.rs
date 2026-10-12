@@ -1,6 +1,6 @@
-use warp::Node;
 use crate::is;
 use warp::node::types;
+use warp::Node;
 // @claude once tests here are passing, move them to the appropriate correct test file!
 
 // === If-then-else ===
@@ -51,7 +51,6 @@ fn test_index_assign_in_loop() {
 	is!("i=0;pixel=(0 0 0 0 0);while(i++<5){pixel[i]=i%2};i", 5);
 }
 
-
 #[test]
 fn test_type() {
 	// type() returns a Symbol with the type name
@@ -62,12 +61,11 @@ fn test_type() {
 	is!("x=42;type(x)", Node::Symbol("int".to_string()));
 }
 
-
 #[test]
 fn test_type_equivalence() {
-	is!("x:int=1;type(x)",Node::Symbol("int".to_string()));
-	is!("x:int=1;type(x)",types("int")); // via above
-	// is!("x:int=1;type(x)","int"); // via above
+	is!("x:int=1;type(x)", Node::Symbol("int".to_string()));
+	is!("x:int=1;type(x)", types("int")); // via above
+	                                   // is!("x:int=1;type(x)","int"); // via above
 }
 
 #[test]
@@ -76,14 +74,11 @@ fn test_type_annotated() {
 	is!("x:int=1;type(x)", Node::Symbol("int".to_string()));
 }
 
-
 #[test]
 // P59 (user, 2026-10-05): the type is written `list of int` (decided), not `list<int>`
 fn test_array_type_generics() {
-	is!("pixels=(1,2,3);type(pixels)","list of int");
+	is!("pixels=(1,2,3);type(pixels)", "list of int");
 }
-
-
 
 #[test]
 fn test_array_length() {
@@ -91,13 +86,12 @@ fn test_array_length() {
 	is!("pixels=(1,2,3);count(pixels)", 3); // element count
 	is!("pixels=(1,2,3);pixels.count()", 3); // element count
 	is!("pixels=(1,2,3);pixels.count", 3); // element count methods/getters don't need ()
-	// is!("pixels=(1,2,3);pixel count", 3); // element count
-	// is!("pixels=(1,2,3);number of pixels", 3); // element count - requires natural language "of" syntax
+										// is!("pixels=(1,2,3);pixel count", 3); // element count
+										// is!("pixels=(1,2,3);number of pixels", 3); // element count - requires natural language "of" syntax
 	is!("pixels=(1,2,3);pixels.number()", 3); // element count
 	is!("pixels=(1,2,3);size(pixels) ", 3); // size is a synonym for count
-	// is!("pixels=(1,2,3);length(pixels) ", 3 * xyz); // ⚠️ byte count as node ???
+	                                     // is!("pixels=(1,2,3);length(pixels) ", 3 * xyz); // ⚠️ byte count as node ???
 }
-
 
 #[test]
 #[ignore = "user: size = count, byte_size gives bytes (P40)"]

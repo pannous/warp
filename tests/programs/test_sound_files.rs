@@ -17,7 +17,10 @@ fn sound_file(folder: &str, name: &str, bytes: &[u8]) -> PathBuf {
 
 /// What `program` prints on stderr, its stdout holding 7
 fn errors_of(program: &str) -> String {
-	let run = crate::common::warp_command().args(["--no-ask", "eval", program]).output().unwrap();
+	let run = crate::common::warp_command()
+		.args(["--no-ask", "eval", program])
+		.output()
+		.unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr).into_owned();
 	assert!(String::from_utf8_lossy(&run.stdout).contains('7'), "{errors}");
 	errors
@@ -25,16 +28,26 @@ fn errors_of(program: &str) -> String {
 
 #[test]
 fn a_music_file_plays_in_the_background() {
-	let wav = sound_file("sound-files", "beep.wav", &warp::sound::wav(&[32768, 40000, 32768], 22050));
-	assert!(errors_of(&format!("use sound\nplay \"{}\"\n7", wav.display())).contains(&format!("sound file wav: {}", wav.display())));
-	assert!(errors_of(&format!("use sound\nplay_file(\"{}\")\nstop_sound\n7", wav.display())).contains("sound file wav: "));
+	let wav = sound_file(
+		"sound-files",
+		"beep.wav",
+		&warp::sound::wav(&[32768, 40000, 32768], 22050),
+	);
+	assert!(errors_of(&format!("use sound\nplay \"{}\"\n7", wav.display()))
+		.contains(&format!("sound file wav: {}", wav.display())));
+	assert!(
+		errors_of(&format!("use sound\nplay_file(\"{}\")\nstop_sound\n7", wav.display())).contains("sound file wav: ")
+	);
 }
 
 /// card sound-file-failure: a file only its first bytes call music is decoded first (ffprobe, afinfo), so a broken one
 /// fails play instead of its player failing unseen; without a decoder on the machine only the format is checked
 #[test]
 fn a_broken_music_file_fails() {
-	for (name, bytes, format) in [("song.mp3", b"ID3\x04\x00\x00\x00\x00\x00\x00".as_slice(), "mp3"), ("song.ogg", b"OggS\x00\x02\x00\x00", "ogg")] {
+	for (name, bytes, format) in [
+		("song.mp3", b"ID3\x04\x00\x00\x00\x00\x00\x00".as_slice(), "mp3"),
+		("song.ogg", b"OggS\x00\x02\x00\x00", "ogg"),
+	] {
 		let path = sound_file("sound-files-broken", name, bytes);
 		let program = format!("play \"{}\"\n7", path.display());
 		if warp::sound::can_probe(format) {

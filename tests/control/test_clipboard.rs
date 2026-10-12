@@ -4,13 +4,18 @@
 use crate::is;
 
 fn lowered(code: &str) -> String {
-	warp::pipeline::lower(code).expect("a program that needs a module").serialize()
+	warp::pipeline::lower(code)
+		.expect("a program that needs a module")
+		.serialize()
 }
 
 #[test]
 fn a_clipboard_listener_watches_the_change_count() {
 	let code = lowered("on clipboard change { print \"copied\" }");
-	assert!(code.contains("clipboard count") && code.contains("on·shared") && code.contains("signal_every"), "{code}");
+	assert!(
+		code.contains("clipboard count") && code.contains("on·shared") && code.contains("signal_every"),
+		"{code}"
+	);
 	assert!(!code.contains("clipboard_text"), "listening reads no content: {code}");
 }
 
@@ -33,7 +38,13 @@ fn the_change_count_is_read_without_the_content() {
 #[test]
 fn writing_the_clipboard_is_the_std_word() {
 	let code = lowered("clipboard.write(\"hello there\")");
-	assert!(code.contains("std_io") && code.contains("\"clipboard\"") && code.contains("\"write\"") && code.contains("hello there"), "{code}");
+	assert!(
+		code.contains("std_io")
+			&& code.contains("\"clipboard\"")
+			&& code.contains("\"write\"")
+			&& code.contains("hello there"),
+		"{code}"
+	);
 	assert!(lowered("print clipboard.read()").contains("(clipboard_text)"));
 	is!("clipboard = {write: 3}; clipboard.write", 3);
 }

@@ -12,7 +12,8 @@ const NULL_RESULT: &str = r#"(module (func (export "main") (result anyref) ref.n
 /// a GC value that is no Node struct: an i31ref
 const I31_RESULT: &str = r#"(module (func (export "main") (result anyref) i32.const 5 ref.i31))"#;
 /// a result type no Node can come from
-const FUNCREF_RESULT: &str = r#"(module (func $f) (elem declare func $f) (func (export "main") (result funcref) ref.func $f))"#;
+const FUNCREF_RESULT: &str =
+	r#"(module (func $f) (elem declare func $f) (func (export "main") (result funcref) ref.func $f))"#;
 const NO_RESULT: &str = r#"(module (func (export "main")))"#;
 const TWO_RESULTS: &str = r#"(module (func (export "main") (result i64 i64) i64.const 1 i64.const 2))"#;
 const NO_ENTRY_POINT: &str = r#"(module (func (export "other") (result i64) i64.const 1))"#;
@@ -55,6 +56,9 @@ fn an_unreadable_result_is_an_error_not_a_panic() {
 	for wat_source in [I31_RESULT, FUNCREF_RESULT, TWO_RESULTS, NO_ENTRY_POINT] {
 		let outcome = std::panic::catch_unwind(|| read(wat_source));
 		let outcome = outcome.unwrap_or_else(|_| panic!("read_bytes panicked on {wat_source}"));
-		assert!(matches!(outcome, Err(_) | Ok(Node::Error(_))), "{wat_source} gave {outcome:?}");
+		assert!(
+			matches!(outcome, Err(_) | Ok(Node::Error(_))),
+			"{wat_source} gave {outcome:?}"
+		);
 	}
 }

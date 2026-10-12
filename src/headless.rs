@@ -27,10 +27,18 @@ const FIELDS: &str = "fields";
 /// the labels a form field is found by besides its text
 const FIELD_LABELS: [&str; 4] = ["placeholder", "aria-label", "name", "id"];
 /// elements without content or closing tag
-const VOID_ELEMENTS: [&str; 13] = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"];
+const VOID_ELEMENTS: [&str; 13] = [
+	"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr",
+];
 /// elements whose content the page does not show as text
 const HIDDEN_CONTENT: [&str; 2] = ["style", "script"];
-const ENTITIES: [(&str, &str); 5] = [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&amp;", "&")];
+const ENTITIES: [(&str, &str); 5] = [
+	("&lt;", "<"),
+	("&gt;", ">"),
+	("&quot;", "\""),
+	("&#39;", "'"),
+	("&amp;", "&"),
+];
 
 pub struct Page {
 	markup: Node,
@@ -86,13 +94,29 @@ impl Page {
 	/// The event on the element showing `label`, with `detail` as its `event` (and the element's component instance)
 	fn fire(&mut self, event: &str, label: &str, mut detail: Map<String, Value>) -> Result<(), String> {
 		let handler_attribute = format!("{HANDLER_ATTRIBUTE_PREFIX}{event}");
-		let shows = |element: &Element| element.text.trim() == label || FIELD_LABELS.iter().any(|name| element.attribute(name) == Some(label));
-		let element = shown(&self.html()).0.into_iter().find(|element| element.attribute(&handler_attribute).is_some() && shows(element))
-			.ok_or_else(|| format!("no element showing {label:?} handles {event}; the page: {}", self.html()))?;
-		if let Some(instance) = element.attribute(INSTANCE_ATTRIBUTE).and_then(|instance| instance.parse::<i64>().ok()) {
+		let shows = |element: &Element| {
+			element.text.trim() == label || FIELD_LABELS.iter().any(|name| element.attribute(name) == Some(label))
+		};
+		let element = shown(&self.html())
+			.0
+			.into_iter()
+			.find(|element| element.attribute(&handler_attribute).is_some() && shows(element))
+			.ok_or_else(|| {
+				format!(
+					"no element showing {label:?} handles {event}; the page: {}",
+					self.html()
+				)
+			})?;
+		if let Some(instance) = element
+			.attribute(INSTANCE_ATTRIBUTE)
+			.and_then(|instance| instance.parse::<i64>().ok())
+		{
 			detail.insert(INSTANCE.to_string(), json!(instance));
 		}
-		let page_event = format!("{event}·{}", element.attribute(&handler_attribute).expect("found by it"));
+		let page_event = format!(
+			"{event}·{}",
+			element.attribute(&handler_attribute).expect("found by it")
+		);
 		self.markup = self.handled(&page_event, &Value::Object(detail))?;
 		Ok(())
 	}
@@ -124,7 +148,10 @@ struct Element {
 
 impl Element {
 	fn attribute(&self, name: &str) -> Option<&str> {
-		self.attributes.iter().find(|(attribute, _)| attribute == name).map(|(_, value)| value.as_str())
+		self.attributes
+			.iter()
+			.find(|(attribute, _)| attribute == name)
+			.map(|(_, value)| value.as_str())
 	}
 }
 
@@ -151,7 +178,10 @@ fn shown(html: &str) -> (Vec<Element>, String) {
 			rest = rest.find(&closing).map_or("", |end| &rest[end + closing.len()..]);
 			continue;
 		}
-		found.push(Element { attributes: attributes(&tag[name.len()..]), text: String::new() });
+		found.push(Element {
+			attributes: attributes(&tag[name.len()..]),
+			text: String::new(),
+		});
 		if !VOID_ELEMENTS.contains(&name.as_str()) {
 			open.push(found.len() - 1);
 		}
@@ -160,7 +190,9 @@ fn shown(html: &str) -> (Vec<Element>, String) {
 }
 
 fn add_text(found: &mut [Element], open: &[usize], text: &mut String, html: &str) {
-	let plain = ENTITIES.iter().fold(html.to_string(), |plain, (entity, character)| plain.replace(entity, character));
+	let plain = ENTITIES.iter().fold(html.to_string(), |plain, (entity, character)| {
+		plain.replace(entity, character)
+	});
 	open.iter().for_each(|&element| found[element].text.push_str(&plain));
 	text.push_str(&plain);
 }
@@ -170,7 +202,9 @@ fn attributes(mut rest: &str) -> Vec<(String, String)> {
 	let mut found = vec![];
 	loop {
 		rest = rest.trim_start();
-		let name_end = rest.find(|character: char| character == '=' || character.is_whitespace()).unwrap_or(rest.len());
+		let name_end = rest
+			.find(|character: char| character == '=' || character.is_whitespace())
+			.unwrap_or(rest.len());
 		if name_end == 0 {
 			return found;
 		}
@@ -209,7 +243,11 @@ mod native {
 
 	impl Run {
 		pub(super) fn start(module: CompiledModule) -> Result<(Node, Run), Node> {
-			let imports = Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
+			let imports = Imports {
+				host: module.needs_host,
+				wasi: module.needs_wasi,
+				ffi: module.needs_ffi,
+			};
 			let (value, mut store, instance) = run_main_kept(&module.bytes, imports).map_err(failed_run)?;
 			let markup = val_to_node(&value, &mut store, &instance).unwrap_or_else(failed_run);
 			Ok((markup, Run { store, instance }))
@@ -224,14 +262,22 @@ mod native {
 
 		/// Calls an export of the program, with one node argument or none
 		fn call(&mut self, name: &str, argument: Option<Node>) -> Result<Node, String> {
-			let function = self.instance.get_func(&mut self.store, name).ok_or_else(|| format!("the program exports no {name}"))?;
+			let function = self
+				.instance
+				.get_func(&mut self.store, name)
+				.ok_or_else(|| format!("the program exports no {name}"))?;
 			let arguments = match argument {
 				Some(argument) => vec![self.built(&argument)?],
 				None => vec![],
 			};
-			let mut results: Vec<Val> = function.ty(&self.store).results().map(|result| Val::default_for_ty(&result).unwrap_or(Val::AnyRef(None))).collect();
+			let mut results: Vec<Val> = function
+				.ty(&self.store)
+				.results()
+				.map(|result| Val::default_for_ty(&result).unwrap_or(Val::AnyRef(None)))
+				.collect();
 			let outcome = function.call(&mut self.store, &arguments, &mut results);
-			with_trap_detail(outcome, &mut self.store, &self.instance).map_err(|failure| failed_run(failure).serialize())?;
+			with_trap_detail(outcome, &mut self.store, &self.instance)
+				.map_err(|failure| failed_run(failure).serialize())?;
 			let result = results.first().copied().unwrap_or(Val::AnyRef(None));
 			val_to_node(&result, &mut self.store, &self.instance).map_err(|failure| failure.to_string())
 		}
@@ -241,18 +287,31 @@ mod native {
 			use crate::tasks::{Builders, TaskValue};
 			let value = TaskValue::of(node).map_err(|problem| problem.to_string())?;
 			let (instance, store) = (self.instance, &mut self.store);
-			let builders = Builders::of(&mut |export| instance.get_export(&mut *store, export)).map_err(|problem| problem.to_string())?;
-			builders.build(&value, &mut self.store.as_context_mut()).map_err(|problem| problem.to_string())
+			let builders = Builders::of(&mut |export| instance.get_export(&mut *store, export))
+				.map_err(|problem| problem.to_string())?;
+			builders
+				.build(&value, &mut self.store.as_context_mut())
+				.map_err(|problem| problem.to_string())
 		}
 	}
 
 	/// An event's detail as the page's treeOfPlain gives it: an object of texts and numbers, a boolean as 1 or 0
 	fn node_of_json(value: &Value) -> Node {
 		match value {
-			Value::Object(fields) => Node::List(fields.iter().map(|(name, value)| Node::key(name, node_of_json(value))).collect(), Bracket::Curly, Separator::None),
+			Value::Object(fields) => Node::List(
+				fields
+					.iter()
+					.map(|(name, value)| Node::key(name, node_of_json(value)))
+					.collect(),
+				Bracket::Curly,
+				Separator::None,
+			),
 			Value::String(text) => Node::Text(text.clone()),
 			Value::Bool(truth) => Node::int(*truth as i64),
-			Value::Number(number) => number.as_i64().map(Node::int).unwrap_or_else(|| Node::from(number.as_f64().unwrap_or_default())),
+			Value::Number(number) => number
+				.as_i64()
+				.map(Node::int)
+				.unwrap_or_else(|| Node::from(number.as_f64().unwrap_or_default())),
 			_ => Node::Empty,
 		}
 	}

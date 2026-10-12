@@ -2,9 +2,9 @@ use std::cell::Cell;
 #[cfg(feature = "native")]
 use wasmtime::{Engine, Store};
 
-pub use warp_runtime::fuel::{DEFAULT_FUEL, FUEL_VARIABLE};
 #[cfg(feature = "native")]
 pub use warp_runtime::engine::deterministic_config;
+pub use warp_runtime::fuel::{DEFAULT_FUEL, FUEL_VARIABLE};
 
 thread_local! {
 	static FUEL_OVERRIDE: Cell<Option<u64>> = const { Cell::new(None) };
@@ -12,7 +12,8 @@ thread_local! {
 
 /// Fuel budget of the next runs on this thread: `with_fuel`, else `WARP_FUEL`, else `DEFAULT_FUEL`
 pub fn fuel_budget() -> u64 {
-	FUEL_OVERRIDE.with(Cell::get)
+	FUEL_OVERRIDE
+		.with(Cell::get)
 		.or_else(warp_runtime::fuel::fuel_from_environment)
 		.unwrap_or(DEFAULT_FUEL)
 }
@@ -58,9 +59,10 @@ pub fn task_engine() -> Engine {
 #[cfg(feature = "native")]
 pub fn gc_engine() -> Engine {
 	static SHARED: std::sync::OnceLock<Engine> = std::sync::OnceLock::new();
-	SHARED.get_or_init(|| Engine::new(&warp_runtime::engine::fueled_config()).expect("Failed to create WASM engine")).clone()
+	SHARED
+		.get_or_init(|| Engine::new(&warp_runtime::engine::fueled_config()).expect("Failed to create WASM engine"))
+		.clone()
 }
-
 
 pub fn show_type_name<T>(_: &T) {
 	use std::any::type_name;

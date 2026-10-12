@@ -12,30 +12,44 @@ const IOVEC_BYTES: usize = 8;
 
 /// fd_write(fd, iovecs, count, written) to stdout or stderr
 pub fn link_output<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
-	linker.func_wrap(WASI_LIBRARY, FD_WRITE, |mut caller: Caller<'_, T>, fd: i32, iovecs: i32, count: i32, written: i32| -> i32 {
-		let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return ERRNO_FAULT };
-		let bytes = memory.data(&caller);
-		let word = |at: usize| bytes.get(at..at + 4).map(|word| u32::from_le_bytes(word.try_into().unwrap()) as usize);
-		let mut text = Vec::new();
-		for index in 0..count.max(0) as usize {
-			let at = iovecs as usize + index * IOVEC_BYTES;
-			let (Some(start), Some(length)) = (word(at), word(at + 4)) else { return ERRNO_FAULT };
-			let Some(part) = bytes.get(start..start + length) else { return ERRNO_FAULT };
-			text.extend_from_slice(part);
-		}
-		use std::io::Write;
-		let outcome = match fd {
-			STDOUT => std::io::stdout().write_all(&text),
-			STDERR => std::io::stderr().write_all(&text),
-			_ => return ERRNO_BADF,
-		};
-		if outcome.is_err() {
-			return ERRNO_BADF;
-		}
-		match memory.write(&mut caller, written as usize, &(text.len() as u32).to_le_bytes()) {
-			Ok(()) => ERRNO_SUCCESS,
-			Err(_) => ERRNO_FAULT,
-		}
-	})?;
+	linker.func_wrap(
+		WASI_LIBRARY,
+		FD_WRITE,
+		|mut caller: Caller<'_, T>, fd: i32, iovecs: i32, count: i32, written: i32| -> i32 {
+			let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+				return ERRNO_FAULT;
+			};
+			let bytes = memory.data(&caller);
+			let word = |at: usize| {
+				bytes
+					.get(at..at + 4)
+					.map(|word| u32::from_le_bytes(word.try_into().unwrap()) as usize)
+			};
+			let mut text = Vec::new();
+			for index in 0..count.max(0) as usize {
+				let at = iovecs as usize + index * IOVEC_BYTES;
+				let (Some(start), Some(length)) = (word(at), word(at + 4)) else {
+					return ERRNO_FAULT;
+				};
+				let Some(part) = bytes.get(start..start + length) else {
+					return ERRNO_FAULT;
+				};
+				text.extend_from_slice(part);
+			}
+			use std::io::Write;
+			let outcome = match fd {
+				STDOUT => std::io::stdout().write_all(&text),
+				STDERR => std::io::stderr().write_all(&text),
+				_ => return ERRNO_BADF,
+			};
+			if outcome.is_err() {
+				return ERRNO_BADF;
+			}
+			match memory.write(&mut caller, written as usize, &(text.len() as u32).to_le_bytes()) {
+				Ok(()) => ERRNO_SUCCESS,
+				Err(_) => ERRNO_FAULT,
+			}
+		},
+	)?;
 	Ok(())
 }

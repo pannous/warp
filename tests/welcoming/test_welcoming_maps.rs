@@ -1,7 +1,7 @@
 //! Maps as newcomers from Python and JavaScript use them (field test: Dijkstra): quoted and unquoted keys are the
 //! same key, keys can be variables, `{}` grows, and keys/values/has/get/in and `for k in m` work on any map.
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 use warp::*;
 
 #[test]
@@ -39,7 +39,10 @@ fn test_absent_key() {
 #[test]
 fn test_keys_values_has() {
 	is!(r#"graph = {"A": 1, "B": 2}; graph.keys().length"#, 2);
-	is!(r#"m = {"A": 3, B: 4}; vs = m.values(); s = 0; for v in vs { s = s + v }; s"#, 7);
+	is!(
+		r#"m = {"A": 3, B: 4}; vs = m.values(); s = 0; for v in vs { s = s + v }; s"#,
+		7
+	);
 	is!(r#"m = {"A": 1}; m.has("A")"#, 1);
 	is!(r#"m = {"A": 1}; m.has("B")"#, 0);
 }
@@ -63,7 +66,10 @@ fn test_for_in_a_map_walks_its_keys() {
 #[test]
 fn test_for_key_value_in_a_map() {
 	is!(r#"m = {A: 1, B: 2}; s = 0; for k, v in m { s = s + v }; s"#, 3);
-	is!(r#"m = {A: 1, B: 2}; s = ""; n = 0; for (k, v) in m { s = s + k; n = n + v }; s == "AB" and n == 3"#, 1);
+	is!(
+		r#"m = {A: 1, B: 2}; s = ""; n = 0; for (k, v) in m { s = s + k; n = n + v }; s == "AB" and n == 3"#,
+		1
+	);
 }
 
 #[test]
@@ -73,14 +79,24 @@ fn test_for_destructures_pairs() {
 
 #[test]
 fn test_map_parameter() {
-	is!(r#"fun f(g) { d = {}; nodes = g.keys(); for n in nodes { d[n] = 9 }; d["B"] }; f({A: 1, B: 2})"#, 9);
-	is!(r#"fun f(g) { c = ""; for e in g["A"] { c = c + e[0] }; c }; f({A: [["B", 4]]})"#, "B");
-	is!(r#"fun f(g) { c = 0; for e in g["A"] { c = c + e[1] }; c }; f({A: [["B", 4]], B: []})"#, 4);
+	is!(
+		r#"fun f(g) { d = {}; nodes = g.keys(); for n in nodes { d[n] = 9 }; d["B"] }; f({A: 1, B: 2})"#,
+		9
+	);
+	is!(
+		r#"fun f(g) { c = ""; for e in g["A"] { c = c + e[0] }; c }; f({A: [["B", 4]]})"#,
+		"B"
+	);
+	is!(
+		r#"fun f(g) { c = 0; for e in g["A"] { c = c + e[1] }; c }; f({A: [["B", 4]], B: []})"#,
+		4
+	);
 }
 
 #[test]
 fn test_dijkstra_core() {
-	is!(r#"
+	is!(
+		r#"
 graph = {"A": [["B", 4], ["C", 2]], "B": [["D", 5]], "C": [["B", 1], ["D", 8], ["E", 10]], "D": [["E", 2], ["F", 6]], "E": [["F", 3]], "F": []}
 fun dijkstra(graph, start) {
 	dist = {}
@@ -107,13 +123,21 @@ fun dijkstra(graph, start) {
 	}
 	return dist["F"]
 }
-dijkstra(graph, "A")"#, 13);
+dijkstra(graph, "A")"#,
+		13
+	);
 }
 
 #[test]
 fn test_list_returned_by_a_function_holds_maps() {
-	is!(r#"fun f() { return [{F: 13}, 2] }; r = f(); d = r[0]; "x:" + d["F"]"#, "x:13");
-	is!(r#"fun f() { return [{F: 13}, 2] }; r = f(); d = r[0]; x = d["F"]; x + 1"#, 14);
+	is!(
+		r#"fun f() { return [{F: 13}, 2] }; r = f(); d = r[0]; "x:" + d["F"]"#,
+		"x:13"
+	);
+	is!(
+		r#"fun f() { return [{F: 13}, 2] }; r = f(); d = r[0]; x = d["F"]; x + 1"#,
+		14
+	);
 }
 
 #[test]

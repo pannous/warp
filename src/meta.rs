@@ -12,7 +12,6 @@ pub struct LineInfo {
 	pub line: String, // debug! expensive but useful
 }
 
-
 // Custom trait for cloneable Any types with equality support
 pub trait CloneAny: Any {
 	fn clone_any(&self) -> Box<dyn CloneAny>;
@@ -35,7 +34,6 @@ impl<T: 'static + Clone + PartialEq> CloneAny for T {
 		}
 	}
 }
-
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum DataType {
@@ -119,7 +117,6 @@ impl fmt::Display for DataValue {
 		write!(f, "«DataValue({})»", self.type_name)
 	}
 }
-
 
 impl fmt::Debug for DataValue {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

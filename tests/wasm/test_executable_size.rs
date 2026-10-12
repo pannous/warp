@@ -11,7 +11,12 @@ const QUICKSORT_CARRIED_LIMIT: usize = 60_000;
 fn built_executable(name: &str, source: &str) -> PathBuf {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join(format!("{name}.warp"));
 	std::fs::write(&source_path, source).unwrap();
-	let build = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).args(["build", "--exe"]).arg(&source_path).output().unwrap();
+	let build = crate::common::warp_command()
+		.env("WARP_RUNTIME_STUB", crate::common::runtime_stub())
+		.args(["build", "--exe"])
+		.arg(&source_path)
+		.output()
+		.unwrap();
 	assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
 	source_path.with_extension(std::env::consts::EXE_EXTENSION)
 }
@@ -34,14 +39,22 @@ fn test_executable_exports_only_what_the_stub_calls() {
 	assert_eq!(printed_by(&executable), "49\n");
 	let exports = carried_exports(&executable);
 	assert!(exports.contains(&"main".to_string()), "{exports:?}");
-	assert!(!exports.iter().any(|name| name == "square" || name == "get_kind" || name == "list_at"), "{exports:?}");
+	assert!(
+		!exports
+			.iter()
+			.any(|name| name == "square" || name == "get_kind" || name == "list_at"),
+		"{exports:?}"
+	);
 }
 
 #[test]
 fn test_executable_keeps_its_handlers() {
 	let executable = built_executable("size_on_exit", "on exit { print \"bye\" }\nprint \"hello\"");
 	let printed = printed_by(&executable);
-	assert!(printed.starts_with("hello\n") && printed.ends_with("bye\n"), "{printed}");
+	assert!(
+		printed.starts_with("hello\n") && printed.ends_with("bye\n"),
+		"{printed}"
+	);
 }
 
 #[test]

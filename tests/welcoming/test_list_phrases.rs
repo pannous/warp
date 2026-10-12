@@ -17,7 +17,10 @@ fn keep_only_a_property() {
 fn sort_by_a_key() {
 	is!("[\"bbb\", \"a\", \"cc\"].sort by size", parse("['a' \"cc\" \"bbb\"]"));
 	is!("negated(n) := -n; [1, 3, 2].sort by negated", parse("[3 2 1]"));
-	is!("items = [{price: 3}, {price: 1}]; cheapest = items.sort by price; cheapest#1.price", 1);
+	is!(
+		"items = [{price: 3}, {price: 1}]; cheapest = items.sort by price; cheapest#1.price",
+		1
+	);
 }
 
 #[test]
@@ -40,7 +43,10 @@ fn a_method_of_a_parenthesized_filter() {
 /// card todo-app robustness: `todos sorted by priority` as written without a dot, and `sorted` as `sort`
 #[test]
 fn sorted_by_a_field_without_a_dot() {
-	is!("items = [{price: 3}, {price: 1}]; cheapest = items sorted by price; cheapest#1.price", 1);
+	is!(
+		"items = [{price: 3}, {price: 1}]; cheapest = items sorted by price; cheapest#1.price",
+		1
+	);
 	is!("class T{p:int}; xs = [T(2), T(1)]; (xs sorted by p)#1.p", 1);
 	is!("class T{p:int}; xs = [T(2), T(1)]; ys = xs.sorted by p; ys#1.p", 1);
 	is!("xs = [1, -2, 3]; xs keep only positive", parse("[1 3]"));

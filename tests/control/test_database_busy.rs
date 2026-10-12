@@ -14,10 +14,12 @@ fn programs_writing_one_database_at_once_wait_for_each_other() {
 	let _ = std::fs::remove_file(folder.join("app.database.sqlite"));
 	let program = "class Person{name: text; age: int}\nstored people: [Person]\nfor i in 1..20 { people.add(Person(\"Al\", i)) }\ncount(people)";
 	// unnamed threads, as a program's own tasks: they share the one file beside the program
-	let writers: Vec<_> = (0..WRITERS).map(|_| {
-		let file = folder.join("app.warp");
-		std::thread::spawn(move || warp::modules::with_program_file(&file, || eval(program)).serialize())
-	}).collect();
+	let writers: Vec<_> = (0..WRITERS)
+		.map(|_| {
+			let file = folder.join("app.warp");
+			std::thread::spawn(move || warp::modules::with_program_file(&file, || eval(program)).serialize())
+		})
+		.collect();
 	for writer in writers {
 		let result = writer.join().expect("writer thread");
 		assert!(!result.contains("locked"), "{result}");
@@ -28,7 +30,10 @@ fn programs_writing_one_database_at_once_wait_for_each_other() {
 #[test]
 fn a_test_thread_keeps_a_samples_tables_apart() {
 	let folder = std::env::var("WARP_TEST_TABLES").expect("WARP_TEST_TABLES from .cargo/config.toml");
-	let thread = std::thread::current().name().expect("libtest names its threads").replace("::", ".");
+	let thread = std::thread::current()
+		.name()
+		.expect("libtest names its threads")
+		.replace("::", ".");
 	eval("samples/orm.warp");
 	let file = std::path::Path::new(&folder).join(thread).join("orm.database.sqlite");
 	assert!(file.exists(), "{}", file.display());

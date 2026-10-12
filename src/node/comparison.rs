@@ -41,14 +41,12 @@ impl PartialEq for Node {
 				Node::Number(n2) => n == n2,
 				_ => false,
 			},
-			Symbol(s) => {
-				match other {
-					True => !s.is_empty(),
-					False => s.is_empty(),
-					Symbol(s2) | Text(s2) => s == s2,
-					_ => false,
-				}
-			}
+			Symbol(s) => match other {
+				True => !s.is_empty(),
+				False => s.is_empty(),
+				Symbol(s2) | Text(s2) => s == s2,
+				_ => false,
+			},
 			Text(s) => match other {
 				True => !s.is_empty(),
 				False => s.is_empty(),
@@ -70,9 +68,7 @@ impl PartialEq for Node {
 			Meta { node, .. } => {
 				// Ignore metadata when comparing equality - unwrap both sides
 				let other_unwrapped = match other {
-					Meta {
-						node: other_node, ..
-					} => other_node.as_ref(),
+					Meta { node: other_node, .. } => other_node.as_ref(),
 					_ => other,
 				};
 				node.as_ref().eq(other_unwrapped)
@@ -123,7 +119,9 @@ impl PartialEq<i64> for Node {
 			False => *other == 0,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Meta { node, .. } => node.as_ref().eq(other),
-			Data(data) => data.downcast_ref::<crate::units::Quantity>().is_some_and(|quantity| quantity.is_amount(*other)),
+			Data(data) => data
+				.downcast_ref::<crate::units::Quantity>()
+				.is_some_and(|quantity| quantity.is_amount(*other)),
 			_ => false,
 		}
 	}
@@ -399,7 +397,9 @@ impl PartialEq<Node> for serde_json::Value {
 #[cfg(feature = "native")]
 pub trait GcComparable {
 	/// Try to create Self from a GcObject
-	fn try_from_gc(gc_obj: &crate::gc_traits::GcObject) -> Option<Self> where Self: Sized;
+	fn try_from_gc(gc_obj: &crate::gc_traits::GcObject) -> Option<Self>
+	where
+		Self: Sized;
 	/// Compare self with another instance
 	fn gc_eq(&self, other: &Self) -> bool;
 }

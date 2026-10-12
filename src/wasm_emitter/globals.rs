@@ -9,7 +9,9 @@ impl WasmGcEmitter {
 	/// `error("…")` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
 	/// so it fails the run with its message through `returned_error`, which `try` catches; true when it was one
 	pub(super) fn emit_raised_error(&mut self, func: &mut Function, node: &Node) -> bool {
-		let Some(message) = returned_error_message(node) else { return false };
+		let Some(message) = returned_error_message(node) else {
+			return false;
+		};
 		self.emit_trap_detail(func, message);
 		self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
 		true
@@ -44,7 +46,12 @@ impl WasmGcEmitter {
 
 	/// Emit a fetch call using the host.fetch import (host.fetch_within for an explicit timeout)
 	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
-	pub(super) fn emit_fetch_call(&mut self, func: &mut Function, url_node: &Node, timeout: Option<std::time::Duration>) {
+	pub(super) fn emit_fetch_call(
+		&mut self,
+		func: &mut Function,
+		url_node: &Node,
+		timeout: Option<std::time::Duration>,
+	) {
 		let url = self.extract_url_string(url_node);
 		// a URL known only at run time (a text variable, a parameter, a concatenation), else the URL as written
 		if self.is_runtime_text(url_node) {
@@ -71,10 +78,12 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I32Const(ptr as i32), I32Const(-(len as i32))]);
 		}
 		let (len, ptr) = (self.scratch(0), self.scratch(1));
-		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(len), I::I64ExtendI32U, I::LocalSet(ptr)]);
+		Self::emit_list(
+			func,
+			&[I::I64ExtendI32S, I::LocalSet(len), I::I64ExtendI32U, I::LocalSet(ptr)],
+		);
 		self.emit_host_text_result(func, len, ptr);
 	}
-
 
 	/// Extract URL string from parsed node tree
 	/// Handles patterns like: https://... which parses as Key(Symbol("https"), Colon, ...)
@@ -124,7 +133,9 @@ impl WasmGcEmitter {
 	/// `x += y` and `x++` on a declared global (not shadowed by a local) as the plain assignment `x = x + y`,
 	/// so globals resolve exactly like in plain assignment
 	pub(super) fn global_update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
-		let Node::Symbol(name) = target.drop_meta() else { return None };
+		let Node::Symbol(name) = target.drop_meta() else {
+			return None;
+		};
 		if self.scope.lookup(name).is_some() || !self.ctx.user_globals.contains_key(name) {
 			return None;
 		}
@@ -206,27 +217,50 @@ impl WasmGcEmitter {
 
 	/// Every `global` of the program exists before any function is compiled, so function bodies can change it
 	pub(super) fn allocate_declared_globals(&mut self, program: &Node) {
-		let mut main = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `global g = vec(1, 2)` holds what vec returns
+		let mut main = Scope::with_function_kinds(self.user_function_kinds())
+			.with_closure_targets(self.ctx.closure_variable_targets.clone()); // `global g = vec(1, 2)` holds what vec returns
 		collect_variables(program, &mut main);
-		_ = crate::analyzer::widen_globals_by_functions(&mut main.globals, self.ctx.user_functions.values(), &self.user_function_kinds(), &self.ctx.closure_variable_targets);
-		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
+		_ = crate::analyzer::widen_globals_by_functions(
+			&mut main.globals,
+			self.ctx.user_functions.values(),
+			&self.user_function_kinds(),
+			&self.ctx.closure_variable_targets,
+		);
+		let mut names: Vec<&String> = main
+			.globals
+			.keys()
+			.filter(|name| !self.ctx.user_globals.contains_key(*name))
+			.collect();
 		names.sort();
 		// a task's instance copies globals as Nodes, so a program with tasks keeps none in an array or map of its own type
-		let (typed, typed_maps) = if self.spawns_tasks() { Default::default() } else { (self.find_typed_globals(program, &main), self.find_typed_map_globals(program, &main.globals)) };
+		let (typed, typed_maps) = if self.spawns_tasks() {
+			Default::default()
+		} else {
+			(
+				self.find_typed_globals(program, &main),
+				self.find_typed_map_globals(program, &main.globals),
+			)
+		};
 		for name in names {
 			if typed_maps.contains(name) {
 				let global = self.declare_typed_map_global();
-				self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
+				self.ctx
+					.user_globals
+					.insert(name.to_string(), (global, main.globals[name].kind));
 				self.typed_map_globals.insert(name.to_string(), global);
 				continue;
 			}
 			match typed.get(name) {
 				Some(&list) => {
 					let global = self.declare_typed_list_global(list.element);
-					self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
+					self.ctx
+						.user_globals
+						.insert(name.to_string(), (global, main.globals[name].kind));
 					self.typed_globals.insert(name.to_string(), (global, list));
 				}
-				None => { self.allocate_global(name, main.globals[name].kind); }
+				None => {
+					self.allocate_global(name, main.globals[name].kind);
+				}
 			}
 		}
 		self.ctx.declared_globals = main.globals;
@@ -275,12 +309,23 @@ impl WasmGcEmitter {
 		} else {
 			ConstExpr::i64_const(0)
 		};
-		let val_type = if kind.is_ref() { Ref(self.node_ref(true)) } else { self.storage_type(kind) };
+		let val_type = if kind.is_ref() {
+			Ref(self.node_ref(true))
+		} else {
+			self.storage_type(kind)
+		};
 		self.declare_global_of(val_type, init_expr)
 	}
 
 	pub(super) fn declare_global_of(&mut self, val_type: ValType, init_expr: ConstExpr) -> u32 {
-		self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &init_expr);
+		self.globals.global(
+			GlobalType {
+				val_type,
+				mutable: true,
+				shared: false,
+			},
+			&init_expr,
+		);
 		self.next_global_idx += 1;
 		self.next_global_idx - 1
 	}
@@ -300,7 +345,9 @@ impl WasmGcEmitter {
 		}
 		let index = self.declare_mutable_global(Kind::Empty);
 		self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
-		self.ctx.user_globals.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
+		self.ctx
+			.user_globals
+			.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
 		index
 	}
 

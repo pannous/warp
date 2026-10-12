@@ -43,16 +43,44 @@ const LEAST_AT_ZERO: [Extremum; 1] = [turns(0.0, 0.0, false, 0.0)];
 /// argument map the endpoints, an extremum or pole inside the interval is a bound. With the run-time function of each
 /// (wasm_emitter/uncertain.rs)
 pub const INTERVAL_WORDS: [(&str, &str, &[Extremum]); 23] = [
-	("sqrt", "uncertain_sqrt", &[]), ("cbrt", "uncertain_cbrt", &[]),
-	("abs", "uncertain_abs", &LEAST_AT_ZERO), ("fabs", "uncertain_fabs", &LEAST_AT_ZERO),
-	("sin", "uncertain_sin", &[turns(HALF_PI, TAU, true, 1.0), turns(-HALF_PI, TAU, false, -1.0)]),
-	("cos", "uncertain_cos", &[turns(0.0, TAU, true, 1.0), turns(PI, TAU, false, -1.0)]),
-	("tan", "uncertain_tan", &[turns(HALF_PI, PI, true, f64::INFINITY), turns(HALF_PI, PI, false, f64::NEG_INFINITY)]),
-	("asin", "uncertain_asin", &[]), ("acos", "uncertain_acos", &[]), ("atan", "uncertain_atan", &[]),
-	("sinh", "uncertain_sinh", &[]), ("cosh", "uncertain_cosh", &[turns(0.0, 0.0, false, 1.0)]), ("tanh", "uncertain_tanh", &[]),
-	("exp", "uncertain_exp", &[]), ("expm1", "uncertain_expm1", &[]),
-	("log", "uncertain_log", &[]), ("log2", "uncertain_log2", &[]), ("log10", "uncertain_log10", &[]), ("log1p", "uncertain_log1p", &[]),
-	("floor", "uncertain_floor", &[]), ("ceil", "uncertain_ceil", &[]), ("round", "uncertain_round", &[]), ("trunc", "uncertain_trunc", &[]),
+	("sqrt", "uncertain_sqrt", &[]),
+	("cbrt", "uncertain_cbrt", &[]),
+	("abs", "uncertain_abs", &LEAST_AT_ZERO),
+	("fabs", "uncertain_fabs", &LEAST_AT_ZERO),
+	(
+		"sin",
+		"uncertain_sin",
+		&[turns(HALF_PI, TAU, true, 1.0), turns(-HALF_PI, TAU, false, -1.0)],
+	),
+	(
+		"cos",
+		"uncertain_cos",
+		&[turns(0.0, TAU, true, 1.0), turns(PI, TAU, false, -1.0)],
+	),
+	(
+		"tan",
+		"uncertain_tan",
+		&[
+			turns(HALF_PI, PI, true, f64::INFINITY),
+			turns(HALF_PI, PI, false, f64::NEG_INFINITY),
+		],
+	),
+	("asin", "uncertain_asin", &[]),
+	("acos", "uncertain_acos", &[]),
+	("atan", "uncertain_atan", &[]),
+	("sinh", "uncertain_sinh", &[]),
+	("cosh", "uncertain_cosh", &[turns(0.0, 0.0, false, 1.0)]),
+	("tanh", "uncertain_tanh", &[]),
+	("exp", "uncertain_exp", &[]),
+	("expm1", "uncertain_expm1", &[]),
+	("log", "uncertain_log", &[]),
+	("log2", "uncertain_log2", &[]),
+	("log10", "uncertain_log10", &[]),
+	("log1p", "uncertain_log1p", &[]),
+	("floor", "uncertain_floor", &[]),
+	("ceil", "uncertain_ceil", &[]),
+	("round", "uncertain_round", &[]),
+	("trunc", "uncertain_trunc", &[]),
 ];
 
 /// A math word an interval passes through
@@ -73,8 +101,18 @@ impl Uncertain {
 	/// From the run-time array [value, low, high], a Gaussian's [value, low, high, σ, its contributions…]
 	pub fn from_parts(parts: &[f64]) -> Option<Uncertain> {
 		match *parts {
-			[value, low, high] => Some(Uncertain { value, low, high, gaussian: false }),
-			[value, low, high, _, ..] => Some(Uncertain { value, low, high, gaussian: true }),
+			[value, low, high] => Some(Uncertain {
+				value,
+				low,
+				high,
+				gaussian: false,
+			}),
+			[value, low, high, _, ..] => Some(Uncertain {
+				value,
+				low,
+				high,
+				gaussian: true,
+			}),
 			_ => None,
 		}
 	}
@@ -89,7 +127,12 @@ impl Uncertain {
 
 	/// The same uncertainty counted in a unit `factor` times larger (a positive factor)
 	pub fn scaled(&self, factor: f64) -> Uncertain {
-		Uncertain { value: self.value * factor, low: self.low * factor, high: self.high * factor, gaussian: self.gaussian }
+		Uncertain {
+			value: self.value * factor,
+			low: self.low * factor,
+			high: self.high * factor,
+			gaussian: self.gaussian,
+		}
 	}
 
 	/// The ± part: how far the interval reaches from the value, on its farther side
@@ -111,15 +154,30 @@ impl fmt::Display for Uncertain {
 			place += 1;
 		}
 		let decimals = (-place).max(0) as usize;
-		let rounded = |x: f64| if place < 0 { x } else { (x / 10f64.powi(place)).round() * 10f64.powi(place) };
-		write!(f, "{:.*} ± {:.*}{sigma}", decimals, rounded(self.value), decimals, rounded(radius))
+		let rounded = |x: f64| {
+			if place < 0 {
+				x
+			} else {
+				(x / 10f64.powi(place)).round() * 10f64.powi(place)
+			}
+		};
+		write!(
+			f,
+			"{:.*} ± {:.*}{sigma}",
+			decimals,
+			rounded(self.value),
+			decimals,
+			rounded(radius)
+		)
 	}
 }
 
 /// The spread of a Gaussian `5 ± 1σ` (the right side of its ±, `1*σ`), None for an interval's
 pub fn gaussian_spread(right: &Node) -> Option<&Node> {
 	match right.drop_meta() {
-		Node::Key(spread, Op::Mul, sigma) if matches!(sigma.drop_meta(), Node::Symbol(name) if name == SIGMA) => Some(spread),
+		Node::Key(spread, Op::Mul, sigma) if matches!(sigma.drop_meta(), Node::Symbol(name) if name == SIGMA) => {
+			Some(spread)
+		}
 		_ => None,
 	}
 }
@@ -134,7 +192,9 @@ pub fn lower_certainty(node: Node) -> Node {
 	let said = |word: &Node| CERTAINTY_WORDS.contains(&word.drop_meta().name().as_str());
 	let (word, compared, op, right) = match node.drop_meta() {
 		Node::Key(left, op, right) if op.is_ordering() => match left.drop_meta() {
-			Node::List(items, Bracket::None, _) if matches!(items.as_slice(), [_, word] if said(word)) => (&items[1], &items[0], op, right),
+			Node::List(items, Bracket::None, _) if matches!(items.as_slice(), [_, word] if said(word)) => {
+				(&items[1], &items[0], op, right)
+			}
 			_ => return node,
 		},
 		// in parentheses as an `if` condition: `if (y certainly < x) then …`
@@ -148,7 +208,12 @@ pub fn lower_certainty(node: Node) -> Node {
 		_ => return node,
 	};
 	let comparison = Node::Key(Box::new(compared.clone()), *op, right.clone());
-	Node::List(vec![Node::Symbol(word.drop_meta().name()), comparison], Bracket::None, Separator::Space).with_meta_of(&node)
+	Node::List(
+		vec![Node::Symbol(word.drop_meta().name()), comparison],
+		Bracket::None,
+		Separator::Space,
+	)
+	.with_meta_of(&node)
 }
 
 /// Marks the type `number` of a parameter that may hold a ± value: held as a Node and checked for a number at run time
@@ -167,11 +232,15 @@ pub fn lower_interval_parameters(program: Node) -> Node {
 
 fn with_interval_parameters(node: Node) -> Node {
 	match node {
-		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) => {
+		Node::Key(head, op @ (Op::Define | Op::Assign), body)
+			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
+		{
 			let head = head.map_children(|parameter| match parameter.drop_meta() {
-				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_TYPE => {
-					Node::Key(name.clone(), Op::Colon, Box::new(Node::meta(type_node.drop_meta().clone(), Node::data(IntervalNumber))))
-				}
+				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_TYPE => Node::Key(
+					name.clone(),
+					Op::Colon,
+					Box::new(Node::meta(type_node.drop_meta().clone(), Node::data(IntervalNumber))),
+				),
 				_ => parameter,
 			});
 			Node::Key(Box::new(head), op, Box::new(with_interval_parameters(*body)))
@@ -183,7 +252,10 @@ fn with_interval_parameters(node: Node) -> Node {
 /// Is the type `number` of a parameter that may hold a ± value
 pub fn is_interval_number(type_node: &Node) -> bool {
 	match type_node {
-		Node::Meta { node, data } => matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<IntervalNumber>().is_some()) || is_interval_number(node),
+		Node::Meta { node, data } => {
+			matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<IntervalNumber>().is_some())
+				|| is_interval_number(node)
+		}
 		_ => false,
 	}
 }
@@ -192,7 +264,12 @@ pub fn is_interval_number(type_node: &Node) -> bool {
 pub fn certainty_parts(node: &Node) -> Option<(&str, &Node)> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::None, _) => match items.as_slice() {
-			[Node::Symbol(word), ordering] if CERTAINTY_WORDS.contains(&word.as_str()) && matches!(ordering.drop_meta(), Node::Key(_, op, _) if op.is_ordering()) => Some((word, ordering)),
+			[Node::Symbol(word), ordering]
+				if CERTAINTY_WORDS.contains(&word.as_str())
+					&& matches!(ordering.drop_meta(), Node::Key(_, op, _) if op.is_ordering()) =>
+			{
+				Some((word, ordering))
+			}
 			_ => None,
 		},
 		_ => None,
@@ -211,11 +288,17 @@ pub fn check_orderings(program: &Node) -> Option<Diagnostic> {
 /// The first ordering of a known ± that is not said `certainly` or `possibly`
 fn first_unsaid_ordering(node: &Node, intervals: &HashSet<String>) -> Option<Diagnostic> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if matches!(items.first().map(|word| word.drop_meta().name()), Some(word) if CERTAINTY_WORDS.contains(&word.as_str())) => None,
-		Node::Key(left, op, right) if op.is_ordering() && [left, right].iter().any(|side| is_interval(side, intervals)) => {
+		Node::List(items, _, _) if matches!(items.first().map(|word| word.drop_meta().name()), Some(word) if CERTAINTY_WORDS.contains(&word.as_str())) => {
+			None
+		}
+		Node::Key(left, op, right)
+			if op.is_ordering() && [left, right].iter().any(|side| is_interval(side, intervals)) =>
+		{
 			Some(unsaid_ordering(node, left, *op, right))
 		}
-		Node::Key(left, _, right) => first_unsaid_ordering(left, intervals).or_else(|| first_unsaid_ordering(right, intervals)),
+		Node::Key(left, _, right) => {
+			first_unsaid_ordering(left, intervals).or_else(|| first_unsaid_ordering(right, intervals))
+		}
 		Node::List(items, _, _) => items.iter().find_map(|item| first_unsaid_ordering(item, intervals)),
 		_ => None,
 	}
@@ -259,7 +342,9 @@ fn is_interval(node: &Node, names: &HashSet<String>) -> bool {
 	match node.drop_meta() {
 		Node::Key(_, Op::PlusMinus, _) => true,
 		Node::Symbol(name) => names.contains(name),
-		Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Neg, right) => is_interval(left, names) || is_interval(right, names),
+		Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Neg, right) => {
+			is_interval(left, names) || is_interval(right, names)
+		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_interval(&items[0], names),
 		_ => false,
 	}
@@ -270,11 +355,17 @@ fn unsaid_ordering(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic
 	let written = format!("{left} {op} {right}");
 	let readings = [CERTAINLY, POSSIBLY].map(|word| format!("{left} {word} {op} {right}"));
 	let by_value = format!("{left}.value {op} {right}");
-	Diagnostic::at(node, format!("{written} compares a ± value: an overlap is neither yes nor no"))
-		.fix(format!("write `{}` (the whole interval), `{}` (some of it) or `{by_value}` (its value)", readings[0], readings[1]))
-		.offer("the whole interval", &written, &readings[0])
-		.offer("some of the interval", &written, &readings[1])
-		.offer("its value", &written, &by_value)
+	Diagnostic::at(
+		node,
+		format!("{written} compares a ± value: an overlap is neither yes nor no"),
+	)
+	.fix(format!(
+		"write `{}` (the whole interval), `{}` (some of it) or `{by_value}` (its value)",
+		readings[0], readings[1]
+	))
+	.offer("the whole interval", &written, &readings[0])
+	.offer("some of the interval", &written, &readings[1])
+	.offer("its value", &written, &by_value)
 }
 
 /// The warning of a bare ordering whose operands turn out to overlap at run time (the compiler knew no ±)

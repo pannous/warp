@@ -1,6 +1,6 @@
 use crate::eq;
-use warp::Node;
 use warp::warp_parser::WarpParser;
+use warp::Node;
 
 #[test]
 fn test_position_tracking() {
@@ -15,10 +15,7 @@ city: "NYC""#;
 		// First item should be at line 1
 		if let Some(first) = items.first() {
 			if let Some(info) = first.get_lineinfo() {
-				println!(
-					"First item position: line {:?}, column {:?}",
-					info.line_nr, info.column
-				);
+				println!("First item position: line {:?}, column {:?}", info.line_nr, info.column);
 				eq!(info.line_nr, 1);
 			}
 		}
@@ -26,7 +23,10 @@ city: "NYC""#;
 		// Second item should be at line 2
 		if let Some(second) = items.get(1) {
 			if let Some(meta) = second.get_lineinfo() {
-				println!("Second item position: line {:?}, column {:?}", meta.line_nr, meta.column);
+				println!(
+					"Second item position: line {:?}, column {:?}",
+					meta.line_nr, meta.column
+				);
 				eq!(meta.line_nr, 2);
 			}
 		}

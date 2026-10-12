@@ -6,7 +6,12 @@ const PORT: u16 = 18439; // not 18432: test_web_server's RPC server listens ther
 const FOLDER: &str = "scratch/dev_server";
 
 fn get(path: &str) -> String {
-	ureq::get(&format!("http://127.0.0.1:{PORT}{path}")).call().expect("an answer").body_mut().read_to_string().expect("a text")
+	ureq::get(&format!("http://127.0.0.1:{PORT}{path}"))
+		.call()
+		.expect("an answer")
+		.body_mut()
+		.read_to_string()
+		.expect("a text")
 }
 
 fn state() -> serde_json::Value {
@@ -25,11 +30,17 @@ fn the_dev_server_rebuilds_a_changed_program() {
 	});
 	let started = std::time::Instant::now();
 	while std::net::TcpStream::connect(("127.0.0.1", PORT)).is_err() {
-		assert!(started.elapsed() < Duration::from_secs(60), "the dev server did not start");
+		assert!(
+			started.elapsed() < Duration::from_secs(60),
+			"the dev server did not start"
+		);
 		std::thread::sleep(Duration::from_millis(50));
 	}
 	let page = get("/");
-	assert!(page.contains("<p>one</p>") && page.contains("<script src=\"dev.js\">"), "{page}");
+	assert!(
+		page.contains("<p>one</p>") && page.contains("<script src=\"dev.js\">"),
+		"{page}"
+	);
 	assert!(get("/dev.js").contains("warp-dev/state"));
 	let first = state();
 	assert!(first["error"].is_null(), "{first}");
@@ -42,7 +53,10 @@ fn the_dev_server_rebuilds_a_changed_program() {
 	std::fs::write(&program, "x = 1\np{ \"three\" + y }").expect("a failing program");
 	let failed = state();
 	let error = failed["error"].as_str().expect("the failure");
-	assert!(error.contains("y") && error.contains("2 | p{ \"three\" + y }"), "{error}");
+	assert!(
+		error.contains("y") && error.contains("2 | p{ \"three\" + y }"),
+		"{error}"
+	);
 }
 
 // a dev build keeps each main-level variable the program changes (as `stored` does, in the page's sessionStorage), so
@@ -54,7 +68,11 @@ fn a_dev_build_keeps_the_values_the_program_changed() {
 	assert_eq!(run("dev_count = 0\ndev_count += 1\ndev_count"), "2");
 	assert_eq!(run("dev_start = 5\ndev_start"), "5");
 	assert_eq!(run("dev_start = 6\ndev_start"), "6");
-	assert_eq!(run("dev_count = 0\ndev_count"), "0", "a variable the program no longer changes takes its new value");
+	assert_eq!(
+		run("dev_count = 0\ndev_count"),
+		"0",
+		"a variable the program no longer changes takes its new value"
+	);
 }
 
 // a dev build keeps each component instance's state too (card web-dev-instances): after a reload the second counter

@@ -59,9 +59,19 @@ thread_local! {
 
 /// `analyse(context, program)` into a fresh `context`, or what it gave for the same tree before
 pub fn analysed(context: &mut Context, program: &Node, analyse: impl FnOnce(&mut Context, &Node)) {
-	let key = (is_fresh(context) && std::env::var(SWITCH_VARIABLE).as_deref() != Ok("off")).then(|| fingerprint(program)).flatten();
-	let Some(key) = key else { return analyse(context, program) };
-	if let Some(analysis) = REMEMBERED_ANALYSES.with(|remembered| remembered.borrow().iter().find(|(known, _)| *known == key).map(|(_, analysis)| analysis.clone())) {
+	let key = (is_fresh(context) && std::env::var(SWITCH_VARIABLE).as_deref() != Ok("off"))
+		.then(|| fingerprint(program))
+		.flatten();
+	let Some(key) = key else {
+		return analyse(context, program);
+	};
+	if let Some(analysis) = REMEMBERED_ANALYSES.with(|remembered| {
+		remembered
+			.borrow()
+			.iter()
+			.find(|(known, _)| *known == key)
+			.map(|(_, analysis)| analysis.clone())
+	}) {
 		return analysis.into(context);
 	}
 	// what the analysis needs from the runtime is no part of a remembered answer: such an analysis is not remembered
@@ -82,10 +92,18 @@ pub fn analysed(context: &mut Context, program: &Node, analyse: impl FnOnce(&mut
 
 /// A Context nothing was put in yet: the analysis depends only on the program
 fn is_fresh(context: &Context) -> bool {
-	context.user_functions.is_empty() && context.ffi_imports.is_empty() && context.field_kinds.is_empty() && context.enclosing_functions.is_empty()
-		&& context.parameter_conflicts.is_empty() && context.closure_targets.is_empty() && context.closure_variable_targets.is_empty()
-		&& context.type_registry.types().is_empty() && context.user_globals.is_empty() && context.declared_globals.is_empty()
-		&& context.captures.is_empty() && context.capture_bindings.is_empty()
+	context.user_functions.is_empty()
+		&& context.ffi_imports.is_empty()
+		&& context.field_kinds.is_empty()
+		&& context.enclosing_functions.is_empty()
+		&& context.parameter_conflicts.is_empty()
+		&& context.closure_targets.is_empty()
+		&& context.closure_variable_targets.is_empty()
+		&& context.type_registry.types().is_empty()
+		&& context.user_globals.is_empty()
+		&& context.declared_globals.is_empty()
+		&& context.captures.is_empty()
+		&& context.capture_bindings.is_empty()
 }
 
 /// A hash of the whole tree, metadata included; none for a tree holding opaque Rust data (Node::Data)

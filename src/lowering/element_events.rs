@@ -9,8 +9,8 @@
 //! `input{ bind: age }` a number field of step 1, which the browser refuses 2.5 in, `float` one of any step, `bool` a
 //! checkbox; an attribute the element sets itself wins.
 
-use super::words::ON_WORD;
 use super::nodes::key;
+use super::words::ON_WORD;
 use crate::event_signals::{ELEMENT_EVENT_JOINER, PAGE_EVENTS};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -32,11 +32,16 @@ const WHOLE_STEP: &str = "1";
 pub const HANDLER_ATTRIBUTE_PREFIX: &str = "data-warp-";
 
 pub fn lower(program: Node) -> Node {
-	let Node::List(statements, bracket, separator) = program else { return program };
+	let Node::List(statements, bracket, separator) = program else {
+		return program;
+	};
 	if !statements.iter().any(has_element_handler) {
 		return Node::List(statements, bracket, separator);
 	}
-	let mut marker = Marker { handlers: vec![], numbered: 0 };
+	let mut marker = Marker {
+		handlers: vec![],
+		numbered: 0,
+	};
 	let mut lowered = vec![];
 	for statement in statements {
 		let marked = marker.marked(statement);
@@ -49,7 +54,10 @@ pub fn lower(program: Node) -> Node {
 
 pub(crate) fn has_element_handler(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some())));
+	node.visit(&mut |part| {
+		found |=
+			element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some()))
+	});
 	found
 }
 
@@ -62,13 +70,25 @@ pub fn lower_binds(program: Node) -> Node {
 fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
 	let node = node.map_children(|child| with_binds(child, declared));
 	with_element_items(node, |items| {
-		let checks: Vec<Node> = (0..items.len()).filter_map(|index| bound_at(&items, index)).flat_map(|variable| type_checks(&variable, declared, &items)).collect();
+		let checks: Vec<Node> = (0..items.len())
+			.filter_map(|index| bound_at(&items, index))
+			.flat_map(|variable| type_checks(&variable, declared, &items))
+			.collect();
 		let property = bound_property(&[checks.clone(), items.clone()].concat());
 		let mut checks = Some(checks);
-		items.iter().enumerate().flat_map(|(index, item)| match bound_at(&items, index) {
-			Some(variable) => checks.take().unwrap_or_default().into_iter().chain(bound(variable, property)).collect(),
-			None => vec![item.clone()],
-		}).collect()
+		items
+			.iter()
+			.enumerate()
+			.flat_map(|(index, item)| match bound_at(&items, index) {
+				Some(variable) => checks
+					.take()
+					.unwrap_or_default()
+					.into_iter()
+					.chain(bound(variable, property))
+					.collect(),
+				None => vec![item.clone()],
+			})
+			.collect()
 	})
 }
 
@@ -76,28 +96,57 @@ fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
 fn declared_types(program: &Node) -> HashMap<String, Option<String>> {
 	let mut declared: HashMap<String, Option<String>> = HashMap::new();
 	program.visit(&mut |part| {
-		let Node::Key(target, Op::Assign, _) = part.drop_meta() else { return };
-		let Node::Key(name, Op::Colon, kind) = target.drop_meta() else { return };
-		let (Node::Symbol(name), Node::Symbol(kind)) = (name.drop_meta(), kind.drop_meta()) else { return };
-		declared.entry(name.clone()).and_modify(|known| if known.as_ref() != Some(kind) { *known = None }).or_insert_with(|| Some(kind.clone()));
+		let Node::Key(target, Op::Assign, _) = part.drop_meta() else {
+			return;
+		};
+		let Node::Key(name, Op::Colon, kind) = target.drop_meta() else {
+			return;
+		};
+		let (Node::Symbol(name), Node::Symbol(kind)) = (name.drop_meta(), kind.drop_meta()) else {
+			return;
+		};
+		declared
+			.entry(name.clone())
+			.and_modify(|known| {
+				if known.as_ref() != Some(kind) {
+					*known = None
+				}
+			})
+			.or_insert_with(|| Some(kind.clone()));
 	});
 	declared
 }
 
 /// The attributes a bound variable's declared type checks its field with, but those the element sets itself
 fn type_checks(variable: &Node, declared: &HashMap<String, Option<String>>, items: &[Node]) -> Vec<Node> {
-	let Some(Some(kind)) = declared.get(&variable.drop_meta().name()) else { return vec![] };
+	let Some(Some(kind)) = declared.get(&variable.drop_meta().name()) else {
+		return vec![];
+	};
 	let checks: &[(&str, Node)] = if crate::analyzer::is_bool_type(kind) {
 		&[(TYPE_ATTRIBUTE, Node::Text(CHECKBOX_FIELD.to_string()))]
 	} else if crate::analyzer::is_whole_type(kind) {
-		&[(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())), (STEP_ATTRIBUTE, Node::Text(WHOLE_STEP.to_string()))]
+		&[
+			(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())),
+			(STEP_ATTRIBUTE, Node::Text(WHOLE_STEP.to_string())),
+		]
 	} else if crate::analyzer::builtin_type_kind(kind) == Some(crate::type_kinds::Kind::Float) {
-		&[(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())), (STEP_ATTRIBUTE, Node::Text(ANY_STEP.to_string()))]
+		&[
+			(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())),
+			(STEP_ATTRIBUTE, Node::Text(ANY_STEP.to_string())),
+		]
 	} else {
 		&[]
 	};
-	let sets = |name: &str| items.iter().any(|item| matches!(item.drop_meta(), Node::Key(set, Op::Colon, _) if set.drop_meta().name() == name));
-	checks.iter().filter(|(name, _)| !sets(name)).map(|(name, value)| key(symbol(name), Op::Colon, value.clone())).collect()
+	let sets = |name: &str| {
+		items
+			.iter()
+			.any(|item| matches!(item.drop_meta(), Node::Key(set, Op::Colon, _) if set.drop_meta().name() == name))
+	};
+	checks
+		.iter()
+		.filter(|(name, _)| !sets(name))
+		.map(|(name, value)| key(symbol(name), Op::Colon, value.clone()))
+		.collect()
 }
 
 /// `bind: name` at `index` of an element's items: the bound variable
@@ -110,23 +159,37 @@ fn bound_at(items: &[Node], index: usize) -> Option<Node> {
 
 /// `value`, or `checked` for a checkbox or radio (`type: "checkbox"`)
 fn bound_property(items: &[Node]) -> &'static str {
-	let checks = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, kind)
-		if name.drop_meta().name() == TYPE_ATTRIBUTE && CHECKED_TYPES.contains(&kind.drop_meta().name().as_str())));
-	if checks { CHECKED } else { VALUE }
+	let checks = items.iter().any(|item| {
+		matches!(item.drop_meta(), Node::Key(name, Op::Colon, kind)
+		if name.drop_meta().name() == TYPE_ATTRIBUTE && CHECKED_TYPES.contains(&kind.drop_meta().name().as_str()))
+	});
+	if checks {
+		CHECKED
+	} else {
+		VALUE
+	}
 }
 
 /// `bind: name` as the attribute `value: name` and the handler `on input { name = event.value }`
 fn bound(variable: Node, property: &str) -> [Node; 4] {
 	let attribute = key(symbol(property), Op::Colon, variable.clone());
 	let read = key(symbol(crate::event_signals::EVENT_WORD), Op::Dot, symbol(property));
-	let update = Node::List(vec![key(variable, Op::Assign, read)], Bracket::Curly, Separator::Semicolon);
+	let update = Node::List(
+		vec![key(variable, Op::Assign, read)],
+		Bracket::Curly,
+		Separator::Semicolon,
+	);
 	[attribute, symbol(ON_WORD), symbol(INPUT_EVENT), update]
 }
 
 /// The items of an element's block: `button{ … }` (a block of anything else is code, its `on click` page-wide)
 pub(crate) fn element_items(node: &Node) -> Option<&Vec<Node>> {
-	let Node::Key(tag, Op::Colon | Op::None, content) = node else { return None };
-	let Node::Symbol(tag) = tag.drop_meta() else { return None };
+	let Node::Key(tag, Op::Colon | Op::None, content) = node else {
+		return None;
+	};
+	let Node::Symbol(tag) = tag.drop_meta() else {
+		return None;
+	};
 	match content.drop_meta() {
 		Node::List(items, Bracket::Curly, _) if crate::markup::is_element_tag(tag) => Some(items),
 		_ => None,
@@ -138,8 +201,12 @@ pub(crate) fn with_element_items(node: Node, rewrite: impl FnOnce(Vec<Node>) -> 
 	if element_items(&node).is_none() {
 		return node;
 	}
-	let Node::Key(tag, op, content) = node else { unreachable!("an element") };
-	let Node::List(items, bracket, separator) = content.drop_meta().clone() else { unreachable!("an element's block") };
+	let Node::Key(tag, op, content) = node else {
+		unreachable!("an element")
+	};
+	let Node::List(items, bracket, separator) = content.drop_meta().clone() else {
+		unreachable!("an element's block")
+	};
 	Node::Key(tag, op, Box::new(Node::List(rewrite(items), bracket, separator)))
 }
 
@@ -147,7 +214,9 @@ pub(crate) fn with_element_items(node: Node, rewrite: impl FnOnce(Vec<Node>) -> 
 pub(crate) fn handler_at(items: &[Node], index: usize) -> Option<(String, Node, usize)> {
 	// `form{⏎ on submit { … }⏎ button{…} }`: a handler on a line of its own is that line's group
 	if let Node::List(line, Bracket::None, _) = items.get(index)?.drop_meta() {
-		return handler_at(line, 0).filter(|(_, _, length)| *length == line.len()).map(|(event, body, _)| (event, body, 1));
+		return handler_at(line, 0)
+			.filter(|(_, _, length)| *length == line.len())
+			.map(|(event, body, _)| (event, body, 1));
 	}
 	if !items.get(index)?.is_symbol(ON_WORD) {
 		return None;
@@ -185,9 +254,17 @@ impl Marker {
 			match handler_at(&items, index) {
 				Some((event, body, length)) => {
 					self.numbered += 1;
-					kept.push(key(Node::Symbol(format!("{HANDLER_ATTRIBUTE_PREFIX}{event}")), Op::Colon, Node::Text(self.numbered.to_string())));
+					kept.push(key(
+						Node::Symbol(format!("{HANDLER_ATTRIBUTE_PREFIX}{event}")),
+						Op::Colon,
+						Node::Text(self.numbered.to_string()),
+					));
 					let handled = Node::Symbol(format!("{event}{ELEMENT_EVENT_JOINER}{}", self.numbered));
-					self.handlers.push(Node::List(vec![symbol(ON_WORD), handled, body], Bracket::None, Separator::Space));
+					self.handlers.push(Node::List(
+						vec![symbol(ON_WORD), handled, body],
+						Bracket::None,
+						Separator::Space,
+					));
 					index += length;
 				}
 				None => {

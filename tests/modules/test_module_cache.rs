@@ -2,7 +2,6 @@ use warp::Node;
 // use warp::test_utils::{cache_stats, read_bytes_fast};
 use warp::wasm_emitter::WasmGcEmitter;
 
-
 #[test]
 fn test_module_cache_reuse() {
 	// Generate the same WASM bytecode twice
@@ -17,10 +16,7 @@ fn test_module_cache_reuse() {
 	let bytes2 = emitter2.finish();
 
 	// Verify bytecode is identical
-	assert_eq!(
-		bytes1, bytes2,
-		"Identical nodes should produce identical bytecode"
-	);
+	assert_eq!(bytes1, bytes2, "Identical nodes should produce identical bytecode");
 
 	// First read - should compile and cache
 	// let root1 = read_bytes_fast(&bytes1).expect("First read failed");
@@ -49,10 +45,7 @@ fn test_different_modules_not_cached() {
 	let bytes2 = emitter2.finish();
 
 	// Verify bytecode is different
-	assert_ne!(
-		bytes1, bytes2,
-		"Different nodes should produce different bytecode"
-	);
+	assert_ne!(bytes1, bytes2, "Different nodes should produce different bytecode");
 
 	println!("✓ Different modules cached separately");
 }

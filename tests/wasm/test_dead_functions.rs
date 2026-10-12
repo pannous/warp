@@ -42,14 +42,22 @@ fn unreachable_functions_are_dropped_and_the_rest_renumbered() {
 
 #[test]
 fn a_module_without_dead_functions_stays_as_it_is() {
-	let module = wat::parse_str(r#"(module (func $helper (result i64) (i64.const 1)) (func (export "main") (result i64) (call $helper)))"#).unwrap();
+	let module = wat::parse_str(
+		r#"(module (func $helper (result i64) (i64.const 1)) (func (export "main") (result i64) (call $helper)))"#,
+	)
+	.unwrap();
 	assert_eq!(without_dead_functions(&module).unwrap(), module);
 }
 
 /// the emitter's modules carry no function that nothing reaches: pruning them again changes nothing
 #[test]
 fn compiled_programs_carry_no_dead_functions() {
-	for program in ["42", "f(x) := x + 1; f(41)", "print \"hi\"; [1, 2, 3].map(x => x * 2)", "try 1/0 else 7"] {
+	for program in [
+		"42",
+		"f(x) := x + 1; f(41)",
+		"print \"hi\"; [1, 2, 3].map(x => x * 2)",
+		"try 1/0 else 7",
+	] {
 		let module = warp::wasm_emitter::compile(program).unwrap().bytes;
 		assert_eq!(without_dead_functions(&module).unwrap(), module, "{program}");
 	}

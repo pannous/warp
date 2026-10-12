@@ -4,10 +4,10 @@
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating.
 
 use super::nodes::{call, children_rewritten, int, key, written_entry};
+use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::diagnostic::Diagnostic;
 
 /// Meta key on a name written `x!`
 const MUTATED_MARK: &str = "mutated";
@@ -60,7 +60,11 @@ fn copy_word_call(call: &Node) -> Option<(&str, &str, bool)> {
 		other => other,
 	};
 	match (called, variable.drop_meta()) {
-		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&crate::library_words::canonical_spelling(called)) => Some((called, name, is_marked(call) || is_marked(variable))),
+		(Node::Symbol(called), Node::Symbol(name))
+			if COPY_WORDS.contains(&crate::library_words::canonical_spelling(called)) =>
+		{
+			Some((called, name, is_marked(call) || is_marked(variable)))
+		}
 		_ => None,
 	}
 }
@@ -94,20 +98,31 @@ pub fn mutated_variable(call: &Node) -> Option<&Node> {
 
 /// `x!`: evaluated alone, assigned the result of the call it is the argument of
 pub fn marked(name: Node) -> Node {
-	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::True)) }
+	Node::Meta {
+		node: Box::new(name),
+		data: Box::new(Node::key(MUTATED_MARK, Node::True)),
+	}
 }
 
 /// `x!!`: like `x!`, and a block runs fully (blocks.rs)
 pub fn marked_fully(name: Node) -> Node {
-	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::int(FULLY))) }
+	Node::Meta {
+		node: Box::new(name),
+		data: Box::new(Node::key(MUTATED_MARK, Node::int(FULLY))),
+	}
 }
 const FULLY: i64 = 2;
 
 /// What a `!` or `!!` follows (a name or a field `o.s1`), and whether it was `!!`
 pub(crate) fn bang_target(node: &Node) -> Option<(Node, bool)> {
-	let Node::Meta { node: inner, data } = node else { return None };
+	let Node::Meta { node: inner, data } = node else {
+		return None;
+	};
 	match data.as_ref() {
-		Node::Key(key, _, value) if key.name() == MUTATED_MARK => Some((inner.drop_meta().clone(), matches!(value.drop_meta(), Node::Number(n) if *n == FULLY))),
+		Node::Key(key, _, value) if key.name() == MUTATED_MARK => Some((
+			inner.drop_meta().clone(),
+			matches!(value.drop_meta(), Node::Number(n) if *n == FULLY),
+		)),
 		_ => bang_target(inner),
 	}
 }
@@ -120,7 +135,9 @@ pub fn lower_deletes(node: Node) -> Node {
 }
 
 fn deleted_entry(statement: &Node) -> Option<Node> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
 	let [word, target] = items.as_slice() else { return None };
 	if !word.is_symbol(DELETE_WORD) {
 		return None;
@@ -142,8 +159,13 @@ pub fn lower(node: Node) -> Node {
 			let items: Vec<Node> = items.into_iter().map(lower_inside).collect();
 			let call = Node::List(items, bracket, separator);
 			match &call {
-				Node::List(items, _, separator) if items.len() == 2 && is_name(&items[0]) && is_marked(&items[1]) && is_name(&unmarked(items[1].clone()))
-					&& !matches!(separator, Separator::Semicolon | Separator::Newline) => {
+				Node::List(items, _, separator)
+					if items.len() == 2
+						&& is_name(&items[0])
+						&& is_marked(&items[1])
+						&& is_name(&unmarked(items[1].clone()))
+						&& !matches!(separator, Separator::Semicolon | Separator::Newline) =>
+				{
 					let variable = unmarked(items[1].clone());
 					key(variable, Op::Assign, strip_marks(call, false))
 				}
@@ -162,14 +184,31 @@ pub fn lower(node: Node) -> Node {
 
 /// Items keep their marks until their own list decides; deeper lists are lowered on their own
 fn lower_inside(item: Node) -> Node {
-	if is_marked(&item) { item } else { lower(item) }
+	if is_marked(&item) {
+		item
+	} else {
+		lower(item)
+	}
 }
 
 /// The marked names as plain names (the variable a mutation assigns) or, `unwrap`, as unwraps (`x!` alone)
 fn strip_marks(node: Node, unwrap: bool) -> Node {
-	let plain = |item: Node| if unwrap { unwrapped(unmarked(item)) } else { unmarked(item) };
+	let plain = |item: Node| {
+		if unwrap {
+			unwrapped(unmarked(item))
+		} else {
+			unmarked(item)
+		}
+	};
 	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| if is_marked(&item) { plain(item) } else { item }).collect(), bracket, separator),
+		Node::List(items, bracket, separator) => Node::List(
+			items
+				.into_iter()
+				.map(|item| if is_marked(&item) { plain(item) } else { item })
+				.collect(),
+			bracket,
+			separator,
+		),
 		other => other,
 	}
 }
@@ -189,7 +228,9 @@ fn unwrapped(name: Node) -> Node {
 	}
 	if !is_name(&name) {
 		let written = crate::normalize::operand_text(&name);
-		return crate::node::error(&format!("{written} is only known at run time: `!` needs a constant block"));
+		return crate::node::error(&format!(
+			"{written} is only known at run time: `!` needs a constant block"
+		));
 	}
 	call(UNWRAP, vec![name])
 }
@@ -209,7 +250,10 @@ fn is_mark(data: &Node) -> bool {
 fn unmarked(node: Node) -> Node {
 	match node {
 		Node::Meta { node, data } if is_mark(&data) => *node,
-		Node::Meta { node, data } => Node::Meta { node: Box::new(unmarked(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(unmarked(*node)),
+			data,
+		},
 		other => other,
 	}
 }

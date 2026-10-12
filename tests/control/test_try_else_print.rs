@@ -12,7 +12,13 @@ fn the_fallback_prints() {
 #[cfg(all(unix, feature = "native"))]
 #[test]
 fn the_fallback_prints_its_text_unquoted() {
-	let lines = |code: &str| crate::common::printed(code).lines().filter(|line| !line.starts_with('»')).map(str::to_string).collect::<Vec<_>>();
+	let lines = |code: &str| {
+		crate::common::printed(code)
+			.lines()
+			.filter(|line| !line.starts_with('»'))
+			.map(str::to_string)
+			.collect::<Vec<_>>()
+	};
 	assert_eq!(lines("a = 1; b = 0\ntry print a / b else print \"msg\""), ["msg"]);
 	assert_eq!(lines("try print 1 + 2 else print \"msg\""), ["3"]);
 	assert_eq!(lines("try 1/0 else print \"a\" finally print \"z\""), ["a", "z"]);

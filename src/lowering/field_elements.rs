@@ -25,10 +25,20 @@ fn changes_element(op: &Op) -> bool {
 
 /// `k.counts#i`: the field `k.counts`, the index i and the name of the variable for its list
 fn field_element(target: &Node) -> Option<(Node, Node, String)> {
-	let Node::Key(field, Op::Hash, index) = target.drop_meta() else { return None };
-	let Node::Key(object, Op::Dot, member) = field.drop_meta() else { return None };
-	let (Node::Symbol(object), Node::Symbol(member)) = (object.drop_meta(), member.drop_meta()) else { return None };
-	Some((field.as_ref().clone(), index.as_ref().clone(), format!("{object}·{member}{ELEMENTS_SUFFIX}")))
+	let Node::Key(field, Op::Hash, index) = target.drop_meta() else {
+		return None;
+	};
+	let Node::Key(object, Op::Dot, member) = field.drop_meta() else {
+		return None;
+	};
+	let (Node::Symbol(object), Node::Symbol(member)) = (object.drop_meta(), member.drop_meta()) else {
+		return None;
+	};
+	Some((
+		field.as_ref().clone(),
+		index.as_ref().clone(),
+		format!("{object}·{member}{ELEMENTS_SUFFIX}"),
+	))
 }
 
 fn written_back(field: Node, index: Node, op: Op, value: Node, name: String) -> Node {

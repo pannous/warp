@@ -15,7 +15,14 @@ fn contains(bytes: &[u8], text: &str) -> bool {
 #[test]
 fn a_route_reading_a_table_ships_without_it() {
 	let files = warp::site::files(PROGRAM, "users", false).expect("the page builds");
-	let file = |wanted: &str| files.iter().find(|(name, _)| name == wanted).unwrap_or_else(|| panic!("{wanted}")).1.clone();
+	let file = |wanted: &str| {
+		files
+			.iter()
+			.find(|(name, _)| name == wanted)
+			.unwrap_or_else(|| panic!("{wanted}"))
+			.1
+			.clone()
+	};
 	let page = String::from_utf8_lossy(&file("index.html")).into_owned();
 	assert!(page.contains("<p>home</p>"), "{page}");
 	let module = file("app.wasm");
@@ -29,11 +36,16 @@ fn served(port: u16, folder: &str, requests: usize) -> std::thread::JoinHandle<S
 	std::fs::create_dir_all(&folder).expect("scratch folder");
 	let _ = std::fs::remove_file(folder.join("app.database.sqlite"));
 	let program = folder.join("app.warp");
-	warp::modules::with_program_file(&program, || warp::wasm_emitter::eval("class User{name: text}\nusers: [User] = database.users_p221\nusers.add(User(\"Ann\"))\nusers.add(User(\"Bo\"))"));
+	warp::modules::with_program_file(&program, || {
+		warp::wasm_emitter::eval("class User{name: text}\nusers: [User] = database.users_p221\nusers.add(User(\"Ann\"))\nusers.add(User(\"Bo\"))")
+	});
 	std::fs::write(&program, PROGRAM).expect("the program file");
 	let server = std::thread::spawn(move || {
 		warp::web_server::stop_after(requests);
-		warp::modules::with_program_file(&program, || warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(PROGRAM))).serialize()
+		warp::modules::with_program_file(&program, || {
+			warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(PROGRAM))
+		})
+		.serialize()
 	});
 	let started = std::time::Instant::now();
 	while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
@@ -47,7 +59,12 @@ fn served(port: u16, folder: &str, requests: usize) -> std::thread::JoinHandle<S
 fn the_server_gives_only_what_the_route_shows() {
 	const PORT: u16 = 18466;
 	let server = served(PORT, "route_data", 1);
-	let shown = ureq::post(&format!("http://127.0.0.1:{PORT}/rpc/route%C2%B7data%C2%B70")).send("[\"/users/2\"]").expect("an answer").body_mut().read_to_string().expect("a text");
+	let shown = ureq::post(&format!("http://127.0.0.1:{PORT}/rpc/route%C2%B7data%C2%B70"))
+		.send("[\"/users/2\"]")
+		.expect("an answer")
+		.body_mut()
+		.read_to_string()
+		.expect("a text");
 	assert_eq!(shown, "User Bo");
 	server.join().expect("the server thread");
 }
@@ -58,8 +75,16 @@ fn the_server_gives_only_what_the_route_shows() {
 fn the_first_visit_gets_finished_html() {
 	const PORT: u16 = 18471;
 	let server = served(PORT, "route_data_html", 1);
-	let page = ureq::get(&format!("http://127.0.0.1:{PORT}/users/2")).call().expect("an answer").body_mut().read_to_string().expect("the page");
+	let page = ureq::get(&format!("http://127.0.0.1:{PORT}/users/2"))
+		.call()
+		.expect("an answer")
+		.body_mut()
+		.read_to_string()
+		.expect("the page");
 	assert!(page.contains("<h1>User Bo</h1>"), "{page}");
-	assert!(page.contains(r#"{"url":"/rpc/route·data·0","arguments":["/users/2"],"body":"User Bo","text":true}"#), "{page}");
+	assert!(
+		page.contains(r#"{"url":"/rpc/route·data·0","arguments":["/users/2"],"body":"User Bo","text":true}"#),
+		"{page}"
+	);
 	server.join().expect("the server thread");
 }

@@ -70,7 +70,10 @@ pub fn spin_manifest(name: &str, source: &str) -> String {
 /// The Worker of the program file written next to it: app.warp → app-worker/
 pub fn build(program: &Path) -> Result<BuiltSite, String> {
 	let code = crate::site::read_program(program)?;
-	write_files(&worker_files(&code, &crate::site::program_stem(program))?, &worker_directory(program))
+	write_files(
+		&worker_files(&code, &crate::site::program_stem(program))?,
+		&worker_directory(program),
+	)
 }
 
 pub fn worker_directory(program: &Path) -> PathBuf {
@@ -85,7 +88,11 @@ pub fn deploy(program: &Path, deployment: Deployment) -> Result<(), String> {
 		return Ok(());
 	}
 	let built = build(program)?;
-	println!("built the Worker {} ({})", built.directory.display(), built.files.join(", "));
+	println!(
+		"built the Worker {} ({})",
+		built.directory.display(),
+		built.files.join(", ")
+	);
 	let command = match deployment {
 		Deployment::Cloud => "deploy",
 		Deployment::Local => "dev",
@@ -96,12 +103,19 @@ pub fn deploy(program: &Path, deployment: Deployment) -> Result<(), String> {
 	let binary = words.next().unwrap_or(WRANGLER);
 	let status = std::process::Command::new(binary).args(words).arg(command).current_dir(&built.directory).status()
 		.map_err(|failure| format!("{binary} does not run ({failure}): install it with `npm install -g wrangler`, or name it in {WRANGLER_VARIABLE}"))?;
-	status.success().then_some(()).ok_or_else(|| format!("{wrangler} {command} failed ({status})"))
+	status
+		.success()
+		.then_some(())
+		.ok_or_else(|| format!("{wrangler} {command} failed ({status})"))
 }
 
 /// `My App.warp` → my-app
 fn worker_name(name: &str) -> String {
-	let dashed: String = name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+	let dashed: String = name
+		.to_lowercase()
+		.chars()
+		.map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+		.collect();
 	let trimmed = dashed.trim_matches('-');
 	let name = if trimmed.is_empty() { "warp-app" } else { trimmed };
 	name.chars().take(NAME_LENGTH).collect()
@@ -116,21 +130,45 @@ pub fn deploy_hosted(program: &Path) -> Result<String, String> {
 	let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
 	let hosting = std::env::var(HOSTING_VARIABLE).unwrap_or_else(|_| HOSTING.to_string());
 	let address = format!("{hosting}/deploy?name={name}&scripts={}", names.join(","));
-	let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(HOSTING_TIMEOUT)).http_status_as_error(false).build().into();
-	let mut response = agent.post(&address).header("authorization", &format!("Bearer {}", github_token()?)).send(&module[..])
+	let agent: ureq::Agent = ureq::Agent::config_builder()
+		.timeout_global(Some(HOSTING_TIMEOUT))
+		.http_status_as_error(false)
+		.build()
+		.into();
+	let mut response = agent
+		.post(&address)
+		.header("authorization", &format!("Bearer {}", github_token()?))
+		.send(&module[..])
 		.map_err(|failure| format!("{hosting} does not answer: {failure}"))?;
-	let text = response.body_mut().read_to_string().map_err(|failure| format!("{hosting} answered nothing: {failure}"))?;
-	let reply: serde_json::Value = serde_json::from_str(&text).map_err(|_| format!("{hosting} answered no JSON: {text}"))?;
+	let text = response
+		.body_mut()
+		.read_to_string()
+		.map_err(|failure| format!("{hosting} answered nothing: {failure}"))?;
+	let reply: serde_json::Value =
+		serde_json::from_str(&text).map_err(|_| format!("{hosting} answered no JSON: {text}"))?;
 	match reply["url"].as_str() {
 		Some(url) => Ok(url.to_string()),
-		None => Err(format!("{hosting}: {}", reply["error"].as_str().unwrap_or("no address"))),
+		None => Err(format!(
+			"{hosting}: {}",
+			reply["error"].as_str().unwrap_or("no address")
+		)),
 	}
 }
 
 fn github_token() -> Result<String, String> {
-	if let Ok(token) = std::env::var(HOSTING_TOKEN_VARIABLE) { return Ok(token) }
-	let login_needed = || format!("warp-hosting needs a GitHub login: `gh auth login`, or a token in {HOSTING_TOKEN_VARIABLE}");
-	let output = std::process::Command::new("gh").args(["auth", "token"]).output().map_err(|_| login_needed())?;
+	if let Ok(token) = std::env::var(HOSTING_TOKEN_VARIABLE) {
+		return Ok(token);
+	}
+	let login_needed =
+		|| format!("warp-hosting needs a GitHub login: `gh auth login`, or a token in {HOSTING_TOKEN_VARIABLE}");
+	let output = std::process::Command::new("gh")
+		.args(["auth", "token"])
+		.output()
+		.map_err(|_| login_needed())?;
 	let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
-	if token.is_empty() { Err(login_needed()) } else { Ok(token) }
+	if token.is_empty() {
+		Err(login_needed())
+	} else {
+		Ok(token)
+	}
 }

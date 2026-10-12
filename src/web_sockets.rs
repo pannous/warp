@@ -51,13 +51,16 @@ pub fn pending(id: i64) -> Option<i64> {
 	connected(&address, |connection| {
 		connection.received.extend(connection.incoming.try_iter());
 		connection.received.len() as i64
-	}).ok()
+	})
+	.ok()
 }
 
 /// The oldest message for listener `id` as a value (ø when none waits), None when it hears no WebSocket
 pub fn next(id: i64) -> Option<Node> {
 	let address = LISTENERS.with(|listeners| listeners.borrow().get(&id).cloned())?;
-	let message = connected(&address, |connection| connection.received.pop_front()).ok().flatten();
+	let message = connected(&address, |connection| connection.received.pop_front())
+		.ok()
+		.flatten();
 	Some(message.map_or(Node::Empty, crate::web_server::value_of_body))
 }
 
@@ -65,7 +68,9 @@ pub fn next(id: i64) -> Option<Node> {
 pub fn send(address: &str, message: &Node) -> Result<(), String> {
 	let text = match message.drop_meta() {
 		Node::Text(text) => text.clone(),
-		other => other.to_json_compact().map_err(|problem| format!("broadcast on {address:?}: {problem}"))?,
+		other => other
+			.to_json_compact()
+			.map_err(|problem| format!("broadcast on {address:?}: {problem}"))?,
 	};
 	connected(address, |connection| connection.outgoing.send(text))
 		.and_then(|sent| sent.map_err(|_| "the connection is closed".to_string()))
@@ -90,7 +95,9 @@ fn connect(address: &str) -> Result<Connection, String> {
 		MaybeTlsStream::Rustls(stream) => stream.get_mut(),
 		_ => return Err("an unknown kind of stream".to_string()),
 	};
-	stream.set_read_timeout(Some(READ_TIMEOUT)).map_err(|problem| problem.to_string())?;
+	stream
+		.set_read_timeout(Some(READ_TIMEOUT))
+		.map_err(|problem| problem.to_string())?;
 	let (outgoing, to_send) = channel::<String>();
 	let (arrived, incoming) = channel();
 	std::thread::spawn(move || loop {
@@ -102,7 +109,11 @@ fn connect(address: &str) -> Result<Connection, String> {
 			}
 			Ok(Message::Close(_)) => return,
 			Ok(_) => {}
-			Err(tungstenite::Error::Io(problem)) if matches!(problem.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+			Err(tungstenite::Error::Io(problem))
+				if matches!(
+					problem.kind(),
+					std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+				) => {}
 			Err(_) => return,
 		}
 		loop {
@@ -117,6 +128,9 @@ fn connect(address: &str) -> Result<Connection, String> {
 			}
 		}
 	});
-	Ok(Connection { outgoing, incoming, received: VecDeque::new() })
+	Ok(Connection {
+		outgoing,
+		incoming,
+		received: VecDeque::new(),
+	})
 }
-

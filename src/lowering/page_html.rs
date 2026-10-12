@@ -4,9 +4,9 @@
 //! binding event_signals.rs made, else the program's last line when that is an expression: a page shows its last line
 //! anew, so it is read again after each handler.
 
+use super::nodes::call;
 use crate::event_signals::{function_with_globals, main_level_variables, PAGE_VALUE};
 use crate::node::{symbol, Node};
-use super::nodes::call;
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -25,9 +25,15 @@ pub fn use_markup(program: Node) -> Node {
 	}
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
 	let rendered = call(TO_HTML, vec![call(PAGE_VALUE, vec![])]);
-	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_HTML, false, &[rendered], &HashSet::new()));
+	statements.insert(
+		statements.len().saturating_sub(1),
+		function_with_globals(PAGE_HTML, false, &[rendered], &HashSet::new()),
+	);
 	let any_value = call(TO_HTML, vec![symbol(crate::event_signals::EVENT_WORD)]);
-	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_RENDER, true, &[any_value], &HashSet::new()));
+	statements.insert(
+		statements.len().saturating_sub(1),
+		function_with_globals(PAGE_RENDER, true, &[any_value], &HashSet::new()),
+	);
 	Node::List(statements, bracket, separator)
 }
 
@@ -44,7 +50,10 @@ pub fn lower(program: Node) -> Node {
 	match statements.last().filter(|last| is_shown(last)).cloned() {
 		Some(shown) => {
 			let main_variables = main_level_variables(&statements);
-			statements.insert(statements.len() - 1, function_with_globals(PAGE_VALUE, false, &[shown], &main_variables));
+			statements.insert(
+				statements.len() - 1,
+				function_with_globals(PAGE_VALUE, false, &[shown], &main_variables),
+			);
 		}
 		None => statements.retain(|statement| !defines(statement, PAGE_HTML)),
 	}
@@ -53,7 +62,9 @@ pub fn lower(program: Node) -> Node {
 
 /// `name() := …`, `(name) := …`
 fn defines(statement: &Node, name: &str) -> bool {
-	let Node::Key(head, Op::Define, _) = statement.drop_meta() else { return false };
+	let Node::Key(head, Op::Define, _) = statement.drop_meta() else {
+		return false;
+	};
 	let head = match head.drop_meta() {
 		Node::List(items, _, _) => items.first().map(Node::drop_meta),
 		other => Some(other),
@@ -65,7 +76,9 @@ fn defines(statement: &Node, name: &str) -> bool {
 fn is_shown(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Key(_, op, _) => !matches!(op, Op::Assign | Op::Define) && !op.is_compound_assign(),
-		Node::List(items, _, _) => !matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if STATEMENT_WORDS.contains(&word.as_str()) || crate::modules::is_import_keyword(word)),
+		Node::List(items, _, _) => {
+			!matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if STATEMENT_WORDS.contains(&word.as_str()) || crate::modules::is_import_keyword(word))
+		}
 		_ => true,
 	}
 }

@@ -25,14 +25,19 @@ const BODY_PLACEHOLDER: &str = "memo_body";
 pub fn lower(program: Node) -> Node {
 	let context = crate::analyzer::function_context(&program);
 	// the shape first: the effects and variables of the whole program only when some function has it
-	let candidates: Vec<&UserFunctionDef> = context.user_functions.values().filter(|function| has_memoizable_shape(function)).collect();
+	let candidates: Vec<&UserFunctionDef> = context
+		.user_functions
+		.values()
+		.filter(|function| has_memoizable_shape(function))
+		.collect();
 	if candidates.is_empty() {
 		return program;
 	}
 	let report = EffectReport::of(&program);
 	let mut main = Scope::new();
 	collect_variables(&program, &mut main);
-	let mut memoized: Vec<String> = candidates.into_iter()
+	let mut memoized: Vec<String> = candidates
+		.into_iter()
 		.filter(|function| is_memoizable(function, &report, &main))
 		.map(|function| function.name.clone())
 		.collect();
@@ -45,20 +50,35 @@ pub fn lower(program: Node) -> Node {
 
 /// One Int parameter, an Int result, an expression body calling the function itself at least twice
 fn has_memoizable_shape(function: &UserFunctionDef) -> bool {
-	let [param] = function.params.as_slice() else { return false };
+	let [param] = function.params.as_slice() else {
+		return false;
+	};
 	let mut self_calls = 0;
-	function.body.visit(&mut |part| if let Node::List(items, _, _) = part.drop_meta() {
-		self_calls += matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name) as usize;
+	function.body.visit(&mut |part| {
+		if let Node::List(items, _, _) = part.drop_meta() {
+			self_calls += matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name)
+				as usize;
+		}
 	});
 	let mut expression = true;
-	function.body.visit(&mut |part| expression &= !matches!(part.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::List(_, _, Separator::Semicolon | Separator::Newline))
-		&& part.drop_meta().name() != "return");
-	expression && self_calls >= 2 && param_kind(param) == Kind::Int && function.return_kind == Kind::Int && function.tuple_kinds.is_empty()
+	function.body.visit(&mut |part| {
+		expression &= !matches!(
+			part.drop_meta(),
+			Node::List(_, Bracket::Curly, _) | Node::List(_, _, Separator::Semicolon | Separator::Newline)
+		) && part.drop_meta().name() != "return"
+	});
+	expression
+		&& self_calls >= 2
+		&& param_kind(param) == Kind::Int
+		&& function.return_kind == Kind::Int
+		&& function.tuple_kinds.is_empty()
 }
 
 /// A function of that shape that is pure (but for dividing) and reads no variable of main
 fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope) -> bool {
-	report.effects_of(&function.name).is_some_and(|effects| effects.is_subset_of(EffectSet::of(&[Effect::Div])))
+	report
+		.effects_of(&function.name)
+		.is_some_and(|effects| effects.is_subset_of(EffectSet::of(&[Effect::Div])))
 		&& captured_variables(function, main).is_empty()
 }
 
@@ -71,18 +91,41 @@ pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
 	match node.drop_meta() {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if *op == Op::Define || is_call_head(head) => {
 			let op = *op;
-			Some((head.as_ref().clone(), body.as_ref().clone(), Box::new(move |head: Node, body: Node| key(head, op, body))))
+			Some((
+				head.as_ref().clone(),
+				body.as_ref().clone(),
+				Box::new(move |head: Node, body: Node| key(head, op, body)),
+			))
 		}
 		Node::List(items, bracket, separator) => match items.as_slice() {
-			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => match definition.drop_meta() {
-				Node::Key(head, Op::Colon | Op::Define, body) => {
-					let (keyword, bracket, separator, op) = (keyword.clone(), bracket.clone(), separator.clone(), if matches!(definition.drop_meta(), Node::Key(_, Op::Define, _)) { Op::Define } else { Op::Colon });
-					Some((head.as_ref().clone(), body.as_ref().clone(), Box::new(move |head: Node, body: Node| {
-						Node::List(vec![keyword.clone(), key(head, op, body)], bracket.clone(), separator.clone())
-					})))
+			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => {
+				match definition.drop_meta() {
+					Node::Key(head, Op::Colon | Op::Define, body) => {
+						let (keyword, bracket, separator, op) = (
+							keyword.clone(),
+							bracket.clone(),
+							separator.clone(),
+							if matches!(definition.drop_meta(), Node::Key(_, Op::Define, _)) {
+								Op::Define
+							} else {
+								Op::Colon
+							},
+						);
+						Some((
+							head.as_ref().clone(),
+							body.as_ref().clone(),
+							Box::new(move |head: Node, body: Node| {
+								Node::List(
+									vec![keyword.clone(), key(head, op, body)],
+									bracket.clone(),
+									separator.clone(),
+								)
+							}),
+						))
+					}
+					_ => None,
 				}
-				_ => None,
-			},
+			}
 			_ => None,
 		},
 		_ => None,
@@ -102,7 +145,9 @@ fn rewritten(node: Node, memoized: &[String]) -> Node {
 fn cached(node: &Node, memoized: &[String]) -> Option<Node> {
 	if let Some((head, body, make)) = definition_parts(node) {
 		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
-			let id = items.first().and_then(|name| memoized.iter().position(|memo| *memo == name.drop_meta().name()));
+			let id = items
+				.first()
+				.and_then(|name| memoized.iter().position(|memo| *memo == name.drop_meta().name()));
 			if let ([_, param], Some(id)) = (items.as_slice(), id) {
 				let template = crate::warp_parser::parse(&format!(
 					"if {MEMO_KNOWN}({id}, {ARGUMENT_PLACEHOLDER}) then {MEMO_VALUE}({id}, {ARGUMENT_PLACEHOLDER}) else {MEMO_STORE}({id}, {ARGUMENT_PLACEHOLDER}, {BODY_PLACEHOLDER})"));
@@ -110,7 +155,11 @@ fn cached(node: &Node, memoized: &[String]) -> Option<Node> {
 					Node::Key(name, _, _) => name.drop_meta().name(), // `n: int`
 					other => other.name(),
 				});
-				let cached_body = substitute(substitute(template, ARGUMENT_PLACEHOLDER, &argument), BODY_PLACEHOLDER, &body);
+				let cached_body = substitute(
+					substitute(template, ARGUMENT_PLACEHOLDER, &argument),
+					BODY_PLACEHOLDER,
+					&body,
+				);
 				return Some(make(head.clone(), cached_body));
 			}
 		}

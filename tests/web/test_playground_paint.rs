@@ -26,14 +26,22 @@ fn run_in_page(code: &str, name: &str, system_values: Option<&str>) -> String {
 	let path = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}.wasm"));
 	std::fs::write(&path, &module.bytes).unwrap();
 	let playground = concat!(env!("CARGO_MANIFEST_DIR"), "/web/playground");
-	let output = Command::new("node").args(["--input-type=module", "-e", HOST_RUN, playground]).arg(&path).args(system_values).output().expect("node runs");
+	let output = Command::new("node")
+		.args(["--input-type=module", "-e", HOST_RUN, playground])
+		.arg(&path)
+		.args(system_values)
+		.output()
+		.expect("node runs");
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 	String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
 #[test]
 fn the_playground_paints_a_canvas_of_its_size() {
-	assert_eq!(run_in_host("use draw\ncanvas(2, 1)\nshow()", "paint-small"), "painted 2×1\nran");
+	assert_eq!(
+		run_in_host("use draw\ncanvas(2, 1)\nshow()", "paint-small"),
+		"painted 2×1\nran"
+	);
 }
 
 #[test]
@@ -44,5 +52,8 @@ fn the_playground_paints_the_default_canvas() {
 #[test]
 fn the_default_canvas_fills_the_output_pane() {
 	let pane = r#"{"view_width": 300, "view_height": 200}"#;
-	assert_eq!(run_in_page("use draw\nshow()", "paint-pane", Some(pane)), "painted 300×200\nran");
+	assert_eq!(
+		run_in_page("use draw\nshow()", "paint-pane", Some(pane)),
+		"painted 300×200\nran"
+	);
 }

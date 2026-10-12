@@ -2,9 +2,9 @@
 //! compiles, keyed by the SHA-256 of the module bytes and the engine's compatibility hash (wasmtime version, target,
 //! every setting that changes the machine code). A cached module is mapped into memory instead of compiled again.
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, Once};
 use std::time::SystemTime;
@@ -41,7 +41,9 @@ pub fn compiled_module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 		// SAFETY: compiled code runs as it is, so a .cwasm file is trusted like a native executable: the user runs it
 		return unsafe { Module::deserialize(engine, bytes) };
 	}
-	let Some(directory) = cache_directory() else { return Module::new(engine, bytes) };
+	let Some(directory) = cache_directory() else {
+		return Module::new(engine, bytes);
+	};
 	let key = cache_key(engine, bytes);
 	if let Some(module) = remembered(engine, &key) {
 		return Ok(module);
@@ -59,7 +61,10 @@ pub fn compiled_module_in(directory: &Path, engine: &Engine, bytes: &[u8]) -> Re
 /// The module this process compiled for the same engine (a Module belongs to the Engine that compiled it)
 fn remembered(engine: &Engine, key: &str) -> Option<Module> {
 	let modules = IN_MEMORY.lock().ok()?;
-	modules.get(key).filter(|module| Engine::same(module.engine(), engine)).cloned()
+	modules
+		.get(key)
+		.filter(|module| Engine::same(module.engine(), engine))
+		.cloned()
 }
 
 fn remember(key: String, module: &Module) {
@@ -99,14 +104,19 @@ fn cache_directory() -> Option<PathBuf> {
 	match std::env::var(CACHE_VARIABLE) {
 		Ok(setting) if setting == CACHE_OFF => None,
 		Ok(setting) if !setting.is_empty() => Some(PathBuf::from(setting)),
-		_ => std::env::var("HOME").ok().map(|home| PathBuf::from(home).join(DEFAULT_CACHE)),
+		_ => std::env::var("HOME")
+			.ok()
+			.map(|home| PathBuf::from(home).join(DEFAULT_CACHE)),
 	}
 }
 
 fn cache_key(engine: &Engine, bytes: &[u8]) -> String {
 	let mut engine_hasher = std::collections::hash_map::DefaultHasher::new();
 	engine.precompile_compatibility_hash().hash(&mut engine_hasher);
-	let digest = Sha256::new().chain_update(engine_hasher.finish().to_le_bytes()).chain_update(bytes).finalize();
+	let digest = Sha256::new()
+		.chain_update(engine_hasher.finish().to_le_bytes())
+		.chain_update(bytes)
+		.finalize();
 	digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
@@ -119,11 +129,17 @@ fn cached_module(engine: &Engine, path: &Path) -> Option<Module> {
 	// atomically (store_module), and wasmtime still rejects a file of another version or engine configuration
 	match unsafe { Module::deserialize_file(engine, path) } {
 		Ok(module) => {
-			let _ = fs::File::options().write(true).open(path).and_then(|file| file.set_modified(SystemTime::now()));
+			let _ = fs::File::options()
+				.write(true)
+				.open(path)
+				.and_then(|file| file.set_modified(SystemTime::now()));
 			Some(module)
 		}
 		Err(failure) => {
-			eprintln!("warning: unusable cached module {} is compiled again: {failure}", path.display());
+			eprintln!(
+				"warning: unusable cached module {} is compiled again: {failure}",
+				path.display()
+			);
 			None
 		}
 	}
@@ -146,7 +162,13 @@ fn prune(directory: &Path) {
 		.filter_map(Result::ok)
 		.filter_map(|entry| entry.metadata().ok().map(|metadata| (metadata, entry.path())))
 		.filter(|(metadata, _)| metadata.is_file())
-		.map(|(metadata, path)| (metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH), metadata.len(), path))
+		.map(|(metadata, path)| {
+			(
+				metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+				metadata.len(),
+				path,
+			)
+		})
 		.collect();
 	let mut total: u64 = modules.iter().map(|(_, size, _)| size).sum();
 	if total <= MAX_CACHE_BYTES {

@@ -6,7 +6,10 @@ use crate::is;
 fn hint_texts(code: &str) -> Vec<String> {
 	warp::normalize::clear_shown_hints();
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
-	hints.iter().map(|hint| format!("{} → {}: {}", hint.original, hint.canonical, hint.reason)).collect()
+	hints
+		.iter()
+		.map(|hint| format!("{} → {}: {}", hint.original, hint.canonical, hint.reason))
+		.collect()
 }
 
 #[test]

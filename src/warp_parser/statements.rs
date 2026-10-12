@@ -10,7 +10,11 @@ impl WarpParser {
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
 		self.in_for_header = outer_header;
 		self.skip_spaces();
-		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let body_word = if self.current_char() == ':' {
+			Some(":")
+		} else {
+			Some("do").filter(|word| self.matches_keyword(word))
+		};
 		(iterable, body_word)
 	}
 
@@ -25,21 +29,35 @@ impl WarpParser {
 			return None;
 		}
 		let declaration = self.parse_expr(0); // name, name=value or name:=value
-		let defines_function = matches!(declaration.drop_meta(), Node::Key(name, Op::Define, _) if self.functions.contains(&name.name()));
+		let defines_function =
+			matches!(declaration.drop_meta(), Node::Key(name, Op::Define, _) if self.functions.contains(&name.name()));
 		if keyword == "export" && defines_function {
 			return Some(declaration);
 		}
-		let global = |declaration: Node| Node::Key(Box::new(Symbol(crate::node::GLOBAL_DECLARATION.to_string())), Op::Colon, Box::new(declaration));
+		let global = |declaration: Node| {
+			Node::Key(
+				Box::new(Symbol(crate::node::GLOBAL_DECLARATION.to_string())),
+				Op::Colon,
+				Box::new(declaration),
+			)
+		};
 		// `global a, b` (Python): one declaration per name
 		let mut names = vec![declaration];
-		while keyword == crate::node::GLOBAL_DECLARATION && matches!(names.last().map(Node::drop_meta), Some(Symbol(_))) && self.current_char() == ',' {
+		while keyword == crate::node::GLOBAL_DECLARATION
+			&& matches!(names.last().map(Node::drop_meta), Some(Symbol(_)))
+			&& self.current_char() == ','
+		{
 			self.advance();
 			self.skip_spaces();
 			names.push(self.parse_atom());
 		}
 		Some(match names.len() {
 			1 => global(names.remove(0)),
-			_ => Node::List(names.into_iter().map(global).collect(), Bracket::None, Separator::Semicolon),
+			_ => Node::List(
+				names.into_iter().map(global).collect(),
+				Bracket::None,
+				Separator::Semicolon,
+			),
 		})
 	}
 
@@ -70,7 +88,11 @@ impl WarpParser {
 			1 => names.remove(0),
 			_ => Node::List(names, Bracket::None, Separator::Colon),
 		};
-		Node::Key(Box::new(Symbol(NONLOCAL_WORD.to_string())), Op::Colon, Box::new(declared))
+		Node::Key(
+			Box::new(Symbol(NONLOCAL_WORD.to_string())),
+			Op::Colon,
+			Box::new(declared),
+		)
 	}
 
 	/// `, b` after a declared name: another name, not the next item of a list
@@ -94,12 +116,17 @@ impl WarpParser {
 		let mut words = vec![first.to_string()];
 		let mut offset = 0;
 		let next = loop {
-			let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+			let blanks = (offset..)
+				.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
+				.count();
 			if blanks == 0 {
 				return None; // `public = 3`, `public(…)`: a name
 			}
 			let start = offset + blanks;
-			let word: String = (start..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+			let word: String = (start..)
+				.map(|at| self.peek_char(at))
+				.take_while(|ch| is_identifier_char(*ch))
+				.collect();
 			offset = start + word.chars().count();
 			if !is_modifier(&word) {
 				break word;
@@ -113,9 +140,18 @@ impl WarpParser {
 		}
 		let (line, column) = (self.line_nr, self.column.saturating_sub(first.chars().count()));
 		let is_static = words.iter().any(|word| word == STATIC_KEYWORD);
-		for word in words.iter().filter(|word| FOREIGN_MODIFIERS.contains(&word.as_str()) && *word != STATIC_KEYWORD) {
-			let question = Ask::new(FOREIGN_MODIFIER_TOPIC, format!("{word} has no meaning in warp"), vec![reading("skip it", &next)], Fallback::Warning)
-				.written(word).at(line, column);
+		for word in words
+			.iter()
+			.filter(|word| FOREIGN_MODIFIERS.contains(&word.as_str()) && *word != STATIC_KEYWORD)
+		{
+			let question = Ask::new(
+				FOREIGN_MODIFIER_TOPIC,
+				format!("{word} has no meaning in warp"),
+				vec![reading("skip it", &next)],
+				Fallback::Warning,
+			)
+			.written(word)
+			.at(line, column);
 			if let Err(error) = ask(&question) {
 				return Some(error);
 			}
@@ -123,7 +159,11 @@ impl WarpParser {
 		self.advance_by(offset - next.chars().count());
 		self.skip_spaces();
 		let statement = self.parse_expr(0);
-		Some(if is_static { statement.with_attribute(STATIC_KEYWORD, Node::True) } else { statement })
+		Some(if is_static {
+			statement.with_attribute(STATIC_KEYWORD, Node::True)
+		} else {
+			statement
+		})
 	}
 
 	/// Modifier and type words between the keyword and the name (`global const int k=7`): the global holds the value, the words are dropped
@@ -131,7 +171,9 @@ impl WarpParser {
 		loop {
 			let before_word = self.mark();
 			let word = self.parse_symbol().unwrap_or_default();
-			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
+			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str())
+				|| crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str())
+				|| crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
 				self.rewind(before_word); // `global int` names the variable int
@@ -154,7 +196,12 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_loop_variable(&mut self) -> Option<Node> {
-		let bracket = if self.current_char() == '(' { self.advance(); Bracket::Round } else { Bracket::None };
+		let bracket = if self.current_char() == '(' {
+			self.advance();
+			Bracket::Round
+		} else {
+			Bracket::None
+		};
 		let mut names = vec![];
 		loop {
 			self.skip_spaces();
@@ -218,7 +265,8 @@ impl WarpParser {
 		} else {
 			self.rewind(before_header.clone());
 			self.skip_spaces();
-			if self.at_c_style_for_head() { // `for(i=0;i<n;i++)`; `for (1…5).filter(f):` walks the list
+			if self.at_c_style_for_head() {
+				// `for(i=0;i<n;i++)`; `for (1…5).filter(f):` walks the list
 				return Some(self.c_style_for());
 			}
 		}
@@ -228,7 +276,8 @@ impl WarpParser {
 			let body = match body_word {
 				Some(word) => self.colon_body(word),
 				None if self.current_char() == '{' => self.parse_atom(), // `for (1…5).filter(odd) {print it}`
-				None => match starts_statement.then(|| self.indented_lines_below()).flatten() { // `play 440Hz for 0.05s` owns no lines below
+				None => match starts_statement.then(|| self.indented_lines_below()).flatten() {
+					// `play 440Hz for 0.05s` owns no lines below
 					Some(block) => block, // `for 0 to 2` and the lines indented below it
 					None => {
 						self.rewind(before_header);
@@ -236,7 +285,11 @@ impl WarpParser {
 					}
 				},
 			};
-			return Some(Node::List(vec![Symbol("for".to_string()), iterable, as_block(body)], Bracket::None, Separator::Space));
+			return Some(Node::List(
+				vec![Symbol("for".to_string()), iterable, as_block(body)],
+				Bracket::None,
+				Separator::Space,
+			));
 		};
 		let key_variable = match variable.drop_meta() {
 			Symbol(name) if iterates_keys(&iterable) => Some(name.clone()),
@@ -258,14 +311,26 @@ impl WarpParser {
 				let test = call(crate::traits::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
-				self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body).map(|body| (it, body))
+				self.filtered_body(
+					&format!("for {name} in …"),
+					&format!("for x in … {{ if x is {name} {{ … }} }}"),
+					header,
+					test,
+					body,
+				)
+				.map(|body| (it, body))
 			}
 			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
 			// all are of the type needs no filter
-			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
+			Symbol(name)
+				if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) =>
+			{
 				let test = self.type_test(&variable, name).expect("a type word");
 				let header = type_filter_header(name, &iterable, &body);
-				Ok((variable.clone(), self.type_filtered_body(name, &iterable, header, test, body)))
+				Ok((
+					variable.clone(),
+					self.type_filtered_body(name, &iterable, header, test, body),
+				))
 			}
 			_ => Ok((variable, body)),
 		};
@@ -289,14 +354,23 @@ impl WarpParser {
 			Symbol(name) => self.text_variables.contains(name),
 			_ => false,
 		};
-		let unit = variable.drop_meta().symbol_name().and_then(|name| TEXT_UNIT_NAMES.iter().find(|(unit, _)| *unit == name));
-		let (Some((unit, separator)), true) = (unit, is_text) else { return iterable };
+		let unit = variable
+			.drop_meta()
+			.symbol_name()
+			.and_then(|name| TEXT_UNIT_NAMES.iter().find(|(unit, _)| *unit == name));
+		let (Some((unit, separator)), true) = (unit, is_text) else {
+			return iterable;
+		};
 		let parts = call(SPLIT_WORD, vec![iterable, Node::Text(separator.to_string())]);
 		if *unit != WORD_UNIT {
 			return parts;
 		}
 		let part = Symbol(format!("{unit}·part"));
-		let non_empty = Node::Key(Box::new(part.clone()), Op::FatArrow, Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))));
+		let non_empty = Node::Key(
+			Box::new(part.clone()),
+			Op::FatArrow,
+			Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))),
+		);
 		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
 	}
 
@@ -328,7 +402,9 @@ impl WarpParser {
 
 	/// A loop's body starts here: `{…}`, `: …`, `do …`, or the next line
 	fn at_loop_body(&self) -> bool {
-		matches!(self.current_char(), '{' | ':' | '\n') || (self.current_char() == '/' && self.peek_char(1) == '/') || self.matches_keyword("do")
+		matches!(self.current_char(), '{' | ':' | '\n')
+			|| (self.current_char() == '/' && self.peek_char(1) == '/')
+			|| self.matches_keyword("do")
 	}
 
 	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
@@ -358,7 +434,11 @@ impl WarpParser {
 		};
 		let mentions_it = crate::warp_parser::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER);
 		// `(even number)`: an adjective and a type word
-		let condition = if mentions_it { Some(condition) } else { self.adjective_condition(&condition) };
+		let condition = if mentions_it {
+			Some(condition)
+		} else {
+			self.adjective_condition(&condition)
+		};
 		let Some(condition) = condition.filter(|_| self.current_char() == ')') else {
 			self.rewind(before);
 			return None;
@@ -377,8 +457,17 @@ impl WarpParser {
 		};
 		let shown = crate::normalize::operand_text(&condition);
 		let collection = crate::normalize::operand_text(&iterable);
-		let header = (format!("for ({shown}) in {collection}"), format!("for it in {collection}.filter(it => {shown})"));
-		let body = match self.filtered_body(&format!("for ({shown}) in …"), &format!("for it in … {{ if {shown} {{ … }} }}"), Some(header), condition, body) {
+		let header = (
+			format!("for ({shown}) in {collection}"),
+			format!("for it in {collection}.filter(it => {shown})"),
+		);
+		let body = match self.filtered_body(
+			&format!("for ({shown}) in …"),
+			&format!("for it in … {{ if {shown} {{ … }} }}"),
+			Some(header),
+			condition,
+			body,
+		) {
 			Ok(body) => body,
 			Err(error) => return Some(error),
 		};
@@ -390,13 +479,28 @@ impl WarpParser {
 	/// `it is number`; None for anything else
 	pub(super) fn adjective_condition(&self, words: &Node) -> Option<Node> {
 		// the two words, spaced or read as the call `even(number)`
-		let Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) = words.drop_meta() else { return None };
-		let [adjective, type_word] = items.as_slice() else { return None };
-		let Symbol(adjective) = adjective.drop_meta() else { return None };
-		let Symbol(type_name) = type_word.drop_meta() else { return None };
+		let Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) = words.drop_meta()
+		else {
+			return None;
+		};
+		let [adjective, type_word] = items.as_slice() else {
+			return None;
+		};
+		let Symbol(adjective) = adjective.drop_meta() else {
+			return None;
+		};
+		let Symbol(type_name) = type_word.drop_meta() else {
+			return None;
+		};
 		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
 		let type_test = self.type_test(&it, type_name)?;
-		let parity = |op: Op| Node::Key(Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))), op, Box::new(Node::int(0)));
+		let parity = |op: Op| {
+			Node::Key(
+				Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))),
+				op,
+				Box::new(Node::int(0)),
+			)
+		};
 		let adjective_test = match adjective.as_str() {
 			word if self.functions.contains(word) => call(word, vec![it.clone()]),
 			EVEN_WORD => parity(Op::Eq),
@@ -421,7 +525,14 @@ impl WarpParser {
 	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46).
 	/// `header` is the loop's header as written and its explicit form, the fix ("I meant: …"); None when the body
 	/// needs the edit too
-	pub(super) fn filtered_body(&self, written: &str, explicit: &str, header: Option<(String, String)>, test: Node, body: Node) -> Result<Node, Node> {
+	pub(super) fn filtered_body(
+		&self,
+		written: &str,
+		explicit: &str,
+		header: Option<(String, String)>,
+		test: Node,
+		body: Node,
+	) -> Result<Node, Node> {
 		ask(&self.filter_question(written, explicit, header))?;
 		Ok(guarded_body(test, body))
 	}
@@ -434,15 +545,34 @@ impl WarpParser {
 			Some((written, replacement)) => filter.replacing(written, replacement),
 			None => filter,
 		}];
-		Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column)
+		Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning)
+			.written(written)
+			.at(self.line_nr, self.column)
 	}
 
 	/// `for T in xs` of a type word T, which visits only the items of type T: the type test carries the loop, so the emitter
 	/// decides it from the items' static type and announces the filter only when it is left to run time (`for char in s`
 	/// of a text s filters nothing)
-	fn type_filtered_body(&self, name: &str, iterable: &Node, header: Option<(String, String)>, test: Node, body: Node) -> Node {
-		let question = self.filter_question(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header);
-		guarded_body(test.with_meta_data(super::FilterLoop { question, iterable: iterable.clone() }), body)
+	fn type_filtered_body(
+		&self,
+		name: &str,
+		iterable: &Node,
+		header: Option<(String, String)>,
+		test: Node,
+		body: Node,
+	) -> Node {
+		let question = self.filter_question(
+			&format!("for {name} in …"),
+			&format!("for x in … {{ if x is {name} {{ … }} }}"),
+			header,
+		);
+		guarded_body(
+			test.with_meta_data(super::FilterLoop {
+				question,
+				iterable: iterable.clone(),
+			}),
+			body,
+		)
 	}
 
 	/// `for (i=0;i<n;i++) {body}`, `for(…) print i`, `for(…): body`, at its head: `((for (head)) {body})` as lowering reads it
@@ -455,7 +585,11 @@ impl WarpParser {
 			_ if self.matches_keyword(DO_WORD) => self.colon_body(DO_WORD),
 			_ => self.indented_lines_below().unwrap_or_else(|| self.rest_of_statement()),
 		};
-		Node::List(vec![call("for", vec![head]), as_block(body)], Bracket::None, Separator::None)
+		Node::List(
+			vec![call("for", vec![head]), as_block(body)],
+			Bracket::None,
+			Separator::None,
+		)
 	}
 
 	/// The body after `:` or `do`: the statements up to `end` after `do`, the indented block under a `:` or `do` at the end
@@ -474,7 +608,8 @@ impl WarpParser {
 		if !self.only_blanks_before_newline() {
 			return None;
 		}
-		self.with_equals_comparing(false, |parser| parser.parse_indented_block()).map(statement_block) // its lines assign
+		self.with_equals_comparing(false, |parser| parser.parse_indented_block())
+			.map(statement_block) // its lines assign
 	}
 
 	/// The words up to the end of the line, one expression: the colon body `print i` of `for i in 1..3 : print i`
@@ -568,7 +703,8 @@ impl WarpParser {
 			return while_do(rhs, body);
 		}
 
-		if let Some((condition, body)) = split_trailing_block(&rhs, true) { // `{}` parses as ø
+		if let Some((condition, body)) = split_trailing_block(&rhs, true) {
+			// `{}` parses as ø
 			return while_do(condition, body);
 		}
 
@@ -614,9 +750,15 @@ impl WarpParser {
 
 	/// Do line breaks and blanks, then the word `else`, follow the cursor
 	pub(super) fn else_on_a_later_line(&self) -> bool {
-		let gap = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t' | '\n' | '\r')).count();
+		let gap = (0..)
+			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t' | '\n' | '\r'))
+			.count();
 		let crosses_line = (0..gap).any(|at| self.peek_char(at) == '\n');
-		let word = ELSE_KEYWORD.chars().enumerate().all(|(i, c)| self.peek_char(gap + i) == c) && !is_identifier_char(self.peek_char(gap + ELSE_KEYWORD.len()));
+		let word = ELSE_KEYWORD
+			.chars()
+			.enumerate()
+			.all(|(i, c)| self.peek_char(gap + i) == c)
+			&& !is_identifier_char(self.peek_char(gap + ELSE_KEYWORD.len()));
 		crosses_line && word
 	}
 
@@ -633,9 +775,11 @@ impl WarpParser {
 /// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
 fn statement_block(block: Node) -> Node {
 	match block {
-		Node::List(items, Bracket::Curly, Separator::Colon) => {
-			Node::List(vec![Node::List(items, Bracket::None, Separator::Colon)], Bracket::Curly, Separator::Semicolon)
-		}
+		Node::List(items, Bracket::Curly, Separator::Colon) => Node::List(
+			vec![Node::List(items, Bracket::None, Separator::Colon)],
+			Bracket::Curly,
+			Separator::Semicolon,
+		),
 		block => block,
 	}
 }
@@ -650,6 +794,10 @@ fn as_block(body: Node) -> Node {
 
 /// `{ if test then body }`, the body of a filtering loop
 fn guarded_body(test: Node, body: Node) -> Node {
-	let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
+	let guarded = Node::Key(
+		Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))),
+		Op::Then,
+		Box::new(body),
+	);
 	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }

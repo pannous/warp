@@ -16,7 +16,11 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn a_parameter_named_like_a_unit_written_as_that_unit_is_a_name_clash() {
-	for code in ["f(s) := s * 2; f(3 s)", "f(m) := m + 1; f(2 m)", "f(s) := s * 2; 3 s + f(1)"] {
+	for code in [
+		"f(s) := s * 2; f(3 s)",
+		"f(m) := m + 1; f(2 m)",
+		"f(s) := s * 2; 3 s + f(1)",
+	] {
 		let message = clash(code);
 		assert!(message.contains("is a parameter of f and a unit"), "{code}: {message}");
 		assert!(message.contains("rename the parameter"), "{code}: {message}");

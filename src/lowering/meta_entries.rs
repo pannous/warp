@@ -7,14 +7,18 @@
 //! the pragma such a read is an error naming it.
 
 use super::nodes::{children_rewritten, key};
-use crate::node::{meta_entry, symbol, ATTRIBUTE_MARK, Bracket, Node, Separator};
+use crate::node::{meta_entry, symbol, Bracket, Node, Separator, ATTRIBUTE_MARK};
 use crate::operators::Op;
 
 pub fn lower(node: Node) -> Node {
 	hint_shadowed_meta(&node);
 	let mut comments = vec![];
 	binding_comments(&node, &mut comments);
-	as_entries(if comments.is_empty() { node } else { comment_reads(node, &comments) })
+	as_entries(if comments.is_empty() {
+		node
+	} else {
+		comment_reads(node, &comments)
+	})
 }
 
 const COMMENT_KEY: &str = "comment";
@@ -26,10 +30,12 @@ const DOC_WORD: &str = "doc";
 fn comment_of(node: &Node) -> Option<&str> {
 	match node {
 		Node::Meta { node, data } => match data.as_ref() {
-			Node::Key(key, _, value) if matches!(key.as_ref(), Node::Symbol(name) if name == COMMENT_KEY) => match value.drop_meta() {
-				Node::Text(comment) => Some(comment),
-				_ => comment_of(node),
-			},
+			Node::Key(key, _, value) if matches!(key.as_ref(), Node::Symbol(name) if name == COMMENT_KEY) => {
+				match value.drop_meta() {
+					Node::Text(comment) => Some(comment),
+					_ => comment_of(node),
+				}
+			}
 			_ => comment_of(node),
 		},
 		// a function's head `f(x)`: the comment is on its name
@@ -59,23 +65,33 @@ fn bound_name(target: &Node) -> Option<String> {
 }
 
 fn binding_comments(node: &Node, bindings: &mut Vec<Commented>) {
-	let mut add = |name: String, comment: &str, value: &Node| bindings.push(Commented {
-		name,
-		comment: comment.to_string(),
-		fields: match value.drop_meta() {
-			Node::List(items, Bracket::Curly, _) => items.iter().filter_map(|item| match item.drop_meta() {
-				Node::Key(key, _, _) => Some(key.drop_meta().name()),
-				_ => None,
-			}).collect(),
-			_ => vec![],
-		},
-	});
+	let mut add = |name: String, comment: &str, value: &Node| {
+		bindings.push(Commented {
+			name,
+			comment: comment.to_string(),
+			fields: match value.drop_meta() {
+				Node::List(items, Bracket::Curly, _) => items
+					.iter()
+					.filter_map(|item| match item.drop_meta() {
+						Node::Key(key, _, _) => Some(key.drop_meta().name()),
+						_ => None,
+					})
+					.collect(),
+				_ => vec![],
+			},
+		})
+	};
 	match node {
 		Node::Meta { node: inner, .. } => match (comment_of(node), inner.drop_meta()) {
-			(Some(comment), Node::Key(target, Op::Colon | Op::Assign | Op::Define, value)) if let Some(name) = bound_name(target) => add(name, comment, value),
+			(Some(comment), Node::Key(target, Op::Colon | Op::Assign | Op::Define, value))
+				if let Some(name) = bound_name(target) =>
+			{
+				add(name, comment, value)
+			}
 			_ => binding_comments(inner, bindings),
 		},
-		Node::Key(target, Op::Colon | Op::Assign | Op::Define, value) => match (comment_of(target), bound_name(target)) {
+		Node::Key(target, Op::Colon | Op::Assign | Op::Define, value) => match (comment_of(target), bound_name(target))
+		{
 			(Some(comment), Some(name)) => add(name, comment, value),
 			_ => binding_comments(value, bindings),
 		},
@@ -96,12 +112,18 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => comment,
 						_ if binding.fields.iter().any(|own| own == field) => return None,
 						DOC_WORD => comment,
-						META_WORD =>Node::List(vec![key(symbol(COMMENT_KEY), Op::Colon, comment)], Bracket::Curly, Separator::Space),
+						META_WORD => Node::List(
+							vec![key(symbol(COMMENT_KEY), Op::Colon, comment)],
+							Bracket::Curly,
+							Separator::Space,
+						),
 						_ => return None,
 					};
 					Some(match crate::diagnostic::comments_as_meta() {
 						true => read,
-						false => crate::node::error(&format!("no field {field}: {name}'s comment becomes its meta information under `use comments`")),
+						false => crate::node::error(&format!(
+							"no field {field}: {name}'s comment becomes its meta information under `use comments`"
+						)),
 					})
 				}),
 				_ => None,
@@ -115,11 +137,23 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 fn as_entries(node: Node) -> Node {
 	match node {
 		Node::Meta { node, data } => match annotation_entry(&data) {
-			Some(entry) => with_entry(as_entries(*node), entry).unwrap_or_else(|inner| Node::Meta { node: Box::new(inner), data }),
-			None => Node::Meta { node: Box::new(as_entries(*node)), data },
+			Some(entry) => with_entry(as_entries(*node), entry).unwrap_or_else(|inner| Node::Meta {
+				node: Box::new(inner),
+				data,
+			}),
+			None => Node::Meta {
+				node: Box::new(as_entries(*node)),
+				data,
+			},
 		},
-		Node::List(items, Bracket::Curly, separator) => Node::List(meta_last(items.into_iter().map(as_entries).collect()), Bracket::Curly, separator),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(as_entries).collect(), bracket, separator),
+		Node::List(items, Bracket::Curly, separator) => Node::List(
+			meta_last(items.into_iter().map(as_entries).collect()),
+			Bracket::Curly,
+			separator,
+		),
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(as_entries).collect(), bracket, separator)
+		}
 		Node::Key(left, op, right) => key(as_entries(*left), op, as_entries(*right)),
 		other => other,
 	}
@@ -136,18 +170,24 @@ fn meta_last(items: Vec<Node>) -> Vec<Node> {
 fn annotation_entry(data: &Node) -> Option<Node> {
 	let Node::Key(key, _, value) = data else { return None };
 	let Node::Symbol(name) = key.as_ref() else { return None };
-	name.starts_with(ATTRIBUTE_MARK).then(|| Node::Key(key.clone(), Op::Colon, value.clone()))
+	name.starts_with(ATTRIBUTE_MARK)
+		.then(|| Node::Key(key.clone(), Op::Colon, value.clone()))
 }
 
 /// The object with the entry added to its fields; Err gives back anything that is no object
 fn with_entry(object: Node, entry: Node) -> Result<Node, Node> {
 	match object {
-		Node::Meta { node, data } => with_entry(*node, entry).map(|node| Node::Meta { node: Box::new(node), data }),
+		Node::Meta { node, data } => with_entry(*node, entry).map(|node| Node::Meta {
+			node: Box::new(node),
+			data,
+		}),
 		Node::List(mut items, Bracket::Curly, separator) => {
 			items.push(entry);
 			Ok(Node::List(items, Bracket::Curly, separator))
 		}
-		Node::Key(name, op @ (Op::Colon | Op::None), fields) if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+		Node::Key(name, op @ (Op::Colon | Op::None), fields)
+			if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
 			with_entry(*fields, entry).map(|fields| Node::Key(name, op, Box::new(fields)))
 		}
 		other => Err(other),
@@ -162,8 +202,12 @@ fn hint_shadowed_meta(node: &Node) {
 			objects.push((target.name(), value.drop_meta().clone()));
 		}
 		Node::Key(object, Op::Dot, field) => {
-			let (Node::Symbol(object), Node::Symbol(field)) = (object.drop_meta(), field.drop_meta()) else { return };
-			let Some((_, value)) = objects.iter().rev().find(|(name, _)| name == object) else { return };
+			let (Node::Symbol(object), Node::Symbol(field)) = (object.drop_meta(), field.drop_meta()) else {
+				return;
+			};
+			let Some((_, value)) = objects.iter().rev().find(|(name, _)| name == object) else {
+				return;
+			};
 			let shadowed = value.meta_entries().any(|(name, _)| name == field) && has_field(value, field);
 			if shadowed {
 				let reason = format!("{object} has both the field {field} and the meta key @{field}: the field wins");
@@ -184,6 +228,7 @@ fn has_field(object: &Node, field: &str) -> bool {
 		},
 		_ => return false,
 	};
-	fields.iter().any(|entry| meta_entry(entry).is_none() && matches!(entry.drop_meta(), Node::Key(key, _, _) if key.name() == field))
+	fields.iter().any(|entry| {
+		meta_entry(entry).is_none() && matches!(entry.drop_meta(), Node::Key(key, _, _) if key.name() == field)
+	})
 }
-

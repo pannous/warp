@@ -1,6 +1,6 @@
 use crate::eq;
-use warp::Node;
 use warp::warp_parser::WarpParser;
+use warp::Node;
 
 #[test]
 fn test_warp_to_json() {

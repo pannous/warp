@@ -43,7 +43,9 @@ pub(crate) fn is_yield(node: &Node) -> bool {
 pub(crate) fn yielded(node: &Node) -> Option<Vec<Node>> {
 	match node.drop_meta() {
 		_ if is_yield(node) => Some(vec![]),
-		Node::List(items, _, Separator::Space | Separator::None) if items.first().is_some_and(is_yield) => Some(items[1..].to_vec()),
+		Node::List(items, _, Separator::Space | Separator::None) if items.first().is_some_and(is_yield) => {
+			Some(items[1..].to_vec())
+		}
 		Node::List(items, _, Separator::Colon) => {
 			let mut values = yielded(items.first()?)?;
 			values.extend(items[1..].iter().cloned());
@@ -73,26 +75,41 @@ fn definition_name(node: &Node) -> Option<String> {
 /// The functions a block after a call can go to: those that yield, and those with parameters
 fn block_takers(node: &Node) -> HashMap<String, BlockTaker> {
 	let mut takers = HashMap::new();
-	node.visit(&mut |part| if let Some((name, count)) = parameter_count(part) { takers.insert(name, BlockTaker::Parameters(count)); });
-	node.visit(&mut |part| if let Some(name) = definition_name(part) { takers.insert(name, BlockTaker::Yielding); });
+	node.visit(&mut |part| {
+		if let Some((name, count)) = parameter_count(part) {
+			takers.insert(name, BlockTaker::Parameters(count));
+		}
+	});
+	node.visit(&mut |part| {
+		if let Some(name) = definition_name(part) {
+			takers.insert(name, BlockTaker::Yielding);
+		}
+	});
 	takers
 }
 
 /// `f(a, b) := body`: the name and the number of parameters
 fn parameter_count(node: &Node) -> Option<(String, usize)> {
-	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else { return None };
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
-	let Node::Symbol(name) = items.first()?.drop_meta() else { return None };
+	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else {
+		return None;
+	};
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(name) = items.first()?.drop_meta() else {
+		return None;
+	};
 	(items.len() > 1).then(|| (name.clone(), items.len() - 1))
 }
-
 
 /// `f`, `f(a)` or `f a`: the function and its arguments
 fn call_parts(node: &Node, takers: &HashMap<String, BlockTaker>) -> Option<(String, Vec<Node>)> {
 	match node.drop_meta() {
 		Node::Symbol(name) if takers.contains_key(name) => Some((name.clone(), vec![])),
 		Node::List(items, Bracket::Round | Bracket::None, _) => match items.first()?.drop_meta() {
-			Node::Symbol(name) if takers.contains_key(name) => Some((name.clone(), items[1..].iter().flat_map(arguments).collect())),
+			Node::Symbol(name) if takers.contains_key(name) => {
+				Some((name.clone(), items[1..].iter().flat_map(arguments).collect()))
+			}
 			_ => None,
 		},
 		_ => None,
@@ -117,7 +134,12 @@ fn as_lambda(block: Node) -> Node {
 }
 
 /// The call with the block as its last argument, if the function takes it there
-fn call_with_block(name: &str, mut arguments: Vec<Node>, block: Node, takers: &HashMap<String, BlockTaker>) -> Option<Node> {
+fn call_with_block(
+	name: &str,
+	mut arguments: Vec<Node>,
+	block: Node,
+	takers: &HashMap<String, BlockTaker>,
+) -> Option<Node> {
 	let block = match takers.get(name)? {
 		BlockTaker::Yielding => as_lambda(block),
 		BlockTaker::Parameters(count) if arguments.len() < *count => block,
@@ -131,13 +153,18 @@ fn call_with_block(name: &str, mut arguments: Vec<Node>, block: Node, takers: &H
 /// `f {…}`, `f(a) {…}`, `f(a) do … end`, `f a do … end`: the block becomes the last argument
 fn block_call(node: &Node, takers: &HashMap<String, BlockTaker>) -> Option<(String, Node)> {
 	let (callee, block) = match node.drop_meta() {
-		Node::List(items, _, Separator::Space | Separator::None) if items.len() == 2 && is_block(&items[1]) => (&items[0], &items[1]),
+		Node::List(items, _, Separator::Space | Separator::None) if items.len() == 2 && is_block(&items[1]) => {
+			(&items[0], &items[1])
+		}
 		Node::Key(callee, Op::Do, block) if is_block(block) => (callee.as_ref(), block.as_ref()),
 		Node::List(items, _, Separator::Space) if items.len() == 2 => match items[1].drop_meta() {
 			Node::Key(argument, Op::Do, block) if is_block(block) => {
 				let (name, mut arguments) = call_parts(&items[0], takers)?;
 				arguments.extend(self::arguments(argument));
-				return Some((name.clone(), call_with_block(&name, arguments, block.as_ref().clone(), takers)?));
+				return Some((
+					name.clone(),
+					call_with_block(&name, arguments, block.as_ref().clone(), takers)?,
+				));
 			}
 			_ => return None,
 		},
@@ -159,8 +186,13 @@ fn with_block_arguments(node: Node, takers: &HashMap<String, BlockTaker>, called
 
 fn with_block_parameters(node: Node, called: &HashSet<String>) -> Node {
 	match node {
-		Node::Key(head, Op::Define, body) if definition_name(&Node::Key(head.clone(), Op::Define, body.clone())).is_some_and(|name| called.contains(&name)) => {
-			let Node::List(mut items, bracket, separator) = head.drop_meta().clone() else { unreachable!("a function head") };
+		Node::Key(head, Op::Define, body)
+			if definition_name(&Node::Key(head.clone(), Op::Define, body.clone()))
+				.is_some_and(|name| called.contains(&name)) =>
+		{
+			let Node::List(mut items, bracket, separator) = head.drop_meta().clone() else {
+				unreachable!("a function head")
+			};
 			items.push(symbol(BLOCK_PARAMETER));
 			key(Node::List(items, bracket, separator), Op::Define, block_calls(*body))
 		}
@@ -172,7 +204,11 @@ fn block_calls(node: Node) -> Node {
 	match yielded(&node) {
 		Some(values) => {
 			let callee = std::iter::once(symbol(BLOCK_PARAMETER));
-			Node::List(callee.chain(values.into_iter().map(block_calls)).collect(), Bracket::Round, Separator::None)
+			Node::List(
+				callee.chain(values.into_iter().map(block_calls)).collect(),
+				Bracket::Round,
+				Separator::None,
+			)
 		}
 		None => node.map_children(block_calls),
 	}

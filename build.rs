@@ -6,7 +6,11 @@ use std::process::Command;
 const DETACHED_HEAD: &str = "HEAD";
 
 fn git(arguments: &[&str]) -> Option<String> {
-	let output = Command::new("git").args(arguments).output().ok().filter(|output| output.status.success())?;
+	let output = Command::new("git")
+		.args(arguments)
+		.output()
+		.ok()
+		.filter(|output| output.status.success())?;
 	Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
@@ -14,7 +18,9 @@ fn main() {
 	println!("cargo:rerun-if-changed=build.rs");
 	// logs/HEAD grows on every commit, checkout and reset, also of a worktree (its own git dir)
 	// (a missing file would rerun this on every build)
-	if let Some(head_log) = git(&["rev-parse", "--git-path", "logs/HEAD"]).filter(|path| std::path::Path::new(path).exists()) {
+	if let Some(head_log) =
+		git(&["rev-parse", "--git-path", "logs/HEAD"]).filter(|path| std::path::Path::new(path).exists())
+	{
 		println!("cargo:rerun-if-changed={head_log}");
 	}
 	if let Some(commit) = git(&["rev-parse", "--short=9", "HEAD"]) {

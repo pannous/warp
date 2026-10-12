@@ -5,7 +5,20 @@ use wasm_encoder::*;
 use Instruction as I;
 
 /// The runtime functions a page's scripts call (web/playground: host.js buildValue, guarded_call, reader.js readNode)
-const PAGE_HOST_CALLS: [&str; 12] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list", "get_kind", "error_of", super::int_lists::INTS_TO_LIST, super::int_lists::LIST_TO_INTS];
+const PAGE_HOST_CALLS: [&str; 12] = [
+	"new_empty",
+	"new_int",
+	"new_float",
+	"new_codepoint",
+	"new_text",
+	"new_symbol",
+	"new_key",
+	"new_list",
+	"get_kind",
+	"error_of",
+	super::int_lists::INTS_TO_LIST,
+	super::int_lists::LIST_TO_INTS,
+];
 
 impl WasmGcEmitter {
 	/// Declares and emits the function `name`; `body` writes the instructions, the closing `end` is added here
@@ -53,7 +66,14 @@ impl WasmGcEmitter {
 
 	/// A function only the host calls, exported as `export` without a name in the registry (a component adapter, a
 	/// type's constructor, the compare dispatcher): its index, taken after `body` ran
-	pub(super) fn host_only_function(&mut self, export: &str, params: Vec<ValType>, results: Vec<ValType>, locals: Vec<ValType>, body: impl FnOnce(&mut Self, &mut Function)) -> u32 {
+	pub(super) fn host_only_function(
+		&mut self,
+		export: &str,
+		params: Vec<ValType>,
+		results: Vec<ValType>,
+		locals: Vec<ValType>,
+		body: impl FnOnce(&mut Self, &mut Function),
+	) -> u32 {
 		let func_type = self.type_manager.function_type(params, results);
 		self.function_body(locals, body);
 		let index = self.reserve_function(func_type);

@@ -56,7 +56,8 @@ impl StringTable {
 			return offset;
 		}
 		let offset = self.next_offset;
-		self.data_section.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
+		self.data_section
+			.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
 		self.table.insert(key, offset);
 		self.next_offset += bytes.len() as u32;
 		offset
