@@ -38,6 +38,8 @@ cleanup-groups, cleanup-filter):
 - variables.rs collect_variables_inner: one `visit` closure, `bind_destructured`, `bind_assigned`
 - lists.rs parse_list_with_separators: `with_definition_block`, `parse_separator`
 - `Node::single_or_list` for the one-item-or-list choice
+- (cleanup-json-nodes) `foreign::node_of` is the single JSON-to-Node conversion; headless page-event details reuse it,
+  so nested arrays, codepoints, big integers, ordered objects and number handling no longer diverge.
 - if-let guards (stable on our toolchain, already used in src/lowering/) replace ~30 arms that computed their match
   twice: `x if f(x).is_some() => f(x).expect("guarded")` and `matches!(…)` + `let … else { unreachable!() }`
 - inference.rs infer_type: `conversion_kind`; checks.rs list_type_name: `nested_type_word`, `LIST_OF_PREFIX`;
@@ -115,8 +117,6 @@ Left (bigger, needs care):
   hardlink-guard's marker): edit it only knowing it changes that file too.
 - (cleanup-gc-object) Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
-- (cleanup-json-nodes) headless.rs node_of_json and foreign.rs node_of both turn JSON into Nodes; they differ in separator (None vs Space),
-  arrays (ø vs list) and a non-integer number's fallback, so one replacing the other changes output.
 - (cleanup-ffi-f32) ffi/link.rs: the generic wrapper could take most typed signatures if it passed f32 arguments right (it passes
   f64s), which needs FFI tests for each signature first.
 - (cleanup-html-escape) markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.
