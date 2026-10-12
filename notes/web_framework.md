@@ -137,8 +137,14 @@ Each step is useful on its own and is what the next ones stand on.
 - `select{ bind: choice }` (card web-bind-select): lib/markup.warp hands a select's value to its options (html_render's
   `chosen`), and the option whose value, else text, equals it is `selected`, from the first render on; later the page
   sets select.value (morphElement). Sample samples/select_binding.warp.
-- Left: `bind:` inside a component's state (component_state.rs sees only handlers; card web-bind-component), validation from types (card
-  web-validate).
+- `bind:` inside a component (card web-bind-component): element_events::lower_binds spells binds out before
+  component_state, which then keeps the bound variable per instance like any handler's. Sample
+  samples/component_binding.warp.
+- Validation from declared types (card web-validate): element_events::lower_binds gives a bound field the checks of
+  its variable's declared type (`age: int = 30`): int → type number, step 1 (the browser marks 2.5 :invalid and a
+  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. Not yet:
+  ranges or text patterns as types, and `int age = 30` (C-style) declarations (card bind-ignores). Sample
+  samples/typed_form.warp.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style

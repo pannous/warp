@@ -67,3 +67,13 @@ fn a_bound_select_shows_the_chosen_option() {
 	assert_eq!(html_of("size = 2\nselect{ bind: size aria-label: \"size\" option{ value: 1 \"small\" } option{ value: 2 \"large\" } }"),
 		"<select value=\"2\" data-warp-input=\"1\" aria-label=\"size\"><option value=\"1\">small</option><option value=\"2\" selected>large</option></select>");
 }
+
+// a bound field takes its checks from the variable's declared type: the browser refuses 2.5 for an int, a bool is a
+// checkbox; what the element says itself wins (card web-validate)
+#[test]
+fn a_bound_field_is_validated_by_the_declared_type() {
+	assert_eq!(html_of("age: int = 30\ninput{ bind: age aria-label: \"age\" }"), "<input type=\"number\" step=\"1\" value=\"30\" data-warp-input=\"1\" aria-label=\"age\">");
+	assert_eq!(html_of("price: float = 2.5\ninput{ bind: price aria-label: \"price\" }"), "<input type=\"number\" step=\"any\" value=\"2.5\" data-warp-input=\"1\" aria-label=\"price\">");
+	assert_eq!(html_of("done: bool = yes\ninput{ bind: done aria-label: \"done\" }"), "<input type=\"checkbox\" checked data-warp-input=\"1\" aria-label=\"done\">");
+	assert_eq!(html_of("age: int = 30\ninput{ bind: age type: \"range\" aria-label: \"age\" }"), "<input step=\"1\" value=\"30\" data-warp-input=\"1\" type=\"range\" aria-label=\"age\">");
+}

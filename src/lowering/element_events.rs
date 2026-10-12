@@ -3,13 +3,18 @@
 //! the attribute `data-warp-click: "1"`. The page calls handler 1 on a click inside that element and shows the
 //! program's markup anew (playground.js, worker.js showHandled).
 //! `input{ bind: name }` (card web-bind) is `input{ value: name on input { name = event.value } }`; a checkbox or radio
-//! binds `checked` to `event.checked`.
+//! binds `checked` to `event.checked`. Binds are spelled out first (lower_binds), so a component sees the handler of a
+//! bind among its state's handlers (component_state.rs, card web-bind-component).
+//! A bound variable's declared type gives the field its checks (card web-validate): `age: int = 30` makes
+//! `input{ bind: age }` a number field of step 1, which the browser refuses 2.5 in, `float` one of any step, `bool` a
+//! checkbox; an attribute the element sets itself wins.
 
 use super::words::ON_WORD;
 use super::nodes::key;
 use crate::event_signals::{ELEMENT_EVENT_JOINER, PAGE_EVENTS};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use std::collections::HashMap;
 
 const BIND_WORD: &str = "bind";
 const INPUT_EVENT: &str = "input";
@@ -18,6 +23,11 @@ const TYPE_ATTRIBUTE: &str = "type";
 const CHECKED_TYPES: [&str; 2] = ["checkbox", "radio"];
 const VALUE: &str = "value";
 const CHECKED: &str = "checked";
+const STEP_ATTRIBUTE: &str = "step";
+const NUMBER_FIELD: &str = "number";
+const CHECKBOX_FIELD: &str = "checkbox";
+const ANY_STEP: &str = "any";
+const WHOLE_STEP: &str = "1";
 /// `data-warp-click`: the attribute naming an element's handler of an event
 pub const HANDLER_ATTRIBUTE_PREFIX: &str = "data-warp-";
 
@@ -39,8 +49,55 @@ pub fn lower(program: Node) -> Node {
 
 pub(crate) fn has_element_handler(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some() || bound_at(items, index).is_some())));
+	node.visit(&mut |part| found |= element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some())));
 	found
+}
+
+/// Each `bind: name` of an element spelled out as its attribute and handler, with the checks of name's declared type
+pub fn lower_binds(program: Node) -> Node {
+	let declared = declared_types(&program);
+	with_binds(program, &declared)
+}
+
+fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
+	let node = node.map_children(|child| with_binds(child, declared));
+	with_element_items(node, |items| {
+		let checks: Vec<Node> = (0..items.len()).filter_map(|index| bound_at(&items, index)).flat_map(|variable| type_checks(&variable, declared, &items)).collect();
+		let property = bound_property(&[checks.clone(), items.clone()].concat());
+		let mut checks = Some(checks);
+		items.iter().enumerate().flat_map(|(index, item)| match bound_at(&items, index) {
+			Some(variable) => checks.take().unwrap_or_default().into_iter().chain(bound(variable, property)).collect(),
+			None => vec![item.clone()],
+		}).collect()
+	})
+}
+
+/// `age: int = 30`: each variable's declared type; none for a name declared with two types
+fn declared_types(program: &Node) -> HashMap<String, Option<String>> {
+	let mut declared: HashMap<String, Option<String>> = HashMap::new();
+	program.visit(&mut |part| {
+		let Node::Key(target, Op::Assign, _) = part.drop_meta() else { return };
+		let Node::Key(name, Op::Colon, kind) = target.drop_meta() else { return };
+		let (Node::Symbol(name), Node::Symbol(kind)) = (name.drop_meta(), kind.drop_meta()) else { return };
+		declared.entry(name.clone()).and_modify(|known| if known.as_ref() != Some(kind) { *known = None }).or_insert_with(|| Some(kind.clone()));
+	});
+	declared
+}
+
+/// The attributes a bound variable's declared type checks its field with, but those the element sets itself
+fn type_checks(variable: &Node, declared: &HashMap<String, Option<String>>, items: &[Node]) -> Vec<Node> {
+	let Some(Some(kind)) = declared.get(&variable.drop_meta().name()) else { return vec![] };
+	let checks: &[(&str, Node)] = if crate::analyzer::is_bool_type(kind) {
+		&[(TYPE_ATTRIBUTE, Node::Text(CHECKBOX_FIELD.to_string()))]
+	} else if crate::analyzer::is_whole_type(kind) {
+		&[(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())), (STEP_ATTRIBUTE, Node::Text(WHOLE_STEP.to_string()))]
+	} else if crate::analyzer::builtin_type_kind(kind) == Some(crate::type_kinds::Kind::Float) {
+		&[(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())), (STEP_ATTRIBUTE, Node::Text(ANY_STEP.to_string()))]
+	} else {
+		&[]
+	};
+	let sets = |name: &str| items.iter().any(|item| matches!(item.drop_meta(), Node::Key(set, Op::Colon, _) if set.drop_meta().name() == name));
+	checks.iter().filter(|(name, _)| !sets(name)).map(|(name, value)| key(symbol(name), Op::Colon, value.clone())).collect()
 }
 
 /// `bind: name` at `index` of an element's items: the bound variable
@@ -122,11 +179,6 @@ impl Marker {
 
 	/// An element's items with its handlers taken out and the element marked with their numbers
 	fn marked_items(&mut self, items: Vec<Node>) -> Vec<Node> {
-		let property = bound_property(&items);
-		let items: Vec<Node> = items.iter().enumerate().flat_map(|(index, item)| match bound_at(&items, index) {
-			Some(variable) => bound(variable, property).to_vec(),
-			None => vec![item.clone()],
-		}).collect();
 		let mut kept = vec![];
 		let mut index = 0;
 		while index < items.len() {
