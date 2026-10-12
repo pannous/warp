@@ -455,7 +455,9 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 					) =>
 				{
 					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
-						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_)))) => {
+						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_))))
+							if !crate::type_tests::holds_any_number(&type_name.name()) =>
+						{
 							Box::new(Node::Number(Number::Float((*number).into())))
 						}
 						(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),

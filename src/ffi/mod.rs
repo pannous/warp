@@ -360,10 +360,10 @@ fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
 			vec![wasm_encoder::ValType::F64],
 		),
 	);
-	for (name, params, results) in crate::host::host_word_signatures() {
+	for (name, params, results) in crate::host::HOST_WORD_SIGNATURES {
 		sigs.insert(
 			name.to_string(),
-			FfiSignature::new(name, crate::host::HOST_LIBRARY, params, results),
+			FfiSignature::new(name, crate::host::HOST_LIBRARY, params.to_vec(), results.to_vec()),
 		);
 	}
 	use crate::wasm_emitter::linear_arrays::{linear_word_signatures, LINEAR_LIBRARY};

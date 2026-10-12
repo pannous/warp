@@ -40,7 +40,7 @@ def evidentMisfit (v : Expr) (t : Ty) : Bool := v.isValue && !fits v t
 admits (`[1] as int` is refused) -/
 def convertible (te : Ty) : Ty → Bool
   | .text | .bool => true
-  | .int | .exact | .number | .codepoint => consub te .number || consub te .text
+  | .int | .exact | .float | .number | .codepoint => consub te .number || consub te .text
   | t => consub te t
 
 /-- a conversion warp refuses when it compiles: a text literal of other than one character to a codepoint
@@ -68,7 +68,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
   | .num _ => some .exact
-  | .flt _ => some .number
+  | .flt _ => some .float
   | .fail _ => some .any
   | .failed e => (typeOf P Γ e).map fun _ => .bool
   | .qty _ d => some (.quantity d)
@@ -587,13 +587,14 @@ def valuesOf (x : String) : Expr → List Expr
   | .lam _ b => valuesOf x b
   | _ => []
 
-/-- P45: a name declared by its first value widens over the numbers it is given (`x = 1; x = 2.5` is a number);
+/-- P45: a name declared by its first value widens over the numbers it is given (`x = 1; x = 2.5` is a number,
+`x = 1/3; x = 0.5 as float` a float place);
 a value of another kind (`x = 1; x = "a"`) leaves the type, so its assignment is rejected -/
 def widenOver (s : Spec) (d : Decl) : Decl :=
   if d.annotated || d.mode == .charged || d.type == .bool then d else
   let widened := (valuesOf d.name s.main).foldl (init := d.type) fun t value =>
     match typeOf s.program Ctx.empty value with
-    | some tv => if sub (join t tv) .number then join t tv else t
+    | some tv => if sub (join t tv) .number then widenNumber t tv else t
     | none => t
   { d with type := widened }
 
@@ -647,14 +648,14 @@ def resolveCalls (P : Program) : Ctx → Expr → Expr :=
 /-- gradual typing: a value of static type any given to a narrower name or parameter is checked when it runs
 (`level = event.level` is `level = cast event.level [int]`), and so is an optional given to a place that takes no ø
 (`a: int? = 3; b: int = a`: warp unwraps it when it runs); warp admits these at compile time. An exact number given
-to a float place is converted (`x: float = 1/3` holds 0.333…) -/
+to a float place is converted (`x: float = 1/3` holds 0.333…); a number place keeps it (`x: number = 1/3` holds 1/3) -/
 def castDynamicValues (P : Program) : Ctx → Expr → Expr :=
   Expr.rewrite P fun Γ e =>
     let checked (place : Option Ty) (v : Expr) (give : Expr → Expr) :=
       match place, typeOf P Γ v with
       | some t, some tv =>
         if (tv == .any || tv.isOptional) && !sub tv t then give (.cast v [t])
-        else if t == .number && tv != .never && sub tv .exact then give (.conv v .number)
+        else if Ty.convertsToFloat tv t then give (.conv v .float)
         else e
       | _, _ => e
     match e with
@@ -816,7 +817,7 @@ def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
       if f != cellField || !cells.contains c then firsts else
       match firsts.lookup c with
       | none => firsts ++ [(c, t)]
-      | some first => if sub (join first t) .number then firsts.map fun (d, u) => (d, if d == c then join u t else u) else firsts
+      | some first => if sub (join first t) .number then firsts.map fun (d, u) => (d, if d == c then widenNumber u t else u) else firsts
     | _ => firsts
   { observed.foldl (fun g o => g.add classes o) g with cells := firsts }
 

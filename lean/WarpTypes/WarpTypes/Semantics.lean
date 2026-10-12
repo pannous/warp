@@ -414,7 +414,7 @@ def valueType : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
   | .num _ => some .exact
-  | .flt _ => some .number
+  | .flt _ => some .float
   | .qty _ d => some (.quantity d)
   | .text s => some (textTy s)
   | .unit => some .unit
@@ -490,13 +490,15 @@ def codepointOf (n : Int) : Expr :=
   if n.toNat.isValidChar && 0 ≤ n then .text (String.singleton (Char.ofNat n.toNat)) else .error "invalid codepoint"
 
 /-- `v as t` of a value: a scalar converts to text, int, number or bool (a number to int keeps its whole part, a text
-is parsed), a number to the codepoint it numbers, a number or a text to an exact number (a float only by a cast); to
-any other type the value is checked as a cast checks it -/
+is parsed), a number to the codepoint it numbers, a number or a text to an exact number (a float only by a cast), a
+number to `number` as it is (a text to the exact number it spells); to any other type the value is checked as a cast
+checks it -/
 def convertValue (μ : Store) (v : Expr) : Ty → Expr
   | .text => .text (textForm μ v)
   | .bool => .bool (truthy (μ.items v))
   | .int => if isNumber v then .int (asNumber v) else parsed (fun q => .int (asNumber (.num q))) v
-  | .number => if isNumber v then floatValue (asFloat v) else parsed (fun q => floatValue (ratToFloat q)) v
+  | .float => if isNumber v then floatValue (asFloat v) else parsed (fun q => floatValue (ratToFloat q)) v
+  | .number => if isNumber v then v else parsed exactValue v
   | .exact => if fits v .exact then v else parsed exactValue v
   | .codepoint => if isNumber v then codepointOf (asNumber v) else if fits v .codepoint then v else .error "cannot cast"
   | t => if fits v t then v else .error "cannot cast"

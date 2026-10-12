@@ -64,6 +64,7 @@ mod test_file_declarations;
 mod test_filled_map_types; // card number-keyed
 mod test_flags;
 mod test_float_fields;
+mod test_floats_add_exact; // card floats-add-exact
 mod test_fraction_text;
 mod test_generic_classes;
 mod test_generic_types;
@@ -92,6 +93,7 @@ mod test_mutating_methods;
 mod test_nested_type_calls; // text hex 255 is text(hex(255))
 mod test_number_converts; // card number-converts
 mod test_number_field; // card number-field
+mod test_number_keeps_exact; // card number-keeps-exact
 mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
