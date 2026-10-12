@@ -59,6 +59,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
+- Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
+  both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
