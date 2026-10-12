@@ -1499,6 +1499,7 @@ PASSED:
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
+  ✓ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
@@ -1955,8 +1956,6 @@ PASSED:
   ✓ modules::test_std_named_program::a_file_shadowing_a_std_module_is_named
   ✓ modules::test_std_named_program::a_program_named_like_a_std_module_uses_the_std_module
   ✓ modules::test_std_names_offline::a_std_module_name_needs_no_file_lookup
-  ✓ modules::test_std_net::post_sends_the_headers_of_a_map
-  ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_prelude::a_local_named_like_a_prelude_word_is_the_local
   ✓ modules::test_std_prelude::a_module_word_inside_an_interpolation_comes_along
   ✓ modules::test_std_prelude::a_programs_own_prelude_word_wins
@@ -4170,6 +4169,7 @@ PASSED:
   ✓ web::test_completion_words::claude_reads_the_whole_program_unless_it_is_too_long
   ✓ web::test_completion_words::enter_after_a_whole_word_is_a_new_line
   ✓ web::test_completion_words::the_programs_own_words_come_first
+  ✓ web::test_components::a_bound_field_in_a_component_binds_its_instance
   ✓ web::test_components::a_component_is_a_function_returning_markup
   ✓ web::test_components::a_trailing_block_fills_a_function_parameter
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
@@ -4199,7 +4199,9 @@ PASSED:
   ✓ web::test_expert_guide::every_expert_snippet_shows_its_value
   ✓ web::test_expert_guide::the_expert_guide_has_the_beginner_chapters
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
+  ✓ web::test_form_bindings::a_bound_field_is_validated_by_the_declared_type
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
+  ✓ web::test_form_bindings::a_bound_select_shows_the_chosen_option
   ✓ web::test_form_bindings::a_handler_on_its_own_line_is_the_elements
   ✓ web::test_form_bindings::a_site_with_a_submit_handler_carries_the_forms_script
   ✓ web::test_form_bindings::a_submitted_form_hands_its_fields_to_its_handler
@@ -4815,6 +4817,8 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ modules::test_std_net::post_sends_the_headers_of_a_map
+  ✗ modules::test_std_net::use_net_posts_a_text
 
 SUMMARY:
-10 ignored, 4812 passed, 0 failed, 4812 total tested
+10 ignored, 4814 passed, 2 failed, 4816 total tested
