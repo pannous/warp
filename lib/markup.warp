@@ -23,14 +23,15 @@ html_boolean_attributes = ["checked", "disabled", "selected", "readonly", "requi
 // CSS properties whose number has no unit; any other number is pixels
 html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"]
 
-to_html(value:any) := html_render(value, ø)
+to_html(value:any) := html_render(value, ø, ø)
 
-// `scope`: the component whose elements a style sheet styles (data-warp-scope, card web-scoped)
-html_render(value:any, scope:any) := {
-	if html_is_element(value) { return html_element(html_tag(keys(value)#1), values(value)#1, scope) }
+// `scope`: the component whose elements a style sheet styles (data-warp-scope, card web-scoped); `chosen`: the value
+// of the select around, whose option is selected (`select{ bind: fruit }`, card web-bind-select)
+html_render(value:any, scope:any, chosen:any) := {
+	if html_is_element(value) { return html_element(html_tag(keys(value)#1), values(value)#1, scope, chosen) }
 	if html_is_group(value) {
 		var out = ""
-		for item in value { out = out + html_render(item, scope) }
+		for item in value { out = out + html_render(item, scope, chosen) }
 		return out
 	}
 	if value == ø { return "" }
@@ -39,20 +40,26 @@ html_render(value:any, scope:any) := {
 
 html_is_element(value:any) := value is pair and contains(html_elements, keys(value)#1)
 
-html_element(tag:any, content:any, scope:any) := {
+html_element(tag:any, content:any, scope:any, chosen:any) := {
 	let items = html_items(content)
 	var own_scope = scope
+	var own_chosen = chosen
+	var value = ø
 	for item in items {
 		if html_is_attribute(item, tag) and keys(item)#1 == "data-warp-scope" { own_scope = html_plain(values(item)#1) }
+		if html_is_attribute(item, tag) and keys(item)#1 == "value" { value = html_plain(values(item)#1) }
 	}
+	if tag == "select" { own_chosen = value }
 	var attributes = ""
 	var children = ""
 	for item in items {
 		if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
 		else if tag == "style" { children = children + html_style_rule(item, scope) + " " }
 		else if tag == "script" { children = children + html_plain(item) }
-		else { children = children + html_render(item, own_scope) }
+		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
+	// the option whose value, else text, is the select's
+	if tag == "option" and chosen != ø and (if value == ø then children else html_escaped(value)) == html_escaped(chosen) { attributes = attributes + " selected" }
 	if contains(html_void_elements, tag) { return "<" + tag + attributes + ">" }
 	if tag == "style" { children = trim(children) }
 	// `</script>` inside a script would end it

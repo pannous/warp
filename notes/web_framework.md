@@ -134,8 +134,10 @@ Each step is useful on its own and is what the next ones stand on.
   one still goes to its route. Headless: `Page::submit(label, fields)`. Sample samples/form_submit.warp.
 - A handler on a line of its own inside an element (`form{⏎ on submit { … }⏎ button{…} }`) is the element's, not the
   tag `on{submit{…}}` (markup_tags.rs attributes, element_events.rs handler_at).
-- Left: `select{ bind: choice }` (its first render shows the first option; card web-bind-select), `bind:` inside a
-  component's state (component_state.rs sees only handlers; card web-bind-component), validation from types (card
+- `select{ bind: choice }` (card web-bind-select): lib/markup.warp hands a select's value to its options (html_render's
+  `chosen`), and the option whose value, else text, equals it is `selected`, from the first render on; later the page
+  sets select.value (morphElement). Sample samples/select_binding.warp.
+- Left: `bind:` inside a component's state (component_state.rs sees only handlers; card web-bind-component), validation from types (card
   web-validate).
 
 ## Step 7 (web-styles), what is done and what is left

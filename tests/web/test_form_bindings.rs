@@ -57,3 +57,13 @@ fn a_site_with_a_submit_handler_carries_the_forms_script() {
 	assert_eq!(with[with.len() - 3..], ["markup.js", "markup-forms.js", "site.js"]);
 	assert!(!scripts("div{ p{ \"hello\" } }").contains(&"markup-forms.js".to_string()));
 }
+
+// `select{ bind: choice }` shows the chosen option from its first render: the option whose value, else text, is the
+// select's value is selected (card web-bind-select)
+#[test]
+fn a_bound_select_shows_the_chosen_option() {
+	assert_eq!(html_of("fruit = \"pear\"\nselect{ bind: fruit aria-label: \"fruit\" option{ \"apple\" } option{ \"pear\" } }"),
+		"<select value=\"pear\" data-warp-input=\"1\" aria-label=\"fruit\"><option>apple</option><option selected>pear</option></select>");
+	assert_eq!(html_of("size = 2\nselect{ bind: size aria-label: \"size\" option{ value: 1 \"small\" } option{ value: 2 \"large\" } }"),
+		"<select value=\"2\" data-warp-input=\"1\" aria-label=\"size\"><option value=\"1\">small</option><option value=\"2\" selected>large</option></select>");
+}
