@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+// Custom keyframes as data (card web-keyframes): a new item pops in through the frames, overshooting a little, timed
+// by its transition, and leaves through them backwards. Run it in the playground and click add and remove.
+items = ["first"]
+div{
+	button{ on click { items = items + ["item " + (count(items) + 1)] } "add" }
+	button{ on click { items = items[1..] } "remove" }
+	ul{ [li{ key: item transition: all 400ms keyframes: [{ opacity: 0 transform: "scale(0.5)" } { transform: "scale(1.15)" } {}] item } for item in items] }
+}

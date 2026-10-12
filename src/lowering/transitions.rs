@@ -5,6 +5,9 @@
 //! transform transition to their new places. The words are data, not variables: names and durations, normalized to
 //! milliseconds; a text is taken as written; the words end where the element's children begin (`p{ transition: opacity
 //! 1s "text" }`). The kinds before CSS, `transition: fade 200ms` (also scale, slide), are that CSS, with a hint to it.
+//! `keyframes: [{ opacity: 0 } { transform: "scale(1.1)" } {}]` (card web-keyframes) are the frames an element enters
+//! through, timed by its transition, and leaves through backwards: the attribute `data-warp-keyframes`, each frame's
+//! declarations, the frames joined by " | ".
 
 use super::nodes::key;
 use crate::element_events::with_element_items;
@@ -15,6 +18,9 @@ const TRANSITION: &str = "transition";
 const STYLE: &str = "style";
 const STARTING_STYLE: &str = "starting-style";
 pub const STARTING_STYLE_ATTRIBUTE: &str = "data-warp-starting-style";
+const KEYFRAMES: &str = "keyframes";
+const KEYFRAMES_ATTRIBUTE: &str = "data-warp-keyframes";
+const FRAME_SEPARATOR: &str = " | ";
 /// CSS timing words that may follow a transition's duration as words of their own (`opacity 200ms ease-out`)
 const TIMING_WORDS: [&str; 7] = ["ease", "ease-in", "ease-out", "ease-in-out", "linear", "step-start", "step-end"];
 /// The kinds before CSS and the starting style each means; they transition opacity and, for moves, transform
@@ -37,7 +43,7 @@ pub fn lower(node: Node) -> Node {
 		let mut lowered: Vec<Node> = vec![];
 		for item in with_line_words(items) {
 			let Some(words) = transition_of(&item) else {
-				lowered.push(starting_style_attribute(item));
+				lowered.push(page_attribute(item));
 				continue;
 			};
 			let (spec, children) = spec_and_children(words);
@@ -52,7 +58,7 @@ pub fn lower(node: Node) -> Node {
 			};
 			transition_style = Some((lowered.len(), spec.clone()));
 			lowered.push(css_pair(STYLE, declarations(&[(TRANSITION, &spec)])));
-			lowered.extend(children);
+			lowered.extend(children.into_iter().map(page_attribute));
 		}
 		match transition_style {
 			Some((at, spec)) => with_style_transition(lowered, at, spec),
@@ -116,11 +122,31 @@ fn css_pair(name: &str, value: Node) -> Node {
 	key(symbol(name), Op::Colon, value)
 }
 
-/// `starting-style: { opacity: 0 }` is the attribute the page applies
-fn starting_style_attribute(item: Node) -> Node {
+/// `starting-style: { opacity: 0 }` and `keyframes: […]` are attributes the page applies
+fn page_attribute(item: Node) -> Node {
 	match item.drop_meta() {
 		Node::Key(name, Op::Colon, value) if name.is_symbol(STARTING_STYLE) => css_pair(STARTING_STYLE_ATTRIBUTE, value.as_ref().clone()),
+		Node::Key(name, Op::Colon, value) if name.is_symbol(KEYFRAMES) => match value.drop_meta() {
+			Node::List(frames, Bracket::Square, _) => css_pair(KEYFRAMES_ATTRIBUTE, text(&frames.iter().map(frame_css).collect::<Vec<_>>().join(FRAME_SEPARATOR))),
+			_ => item,
+		},
 		_ => item,
+	}
+}
+
+/// `{ opacity: 0 transform: "scale(0.5)" }` → `opacity: 0; transform: scale(0.5)`; `{}` (ø) the element's own style
+fn frame_css(frame: &Node) -> String {
+	match frame.drop_meta() {
+		Node::Key(name, Op::Colon, value) => format!("{}: {}", name.drop_meta().name(), css_value(value)),
+		Node::List(declarations, _, _) => declarations.iter().map(frame_css).collect::<Vec<_>>().join("; "),
+		_ => String::new(),
+	}
+}
+
+fn css_value(value: &Node) -> String {
+	match value.drop_meta() {
+		Node::Text(written) => written.clone(),
+		other => other.serialize(),
 	}
 }
 

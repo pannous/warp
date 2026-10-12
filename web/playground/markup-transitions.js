@@ -6,10 +6,11 @@
 // markup.js's transitionPlaces, enter, leave and moveFrom.
 
 const STARTING_STYLE_ATTRIBUTE = "data-warp-starting-style";
+const KEYFRAMES_ATTRIBUTE = "data-warp-keyframes"; // `keyframes: [{…} {…}]`: frames of declarations, joined by " | "
 const MOVING_PROPERTIES = ["transform", "all"]; // a CSS transition of these glides a keyed element to its new place
 
-// what an element enters from and leaves towards (its starting style: CSS's @starting-style, which an inline style
-// cannot hold), the timing of its CSS transition and how long a move takes; null without one or when motion is unwanted
+// the frames an element enters through and leaves through backwards (its keyframes, else from its starting style: CSS's
+// @starting-style, which an inline style cannot hold), the timing of its CSS transition and how long a move takes; null without one or when motion is unwanted
 function transitionOf(node) {
 	if (!node.getAttribute || matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
 	const style = getComputedStyle(node);
@@ -18,8 +19,9 @@ function transitionOf(node) {
 	if (!duration) return null;
 	const moving = style.transitionProperty.split(", ").findIndex(property => MOVING_PROPERTIES.includes(property));
 	const starting = node.getAttribute(STARTING_STYLE_ATTRIBUTE);
+	const frames = node.getAttribute(KEYFRAMES_ATTRIBUTE)?.split(" | ").map(declarations);
 	const timing = { duration, easing: style.transitionTimingFunction.split(", ")[0] };
-	return { from: starting && declarations(starting), timing, move: moving < 0 ? 0 : durations[moving % durations.length] };
+	return { entering: frames || (starting && [declarations(starting), {}]), timing, move: moving < 0 ? 0 : durations[moving % durations.length] };
 }
 
 // `opacity: 0; transform: scale(0.8)` as a keyframe
@@ -30,21 +32,21 @@ const declarations = css => Object.fromEntries(css.split(";").filter(declaration
 
 function enter(node) {
 	const transition = transitionOf(node);
-	if (transition?.from) node.animate([transition.from, {}], transition.timing);
+	if (transition?.entering) node.animate(transition.entering, transition.timing);
 }
 
-// a node gone from the markup: with a starting style it stays in place, unmatched, until it has animated out; then
-// its moving siblings glide into the space it leaves instead of jumping (card web-leave-space)
+// a node gone from the markup: with a starting style or keyframes it stays in place, unmatched, until it has animated
+// out (through its keyframes backwards); then its moving siblings glide into its space (card web-leave-space)
 function leave(node) {
 	const transition = transitionOf(node);
-	if (!transition?.from) return node.remove();
+	if (!transition?.entering) return node.remove();
 	node.setAttribute(LEAVING_ATTRIBUTE, "");
 	const removed = () => {
 		const places = node.parentNode ? transitionPlaces(node.parentNode) : new Map();
 		node.remove();
 		places.forEach((before, element) => moveFrom(element, before));
 	};
-	node.animate([{}, transition.from], { ...transition.timing, fill: "forwards" }).finished.then(removed, removed);
+	node.animate([...transition.entering].reverse(), { ...transition.timing, fill: "forwards" }).finished.then(removed, removed);
 }
 
 // where each keyed element that moves with a transition is shown now: after the morph it glides from there (FLIP)

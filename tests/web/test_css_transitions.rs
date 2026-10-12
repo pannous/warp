@@ -50,3 +50,12 @@ fn a_site_with_transitions_carries_their_script() {
 	assert_eq!(with[with.len() - 3..], ["markup.js", "markup-transitions.js", "site.js"]);
 	assert!(!scripts("div{ p{ \"hello\" } }").contains(&"markup-transitions.js".to_string()));
 }
+
+// `keyframes: [{…} {…}]`: the frames an element enters through, as data, CSS declarations per frame; it leaves through
+// them backwards (card web-keyframes)
+#[test]
+fn custom_keyframes_are_data_for_the_page() {
+	let html = html_of("li{ transition: all 300ms keyframes: [{ opacity: 0 transform: \"scale(0.5)\" } { transform: \"scale(1.1)\" } {}] \"tea\" }");
+	assert!(html.contains("data-warp-keyframes=\"opacity: 0; transform: scale(0.5) | transform: scale(1.1) | \""), "{html}");
+	assert!(html.ends_with(">tea</li>"), "{html}");
+}
