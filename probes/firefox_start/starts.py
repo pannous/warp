@@ -3,15 +3,18 @@
 # first page, right after Firefox started), and follows playground.state() until the worker is ready; a load still
 # starting after STALL_SECONDS counts as a stall at its stage. Prints each load's seconds from open to ready.
 # CI only (no browser on the Mac): python3 probes/firefox_start/starts.py _site [loads]
+# WARP_SERVE_UNISOLATED=1: served as GitHub Pages serves it, each load isolates itself under coi-serviceworker.js first
+# (one reload; card firefox-coi-worker)
 import collections, json, os, sys, time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "web", "playground"))
 import test_in_browser as runner
 
 LOADS = int(sys.argv[2]) if len(sys.argv) > 2 else 60
-STALL_SECONDS = 25
+STALL_SECONDS = 25 + (runner.ISOLATION_SECONDS if runner.UNISOLATED else 0)
 POLL_SECONDS = 0.25
-STATE = "JSON.stringify(typeof playground === 'object' ? playground.state() : null)"
+STATE = """JSON.stringify(typeof playground === 'object' ? {...playground.state(), isolated: self.crossOriginIsolated,
+	controlled: !!navigator.serviceWorker?.controller} : null)"""
 
 
 def state():
@@ -26,8 +29,9 @@ def one_load(url):
 	stages = [["(opening)", began]]
 	while time.time() - began < STALL_SECONDS:
 		current = state() or {"worker": "no playground yet", "ready": "no"}
-		if not stages or stages[-1][0] != current["worker"]:
-			stages.append([current["worker"], time.time()])
+		stage = current["worker"] + ("" if current.get("isolated", True) else " (unisolated)") + (" (controlled)" if current.get("controlled") else "")
+		if not stages or stages[-1][0] != stage:
+			stages.append([stage, time.time()])
 		if current["ready"] == "ready":  # playground.state: "starting", "ready" or "failed: …"
 			return durations(stages + [["ready", time.time()]]), True
 		time.sleep(POLL_SECONDS)
