@@ -693,6 +693,8 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 		None if super::user_functions::names_empty_type(type_node) => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
+		// `number` keeps whatever number it is given, an exact 1/3 or a float (card number-keeps-exact)
+		None if crate::type_tests::holds_any_number(type_name) => Some(Kind::Empty),
 		None => builtin_type_kind(type_name),
 	}
 }
