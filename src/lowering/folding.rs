@@ -6,7 +6,7 @@
 //! program computes; a call that fails or runs out of fuel stays a call.
 
 use super::nodes::{call, children_rewritten, key};
-use crate::analyzer::{captured_variables, collect_variables, Scope};
+use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
 use crate::function_values::{definitions, Definition};
@@ -221,6 +221,94 @@ pub fn fold_constant_calls(program: Node) -> Node {
 		.filter(|(_, value)| is_constant(value))
 		.collect();
 	replaced(program, &folded)
+}
+
+/// A constant call whose value its function's checked result cannot hold is refused when compiled, as `x: int = 3/2`
+/// is (card static-int): `def half(x) -> int { x / 2 }; half(3)` gives 3/2, no int. The calls are computed as the
+/// folding computes them, from the definitions without their result checks, so the value is the misfit itself
+pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
+	let statements = statements_of(&program);
+	let foldable = foldable_functions(&program, &statements);
+	let declared: HashMap<String, String> = statements
+		.iter()
+		.flat_map(functions_in)
+		.filter(|function| foldable.contains(&function.name))
+		.filter_map(|function| Some((function.name, checked_result_type(&function.body)?)))
+		.collect();
+	let mut calls: Vec<(Node, String, Vec<Node>)> = vec![];
+	for statement in &statements {
+		statement.visit(&mut |node| {
+			if let Some((name, arguments)) = constant_call(node, &declared) {
+				if !calls.iter().any(|(called, _, _)| called == node) {
+					calls.push((node.clone(), name, arguments));
+				}
+			}
+		});
+	}
+	if calls.is_empty() {
+		return Ok(program);
+	}
+	let definitions = statements
+		.iter()
+		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)))
+		.map(|definition| without_result_checks(definition.clone()));
+	let computed = calls.iter().map(|(_, name, arguments)| call(name, arguments.clone())).collect();
+	let probe = [
+		definitions.collect(),
+		vec![Node::List(computed, Bracket::Square, Separator::Colon)],
+	]
+	.concat();
+	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
+		return Ok(program);
+	};
+	let Node::List(values, _, _) = crate::pipeline::run_module(module).drop_meta().clone() else {
+		return Ok(program);
+	};
+	for ((called, name, arguments), value) in calls.iter().zip(values) {
+		if let Some(refusal) = crate::analyzer::assignment_mismatch(called, CHECKED_RESULT, &declared[name], &value) {
+			let arguments: Vec<String> = arguments.iter().map(Node::serialize).collect();
+			let message = format!("{name}({}) gives {}: {}", arguments.join(", "), value.serialize(), refusal.message);
+			return Err(refusal.message(message).into_error());
+		}
+	}
+	Ok(program)
+}
+
+/// `f(3)` or `f 3`: a call of one of `functions` with constant arguments only, its name and arguments
+fn constant_call<T>(node: &Node, functions: &HashMap<String, T>) -> Option<(String, Vec<Node>)> {
+	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
+		return None;
+	};
+	let (head, arguments) = items.split_first()?;
+	let Node::Symbol(name) = head.drop_meta() else { return None };
+	(functions.contains_key(name) && !arguments.is_empty() && arguments.iter().all(is_constant))
+		.then(|| (name.clone(), arguments.to_vec()))
+}
+
+/// The type of a body's checked result (type_name_matching checked_result: `the result: int = v`, the type kept on the
+/// name as declaration_lowering keeps a declared type)
+fn checked_result_type(body: &Node) -> Option<String> {
+	let mut declared = None;
+	body.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign, _) = node {
+			if let Node::Meta { node: name, data } = target.as_ref() {
+				if let (true, Node::Symbol(type_name)) = (name.is_symbol(CHECKED_RESULT), data.as_ref()) {
+					declared = Some(type_name.clone());
+				}
+			}
+		}
+	});
+	declared
+}
+
+/// A definition whose checked result keeps any value: `the result = v`
+fn without_result_checks(node: Node) -> Node {
+	match node {
+		Node::Meta { node: name, data } if name.is_symbol(CHECKED_RESULT) && matches!(data.as_ref(), Node::Symbol(_)) => {
+			*name
+		}
+		other => children_rewritten(other, without_result_checks),
+	}
 }
 
 /// Pure functions (no effect, not even possible divergence) that read no main-level variable: their value depends

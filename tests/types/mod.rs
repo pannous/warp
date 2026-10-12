@@ -6,7 +6,7 @@ mod test_class_unions;
 mod test_any_field_text;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
-mod test_any_place;
+mod test_any_place; // card yes-stores
 mod test_as_number_variable; // card number-variable
 mod test_be_definitions;
 mod test_binary_int; // card binary-int
@@ -118,6 +118,7 @@ mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
 mod test_sized_array_values;
 mod test_spaced_construction;
+mod test_static_result; // card static-int
 mod test_struct_field_of_constructor;
 mod test_struct_instances;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -161,8 +162,8 @@ mod test_types_scope;
 mod test_union_returns;
 mod test_union_spellings;
 mod test_unknown_conversion; // card unknown-word
-mod test_unknown_type;
+mod test_unknown_type; // card unknown-type
 mod test_upcast_fields;
 mod test_value_constructor;
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card unknown-type // card yes-stores
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error

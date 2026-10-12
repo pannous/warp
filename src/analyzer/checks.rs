@@ -2083,7 +2083,7 @@ pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	}
 }
 
-pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
+pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
 	// `a = b = 2.5`: an assignment's value is the value it assigns (card chain-unchecked)
 	if let Node::Key(_, Op::Assign, assigned) = value.drop_meta() {
 		return assignment_mismatch(assignment, name, type_name, assigned);
