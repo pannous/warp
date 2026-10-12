@@ -10,6 +10,9 @@ notes/open_decisions.md.
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
   are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
   position `or` stays the boolean or (warp-dispatch).
+- lossy-return (asked; replaces the old todo.md note "a declared return type converts"): a fraction reaching a
+  declared int result is an error, "an int must be a whole number", fix "declare number, or truncate with as int";
+  lossless conversions (`-> text { 3 }` → "3") still convert. Test assertions pinning truncation may change.
 - cargo-fmt: format the whole repo once in one chore commit, right after an Integrator batch, then the gate enforces
   `cargo fmt --check`.
 - web-keyframes (implied by P188, not asked): CSS's own form in warp syntax, `@keyframes pop {…}` in `style{}` and
