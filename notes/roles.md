@@ -81,6 +81,9 @@ The only session that runs the full suite and the only one that pushes code to m
   uncommitted edits carried along), look for the wish behind them and a general pattern: a commented-out line or
   TODO is a missing feature, a changed constant a complaint (speed, size), a new sample a use case. Each becomes a
   card (`todo add`), or a question for the Interviewer when the intent is open.
+- Every landing gets a try line (user, 2026-10-12; notes/agents/common.md): the merge report names each user-visible
+  branch to its owner, who sends warp-interviewer the try line; an owner that has retired gets none, so the
+  Integrator sends that branch's try line itself.
 - Before every merge: Cargo.toml/Cargo.lock restored (a branch that changes Cargo.toml is otherwise refused, and a
   grep for "conflict" does not show that). Before reporting a branch merged: `git merge-base --is-ancestor
   origin/<branch> HEAD`.
