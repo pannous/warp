@@ -204,5 +204,7 @@ mod test_welcome_forms;
 mod test_when_signals;
 mod test_while_paren_condition;
 mod test_while_value;
+#[cfg(feature = "native")] // the paint window's input
+mod test_window_clicks; // card native-window
 mod test_window_opens; // card window-loop
 mod test_word_statements; // card error-beep // card rest-patterns

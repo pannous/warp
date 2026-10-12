@@ -10,8 +10,8 @@
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
-	BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y,
-	ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN,
+	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, KEY_DOWN, KEY_PRESSED,
+	MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -70,6 +70,11 @@ pub fn native_view() -> (i64, i64) {
 static KEY_PRESSES: Mutex<VecDeque<i64>> = Mutex::new(VecDeque::new());
 const KEYS_KEPT: usize = 64;
 const KEY_INPUT: usize = 3;
+const BUTTON_INPUT: usize = 2;
+/// The clicks over the paint window not read yet (CLICK_PRESSED), each where the button went down, oldest first, the
+/// last KEYS_KEPT; and the click read last, which CLICK_X and CLICK_Y tell
+static CLICKS: Mutex<VecDeque<(f32, f32)>> = Mutex::new(VecDeque::new());
+static CLICK_READ: Mutex<(f32, f32)> = Mutex::new((0.0, 0.0));
 
 /// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/paint.rs allow_windows)
 static DRAWING_ON_GPU: AtomicBool = AtomicBool::new(false);
@@ -86,20 +91,28 @@ pub fn window_input() -> [f32; 4] {
 
 pub fn tell_window_input(input: [f32; 4]) {
 	tell_window_key(input[KEY_INPUT]);
+	// a click: the button down that was up
+	if input[BUTTON_INPUT] != 0.0 && window_input()[BUTTON_INPUT] == 0.0 {
+		kept_push(&mut CLICKS.lock().unwrap(), (input[0], input[1]));
+	}
 	for (value, number) in WINDOW_INPUT.iter().zip(input) {
 		value.store(number.to_bits(), Ordering::Relaxed);
 	}
+}
+
+/// A press queued, the oldest dropped beyond KEYS_KEPT: a program that never reads them keeps the last ones
+fn kept_push<T>(presses: &mut VecDeque<T>, press: T) {
+	if presses.len() == KEYS_KEPT {
+		presses.pop_front();
+	}
+	presses.push_back(press);
 }
 
 /// The key held over the paint window alone, the pointer left as it is
 pub fn tell_window_key(key: f32) {
 	// a press: a key held that was not held before (another key, or none)
 	if key != 0.0 && key != window_input()[KEY_INPUT] {
-		let mut presses = KEY_PRESSES.lock().unwrap();
-		if presses.len() == KEYS_KEPT {
-			presses.pop_front();
-		}
-		presses.push_back(key as i64);
+		kept_push(&mut KEY_PRESSES.lock().unwrap(), key as i64);
 	}
 	WINDOW_INPUT[KEY_INPUT].store(key.to_bits(), Ordering::Relaxed);
 }
@@ -119,6 +132,17 @@ pub fn read(name: &str) -> Result<i64, String> {
 	}
 	if name == KEY_DOWN {
 		return Ok((window_input()[KEY_INPUT] != 0.0) as i64);
+	}
+	if name == CLICK_PRESSED {
+		let click = CLICKS.lock().unwrap().pop_front();
+		if let Some(click) = click {
+			*CLICK_READ.lock().unwrap() = click;
+		}
+		return Ok(click.is_some() as i64);
+	}
+	if name == CLICK_X || name == CLICK_Y {
+		let (x, y) = *CLICK_READ.lock().unwrap();
+		return Ok(if name == CLICK_X { x } else { y } as i64);
 	}
 	if name == KEY_PRESSED {
 		return Ok(KEY_PRESSES.lock().unwrap().pop_front().unwrap_or(0));
