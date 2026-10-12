@@ -7,6 +7,7 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- crash-fixes-first (user): crash fixes are merged with the highest priority (notes/roles.md, warp-integrator).
 - small-changes-on-main (user): agents may work on main without a worktree when their change is small or doesn't
   conflict with other work; moving onto or off a worktree on demand is fine (notes/roles.md "Small changes on main").
 - session-names (user): a session is named for the task it is on now (the card key until the area is known), never a

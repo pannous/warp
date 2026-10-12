@@ -35,8 +35,9 @@ ask me decision questions."
 - Ready to try (user 2026-10-10: "a general mechanism when some feature is done and ready to be tested by me"; the
   question popups are the notifications that reach the user): after each batch of questions, and whenever idle,
   `todo try --new` lists finished features not announced yet. Try lines spell out the full path
-  /Users/me/dev/bin/warp: a debug build of main refreshed by push_tested.sh after every pushed batch (`--version`:
-  "… debug build <commit>"). Plain `warp` and a sample's `#!/usr/bin/env warp` run brew's copy (/opt/homebrew/bin
+  /Users/me/dev/bin/warp: main built with the optimized quick-release profile (Cargo.toml), rebuilt in the background
+  by refresh_main_binary.sh a few minutes after every pushed batch (`--version`: "…-main"; log:
+  warp.worktrees.noindex/main_binary.log); main's debug build is /Users/me/dev/bin/warp-debug. Plain `warp` and a sample's `#!/usr/bin/env warp` run brew's copy (/opt/homebrew/bin
   comes first on PATH), so a sample is tried as `/Users/me/dev/bin/warp samples/x.warp`. Homebrew releases are occasional (user,
   2026-10-10), so nothing waits for brew; a feature is announced once its batch is pushed (workers run `todo done`
   only after their branch is on main). Never the shared-target debug/warp: it holds whichever worktree built last.
@@ -74,6 +75,8 @@ The only session that runs the full suite and the only one that pushes code to m
   agent's result) is not batched: it goes next, alone on main, its full suite ahead of the batch run (a running suite
   finishes first). It skips the waiting, never the suite: one red branch on main stops every worker. To try a result
   even sooner, the worker's early-try binary (notes/agents/common.md) needs no merge at all.
+- Crash fixes first (user, 2026-10-12: "Crash fixes must be merged with highest priority"): a crash card or a branch
+  fixing a panic or trap is always express, alone and next, ahead of any queued batch (a running suite finishes first).
 - Before every merge: Cargo.toml/Cargo.lock restored (a branch that changes Cargo.toml is otherwise refused, and a
   grep for "conflict" does not show that). Before reporting a branch merged: `git merge-base --is-ancestor
   origin/<branch> HEAD`.
