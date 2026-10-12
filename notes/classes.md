@@ -250,8 +250,9 @@ is a method of the generic function `sum` (card dispatch, notes/dispatch.md; for
   `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
   Every class body is normalized to its members (with_members), not only those with methods. The declared-type
   pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
-Open (card class-forms-ruby): Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`), Go (`type P struct {…}`, `func (p P) M()`),
-operators (`__add__`, `operator +`), a method named `norm` (the parser reads it as the operator ‖).
+Also (card class-forms-ruby, reviewed 2026-10-12): Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`, endless
+`def twice = @x * 2`), Go (`type P struct {…}`, `func (p P) M()`), operators (`__add__`, `operator +`, class_operators.md),
+a method named `norm` (tests/functions/test_operator_word_methods.rs).
 
 Smart scopes (classes-22, wiki/inventions.md, declarations.rs smart_scope): `Number { Square = it*it }` defines
 `Square(self:Number) := self*self` for a builtin type word, `it` the value the method is called on: `3.Square`.
