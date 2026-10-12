@@ -7,9 +7,18 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- return-as (user, via warp-supervisor): return types are spelled `def f(x) as int or text`; `->` still works with
+  a hint and an "I meant" fix toward `as`; no `returns` keyword ("nah") (warp-dispatch).
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
   are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
   position `or` stays the boolean or (warp-dispatch).
+- lossy-return (asked; replaces the old todo.md note "a declared return type converts"): a fraction reaching a
+  declared int result is an error, "an int must be a whole number", fix "declare number, or truncate with as int";
+  lossless conversions (`-> text { 3 }` → "3") still convert. Test assertions pinning truncation may change.
+- cargo-fmt: format the whole repo once in one chore commit, right after an Integrator batch, then the gate enforces
+  `cargo fmt --check`.
+- web-keyframes (implied by P188, not asked): CSS's own form in warp syntax, `@keyframes pop {…}` in `style{}` and
+  `animation: pop 400ms`; warp adds only the delayed removal for leaving, `leave: pop 400ms reverse`.
 - web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
   in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup). The long form
   `Counter.all` (or `Counter.instances` if `all` is taken) means the same and hints to use `counters`.
