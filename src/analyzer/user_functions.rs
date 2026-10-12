@@ -925,14 +925,14 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 					*given_bools.entry((name.clone(), index)).or_insert(true) &= is_bool_argument(argument);
 				}
 				// `real`, `exact` are Ints that may hold a ratio: only a whole type loses a decimal's digits
-				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::refuses_decimals(&annotation.name()));
-				if declared_int && has_digits_an_int_loses(argument) {
+				let declared = function.params[index].annotation.as_ref().map(|annotation| annotation.name()).filter(|declared| crate::analyzer::checks::refuses_decimals(declared));
+				if let Some(declared) = declared.filter(|_| has_digits_an_int_loses(argument)) {
 					// a whole float serializes as `2`; its decimal point is what makes it no int
 					let written = match argument.drop_meta() {
 						Node::Number(crate::extensions::numbers::Number::Float(value)) if value.fract() == 0.0 => format!("{value:.1}"),
 						other => other.serialize(),
 					};
-					float_for_int.push(format!("{written} is no int: write {written} as int"));
+					float_for_int.push(format!("{written} is no {declared}: write {written} as int"));
 				}
 				// `g("a")`: a one-character text is parsed as a Codepoint; the parameter holds any text, as for a default
 				if let Some(kind) = argument_kind(argument).map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind }) {
