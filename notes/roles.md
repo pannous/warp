@@ -74,6 +74,8 @@ The only session that runs the full suite and the only one that pushes code to m
   agent's result) is not batched: it goes next, alone on main, its full suite ahead of the batch run (a running suite
   finishes first). It skips the waiting, never the suite: one red branch on main stops every worker. To try a result
   even sooner, the worker's early-try binary (notes/agents/common.md) needs no merge at all.
+- Crash fixes first (user, 2026-10-12: "Crash fixes must be merged with highest priority"): a crash card or a branch
+  fixing a panic or trap is always express, alone and next, ahead of any queued batch (a running suite finishes first).
 - Before every merge: Cargo.toml/Cargo.lock restored (a branch that changes Cargo.toml is otherwise refused, and a
   grep for "conflict" does not show that). Before reporting a branch merged: `git merge-base --is-ancestor
   origin/<branch> HEAD`.
