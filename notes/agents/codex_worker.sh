@@ -1,7 +1,7 @@
 #!/bin/bash
 # Gives Codex one or two cards from the board and hands its finished branches to the Integrator:
 #   notes/agents/codex_worker.sh            (cron, every 5 hours; user, 2026-10-11)
-# A fresh headless `codex exec` takes free cards from the Next column, works each on its own branch and worktree,
+# A fresh Codex thread on the local app-server daemon (codex_app_run.py, so the user sees it in the Codex app) takes free cards from the Next column, works each on its own branch and worktree,
 # and ends with one MERGE REQUEST block per branch. Codex has no SendMessage, so a short headless claude run (Haiku)
 # relays those blocks to warp-integrator. A run still going when the next one is due makes the next one skip.
 REPO=/Users/me/dev/angles/warp
@@ -53,8 +53,15 @@ END
 A card you could not finish: push what you have, say why in the final message, and put no block for it."
 
 echo "$(date +%FT%T) Codex run starting, log $RUN.jsonl"
-codex exec --dangerously-bypass-approvals-and-sandbox -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" > "$RUN.jsonl" 2>&1
-echo "$(date +%FT%T) Codex run ended with exit $?"
+# on the app-server daemon the thread shows up in the user's Codex app (user, 2026-10-12); `codex exec` threads don't
+/usr/bin/python3 "$REPO/notes/agents/codex_app_run.py" "$REPO" "codex cron $(date '+%F %H:%M')" "$PROMPT" "$RUN.jsonl" "$RUN.last.md"
+STATUS=$?
+if [ $STATUS -eq 2 ]; then
+	echo "$(date +%FT%T) NO CODEX APP-SERVER DAEMON (codex app-server daemon start): running codex exec instead, invisible in the Codex app"
+	codex exec --dangerously-bypass-approvals-and-sandbox -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" >> "$RUN.jsonl" 2>&1
+	STATUS=$?
+fi
+echo "$(date +%FT%T) Codex run ended with exit $STATUS"
 grep -o '"message":"You[^"]*usage limit[^"]*"' "$RUN.jsonl" | head -1 | sed 's/^/CODEX REFUSED: /'
 
 REQUESTS=$(awk '/^MERGE REQUEST/{keep=1} keep{print} /^END/{keep=0}' "$RUN.last.md" 2>/dev/null)
