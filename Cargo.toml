@@ -140,9 +140,7 @@ wat = "1.259" # tests build modules from WAT text
 incremental = true
 # Maximum build speed optimizations
 opt-level = 0          # No optimization for faster compile
-#debug = 0              # Minimal debug info for faster compile (override with CARGO_PROFILE_DEV_DEBUG=true)
-#debug = false         # fast by default (IDE overrides with CARGO_PROFILE_DEV_DEBUG=true or use [profile.fast])
-debug = true           # IDE needs debug symbols for breakpoints
+debug = "line-tables-only"  # backtraces keep function names and file:line (crash cards); no IDE needs full debug info
 split-debuginfo = "unpacked"  # Faster on macOS
 codegen-units = 16     # Rust default (256 was wasteful)
 
