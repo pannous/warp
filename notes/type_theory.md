@@ -281,8 +281,9 @@ for a whole number when they run. This is stricter than warp, never unsound, so 
 assigns only globals); `global y` inside a function, or bare at main level before `y = …`, only declares. The
 exporter collects every name declared `global` anywhere first. In warp a function's assignment to a name without
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
-(`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet (card w0-globals): `global float y = …`
-(the exporter does not read the type word yet), `global x; x` (read before any value).
+(`elaborateTyped`: the second pass infers functions seeing the first pass's names). `global float y = 2` declares y as `global y: float = 2` does (the
+parser had dropped the type word); `global x` read before any value is warp's unset 0 (`.var x 0`), unless the first
+statement naming x assigns it (card w0-globals).
 
 ## Lambdas
 

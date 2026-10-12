@@ -166,6 +166,11 @@ const CORPUS: &[&str] = &[
 	"y = 3; def z() { global y; y * y }; y = 4; z()",
 	"global n = 0; def f() { n += 1 }; f(); f(); n",
 	"global x; x = 7; x + 1",
+	// card w0-globals: a global's type word, a global read before any value (warp's unset 0)
+	"global float y = 2; y = 2.5; y",
+	"global int y = 2; y = 2.5",
+	"global x; x + 1",
+	"global x; def f() { x = 2 }; f(); x",
 	"global k = 7",
 	"1 != 2",
 	"class P { x: int }; p = P(1); q = P(1); p == q",

@@ -65,6 +65,8 @@ const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
 /// `global n = 0` at main level, `global n` in a function: a main-level name functions may assign
 const GLOBAL_KEYWORD: &str = "global";
+/// What a global declared without a value holds until it is assigned: `global x; x + 1` is 1
+const UNSET_GLOBAL: i64 = 0;
 /// `break v` in a block handler ends its block with v (aborting handlers)
 const BREAK_KEYWORD: &str = "break";
 /// `return v` before a function's end is the event `f·return` whose block handler, around f's body, breaks with v
@@ -257,8 +259,9 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 	})
 }
 
-/// `global n` or `global n = 0` (parsed `global: n`, `global: (n = 0)`): the name and the value
-fn global_declaration(node: &Node) -> Option<(&str, Option<&Node>)> {
+/// `global n`, `global n = 0` or `global float y = 2` (parsed `global: n`, `global: (n = 0)`, `global: (y: float = 2)`):
+/// the name, and the assignment's target and value
+fn global_declaration(node: &Node) -> Option<(&str, Option<(&Node, &Node)>)> {
 	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else {
 		return None;
 	};
@@ -267,8 +270,12 @@ fn global_declaration(node: &Node) -> Option<(&str, Option<&Node>)> {
 	}
 	match declared.drop_meta() {
 		Node::Symbol(name) => Some((name, None)),
-		Node::Key(name, Op::Assign, value) => match name.drop_meta() {
-			Node::Symbol(name) => Some((name, Some(&**value))),
+		Node::Key(target, Op::Assign, value) => match target.drop_meta() {
+			Node::Symbol(name) => Some((name, Some((&**target, &**value)))),
+			Node::Key(name, Op::Colon, _) => match name.drop_meta() {
+				Node::Symbol(name) => Some((name, Some((&**target, &**value)))),
+				_ => None,
+			},
 			_ => None,
 		},
 		_ => None,
@@ -520,6 +527,19 @@ fn unwrapped(node: &Node) -> &Node {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => unwrapped(&items[0]),
 		other => other,
+	}
+}
+
+/// `global x; x = 7`: the first statement naming x assigns it (or none names it), so that is the global's binding
+fn assigned_before_read(statements: &[&Node], name: &str) -> bool {
+	match statements
+		.iter()
+		.find(|statement| mentions(statement, name))
+		.map(|statement| statement.drop_meta())
+	{
+		Some(Node::Key(target, Op::Assign, value)) => target.is_symbol(name) && !mentions(value, name),
+		Some(_) => false,
+		None => true,
 	}
 }
 
@@ -1105,8 +1125,14 @@ impl Exporter {
 			.map(|class| self.class_definition(class))
 			.collect::<Result<Vec<_>, String>>()?;
 		items.extend(cell_items);
-		for statement in program {
-			items.push(self.item(statement)?);
+		for (position, statement) in program.iter().enumerate() {
+			items.push(match global_declaration(statement) {
+				// `global x; x + 1`: read before any value, x is warp's unset global 0
+				Some((name, None)) if !assigned_before_read(&program[position + 1..], name) => {
+					self.binding(&Node::Symbol(name.to_string()), ".var", &Node::int(UNSET_GLOBAL))?
+				}
+				_ => self.item(statement)?,
+			});
 		}
 		Ok(items)
 	}
@@ -1121,7 +1147,7 @@ impl Exporter {
 			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler, None)?));
 		}
 		match global_declaration(statement) {
-			Some((name, Some(value))) => return self.binding(&Node::Symbol(name.to_string()), ".var", value),
+			Some((_, Some((target, value)))) => return self.binding(target, ".var", value),
 			// `global x; x = 7`: the later first binding is the global one
 			Some((_, None)) => return Ok(format!(".statement {UNIT_TYPE}")),
 			None => {}
