@@ -1,11 +1,12 @@
 //! Key names in a key handler (card key-if): inside `on key {…}` a bare `key` is the pressed key, `event.key`, and the
 //! key words name keys as the page's KeyboardEvent.key does (natively lowering/system_signals.rs KEY_NAMES), so
-//! `on key { if key == ESC { exit } }` reads as written. A program's own variable `key` stays its own.
+//! `on key { if key == ESC { exit } }` reads as written. A program's own variable (`key`, `UP`) stays its own.
 
 use super::nodes::key;
 use crate::event_signals::{main_level_variables, EVENT_WORD};
 use crate::node::{symbol, Node};
 use crate::operators::Op;
+use std::collections::HashSet;
 
 const HANDLER_WORDS: [&str; 2] = ["on", "once"];
 const KEY_EVENT: &str = "key";
@@ -38,20 +39,19 @@ const FUNCTION_KEYS: std::ops::RangeInclusive<u8> = 1..=12;
 
 pub fn lower(program: Node) -> Node {
 	let (statements, _, _) = crate::variable_signals::main_statements(&program);
-	let own_key = main_level_variables(&statements).contains(KEY_EVENT);
-	with_key_names(program, own_key)
+	with_key_names(program, &main_level_variables(&statements))
 }
 
-fn with_key_names(node: Node, own_key: bool) -> Node {
+fn with_key_names(node: Node, own: &HashSet<String>) -> Node {
 	match key_handler_body(&node) {
 		Some(index) => {
 			let Node::List(mut items, bracket, separator) = node.drop_meta().clone() else {
 				unreachable!("a handler is a list")
 			};
-			items[index] = named(items[index].clone(), own_key);
+			items[index] = named(items[index].clone(), own);
 			Node::List(items, bracket, separator)
 		}
-		None => node.map_children(|child| with_key_names(child, own_key)),
+		None => node.map_children(|child| with_key_names(child, own)),
 	}
 }
 
@@ -68,16 +68,15 @@ fn key_handler_body(node: &Node) -> Option<usize> {
 	}
 }
 
-/// The body with `key` as event.key (unless the program has its own) and the key words as the keys' names
-fn named(body: Node, own_key: bool) -> Node {
+/// The body with `key` as event.key and the key words as the keys' names, but for the program's own variables
+fn named(body: Node, own: &HashSet<String>) -> Node {
 	match body.drop_meta() {
-		Node::Symbol(word) if word == KEY_EVENT && !own_key => key(symbol(EVENT_WORD), Op::Dot, symbol(KEY_EVENT)),
+		Node::Symbol(word) if own.contains(word) => body,
+		Node::Symbol(word) if word == KEY_EVENT => key(symbol(EVENT_WORD), Op::Dot, symbol(KEY_EVENT)),
 		Node::Symbol(word) => key_name(word).map(Node::Text).unwrap_or(body),
 		// `event.key`: the field stays a field
-		Node::Key(target, Op::Dot, field) => {
-			key(named(target.as_ref().clone(), own_key), Op::Dot, field.as_ref().clone())
-		}
-		_ => body.map_children(|child| named(child, own_key)),
+		Node::Key(target, Op::Dot, field) => key(named(target.as_ref().clone(), own), Op::Dot, field.as_ref().clone()),
+		_ => body.map_children(|child| named(child, own)),
 	}
 }
 
