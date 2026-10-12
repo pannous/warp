@@ -521,6 +521,9 @@ fn route_function(name: &str, body: Node) -> Node {
 /// browser (notes/web_framework.md "Built sites"). Its calls of server functions ask the server (asking_the_server)
 fn without_serving(program: Node) -> Node {
 	match program {
+		// a program of one statement is that statement: a lone `post "/echo" {…}` is a list of words, not of statements;
+		// it leaves no statements, as several routes do (ø would be a value, and the page would show it)
+		single if is_serving(&single) => Node::List(vec![], Bracket::None, Separator::Newline),
 		Node::List(statements, bracket, separator) => {
 			let statements: Vec<Node> = statements.into_iter().filter(|statement| !is_serving(statement)).collect();
 			let servers = server_names(&statements);
@@ -529,7 +532,6 @@ fn without_serving(program: Node) -> Node {
 			}
 			asking_the_server(statements, &servers).map_or_else(|error| error, |statements| Node::List(statements, bracket, separator))
 		}
-		single if served(&single).is_some() => Node::Empty,
 		other => other,
 	}
 }

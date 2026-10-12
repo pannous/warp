@@ -36,3 +36,12 @@ fn a_server_is_known_without_running_it() {
 	assert!(!warp::serve::serves("p{ \"just a page\" }"));
 	assert!(!warp::serve::serves("get = 3\nget + 1"));
 }
+
+// card routes-serve: a program of routes alone has no page, and building its page says nothing (a lone `post "/echo"
+// {…}` was read as net's post: "undefined function: post")
+#[test]
+fn a_program_of_routes_alone_has_no_page() {
+	for routes in ["post \"/echo\" { request.body }", "get \"/api\" { 1 }", "get \"/api\" { 1 }\npost \"/echo\" { request.body }"] {
+		let site = warp::site::served_files(routes, "routes"); assert!(matches!(site, Ok(None)), "{routes}: {:?}", site.err());
+	}
+}
