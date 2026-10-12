@@ -590,6 +590,7 @@ PASSED:
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
   ✓ control::test_task_dir::dir_of_a_task_lists_its_words
   ✓ control::test_task_dir::the_task_still_runs_after_its_dir
+  ✓ control::test_task_error_positions::a_failing_task_names_its_statement
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
   ✓ control::test_task_exact::a_ratio_crosses_to_a_task_and_back
   ✓ control::test_task_globals::a_go_block_plays_notes
@@ -4408,6 +4409,7 @@ PASSED:
   ✓ web::test_host_parts::the_sites_parts_are_the_playgrounds_parts
   ✓ web::test_html_escape::test_escaped_replaces_the_three_markup_characters
   ✓ web::test_html_escape::test_one_html_escaper
+  ✓ web::test_html_meta::page_facts_on_html_go_into_its_head
   ✓ web::test_html_render::a_computed_child_next_to_an_attribute
   ✓ web::test_html_render::a_for_loop_inside_markup
   ✓ web::test_html_render::a_for_loop_nested_in_html
@@ -4466,6 +4468,7 @@ PASSED:
   ✓ web::test_route_data::a_route_reading_a_table_ships_without_it
   ✓ web::test_route_data::the_first_visit_gets_finished_html
   ✓ web::test_route_data::the_server_gives_only_what_the_route_shows
+  ✓ web::test_route_error_positions::a_failing_route_names_its_statement
   ✓ web::test_route_header::a_route_sets_its_status_and_headers
   ✓ web::test_route_helpers::a_function_a_task_may_call_stays_in_the_main_module
   ✓ web::test_route_helpers::a_function_one_route_calls_moves_with_the_route
@@ -5018,4 +5021,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5013 passed, 0 failed, 5013 total tested
+10 ignored, 5016 passed, 0 failed, 5016 total tested
