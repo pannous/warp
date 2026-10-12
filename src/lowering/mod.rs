@@ -70,6 +70,7 @@ pub mod routes;
 pub mod ruby_blocks;
 pub mod run_time_blocks;
 pub mod scoped_handlers;
+pub mod select_options;
 pub mod serve;
 pub mod shared_arrays;
 pub mod signal_values;

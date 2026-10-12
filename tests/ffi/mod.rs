@@ -24,6 +24,8 @@ mod test_foreign_member_assignment;
 mod test_foreign_operators;
 #[cfg(feature = "native")] // a python3 child process: not in the browser build
 mod test_foreign_python;
+#[cfg(feature = "native")] // a python3 child process: not in the browser build
+mod test_foreign_type_tests; // card int-bool
 mod test_glibc_math_header;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;

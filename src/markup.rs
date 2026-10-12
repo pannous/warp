@@ -12,6 +12,7 @@ const MARKUP_MODULE: &str = "markup";
 /// and the attributes
 const ELEMENTS_LIST: &str = "html_elements";
 const ATTRIBUTES_LIST: &str = "html_attributes";
+const VOID_ELEMENTS_LIST: &str = "html_void_elements";
 const HEAD: &str = "head";
 /// `data-warp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
@@ -44,11 +45,22 @@ pub fn names_attribute(word: &str) -> bool {
 }
 
 fn is_attribute_name(word: &str) -> bool {
+	attribute_names().iter().any(|attribute| attribute == word)
+}
+
+/// The attributes lib/markup.warp writes as attributes (besides `data-…`, `aria-…` and key)
+pub fn attribute_names() -> &'static [String] {
 	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
-	ATTRIBUTES
-		.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST))
+	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST))
+}
+
+/// Does the element take no content (`img`, `input`, `br`): lib/markup.warp writes no closing tag, nor what it holds
+pub fn is_void_element(tag: &str) -> bool {
+	static VOID_ELEMENTS: OnceLock<Vec<String>> = OnceLock::new();
+	VOID_ELEMENTS
+		.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, VOID_ELEMENTS_LIST))
 		.iter()
-		.any(|attribute| attribute == word)
+		.any(|element| element == tag)
 }
 
 /// Is the value an element (`div{…}`, `h1: "Hi"`, a key named after an element): what the CLI prints as HTML and the

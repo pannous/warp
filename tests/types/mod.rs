@@ -6,6 +6,7 @@ mod test_class_unions;
 mod test_any_field_text;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
+mod test_any_place; // card yes-stores
 mod test_as_number_variable; // card number-variable
 mod test_be_definitions;
 mod test_binary_int; // card binary-int
@@ -100,6 +101,7 @@ mod test_optional_list_items;
 mod test_optional_number_fields;
 mod test_param_named_like_global; // card param-named-like-global
 mod test_parameter_text; // card param-text
+mod test_passed_list_identity; // card xs-xs
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
 mod test_printable;
@@ -110,6 +112,7 @@ mod test_records_classes;
 mod test_recursive_fields;
 mod test_repeated_type_parameters;
 mod test_returned_instances; // card units-dynamic
+mod test_returned_list_alias; // card identity-copies-list
 mod test_runtime_text_ratio;
 mod test_same_identity;
 mod test_self_typed_field; // card empty-field
@@ -117,6 +120,7 @@ mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
 mod test_sized_array_values;
 mod test_spaced_construction;
+mod test_static_result; // card static-int
 mod test_struct_field_of_constructor;
 mod test_struct_instances;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -160,7 +164,9 @@ mod test_types_scope;
 mod test_union_returns;
 mod test_union_spellings;
 mod test_unknown_conversion; // card unknown-word
+mod test_unknown_type; // card unknown-type
 mod test_upcast_fields;
+mod test_user_counting_word; // card user-defined-size
 mod test_value_constructor;
 mod test_variant_payloads;
 mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error

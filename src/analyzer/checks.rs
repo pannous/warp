@@ -717,6 +717,7 @@ pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	let mut warnings = vec![];
 	lint_into(program, &mut warnings);
 	warnings.extend(kebab_ambiguities(program));
+	warnings.extend(unknown_variable_types(program));
 	program.visit(&mut |node| {
 		if let Node::Key(_, Op::Define, body) = node {
 			if uses_it_outside_loops(body) {
@@ -1651,53 +1652,79 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 
 /// A parameter annotation must name a builtin or a user-defined type, `x:flaot` is a typo
 pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> {
-	let context = function_definitions(program);
-	let mut user_types = crate::type_kinds::TypeRegistry::new();
-	collect_all_types(&mut user_types, program);
-	let traits = crate::traits::Traits::of(program);
-	context
+	let known_types = KnownTypes::of(program);
+	function_definitions(program)
 		.user_functions
 		.values()
 		.flat_map(|function| &function.params)
 		.find_map(|param| {
 			let annotation = param.annotation.as_ref()?;
-			let type_name = annotation.name();
-			let is_known_name = |name: &str| {
-				type_word_kind(name).is_some() || user_types.get_by_name(name).is_some() || traits.is_trait(name)
-			};
-			if let Some(part) = union_parts(type_name.trim_end_matches('?'))
-				.and_then(|parts| parts.into_iter().find(|part| !is_known_name(part)))
-			{
-				return Some(unknown_union_part(
-					annotation,
-					&format!("parameter {}", param.name),
-					&param.name,
-					&type_name,
-					part,
-				));
-			}
-			let known = match type_name.strip_prefix(LIST_OF_PREFIX) {
-				Some(element) => is_known_name(element) || names_list_type(element),
-				None => {
-					annotated_kind(annotation).is_some()
-						|| user_types.get_by_name(type_name.trim_end_matches('?')).is_some()
-						|| traits.is_trait(&type_name)
-				}
-			};
-			let names = crate::type_tests::builtin_type_words()
-				.map(str::to_string)
-				.chain(user_types.types().iter().map(|type_def| type_def.name.clone()));
-			let diagnostic = || {
-				Diagnostic::at(
-					annotation,
-					format!("unknown type {type_name} of parameter {}", param.name),
-				)
-			};
-			(!known).then(|| match crate::extensions::strings::near_miss(&type_name, names) {
-				Some(near) => diagnostic().offer(format!("the type {near}"), &type_name, near),
-				None => diagnostic(),
-			})
+			known_types.unknown_annotation(annotation, &format!("parameter {}", param.name), &param.name)
 		})
+}
+
+/// A variable's declared type naming no type (`p: foo = 2.5`) is a warning, no longer silent (card unknown-type); the
+/// program runs as if undeclared: C code may name types of headers it never reads (`let z : tdouble = x*x`)
+pub(super) fn unknown_variable_types(program: &Node) -> Vec<Diagnostic> {
+	let known_types = KnownTypes::of(program);
+	let mut unknown = vec![];
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign, _) = node.drop_meta() {
+			if let Node::Key(name, Op::Colon, annotation) = target.drop_meta() {
+				if let Some(name) = name.symbol_name() {
+					unknown.extend(known_types.unknown_annotation(annotation, name, name));
+				}
+			}
+		}
+	});
+	unknown
+}
+
+/// The types a program can name: the builtin ones, its classes and its traits
+struct KnownTypes {
+	user_types: crate::type_kinds::TypeRegistry,
+	traits: crate::traits::Traits,
+}
+
+impl KnownTypes {
+	fn of(program: &Node) -> Self {
+		let mut user_types = crate::type_kinds::TypeRegistry::new();
+		collect_all_types(&mut user_types, program);
+		KnownTypes {
+			user_types,
+			traits: crate::traits::Traits::of(program),
+		}
+	}
+
+	fn is_known_name(&self, name: &str) -> bool {
+		type_word_kind(name).is_some()
+			|| name == crate::type_kinds::UNTYPED_FIELD
+			|| crate::lowering::declarations::is_collection_type_word(name)
+			|| self.user_types.get_by_name(name).is_some()
+			|| self.traits.is_trait(name)
+	}
+
+	/// The error for an annotation naming no known type, with the near type as its fix
+	fn unknown_annotation(&self, annotation: &Node, subject: &str, name: &str) -> Option<Diagnostic> {
+		let type_name = annotation.name();
+		if let Some(part) = union_parts(type_name.trim_end_matches('?'))
+			.and_then(|parts| parts.into_iter().find(|part| !self.is_known_name(part)))
+		{
+			return Some(unknown_union_part(annotation, subject, name, &type_name, part));
+		}
+		let known = match type_name.strip_prefix(LIST_OF_PREFIX) {
+			Some(element) => self.is_known_name(element) || names_list_type(element),
+			None => annotated_kind(annotation).is_some() || self.is_known_name(type_name.trim_end_matches('?')),
+		};
+		let names = crate::type_tests::builtin_type_words()
+			.map(str::to_string)
+			.chain(self.user_types.types().iter().map(|type_def| type_def.name.clone()));
+		let diagnostic = || Diagnostic::at(annotation, format!("unknown type {type_name} of {subject}"));
+		(!known).then(|| match crate::extensions::strings::near_miss(&type_name, names) {
+			Some(near) => diagnostic().offer(format!("the type {near}"), &type_name, near),
+			None => diagnostic(),
+		})
+	}
 }
 
 /// The declared name and type of the target `x:int` or `int x`
@@ -2054,7 +2081,7 @@ pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	}
 }
 
-pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
+pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
 	// `a = b = 2.5`: an assignment's value is the value it assigns (card chain-unchecked)
 	if let Node::Key(_, Op::Assign, assigned) = value.drop_meta() {
 		return assignment_mismatch(assignment, name, type_name, assigned);

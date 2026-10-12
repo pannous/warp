@@ -206,6 +206,10 @@ Kind has no bool, so any int passes a bool check there.
 Fixed: declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts = [420]`), card
 list-element-types (warp-a1, main 499bb5b1c); typed parameters (`f(x: text) := x; f(3)`, card param-types) and
 call results (`f(x: int) := x + 1; y = f(2); y = "a"`, card call-result), functions2 on main by 18952a635.
+static-int: a constant call whose value misfits its declared result (`def half(x) -> int { x / 2 }; half(3)`) is
+refused by `compile` (folding.rs refuse_result_misfits computes the call without the check); `half(4)` stays 2, as
+`x: int = 4/2` does (value-based, where W0 types `int / int` as exact and refuses both). Two corpus programs the model
+checks only by a run-time cast are refused earlier by warp: KNOWN_EARLIER_REFUSALS.
 bool-assign is on its way (warp-15 tip 64c8abf14). Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
 
 ## Classes and sum types (phase 4)

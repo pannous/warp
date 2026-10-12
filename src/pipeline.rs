@@ -346,6 +346,9 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
 	// reads `p.note{…}` as a tag
 	crate::style_rules::lower,
+	// `select{ bind: fruit; ["apple" "pear"] }`: its options spelled out (select_options.rs), before markup_tags makes the
+	// loop over a list variable's options a comprehension and any pass reads the bind
+	crate::select_options::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::markup_tags::lower,
@@ -641,7 +644,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let source = program.clone();
-		let node = crate::folding::precompute(lower_for_emission(program)?);
+		let node = crate::folding::precompute(crate::folding::refuse_result_misfits(lower_for_emission(program)?)?);
 		let reflected = crate::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes

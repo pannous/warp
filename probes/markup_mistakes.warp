@@ -1,0 +1,8 @@
+// markup that would render wrong warns where it is written, with the near name as its fix (card our-html)
+x = 0
+div{
+	a{ hreff: "/x" "go" }
+	button{ on clik { x = 1 } "b" }
+	input{ type: "nubmer" aria-label: "n" }
+	img{ alt: "a" "text inside" }
+}

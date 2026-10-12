@@ -636,17 +636,30 @@ const CORPUS: &[&str] = &[
 	"f(x) := \"a\" + x; f(1.5e-7)",
 	"f(x) := \"a\" + x; f(1 / 3.0)",
 	"f(x) := \"a\" + x; f(-0.00001234)",
+	// a constant call's misfit for a declared int result, refused when compiled (card static-int)
+	"def half(x) -> int { x / 2 }; half(3)",
+	"int square(x) = x*x; square(4) + square 3.1",
+	"def square(x) as int = x*x; square 3.1",
+	"def f(x) -> int { x }; f(\"a\")",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
 const KNOWN_HOLES: &[(&str, &str)] = &[
 	("b: bool = no; b++; b", "bool-assign"),
 	("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"),
-	// a declared int result is checked when it runs (card lossy-return), W0 already when it is compiled
-	("def half(x) -> int { x / 2 }; half(3)", "static-int"),
-	("int square(x) = x*x; square(4) + square 3.1", "static-int"),
-	("def square(x) as int = x*x; square 3.1", "static-int"),
-	("def f(x) -> int { x }; f(\"a\")", "static-int"),
+];
+
+/// Programs warp refuses when compiled that the model accepts and fails only when they run: warp computes a constant
+/// call whose value misfits its declared result (card static-int), the model checks that result with a run-time cast
+const KNOWN_EARLIER_REFUSALS: &[(&str, &str)] = &[
+	(
+		"int half(x) := {y = x; if y > 2 {return y/2}; y/4}; half(3) + half(2)",
+		"static-int",
+	),
+	(
+		"def outer(x) -> int { inner(y) := y * 2; inner(x) / 3 }; outer(5)",
+		"static-int",
+	),
 ];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
@@ -720,9 +733,13 @@ fn test_warp_rejects_what_the_type_model_rejects() {
 			(ModelVerdict::Rejected, Ok(()), None) => {
 				disagreements.push(format!("{code}: warp compiles what the model rejects"))
 			}
-			(ModelVerdict::Accepted(type_name), Err(why), _) => disagreements.push(format!(
-				"{code}: warp rejects ({why}), the model accepts it as {type_name}"
-			)),
+			(ModelVerdict::Accepted(type_name), Err(why), _)
+				if !KNOWN_EARLIER_REFUSALS.iter().any(|(refused, _)| refused == code) =>
+			{
+				disagreements.push(format!(
+					"{code}: warp rejects ({why}), the model accepts it as {type_name}"
+				))
+			}
 			(ModelVerdict::Rejected, Err(_), Some(card)) => {
 				disagreements.push(format!("{code}: hole fixed (card {card}), take it off KNOWN_HOLES"))
 			}

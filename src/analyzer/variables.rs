@@ -691,6 +691,8 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 	match type_name.strip_suffix('?') {
 		Some(_) => Some(Kind::Empty),
 		None if super::user_functions::names_empty_type(type_node) => Some(Kind::Empty),
+		// `y: any`: any value, held as a Node, never the kind of the first value given (card yes-stores)
+		None if type_name == crate::type_kinds::UNTYPED_FIELD => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
 		// `number` keeps whatever number it is given, an exact 1/3 or a float (card number-keeps-exact)

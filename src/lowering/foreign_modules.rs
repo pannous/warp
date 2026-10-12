@@ -423,7 +423,9 @@ impl Foreign<'_> {
 				let zero_based = key(self.rewrite(index.as_ref().clone()), Op::Sub, Node::int(1));
 				Some(operator_call(&runtime, "getitem", vec![indexed, zero_based]))
 			}
-			Node::Key(left, op, right) if operator_member(op).is_some() => {
+			Node::Key(left, op, right)
+				if operator_member(op).is_some() && !(*op == Op::Eq && crate::type_tests::begins_type_test(right)) =>
+			{
 				let (left, right) = (
 					self.rewrite(left.as_ref().clone()),
 					self.rewrite(right.as_ref().clone()),
