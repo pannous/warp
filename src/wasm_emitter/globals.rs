@@ -6,7 +6,7 @@ use super::*;
 const GLOBAL_EXPORT_LABEL: &str = "global·";
 
 impl WasmGcEmitter {
-	/// `error("…")` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
+	/// `error "…"` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
 	/// so it fails the run with its message through `returned_error`, which `try` catches; true when it was one
 	pub(super) fn emit_raised_error(&mut self, func: &mut Function, node: &Node) -> bool {
 		let Some(message) = returned_error_message(node) else {
@@ -17,7 +17,7 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error("…")` from a
+	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error "…"` from a
 	/// function of numbers fails the run with the message, it cannot give back an Error value
 	pub(super) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
 		if self.returns_list {
@@ -336,6 +336,35 @@ impl WasmGcEmitter {
 		self.trap_detail_global();
 		self.emit_global_store(func, TRAP_DETAIL_GLOBAL, value);
 		func.instruction(&I::Drop);
+	}
+
+	/// Leave the position of the statement being emitted in the exported global `trap_position`, for a runtime error of
+	/// it to name: the runner reads it after the trap (wasm_reader::with_trap_detail). Again after a call, whose
+	/// statements left theirs. A statement of a module or of generated code (meta::GENERATED_FILE) clears it: a position
+	/// in another file would be read as the program's
+	pub(super) fn emit_trap_position(&mut self, func: &mut Function) {
+		let Some(position) = self.statement_position.as_ref().filter(|position| position.line_nr > 0) else {
+			return;
+		};
+		let encoded = match position.file {
+			None => encoded_position(position),
+			Some(_) => 0,
+		};
+		let global = self.trap_position_global();
+		Self::emit_list(func, &[I32Const(encoded), I::GlobalSet(global)]);
+	}
+
+	/// The index of the exported global `trap_position`, declared on first use
+	fn trap_position_global(&mut self) -> u32 {
+		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_POSITION_GLOBAL) {
+			return *index;
+		}
+		let index = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
+		self.exports.export(TRAP_POSITION, ExportKind::Global, index);
+		self.ctx
+			.user_globals
+			.insert(TRAP_POSITION_GLOBAL.to_string(), (index, Kind::Int));
+		index
 	}
 
 	/// The index of the exported global `trap_detail`, declared on first use

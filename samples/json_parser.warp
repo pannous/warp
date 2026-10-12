@@ -23,7 +23,7 @@ def parse_value() {
     if c == "f" { pos = pos + 5; return false }
     if c == "n" { pos = pos + 4; return ø }
     if c == "-" or is_digit_text(c) { return parse_number() }
-    return error("Unexpected character: " + c)
+    return error "Unexpected character: " + c
 }
 
 def parse_string() {

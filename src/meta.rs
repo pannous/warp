@@ -50,6 +50,9 @@ pub fn place_text(file: Option<&str>, line: usize, column: usize) -> String {
 	}
 }
 
+/// The file of code a pass generates from a template: its positions are in the template, not in the program
+pub const GENERATED_FILE: &str = "generated";
+
 /// `parse` with the positions it records marked as in `file`: a module's, so its failures name it
 pub fn parsing_file<T>(file: &str, parse: impl FnOnce() -> T) -> T {
 	let outer = PARSED_FILE.with(|parsed| parsed.replace(Some(file.to_string())));

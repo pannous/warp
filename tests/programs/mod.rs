@@ -5,6 +5,8 @@ mod test_algo_queens;
 mod test_algo_sieve;
 mod test_algo_sorting;
 mod test_all_samples;
+#[cfg(feature = "native")] // the paint window's input
+mod test_brush_ripples; // card shader-click-ripples
 mod test_calculator_fixes;
 mod test_cli_help;
 mod test_code_golf; // card code-golf

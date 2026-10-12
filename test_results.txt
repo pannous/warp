@@ -178,6 +178,9 @@ PASSED:
   ✓ control::test_error_values::an_error_has_a_message
   ✓ control::test_error_values::is_error_tests_any_value
   ✓ control::test_error_values::printing_an_error_prints_its_message
+  ✓ control::test_error_words::a_program_may_define_the_words
+  ✓ control::test_error_words::fail_and_panic_raise
+  ✓ control::test_error_words::warn_warns_and_continues
   ✓ control::test_event_footguns::a_change_through_a_list_method_runs_the_listeners
   ✓ control::test_event_footguns::a_derived_value_in_a_method_argument_is_its_value
   ✓ control::test_event_footguns::a_global_declared_after_a_first_write_is_one_variable
@@ -304,6 +307,11 @@ PASSED:
   ✓ control::test_job_lists::counting_jobs_does_not_await_them
   ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
   ✓ control::test_job_lists::the_extremes_of_job_results_are_numbers
+  ✓ control::test_key_down::key_down_is_a_system_value_and_no_without_a_key_held
+  ✓ control::test_key_names::a_bare_key_in_a_key_handler_is_the_pressed_key
+  ✓ control::test_key_names::a_key_handler_comparing_with_an_unbound_word_warns
+  ✓ control::test_key_names::a_programs_own_key_variable_stays_its_own
+  ✓ control::test_key_names::key_words_name_keys
   ✓ control::test_library_signatures::a_prelude_words_signature_as_its_head
   ✓ control::test_library_signatures::an_operator_words_signature
   ✓ control::test_library_signatures::table_words_positional
@@ -740,6 +748,8 @@ PASSED:
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ control::test_while_value::test_while_value_is_last_body_value
   ✓ control::test_while_value::test_while_value_of_untouched_loop_is_empty
+  ✓ control::test_window_clicks::on_click_hears_the_paint_windows_clicks
+  ✓ control::test_window_opens::reading_window_open_opens_the_window_once
   ✓ control::test_word_statements::a_glued_go_block_is_a_task
   ✓ control::test_word_statements::a_word_statement_in_a_block_is_no_call_of_the_next_lines
   ✓ extensions::strings::tests::test_char_str_eq
@@ -2980,6 +2990,7 @@ PASSED:
   ✓ programs::test_algo_sorting::test_sorting
   ✓ programs::test_algo_sorting::test_sorting_idiomatic
   ✓ programs::test_all_samples::test_parse_all_samples
+  ✓ programs::test_brush_ripples::a_click_starts_the_brushs_ripple_where_it_was
   ✓ programs::test_calculator_fixes::test_else_on_the_next_line
   ✓ programs::test_calculator_fixes::test_error_returns
   ✓ programs::test_calculator_fixes::test_float_function_ending_in_a_loop
@@ -4473,6 +4484,7 @@ PASSED:
   ✓ web::test_sandboxed_programs::a_sandboxed_program_calls_no_c_and_no_other_runtime
   ✓ web::test_sandboxed_programs::a_sandboxed_program_keeps_the_host_words
   ✓ web::test_serve_error_body::a_failing_route_answers_its_message
+  ✓ web::test_serve_opens_page::a_listening_server_hands_its_address_over_once
   ✓ web::test_served_forms::a_failing_route_answers_its_failure
   ✓ web::test_served_forms::a_form_posts_to_a_served_route
   ✓ web::test_served_forms::a_page_starts_from_rows_of_a_server_table
@@ -4858,6 +4870,10 @@ PASSED:
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_open_range_slices::a_slice_from_the_start
   ✓ welcoming::test_open_range_slices::a_slice_to_the_end
+  ✓ welcoming::test_parser_runtime_positions::an_index_after_a_call_names_the_caller_line
+  ✓ welcoming::test_parser_runtime_positions::an_index_in_a_function_names_its_line
+  ✓ welcoming::test_parser_runtime_positions::an_index_out_of_range_names_its_line
+  ✓ welcoming::test_parser_runtime_positions::an_unexpected_character_names_its_position
   ✓ welcoming::test_plain_hint_got_it::an_acknowledged_kind_of_hint_stays_away
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
@@ -5002,4 +5018,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4997 passed, 0 failed, 4997 total tested
+10 ignored, 5013 passed, 0 failed, 5013 total tested
