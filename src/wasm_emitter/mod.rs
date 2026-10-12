@@ -31,7 +31,7 @@ mod list_emitter;
 pub(crate) mod int_lists;
 mod list_dispatch;
 pub(crate) mod list_sharing;
-mod library_ops;
+pub(crate) mod library_ops;
 mod text_unicode;
 mod similarity;
 mod uncertain;

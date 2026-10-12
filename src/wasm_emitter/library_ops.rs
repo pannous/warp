@@ -66,6 +66,8 @@ pub const LIST_TEXT: &str = "list_text";
 /// codepoint_of(node) -> Int node: the code point of a character, the runtime error not_a_character for anything else
 pub const CODEPOINT_OF: &str = "codepoint_of";
 pub const NODE_ORDER: &str = "node_order";
+/// list_sorted_by(list, keys): the list ordered by the keys, a list of the same length (sort_by of a key function)
+pub const LIST_SORTED_BY: &str = "list_sorted_by";
 
 impl WasmGcEmitter {
 	pub(crate) fn emit_library_ops(&mut self) {
@@ -268,50 +270,114 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// list_sort(list): a new list of comparable values in ascending order (insertion into a sorted list, see node_order)
+	/// list_sort(list): a new list of comparable values in ascending order (list_sorted_by the values themselves)
 	fn emit_list_sort(&mut self) {
-		if !self.should_emit_function("list_sort") {
+		if !self.should_emit_function("list_sort") && !self.should_emit_function(LIST_SORTED_BY) {
 			return;
 		}
 		let (nullable, node_ref) = (Ref(self.node_ref(true)), Ref(self.node_ref(false)));
-		let node_type = self.type_manager.node_type;
-		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
+		let (node_type, array) = (self.type_manager.node_type, self.type_manager.node_array_type);
+		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
+		let mut locals = vec![ValType::I32, ValType::I32, nullable];
+		locals.extend([array_ref; 4]);
+		locals.extend([ValType::I32; 7]);
+		locals.extend([nullable, ValType::I32]);
 
-		// insert_sorted(sorted, element, kind): the cells of sorted before the first value not before element, the element, the rest shared
-		let insert_sorted = next_index(self);
-		let params = vec![nullable, node_ref, ValType::I64];
-		self.runtime_function("list_insert_sorted", params, vec![node_ref], vec![nullable], |s, f| {
-			let (sorted, element, kind, head) = (0, 1, 2, 3);
-			Self::emit_list(f, &[I::LocalGet(sorted), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
-			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::Return, I::End]);
-			s.emit_field(f, sorted, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(head), I::LocalGet(head), I::RefAsNonNull, I::LocalGet(element)]);
-			s.call(f, NODE_ORDER);
-			Self::emit_list(f, &[I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(kind), I::LocalGet(element)]);
-			Self::emit_list(f, &[I::LocalGet(sorted), I::StructNew(node_type), I::Return, I::End]);
-			s.emit_field(f, sorted, 0);
-			s.emit_field(f, sorted, 1);
-			s.emit_field(f, sorted, 2);
-			Self::emit_list(f, &[I::LocalGet(element), I::LocalGet(kind), I::Call(insert_sorted), I::StructNew(node_type)]);
-		});
-		assert_eq!(self.func_index("list_insert_sorted"), insert_sorted, "recursive call index");
-
-		self.runtime_function("list_sort", vec![nullable], vec![node_ref], vec![nullable, nullable, ValType::I32], |s, f| {
-			let (sorted, element, is_text) = (1, 2, 3);
-			// a text sorts its characters: `sorted "hello"` is "ehllo"
-			s.emit_text_as_characters(f, 0, is_text);
-			s.emit_empty_as_null(f, 0);
+		// list_sorted_by(list, keys): a new list of the list's items (a text's characters), ordered by their keys (the
+		// items themselves when keys is null) as node_order compares them; a bottom-up merge sort over arrays, stable and
+		// without recursion. `xs.sort_by(p => p.k)` calls it with the keys (lambdas.rs)
+		self.runtime_function(LIST_SORTED_BY, vec![nullable, nullable], vec![node_ref], locals, |s, f| {
+			let (list, keys, count, index, cell, cells, ranks, cells_to, ranks_to) = (0, 1, 2, 3, 4, 5, 6, 7, 8);
+			let (width, low, middle, high, left, right, from, sorted, is_text) = (9, 10, 11, 12, 13, 14, 15, 16, 17);
+			s.emit_text_as_characters(f, list, is_text);
+			s.emit_empty_as_null(f, list);
 			s.emit_require_list(f);
-			s.emit_cell_walk(f, 0, |f| {
-				s.emit_field(f, 0, 1);
-				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
-				Self::emit_list(f, &[I::LocalGet(sorted), I::LocalGet(element), I::RefAsNonNull]);
-				s.emit_field(f, 0, 0);
-				Self::emit_list(f, &[I::Call(insert_sorted), I::LocalSet(sorted)]);
+			let get = |array_local: u32, index_local: u32| [I::LocalGet(array_local), I::LocalGet(index_local), I::ArrayGet(array)];
+			let increment = |local: u32| [I::LocalGet(local), I::I32Const(1), I::I32Add, I::LocalSet(local)];
+			let rank_of_cell = |f: &mut Function| {
+				Self::emit_list(f, &[I::LocalGet(ranks), I::LocalGet(index)]);
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::ArraySet(array)]);
+			};
+			let smaller = |f: &mut Function, a: &[I<'static>], b: &[I<'static>]| {
+				Self::emit_list(f, a);
+				Self::emit_list(f, b);
+				Self::emit_list(f, a);
+				Self::emit_list(f, b);
+				f.instruction(&I::I32LtU);
+				f.instruction(&I::Select);
+			};
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell)]);
+			s.emit_cell_walk(f, cell, |f| Self::emit_list(f, &increment(count)));
+			for array_local in [cells, ranks, cells_to, ranks_to] {
+				Self::emit_list(f, &[I::LocalGet(count), I::ArrayNewDefault(array), I::LocalSet(array_local)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell)]);
+			s.emit_cell_walk(f, cell, |f| {
+				Self::emit_list(f, &[I::LocalGet(cells), I::LocalGet(index), I::LocalGet(cell), I::ArraySet(array)]);
+				rank_of_cell(f);
+				Self::emit_list(f, &increment(index));
 			});
+			Self::emit_list(f, &[I::LocalGet(keys), I::LocalSet(cell), I::I32Const(0), I::LocalSet(index)]);
+			s.emit_cell_walk(f, cell, |f| {
+				Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(count), I::I32GeU, I::BrIf(1)]);
+				rank_of_cell(f);
+				Self::emit_list(f, &increment(index));
+			});
+			// runs of width merged pairwise into the other arrays, which then take their place
+			Self::emit_list(f, &[I::I32Const(1), I::LocalSet(width), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(width), I::LocalGet(count), I::I32GeU, I::BrIf(1), I::I32Const(0), I::LocalSet(low)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(low), I::LocalGet(count), I::I32GeU, I::BrIf(1)]);
+			smaller(f, &[I::LocalGet(low), I::LocalGet(width), I::I32Add], &[I::LocalGet(count)]);
+			Self::emit_list(f, &[I::LocalSet(middle), I::LocalGet(low), I::LocalSet(left)]);
+			smaller(f, &[I::LocalGet(middle), I::LocalGet(width), I::I32Add], &[I::LocalGet(count)]);
+			Self::emit_list(f, &[I::LocalSet(high), I::LocalGet(middle), I::LocalSet(right), I::LocalGet(low), I::LocalSet(index)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(index), I::LocalGet(high), I::I32GeU, I::BrIf(1)]);
+			// the left item unless the right one sorts before it
+			Self::emit_list(f, &[I::LocalGet(left), I::LocalGet(middle), I::I32LtU, I::If(BlockType::Result(ValType::I32))]);
+			Self::emit_list(f, &[I::LocalGet(right), I::LocalGet(high), I::I32GeU, I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else]);
+			Self::emit_list(f, &get(ranks, right));
+			f.instruction(&I::RefAsNonNull);
+			Self::emit_list(f, &get(ranks, left));
+			f.instruction(&I::RefAsNonNull);
+			s.call(f, NODE_ORDER);
+			Self::emit_list(f, &[I::I32Const(0), I::I32GeS, I::End, I::Else, I::I32Const(0), I::End]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(left), I::LocalSet(from)]);
+			Self::emit_list(f, &increment(left));
+			Self::emit_list(f, &[I::Else, I::LocalGet(right), I::LocalSet(from)]);
+			Self::emit_list(f, &increment(right));
+			f.instruction(&I::End);
+			for (to, source) in [(cells_to, cells), (ranks_to, ranks)] {
+				Self::emit_list(f, &[I::LocalGet(to), I::LocalGet(index)]);
+				Self::emit_list(f, &get(source, from));
+				f.instruction(&I::ArraySet(array));
+			}
+			Self::emit_list(f, &increment(index));
+			Self::emit_list(f, &[I::Br(0), I::End, I::End, I::LocalGet(high), I::LocalSet(low), I::Br(0), I::End, I::End]);
+			for (first, second) in [(cells, cells_to), (ranks, ranks_to)] {
+				Self::emit_list(f, &[I::LocalGet(first), I::LocalGet(second), I::LocalSet(first), I::LocalSet(second)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(width), I::I32Const(1), I::I32Shl, I::LocalSet(width), I::Br(0), I::End, I::End]);
+			// new cells from the last one back, each of its item's kind of cell
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(count), I::I32Eqz, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count)]);
+			Self::emit_list(f, &get(cells, count));
+			Self::emit_list(f, &[I::RefAsNonNull, I::LocalSet(cell)]);
+			s.emit_field(f, cell, 0);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::LocalGet(sorted), I::StructNew(node_type), I::LocalSet(sorted), I::Br(0), I::End, I::End]);
 			s.emit_list_result(f, sorted);
 			f.instruction(&I::LocalSet(sorted));
 			s.emit_characters_as_text(f, sorted, is_text);
+		});
+
+		if !self.should_emit_function("list_sort") {
+			return;
+		}
+		// `sorted "hello"` is "ehllo"
+		self.runtime_function("list_sort", vec![nullable], vec![node_ref], vec![], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(0), I::RefNull(HeapType::Concrete(node_type))]);
+			s.call(f, LIST_SORTED_BY);
 		});
 	}
 

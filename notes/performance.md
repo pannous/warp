@@ -42,6 +42,14 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
   remembered last cell; any other in-place change of links or items forgets the indexes (forget_list_cursor,
   list_with_at). 10000 inserts into a parameter: 4 s → 8 ms; 10000 lookups in a parameter: 1 s → 4 ms; in a returned
   map: 0.86 s → 5 ms (scratch probes like tests/lists/test_map_index.rs).
+- **Characters of a text** (same card): `for ch in text` asked text_grapheme_count every round, which walks the text.
+  The last counted (start, end) keeps its count in globals (texts never change in place), so 8000 characters:
+  1.2 s → 0 ms (tests/text/test_for_each_char.rs).
+- **Sorting in n log n** (same card): list_sort was a recursive insertion sort (call stack exhausted at 8000 items),
+  `sort_by` a lowered insertion sort. Now both use list_sorted_by (library_ops.rs), a stable bottom-up merge sort over
+  node arrays. A key function of one item (`xs.sort_by(p => p.k)`) is lowered to its keys computed once, then
+  list_sorted_by(list, keys) (lambdas.rs key_sort_template). 30000 texts: 1 ms. A comparator of two items
+  (`by: (a b) => a > b`) still takes the lowered insertion sort.
 - **Texts grow in place** (text_concat): a left text ending where the heap starts gets right's bytes after it; a
   right text made just now (a character's bytes) already follows left, so nothing is copied. The left text's own
   bytes never change, so other values sharing them stay right.
@@ -84,7 +92,7 @@ generic int_gcd/ratio_new path (36 %/41 % of a stroke's profile) stays for bigge
 hoisting the conversion into the float path, would drop it).
 Everyday operations (card runtime-speed, 2026-10-12, quick-release; probes/perf/runtime_mix.warp, n=200k, ms):
 push 1, index read/write 1, typed write 2, map 2, filter 3, concat 30 → 0 (int_list_concat: array.copy into an array
-variable), slice 5, map insert 12 (20k), map lookup 7, sort 11. Left: slice, map insert/lookup, sort.
+variable), slice 5, map insert 12 (20k), map lookup 7, sort 11. Left: slice, map insert/lookup; sort is now n log n (above), except with a two-item comparator.
 Compile time (samples/visualizer.warp, CPU s): 0.84 → 0.50. The passes that need only names/params/bodies take
 analyzer::function_definitions; a full analyse_user_functions runs per changed program state (the memo misses on
 each), so a pass asking for one paid ~5–60 ms. Profile with probes/perf/xctrace_summary.py (unstripped build:

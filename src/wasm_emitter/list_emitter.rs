@@ -11,12 +11,20 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 26] = [
+/// Runtime functions called from lowered code with their node arguments, and how many those are
+const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
+	(crate::analyzer::LIST_DROP_LAST, 1),
+	(crate::analyzer::LIST_BECOME, 2),
+	(super::list_ops::LIST_EXTEND, 2),
+	(super::library_ops::LIST_SORTED_BY, 2),
+];
+
+const BUILTIN_CALLS: [&str; 27] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
 	crate::analyzer::LIST_DROP_LAST, crate::analyzer::LIST_BECOME, crate::library_words::VALUES_SIMILAR, super::list_ops::LIST_EXTEND, crate::library_words::VALUES_ROUGH,
-	crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE,
+	crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE, super::library_ops::LIST_SORTED_BY,
 ];
 
 const PRINT: &str = "print";
@@ -360,26 +368,12 @@ impl WasmGcEmitter {
 				return;
 			}
 		}
-		if let [Node::Symbol(call), list] = items {
-			if call == crate::analyzer::LIST_DROP_LAST {
-				self.emit_node_instructions(func, list);
-				self.emit_call(func, crate::analyzer::LIST_DROP_LAST);
-				return;
-			}
-		}
-		if let [Node::Symbol(call), list, fresh] = items {
-			if call == crate::analyzer::LIST_BECOME {
-				self.emit_node_instructions(func, list);
-				self.emit_node_instructions(func, fresh);
-				self.emit_call(func, crate::analyzer::LIST_BECOME);
-				return;
-			}
-		}
-		if let [Node::Symbol(call), list, added] = items {
-			if call == super::list_ops::LIST_EXTEND {
-				self.emit_node_instructions(func, list);
-				self.emit_node_instructions(func, added);
-				self.emit_call(func, super::list_ops::LIST_EXTEND);
+		if let Some((Node::Symbol(call), arguments)) = items.split_first() {
+			if let Some((name, _)) = NODE_ARGUMENT_CALLS.iter().find(|(name, count)| name == call && *count == arguments.len()) {
+				for argument in arguments {
+					self.emit_node_instructions(func, argument);
+				}
+				self.emit_call(func, name);
 				return;
 			}
 		}
