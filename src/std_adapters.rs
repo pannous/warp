@@ -18,7 +18,8 @@ pub(crate) fn text_value(node: &Node) -> Option<String> {
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
 	let arguments = arguments.as_items();
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
-	let text_of = |node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
+	let text_of =
+		|node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 	#[cfg(feature = "native")]
 	let number_of = |node: &Node| match node.drop_meta() {
@@ -29,58 +30,102 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 	match (module, member, arguments.as_slice()) {
 		("json", "parse", [text]) => {
 			let text = text_of(text)?;
-			let parsed: serde_json::Value = serde_json::from_str(&text).or_else(|_| serde_json::from_str(&crate::node::json_of_json5(&text))).map_err(|problem| failure(format!("{text:?} is no json: {problem}")))?;
+			let parsed: serde_json::Value = serde_json::from_str(&text)
+				.or_else(|_| serde_json::from_str(&crate::node::json_of_json5(&text)))
+				.map_err(|problem| failure(format!("{text:?} is no json: {problem}")))?;
 			Ok(crate::foreign::node_of(&parsed))
 		}
 		("json", "to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
 		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
 		("json", "to_json", [value, classes]) => {
-			let classes: Vec<String> = classes.children().iter().filter_map(|class| text_of(class).ok()).collect();
-			Ok(Node::Text(without_class_tags(crate::foreign::json_of(value), &classes).to_string()))
+			let classes: Vec<String> = classes
+				.children()
+				.iter()
+				.filter_map(|class| text_of(class).ok())
+				.collect();
+			Ok(Node::Text(
+				without_class_tags(crate::foreign::json_of(value), &classes).to_string(),
+			))
 		}
-		("file", "write", [path, text]) => std::fs::write(text_of(path)?, content_of(text)?).map(|_| Node::Empty).map_err(|problem| failure(problem.to_string())),
+		("file", "write", [path, text]) => std::fs::write(text_of(path)?, content_of(text)?)
+			.map(|_| Node::Empty)
+			.map_err(|problem| failure(problem.to_string())),
 		("file", "append", [path, text]) => {
 			use std::io::Write;
-			let mut file = std::fs::OpenOptions::new().append(true).create(true).open(text_of(path)?).map_err(|problem| failure(problem.to_string()))?;
-			file.write_all(content_of(text)?.as_bytes()).map(|_| Node::Empty).map_err(|problem| failure(problem.to_string()))
+			let mut file = std::fs::OpenOptions::new()
+				.append(true)
+				.create(true)
+				.open(text_of(path)?)
+				.map_err(|problem| failure(problem.to_string()))?;
+			file.write_all(content_of(text)?.as_bytes())
+				.map(|_| Node::Empty)
+				.map_err(|problem| failure(problem.to_string()))
 		}
 		// a truth value crosses as 1 or 0, as booleans are encoded
 		("file", "exists", [path]) => Ok(Node::int(i64::from(std::path::Path::new(&text_of(path)?).exists()))),
 		("file", "list", [folder]) => {
 			let entries = std::fs::read_dir(text_of(folder)?).map_err(|problem| failure(problem.to_string()))?;
-			let mut names: Vec<String> = entries.filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned())).collect();
+			let mut names: Vec<String> = entries
+				.filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned()))
+				.collect();
 			names.sort();
 			Ok(texts(names))
 		}
 		("hash", "sha256", [subject]) => {
 			use sha2::Digest;
-			Ok(Node::Text(sha2::Sha256::digest(content_of(subject)?.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()))
+			Ok(Node::Text(
+				sha2::Sha256::digest(content_of(subject)?.as_bytes())
+					.iter()
+					.map(|byte| format!("{byte:02x}"))
+					.collect(),
+			))
 		}
 		("hash", "crc32", [subject]) => Ok(Node::int(i64::from(crc32fast::hash(content_of(subject)?.as_bytes())))),
 		("regex", member, [text, pattern, rest @ ..]) => {
 			let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?).map_err(failure)?);
 			match (member, rest) {
 				("matches", []) => Ok(Node::int(i64::from(pattern.is_match(&text)))),
-				("first", []) => Ok(pattern.find(&text).map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
+				("first", []) => Ok(pattern
+					.find(&text)
+					.map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
 				("all", []) => Ok(texts(pattern.find_iter(&text).map(|found| found.as_str().to_string()))),
-				("replace", [replacement]) => Ok(Node::Text(pattern.replace_all(&text, text_of(replacement)?.as_str()).into_owned())),
+				("replace", [replacement]) => Ok(Node::Text(
+					pattern.replace_all(&text, text_of(replacement)?.as_str()).into_owned(),
+				)),
 				_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 			}
 		}
-		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, &[], crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
+		("net", "post", [url, body]) => {
+			crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, &[], crate::host::FETCH_TIMEOUT)
+				.map(Node::Text)
+				.map_err(failure)
+		}
 		// `post(url, body, {"x-api-key": key})`: the map's pairs are the request's headers
 		("net", "post", [url, body, headers]) => {
 			let headers = header_pairs(headers).map_err(failure)?;
-			crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, &headers, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure)
+			crate::extensions::utils::post_within(
+				&text_of(url)?,
+				&content_of(body)?,
+				&headers,
+				crate::host::FETCH_TIMEOUT,
+			)
+			.map(Node::Text)
+			.map_err(failure)
 		}
 		// `clipboard.write(text)` (lowering/system_values.rs)
 		#[cfg(feature = "native")]
-		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty).map_err(failure),
+		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?)
+			.map(|_| Node::Empty)
+			.map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		("os", "args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
 		#[cfg(feature = "native")]
 		("os", "exec", [command]) => {
-			let arguments = command.as_items().iter().map(content_of).collect::<Result<Vec<_>, _>>()?;
+			let arguments = command
+				.as_items()
+				.iter()
+				.map(content_of)
+				.collect::<Result<Vec<_>, _>>()?;
 			executed(&arguments).map(Node::Text).map_err(failure)
 		}
 		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
@@ -96,7 +141,9 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				return Ok(crate::foreign::node_of(kept));
 			}
 			values.insert(name, crate::foreign::json_of(default));
-			save_stored_values(&file, values).map(|_| default.clone()).map_err(failure)
+			save_stored_values(&file, values)
+				.map(|_| default.clone())
+				.map_err(failure)
 		}
 		("store", "save", [name, value, file]) => {
 			let file = text_of(file)?;
@@ -113,45 +160,82 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		}
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library)
 		#[cfg(feature = "native")]
-		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?).map(|handle| Node::int(handle as i64)).map_err(failure),
+		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?)
+			.map(|handle| Node::int(handle as i64))
+			.map_err(failure),
 		// stop_sound(handle), play's handle (card sound-pro); handle 0: all of them
 		#[cfg(feature = "native")]
 		("sound", "stop", [handle]) => match handle.drop_meta() {
-			Node::Number(crate::extensions::numbers::Number::Int(0)) => { crate::sound::stop(); Ok(Node::Empty) }
-			Node::Number(crate::extensions::numbers::Number::Int(handle)) => crate::sound::stop_one((*handle).max(0) as usize).map(|_| Node::Empty).map_err(failure),
-			other => Err(failure(format!("needs a sound handle, got {}", other.serialize().trim()))),
+			Node::Number(crate::extensions::numbers::Number::Int(0)) => {
+				crate::sound::stop();
+				Ok(Node::Empty)
+			}
+			Node::Number(crate::extensions::numbers::Number::Int(handle)) => {
+				crate::sound::stop_one((*handle).max(0) as usize)
+					.map(|_| Node::Empty)
+					.map_err(failure)
+			}
+			other => Err(failure(format!(
+				"needs a sound handle, got {}",
+				other.serialize().trim()
+			))),
 		},
 		// fade_sound(handle, gain, seconds): a playing sound's gain ramped (card native-sound)
 		#[cfg(feature = "native")]
-		("sound", "fade", [handle, gain, seconds]) => crate::sound::fade(number_of(handle)?.max(0.0) as usize, number_of(gain)?, number_of(seconds)?).map(|_| Node::Empty).map_err(failure),
+		("sound", "fade", [handle, gain, seconds]) => crate::sound::fade(
+			number_of(handle)?.max(0.0) as usize,
+			number_of(gain)?,
+			number_of(seconds)?,
+		)
+		.map(|_| Node::Empty)
+		.map_err(failure),
 		#[cfg(feature = "native")]
 		("sound", "last", []) => Ok(Node::int(crate::sound::last_handle() as i64)),
 		#[cfg(feature = "native")]
 		("sound", "queued", []) => Ok(Node::float(crate::sound::queued_seconds())),
 		#[cfg(feature = "native")]
-		("sound", "at", [seconds]) => { crate::sound::at(number_of(seconds)?); Ok(Node::Empty) }
+		("sound", "at", [seconds]) => {
+			crate::sound::at(number_of(seconds)?);
+			Ok(Node::Empty)
+		}
 		#[cfg(feature = "native")]
-		("sound", "at_end", []) => { crate::sound::at_end(); Ok(Node::Empty) }
+		("sound", "at_end", []) => {
+			crate::sound::at_end();
+			Ok(Node::Empty)
+		}
 		#[cfg(feature = "native")]
-		("sound", "wait", []) => { crate::sound::wait(); Ok(Node::Empty) }
+		("sound", "wait", []) => {
+			crate::sound::wait();
+			Ok(Node::Empty)
+		}
 		#[cfg(feature = "native")]
 		("sound", "render", [path]) => crate::sound::render(&text_of(path)?).map(Node::float).map_err(failure),
 		// MIDI (card midi-out, src/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
 		#[cfg(feature = "native")]
 		("midi", "write_file", [path, notes]) => {
 			let encoded = crate::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
-			std::fs::write(text_of(path)?, encoded).map(|_| Node::Empty).map_err(|problem| failure(problem.to_string()))
+			std::fs::write(text_of(path)?, encoded)
+				.map(|_| Node::Empty)
+				.map_err(|problem| failure(problem.to_string()))
 		}
 		#[cfg(feature = "native")]
 		("midi", "read_file", [path]) => {
 			let path = text_of(path)?;
 			let bytes = std::fs::read(&path).map_err(|problem| failure(format!("cannot read {path}: {problem}")))?;
-			crate::midi::decode(&bytes).map(|notes| Node::list(notes.into_iter().map(Node::int).collect())).map_err(failure)
+			crate::midi::decode(&bytes)
+				.map(|notes| Node::list(notes.into_iter().map(Node::int).collect()))
+				.map_err(failure)
 		}
 		#[cfg(feature = "native")]
 		("midi", "send", [port, message]) => {
-			let bytes = whole_numbers(message).map_err(failure)?.into_iter().map(|byte| u8::try_from(byte).map_err(|_| failure(format!("{byte} is no MIDI byte (0 to 255)")))).collect::<Result<Vec<_>, _>>()?;
-			crate::midi::send(&text_of(port)?, &bytes).map(|_| Node::Empty).map_err(failure)
+			let bytes = whole_numbers(message)
+				.map_err(failure)?
+				.into_iter()
+				.map(|byte| u8::try_from(byte).map_err(|_| failure(format!("{byte} is no MIDI byte (0 to 255)"))))
+				.collect::<Result<Vec<_>, _>>()?;
+			crate::midi::send(&text_of(port)?, &bytes)
+				.map(|_| Node::Empty)
+				.map_err(failure)
 		}
 		#[cfg(feature = "native")]
 		("midi", "outputs", []) => crate::midi::outputs().map(texts).map_err(failure),
@@ -160,8 +244,15 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
-		("store", "all", [file]) => Ok(crate::foreign::node_of(&serde_json::Value::Object(stored_values(&text_of(file)?).map_err(failure)?))),
-		("store", "names", [file]) => Ok(texts(stored_values(&text_of(file)?).map_err(failure)?.into_iter().map(|(name, _)| name))),
+		("store", "all", [file]) => Ok(crate::foreign::node_of(&serde_json::Value::Object(
+			stored_values(&text_of(file)?).map_err(failure)?,
+		))),
+		("store", "names", [file]) => Ok(texts(
+			stored_values(&text_of(file)?)
+				.map_err(failure)?
+				.into_iter()
+				.map(|(name, _)| name),
+		)),
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}
 }
@@ -224,37 +315,62 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 #[cfg(feature = "native")]
 fn executed(command: &[String]) -> Result<String, String> {
 	let (program, arguments) = command.split_first().ok_or("needs a command")?;
-	let output = std::process::Command::new(program).args(arguments).stdin(std::process::Stdio::null()).output().map_err(|problem| format!("cannot run {program}: {problem}"))?;
+	let output = std::process::Command::new(program)
+		.args(arguments)
+		.stdin(std::process::Stdio::null())
+		.output()
+		.map_err(|problem| format!("cannot run {program}: {problem}"))?;
 	if !output.status.success() {
-		return Err(format!("{} failed ({}): {}", command.join(" "), output.status, String::from_utf8_lossy(&output.stderr).trim()));
+		return Err(format!(
+			"{} failed ({}): {}",
+			command.join(" "),
+			output.status,
+			String::from_utf8_lossy(&output.stderr).trim()
+		));
 	}
-	Ok(String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string())
+	Ok(String::from_utf8_lossy(&output.stdout)
+		.trim_end_matches('\n')
+		.to_string())
 }
 
 fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
-	list.as_items().iter().map(|item| match item.drop_meta() {
-		Node::Number(crate::extensions::numbers::Number::Int(value)) => Ok(*value),
-		other => Err(format!("needs whole numbers, got {}", other.serialize().trim())),
-	}).collect()
+	list.as_items()
+		.iter()
+		.map(|item| match item.drop_meta() {
+			Node::Number(crate::extensions::numbers::Number::Int(value)) => Ok(*value),
+			other => Err(format!("needs whole numbers, got {}", other.serialize().trim())),
+		})
+		.collect()
 }
 
 fn texts(items: impl IntoIterator<Item = String>) -> Node {
-	Node::List(items.into_iter().map(Node::Text).collect(), crate::node::Bracket::Square, crate::node::Separator::Space)
+	Node::List(
+		items.into_iter().map(Node::Text).collect(),
+		crate::node::Bracket::Square,
+		crate::node::Separator::Space,
+	)
 }
 
 /// The pattern, if both engines read it alike: Rust's regex has no look-around or backreferences, so JS RegExp may not
 /// use them either (host.js checks the same); every other syntax error is the regex crate's own
 fn regex_of(pattern: &str) -> Result<regex::Regex, String> {
 	if let Some(feature) = unshared_feature(pattern) {
-		return Err(format!("{feature} is not in warp's regex (one engine lacks it): {pattern}"));
+		return Err(format!(
+			"{feature} is not in warp's regex (one engine lacks it): {pattern}"
+		));
 	}
 	regex::Regex::new(pattern).map_err(|problem| problem.to_string())
 }
 
 /// look-around `(?=`, `(?!`, `(?<=`, `(?<!` or a backreference `\1`
 fn unshared_feature(pattern: &str) -> Option<&'static str> {
-	let look_around = ["(?=", "(?!", "(?<=", "(?<!"].iter().any(|opening| pattern.contains(opening));
-	let backreference = pattern.as_bytes().windows(2).any(|pair| pair[0] == b'\\' && pair[1].is_ascii_digit() && pair[1] != b'0');
+	let look_around = ["(?=", "(?!", "(?<=", "(?<!"]
+		.iter()
+		.any(|opening| pattern.contains(opening));
+	let backreference = pattern
+		.as_bytes()
+		.windows(2)
+		.any(|pair| pair[0] == b'\\' && pair[1].is_ascii_digit() && pair[1] != b'0');
 	match (look_around, backreference) {
 		(true, _) => Some("look-around"),
 		(_, true) => Some("a backreference"),
@@ -265,22 +381,46 @@ fn unshared_feature(pattern: &str) -> Option<&'static str> {
 /// A map of texts `{"x-api-key": key}` as (name, value) pairs
 fn header_pairs(headers: &Node) -> Result<Vec<(String, String)>, String> {
 	let serde_json::Value::Object(pairs) = crate::foreign::json_of(headers) else {
-		return Err(format!("headers are a map of texts, got {}", headers.serialize().trim()));
+		return Err(format!(
+			"headers are a map of texts, got {}",
+			headers.serialize().trim()
+		));
 	};
-	pairs.into_iter().map(|(name, value)| match value {
-		serde_json::Value::String(text) => Ok((name, text)),
-		other => Err(format!("header {name} needs a text, got {other}")),
-	}).collect()
+	pairs
+		.into_iter()
+		.map(|(name, value)| match value {
+			serde_json::Value::String(text) => Ok((name, text)),
+			other => Err(format!("header {name} needs a text, got {other}")),
+		})
+		.collect()
 }
 
 /// The json with each object `{"Point": {…}}` of a class named in `classes` as its fields `{…}`
 fn without_class_tags(value: serde_json::Value, classes: &[String]) -> serde_json::Value {
 	use serde_json::Value;
 	match value {
-		Value::Array(items) => Value::Array(items.into_iter().map(|item| without_class_tags(item, classes)).collect()),
-		Value::Object(entries) => match entries.len() == 1 && entries.iter().next().is_some_and(|(key, fields)| classes.contains(key) && fields.is_object()) {
-			true => without_class_tags(entries.into_iter().next().map(|(_, fields)| fields).unwrap_or_default(), classes),
-			false => Value::Object(entries.into_iter().map(|(key, entry)| (key, without_class_tags(entry, classes))).collect()),
+		Value::Array(items) => Value::Array(
+			items
+				.into_iter()
+				.map(|item| without_class_tags(item, classes))
+				.collect(),
+		),
+		Value::Object(entries) => match entries.len() == 1
+			&& entries
+				.iter()
+				.next()
+				.is_some_and(|(key, fields)| classes.contains(key) && fields.is_object())
+		{
+			true => without_class_tags(
+				entries.into_iter().next().map(|(_, fields)| fields).unwrap_or_default(),
+				classes,
+			),
+			false => Value::Object(
+				entries
+					.into_iter()
+					.map(|(key, entry)| (key, without_class_tags(entry, classes)))
+					.collect(),
+			),
 		},
 		other => other,
 	}

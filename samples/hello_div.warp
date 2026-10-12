@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+// Any element is a page (card div-opens-app): run from a terminal, `warp samples/hello_div.warp` opens the app window
+// as html{…} does; piped or redirected it prints the HTML
+div{ h1{ "hello" } p{ "a div is enough to open the app" } }

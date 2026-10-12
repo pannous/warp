@@ -24,12 +24,19 @@ impl Version {
 	pub fn parse(text: &str) -> Option<Version> {
 		let digits = text.strip_prefix(TAG_PREFIX).unwrap_or(text);
 		let parts: Option<Vec<u64>> = digits.split('.').map(|part| part.parse().ok()).collect();
-		Some(Version { parts: parts?, text: digits.to_string() })
+		Some(Version {
+			parts: parts?,
+			text: digits.to_string(),
+		})
 	}
 
 	/// trailing zeros do not count: 1.0 is 1.0.0
 	fn significant_parts(&self) -> &[u64] {
-		let length = self.parts.iter().rposition(|part| *part != 0).map_or(0, |last| last + 1);
+		let length = self
+			.parts
+			.iter()
+			.rposition(|part| *part != 0)
+			.map_or(0, |last| last + 1);
 		&self.parts[..length]
 	}
 }
@@ -132,7 +139,9 @@ fn dotted_digits(chars: &[char]) -> (usize, usize) {
 /// The version a node spells: a version literal, `version x`, a number, a text
 pub fn version_of(node: &Node) -> Option<Version> {
 	match node.drop_meta() {
-		Node::Symbol(text) if is_version_literal(text) || text.starts_with(|c: char| c.is_ascii_digit()) => Version::parse(text),
+		Node::Symbol(text) if is_version_literal(text) || text.starts_with(|c: char| c.is_ascii_digit()) => {
+			Version::parse(text)
+		}
 		Node::Text(text) => Version::parse(text),
 		Node::Number(_) => Version::parse(node.drop_meta().serialize().trim()),
 		Node::List(items, _, _) => match items.as_slice() {
@@ -155,7 +164,10 @@ fn is_version_literal(text: &str) -> bool {
 
 /// The version a module declares with a top level `version 1.2.3`
 pub fn declared_version(statements: &[Node]) -> Option<Version> {
-	statements.iter().find(|statement| is_version_value(statement)).and_then(version_of)
+	statements
+		.iter()
+		.find(|statement| is_version_value(statement))
+		.and_then(version_of)
 }
 
 /// `version 1.2.3` and a version literal
@@ -190,5 +202,9 @@ fn compare(left: &Version, op: Op, right: &Version) -> Node {
 		Op::Ne => left != right,
 		_ => left == right,
 	};
-	if truth { Node::True } else { Node::False }
+	if truth {
+		Node::True
+	} else {
+		Node::False
+	}
 }

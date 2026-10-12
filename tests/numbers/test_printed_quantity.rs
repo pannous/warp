@@ -1,8 +1,8 @@
 //! P231: print rounds a quantity's fraction to two decimals, `6.17km`; str() and the result keep the exact `(37/6)km`;
 //! plain numbers keep `7/3`
-use warp::wasm_emitter::eval;
 #[cfg(feature = "native")]
 use crate::common::printed;
+use warp::wasm_emitter::eval;
 
 fn shown(code: &str) -> String {
 	eval(code).serialize().trim().to_string()

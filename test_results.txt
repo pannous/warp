@@ -3479,6 +3479,10 @@ PASSED:
   ✓ types::test_class_field_names::operator_words_name_fields
   ✓ types::test_class_field_names::own_parameter_field_inside_function_of_its_name
   ✓ types::test_class_field_type_phrases::a_field_type_of_words_is_one_field
+  ✓ types::test_class_fields_checked::a_declared_variable_keeps_its_class
+  ✓ types::test_class_fields_checked::a_field_of_a_class_takes_its_declared_class
+  ✓ types::test_class_fields_checked::a_field_write_takes_its_declared_class
+  ✓ types::test_class_fields_checked::a_function_local_of_the_same_name_is_its_own
   ✓ types::test_class_forms_ported::a_copy_with_changed_fields
   ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
   ✓ types::test_class_forms_ported::a_go_struct_with_methods
@@ -3527,6 +3531,9 @@ PASSED:
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
+  ✓ types::test_class_unions::a_union_of_a_class_and_a_builtin_type
+  ✓ types::test_class_unions::a_union_of_classes_refuses_another_class
+  ✓ types::test_class_unions::a_union_of_classes_takes_an_instance_of_each
   ✓ types::test_class_witnesses::a_compare_method_is_how_instances_order
   ✓ types::test_class_witnesses::a_text_method_is_how_an_instance_prints
   ✓ types::test_class_witnesses::an_equals_method_is_how_instances_compare
@@ -4459,6 +4466,7 @@ PASSED:
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
   ✓ web::test_webview::a_page_survives_losing_focus
   ✓ web::test_webview::a_program_ending_in_an_html_page_is_shown
+  ✓ web::test_webview::a_program_ending_in_any_element_is_shown
   ✓ web::test_webview::a_program_shows_its_page_with_what_a_command_printed
   ✓ web::test_webview::an_html_file_shows_in_the_web_view
   ✓ web::test_webview::without_check_no_window_opens_under_warp_no_window
@@ -4858,4 +4866,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4853 passed, 0 failed, 4853 total tested
+10 ignored, 4861 passed, 0 failed, 4861 total tested

@@ -6,7 +6,12 @@ const TONE: &str = "use sound\nplain = chord_samples([440], 0.1, \"sine\")\n";
 
 #[test]
 fn a_delay_adds_a_tail_of_echoes() {
-	is!(&format!("{TONE}delay_time = 0.1\ndelay_feedback = 0.5\ncount(through_effects(plain)) > count(plain) + 2 * 2205"), true);
+	is!(
+		&format!(
+			"{TONE}delay_time = 0.1\ndelay_feedback = 0.5\ncount(through_effects(plain)) > count(plain) + 2 * 2205"
+		),
+		true
+	);
 	is!(&format!("{TONE}count(through_effects(plain)) == count(plain)"), true);
 }
 
@@ -29,5 +34,8 @@ fn distortion_flattens_the_peaks_and_stays_in_range() {
 
 #[test]
 fn effects_play_in_a_program() {
-	is!("delay_time = 1/4 beat\nreverb_mix = 0.2\ndistortion = 0.3\nplay C4 for 50ms\n1", 1);
+	is!(
+		"delay_time = 1/4 beat\nreverb_mix = 0.2\ndistortion = 0.3\nplay C4 for 50ms\n1",
+		1
+	);
 }

@@ -1,7 +1,7 @@
 //! `if a < n {…}` and `while i < n {…}`: the block is the body, not the argument of the variable n
 
-use warp::parse;
 use crate::is;
+use warp::parse;
 
 #[test]
 fn the_block_after_a_comparison_with_a_variable_is_the_body() {
@@ -14,5 +14,8 @@ fn the_block_after_a_comparison_with_a_variable_is_the_body() {
 
 #[test]
 fn a_condition_still_ends_before_its_block() {
-	assert_eq!(parse("while i < n {i++}").to_string(), parse("while i < n do {i++}").to_string());
+	assert_eq!(
+		parse("while i < n {i++}").to_string(),
+		parse("while i < n do {i++}").to_string()
+	);
 }

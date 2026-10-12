@@ -1,6 +1,6 @@
+use crate::is;
 use warp::wasm_emitter::eval;
 use warp::Node;
-use crate::is;
 
 fn error_text(code: &str) -> String {
 	match eval(code) {
@@ -36,7 +36,10 @@ fn a_nested_include_is_found_next_to_the_including_file() {
 
 #[test]
 fn including_a_file_twice_includes_it_once_and_cycles_terminate() {
-	is!("include tests/fixtures/counter; include tests/fixtures/counter; counter", 11);
+	is!(
+		"include tests/fixtures/counter; include tests/fixtures/counter; counter",
+		11
+	);
 	is!("include tests/fixtures/cycle_a; a_done + b_done", 3);
 }
 

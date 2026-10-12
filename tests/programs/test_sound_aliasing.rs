@@ -14,19 +14,36 @@ const MOST_OFF_HARMONIC_SHARE: f64 = 0.015;
 /// The power of the samples at frequency (one bin of a discrete Fourier transform)
 fn power_at(samples: &[i16], frequency: f64) -> f64 {
 	let turn = -2.0 * std::f64::consts::PI * frequency / RATE;
-	let (real, imaginary) = samples.iter().enumerate().fold((0.0, 0.0), |(real, imaginary), (i, &sample)| {
-		let angle = turn * i as f64;
-		(real + f64::from(sample) * angle.cos(), imaginary + f64::from(sample) * angle.sin())
-	});
+	let (real, imaginary) = samples
+		.iter()
+		.enumerate()
+		.fold((0.0, 0.0), |(real, imaginary), (i, &sample)| {
+			let angle = turn * i as f64;
+			(
+				real + f64::from(sample) * angle.cos(),
+				imaginary + f64::from(sample) * angle.sin(),
+			)
+		});
 	real * real + imaginary * imaginary
 }
 
 /// The share of the energy at frequencies that are no harmonic of the fundamental
 fn off_harmonic_share(samples: &[i16]) -> f64 {
-	let spectrum: Vec<(f64, f64)> = (BIN_HERTZ..RATE as usize / 2).step_by(BIN_HERTZ).map(|frequency| (frequency as f64, power_at(samples, frequency as f64))).collect();
-	let near_harmonic = |frequency: f64| (frequency - (frequency / FUNDAMENTAL).round() * FUNDAMENTAL).abs() <= NEAR_HARMONIC_HERTZ && frequency > FUNDAMENTAL / 2.0;
+	let spectrum: Vec<(f64, f64)> = (BIN_HERTZ..RATE as usize / 2)
+		.step_by(BIN_HERTZ)
+		.map(|frequency| (frequency as f64, power_at(samples, frequency as f64)))
+		.collect();
+	let near_harmonic = |frequency: f64| {
+		(frequency - (frequency / FUNDAMENTAL).round() * FUNDAMENTAL).abs() <= NEAR_HARMONIC_HERTZ
+			&& frequency > FUNDAMENTAL / 2.0
+	};
 	let total: f64 = spectrum.iter().map(|(_, power)| power).sum();
-	spectrum.iter().filter(|(frequency, _)| !near_harmonic(*frequency)).map(|(_, power)| power).sum::<f64>() / total
+	spectrum
+		.iter()
+		.filter(|(frequency, _)| !near_harmonic(*frequency))
+		.map(|(_, power)| power)
+		.sum::<f64>()
+		/ total
 }
 
 #[test]
@@ -34,6 +51,10 @@ fn square_and_sawtooth_do_not_alias() {
 	for (name, sounding) in [("beep", "beep()"), ("sawtooth", "tone(880, 0.15, \"sawtooth\")")] {
 		let (_, samples) = rendered(name, &format!("use sound\n{sounding}\nrender_sound(\"SONG\")"));
 		let share = off_harmonic_share(&samples);
-		assert!(share < MOST_OFF_HARMONIC_SHARE, "{name}: {:.1} % off the harmonics", share * 100.0);
+		assert!(
+			share < MOST_OFF_HARMONIC_SHARE,
+			"{name}: {:.1} % off the harmonics",
+			share * 100.0
+		);
 	}
 }

@@ -42,9 +42,11 @@ pub fn lower(program: Node) -> Node {
 /// The variables assigned `channel "chat"` and their listener ids
 fn machine_channels(program: &Node) -> HashMap<String, i64> {
 	let mut names = vec![];
-	program.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
-		if machine_channel(value).is_some() && !names.contains(&word(target)) {
-			names.push(word(target));
+	program.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign, value) = part {
+			if machine_channel(value).is_some() && !names.contains(&word(target)) {
+				names.push(word(target));
+			}
 		}
 	});
 	names.into_iter().zip(MACHINE_LISTENER_BASE..).collect()
@@ -53,11 +55,13 @@ fn machine_channels(program: &Node) -> HashMap<String, i64> {
 /// `channel "chat"`: the name
 fn machine_channel(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
-		Node::List(items, Bracket::None, _) if items.len() == 2 && word(&items[0]) == CHANNEL_WORD => match items[1].drop_meta() {
-			Node::Text(_) => Some(items[1].clone()),
-			Node::Char(letter) => Some(Node::Text(letter.to_string())),
-			_ => None,
-		},
+		Node::List(items, Bracket::None, _) if items.len() == 2 && word(&items[0]) == CHANNEL_WORD => {
+			match items[1].drop_meta() {
+				Node::Text(_) => Some(items[1].clone()),
+				Node::Char(letter) => Some(Node::Text(letter.to_string())),
+				_ => None,
+			}
+		}
 		_ => None,
 	}
 }
@@ -65,22 +69,36 @@ fn machine_channel(node: &Node) -> Option<Node> {
 /// Statements where `chat = channel "chat"` is `chat = "chat"; channel_listen(ID, "chat")`
 fn with_listeners(node: Node, machine: &HashMap<String, i64>) -> Node {
 	fn listened(statement: &Node, machine: &HashMap<String, i64>) -> Option<(Node, i64, Node)> {
-		let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return None };
-		Some((machine_channel(value)?, *machine.get(&word(target))?, target.as_ref().clone()))
+		let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
+			return None;
+		};
+		Some((
+			machine_channel(value)?,
+			*machine.get(&word(target))?,
+			target.as_ref().clone(),
+		))
 	}
-	let Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) = node.drop_meta() else { return node };
+	let Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) = node.drop_meta() else {
+		return node;
+	};
 	if !items.iter().any(|item| listened(item, machine).is_some()) {
 		return node;
 	}
 	let items = items.iter().flat_map(|item| match listened(item, machine) {
-		Some((name, id, target)) => vec![key(target, Op::Assign, name.clone()), call(crate::host::CHANNEL_LISTEN, vec![Node::int(id), name])],
+		Some((name, id, target)) => vec![
+			key(target, Op::Assign, name.clone()),
+			call(crate::host::CHANNEL_LISTEN, vec![Node::int(id), name]),
+		],
 		None => vec![item.clone()],
 	});
 	Node::List(items.collect(), bracket.clone(), separator.clone())
 }
 
 fn filled(template: &str, bindings: &[(&str, Node)]) -> Node {
-	let bindings: HashMap<String, Node> = bindings.iter().map(|(name, node)| (name.to_string(), node.clone())).collect();
+	let bindings: HashMap<String, Node> = bindings
+		.iter()
+		.map(|(name, node)| (name.to_string(), node.clone()))
+		.collect();
 	crate::law::substitute(crate::warp_parser::parse(template).drop_meta(), &bindings)
 }
 
@@ -89,12 +107,16 @@ fn channel_names(program: &Node) -> HashSet<String> {
 	let mut channels = HashSet::new();
 	let mut functions: HashMap<String, Vec<String>> = HashMap::new();
 	program.visit(&mut |part| match part {
-		Node::Key(target, Op::Assign, value) if is_new_channel(value) => { channels.insert(word(target)); }
-		Node::Key(head, Op::Define, _) => if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
-			if let Some((name, parameters)) = items.split_first() {
-				functions.insert(word(name), parameters.iter().map(word).collect());
+		Node::Key(target, Op::Assign, value) if is_new_channel(value) => {
+			channels.insert(word(target));
+		}
+		Node::Key(head, Op::Define, _) => {
+			if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+				if let Some((name, parameters)) = items.split_first() {
+					functions.insert(word(name), parameters.iter().map(word).collect());
+				}
 			}
-		},
+		}
 		_ => {}
 	});
 	if channels.is_empty() || functions.is_empty() {
@@ -102,11 +124,24 @@ fn channel_names(program: &Node) -> HashSet<String> {
 	}
 	loop {
 		let mut found = vec![];
-		program.visit(&mut |part| if let Node::List(items, Bracket::Round, _) = part {
-			let Some((callee, arguments)) = items.split_first() else { return };
-			let Some(parameters) = functions.get(&word(callee)) else { return };
-			let given = arguments.iter().zip(parameters).filter(|(argument, _)| channels.contains(&word(argument)));
-			found.extend(given.map(|(_, parameter)| parameter.clone()).filter(|parameter| !channels.contains(parameter)));
+		program.visit(&mut |part| {
+			if let Node::List(items, Bracket::Round, _) = part {
+				let Some((callee, arguments)) = items.split_first() else {
+					return;
+				};
+				let Some(parameters) = functions.get(&word(callee)) else {
+					return;
+				};
+				let given = arguments
+					.iter()
+					.zip(parameters)
+					.filter(|(argument, _)| channels.contains(&word(argument)));
+				found.extend(
+					given
+						.map(|(_, parameter)| parameter.clone())
+						.filter(|parameter| !channels.contains(parameter)),
+				);
+			}
 		});
 		if found.is_empty() {
 			return channels;
@@ -136,11 +171,16 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 	};
 	match node.drop_meta() {
 		Node::Key(channel, Op::Dot, method) => {
-			let Node::List(items, _, _) = method.drop_meta() else { return node };
+			let Node::List(items, _, _) = method.drop_meta() else {
+				return node;
+			};
 			let lowered = match (items.first().map(word).as_deref(), &items[1..]) {
 				(Some(SEND_WORD), [value]) => sent(channel, value),
 				(Some(RECEIVE_WORD), []) => match listener(channel) {
-					Some(id) => Some(filled(RECEIVE_TEMPLATE, &[("ID", id), ("CHECK", Node::int(RECEIVE_CHECK_MILLISECONDS))])),
+					Some(id) => Some(filled(
+						RECEIVE_TEMPLATE,
+						&[("ID", id), ("CHECK", Node::int(RECEIVE_CHECK_MILLISECONDS))],
+					)),
 					None => is_local(channel).then(|| call(TAKE, vec![channel.as_ref().clone()])),
 				},
 				(Some(CLOSE_WORD), []) if is_local(channel) => Some(call(CLOSE, vec![channel.as_ref().clone()])),
@@ -152,18 +192,28 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 			[send, value_to] if word(send) == SEND_WORD => match value_to.drop_meta() {
 				// `{ send 7 to ch }` is a block of one statement: it stays a block
 				Node::Key(value, Op::To, channel) => match sent(channel, value) {
-					Some(put) if *bracket == Bracket::Curly => Node::List(vec![put], Bracket::Curly, Separator::Semicolon),
+					Some(put) if *bracket == Bracket::Curly => {
+						Node::List(vec![put], Bracket::Curly, Separator::Semicolon)
+					}
 					Some(put) => put,
 					None => node,
 				},
 				_ => node,
 			},
-			[for_word, item, in_word, channel, body] if word(for_word) == FOR_WORD && word(in_word) == IN_WORD && is_local(channel) => {
-				filled(FOR_TEMPLATE, &[("CHANNEL", channel.clone()), ("ITEM", item.clone()), ("BODY", body.clone())])
+			[for_word, item, in_word, channel, body]
+				if word(for_word) == FOR_WORD && word(in_word) == IN_WORD && is_local(channel) =>
+			{
+				filled(
+					FOR_TEMPLATE,
+					&[
+						("CHANNEL", channel.clone()),
+						("ITEM", item.clone()),
+						("BODY", body.clone()),
+					],
+				)
 			}
 			_ => node,
 		},
 		_ => node,
 	}
 }
-

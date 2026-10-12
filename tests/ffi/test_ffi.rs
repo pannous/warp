@@ -1,6 +1,6 @@
 // ⚠️ TEST WITH  cargo test --features ffi - runs FFI tests on macOS
 #![cfg(feature = "ffi")] // not on github actions
-// #![cfg(not(target_os = "linux"))]
+						 // #![cfg(not(target_os = "linux"))]
 
 // Skip FFI tests on Linux (CI) - requires native libraries (libc/libm)
 // Primary guard: Cargo.toml required-features = ["ffi"]
@@ -27,9 +27,9 @@
 // Dynamic Library Import Tests (using 'use' keyword);
 // ============================================================================
 
-use warp::parse;
-use crate::{is, eq};
+use crate::{eq, is};
 use warp::ffi_parser::{find_library_headers, parse_header_file};
+use warp::parse;
 
 #[test]
 fn test_dynlib_import_emit() {
@@ -86,26 +86,28 @@ fn test_ffi_fmin() {
 fn test_ffi_combined() {
 	// Combined tests using multiple FFI functions together
 	// sqrt(abs(-16)) = sqrt(16) = 4.0
-	is!("import sqrt from 'm'\nimport abs from \"c\"\nsqrt(abs(-16))",4.0);
+	is!("import sqrt from 'm'\nimport abs from \"c\"\nsqrt(abs(-16))", 4.0);
 	// floor(fmin(3.7, 2.9)) = floor(2.9) = 2.0
-	is!("import floor from 'm'\nimport fmin from 'm'\nfloor(fmin(3.7, 2.9))",2.0);
+	is!(
+		"import floor from 'm'\nimport fmin from 'm'\nfloor(fmin(3.7, 2.9))",
+		2.0
+	);
 }
-
 
 #[test]
 fn test_ffi_strcmp() {
 	// Test: int strcmp(const char* s1, const char* s2);
 	is!("import strcmp from \"c\"\nstrcmp(\"hello\", \"hello\")", 0);
-	is!("import strcmp from \"c\"\nx=strcmp(\"abc\", \"def\");x<0",1);
-	is!("import strcmp from \"c\"\nx=strcmp(\"xyz\", \"abc\");x>0",1);
+	is!("import strcmp from \"c\"\nx=strcmp(\"abc\", \"def\");x<0", 1);
+	is!("import strcmp from \"c\"\nx=strcmp(\"xyz\", \"abc\");x>0", 1);
 	is!("import strcmp from \"c\"\nstrcmp(\"\", \"\")", 0);
 }
 
 #[test]
 fn test_ffi_strncmp() {
 	// Test: int strncmp(const char* s1, const char* s2, size_t n);
-	is!("import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)",0);
-	is!("import strncmp from \"c\"\nx=strncmp(\"hello\", \"help\", 5);x!=0",1);
+	is!("import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)", 0);
+	is!("import strncmp from \"c\"\nx=strncmp(\"hello\", \"help\", 5);x!=0", 1);
 }
 
 // ============================================================================
@@ -126,14 +128,20 @@ fn test_ffi_sin() {
 	// Test: double sin(double x);
 	is!("import sin from 'm'\nsin(0.0)", 0.0);
 	is!("import sin from 'm'\nsin(π/2)", 1.0);
-	is!("import sin from 'm'\nimport fabs from 'm'\nfabs(sin(3.141592653589793))<0.001",true);
+	is!(
+		"import sin from 'm'\nimport fabs from 'm'\nfabs(sin(3.141592653589793))<0.001",
+		true
+	);
 }
 
 #[test]
 fn test_ffi_cos() {
 	// Test: double cos(double x);
 	is!("import cos from 'm'\ncos(0.0)", 1.0);
-	is!("import cos from 'm'\nimport fabs from 'm'\nfabs(cos(1.5707963267948966))<0.001",1);
+	is!(
+		"import cos from 'm'\nimport fabs from 'm'\nfabs(cos(1.5707963267948966))<0.001",
+		1
+	);
 	is!("import cos from 'm'\ncos(π)", -1.0);
 }
 
@@ -142,7 +150,10 @@ fn test_ffi_tan() {
 	// Test: double tan(double x);
 	is!("import tan from 'm'\ntan(0.0)", 0.0);
 	// tan(π/4) ≈ 1.0 but floating point precision means we get 0.9999999999999999
-	is!("import tan from 'm'\nimport fabs from 'm'\nfabs(tan(π/4)-1.0)<0.0001", true);
+	is!(
+		"import tan from 'm'\nimport fabs from 'm'\nfabs(tan(π/4)-1.0)<0.0001",
+		true
+	);
 }
 
 #[test]
@@ -233,10 +244,7 @@ fn test_ffi_string_math_combined() {
 		30
 	);
 
-	is!(
-		"import atof from c;import ceil from 'm';ceil(atof('3.7'))",
-		4.0
-	);
+	is!("import atof from c;import ceil from 'm';ceil(atof('3.7'))", 4.0);
 }
 
 #[test]
@@ -288,7 +296,6 @@ fn test_import_from_pattern_emit() {
 	is!("import floor from \"m\"\nimport ceil from \"m\"\nceil(floor(3.7))", 3.0);
 	is!("import sqrt from \"m\"\nsqrt(16)", 4.0);
 }
-
 
 // ============================================================================
 // C Header Parser Tests
@@ -371,21 +378,23 @@ fn test_ffi_sdl_red_square_demo() {
 #[ignore = "requires raylib library and FFI signatures"]
 fn test_ffi_raylib_combined() {
 	// Test: Multiple raylib imports in one program
-	is!(r#"
+	is!(
+		r#"
 import InitWindow from 'raylib'
 import SetTargetFPS from 'raylib'
 import CloseWindow from 'raylib'
 InitWindow(800, 600, "Test")
 SetTargetFPS(60)
 CloseWindow()
-100 "# ,100)
+100 "#,
+		100
+	)
 }
 
 // ============================================================================
 // FFI Header Discovery Tests
 // Tests generic library header discovery from filesystem
 // ============================================================================
-
 
 #[test]
 fn test_ffi_header_parser() {
@@ -423,10 +432,7 @@ fn test_ffi_curl_discovery() {
 		eprintln!("curl: {} functions from {}", funcs.len(), path);
 
 		// Show some actual curl functions
-		let curl_funcs: Vec<_> = funcs.iter()
-			.filter(|f| f.name.starts_with("curl_"))
-			.take(5)
-			.collect();
+		let curl_funcs: Vec<_> = funcs.iter().filter(|f| f.name.starts_with("curl_")).take(5).collect();
 		for f in curl_funcs {
 			eprintln!("  - {}", f.name);
 		}
@@ -451,11 +457,14 @@ fn test_ffi_zlib_discovery() {
 		eprintln!("zlib: {} functions from {}", funcs.len(), path);
 
 		// Show some actual zlib functions
-		let zlib_funcs: Vec<_> = funcs.iter()
-			.filter(|f| f.name.starts_with("compress") ||
-				f.name.starts_with("uncompress") ||
-				f.name.starts_with("deflate") ||
-				f.name.starts_with("inflate"))
+		let zlib_funcs: Vec<_> = funcs
+			.iter()
+			.filter(|f| {
+				f.name.starts_with("compress")
+					|| f.name.starts_with("uncompress")
+					|| f.name.starts_with("deflate")
+					|| f.name.starts_with("inflate")
+			})
 			.take(5)
 			.collect();
 		for f in zlib_funcs {
@@ -479,7 +488,8 @@ fn test_ffi_sqlite_discovery() {
 		eprintln!("sqlite3: {} functions from {}", funcs.len(), path);
 
 		// Show some actual sqlite functions
-		let sqlite_funcs: Vec<_> = funcs.iter()
+		let sqlite_funcs: Vec<_> = funcs
+			.iter()
 			.filter(|f| f.name.starts_with("sqlite3_"))
 			.take(5)
 			.collect();
@@ -597,14 +607,23 @@ fn test_ffi_nested_calls() {
 	// sin(π) ≈ 0, so fabs(sin(3.14)) should be close to 0
 	is!("import fabs from 'm'\nimport sin from 'm'\nfabs(sin(3.14)) < 0.01", 1);
 	// sin(π/2) = 1, fabs(1) = 1
-	is!("import fabs from 'm'\nimport sin from 'm'\nfabs(sin(1.5707963267948966))", 1.0);
+	is!(
+		"import fabs from 'm'\nimport sin from 'm'\nfabs(sin(1.5707963267948966))",
+		1.0
+	);
 }
 
 #[test]
 fn test_ffi_text_arguments_known_at_run_time() {
 	is!("import atoi from \"c\"; q = atoi(\"3\"); q", 3);
-	is!("import atoi from \"c\"; xs=[\"12\" \"30\"]; atoi(xs#1) + atoi(xs#2)", 42);
-	is!("import strcmp from \"c\"; names = [\"charlie\", \"alice\"]; strcmp(names#1, names#2) > 0", 1);
+	is!(
+		"import atoi from \"c\"; xs=[\"12\" \"30\"]; atoi(xs#1) + atoi(xs#2)",
+		42
+	);
+	is!(
+		"import strcmp from \"c\"; names = [\"charlie\", \"alice\"]; strcmp(names#1, names#2) > 0",
+		1
+	);
 	is!("import strlen from \"c\"; xs=[\"hello\"]; strlen(xs#1)", 5);
 }
 

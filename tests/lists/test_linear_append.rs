@@ -12,5 +12,8 @@ fn map_and_filter_of_texts_stay_linear() {
 
 #[test]
 fn an_appended_list_of_nodes_keeps_its_items() {
-	is!("out = []; for i in 1 to 3 { out.add(\"x\"); out.add(i) }; out", list(vec![text("x"), int(1), text("x"), int(2), text("x"), int(3)]));
+	is!(
+		"out = []; for i in 1 to 3 { out.add(\"x\"); out.add(i) }; out",
+		list(vec![text("x"), int(1), text("x"), int(2), text("x"), int(3)])
+	);
 }

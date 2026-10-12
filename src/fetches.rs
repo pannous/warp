@@ -31,11 +31,20 @@ thread_local! {
 pub fn start(id: i64, (url, body): Request, timeout: Duration) {
 	let (sender, receiver) = channel();
 	let awaited = format!("fetch {url}");
-	POSTED.with(|posted| if body.is_some() { posted.borrow_mut().insert(id) } else { posted.borrow_mut().remove(&id) });
-	std::thread::spawn(move || sender.send(match body {
-		Some(body) => crate::extensions::utils::post_within(&url, &body, &[], timeout).map_err(|reason| format!("fetch {url} failed: {reason}")),
-		None => crate::host::fetch(&url, timeout),
-	}));
+	POSTED.with(|posted| {
+		if body.is_some() {
+			posted.borrow_mut().insert(id)
+		} else {
+			posted.borrow_mut().remove(&id)
+		}
+	});
+	std::thread::spawn(move || {
+		sender.send(match body {
+			Some(body) => crate::extensions::utils::post_within(&url, &body, &[], timeout)
+				.map_err(|reason| format!("fetch {url} failed: {reason}")),
+			None => crate::host::fetch(&url, timeout),
+		})
+	});
 	FETCHES.with(|fetches| fetches.borrow_mut().insert(id, Fetch::Pending(receiver)));
 	let handler = format!("{}{id}", crate::host::FETCH_HANDLER_PREFIX);
 	warp_runtime::system_signals::await_ready(handler, awaited, move || arrived(id));
@@ -45,7 +54,9 @@ pub fn start(id: i64, (url, body): Request, timeout: Duration) {
 fn arrived(id: i64) -> bool {
 	FETCHES.with(|fetches| {
 		let mut fetches = fetches.borrow_mut();
-		let Some(Fetch::Pending(receiver)) = fetches.get(&id) else { return fetches.contains_key(&id) };
+		let Some(Fetch::Pending(receiver)) = fetches.get(&id) else {
+			return fetches.contains_key(&id);
+		};
 		let reply = match receiver.try_recv() {
 			Ok(reply) => reply,
 			Err(std::sync::mpsc::TryRecvError::Empty) => return false,

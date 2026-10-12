@@ -6,11 +6,11 @@
 
 pub mod calendar;
 
-pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use crate::extensions::numbers::Number;
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
+pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use std::collections::HashMap;
 
 pub const NOW_WORD: &str = "now";
@@ -35,7 +35,13 @@ pub enum TimeForm {
 	Duration = 3,
 	Zoned = 4,
 }
-pub const TIME_FORMS: [TimeForm; 5] = [TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned];
+pub const TIME_FORMS: [TimeForm; 5] = [
+	TimeForm::Instant,
+	TimeForm::Date,
+	TimeForm::Local,
+	TimeForm::Duration,
+	TimeForm::Zoned,
+];
 /// The info bits of the form
 pub const TIME_FORM_MASK: i64 = 7;
 pub const TIME_FORM_BITS: i64 = 3;
@@ -70,11 +76,17 @@ fn time_info(value: &Value) -> Option<(i64, i64)> {
 		Value::Time(time @ Time::Local(..)) => Some((TimeForm::Local as i64, time.position() as i64)),
 		Value::Time(Time::Zoned(zoned)) => {
 			let index = calendar::ZONES.iter().position(|zone| zone.name == zoned.zone.name)? as i64;
-			Some((TimeForm::Zoned as i64 | index << TIME_FORM_BITS | (zoned.offset / calendar::MINUTE) << OFFSET_SHIFT, zoned.instant() as i64))
+			Some((
+				TimeForm::Zoned as i64 | index << TIME_FORM_BITS | (zoned.offset / calendar::MINUTE) << OFFSET_SHIFT,
+				zoned.instant() as i64,
+			))
 		}
 		Value::Duration(duration) => {
 			let days = (duration.days as u32 as i64) << TIME_FORM_BITS;
-			Some((TimeForm::Duration as i64 | days | duration.months << MONTHS_SHIFT, duration.nanos as i64))
+			Some((
+				TimeForm::Duration as i64 | days | duration.months << MONTHS_SHIFT,
+				duration.nanos as i64,
+			))
 		}
 		_ => None,
 	}
@@ -110,7 +122,10 @@ pub fn constant_form(items: &[Node]) -> Option<TimeForm> {
 
 /// `now` as the program reads it: the host's clock when it runs
 pub fn now_call() -> Node {
-	crate::lowering::nodes::call(INSTANT_AT, vec![crate::lowering::nodes::call(crate::host::CLOCK, vec![])])
+	crate::lowering::nodes::call(
+		INSTANT_AT,
+		vec![crate::lowering::nodes::call(crate::host::CLOCK, vec![])],
+	)
 }
 
 /// A date or time literal as written; validated when evaluated, like `date(2024,2,30)`
@@ -136,12 +151,16 @@ enum Value {
 type Scope = HashMap<String, Value>;
 
 fn form_of(info: i64) -> Option<TimeForm> {
-	TIME_FORMS.into_iter().find(|form| *form as i64 == info & TIME_FORM_MASK)
+	TIME_FORMS
+		.into_iter()
+		.find(|form| *form as i64 == info & TIME_FORM_MASK)
 }
 
 /// A time read back from the run-time node (Kind::Time): its info bits (TimeForm) and position
 pub fn time_node(info: i64, position: Option<Number>) -> Node {
-	let Some(Number::Int(position)) = position else { return error("unreadable time") };
+	let Some(Number::Int(position)) = position else {
+		return error("unreadable time");
+	};
 	let position = position as i128;
 	match form_of(info) {
 		Some(TimeForm::Instant) => Node::data(Time::Instant(position)),
@@ -152,13 +171,23 @@ pub fn time_node(info: i64, position: Option<Number>) -> Node {
 		}
 		Some(TimeForm::Duration) => {
 			let days = (info >> TIME_FORM_BITS) as i32 as i64;
-			Node::data(Duration { months: info >> MONTHS_SHIFT, days, nanos: position })
+			Node::data(Duration {
+				months: info >> MONTHS_SHIFT,
+				days,
+				nanos: position,
+			})
 		}
 		Some(TimeForm::Zoned) => match calendar::ZONES.get(((info >> TIME_FORM_BITS) & ZONE_INDEX_MASK) as usize) {
 			Some(zone) => {
 				let offset = (info >> OFFSET_SHIFT) * calendar::MINUTE;
 				let (date, clock) = calendar::local_at(position, offset);
-				Node::data(Time::Zoned(Zoned { date, clock, offset, zone, rules: calendar::rules() }))
+				Node::data(Time::Zoned(Zoned {
+					date,
+					clock,
+					offset,
+					zone,
+					rules: calendar::rules(),
+				}))
 			}
 			None => error("unreadable time zone"),
 		},
@@ -183,7 +212,9 @@ fn fold_constants(node: Node) -> Node {
 	if mentions_time(&node) && only_time_words(&node) {
 		match evaluate(&node, &mut Scope::new()) {
 			// a quantity, `2 hours in minutes`: written as `120min` for the units' lowering
-			Ok(Value::Converted(quantity)) if !matches!(quantity, Node::Error(_)) => return crate::warp_parser::parse(&quantity.serialize()),
+			Ok(Value::Converted(quantity)) if !matches!(quantity, Node::Error(_)) => {
+				return crate::warp_parser::parse(&quantity.serialize())
+			}
 			Ok(value) => return run_time_constant(value),
 			Err(message) if !message.starts_with(UNSUPPORTED) => return error(&message),
 			Err(_) => {}
@@ -192,13 +223,18 @@ fn fold_constants(node: Node) -> Node {
 	match node {
 		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize()),
 		// `(t in "UTC").year`: the group around a placement is its call's own
-		Node::List(mut items, Bracket::Round, _) if items.len() == 1 && zone_placement(&items[0]).is_some() => fold_constants(items.remove(0)),
+		Node::List(mut items, Bracket::Round, _) if items.len() == 1 && zone_placement(&items[0]).is_some() => {
+			fold_constants(items.remove(0))
+		}
 		Node::List(..) if zone_placement(&node).is_some() => {
 			let (time, zone, choice) = zone_placement(&node).expect("guarded");
 			let number = |n: i64| Node::Number(Number::Int(n));
 			crate::lowering::nodes::call(TIME_IN_ZONE, vec![fold_constants(time), number(zone), number(choice)])
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(fold_constants(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(fold_constants(*node)),
+			data,
+		},
 		other => other.map_children(fold_constants),
 	}
 }
@@ -209,17 +245,34 @@ fn run_time_constant(value: Value) -> Node {
 			let number = |n: i64| Node::Number(Number::Int(n));
 			crate::lowering::nodes::call(TIME_OF, vec![number(info), number(position)])
 		}
-		None if matches!(value, Value::Time(_) | Value::Duration(_)) => not_at_run_time_yet(&value.into_node().serialize()),
+		None if matches!(value, Value::Time(_) | Value::Duration(_)) => {
+			not_at_run_time_yet(&value.into_node().serialize())
+		}
 		None => value.into_node(),
 	}
 }
 
 fn not_at_run_time_yet(written: &str) -> Node {
-	error(&format!("{written}: this time in a program that runs is not supported yet (card run-time-dates)"))
+	error(&format!(
+		"{written}: this time in a program that runs is not supported yet (card run-time-dates)"
+	))
 }
 
 /// Words a constant time expression may hold: no variable, which only the run knows
-const TIME_WORDS: [&str; 12] = ["in", "as", "date", "add", "zoned", "overflow", "disambiguation", "clamp", "constrain", "reject", "earlier", "later"];
+const TIME_WORDS: [&str; 12] = [
+	"in",
+	"as",
+	"date",
+	"add",
+	"zoned",
+	"overflow",
+	"disambiguation",
+	"clamp",
+	"constrain",
+	"reject",
+	"earlier",
+	"later",
+];
 
 fn is_time_word(word: &str) -> bool {
 	TIME_WORDS.contains(&word) || calendar::unit_named(word).is_some()
@@ -241,7 +294,10 @@ fn only_time_words(node: &Node) -> bool {
 
 fn converted_to_unit(items: &[Node]) -> bool {
 	match items {
-		[_, keyword, unit] => (keyword.is_symbol("in") || keyword.is_symbol("as")) && matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word)),
+		[_, keyword, unit] => {
+			(keyword.is_symbol("in") || keyword.is_symbol("as"))
+				&& matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word))
+		}
 		_ => false,
 	}
 }
@@ -272,13 +328,19 @@ fn places_in_zone(node: &Node) -> bool {
 /// `t in "Europe/Berlin"` or `zoned(t, "Europe/Berlin", disambiguation: later)` of a named zone: the time, the zone's
 /// index in calendar::ZONES and the choice (wasm_emitter/time_zones.rs REJECT, EARLIER, LATER)
 fn zone_placement(node: &Node) -> Option<(Node, i64, i64)> {
-	let Node::List(items, _, separator) = node.drop_meta() else { return None };
+	let Node::List(items, _, separator) = node.drop_meta() else {
+		return None;
+	};
 	let (time, zone, choices) = match items.as_slice() {
 		[time, keyword, zone] if keyword.is_symbol("in") => (time, zone, &[][..]),
-		[head, time, zone, choices @ ..] if *separator == Separator::None && head.is_symbol("zoned") => (time, zone, choices),
+		[head, time, zone, choices @ ..] if *separator == Separator::None && head.is_symbol("zoned") => {
+			(time, zone, choices)
+		}
 		_ => return None,
 	};
-	let Node::Text(name) = zone.drop_meta() else { return None };
+	let Node::Text(name) = zone.drop_meta() else {
+		return None;
+	};
 	let index = calendar::ZONES.iter().position(|known| known.name == *name)?;
 	let choice = match choices {
 		[] => REJECT,
@@ -303,7 +365,10 @@ fn mentions_time(node: &Node) -> bool {
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => mentions_time(owner),
 		Node::Key(left, _, right) => mentions_time(left) || mentions_time(right),
 		Node::List(items, _, _) => {
-			items.first().is_some_and(|head| head.is_symbol("date") || head.is_symbol(INSTANT_AT)) || items.iter().any(mentions_time)
+			items
+				.first()
+				.is_some_and(|head| head.is_symbol("date") || head.is_symbol(INSTANT_AT))
+				|| items.iter().any(mentions_time)
 		}
 		other => time_data(other),
 	}
@@ -314,7 +379,10 @@ fn getter_name(head: &Node) -> Option<&str> {
 	match head.drop_meta() {
 		Node::List(items, crate::node::Bracket::Round, _) => match items.as_slice() {
 			[Node::Symbol(name)] => Some(name),
-			[single] => match single.drop_meta() { Node::Symbol(name) => Some(name), _ => None },
+			[single] => match single.drop_meta() {
+				Node::Symbol(name) => Some(name),
+				_ => None,
+			},
 			_ => None,
 		},
 		_ => None,
@@ -402,7 +470,10 @@ fn place_in_zone(time: &Node, zone: &Node, scope: &mut Scope) -> Result<Value, S
 fn zone_argument(word: &str, zone: &Node, scope: &mut Scope) -> Result<&'static calendar::Zone, String> {
 	match evaluate(zone, scope)? {
 		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name),
-		other => Err(format!("{word} needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
+		other => Err(format!(
+			"{word} needs a zone name like \"Europe/Berlin\", got {}",
+			other.kind()
+		)),
 	}
 }
 
@@ -418,7 +489,11 @@ fn construct_date(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 	let [year, month, day] = args else {
 		return Err(format!("date(year, month, day) takes 3 arguments, got {}", args.len()));
 	};
-	let date = calendar::Date::new(int_argument(year, scope)?, int_argument(month, scope)?, int_argument(day, scope)?)?;
+	let date = calendar::Date::new(
+		int_argument(year, scope)?,
+		int_argument(month, scope)?,
+		int_argument(day, scope)?,
+	)?;
 	Ok(Value::Time(Time::Date(date)))
 }
 
@@ -434,9 +509,13 @@ fn options(function: &str, options: &[Node], scope: &mut Scope) -> Result<(Overf
 			other => return Err(format!("{name} takes a word like reject, got {}", other.kind())),
 		};
 		match (name.drop_meta(), mode.as_str()) {
-			(Node::Symbol(name), "clamp" | "constrain") if name == "overflow" && function == "add" => overflow = Overflow::Clamp,
+			(Node::Symbol(name), "clamp" | "constrain") if name == "overflow" && function == "add" => {
+				overflow = Overflow::Clamp
+			}
 			(Node::Symbol(name), "reject") if name == "overflow" && function == "add" => overflow = Overflow::Reject,
-			(Node::Symbol(name), _) if name == "overflow" && function == "add" => return Err(format!("overflow is clamp or reject, got {mode}")),
+			(Node::Symbol(name), _) if name == "overflow" && function == "add" => {
+				return Err(format!("overflow is clamp or reject, got {mode}"))
+			}
 			(Node::Symbol(name), "earlier") if name == "disambiguation" => choice = Disambiguation::Earlier,
 			(Node::Symbol(name), "later") if name == "disambiguation" => choice = Disambiguation::Later,
 			(Node::Symbol(name), "reject") if name == "disambiguation" => choice = Disambiguation::Reject,
@@ -459,19 +538,27 @@ fn add(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 	let (overflow, choice) = options("add", rest, scope)?;
 	match (time, duration) {
 		(Value::Time(time), Value::Duration(duration)) => time.add(duration, overflow, choice).map(Value::Time),
-		(time, duration) => Err(format!("add needs a time and a duration, got {} and {}", time.kind(), duration.kind())),
+		(time, duration) => Err(format!(
+			"add needs a time and a duration, got {} and {}",
+			time.kind(),
+			duration.kind()
+		)),
 	}
 }
 
 /// `zoned(2030-10-27T02:30, "Europe/Berlin", disambiguation: earlier)`: a local time in a zone, the choice spelled out
 fn zoned(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 	let [time, zone, rest @ ..] = args else {
-		return Err("zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string());
+		return Err(
+			"zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string(),
+		);
 	};
 	let zone = zone_argument("zoned", zone, scope)?;
 	let (_, choice) = options("zoned", rest, scope)?;
 	match evaluate(time, scope)? {
-		Value::Time(Time::Local(date, clock)) => zone.resolve(date, clock, choice).map(|zoned| Value::Time(Time::Zoned(zoned))),
+		Value::Time(Time::Local(date, clock)) => zone
+			.resolve(date, clock, choice)
+			.map(|zoned| Value::Time(Time::Zoned(zoned))),
 		Value::Time(time) => time.in_zone(zone).map(Value::Time),
 		other => Err(format!("zoned needs a local time, got {}", other.kind())),
 	}
@@ -498,7 +585,9 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 			};
 			match evaluate(left, scope)? {
 				// The time zone rules version a zoned time was resolved with
-				Value::Time(Time::Zoned(zoned)) if field == TZDATA_FIELD => Ok(Value::Text(zoned.rules.version.to_string())),
+				Value::Time(Time::Zoned(zoned)) if field == TZDATA_FIELD => {
+					Ok(Value::Text(zoned.rules.version.to_string()))
+				}
 				// the wall clock of an instant is the one where the program runs
 				Value::Time(Time::Instant(_)) if field != EPOCH_SECONDS => Err(unsupported(right)),
 				Value::Time(time) => time.field(field).map(Value::Int),
@@ -516,12 +605,13 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 
 fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 	match (left, op, right) {
-		(Value::Time(time), Op::Add, Value::Duration(duration)) | (Value::Duration(duration), Op::Add, Value::Time(time)) => {
-			time.add(duration, Overflow::Reject, Disambiguation::Reject).map(Value::Time)
-		}
-		(Value::Time(time), Op::Sub, Value::Duration(duration)) => {
-			time.add(duration.times(-1), Overflow::Reject, Disambiguation::Reject).map(Value::Time)
-		}
+		(Value::Time(time), Op::Add, Value::Duration(duration))
+		| (Value::Duration(duration), Op::Add, Value::Time(time)) => time
+			.add(duration, Overflow::Reject, Disambiguation::Reject)
+			.map(Value::Time),
+		(Value::Time(time), Op::Sub, Value::Duration(duration)) => time
+			.add(duration.times(-1), Overflow::Reject, Disambiguation::Reject)
+			.map(Value::Time),
 		(Value::Time(later), Op::Sub, Value::Time(earlier)) => Ok(match later.since(earlier)? {
 			Ok(days) => Value::Int(days),
 			Err(duration) => Value::Duration(duration),
@@ -529,7 +619,9 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		(Value::Time(a), op, Value::Time(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.compare(b)?))),
 		(Value::Duration(a), Op::Add, Value::Duration(b)) => Ok(Value::Duration(a.plus(b))),
 		(Value::Duration(a), Op::Sub, Value::Duration(b)) => Ok(Value::Duration(a.plus(b.times(-1)))),
-		(Value::Duration(duration), Op::Mul, Value::Int(n)) | (Value::Int(n), Op::Mul, Value::Duration(duration)) => Ok(Value::Duration(duration.times(n))),
+		(Value::Duration(duration), Op::Mul, Value::Int(n)) | (Value::Int(n), Op::Mul, Value::Duration(duration)) => {
+			Ok(Value::Duration(duration.times(n)))
+		}
 		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
 		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
 		(Value::Int(a), op, Value::Int(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.cmp(&b)))),
@@ -542,10 +634,12 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		(Value::Bool(a), Op::Ne, Value::Bool(b)) => Ok(Value::Bool(a != b)),
 		(Value::Duration(duration), Op::As, Value::Symbol(unit)) => converted(&duration, &Node::Symbol(unit)),
 		// `"on " + 2024-02-29`: a text joins the other's text, as list_join does at run time
-		(left, Op::Add, right) if matches!(left, Value::Text(_)) || matches!(right, Value::Text(_)) => match (joined_text(&left), joined_text(&right)) {
-			(Some(left), Some(right)) => Ok(Value::Text(left + &right)),
-			_ => Err(format!("cannot apply + to a {} and a {}", left.kind(), right.kind())),
-		},
+		(left, Op::Add, right) if matches!(left, Value::Text(_)) || matches!(right, Value::Text(_)) => {
+			match (joined_text(&left), joined_text(&right)) {
+				(Some(left), Some(right)) => Ok(Value::Text(left + &right)),
+				_ => Err(format!("cannot apply + to a {} and a {}", left.kind(), right.kind())),
+			}
+		}
 		(left, op, right) => Err(format!("cannot apply {op} to a {} and a {}", left.kind(), right.kind())),
 	}
 }
@@ -562,7 +656,9 @@ fn joined_text(value: &Value) -> Option<String> {
 
 /// `2 hours in minutes`, `90 minutes as hours`: the duration in a time unit (P36)
 fn converted(duration: &Duration, unit: &Node) -> Result<Value, String> {
-	let Node::Symbol(word) = unit.drop_meta() else { return Err(format!("{duration} converts to a time unit, got {}", unit.serialize())) };
+	let Node::Symbol(word) = unit.drop_meta() else {
+		return Err(format!("{duration} converts to a time unit, got {}", unit.serialize()));
+	};
 	match crate::units::duration_in(duration, word) {
 		Some(Node::Error(message)) => Err(message.to_string()),
 		Some(node) => Ok(Value::Converted(node)),

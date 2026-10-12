@@ -5,8 +5,8 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
+use super::nodes::{call, children_rewritten, key, Counter};
 use super::words::SUM_WORD;
-use super::nodes::{Counter, call, children_rewritten, key};
 use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -29,7 +29,16 @@ pub const COLLECTION_POSITION: &str = "collection_position";
 pub const MAP_GET_OR: &str = "map_get_or";
 /// map_without(map, key): the map without the key's entry, what `m.remove(k)` stores in m (analyzer removed_key)
 pub const MAP_WITHOUT: &str = "map_without";
-pub const MAP_WORD_FUNCTIONS: [&str; 8] = [MAP_KEYS, MAP_VALUES, MAP_ENTRIES, COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT, crate::one_entry_maps::MAP_OF_ENTRY];
+pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
+	MAP_KEYS,
+	MAP_VALUES,
+	MAP_ENTRIES,
+	COLLECTION_CONTAINS,
+	COLLECTION_POSITION,
+	MAP_GET_OR,
+	MAP_WITHOUT,
+	crate::one_entry_maps::MAP_OF_ENTRY,
+];
 const IN_WORD: &str = "in";
 /// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
 const COUNT_WORD: &str = "count";
@@ -90,9 +99,25 @@ pub const LIST_SUM: &str = "list_sum";
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
 pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	(crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT, 0),
-	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
-	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
-	(MAP_WITHOUT, 2), (INSTANCE_COPY, 2), (crate::one_entry_maps::MAP_OF_ENTRY, 1),
+	(ORD, 1),
+	("upper", 1),
+	("lower", 1),
+	("reverse", 1),
+	("sort", 1),
+	("split", 2),
+	("join", 2),
+	("chars", 1),
+	(FIELD_WITH, 3),
+	(MAP_KEYS, 1),
+	(MAP_VALUES, 1),
+	(MAP_ENTRIES, 1),
+	(COLLECTION_CONTAINS, 2),
+	(COLLECTION_POSITION, 2),
+	(MAP_GET_OR, 3),
+	(SLICE, 3),
+	(MAP_WITHOUT, 2),
+	(INSTANCE_COPY, 2),
+	(crate::one_entry_maps::MAP_OF_ENTRY, 1),
 ];
 /// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
 /// compiler it is `ord`, since `codepoint` is also a type word
@@ -142,9 +167,17 @@ pub fn shallow_flag(argument: &Node) -> Node {
 const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// Python's `list(x)`: the list itself, a text's characters
 	(LIST_WORD, 1, "hidden_value as list"),
-	(SUM_WORD, 1, "(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)"),
+	(
+		SUM_WORD,
+		1,
+		"(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)",
+	),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
-	(crate::mutation::UNWRAP, 1, "if hidden_value == ø then error(\"unwrapped ø\") else hidden_value"),
+	(
+		crate::mutation::UNWRAP,
+		1,
+		"if hidden_value == ø then error(\"unwrapped ø\") else hidden_value",
+	),
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
@@ -157,11 +190,16 @@ const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arr
 /// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
 /// `last(xs, 2)` the last 2 (lib/prelude.warp)
-const ARITY_VARIANTS: [(&str, usize, &str); 3] = [("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
+const ARITY_VARIANTS: [(&str, usize, &str); 3] = [
+	("round", 2, "round_to"),
+	("first", 2, "first_items"),
+	("last", 2, "last_items"),
+];
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
 /// and popped_rest, `x.clear()` to cleared (declaration_lowering removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
-const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] = [("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
+	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
 const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
 /// `try_tmp_value` of a try template becomes the temporary `try·value·3`
@@ -190,7 +228,10 @@ pub fn is_similarity_call(name: &str) -> bool {
 	SIMILARITY_LEVELS.iter().any(|(_, function, ..)| *function == name)
 }
 
-pub const SIMILARITY_LEVELS: [(Op, &str, &str, &str); 2] = [(Op::Similar, VALUES_SIMILAR, "tolerance", "1e-9"), (Op::Rough, VALUES_ROUGH, "rough_tolerance", "0.01")];
+pub const SIMILARITY_LEVELS: [(Op, &str, &str, &str); 2] = [
+	(Op::Similar, VALUES_SIMILAR, "tolerance", "1e-9"),
+	(Op::Rough, VALUES_ROUGH, "rough_tolerance", "0.01"),
+];
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "hidden_value";
@@ -200,8 +241,23 @@ const SAFE_PREFIX: &str = "safe_tmp_";
 const SAFE_BASE: &str = "safe";
 
 /// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 5] = ["upper", "lower", "trim", "join", crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT];
-const LIST_RESULT_WORDS: [&str; 8] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT, crate::wasm_emitter::list_ops::LIST_EXTEND];
+const TEXT_RESULT_WORDS: [&str; 5] = [
+	"upper",
+	"lower",
+	"trim",
+	"join",
+	crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT,
+];
+const LIST_RESULT_WORDS: [&str; 8] = [
+	"chars",
+	"sort",
+	"split",
+	MAP_KEYS,
+	MAP_VALUES,
+	MAP_ENTRIES,
+	MAP_WITHOUT,
+	crate::wasm_emitter::list_ops::LIST_EXTEND,
+];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
@@ -215,8 +271,12 @@ pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 
 /// `field_with(m, key, value)` updating the variable m itself: what `m.key = value` lowers to (field_assignment)
 pub fn is_field_update_of(name: &str, value: &Node) -> bool {
-	let Node::List(items, _, _) = value.drop_meta() else { return false };
-	let [word, map, _, _] = items.as_slice() else { return false };
+	let Node::List(items, _, _) = value.drop_meta() else {
+		return false;
+	};
+	let [word, map, _, _] = items.as_slice() else {
+		return false;
+	};
 	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
 }
 
@@ -232,7 +292,10 @@ pub fn is_library_word(name: &str) -> bool {
 /// A function every program has: a library word, an extremum, a rounding function or a text builtin. A class's method
 /// of that name adds to it, other values keep calling it (notes/dispatch.md "Methods")
 pub fn is_standard_function(name: &str) -> bool {
-	is_library_word(name) || crate::min_max::is_extremum(name) || crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::wasm_emitter::text_builtins::is_text_builtin(name)
+	is_library_word(name)
+		|| crate::min_max::is_extremum(name)
+		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
+		|| crate::wasm_emitter::text_builtins::is_text_builtin(name)
 }
 
 /// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
@@ -257,16 +320,32 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 
 fn arity(word: &str) -> usize {
 	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
-	let built_in = RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
-	built_in.or_else(|| crate::modules::prelude_word_arity(word)).unwrap_or(1)
+	let built_in = RUNTIME_WORDS
+		.into_iter()
+		.chain(expanded)
+		.find(|(name, _)| *name == word)
+		.map(|(_, arity)| arity);
+	built_in
+		.or_else(|| crate::modules::prelude_word_arity(word))
+		.unwrap_or(1)
 }
 
 /// The library words a name may stand for once this pass has run: its canonical spelling (`isdigit` → is_digit) and,
 /// its ARITY_VARIANTS (`round(x, 2)` round_to). modules::resolve, which runs before, loads the prelude words by them
 pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
-	let variants = ARITY_VARIANTS.iter().filter(|(word, _, _)| *word == name).map(|(_, _, variant)| *variant);
-	let lowered = LOWERED_TO_PRELUDE.iter().filter(|(word, _)| *word == name).flat_map(|(_, words)| words.iter().copied());
-	canonical_word(name).into_iter().chain(variants).chain(lowered).collect()
+	let variants = ARITY_VARIANTS
+		.iter()
+		.filter(|(word, _, _)| *word == name)
+		.map(|(_, _, variant)| *variant);
+	let lowered = LOWERED_TO_PRELUDE
+		.iter()
+		.filter(|(word, _)| *word == name)
+		.flat_map(|(_, words)| words.iter().copied());
+	canonical_word(name)
+		.into_iter()
+		.chain(variants)
+		.chain(lowered)
+		.collect()
 }
 
 pub fn lower(node: Node) -> Node {
@@ -276,18 +355,39 @@ pub fn lower(node: Node) -> Node {
 	// `sum·1` (an arity overload), `sum·point` of a declared trait's operation: the program defines `sum`, no library
 	// word; a class's method `sum·Bag` of the generic function sum keeps the library's sum for other values
 	let traits = crate::traits::Traits::of(&node);
-	let replaces_word = |operation: &str, variant: &str| variant.parse::<usize>().is_ok() || traits.is_operation(operation);
-	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).filter(|(operation, variant)| replaces_word(operation, variant)).map(|(operation, _)| operation.to_string()).collect();
+	let replaces_word =
+		|operation: &str, variant: &str| variant.parse::<usize>().is_ok() || traits.is_operation(operation);
+	let variants: Vec<String> = shadowed
+		.iter()
+		.filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR))
+		.filter(|(operation, variant)| replaces_word(operation, variant))
+		.map(|(operation, _)| operation.to_string())
+		.collect();
 	shadowed.extend(variants);
 	collect_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);
 
 	let plain = assigned.plain.difference(&assigned.rebound).cloned().collect();
-	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
+	let objects = assigned
+		.objects
+		.into_iter()
+		.filter_map(|(name, literal)| Some((name, literal?)))
+		.collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
-	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), defining: RefCell::new(vec![]), call_results, temporaries: Counter::default() }.expand(node)
+	Lowering {
+		context,
+		shadowed,
+		objects,
+		plain,
+		instances,
+		parameters: RefCell::new(vec![]),
+		defining: RefCell::new(vec![]),
+		call_results,
+		temporaries: Counter::default(),
+	}
+	.expand(node)
 }
 
 /// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
@@ -311,7 +411,9 @@ fn raise_call(items: &[Node]) -> Option<Node> {
 	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| word.is_symbol(raise)) {
 		return None;
 	}
-	let message = crate::pipeline::returned_error_message(raised).unwrap_or(raised).clone();
+	let message = crate::pipeline::returned_error_message(raised)
+		.unwrap_or(raised)
+		.clone();
 	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name
 	let message = match message.drop_meta() {
 		Node::Text(_) | Node::Symbol(_) => message,
@@ -331,7 +433,9 @@ pub fn lower_count_in(node: Node) -> Node {
 
 fn lower_counts(node: Node, library_count: bool) -> Node {
 	let counted = |node: &Node| match node {
-		Node::List(items, bracket, _) => count_in(items).or_else(|| library_count.then(|| count_call(items, bracket)).flatten()),
+		Node::List(items, bracket, _) => {
+			count_in(items).or_else(|| library_count.then(|| count_call(items, bracket)).flatten())
+		}
 		Node::Key(receiver, Op::Dot, call) if library_count => count_method(receiver, call),
 		_ => None,
 	};
@@ -344,14 +448,21 @@ fn lower_counts(node: Node, library_count: bool) -> Node {
 /// `count(y, x)` is `count x in y`
 fn count_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
 	let [count, haystack, needle] = items else { return None };
-	(*bracket == Bracket::Round && count.is_symbol(COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
+	(*bracket == Bracket::Round && count.is_symbol(COUNT_WORD))
+		.then(|| counted_in(count, needle, haystack))
+		.flatten()
 }
 
 /// `y.count(x)` is `count x in y`
 fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
-	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else {
+		return None;
+	};
 	let [count, needle] = items.as_slice() else { return None };
-	count.is_symbol(COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
+	count
+		.is_symbol(COUNT_WORD)
+		.then(|| counted_in(count, needle, receiver))
+		.flatten()
 }
 
 fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
@@ -369,7 +480,9 @@ fn count_in(items: &[Node]) -> Option<Node> {
 		},
 		_ => items.to_vec(),
 	};
-	let [count, needle, in_word, haystack @ ..] = phrase.as_slice() else { return None };
+	let [count, needle, in_word, haystack @ ..] = phrase.as_slice() else {
+		return None;
+	};
 	if !count.is_symbol(COUNT_WORD) || !in_word.is_symbol(IN_WORD) || haystack.is_empty() {
 		return None;
 	}
@@ -377,12 +490,24 @@ fn count_in(items: &[Node]) -> Option<Node> {
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
-	if let Some(unit) = matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten() {
+	if let Some(unit) = matches!(needle.drop_meta(), Node::Symbol(_))
+		.then(|| crate::analyzer::text_unit(&needle.name()))
+		.flatten()
+	{
 		return Some(key(haystack, Op::Dot, symbol(unit)));
 	}
-	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1) && !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
-	let template = if substring { COUNT_SUBSTRING_TEMPLATE } else { COUNT_ITEM_TEMPLATE };
-	Some(substitute(substitute(parse(template), COUNT_HAYSTACK, &haystack), COUNT_NEEDLE, needle))
+	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1)
+		&& !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
+	let template = if substring {
+		COUNT_SUBSTRING_TEMPLATE
+	} else {
+		COUNT_ITEM_TEMPLATE
+	};
+	Some(substitute(
+		substitute(parse(template), COUNT_HAYSTACK, &haystack),
+		COUNT_NEEDLE,
+		needle,
+	))
 }
 
 /// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding, extremum,
@@ -390,20 +515,29 @@ fn count_in(items: &[Node]) -> Option<Node> {
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
 	let context = crate::analyzer::function_definitions(&node);
-	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
+	let arities: HashMap<String, usize> = context
+		.user_functions
+		.iter()
+		.map(|(name, function)| (name.clone(), function.params.len()))
+		.collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
 	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
 	let is_builtin = |name: &str, arguments: usize| {
 		let is_text_builtin = crate::wasm_emitter::text_builtins::text_builtin_kind(name, arguments + 1).is_some();
-		crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || crate::min_max::is_extremum(name) || is_text_builtin || is_libm(name)
+		crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
+			|| crate::min_max::is_extremum(name)
+			|| is_text_builtin
+			|| is_libm(name)
 	};
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
 	let node = list_constructor_calls(node, &defined);
-	function_methods_as_calls(node, &|name, arguments| (is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments))
+	function_methods_as_calls(node, &|name, arguments| {
+		(is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments)
+	})
 }
 
 /// Python's `list()`: the empty list, as `[]` parses; Kotlin's `listOf(1, 2)`, `arrayOf`, `mutableListOf`: the list
@@ -419,10 +553,25 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 			let is_list_word = items[0].is_symbol(LIST_WORD);
 			match elements.is_empty() {
 				true => Node::Empty,
-				false if is_list_word => Node::List(items.into_iter().map(|item| list_constructor_calls(item, defined)).collect(), Bracket::Round, Separator::None), // `list(x)` is `x as list`
-				false => Node::List(elements.into_iter().map(|element| list_constructor_calls(element, defined)).collect(), Bracket::Square, Separator::Colon),
+				false if is_list_word => Node::List(
+					items
+						.into_iter()
+						.map(|item| list_constructor_calls(item, defined))
+						.collect(),
+					Bracket::Round,
+					Separator::None,
+				), // `list(x)` is `x as list`
+				false => Node::List(
+					elements
+						.into_iter()
+						.map(|element| list_constructor_calls(element, defined))
+						.collect(),
+					Bracket::Square,
+					Separator::Colon,
+				),
 			}
-		}		other => other.map_children(|child| list_constructor_calls(child, defined)),
+		}
+		other => other.map_children(|child| list_constructor_calls(child, defined)),
 	}
 }
 
@@ -433,7 +582,11 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
 				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1)) => {
-					Node::List([vec![items[0].clone(), receiver], items[1..].to_vec()].concat(), Bracket::Round, Separator::None)
+					Node::List(
+						[vec![items[0].clone(), receiver], items[1..].to_vec()].concat(),
+						Bracket::Round,
+						Separator::None,
+					)
 				}
 				_ => key(receiver, Op::Dot, method),
 			}
@@ -445,7 +598,9 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 /// The field and step of `x++` / `x--` after a dot
 fn field_step(method: &Node) -> Option<(Node, Op)> {
 	match method.drop_meta() {
-		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.as_ref().clone(), *op)),
+		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => {
+			Some((field.as_ref().clone(), *op))
+		}
 		_ => None,
 	}
 }
@@ -468,7 +623,10 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {
-		Node::Meta { data, .. } => Node::Meta { node: Box::new(text(name)), data: data.clone() },
+		Node::Meta { data, .. } => Node::Meta {
+			node: Box::new(text(name)),
+			data: data.clone(),
+		},
 		_ => text(name),
 	};
 	crate::warp_parser::subscript(object.clone(), key)
@@ -479,7 +637,9 @@ fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 /// value may be an object
 fn is_field_lookup(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(_, Op::Hash, index) if crate::warp_parser::subscript_key(index).and_then(field_name).is_some() => true,
+		Node::Key(_, Op::Hash, index) if crate::warp_parser::subscript_key(index).and_then(field_name).is_some() => {
+			true
+		}
 		Node::Key(list, Op::Hash, _) => is_field_lookup(list),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_field_lookup(&items[0]),
 		_ => false,
@@ -492,7 +652,14 @@ pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 	let items: &[Node] = match node.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
 		// a named tuple `(x: 10, y: 20)`: its entries are fields too
-		Node::List(items, Bracket::Round, _) if items.len() > 1 && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) => items,
+		Node::List(items, Bracket::Round, _)
+			if items.len() > 1
+				&& items
+					.iter()
+					.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
+			items
+		}
 		Node::Key(_, Op::Colon, _) => {
 			single = [node.clone()];
 			&single
@@ -550,8 +717,11 @@ fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
 					_ => None,
 				};
 				let literal = copied.or_else(|| object_entries(value).map(|_| value.as_ref().clone()));
-				let both_objects = literal.is_some() && assigned.objects.get(name).is_none_or(|earlier| earlier.is_some());
-				assigned.objects.insert(name.clone(), if both_objects { literal } else { None });
+				let both_objects =
+					literal.is_some() && assigned.objects.get(name).is_none_or(|earlier| earlier.is_some());
+				assigned
+					.objects
+					.insert(name.clone(), if both_objects { literal } else { None });
 			}
 			collect_assigned_objects(value, assigned);
 		}
@@ -573,7 +743,9 @@ fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
 fn may_hold_object(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Key(_, Op::Hash | Op::Dot, _) => true,
-		Node::List(items, Bracket::Round, Separator::None) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+		Node::List(items, Bracket::Round, Separator::None) => {
+			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
+		}
 		other => object_entries(other).is_some(),
 	}
 }
@@ -599,7 +771,9 @@ fn is_plain_literal(value: &Node) -> bool {
 /// `person: {name: "Alice"}` among the statements of a program that reads `person` later binds it like
 /// `person = {…}`: `person.name` is then a field of a variable (a data key nothing reads stays data)
 fn bind_read_data_objects(program: Node) -> Node {
-	let Node::List(items, bracket @ (Bracket::None | Bracket::Curly), separator) = program else { return program };
+	let Node::List(items, bracket @ (Bracket::None | Bracket::Curly), separator) = program else {
+		return program;
+	};
 	let mut read = HashSet::new();
 	for item in &items {
 		item.visit(&mut |part| {
@@ -610,12 +784,18 @@ fn bind_read_data_objects(program: Node) -> Node {
 			}
 		});
 	}
-	let items = items.into_iter().map(|item| match item.drop_meta() {
-		Node::Key(name, Op::Colon, value) if matches!(name.drop_meta(), Node::Symbol(symbol) if read.contains(symbol)) && object_entries(value).is_some() => {
-			Node::Key(name.clone(), Op::Assign, value.clone())
-		}
-		_ => item,
-	}).collect();
+	let items = items
+		.into_iter()
+		.map(|item| match item.drop_meta() {
+			Node::Key(name, Op::Colon, value)
+				if matches!(name.drop_meta(), Node::Symbol(symbol) if read.contains(symbol))
+					&& object_entries(value).is_some() =>
+			{
+				Node::Key(name.clone(), Op::Assign, value.clone())
+			}
+			_ => item,
+		})
+		.collect();
 	Node::List(items, bracket, separator)
 }
 
@@ -679,7 +859,9 @@ impl Lowering {
 			Node::List(items, bracket, separator) if keyword_definition_parameters(&items).is_some() => {
 				let parameters = keyword_definition_parameters(&items).expect("guarded");
 				let name = keyword_definition_name(&items);
-				let items = self.within_function(name, parameters, || items.into_iter().map(|item| self.expand(item)).collect());
+				let items = self.within_function(name, parameters, || {
+					items.into_iter().map(|item| self.expand(item)).collect()
+				});
 				Node::List(items, bracket, separator)
 			}
 			Node::List(items, bracket, separator) => {
@@ -687,7 +869,8 @@ impl Lowering {
 				if let Some(walk) = self.for_over_map(&items) {
 					return walk;
 				}
-				self.word_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
+				self.word_call(&items, &bracket, &separator)
+					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			// `p.x++` (parsed as `p.(x++)` or `(p.x)++`) is `p.x += 1`, an update of the field
 			Node::Key(left, Op::Dot, right) if field_step(&right).is_some() => {
@@ -695,13 +878,18 @@ impl Lowering {
 				self.expand(stepped(Node::Key(left, Op::Dot, Box::new(field)), op))
 			}
 			// `xs#1++`, `bags#1.n++`: the whole place steps
-			Node::Key(left, op @ (Op::Inc | Op::Dec), _) if matches!(left.drop_meta(), Node::Key(_, Op::Dot | Op::Hash, _)) => self.expand(stepped(*left, op)),
+			Node::Key(left, op @ (Op::Inc | Op::Dec), _)
+				if matches!(left.drop_meta(), Node::Key(_, Op::Dot | Op::Hash, _)) =>
+			{
+				self.expand(stepped(*left, op))
+			}
 			// `bags#1.n += 4`, `p.b.n += 2`, `xs#1#2 += 1`: `place = place + 4`, stored back into the place
 			Node::Key(left, op, right) if op.is_compound_assign() && is_nested_place(&left) => {
 				let combined = Node::Key(left.clone(), op.base_op(), right);
 				let left = self.expand(*left);
 				let combined = self.expand(combined);
-				self.stored(&left, combined.clone()).unwrap_or(key(left, Op::Assign, combined))
+				self.stored(&left, combined.clone())
+					.unwrap_or(key(left, Op::Assign, combined))
 			}
 			Node::Key(left, Op::Dot, right) => {
 				let (left, right) = (self.expand(*left), self.expand_method(*right));
@@ -713,13 +901,16 @@ impl Lowering {
 				}
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
-				self.field_assignment(&left, &right).unwrap_or(key(left, Op::Assign, right))
+				self.field_assignment(&left, &right)
+					.unwrap_or(key(left, Op::Assign, right))
 			}
 			Node::Key(left, Op::SafeDot, right) => {
 				let (receiver, word) = (self.expand(*left), *right);
 				self.safe_lookup(receiver, word)
 			}
-			Node::Key(left, op @ (Op::Similar | Op::Rough), right) => self.lower_similar(op, self.expand(*left), self.expand(*right)),
+			Node::Key(left, op @ (Op::Similar | Op::Rough), right) => {
+				self.lower_similar(op, self.expand(*left), self.expand(*right))
+			}
 			Node::Key(left, Op::Coalesce, right) => self.lower_coalesce(self.expand(*left), self.expand(*right)),
 			Node::Key(left, Op::Define, right) => {
 				let left = self.expand(*left);
@@ -749,7 +940,9 @@ impl Lowering {
 	fn within_function<T>(&self, name: Option<String>, parameters: Vec<String>, lower: impl FnOnce() -> T) -> T {
 		let scope = self.parameters.borrow().len();
 		self.parameters.borrow_mut().extend(parameters.iter().cloned());
-		let named = name.map(|name| self.defining.borrow_mut().push((name, parameters))).is_some();
+		let named = name
+			.map(|name| self.defining.borrow_mut().push((name, parameters)))
+			.is_some();
 		let lowered = lower();
 		self.parameters.borrow_mut().truncate(scope);
 		if named {
@@ -760,8 +953,13 @@ impl Lowering {
 
 	/// `p.name` inside the function `name(p)`: a call would recurse with the same argument forever, so it reads the field
 	fn reads_own_parameter_field(&self, receiver: &Node, name: &str) -> bool {
-		let Node::Symbol(receiver) = receiver.drop_meta() else { return false };
-		self.defining.borrow().last().is_some_and(|(function, parameters)| function == name && parameters.contains(receiver))
+		let Node::Symbol(receiver) = receiver.drop_meta() else {
+			return false;
+		};
+		self.defining
+			.borrow()
+			.last()
+			.is_some_and(|(function, parameters)| function == name && parameters.contains(receiver))
 	}
 
 	/// `def total(xs){sum xs}`: the body block of a function that is one braceless call is that statement, not the data
@@ -769,8 +967,16 @@ impl Lowering {
 	fn body_statement(&self, head: &Node, right: Node) -> Node {
 		let defines_function = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
 		match right {
-			Node::List(items, Bracket::Curly, Separator::Space) if defines_function && items.len() > 1 && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-				Node::List(vec![Node::List(items, Bracket::None, Separator::Space)], Bracket::Curly, Separator::Semicolon)
+			Node::List(items, Bracket::Curly, Separator::Space)
+				if defines_function
+					&& items.len() > 1
+					&& matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
+			{
+				Node::List(
+					vec![Node::List(items, Bracket::None, Separator::Space)],
+					Bracket::Curly,
+					Separator::Semicolon,
+				)
 			}
 			other => other,
 		}
@@ -784,8 +990,15 @@ impl Lowering {
 	/// arithmetic is computed once into a temporary
 	/// `a ≈ b`: the emitter's values_similar(a, b, tolerance), numbers inline, any other values field by field
 	fn lower_similar(&self, op: Op, left: Node, right: Node) -> Node {
-		let (_, function, variable, default) = SIMILARITY_LEVELS.iter().find(|(level, ..)| *level == op).expect("a similarity operator");
-		let tolerance = if self.shadowed.contains(*variable) { variable } else { default };
+		let (_, function, variable, default) = SIMILARITY_LEVELS
+			.iter()
+			.find(|(level, ..)| *level == op)
+			.expect("a similarity operator");
+		let tolerance = if self.shadowed.contains(*variable) {
+			variable
+		} else {
+			default
+		};
 		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
@@ -811,11 +1024,20 @@ impl Lowering {
 	/// The word after a dot, `word` or `word(arguments)`: only the arguments are expanded, the word is not a call of its own
 	fn expand_method(&self, method: Node) -> Node {
 		match method {
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand_method(*node)), data },
-			Node::List(items, bracket, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+			Node::Meta { node, data } => Node::Meta {
+				node: Box::new(self.expand_method(*node)),
+				data,
+			},
+			Node::List(items, bracket, separator)
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
+			{
 				let mut items = items.into_iter();
 				let word = items.next().expect("guarded");
-				Node::List([vec![word], items.map(|argument| self.expand(argument)).collect()].concat(), bracket, separator)
+				Node::List(
+					[vec![word], items.map(|argument| self.expand(argument)).collect()].concat(),
+					bracket,
+					separator,
+				)
 			}
 			other => self.expand(other),
 		}
@@ -827,12 +1049,16 @@ impl Lowering {
 
 	/// The library word a call of `name` with that many arguments (receiver included) means
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
-		self.arity_variant(name, argument_count).or_else(|| self.library_word(name))
+		self.arity_variant(name, argument_count)
+			.or_else(|| self.library_word(name))
 	}
 
 	/// The word `name` means with that many arguments, unless the program defines `name`
 	fn arity_variant(&self, name: &str, argument_count: usize) -> Option<&'static str> {
-		let variant = ARITY_VARIANTS.iter().find(|(word, count, _)| *word == name && *count == argument_count).map(|(_, _, variant)| *variant);
+		let variant = ARITY_VARIANTS
+			.iter()
+			.find(|(word, count, _)| *word == name && *count == argument_count)
+			.map(|(_, _, variant)| *variant);
 		variant.filter(|_| !self.shadowed.contains(name))
 	}
 
@@ -866,24 +1092,44 @@ impl Lowering {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
-				let log_of = |argument: &Node| Node::List(vec![items[0].clone(), argument.clone()], Bracket::Round, Separator::None);
+				let log_of = |argument: &Node| {
+					Node::List(
+						vec![items[0].clone(), argument.clone()],
+						Bracket::Round,
+						Separator::None,
+					)
+				};
 				return Some(key(log_of(value), Op::Div, log_of(base)));
 			}
 		}
 		// `first 3 of xs` is `first_items(xs, 3)`
 		if let [_, argument, of, object] = items {
 			if let (true, Some(word)) = (is_of(of), self.arity_variant(head, 2)) {
-				return Some(self.call(word, &items[0], vec![self.expand(object.clone()), self.expand(argument.clone())], false));
+				return Some(self.call(
+					word,
+					&items[0],
+					vec![self.expand(object.clone()), self.expand(argument.clone())],
+					false,
+				));
 			}
 		}
 		// `first of xs` has one argument, as `first sorted xs`: a library word after it is its argument's prefix
-		let prefixes_its_argument = *bracket == Bracket::None && items.get(1).is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
-		let argument_count = if items.get(1).is_some_and(is_of) || prefixes_its_argument { 1 } else { items.len() - 1 };
+		let prefixes_its_argument = *bracket == Bracket::None
+			&& items
+				.get(1)
+				.is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
+		let argument_count = if items.get(1).is_some_and(is_of) || prefixes_its_argument {
+			1
+		} else {
+			items.len() - 1
+		};
 		let word = self.library_word_for(head, argument_count)?;
 		// `sorted "listen" == sorted "silent"`: the word takes the operand of the comparison, as a defined function of `it` does
 		if let ([_, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
 			if is_comparison(argument) {
-				return Some(with_first_comparand(argument.clone(), &|operand| self.call(word, &items[0], vec![operand], true)));
+				return Some(with_first_comparand(argument.clone(), &|operand| {
+					self.call(word, &items[0], vec![operand], true)
+				}));
 			}
 		}
 		if let [_, of, rest @ ..] = items {
@@ -898,11 +1144,16 @@ impl Lowering {
 		}
 		let is_call = call_name(items, bracket, separator).is_some();
 		// `(sort xs)` is `sort xs` in parentheses
-		let is_prefix = matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
+		let is_prefix =
+			matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
 		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
 		// (a bare word that names no variable keeps the list data: `[first last]`)
-		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadowed.contains(name));
-		let is_element = *bracket == Bracket::Square && *separator == Separator::Space && items.len() == arity(word) + 1 && items[1..].iter().all(is_value);
+		let is_value =
+			|argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadowed.contains(name));
+		let is_element = *bracket == Bracket::Square
+			&& *separator == Separator::Space
+			&& items.len() == arity(word) + 1
+			&& items[1..].iter().all(is_value);
 		if is_element && !is_call {
 			let element = self.call(word, &items[0], items[1..].to_vec(), false);
 			return Some(Node::List(vec![element], Bracket::Square, Separator::None));
@@ -916,7 +1167,9 @@ impl Lowering {
 	/// `for k in m` walks the keys of a map, as in Python; `for k, v in m` and `for (k, v) in m` bind each value too:
 	/// `for k in map_keys(m) {v = m[k]; …}`
 	fn for_over_map(&self, items: &[Node]) -> Option<Node> {
-		let [keyword, names, in_word, rest @ ..] = items else { return None };
+		let [keyword, names, in_word, rest @ ..] = items else {
+			return None;
+		};
 		if !keyword.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 			return None;
 		}
@@ -932,7 +1185,13 @@ impl Lowering {
 		let (key, value) = match names.drop_meta() {
 			Node::Symbol(_) => (names.clone(), None),
 			Node::List(parts, Bracket::Round | Bracket::None, _) => match parts.as_slice() {
-				[key, value] if [key, value].iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => (key.clone(), Some(value.clone())),
+				[key, value]
+					if [key, value]
+						.iter()
+						.all(|name| matches!(name.drop_meta(), Node::Symbol(_))) =>
+				{
+					(key.clone(), Some(value.clone()))
+				}
 				_ => return None,
 			},
 			_ => return None,
@@ -940,36 +1199,66 @@ impl Lowering {
 		let body = match value {
 			None => body,
 			Some(value) => {
-				let lookup = Node::Key(Box::new(value), Op::Assign, Box::new(crate::warp_parser::subscript(map.clone(), key.clone())));
-				Node::List([vec![lookup], crate::for_loop::block_items(&body)].concat(), Bracket::Curly, Separator::Semicolon)
+				let lookup = Node::Key(
+					Box::new(value),
+					Op::Assign,
+					Box::new(crate::warp_parser::subscript(map.clone(), key.clone())),
+				);
+				Node::List(
+					[vec![lookup], crate::for_loop::block_items(&body)].concat(),
+					Bracket::Curly,
+					Separator::Semicolon,
+				)
 			}
 		};
 		let keys = self.call(MAP_KEYS, keyword, vec![map], false);
-		Some(Node::List(vec![keyword.clone(), key, in_word.clone(), keys, body], Bracket::None, Separator::Space))
+		Some(Node::List(
+			vec![keyword.clone(), key, in_word.clone(), keys, body],
+			Bracket::None,
+			Separator::Space,
+		))
 	}
 
 	/// `square 3 + square(4)`, a braceless call of a user function whose argument holds an operator, reads as
 	/// square(3 + square(4)); P68 (user): the reading stays, with a got-it warning naming both readings
 	fn ask_braceless_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Result<(), Node> {
 		let [function, argument] = items else { return Ok(()) };
-		let Node::Symbol(name) = function.drop_meta() else { return Ok(()) };
-		let Node::Key(left, op, right) = argument.drop_meta() else { return Ok(()) };
-		if *bracket != Bracket::None || *separator != Separator::Space || !self.context.user_functions.contains_key(name)
-			|| !op.is_arithmetic() || matches!(left.drop_meta(), Node::Empty) {
+		let Node::Symbol(name) = function.drop_meta() else {
+			return Ok(());
+		};
+		let Node::Key(left, op, right) = argument.drop_meta() else {
+			return Ok(());
+		};
+		if *bracket != Bracket::None
+			|| *separator != Separator::Space
+			|| !self.context.user_functions.contains_key(name)
+			|| !op.is_arithmetic()
+			|| matches!(left.drop_meta(), Node::Empty)
+		{
 			return Ok(());
 		}
 		let (left, right) = (call_text(left), call_text(right));
 		let whole = format!("{name}({left} {op} {right})");
 		let first = format!("{name}({left}) {op} {right}");
-		let question = crate::diagnostic::Ask::new(BRACELESS_ARGUMENT_TOPIC, format!("`{name} {left} {op} {right}` is {whole}, not {first}"),
-			vec![crate::diagnostic::reading("the whole expression", &whole), crate::diagnostic::reading("only the first operand", &first)],
-			crate::diagnostic::Fallback::Warning).written(&format!("{name} {left} {op} {right}")).at_node(argument);
+		let question = crate::diagnostic::Ask::new(
+			BRACELESS_ARGUMENT_TOPIC,
+			format!("`{name} {left} {op} {right}` is {whole}, not {first}"),
+			vec![
+				crate::diagnostic::reading("the whole expression", &whole),
+				crate::diagnostic::reading("only the first operand", &first),
+			],
+			crate::diagnostic::Fallback::Warning,
+		)
+		.written(&format!("{name} {left} {op} {right}"))
+		.at_node(argument);
 		crate::diagnostic::ask(&question).map(|_| ())
 	}
 
 	/// `x in xs`: whether a map has the key x or a list the element x; `byte in t` and `"äb" in bytes` count text units
 	fn membership(&self, items: &[Node]) -> Option<Node> {
-		let [element, in_word, collection] = items else { return None };
+		let [element, in_word, collection] = items else {
+			return None;
+		};
 		let names_unit = |side: &Node| match side.drop_meta() {
 			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
 			other => crate::analyzer::text_unit(&other.name()).is_some(),
@@ -977,15 +1266,26 @@ impl Lowering {
 		if !in_word.is_symbol(IN_WORD) || names_unit(element) || names_unit(collection) {
 			return None;
 		}
-		Some(self.call(COLLECTION_POSITION, in_word, vec![collection.clone(), element.clone()], false))
+		Some(self.call(
+			COLLECTION_POSITION,
+			in_word,
+			vec![collection.clone(), element.clone()],
+			false,
+		))
 	}
 
 	/// `xs contains x`, `xs has x`, `xs includes x`: the method `xs.contains(x)` written between its two values, unless
 	/// the program defines the word
 	fn containment(&self, items: &[Node]) -> Option<Node> {
-		let [collection, word, element] = items else { return None };
-		let Node::Symbol(name) = word.drop_meta() else { return None };
-		let canonical = self.library_word_for(name, 2).filter(|canonical| *canonical == COLLECTION_CONTAINS)?;
+		let [collection, word, element] = items else {
+			return None;
+		};
+		let Node::Symbol(name) = word.drop_meta() else {
+			return None;
+		};
+		let canonical = self
+			.library_word_for(name, 2)
+			.filter(|canonical| *canonical == COLLECTION_CONTAINS)?;
 		Some(self.call(canonical, word, vec![collection.clone(), element.clone()], false))
 	}
 
@@ -997,45 +1297,76 @@ impl Lowering {
 		}
 		let (word_node, arguments) = match method.drop_meta() {
 			Node::Symbol(_) => (method, vec![]),
-			Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => (&items[0], items[1..].to_vec()),
+			Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+				(&items[0], items[1..].to_vec())
+			}
 			_ => return None,
 		};
-		let Node::Symbol(name) = word_node.drop_meta() else { return None };
+		let Node::Symbol(name) = word_node.drop_meta() else {
+			return None;
+		};
 		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
 			return Some(self.call(FROMKEYS, word_node, arguments, false));
 		}
 		let has_arguments = !arguments.is_empty();
 		let literal = self.object_literal(receiver);
-		let is_field = literal.as_ref().and_then(object_entries).is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
+		let is_field = literal
+			.as_ref()
+			.and_then(object_entries)
+			.is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
 		if is_field && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
 		// `x.chars` stays the count of characters; `chars x`, `chars(x)` and the call `x.chars()` are the list
 		let is_called = matches!(method.drop_meta(), Node::List(..));
-		if let Some(word) = self.library_word_for(name, arguments.len() + 1).filter(|_| is_called || counting_method(name, &self.context).is_none()) {
+		if let Some(word) = self
+			.library_word_for(name, arguments.len() + 1)
+			.filter(|_| is_called || counting_method(name, &self.context).is_none())
+		{
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
 		// `x.square` and `x.add(y)` call the user function with the receiver as first argument; `l.start` of an object
 		// with a field start reads the field, even beside a function start (`start(l) := l.start`)
-		let reads_declared_field = !is_called && self.instances.is_declared_field(name) && (self.is_parameter(receiver) || self.instances.shape(receiver).is_some());
-		let reads_declared_field = reads_declared_field || (!is_called && self.reads_own_parameter_field(receiver, name));
+		let reads_declared_field = !is_called
+			&& self.instances.is_declared_field(name)
+			&& (self.is_parameter(receiver) || self.instances.shape(receiver).is_some());
+		let reads_declared_field =
+			reads_declared_field || (!is_called && self.reads_own_parameter_field(receiver, name));
 		if reads_declared_field {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
+		if self
+			.context
+			.user_functions
+			.get(name)
+			.is_some_and(|function| !function.params.is_empty())
+		{
 			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
 			return Some(Node::List(call, Bracket::Round, Separator::None));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
 		// only the common conversions (not `e.text`, a common field); a counting word stays a count (`xs.number()`)
-		let is_type_word_call = is_called && crate::analyzer::type_word_kind(name).is_some() && counting_method(name, &self.context).is_none();
+		let is_type_word_call = is_called
+			&& crate::analyzer::type_word_kind(name).is_some()
+			&& counting_method(name, &self.context).is_none();
 		let is_conversion = CONVERSION_METHODS.contains(&name.as_str()) || is_type_word_call;
 		if is_conversion && arguments.is_empty() && !self.instances.is_declared_field(name) {
-			return Some(Node::List(vec![word_node.clone(), receiver.clone()], Bracket::Round, Separator::None));
+			return Some(Node::List(
+				vec![word_node.clone(), receiver.clone()],
+				Bracket::Round,
+				Separator::None,
+			));
 		}
-		let is_known = counting_method(name, &self.context).is_some() || is_list_mutating_method(name) || self.context.user_functions.contains_key(name);
-		let is_call_result = matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
-		let is_object = literal.is_some() || is_field_lookup(receiver) || self.is_parameter(receiver) || is_call_result || self.instances.is_declared_field(name);
+		let is_known = counting_method(name, &self.context).is_some()
+			|| is_list_mutating_method(name)
+			|| self.context.user_functions.contains_key(name);
+		let is_call_result =
+			matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
+		let is_object = literal.is_some()
+			|| is_field_lookup(receiver)
+			|| self.is_parameter(receiver)
+			|| is_call_result
+			|| self.instances.is_declared_field(name);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
@@ -1046,10 +1377,18 @@ impl Lowering {
 			other => other,
 		};
 		let may_hold_object = match variable {
-			Node::Symbol(variable) => !self.plain.contains(variable) && !self.context.user_functions.contains_key(variable),
+			Node::Symbol(variable) => {
+				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
+			}
 			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call), or a parenthesized object `({a:1}).a`
-			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => true,
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => matches!(items[0].drop_meta(), Node::List(_, Bracket::Curly, _)),
+			Node::List(items, Bracket::Round, Separator::None)
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
+			{
+				true
+			}
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => {
+				matches!(items[0].drop_meta(), Node::List(_, Bracket::Curly, _))
+			}
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		};
@@ -1058,9 +1397,16 @@ impl Lowering {
 		}
 		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
 		if name == crate::type_tests::TYPE_WORD && !has_arguments {
-			return Some(Node::List(vec![word_node.clone(), receiver.clone()], Bracket::Round, Separator::None));
+			return Some(Node::List(
+				vec![word_node.clone(), receiver.clone()],
+				Bracket::Round,
+				Separator::None,
+			));
 		}
-		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
+		let is_value = matches!(
+			receiver.drop_meta(),
+			Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _)
+		);
 		let call = key(receiver.clone(), Op::Dot, method.clone());
 		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
 	}
@@ -1069,7 +1415,9 @@ impl Lowering {
 	/// (`p.b.c = 4` is `p = field_with(p, "b", field_with(p.b, "c", 4))`), an element on the way is stored back
 	/// (`bags#1.n = 5` is `bags#1 = field_with(bags#1, "n", 5)`)
 	fn field_assignment(&self, target: &Node, value: &Node) -> Option<Node> {
-		let Node::Key(_, Op::Hash, index) = target.drop_meta() else { return None };
+		let Node::Key(_, Op::Hash, index) = target.drop_meta() else {
+			return None;
+		};
 		subscript_field(index)?;
 		self.stored(target, value.clone())
 	}
@@ -1077,11 +1425,19 @@ impl Lowering {
 	/// `a = p.x = 5` is `p.x = 5; a = p.x`: the value of a field assignment is the field's new value, not the object
 	/// field_with gives (card chain-field)
 	fn chained_field_assignment(&self, outer: &Node, value: &Node) -> Option<Node> {
-		let Node::Key(inner, Op::Assign, _) = value.drop_meta() else { return None };
-		let Node::Key(_, Op::Hash, index) = self.expand(inner.as_ref().clone()).drop_meta().clone() else { return None };
+		let Node::Key(inner, Op::Assign, _) = value.drop_meta() else {
+			return None;
+		};
+		let Node::Key(_, Op::Hash, index) = self.expand(inner.as_ref().clone()).drop_meta().clone() else {
+			return None;
+		};
 		subscript_field(&index)?;
 		let read_back = Node::Key(Box::new(outer.clone()), Op::Assign, inner.clone());
-		Some(self.expand(Node::List(vec![value.clone(), read_back], Bracket::None, Separator::Semicolon)))
+		Some(self.expand(Node::List(
+			vec![value.clone(), read_back],
+			Bracket::None,
+			Separator::Semicolon,
+		)))
 	}
 
 	/// `place = value` for any place: a variable, an element `xs#i` of one (as written), a field (field_with on its
@@ -1101,7 +1457,11 @@ impl Lowering {
 		}
 		let held = Node::Symbol(format!("{PLACE_TEMPORARY}{}", self.next_temporary()));
 		let element = Node::Key(Box::new(held.clone()), Op::Hash, index.clone());
-		let statements = vec![assigned(&held, base.as_ref().clone()), assigned(&element, value), self.stored(base, held)?];
+		let statements = vec![
+			assigned(&held, base.as_ref().clone()),
+			assigned(&element, value),
+			self.stored(base, held)?,
+		];
 		Some(Node::List(statements, Bracket::None, Separator::Semicolon))
 	}
 
@@ -1116,13 +1476,22 @@ impl Lowering {
 		};
 		let number = self.next_temporary();
 		let program = named_apart(parse(&format!("({SAFE_PREFIX}value={RECEIVER_PLACEHOLDER}; if {SAFE_PREFIX}value == ø then ø else {LOOKUP_PLACEHOLDER})")), SAFE_PREFIX, SAFE_BASE, number);
-		let lookup = field_lookup(&Node::Symbol(temporary_name(&[SAFE_BASE, "value", &number.to_string()])), name, &word);
-		substitute(substitute(program, RECEIVER_PLACEHOLDER, &receiver), LOOKUP_PLACEHOLDER, &lookup)
+		let lookup = field_lookup(
+			&Node::Symbol(temporary_name(&[SAFE_BASE, "value", &number.to_string()])),
+			name,
+			&word,
+		);
+		substitute(
+			substitute(program, RECEIVER_PLACEHOLDER, &receiver),
+			LOOKUP_PLACEHOLDER,
+			&lookup,
+		)
 	}
 
 	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object
 	fn object_literal(&self, node: &Node) -> Option<Node> {
-		self.written_object(node).or_else(|| self.instances.fields_template(node))
+		self.written_object(node)
+			.or_else(|| self.instances.fields_template(node))
 	}
 
 	fn written_object(&self, node: &Node) -> Option<Node> {
@@ -1130,7 +1499,9 @@ impl Lowering {
 			Node::Symbol(name) => self.objects.get(name).cloned(),
 			Node::Key(base, Op::Hash, index) => {
 				let field = field_name(crate::warp_parser::subscript_key(index)?)?;
-				let (_, value) = object_entries(&self.object_literal(base)?)?.into_iter().find(|(name, _)| *name == field)?;
+				let (_, value) = object_entries(&self.object_literal(base)?)?
+					.into_iter()
+					.find(|(name, _)| *name == field)?;
 				object_entries(&value).map(|_| value)
 			}
 			other => object_entries(other).map(|_| other.clone()),
@@ -1140,7 +1511,9 @@ impl Lowering {
 	/// `word of object`, `c of b of p`: the lookup of a field, when the object is one; `None` for anything else
 	fn of_lookup(&self, items: &[Node]) -> Option<Node> {
 		let [word_node, of, rest @ ..] = items else { return None };
-		let Node::Symbol(name) = word_node.drop_meta() else { return None };
+		let Node::Symbol(name) = word_node.drop_meta() else {
+			return None;
+		};
 		if !is_of(of) || rest.is_empty() {
 			return None;
 		}
@@ -1150,7 +1523,10 @@ impl Lowering {
 			_ => return None,
 		};
 		let literal = self.object_literal(&object);
-		let is_field = literal.as_ref().and_then(object_entries).is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
+		let is_field = literal
+			.as_ref()
+			.and_then(object_entries)
+			.is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
 		let is_object = literal.is_some() || is_field_lookup(&object);
 		let is_other_word = self.library_word(name).is_some() || counting_method(name, &self.context).is_some();
 		(is_object && (is_field || !is_other_word)).then(|| field_lookup(&object, name, word_node))
@@ -1158,14 +1534,22 @@ impl Lowering {
 
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
-		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
+		let mut arguments = if is_prefix {
+			self.merged_prefix_arguments(word, arguments)
+		} else {
+			arguments
+		};
 		let wanted = arity(word);
-		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
+		let optional = OPTIONAL_ARGUMENTS
+			.iter()
+			.find(|(name, _)| *name == word)
+			.map_or(0, |(_, optional)| *optional);
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
 			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
-		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False) {
+		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False)
+		{
 			return copy_call(receiver.clone(), shallow_flag(shallow));
 		}
 		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
@@ -1174,17 +1558,35 @@ impl Lowering {
 		let fewest = wanted - crate::modules::prelude_word_defaults(word);
 		if !(fewest..=wanted).contains(&arguments.len()) && !checks_itself {
 			let plural = if wanted == 1 { "" } else { "s" };
-			let counts = if fewest == wanted { wanted.to_string() } else { format!("{fewest} to {wanted}") };
-			let call = Node::List([vec![head.clone()], arguments.clone()].concat(), Bracket::Round, Separator::None);
-			return Diagnostic::at(&call, format!("{word} takes {counts} argument{plural}, got {}", arguments.len())).into_error();
+			let counts = if fewest == wanted {
+				wanted.to_string()
+			} else {
+				format!("{fewest} to {wanted}")
+			};
+			let call = Node::List(
+				[vec![head.clone()], arguments.clone()].concat(),
+				Bracket::Round,
+				Separator::None,
+			);
+			return Diagnostic::at(
+				&call,
+				format!("{word} takes {counts} argument{plural}, got {}", arguments.len()),
+			)
+			.into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM_WORD => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
-			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, crate::modules::prelude_arguments(word, arguments)),
+			None if let Some(qualified) = crate::modules::prelude_name(word) => {
+				call(&qualified, crate::modules::prelude_arguments(word, arguments))
+			}
 			None => {
-				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { symbol(word) };
+				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) {
+					head.clone()
+				} else {
+					symbol(word)
+				};
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
 			}
 		}
@@ -1199,7 +1601,9 @@ impl Lowering {
 		}
 		let (kept, rest) = arguments.split_at(wanted - 1);
 		let heads_with_word = matches!(rest[0].drop_meta(), Node::Symbol(name) if self.library_word(name).is_some());
-		let phrase = heads_with_word.then(|| self.word_call(rest, &Bracket::None, &Separator::Space)).flatten();
+		let phrase = heads_with_word
+			.then(|| self.word_call(rest, &Bracket::None, &Separator::Space))
+			.flatten();
 		let phrase = phrase.unwrap_or_else(|| Node::List(rest.to_vec(), Bracket::None, Separator::Space));
 		[kept.to_vec(), vec![phrase]].concat()
 	}
@@ -1263,31 +1667,59 @@ impl Lowering {
 	/// a message the error says the assertion failed
 	fn lower_assert(&self, condition: Node, message: Node) -> Node {
 		let message = match message.drop_meta() {
-			Node::Empty => Node::Text(format!("{}: {}", crate::warp_parser::ASSERTION_FAILED, condition.serialize())),
+			Node::Empty => Node::Text(format!(
+				"{}: {}",
+				crate::warp_parser::ASSERTION_FAILED,
+				condition.serialize()
+			)),
 			_ => message,
 		};
 		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;
 		self.instantiate_template(
-			&format!("(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})", crate::wasm_emitter::text_builtins::RAISE),
-			&[(condition_placeholder, &condition), (TRY_FALLBACK_PLACEHOLDER, &message)],
+			&format!(
+				"(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})",
+				crate::wasm_emitter::text_builtins::RAISE
+			),
+			&[
+				(condition_placeholder, &condition),
+				(TRY_FALLBACK_PLACEHOLDER, &message),
+			],
 		)
 	}
 
 	/// The template of an expanded word with the receiver (held once in a temporary) and the further arguments in place
 	fn expanded(&self, template: &str, arguments: Vec<Node>) -> Node {
-		let program = named_apart(parse(&format!("({TEMPORARY}={RECEIVER_PLACEHOLDER}; {template})")), HIDDEN_PREFIX, WORD_BASE, self.next_temporary());
-		arguments.iter().enumerate().fold(program, |program, (index, argument)| {
-			let placeholder = if index == 0 { RECEIVER_PLACEHOLDER.to_string() } else { format!("{RECEIVER_PLACEHOLDER}_{}", index + 1) };
-			substitute(program, &placeholder, argument)
-		})
+		let program = named_apart(
+			parse(&format!("({TEMPORARY}={RECEIVER_PLACEHOLDER}; {template})")),
+			HIDDEN_PREFIX,
+			WORD_BASE,
+			self.next_temporary(),
+		);
+		arguments
+			.iter()
+			.enumerate()
+			.fold(program, |program, (index, argument)| {
+				let placeholder = if index == 0 {
+					RECEIVER_PLACEHOLDER.to_string()
+				} else {
+					format!("{RECEIVER_PLACEHOLDER}_{}", index + 1)
+				};
+				substitute(program, &placeholder, argument)
+			})
 	}
 }
 
 /// `(tmp = xs; loop)` → `(tmp = xs; list_sum(tmp, loop))`
 fn dispatched_sum(expanded: Node) -> Node {
-	let Node::List(mut items, bracket, separator) = expanded.drop_meta().clone() else { return expanded };
-	let [assignment, sum_loop] = items.as_mut_slice() else { return Node::List(items, bracket, separator) };
-	let Node::Key(temporary, Op::Assign, _) = assignment.drop_meta() else { return Node::List(items, bracket, separator) };
+	let Node::List(mut items, bracket, separator) = expanded.drop_meta().clone() else {
+		return expanded;
+	};
+	let [assignment, sum_loop] = items.as_mut_slice() else {
+		return Node::List(items, bracket, separator);
+	};
+	let Node::Key(temporary, Op::Assign, _) = assignment.drop_meta() else {
+		return Node::List(items, bracket, separator);
+	};
 	let list = temporary.as_ref().clone();
 	*sum_loop = call(LIST_SUM, vec![list, sum_loop.clone()]);
 	Node::List(items, bracket, separator)
@@ -1301,8 +1733,13 @@ fn is_comparison(node: &Node) -> bool {
 /// The leftmost operand of a comparison chain, replaced: `"a" == b and c` → `f("a") == b and c`
 fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
 	match node {
-		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => Node::Key(Box::new(with_first_comparand(*left, replace)), op, right),
-		Node::Meta { node, data } if is_comparison(&node) => Node::Meta { node: Box::new(with_first_comparand(*node, replace)), data },
+		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => {
+			Node::Key(Box::new(with_first_comparand(*left, replace)), op, right)
+		}
+		Node::Meta { node, data } if is_comparison(&node) => Node::Meta {
+			node: Box::new(with_first_comparand(*node, replace)),
+			data,
+		},
 		operand => replace(operand),
 	}
 }
@@ -1316,7 +1753,9 @@ pub(crate) fn temporary_name(parts: &[&str]) -> String {
 /// A parsed template's temporaries named apart: `prefix_part` becomes `base·part·number`
 pub(crate) fn named_apart(node: Node, prefix: &str, base: &str, number: usize) -> Node {
 	match node {
-		Node::Symbol(name) if name.starts_with(prefix) => Node::Symbol(temporary_name(&[base, &name[prefix.len()..], &number.to_string()])),
+		Node::Symbol(name) if name.starts_with(prefix) => {
+			Node::Symbol(temporary_name(&[base, &name[prefix.len()..], &number.to_string()]))
+		}
 		other => other.map_children(|child| named_apart(child, prefix, base, number)),
 	}
 }
@@ -1336,8 +1775,14 @@ fn is_float_zero(node: &Node) -> bool {
 /// An operand as written in a warning: a call `f 4` / `f(4)` as f(4), anything else as normalize writes it
 fn call_text(node: &Node) -> String {
 	match node.drop_meta() {
-		Node::List(items, Bracket::None | Bracket::Round, _) if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(_)) => {
-			format!("{}({})", items[0].drop_meta().name(), items[1..].iter().map(call_text).collect::<Vec<_>>().join(", "))
+		Node::List(items, Bracket::None | Bracket::Round, _)
+			if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(_)) =>
+		{
+			format!(
+				"{}({})",
+				items[0].drop_meta().name(),
+				items[1..].iter().map(call_text).collect::<Vec<_>>().join(", ")
+			)
 		}
 		_ => crate::normalize::operand_text(node),
 	}
@@ -1360,11 +1805,15 @@ fn keyword_definition_head(items: &[Node]) -> Option<&[Node]> {
 		},
 		_ => return None,
 	};
-	let Node::Symbol(keyword) = keyword.drop_meta() else { return None };
+	let Node::Symbol(keyword) = keyword.drop_meta() else {
+		return None;
+	};
 	if !crate::operators::is_function_keyword(keyword) {
 		return None;
 	}
-	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
 	Some(head_items)
 }
 
@@ -1374,11 +1823,15 @@ fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		other => vec![other.clone()],
 	});
-	Some(parameters.filter_map(|parameter| match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, Op::Assign, _) => Some(name.name()),
-		_ => None,
-	}).collect())
+	Some(
+		parameters
+			.filter_map(|parameter| match parameter.drop_meta() {
+				Node::Symbol(name) => Some(name.clone()),
+				Node::Key(name, Op::Assign, _) => Some(name.name()),
+				_ => None,
+			})
+			.collect(),
+	)
 }
 
 /// The word `of` (`first of xs`, `name of person`)

@@ -14,23 +14,39 @@ pub(super) fn inline(program: &Node) -> Result<Node, String> {
 	let with_modules = inline_modules(program)?;
 	let parts = statements(&with_modules);
 	let own: Vec<&Node> = parts.to_vec();
-	let words: Vec<Node> = LIBRARY_WORDS.iter().filter(|(word, _)| own.iter().any(|statement| calls(statement, word)) && !defines(&own, word))
-		.flat_map(|(_, source)| statements(&crate::warp_parser::parse(source)).into_iter().cloned().collect::<Vec<_>>()).collect();
+	let words: Vec<Node> = LIBRARY_WORDS
+		.iter()
+		.filter(|(word, _)| own.iter().any(|statement| calls(statement, word)) && !defines(&own, word))
+		.flat_map(|(_, source)| {
+			statements(&crate::warp_parser::parse(source))
+				.into_iter()
+				.cloned()
+				.collect::<Vec<_>>()
+		})
+		.collect();
 	if words.is_empty() {
 		return Ok(with_modules);
 	}
-	Ok(Node::List(words.into_iter().chain(parts.into_iter().cloned()).collect(), Bracket::None, Separator::Semicolon))
+	Ok(Node::List(
+		words.into_iter().chain(parts.into_iter().cloned()).collect(),
+		Bracket::None,
+		Separator::Semicolon,
+	))
 }
 
 /// whether node calls the word: `sum xs`, `sum(xs)`
 fn calls(node: &Node, word: &str) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::List(items, _, _) if items.len() > 1 && items[0].is_symbol(word)));
+	node.visit(&mut |part| {
+		found |= matches!(part, Node::List(items, _, _) if items.len() > 1 && items[0].is_symbol(word))
+	});
 	found
 }
 
 fn defines(program: &[&Node], word: &str) -> bool {
-	program.iter().any(|statement| function_definition(statement).is_some_and(|(name, _, _)| name == word))
+	program
+		.iter()
+		.any(|statement| function_definition(statement).is_some_and(|(name, _, _)| name == word))
 }
 
 fn inline_modules(program: &Node) -> Result<Node, String> {
@@ -38,7 +54,11 @@ fn inline_modules(program: &Node) -> Result<Node, String> {
 	if !parts.iter().any(|statement| used_module(statement).is_some()) {
 		return Ok(program.clone());
 	}
-	let own: Vec<&Node> = parts.iter().copied().filter(|statement| used_module(statement).is_none()).collect();
+	let own: Vec<&Node> = parts
+		.iter()
+		.copied()
+		.filter(|statement| used_module(statement).is_none())
+		.collect();
 	let mut inlined = vec![];
 	for statement in &parts {
 		match used_module(statement) {
@@ -55,17 +75,24 @@ fn inline_modules(program: &Node) -> Result<Node, String> {
 /// `use list`: the module's name
 fn used_module(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && USE_KEYWORDS.iter().any(|keyword| items[0].is_symbol(keyword)) => match items[1].drop_meta() {
-			Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
-			_ => None,
-		},
+		Node::List(items, _, _)
+			if items.len() == 2 && USE_KEYWORDS.iter().any(|keyword| items[0].is_symbol(keyword)) =>
+		{
+			match items[1].drop_meta() {
+				Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
+				_ => None,
+			}
+		}
 		_ => None,
 	}
 }
 
 /// The module's definitions the program calls, transitively, in the module's order; not the ones it defines itself
 fn needed_definitions(module: &Node, program: &[&Node]) -> Vec<Node> {
-	let definitions: Vec<(&str, &Node)> = statements(module).into_iter().filter_map(|statement| function_definition(statement).map(|(name, _, _)| (name, statement))).collect();
+	let definitions: Vec<(&str, &Node)> = statements(module)
+		.into_iter()
+		.filter_map(|statement| function_definition(statement).map(|(name, _, _)| (name, statement)))
+		.collect();
 	let mut needed: Vec<&str> = vec![];
 	let mut callers: Vec<&Node> = program.to_vec();
 	while let Some(caller) = callers.pop() {
@@ -76,5 +103,9 @@ fn needed_definitions(module: &Node, program: &[&Node]) -> Vec<Node> {
 			}
 		}
 	}
-	definitions.into_iter().filter(|(name, _)| needed.contains(name)).map(|(_, definition)| definition.clone()).collect()
+	definitions
+		.into_iter()
+		.filter(|(name, _)| needed.contains(name))
+		.map(|(_, definition)| definition.clone())
+		.collect()
 }

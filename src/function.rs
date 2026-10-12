@@ -17,7 +17,7 @@ use wasm_encoder::ValType;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ABI {
 	#[default]
-	Native,            // Standard WASM calling convention
+	Native, // Standard WASM calling convention
 	Warp,              // Multi-value return tuples (value, type)
 	WarpSmartPointers, // Smart pointers for multi-value compatibility
 	Canonical,         // WIT canonical ABI
@@ -70,7 +70,7 @@ impl Arg {
 /// Function type signature with parameters and return types
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Signature {
-	pub type_index: i32,         // Index in WASM type section (-1 if not assigned)
+	pub type_index: i32, // Index in WASM type section (-1 if not assigned)
 	pub abi: ABI,
 	pub parameters: Vec<Arg>,    // Named parameters
 	pub return_types: Vec<Kind>, // Return type(s) - WASM supports multi-value
@@ -147,14 +147,12 @@ impl Signature {
 
 	/// Format signature for display
 	pub fn format(&self) -> String {
-		let params: Vec<String> = self.parameters
+		let params: Vec<String> = self
+			.parameters
 			.iter()
 			.map(|p| format!("{}: {:?}", p.name, p.kind))
 			.collect();
-		let returns: Vec<String> = self.return_types
-			.iter()
-			.map(|k| format!("{:?}", k))
-			.collect();
+		let returns: Vec<String> = self.return_types.iter().map(|k| format!("{:?}", k)).collect();
 		if returns.is_empty() {
 			format!("({})", params.join(", "))
 		} else {
@@ -173,32 +171,32 @@ impl std::fmt::Display for Signature {
 #[derive(Debug, Clone, Default)]
 pub struct Function {
 	// Indices
-	pub code_index: i32,     // Index in code section (-1 if not assigned)
-	pub call_index: i32,     // Index for call instruction (code_index + import_count)
-	pub type_index: i32,     // Index in type section
+	pub code_index: i32, // Index in code section (-1 if not assigned)
+	pub call_index: i32, // Index for call instruction (code_index + import_count)
+	pub type_index: i32, // Index in type section
 
 	// Names
 	pub name: String,
 	pub export_name: Option<String>,
-	pub fullname: String,    // Original/mangled name
+	pub fullname: String, // Original/mangled name
 
 	// Signature
 	pub signature: Signature,
 
 	// Body
 	pub body: Option<Box<Node>>,
-	pub code: Vec<u8>,       // Compiled WASM bytecode
+	pub code: Vec<u8>, // Compiled WASM bytecode
 
 	// Flags
-	pub is_import: bool,     // Not in code section, but in import section
-	pub is_declared: bool,   // Exported or called
-	pub is_host: bool,       // Host function (subset of imports)
-	pub is_builtin: bool,    // Hardcoded builtin function
-	pub is_runtime: bool,    // Runtime library function
-	pub is_handled: bool,    // Already emitted
-	pub is_used: bool,       // Called somewhere
-	pub is_polymorphic: bool, // Has multiple type variants
-	pub is_ffi: bool,        // Foreign function interface import
+	pub is_import: bool,             // Not in code section, but in import section
+	pub is_declared: bool,           // Exported or called
+	pub is_host: bool,               // Host function (subset of imports)
+	pub is_builtin: bool,            // Hardcoded builtin function
+	pub is_runtime: bool,            // Runtime library function
+	pub is_handled: bool,            // Already emitted
+	pub is_used: bool,               // Called somewhere
+	pub is_polymorphic: bool,        // Has multiple type variants
+	pub is_ffi: bool,                // Foreign function interface import
 	pub ffi_library: Option<String>, // FFI library name
 
 	// Polymorphism
@@ -391,7 +389,8 @@ impl std::ops::Index<&str> for FunctionRegistry {
 	type Output = Function;
 
 	fn index(&self, name: &str) -> &Self::Output {
-		self.get(name).unwrap_or_else(|| panic!("Function '{}' not found", name))
+		self.get(name)
+			.unwrap_or_else(|| panic!("Function '{}' not found", name))
 	}
 }
 
@@ -440,7 +439,7 @@ mod tests {
 				Signature::new()
 					.param("a", Kind::Int)
 					.param("b", Kind::Int)
-					.returns(Kind::Int)
+					.returns(Kind::Int),
 			)
 			.exported("add");
 
@@ -474,18 +473,17 @@ mod tests {
 	fn test_function_registry() {
 		let mut reg = FunctionRegistry::new();
 
-		let fetch = Function::host("fetch")
-			.with_signature(Signature::new()
-				.param("url", Kind::Text)
-				.returns(Kind::Text));
+		let fetch =
+			Function::host("fetch").with_signature(Signature::new().param("url", Kind::Text).returns(Kind::Text));
 		let fetch_idx = reg.register(fetch);
 		assert_eq!(fetch_idx, 0);
 
-		let add = Function::new("add")
-			.with_signature(Signature::new()
+		let add = Function::new("add").with_signature(
+			Signature::new()
 				.param("a", Kind::Int)
 				.param("b", Kind::Int)
-				.returns(Kind::Int));
+				.returns(Kind::Int),
+		);
 		let add_idx = reg.register(add);
 		assert_eq!(add_idx, 1); // 1 import + 0 code = 1
 

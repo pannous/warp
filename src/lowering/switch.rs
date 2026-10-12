@@ -5,10 +5,10 @@
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
+use super::nodes::{call, children_rewritten, if_then, key, Counter};
 use super::words::COUNT_WORD;
-use super::nodes::{Counter, call, children_rewritten, if_then, key};
-use crate::node::{text, Bracket, Node, Separator};
 use crate::library_words::SLICE;
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::tuples::STARRED;
 
@@ -31,11 +31,18 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let context = crate::analyzer::function_definitions(&node);
-	let words: Vec<&str> = SWITCH_WORDS.into_iter().filter(|word| !context.user_functions.contains_key(*word)).collect();
+	let words: Vec<&str> = SWITCH_WORDS
+		.into_iter()
+		.filter(|word| !context.user_functions.contains_key(*word))
+		.collect();
 	if words.is_empty() {
 		return node;
 	}
-	Lowering { words, switches: Counter::default() }.expand(node)
+	Lowering {
+		words,
+		switches: Counter::default(),
+	}
+	.expand(node)
 }
 
 struct Lowering<'a> {
@@ -64,7 +71,11 @@ impl Lowering<'_> {
 
 	/// `f(switch 2 {1: 10 2: 20})` arrives as the call `f switch 2 {…}`: the three items one argument
 	fn with_switch_arguments(&self, items: Vec<Node>) -> Vec<Node> {
-		let Some(start) = (1..items.len().saturating_sub(2)).find(|&start| self.switch(&items[start..start + 3]).is_some()) else { return items };
+		let Some(start) =
+			(1..items.len().saturating_sub(2)).find(|&start| self.switch(&items[start..start + 3]).is_some())
+		else {
+			return items;
+		};
 		let switch = self.switch(&items[start..start + 3]).expect("found");
 		let rest = self.with_switch_arguments(items[start + 3..].to_vec());
 		items[..start].iter().cloned().chain([switch]).chain(rest).collect()
@@ -79,7 +90,9 @@ impl Lowering<'_> {
 			let switch = self.switch(&[head.clone(), subject.clone(), block.clone()])?;
 			return Some(with_leftmost(cases.clone(), switch));
 		}
-		let Node::Symbol(word) = head.drop_meta() else { return None };
+		let Node::Symbol(word) = head.drop_meta() else {
+			return None;
+		};
 		if !self.words.contains(&word.as_str()) {
 			return None;
 		}
@@ -107,10 +120,12 @@ impl Lowering<'_> {
 fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
 	match items {
 		[head, subject, cases] => Some((head, subject, cases)),
-		[pair, cases] if matches!(pair.drop_meta(), Node::List(words, _, _) if words.len() == 2) => match pair.drop_meta() {
-			Node::List(words, _, _) => Some((&words[0], &words[1], cases)),
-			_ => None,
-		},
+		[pair, cases] if matches!(pair.drop_meta(), Node::List(words, _, _) if words.len() == 2) => {
+			match pair.drop_meta() {
+				Node::List(words, _, _) => Some((&words[0], &words[1], cases)),
+				_ => None,
+			}
+		}
 		[head, juxtaposed] => match juxtaposed.drop_meta() {
 			Node::List(pair, _, _) if pair.len() == 2 => Some((head, &pair[0], &pair[1])),
 			_ => None,
@@ -130,7 +145,10 @@ fn leftmost(node: &Node) -> &Node {
 fn with_leftmost(node: Node, replacement: Node) -> Node {
 	match node {
 		Node::Key(left, op, right) => Node::Key(Box::new(with_leftmost(*left, replacement)), op, right),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_leftmost(*node, replacement)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_leftmost(*node, replacement)),
+			data,
+		},
 		_ => replacement,
 	}
 }
@@ -147,12 +165,17 @@ fn item(path: &Node, position: usize) -> Node {
 /// A rest in a pattern, with its name: `...rest` and `*rest` (parsed alike), `rest...`; `..` and `...` unnamed
 pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 	match part.drop_meta() {
-		Node::Symbol(name) => name.strip_prefix(STARRED).filter(|rest| !rest.is_empty()).map(|rest| Some(rest.to_string())),
-		Node::Key(start, Op::Range | Op::To, end) if matches!(end.drop_meta(), Node::Empty) => match start.drop_meta() {
-			Node::Empty => Some(None),
-			Node::Symbol(name) => Some(Some(name.clone())),
-			_ => None,
-		},
+		Node::Symbol(name) => name
+			.strip_prefix(STARRED)
+			.filter(|rest| !rest.is_empty())
+			.map(|rest| Some(rest.to_string())),
+		Node::Key(start, Op::Range | Op::To, end) if matches!(end.drop_meta(), Node::Empty) => {
+			match start.drop_meta() {
+				Node::Empty => Some(None),
+				Node::Symbol(name) => Some(Some(name.clone())),
+				_ => None,
+			}
+		}
 		_ => None,
 	}
 }
@@ -163,7 +186,11 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 		Node::List(items, Bracket::Square, _) => {
 			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
 			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
-				tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
+				tests.push(key(
+					call(COUNT_WORD, vec![path.clone()]),
+					Op::Eq,
+					Node::int(items.len() as i64),
+				));
 				for (index, part) in items.iter().enumerate() {
 					pattern_tests(part, item(&path, index + 1), tests, bindings);
 				}
@@ -181,7 +208,12 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 			for (index, part) in items.iter().enumerate() {
 				match index.cmp(&rest_index) {
 					std::cmp::Ordering::Less => pattern_tests(part, item(&path, index + 1), tests, bindings),
-					std::cmp::Ordering::Greater => pattern_tests(part, key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)), tests, bindings),
+					std::cmp::Ordering::Greater => pattern_tests(
+						part,
+						key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)),
+						tests,
+						bindings,
+					),
 					std::cmp::Ordering::Equal => {
 						if let Some(Some(name)) = rest_pattern(part) {
 							let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
@@ -194,7 +226,11 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 		Node::Key(name, Op::Colon, value) => {
 			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
-			tests.push(key(call(TEXT_WORD, vec![item(&path, 1)]), Op::Eq, Node::Text(name.name())));
+			tests.push(key(
+				call(TEXT_WORD, vec![item(&path, 1)]),
+				Op::Eq,
+				Node::Text(name.name()),
+			));
 			pattern_tests(value, item(&path, 2), tests, bindings);
 		}
 		Node::Symbol(name) if name == WILDCARD => {}
@@ -220,8 +256,15 @@ fn case_test(subject: &Node, case: Case) -> (Node, Node) {
 	if let Some(guard) = guard {
 		tests.push(sequence([bindings.clone(), vec![guard]].concat()));
 	}
-	let test = tests.into_iter().reduce(|all, test| key(all, Op::And, test)).unwrap_or(Node::True);
-	let body = if bindings.is_empty() { case.body } else { sequence([bindings, vec![case.body]].concat()) };
+	let test = tests
+		.into_iter()
+		.reduce(|all, test| key(all, Op::And, test))
+		.unwrap_or(Node::True);
+	let body = if bindings.is_empty() {
+		case.body
+	} else {
+		sequence([bindings, vec![case.body]].concat())
+	};
 	(test, body)
 }
 
@@ -229,7 +272,9 @@ fn case_test(subject: &Node, case: Case) -> (Node, Node) {
 fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
 	match case_key.drop_meta() {
 		Node::Key(condition, Op::Then, pattern) => match condition.drop_meta() {
-			Node::Key(empty, Op::If, guard) if matches!(empty.drop_meta(), Node::Empty) => (pattern.drop_meta().clone(), Some(guard.as_ref().clone())),
+			Node::Key(empty, Op::If, guard) if matches!(empty.drop_meta(), Node::Empty) => {
+				(pattern.drop_meta().clone(), Some(guard.as_ref().clone()))
+			}
 			_ => (case_key.clone(), None),
 		},
 		_ => (case_key.clone(), None),
@@ -252,7 +297,11 @@ fn subject_label(subject: &Node) -> String {
 		_ => String::new(),
 	};
 	let is_name = !written.is_empty() && written.chars().all(|c| c.is_alphanumeric() || c == '_');
-	if is_name { written } else { UNNAMED_SUBJECT.to_string() }
+	if is_name {
+		written
+	} else {
+		UNNAMED_SUBJECT.to_string()
+	}
 }
 
 /// `switch_no_case("label": value)`: the error names the subject as written and its runtime value
@@ -278,10 +327,16 @@ fn cases_of(block: &Node) -> Option<Vec<Case>> {
 /// `1: 10` is a Colon key; `1: x=5` parses as `(1:x)=5`, so the colon is found down the left spine of the assignment
 fn case_of(item: &Node) -> Option<Case> {
 	match item.drop_meta() {
-		Node::Key(key, Op::Colon, body) => Some(Case { key: key.as_ref().clone(), body: body.as_ref().clone() }),
+		Node::Key(key, Op::Colon, body) => Some(Case {
+			key: key.as_ref().clone(),
+			body: body.as_ref().clone(),
+		}),
 		Node::Key(left, op, right) => {
 			let Case { key, body } = case_of(left)?;
-			Some(Case { key, body: Node::Key(Box::new(body), *op, right.clone()) })
+			Some(Case {
+				key,
+				body: Node::Key(Box::new(body), *op, right.clone()),
+			})
 		}
 		_ => None,
 	}

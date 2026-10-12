@@ -1,9 +1,9 @@
 //! Newcomer syntax from Python/JS is eaten: it compiles to its intent, and a hint names the warp form
 //! (probes/sugar/cases.txt; decisions in notes/open_decisions.md)
-use crate::is;
 use crate::common::fails_with;
-use warp::*;
+use crate::is;
 use warp::node::strings;
+use warp::*;
 
 #[test]
 fn let_var_and_const_declare_inside_any_block() {
@@ -43,8 +43,14 @@ fn n_times_a_one_element_list_repeats_it() {
 	is!("x = 100 times [0]; x.length", 100);
 	is!("def f(n){ xs = n times [0]; xs#2=5; xs }; f(3)", ints(vec![0, 5, 0]));
 	// wiki/Footguns.md "Lists and arithmetic": Python repeats, NumPy multiplies, so `*` is an Ask; unanswered an error
-	fails_with("[0]*3", "type error: list * number: does `[0]*3` repeat the list or multiply each element? (too ambiguous to guess)");
-	fails_with("3*[1]", "`3 times [1]` for repeat the list or `[1].map(x => x*3)` for multiply each element");
+	fails_with(
+		"[0]*3",
+		"type error: list * number: does `[0]*3` repeat the list or multiply each element? (too ambiguous to guess)",
+	);
+	fails_with(
+		"3*[1]",
+		"`3 times [1]` for repeat the list or `[1].map(x => x*3)` for multiply each element",
+	);
 	fails_with("[1 2]*2", "too ambiguous to guess");
 	fails_with("xs=[1 2]; xs*2", "type error"); // a list variable: no Ask yet
 }
@@ -65,12 +71,24 @@ fn insert_never_guesses_the_argument_order() {
 	is!("pixel=[1 2 3]; pixel.insert(4); pixel", ints(vec![1, 2, 3, 4]));
 	is!("b=[]; b.insert(5, at: 0); b", ints(vec![5]));
 	// the kinds decide: the one Int is the position, in either order
-	is!("xs=[\"a\" \"b\"]; xs.insert(0, \"z\"); xs", strings(vec!["z", "a", "b"]));
-	is!("xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs", strings(vec!["a", "z", "b"]));
+	is!(
+		"xs=[\"a\" \"b\"]; xs.insert(0, \"z\"); xs",
+		strings(vec!["z", "a", "b"])
+	);
+	is!(
+		"xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs",
+		strings(vec!["a", "z", "b"])
+	);
 	// two Ints: Python `insert(i, x)` and warp `insert(x, i)` disagree (wiki/Footguns.md "Guessing intent")
 	// unanswered the Ask is an error naming both explicit forms
-	fails_with("xs=[1 2]; xs.insert(0, 4); xs", "does insert(0, 4) put 4 at 0 (Python) or 0 at 4 (warp)? (too ambiguous to guess)");
-	fails_with("xs=[1 2]; i=1; v=9; xs.insert(i, v); xs", "`insert(v, at: i)` for position first, as Python or `insert(i, at: v)` for value first, as warp");
+	fails_with(
+		"xs=[1 2]; xs.insert(0, 4); xs",
+		"does insert(0, 4) put 4 at 0 (Python) or 0 at 4 (warp)? (too ambiguous to guess)",
+	);
+	fails_with(
+		"xs=[1 2]; i=1; v=9; xs.insert(i, v); xs",
+		"`insert(v, at: i)` for position first, as Python or `insert(i, at: v)` for value first, as warp",
+	);
 }
 
 #[test]
@@ -123,7 +141,13 @@ fn the_let_note_is_shown_until_acknowledged() {
 	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves let and := open (user #12)
-	let let_hints = || capture_hints(|| warp::wasm_emitter::eval("let x = 3; x")).1.iter().filter(|hint| hint.original.starts_with("let ")).count();
+	let let_hints = || {
+		capture_hints(|| warp::wasm_emitter::eval("let x = 3; x"))
+			.1
+			.iter()
+			.filter(|hint| hint.original.starts_with("let "))
+			.count()
+	};
 	let path = "scratch/test_welcoming_sugar.acknowledged";
 	std::fs::create_dir_all("scratch").unwrap();
 	let _ = std::fs::remove_file(path);
@@ -161,7 +185,13 @@ fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 	is!("items=[1 2 3 4 5]\nmid = len(items)//2\nmid", 2);
 	is!("n = 10; n//=3; n", 3);
 	// the note "`// …` after code is a comment" shows until acknowledged; a `//` line of its own is no news
-	let notes = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count();
+	let notes = |code: &str| {
+		capture_hints(|| warp::wasm_emitter::eval(code))
+			.1
+			.iter()
+			.filter(|hint| hint.canonical == "a//b")
+			.count()
+	};
 	let path = "scratch/test_welcoming_sugar.slash_comment";
 	std::fs::create_dir_all("scratch").unwrap();
 	let _ = std::fs::remove_file(path);
@@ -181,7 +211,13 @@ fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 #[test]
 fn a_comment_after_a_text_needs_no_note() {
 	use warp::normalize::capture_hints;
-	let notes = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count();
+	let notes = |code: &str| {
+		capture_hints(|| warp::wasm_emitter::eval(code))
+			.1
+			.iter()
+			.filter(|hint| hint.canonical == "a//b")
+			.count()
+	};
 	assert_eq!(notes("p = { e: \"trailing\" // a comment\n age: 30 }; p.age"), 0);
 	assert_eq!(notes("x = \"a\", // a comment\nx"), 0);
 }
@@ -191,7 +227,13 @@ fn a_comment_after_a_text_needs_no_note() {
 #[test]
 fn a_word_comment_after_a_value_needs_no_note() {
 	use warp::normalize::capture_hints;
-	let notes = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count();
+	let notes = |code: &str| {
+		capture_hints(|| warp::wasm_emitter::eval(code))
+			.1
+			.iter()
+			.filter(|hint| hint.canonical == "a//b")
+			.count()
+	};
 	assert_eq!(notes("cutoff = 900 // Hz\ncutoff"), 0);
 	assert_eq!(notes("x = 4 // peaks\nx"), 0);
 	assert_eq!(notes("x = 4.0 // a peak\nx"), 0);

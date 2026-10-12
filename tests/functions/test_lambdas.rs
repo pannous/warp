@@ -1,8 +1,8 @@
 //! Compile-time lambdas: `f = x=>x*x` defines a function at that point (capture by value), a block with bindings is called
 //! at once, `map` over a literal block or lambda is a loop. A lambda that cannot be inlined is a closure (test_closures.rs).
+use crate::common::fails_with;
 use crate::is;
 use warp::wasm_emitter::eval;
-use crate::common::fails_with;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize()
@@ -20,7 +20,10 @@ fn test_assigned_lambda_is_a_function() {
 #[test]
 fn test_lambda_captures_by_value() {
 	// late binding (wiki/charged.md §3, released 2026-10-05) replaced D7's silent snapshot: the change is an error
-	fails_with("n=10; f = x=>x+n; n=20; f 1", "f reads n (line 1): declare `global n` in f");
+	fails_with(
+		"n=10; f = x=>x+n; n=20; f 1",
+		"f reads n (line 1): declare `global n` in f",
+	);
 	is!("n=10; f = x=>x+n; f 1", 11);
 }
 
@@ -50,7 +53,10 @@ fn test_map_as_a_method() {
 #[test]
 fn test_a_lambda_that_cannot_be_inlined_is_a_closure_value() {
 	is!("apply(f, x):=x; apply(y=>y+1, 2)", 2);
-	fails_with("map [1 2 3] 5", "map needs a function, got 5 (an Int); fix: map [1 2 3] (x => …)");
+	fails_with(
+		"map [1 2 3] 5",
+		"map needs a function, got 5 (an Int); fix: map [1 2 3] (x => …)",
+	);
 }
 
 #[test]

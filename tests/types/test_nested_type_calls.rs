@@ -1,7 +1,7 @@
 // A braceless call of a built-in type nests like a user function's (`square square 2`): `text hex 255` is
 // `text(hex(255))`, `text(byte 65)` is `b = byte 65; text(b)`, one call shape for every callable
-use warp::wasm_emitter::eval;
 use crate::is;
+use warp::wasm_emitter::eval;
 
 fn shown(code: &str) -> String {
 	eval(code).serialize()

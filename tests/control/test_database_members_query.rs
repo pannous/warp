@@ -16,7 +16,17 @@ fn a_list_field_reads_only_the_rows_pointing_back() {
 	eval(&program(SEED));
 	let before = warp::database::rows_read();
 	is!(&program("count(teams#1.players)"), 2);
-	assert!(warp::database::rows_read() - before < 10, "team.players loaded the whole people table: {} rows", warp::database::rows_read() - before);
-	is!(&program("red = teams#1\nbo = red.players#1\nbo.name = \"Bob\"\npeople#1.name"), "Bob");
-	is!(&program("bo = people#1\nbo.team = teams#2\ncount(teams#1.players) * 100 + count(teams#2.players)"), 151);
+	assert!(
+		warp::database::rows_read() - before < 10,
+		"team.players loaded the whole people table: {} rows",
+		warp::database::rows_read() - before
+	);
+	is!(
+		&program("red = teams#1\nbo = red.players#1\nbo.name = \"Bob\"\npeople#1.name"),
+		"Bob"
+	);
+	is!(
+		&program("bo = people#1\nbo.team = teams#2\ncount(teams#1.players) * 100 + count(teams#2.players)"),
+		151
+	);
 }

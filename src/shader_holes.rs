@@ -30,7 +30,9 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 	while let Some(at) = rest.find('$') {
 		text.push_str(&rest[..at]);
 		let after = &rest[at + 1..];
-		let length = after.find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(after.len());
+		let length = after
+			.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+			.unwrap_or(after.len());
 		let name = &after[..length];
 		if name.is_empty() || name.starts_with(|ch: char| ch.is_ascii_digit()) {
 			text.push('$');
@@ -52,7 +54,14 @@ pub fn shader_text(wgsl: &str) -> Node {
 	let (text, names) = written(wgsl);
 	match names.is_empty() {
 		true => Node::Text(text),
-		false => Node::Text(text).with_attribute(HOLES_ATTRIBUTE, Node::List(names.into_iter().map(Node::Symbol).collect(), Bracket::Square, Separator::Space)),
+		false => Node::Text(text).with_attribute(
+			HOLES_ATTRIBUTE,
+			Node::List(
+				names.into_iter().map(Node::Symbol).collect(),
+				Bracket::Square,
+				Separator::Space,
+			),
+		),
 	}
 }
 
@@ -72,8 +81,16 @@ pub fn lower(program: Node) -> Node {
 	if shaders.is_empty() && !mentions_holes(&program) {
 		return program;
 	}
-	let passed = |holes: Vec<String>| holes.into_iter().filter(|name| !BUILTIN_HOLES.contains(&name.as_str()) || variables.contains(name)).collect::<Vec<_>>();
-	let shaders = shaders.into_iter().map(|(shader, holes)| (shader, passed(holes))).collect();
+	let passed = |holes: Vec<String>| {
+		holes
+			.into_iter()
+			.filter(|name| !BUILTIN_HOLES.contains(&name.as_str()) || variables.contains(name))
+			.collect::<Vec<_>>()
+	};
+	let shaders = shaders
+		.into_iter()
+		.map(|(shader, holes)| (shader, passed(holes)))
+		.collect();
 	with_values(program, &shaders, &passed)
 }
 
@@ -90,23 +107,61 @@ fn mentions_holes(program: &Node) -> bool {
 	found
 }
 
-fn with_values(node: Node, shaders: &HashMap<String, Vec<String>>, passed: &impl Fn(Vec<String>) -> Vec<String>) -> Node {
+fn with_values(
+	node: Node,
+	shaders: &HashMap<String, Vec<String>>,
+	passed: &impl Fn(Vec<String>) -> Vec<String>,
+) -> Node {
 	let node = node.map_children(|child| with_values(child, shaders, passed));
-	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
-	let rendering = items.first().is_some_and(|word| RENDERING_WORDS.contains(&word.name().as_str()));
-	let holes = items.get(1).filter(|_| rendering).and_then(|shader| holes_of(shader).map(passed).or_else(|| shaders.get(&shader.drop_meta().name()).cloned()));
-	let Some(holes) = holes.filter(|holes| !holes.is_empty() && items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1) else { return node };
+	let Node::List(items, bracket, separator) = node.drop_meta() else {
+		return node;
+	};
+	let rendering = items
+		.first()
+		.is_some_and(|word| RENDERING_WORDS.contains(&word.name().as_str()));
+	let holes = items.get(1).filter(|_| rendering).and_then(|shader| {
+		holes_of(shader)
+			.map(passed)
+			.or_else(|| shaders.get(&shader.drop_meta().name()).cloned())
+	});
+	let Some(holes) =
+		holes.filter(|holes| !holes.is_empty() && items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1)
+	else {
+		return node;
+	};
 	let mut items = items.clone();
-	let entries = |given: &[Node]| holes.iter().filter(|name| !given.iter().any(|entry| entry_name(entry).as_deref() == Some(name.as_str()))).map(|name| entry(name)).collect::<Vec<_>>();
+	let entries = |given: &[Node]| {
+		holes
+			.iter()
+			.filter(|name| {
+				!given
+					.iter()
+					.any(|entry| entry_name(entry).as_deref() == Some(name.as_str()))
+			})
+			.map(|name| entry(name))
+			.collect::<Vec<_>>()
+	};
 	match items.get(VALUES_INDEX).map(|values| values.drop_meta().clone()) {
 		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Colon)),
 		Some(Node::List(given, Bracket::Curly, map_separator)) => {
 			let added = entries(&given);
-			items[VALUES_INDEX] = Node::List(given.into_iter().chain(added).collect(), Bracket::Curly, map_separator).with_meta_of(&items[VALUES_INDEX]);
+			items[VALUES_INDEX] = Node::List(given.into_iter().chain(added).collect(), Bracket::Curly, map_separator)
+				.with_meta_of(&items[VALUES_INDEX]);
 		}
 		Some(_) => {
-			let names = holes.iter().map(|name| format!("${name}")).collect::<Vec<_>>().join(", ");
-			let message = format!("the shader's holes {names} need the values map written out here, `{{{}}}`, to add their entries", holes.iter().map(|name| format!("{name}: {name}")).collect::<Vec<_>>().join(", "));
+			let names = holes
+				.iter()
+				.map(|name| format!("${name}"))
+				.collect::<Vec<_>>()
+				.join(", ");
+			let message = format!(
+				"the shader's holes {names} need the values map written out here, `{{{}}}`, to add their entries",
+				holes
+					.iter()
+					.map(|name| format!("{name}: {name}"))
+					.collect::<Vec<_>>()
+					.join(", ")
+			);
 			return crate::diagnostic::Diagnostic::at(&items[VALUES_INDEX], message).into_error();
 		}
 	}

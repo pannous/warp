@@ -52,12 +52,20 @@ pub(super) fn rest_of(items: &[Node], skip: usize, bracket: &Bracket, separator:
 /// A text seen in one unit, `byte in t` or `t as bytes`: counting it counts that unit, `t.bytes`
 pub(super) fn unit_count(node: &Node) -> Option<Node> {
 	let count_of = |text: Node, unit: &Node| {
-		let Node::Symbol(word) = unit.drop_meta() else { return None };
-		Some(Node::Key(Box::new(text), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
+		let Node::Symbol(word) = unit.drop_meta() else {
+			return None;
+		};
+		Some(Node::Key(
+			Box::new(text),
+			Op::Dot,
+			Box::new(Node::Symbol(text_unit(word)?.to_string())),
+		))
 	};
 	match node.drop_meta() {
 		Node::List(items, _, _) if items.len() == 1 => unit_count(&items[0]),
-		Node::List(items, bracket, separator) if items.len() >= 3 && items[1].is_symbol("in") && text_unit(&items[0].name()).is_some() => {
+		Node::List(items, bracket, separator)
+			if items.len() >= 3 && items[1].is_symbol("in") && text_unit(&items[0].name()).is_some() =>
+		{
 			count_of(rest_of(items, 2, bracket, separator), &items[0])
 		}
 		Node::Key(text, Op::As, unit) => count_of(text.as_ref().clone(), unit),
@@ -73,22 +81,36 @@ pub(super) fn unit_count(node: &Node) -> Option<Node> {
 /// `#bytes in t`, parsed as the items `#bytes`, `in`, `t`: the count of that unit, `t.bytes`
 pub(super) fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 	let [hashed, keyword, _, ..] = items else { return None };
-	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else { return None };
+	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else {
+		return None;
+	};
 	if !matches!(empty.drop_meta(), Node::Empty) || !keyword.is_symbol("in") {
 		return None;
 	}
-	let Node::Symbol(word) = unit.drop_meta() else { return None };
+	let Node::Symbol(word) = unit.drop_meta() else {
+		return None;
+	};
 	let counted = rest_of(items, 2, &Bracket::None, &Separator::Space);
-	Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
+	Some(Node::Key(
+		Box::new(counted),
+		Op::Dot,
+		Box::new(Node::Symbol(text_unit(word)?.to_string())),
+	))
 }
 
 /// `x size`, `x count`, `x length`, `x number`: a counting property word after a name is the getter `x.size`,
 /// unless the name is a keyword (`return count`) or the word a variable of the program
 pub(super) fn property_of_name(items: &[Node], separator: &Separator, variables: &HashSet<String>) -> Option<Node> {
 	let [name, property] = items else { return None };
-	let (Node::Symbol(name_text), Node::Symbol(property_text)) = (name.drop_meta(), property.drop_meta()) else { return None };
+	let (Node::Symbol(name_text), Node::Symbol(property_text)) = (name.drop_meta(), property.drop_meta()) else {
+		return None;
+	};
 	let names_no_object = is_counting_property(name_text) || PROPERTYLESS_KEYWORDS.contains(&name_text.as_str());
-	if *separator != Separator::Space || names_no_object || !is_counting_property(property_text) || variables.contains(property_text) {
+	if *separator != Separator::Space
+		|| names_no_object
+		|| !is_counting_property(property_text)
+		|| variables.contains(property_text)
+	{
 		return None;
 	}
 	Some(Node::Key(Box::new(name.clone()), Op::Dot, Box::new(property.clone())))
@@ -99,7 +121,9 @@ pub(super) fn property_of_name(items: &[Node], separator: &Separator, variables:
 /// `print chars in "hello"`: a name no variable has, in a collection, prints each item as `for chars in "hello": print it`
 pub(super) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
 	let [print, phrase] = items else { return None };
-	let Node::List(phrase, Bracket::None | Bracket::Round, _) = phrase.drop_meta() else { return None };
+	let Node::List(phrase, Bracket::None | Bracket::Round, _) = phrase.drop_meta() else {
+		return None;
+	};
 	// `chars in "hello"` arrives as the words or as `chars (in "hello")`, optionally after `all`
 	let phrase = match phrase.as_slice() {
 		[all, rest @ ..] if all.is_symbol("all") => rest,
@@ -113,25 +137,57 @@ pub(super) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 		},
 		_ => return None,
 	};
-	let Node::Symbol(name) = name.drop_meta() else { return None };
+	let Node::Symbol(name) = name.drop_meta() else {
+		return None;
+	};
 	if !print.is_symbol("print") || !in_word.is_symbol("in") || variables.contains(name) {
 		return None;
 	}
-	let body = Node::List(vec![print.clone(), Node::Symbol(name.clone())], Bracket::Curly, Separator::Space);
-	Some(Node::List(vec![Node::Symbol("for".into()), Node::Symbol(name.clone()), in_word.clone(), collection.clone(), body], Bracket::None, Separator::Space))
+	let body = Node::List(
+		vec![print.clone(), Node::Symbol(name.clone())],
+		Bracket::Curly,
+		Separator::Space,
+	);
+	Some(Node::List(
+		vec![
+			Node::Symbol("for".into()),
+			Node::Symbol(name.clone()),
+			in_word.clone(),
+			collection.clone(),
+			body,
+		],
+		Bracket::None,
+		Separator::Space,
+	))
 }
 
-pub(super) fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator, variables: &HashSet<String>) -> Option<Node> {
+pub(super) fn counting_phrase(
+	items: &[Node],
+	bracket: &Bracket,
+	separator: &Separator,
+	variables: &HashSet<String>,
+) -> Option<Node> {
 	if let [unit, count, of, _, ..] = items {
 		if unit.is_symbol("byte") && count.is_symbol("count") && of.is_symbol("of") {
 			let counted = rest_of(items, 3, bracket, separator);
-			return Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol("bytes".to_string()))));
+			return Some(Node::Key(
+				Box::new(counted),
+				Op::Dot,
+				Box::new(Node::Symbol("bytes".to_string())),
+			));
 		}
 	}
 	if let [count, unit, of, _, ..] = items {
 		if count.is_symbol("count") && of.is_symbol("of") {
-			if let Some(unit_property) = matches!(unit.drop_meta(), Node::Symbol(_)).then(|| text_unit(&unit.name())).flatten() {
-				return Some(Node::Key(Box::new(rest_of(items, 3, bracket, separator)), Op::Dot, Box::new(Node::Symbol(unit_property.to_string()))));
+			if let Some(unit_property) = matches!(unit.drop_meta(), Node::Symbol(_))
+				.then(|| text_unit(&unit.name()))
+				.flatten()
+			{
+				return Some(Node::Key(
+					Box::new(rest_of(items, 3, bracket, separator)),
+					Op::Dot,
+					Box::new(Node::Symbol(unit_property.to_string())),
+				));
 			}
 		}
 	}
@@ -139,7 +195,9 @@ pub(super) fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Sep
 		return Some(property);
 	}
 	let [word, of, _, ..] = items else { return None };
-	let Node::Symbol(word) = word.drop_meta() else { return None };
+	let Node::Symbol(word) = word.drop_meta() else {
+		return None;
+	};
 	if !is_counting_property(word) {
 		return None;
 	}
@@ -148,7 +206,13 @@ pub(super) fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Sep
 		return None;
 	}
 	let counted = rest_of(items, 2, bracket, separator);
-	Some(unit_count(&counted).unwrap_or_else(|| Node::List(vec![Node::Symbol(counter.to_string()), counted], bracket.clone(), separator.clone())))
+	Some(unit_count(&counted).unwrap_or_else(|| {
+		Node::List(
+			vec![Node::Symbol(counter.to_string()), counted],
+			bracket.clone(),
+			separator.clone(),
+		)
+	}))
 }
 
 /// The most numbers a range of literals is written out as at compile time; a longer one is collected at run time like
@@ -158,10 +222,21 @@ const LITERAL_RANGE_MAX_LENGTH: i64 = 1000;
 /// The list a range of integer literals stands for: `1..4` is [1 2 3], `1…4` and `1 to 4` are [1 2 3 4]; not an empty,
 /// computed or long range
 pub(crate) fn range_elements(range: &Node) -> Option<Node> {
-	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
-	let (Node::Number(Number::Int(start)), Node::Number(Number::Int(end))) = (start.drop_meta(), end.drop_meta()) else { return None };
+	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else {
+		return None;
+	};
+	let (Node::Number(Number::Int(start)), Node::Number(Number::Int(end))) = (start.drop_meta(), end.drop_meta())
+	else {
+		return None;
+	};
 	let last = if *op == Op::To { *end } else { end - 1 };
-	(start <= &last && last - start < LITERAL_RANGE_MAX_LENGTH).then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
+	(start <= &last && last - start < LITERAL_RANGE_MAX_LENGTH).then(|| {
+		Node::List(
+			(*start..=last).map(Node::int).collect(),
+			Bracket::Square,
+			Separator::Space,
+		)
+	})
 }
 
 /// The name a range of computed bounds collects its list under where no variable is assigned (`print a..b`)
@@ -169,17 +244,41 @@ pub(super) const RANGE_VALUE: &str = "range_value";
 
 /// `xs = a..b` of computed bounds: `(xs·range = ø; for xs·item in a..b { xs·range = xs·range + [xs·item] }; xs·range)`
 pub(super) fn computed_range(target: &Node, range: &Node) -> Option<Node> {
-	let Node::Symbol(name) = target.drop_meta() else { return None };
+	let Node::Symbol(name) = target.drop_meta() else {
+		return None;
+	};
 	if !matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) || range_elements(range).is_some() {
 		return None;
 	}
 	let symbol = |suffix: &str| Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}{suffix}"));
 	let (items, item) = (symbol("range"), symbol("item"));
-	let appended = Node::Key(Box::new(items.clone()), Op::Add, Box::new(Node::List(vec![item.clone()], Bracket::Square, Separator::Space)));
-	let body = Node::List(vec![Node::Key(Box::new(items.clone()), Op::Assign, Box::new(appended))], Bracket::Curly, Separator::Semicolon);
-	let walk = Node::List(vec![Node::Symbol("for".into()), item, Node::Symbol("in".into()), range.clone(), body], Bracket::None, Separator::Space);
+	let appended = Node::Key(
+		Box::new(items.clone()),
+		Op::Add,
+		Box::new(Node::List(vec![item.clone()], Bracket::Square, Separator::Space)),
+	);
+	let body = Node::List(
+		vec![Node::Key(Box::new(items.clone()), Op::Assign, Box::new(appended))],
+		Bracket::Curly,
+		Separator::Semicolon,
+	);
+	let walk = Node::List(
+		vec![
+			Node::Symbol("for".into()),
+			item,
+			Node::Symbol("in".into()),
+			range.clone(),
+			body,
+		],
+		Bracket::None,
+		Separator::Space,
+	);
 	let start = Node::Key(Box::new(items.clone()), Op::Assign, Box::new(Node::Empty));
-	Some(Node::List(vec![start, walk, items], Bracket::Round, Separator::Semicolon))
+	Some(Node::List(
+		vec![start, walk, items],
+		Bracket::Round,
+		Separator::Semicolon,
+	))
 }
 
 pub(super) fn require_counter(ctx: &mut Context, counter: &'static str) {

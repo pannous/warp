@@ -13,9 +13,9 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use serde_json::Value;
+use std::cell::RefCell;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::cell::RefCell;
 use std::sync::{Condvar, Mutex};
 
 /// A runtime: its name in `use <runtime> …`, the variable naming its interpreter, the default interpreter, and how it
@@ -29,8 +29,20 @@ struct Interpreter {
 }
 
 const INTERPRETERS: [Interpreter; 2] = [
-	Interpreter { runtime: "python", variable: "WARP_PYTHON", default: "python3", arguments: ["-u", "-c"], script: FOREIGN_PYTHON_LOOP },
-	Interpreter { runtime: "js", variable: "WARP_NODE", default: "node", arguments: ["--no-warnings", "-e"], script: FOREIGN_JS_LOOP },
+	Interpreter {
+		runtime: "python",
+		variable: "WARP_PYTHON",
+		default: "python3",
+		arguments: ["-u", "-c"],
+		script: FOREIGN_PYTHON_LOOP,
+	},
+	Interpreter {
+		runtime: "js",
+		variable: "WARP_NODE",
+		default: "node",
+		arguments: ["--no-warnings", "-e"],
+		script: FOREIGN_JS_LOOP,
+	},
 ];
 /// An integer beyond 64 bits, sent as its digits: `{"$int": "15511210043330985984000000"}`
 const BIG_INTEGER_KEY: &str = "$int";
@@ -154,7 +166,14 @@ static RETURNED: Condvar = Condvar::new();
 
 /// `runtime.module.member(arguments…)`, or the member itself when it is no call, as a Node; `module` is a module's name
 /// or a handle
-pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments: &Node, callback: Callback) -> Result<Node, String> {
+pub fn call(
+	runtime: &str,
+	module: &Node,
+	member: &str,
+	is_call: bool,
+	arguments: &Node,
+	callback: Callback,
+) -> Result<Node, String> {
 	let arguments = match arguments.drop_meta() {
 		_ if !is_call => Value::Null,
 		Node::Empty => Value::Array(vec![]),
@@ -165,14 +184,18 @@ pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments
 		return component_call(module, member, &arguments);
 	}
 	let Some(interpreter) = INTERPRETERS.iter().find(|interpreter| interpreter.runtime == runtime) else {
-		return Err(format!("no foreign runtime {runtime}: known are {}", crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")));
+		return Err(format!(
+			"no foreign runtime {runtime}: known are {}",
+			crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")
+		));
 	};
 	let (module, module_json) = match module.drop_meta() {
 		Node::Text(name) | Node::Symbol(name) => (name.clone(), Value::String(name.clone())),
 		handle => (handle.serialize(), json_of(handle)),
 	};
 	let request = serde_json::json!({"module": module_json, "member": member, "arguments": arguments});
-	let answer = exchange(interpreter, &request.to_string(), callback).map_err(|failure| format!("{runtime}: {failure}"))?;
+	let answer =
+		exchange(interpreter, &request.to_string(), callback).map_err(|failure| format!("{runtime}: {failure}"))?;
 	match (answer.get("value"), answer.get("error")) {
 		(_, Some(Value::String(error))) => Err(format!("{runtime} {module}.{member}: {error}")),
 		(Some(value), _) => Ok(node_of(value)),
@@ -184,16 +207,23 @@ pub fn call(runtime: &str, module: &Node, member: &str, is_call: bool, arguments
 fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node, String> {
 	let receiver = match module.drop_meta() {
 		Node::Text(path) | Node::Symbol(path) => path.clone(),
-		handle => json_of(handle).get("text").and_then(Value::as_str).map_or_else(|| handle.serialize(), str::to_string),
+		handle => json_of(handle)
+			.get("text")
+			.and_then(Value::as_str)
+			.map_or_else(|| handle.serialize(), str::to_string),
 	};
 	let Value::Array(arguments) = arguments else {
-		return Err(format!("wasm {receiver}: {member} is a function of the component, call it: {member}(…)"));
+		return Err(format!(
+			"wasm {receiver}: {member} is a function of the component, call it: {member}(…)"
+		));
 	};
 	let result = match module.drop_meta() {
 		Node::Text(path) | Node::Symbol(path) => crate::components::call(path, member, arguments),
 		handle => crate::components::call_method(&json_of(handle), member, arguments),
 	};
-	result.map(|value| node_of(&value)).map_err(|failure| format!("wasm {receiver}: {failure}"))
+	result
+		.map(|value| node_of(&value))
+		.map_err(|failure| format!("wasm {receiver}: {failure}"))
 }
 
 /// One request line out, one answer line back, each callback line before it answered; the child is started on first
@@ -216,7 +246,12 @@ fn exchange(interpreter: &'static Interpreter, request: &str, callback: Callback
 
 /// The request to the child and its answer; a callback line calls the warp function back meanwhile, the child held by
 /// this thread for the foreign calls it makes. The child is gone when it ended
-fn talk(runtime: &'static str, mut child: Runtime, request: &str, callback: Callback) -> (Result<Value, String>, Option<Runtime>) {
+fn talk(
+	runtime: &'static str,
+	mut child: Runtime,
+	request: &str,
+	callback: Callback,
+) -> (Result<Value, String>, Option<Runtime>) {
 	let mut line = request.to_string();
 	loop {
 		let mut answer = String::new();
@@ -228,21 +263,33 @@ fn talk(runtime: &'static str, mut child: Runtime, request: &str, callback: Call
 			Ok(answer) => answer,
 			Err(failure) => return (Err(format!("answered no JSON: {failure}")), Some(child)),
 		};
-		let Some(function) = answer.get("callback").and_then(Value::as_u64) else { return (Ok(answer), Some(child)) };
+		let Some(function) = answer.get("callback").and_then(Value::as_u64) else {
+			return (Ok(answer), Some(child));
+		};
 		HELD.with_borrow_mut(|held| held.push((runtime, child)));
-		let result = callback(function as usize, node_of(answer.get("arguments").unwrap_or(&Value::Null)));
-		let Some(held) = take_held(runtime) else { return (Err("the interpreter ended".into()), None) };
+		let result = callback(
+			function as usize,
+			node_of(answer.get("arguments").unwrap_or(&Value::Null)),
+		);
+		let Some(held) = take_held(runtime) else {
+			return (Err("the interpreter ended".into()), None);
+		};
 		child = held;
 		line = match result {
 			Ok(value) => serde_json::json!({"value": json_of(&value)}),
 			Err(failure) => serde_json::json!({"error": failure}),
-		}.to_string();
+		}
+		.to_string();
 	}
 }
 
 /// The child of `runtime` this thread holds, while a warp function is called back
 fn take_held(runtime: &str) -> Option<Runtime> {
-	HELD.with_borrow_mut(|held| held.iter().rposition(|(name, _)| *name == runtime).map(|index| held.remove(index).1))
+	HELD.with_borrow_mut(|held| {
+		held.iter()
+			.rposition(|(name, _)| *name == runtime)
+			.map(|index| held.remove(index).1)
+	})
 }
 
 /// The child of the interpreter for one call: started when there is none, waited for while another thread's call holds it
@@ -277,24 +324,50 @@ fn give_back(runtime: &'static str, child: Option<Runtime>) {
 
 fn start(interpreter: &Interpreter) -> Result<Runtime, String> {
 	let program = std::env::var(interpreter.variable).unwrap_or_else(|_| interpreter.default.to_string());
-	let mut child = Command::new(&program).args(interpreter.arguments).arg(interpreter.script).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit())
-		.spawn().map_err(|failure| format!("cannot start {program} ({failure}); set {} to an interpreter", interpreter.variable))?;
+	let mut child = Command::new(&program)
+		.args(interpreter.arguments)
+		.arg(interpreter.script)
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::inherit())
+		.spawn()
+		.map_err(|failure| {
+			format!(
+				"cannot start {program} ({failure}); set {} to an interpreter",
+				interpreter.variable
+			)
+		})?;
 	let input = child.stdin.take().ok_or("no stdin")?;
 	let output = BufReader::new(child.stdout.take().ok_or("no stdout")?);
-	Ok(Runtime { _child: child, input, output })
+	Ok(Runtime {
+		_child: child,
+		input,
+		output,
+	})
 }
 
 pub(crate) fn json_of(node: &Node) -> Value {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => Value::Array(items.iter().map(json_of).collect()),
+		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => {
+			Value::Array(items.iter().map(json_of).collect())
+		}
 		Node::Key(key, Op::Colon, value) => serde_json::json!({ key.name(): json_of(value) }),
 		// an object, a handle among them: `{$handle: 7, …}`
-		Node::List(items, Bracket::Curly, _) if items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) => Value::Object(
-			items.iter().filter_map(|item| match item.drop_meta() {
-				Node::Key(key, _, value) => Some((key.name(), json_of(value))),
-				_ => None,
-			}).collect(),
-		),
+		Node::List(items, Bracket::Curly, _)
+			if items
+				.iter()
+				.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
+			Value::Object(
+				items
+					.iter()
+					.filter_map(|item| match item.drop_meta() {
+						Node::Key(key, _, value) => Some((key.name(), json_of(value))),
+						_ => None,
+					})
+					.collect(),
+			)
+		}
 		// an exact rational (`2.5` is 5/2) crosses as a float, an integer as itself
 		Node::Number(Number::Int(integer)) => Value::from(*integer),
 		Node::Number(number) => Value::from(f64::from(*number)),
@@ -324,11 +397,17 @@ pub(crate) fn node_of(value: &Value) -> Node {
 		Value::Array(items) => Node::List(items.iter().map(node_of).collect(), Bracket::Square, Separator::Space),
 		Value::Object(entries) if entries.len() == 1 && entries.get(BIG_INTEGER_KEY).is_some_and(Value::is_string) => {
 			let digits = entries[BIG_INTEGER_KEY].as_str().unwrap_or_default();
-			digits.parse::<num_bigint::BigInt>().map(|big| Node::Number(Number::BigInt(Box::leak(Box::new(big))))).unwrap_or_else(|_| Node::Text(digits.to_string()))
+			digits
+				.parse::<num_bigint::BigInt>()
+				.map(|big| Node::Number(Number::BigInt(Box::leak(Box::new(big)))))
+				.unwrap_or_else(|_| Node::Text(digits.to_string()))
 		}
 		Value::Object(entries) if let Some(character) = codepoint_of(entries) => Node::Char(character),
 		Value::Object(entries) => Node::List(
-			entries.iter().map(|(key, value)| Node::key(key, node_of(value))).collect(),
+			entries
+				.iter()
+				.map(|(key, value)| Node::key(key, node_of(value)))
+				.collect(),
 			Bracket::Curly,
 			Separator::Space,
 		),

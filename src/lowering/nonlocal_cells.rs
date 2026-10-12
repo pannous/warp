@@ -26,10 +26,21 @@ pub fn lower(node: Node) -> Node {
 
 /// `f(a, b) := body`: its head, operator, parameter names and body
 fn definition(node: &Node) -> Option<(&Node, Op, Vec<String>, &Node)> {
-	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = node.drop_meta() else { return None };
-	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else { return None };
+	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = node.drop_meta() else {
+		return None;
+	};
+	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
+		return None;
+	};
 	let (name, params) = items.split_first()?;
-	matches!(name.drop_meta(), Node::Symbol(_)).then(|| (head.as_ref(), *op, params.iter().map(|param| param.drop_meta().name()).collect(), body.as_ref()))
+	matches!(name.drop_meta(), Node::Symbol(_)).then(|| {
+		(
+			head.as_ref(),
+			*op,
+			params.iter().map(|param| param.drop_meta().name()).collect(),
+			body.as_ref(),
+		)
+	})
 }
 
 /// The definitions directly in a body (not those inside them)
@@ -64,9 +75,11 @@ fn celled(body: Node, variable: &str, is_param: bool) -> Node {
 	let initial = if is_param { symbol(variable) } else { Node::Empty };
 	let made = key(cell.clone(), Op::Assign, call(CELL_NEW, vec![initial]));
 	match through_cell(body, variable, &cell) {
-		Node::List(items, bracket @ (Bracket::Curly | Bracket::None), separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List([vec![made], items].concat(), bracket, separator)
-		}
+		Node::List(
+			items,
+			bracket @ (Bracket::Curly | Bracket::None),
+			separator @ (Separator::Semicolon | Separator::Newline),
+		) => Node::List([vec![made], items].concat(), bracket, separator),
 		single => Node::List(vec![made, single], Bracket::Curly, Separator::Semicolon),
 	}
 }
@@ -79,7 +92,8 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 	let set = |value: Node| call(CELL_SET, vec![cell.clone(), value]);
 	if let Some((_, _, params, body)) = definition(&node) {
 		let shadows = params.iter().any(|param| param == variable)
-			|| (!changes_in(body, variable).is_empty() && !declared_nonlocals(body).iter().any(|declared| declared == variable));
+			|| (!changes_in(body, variable).is_empty()
+				&& !declared_nonlocals(body).iter().any(|declared| declared == variable));
 		if shadows {
 			return node;
 		}
@@ -87,7 +101,9 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 	match node {
 		Node::Symbol(ref name) if name == variable => get(),
 		Node::Key(keyword, Op::Colon, names) if keyword.is_symbol(NONLOCAL) => Node::Key(keyword, Op::Colon, names),
-		Node::Key(target, Op::Assign | Op::Define, value) if is_variable(&target) => set(through_cell(*value, variable, cell)),
+		Node::Key(target, Op::Assign | Op::Define, value) if is_variable(&target) => {
+			set(through_cell(*value, variable, cell))
+		}
 		Node::Key(target, op, value) if is_variable(&target) && op.is_compound_assign() => {
 			set(key(get(), op.base_op(), through_cell(*value, variable, cell)))
 		}
@@ -161,8 +177,14 @@ fn with_first(statements: Vec<Node>, body: Node) -> Node {
 		return body;
 	}
 	match body {
-		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => Node::List([statements, items].concat(), Bracket::Curly, Separator::Semicolon),
-		single => Node::List([statements, vec![single]].concat(), Bracket::Curly, Separator::Semicolon),
+		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => {
+			Node::List([statements, items].concat(), Bracket::Curly, Separator::Semicolon)
+		}
+		single => Node::List(
+			[statements, vec![single]].concat(),
+			Bracket::Curly,
+			Separator::Semicolon,
+		),
 	}
 }
 
@@ -179,8 +201,10 @@ fn in_enclosing(node: Node, locals: &[String], count: &mut usize, hoisted: &mut 
 		Node::Key(lambda_params, Op::FatArrow, body) => {
 			let params = lambda_parameters(&lambda_params);
 			// a lambda changing an enclosing local shares it, as in JS, Kotlin, Swift, C#, Ruby and Julia
-			let shared: Vec<Node> = undeclared_changes(&body, &params, locals).into_iter()
-				.map(|(_, name)| key(symbol(NONLOCAL), Op::Colon, Node::Symbol(name))).collect();
+			let shared: Vec<Node> = undeclared_changes(&body, &params, locals)
+				.into_iter()
+				.map(|(_, name)| key(symbol(NONLOCAL), Op::Colon, Node::Symbol(name)))
+				.collect();
 			let body = nonlocal_lambdas(with_first(shared, *body), count);
 			if declared_nonlocals(&body).is_empty() {
 				return Node::Key(lambda_params, Op::FatArrow, Box::new(body));
@@ -236,9 +260,18 @@ fn undeclared_changes<'a>(body: &'a Node, params: &[String], locals: &[String]) 
 	body.visit(&mut |part| {
 		let Node::Key(target, op, value) = part else { return };
 		let Node::Symbol(name) = target.drop_meta() else { return };
-		let reads_itself = *op == Op::Assign && { let mut reads = false; value.visit(&mut |read| reads |= matches!(read, Node::Symbol(read) if read == name)); reads };
+		let reads_itself = *op == Op::Assign && {
+			let mut reads = false;
+			value.visit(&mut |read| reads |= matches!(read, Node::Symbol(read) if read == name));
+			reads
+		};
 		let updates = op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) || reads_itself;
-		if updates && locals.contains(name) && !params.contains(name) && !declared.contains(name) && !found.iter().any(|(_, seen)| seen == name) {
+		if updates
+			&& locals.contains(name)
+			&& !params.contains(name)
+			&& !declared.contains(name)
+			&& !found.iter().any(|(_, seen)| seen == name)
+		{
 			found.push((part, name.clone()));
 		}
 	});

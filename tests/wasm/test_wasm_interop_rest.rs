@@ -12,8 +12,14 @@ fn optional_fields_on_one_line() {
 
 #[test]
 fn linear_memory_by_its_bytes() {
-	is!("use memory; memory.copy([104, 105], 60000); memory.slice(60000, 60002)", parse("[104 105]"));
-	is!("use memory; use text; memory.copy(to_utf8(\"wasm ✓\"), 60000); from_utf8(memory.slice(60000, 60008))", "wasm ✓");
+	is!(
+		"use memory; memory.copy([104, 105], 60000); memory.slice(60000, 60002)",
+		parse("[104 105]")
+	);
+	is!(
+		"use memory; use text; memory.copy(to_utf8(\"wasm ✓\"), 60000); from_utf8(memory.slice(60000, 60008))",
+		"wasm ✓"
+	);
 }
 
 /// `use { memory, table } from "env"`: the module imports its memory and a function table instead of defining them;
@@ -23,17 +29,37 @@ fn linear_memory_by_its_bytes() {
 fn imported_memory_and_table() {
 	let code = "use { memory, table } from \"env\"\nuse memory\nmemory.copy([7, 8], 100)\nmemory.slice(100, 102)";
 	let module = warp::pipeline::compile(code).expect("compiles");
-	let imports: Vec<(String, String)> = wasmparser::Parser::new(0).parse_all(&module.bytes).filter_map(Result::ok)
-		.filter_map(|payload| match payload { wasmparser::Payload::ImportSection(section) => Some(section), _ => None })
-		.flat_map(|section| section.into_imports().filter_map(Result::ok).map(|import| (import.module.to_string(), import.name.to_string())).collect::<Vec<_>>())
+	let imports: Vec<(String, String)> = wasmparser::Parser::new(0)
+		.parse_all(&module.bytes)
+		.filter_map(Result::ok)
+		.filter_map(|payload| match payload {
+			wasmparser::Payload::ImportSection(section) => Some(section),
+			_ => None,
+		})
+		.flat_map(|section| {
+			section
+				.into_imports()
+				.filter_map(Result::ok)
+				.map(|import| (import.module.to_string(), import.name.to_string()))
+				.collect::<Vec<_>>()
+		})
 		.collect();
-	assert!(imports.contains(&("env".to_string(), "memory".to_string())), "{imports:?}");
-	assert!(imports.contains(&("env".to_string(), "table".to_string())), "{imports:?}");
+	assert!(
+		imports.contains(&("env".to_string(), "memory".to_string())),
+		"{imports:?}"
+	);
+	assert!(
+		imports.contains(&("env".to_string(), "table".to_string())),
+		"{imports:?}"
+	);
 }
 
 #[test]
 fn imported_memory_runs() {
-	is!("use { memory, table } from \"env\"\nuse memory\nmemory.copy([7, 8], 100)\nmemory.slice(100, 102)", parse("[7 8]"));
+	is!(
+		"use { memory, table } from \"env\"\nuse memory\nmemory.copy([7, 8], 100)\nmemory.slice(100, 102)",
+		parse("[7 8]")
+	);
 }
 
 #[test]

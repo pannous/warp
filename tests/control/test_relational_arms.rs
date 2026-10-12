@@ -1,7 +1,7 @@
 // Card leading-gt: a comparison without its left side was dropped silently (`> 100` read as 100). In a match arm it
 // compares the subject (C#'s relational pattern `> 100 =>`), anywhere else it is an error naming what is missing
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 const SIZE: &str = "size(v) := match v {\n < 0 => \"negative\"\n >= 100 => \"big\"\n _ => \"small\" }\n";
 

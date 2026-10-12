@@ -25,8 +25,13 @@ fn entities_expand_inside_double_quoted_texts() {
 #[test]
 fn an_unknown_entity_is_an_error() {
 	let (value, warnings) = crate::common::warnings_of("\\:alphabet = 1");
-	assert!(!matches!(value, warp::Node::Error(_)) && warnings.iter().any(|warning| warning.contains("\\:alphabet")), "{value:?} {warnings:?}");
-	with_warning_mode(WarningMode::Error, || crate::common::fails_with("\\:alphabet = 1", "\\:alphabet")); // strict
+	assert!(
+		!matches!(value, warp::Node::Error(_)) && warnings.iter().any(|warning| warning.contains("\\:alphabet")),
+		"{value:?} {warnings:?}"
+	);
+	with_warning_mode(WarningMode::Error, || {
+		crate::common::fails_with("\\:alphabet = 1", "\\:alphabet")
+	}); // strict
 	crate::common::fails_with("\\alpha = 1", "\\:alpha");
 }
 

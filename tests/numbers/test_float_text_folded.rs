@@ -2,8 +2,14 @@
 //! one way, the shortest digits that read back (user decision float-text), positional from 1e-5 up to 1e15, else with an exponent
 use crate::is;
 
-const FLOAT_TEXTS: [(&str, &str); 6] =
-	[("1.5", "1.5"), ("0.30000000000000004", "0.30000000000000004"), ("-2.25", "-2.25"), ("1.5e-7", "1.5e-7"), ("0.00012", "0.00012"), ("1.0f / 3", "0.3333333333333333")];
+const FLOAT_TEXTS: [(&str, &str); 6] = [
+	("1.5", "1.5"),
+	("0.30000000000000004", "0.30000000000000004"),
+	("-2.25", "-2.25"),
+	("1.5e-7", "1.5e-7"),
+	("0.00012", "0.00012"),
+	("1.0f / 3", "0.3333333333333333"),
+];
 
 #[test]
 fn test_folded_float_joins_text_as_at_run_time() {

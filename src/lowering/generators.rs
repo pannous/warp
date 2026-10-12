@@ -9,8 +9,8 @@
 //! loop `for yield·item·1 in xs { yield yield·item·1 }`, lazy like any loop over a generator.
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
+use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol, Counter};
 use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, RETURN_WORD};
-use super::nodes::{Counter, assign, block, call, if_then, int, key, statement_list, symbol};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
@@ -67,9 +67,13 @@ pub fn lower(node: Node) -> Node {
 /// `yield from xs` as `for yield·item·1 in xs { yield yield·item·1 }`
 fn delegations(node: Node, counter: &Counter) -> Node {
 	let node = node.map_children(|child| delegations(child, counter));
-	let Some(source) = delegated_source(&node) else { return node };
+	let Some(source) = delegated_source(&node) else {
+		return node;
+	};
 	let item = symbol(&[DELEGATED_ITEM, &counter.next_number().to_string()].join(NAME_SEPARATOR));
-	crate::generator_consumers::template(DELEGATION, &[("ITEM", &item), ("SOURCE", &source)]).remove(0).with_meta_of(&node)
+	crate::generator_consumers::template(DELEGATION, &[("ITEM", &item), ("SOURCE", &source)])
+		.remove(0)
+		.with_meta_of(&node)
 }
 
 fn delegated_source(node: &Node) -> Option<Node> {
@@ -95,29 +99,50 @@ fn run_once(mut body: Vec<Node>) -> Node {
 
 /// `name(params) := body` of a body that yields: its name, parameters and body
 fn definition(node: &Node) -> Option<(String, Vec<String>, &Node)> {
-	let Node::Key(head, Op::Define, body) = node.drop_meta() else { return None };
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
+	let Node::Key(head, Op::Define, body) = node.drop_meta() else {
+		return None;
+	};
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
 	let (name, parameters) = items.split_first()?;
-	let parameters = parameters.iter().map(|parameter| parameter.symbol_name().map(String::from)).collect::<Option<Vec<_>>>()?;
+	let parameters = parameters
+		.iter()
+		.map(|parameter| parameter.symbol_name().map(String::from))
+		.collect::<Option<Vec<_>>>()?;
 	let name = name.symbol_name()?.to_string();
 	contains_yield(body).then(|| (name, parameters, body.as_ref()))
 }
 
 pub(crate) fn generators(node: &Node) -> HashMap<String, Generator> {
 	let mut generators = HashMap::new();
-	node.visit(&mut |part| if let Some((name, parameters, body)) = definition(part) {
-		let mut locals: HashSet<String> = parameters.iter().cloned().collect();
-		locals.extend(loop_variables(body));
-		let mut inlinable = true;
-		body.visit(&mut |inner| match inner {
-			Node::Key(target, op, _) if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) => {
-				locals.extend(target.symbol_name().map(String::from));
-			}
-			Node::List(items, Bracket::Round, _) if items.first().is_some_and(|callee| callee.is_symbol(&name)) => inlinable = false,
-			Node::Symbol(word) if word == GLOBAL_WORD => inlinable = false,
-			_ => {}
-		});
-		generators.insert(name, Generator { parameters, body: body.clone(), locals, inlinable });
+	node.visit(&mut |part| {
+		if let Some((name, parameters, body)) = definition(part) {
+			let mut locals: HashSet<String> = parameters.iter().cloned().collect();
+			locals.extend(loop_variables(body));
+			let mut inlinable = true;
+			body.visit(&mut |inner| match inner {
+				Node::Key(target, op, _)
+					if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) =>
+				{
+					locals.extend(target.symbol_name().map(String::from));
+				}
+				Node::List(items, Bracket::Round, _) if items.first().is_some_and(|callee| callee.is_symbol(&name)) => {
+					inlinable = false
+				}
+				Node::Symbol(word) if word == GLOBAL_WORD => inlinable = false,
+				_ => {}
+			});
+			generators.insert(
+				name,
+				Generator {
+					parameters,
+					body: body.clone(),
+					locals,
+					inlinable,
+				},
+			);
+		}
 	});
 	generators
 }
@@ -173,7 +198,11 @@ pub(crate) fn is_statement_list(items: &[Node], bracket: &Bracket, separator: &S
 fn rewritten(node: Node, step: &dyn Fn(&Node) -> Step) -> Node {
 	match node {
 		Node::List(items, bracket, separator) if is_statement_list(&items, &bracket, &separator) => {
-			let separator = if matches!(separator, Separator::Newline) { separator } else { Separator::Semicolon };
+			let separator = if matches!(separator, Separator::Newline) {
+				separator
+			} else {
+				Separator::Semicolon
+			};
 			let items = items.into_iter().flat_map(|item| match step(&item) {
 				Step::Keep => vec![item],
 				Step::Descend => vec![item.map_children(|child| rewritten(child, step))],
@@ -181,7 +210,10 @@ fn rewritten(node: Node, step: &dyn Fn(&Node) -> Step) -> Node {
 			});
 			Node::List(items.collect(), bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewritten(*node, step)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(rewritten(*node, step)),
+			data,
+		},
 		other => match step(&other) {
 			Step::Keep => other,
 			Step::Descend => other.map_children(|child| rewritten(child, step)),
@@ -209,13 +241,20 @@ pub(crate) fn holds_stop(node: &Node) -> bool {
 }
 
 /// `for x in g(args) {body}` and `for g(args) {body}`: the loop variable, the generator, its arguments and the body
-fn generator_loop<'a>(node: &Node, generators: &'a HashMap<String, Generator>) -> Option<(Node, &'a String, &'a Generator, Vec<Node>, Node)> {
-	let Node::List(items, _, _) = node.drop_meta() else { return None };
+fn generator_loop<'a>(
+	node: &Node,
+	generators: &'a HashMap<String, Generator>,
+) -> Option<(Node, &'a String, &'a Generator, Vec<Node>, Node)> {
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return None;
+	};
 	if !items.first().is_some_and(|keyword| keyword.is_symbol(FOR_WORD)) {
 		return None;
 	}
 	let (variable, call, body) = match items.as_slice() {
-		[_, variable, within, call, body] if within.is_symbol(IN_WORD) && variable.symbol_name().is_some() => (variable.clone(), call, body),
+		[_, variable, within, call, body] if within.is_symbol(IN_WORD) && variable.symbol_name().is_some() => {
+			(variable.clone(), call, body)
+		}
 		[_, call, body] => (symbol(IMPLICIT_VARIABLE), call, body),
 		_ => return None,
 	};
@@ -231,7 +270,8 @@ fn generator_loop<'a>(node: &Node, generators: &'a HashMap<String, Generator>) -
 	let (name, arguments) = call_items.split_first()?;
 	let (name, generator) = generators.get_key_value(name.symbol_name()?)?;
 	let arguments: Vec<Node> = arguments.iter().flat_map(self::arguments).collect();
-	(generator.inlinable && arguments.len() == generator.parameters.len()).then(|| (variable, name, generator, arguments, body.clone()))
+	(generator.inlinable && arguments.len() == generator.parameters.len())
+		.then(|| (variable, name, generator, arguments, body.clone()))
 }
 
 fn lazy_loops(node: Node, generators: &HashMap<String, Generator>, counter: &Counter) -> Node {
@@ -247,7 +287,14 @@ fn lazy_loops(node: Node, generators: &HashMap<String, Generator>, counter: &Cou
 }
 
 /// The generator's body inlined, each `yield v` running the loop's body with the variable `v`
-fn inlined_loop(variable: Node, name: &str, generator: &Generator, arguments: Vec<Node>, body: Node, loop_number: usize) -> Node {
+fn inlined_loop(
+	variable: Node,
+	name: &str,
+	generator: &Generator,
+	arguments: Vec<Node>,
+	body: Node,
+	loop_number: usize,
+) -> Node {
 	let rename = |word: &str| [name, word, &loop_number.to_string()].join(NAME_SEPARATOR);
 	let stop = symbol(&rename(STOP_SUFFIX));
 	let breaks = holds_own(&body, BREAK_WORD);
@@ -266,8 +313,14 @@ fn inlined_loop(variable: Node, name: &str, generator: &Generator, arguments: Ve
 		}
 		run
 	};
-	let generator_statements = block_items(&rewritten(generator_body, &|node| generator_step(node, &loop_body, &stop, stops)));
-	let bindings = generator.parameters.iter().zip(arguments).map(|(parameter, argument)| assign(symbol(&rename(parameter)), argument));
+	let generator_statements = block_items(&rewritten(generator_body, &|node| {
+		generator_step(node, &loop_body, &stop, stops)
+	}));
+	let bindings = generator
+		.parameters
+		.iter()
+		.zip(arguments)
+		.map(|(parameter, argument)| assign(symbol(&rename(parameter)), argument));
 	let mut all: Vec<Node> = bindings.collect();
 	match stops {
 		true => {
@@ -288,7 +341,12 @@ fn generator_step(node: &Node, loop_body: &dyn Fn(Vec<Node>) -> Vec<Node>, stop:
 	match node {
 		_ if is_return(node) => Step::Replace(vec![assign(stop.clone(), int(1)), symbol(BREAK_WORD)]),
 		_ if is_own_scope(node) => Step::Keep,
-		_ if stops && is_loop(node) && holds_stop(node) => Step::Replace(vec![node.drop_meta().clone().map_children(|child| rewritten(child, &|inner| generator_step(inner, loop_body, stop, stops))), break_if(stop)]),
+		_ if stops && is_loop(node) && holds_stop(node) => Step::Replace(vec![
+			node.drop_meta()
+				.clone()
+				.map_children(|child| rewritten(child, &|inner| generator_step(inner, loop_body, stop, stops))),
+			break_if(stop),
+		]),
 		_ => Step::Descend,
 	}
 }
@@ -321,9 +379,11 @@ pub fn lower_iterators(node: Node) -> Node {
 		return node;
 	}
 	let mut objects = HashSet::new();
-	node.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
-		if constructed_iterator(value, &classes) {
-			objects.extend(target.symbol_name().map(String::from));
+	node.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign, value) = part {
+			if constructed_iterator(value, &classes) {
+				objects.extend(target.symbol_name().map(String::from));
+			}
 		}
 	});
 	iterator_loops(node, &classes, &objects)
@@ -354,25 +414,51 @@ fn constructed_iterator(value: &Node, classes: &HashSet<String>) -> bool {
 
 fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<String>) -> Node {
 	let node = node.map_children(|child| iterator_loops(child, classes, objects));
-	let Node::List(items, _, _) = node.drop_meta() else { return node };
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return node;
+	};
 	let (variable, iterable, body) = match items.as_slice() {
-		[keyword, variable, within, iterable, body] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => (variable, iterable, body),
+		[keyword, variable, within, iterable, body] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => {
+			(variable, iterable, body)
+		}
 		_ => return node,
 	};
-	let is_object = iterable.symbol_name().is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
-	let Some(name) = variable.symbol_name().filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) else { return node };
+	let is_object =
+		iterable.symbol_name().is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
+	let Some(name) = variable
+		.symbol_name()
+		.filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
+	else {
+		return node;
+	};
 	let iterator = symbol(&[name, ITERATOR_SUFFIX].join(NAME_SEPARATOR));
-	let next = || assign(variable.clone(), key(iterator.clone(), Op::Dot, call(NEXT_METHOD, vec![])));
+	let next = || {
+		assign(
+			variable.clone(),
+			key(iterator.clone(), Op::Dot, call(NEXT_METHOD, vec![])),
+		)
+	};
 	let mut statements_of_body = block_items(body);
 	statements_of_body.push(crate::wasm_emitter::mark_step(next()));
 	let more = key(variable.clone(), Op::Ne, Node::Empty);
-	statement_list(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, block(statements_of_body))], Bracket::None).with_meta_of(&node)
+	statement_list(
+		vec![
+			assign(iterator.clone(), iterable.clone()),
+			next(),
+			while_do(more, block(statements_of_body)),
+		],
+		Bracket::None,
+	)
+	.with_meta_of(&node)
 }
 
 /// Each generator's definition collects what it yields: `{ g·yielded = []; …; g·yielded += [v]; …; g·yielded }`
 fn collected_definitions(node: Node, generators: &HashMap<String, Generator>) -> Node {
 	match node {
-		Node::Key(head, Op::Define, body) if definition(&Node::Key(head.clone(), Op::Define, body.clone())).is_some_and(|(name, _, _)| generators.contains_key(&name)) => {
+		Node::Key(head, Op::Define, body)
+			if definition(&Node::Key(head.clone(), Op::Define, body.clone()))
+				.is_some_and(|(name, _, _)| generators.contains_key(&name)) =>
+		{
 			let (name, _, _) = definition(&Node::Key(head.clone(), Op::Define, body.clone())).expect("a generator");
 			let list = symbol(&[name.as_str(), YIELDED_SUFFIX].join(NAME_SEPARATOR));
 			let step = |node: &Node| -> Step {
@@ -382,7 +468,11 @@ fn collected_definitions(node: Node, generators: &HashMap<String, Generator>) ->
 					return Step::Replace(std::iter::once(collect).chain(receiving_nothing(target)).collect());
 				}
 				match node {
-					_ if is_return(node) => Step::Replace(vec![Node::List(vec![symbol(RETURN_WORD), list.clone()], Bracket::None, Separator::Space)]),
+					_ if is_return(node) => Step::Replace(vec![Node::List(
+						vec![symbol(RETURN_WORD), list.clone()],
+						Bracket::None,
+						Separator::Space,
+					)]),
 					_ if is_own_scope(node) => Step::Keep,
 					_ => Step::Descend,
 				}

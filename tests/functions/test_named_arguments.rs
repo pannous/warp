@@ -39,7 +39,6 @@ fn named_arguments_run_as_written() {
 	is!(&format!("{counters}k() := f(b=h(), a=g()); k()"), 2102);
 }
 
-
 #[test]
 fn a_bare_flag_name_in_a_call_sets_it() {
 	// card copy-shallow: `copy(shallow)` is `copy(shallow: true)`, and so for any flag (a parameter of default yes/no)
@@ -48,6 +47,12 @@ fn a_bare_flag_name_in_a_call_sets_it() {
 	is!("f(a, loud = false) := if loud then a * 10 else a; f(3)", 3);
 	is!("f(a, loud: false) := if loud then a * 10 else a; f(3, loud)", 30);
 	// a variable of that name is passed as it is
-	is!("f(a, loud = false) := if loud then a * 10 else a; loud = false; f(3, loud)", 3);
-	is!("f(a, loud = false) := if loud then a * 10 else a; g(loud) := f(2, loud); g(false)", 2);
+	is!(
+		"f(a, loud = false) := if loud then a * 10 else a; loud = false; f(3, loud)",
+		3
+	);
+	is!(
+		"f(a, loud = false) := if loud then a * 10 else a; g(loud) := f(2, loud); g(false)",
+		2
+	);
 }

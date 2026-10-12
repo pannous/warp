@@ -4,8 +4,8 @@
 //! Iterable (wiki/trait.md): `iterate(b:bag) := …` gives what a bag holds; `for x in b` walks it and `x in b` searches it.
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.
 
-use super::words::{FOR_WORD, IN_WORD};
 use super::nodes::{call, children_rewritten, key};
+use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
@@ -17,12 +17,20 @@ const PRINT_WORD: &str = "print";
 
 pub fn lower(node: Node) -> Node {
 	let declared = declared_types(&node);
-	let (printable, iterable) = (defining(&node, &declared, TEXT_OPERATION), defining(&node, &declared, ITERATE_OPERATION));
+	let (printable, iterable) = (
+		defining(&node, &declared, TEXT_OPERATION),
+		defining(&node, &declared, ITERATE_OPERATION),
+	);
 	if printable.is_empty() && iterable.is_empty() {
 		return node;
 	}
 	let types = InstanceTypes::of(&node);
-	Operations { printable, iterable, types }.rewrite_program(node)
+	Operations {
+		printable,
+		iterable,
+		types,
+	}
+	.rewrite_program(node)
 }
 
 struct Operations {
@@ -37,13 +45,22 @@ impl Operations {
 	/// a program shows the value `str()` would
 	fn rewrite_program(&self, node: Node) -> Node {
 		match node {
-			Node::Meta { node, data } if is_statements(&node) => Node::Meta { node: Box::new(self.rewrite_program(*node)), data },
+			Node::Meta { node, data } if is_statements(&node) => Node::Meta {
+				node: Box::new(self.rewrite_program(*node)),
+				data,
+			},
 			Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 				let last = statements.pop().map(|last| self.rewrite_program(last));
-				let statements = statements.into_iter().map(|statement| self.rewrite(statement)).chain(last).collect();
+				let statements = statements
+					.into_iter()
+					.map(|statement| self.rewrite(statement))
+					.chain(last)
+					.collect();
 				Node::List(statements, Bracket::None, separator)
 			}
-			value => self.call(TEXT_OPERATION, &self.printable, &value).unwrap_or_else(|| self.rewrite(value)),
+			value => self
+				.call(TEXT_OPERATION, &self.printable, &value)
+				.unwrap_or_else(|| self.rewrite(value)),
 		}
 	}
 
@@ -56,26 +73,52 @@ impl Operations {
 			}
 		}
 		match node {
-			Node::Key(value, Op::As, target) if is_text_word(&target) => match self.call(TEXT_OPERATION, &self.printable, &value) {
-				Some(call) => call,
-				None => Node::Key(Box::new(self.rewrite(*value)), Op::As, target),
-			},
+			Node::Key(value, Op::As, target) if is_text_word(&target) => {
+				match self.call(TEXT_OPERATION, &self.printable, &value) {
+					Some(call) => call,
+					None => Node::Key(Box::new(self.rewrite(*value)), Op::As, target),
+				}
+			}
 			Node::List(items, bracket, separator) => {
 				let text_call = |value: &Node| self.call(TEXT_OPERATION, &self.printable, value);
 				let items_of = |value: &Node| self.call(ITERATE_OPERATION, &self.iterable, value);
 				let called = match items.as_slice() {
-					[word, value] if is_text_word(word) || word.name() == crate::wasm_emitter::text_builtins::TEXT_FORM => text_call(value),
-					[word, value] if word.name() == PRINT_WORD => text_call(value).map(|text| Node::List(vec![word.clone(), text], bracket.clone(), separator.clone())),
+					[word, value]
+						if is_text_word(word) || word.name() == crate::wasm_emitter::text_builtins::TEXT_FORM =>
+					{
+						text_call(value)
+					}
+					[word, value] if word.name() == PRINT_WORD => text_call(value)
+						.map(|text| Node::List(vec![word.clone(), text], bracket.clone(), separator.clone())),
 					// `for x in b body`, `x in b`: the items iterate gives
-					[word, variable, keyword, iterated, rest @ ..] if word.name() == FOR_WORD && keyword.name() == IN_WORD => items_of(iterated).map(|walked| {
-						let rest: Vec<Node> = rest.iter().map(|item| self.rewrite(item.clone())).collect();
-						Node::List([vec![word.clone(), variable.clone(), keyword.clone(), walked], rest].concat(), bracket.clone(), separator.clone())
+					[word, variable, keyword, iterated, rest @ ..]
+						if word.name() == FOR_WORD && keyword.name() == IN_WORD =>
+					{
+						items_of(iterated).map(|walked| {
+							let rest: Vec<Node> = rest.iter().map(|item| self.rewrite(item.clone())).collect();
+							Node::List(
+								[vec![word.clone(), variable.clone(), keyword.clone(), walked], rest].concat(),
+								bracket.clone(),
+								separator.clone(),
+							)
+						})
+					}
+					[value, keyword, searched] if keyword.name() == IN_WORD => items_of(searched).map(|walked| {
+						Node::List(
+							vec![self.rewrite(value.clone()), keyword.clone(), walked],
+							bracket.clone(),
+							separator.clone(),
+						)
 					}),
-					[value, keyword, searched] if keyword.name() == IN_WORD => items_of(searched)
-						.map(|walked| Node::List(vec![self.rewrite(value.clone()), keyword.clone(), walked], bracket.clone(), separator.clone())),
 					_ => None,
 				};
-				called.unwrap_or_else(|| Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator))
+				called.unwrap_or_else(|| {
+					Node::List(
+						items.into_iter().map(|item| self.rewrite(item)).collect(),
+						bracket,
+						separator,
+					)
+				})
 			}
 			Node::Key(head, Op::Define, body) => {
 				let body = self.types.in_definition(&head, || self.rewrite(*body));
@@ -83,8 +126,13 @@ impl Operations {
 			}
 			// `"hi " + bo`, `s + bo`: an instance joining a text joins as its text (card print-oldest: text + anything
 			// printable); `bo + other`, `bo + 1` of another instance or a number stay the type's own sums
-			Node::Key(left, Op::Add, right) if self.joins_printable(&left, &right) || self.joins_printable(&right, &left) => {
-				let joined = |side: Node| self.call(TEXT_OPERATION, &self.printable, &side).unwrap_or_else(|| self.rewrite(side));
+			Node::Key(left, Op::Add, right)
+				if self.joins_printable(&left, &right) || self.joins_printable(&right, &left) =>
+			{
+				let joined = |side: Node| {
+					self.call(TEXT_OPERATION, &self.printable, &side)
+						.unwrap_or_else(|| self.rewrite(side))
+				};
 				key(joined(*left), Op::Add, joined(*right))
 			}
 			other => children_rewritten(other, |child| self.rewrite(child)),
@@ -99,15 +147,20 @@ impl Operations {
 
 	/// `text·person(x)`, `iterate·bag(b)` for a value known to be an instance of a type defining the operation
 	fn call(&self, operation: &str, types: &HashSet<String>, value: &Node) -> Option<Node> {
-		let Some(Shape::Instance(type_name)) = self.types.shape(value) else { return None };
-		types.contains(&type_name).then(|| {
-			call(&witness_name(operation, &type_name), vec![self.rewrite(value.clone())])
-		})
+		let Some(Shape::Instance(type_name)) = self.types.shape(value) else {
+			return None;
+		};
+		types
+			.contains(&type_name)
+			.then(|| call(&witness_name(operation, &type_name), vec![self.rewrite(value.clone())]))
 	}
 }
 
 fn is_statements(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline))
+	matches!(
+		node.drop_meta(),
+		Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)
+	)
 }
 
 pub(crate) fn is_text_word(node: &Node) -> bool {
@@ -116,7 +169,11 @@ pub(crate) fn is_text_word(node: &Node) -> bool {
 
 fn declared_types(node: &Node) -> HashSet<String> {
 	let mut types = HashSet::new();
-	node.visit(&mut |part| if let Node::Type { name, .. } = part { types.insert(name.name()); });
+	node.visit(&mut |part| {
+		if let Node::Type { name, .. } = part {
+			types.insert(name.name());
+		}
+	});
 	types
 }
 
@@ -128,7 +185,10 @@ fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet
 		if let Some((type_name, _, _)) = definition(part, declared, operation) {
 			types.insert(type_name);
 		}
-		if let Some(type_name) = declared.iter().find(|type_name| defines_function(part, &witness_name(operation, type_name))) {
+		if let Some(type_name) = declared
+			.iter()
+			.find(|type_name| defines_function(part, &witness_name(operation, type_name)))
+		{
 			types.insert(type_name.clone());
 		}
 	});
@@ -136,16 +196,27 @@ fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet
 }
 
 fn defines_function(node: &Node, name: &str) -> bool {
-	let Node::Key(head, Op::Define | Op::Assign, _) = node else { return false };
+	let Node::Key(head, Op::Define | Op::Assign, _) = node else {
+		return false;
+	};
 	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.name() == name))
 }
 
 /// `operation(p:T) := body` of a declared type T: T, the parameter and the body
 fn definition(node: &Node, declared: &HashSet<String>, operation: &str) -> Option<(String, Node, Node)> {
-	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else { return None };
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
-	let [word, parameter] = items.as_slice() else { return None };
-	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else { return None };
+	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else {
+		return None;
+	};
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
+	let [word, parameter] = items.as_slice() else {
+		return None;
+	};
+	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else {
+		return None;
+	};
 	let type_name = type_node.drop_meta().name();
-	(word.name() == operation && declared.contains(&type_name)).then(|| (type_name, parameter.clone(), body.as_ref().clone()))
+	(word.name() == operation && declared.contains(&type_name))
+		.then(|| (type_name, parameter.clone(), body.as_ref().clone()))
 }

@@ -1,7 +1,7 @@
 // wiki/pipe.md `2|square|root`, `square 2|root`: a pipe into a function defined in the spaced form (`square x := x*x`,
 // rewritten only after the pipe pass) and into a word operator alone (`sqrt`, `cbrt`, `abs`)
-use warp::ints;
 use crate::is;
+use warp::ints;
 
 #[test]
 fn a_pipe_into_a_spaced_definition() {

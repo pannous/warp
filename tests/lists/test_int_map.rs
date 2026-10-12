@@ -28,22 +28,35 @@ fn a_number_is_found_in_a_map() {
 
 #[test]
 fn a_global_map_is_set_in_a_function() {
-	is!("m = {}; f(k, v) := { global m; m[k] = v }; f(9, 1); f(10, 2); m[9] + m[10]", 3);
+	is!(
+		"m = {}; f(k, v) := { global m; m[k] = v }; f(9, 1); f(10, 2); m[9] + m[10]",
+		3
+	);
 	is!("m = {}; f(k) := { global m; m[k] }; m[3] = 7; f(3)", 7);
-	is!("m = {}; f(k) := { global m; if k in m then 1 else 0 }; m[3] = 7; f(3) + f(4)", 1);
+	is!(
+		"m = {}; f(k) := { global m; if k in m then 1 else 0 }; m[3] = 7; f(3) + f(4)",
+		1
+	);
 	is!("m = {}; f() := { global m; m = {} }; m[3] = 7; f(); count(m)", 0);
 }
 
 #[test]
 fn an_entry_is_removed_by_its_number() {
-	is!("m = {}; for i in 1 to 100 { m[i] = i }; for i in 1 to 99 { m.remove(i) }; [count(m), m[100]]", warp::parse("[1 100]"));
-	is!("m = {}; f(k) := { global m; m.remove(k) }; m[1] = 1; m[2] = 2; f(1); if 1 in m then 0 else m[2]", 2);
+	is!(
+		"m = {}; for i in 1 to 100 { m[i] = i }; for i in 1 to 99 { m.remove(i) }; [count(m), m[100]]",
+		warp::parse("[1 100]")
+	);
+	is!(
+		"m = {}; f(k) := { global m; m.remove(k) }; m[1] = 1; m[2] = 2; f(1); if 1 in m then 0 else m[2]",
+		2
+	);
 	is!("m = {}; m[1] = 5; m.remove(1)", 5);
 }
 
 #[test]
 fn a_global_map_takes_constant_time_per_entry() {
-	let filled = format!("m = {{}}; put(k, v) := {{ global m; m[k] = v }}; for i in 1 to {ENTRIES} {{ put(i, i * 2) }}");
+	let filled =
+		format!("m = {{}}; put(k, v) := {{ global m; m[k] = v }}; for i in 1 to {ENTRIES} {{ put(i, i * 2) }}");
 	is!(&timed(&filled, "m[777]"), 1554);
 	let found = format!("{filled}; got(k) := {{ global m; if k in m then m[k] else 0 }}; s = 0; for i in 1 to {ENTRIES} {{ s += got(i) }}");
 	is!(&timed(&found, "s"), ENTRIES * (ENTRIES + 1));
@@ -57,7 +70,9 @@ const LINEAR_RATIO: i64 = 11;
 /// The identity map of a table (notes/orm.md) finds a loaded row's instance by its id: loading is linear
 #[test]
 fn ten_thousand_rows_load_in_linear_time() {
-	let loaded = |table: &str, rows: i64| format!("{table}: [Person] = database.int_map_{table}\nfor i in 1 to {rows} {{ {table}.add(Person(\"p\", i)) }}\n{table}_sum = 0; for p in {table} {{ {table}_sum += p.age }}");
+	let loaded = |table: &str, rows: i64| {
+		format!("{table}: [Person] = database.int_map_{table}\nfor i in 1 to {rows} {{ {table}.add(Person(\"p\", i)) }}\n{table}_sum = 0; for p in {table} {{ {table}_sum += p.age }}")
+	};
 	let (small, large) = (loaded("small", ENTRIES / 4), loaded("large", ENTRIES));
 	let program = format!("class Person{{name: text; age: int}}\nt0 = clock()\n{small}\nt1 = clock()\n{large}\nt2 = clock()\nif t2 - t1 <= {LINEAR_RATIO} * max(t1 - t0, 1) then large_sum else [t1 - t0, t2 - t1]");
 	is!(&program, ENTRIES * (ENTRIES + 1) / 2);

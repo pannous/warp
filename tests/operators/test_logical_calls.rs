@@ -15,8 +15,14 @@ fn test_call_operand_of_and_or() {
 
 #[test]
 fn test_call_operand_is_evaluated_once() {
-	is!("global calls = 0; def c(){ calls = calls + 1; return 3 }; c() or 4; calls", 1);
-	is!("global calls = 0; def c(){ calls = calls + 1; return 3 }; c() or \"x\"; calls", 1);
+	is!(
+		"global calls = 0; def c(){ calls = calls + 1; return 3 }; c() or 4; calls",
+		1
+	);
+	is!(
+		"global calls = 0; def c(){ calls = calls + 1; return 3 }; c() or \"x\"; calls",
+		1
+	);
 }
 
 #[test] // an element of a list of mixed values is a Node: its truthiness is tested at run time
@@ -25,5 +31,8 @@ fn test_node_operand_of_and_or() {
 	is!("xs=[false, \"a\"]; xs#2 and 5", 5);
 	is!("xs=[0, \"a\"]; xs#1 or \"b\"", "b");
 	is!("x=[]; x or 3", 3);
-	is!("global g=[]; g.push(false); def c(){ return g#1 }; k=2; c() and k == 2", false);
+	is!(
+		"global g=[]; g.push(false); def c(){ return g#1 }; k=2; c() and k == 2",
+		false
+	);
 }

@@ -6,7 +6,13 @@ use crate::is_online;
 
 #[test]
 fn use_net_posts_a_text() {
-	is_online!(&format!("use net; use json; answer = parse_json(post(\"{}\", \"hello warp\")); answer.data", echo_url()), "hello warp");
+	is_online!(
+		&format!(
+			"use net; use json; answer = parse_json(post(\"{}\", \"hello warp\")); answer.data",
+			echo_url()
+		),
+		"hello warp"
+	);
 }
 
 #[test]
@@ -22,10 +28,21 @@ fn only_a_network_failure_is_retried() {
 	let attempts_at = |url: String| {
 		let attempts = std::cell::Cell::new(0);
 		let code = format!("use net; post(\"{url}\", \"x\")");
-		retried_on_network_failure(&code, || { attempts.set(attempts.get() + 1); warp::wasm_emitter::eval(&code) }, network_failure_of);
+		retried_on_network_failure(
+			&code,
+			|| {
+				attempts.set(attempts.get() + 1);
+				warp::wasm_emitter::eval(&code)
+			},
+			network_failure_of,
+		);
 		attempts.get()
 	};
-	let closed_port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port(); // listener dropped: refused
+	let closed_port = std::net::TcpListener::bind("127.0.0.1:0")
+		.unwrap()
+		.local_addr()
+		.unwrap()
+		.port(); // listener dropped: refused
 	assert_eq!(attempts_at(format!("http://127.0.0.1:{closed_port}/post")), 2);
 	assert_eq!(attempts_at(serve("401 Unauthorized", "no")), 1);
 }

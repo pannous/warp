@@ -18,12 +18,20 @@ fn a_match_on_enum_cases_tests_and_binds() {
 	is!(&format!("{SHAPE}; {area}; area(Shape::Rect(2, 3))"), 6);
 	is!(&format!("{SHAPE}; {area}; area(Circle(2))"), 12);
 	is!(&format!("{SHAPE}; {area}; area(Dot)"), 0);
-	is!(&format!("{SHAPE}; s = Shape::Rect(2, 3); match s {{ Shape::Circle(r) => r, Shape::Rect(w, h) => w * h, Dot => 0 }}"), 6);
+	is!(
+		&format!(
+			"{SHAPE}; s = Shape::Rect(2, 3); match s {{ Shape::Circle(r) => r, Shape::Rect(w, h) => w * h, Dot => 0 }}"
+		),
+		6
+	);
 }
 
 #[test]
 fn swift_case_lines_with_values() {
-	is!("enum Shape { case circle(radius: int)\n case square(side: int) }; s = Shape::square(4); s.side", 4);
+	is!(
+		"enum Shape { case circle(radius: int)\n case square(side: int) }; s = Shape::square(4); s.side",
+		4
+	);
 }
 
 #[test]

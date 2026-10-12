@@ -1,7 +1,7 @@
 // Card g_ADRM (wiki/Error.md): `on error of f {handler}` attaches a catch handler to f from outside: a call of f that
 // fails has the handler's value, as `try body else handler`
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 #[test]
 fn a_failing_call_has_the_handler_value() {

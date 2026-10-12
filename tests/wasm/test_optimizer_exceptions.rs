@@ -12,6 +12,8 @@ fn optimized_try_still_catches() {
 		return;
 	}
 	let module = compile("try 1 + [1 2]#5 else 7").unwrap_or_else(|error| panic!("{error:?}"));
-	let optimized = WasmOptimizer::library(OptimizationMode::Speed).optimize(&module.bytes).unwrap();
+	let optimized = WasmOptimizer::library(OptimizationMode::Speed)
+		.optimize(&module.bytes)
+		.unwrap();
 	assert_eq!(read_bytes(&optimized).unwrap(), Node::Number(Number::Int(7)));
 }

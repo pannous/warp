@@ -1,8 +1,8 @@
+use crate::{eq, is};
+use warp::wasm_emitter::eval;
 use warp::Node::{Empty, Type};
 use warp::*;
-use warp::wasm_emitter::eval;
 use warp::{key, symbol, wasm_object, wasm_struct, Node};
-use crate::{is, eq};
 
 // End goal API achieved - unified struct for both Rust and WASM GC
 // Single definition creates both Rust struct and WASM GC reader
@@ -15,10 +15,12 @@ wasm_struct! {
 
 #[test]
 fn test_class_instance_magic_roundtrip() {
-	let alice = Person { name: "Alice".into(), age: 30 };
+	let alice = Person {
+		name: "Alice".into(),
+		age: 30,
+	};
 	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice); // IT WORKS!! 🎉
 }
-
 
 #[test]
 fn test_magic_object_roundtrip() {
@@ -27,7 +29,6 @@ fn test_magic_object_roundtrip() {
 	let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } };
 	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 }
-
 
 #[test]
 fn test_debug_format() {
@@ -61,7 +62,7 @@ let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }; i
  */
 
 fn field(name: &str, type_name: &str) -> Node {
-	let typ=Type {
+	let typ = Type {
 		name: Box::new(symbol(type_name)),
 		body: Box::new(Empty),
 	};
@@ -74,7 +75,7 @@ fn test_class_definition() {
 		"class Person{name:String age:i64}",
 		Type {
 			name: Box::new(symbol("Person")),
-			body: Box::new(list(vec![field("name","String"), field("age", "i64")]))
+			body: Box::new(list(vec![field("name", "String"), field("age", "i64")]))
 		}
 	);
 }
@@ -96,9 +97,6 @@ fn test_class_instance_explicit() -> anyhow::Result<()> {
 	}
 	Ok(())
 }
-
-
-
 
 #[test]
 fn test_class_instance2() -> anyhow::Result<()> {
@@ -144,7 +142,6 @@ fn test_class_instance_raw() {
 		panic!("expected Node::Data, got {:?}", result);
 	}
 }
-
 
 #[test]
 fn test_text() {
