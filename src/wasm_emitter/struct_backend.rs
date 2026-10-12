@@ -182,8 +182,10 @@ impl WasmGcEmitter {
 		// a union field `size: int | text` is stored as a Node: its literal is checked against the parts
 		let literal_misfit = crate::analyzer::literal_misfit(&field.type_name, value);
 		if self.misfits(value, access.kind) || literal_misfit.is_some() {
-			let given = crate::analyzer::kind_with_article(literal_misfit.unwrap_or_else(|| self.given_kind(value)));
-			let message = format!("{} of {class} is {} field, got {} ({given})", field.name, crate::analyzer::with_article(&field.type_name), value.serialize());
+			let given_kind = literal_misfit.unwrap_or_else(|| self.given_kind(value));
+			let given = crate::analyzer::kind_with_article(given_kind);
+			let note = crate::analyzer::not_whole_note(&field.type_name, given_kind);
+			let message = format!("{} of {class} is {} field, got {} ({given}){note}", field.name, crate::analyzer::with_article(&field.type_name), value.serialize());
 			self.emit_type_error(func, message);
 			return true;
 		}
