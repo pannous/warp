@@ -273,6 +273,8 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_reduce_linear)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
+	linker.func_wrap(HOST_LIBRARY, DRAW_SHAPE, |kind: i64, a: f64, b: f64, c: f64, d: f64, color: i64| crate::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32))?;
+	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
 	linker.func_wrap(HOST_LIBRARY, SOUND, sound)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
@@ -338,6 +340,12 @@ fn paint(mut caller: Caller<'_, HostState>, pixels: HostNode, width: i64, height
 		},
 	};
 	crate::paint::paint(&values, size.0, size.1).map(|_| ()).map_err(task_failure)
+}
+
+/// show() of `use draw` on the GPU (src/gpu_canvas.rs)
+fn draw_show(width: i64, height: i64) -> wasmtime::Result<()> {
+	warp_runtime::system_signals::end_at_first_frame()?;
+	crate::gpu_canvas::show(width.max(0) as usize, height.max(0) as usize).map(|_| ()).map_err(task_failure)
 }
 
 /// sound_samples(samples, count, rate) natively: a WAV file, played unless headless (src/sound.rs)

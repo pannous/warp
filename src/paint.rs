@@ -18,6 +18,9 @@ const FOLDER: &str = "warp-paint";
 /// Set when tests or a headless machine must not see windows (tests/common warp_command, tests/queue.sh)
 pub const NO_WINDOW_VARIABLE: &str = "WARP_NO_WINDOW";
 const CI_VARIABLE: &str = "CI";
+/// `WARP_DRAW=gpu` or `cpu` picks how `use draw` draws (src/gpu_canvas.rs); without it, on the GPU when a window shows
+const DRAW_VARIABLE: &str = "WARP_DRAW";
+const DRAW_CHOICES: [&str; 2] = ["gpu", "cpu"];
 /// Whether paint shows a window: only the warp binary turns it on (allow_windows); a library caller writes PNGs
 static WINDOWS: AtomicBool = AtomicBool::new(false);
 /// The paint calls of this run so far
@@ -39,6 +42,12 @@ pub fn shade(value: u64) -> [u8; 3] {
 pub fn allow_windows() {
 	let headless = [NO_WINDOW_VARIABLE, CI_VARIABLE].iter().any(|variable| std::env::var_os(variable).is_some());
 	WINDOWS.store(!headless, Ordering::Relaxed);
+	let chosen = std::env::var(DRAW_VARIABLE).ok().filter(|choice| !choice.is_empty());
+	if let Some(unknown) = chosen.as_ref().filter(|choice| !DRAW_CHOICES.contains(&choice.as_str())) {
+		eprintln!("warning: {DRAW_VARIABLE}={unknown} is neither {}: use draw draws as without it", DRAW_CHOICES.join(" nor "));
+	}
+	let on_gpu = chosen.as_deref().filter(|choice| DRAW_CHOICES.contains(choice)).map_or(!headless, |choice| choice == DRAW_CHOICES[0]);
+	warp_runtime::system_values::tell_gpu_drawing(on_gpu);
 }
 
 /// Whether the warp binary may reach the user's screen and speakers: paint's windows, sound's player (src/sound.rs)

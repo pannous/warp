@@ -14,7 +14,8 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
 // window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
-const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0 };
+const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
+const NO_GPU_DRAWING = "use draw draws through pixels on a page (gpu_drawing is no here), so draw_shape and draw_show never run";
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
@@ -212,6 +213,9 @@ function programImports(holder, hooks) {
 				}
 				hooks.paint(painted, Number(width), Number(height));
 			},
+			// use draw on the GPU (src/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
+			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
+			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
 			// the page plays them with WebAudio
 			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
