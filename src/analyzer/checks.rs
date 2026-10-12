@@ -1903,14 +1903,16 @@ pub(super) fn check_declared_types(
 			}
 			check_declared_types(value, declared, lists, classes)
 		}
-		// `names.add(420)`: the method call appends before mutation lowers it to `names = names + [420]`
-		Node::Key(list, Op::Dot, _) if appended_items(node).is_some() => {
+		// `names.add(420)`, `names.insert(420, at: 0)`: the method call appends before mutation lowers it to
+		// `names = names + [420]`
+		Node::Key(list, Op::Dot, _) if appended_items(node).or_else(|| inserted_item(node)).is_some() => {
 			let Node::Symbol(name) = list.drop_meta() else {
 				return None;
 			};
 			let type_name = declared.get(name)?;
 			let element = list_element_type(type_name)?;
-			let appended = Node::List(appended_items(node)?.to_vec(), Bracket::Square, Separator::Space);
+			let items = appended_items(node).or_else(|| inserted_item(node))?;
+			let appended = Node::List(items.to_vec(), Bracket::Square, Separator::Space);
 			list_items_mismatch(node, name, type_name, element, &appended)
 		}
 		Node::Key(left, _, right) => check_declared_types(left, declared, lists, classes)
@@ -2218,6 +2220,33 @@ pub(crate) fn indexed_list(target: &Node) -> Option<&str> {
 		return None;
 	};
 	list.symbol_name()
+}
+
+/// The value of `xs.insert(a, at: i)` (card w0-list-writes: an insert is a write, checked as `xs.add(a)` is)
+pub(crate) fn inserted_item(call: &Node) -> Option<&[Node]> {
+	let Node::Key(_, Op::Dot, method_call) = call.drop_meta() else {
+		return None;
+	};
+	let Node::List(items, _, _) = method_call.drop_meta() else {
+		return None;
+	};
+	match items.as_slice() {
+		[method, first, second]
+			if method.is_symbol(INSERT_METHOD) && is_insert_position(first) != is_insert_position(second) =>
+		{
+			Some(std::slice::from_ref(if is_insert_position(first) {
+				second
+			} else {
+				first
+			}))
+		}
+		_ => None,
+	}
+}
+
+/// `at: i` of `xs.insert(a, at: i)`
+pub(crate) fn is_insert_position(argument: &Node) -> bool {
+	matches!(argument.drop_meta(), Node::Key(word, Op::Colon, _) if word.is_symbol(AT_WORD))
 }
 
 /// The items of an append call `xs.add(a)`, `xs.push(a, b)`

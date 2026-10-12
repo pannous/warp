@@ -9,7 +9,7 @@
 use super::nodes::{assign, key, Counter};
 use crate::analyzer::{
 	added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list,
-	list_element_type, of_type_declaration,
+	inserted_item, is_insert_position, list_element_type, of_type_declaration,
 };
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
@@ -122,7 +122,7 @@ impl ElementChecks {
 			}
 			Node::Key(list, Op::Dot, call) => {
 				let append = Node::Key(list, Op::Dot, call);
-				if appended_items(&append).is_none() {
+				if appended_items(&append).or_else(|| inserted_item(&append)).is_none() {
 					return append.map_children(|child| self.lower(child));
 				}
 				let Node::Key(list, _, _) = append.drop_meta() else {
@@ -179,7 +179,14 @@ impl ElementChecks {
 		};
 		let (method, arguments) = items.split_first().expect("an append call has its method");
 		let mut checks = vec![];
-		let arguments = self.checked_items(arguments.to_vec(), tests, &mut checks);
+		// `xs.insert(v, at: i)`: the value is checked, not its position
+		let arguments: Vec<Node> = arguments
+			.iter()
+			.flat_map(|argument| match is_insert_position(argument) {
+				true => vec![argument.clone()],
+				false => self.checked_items(vec![argument.clone()], tests, &mut checks),
+			})
+			.collect();
 		let call = Node::List(
 			[vec![method.clone()], arguments].concat(),
 			bracket.clone(),
