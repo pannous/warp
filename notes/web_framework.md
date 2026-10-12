@@ -42,7 +42,9 @@ Each step is useful on its own and is what the next ones stand on.
 ## Server and page (agreed with warp-f0, 2026-10-07; card web-server)
 - **Routes**: `serve 8080 { get "/api/users" { users } post "/api/users" { … } }`. A route's block value is the response:
   a text as text/plain, any other value as JSON (std json to_json). `request` holds method, path, query and body (the
-  body parsed when it is JSON); `status 404` sets the status; `header "name" "value"` later (card web-route-header).
+  body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/serve.rs
+  with_answer_headers makes them the host word response_header, `status` as the CGI header Status; natively
+  web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/route_headers.warp).
 - **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a warp value (arrays ↔ lists, objects ↔
   maps); a status of 400 or more is an Error value carrying the status and the body text.
 - **Typed RPC**: `server def users(min_age) {…}` in the same program. The server build exposes it as

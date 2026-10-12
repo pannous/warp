@@ -110,6 +110,8 @@ function programImports(holder, hooks) {
 			},
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
+			// `header "name" "value"` in a route the page itself answers (a form without a server): no HTTP answer to carry it
+			response_header: () => {},
 			// the host words (src/host.rs)
 			sleep: holder.sleep,
 			clock: () => BigInt(Date.now()),

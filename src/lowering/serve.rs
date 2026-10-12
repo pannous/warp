@@ -7,6 +7,7 @@
 //! for a server function's value (without_serving).
 
 use super::nodes::{call, key};
+use crate::declarations::word;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORDS;
@@ -18,6 +19,9 @@ const REQUEST_WORD: &str = "request";
 const ANY_TYPE: &str = "any";
 pub(crate) const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 const SERVER_WORD: &str = "server";
+/// `header "name" "value"` and `status 418` in a route's body (with_answer_headers)
+const HEADER_WORD: &str = "header";
+const STATUS_WORD: &str = "status";
 const RPC_PREFIX: &str = "/rpc/";
 const RPC_METHOD: &str = "POST";
 /// `f·rpc·0`: the value of the page's first call of the server function f
@@ -713,7 +717,29 @@ fn with_local_routes(program: Node) -> Node {
 fn route_function(name: &str, body: Node) -> Node {
 	let request = key(symbol(REQUEST_WORD), Op::Colon, symbol(ANY_TYPE));
 	let head = call(name, vec![request]);
-	key(head, Op::Define, body)
+	key(head, Op::Define, with_answer_headers(body))
+}
+
+/// In a route's body `header "name" "value"` and `status 418` are response_header calls, which the route's HTTP answer
+/// carries (card web-route-header; `status` is the CGI header Status); `header{…}` stays the markup tag
+fn with_answer_headers(node: Node) -> Node {
+	let is_operand = |item: &Node| !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
+	match node.drop_meta() {
+		Node::List(items, Bracket::None | Bracket::Round, _)
+			if items.len() == 3 && word(&items[0]) == HEADER_WORD && items[1..].iter().all(is_operand) =>
+		{
+			call(crate::host::RESPONSE_HEADER, items[1..].to_vec())
+		}
+		Node::List(items, Bracket::None | Bracket::Round, _)
+			if items.len() == 2 && word(&items[0]) == STATUS_WORD && is_operand(&items[1]) =>
+		{
+			call(
+				crate::host::RESPONSE_HEADER,
+				vec![text(crate::host::STATUS_HEADER), items[1].clone()],
+			)
+		}
+		_ => node.map_children(with_answer_headers),
+	}
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
