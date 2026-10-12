@@ -233,6 +233,7 @@ function plainOfTree(tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return null;
 		case 1:
+			if (String(kind) === BOOL_KIND) return Number(payload.int) !== 0;
 			if (payload.ratio) return Number(payload.ratio[0].int) / Number(payload.ratio[1].int);
 			return payload.int === undefined ? null : Number(payload.int);
 		case 2: return Number(payload.float);
