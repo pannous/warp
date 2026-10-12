@@ -4264,6 +4264,7 @@ PASSED:
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dev_server::the_dev_server_watches_the_modules_used
+  ✓ web::test_dev_server::warp_dev_opens_no_browser_when_piped
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_dom_pages::main_sets_the_title_of_the_page
@@ -4346,6 +4347,9 @@ PASSED:
   ✓ web::test_missing_row_404::a_missing_row_is_not_found
   ✓ web::test_missing_use::a_missing_use_offers_to_add_it
   ✓ web::test_missing_use::the_added_use_makes_it_run
+  ✓ web::test_page_custom_events::a_handled_emit_stays_in_the_program
+  ✓ web::test_page_custom_events::a_plain_program_s_unhandled_emit_does_nothing
+  ✓ web::test_page_custom_events::an_unhandled_emit_reaches_the_page
   ✓ web::test_page_tests::a_failing_check_names_its_test_and_the_page
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
@@ -4902,4 +4906,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4897 passed, 0 failed, 4897 total tested
+10 ignored, 4901 passed, 0 failed, 4901 total tested
