@@ -86,3 +86,12 @@ fn a_call_with_more_arguments_is_the_same_call_either_way() {
 	is!("class Deck{n:int; def take(k):=n - k}; def g(x, k) := x.take(k); g(Deck(9), 2) * 10 + count(g([1,2,3], 2))", 72);
 	is!("class sq{s:int}; class rc{w:int}; scale(a:sq, k):=a.s*k; scale(b:rc, k):=b.w+k; t=0; for x in [sq(2), rc(3)] { t = t*100 + x.scale(10) }; t", 2013);
 }
+
+#[test]
+fn a_method_named_like_any_standard_function_keeps_it() {
+	is!("class P{x:int; def max():=x}; P(4).max() + [1,2].max() + max(3, 5)", 11);
+	is!("class Rope{s:text; def trim():=\"rope\"}; Rope(\"a\").trim() + \" a \".trim()", "ropea");
+	is!("class Coin{v:float; def round():=7}; Coin(1.5).round() + round(2.0)", 9);
+	is!("class Box{n:int; def int():=n}; Box(3).int() + \"42\".int()", 45);
+	is!("class C{x:int; def double():=x*2}; C(3).double() + 2.double()", 8);
+}
