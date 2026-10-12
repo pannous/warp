@@ -159,6 +159,19 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    browser and in a CoreAudio render callback natively: the same code both ways, which is where wasm-first warp beats
    other languages. Needs f32 arrays without boxing (today samples cross as a list of Ints), no allocation in the
    callback, 44.1/48 kHz stereo.
+   Native first step built (card real-time, samples/signal.warp, tests/programs/test_sound_signal.rs):
+   `play_signal(hum, 2s)` calls the program's `hum(t)` for every sample (t in seconds, at sample_rate), mono. The
+   host word (host/native.rs played_signal) calls the export typed (f64) -> f64; music_words.rs makes the function
+   of floats to a float (untyped parameters `: float`, body `as float`, so `hum(t) := 3.0` works too). On warp's own
+   output (sound_engine) the samples go out in blocks of 512 queued at most 100 ms ahead of the speaker
+   (sound.rs play_signal), each block a sound of the same handle on the Mixer, so stop_sound(handle) ends it; the
+   audio callback itself only mixes (no wasm, no allocation). Headless, or on afplay, it is one sound: render_sound
+   and the tests read the same samples. The call blocks the program while it plays; `go { play_signal(…) }` plays it
+   beside it. State between samples lives in globals declared `as float`: an exact decimal global
+   (`global level = 0.0`) grows with every sample and runs out of fuel within 220 samples.
+   About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
+   Still to build: the browser (an AudioWorklet running the module), stereo (a pair), block-wise `process(block)` over
+   f32 arrays, input (a microphone as the signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 

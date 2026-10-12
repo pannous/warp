@@ -58,6 +58,11 @@ const EARLY_FAILURE: Duration = Duration::from_millis(300);
 const PLAYER_POLL: Duration = Duration::from_millis(50);
 /// The last characters of a failing player's error output that its report shows
 const FAILURE_TAIL: usize = 300;
+/// A signal's samples computed at once on warp's own output (play_signal): 23 ms at 22050 Hz
+const SIGNAL_BLOCK: usize = 512;
+/// How far ahead of the speaker a signal is computed: its latency, and room for a slow block
+const SIGNAL_AHEAD: Duration = Duration::from_millis(100);
+const SIGNAL_POLL: Duration = Duration::from_millis(5);
 type Player = Arc<Mutex<std::process::Child>>;
 /// The sounds and music files playing by their handles, stopped by stop_sound
 static PLAYING: Mutex<Vec<(usize, Player)>> = Mutex::new(Vec::new());
@@ -138,8 +143,13 @@ pub fn last_handle() -> usize {
 impl Queued {
 	/// stop_sound() since it was queued, or stop_sound(its handle)
 	fn stopped(&self) -> bool {
-		self.stops != STOPS.load(Ordering::Relaxed) || STOPPED.lock().is_ok_and(|stopped| stopped.contains(&self.handle))
+		stopped_since(self.handle, self.stops)
 	}
+}
+
+/// stop_sound() since the stop count `stops`, or stop_sound(handle)
+fn stopped_since(handle: usize, stops: usize) -> bool {
+	stops != STOPS.load(Ordering::Relaxed) || STOPPED.lock().is_ok_and(|stopped| stopped.contains(&handle))
 }
 
 /// The player among those playing by its handle: stop_sound stops it, the process's end waits for it (a ctrl-c then
@@ -387,8 +397,38 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 /// Queue the samples on the audio clock: when the user may hear them in our own output stream (sound_engine.rs), else
 /// as a WAV for the system's player; headless the WAV only, its place said
 pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<(), String> {
-	let samples = pcm(samples);
+	sounded(next_handle(), pcm(samples), rate, channels)
+}
+
+/// play_signal(f, seconds) (card real-time): the mono samples of f(t), t the sample's time in seconds, each computed when
+/// it is due: on warp's own output in blocks queued SIGNAL_AHEAD before the device plays them (stop_sound ends it),
+/// else all of them as one sound. Its handle
+pub fn play_signal(seconds: f64, rate: u32, mut sample_at: impl FnMut(f64) -> Result<f64, String>) -> Result<usize, String> {
+	let total = (seconds.max(0.0) * rate as f64).round() as usize;
 	let handle = next_handle();
+	let stops = STOPS.load(Ordering::Relaxed);
+	let streamed = crate::paint::shows_windows() && crate::sound_engine::available();
+	let block = if streamed { SIGNAL_BLOCK } else { total.max(1) };
+	for first in (0..total).step_by(block) {
+		while streamed && queued_seconds() > SIGNAL_AHEAD.as_secs_f64() {
+			std::thread::sleep(SIGNAL_POLL);
+		}
+		if stopped_since(handle, stops) {
+			break;
+		}
+		let samples = (first..(first + block).min(total)).map(|index| sample_at(index as f64 / rate as f64).map(signal_pcm)).collect::<Result<Vec<_>, _>>()?;
+		sounded(handle, samples, rate, MONO)?;
+	}
+	Ok(handle)
+}
+
+/// A signal's value, full scale -1…1, as a 16-bit amplitude
+fn signal_pcm(value: f64) -> i16 {
+	(value.clamp(-1.0, 1.0) * i16::MAX as f64).round() as i16
+}
+
+/// The 16-bit samples queued as the sound of the handle
+fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result<(), String> {
 	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
 	let (start, place) = scheduled(seconds);
 	let audible = crate::paint::shows_windows();

@@ -38,6 +38,7 @@ mod test_sound_spectrum; // card winamp-like
 mod test_sound_use; // card bizarre-global
 mod test_sound_aliasing; // card reason-beep
 mod test_sound_engine; // card native-sound
+mod test_sound_signal; // card real-time
 mod test_task_sound; // card task-sound
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_holes; // card shader-holes

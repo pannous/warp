@@ -162,6 +162,11 @@ mod output {
 		receiver.recv().map_err(|failure| failure.to_string())?
 	}
 
+	/// Whether the device plays warp's own output stream (started now, if not yet)
+	pub fn available() -> bool {
+		engine().is_some()
+	}
+
 	/// The sound queued on the device at its start, false without an output stream
 	pub fn play(handle: usize, start: Instant, samples: &[i16], rate: u32, channels: u16) -> bool {
 		let Some(engine) = engine() else { return false };
@@ -192,9 +197,14 @@ mod output {
 }
 
 #[cfg(target_os = "macos")]
-pub use output::{busy, fade, play, stop};
+pub use output::{available, busy, fade, play, stop};
 
 /// Without our own output here: the players play every sound
+#[cfg(not(target_os = "macos"))]
+pub fn available() -> bool {
+	false
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn play(_: usize, _: Instant, _: &[i16], _: u32, _: u16) -> bool {
 	false

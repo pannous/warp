@@ -1,0 +1,8 @@
+use sound
+global level = 0.0
+smooth(t) := {
+  level = level + 0.5 * (0.8 - level)
+  level
+}
+play_signal(smooth, 0.01)
+level
