@@ -2980,6 +2980,7 @@ PASSED:
   ✓ programs::test_paint::paint_frames_for_the_window_read_back_as_sent
   ✓ programs::test_paint::paint_writes_a_png_natively
   ✓ programs::test_paint::paint_writes_colors_as_a_truecolor_png
+  ✓ programs::test_paint::the_paint_window_hears_the_pointer_unfocused
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
@@ -4878,4 +4879,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4873 passed, 0 failed, 4873 total tested
+10 ignored, 4874 passed, 0 failed, 4874 total tested
