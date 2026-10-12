@@ -26,6 +26,10 @@ notes/open_decisions.md.
     `a=5; [a -1]` is [5 -1] (was [4]); `[a - 1]`, `[a-1]` stay [4]; outside brackets `x -1` still subtracts.
   - P88 stands (re-asked now that strangers' programs are hosted): every host, eval_untrusted too, keeps every
     capability for now; the hosted programs rely on their OS sandbox (systemd unit, Worker isolate).
+  - Defaults taken building them (warp-semantics, branch semantics, not asked): list-sign applies only to lists
+    without commas (`[a -1, 2]` stays [4, 2]) and never inside an index (`xs[a -2]` subtracts); a comma-less
+    `[1 -1]` no longer warns. `xs.has(x)` gives yes/no like `in`. binary-int (user): `5 as binary` shows 0b101,
+    `0b101 + 1` is 6.
 - return-as (user, via warp-supervisor): return types are spelled `def f(x) as int or text`; `->` still works with
   a hint and an "I meant" fix toward `as`; no `returns` keyword ("nah") (warp-dispatch).
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
