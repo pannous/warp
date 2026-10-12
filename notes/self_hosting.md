@@ -26,8 +26,10 @@ Works:
 Gaps (each a card below):
 - `text[i]` costs O(n): lexing 8 KB char by char takes 0.69 s and 16 KB takes 2.6 s, and the parser's own 35 KB file
   runs out of fuel (index_cost.warp, scan_speed.warp). → self-text-index
-- No Node API on data values: a key's name, a node's kind, a call's head and children, and making a symbol are not
-  reachable (`p.name`, `kind(p)`, `c[0]` and `symbol("x")` fail; node_access.warp, build_nodes.warp). → self-node-api
+- ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/node_api.rs): `n.key`, `n.value`, `n.op`,
+  `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
+  the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still
+  missing: a list's separator (`,` `;` newline) is not kept in the wasm Node at all → self-node-separator
 - Bytes grow by copying (`bytes = bytes + [b]`, lib/memory.warp). → self-byte-buffer
 
 ## Steps

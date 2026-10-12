@@ -1,4 +1,6 @@
-// reading a data node's parts from warp (2026-10-12): p.x → 3 works; p.name, kind(p), p[0], c.name, symbol("x") fail
+// reading a data node's parts from warp (card self-node-api): a key's key, value, op and name, a list's bracket, the
+// kind by type(), items by index; and building them: symbol(text), key(left, op, right), bracketed(items, bracket)
 p = data (x: 3)
 c = data f(1, 2)
-[p.x, p.name, kind(p), c[0], symbol("x")]
+built = key(symbol("y"), "+", bracketed([1, 2], "("))
+[p.key, p.value, p.op, p.name, type(p), c[0], c.bracket, symbol("x"), built, built.value.bracket]

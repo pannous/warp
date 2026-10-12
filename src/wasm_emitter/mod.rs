@@ -28,6 +28,7 @@ mod key_emitter;
 mod layout;
 pub(crate) mod linear_arrays;
 mod list_emitter;
+mod node_api;
 pub(crate) mod int_lists;
 mod list_dispatch;
 pub(crate) mod list_sharing;
@@ -1012,6 +1013,7 @@ impl WasmGcEmitter {
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
 		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
+		self.emit_node_api(); // after text_of, text_concat and error_of, which it calls
 	}
 
 	fn emit_getters(&mut self) {
