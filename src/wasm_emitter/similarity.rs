@@ -15,8 +15,11 @@ use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND, KIND_MASK};
 use wasm_encoder::*;
 use Instruction as I;
 
-/// numbers_similar(a: f64, b: f64, tolerance: f64) -> i32: |a-b| ≤ tolerance·|a| or ≤ tolerance·|b| (or a == b)
+/// numbers_similar(a: f64, b: f64, tolerance: f64) -> i32: |a-b| ≤ tolerance·|a| or ≤ tolerance·|b| or ≤
+/// ABSOLUTE_TOLERANCE (or a == b)
 pub const NUMBERS_SIMILAR: &str = "numbers_similar";
+/// The absolute floor near zero (decision approx-zero, numpy allclose style): `sin(3.141592653589793) ≈ 0`
+const ABSOLUTE_TOLERANCE: f64 = 1e-12;
 /// text_fold(text) -> text: lower case without accents
 pub const TEXT_FOLD: &str = "text_fold";
 /// What values_similar calls
@@ -104,6 +107,15 @@ impl WasmGcEmitter {
 					],
 				);
 				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b), I::F64Eq]);
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(difference),
+						I::F64Const(ABSOLUTE_TOLERANCE.into()),
+						I::F64Le,
+						I::I32Or,
+					],
+				);
 				for side in [a, b] {
 					Self::emit_list(
 						f,
