@@ -38,6 +38,12 @@ const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
 const STDOUT = 1;
 const NOTIFICATION_TITLE = "warp";
+// card report-button: ?report turns the report button on in this browser, ?report=off off; only for who knows it
+const REPORT_PARAMETER = "report";
+const REPORT_KEY = "warp-playground-report";
+const REPORT_OFF = "off";
+const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
+const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -811,6 +817,23 @@ function showBuildSwitch() {
 
 // the commit the page was built from and the build time in the viewer's time zone (build.sh version.js), linked to
 // the commit on GitHub
+function showReportButton() {
+	const asked = new URLSearchParams(location.search).get(REPORT_PARAMETER);
+	if (asked !== null) store(REPORT_KEY, asked === REPORT_OFF ? null : "on");
+	$("report").hidden = stored(REPORT_KEY) !== "on";
+	$("report").onclick = () => window.open(reportAddress(), "_blank", "noopener");
+}
+
+// a new GitHub issue holding the program, what it showed and the playground's version, for its reporter to submit
+function reportAddress() {
+	const code = editor.getValue();
+	const fenced = (text, limit, language = "") => "```" + language + "\n" + text.slice(0, limit) + (text.length > limit ? "\n…" : "") + "\n```";
+	const title = `playground: ${code.split("\n").find(line => line.trim()) ?? "empty program"}`;
+	const body = [fenced(code, REPORT_LIMITS.code, "warp"), "Output:", fenced($("output").innerText.trim(), REPORT_LIMITS.output),
+		$("version").textContent || "unversioned build"].join("\n\n");
+	return `${ISSUE_URL}?${new URLSearchParams({ title, body })}`;
+}
+
 function showVersion() {
 	if (!PLAYGROUND_VERSION) return;
 	const { commit, date, built } = PLAYGROUND_VERSION;
@@ -939,6 +962,7 @@ function initialize() {
 	startResizers();
 	showBuildSwitch();
 	showVersion();
+	showReportButton();
 	fillExamples();
 	startWorker();
 	startAssistant(editor, tellEnvironment, startCompletion(editor));
@@ -947,7 +971,7 @@ function initialize() {
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 

@@ -1509,7 +1509,7 @@ pub const INDEX_OUT_OF_RANGE_OF: &str = "index_out_of_range_of";
 /// index_out_of_range_in(list, index): index_out_of_range_of a cons list, counting its cells
 const INDEX_OUT_OF_RANGE_IN: &str = "index_out_of_range_in";
 
-/// `return error("…")` from a function that returns numbers: the run fails, the message is the trap detail
+/// `return error "…"` from a function that returns numbers: the run fails, the message is the trap detail
 pub const RETURNED_ERROR: &str = "returned_error";
 
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
@@ -2536,7 +2536,7 @@ impl WasmGcEmitter {
 	fn emit_list_walk(&mut self, func: &mut Function, current: u32) {
 		let asked = current + 1;
 		Self::emit_list(func, &[I::LocalGet(1), I::LocalSet(asked)]);
-		// a stored error indexed (`r = error("x"); r#1`) raises itself, as any operation on it does
+		// a stored error indexed (`r = error "x"; r#1`) raises itself, as any operation on it does
 		self.emit_fail_if_error(func, 0);
 		// a number, a character or a text held where a list is indexed (`x=3; x#1`, a parameter): not_a_list, not a cast trap
 		for scalar in [Kind::Int, Kind::Float, Kind::Codepoint, Kind::Text, Kind::Symbol] {

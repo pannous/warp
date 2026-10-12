@@ -1,6 +1,6 @@
 //! Text as UTF-8 bytes: `a + b` concatenates texts and characters, `read(path)` loads a file,
 //! `byte_at(text, offset)` and `byte_slice(text, start, end)` address bytes by 0-based offset, end exclusive.
-//! `error(message)` makes an Error value of a text, the way a failed `read` reports.
+//! `error message` makes an Error value of a text, the way a failed `read` reports.
 //! Offsets are bytes, not characters: code that scans UTF-8 itself (a parser, a binary index) needs them.
 
 use crate::node::Node;
@@ -63,7 +63,7 @@ pub const RAISE: &str = "raise";
 pub const IS_ERROR: &str = "is_error";
 /// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
 pub const ERROR_OF: &str = "error_of";
-const WARNING: &str = "warning";
+pub const WARNING: &str = "warning";
 const WARN_TEXT: &str = "warn_text";
 pub(super) const HOST_WARN: &str = "host_warn";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
@@ -620,7 +620,7 @@ impl WasmGcEmitter {
 
 	/// A value held as a Node (a map value, arithmetic of an any value) may be a number at run time: joined, a number
 	/// takes its text form; a stored error stays itself, for text_concat to give it on, never joined as its message
-	/// (`r = error("b"); "a" + r`, card error-value-kind)
+	/// (`r = error "b"; "a" + r`, card error-value-kind)
 	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
 		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
 		let node_type = self.type_manager.node_type;

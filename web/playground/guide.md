@@ -582,7 +582,7 @@ raise "boom"
 A function can also hand an error back as its value. The caller asks `failed`: no try, no catch.
 
 ```warp => 1
-f(x) := if x < 0 then error("neg") else x
+f(x) := if x < 0 then error "neg" else x
 r = f(-1)
 if r failed then 1 else 2
 ```

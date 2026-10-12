@@ -59,6 +59,19 @@ pub fn allow_windows() {
 		.filter(|choice| DRAW_CHOICES.contains(choice))
 		.map_or(!headless, |choice| choice == DRAW_CHOICES[0]);
 	warp_runtime::system_values::tell_gpu_drawing(on_gpu);
+	if !headless {
+		warp_runtime::system_values::tell_window_opener(open_blank_window);
+	}
+}
+
+/// A blank window of the native view's size, for a program asking window_open before its first paint (card window-loop)
+fn open_blank_window() {
+	let (width, height) = warp_runtime::system_values::native_view();
+	let (width, height) = (width as usize, height as usize);
+	let paper = vec![0; width * height];
+	if let Err(failure) = crate::paint_window::show(&crate::paint_window::frame_bytes(&paper, width, height)) {
+		eprintln!("window_open: {failure}");
+	}
 }
 
 /// Whether the warp binary may reach the user's screen and speakers: paint's windows, sound's player (src/sound.rs)

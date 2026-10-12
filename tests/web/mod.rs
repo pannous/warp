@@ -93,6 +93,8 @@ mod test_safari_imports;
 mod test_sandboxed_programs; // card ferron-hosting
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_serve_error_body; // card serve-error-body
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_serve_opens_page; // card samples-serving
 #[cfg(feature = "native")] // a server on a port, HTTP requests and its SQLite tables
 mod test_served_forms; // card todo-app
 #[cfg(feature = "native")] // a server on a port and its SQLite tables

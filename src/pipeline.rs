@@ -425,6 +425,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::system_values::read,
 	crate::shared_arrays::lower,
 	crate::fetch_signals::lower,
+	// `on key { if key == ESC … }`: the pressed key and the key words, before system_signals reads the key handlers
+	crate::key_names::lower,
 	crate::system_signals::lower,
 	crate::element_events::lower_binds,
 	crate::component_state::lower,
@@ -551,8 +553,8 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
 	let node = run_passes(node, SOURCE_PASSES);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
@@ -577,16 +579,16 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = run_passes(node, MEANING_PASSES);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
 	let node = effects.answer_queries(node);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
 		return Err(crate::node::error(&format!(
@@ -745,8 +747,8 @@ fn checked_markup(result: Node) -> Node {
 	result
 }
 
-/// The words of an exception (library_words lowers them to the call raise(X))
-pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
+/// The words of an exception (library_words lowers them to the call raise(X)), unless the program defines one
+pub(crate) const RAISE_WORDS: [&str; 4] = ["raise", "throw", "fail", "panic"];
 
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
 /// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
@@ -951,7 +953,7 @@ pub fn cannot_hand_back(value: &Node) -> String {
 	)
 }
 
-/// The message of `error("…")`, or of `raise …`, which always fails the run
+/// The message of `error "…"`, or of `raise …`, which always fails the run
 pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Round, _)

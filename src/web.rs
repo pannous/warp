@@ -180,8 +180,9 @@ pub fn acknowledged_topics(json: &str) -> HashSet<String> {
 // The result of a run in the page, read back into a Node
 // ============================================================================
 
-/// What happened when the page ran a module (`warnings`: the runtime warnings it reported): `{"result": tree}`, `{"trap": message, "trace": stack, "detail": tree?}`
-/// (a runtime error; the stack names the wasm functions, `detail` is the module's trap_detail global) or
+/// What happened when the page ran a module (`warnings`: the runtime warnings it reported): `{"result": tree}`,
+/// `{"trap": message, "trace": stack, "detail": tree?, "position": number?}` (a runtime error; the stack names the wasm
+/// functions, `detail` and `position` are the module's trap_detail and trap_position globals) or
 /// `{"failure": message}` (the module did not compile, link or instantiate)
 pub fn run_outcome(outcome: &Value) -> Node {
 	RENDERED.with(|rendered| *rendered.borrow_mut() = outcome.get("html").and_then(Value::as_str).map(str::to_string));
@@ -208,6 +209,13 @@ pub fn run_outcome(outcome: &Value) -> Node {
 				"\n{}",
 				crate::wasm_emitter::trap_detail_line(&node_from_tree(detail))
 			));
+		}
+		let position = outcome
+			.get("position")
+			.and_then(Value::as_str)
+			.and_then(|position| position.parse().ok());
+		if let Some(line) = position.and_then(crate::wasm_emitter::trap_position_line) {
+			trace.push_str(&format!("\n{line}"));
 		}
 		return crate::wasm_emitter::trap_error(&trace, engine_words(message));
 	}

@@ -133,7 +133,7 @@ fn a_runtime_error_names_the_range_hint_and_the_guesses_behind_it() {
 		failure.contains("assumed at 24:13, 25:15") && failure.contains("loop bound `..size-1`"),
 		"{failure}"
 	);
-	is!("a=[1,2]; a#3", warp::error("index out of range: 3 not in 1…2"));
+	is!("a=[1,2]; a#3", warp::error("index out of range: 3 not in 1…2 at 1:10"));
 }
 
 #[test]

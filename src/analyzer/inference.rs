@@ -575,7 +575,7 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 }
 
 /// A branch `{a; b}` is worth its last statement
-/// A branch that is `error(…)` (or a block ending in it): the bottom kind, it never gives a value to its if
+/// A branch that is `error …` (or a block ending in it): the bottom kind, it never gives a value to its if
 pub(crate) fn raises_error(branch: &Node) -> bool {
 	match branch.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => {
@@ -597,7 +597,7 @@ pub(crate) fn block_result(block: &Node) -> Option<Node> {
 	}
 }
 
-/// `if c then error("…") else x`: τ or error (Decided #1, errors are values), a Node keeping the error until a use
+/// `if c then error "…" else x`: τ or error (Decided #1, errors are values), a Node keeping the error until a use
 /// wants a number; a number is held as a Node of run-time kind
 fn error_or(kind: Kind) -> Kind {
 	if matches!(kind, Kind::Int | Kind::Float) {
@@ -607,7 +607,7 @@ fn error_or(kind: Kind) -> Kind {
 	}
 }
 
-/// The kind of a choice between two branches; an `error(…)` branch raises its error, so the other branch decides the
+/// The kind of a choice between two branches; an `error …` branch raises its error, so the other branch decides the
 /// kind (bottom kind)
 fn choice_kind(then_expr: &Node, else_expr: &Node, scope: &Scope) -> Kind {
 	match (raises_error(then_expr), raises_error(else_expr)) {

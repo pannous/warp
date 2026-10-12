@@ -5,6 +5,8 @@
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
+// the position of the statement a trapped run was in, line << 32 | column (src/wasm_emitter/globals.rs emit_trap_position)
+const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_ROUTES_EXPORT = "page·routes";
 const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/serve.rs PAGE_SUBMITTED
@@ -125,6 +127,8 @@ function programImports(holder, hooks) {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
 				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
+				// key_down: whether the page's held key (canvas.js trackKey) is any
+				if (value === "key_down") return BigInt(self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) !== 0 : 0);
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
@@ -412,7 +416,8 @@ function outcomeOf(holder, hooks, call) {
 		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
-		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, warnings };
+		const position = exports[TRAP_POSITION_EXPORT]?.value;
+		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, position: position ? String(position) : null, warnings };
 	};
 	try {
 		const result = call();

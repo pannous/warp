@@ -374,6 +374,7 @@ impl WasmGcEmitter {
 			.collect();
 
 		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
+		let saved_statement_position = self.statement_position.take();
 		// Compile the function body - use node instructions for Node-returning functions
 		if self.struct_results.contains_key(name) {
 			self.emit_struct_result_body(&mut func, &user_fn.body);
@@ -408,6 +409,7 @@ impl WasmGcEmitter {
 			self.compile_tuple_packer(&user_fn.tuple_kinds);
 		}
 		self.returned_tuple = saved_returned_tuple;
+		self.statement_position = saved_statement_position;
 
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
@@ -683,6 +685,7 @@ impl WasmGcEmitter {
 		}
 
 		func.instruction(&I::Call(func_index));
+		self.emit_trap_position(func);
 	}
 }
 

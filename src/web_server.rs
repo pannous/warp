@@ -42,6 +42,14 @@ const PATH_SEPARATOR: char = '/';
 thread_local! {
 	/// How many requests this thread's next serve answers before it returns: 0 serves on (tests stop it so)
 	static REQUEST_LIMIT: Cell<usize> = const { Cell::new(0) };
+	/// What the next serve on this thread does with its address once it listens (the CLI opens the browser)
+	static ON_LISTENING: Cell<Option<fn(&str)>> = const { Cell::new(None) };
+}
+
+/// The next serve on this thread calls `listening` with its address, `http://localhost:<port>/`, once it listens
+/// (card samples-serving: `warp app.warp` from a terminal opens its page)
+pub fn when_listening(listening: fn(&str)) {
+	ON_LISTENING.with(|hook| hook.set(Some(listening)));
 }
 
 /// The next serve on this thread returns after `requests` requests (a test's server ends)
@@ -289,6 +297,9 @@ pub fn serve(
 	let server = tiny_http::Server::http((address.as_str(), port))
 		.map_err(|problem| format!("serve {address}:{port}: {problem}"))?;
 	let limit = take_request_limit();
+	if let Some(listening) = ON_LISTENING.with(Cell::take) {
+		listening(&format!("http://localhost:{port}/"));
+	}
 	let mut served = 0;
 	for mut request in server.incoming_requests() {
 		let method = request.method().as_str().to_uppercase();

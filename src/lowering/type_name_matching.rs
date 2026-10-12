@@ -13,7 +13,7 @@ pub(crate) const PREPOSITIONS: [&str; 11] = [
 	"to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each",
 ];
 const IT: &str = "it";
-/// The word that makes an error value, `error("e")`
+/// The word that makes an error value, `error "e"`
 const ERROR_WORD: &str = "error";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 17] = [
@@ -261,8 +261,8 @@ fn flat_head(head: &Node) -> Node {
 }
 
 /// The value converted to the declared result type; an arithmetic value is grouped, `(x*2) as int`, as written it
-/// would be the ambiguous `x*2 as int`. The branches of a choice convert each, so an `error(…)` branch stays the
-/// error (card braced-body: `def f(x) -> text { error("e") }` fails with e; `as text` would give the text "(error 'e')")
+/// would be the ambiguous `x*2 as int`. The branches of a choice convert each, so an `error …` branch stays the
+/// error (card braced-body: `def f(x) -> text { error "e" }` fails with e; `as text` would give the text "(error 'e')")
 fn as_type(value: Node, type_name: &Node) -> Node {
 	match value.drop_meta() {
 		_ if is_error_value(&value) => value,
@@ -329,7 +329,7 @@ fn checked_result(value: Node, type_name: &Node) -> Node {
 	)
 }
 
-/// `error("e")`
+/// `error "e"`
 fn is_error_value(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Error(_) => true,

@@ -1,0 +1,7 @@
+// card keyboard-state: paint with the mouse; hold any key to wipe the canvas (key_down, as mouse_down)
+use draw
+while window_open {
+	if mouse_down { circle(mouse_x, mouse_y, 8, blue); show() }
+	if key_down { clear(white); show() }
+	sleep 16ms
+}
