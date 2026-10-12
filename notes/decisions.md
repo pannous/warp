@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- play-dispatch (warp-sound default, batch 240; user asked for no snake case): `play hum for 2s` dispatches on what
+  hum is: a function of t, or a pair [left, right] of them, plays as a signal; a block function plays block-wise. No
+  new word. Stereo: `play_signal([left, right], 2s)` or a fill with three parameters (left, right, t).
 - type-library-words (warp-dispatch, user): the list/map/text library words are always available, without `use`, as
   both `x.f()` and `f(x)` (one call, Julia style): `[3 1 2].unique()` and `unique([3 1 2])`, `words("a b")`. `use list`
   only for the qualified `list.zip`. Replaces the dot-only part of list-methods (2026-10-10).
