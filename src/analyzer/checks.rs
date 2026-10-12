@@ -466,7 +466,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_declared_types(program, &mut HashMap::new(), &mut Scope::new()))
 		.or_else(|| super::list_views::check_widened_list_views(program))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
-		.or_else(|| check_null_use(program, &mut HashMap::new()))
+		.or_else(|| check_null_use(program, &mut HashMap::new(), &list_variables(program)))
 		.or_else(|| check_subjectless_comparison(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_call_arity(program))
@@ -1114,9 +1114,29 @@ impl Unchecked {
 	}
 }
 
+/// A list literal `[1, 2]` or a variable assigned one
+fn holds_list(operand: &Node, lists: &HashSet<String>) -> bool {
+	match operand.drop_meta() {
+		Node::List(_, Bracket::Square, _) => true,
+		Node::Symbol(name) => lists.contains(name),
+		_ => false,
+	}
+}
+
+/// The variables the program assigns a list literal: what `+` concatenates
+fn list_variables(program: &Node) -> HashSet<String> {
+	let mut lists = HashSet::new();
+	program.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+		if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (target.drop_meta(), value.drop_meta()) {
+			lists.insert(name.clone());
+		}
+	});
+	lists
+}
+
 /// `x=ø` makes x possibly null, `x=fetch …` possibly an error: arithmetic or member access on it needs an
 /// `if x {…}` check first (ø and errors are falsy). A fetch used directly as an operand is never checked.
-pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Unchecked>) -> Option<Diagnostic> {
+pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Unchecked>, lists: &HashSet<String>) -> Option<Diagnostic> {
 	let possibly_null = |operand: &Node, nullable: &HashMap<String, Unchecked>| match operand.drop_meta() {
 		Node::Symbol(name) => nullable.get(name).map(|reason| (name.clone(), reason.describe(name), None)),
 		fetched if crate::host::fetch_call(fetched).is_some() => {
@@ -1130,9 +1150,9 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 			// `out = out + xs` building a list from ø, the empty list: a concatenation, no use of a null
 			let found = match value.drop_meta() {
 				Node::Key(left, Op::Add, right) if left.drop_meta() == target.drop_meta() && nullable.get(&target.name()) == Some(&Unchecked::Null) => {
-					check_null_use(right, nullable)
+					check_null_use(right, nullable, lists)
 				}
-				_ => check_null_use(value, nullable),
+				_ => check_null_use(value, nullable, lists),
 			};
 			let target = match target.drop_meta() {
 				Node::Key(name, Op::Colon, _) => &**name, // x:int?=ø
@@ -1148,25 +1168,26 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 		}
 		Node::Key(if_condition, Op::Then, then) => {
 			let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else {
-				return check_null_use(if_condition, nullable).or_else(|| check_null_use(then, nullable));
+				return check_null_use(if_condition, nullable, lists).or_else(|| check_null_use(then, nullable, lists));
 			};
 			let mut narrowed = nullable.clone();
 			if let Node::Symbol(name) = condition.drop_meta() {
 				narrowed.remove(name);
 			}
-			check_null_use(condition, nullable).or_else(|| check_null_use(then, &mut narrowed))
+			check_null_use(condition, nullable, lists).or_else(|| check_null_use(then, &mut narrowed, lists))
 		}
 		// ø is the empty list: appending to it or concatenating a list needs no check (`a=(); a.add(1)`), nor popping a
 		// stack built in a loop (`st=[]; for t in ts { if … { st.pop() } else { st.add(t) } }`)
 		Node::Key(list, Op::Dot, call) if (updates_list(list, call) || popped_list(list, call).is_some()) && nullable.get(&list.name()) != Some(&Unchecked::Error) => {
-			let found = check_null_use(call, nullable);
+			let found = check_null_use(call, nullable, lists);
 			nullable.remove(&list.name()); // no longer empty
 			found
 		}
 		// ø is the empty list: it counts 0 (`b=[]; b.count`)
 		Node::Key(list, Op::Dot, property) if matches!(list.drop_meta(), Node::Symbol(_)) && is_counting_property(&property.name()) && nullable.get(&list.name()) != Some(&Unchecked::Error) => None,
-		Node::Key(left, Op::Add, right) if [left, right].iter().any(|side| matches!(side.drop_meta(), Node::List(_, Bracket::Square, _))) => {
-			check_null_use(left, nullable).or_else(|| check_null_use(right, nullable))
+		// `xs + ys` of a list xs and ys = []: concatenating the empty list
+		Node::Key(left, Op::Add, right) if [left, right].iter().any(|side| holds_list(side, lists)) => {
+			check_null_use(left, nullable, lists).or_else(|| check_null_use(right, nullable, lists))
 		}
 		Node::Key(left, op, right) if op.is_arithmetic() || *op == Op::Dot => {
 			let operand = possibly_null(left, nullable).or_else(|| if *op == Op::Dot { None } else { possibly_null(right, nullable) });
@@ -1178,10 +1199,10 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 				};
 				return Some(Diagnostic::at(node, format!("{reason} in {expression}")).fix(fix));
 			}
-			check_null_use(left, nullable).or_else(|| check_null_use(right, nullable))
+			check_null_use(left, nullable, lists).or_else(|| check_null_use(right, nullable, lists))
 		}
-		Node::Key(left, _, right) => check_null_use(left, nullable).or_else(|| check_null_use(right, nullable)),
-		Node::List(items, _, _) => items.iter().find_map(|item| check_null_use(item, nullable)),
+		Node::Key(left, _, right) => check_null_use(left, nullable, lists).or_else(|| check_null_use(right, nullable, lists)),
+		Node::List(items, _, _) => items.iter().find_map(|item| check_null_use(item, nullable, lists)),
 		_ => None,
 	}
 }

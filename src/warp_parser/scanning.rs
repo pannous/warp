@@ -321,6 +321,13 @@ impl WarpParser {
 		}
 	}
 
+	/// The identifier that ends right before position `end` and the blanks before it
+	pub(super) fn word_ending_before(&self, end: usize) -> String {
+		let before = self.chars[..end].iter().rev().skip_while(|c| matches!(c, ' ' | '\t'));
+		let word: String = before.take_while(|c| is_identifier_char(**c)).collect();
+		word.chars().rev().collect()
+	}
+
 	/// The source line up to the cursor
 	pub(super) fn input_before_cursor(&self) -> String {
 		let before: String = self.chars[..self.pos].iter().rev().take_while(|c| **c != '\n').collect();

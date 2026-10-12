@@ -56,3 +56,18 @@ fn a_dev_build_keeps_the_values_the_program_changed() {
 	assert_eq!(run("dev_start = 6\ndev_start"), "6");
 	assert_eq!(run("dev_count = 0\ndev_count"), "0", "a variable the program no longer changes takes its new value");
 }
+
+// a dev build keeps each component instance's state too (card web-dev-instances): after a reload the second counter
+// still shows its clicks, the first its own
+#[test]
+#[cfg(feature = "native")]
+fn a_dev_build_keeps_component_state() {
+	let code = "def DevTally(name) {\n\ttally = 0\n\tdiv{ button{ on click { tally += 1 } name } p{ name + \" \" + tally } }\n}\ndiv{ DevTally(\"a\") DevTally(\"b\") }";
+	let reload = || warp::pipeline::for_dev(|| warp::headless::Page::render(code)).expect("the page");
+	let mut page = reload();
+	page.click("b").expect("clicked");
+	page.click("b").expect("clicked");
+	let reloaded = reload();
+	let text = reloaded.text();
+	assert!(text.contains("a 0") && text.contains("b 2"), "{}", reloaded.html());
+}

@@ -100,4 +100,5 @@ mod test_python_collections; // card python-stdlib
 mod test_aliased_changes; // card aliased-list
 mod test_delete_list; // card delete-list
 mod test_map_index;
+mod test_empty_list_concat; // card null-typed
 mod test_sort_long;

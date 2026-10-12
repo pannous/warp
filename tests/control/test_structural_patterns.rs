@@ -37,3 +37,10 @@ fn test_a_subject_that_is_no_list_does_not_match() {
 fn test_no_match_without_default_is_loud() {
 	fails_with("xs=[1, 2]; switch xs { [a]: a }", "no case for xs");
 }
+
+#[test]
+fn a_call_as_the_subject() {
+	is!("class Point{x:int; y:int}; match Point(3, 4) { Point{x, y} => x + y }", 7);
+	is!("f(a, b) := a + b; match f(3, 4) { 7 => 1; _ => 0 }", 1);
+	is!("f(a, b) := [a, b]; switch f(3, 4) { [a, b]: b  _: 0 }", 4);
+}
