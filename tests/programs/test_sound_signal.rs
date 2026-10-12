@@ -15,12 +15,18 @@ fn rendered_samples(path: &str) -> Vec<i16> {
 /// The rendered samples of the signal `hum` the definition gives, played for a tenth of a second; in a process of its
 /// own, as render_sound takes the sounds of every run in the process (test_sound_render.rs)
 fn played(definition: &str, name: &str) -> Vec<i16> {
+	rendered(&format!("{definition}\nplay_signal(hum, 0.1)"), name, "rendered", "10")
+}
+
+/// The rendered samples of the program's sound, after which `last` (`rendered`: the rendered length in hundredths of a
+/// second) is `expected`
+fn rendered(program: &str, name: &str, last: &str, expected: &str) -> Vec<i16> {
 	std::fs::create_dir_all(FOLDER).expect("data folder");
 	let path = format!("{FOLDER}/{name}.wav");
-	let program = format!("use sound\n{definition}\nplay_signal(hum, 0.1)\nround(render_sound(\"{path}\") * 100)");
+	let program = format!("use sound\n{program}\nrendered = round(render_sound(\"{path}\") * 100)\n{last}");
 	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().expect("warp runs");
 	let printed = String::from_utf8_lossy(&run.stdout);
-	assert_eq!(printed.trim().trim_start_matches('»').trim(), "10","{}", String::from_utf8_lossy(&run.stderr));
+	assert_eq!(printed.trim().trim_start_matches('»').trim(), expected, "{}", String::from_utf8_lossy(&run.stderr));
 	rendered_samples(&path)
 }
 
@@ -54,4 +60,51 @@ fn a_signal_keeps_its_state_between_samples() {
 fn a_signal_louder_than_full_scale_is_clipped() {
 	let samples = played("hum(t: float) := 3.0", "signal_clipped");
 	assert!(samples.iter().all(|&sample| sample == i16::MAX), "{:?}", &samples[..4]);
+}
+
+// block-wise (sound layer 8): `play_blocks(fill, seconds)` hands fill a linear float array of a block's samples and the
+// block's time; fill writes every cell, one call per block instead of one per sample
+const BLOCK_SINE: &str = "global calls = 0\nhum(block, t) := {\n  calls = calls + 1\n  for i in 1 to #block { block#i = 0.5 * sin(2 * pi * 441 * (t + (i - 1) / sample_rate)) }\n}\nplay_blocks(hum, 0.1)";
+
+#[test]
+fn a_block_function_fills_the_samples_of_each_block() {
+	assert_sine(&rendered(BLOCK_SINE, "signal_blocks", "rendered", "10"), 0.5, 441.0);
+}
+
+#[test]
+fn a_block_function_is_called_once_a_block() {
+	let samples = rendered(BLOCK_SINE, "signal_block_calls", "calls", "5");
+	assert_eq!(samples.len(), (RATE * 0.1) as usize, "4 blocks of 512 samples and 157 of the fifth");
+}
+
+// stereo (sound layer 8): two functions of the time, left and right, or a block function of two blocks
+fn channel(samples: &[i16], index: usize) -> Vec<i16> {
+	samples.iter().skip(index).step_by(2).copied().collect()
+}
+
+fn assert_stereo(samples: &[i16]) {
+	assert_sine(&channel(samples, 0), 0.5, 441.0);
+	assert_sine(&channel(samples, 1), 0.25, 220.5);
+}
+
+#[test]
+fn a_pair_of_signal_functions_plays_in_stereo() {
+	let program = "left(t) := 0.5 * sin(2 * pi * 441 * t)\nright(t) := 0.25 * sin(2 * pi * 220.5 * t)\nplay_signal([left, right], 0.1)";
+	assert_stereo(&rendered(program, "signal_stereo", "rendered", "10"));
+}
+
+#[test]
+fn a_block_function_of_two_blocks_plays_in_stereo() {
+	let program = "hum(left, right, t) := for i in 1 to #left {\n  time = t + (i - 1) / sample_rate\n  left#i = 0.5 * sin(2 * pi * 441 * time)\n  right#i = 0.25 * sin(2 * pi * 220.5 * time)\n}\nplay_blocks(hum, 0.1)";
+	assert_stereo(&rendered(program, "signal_blocks_stereo", "rendered", "10"));
+}
+
+// `play hum for 2s` (user, 2026-10-12: no snake case for signals): play of a function of the time is play_signal, of a
+// block function play_blocks, of a pair of functions stereo
+#[test]
+fn play_of_a_function_plays_it_as_a_signal() {
+	assert_sine(&rendered("hum(t) := 0.5 * sin(2 * pi * 441 * t)\nplay hum for 0.1s", "play_function", "rendered", "10"), 0.5, 441.0);
+	assert_sine(&rendered(&BLOCK_SINE.replace("play_blocks(hum, 0.1)", "play hum for 0.1s"), "play_block_function", "calls", "5"), 0.5, 441.0);
+	let pair = "left(t) := 0.5 * sin(2 * pi * 441 * t)\nright(t) := 0.25 * sin(2 * pi * 220.5 * t)\nplay [left, right] for 0.1s";
+	assert_stereo(&rendered(pair, "play_function_pair", "rendered", "10"));
 }

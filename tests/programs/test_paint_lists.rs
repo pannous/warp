@@ -5,9 +5,14 @@ use std::io::Read;
 
 /// The gray levels of the PNG `code` paints into a folder of its own, row by row after each filter byte
 pub(crate) fn painted_rows(code: &str, folder: &str) -> Vec<u8> {
+	painted_rows_by(crate::common::warp_command(), code, folder)
+}
+
+/// painted_rows with a command of the caller's, e.g. with an environment of its own
+pub(crate) fn painted_rows_by(mut command: std::process::Command, code: &str, folder: &str) -> Vec<u8> {
 	let folder = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(folder);
 	std::fs::create_dir_all(&folder).unwrap();
-	let run = crate::common::warp_command().env("TMPDIR", &folder).args(["--no-ask", "eval", code]).output().unwrap();
+	let run = command.env("TMPDIR", &folder).args(["--no-ask", "eval", code]).output().unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr);
 	let path = errors.lines().find_map(|line| line.split_once(": ").filter(|(said, _)| said.starts_with("painted ")).map(|(_, path)| path.to_string()));
 	let png = std::fs::read(path.unwrap_or_else(|| panic!("no painted line: {errors}"))).unwrap();

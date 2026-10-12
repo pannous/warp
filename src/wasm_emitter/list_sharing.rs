@@ -56,7 +56,8 @@ impl<'n> Holders<'_, 'n> {
 			Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define) || is_update(op) => self.assignment(target, value),
 			// `xs#i`, `#xs`: an item or the count read
 			Node::Key(list, Op::Hash, index) => { self.value(list, true); self.value(index, true) }
-			Node::Key(left, op, right) if op.is_comparison() => { self.value(left, true); self.value(right, true) }
+			// `xs + ys`, `xs * 2`: a new list (list_concat copies both), or a number
+			Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() => { self.value(left, true); self.value(right, true) }
 			Node::Key(object, Op::Dot, member) if is_reading(member) => self.value(object, true),
 			Node::Key(left, _, right) => { self.value(left, false); self.value(right, false) }
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {

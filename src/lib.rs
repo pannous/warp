@@ -38,6 +38,8 @@ pub mod web_sockets;
 #[cfg(feature = "native")]
 pub mod gpu;
 #[cfg(feature = "native")]
+pub mod gpu_canvas;
+#[cfg(feature = "native")]
 pub mod shared;
 #[cfg(feature = "native")]
 pub mod paint;

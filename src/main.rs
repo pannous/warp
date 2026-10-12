@@ -45,6 +45,9 @@ const RUN_PREFIX: &str = "run ";
 const TEST_WORD: &str = "test";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
 const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
+/// WARP_EXECUTABLE=1 (or true/yes/on): `warp <file>` also leaves the standalone executable next to the file, off by
+/// default (card executable-flag, user 2026-10-12, replaces P103's default); `warp build` always makes it
+const EXECUTABLE_VARIABLE: &str = "WARP_EXECUTABLE";
 /// The crate of the stub in warp's source checkout
 const RUNTIME_STUB_CRATE: &str = "crates/warp-runtime";
 #[cfg(unix)]
@@ -405,7 +408,7 @@ fn run_command(args: &[String]) {
         }
         diagnostic::show_lines_of(&source_of(path));
         let result = eval(path); // a file: its folder is in scope (D15)
-        if !only_run && !matches!(result, Node::Error(_)) {
+        if !only_run && wants_executable() && !matches!(result, Node::Error(_)) {
             leave_executable(path);
         }
         if let Some(code) = warp_runtime::system_signals::take_exit_code() {
@@ -558,7 +561,11 @@ fn leading_flags(mut arguments: String) -> (Vec<&'static str>, String) {
     (flags, arguments)
 }
 
-/// P103: the executable next to a program file that ran, unless one newer than the file is there already; a program
+fn wants_executable() -> bool {
+    env::var(EXECUTABLE_VARIABLE).is_ok_and(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+}
+
+/// P103 (with WARP_EXECUTABLE): the executable next to a program file that ran, unless one newer than the file is there already; a program
 /// the runtime cannot carry (it fetches, say) gets a note on stderr instead
 fn leave_executable(path: &str) {
     let modified = |file: &std::path::Path| fs::metadata(file).and_then(|metadata| metadata.modified()).ok();
@@ -807,8 +814,8 @@ fn structure(node: &Node) -> String {
 
 fn usage() {
     // println!("Usage: warp [options] [file]");
-    println!("  warp <file.warp>     Run a warp file and leave its standalone executable <file> next to it");
-    println!("  warp run <file.warp> Run a warp file, no executable");
+    println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
+    println!("  warp run <file.warp> Run a warp file, never an executable");
     println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
     println!("  warp eval <code>     Evaluate code");
     println!("  warp lower <code>    Show the program after the lowering passes");

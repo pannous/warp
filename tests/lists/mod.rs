@@ -56,6 +56,7 @@ mod test_hash_range_slices;
 mod test_hash_range_warning;
 mod test_map_starts;
 mod test_map_typed;
+mod test_concat_keeps_arrays; // card runtime-speed
 mod test_counting_word_variables;
 mod test_long_list_copies;
 mod test_float_array_writes;

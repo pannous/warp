@@ -273,6 +273,8 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_reduce_linear)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
+	linker.func_wrap(HOST_LIBRARY, DRAW_SHAPE, |kind: i64, a: f64, b: f64, c: f64, d: f64, color: i64| crate::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32))?;
+	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
 	linker.func_wrap(HOST_LIBRARY, SOUND, sound)?;
 
 	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
@@ -338,6 +340,12 @@ fn paint(mut caller: Caller<'_, HostState>, pixels: HostNode, width: i64, height
 		},
 	};
 	crate::paint::paint(&values, size.0, size.1).map(|_| ()).map_err(task_failure)
+}
+
+/// show() of `use draw` on the GPU (src/gpu_canvas.rs)
+fn draw_show(width: i64, height: i64) -> wasmtime::Result<()> {
+	warp_runtime::system_signals::end_at_first_frame()?;
+	crate::gpu_canvas::show(width.max(0) as usize, height.max(0) as usize).map(|_| ()).map_err(task_failure)
 }
 
 /// sound_samples(samples, count, rate) natively: a WAV file, played unless headless (src/sound.rs)
@@ -574,6 +582,7 @@ fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNod
 	let answer = match (module.as_str(), member.as_str()) {
 		("table", "select") => queried_rows(&mut caller, &arguments?)?,
 		("sound", "signal") => played_signal(&mut caller, &arguments?)?,
+		("sound", "blocks") => played_blocks(&mut caller, &arguments?)?,
 		_ => match crate::std_adapters::call(&module, &member, &arguments?) {
 			Ok(answer) => answer,
 			// the program raises it (emit_ffi_result): `try` catches it, uncaught it ends the run with this reason
@@ -589,16 +598,58 @@ fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtim
 	calling_back("table.select", |kept| crate::database::select(&arguments.children(), &mut |function, request| route_value(caller, function, request).map_err(&mut *kept)))
 }
 
-/// play_signal(f, seconds) (sound.rs play_signal): the program's f(t: float) called for each sample; its handle
+/// play_signal(f, seconds) (sound.rs play_signal): the program's f(t: float) called for each sample, in stereo a
+/// pair [left, right] of them; its handle
 fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
-	let [function, seconds, rate] = arguments.children().try_into().map_err(|_| task_failure("play_signal(f, seconds) needs a function and its seconds".into()))?;
-	let name = function.name();
-	let not_a_signal = || task_failure(format!("play_signal: {name} is no function of the time in seconds to a number, as hum(t) := sin(2 * pi * 440 * t)"));
-	let signal = caller.get_export(&name).and_then(Extern::into_func).ok_or_else(not_a_signal)?.typed::<f64, f64>(&*caller).map_err(|_| not_a_signal())?;
-	let [seconds, rate] = [seconds, rate].map(|number| number_of(&number, &task_failure).map(f64::from));
-	let (seconds, rate) = (seconds?, rate?.clamp(1.0, u32::MAX as f64) as u32);
-	let handle = calling_back("play_signal", |kept| crate::sound::play_signal(seconds, rate, |time| signal.call(&mut *caller, time).map_err(&mut *kept)))?;
+	let ([functions, seconds, rate], word) = (sound_arguments(arguments, "play_signal(f, seconds) needs a function and its seconds")?, "play_signal");
+	let signals = channels_of(&functions, word)?.iter().map(|function| called_back(caller, function, word, "of the time in seconds to a number, as hum(t) := sin(2 * pi * 440 * t)")).collect::<wasmtime::Result<Vec<_>>>()?;
+	let (seconds, rate) = seconds_and_rate(&seconds, &rate)?;
+	let handle = calling_back(word, |kept| crate::sound::play_signal(seconds, rate, signals.len() as u16, |channel, time| signals[channel].call(&mut *caller, time).map_err(&mut *kept)))?;
 	Ok(Node::int(handle as i64))
+}
+
+/// play_blocks(fill, seconds) (music_words.rs with_block_signals): the program's `fill·blocks(t: float)` called for
+/// each block, t its first sample's time, which fills the linear float arrays at `blocks` (one, or left and right)
+/// through fill; its handle
+fn played_blocks(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+	let ([function, blocks, seconds, rate], word) = (sound_arguments(arguments, "play_blocks(fill, seconds) needs a function and its seconds")?, "play_blocks");
+	let fill = called_back(caller, &function, word, "of a block of samples and its time, as hum(block, t) := for i in 1 to #block { block#i = … }")?;
+	let (seconds, rate) = seconds_and_rate(&seconds, &rate)?;
+	let blocks = channels_of(&blocks, word)?.iter().map(|block| number_of(block, &task_failure).map(|address| f64::from(address) as i64)).collect::<wasmtime::Result<Vec<_>>>()?;
+	let size = linear_doubles(caller, blocks[0], &task_failure)?.len();
+	let handle = calling_back(word, |kept| crate::sound::play_blocks(seconds, rate, size, blocks.len() as u16, |first, _| {
+		fill.call(&mut *caller, first as f64 / rate as f64).map_err(&mut *kept)?;
+		blocks.iter().map(|&block| linear_doubles(caller, block, &task_failure).map_err(&mut *kept)).collect()
+	}))?;
+	Ok(Node::int(handle as i64))
+}
+
+/// A sound word's one value or stereo pair [left, right] of them
+fn channels_of(node: &Node, word: &str) -> wasmtime::Result<Vec<Node>> {
+	let channels = match node.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		single => vec![single.clone()],
+	};
+	match channels.len() {
+		1 | 2 => Ok(channels),
+		count => Err(task_failure(format!("{word}: {count} channels; one, or a pair [left, right] for stereo"))),
+	}
+}
+
+fn sound_arguments<const COUNT: usize>(arguments: &Node, usage: &str) -> wasmtime::Result<[Node; COUNT]> {
+	arguments.children().try_into().map_err(|_| task_failure(usage.into()))
+}
+
+/// The program's function of a float to a float a sound word calls back
+fn called_back(caller: &mut Caller<'_, HostState>, function: &Node, word: &str, shape: &str) -> wasmtime::Result<wasmtime::TypedFunc<f64, f64>> {
+	let name = function.name();
+	let not_a_signal = || task_failure(format!("{word}: {name} is no function {shape}"));
+	caller.get_export(&name).and_then(Extern::into_func).ok_or_else(not_a_signal)?.typed::<f64, f64>(&*caller).map_err(|_| not_a_signal())
+}
+
+fn seconds_and_rate(seconds: &Node, rate: &Node) -> wasmtime::Result<(f64, u32)> {
+	let [seconds, rate] = [seconds, rate].map(|number| number_of(number, &task_failure).map(f64::from));
+	Ok((seconds?, rate?.clamp(1.0, u32::MAX as f64) as u32))
 }
 
 /// What a host word computes calling the program back: a call that fails fails the word with its own error (the trap,
@@ -846,10 +897,15 @@ fn linear_memory(caller: &mut Caller<'_, HostState>, failure: &impl Fn(String) -
 
 /// A linear float array's cells as f32, as the GPU takes them
 fn linear_floats(caller: &mut Caller<'_, HostState>, block: i64, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Vec<f32>> {
+	Ok(linear_doubles(caller, block, failure)?.into_iter().map(|cell| cell as f32).collect())
+}
+
+/// A linear float array's cells
+fn linear_doubles(caller: &mut Caller<'_, HostState>, block: i64, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Vec<f64>> {
 	let memory = linear_memory(caller, failure)?;
 	let bytes = memory.data(&*caller);
 	let cells = linear_cells(bytes, block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
-	Ok(bytes[cells].as_chunks::<LINEAR_CELL_BYTES>().0.iter().map(|cell| f64::from_le_bytes(*cell) as f32).collect())
+	Ok(bytes[cells].as_chunks::<LINEAR_CELL_BYTES>().0.iter().map(|cell| f64::from_le_bytes(*cell)).collect())
 }
 
 /// The f32 the GPU left, written into a linear float array's cells

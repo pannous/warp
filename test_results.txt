@@ -1498,6 +1498,8 @@ PASSED:
   ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
+  ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
+  ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
@@ -2924,6 +2926,9 @@ PASSED:
   ✓ programs::test_draw::colors_are_numbers_with_an_alpha_byte
   ✓ programs::test_draw::shapes_set_the_pixels_they_cover
   ✓ programs::test_draw::with_alpha_is_a_method_of_a_color
+  ✓ programs::test_gpu_draw::an_unknown_draw_choice_warns
+  ✓ programs::test_gpu_draw::gpu_draws_what_cpu_draws
+  ✓ programs::test_gpu_draw::shapes_cross_to_the_paint_window_whole
   ✓ programs::test_hints_toggle::a_plain_run_shows_its_hints_and_how_to_hide_them
   ✓ programs::test_hints_toggle::a_run_without_hints_has_no_tip
   ✓ programs::test_hints_toggle::hints_chosen_explicitly_need_no_tip
@@ -3051,10 +3056,15 @@ PASSED:
   ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
+  ✓ programs::test_sound_signal::a_block_function_fills_the_samples_of_each_block
+  ✓ programs::test_sound_signal::a_block_function_is_called_once_a_block
+  ✓ programs::test_sound_signal::a_block_function_of_two_blocks_plays_in_stereo
+  ✓ programs::test_sound_signal::a_pair_of_signal_functions_plays_in_stereo
   ✓ programs::test_sound_signal::a_signal_function_plays_sample_by_sample
   ✓ programs::test_sound_signal::a_signal_keeps_its_state_between_samples
   ✓ programs::test_sound_signal::a_signal_louder_than_full_scale_is_clipped
   ✓ programs::test_sound_signal::a_signal_parameter_is_the_time_in_seconds_untyped_too
+  ✓ programs::test_sound_signal::play_of_a_function_plays_it_as_a_signal
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
@@ -4022,6 +4032,8 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_build_exe_signs_cleanly_on_macos
   ✓ wasm::test_standalone_executable::test_build_makes_an_executable_by_default
   ✓ wasm::test_standalone_executable::test_machine_code_rides_at_the_end_of_the_executable
+  ✓ wasm::test_standalone_executable::test_plain_run_leaves_no_executable_by_default
+  ✓ wasm::test_standalone_executable::test_plain_run_with_warp_executable_leaves_it
   ✓ wasm::test_standalone_executable::test_running_a_file_leaves_its_executable
   ✓ wasm::test_standalone_executable::test_running_a_file_shows_its_hints_once
   ✓ wasm::test_standalone_executable::test_running_without_a_stub_leaves_no_executable
@@ -4785,4 +4797,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4780 passed, 0 failed, 4780 total tested
+10 ignored, 4792 passed, 0 failed, 4792 total tested

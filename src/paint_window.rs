@@ -2,6 +2,8 @@
 //! on macOS). A window owns the main thread there, which the program runs on, so a viewer process does: the same
 //! binary as `warp paint-window`, reading frames from its stdin, [width u32][height u32][width×height RGBA bytes]. Each
 //! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed.
+//! `use draw` on the GPU sends shapes instead (src/gpu_canvas.rs): [SHAPES_MARK][width][height][count][count shapes],
+//! drawn over the canvas texture this process keeps, which the window then shows; no pixels cross.
 
 use std::io::{BufRead, Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -23,6 +25,9 @@ const SHOWN_SIDE: u32 = 512;
 /// A frame this many pixels across or more shows pixel for pixel (crisp on a Retina screen, half as many points)
 const PIXEL_FOR_PIXEL_SIDE: u32 = 1024;
 const RGBA_BYTES: usize = 4;
+/// In a frame's width: shapes follow, not pixels
+const SHAPES_MARK: u32 = u32::MAX;
+const WORD_BYTES: usize = 4;
 /// One triangle covering the window, sampling the frame as a texture, nearest pixel (no blur when scaled up)
 const SHADER: &str = "
 @group(0) @binding(0) var frame: texture_2d<f32>;
@@ -78,6 +83,21 @@ pub struct Frame {
 	pub rgba: Vec<u8>,
 }
 
+/// Shapes for the canvas `use draw` keeps on the GPU
+#[derive(Debug, PartialEq)]
+pub struct Shapes {
+	pub width: u32,
+	pub height: u32,
+	pub shapes: Vec<u8>,
+}
+
+/// What the viewer reads from its stdin
+#[derive(Debug, PartialEq)]
+pub enum Message {
+	Frame(Frame),
+	Shapes(Shapes),
+}
+
 /// The pixels (paint's values, shaded as the PNG shades them) as one frame for the viewer's stdin
 pub fn frame_bytes(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
 	let mut bytes = frame_header(width, height);
@@ -102,15 +122,42 @@ fn frame_header(width: usize, height: usize) -> Vec<u8> {
 	bytes
 }
 
-/// The next frame, None at the end of the stream
+/// The shapes drawn since the last show as one message for the viewer's stdin
+pub fn shapes_message(width: usize, height: usize, shapes: &[u8]) -> Vec<u8> {
+	let count = shapes.len() / crate::gpu_canvas::SHAPE_BYTES;
+	let words = [SHAPES_MARK, width as u32, height as u32, count as u32];
+	words.iter().flat_map(|word| word.to_le_bytes()).chain(shapes.iter().copied()).collect()
+}
+
+/// The next frame, None at the end of the stream (or at shapes)
 pub fn read_frame(reader: &mut impl Read) -> Option<Frame> {
-	let mut size = [0u8; 8];
-	reader.read_exact(&mut size).ok()?;
-	let side = |at: usize| u32::from_le_bytes(size[at..at + 4].try_into().expect("four bytes"));
-	let (width, height) = (side(0), side(4));
-	let mut rgba = vec![0u8; width as usize * height as usize * RGBA_BYTES];
-	reader.read_exact(&mut rgba).ok()?;
-	Some(Frame { width, height, rgba })
+	match read_message(reader)? {
+		Message::Frame(frame) => Some(frame),
+		Message::Shapes(_) => None,
+	}
+}
+
+/// The next frame or shapes, None at the end of the stream
+pub fn read_message(reader: &mut impl Read) -> Option<Message> {
+	let [first, second] = read_words(reader)?;
+	if first == SHAPES_MARK {
+		let [height, count] = read_words(reader)?;
+		let shapes = read_bytes(reader, count as usize * crate::gpu_canvas::SHAPE_BYTES)?;
+		return Some(Message::Shapes(Shapes { width: second, height, shapes }));
+	}
+	let rgba = read_bytes(reader, first as usize * second as usize * RGBA_BYTES)?;
+	Some(Message::Frame(Frame { width: first, height: second, rgba }))
+}
+
+fn read_words<const COUNT: usize>(reader: &mut impl Read) -> Option<[u32; COUNT]> {
+	let bytes = read_bytes(reader, COUNT * WORD_BYTES)?;
+	Some(std::array::from_fn(|at| u32::from_le_bytes(bytes[at * WORD_BYTES..][..WORD_BYTES].try_into().expect("four bytes"))))
+}
+
+fn read_bytes(reader: &mut impl Read, count: usize) -> Option<Vec<u8>> {
+	let mut bytes = vec![0u8; count];
+	reader.read_exact(&mut bytes).ok()?;
+	Some(bytes)
 }
 
 /// The viewer of this run, started by the first paint
@@ -147,12 +194,12 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 
 /// `warp paint-window`: the window showing the frames arriving on stdin, until it is closed
 pub fn run(check: bool) -> Result<(), String> {
-	let event_loop = EventLoop::<Frame>::with_user_event().build().map_err(|failure| format!("paint-window: no event loop: {failure}"))?;
+	let event_loop = EventLoop::<Message>::with_user_event().build().map_err(|failure| format!("paint-window: no event loop: {failure}"))?;
 	let proxy = event_loop.create_proxy();
 	std::thread::spawn(move || {
 		let mut input = std::io::stdin().lock();
-		while let Some(frame) = read_frame(&mut input) {
-			if proxy.send_event(frame).is_err() {
+		while let Some(message) = read_message(&mut input) {
+			if proxy.send_event(message).is_err() {
 				break;
 			}
 		}
@@ -165,8 +212,8 @@ pub fn run(check: bool) -> Result<(), String> {
 #[derive(Default)]
 struct Viewer {
 	screen: Option<Screen>,
-	/// The frame that came before the window could take it
-	waiting: Option<Frame>,
+	/// What came before the window could take it
+	waiting: Vec<Message>,
 	failure: Option<String>,
 	check: bool,
 }
@@ -182,18 +229,23 @@ struct Screen {
 	sampler: wgpu::Sampler,
 	texture_format: wgpu::TextureFormat,
 	bindings: Option<wgpu::BindGroup>,
+	/// The canvas `use draw` keeps on the GPU, made by its first shapes
+	canvas: Option<crate::gpu_canvas::Canvas>,
 	frame_size: (u32, u32),
 	pointer: (f64, f64),
 	button_down: bool,
 	key: u32,
 }
 
-impl ApplicationHandler<Frame> for Viewer {
+impl ApplicationHandler<Message> for Viewer {
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		if self.screen.is_some() {
 			return;
 		}
-		let (width, height) = self.waiting.as_ref().map_or((SHOWN_SIDE, SHOWN_SIDE), |frame| (frame.width, frame.height));
+		let (width, height) = self.waiting.first().map_or((SHOWN_SIDE, SHOWN_SIDE), |message| match message {
+			Message::Frame(frame) => (frame.width, frame.height),
+			Message::Shapes(shapes) => (shapes.width, shapes.height),
+		});
 		match Screen::open(event_loop, width, height, self.check) {
 			Ok(screen) => self.screen = Some(screen),
 			Err(failure) => {
@@ -201,15 +253,16 @@ impl ApplicationHandler<Frame> for Viewer {
 				return event_loop.exit();
 			}
 		}
-		if let Some(frame) = self.waiting.take() {
-			self.user_event(event_loop, frame);
+		for message in std::mem::take(&mut self.waiting) {
+			self.user_event(event_loop, message);
 		}
 	}
 
-	fn user_event(&mut self, _: &ActiveEventLoop, frame: Frame) {
-		match self.screen.as_mut() {
-			Some(screen) => screen.take(frame),
-			None => self.waiting = Some(frame),
+	fn user_event(&mut self, _: &ActiveEventLoop, message: Message) {
+		match (self.screen.as_mut(), message) {
+			(Some(screen), Message::Frame(frame)) => screen.take(frame),
+			(Some(screen), Message::Shapes(shapes)) => screen.draw_shapes(shapes),
+			(None, message) => self.waiting.push(message),
 		}
 	}
 
@@ -283,7 +336,7 @@ impl Screen {
 			cache: None,
 		});
 		let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-		Ok(Screen { window, surface, config, device, queue, pipeline, sampler, texture_format, bindings: None, frame_size: (0, 0), pointer: (0.0, 0.0), button_down: false, key: 0 })
+		Ok(Screen { window, surface, config, device, queue, pipeline, sampler, texture_format, bindings: None, canvas: None, frame_size: (0, 0), pointer: (0.0, 0.0), button_down: false, key: 0 })
 	}
 
 	/// The frame as the texture the next draw samples
@@ -303,19 +356,32 @@ impl Screen {
 			let layout = wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(frame.width * RGBA_BYTES as u32), rows_per_image: None };
 			self.queue.write_texture(texture.as_image_copy(), &frame.rgba, layout, size);
 		}
-		let view = texture.create_view(&Default::default());
+		self.show_texture(&texture.create_view(&Default::default()), (frame.width, frame.height));
+	}
+
+	/// The shapes drawn over the canvas on the GPU, which the window then shows
+	fn draw_shapes(&mut self, shapes: Shapes) {
+		let canvas = self.canvas.get_or_insert_with(|| crate::gpu_canvas::Canvas::new(&self.device));
+		let encoder = canvas.draw(&self.device, &self.queue, shapes.width, shapes.height, &shapes.shapes);
+		self.queue.submit([encoder.finish()]);
+		let view = canvas.texture().create_view(&wgpu::TextureViewDescriptor { format: Some(self.texture_format), ..Default::default() });
+		self.show_texture(&view, (shapes.width, shapes.height));
+	}
+
+	/// The texture the next draw samples, `size` pixels
+	fn show_texture(&mut self, view: &wgpu::TextureView, size: (u32, u32)) {
 		self.bindings = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: Some(TITLE),
 			layout: &self.pipeline.get_bind_group_layout(0),
 			entries: &[
-				wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+				wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(view) },
 				wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
 			],
 		}));
-		if self.frame_size != (frame.width, frame.height) && self.frame_size != (0, 0) {
-			let _ = self.window.request_inner_size(shown_size(frame.width, frame.height));
+		if self.frame_size != size && self.frame_size != (0, 0) {
+			let _ = self.window.request_inner_size(shown_size(size.0, size.1));
 		}
-		self.frame_size = (frame.width, frame.height);
+		self.frame_size = size;
 		self.window.request_redraw();
 	}
 
