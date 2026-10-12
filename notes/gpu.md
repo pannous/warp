@@ -37,6 +37,8 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
   sum/min/max, without @gpu or @cpu, Kernel.heavy) goes to the GPU from GPU_AUTO_MIN_COUNT = 10 × GPU_MAP_MIN_COUNT
   (327680 items: one order of magnitude of room for other architectures), checked at run time (flag AUTOMATIC = 4 in
   the keeping argument). Without an adapter it stays on the CPU silently (no warning, unlike @gpu).
+  `go xs.map(x => sin(x))` is that plain map too (parallel.rs kernel_map, card go-heavy-map): tasks copying Node slices
+  took 50 s for 10 maps of 300k items, the CPU loop 1 s (probes/perf/go_heavy_map.warp).
 - Exactness on demand: `@cpu` on a map (`xs.map(f) @cpu`, `@cpu xs.map(f)`), a block, a function or the program keeps
   it on the CPU in f64 and overrides the switch; `@gpu` with `@cpu` on one map is a compile error. `WARP_GPU=off`
   pins a whole run (tests, benchmarks) to the CPU, @gpu included.
