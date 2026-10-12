@@ -192,7 +192,7 @@ pub fn echo_url() -> String {
 	static URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 	URL.get_or_init(|| {
 		let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-		std::thread::spawn(move || warp::pipeline::serving_at(port, || eval(ECHO_SERVER)));
+		std::thread::spawn(move || warp::pipeline::serving_at(port, || eval(ECHO_SERVER).serialize()));
 		let started = std::time::Instant::now();
 		while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
 			assert!(started.elapsed() < SERVER_START_LIMIT, "the echo server did not start");
