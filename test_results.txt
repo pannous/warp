@@ -1955,8 +1955,6 @@ PASSED:
   ✓ modules::test_std_named_program::a_file_shadowing_a_std_module_is_named
   ✓ modules::test_std_named_program::a_program_named_like_a_std_module_uses_the_std_module
   ✓ modules::test_std_names_offline::a_std_module_name_needs_no_file_lookup
-  ✓ modules::test_std_net::post_sends_the_headers_of_a_map
-  ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_prelude::a_local_named_like_a_prelude_word_is_the_local
   ✓ modules::test_std_prelude::a_module_word_inside_an_interpolation_comes_along
   ✓ modules::test_std_prelude::a_programs_own_prelude_word_wins
@@ -4138,6 +4136,7 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
   ✓ web::test_accessibility::head_attributes_count
+  ✓ web::test_accessibility::markup_built_at_run_time_is_checked
   ✓ web::test_accessibility::style_sheet_rules_are_no_elements
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
@@ -4153,6 +4152,7 @@ PASSED:
   ✓ web::test_async_data::the_parsed_json_arrives_later
   ✓ web::test_bundle_budget::a_hello_world_site_stays_within_its_budget
   ✓ web::test_bundle_budget::a_site_script_is_compacted
+  ✓ web::test_bundle_budget::a_site_script_loses_its_trailing_comments
   ✓ web::test_class_components::an_instance_as_the_programs_value_renders
   ✓ web::test_class_components::an_instance_in_markup_renders
   ✓ web::test_class_components::an_instance_outside_markup_stays_an_instance
@@ -4193,6 +4193,9 @@ PASSED:
   ✓ web::test_expert_guide::the_expert_guide_has_the_beginner_chapters
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
+  ✓ web::test_form_bindings::a_handler_on_its_own_line_is_the_elements
+  ✓ web::test_form_bindings::a_site_with_a_submit_handler_carries_the_forms_script
+  ✓ web::test_form_bindings::a_submitted_form_hands_its_fields_to_its_handler
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
   ✓ web::test_form_routes::a_form_route_inside_an_element
   ✓ web::test_form_routes::a_form_written_as_its_route
@@ -4325,6 +4328,7 @@ PASSED:
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
   ✓ web::test_style_rules::hex_colors_in_a_style_sheet
   ✓ web::test_style_rules::lengths_keep_their_units
+  ✓ web::test_style_rules::percentages_and_comma_rules_on_one_line
   ✓ web::test_style_rules::root_and_element_rules_in_a_style_sheet
   ✓ web::test_style_rules::selectors_need_no_quotes
   ✓ web::test_styles::a_style_sheet_in_a_component_is_scoped_to_it
@@ -4802,6 +4806,8 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ modules::test_std_net::post_sends_the_headers_of_a_map
+  ✗ modules::test_std_net::use_net_posts_a_text
 
 SUMMARY:
-10 ignored, 4799 passed, 0 failed, 4799 total tested
+10 ignored, 4803 passed, 2 failed, 4805 total tested
