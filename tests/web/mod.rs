@@ -15,6 +15,8 @@ mod test_completion_terse; // card completion-terse: the gray continuation is co
 mod test_completion_words; // cards code-completion-should, completion-must
 mod test_components;
 mod test_css_transitions;
+#[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
+mod test_database_site; // database[k] in a built site
 #[cfg(feature = "native")] // wrangler dev runs the Worker (card cloud-deploy)
 mod test_deploy;
 #[cfg(feature = "native")] // runs node
