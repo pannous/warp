@@ -40,6 +40,10 @@ pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
 /// Whether a key is held now, over the paint window or the page (card keyboard-state): `on key` hears each press
 pub const KEY_DOWN: &str = "key_down";
+/// The name of the key held now ("a", "ArrowUp", "" for none), as `on key` names presses (card held-key): the word
+/// a program reads, made from KEY_CODE_HELD, the held key's code (0: none), which it does not name
+pub const HELD_KEY: &str = "held_key";
+pub const KEY_CODE_HELD: &str = "key code held";
 /// Whether a window shows the pictures: natively the paint window until it closes (no before the first paint and
 /// headless), on a page its canvas, always; `while window_open { … }` is a drawing loop that ends with its window
 pub const WINDOW_OPEN: &str = "window_open";

@@ -15,14 +15,17 @@
 use super::nodes::{call, key};
 use super::words::ON_WORD;
 use crate::declarations::word;
-use crate::node::{symbol, Bracket, Node};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
 use std::collections::HashSet;
 use warp_runtime::host_words::{
-	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, MOUSE_X, MOUSE_Y, SYSTEM_VALUE, SYSTEM_VALUES,
+	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, HELD_KEY, KEY_CODE_HELD, MOUSE_X, MOUSE_Y, SYSTEM_VALUE,
+	SYSTEM_VALUES,
 };
 
+/// `held_key` reads the held key's code once and names it (card held-key)
+const HELD_CODE: &str = "held·code";
 /// The mark of a system value read between the two passes
 pub const SYSTEM_PREFIX: &str = "system·";
 /// Host readings that are measurements, not counts: float sources (decision exact-decimals), so the exact decimals
@@ -42,7 +45,7 @@ pub fn name(program: Node) -> Node {
 	let bound = bound_names(&program);
 	let names: Vec<(&str, bool)> = SYSTEM_VALUES
 		.into_iter()
-		.chain([(CLIPBOARD, false), (NOW_WORD, false)])
+		.chain([(CLIPBOARD, false), (NOW_WORD, false), (HELD_KEY, false)])
 		.filter(|(name, _)| !bound.contains(*name))
 		.collect();
 	if names.is_empty() {
@@ -108,12 +111,24 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	bound
 }
 
+/// `held_key`: the name of the key held now, as `on key` names a press (system_signals.rs key_named)
+fn held_key() -> Node {
+	let read = key(
+		symbol(HELD_CODE),
+		Op::Assign,
+		call(SYSTEM_VALUE, vec![Node::Text(KEY_CODE_HELD.to_string())]),
+	);
+	let named = crate::system_signals::key_named(symbol(HELD_CODE));
+	Node::List(vec![read, named], Bracket::Curly, Separator::Semicolon)
+}
+
 /// Each read of a system value as its mark; a field name (`{battery: 5}`, `p.battery`) is no read
 fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 	let marked = |name: &str| match names.iter().any(|(system, _)| *system == name) {
 		false => None,
 		true if name == CLIPBOARD => Some(call(CLIPBOARD_TEXT, vec![])),
 		true if name == NOW_WORD => Some(crate::time::now_call()),
+		true if name == HELD_KEY => Some(held_key()),
 		true => Some(Node::Symbol(format!("{SYSTEM_PREFIX}{name}"))),
 	};
 	match node {
