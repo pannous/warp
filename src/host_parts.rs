@@ -3,7 +3,7 @@
 //! (src/deploy.rs) ship their texts; the playground's Deploy (src/web.rs web_worker_bundle) only names them for
 //! warp-hosting, so the wasm32 compiler carries the names without the texts.
 
-use crate::host::{CLIPBOARD_TEXT, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{CLIPBOARD_TEXT, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, RUN_BLOCK, SIGNAL_SEND, SOUND, STD_IO, STD_PURE};
 use crate::node::Node;
 use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY};
 
@@ -40,7 +40,7 @@ pub struct HostPart {
 pub const HOST_PARTS: [HostPart; 9] = [
 	HostPart {
 		script: ("host-files.js", script_text!("host-files.js")),
-		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
+		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", SOUND, STD_IO].contains(&name),
 		needs: &[],
 	},
 	HostPart { script: ("host-hashes.js", script_text!("host-hashes.js")), gives: |module, name| module == HOST_LIBRARY && name == STD_PURE, needs: &[] },

@@ -551,11 +551,26 @@ function wavOf(samples, rate, channels = 1) {
 
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
+		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
+		// signal's blocks keep its first one's handle. The handle
+		holder.sounded = (samples, rate, channels, handle) => {
+			const sound = { samples, rate, channels };
+			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+			(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
+			hooks.sound?.({ ...sound, at, handle });
+			return handle ?? self.lastSoundHandle?.() ?? 0;
+		};
 		const fetchUrl = (pointer, length, timeout) => {
 			const url = text(pointer, length);
 			return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
 		};
 		return {
+			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
+			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
+			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
+			sound_samples: (samples, count, rate, channels) => {
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
+			},
 			fetch: (pointer, length) => fetchUrl(pointer, length),
 			fetch_within: (pointer, length, milliseconds) => fetchUrl(pointer, length, Number(milliseconds)),
 			// the file's bytes as they are, like src/host.rs read; a URL (a package's own files) is fetched

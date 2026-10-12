@@ -3,7 +3,7 @@
 //! system's temporary folder (warp-sound/sound-<process id>.wav, then sound-<process id>-2.wav …: runs at the same time
 //! never share a file; card sound-wavs), played by the
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
-//! tests, which only get the file). The playground plays the same samples with WebAudio (host.js sound_samples).
+//! tests, which only get the file). The playground plays the same samples with WebAudio (host-files.js sound_samples).
 //! A sound is queued on the audio clock behind those before it in its voice and `play` returns at once (card sound-pro):
 //! each sound waits for its start on a thread of its own and plays, stop_sound drops the waiting ones, the process's
 //! end waits for them and for the music files playing. A voice is the program's thread or a task (`go { … }`), which

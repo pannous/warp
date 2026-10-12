@@ -118,15 +118,6 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
 	const program = () => holder.exports;
-	// samples (amplitude + SAMPLE_OFFSET of host-files.js, stereo interleaved) queued on the voice, for the page and
-	// render_sound; a signal's blocks keep its first one's handle. The handle
-	holder.sounded = (samples, rate, channels, handle) => {
-		const sound = { samples, rate, channels };
-		const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
-		(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
-		hooks.sound?.({ ...sound, at, handle });
-		return handle ?? self.lastSoundHandle?.() ?? 0;
-	};
 	// the host word sleep (src/host.rs): a page cannot block, so it busy-waits
 	holder.sleep = milliseconds => {
 		hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
@@ -222,13 +213,6 @@ function programImports(holder, hooks) {
 					painted = Array.from(rendered);
 				}
 				hooks.paint(painted, Number(width), Number(height));
-			},
-			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
-			// the page plays them with WebAudio
-			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
-			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
-			sound_samples: (samples, count, rate, channels) => {
-				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
