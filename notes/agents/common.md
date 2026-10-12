@@ -12,9 +12,8 @@ guess (user 2026-10-10: show() without a canvas gets a default size, not an erro
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
-- Every spawned session is announced to the user's Codex thread "Warp Boss" (user, 2026-10-12: inform the Codex Boss
-  every time we spawn a session): ~/dev/bin/claude-remote.sh (start.sh through it) and the Codex cron run (start and
-  end) do it; other spawns send name, folder and URL themselves with `~/dev/bin/codex-notify.sh "Warp Boss" "<text>"`.
+- Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
+  Claude spawns never notify it (user, 2026-10-12: a Claude spawn notice landing in Codex is "not at all what we want").
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
