@@ -335,7 +335,8 @@ function plainOfTree(tree) {
 			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
-		case Number(KIND_FUNCTION): return tree.warpFunction ? callableOf(tree.warpFunction) : null;
+		// its value the function's name (src/wasm_emitter/closures.rs), kept for a host word calling the export itself
+		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
 		default: return null;
 	}
 }

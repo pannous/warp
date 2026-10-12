@@ -488,6 +488,10 @@ function playedSignal(holder, seconds, rate, channels, block, blockOf) {
 	return self.lastSoundHandle?.() ?? 0;
 }
 
+// a function the program gives a sound word, of a float to a float: its export, called directly (closure_apply, which
+// builds nodes for each call, only for a closure without one)
+const exportedOr = (program, callable) => program[callable.warpName] ?? callable;
+
 // the cells of the linear float array at `address` in the program's memory
 function linearDoubles(program, address) {
 	const view = new DataView(program.memory.buffer);
@@ -615,7 +619,7 @@ addHostPart({
 			wait: () => null,
 			// play hum for 2s: hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
 			signal(functions, seconds, rate) {
-				const signals = [functions].flat();
+				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));
 				return playedSignal(this.holder, seconds, Number(rate), signals.length, SIGNAL_BLOCK, (first, count) => {
 					const blocks = signals.map(() => []);
 					for (let index = first; index < first + count; index++) signals.forEach((signal, channel) => blocks[channel].push(signal(index / Number(rate))));
@@ -627,8 +631,9 @@ addHostPart({
 			blocks(caller, addresses, seconds, rate) {
 				const blocks = [addresses].flat().map(Number);
 				const program = this.holder.exports;
+				const fill = exportedOr(program, caller);
 				return playedSignal(this.holder, seconds, Number(rate), blocks.length, linearDoubles(program, blocks[0]).length, first => {
-					caller(first / Number(rate));
+					fill(first / Number(rate));
 					return blocks.map(address => linearDoubles(program, address));
 				});
 			},
