@@ -429,9 +429,12 @@ Node), and folding no longer inlines a variant with a declared parameter: `f(a: 
 folded to 3.5 unchecked. A union may name declared classes (card union-types): `s: Circle | Square` is the join of the
 classes (their common ancestor, `object` of unrelated ones), so W0 needs nothing new; warp lowers it like a union of
 builtin types (analyzer `union_of_types`, a class covers no builtin part: `Point | text` keeps both), holds it as a Node,
-and traits.rs `admit` refuses an instance like none of the classes. Not yet: a class-typed place written again
-(`s: C | D = C(1); s = E(2)`, also of one class) and class-typed fields (card class-field), `x as T?` (a conversion in
-warp: `"4" as int?` is 4; W0's cast only checks).
+and traits.rs `admit` refuses an instance like none of the classes. Class-typed places (card class-field): traits.rs
+`Dispatch` remembers `s: C = …` per definition scope (a function's `s = …` is its own local) and admits a later `s = v`,
+each constructor field (`instance_parts`) and a field write, which reaches dispatch as `b = field_with(b, "content", v)`;
+a class field may hold ø (tree leaves). The analyzer lowers unions inside class bodies too: `map_children` skips field
+declarations, so `content: Circle | Square` had registered as `any`. Not yet: `x as T?` (a conversion in warp:
+`"4" as int?` is 4; W0's cast only checks).
 
 ## Implicit casts from `any`
 
