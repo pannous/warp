@@ -33,6 +33,16 @@ pub const BUILTIN_HOLES: [&str; 9] = [
 	PREVIOUS_HOLE,
 ];
 pub const PREVIOUS_HOLE: &str = "previous";
+/// other words for $previous, which stay the program's own names: a value missing under one of them hints at $previous
+pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
+
+/// what a shader missing the value `name` may have meant ("" for nothing)
+pub fn missing_value_hint(name: &str) -> &'static str {
+	match PREVIOUS_WORDS.contains(&name) {
+		true => "; the shader's own previous frame is $previous(at)",
+		false => "",
+	}
+}
 
 /// The WGSL of a shader block with each `$name` as `values.name`, and the names in order (none: no hole)
 pub fn written(wgsl: &str) -> (String, Vec<String>) {

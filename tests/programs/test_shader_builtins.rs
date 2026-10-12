@@ -63,3 +63,25 @@ fn a_shader_reads_its_previous_frame() {
 	// kept as 8 bits per channel: 64, then 128, then 192 = 0xC0
 	assert!(said.contains(&(0xFFC0_0000u32).to_string()), "{said}");
 }
+
+// card shader-read: $last, $feedback and $before are words for $previous (user's Interviewer 2026-10-12, canonical word
+// plus hinting aliases): left unassigned, the error names $previous(at)
+#[cfg(feature = "native")]
+#[test]
+fn a_word_for_the_previous_frame_hints_at_previous() {
+	let shader = "s = shader {\n\t@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n\t\treturn $last(at.xy);\n\t}\n}\n";
+	let run = crate::common::warp_command()
+		.args([
+			"--no-ask",
+			"eval",
+			&format!("use graphics\n{shader}gpu_render(s, 2, 2)"),
+		])
+		.output()
+		.unwrap();
+	let said = format!(
+		"{}{}",
+		String::from_utf8_lossy(&run.stdout),
+		String::from_utf8_lossy(&run.stderr)
+	);
+	assert!(said.contains("$previous(at)"), "{said}");
+}

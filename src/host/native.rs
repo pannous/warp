@@ -1470,8 +1470,9 @@ fn shader_values(values: &Node) -> Result<Vec<crate::gpu::ShaderValue>, String> 
 	let float = |name: &str, value: &Node| match value.drop_meta() {
 		Node::Number(number) => Ok(f64::from(*number) as f32),
 		other => Err(format!(
-			"values.{name} is a number or a list of numbers, got {}",
-			other.serialize()
+			"values.{name} is a number or a list of numbers, got {}{}",
+			other.serialize(),
+			crate::shader_holes::missing_value_hint(name)
 		)),
 	};
 	// a map of one entry arrives as that key

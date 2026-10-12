@@ -39,6 +39,7 @@ fn ${PREVIOUS_FUNCTION}(at: vec2f) -> vec4f {
 	let last = vec2i(textureDimensions(warp_previous_frame)) - vec2i(1);
 	return textureLoad(warp_previous_frame, clamp(vec2i(at), vec2i(0), last), 0);
 }`;
+const PREVIOUS_WORDS = ["last", "feedback", "before"]; // a value missing under these hints at $previous (src/shader_holes.rs)
 const previousFrames = new Map(); // the task Worker's: shader → the texture it drew last
 const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte rows
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
@@ -206,7 +207,7 @@ function uniformLayout(values) {
 		const vectors = Array.isArray(value) && value.some(Array.isArray);
 		if (vectors && value.some(item => [item].flat().length > VECTOR_FLOATS)) throw new Error(`${VALUES_NAME}.${name} is a list of vectors of up to four numbers, got ${JSON.stringify(value)}`);
 		const numbers = vectors ? value.flatMap(item => [...[item].flat(), 0, 0, 0, 0].slice(0, VECTOR_FLOATS)) : [value].flat();
-		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}`);
+		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}${PREVIOUS_WORDS.includes(name) ? "; the shader's own previous frame is $previous(at)" : ""}`);
 		const array = vectors || numbers.length > VECTOR_FLOATS;
 		const [type, alignment] = array ? [`array<vec4f, ${Math.max(1, Math.ceil(numbers.length / VECTOR_FLOATS))}>`, UNIFORM_ALIGNMENT] : VALUE_TYPES[numbers.length] ?? [];
 		if (!type) throw new Error(`${VALUES_NAME}.${name} is one number or a list of two to four, got ${numbers.length}`);
