@@ -142,9 +142,10 @@ Each step is useful on its own and is what the next ones stand on.
   samples/component_binding.warp.
 - Validation from declared types (card web-validate): element_events::lower_binds gives a bound field the checks of
   its variable's declared type (`age: int = 30`): int → type number, step 1 (the browser marks 2.5 :invalid and a
-  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. Not yet:
-  ranges or text patterns as types, and `int age = 30` (C-style) declarations (card bind-ignores). Sample
-  samples/typed_form.warp.
+  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. The C-style
+  `int age = 30` is the same declaration: type_name_matching::lower_prefixed_declarations rewrites it early to
+  `age: int = 30`, so handlers also treat it as the main-level variable (card bind-ignores). Not yet: ranges or text
+  patterns as types. Sample samples/typed_form.warp.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
