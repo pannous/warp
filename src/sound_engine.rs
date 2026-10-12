@@ -12,19 +12,38 @@ use std::time::{Duration, Instant};
 /// already played when it arrives (CoreAudio buffers hold 512 frames, 11 ms at 44.1 kHz)
 const LEAD: Duration = Duration::from_millis(60);
 const AMPLITUDE: f32 = 32_768.0;
+/// A sound of the same handle starting this close to where the last one ends continues it (a signal's next block):
+/// both starts round to frames on their own
+const SEAM_FRAMES: u64 = 2;
 
-/// A sound in the mix: its samples at the device's rate and channels, the frame it starts at, its gain and the gain it
-/// ramps to by `step` a frame (fade_sound)
+/// A sound in the mix: its samples as given (`channels` interleaved) and their frames a device frame (`ratio`, their
+/// rate over the device's), the frame it starts at, its gain and the gain it ramps to by `step` a frame (fade_sound)
 struct Mixed {
 	handle: usize,
 	start: u64,
 	samples: Vec<f32>,
+	channels: usize,
+	ratio: f64,
 	gain: f32,
 	target: f32,
 	step: f32,
 }
 
 impl Mixed {
+	/// Its length in device frames
+	fn frames(&self) -> u64 {
+		((self.samples.len() / self.channels) as f64 / self.ratio).round() as u64
+	}
+
+	/// The device frame's sample on the channel, between the given samples (linear interpolation); mono on every
+	/// speaker, stereo's left and right on the first two
+	fn sample(&self, frame: u64, channel: usize) -> f32 {
+		let position = frame as f64 * self.ratio;
+		let (before, share) = (position.floor() as usize, position.fract() as f32);
+		let at = |frame: usize| self.samples.get(frame * self.channels + channel.min(self.channels - 1)).copied().unwrap_or(0.0);
+		at(before) * (1.0 - share) + at(before + 1) * share
+	}
+
 	/// The gain of the frame played now, then one step on toward the target
 	fn next_gain(&mut self) -> f32 {
 		let gain = self.gain;
@@ -46,23 +65,16 @@ impl Mixer {
 		Mixer { rate, channels, frame: 0, sounds: Vec::new() }
 	}
 
-	/// The 16-bit samples (`channels` interleaved, at `rate`) starting at the frame, converted to the device's rate
-	/// (linear interpolation) and channels (mono on every speaker, stereo's left and right on the first two)
+	/// The 16-bit samples (`channels` interleaved, at `rate`) starting at the frame, played at the device's rate and
+	/// channels; continuing the handle's sound that ends there (SEAM_FRAMES), they join it without a seam
 	pub fn add(&mut self, handle: usize, start: u64, samples: &[i16], rate: u32, channels: u16) {
-		let channels = channels.max(1) as usize;
-		let frames = samples.len() / channels;
-		let step = rate as f64 / self.rate as f64;
-		let converted_frames = (frames as f64 / step).round() as usize;
-		let at = |frame: usize, channel: usize| samples.get(frame * channels + channel.min(channels - 1)).map_or(0.0, |&sample| sample as f32 / AMPLITUDE);
-		let mut converted = Vec::with_capacity(converted_frames * self.channels as usize);
-		for frame in 0..converted_frames {
-			let position = frame as f64 * step;
-			let (before, share) = (position.floor() as usize, (position.fract()) as f32);
-			for channel in 0..self.channels as usize {
-				converted.push(at(before, channel) * (1.0 - share) + at(before + 1, channel) * share);
-			}
+		let (channels, ratio) = (channels.max(1) as usize, rate as f64 / self.rate as f64);
+		let samples = samples.iter().map(|&sample| sample as f32 / AMPLITUDE);
+		let continued = self.sounds.iter_mut().find(|sound| sound.handle == handle && sound.channels == channels && sound.ratio == ratio && (sound.start + sound.frames()).abs_diff(start) <= SEAM_FRAMES);
+		match continued {
+			Some(sound) => sound.samples.extend(samples),
+			None => self.sounds.push(Mixed { handle, start, samples: samples.collect(), channels, ratio, gain: 1.0, target: 1.0, step: 0.0 }),
 		}
-		self.sounds.push(Mixed { handle, start, samples: converted, gain: 1.0, target: 1.0, step: 0.0 });
 	}
 
 	/// stop_sound(handle), 0 all of them: dropped from the mix at once
@@ -91,18 +103,19 @@ impl Mixer {
 		buffer.fill(0.0);
 		let frames = (buffer.len() / channels) as u64;
 		for sound in &mut self.sounds {
-			let sound_frames = (sound.samples.len() / channels) as u64;
 			let first = sound.start.max(self.frame);
-			let last = (sound.start + sound_frames).min(self.frame + frames);
+			let last = (sound.start + sound.frames()).min(self.frame + frames);
 			for frame in first..last {
-				let (into, from) = (((frame - self.frame) as usize) * channels, ((frame - sound.start) as usize) * channels);
+				let into = ((frame - self.frame) as usize) * channels;
 				let gain = sound.next_gain();
-				buffer[into..into + channels].iter_mut().zip(&sound.samples[from..from + channels]).for_each(|(out, sample)| *out += sample * gain);
+				for (channel, out) in buffer[into..into + channels].iter_mut().enumerate() {
+					*out += sound.sample(frame - sound.start, channel) * gain;
+				}
 			}
 		}
 		self.frame += frames;
 		let frame = self.frame;
-		self.sounds.retain(|sound| sound.start + (sound.samples.len() / channels) as u64 > frame);
+		self.sounds.retain(|sound| sound.start + sound.frames() > frame);
 		buffer.iter_mut().for_each(|sample| *sample = sample.clamp(-1.0, 1.0));
 	}
 
