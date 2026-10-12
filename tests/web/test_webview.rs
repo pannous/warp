@@ -35,3 +35,10 @@ fn without_check_no_window_opens_under_warp_no_window() {
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("--check"));
 }
+
+#[test]
+fn a_page_survives_losing_focus() {
+	// --check replays the focus loss (windowDidResignKey) that crashed `warp app samples/crontab.warp` with
+	// "tried to access uninitialized instance variable" (card focus-crash)
+	assert!(checked_text("focus.html", "<p>still here</p>").contains("still here"));
+}
