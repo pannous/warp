@@ -197,11 +197,11 @@ fn without_use_of(program: Node, module: &str) -> Node {
 	}
 }
 
-/// `xs.unique()`: a type's methods are the words of the standard module named after it (lib/list.warp, text.warp,
-/// map.warp; user decision, card list-methods), so a program
-/// calling one as a method uses that module; `unique(xs)` still needs `use list`. A library word stays the builtin, a
-/// word the program defines is its own, a word of two such modules needs its `use`, `list.zip(a, b)` names the module
-/// (test_std_qualified)
+/// `xs.unique()`, `unique(xs)`: the words of the standard modules named after a type (lib/list.warp, text.warp,
+/// map.warp) are standard functions of every program, called either way (user decision type-library-words, card
+/// dispatch: "just provide the standard functions for list and map by default"), so a program calling one uses that
+/// module. A library word stays the builtin, a word the program defines is its own, a word of two such modules needs
+/// its `use`, `list.zip(a, b)` names the module (test_std_qualified)
 /// The standard modules named after a type with their words, the methods of that type: list, map, text
 pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 	std_module_names()
@@ -211,16 +211,17 @@ pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 }
 
 fn with_type_module_uses(program: Node) -> Node {
-	let mut defined = HashSet::new();
-	program.visit(&mut |node| defined.extend(declared_name(node)));
-	let used: HashSet<String> = statements(program.clone()).iter().filter_map(used_module).map(|used| used.name).collect();
+	let defined = own_functions(&program);
+	// `from list import zip` brings only zip: the module's other words stay out (test_from_import)
+	let imported = |statement: &Node| used_module(statement).or_else(|| imported_words(statement).map(|(used, _, _)| used));
+	let used: HashSet<String> = statements(program.clone()).iter().filter_map(imported).map(|used| used.name).collect();
 	let type_modules = type_modules();
 	let is_module_name = |receiver: &Node| receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name));
 	let only_provider = |method: &String| match type_modules.iter().filter(|(_, words)| words.contains(method)).collect::<Vec<_>>().as_slice() {
 		[(module, _)] => Some(*module),
 		_ => None,
 	};
-	let mut modules: Vec<&str> = called_methods(&program, &is_module_name)
+	let mut modules: Vec<&str> = called_words(&program, &is_module_name)
 		.iter()
 		.filter(|method| !defined.contains(*method) && !crate::library_words::is_library_word(method))
 		.filter_map(only_provider)
@@ -231,16 +232,72 @@ fn with_type_module_uses(program: Node) -> Node {
 	with_statements_first(program, modules.into_iter().map(|module| WarpParser::parse(&format!("use {module}"))).collect())
 }
 
-/// The methods called with arguments: `unique` of `xs.unique()` and `take` of `xs.take(2)`; `book.title` may be a field,
-/// `list.zip(a, b)` of a module name is a qualified word
-fn called_methods(program: &Node, is_module_name: &dyn Fn(&Node) -> bool) -> HashSet<String> {
-	let mut names = HashSet::new();
-	program.visit(&mut |node| if let Node::Key(receiver, Op::Dot | Op::SafeDot, member) = node {
-		if let (Node::List(call, _, _), false) = (member.drop_meta(), is_module_name(receiver)) {
-			names.extend(call.first().and_then(Node::symbol_name).map(String::from));
-		}
+/// The names the program declares, but not its methods: `take()` of a class Box, `take(b:Box)` add to list's take
+/// (notes/dispatch.md "Methods"), a plain `take(xs, n)` is the program's own take
+fn own_functions(program: &Node) -> HashSet<String> {
+	let mut classes = HashSet::new();
+	program.visit(&mut |node| if let Node::Type { name, .. } = node {
+		classes.extend(leftmost_symbol(name));
 	});
+	let mut own = classes.clone();
+	collect_own_functions(program, &classes, &mut own);
+	own
+}
+
+fn collect_own_functions(node: &Node, classes: &HashSet<String>, own: &mut HashSet<String>) {
+	let is_method = |target: &Node| match target.drop_meta() {
+		Node::List(items, _, _) => matches!(items.get(1).map(Node::drop_meta), Some(Node::Key(_, Op::Colon, class)) if class.symbol_name().is_some_and(|class| classes.contains(class))),
+		_ => false,
+	};
+	match node.drop_meta() {
+		Node::Type { .. } => {}
+		Node::Key(target, Op::Assign | Op::Define, value) if is_method(target) => collect_own_functions(value, classes, own),
+		Node::Key(left, _, right) => {
+			own.extend(declared_name(node));
+			collect_own_functions(left, classes, own);
+			collect_own_functions(right, classes, own);
+		}
+		Node::List(items, _, _) => {
+			own.extend(declared_name(node));
+			items.iter().for_each(|item| collect_own_functions(item, classes, own));
+		}
+		other => own.extend(declared_name(other)),
+	}
+}
+
+/// The words called with arguments: `unique` of `unique(xs)`, `unique xs`, `xs.unique()` and `take` of `xs.take(2)`; `book.title`
+/// may be a field, `list.zip(a, b)` of a module name is a qualified word
+fn called_words(program: &Node, is_module_name: &dyn Fn(&Node) -> bool) -> HashSet<String> {
+	let mut names = HashSet::new();
+	collect_called_words(program, is_module_name, &mut names);
 	names
+}
+
+fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, names: &mut HashSet<String>) {
+	let called = |call: &[Node]| call.first().and_then(Node::symbol_name).map(String::from);
+	match node.drop_meta() {
+		Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
+			collect_called_words(receiver, is_module_name, names);
+			if let Node::List(call, _, _) = member.drop_meta() {
+				if !is_module_name(receiver) {
+					names.extend(called(call));
+				}
+				call.iter().skip(1).for_each(|argument| collect_called_words(argument, is_module_name, names));
+			}
+		}
+		Node::Key(left, _, right) => {
+			collect_called_words(left, is_module_name, names);
+			collect_called_words(right, is_module_name, names);
+		}
+		Node::List(items, bracket, _) => {
+			if matches!(bracket, Bracket::Round | Bracket::None) && items.len() > 1 {
+				names.extend(called(items));
+			}
+			items.iter().for_each(|item| collect_called_words(item, is_module_name, names));
+		}
+		Node::Type { body, .. } => collect_called_words(body, is_module_name, names),
+		_ => {}
+	}
 }
 
 fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
