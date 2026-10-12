@@ -499,7 +499,15 @@ pub fn lower_conformances(node: Node) -> Node {
 		return node;
 	}
 	let traits = Traits::of(&node);
-	let node = conform(operation_calls(node, &traits), &registry, &traits);
+	let generics = generic_functions(&node, &registry, &traits);
+	let node = conform(operation_calls(node, &traits, &generics), &registry, &traits, &generics);
+	let node = match generics.is_empty() {
+		true => node,
+		false => match generic_calls(node, generics) {
+			Ok(node) => node,
+			Err(error) => return error,
+		},
+	};
 	let witnesses = defined_functions(&node);
 	match first_unkept_claim(&node, &traits, &witnesses) {
 		Some(error) => error,
@@ -507,35 +515,39 @@ pub fn lower_conformances(node: Node) -> Node {
 	}
 }
 
-/// `s.area()` of a declared trait's operation: the call `area(s)`, which picks the witness of s's type like any call
-/// of the operation (a class method `area(): number {…}` is the witness area·Square)
-fn operation_calls(node: Node, traits: &Traits) -> Node {
+/// `s.area()` of a declared trait's operation or of a generic function: the call `area(s)`, which picks the witness of
+/// s's type like any call of the operation (a class method `area(): number {…}` is the witness area·Square)
+fn operation_calls(node: Node, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {
+	let is_operation = |member: &Node| {
+		let name = crate::lowering::class_methods::leading_name(member);
+		traits.operation(&name).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name)) || generics.contains_key(&name)
+	};
 	match node {
-		Node::Key(receiver, Op::Dot, member) if traits.operation(&crate::lowering::class_methods::leading_name(&member)).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name)) => {
+		Node::Key(receiver, Op::Dot, member) if is_operation(&member) => {
 			let arguments = match member.drop_meta() {
 				Node::List(items, _, _) => items[1..].to_vec(),
 				_ => vec![],
 			};
 			let name = Node::Symbol(crate::lowering::class_methods::leading_name(&member));
-			let arguments = std::iter::once(*receiver).chain(arguments).map(|argument| operation_calls(argument, traits));
+			let arguments = std::iter::once(*receiver).chain(arguments).map(|argument| operation_calls(argument, traits, generics));
 			Node::List(std::iter::once(name).chain(arguments).collect(), Bracket::Round, Separator::None)
 		}
-		other => other.map_children(|child| operation_calls(child, traits)),
+		other => other.map_children(|child| operation_calls(child, traits, generics)),
 	}
 }
 
-fn conform(node: Node, registry: &TypeRegistry, traits: &Traits) -> Node {
+fn conform(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
 			let body = instance_parameters(&head, registry).iter().fold(*body, |body, (name, type_name)| typed_uses(body, name, type_name));
 			let head = typed_parameters(*head, registry);
-			let head = match witness_of(&head, registry, traits) {
+			let head = match witness_of(&head, registry, traits).or_else(|| method_of(&head, registry, generics)) {
 				Some(witness) => renamed_head(head, witness),
 				None => head,
 			};
-			key(head, op, conform(body, registry, traits))
+			key(head, op, conform(body, registry, traits, generics))
 		}
-		other => children_rewritten(other, |child| conform(child, registry, traits)),
+		other => children_rewritten(other, |child| conform(child, registry, traits, generics)),
 	}
 }
 
@@ -686,6 +698,190 @@ fn without_claims(node: Node, traits: &Traits) -> Node {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Generic functions: methods told apart by the class of their first argument
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A function name with methods for declared classes (`def sort(d:Deck)`, `area(s:square)`, notes/dispatch.md
+/// "Methods"): a definition adds a method, it never replaces the function for other values
+pub(crate) struct Generic {
+	/// The classes the methods take as first argument, in declaration order
+	methods: Vec<String>,
+	/// The first parameter's name in the first method, for the fix of a missing method
+	parameter: String,
+	/// Other values have a function to call: a library word (`sort` of lists) or an untyped definition `sort(x)`
+	fallback: bool,
+}
+
+impl Generic {
+	/// The class whose method a value of `type_name` calls: its own, else the nearest class it is like (its parent); two
+	/// equally near ones are ambiguous
+	fn method_for(&self, type_name: &str, likenesses: &[Likeness]) -> Result<Option<String>, (String, String)> {
+		let mut level = vec![type_name.to_string()];
+		let mut seen = level.clone();
+		while !level.is_empty() {
+			let found: Vec<&String> = level.iter().filter(|candidate| self.methods.contains(candidate)).collect();
+			match found.as_slice() {
+				[one] => return Ok(Some(one.to_string())),
+				[first, second, ..] => return Err((first.to_string(), second.to_string())),
+				[] => {}
+			}
+			let mut parents: Vec<String> = level.iter().flat_map(|kind| likenesses.iter().filter(move |likeness| likeness.kind == *kind).map(|likeness| likeness.like.clone())).collect();
+			parents.retain(|parent| !seen.contains(parent));
+			parents.dedup();
+			seen.extend(parents.iter().cloned());
+			level = parents;
+		}
+		Ok(None)
+	}
+
+	fn signatures(&self, name: &str) -> String {
+		self.methods.iter().map(|type_name| format!("{name}({type_name})")).collect::<Vec<_>>().join(", ")
+	}
+}
+
+/// The functions with methods for declared classes that need telling apart: methods of several classes, or of a name
+/// with a fallback. A declared trait's operations stay the traits' (witness_of)
+fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &Traits) -> HashMap<String, Generic> {
+	let mut typed: Vec<(String, String, String)> = vec![];
+	let mut untyped: Vec<String> = vec![];
+	node.visit(&mut |part| if let Node::Key(head, Op::Assign | Op::Define, _) = part {
+		let Some(items) = definition_head(head) else { return };
+		let Node::Symbol(name) = items[0].drop_meta() else { return };
+		if name.contains(WITNESS_SEPARATOR) || traits.operation(name).is_some() {
+			return;
+		}
+		match parameter_type(&items[1], registry) {
+			Some(type_name) => typed.push((name.clone(), type_name.to_string(), items[1].drop_meta().name())),
+			None => untyped.push(name.clone()),
+		}
+	});
+	let mut generics: HashMap<String, Generic> = HashMap::new();
+	for (name, type_name, parameter) in typed {
+		let fallback = untyped.contains(&name) || crate::lowering::class_methods::is_library_method(&name);
+		let generic = generics.entry(name).or_insert(Generic { methods: vec![], parameter, fallback });
+		if !generic.methods.contains(&type_name) {
+			generic.methods.push(type_name);
+		}
+	}
+	generics.retain(|_, generic| generic.fallback || generic.methods.len() > 1);
+	generics
+}
+
+/// `sort(d:Deck)` of a generic function: the method `sort·Deck`
+fn method_of(head: &Node, registry: &TypeRegistry, generics: &HashMap<String, Generic>) -> Option<String> {
+	let items = definition_head(head)?;
+	let Node::Symbol(name) = items[0].drop_meta() else { return None };
+	generics.contains_key(name).then_some(())?;
+	Some(witness_name(name, parameter_type(&items[1], registry)?))
+}
+
+/// Every call of a generic function calls the method for its first argument's class: statically where the class is
+/// known, through a dispatcher `f·dispatch` where it is known only at run time; other values call the fallback
+fn generic_calls(node: Node, functions: HashMap<String, Generic>) -> Result<Node, Node> {
+	let types = InstanceTypes::of(&node);
+	let mut likenesses = vec![];
+	collect_declared(&node, &mut likenesses);
+	let plain = crate::analyzer::literal_variable_kinds(&node, &crate::analyzer::function_context(&node));
+	let classes = types.registry.types().iter().map(|type_def| type_def.name.clone()).collect();
+	let calls = GenericCalls { functions, types, likenesses, plain, classes, failed: RefCell::new(None), dispatched: RefCell::new(Default::default()) };
+	let node = calls.resolve(node);
+	if let Some(error) = calls.failed.into_inner() {
+		return Err(error);
+	}
+	let dispatchers: Vec<Node> = calls.dispatched.into_inner().into_iter().map(|((name, arity), (cases, fallback))| dispatcher_of_cases(&name, arity, &cases, fallback)).collect();
+	Ok(match dispatchers.is_empty() {
+		true => node,
+		false => Node::List([dispatchers, vec![node]].concat(), Bracket::None, Separator::Semicolon),
+	})
+}
+
+struct GenericCalls {
+	functions: HashMap<String, Generic>,
+	types: InstanceTypes,
+	likenesses: Vec<Likeness>,
+	/// The variables only ever holding literals, which are no instances
+	plain: HashMap<String, crate::type_kinds::Kind>,
+	classes: Vec<String>,
+	failed: RefCell<Option<Node>>,
+	/// (function, number of arguments) → its dispatcher's cases
+	dispatched: RefCell<std::collections::BTreeMap<(String, usize), DispatchCases>>,
+}
+
+/// A dispatcher's cases (the class tested, the class whose method it calls) and whether other values call the fallback
+type DispatchCases = (Vec<(String, String)>, bool);
+
+impl GenericCalls {
+	fn fail(&self, error: Node) -> Option<Node> {
+		self.failed.borrow_mut().get_or_insert(error.clone());
+		Some(error)
+	}
+
+	fn resolve(&self, node: Node) -> Node {
+		match node {
+			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
+				let body = self.types.in_definition(&head, || self.resolve(*body));
+				Node::Key(head, op, Box::new(body))
+			}
+			Node::List(items, bracket, separator) => {
+				let items: Vec<Node> = items.into_iter().map(|item| self.resolve(item)).collect();
+				self.call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
+			}
+			other => children_rewritten(other, |child| self.resolve(child)),
+		}
+	}
+
+	/// The kind of a value certainly no instance: a literal, a variable only ever holding literals
+	fn plain_kind(&self, value: &Node) -> Option<crate::type_kinds::Kind> {
+		crate::analyzer::argument_literal_kind(value).or_else(|| match value.drop_meta() {
+			Node::Symbol(name) if !self.types.is_parameter(name) => self.plain.get(name).copied(),
+			_ => None,
+		})
+	}
+
+	fn call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let [head, first, ..] = items else { return None };
+		let name = called_name(items, bracket, separator)?;
+		let generic = self.functions.get(name)?;
+		let arguments = items[1..].to_vec();
+		if let Some(Shape::Instance(type_name)) = self.types.shape(first) {
+			return match generic.method_for(&type_name, &self.likenesses) {
+				Ok(Some(method_type)) => Some(witness_call(name, &method_type, arguments)),
+				Ok(None) if generic.fallback => None,
+				Ok(None) => self.fail(no_method(head, name, &type_name, generic)),
+				Err((first_type, second_type)) => self.fail(ambiguous_method(head, name, &type_name, &first_type, &second_type)),
+			};
+		}
+		if let Some(kind) = self.plain_kind(first).or_else(|| matches!(self.types.shape(first), Some(Shape::ListOf(_))).then_some(crate::type_kinds::Kind::List)) {
+			return match generic.fallback {
+				true => None,
+				false => self.fail(no_method(head, name, &format!("{kind:?}"), generic)),
+			};
+		}
+		let cases: Vec<(String, String)> = self.classes.iter().filter_map(|class| Some((class.clone(), generic.method_for(class, &self.likenesses).ok()??))).collect();
+		match (cases.as_slice(), generic.fallback) {
+			([], true) => None,
+			([(_, method_type)], false) => Some(witness_call(name, method_type, arguments)),
+			_ => {
+				self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), (cases, generic.fallback));
+				Some(witness_call(name, DISPATCH, arguments))
+			}
+		}
+	}
+}
+
+/// `area(circle(1))` of a generic function without a method for circle
+fn no_method(located: &Node, name: &str, type_name: &str, generic: &Generic) -> Node {
+	let message = format!("{name} has no method for {type_name}; methods: {}", generic.signatures(name));
+	Diagnostic::at(located, message).fix(format!("define {name}({}:{type_name}) := …", generic.parameter)).into_error()
+}
+
+/// `f(C(1))` of methods f(A) and f(B) where C is like both
+fn ambiguous_method(located: &Node, name: &str, type_name: &str, first: &str, second: &str) -> Node {
+	let message = format!("{name} of {} is ambiguous: {type_name} is like both {first} and {second}, which have a method {name} each", crate::analyzer::with_article(type_name));
+	Diagnostic::at(located, message).fix(format!("define {name}(x:{type_name}) := … to pick one")).into_error()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Static instance types
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -804,6 +1000,11 @@ impl InstanceTypes {
 		let rewritten = rewrite();
 		self.parameters.borrow_mut().pop();
 		rewritten
+	}
+
+	/// Is `name` a parameter of a definition being rewritten
+	fn is_parameter(&self, name: &str) -> bool {
+		self.parameters.borrow().iter().any(|scope| scope.contains_key(name))
 	}
 
 	/// The declared type of the elements of `[C]`
@@ -953,12 +1154,25 @@ fn with_dispatchers(node: Node, dispatched: &std::collections::BTreeMap<(String,
 }
 
 fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
+	let cases: Vec<(String, String)> = types.iter().map(|type_name| (type_name.clone(), type_name.clone())).collect();
+	dispatcher_of_cases(operation, arity, &cases, false)
+}
+
+/// `op·dispatch(x, …)`: per case (the class x is an instance of, the class whose method that calls) the method; the
+/// last case unchecked, or with a `fallback` every case checked and any other value calling `op` itself
+fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[(String, String)], fallback: bool) -> Node {
 	let parameters: Vec<Node> = (0..arity).map(|index| Node::Symbol(format!("dispatched_{index}"))).collect();
-	let (last, checked) = types.split_last().expect("two or more types define the operation");
-	let witness = |type_name: &str| witness_call(operation, type_name, parameters.clone());
-	let body = checked.iter().rev().fold(witness(last), |otherwise, type_name| {
-		let test = call(INSTANCE_OF, vec![parameters[0].clone(), Node::Text(type_name.clone())]);
-		if_then_else(test, witness(type_name), otherwise)
+	let method = |type_name: &str| witness_call(operation, type_name, parameters.clone());
+	let (checked, otherwise) = match fallback {
+		true => (cases, call(operation, parameters.clone())),
+		false => {
+			let (last, checked) = cases.split_last().expect("two or more types define the operation");
+			(checked, method(&last.1))
+		}
+	};
+	let body = checked.iter().rev().fold(otherwise, |otherwise, (instance_type, method_type)| {
+		let test = call(INSTANCE_OF, vec![parameters[0].clone(), Node::Text(instance_type.clone())]);
+		if_then_else(test, method(method_type), otherwise)
 	});
 	// the first parameter is an instance of some type: held as a Node, like a parameter `s:square`
 	let instance = key(parameters[0].clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance)));

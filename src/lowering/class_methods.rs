@@ -13,6 +13,7 @@ mod operators;
 mod other_languages;
 use inheritance::*;
 use operators::*;
+pub(crate) use operators::is_library_method;
 use other_languages::*;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
