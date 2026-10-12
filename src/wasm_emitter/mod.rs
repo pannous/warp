@@ -2367,7 +2367,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
 		crate::fixed_width::overflow_message(&type_name)
 	});
-	// `return error("…")` from a number function: the message is the trap detail
+	// `return error "…"` from a number function: the message is the trap detail
 	let returned_error = trace
 		.contains(list_ops::RETURNED_ERROR)
 		.then(|| trap_detail(trace))
