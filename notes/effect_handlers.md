@@ -20,8 +20,11 @@ Lowering (src/lowering/scoped_handlers.rs, before event_signals):
 - `emit ask{…}`: `if ask·active() == 1 then ask·handler·1(data) else … else emit ask{…}` (the last is the program-wide
   emit, lowered by event_signals as before); reads go through `ask·active()` so a function sees the current value
 - while handler i runs, the active handler is block i's outer one: an emit inside a handler goes to the next handler out
-- Limits: a handler body reads main-level variables and `event`, not the locals of the function it is written in;
-  an error escaping the block leaves the handler active (no unwinding yet)
+- Limit: a handler body reads main-level variables and `event`, not the locals of the function it is written in
+- Leave on throw (card on-error-abort, 2026-10-12): a block an error or another block's abort jumps out of skips its
+  leave, so each `try` and each aborting block notes every event's active handler as it starts and puts them back once
+  it caught the throw, before its fallback runs (scoped_handlers::unwound). An uncaught error ends the program anyway.
+  Tests: tests/control/test_handler_unwinding.rs
 
 ## Step 2: events as named effects (src/effects.rs)
 - a function's effects gain event names next to the closed set (FunctionEffects.events): `emit ask` in f adds `ask`, so `effects of f` is `(IO ask)`
