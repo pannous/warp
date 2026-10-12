@@ -400,7 +400,7 @@ function outcomeOf(holder, hooks, call) {
 	};
 	const failed = trap => {
 		eachHostPart("ended", holder);
-		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
+		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, exited: holder.exitCode, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };

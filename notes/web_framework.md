@@ -10,7 +10,8 @@ order and what each builds on. Defaults below are undoable; open questions go to
 - **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/html.warp, html_dsl.warp; repeated
   keys like `li li li` since 49a48ece1, tests/web/test_markup_tags.rs). It is only a value today: nothing renders it.
 - **Signals** (notes/signals.md): every variable is a signal once something listens; `:=` derives one and knows what it
-  reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7).
+  reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7)
+  and in `warp app` (`on key { exit }` closes it, samples/hello_div.warp, tests/web/test_app_keys.rs).
 - **Page plumbing** (notes/web_playground.md): the compiler runs in a worker, host words reach the page
   (host.js), paint draws pixels, `use draw` shapes (lib/draw.warp), fetch, channels, components, threads.
 
