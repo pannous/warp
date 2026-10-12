@@ -26,11 +26,12 @@ const added = table.insert("people", ["name", "age"], ["new", 1], file);
 const elapsed = Date.now() - started;
 console.log(JSON.stringify({
 	first: table.page("people", schema, file, 1, 3),
-	last: table.page("people", schema, file, ROWS, 5),
+	last: table.page("people", schema, file, ROWS - 1, 5),
 	count: table.count("people", schema, file),
 	added,
 	fast: elapsed < BUDGET_MS,
 }));
+databaseChannel?.close(); // an open BroadcastChannel keeps node running
 "#;
 
 #[test]
