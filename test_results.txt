@@ -404,6 +404,9 @@ PASSED:
   ✓ control::test_relational_arms::a_comparison_without_its_left_side_is_an_error
   ✓ control::test_relational_arms::a_match_arm_compares_the_subject
   ✓ control::test_relational_arms::the_operator_value_stays
+  ✓ control::test_rest_patterns::a_class_pattern_leaves_other_fields_out
+  ✓ control::test_rest_patterns::a_rest_binds_the_remaining_items
+  ✓ control::test_rest_patterns::items_after_a_rest_count_from_the_end
   ✓ control::test_run_tests::a_build_leaves_the_tests_out
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
   ✓ control::test_run_time_block_cache::a_block_run_in_a_loop_with_changing_numbers_compiles_once
@@ -490,6 +493,7 @@ PASSED:
   ✓ control::test_stored_signals::a_local_named_stored_keeps_the_word
   ✓ control::test_stored_signals::a_program_keeps_its_stored_values_in_a_file_beside_it
   ✓ control::test_stored_signals::a_stored_value_starts_with_its_default
+  ✓ control::test_structural_patterns::a_call_as_the_subject
   ✓ control::test_structural_patterns::test_a_subject_that_is_no_list_does_not_match
   ✓ control::test_structural_patterns::test_list_patterns_bind_names
   ✓ control::test_structural_patterns::test_nested_lists_and_pairs
@@ -1540,6 +1544,7 @@ PASSED:
   ✓ lists::test_empty_list_argument::a_function_receives_the_empty_list
   ✓ lists::test_empty_list_argument::an_empty_list_inside_a_list_is_an_item
   ✓ lists::test_empty_list_argument::an_empty_list_literal_is_a_call_argument
+  ✓ lists::test_empty_list_concat::an_empty_list_variable_concatenates
   ✓ lists::test_empty_list_count::a_counting_property_is_a_number_in_arithmetic
   ✓ lists::test_empty_list_count::a_loop_over_an_empty_list_does_not_run
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
@@ -1664,6 +1669,8 @@ PASSED:
   ✓ lists::test_long_list_copies::copies_keep_the_order_and_share_nothing_they_change
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
   ✓ lists::test_map_get_kind::get_gives_the_value_kind_of_the_map
+  ✓ lists::test_map_index::a_map_parameter_fills_and_finds_in_linear_time
+  ✓ lists::test_map_index::an_indexed_map_changed_in_place_finds_the_change
   ✓ lists::test_map_literal_number_keys::a_number_subscript_keys_a_map_literal
   ✓ lists::test_map_literal_number_keys::number_and_text_keys_of_a_map_literal_agree
   ✓ lists::test_map_parameter_keys::keys_of_a_one_entry_map_parameter
@@ -4157,6 +4164,7 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_no_optimization
   ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
+  ✓ web::test_accessibility::fetched_content_is_announced
   ✓ web::test_accessibility::head_attributes_count
   ✓ web::test_accessibility::markup_built_at_run_time_is_checked
   ✓ web::test_accessibility::style_sheet_rules_are_no_elements
@@ -4844,4 +4852,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4839 passed, 0 failed, 4839 total tested
+10 ignored, 4847 passed, 0 failed, 4847 total tested
