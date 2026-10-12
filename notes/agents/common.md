@@ -79,7 +79,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
   the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
-  (main's debug build, refreshed per pushed batch; plain `warp` is the older brew release). Run `todo done` only
+  (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed
+  batch by the Integrator's refresh_main_binary.sh; plain `warp` is the older brew release). Agents who want main's
+  debug build (assertions, backtraces) run /Users/me/dev/bin/warp-debug, installed right at the push. Time
+  performance only with an optimized build: debug made finger paint's show() 250 ms instead of 20-40 ms. Run `todo done` only
   after your branch is on main; the Interviewer announces it (notes/roles.md "Ready to try").
   Early try (user 2026-10-10: "if it runs the test just for this one feature, we could already present it"): as soon
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
