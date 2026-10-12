@@ -110,6 +110,8 @@ function programImports(holder, hooks) {
 			},
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
+			// `header "name" "value"` in a route the page itself answers (a form without a server): no HTTP answer to carry it
+			response_header: () => {},
 			// the host words (src/host.rs)
 			sleep: holder.sleep,
 			clock: () => BigInt(Date.now()),
@@ -400,7 +402,7 @@ function outcomeOf(holder, hooks, call) {
 	};
 	const failed = trap => {
 		eachHostPart("ended", holder);
-		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
+		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, exited: holder.exitCode, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };

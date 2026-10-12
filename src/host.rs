@@ -81,8 +81,7 @@ pub const RUN_BLOCK: &str = "run_block";
 /// block·value(index): the number a block run at run time reads, of the values its run_block call passed
 /// (pipeline::eval_block): the block is compiled as a function of them, the same module for other values
 pub const BLOCK_VALUE: &str = "block·value";
-/// foreign_call(runtime, module, member, call, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
-pub const FOREIGN_CALL: &str = "foreign_call";
+pub use warp_runtime::host_words::FOREIGN_CALL;
 /// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
 /// browser playground (host.js); natively a PNG file (src/paint.rs)
 pub const PAINT: &str = "paint";
@@ -111,6 +110,10 @@ pub const STD_IO: &str = "std_io";
 /// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
+/// response_header(name, value): `header "name" "value"` in a route's body, `status 418` the CGI header Status
+/// (card web-route-header, lowering/serve.rs with_answer_headers): natively the route's HTTP answer carries it
+pub const RESPONSE_HEADER: &str = "response_header";
+pub const STATUS_HEADER: &str = "Status";
 /// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
 /// `users := fetch url` (lowering/fetch_signals.rs)
@@ -168,7 +171,7 @@ pub const VALUE_GIVING_WORDS: [&str; 14] = [
 	STD_IO,
 	SERVE_ROUTES,
 ];
-pub const HOST_WORDS: [&str; 68] = [
+pub const HOST_WORDS: [&str; 69] = [
 	DRAW_SHAPE,
 	DRAW_SHOW,
 	GPU_COMPUTE,
@@ -180,6 +183,7 @@ pub const HOST_WORDS: [&str; 68] = [
 	FETCH_START,
 	FETCH_REPLY,
 	SERVE_ROUTES,
+	RESPONSE_HEADER,
 	STD_PURE,
 	STD_IO,
 	CHANNEL_LISTEN,
@@ -240,7 +244,7 @@ pub const HOST_WORDS: [&str; 68] = [
 ];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 68] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 69] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[
@@ -255,6 +259,7 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 		(FETCH_START, vec![I64, node], vec![]),
 		(FETCH_REPLY, vec![I64], vec![node]),
 		(SERVE_ROUTES, vec![I64, node], vec![node]),
+		(RESPONSE_HEADER, vec![node, node], vec![]),
 		(STD_PURE, vec![node, node, node], vec![node]),
 		(STD_IO, vec![node, node, node], vec![node]),
 		(CHANNEL_LISTEN, vec![I64, node], vec![]),

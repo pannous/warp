@@ -7,6 +7,8 @@ mod test_component_worlds;
 mod test_dead_functions;
 mod test_emitter;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_executable_foreign; // card exe-foreign
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_executable_output; // card executable-exit
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_executable_size; // card g_gFs8

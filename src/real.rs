@@ -118,10 +118,12 @@ fn real_variables(program: &Node) -> HashMap<String, Node> {
 			}
 		}
 	});
+	let parameters = crate::lowering::memoization::parameter_names(program);
 	assignments
 		.into_iter()
 		.filter_map(|(name, mut values)| {
-			(values.len() == 1 && mentions_real(&values[0])).then(|| (name, values.remove(0)))
+			(values.len() == 1 && mentions_real(&values[0]) && !parameters.contains(&name))
+				.then(|| (name, values.remove(0)))
 		})
 		.collect()
 }

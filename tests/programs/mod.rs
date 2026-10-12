@@ -20,6 +20,7 @@ mod test_music_values; // card music-values
 mod test_paint;
 mod test_paint_lists;
 mod test_paint_shader; // P234
+mod test_paint_window_ends; // card exit-key
 mod test_plain_hints_when_piped;
 mod test_playground_samples;
 mod test_samples;
@@ -47,7 +48,7 @@ mod test_sound_spectrum; // card winamp-like
 mod test_sound_synth; // card sound-pro
 mod test_sound_tempo; // card sound-pro
 mod test_sound_use; // card bizarre-global
-mod test_sound_voices; // card sound-pro
+pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves scope too
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
 mod test_warp_command; // card midi-out

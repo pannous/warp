@@ -3,7 +3,11 @@
 #[cfg(feature = "engine")]
 pub mod engine;
 pub mod floats;
+#[cfg(feature = "engine")]
+pub mod foreign;
 pub mod fuel;
+#[cfg(feature = "engine")]
+pub mod gc_values;
 pub mod host_words;
 #[cfg(feature = "engine")]
 pub mod libm;

@@ -6,6 +6,7 @@ use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
 use warp::{diagnostic, extensions, law, markup, package_tools, run, util, warp_parser, wasm_emitter, wasm_reader};
+use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
 use wasm_emitter::eval;
 
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
@@ -582,6 +583,7 @@ fn fail(message: impl std::fmt::Display) -> ! {
 /// The program's value printed, its Int the exit status, an uncaught error status 1
 fn print_and_exit(result: Node) -> ! {
 	show(&result, "");
+	ended_well(&result);
 	std::process::exit(node_to_i32(&result));
 }
 
@@ -590,6 +592,14 @@ fn show_and_fail_on_error(result: &Node, mark: &str) {
 	show(result, mark);
 	if matches!(result.drop_meta(), Node::Error(_)) {
 		std::process::exit(ERROR_STATUS);
+	}
+	ended_well(result);
+}
+
+/// A program that ended well keeps its painted window up until the user closes it; exit() or a failure closes it
+fn ended_well(result: &Node) {
+	if !matches!(result.drop_meta(), Node::Error(_)) {
+		warp::paint_window::wait_until_closed();
 	}
 }
 
@@ -717,7 +727,13 @@ fn standalone_note_marker(program: &std::path::Path) -> Option<std::path::PathBu
 fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
 	let program = wasm_emitter::compile_printing_result(code)
 		.map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
-	let bytes = warp::dead_functions::keeping_exports(&program.bytes, warp_runtime::standalone::stub_calls_export)?;
+	let foreign_call = (HOST_LIBRARY.to_string(), FOREIGN_CALL.to_string());
+	let kept_exports = if warp::host_parts::imports_of(&program.bytes)?.contains(&foreign_call) {
+		warp_runtime::standalone::stub_calls_export_with_foreign_calls
+	} else {
+		warp_runtime::standalone::stub_calls_export
+	};
+	let bytes = warp::dead_functions::keeping_exports(&program.bytes, kept_exports)?;
 	let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
 	let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
 	let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
