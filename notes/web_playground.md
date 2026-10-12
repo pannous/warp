@@ -212,7 +212,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   trickle_server.py [--stall] + progress.sh (warp.wasm at 400 KB/s, or stopping after 1 MB: the note at 30 s).
 - The hang caught (2026-10-09, verify run 37895933962, live site, Firefox): isolated and service-worker controlled, but
   playground.state() said worker "not started": worker.js never posted a single message, nothing in the console; the
-  run queued behind it. Root cause (a Worker spawned under coi-serviceworker in Firefox that never runs) still open (card firefox-coi-worker).
+  run queued behind it. Root cause: Firefox's nested `new Worker` (below, card tour-firefox-stall); coi-serviceworker is not part of it (card firefox-coi-worker).
   Now playground.js restarts a starting worker silent for STALLED_START_MS (60 s; every message restarts the clock, so a
   slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
   loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of
@@ -231,6 +231,11 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   asks {taskWorker: {id, url}}, gets a MessagePort to the new Worker, and asks {endTaskWorker: id} to stop one; the
   pool holds the ports. Both listeners are registered before the Worker's own onmessage and stop the message there.
   Measured (runs 38055959458 vs 38055971317, 150 fresh starts each): 0 stalls with the fix, 6 without.
+- Card firefox-coi-worker (2026-10-12): the hang of 2026-10-09 was suspected on coi-serviceworker. Run 38285339353
+  (branch coi-probe) followed 80 fresh Firefox starts served without the isolation headers (WARP_SERVE_UNISOLATED=1, as
+  GitHub Pages: each page reloads once under coi-serviceworker.js and comes back controlled and isolated) and 40 with
+  them: 0 stalls in either, ready in ~3.5 s vs ~2.8 s. No stall warning ("gave no sign for") in the 100 Pages runs
+  since the page-made task Workers either. Closed: the nested Worker was the cause.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
@@ -292,7 +297,7 @@ the_strict_flag_turns_warnings_into_errors before).
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
 worker's hooks.paint, the page draws one canvas per call under the output (playground.js showPaintings: nonzero/true
-is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path. Run by `warp` itself it shows the frames in a window instead, also from an editor's build or a pipe (card g_gGsg, src/paint_window.rs; PNGs only with WARP_NO_WINDOW or CI set, as tests/common warp_command and tests/queue.sh do, or for warp used as a library): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed (the playground likewise: a painting the size of the last replaces it at once, sleep or not, card g_oldM). Pixels cross between host and module in one call each way (card g_odW4, src/wasm_emitter/int_lists.rs: ints_to_list for gpu_render, list_to_ints for paint, through scratch memory above the text heap): a 256×256 frame of samples/webgpu went from 43 to 5 ms for gpu_render natively (paint 44 → 1 ms) and from 31 to 7 ms in Chrome (probes/gpu/render_speed.warp, probes/gpu/web_speed.py),, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/circle.warp is the issue's demo as
+is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path. Run by `warp` itself it shows the frames in a window instead, also from an editor's build or a pipe (card g_gGsg, src/paint_window.rs; PNGs only with WARP_NO_WINDOW or CI set, as tests/common warp_command and tests/queue.sh do, or for warp used as a library): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed: a program that ended well waits for that, any other end (exit(), a failure, ctrl-c, a kill) ends the viewer's stdin and so its window, which opens only with the first frame (card exit-key, tests/programs/test_paint_window_ends.rs) (the playground likewise: a painting the size of the last replaces it at once, sleep or not, card g_oldM). Pixels cross between host and module in one call each way (card g_odW4, src/wasm_emitter/int_lists.rs: ints_to_list for gpu_render, list_to_ints for paint, through scratch memory above the text heap): a 256×256 frame of samples/webgpu went from 43 to 5 ms for gpu_render natively (paint 44 → 1 ms) and from 31 to 7 ms in Chrome (probes/gpu/render_speed.warp, probes/gpu/web_speed.py),, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/circle.warp is the issue's demo as
 written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.warp the filled
 circle with two loops.
 Prints show as they arrive, like paintings (card print-watch, 2026-10-09): `print "Watch it turn blue."` before a

@@ -6,6 +6,16 @@ const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
 /// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
 /// samples is SAMPLE_SLICES tests, each over one slice
 const SAMPLE_SLICES: usize = 4;
+/// How a failed request reads when it never got an answer (src/extensions/utils.rs network_reason, ureq's io errors,
+/// host-files.js): worth one retry
+const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection", "network error"];
+/// How it reads when the host answered: a wrong answer, never retried
+const ANSWERED: &str = "http status";
+#[cfg(feature = "native")]
+const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+/// The echo server of echo_url: what a POST sent, as httpbin.org/post answers it
+#[cfg(feature = "native")]
+const ECHO_SERVER: &str = "post \"/post\" { {data: request.body, headers: request.headers} }";
 
 /// Every SAMPLE_SLICES-th item from `slice` on
 pub fn sample_slice<T>(items: &[T], slice: usize) -> impl Iterator<Item = &T> {
@@ -19,13 +29,22 @@ pub struct Resource {
 }
 
 /// macOS SDK headers declare libm plainly (`double sqrt(double);`); glibc's math.h hides them behind __MATHCALL macros
-pub const MACOS_C_HEADERS: Resource = Resource { name: "the macOS C headers (libm declared without glibc macros)", available: || cfg!(target_os = "macos") };
+pub const MACOS_C_HEADERS: Resource = Resource {
+	name: "the macOS C headers (libm declared without glibc macros)",
+	available: || cfg!(target_os = "macos"),
+};
 
 /// `lean`/`lake` runs are disabled in cloud sessions (user decision): no toolchain there, and proofs are slow
-pub const LEAN: Resource = Resource { name: "the Lean toolchain (disabled in cloud sessions)", available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true") };
+pub const LEAN: Resource = Resource {
+	name: "the Lean toolchain (disabled in cloud sessions)",
+	available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true"),
+};
 /// binaryen's wasm-split, which splits a built site's module by route (src/route_split.rs)
 #[cfg(feature = "native")]
-pub const WASM_SPLIT: Resource = Resource { name: "binaryen's wasm-split", available: || warp::binaryen::available("wasm-split") };
+pub const WASM_SPLIT: Resource = Resource {
+	name: "binaryen's wasm-split",
+	available: || warp::binaryen::available("wasm-split"),
+};
 
 // The test macros (user decision P100: they live with the tests, not in the library). is!(code, value) compiles and
 // runs code through the whole pipeline (parse, analyze, emit, run, read back) and compares the result
@@ -48,7 +67,22 @@ macro_rules! is {
 	// For wasm_struct! types: use reverse comparison (Person == Node)
 	($a:expr, $b:expr, gc) => {{
 		let result = ::warp::wasm_emitter::eval($a);
-		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
+		assert!(
+			$b == result,
+			"is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}",
+			$a,
+			$b,
+			result
+		);
+	}};
+}
+
+/// is! for code that reaches another host: retried once when only the network failed it (common::online_eval)
+#[macro_export]
+macro_rules! is_online {
+	($a:expr, $b:expr) => {{
+		let result = $crate::common::online_eval($a);
+		assert_eq!(result, $b, "{}", $a);
 	}};
 }
 
@@ -95,7 +129,11 @@ pub fn announce_skip(resource: &str, test_module: &str) {
 /// adapter only within what WGSL guarantees, 2^-11 for sin and cos on [-π, π]. SwiftShader, the adapter of CI's
 /// headless Chrome (named by web/playground/test-worker.js as WARP_GPU_ADAPTER), was off by up to 5.2e-5 (card browser-gpu)
 pub fn gpu_tolerance() -> &'static str {
-	if software_gpu() { "0.00048828125" } else { "0.00001" }
+	if software_gpu() {
+		"0.00048828125"
+	} else {
+		"0.00001"
+	}
 }
 
 /// Whether the tests run on a software WebGPU adapter (gpu_tolerance)
@@ -132,14 +170,23 @@ pub fn fails_with(code: &str, needle: &str) {
 pub fn warnings_of(code: &str) -> (Node, Vec<String>) {
 	warp::diagnostic::take_warnings();
 	let value = eval(code);
-	(value, warp::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect())
+	(
+		value,
+		warp::diagnostic::take_warnings()
+			.iter()
+			.map(|warning| warning.to_string())
+			.collect(),
+	)
 }
 
 /// `code` gives `expected` and warns with a message containing `needle`
 pub fn warns_with(code: &str, expected: impl Into<Node>, needle: &str) {
 	let (value, warnings) = warnings_of(code);
 	assert_eq!(value, expected.into(), "{code}");
-	assert!(warnings.iter().any(|warning| warning.contains(needle)), "no warning containing {needle:?} for {code}: {warnings:?}");
+	assert!(
+		warnings.iter().any(|warning| warning.contains(needle)),
+		"no warning containing {needle:?} for {code}: {warnings:?}"
+	);
 }
 
 /// Local HTTP stub answering every request with `status` and `body`: fetch tests need no network
@@ -152,7 +199,10 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 		for mut stream in listener.incoming().flatten() {
 			let mut request = [0u8; 4096];
 			let _ = stream.read(&mut request);
-			let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+			let response = format!(
+				"HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+				body.len()
+			);
 			let _ = stream.write_all(response.as_bytes());
 		}
 	});
@@ -163,12 +213,82 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 #[cfg(not(feature = "native"))]
 pub fn serve(status: &'static str, body: &'static str) -> String {
 	let stub = std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)");
-	format!("{stub}?status={}&body={}", percent_encoded(status), percent_encoded(body))
+	format!(
+		"{stub}?status={}&body={}",
+		percent_encoded(status),
+		percent_encoded(body)
+	)
+}
+
+/// A warp server (web_server.rs, end to end) answering POST /post with what it got, as httpbin.org does: {data,
+/// headers}; started once per test process on a free port
+#[cfg(feature = "native")]
+pub fn echo_url() -> String {
+	static URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+	URL.get_or_init(|| {
+		let port = std::net::TcpListener::bind("127.0.0.1:0")
+			.unwrap()
+			.local_addr()
+			.unwrap()
+			.port();
+		std::thread::spawn(move || warp::pipeline::serving_at(port, || eval(ECHO_SERVER).serialize()));
+		let started = std::time::Instant::now();
+		while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+			assert!(started.elapsed() < SERVER_START_LIMIT, "the echo server did not start");
+			std::thread::sleep(std::time::Duration::from_millis(50));
+		}
+		format!("http://127.0.0.1:{port}/post")
+	})
+	.clone()
+}
+
+/// In the browser the test server echoes a POST to its stub (web/playground/test_in_browser.py /__stub__)
+#[cfg(not(feature = "native"))]
+pub fn echo_url() -> String {
+	std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)")
+}
+
+/// `attempt` once more when it failed for the network alone (`network_failure` names why), logged loudly: a slow or
+/// unreachable host fails a test only twice in a row. A wrong answer is never retried
+pub fn retried_on_network_failure<T>(
+	what: &str,
+	attempt: impl Fn() -> T,
+	network_failure: impl Fn(&T) -> Option<String>,
+) -> T {
+	let first = attempt();
+	let Some(reason) = network_failure(&first) else {
+		return first;
+	};
+	eprintln!("⚠️  RETRY {what}: network failure ({reason}), trying once more");
+	attempt()
+}
+
+/// The reason of an error value from a request that got no answer (no connection, DNS, timeout), else None
+pub fn network_failure_of(value: &Node) -> Option<String> {
+	let Node::Error(message) = value.drop_meta() else {
+		return None;
+	};
+	let reason = message.to_string();
+	let lower = reason.to_lowercase();
+	(!lower.contains(ANSWERED) && NETWORK_FAILURES.iter().any(|failure| lower.contains(failure))).then_some(reason)
+}
+
+/// The value of `code`, which reaches another host: run again once when the network failed it
+pub fn online_eval(code: &str) -> Node {
+	retried_on_network_failure(code, || eval(code), network_failure_of)
 }
 
 #[cfg(not(feature = "native"))]
 fn percent_encoded(text: &str) -> String {
-	text.bytes().map(|byte| if byte.is_ascii_alphanumeric() { (byte as char).to_string() } else { format!("%{byte:02X}") }).collect()
+	text.bytes()
+		.map(|byte| {
+			if byte.is_ascii_alphanumeric() {
+				(byte as char).to_string()
+			} else {
+				format!("%{byte:02X}")
+			}
+		})
+		.collect()
 }
 
 /// A directory for the scratch files of `name`, unique to this test process: below the system's temp dir, or below /tmp
@@ -178,7 +298,10 @@ pub fn scratch_directory(name: &str) -> std::path::PathBuf {
 	#[cfg(feature = "native")]
 	return std::env::temp_dir().join(format!("{name}_{}", std::process::id()));
 	#[cfg(not(feature = "native"))]
-	return std::path::PathBuf::from(std::env::var("TMPDIR").expect("the browser test page names its temp dir (wasi.js)")).join(name);
+	return std::path::PathBuf::from(
+		std::env::var("TMPDIR").expect("the browser test page names its temp dir (wasi.js)"),
+	)
+	.join(name);
 }
 
 /// What the warp binary writes to stdout running `code` (no questions asked)
@@ -196,13 +319,37 @@ pub fn printed(code: &str) -> String {
 pub fn runtime_stub() -> &'static std::path::Path {
 	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 	STUB.get_or_init(|| {
-		let built = std::process::Command::new(env!("CARGO")).args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", "warp-runtime"])
-			.current_dir(env!("CARGO_MANIFEST_DIR")).status().expect("cargo runs");
+		let built = std::process::Command::new(env!("CARGO"))
+			.args([
+				"build",
+				"--offline",
+				"--quiet",
+				"-p",
+				"warp-runtime",
+				"--bin",
+				"warp-runtime",
+			])
+			.current_dir(env!("CARGO_MANIFEST_DIR"))
+			.status()
+			.expect("cargo runs");
 		assert!(built.success(), "cargo build -p warp-runtime failed");
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
-		let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
-		let build = checkout_build(&shared, "warp_runtime-", &runtime_manifest.to_string_lossy(), Some(env!("CARGO_PKG_VERSION")))
-			.unwrap_or_else(|| panic!("target/debug/deps holds no warp-runtime {} built from {}", env!("CARGO_PKG_VERSION"), runtime_manifest.display()));
+		let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("crates")
+			.join("warp-runtime");
+		let build = checkout_build(
+			&shared,
+			"warp_runtime-",
+			&runtime_manifest.to_string_lossy(),
+			Some(env!("CARGO_PKG_VERSION")),
+		)
+		.unwrap_or_else(|| {
+			panic!(
+				"target/debug/deps holds no warp-runtime {} built from {}",
+				env!("CARGO_PKG_VERSION"),
+				runtime_manifest.display()
+			)
+		});
 		own_copy(&build, "warp-runtime").expect("copy the warp-runtime stub")
 	})
 }
@@ -218,16 +365,35 @@ pub fn warp_command() -> std::process::Command {
 	let binary = BINARY.get_or_init(|| {
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp"));
 		let find = || {
-			let candidates = checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION"))).into_iter().chain([shared.to_path_buf()]);
-			candidates.filter_map(|candidate| own_copy(&candidate, "warp").ok()).find(|own| is_this_version(own))
+			let candidates = checkout_build(
+				shared,
+				"warp-",
+				env!("CARGO_MANIFEST_DIR"),
+				Some(env!("CARGO_PKG_VERSION")),
+			)
+			.into_iter()
+			.chain([shared.to_path_buf()]);
+			candidates
+				.filter_map(|candidate| own_copy(&candidate, "warp").ok())
+				.find(|own| is_this_version(own))
 		};
 		// another checkout's build can replace the shared binary before this one was found: build this checkout's anew
 		let own = find().or_else(|| {
-			let built = std::process::Command::new(env!("CARGO")).args(["build", "--offline", "--quiet", "--bin", "warp"])
-				.current_dir(env!("CARGO_MANIFEST_DIR")).status().is_ok_and(|status| status.success());
+			let built = std::process::Command::new(env!("CARGO"))
+				.args(["build", "--offline", "--quiet", "--bin", "warp"])
+				.current_dir(env!("CARGO_MANIFEST_DIR"))
+				.status()
+				.is_ok_and(|status| status.success());
 			built.then(find).flatten()
 		});
-		own.unwrap_or_else(|| panic!("neither target/debug/deps nor {} holds a warp of version {} built from {}, also after building it", shared.display(), env!("CARGO_PKG_VERSION"), env!("CARGO_MANIFEST_DIR")))
+		own.unwrap_or_else(|| {
+			panic!(
+				"neither target/debug/deps nor {} holds a warp of version {} built from {}, also after building it",
+				shared.display(),
+				env!("CARGO_PKG_VERSION"),
+				env!("CARGO_MANIFEST_DIR")
+			)
+		})
 	});
 	// hints chosen explicitly (card hints-toggle): the tests read them without the closing "hide hints with" line
 	let mut command = std::process::Command::new(binary);
@@ -260,18 +426,39 @@ fn own_copy(binary: &std::path::Path, name: &str) -> std::io::Result<std::path::
 #[cfg(feature = "native")]
 fn is_this_version(binary: &std::path::Path) -> bool {
 	let output = std::process::Command::new(binary).arg("version").output();
-	output.is_ok_and(|output| String::from_utf8_lossy(&output.stdout).split_whitespace().last() == Some(env!("CARGO_PKG_VERSION")))
+	output.is_ok_and(|output| {
+		String::from_utf8_lossy(&output.stdout).split_whitespace().last() == Some(env!("CARGO_PKG_VERSION"))
+	})
 }
 
 /// This checkout's own build of a binary in target/debug/deps, where each package version keeps its own file
 /// (`warp-<hash>`): the newest one whose dep-info names this manifest directory (and version), no rebuild needed
 #[cfg(feature = "native")]
-fn checkout_build(uplifted: &std::path::Path, prefix: &str, manifest_dir: &str, version: Option<&str>) -> Option<std::path::PathBuf> {
+fn checkout_build(
+	uplifted: &std::path::Path,
+	prefix: &str,
+	manifest_dir: &str,
+	version: Option<&str>,
+) -> Option<std::path::PathBuf> {
 	let deps = uplifted.parent()?.join("deps");
-	let names_this_checkout = |info: &str| info.lines().any(|line| line == format!("# env-dep:CARGO_MANIFEST_DIR={manifest_dir}"))
-		&& version.is_none_or(|version| info.lines().any(|line| line == format!("# env-dep:CARGO_PKG_VERSION={version}")));
-	std::fs::read_dir(deps).ok()?.flatten().map(|entry| entry.path())
-		.filter(|path| path.extension().is_some_and(|extension| extension == "d") && path.file_name().is_some_and(|name| name.to_string_lossy().starts_with(prefix)))
+	let names_this_checkout = |info: &str| {
+		info.lines()
+			.any(|line| line == format!("# env-dep:CARGO_MANIFEST_DIR={manifest_dir}"))
+			&& version.is_none_or(|version| {
+				info.lines()
+					.any(|line| line == format!("# env-dep:CARGO_PKG_VERSION={version}"))
+			})
+	};
+	std::fs::read_dir(deps)
+		.ok()?
+		.flatten()
+		.map(|entry| entry.path())
+		.filter(|path| {
+			path.extension().is_some_and(|extension| extension == "d")
+				&& path
+					.file_name()
+					.is_some_and(|name| name.to_string_lossy().starts_with(prefix))
+		})
 		.filter(|info| std::fs::read_to_string(info).is_ok_and(|text| names_this_checkout(&text)))
 		.map(|info| info.with_extension(""))
 		.filter(|binary| binary.is_file())
@@ -281,7 +468,9 @@ fn checkout_build(uplifted: &std::path::Path, prefix: &str, manifest_dir: &str, 
 /// How many calls the module of `code` makes to the function `name` (by the wasm name section)
 pub fn calls_to(code: &str, name: &str) -> usize {
 	use wasmparser::{KnownCustom, Name, Operator, Parser, Payload};
-	let bytes = warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
+	let bytes = warp::wasm_emitter::compile(code)
+		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
+		.bytes;
 	let mut index = None;
 	let mut calls = Vec::new();
 	for payload in Parser::new(0).parse_all(&bytes) {
@@ -290,7 +479,12 @@ pub fn calls_to(code: &str, name: &str) -> usize {
 				if let KnownCustom::Name(names) = section.as_known() {
 					for subsection in names {
 						if let Ok(Name::Function(map)) = subsection {
-							index = map.into_iter().flatten().find(|naming| naming.name == name).map(|naming| naming.index).or(index);
+							index = map
+								.into_iter()
+								.flatten()
+								.find(|naming| naming.name == name)
+								.map(|naming| naming.index)
+								.or(index);
 						}
 					}
 				}
@@ -311,9 +505,21 @@ pub fn calls_to(code: &str, name: &str) -> usize {
 
 /// The (module, name) of every import of the module `code` compiles to
 pub fn imports_of(code: &str) -> Vec<(String, String)> {
-	let bytes = warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
-	wasmparser::Parser::new(0).parse_all(&bytes).filter_map(|payload| match payload.expect("valid module") {
-		wasmparser::Payload::ImportSection(section) => Some(section.into_imports().map(|import| import.expect("valid import")).map(|import| (import.module.to_string(), import.name.to_string())).collect::<Vec<_>>()),
-		_ => None,
-	}).flatten().collect()
+	let bytes = warp::wasm_emitter::compile(code)
+		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
+		.bytes;
+	wasmparser::Parser::new(0)
+		.parse_all(&bytes)
+		.filter_map(|payload| match payload.expect("valid module") {
+			wasmparser::Payload::ImportSection(section) => Some(
+				section
+					.into_imports()
+					.map(|import| import.expect("valid import"))
+					.map(|import| (import.module.to_string(), import.name.to_string()))
+					.collect::<Vec<_>>(),
+			),
+			_ => None,
+		})
+		.flatten()
+		.collect()
 }

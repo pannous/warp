@@ -4,19 +4,19 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
 use crate::warp_parser::WarpParser;
+use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
 #[cfg(feature = "native")]
 use log::warn;
 
 const INDEX_OUT_OF_RANGE: &str = "index out of range";
 const UNWRAPPED_EMPTY: &str = "unwrapped ø";
 const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
+use crate::lowering::nodes::children_rewritten;
 #[cfg(feature = "native")]
 use crate::wasm_emitter::{failed_run, run_raw_struct};
 #[cfg(feature = "native")]
 use crate::wasm_reader::read_bytes;
-use crate::lowering::nodes::children_rewritten;
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
@@ -54,7 +54,9 @@ fn has_exclusive_range(node: &Node) -> bool {
 fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
 	let assumptions = crate::diagnostic::take_assumptions();
 	let Node::Error(reason) = &result else { return result };
-	let Node::Text(message) = reason.drop_meta() else { return result };
+	let Node::Text(message) = reason.drop_meta() else {
+		return result;
+	};
 	let mut lines = vec![message.clone()];
 	if exclusive_range && message.starts_with(INDEX_OUT_OF_RANGE) {
 		lines.push(RANGE_END_HINT.to_string());
@@ -68,7 +70,11 @@ fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
 			None => assumed.push((guess, vec![position])),
 		}
 	}
-	lines.extend(assumed.into_iter().map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))));
+	lines.extend(
+		assumed
+			.into_iter()
+			.map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))),
+	);
 	match lines.len() {
 		1 => result,
 		_ => crate::node::error(&lines.join("\n  ")),
@@ -90,8 +96,12 @@ pub fn eval_untrusted(code: &str) -> Node {
 	crate::diagnostic::begin_program();
 	let program = WarpParser::parse(code);
 	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
-		Some((external, _)) => crate::node::error(&format!("untrusted code has no capabilities but pure libm, refusing to call {external}")),
-		None => with_granted(&crate::effects::Capability::GRANTED_UNTRUSTED, || eval_parsed(program, code)),
+		Some((external, _)) => crate::node::error(&format!(
+			"untrusted code has no capabilities but pure libm, refusing to call {external}"
+		)),
+		None => with_granted(&crate::effects::Capability::GRANTED_UNTRUSTED, || {
+			eval_parsed(program, code)
+		}),
 	}
 }
 
@@ -306,6 +316,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
+	crate::type_name_matching::lower_prefixed_declarations,
 	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
 	crate::lowering::test_blocks::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
@@ -323,7 +335,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
-	crate::music_words::lower_live_loops, crate::go_blocks::lower,
+	crate::music_words::lower_live_loops,
+	crate::go_blocks::lower,
 	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
 	crate::references::lower,
 	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call
@@ -377,7 +390,11 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
 	crate::optional_casts::lower,
 	crate::phrase_calls::lower,
-	crate::std_aliases::lower, crate::class_methods::lower_json_classes, crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
+	crate::std_aliases::lower,
+	crate::class_methods::lower_json_classes,
+	crate::welcome_forms::lower,
+	crate::analyzer::lower_kebab_members,
+	crate::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
 	// `{a:1}` becomes the map of its one entry where a map is needed (one_entry_maps.rs), before a pass lowers m.pop(k)
@@ -385,17 +402,67 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
 	crate::music_words::lower,
-	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
+	crate::routes::lower,
+	crate::page_html::use_markup,
+	crate::modules::resolve,
 	// again: a used module's phrases, `play 440Hz for 0.5s` of lib/sound.warp's `to play x for d:`
 	crate::phrase_calls::lower,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::reflection::lower_module_words,
 	// again: `dir(is_square)`, `is_square.params` of a used module's function, which joined the program in resolve
 	crate::reflection::lower,
-	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::mutation::lower_deletes, crate::undo_history::lower, crate::declarations::lower_tasks, crate::reflection::lower_unknown_dir, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::generators::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
+	crate::units::lower_sleep_durations,
+	crate::units::lower_quantity_comparisons,
+	crate::stored_values::lower,
+	crate::mutation::lower_deletes,
+	crate::undo_history::lower,
+	crate::declarations::lower_tasks,
+	crate::reflection::lower_unknown_dir,
+	crate::system_values::name,
+	crate::signal_values::poll_shared,
+	crate::system_values::read,
+	crate::shared_arrays::lower,
+	crate::fetch_signals::lower,
+	crate::system_signals::lower,
+	crate::element_events::lower_binds,
+	crate::component_state::lower,
+	crate::element_events::lower,
+	crate::event_signals::lower,
+	crate::page_html::lower,
+	crate::signal_values::subscribe,
+	crate::variable_signals::lower,
+	crate::signal_values::lower,
+	crate::declarations::lower_c_functions,
+	crate::declarations::lower_bare_declarations,
+	crate::declarations::lower_spaced_definitions,
+	crate::lowering::number_words::lower,
+	crate::parameter_shapes::lower,
+	crate::ruby_blocks::lower,
+	crate::generators::lower,
+	crate::declarations::lower_sized_arrays,
+	crate::result_word::lower,
+	crate::picked_calls::lower,
+	crate::variadic::lower,
+	crate::nonlocal_cells::lower_lambdas,
+	crate::named_arguments::lower,
+	crate::comprehensions::lower,
+	crate::library_words::lower_function_methods,
+	crate::tuples::lower,
+	crate::run_time_blocks::warn_unresolved,
+	crate::run_time_blocks::lower_interpret,
+	crate::blocks::lower,
+	crate::getters::lower,
+	crate::run_time_blocks::lower_run_time_bangs,
+	crate::mutation::warn_discarded,
+	crate::mutation::lower,
+	crate::nested_index::lower,
+	crate::field_elements::lower,
+	crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
-	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
+	crate::type_name_matching::lower,
+	crate::meta_entries::lower,
+	crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,
 	// `lo(a:number) := a.low; lo(5 ± 1)`: a number parameter of a program with ± values holds one (uncertain.rs)
 	crate::uncertain::lower_interval_parameters,
@@ -405,13 +472,36 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 const MEANING_PASSES: &[fn(Node) -> Node] = &[
 	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
 	crate::lowering::list_element_checks::lower,
-	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
+	crate::lazy_ranges::lower,
+	crate::declarations::resolve_tasks,
+	crate::traits::lower_declarations,
+	crate::type_tests::lower,
+	crate::ambiguous_forms::lower,
+	crate::analyzer::lower_list_times,
 	// before any pass reads a call's arity: `square square 2` nests, `f(a)` and `f(a, b)` become `f·1`, `f·2`
-	crate::broadcasting::lower_scalar_element_wise, crate::broadcasting::lower_prefix_calls, crate::overloads::lower_arity_overloads,
-	crate::broadcasting::lower, crate::library_words::lower_count_in, crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::broadcasting::lower_several_arguments, crate::real::lower,
-	crate::type_constructor::lower, crate::printable::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
-	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower, crate::number_keys::lower_key_words,
-	crate::traits::lower_dispatch, crate::memoization::lower,
+	crate::broadcasting::lower_scalar_element_wise,
+	crate::broadcasting::lower_prefix_calls,
+	crate::overloads::lower_arity_overloads,
+	crate::broadcasting::lower,
+	crate::library_words::lower_count_in,
+	crate::lambdas::lower,
+	crate::function_values::lower,
+	crate::closures::lower,
+	crate::lambdas::lower_strict,
+	crate::broadcasting::lower_several_arguments,
+	crate::real::lower,
+	crate::type_constructor::lower,
+	crate::printable::lower,
+	crate::overloads::lower,
+	crate::traits::lower_conformances,
+	crate::min_max::lower,
+	crate::declarations::lower,
+	crate::switch::lower,
+	crate::phrase_words::lower,
+	crate::library_words::lower,
+	crate::number_keys::lower_key_words,
+	crate::traits::lower_dispatch,
+	crate::memoization::lower,
 ];
 
 /// A module's source after the passes the program ran before its `use` was resolved (those before modules::resolve):
@@ -421,8 +511,14 @@ const MEANING_PASSES: &[fn(Node) -> Node] = &[
 pub(crate) fn lower_module_source(module: Node) -> Node {
 	type Pass = fn(Node) -> Node;
 	let program_only: [Pass; 2] = [crate::getters::lower, crate::serve::with_default_routes];
-	let resolved_at = SOURCE_PASSES.iter().position(|pass| std::ptr::fn_addr_eq(*pass, crate::modules::resolve as Pass)).expect("modules::resolve is a source pass");
-	SOURCE_PASSES[..resolved_at].iter().filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own))).fold(module, |module, pass| pass(module))
+	let resolved_at = SOURCE_PASSES
+		.iter()
+		.position(|pass| std::ptr::fn_addr_eq(*pass, crate::modules::resolve as Pass))
+		.expect("modules::resolve is a source pass");
+	SOURCE_PASSES[..resolved_at]
+		.iter()
+		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
+		.fold(module, |module, pass| pass(module))
 }
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
@@ -442,6 +538,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
 		return Err(misread.into_error());
+	}
+	if let Some(unfillable) = crate::class_methods::check_self_typed_fields(&node) {
+		return Err(unfillable.into_error());
 	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
@@ -487,14 +586,19 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
 		return Err(crate::node::error(&format!(
-			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name())));
+			"capability denied: {name} needs the {} capability, which eval does not grant",
+			capability.name()
+		)));
 	}
-	let node = crate::analyzer::resolve_main_variable_assignments(crate::late_binding::lower(without_constraints(node))?)?;
+	let node =
+		crate::analyzer::resolve_main_variable_assignments(crate::late_binding::lower(without_constraints(node))?)?;
 	if let Some(error) = crate::analyzer::diagnose(&node) {
 		return Err(error);
 	}
 	crate::diagnostic::report(&crate::analyzer::lint(&node))?;
-	Ok(crate::analyzer::indexed_parameter_copies(crate::inlining::lower(crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)))))
+	Ok(crate::analyzer::indexed_parameter_copies(crate::inlining::lower(
+		crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)),
+	)))
 }
 
 /// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value
@@ -535,15 +639,24 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 		let reflected = crate::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
-		let entries: Vec<_> = crate::units::static_units::result_units_entry().into_iter().chain(reflected).collect();
-		choose_module(&node).map(|module| CompiledModule { bytes: crate::meta_section::with_entries(module.bytes, entries), ..module })
+		let entries: Vec<_> = crate::units::static_units::result_units_entry()
+			.into_iter()
+			.chain(reflected)
+			.collect();
+		choose_module(&node).map(|module| CompiledModule {
+			bytes: crate::meta_section::with_entries(module.bytes, entries),
+			..module
+		})
 	})
 }
 
 /// The program with its last statement `x` printed: `print(x)`; a declaration or a print stays as it is
 fn printing_result(program: Node) -> Node {
 	match program {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(printing_result(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(printing_result(*node)),
+			data,
+		},
 		Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			if let Some(last) = statements.pop() {
 				statements.push(printing_result(last));
@@ -551,7 +664,9 @@ fn printing_result(program: Node) -> Node {
 			Node::List(statements, Bracket::None, separator)
 		}
 		Node::Empty => Node::Empty,
-		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => statement,
+		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => {
+			statement
+		}
 		value => {
 			PRINTS_RESULT.with(|prints| prints.set(true));
 			crate::warp_parser::print_call([value])
@@ -579,7 +694,12 @@ fn raw_struct_module(node: &Node) -> Option<Vec<u8>> {
 
 fn choose_module(node: &Node) -> Result<CompiledModule, Node> {
 	match raw_struct_module(node) {
-		Some(bytes) => Ok(CompiledModule { bytes, needs_host: false, needs_wasi: false, needs_ffi: false }),
+		Some(bytes) => Ok(CompiledModule {
+			bytes,
+			needs_host: false,
+			needs_wasi: false,
+			needs_ffi: false,
+		}),
 		None => emit_module(node),
 	}
 }
@@ -605,9 +725,20 @@ fn eval_program(node: Node) -> Node {
 
 	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
 	match emit_module(&node) {
-		Ok(module) => run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module }),
+		Ok(module) => checked_markup(run_module(CompiledModule {
+			bytes: crate::units::static_units::with_result_units(module.bytes),
+			..module
+		})),
 		Err(type_error) => type_error,
 	}
+}
+
+/// A run's value; markup it built is checked for accessibility as it came out (card web-a11y-runtime)
+fn checked_markup(result: Node) -> Node {
+	if crate::markup::is_markup(&result) {
+		crate::accessibility::check_rendered(&result);
+	}
+	result
 }
 
 /// The words of an exception (library_words lowers them to the call raise(X))
@@ -629,20 +760,44 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 	};
 	let block = spaced(block);
 	let definitions: Vec<Node> = definitions.as_items().into_iter().map(spaced).collect();
-	let mentioned = |name: &str| [&block].into_iter().chain(&definitions).any(|part| mentions(part, name));
-	let bound: Vec<(String, Node)> = names.into_iter().zip(values.as_items()).filter(|(name, _)| mentioned(name)).collect();
+	let mentioned = |name: &str| {
+		[&block]
+			.into_iter()
+			.chain(&definitions)
+			.any(|part| mentions(part, name))
+	};
+	let bound: Vec<(String, Node)> = names
+		.into_iter()
+		.zip(values.as_items())
+		.filter(|(name, _)| mentioned(name))
+		.collect();
 	let program_of = |bindings: Vec<Node>| {
-		let statements: Vec<Node> = bindings.into_iter().chain(definitions.iter().cloned()).chain([block.clone()]).collect();
+		let statements: Vec<Node> = bindings
+			.into_iter()
+			.chain(definitions.iter().cloned())
+			.chain([block.clone()])
+			.collect();
 		Node::List(statements, Bracket::None, Separator::Newline)
 	};
-	let as_written = program_of(bound.iter().map(|(name, value)| assignment(name, as_written(value.clone()))).collect());
-	let result = match crate::effects::EffectReport::of(&as_written).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
-		Some((external, capability)) => crate::node::error(&format!(
-			"a block run at run time is pure: {external} needs the {} capability, which it does not get", capability.name())),
-		None => run_block_program(bound, program_of),
-	};
+	let as_written = program_of(
+		bound
+			.iter()
+			.map(|(name, value)| assignment(name, as_written(value.clone())))
+			.collect(),
+	);
+	let result =
+		match crate::effects::EffectReport::of(&as_written).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+			Some((external, capability)) => crate::node::error(&format!(
+				"a block run at run time is pure: {external} needs the {} capability, which it does not get",
+				capability.name()
+			)),
+			None => run_block_program(bound, program_of),
+		};
 	match result.drop_meta() {
-		Node::Error(message) => Err(format!("the block {written} failed: {}", message.serialize().trim_matches('"'))),
+		Node::Error(message) => Err(format!(
+			"the block {written} failed: {}",
+			message.serialize().trim_matches('"')
+		)),
 		_ => Ok(result),
 	}
 }
@@ -655,17 +810,23 @@ fn assignment(name: &str, value: Node) -> Node {
 fn as_written(value: Node) -> Node {
 	match value.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
-		_ => Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value], Bracket::None, Separator::Space),
+		_ => Node::List(
+			vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value],
+			Bracket::None,
+			Separator::Space,
+		),
 	}
 }
 
 /// Does `node` mention `name`: as a word, or inside a text (an interpolation)
 fn mentions(node: &Node, name: &str) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= match part {
-		Node::Symbol(word) => word == name,
-		Node::Text(text) => text.contains(name),
-		_ => false,
+	node.visit(&mut |part| {
+		found |= match part {
+			Node::Symbol(word) => word == name,
+			Node::Text(text) => text.contains(name),
+			_ => false,
+		}
 	});
 	found
 }
@@ -679,27 +840,52 @@ fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) 
 	use crate::extensions::numbers::Number;
 	use crate::tasks::TaskValue;
 	let mut numbers = vec![];
-	let bindings = bound.into_iter().map(|(name, value)| {
-		// an exact ratio (`0.5` is 1/2) or big Int is an Int to the compiler: a handle the host composes (tasks.rs Builders)
-		let (number, type_word) = match value.drop_meta() {
-			Node::Number(Number::Float(x)) => (TaskValue::Float(*x), "float"),
-			Node::Number(Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_)) => match TaskValue::of(&value) {
-				Ok(number) => (number, "int"),
-				Err(_) => return assignment(&name, as_written(value)),
-			},
-			_ => return assignment(&name, as_written(value)),
-		};
-		let read = Node::List(vec![Node::Symbol(crate::host::BLOCK_VALUE.to_string()), Node::Number(Number::Int(numbers.len() as i64))], Bracket::Round, Separator::None);
-		numbers.push(number);
-		assignment(&name, Node::Key(Box::new(read), Op::As, Box::new(Node::Symbol(type_word.to_string()))))
-	}).collect();
+	let bindings = bound
+		.into_iter()
+		.map(|(name, value)| {
+			// an exact ratio (`0.5` is 1/2) or big Int is an Int to the compiler: a handle the host composes (tasks.rs Builders)
+			let (number, type_word) = match value.drop_meta() {
+				Node::Number(Number::Float(x)) => (TaskValue::Float(*x), "float"),
+				Node::Number(Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_)) => {
+					match TaskValue::of(&value) {
+						Ok(number) => (number, "int"),
+						Err(_) => return assignment(&name, as_written(value)),
+					}
+				}
+				_ => return assignment(&name, as_written(value)),
+			};
+			let read = Node::List(
+				vec![
+					Node::Symbol(crate::host::BLOCK_VALUE.to_string()),
+					Node::Number(Number::Int(numbers.len() as i64)),
+				],
+				Bracket::Round,
+				Separator::None,
+			);
+			numbers.push(number);
+			assignment(
+				&name,
+				Node::Key(Box::new(read), Op::As, Box::new(Node::Symbol(type_word.to_string()))),
+			)
+		})
+		.collect();
 	let program = program_of(bindings);
-	crate::host::with_block_values(numbers, || crate::diagnostic::in_program_mode(program, run_cached_block))
+	crate::host::with_block_values(numbers, || {
+		crate::diagnostic::in_program_mode(program, run_cached_block)
+	})
 }
 
 #[cfg(not(feature = "native"))]
 fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
-	eval_parsed(program_of(bound.into_iter().map(|(name, value)| assignment(&name, as_written(value))).collect()), "")
+	eval_parsed(
+		program_of(
+			bound
+				.into_iter()
+				.map(|(name, value)| assignment(&name, as_written(value)))
+				.collect(),
+		),
+		"",
+	)
 }
 
 /// The block programs compiled on this thread, by their text; past BLOCK_MODULES_KEPT they start over
@@ -746,32 +932,61 @@ fn run_cached_block(program: Node) -> Node {
 /// spaced phrase again, as the parser made it
 fn spaced(node: Node) -> Node {
 	match node {
-		Node::List(items, Bracket::None, Separator::None) => Node::List(items.into_iter().map(spaced).collect(), Bracket::None, Separator::Space),
+		Node::List(items, Bracket::None, Separator::None) => {
+			Node::List(items.into_iter().map(spaced).collect(), Bracket::None, Separator::Space)
+		}
 		other => children_rewritten(other, spaced),
 	}
 }
 
 /// A block's value the host has no constructor for in the running module yet
 pub fn cannot_hand_back(value: &Node) -> String {
-	format!("the block gave {}, a value run_block cannot hand back yet", value.serialize().trim())
+	format!(
+		"the block gave {}, a value run_block cannot hand back yet",
+		value.serialize().trim()
+	)
 }
 
 /// The message of `error("…")`, or of `raise …`, which always fails the run
 pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text_builtins::RAISE) => Some(&items[1]),
+		Node::List(items, Bracket::Round, _)
+			if items.len() == 2
+				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text_builtins::RAISE) =>
+		{
+			Some(&items[1])
+		}
 		// `raise X` / `throw X` before library_words makes them the call raise(X)
-		Node::List(items, Bracket::None, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if RAISE_WORDS.contains(&word.as_str())) => Some(&items[1]),
+		Node::List(items, Bracket::None, _)
+			if items.len() == 2
+				&& matches!(items[0].drop_meta(), Node::Symbol(word) if RAISE_WORDS.contains(&word.as_str())) =>
+		{
+			Some(&items[1])
+		}
 		_ => None,
 	}
 }
 
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
-pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
+pub(crate) fn run_module(
+	CompiledModule {
+		bytes,
+		needs_host,
+		needs_wasi,
+		needs_ffi,
+	}: CompiledModule,
+) -> Node {
 	use crate::wasm_reader::{read_bytes_with_imports, Imports};
 	let result = if needs_ffi || needs_wasi || needs_host {
-		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
+		read_bytes_with_imports(
+			&bytes,
+			Imports {
+				host: needs_host,
+				wasi: needs_wasi,
+				ffi: needs_ffi,
+			},
+		)
 	} else {
 		read_bytes(&bytes)
 	};

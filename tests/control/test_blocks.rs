@@ -1,15 +1,15 @@
-use crate::{is, eq, skip};
+use crate::{eq, is, skip};
 use warp::warp_parser::parse;
 
 #[test]
 fn test_indent_as_block() {
 	let result0 = parse("a\n\tb\n\tc\nd");
-	eq!(result0.length(), 2);   //   a… d
+	eq!(result0.length(), 2); //   a… d
 	eq!(result0[0].length(), 2); // b, c
-	// 0x0E 	SO 	␎ 	^N 		Shift Out
-	// 0x0F 	SI 	␏ 	^O 		Shift In
-	//	indent/dedent  0xF03B looks like pause!?   0xF032…  it does, what's going on CLion? Using STSong!
-	//	https://fontawesome.com/v4.7/icon/outdent looks more like it, also matching context  OK in font PingFang HK?
+	                          // 0x0E 	SO 	␎ 	^N 		Shift Out
+	                          // 0x0F 	SI 	␏ 	^O 		Shift In
+	                          //	indent/dedent  0xF03B looks like pause!?   0xF032…  it does, what's going on CLion? Using STSong!
+	                          //	https://fontawesome.com/v4.7/icon/outdent looks more like it, also matching context  OK in font PingFang HK?
 } // 􀖯􀉶𠿜🕻🗠🂿	𝄉
 
 #[test]
@@ -56,11 +56,8 @@ fn test_group_cascade() {
 	result.print();
 	let _first = result.first();
 	eq!(result[0][0], parse("a b c, d e f; g h i , j k l")); // significant newline!
-	eq!(
-		result[0][1],
-		parse("a2 b2 c2, d2 e2 f2; g2 h2 i2 , j2 k2 l2")
-	); // significant newline!
-	//     eq!(result[0][0][0][0].length(), 3) // a b c
+	eq!(result[0][1], parse("a2 b2 c2, d2 e2 f2; g2 h2 i2 , j2 k2 l2")); // significant newline!
+																	  //     eq!(result[0][0][0][0].length(), 3) // a b c
 	skip!(
 		eq!(result[0][0][0][0], parse("a b c"));
 	);
@@ -75,7 +72,6 @@ fn test_group_cascade() {
 	// print(reparse.serialize());
 	eq!(result, reparse);
 }
-
 
 #[test]
 fn test_matrix_order() {

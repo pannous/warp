@@ -13,7 +13,10 @@ const ENTITIES: &str = include_str!("uniscript_entities.tsv");
 /// The characters an entity name stands for
 pub fn entity(name: &str) -> Option<&'static str> {
 	static TABLE: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-	TABLE.get_or_init(|| ENTITIES.lines().filter_map(|line| line.split_once('\t')).collect()).get(name).copied()
+	TABLE
+		.get_or_init(|| ENTITIES.lines().filter_map(|line| line.split_once('\t')).collect())
+		.get(name)
+		.copied()
 }
 
 /// The entity written at `chars[at..]`, `\:name` (the name its whole run of ASCII letters): its name and the number of

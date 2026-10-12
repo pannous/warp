@@ -14,6 +14,8 @@ fn optimizer_keeps_extended_constant_expressions() {
 		return;
 	}
 	let module = wat::parse_str(GLOBAL_BY_ARITHMETIC).unwrap();
-	let optimized = WasmOptimizer::library(OptimizationMode::Speed).optimize(&module).unwrap();
+	let optimized = WasmOptimizer::library(OptimizationMode::Speed)
+		.optimize(&module)
+		.unwrap();
 	wasmparser::Validator::new().validate_all(&optimized).unwrap();
 }

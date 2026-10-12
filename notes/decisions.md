@@ -7,6 +7,64 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- Soundness review (Interviewer, all of this file re-read 2026-10-12; each case verified on main 64ff51cf5):
+  - approx-zero (reopens D8): `≈` gets an absolute floor near zero, |a-b| ≤ max(1e-9·max(|a|,|b|), 1e-12) (numpy
+    allclose style); `sin(3.141592653589793) ≈ 0` and `1e-20 ≈ 0` are yes (were no); `tolerance = …` still overrides.
+  - in-bool (reopens D14): `x in list` is yes/no: `(2 in [5 2]) == yes` is yes (was no, `in` gave the position 2).
+    The position comes from `xs.index_of(x)`.
+  - index-position (reopens P35, P183's 0-based argmax, the 0-based insert slots; user's idea): `index` and
+    `position` become dimensioned int types, like units or C's size_t: an index counts from 0 (`xs[i]`), a
+    position from 1 (`xs#p`). Both are ints, but the type knows which it is, a variable may be declared either, and
+    the methods are type safe: index_of, argmax, argmin, insert at: return or take a position or an index by their
+    declared type, so `xs[xs.index_of(20)]` picks 20 (today 30). Details (conversion vs error when a position meets
+    `[ ]`, printing) go to the worker.
+  - field-or-minus (reopens P168): `p.phone-number` without that field is the error "p has no field phone-number"
+    with the fix "I meant: p.phone - number"; no silent subtraction (today 7).
+  - P49b stands (re-asked after exact decimals made `2.0` the int 2): a written `2.0` stays refused for an int
+    parameter, "2.0 is no int: write 2.0 as int"; the written point signals float intent.
+  - list-sign (refines D13/#40): in a list literal a space plus a glued sign starts a new item after anything:
+    `a=5; [a -1]` is [5 -1] (was [4]); `[a - 1]`, `[a-1]` stay [4]; outside brackets `x -1` still subtracts.
+  - P88 stands (re-asked now that strangers' programs are hosted): every host, eval_untrusted too, keeps every
+    capability for now; the hosted programs rely on their OS sandbox (systemd unit, Worker isolate).
+  - Defaults taken building them (warp-semantics, branch semantics, not asked): list-sign applies only to lists
+    without commas (`[a -1, 2]` stays [4, 2]) and never inside an index (`xs[a -2]` subtracts); a comma-less
+    `[1 -1]` no longer warns. `xs.has(x)` gives yes/no like `in`. binary-int (user): `5 as binary` shows 0b101,
+    `0b101 + 1` is 6.
+- return-as (user, via warp-supervisor): return types are spelled `def f(x) as int or text`; `->` still works with
+  a hint and an "I meant" fix toward `as`; no `returns` keyword ("nah") (warp-dispatch).
+- union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
+  are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
+  position `or` stays the boolean or (warp-dispatch).
+- empty-field (re-asked, strict): ø needs `?` everywhere, no exception for a class's own type. `left: Tree?` holds ø;
+  `class Tree{left: Tree; v:int}` is a compile error, "left can never be filled: every Tree needs a Tree first; fix:
+  left: Tree?".
+- number-converts (implied by rational-float and exact-decimals, not asked): `number` means any number and keeps an
+  exact value (`x: number = 1/3` stays 1/3, card number-number); only `float` converts.
+- exe-foreign: an executable from `warp build` that uses python/js starts python3 or node from PATH when it runs and
+  fails loudly naming a missing interpreter ("cannot start python3; set WARP_PYTHON"); components and C calls stay
+  refused in executables (notes/aot.md).
+- lossy-return (asked; replaces the old todo.md note "a declared return type converts"): a fraction reaching a
+  declared int result is an error, "an int must be a whole number", fix "declare number, or truncate with as int";
+  lossless conversions (`-> text { 3 }` → "3") still convert. Test assertions pinning truncation may change.
+- cargo-fmt: format the whole repo once in one chore commit, right after an Integrator batch, then the gate enforces
+  `cargo fmt --check`.
+- web-keyframes (implied by P188, not asked): CSS's own form in warp syntax, `@keyframes pop {…}` in `style{}` and
+  `animation: pop 400ms`; warp adds only the delayed removal for leaving, `leave: pop 400ms reverse`.
+- web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
+  in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup). The long form
+  `Counter.all` (or `Counter.instances` if `all` is taken) means the same and hints to use `counters`.
+- signal-samples: the user renamed samples/signal.warp and samples/signal_blocks.warp to samples/siren_sound.warp and
+  samples/stereo_sound.warp (a6484f820); the "Signals" examples on the wiki sound page stay as documentation.
+- consistency (card #376, sub-card of #35 cleanup): an agent regularly checks the app against the documentation.
+  Clear mismatches: fix the docs (small cases: the app); ambiguous ones go through the Interviewer to the user.
+- self-hosting (user, asked directly; plan notes/self_hosting.md, topic card self-hosted): it is for dogfooding,
+  independence from Rust and as a showcase. Scope: the parser first (lexer, parser, serializer), and later parts are
+  planned once it matches. Each warp part is a twin of its Rust part, checked by a differential test over every sample
+  before the Rust part goes. Language gaps found on the way (text indexing, Node API, byte buffer) are fixed in the
+  language, not worked around.
+- site-budget (user, directly to warp-bundle-size, 2026-10-12; replaces the earlier modest raise + ratchet): the
+  hello-world site budget is 100 KB gzipped, "plenty compared to other huge web sites"; no ratchet. Today it is
+  19.8 KB; the test still prints the size.
 - no-executable-by-default (user, via warp-supervisor; replaces P103's default): a plain `warp file.warp` run no
   longer writes the standalone executable next to the file; WARP_EXECUTABLE=1 turns it back on, `warp build` still
   makes it (worker warp-executable-flag).
@@ -43,7 +101,7 @@ notes/open_decisions.md.
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
 - footgun-divzero (warp-numbers): user: "no idea about the advantages … you decide or we decide later"; the
   Interviewer's default, revisit any time: exact numbers (ints, rationals, decimals) raise divide by zero (`r = try
-  1/0; r failed` is yes, as failed-raised), computed IEEE floats give ∞/NaN as IEEE (`sqrt(2)/0` is ∞). The
+  1/0; r failed` is yes, as failed-raised), computed IEEE floats give ∞/NaN as IEEE (`sqrt(2)/0` was the example; since exact-decimals √2 is an exact real, so it raises; `(2 as float)/0` is ∞). The
   extended-rational ±1/0 idea stays open for later; wiki Footguns "NaN and infinity" is corrected to this.
 - wiki-full-evaluation (warp-docs): no conflict: `created: now` stays a block until `!` (the spec); "dates are folded
   at compile time" is today's implementation limit (Footguns "Not yet"), not a rule. Implied, not asked.
@@ -86,7 +144,7 @@ notes/open_decisions.md.
   the number of entries. Tests pinning a single `=` as a statement change meaning by this decision.
 - float-result (warp-functions): `int square(x) = x*x; square 3.1` is a compile error naming int, fix "declare
   `number` to keep the float, or truncate with `as int`". Implied by rational-float, not asked.
-- exact-default (user 2026-10-10, asked after warp-perf measured fraction math as ~90% of finger paint's time plus a
+- exact-default (SUPERSEDED the same day by exact-decimals: decimal literals are exact) (user 2026-10-10, asked after warp-perf measured fraction math as ~90% of finger paint's time plus a
   never-freed number heap): integer division stays exact, `1/3 + 1/3` is `2/3`; decimal literals are floats,
   `.1 + .2 ≈ .3`; `==` on floats gives a warning with the fix "use ≈". Supersedes the 2026-09-28 "decimals exact"
   (`0.1+0.2==0.3`); tests pinning it change meaning by this decision. The ratio heap leak gets fixed regardless
@@ -132,6 +190,10 @@ notes/open_decisions.md.
 - P239 (warp-class, cards lambda-def, unbound-lambda): in a lambda naming its parameter, `it` is the surrounding
   code's `it`: `scale := [1 2].map(x => x * it); scale 3` is [3 6]; with no outer `it`, `[1 2].map(x => it)` is
   the error "undefined variable: it". As implemented.
+- P241 (user directly to warp-dispatch, 2026-10-12, extends P157; "do we really need a new vector type or can we use our list"): no vector type and no Rust syntax in warp: warp's list holds any elements,
+  blocks and unboxed numbers alike, so a list type is `ints` (or `list of int`). Ported `Vec<int>`, `vector<int>`,
+  `vector of int`, `Array<int>`, `ArrayList<int>` read as that list with the note "warp says list"
+  (warp_parser FOREIGN_LIST_HEADS); `Vec<T>` of a type parameter drops with it.
 - P240 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
   so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
   (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and
@@ -392,7 +454,7 @@ notes/open_decisions.md.
   exit nonzero.
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
-- P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
+- P200 (copy-in/copy-out SUPERSEDED by P200b real references) class instances passed to functions are shared references (like Python/JS). Card instance-field.
   Built as copy-in/copy-out (warp-c6): a parameter whose field a function changes is shared (maps too); aliases
   don't share (`q = p; q.x = 7` leaves p.x); only a variable argument gets the change back (`f(bags#1)` doesn't);
   a function passed as a value keeps value semantics. User: interim OK; real references (struct_backend's mutable
@@ -405,7 +467,7 @@ notes/open_decisions.md.
 ## Decided 2026-10-07 (user, multiple-choice interview, as recommended unless quoted)
 - P169 `use math` loads a NEW warp math module (to be designed) with beautiful names, not the historic C names: "we
   need to educate people about beautiful names". The raw C library stays available as `use cmath`. Owner warp-67.
-- P170 after `use list` its words work bare `zip(a, b)` and qualified `list.zip(a, b)`.
+- P170/P171 (SUPERSEDED for list/map/text words 2026-10-12 by type-library-words: always available) P170 after `use list` its words work bare `zip(a, b)` and qualified `list.zip(a, b)`.
 - P171 new words (zip, enumerate, unique, …) stay in their modules; a bare use without `use` is an error naming the
   module. Exceptions: `write` and `exists` are global (prelude). The file module also loads automatically when the
   program contains a file URL.
@@ -509,7 +571,7 @@ notes/open_decisions.md.
 - P165b soft keywords vs tests: strict P165. tests/functions/test_named_arguments.rs:22 renames `fun` → `g`
   (`fun` is a hard keyword); tests/operators/test_root_word.rs:14-15 top-level `root = 5` / `root(x) := …` expect the
   error. Unblocks branch soft-keywords (warp-64, merge by warp-3f).
-- P168 `p.phone-number` when p has no field phone-number but `number` exists: FALL BACK to subtraction
+- P168 (SUPERSEDED 2026-10-12 by field-or-minus: an error with a fix) `p.phone-number` when p has no field phone-number but `number` exists: FALL BACK to subtraction
   `p.phone - number` (the user chose this over the recommended field error). Implemented by warp-64.
 - P151 crates.io name (asked by the packaging session, answered there directly): "lang is perfect": the package is
   `warp-lang` (library still `warp`, binary `warp`), its runtime `warp-runtime`; notes/packaging.md.
@@ -569,7 +631,7 @@ notes/open_decisions.md.
   (`.meta.comment`), `@` for direct reads. Assumed (undoable): activation by the pragma `use comments`; bindings only
   for now (fields/functions unanswered).
 - Classes (issue #14, card g-1nug, warp-40, notes/classes.md): P115 bare field names read the receiver, `self`
-  (alias `this`) too; P116 `c.inc()` updates the variable c (objects are values, like `xs.add(v)`); P117 a body
+  (alias `this`) too; P116 `c.inc()` updates the variable c (objects were values then; P200b made them shared references); P117 a body
   definition without parentheses (`area := side*side`) is a getter computed at each read, and `class b extends a`
   copies a's fields and methods (b's own override) (user chose inheritance over the recommended none).
 - P124 (warp-dd, branch functions 9f208fbc3) a lambda that assigns a variable of its enclosing function shares it
@@ -862,7 +924,7 @@ notes/open_decisions.md.
 - P48 custom operators: the wiki syntax as proposed (`prefix operator ⁻ := it*-1`, `suffix operator ³ := …`,
   `infix operator ⊕ := left+right`), prefix/suffix tightest, new infix like `+`, the symbol known file-wide (pre-scan).
 - P29 `pair.0` counts from 0 (like `pair[0]`).
-- P30/P35 keep as implemented: `xs.pop()` removes and gives the last item, `m.remove(k)` removes and gives the value
+- P30/P35 (P35 reopened 2026-10-12 by index-position) keep as implemented: `xs.pop()` removes and gives the last item, `m.remove(k)` removes and gives the value
   (ø when absent), `xs.index_of(x)` is 1-based, 0 when absent.
 - P44 shared arrays keep `shared xs = int[n]` with atomic `xs#i += v`, Ints only for now. Re-asked: `atomic` is a synonym of `shared` (below).
 - P56(2-4) `\:epsilon`/`\:phi` are ε U+03B5 / φ U+03C6; an unknown entity name is a loud error; `∞` is f64
@@ -1115,7 +1177,7 @@ notes/open_decisions.md.
   picks one canonical form. Single quotes stay literal. Open detail: `$` holes in sql/sh templates must keep working.
 - D6 pipe: "The pipe operator is just an operator that behaves differently with different types unified". So `|` is one
   operator dispatched on its operand types: truth values → logical or, a value and a function → pipe (`2|square|root`).
-- D14 `x in list`: "The position one index would behave as a truth but maybe it's a foot gun let's try it with a
+- D14 (SUPERSEDED 2026-10-12 by in-bool: yes/no) `x in list`: "The position one index would behave as a truth but maybe it's a foot gun let's try it with a
   warning". `3 in [1 2 3]` gives the position (truthy when found), with a warning. Caveat for implementation: a 0-based
   position makes the first element falsy, so the position must be 1-based (or found-at-0 still truthy).
 - #38 `[ø]`: "Truthy". A non-empty list is truthy; the test_wasm_logic_on_objects expectation may be edited.
@@ -1128,7 +1190,7 @@ notes/open_decisions.md.
 - D5 matching by type name: "General rule". Any noun can name a type/parameter (wiki matching.md); open detail: the
   rule for unknown words (`photo`) and multi-word class names.
 - D4 constructor vs data: "Distinguish". `T{…}` with a known type constructs/validates, `k:{…}` is plain data, not equal.
-- D8 `≈` / `~` / `circa`: "Relative 1e-9 + override". Default relative tolerance 1e-9, settable via `tolerance = …`.
+- D8 (absolute floor near zero added 2026-10-12, approx-zero) `≈` / `~` / `circa`: "Relative 1e-9 + override". Default relative tolerance 1e-9, settable via `tolerance = …`.
 - D15 auto-imports: "Later", parked. D10 return-type polymorphism: parked then, un-parked later as P17 ("Dispatch on return type", done: notes/dispatch.md, src/lowering/overloads.rs).
 - #25 / #36 `first [10, 5]`, `reduce [7] …`: "if by subscript you mean index then we already have a rule that space
   disabled index". So a space before `[` never indexes; reading these as an index is a bug against that rule:

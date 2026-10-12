@@ -8,7 +8,8 @@ use warp::normalize::capture_hints;
 use warp::wasm_emitter::eval;
 
 const SQUARE: &str = "square:=it*it; ";
-const OVERLOADS: &str = "class pdf{body}; class docx{body}; render(t:text) := pdf(\"%PDF \" + t); render(t:text) := docx(\"<w:t>\" + t); ";
+const OVERLOADS: &str =
+	"class pdf{body}; class docx{body}; render(t:text) := pdf(\"%PDF \" + t); render(t:text) := docx(\"<w:t>\" + t); ";
 
 /// The warnings of `code`, and its errors with fixes
 fn diagnostics(code: &str) -> Vec<Diagnostic> {
@@ -23,16 +24,27 @@ fn diagnostics(code: &str) -> Vec<Diagnostic> {
 /// `code` with the fix applied whose meaning mentions `meaning`
 fn fixed_by(code: &str, meaning: &str) -> String {
 	let all = diagnostics(code);
-	let found = all.iter().find_map(|diagnostic| diagnostic.fixes.iter().find(|fix| fix.meaning.contains(meaning)).map(|fix| (diagnostic, fix)));
+	let found = all.iter().find_map(|diagnostic| {
+		diagnostic
+			.fixes
+			.iter()
+			.find(|fix| fix.meaning.contains(meaning))
+			.map(|fix| (diagnostic, fix))
+	});
 	let (diagnostic, fix) = found.unwrap_or_else(|| panic!("no fix meaning {meaning:?} for {code}: {all:?}"));
-	fixed(code, diagnostic.line, diagnostic.column, fix).unwrap_or_else(|| panic!("{fix:?} does not find its text in {code}"))
+	fixed(code, diagnostic.line, diagnostic.column, fix)
+		.unwrap_or_else(|| panic!("{fix:?} does not find its text in {code}"))
 }
 
 /// The fix whose meaning mentions `meaning` turns `code` into a program whose value is `expected`, warning-free
 fn assert_fix(code: &str, meaning: &str, expected: &str) {
 	let source = fixed_by(code, meaning);
 	let value = with_warning_mode(WarningMode::Error, || eval(&source));
-	assert_eq!(value.serialize().trim(), expected, "{code} fixed to {meaning}: {source}");
+	assert_eq!(
+		value.serialize().trim(),
+		expected,
+		"{code} fixed to {meaning}: {source}"
+	);
 }
 
 #[test]
@@ -46,7 +58,7 @@ fn range_end_fixes() {
 #[test]
 fn signed_operand_fixes() {
 	assert_fix("1 -1", "the list", "1 -1"); // `1 (-1)`: a list without brackets prints so
-	assert_fix("[1 -1 2]", "the list", "[1 -1 2]");
+	assert!(diagnostics("[1 -1 2]").is_empty()); // list-sign (user 2026-10-12): inside a list literal no question
 	assert_fix("1 -1", "arithmetic", "0");
 }
 
@@ -110,13 +122,17 @@ fn operator_ambiguity_fixes() {
 #[test]
 fn loop_it_fix() {
 	assert_fix("f:={s=it; for 1..3 {s+=it}; s}; f(10)", "function's `it`", "30");
-	assert_fix("f:={s=it; for i in [5 6] {s+=it}; s}; f(10)", "function's `it`", "30"); // #23: `for i in` binds it too
+	assert_fix("f:={s=it; for i in [5 6] {s+=it}; s}; f(10)", "function's `it`", "30");
+	// #23: `for i in` binds it too
 }
 
 /// The hint about `original` in `code` offers its preferred form, which gives `expected`
 fn assert_hint_fix(code: &str, original: &str, expected: &str) {
 	let (_, hints) = capture_hints(|| eval(code));
-	let hint = hints.iter().find(|hint| hint.original == original).unwrap_or_else(|| panic!("{hints:?}"));
+	let hint = hints
+		.iter()
+		.find(|hint| hint.original == original)
+		.unwrap_or_else(|| panic!("{hints:?}"));
 	let (line, column) = hint.line_and_column();
 	let source = fixed(code, line, column, &hint.fix().expect("a rewrite")).expect("the hint's text is in the source");
 	assert_eq!(eval(&source).serialize(), expected, "{source}");
@@ -131,10 +147,15 @@ fn a_hint_offers_its_preferred_form() {
 #[test]
 fn the_page_gets_each_fix_as_an_edit() {
 	let report = warp::web::evaluate(&format!("{SQUARE}square 3 + square 4"), Default::default());
-	let fixes = report["errors"][0]["fixes"].as_array().unwrap_or_else(|| panic!("{report}"));
+	let fixes = report["errors"][0]["fixes"]
+		.as_array()
+		.unwrap_or_else(|| panic!("{report}"));
 	assert_eq!(fixes.len(), 2, "{report}");
 	assert_eq!(fixes[0]["label"], "I meant: square(3) + square(4)");
-	assert_eq!((fixes[0]["start"].as_u64(), fixes[0]["end"].as_u64()), (Some(SQUARE.len() as u64), Some(SQUARE.len() as u64 + 19)));
+	assert_eq!(
+		(fixes[0]["start"].as_u64(), fixes[0]["end"].as_u64()),
+		(Some(SQUARE.len() as u64), Some(SQUARE.len() as u64 + 19))
+	);
 	let warned = warp::web::evaluate("x=0; for i in 1 upto 4 {x+=i}; x", Default::default());
 	assert_eq!(warned["warnings"][0]["topic"], "upto");
 	assert_eq!(warned["warnings"][0]["fixes"][1]["replacement"], "...");
@@ -154,13 +175,19 @@ fn codepoint_is_the_preferred_name() {
 fn the_page_says_got_it_for_one_expression() {
 	let code = "x=0; for i in 1 upto 4 {x+=i}; for i in 1 upto 3 {x+=i}; x";
 	let report = warp::web::evaluate(code, Default::default());
-	let first = report["warnings"][0]["expression_key"].as_str().unwrap_or_else(|| panic!("{report}")).to_string();
+	let first = report["warnings"][0]["expression_key"]
+		.as_str()
+		.unwrap_or_else(|| panic!("{report}"))
+		.to_string();
 	assert!(first.starts_with("upto@"), "{first}");
 	assert_eq!(report["got_it"][0]["topic"], "upto");
 	let silenced = warp::web::evaluate(code, [first].into_iter().collect());
 	let warnings = silenced["warnings"].as_array().unwrap();
 	assert_eq!(warnings.len(), 1, "the other upto still warns: {silenced}");
-	assert!(warnings[0]["message"].as_str().unwrap().contains("upto 3"), "{silenced}");
+	assert!(
+		warnings[0]["message"].as_str().unwrap().contains("upto 3"),
+		"{silenced}"
+	);
 	assert_eq!(silenced["value"], report["value"]);
 }
 
@@ -177,21 +204,36 @@ fn kebab_key_fixes() {
 
 #[test]
 fn filter_loop_fixes() {
-	assert_fix("xs=[1,\"a\",2]; s=0; for int in xs: s += it\ns", "filter the items", "3");
+	assert_fix(
+		"xs=[1,\"a\",2]; s=0; for int in xs: s += it\ns",
+		"filter the items",
+		"3",
+	);
 	assert_fix("xs=[1,5,3]; s=0; for (it>2) in xs: s += it\ns", "filter the items", "8");
-	assert_fix("type Friend {name}; xs=[Friend{name:\"a\"}, 3]; n=0; for Friend in xs: n += 1\nn", "filter the items", "1");
+	assert_fix(
+		"type Friend {name}; xs=[Friend{name:\"a\"}, 3]; n=0; for Friend in xs: n += 1\nn",
+		"filter the items",
+		"1",
+	);
 }
 
 #[test]
 fn the_page_gets_every_edit_of_a_fix() {
 	let code = "a=5; b=1; a-b:2; a-b";
 	let report = warp::web::evaluate(code, Default::default());
-	let renamed = report["warnings"][0]["fixes"].as_array().unwrap_or_else(|| panic!("{report}")).iter()
-		.find(|fix| fix["meaning"].as_str().unwrap_or_default().contains("renamed")).unwrap_or_else(|| panic!("{report}"));
+	let renamed = report["warnings"][0]["fixes"]
+		.as_array()
+		.unwrap_or_else(|| panic!("{report}"))
+		.iter()
+		.find(|fix| fix["meaning"].as_str().unwrap_or_default().contains("renamed"))
+		.unwrap_or_else(|| panic!("{report}"));
 	let edits = renamed["edits"].as_array().unwrap();
 	assert_eq!(edits.len(), 2, "{renamed}");
 	// the last in the text first: the read at the end, then the key
-	assert_eq!((edits[0]["start"].as_u64(), edits[1]["start"].as_u64()), (Some(code.len() as u64 - 3), Some(10)));
+	assert_eq!(
+		(edits[0]["start"].as_u64(), edits[1]["start"].as_u64()),
+		(Some(code.len() as u64 - 3), Some(10))
+	);
 }
 
 #[test]
@@ -199,7 +241,10 @@ fn ambiguous_call_comparison_fixes() {
 	assert_fix("say(x) := x\nsay 3 == 4", "the call compared", "no");
 	assert_fix("say(x) := x\nsay 3 == 4", "the comparison as the argument", "no");
 	assert_fix("say(x) := x\nsay 3 == 3", "the call compared", "yes");
-	assert_eq!(fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"), "say(x) := x\nsay(3 == 3)");
+	assert_eq!(
+		fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"),
+		"say(x) := x\nsay(3 == 3)"
+	);
 }
 
 /// card more-fixes (user): an error with an evident fix offers it; a missing closer is added where it was left open
@@ -241,4 +286,10 @@ fn declared_type_mismatch_fixes() {
 #[test]
 fn unused_copy_fix() {
 	assert_fix("x = [3, 1, 2]; sort x; x", "change x", "[1 2 3]");
+}
+
+#[test]
+fn missing_kebab_field_fix() {
+	// field-or-minus (user 2026-10-12): "I meant: p.phone - number"
+	assert_fix("p = {phone: 7}; number = 2; p.phone-number", "subtraction", "5");
 }

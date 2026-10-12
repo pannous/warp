@@ -1,0 +1,313 @@
+// Sound and MIDI in the page (a part of host.js, which says how parts work; needs host-files.js, whose files it writes
+// and reads): the host word sound_samples and std's sound and midi modules (lib/sound.warp)
+
+// src/sound.rs: 16-bit mono PCM, samples offset by SAMPLE_OFFSET; a render without sounds has the default rate
+const SAMPLE_OFFSET = 32768;
+const DEFAULT_SAMPLE_RATE = 22050;
+const WAV_HEADER_BYTES = 44;
+// play of a signal (src/sound.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
+const SIGNAL_BLOCK = 512;
+const FULL_SCALE = 32767;
+// played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
+// checked every SIGNAL_POLL_MS (src/sound.rs SIGNAL_AHEAD, SIGNAL_POLL)
+const SIGNAL_AHEAD_SECONDS = 0.1;
+const SIGNAL_POLL_MS = 10;
+// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound.rs PLAY_AHEAD)
+const PLAY_AHEAD_SECONDS = 0.5;
+// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
+const LINEAR_CELL_BYTES = 8;
+
+// MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
+const MIDI_TICKS_PER_QUARTER = 480;
+const MIDI_MICROSECONDS_PER_QUARTER = 500000;
+const MIDI_TICKS_PER_SECOND = MIDI_TICKS_PER_QUARTER * 1e6 / MIDI_MICROSECONDS_PER_QUARTER;
+const MIDI_NOTE_ON = 0x90;
+const MIDI_NOTE_OFF = 0x80;
+const MIDI_FIELDS = 4; // start ms, key, length ms, velocity
+const midiTicks = milliseconds => Math.round(Math.max(0, milliseconds) * MIDI_TICKS_PER_SECOND / 1000);
+const midiVariableLength = value => {
+	const groups = [value & 0x7f];
+	for (value >>= 7; value > 0; value >>= 7) groups.push(value & 0x7f | 0x80);
+	return groups.reverse();
+};
+const midiChunk = (kind, body) => {
+	const bytes = new Uint8Array(8 + body.length);
+	const view = new DataView(bytes.buffer);
+	[...kind].forEach((letter, i) => bytes[i] = letter.charCodeAt(0));
+	view.setUint32(4, body.length);
+	bytes.set(body, 8);
+	return bytes;
+};
+function midiFileOf(flat) {
+	if (flat.length % MIDI_FIELDS) throw new Error(`notes come as [start, key, length, velocity] four numbers each, got ${flat.length} numbers`);
+	const events = [];
+	for (let i = 0; i < flat.length; i += MIDI_FIELDS) {
+		const [start, key, length, velocity] = flat.slice(i, i + MIDI_FIELDS);
+		if (key < 0 || key > 127) throw new Error(`MIDI keys are 0 to 127, got ${key}`);
+		const on = midiTicks(start);
+		events.push([on, 1, [MIDI_NOTE_ON, key, Math.min(127, Math.max(1, velocity))]], [Math.max(on, midiTicks(start + length)), 0, [MIDI_NOTE_OFF, key, 0]]);
+	}
+	events.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+	const track = [0, 0xff, 0x51, 3, MIDI_MICROSECONDS_PER_QUARTER >> 16 & 255, MIDI_MICROSECONDS_PER_QUARTER >> 8 & 255, MIDI_MICROSECONDS_PER_QUARTER & 255];
+	let now = 0;
+	for (const [tick, , message] of events) {
+		track.push(...midiVariableLength(tick - now), ...message);
+		now = tick;
+	}
+	track.push(0, 0xff, 0x2f, 0);
+	const header = new Uint8Array([0, 0, 0, 1, MIDI_TICKS_PER_QUARTER >> 8, MIDI_TICKS_PER_QUARTER & 255]);
+	return Uint8Array.from([...midiChunk("MThd", header), ...midiChunk("MTrk", track)]);
+}
+function midiNotesOf(bytes) {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+	const ascii = at => String.fromCharCode(...bytes.slice(at, at + 4));
+	if (ascii(0) !== "MThd") throw new Error("not a MIDI file (it does not start with MThd)");
+	const tracks = view.getUint16(10), division = view.getUint16(12);
+	if (division & 0x8000) throw new Error("MIDI files timed in SMPTE frames are not supported, only ticks per quarter note");
+	const tempi = [[0, MIDI_MICROSECONDS_PER_QUARTER]], messages = [];
+	let at = 8 + view.getUint32(4);
+	for (let t = 0; t < tracks; t++) {
+		const end = at + 8 + view.getUint32(at + 4), kind = ascii(at);
+		at += 8;
+		if (kind !== "MTrk") { at = end; continue; }
+		const ended = () => { throw new Error("the file ends inside an event"); };
+		const byte = () => at < end ? bytes[at++] : ended();
+		const length = () => { let value = 0; for (let i = 0; i < 4; i++) { const b = byte(); value = value << 7 | b & 0x7f; if (!(b & 0x80)) return value; } throw new Error("a delay is longer than four bytes"); };
+		let tick = 0, status = 0;
+		while (at < end) {
+			tick += length();
+			const first = byte();
+			if (first & 0x80) status = first; else at--;
+			if (status === 0xff) {
+				const type = byte(), size = length(), data = bytes.slice(at, at += size);
+				if (type === 0x51 && size === 3) tempi.push([tick, data[0] << 16 | data[1] << 8 | data[2]]);
+			} else if (status === 0xf0 || status === 0xf7) at += length();
+			else {
+				const kind = status & 0xf0, channel = status & 15, one = byte();
+				const two = kind === 0xc0 || kind === 0xd0 ? 0 : byte();
+				if (kind === MIDI_NOTE_ON) messages.push([tick, two > 0, channel, one, two]);
+				else if (kind === MIDI_NOTE_OFF) messages.push([tick, false, channel, one, 0]);
+			}
+		}
+		at = end;
+	}
+	tempi.sort((a, b) => a[0] - b[0]);
+	const milliseconds = tick => {
+		let seconds = 0, from = 0, tempo = MIDI_MICROSECONDS_PER_QUARTER;
+		for (const [when, next] of tempi) {
+			if (when >= tick) break;
+			seconds += (when - from) * tempo / 1e6 / division;
+			[from, tempo] = [when, next];
+		}
+		return Math.round((seconds + (tick - from) * tempo / 1e6 / division) * 1000);
+	};
+	messages.sort((a, b) => a[0] - b[0]);
+	const sounding = [], notes = [];
+	for (const [tick, on, channel, key, velocity] of messages) {
+		if (on) { sounding.push([tick, channel, key, velocity]); continue; }
+		const index = sounding.findIndex(([, c, k]) => c === channel && k === key);
+		if (index < 0) continue;
+		const [start, , , started] = sounding.splice(index, 1)[0];
+		notes.push([milliseconds(start), key, milliseconds(tick) - milliseconds(start), started]);
+	}
+	return notes.sort((a, b) => a[0] - b[0] || a[1] - b[1]).flat();
+}
+const wholeNumbers = list => Array.from(list, Number);
+
+// a 16-bit mono PCM WAV of the offset samples (src/sound.rs wav)
+// the sounds mixed at their places on their voices (src/sound.rs render): a task's sound along with the program's; a
+// sound without a place (no voices where it ran) follows the one before. From where the run's last render ended, so
+// `at 1s beep()` keeps its second of silence
+// the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
+// render): the samples interleaved and the channels
+// play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
+// samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
+// the signal's handle, computed when the voice holds less than SIGNAL_AHEAD_SECONDS, the wait a sleep (no runaway
+// time); else all of them at once, one sound. Its handle
+function playedSignal(holder, seconds, rate, channels, block, blockOf) {
+	const total = Math.round(Math.max(0, Number(seconds)) * rate);
+	const paced = Boolean(self.pageSystemValues?.window_open);
+	let samples = [];
+	let handle;
+	const played = () => {
+		if (samples.length) handle = holder.sounded(samples, rate, channels, handle);
+		samples = [];
+	};
+	for (let first = 0; first < total; first += block) {
+		while (paced && (self.soundsQueued?.() ?? 0) > SIGNAL_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
+		const count = Math.min(block, total - first);
+		const blocks = blockOf(first, count);
+		for (let index = 0; index < count; index++)
+			for (const cells of blocks) samples.push(Math.round(Math.max(-1, Math.min(1, Number(cells[index] ?? 0))) * FULL_SCALE) + SAMPLE_OFFSET);
+		if (paced) played();
+	}
+	played();
+	return handle ?? 0;
+}
+
+// a function the program gives a sound word, of a float to a float: its export, called directly (closure_apply, which
+// builds nodes for each call, only for a closure without one)
+const exportedOr = (program, callable) => program[callable.warpName] ?? callable;
+
+// the cells of the linear float array at `address` in the program's memory
+function linearDoubles(program, address) {
+	const view = new DataView(program.memory.buffer);
+	const count = Number(view.getBigInt64(address, true));
+	return Array.from({ length: count }, (_, index) => view.getFloat64(address + LINEAR_CELL_BYTES * (index + 1), true));
+}
+
+function mixed(sounds, rate, run) {
+	const channels = Math.max(1, ...sounds.map(sound => sound.channels ?? 1));
+	const framesOf = sound => sound.samples.length / (sound.channels ?? 1);
+	let end = run.renderedUntil ?? 0;
+	const starts = sounds.map(sound => {
+		const place = sound.place ?? end;
+		end = Math.max(end, place + framesOf(sound) / rate);
+		return place;
+	});
+	const first = Math.min(run.renderedUntil ?? 0, ...starts);
+	const offsets = starts.map(place => Math.round((place - first) * rate));
+	const amplitudes = new Float64Array(channels * Math.max(0, ...sounds.map((sound, i) => offsets[i] + framesOf(sound))));
+	const fades = run.soundFades ?? [];
+	run.soundFades = [];
+	sounds.forEach((sound, i) => {
+		const own = sound.channels ?? 1;
+		const ownFades = fades.filter(fade => fade.handle === 0 || fade.handle === sound.handle);
+		for (let frame = 0; frame < framesOf(sound); frame++) {
+			const gain = ownFades.length ? fadedGain(ownFades, starts[i] + frame / rate) : 1;
+			for (let channel = 0; channel < channels; channel++)
+				amplitudes[(offsets[i] + frame) * channels + channel] += Math.round((Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET) * gain);
+		}
+	});
+	run.renderedUntil = first + amplitudes.length / channels / rate;
+	return { samples: Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET), channels };
+}
+
+// the gain at the place after the fades (src/sound.rs faded_gain), in the order they were called: each ramps linearly
+// from the gain it finds there to its own
+function fadedGain(fades, place) {
+	const ramped = (fade, from, at) => from + (fade.gain - from) * (fade.seconds > 0 ? Math.min(1, Math.max(0, (at - fade.place) / fade.seconds)) : 1);
+	let ramp = [{ place: 0, gain: 1, seconds: 0 }, 1];
+	for (const fade of fades.filter(fade => fade.place <= place)) ramp = [fade, ramped(...ramp, fade.place)];
+	return ramped(...ramp, place);
+}
+
+function wavOf(samples, rate, channels = 1) {
+	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
+	const view = new DataView(bytes.buffer);
+	const ascii = (at, word) => [...word].forEach((letter, i) => view.setUint8(at + i, letter.charCodeAt(0)));
+	ascii(0, "RIFF");
+	view.setUint32(4, bytes.length - 8, true);
+	ascii(8, "WAVEfmt ");
+	[[16, 16, 4], [20, 1, 2], [22, channels, 2], [24, rate, 4], [28, 2 * channels * rate, 4], [32, 2 * channels, 2], [34, 16, 2]]
+		.forEach(([at, value, size]) => size === 4 ? view.setUint32(at, value, true) : view.setUint16(at, value, true));
+	ascii(36, "data");
+	view.setUint32(40, 2 * samples.length, true);
+	samples.forEach((sample, i) => view.setInt16(WAV_HEADER_BYTES + 2 * i, Math.max(-32768, Math.min(32767, Number(sample) - SAMPLE_OFFSET)), true));
+	return bytes;
+}
+
+addHostPart({
+	words: (holder, hooks, { program }) => {
+		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
+		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
+		// (but in an `at`, which places its sounds itself). The handle
+		holder.sounded = (samples, rate, channels, handle) => {
+			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
+			const sound = { samples, rate, channels };
+			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+			hooks.sound?.({ ...sound, at, handle });
+			const own = handle ?? self.lastSoundHandle?.() ?? 0;
+			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
+			return own;
+		};
+		return {
+			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
+			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
+			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
+			sound_samples: (samples, count, rate, channels) => {
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
+			},
+		};
+	},
+	adapters: {
+		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
+		// the Web MIDI access (playground.js sendMidi). A Worker cannot wait for the page's device list or its input
+		midi: {
+			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
+			read_file: path => midiNotesOf(readBytes(contentText(path))),
+			send: (port, message) => {
+				if (!self.sendMidi) return null; // a run without a page (tests, node) has no devices, silent as sound is
+				self.sendMidi(contentText(port), wholeNumbers(message));
+				return null;
+			},
+			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
+			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
+		},
+		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
+		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
+		sound: {
+			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
+			// that is not there fails as natively (card browser-play)
+			play_file: path => {
+				const name = contentText(path);
+				const written = writtenFiles.has(filePath(name));
+				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
+				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
+				return self.lastSoundHandle?.() ?? 0;
+			},
+			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
+			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
+			last: () => self.lastSoundHandle?.() ?? 0,
+			// fade_sound(handle, gain, seconds) (src/sound.rs fade): the page ramps the playing sound, render_sound from where
+			// the speaker stood on this voice
+			fade(handle, gain, seconds) {
+				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
+				const last = self.lastSoundHandle?.() ?? 0;
+				if (handle > last) throw new Error(`fade_sound(${handle}): no sound ${handle} in this run, which played ${last}`);
+				if (!(gain >= 0 && gain <= 1) || seconds < 0) throw new Error(`fade_sound(${handle}, ${gain}, ${seconds}): the gain is 0…1 and the seconds not negative`);
+				const place = (self.currentVoice?.().seconds ?? 0) - (self.soundsQueued?.() ?? 0);
+				(this.holder.run.soundFades ??= []).push({ handle, place, gain, seconds });
+				self.fadeSound?.(handle, gain, seconds);
+				return null;
+			},
+			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
+			queued: () => self.soundsQueued?.() ?? 0,
+			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
+			at_end: () => { self.voiceAtEnd?.(); return null; },
+			wait: () => null,
+			// play hum for 2s: hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
+			signal(functions, seconds, rate) {
+				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));
+				return playedSignal(this.holder, seconds, Number(rate), signals.length, SIGNAL_BLOCK, (first, count) => {
+					const blocks = signals.map(() => []);
+					for (let index = first; index < first + count; index++) signals.forEach((signal, channel) => blocks[channel].push(signal(index / Number(rate))));
+					return blocks;
+				});
+			},
+			// play fill for 2s of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
+			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
+			blocks(caller, addresses, seconds, rate) {
+				const blocks = [addresses].flat().map(Number);
+				const program = this.holder.exports;
+				const fill = exportedOr(program, caller);
+				return playedSignal(this.holder, seconds, Number(rate), blocks.length, linearDoubles(program, blocks[0]).length, first => {
+					fill(first / Number(rate));
+					return blocks.map(address => linearDoubles(program, address));
+				});
+			},
+			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
+			// offers it for download
+			render(path) {
+				const sounds = this.holder.run.unrenderedSounds ?? [];
+				this.holder.run.unrenderedSounds = [];
+				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
+				const other = sounds.find(sound => sound.rate !== rate);
+				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
+				const { samples, channels } = mixed(sounds, rate, this.holder.run);
+				keepWritten(contentText(path), wavOf(samples, rate, channels));
+				return samples.length / channels / rate;
+			},
+		},
+	},
+});

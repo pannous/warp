@@ -20,9 +20,19 @@ fn served(port: u16, requests: usize, code: &'static str) -> std::thread::JoinHa
 fn a_program_without_serve_is_served_with_its_server_functions_and_routes() {
 	const PORT: u16 = 18464;
 	let server = served(PORT, 2, "server def add(a, b) { a + b }\nget \"/api/hi\" { \"hi\" }");
-	let added = ureq::post(&format!("http://127.0.0.1:{PORT}/rpc/add")).send("[2, 3]").expect("an answer").body_mut().read_to_string().expect("a text");
+	let added = ureq::post(&format!("http://127.0.0.1:{PORT}/rpc/add"))
+		.send("[2, 3]")
+		.expect("an answer")
+		.body_mut()
+		.read_to_string()
+		.expect("a text");
 	assert_eq!(added, "5");
-	let hi = ureq::get(&format!("http://127.0.0.1:{PORT}/api/hi")).call().expect("an answer").body_mut().read_to_string().expect("a text");
+	let hi = ureq::get(&format!("http://127.0.0.1:{PORT}/api/hi"))
+		.call()
+		.expect("an answer")
+		.body_mut()
+		.read_to_string()
+		.expect("a text");
 	assert_eq!(hi, "hi");
 	server.join().expect("the server thread");
 }
@@ -35,4 +45,18 @@ fn a_server_is_known_without_running_it() {
 	assert!(warp::serve::serves("x = 1\nserve 8080 { get \"/\" { x } }"));
 	assert!(!warp::serve::serves("p{ \"just a page\" }"));
 	assert!(!warp::serve::serves("get = 3\nget + 1"));
+}
+
+// card routes-serve: a program of routes alone has no page, and building its page says nothing (a lone `post "/echo"
+// {…}` was read as net's post: "undefined function: post")
+#[test]
+fn a_program_of_routes_alone_has_no_page() {
+	for routes in [
+		"post \"/echo\" { request.body }",
+		"get \"/api\" { 1 }",
+		"get \"/api\" { 1 }\npost \"/echo\" { request.body }",
+	] {
+		let site = warp::site::served_files(routes, "routes");
+		assert!(matches!(site, Ok(None)), "{routes}: {:?}", site.err());
+	}
 }

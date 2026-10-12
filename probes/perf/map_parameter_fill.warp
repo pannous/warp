@@ -1,0 +1,9 @@
+// A map filled and read through a function parameter: each insert and lookup takes constant time (map index)
+def fill(m, n) { for i in 0..n { m["k" + i] = i } }
+def look(m, n) { s = 0; for i in 0..n { s += m["k" + i] }; s }
+n = 20000
+m = {}
+t0 = clock()
+fill(m, n)
+total = look(m, n)
+print "20000 inserts and lookups through a parameter: " + (clock() - t0) + " ms, sum " + total

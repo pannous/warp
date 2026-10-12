@@ -19,8 +19,14 @@ fn test_to_phrase_with_a_block_body() {
 
 #[test]
 fn test_wiki_forms() {
-	is!("fibonacci number = if number<2 : 0 else fibonacci(number-1) + fibonacci(number-2); fibonacci 10", 0); // the wiki's base case is 0
-	is!("fibonacci number = if number<2 : number else fibonacci(number-1) + fibonacci(number-2); fibonacci 10", 55);
+	is!(
+		"fibonacci number = if number<2 : 0 else fibonacci(number-1) + fibonacci(number-2); fibonacci 10",
+		0
+	); // the wiki's base case is 0
+	is!(
+		"fibonacci number = if number<2 : number else fibonacci(number-1) + fibonacci(number-2); fibonacci 10",
+		55
+	);
 	is!("square of a number = it*it; square 3", 9);
 	is!("to square a number: it*it; square 3", 9);
 	is!("to square a number: return it * it; square 3", 9);

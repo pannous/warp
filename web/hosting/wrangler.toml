@@ -4,6 +4,8 @@
 name = "warp-hosting"
 main = "hosting.mjs"
 compatibility_date = "2026-09-01"
+# /up fetches the deployed programs, which are Workers of this account: without it Cloudflare refuses (error 1042)
+compatibility_flags = ["global_fetch_strictly_public"]
 
 [vars]
 ACCOUNT_ID = "3c4ff005785f4576ab288e320f715c87"

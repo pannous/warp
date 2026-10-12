@@ -10,7 +10,8 @@ order and what each builds on. Defaults below are undoable; open questions go to
 - **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/html.warp, html_dsl.warp; repeated
   keys like `li li li` since 49a48ece1, tests/web/test_markup_tags.rs). It is only a value today: nothing renders it.
 - **Signals** (notes/signals.md): every variable is a signal once something listens; `:=` derives one and knows what it
-  reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7).
+  reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7)
+  and in `warp app` (`on key { exit }` closes it, samples/hello_div.warp, tests/web/test_app_keys.rs).
 - **Page plumbing** (notes/web_playground.md): the compiler runs in a worker, host words reach the page
   (host.js), paint draws pixels, `use draw` shapes (lib/draw.warp), fetch, channels, components, threads.
 
@@ -41,7 +42,12 @@ Each step is useful on its own and is what the next ones stand on.
 ## Server and page (agreed with warp-f0, 2026-10-07; card web-server)
 - **Routes**: `serve 8080 { get "/api/users" { users } post "/api/users" { … } }`. A route's block value is the response:
   a text as text/plain, any other value as JSON (std json to_json). `request` holds method, path, query and body (the
-  body parsed when it is JSON); `status 404` sets the status; `header "name" "value"` later (card web-route-header).
+  body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/serve.rs
+  with_answer_headers makes them the host word response_header, `status` as the CGI header Status; natively
+  web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/route_headers.warp).
+  A WAGI build (`warp build --wagi`, card wagi-build) has no host: there they are lib/wagi.warp wagi_header calls,
+  which globals collect for the CGI answer; a set Content-Type replaces the answer's own, a failing route answers 500
+  whatever status it set (tests/web/test_wagi_headers.rs, probes/hosting/wagi_routes.sh /teapot).
 - **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a warp value (arrays ↔ lists, objects ↔
   maps); a status of 400 or more is an Error value carrying the status and the body text.
 - **Typed RPC**: `server def users(min_age) {…}` in the same program. The server build exposes it as
@@ -89,8 +95,14 @@ Each step is useful on its own and is what the next ones stand on.
   reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
   value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
   part, when the last line is a name (components: `page·markup`), or when a hole fails.
-- Left (card web-fine-text-nodes): holes inside components (an instance's elements by instance), text-node
-  granularity (a hole is an element).
+- Done (card web-fine-text-nodes, 2026-10-12): a computed text standing alone between an element's children
+  (`section{ h1{…} button{…} "clicked " + n + " times" }`) is a text hole `page·hole·<path>·text·<n>` (markup.rs
+  text_holes, n the child elements before it); worker.js sends its plain text, playground.js showText sets that text
+  node only, and the element is no element hole. Only a sum starting with a literal text counts (a bare `n` may be
+  markup); a text beside it (one DOM text node), a computed attribute, no child elements, or style/script/option/
+  select/textarea keep the element hole. Browser check: test_in_browser.py TEXT_HOLE (CI).
+- Left: holes inside components (an instance's elements by instance); the root's own text holes (a computed part in
+  the root still means no holes); built sites (site.js) morph the whole page·html, holes are the playground's.
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left
@@ -108,8 +120,17 @@ Each step is useful on its own and is what the next ones stand on.
   fewer instances of the component than the one before (the last ones are the ones gone, by the order rule), then
   their state entries are dropped. What a cleanup reads is kept per instance like handler state. Tour example cleanup.
 - `(if c then A() else [])` among an element's children is a child (markup_tags.rs), not a statement.
-- Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it; card
-  web-instance-keys), state of a component read by a handler outside it (card web-outside-state).
+- Outside its component (card web-outside-state, user decision): `counters`, Counter's lower-case plural, is its
+  instances in page order; `counters#1.count` is the first one's count (readable and assignable), `counters.count`
+  every one's. `Counter.instances` is the long form, with a hint to write `counters` (`Counter.all` would clash with the
+  list method all); `Counter.count` stays short for `counters.count`. A program's own variable `counters` stays its
+  own. component_state.rs with_state_lists maps them to the state lists `Counter·count`. Sample
+  samples/component_totals.warp.
+- Keyed instances (card web-instance-keys): `Counter(t, key: t.id)` ties an instance's state to its key. A keyed
+  component gets the parameter `key = ø` and the list `Counter·keys`; each instance moves its key's entries of the
+  render before to its position (a swap), a new key takes a fresh slot (what stood there moves to the end), so after
+  the render the state lists are in page order again and truncation, cleanup and `event.instance` work as before;
+  mount runs for a new key. Unkeyed calls keep the order rule. Sample samples/keyed_counters.warp.
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
@@ -128,9 +149,24 @@ Each step is useful on its own and is what the next ones stand on.
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
 - Boolean attributes (checked, disabled, …) are present or absent (lib/markup.warp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
-- Left: `select{ bind: choice }` (its first render shows the first option; card web-bind-select), `bind:` inside a
-  component's state (component_state.rs sees only handlers; card web-bind-component), form submit as an event with the
-  fields as an object (card web-submit), validation from types (card web-validate).
+- `form{ on submit { … event.fields.name … } }` (card web-submit): `submit` is a page event; the page sends
+  {fields}, the form's named fields (a number field's a number, a checkbox's checked), and keeps a form with the
+  handler on the page (markup-forms.js, a part a built site ships only when its module has `on·submit`); a form without
+  one still goes to its route. Headless: `Page::submit(label, fields)`. Sample samples/form_submit.warp.
+- A handler on a line of its own inside an element (`form{⏎ on submit { … }⏎ button{…} }`) is the element's, not the
+  tag `on{submit{…}}` (markup_tags.rs attributes, element_events.rs handler_at).
+- `select{ bind: choice }` (card web-bind-select): lib/markup.warp hands a select's value to its options (html_render's
+  `chosen`), and the option whose value, else text, equals it is `selected`, from the first render on; later the page
+  sets select.value (morphElement). Sample samples/select_binding.warp.
+- `bind:` inside a component (card web-bind-component): element_events::lower_binds spells binds out before
+  component_state, which then keeps the bound variable per instance like any handler's. Sample
+  samples/component_binding.warp.
+- Validation from declared types (card web-validate): element_events::lower_binds gives a bound field the checks of
+  its variable's declared type (`age: int = 30`): int → type number, step 1 (the browser marks 2.5 :invalid and a
+  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. The C-style
+  `int age = 30` is the same declaration: type_name_matching::lower_prefixed_declarations rewrites it early to
+  `age: int = 30`, so handlers also treat it as the main-level variable (card bind-ignores). Not yet: ranges or text
+  patterns as types. Sample samples/typed_form.warp.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
@@ -146,8 +182,9 @@ Each step is useful on its own and is what the next ones stand on.
   followed by a block or selector part stays a selector (`#fed { … }`), an id never starts with a digit (card css-block,
   parser css_color_length). `:root {…}` starting a rule is the pseudo-class selector, and a selector before a comma
   continues into the group after it (`h1, :hover {…}`, `ul li, .x {…}`); a sheet's `html {…}` is a rule, no element
-  (no accessibility warning; card markup-style-block). Limit (card web-styles-limits): `50%` followed by another
-  declaration without `;`.
+  (no accessibility warning; card markup-style-block). A `%` glued to a number is a percentage, also before the
+  next declaration on its line (`width: 50% height: 10px`), and rules with comma selectors may share a line (card
+  web-styles-limits).
 - Scoping a component's sheet to its own elements: done (card web-scoped, under step 15 below).
 
 ## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
@@ -187,8 +224,17 @@ Each step is useful on its own and is what the next ones stand on.
   animates on the first render or with prefers-reduced-motion. Tests: tests/web/test_css_transitions.rs,
   test_transitions.rs; tour example transitions (`animated` check of test_in_browser.py);
   probes/transitions/leave_check.py.
-- Left: custom keyframes as data (card web-keyframes), `0.3s` (card fractional-durations), leaving items still take
-  their space until removed (no absolute positioning while leaving; card web-leave-space).
+- Leaving space (card web-leave-space): a leaving item keeps its space while it animates out (no absolute
+  positioning); when it is removed, its keyed siblings with a transform transition glide into the space (FLIP in
+  markup-transitions.js leave) instead of jumping. Sample samples/leaving_list.warp; probes/transitions/leave_check.py
+  reports `glided`.
+- Keyframes are CSS's own (card web-keyframes, user decision via P188): `style{ "@keyframes pop": { from: {…} "60%":
+  {…} to: {…} } }` in the sheet, `animation: pop 400ms` in an element joins its inline style beside a transition.
+  What CSS lacks is a removal that waits: `leave: pop 400ms reverse` is the attribute data-warp-leave, the animation
+  markup-transitions.js plays before it removes the element (then its siblings glide into the space). The sheet's key
+  must be quoted: unquoted `@keyframes pop { from … to … }` reads `from … to` as a range. The invented inline
+  `keyframes: [...]` list was dropped. Sample samples/keyframes.warp.
+- Left: `0.3s` (card fractional-durations).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-warp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
   `[data-warp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested
@@ -322,20 +368,31 @@ Each step is useful on its own and is what the next ones stand on.
 - Budget: tests/web/test_bundle_budget.rs builds `p{ "hello world" }` as a site and holds its gzipped total under a
   budget, printing each file (the suite's log tracks it). 2026-10-07: 46.2 KB → 40.5 KB (case table as ranges,
   wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
-  lines and indentation, host.js 23.8 → 16.7). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+  lines and indentation, host.js 23.8 → 16.7); 2026-10-12: 23.0 → 22.4 KB (also without a statement's trailing
+  `; // comment`, card web-submit). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+- Card web-bundle-growth (2026-10-12): 23.0 → 19.8 KB. host-media.js (paint, text_coverage, int-list helpers), html_kebab
+  ASCII-only (the Unicode case table was reached only through html_kebab → lower: app.wasm 12.0 → 10.8), exact.js
+  (exact numbers, starts the tasks, foreign and compiler parts) and std.js (stdCall with std_pure/std_io, starts the
+  hashes and files parts). Helper files prepended to parts hold function declarations only (a site may load them twice).
+  Find growth with integrator_tools/site_size.sh per merge, then scratch tools: gzip per JS block, wasm export →
+  function reachability. User, 2026-10-12: the budget is 100 KB, so it never blocks a branch; the test still prints sizes.
 - Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
 - What is left in app.wasm is the runtime lib/markup.warp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
 - host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
-  page events, values between JS and warp, std_pure/std_io's dispatch); the parts add themselves with addHostPart:
+  page events, values between JS and warp); the parts add themselves with addHostPart:
   host-files.js (fetch, read, std file, net, store and os), host-hashes.js (std_pure: hash, json, regex), host-timers.js
   (on every …, at 9:00), host-random.js (random, seeded), host-tasks.js (tasks, channels,
   BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
   imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
   steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
-  a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
-  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it; card web-host-parts-std).
+  a part gives selects it. std modules (2026-10-12, card web-host-parts-std): the emitter names the std modules a
+  program calls through std_pure/std_io in the custom section warp.std_modules (`*` for one named at run time: every
+  part), host_parts.rs reads them as imports of that pseudo-module. host-sound.js (sound_samples, std sound and midi,
+  17.7 KB) is split from host-files.js (41.6 → 24.2 KB), so `stored` values ship no sound code (tests/web/test_host_parts_std.rs).
+  Still coarse: json ships the hashes (host-hashes.js, 5.5 KB) and tables stay in host-files.js: a tables part would
+  give no host word, which test_host_parts each_part_is_chosen_by_the_words_it_gives allows only for host-hashes.js.
 - Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
   probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
   functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
@@ -344,10 +401,14 @@ Each step is useful on its own and is what the next ones stand on.
   instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
   instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
   module once. Without wasm-split on PATH the site ships one module with a note; a dev site never splits.
-  Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
-  its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
-  functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
-  calls them before the route loads (card web-split-helpers).
+  User functions only one route reaches move too (2026-10-12, card web-split-helpers, tests/web/test_route_helpers.rs):
+  the emitter lists them in the custom section `warp.user_functions` (host.rs USER_FUNCTIONS_SECTION); they are
+  exported only for tasks and other modules, so route_split.rs leaves them out of the call graph's roots, and
+  wasm-split keeps each export as a `trampoline_<name>` thunk through the table. A module spawning tasks (task_spawn,
+  task_spawn_values) keeps them all: a task's Worker calls one by name in a fresh instance without the route's module.
+  wasm-split runs with --debuginfo, so app.wasm and the route modules keep their name sections.
+  Limits: the runtime the module exports stays in app.wasm; data segments stay too. A user function the compiler folded
+  away (fib(15) → "610") stays as dead code in app.wasm: nothing drops unreached user functions of a site yet.
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
@@ -498,10 +559,24 @@ Each step is useful on its own and is what the next ones stand on.
   sessionStorage (`warp dev <name>`), in memory natively. Only a changed value is saved, so a variable never changed
   takes its new initial value from the edited source; one changed keeps its value (as React Fast Refresh does).
   site.js hydrate loads the kept values and shows what main left (page·html).
+  Component instance state too (card web-dev-instances): in a dev build component_state.rs declares each state list
+  (`Counter·count`, and a keyed component's keys) from the dev store and saves it after every render, so each instance
+  keeps its state across a reload (instances are found by call order or key, as within one run).
 - Tests: tests/web/test_dev_server.rs; probes/dev/counter.warp (click, edit the label: the count stays),
   probes/dev/stored_check.py.
-- Left: watching used modules (only the program's file counts; card web-dev-modules), component instance state (`Counter·count` lists; card web-dev-instances) and
-  the playground editor's error marks in the overlay (card web-dev-marks); a failure's source line is that of the program, not of a module.
+- Modules (card web-dev-modules): the loader records the files a build used or included (modules::module_files), and
+  dev_server.rs watches them beside the program. A module's parse failure names its file (` at greeting.warp:2:15`,
+  diagnostic::located_in_file), so the overlay shows the module's line (host_parts::with_excerpt reads that file).
+  A failure past parsing in a module's code (an unknown word) names the file too (card module-error-file): the parser
+  marks a module's positions with its file (meta::parsing_file, LineInfo.file), the emitter's errors and Diagnostic
+  print `file:line:column` (meta::place_text), and names_position reads that as a position. Probes:
+  probes/dev/uses_module.warp with probes/dev/greeting_module.warp, probes/module_error_file/uses_broken.warp.
+- Browser (card dev-opens-browser): `warp dev` from a terminal opens its page in the default browser
+  (dev_server::serve_and_open, `open` / `xdg-open` / `start`); piped, under WARP_NO_WINDOW or CI it only prints the
+  address, and `dev_server::serve` (tests) never opens. Test warp_dev_opens_no_browser_when_piped.
+- Error marks (card web-dev-marks, 2026-10-12): dev.js devErrorPieces turns the failure's excerpt (`  2 | source` over
+  its carets) into the source line with the failing word underlined as playground.css .marked-error, the message on
+  hover (tests/web/test_dev_marks.rs runs it under node). Warnings of a good build are not shown.
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
 - Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of
@@ -514,4 +589,12 @@ Each step is useful on its own and is what the next ones stand on.
 - Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
   focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
   focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
-- Not here: live regions for async content (card web-a11y-live). Markup built at run time (strings, computed tags) is not checked (card web-a11y-runtime).
+- Markup built at run time (card web-a11y-runtime): the markup a run hands back (pipeline checked_markup) goes through the
+  same rules; a computed tag comes back as a text (`("h" + level): title` as `"h2": …`) and is named like a tag as
+  written. Problems the markup as written already showed are not repeated; the others are runtime warnings
+  (`markup built at run time: h3 after h1 skips a heading level; fix: h2`), each once a run. Sample
+  samples/computed_tags.warp. Not checked: markup only a later page event builds (the playground renders it in its
+  module, headless Page re-renders through page·html).
+- Live regions (card web-a11y-live): the outermost element whose own content reads a fetched value (`users := fetch …`)
+  gets aria-live="polite" (fetch_signals.rs with_live_regions), so a screen reader announces it when it arrives; an
+  element setting aria-live keeps its own. Sample samples/live_region.warp.

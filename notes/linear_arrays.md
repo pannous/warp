@@ -15,6 +15,11 @@ picking it automatically."
   `#xs`, `count(xs)`, `xs.count` or `for x in xs`, becomes `linear xs = float[n]`. dot of 10^6 then runs as
   linear_dotf (2–3 ms) instead of over GC lists (13 ms). Anything else (a reassignment, `print(xs)`, a call, an
   append, a GC list partner) keeps both as GC lists. samples/dot.warp has no `linear` any more.
+- Mapped by a numeric kernel (card auto-linear-floats, 2026-10-12): `xs.map(x => body)` / `map(xs, x => body)` whose
+  lambda gpu_maps::kernel translates (arithmetic, sqrt, sin, max …, captured numbers) counts like a dot pairing, so a
+  plain `xs = float[n]` becomes linear and the map runs as the f64x2 kernel or one loop into a new block. A lambda
+  calling a user function keeps the GC list. probes/perf/auto_linear_map.warp (20 maps of 10^6 in a loop): 0.08 s;
+  main ran out of fuel after 15 s there (card map-inside: a GC-list map inside a loop body is quadratic).
 - Reads like any list: `xs#i`, `xs#i = v`, `xs#i += v`, `#xs`, `count xs`, `xs.count`, `for x in xs {…}`, passing
   it to a function (by reference, as shared arrays); used as a whole value (printed, returned) it is the list of its
   cells. Outside 1..n: `index out of range`. A `go` cannot take one (an error says to use `shared`): another task has

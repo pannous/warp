@@ -7,6 +7,7 @@
 //! for a server function's value (without_serving).
 
 use super::nodes::{call, key};
+use crate::declarations::word;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORDS;
@@ -18,6 +19,9 @@ const REQUEST_WORD: &str = "request";
 const ANY_TYPE: &str = "any";
 pub(crate) const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 const SERVER_WORD: &str = "server";
+/// `header "name" "value"` and `status 418` in a route's body (with_answer_headers)
+const HEADER_WORD: &str = "header";
+const STATUS_WORD: &str = "status";
 const RPC_PREFIX: &str = "/rpc/";
 const RPC_METHOD: &str = "POST";
 /// `f·rpc·0`: the value of the page's first call of the server function f
@@ -50,7 +54,10 @@ pub const PAGE_SUBMITTED: &str = "page·submitted";
 /// `·` of a generated name as written in code (it would parse as a product)
 const NAME_DOT: &str = "_dot_";
 /// What a WAGI build (`warp build --wagi`, lib/wagi.warp, which the build uses) ends in: the routes' answer to the request
-const WAGI_ANSWER: &str = "try { wagi_answer(page·submitted(wagi_request())) } catch error { wagi_failed(error.message) }";
+const WAGI_ANSWER: &str =
+	"try { wagi_answer(page·submitted(wagi_request())) } catch error { wagi_failed(error.message) }";
+/// A WAGI build's routes set their answer's headers in lib/wagi.warp, not through the host (no host there, only WASI)
+const WAGI_HEADER: &str = "wagi_header";
 
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
@@ -67,30 +74,53 @@ pub fn lower(program: Node) -> Node {
 		return without_serving(program);
 	}
 	let port = crate::pipeline::serving_port();
-	let program = if port.is_none() { with_local_routes(program) } else { program };
+	let program = if port.is_none() {
+		with_local_routes(program)
+	} else {
+		program
+	};
 	let program = match program {
-		single if port.is_some() && !matches!(single.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)) => {
+		single
+			if port.is_some()
+				&& !matches!(
+					single.drop_meta(),
+					Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)
+				) =>
+		{
 			Node::List(vec![single], Bracket::None, Separator::Newline)
 		}
 		other => other,
 	};
 	match program {
-		Node::List(statements, bracket, separator) if port.is_some() || statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
+		Node::List(statements, bracket, separator)
+			if port.is_some()
+				|| statements
+					.iter()
+					.any(|statement| served(statement).is_some() || server_definition(statement).is_some()) =>
+		{
 			let servers = server_names(&statements);
-			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or_else(|| assigned_asking(statement, &servers))).collect();
+			let statements: Vec<Node> = statements
+				.into_iter()
+				.map(|statement| server_definition(&statement).unwrap_or_else(|| assigned_asking(statement, &servers)))
+				.collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
 			let server_data = ServerData::of(&statements);
 			let mut routes = 0;
 			let serves_itself = statements.iter().any(|statement| served(statement).is_some());
 			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements
-			let (top_level, statements): (Vec<Node>, Vec<Node>) = statements.into_iter().partition(|statement| !serves_itself && port.is_some() && !top_level_routes(statement).is_empty());
-			let mut statements: Vec<Node> = statements.into_iter().flat_map(|statement| match served(&statement) {
-				Some((port, mut routed)) => {
-					routed.extend(calls.iter().cloned());
-					serving(port, routed, &server_data, &mut routes)
-				}
-				None => vec![statement],
-			}).collect();
+			let (top_level, statements): (Vec<Node>, Vec<Node>) = statements
+				.into_iter()
+				.partition(|statement| !serves_itself && port.is_some() && !top_level_routes(statement).is_empty());
+			let mut statements: Vec<Node> = statements
+				.into_iter()
+				.flat_map(|statement| match served(&statement) {
+					Some((port, mut routed)) => {
+						routed.extend(calls.iter().cloned());
+						serving(port, routed, &server_data, &mut routes)
+					}
+					None => vec![statement],
+				})
+				.collect();
 			if let (Some(port), false) = (port, serves_itself) {
 				let routed = top_level.iter().flat_map(top_level_routes).chain(calls).collect();
 				statements.extend(serving(Node::int(i64::from(port)), routed, &server_data, &mut routes));
@@ -99,7 +129,11 @@ pub fn lower(program: Node) -> Node {
 		}
 		single if served(&single).is_some() => {
 			let (port, routed) = served(&single).expect("checked");
-			Node::List(serving(port, routed, &ServerData::default(), &mut 0), Bracket::None, Separator::Semicolon)
+			Node::List(
+				serving(port, routed, &ServerData::default(), &mut 0),
+				Bracket::None,
+				Separator::Semicolon,
+			)
 		}
 		other => other,
 	}
@@ -112,13 +146,10 @@ pub fn serves(code: &str) -> bool {
 	top_level_statements(code).iter().any(is_serving_statement)
 }
 
-/// The tag whose value is a whole page
-const PAGE_TAG: &str = "html";
-
-/// Whether the program's value is a page, `html{ … }` its last statement: plain `warp page.warp` run from a terminal
-/// shows it in a window (main.rs) as `warp app page.warp` does
+/// Whether the program's value is a page, `html{ … }` or any other element (`div{ … }`, card div-opens-app) its last
+/// statement: plain `warp page.warp` run from a terminal shows it in a window (main.rs) as `warp app page.warp` does
 pub fn shows_page(code: &str) -> bool {
-	let is_page_tag = |tag: &Node| tag.symbol_name() == Some(PAGE_TAG);
+	let is_page_tag = |tag: &Node| tag.symbol_name().is_some_and(crate::markup::is_element_tag);
 	top_level_statements(code).last().is_some_and(|last| match last.drop_meta() {
 		Node::Key(tag, Op::Colon, _) => is_page_tag(tag),
 		Node::List(items, _, _) => matches!(items.as_slice(), [tag, body] if is_page_tag(tag) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))),
@@ -127,7 +158,10 @@ pub fn shows_page(code: &str) -> bool {
 }
 
 fn is_serving_statement(statement: &Node) -> bool {
-	served(statement).is_some() || server_definition(statement).is_some() || crate::routes::is_route(statement) || !top_level_routes(statement).is_empty()
+	served(statement).is_some()
+		|| server_definition(statement).is_some()
+		|| crate::routes::is_route(statement)
+		|| !top_level_routes(statement).is_empty()
 }
 
 /// A hosted program without routes (`warp deploy`, card make-deploy) answers anyway: its value is the page at /, and
@@ -138,24 +172,42 @@ pub fn with_default_routes(program: Node) -> Node {
 		return program;
 	}
 	let (mut statements, separator) = match program.drop_meta() {
-		Node::List(statements, Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => (statements.clone(), separator.clone()),
+		Node::List(statements, Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => {
+			(statements.clone(), separator.clone())
+		}
 		_ => (vec![program.clone()], Separator::Newline),
 	};
 	if statements.iter().any(is_serving_statement) {
 		return program;
 	}
 	let functions: Vec<(String, String)> = statements.iter().filter_map(function_route).collect();
-	let value = statements.last().filter(|last| !crate::modules::is_declaration(last) && !is_use(last)).cloned();
+	let value = statements
+		.last()
+		.filter(|last| !crate::modules::is_declaration(last) && !is_use(last))
+		.cloned();
 	if value.is_none() && functions.is_empty() {
 		return program;
 	}
-	let index = value.is_none().then(|| functions.iter().map(|(path, _)| format!("{path:?}")).collect::<Vec<_>>().join(", "));
+	let index = value.is_none().then(|| {
+		functions
+			.iter()
+			.map(|(path, _)| format!("{path:?}"))
+			.collect::<Vec<_>>()
+			.join(", ")
+	});
 	if value.is_some() {
 		statements.pop();
 	}
-	statements.extend(functions.iter().map(|(path, answer)| crate::warp_parser::parse(&format!("get {path:?} {{ {answer} }}"))));
+	statements.extend(
+		functions
+			.iter()
+			.map(|(path, answer)| crate::warp_parser::parse(&format!("get {path:?} {{ {answer} }}"))),
+	);
 	statements.push(match value {
-		Some(value) => with_route_body(crate::warp_parser::parse(&format!("get {:?} {{ ø }}", PAGE_ROUTE)), value),
+		Some(value) => with_route_body(
+			crate::warp_parser::parse(&format!("get {:?} {{ ø }}", PAGE_ROUTE)),
+			value,
+		),
 		None => crate::warp_parser::parse(&format!("get {PAGE_ROUTE:?} {{ [{}] }}", index.unwrap_or_default())),
 	});
 	Node::List(statements, Bracket::None, separator)
@@ -165,11 +217,18 @@ pub fn with_default_routes(program: Node) -> Node {
 fn function_route(statement: &Node) -> Option<(String, String)> {
 	let (head, body, _) = super::memoization::definition_parts(statement)?;
 	let (name, parameters) = match head.drop_meta() {
-		Node::List(items, Bracket::Round, _) if super::nodes::is_call_head(&head) => (items[0].symbol_name()?.to_string(), items[1..].iter().filter_map(super::nodes::parameter_name).collect()),
-		Node::Symbol(name) if body.mentions_any(&[IMPLICIT_PARAMETER]) => (name.clone(), vec![ROUTE_ARGUMENT.to_string()]),
+		Node::List(items, Bracket::Round, _) if super::nodes::is_call_head(&head) => (
+			items[0].symbol_name()?.to_string(),
+			items[1..].iter().filter_map(super::nodes::parameter_name).collect(),
+		),
+		Node::Symbol(name) if body.mentions_any(&[IMPLICIT_PARAMETER]) => {
+			(name.clone(), vec![ROUTE_ARGUMENT.to_string()])
+		}
 		_ => return None,
 	};
-	let path: String = std::iter::once(format!("/{name}")).chain(parameters.iter().map(|parameter| format!("/:{parameter}"))).collect();
+	let path: String = std::iter::once(format!("/{name}"))
+		.chain(parameters.iter().map(|parameter| format!("/:{parameter}")))
+		.collect();
 	Some((path, format!("{name}({})", parameters.join(", "))))
 }
 
@@ -179,7 +238,9 @@ fn is_use(statement: &Node) -> bool {
 
 /// The route with `body` in place of its block's ø
 fn with_route_body(route: Node, body: Node) -> Node {
-	let Node::List(mut items, bracket, separator) = route.drop_meta().clone() else { return route };
+	let Node::List(mut items, bracket, separator) = route.drop_meta().clone() else {
+		return route;
+	};
 	if let Some(Node::List(_, block_bracket, block_separator)) = items.pop().map(|block| block.drop_meta().clone()) {
 		items.push(Node::List(vec![body], block_bracket, block_separator));
 	}
@@ -188,7 +249,9 @@ fn with_route_body(route: Node, body: Node) -> Node {
 
 /// Whether the program has its own `serve PORT {…}`
 pub fn serves_itself(code: &str) -> bool {
-	top_level_statements(code).iter().any(|statement| served(statement).is_some())
+	top_level_statements(code)
+		.iter()
+		.any(|statement| served(statement).is_some())
 }
 
 /// The program's statements, read quietly: running it says its hints and warnings
@@ -218,38 +281,93 @@ fn top_level_routes(statement: &Node) -> Vec<Route> {
 /// main-level `page·path` (page_path(), set anew by page·navigated when the page goes to another path), so the page asks
 /// POST /rpc/route·data·N anew for each path (asking_the_server). The shipped page leaves the server data out
 fn with_route_data(program: Node) -> Node {
-	let Node::List(statements, bracket, separator) = program else { return program };
+	let Node::List(statements, bracket, separator) = program else {
+		return program;
+	};
 	let server_data: Vec<String> = statements.iter().filter_map(server_variable).collect();
-	let reads_server_data = |node: &Node| node.mentions_any(&server_data.iter().map(String::as_str).collect::<Vec<_>>());
-	if server_data.is_empty() || !statements.iter().any(|statement| crate::routes::route(statement).is_some_and(|(_, body)| body.iter().any(reads_server_data))) {
+	let reads_server_data =
+		|node: &Node| node.mentions_any(&server_data.iter().map(String::as_str).collect::<Vec<_>>());
+	if server_data.is_empty()
+		|| !statements.iter().any(|statement| {
+			crate::routes::route(statement).is_some_and(|(_, body)| body.iter().any(reads_server_data))
+		}) {
 		return Node::List(statements, bracket, separator);
 	}
 	let mut data_functions = vec![];
-	let mut lowered: Vec<Node> = vec![parse_named(&format!("{PAGE_PATH} = page_path()")), parse_named(&format!("{PAGE_NAVIGATED}() := {{ global {PAGE_PATH}; {PAGE_PATH} = page_path() }}"))];
+	let mut lowered: Vec<Node> = vec![
+		parse_named(&format!("{PAGE_PATH} = page_path()")),
+		parse_named(&format!(
+			"{PAGE_NAVIGATED}() := {{ global {PAGE_PATH}; {PAGE_PATH} = page_path() }}"
+		)),
+	];
 	for statement in statements {
 		match crate::routes::route(&statement) {
 			Some((pattern, body)) if body.iter().any(reads_server_data) => {
-				let body = body.into_iter().map(|item| data_read(item, &pattern, &reads_server_data, &mut data_functions)).collect();
-				let Node::List(items, route_bracket, route_separator) = statement.drop_meta().clone() else { unreachable!("a route is a list") };
+				let body = body
+					.into_iter()
+					.map(|item| data_read(item, &pattern, &reads_server_data, &mut data_functions))
+					.collect();
+				let Node::List(items, route_bracket, route_separator) = statement.drop_meta().clone() else {
+					unreachable!("a route is a list")
+				};
 				let block = Node::List(body, Bracket::Curly, Separator::Newline);
-				lowered.push(Node::List(vec![items[0].clone(), items[1].clone(), block], route_bracket, route_separator));
+				lowered.push(Node::List(
+					vec![items[0].clone(), items[1].clone(), block],
+					route_bracket,
+					route_separator,
+				));
 			}
 			_ => lowered.push(statement),
 		}
 	}
 	// where the first route stands, after the server data they read (as routes.rs places its functions)
-	let first_route = lowered.iter().position(crate::routes::is_route).unwrap_or(lowered.len());
+	let first_route = lowered
+		.iter()
+		.position(crate::routes::is_route)
+		.unwrap_or(lowered.len());
 	lowered.splice(first_route..first_route, data_functions);
 	// the shipped page asks the server, so the server data's definitions stay on the server
 	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
-		let page_reads = |name: &String| lowered.iter().filter(|statement| server_variable(statement).is_none() && server_definition(statement).is_none() && !is_serving(statement)).any(|statement| statement.mentions_any(&[name]));
+		lowered.retain(|statement| !changes_server_data_only(statement, &reads_server_data));
+		let page_reads = |name: &String| {
+			lowered
+				.iter()
+				.filter(|statement| {
+					server_variable(statement).is_none()
+						&& server_definition(statement).is_none()
+						&& !is_serving(statement)
+				})
+				.any(|statement| statement.mentions_any(&[name]))
+		};
 		let unread: Vec<String> = server_data.iter().filter(|name| !page_reads(name)).cloned().collect();
 		let left_out = |statement: &Node| server_variable(statement).is_some_and(|name| unread.contains(&name));
-		let row_classes: Vec<String> = lowered.iter().filter(|statement| left_out(statement)).filter_map(table_class).collect();
+		let row_classes: Vec<String> = lowered
+			.iter()
+			.filter(|statement| left_out(statement))
+			.filter_map(table_class)
+			.collect();
 		lowered.retain(|statement| !left_out(statement));
-		lowered = lowered.into_iter().map(|statement| crate::database_tables::with_row_ids(statement, &row_classes)).collect();
+		lowered = lowered
+			.into_iter()
+			.map(|statement| crate::database_tables::with_row_ids(statement, &row_classes))
+			.collect();
 	}
 	Node::List(lowered, bracket, separator)
+}
+
+/// A main-level statement that only changes server data (`if count(users) == 0 { users.add(…) }`): it defines nothing
+/// and shows nothing, so it runs on the server, which runs main, and the shipped page leaves it out (card
+/// web-page-server-data); in the browser it would open a table of the page's own
+fn changes_server_data_only(statement: &Node, reads_server_data: &dyn Fn(&Node) -> bool) -> bool {
+	let mut shows = false;
+	statement.visit(&mut |node| shows |= crate::markup::is_markup(node));
+	reads_server_data(statement)
+		&& !shows
+		&& server_variable(statement).is_none()
+		&& server_definition(statement).is_none()
+		&& !is_serving(statement)
+		&& !crate::routes::is_route(statement)
+		&& crate::event_signals::main_level_variables(std::slice::from_ref(statement)).is_empty()
 }
 
 /// `stored todos: [Todo]` or `todos: [Todo] = database.todos`: the class of the table's rows
@@ -259,7 +377,9 @@ fn table_class(statement: &Node) -> Option<String> {
 		Node::List(items, _, _) => items.last()?.drop_meta().clone(),
 		_ => return None,
 	};
-	let Node::Key(_, Op::Colon, list_type) = declared else { return None };
+	let Node::Key(_, Op::Colon, list_type) = declared else {
+		return None;
+	};
 	match list_type.drop_meta() {
 		Node::List(element, Bracket::Square, _) if element.len() == 1 => Some(element[0].drop_meta().name()),
 		_ => None,
@@ -271,7 +391,9 @@ fn table_class(statement: &Node) -> Option<String> {
 fn server_variable(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
 		Node::Key(target, Op::Assign, source) => {
-			let Node::Key(store, Op::Dot, _) = source.drop_meta() else { return None };
+			let Node::Key(store, Op::Dot, _) = source.drop_meta() else {
+				return None;
+			};
 			if !DATABASE_WORDS.contains(&store.drop_meta().name().as_str()) {
 				return None;
 			}
@@ -282,10 +404,16 @@ fn server_variable(statement: &Node) -> Option<String> {
 			}
 		}
 		Node::List(items, _, _) => match items.as_slice() {
-			[word, declaration] if word.drop_meta().name() == crate::stored_values::STORED_WORD => match declaration.drop_meta() {
-				Node::Key(name, Op::Colon, list_type) if matches!(list_type.drop_meta(), Node::List(_, Bracket::Square, _)) => Some(name.drop_meta().name()),
-				_ => None,
-			},
+			[word, declaration] if word.drop_meta().name() == crate::stored_values::STORED_WORD => {
+				match declaration.drop_meta() {
+					Node::Key(name, Op::Colon, list_type)
+						if matches!(list_type.drop_meta(), Node::List(_, Bracket::Square, _)) =>
+					{
+						Some(name.drop_meta().name())
+					}
+					_ => None,
+				}
+			}
 			_ => None,
 		},
 		_ => None,
@@ -320,10 +448,15 @@ impl ServerData {
 	fn of(statements: &[Node]) -> ServerData {
 		let tables: Vec<(String, Node)> = statements.iter().filter_map(table_variable).collect();
 		let mut list_words: Vec<String> = tables.iter().map(|(name, _)| name.clone()).collect();
-		let giving_lists: Vec<String> = statements.iter().filter_map(|statement| match statement.drop_meta() {
-			Node::Key(_, Op::Define, body) if answers_a_list(body, &list_words) => defined_function(statement).map(|(name, _)| name),
-			_ => None,
-		}).collect();
+		let giving_lists: Vec<String> = statements
+			.iter()
+			.filter_map(|statement| match statement.drop_meta() {
+				Node::Key(_, Op::Define, body) if answers_a_list(body, &list_words) => {
+					defined_function(statement).map(|(name, _)| name)
+				}
+				_ => None,
+			})
+			.collect();
 		list_words.extend(giving_lists);
 		ServerData { tables, list_words }
 	}
@@ -333,9 +466,14 @@ impl ServerData {
 /// not done`, a comprehension or a table's query by now), so its ø answers []
 fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
 	match value.drop_meta() {
-		Node::List(items, Bracket::Curly, _) | Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => items.last().is_some_and(|last| answers_a_list(last, list_words)),
+		Node::List(items, Bracket::Curly, _)
+		| Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => {
+			items.last().is_some_and(|last| answers_a_list(last, list_words))
+		}
 		Node::Symbol(name) => list_words.contains(name) || name.starts_with(crate::comprehensions::MADE),
-		Node::List(items, Bracket::Round, _) => items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(name) if list_words.contains(name))),
+		Node::List(items, Bracket::Round, _) => items
+			.first()
+			.is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(name) if list_words.contains(name))),
 		Node::List(_, Bracket::Square, _) => true,
 		_ => crate::database_tables::is_filter_query(value),
 	}
@@ -346,23 +484,46 @@ fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
 /// before lower_where reads the block's variables (a table's filter sends `id` to SQL as a value, card todo-app)
 pub fn bind_path_parameters(program: Node) -> Node {
 	match program {
-		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => Node::List(statements.into_iter().map(with_bound_routes).collect(), bracket, separator),
+		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => {
+			Node::List(
+				statements.into_iter().map(with_bound_routes).collect(),
+				bracket,
+				separator,
+			)
+		}
 		single => with_bound_routes(single),
 	}
 }
 
 /// The statement's routes with their path's parameters bound
 fn with_bound_routes(statement: Node) -> Node {
-	let Node::List(items, bracket, separator) = statement.drop_meta().clone() else { return statement };
+	let Node::List(items, bracket, separator) = statement.drop_meta().clone() else {
+		return statement;
+	};
 	match served(&statement).is_some() {
 		true => {
 			let [serve, port, block] = <[Node; 3]>::try_from(items).expect("served");
-			let Node::List(routes, block_bracket, block_separator) = block.drop_meta().clone() else { unreachable!("served") };
-			let routes = routes.into_iter().map(|route| match route.drop_meta() {
-				Node::List(words, Bracket::None, words_separator) => Node::List(bound_routes(words.clone()), Bracket::None, words_separator.clone()),
-				_ => route,
-			}).collect();
-			Node::List(vec![serve, port, Node::List(bound_routes(routes), block_bracket, block_separator)], bracket, separator)
+			let Node::List(routes, block_bracket, block_separator) = block.drop_meta().clone() else {
+				unreachable!("served")
+			};
+			let routes = routes
+				.into_iter()
+				.map(|route| match route.drop_meta() {
+					Node::List(words, Bracket::None, words_separator) => {
+						Node::List(bound_routes(words.clone()), Bracket::None, words_separator.clone())
+					}
+					_ => route,
+				})
+				.collect();
+			Node::List(
+				vec![
+					serve,
+					port,
+					Node::List(bound_routes(routes), block_bracket, block_separator),
+				],
+				bracket,
+				separator,
+			)
 		}
 		false if !top_level_routes(&statement).is_empty() => Node::List(bound_routes(items), bracket, separator),
 		false => statement,
@@ -376,8 +537,13 @@ fn bound_routes(words: Vec<Node>) -> Vec<Node> {
 	while index + 2 < bound.len() {
 		match METHODS.contains(&bound[index].drop_meta().name().as_str()) {
 			true => {
-				let part = if bound[index].drop_meta().name() == QUERY_METHOD { QUERY_PART } else { BODY_PART };
-				bound[index + 2] = with_request_fields(with_path_parameters(&bound[index + 1], bound[index + 2].clone()), part);
+				let part = if bound[index].drop_meta().name() == QUERY_METHOD {
+					QUERY_PART
+				} else {
+					BODY_PART
+				};
+				bound[index + 2] =
+					with_request_fields(with_path_parameters(&bound[index + 1], bound[index + 2].clone()), part);
 				index += 3;
 			}
 			false => index += 1,
@@ -392,7 +558,9 @@ fn bound_routes(words: Vec<Node>) -> Vec<Node> {
 fn with_request_fields(body: Node, part: &str) -> Node {
 	match body {
 		Node::Symbol(ref name) => match name.strip_prefix(FIELD_MARK) {
-			Some(field) if field.starts_with(|first: char| first.is_alphabetic() || first == '_') => crate::warp_parser::parse(&format!("{REQUEST_WORD}.{part}.{field}")),
+			Some(field) if field.starts_with(|first: char| first.is_alphabetic() || first == '_') => {
+				crate::warp_parser::parse(&format!("{REQUEST_WORD}.{part}.{field}"))
+			}
 			_ => body,
 		},
 		other => other.map_children(|child| with_request_fields(child, part)),
@@ -408,8 +576,13 @@ fn with_path_parameters(path: &Node, body: Node) -> Node {
 		return body;
 	}
 	let items = crate::event_signals::statements_of(&body);
-	let (page_path, request_path) = (crate::warp_parser::parse(PAGE_PATH_CALL), crate::warp_parser::parse(REQUEST_PATH));
-	let bound = crate::routes::route_body(&pattern, &items).into_iter().map(|item| replaced(item, &page_path, &request_path));
+	let (page_path, request_path) = (
+		crate::warp_parser::parse(PAGE_PATH_CALL),
+		crate::warp_parser::parse(REQUEST_PATH),
+	);
+	let bound = crate::routes::route_body(&pattern, &items)
+		.into_iter()
+		.map(|item| replaced(item, &page_path, &request_path));
 	Node::List(bound.collect(), Bracket::Curly, Separator::Newline)
 }
 
@@ -417,7 +590,9 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 	if tables.is_empty() {
 		return body;
 	}
-	let reads = tables.iter().flat_map(|(name, table)| [global(name), key(Node::Symbol(name.clone()), Op::Assign, table.clone())]);
+	let reads = tables
+		.iter()
+		.flat_map(|(name, table)| [global(name), key(Node::Symbol(name.clone()), Op::Assign, table.clone())]);
 	prepended(reads.collect(), body)
 }
 
@@ -428,7 +603,14 @@ fn global(name: &str) -> Node {
 
 /// The block with these statements first; a one-line block of words, `{ last 2 of users }`, is one statement
 fn prepended(first: Vec<Node>, body: Node) -> Node {
-	Node::List(first.into_iter().chain(crate::event_signals::statements_of(&body)).collect(), Bracket::Curly, Separator::Newline)
+	Node::List(
+		first
+			.into_iter()
+			.chain(crate::event_signals::statements_of(&body))
+			.collect(),
+		Bracket::Curly,
+		Separator::Newline,
+	)
 }
 
 /// The item with each value reading server data as the call of a server function giving it; markup and blocks are
@@ -443,11 +625,24 @@ fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> boo
 	let name = format!("{ROUTE_DATA_PREFIX}{}", functions.len());
 	let path = symbol(PATH_PARAMETER);
 	let page_path = crate::warp_parser::parse(PAGE_PATH_CALL);
-	let body: Vec<Node> = crate::routes::route_body(pattern, &[node]).into_iter().map(|item| replaced(item, &page_path, &path)).collect();
-	let guard = crate::warp_parser::parse(&format!("if not route_matches({pattern:?}, {PATH_PARAMETER}) {{ return ø }}"));
+	let body: Vec<Node> = crate::routes::route_body(pattern, &[node])
+		.into_iter()
+		.map(|item| replaced(item, &page_path, &path))
+		.collect();
+	let guard = crate::warp_parser::parse(&format!(
+		"if not route_matches({pattern:?}, {PATH_PARAMETER}) {{ return ø }}"
+	));
 	let head = call(&name.clone(), vec![key(path, Op::Colon, symbol("text"))]);
-	let definition = key(head, Op::Define, Node::List([vec![guard], body].concat(), Bracket::Curly, Separator::Newline));
-	functions.push(Node::List(vec![symbol(SERVER_WORD), definition], Bracket::None, Separator::Space));
+	let definition = key(
+		head,
+		Op::Define,
+		Node::List([vec![guard], body].concat(), Bracket::Curly, Separator::Newline),
+	);
+	functions.push(Node::List(
+		vec![symbol(SERVER_WORD), definition],
+		Bracket::None,
+		Separator::Space,
+	));
 	call(&name, vec![symbol(PAGE_PATH)])
 }
 
@@ -455,8 +650,17 @@ fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> boo
 fn is_markup(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => true,
-		Node::List(items, _, _) => items.last().is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) && items.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(_))),
-		Node::Key(tag, _, block) => matches!(tag.drop_meta(), Node::Symbol(_)) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)),
+		Node::List(items, _, _) => {
+			items
+				.last()
+				.is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _)))
+				&& items
+					.first()
+					.is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(_)))
+		}
+		Node::Key(tag, _, block) => {
+			matches!(tag.drop_meta(), Node::Symbol(_)) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
+		}
 		_ => false,
 	}
 }
@@ -485,23 +689,40 @@ fn with_generated_names(node: Node) -> Node {
 /// route·N(request), as served, and page·submitted(request) calls the one answering the request of a form of the page.
 /// Like an event handler, a route changes the page's variables: those it mentions are its globals
 fn with_local_routes(program: Node) -> Node {
-	let Node::List(statements, bracket, separator) = program else { return program };
-	let Some(first_route) = statements.iter().position(|statement| !top_level_routes(statement).is_empty()) else {
+	let Node::List(statements, bracket, separator) = program else {
+		return program;
+	};
+	let Some(first_route) = statements
+		.iter()
+		.position(|statement| !top_level_routes(statement).is_empty())
+	else {
 		return Node::List(statements, bracket, separator);
 	};
-	let (routed, mut statements): (Vec<Node>, Vec<Node>) = statements.into_iter().partition(|statement| !top_level_routes(statement).is_empty());
+	let (routed, mut statements): (Vec<Node>, Vec<Node>) = statements
+		.into_iter()
+		.partition(|statement| !top_level_routes(statement).is_empty());
 	let mut page_variables = crate::event_signals::main_level_variables(&statements);
 	page_variables.extend(statements.iter().filter_map(server_variable));
 	let mut functions = vec![];
 	let mut answers = vec![];
 	for (index, (method, path, body)) in routed.iter().flat_map(top_level_routes).enumerate() {
 		let function = format!("{ROUTE_PREFIX}{index}");
-		let globals = page_variables.iter().filter(|name| body.mentions_any(&[name.as_str()])).map(|name| global(name)).collect();
+		let globals = page_variables
+			.iter()
+			.filter(|name| body.mentions_any(&[name.as_str()]))
+			.map(|name| global(name))
+			.collect();
 		functions.push(route_function(&function, prepended(globals, body)));
-		answers.push(format!("if request.method == {method:?} and route_matches({}, request.path) {{ return {function}(request) }}", path.serialize()));
+		answers.push(format!(
+			"if request.method == {method:?} and route_matches({}, request.path) {{ return {function}(request) }}",
+			path.serialize()
+		));
 	}
 	let unanswered = "throw \"no route answers \" + request.method + \" \" + request.path";
-	functions.push(parse_named(&format!("{PAGE_SUBMITTED}(request:any) := {{\n{}\n{unanswered}\n}}", answers.join("\n"))));
+	functions.push(parse_named(&format!(
+		"{PAGE_SUBMITTED}(request:any) := {{\n{}\n{unanswered}\n}}",
+		answers.join("\n")
+	)));
 	if crate::pipeline::is_for_wagi() {
 		statements.push(parse_named(WAGI_ANSWER));
 	}
@@ -514,22 +735,51 @@ fn with_local_routes(program: Node) -> Node {
 fn route_function(name: &str, body: Node) -> Node {
 	let request = key(symbol(REQUEST_WORD), Op::Colon, symbol(ANY_TYPE));
 	let head = call(name, vec![request]);
-	key(head, Op::Define, body)
+	key(head, Op::Define, with_answer_headers(body))
+}
+
+/// In a route's body `header "name" "value"` and `status 418` are response_header calls, which the route's HTTP answer
+/// carries (card web-route-header; `status` is the CGI header Status); `header{…}` stays the markup tag
+fn with_answer_headers(node: Node) -> Node {
+	let setter = match crate::pipeline::is_for_wagi() {
+		true => WAGI_HEADER,
+		false => crate::host::RESPONSE_HEADER,
+	};
+	let is_operand = |item: &Node| !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
+	match node.drop_meta() {
+		Node::List(items, Bracket::None | Bracket::Round, _)
+			if items.len() == 3 && word(&items[0]) == HEADER_WORD && items[1..].iter().all(is_operand) =>
+		{
+			call(setter, items[1..].to_vec())
+		}
+		Node::List(items, Bracket::None | Bracket::Round, _)
+			if items.len() == 2 && word(&items[0]) == STATUS_WORD && is_operand(&items[1]) =>
+		{
+			call(setter, vec![text(crate::host::STATUS_HEADER), items[1].clone()])
+		}
+		_ => node.map_children(with_answer_headers),
+	}
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
 /// browser (notes/web_framework.md "Built sites"). Its calls of server functions ask the server (asking_the_server)
 fn without_serving(program: Node) -> Node {
 	match program {
+		// a program of one statement is that statement: a lone `post "/echo" {…}` is a list of words, not of statements;
+		// it leaves no statements, as several routes do (ø would be a value, and the page would show it)
+		single if is_serving(&single) => Node::List(vec![], Bracket::None, Separator::Newline),
 		Node::List(statements, bracket, separator) => {
-			let statements: Vec<Node> = statements.into_iter().filter(|statement| !is_serving(statement)).collect();
+			let statements: Vec<Node> = statements
+				.into_iter()
+				.filter(|statement| !is_serving(statement))
+				.collect();
 			let servers = server_names(&statements);
 			if servers.is_empty() {
 				return Node::List(statements, bracket, separator);
 			}
-			asking_the_server(statements, &servers).map_or_else(|error| error, |statements| Node::List(statements, bracket, separator))
+			asking_the_server(statements, &servers)
+				.map_or_else(|error| error, |statements| Node::List(statements, bracket, separator))
 		}
-		single if served(&single).is_some() => Node::Empty,
 		other => other,
 	}
 }
@@ -539,24 +789,52 @@ fn without_serving(program: Node) -> Node {
 /// argument changes (lowering/fetch_signals.rs); its first value is what the call gave the prerender
 /// (pipeline::prerendering), which keeps the functions and calls them, and exports the values as rpc·values (site.rs)
 fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<Node>, Node> {
-	let page_code: Vec<Node> = statements.iter().filter(|statement| server_definition(statement).is_none()).cloned().collect();
+	let page_code: Vec<Node> = statements
+		.iter()
+		.filter(|statement| server_definition(statement).is_none())
+		.cloned()
+		.collect();
 	let calls = server_calls(&page_code, servers);
 	// a page calling no server function needs none of them, prerendered or not
 	let prerendering = crate::pipeline::is_prerendering() && !calls.is_empty();
 	let main_variables = crate::event_signals::main_level_variables(&page_code);
-	let functions: HashSet<String> = statements.iter().filter_map(|statement| defined_function(&server_definition(statement).unwrap_or_else(|| statement.clone()))).map(|(name, _)| name).collect();
-	if let Some(error) = calls.iter().find_map(|call| local_argument(call, &main_variables, &functions)) {
+	let functions: HashSet<String> = statements
+		.iter()
+		.filter_map(|statement| defined_function(&server_definition(statement).unwrap_or_else(|| statement.clone())))
+		.map(|(name, _)| name)
+		.collect();
+	if let Some(error) = calls
+		.iter()
+		.find_map(|call| local_argument(call, &main_variables, &functions))
+	{
 		return Err(error);
 	}
 	// `g := f(x)` names the value of its call g
-	let names: Vec<String> = calls.iter().enumerate().map(|(index, call)| page_code.iter().find_map(|statement| defined_as(statement, call)).unwrap_or_else(|| format!("{}{RPC_VALUE_INFIX}{index}", callee(call)))).collect();
+	let names: Vec<String> = calls
+		.iter()
+		.enumerate()
+		.map(|(index, call)| {
+			page_code
+				.iter()
+				.find_map(|statement| defined_as(statement, call))
+				.unwrap_or_else(|| format!("{}{RPC_VALUE_INFIX}{index}", callee(call)))
+		})
+		.collect();
 	let read = |node: Node| with_calls_read(node, &calls, &names);
 	let asking = |index: usize| {
-		let call = Node::List(call_items(&calls[index]).into_iter().map(&read).collect(), Bracket::Round, Separator::None);
+		let call = Node::List(
+			call_items(&calls[index]).into_iter().map(&read).collect(),
+			Bracket::Round,
+			Separator::None,
+		);
 		let value = if prerendering {
 			call.clone()
 		} else {
-			let fetch = Node::List(vec![symbol(crate::host::FETCH_WORD), rpc_request(&call)], Bracket::None, Separator::Space);
+			let fetch = Node::List(
+				vec![symbol(crate::host::FETCH_WORD), rpc_request(&call)],
+				Bracket::None,
+				Separator::Space,
+			);
 			key(fetch, Op::Coalesce, crate::pipeline::server_value(index))
 		};
 		let op = if prerendering { Op::Assign } else { Op::Define };
@@ -577,35 +855,59 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 			},
 		}
 	}
-	let mut asked: Vec<(usize, usize, Node)> = (0..calls.len()).filter(|index| !asked_in_place.contains(index)).map(|index| {
-		let (call, statement) = asking(index);
-		(asked_at(&kept, &names[index], &call, &main_variables), index, statement)
-	}).collect();
+	let mut asked: Vec<(usize, usize, Node)> = (0..calls.len())
+		.filter(|index| !asked_in_place.contains(index))
+		.map(|index| {
+			let (call, statement) = asking(index);
+			(asked_at(&kept, &names[index], &call, &main_variables), index, statement)
+		})
+		.collect();
 	// the last first: an inner call (a later index) before the call around it
 	asked.sort_by_key(|(position, index, _)| std::cmp::Reverse((*position, std::cmp::Reverse(*index))));
 	for (position, _, statement) in asked {
 		kept.insert(position, statement);
 	}
 	if prerendering {
-		let values = Node::List(names.iter().cloned().map(Node::Symbol).collect(), Bracket::Square, Separator::Colon);
-		let requests = Node::List((0..calls.len()).map(|index| rpc_request(&asking(index).0)).collect(), Bracket::Square, Separator::Colon);
+		let values = Node::List(
+			names.iter().cloned().map(Node::Symbol).collect(),
+			Bracket::Square,
+			Separator::Colon,
+		);
+		let requests = Node::List(
+			(0..calls.len()).map(|index| rpc_request(&asking(index).0)).collect(),
+			Bracket::Square,
+			Separator::Colon,
+		);
 		let globals: HashSet<String> = main_variables.into_iter().chain(names).collect();
 		// first: the last statement shows the page
-		kept.insert(0, crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals));
-		kept.insert(0, crate::event_signals::function_with_globals(RPC_REQUESTS, false, &[requests], &globals));
+		kept.insert(
+			0,
+			crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals),
+		);
+		kept.insert(
+			0,
+			crate::event_signals::function_with_globals(RPC_REQUESTS, false, &[requests], &globals),
+		);
 	}
 	Ok(kept)
 }
 
 fn server_names(statements: &[Node]) -> Vec<String> {
-	statements.iter().filter_map(server_definition).filter_map(|definition| defined_function(&definition)).map(|(name, _)| name).collect()
+	statements
+		.iter()
+		.filter_map(server_definition)
+		.filter_map(|definition| defined_function(&definition))
+		.map(|(name, _)| name)
+		.collect()
 }
 
 /// `g := f(x)` of a server function f, the page's asking form, is on the server the value it renders, as in the
 /// prerender (asking_the_server): `g = f(x)`
 fn assigned_asking(statement: Node, servers: &[String]) -> Node {
 	match statement.drop_meta() {
-		Node::Key(target, Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(_)) && is_server_call(value, servers) => {
+		Node::Key(target, Op::Define, value)
+			if matches!(target.drop_meta(), Node::Symbol(_)) && is_server_call(value, servers) =>
+		{
 			Node::Key(target.clone(), Op::Assign, value.clone())
 		}
 		_ => statement,
@@ -614,8 +916,12 @@ fn assigned_asking(statement: Node, servers: &[String]) -> Node {
 
 /// `g := f(x)` of the call: g
 fn defined_as(statement: &Node, call: &Node) -> Option<String> {
-	let Node::Key(target, Op::Define, value) = statement.drop_meta() else { return None };
-	let Node::Symbol(name) = target.drop_meta() else { return None };
+	let Node::Key(target, Op::Define, value) = statement.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(name) = target.drop_meta() else {
+		return None;
+	};
 	(value.serialize() == call.serialize()).then(|| name.clone())
 }
 
@@ -634,16 +940,21 @@ fn server_calls(page_code: &[Node], servers: &[String]) -> Vec<Node> {
 
 /// `f(a, b)` / `f a` of a server function f
 fn is_server_call(node: &Node, servers: &[String]) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Round | Bracket::None, _)) && crate::tuples::call_parts(node).is_some_and(|(name, _)| servers.iter().any(|server| server == name))
+	matches!(node.drop_meta(), Node::List(_, Bracket::Round | Bracket::None, _))
+		&& crate::tuples::call_parts(node).is_some_and(|(name, _)| servers.iter().any(|server| server == name))
 }
 
 fn callee(call: &Node) -> String {
-	crate::tuples::call_parts(call).map(|(name, _)| name.to_string()).unwrap_or_default()
+	crate::tuples::call_parts(call)
+		.map(|(name, _)| name.to_string())
+		.unwrap_or_default()
 }
 
 /// The callee and the arguments of a call, `f(a, b)` written either way
 fn call_items(call: &Node) -> Vec<Node> {
-	let Some((name, arguments)) = crate::tuples::call_parts(call) else { return vec![call.clone()] };
+	let Some((name, arguments)) = crate::tuples::call_parts(call) else {
+		return vec![call.clone()];
+	};
 	let arguments = match arguments {
 		[single] => match single.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.clone(),
@@ -658,7 +969,11 @@ fn call_items(call: &Node) -> Vec<Node> {
 fn rpc_request(call: &Node) -> Node {
 	let items = call_items(call);
 	let path = Node::Text(format!("{RPC_PREFIX}{}", callee(call)));
-	Node::List(vec![path, Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon)], Bracket::Square, Separator::Colon)
+	Node::List(
+		vec![path, Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon)],
+		Bracket::Square,
+		Separator::Colon,
+	)
 }
 
 /// Each of the calls in `node` as the variable holding its value
@@ -671,9 +986,22 @@ fn with_calls_read(node: Node, calls: &[Node], names: &[String]) -> Node {
 
 /// Where the page asks: before the first statement reading the value, after its arguments got their first values
 fn asked_at(statements: &[Node], name: &str, call: &Node, main_variables: &HashSet<String>) -> usize {
-	let first_read = statements.iter().position(|statement| statement.mentions_any(&[name])).unwrap_or(statements.len());
-	let arguments: Vec<String> = crate::variable_signals::symbols(call).into_iter().filter(|symbol| main_variables.contains(symbol)).collect();
-	let first_assigned = |variable: &String| statements.iter().position(|statement| crate::event_signals::main_level_variables(std::slice::from_ref(statement)).contains(variable)).map_or(0, |index| index + 1);
+	let first_read = statements
+		.iter()
+		.position(|statement| statement.mentions_any(&[name]))
+		.unwrap_or(statements.len());
+	let arguments: Vec<String> = crate::variable_signals::symbols(call)
+		.into_iter()
+		.filter(|symbol| main_variables.contains(symbol))
+		.collect();
+	let first_assigned = |variable: &String| {
+		statements
+			.iter()
+			.position(|statement| {
+				crate::event_signals::main_level_variables(std::slice::from_ref(statement)).contains(variable)
+			})
+			.map_or(0, |index| index + 1)
+	};
 	arguments.iter().map(first_assigned).fold(first_read, usize::max)
 }
 
@@ -682,25 +1010,41 @@ fn local_argument(call: &Node, main_variables: &HashSet<String>, functions: &Has
 	let items = call_items(call);
 	let mut heads = HashSet::new();
 	for argument in &items[1..] {
-		argument.visit(&mut |node| if let Some((name, _)) = crate::tuples::call_parts(node) { heads.insert(name.to_string()); });
+		argument.visit(&mut |node| {
+			if let Some((name, _)) = crate::tuples::call_parts(node) {
+				heads.insert(name.to_string());
+			}
+		});
 	}
-	let known = |symbol: &String| main_variables.contains(symbol) || functions.contains(symbol) || heads.contains(symbol);
-	let local = items[1..].iter().flat_map(crate::variable_signals::symbols).find(|symbol| !known(symbol))?;
+	let known =
+		|symbol: &String| main_variables.contains(symbol) || functions.contains(symbol) || heads.contains(symbol);
+	let local = items[1..]
+		.iter()
+		.flat_map(crate::variable_signals::symbols)
+		.find(|symbol| !known(symbol))?;
 	let name = callee(call);
 	Some(crate::diagnostic::Diagnostic::at(call, format!("the page asks the server for {name}(…) before its code runs, so it sends main-level values only, not {local}: compute {local} at the main level or call {name} from a function of the server (POST {RPC_PREFIX}{name}, notes/server_routes.md)")).into_error())
 }
 
 /// `serve port {routes}`: the port and each route's method, path and body
 fn served(statement: &Node) -> Option<(Node, Vec<Route>)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let [serve, port, block] = items.as_slice() else { return None };
-	let Node::List(routes, Bracket::Curly, _) = block.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let [serve, port, block] = items.as_slice() else {
+		return None;
+	};
+	let Node::List(routes, Bracket::Curly, _) = block.drop_meta() else {
+		return None;
+	};
 	(serve.drop_meta().name() == SERVE_WORD).then(|| (port.clone(), routes_in(routes)))
 }
 
 /// `server def f(…) {…}` / `server f(…) := …`: the definition itself
 fn server_definition(statement: &Node) -> Option<Node> {
-	let Node::List(items, bracket, separator) = statement.drop_meta() else { return None };
+	let Node::List(items, bracket, separator) = statement.drop_meta() else {
+		return None;
+	};
 	let (word, definition) = items.split_first()?;
 	if word.drop_meta().name() != SERVER_WORD || definition.is_empty() {
 		return None;
@@ -717,8 +1061,12 @@ fn server_definition(statement: &Node) -> Option<Node> {
 
 /// `f(a, b:int) := …` as `f(a:any, b:int) := …`: an RPC's arguments are JSON values of any kind
 fn with_any_parameters(definition: Node) -> Node {
-	let Node::Key(head, Op::Define, body) = definition.drop_meta().clone() else { return definition };
-	let Node::List(items, bracket, separator) = head.drop_meta().clone() else { return definition };
+	let Node::Key(head, Op::Define, body) = definition.drop_meta().clone() else {
+		return definition;
+	};
+	let Node::List(items, bracket, separator) = head.drop_meta().clone() else {
+		return definition;
+	};
 	let any = |parameter: Node| match parameter.drop_meta() {
 		Node::Symbol(_) => key(parameter, Op::Colon, symbol(ANY_TYPE)),
 		_ => parameter,
@@ -733,27 +1081,46 @@ fn rpc_route(definition: &Node) -> Option<Route> {
 	let (name, parameters) = defined_function(definition)?;
 	let arguments = (1..=parameters).map(|index| crate::warp_parser::parse(&format!("{REQUEST_WORD}.body#{index}")));
 	// built, not parsed: a generated name's `·` would parse as a product
-	let call = Node::List(std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect(), Bracket::Round, Separator::None);
-	Some((RPC_METHOD.to_string(), Node::Text(format!("{RPC_PREFIX}{name}")), Node::List(vec![call], Bracket::Curly, Separator::None)))
+	let call = Node::List(
+		std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect(),
+		Bracket::Round,
+		Separator::None,
+	);
+	Some((
+		RPC_METHOD.to_string(),
+		Node::Text(format!("{RPC_PREFIX}{name}")),
+		Node::List(vec![call], Bracket::Curly, Separator::None),
+	))
 }
 
 /// The name and parameter count of the function a definition defines
 fn defined_function(definition: &Node) -> Option<(String, usize)> {
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, definition);
-	context.user_functions.into_values().next().map(|function| (function.name, function.params.len()))
+	let context = crate::analyzer::function_definitions(definition);
+	context
+		.user_functions
+		.into_values()
+		.next()
+		.map(|function| (function.name, function.params.len()))
 }
 
 /// The routes of a block, one per line (`get "/" {…}` each) or in a row
 fn routes_in(items: &[Node]) -> Vec<Route> {
-	let words: Vec<Node> = items.iter().flat_map(|item| match item.drop_meta() {
-		Node::List(parts, Bracket::None, _) => parts.clone(),
-		other => vec![other.clone()],
-	}).collect();
-	words.chunks(3).filter_map(|route| match route {
-		[method, path, body] if METHODS.contains(&method.drop_meta().name().as_str()) => Some((method.drop_meta().name().to_uppercase(), path.clone(), body.clone())),
-		_ => None,
-	}).collect()
+	let words: Vec<Node> = items
+		.iter()
+		.flat_map(|item| match item.drop_meta() {
+			Node::List(parts, Bracket::None, _) => parts.clone(),
+			other => vec![other.clone()],
+		})
+		.collect();
+	words
+		.chunks(3)
+		.filter_map(|route| match route {
+			[method, path, body] if METHODS.contains(&method.drop_meta().name().as_str()) => {
+				Some((method.drop_meta().name().to_uppercase(), path.clone(), body.clone()))
+			}
+			_ => None,
+		})
+		.collect()
 }
 
 /// The route functions, then the call that serves them

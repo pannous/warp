@@ -6,7 +6,12 @@ use std::path::PathBuf;
 fn build_errors(name: &str, source: &str) -> String {
 	let source_path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}.warp"));
 	std::fs::write(&source_path, source).unwrap();
-	let build = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).args(["build", "--exe"]).arg(&source_path).output().unwrap();
+	let build = crate::common::warp_command()
+		.env("WARP_RUNTIME_STUB", crate::common::runtime_stub())
+		.args(["build", "--exe"])
+		.arg(&source_path)
+		.output()
+		.unwrap();
 	assert!(!build.status.success());
 	String::from_utf8_lossy(&build.stderr).into_owned()
 }

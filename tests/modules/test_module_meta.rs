@@ -25,7 +25,10 @@ fn an_imported_warp_module_reflects_its_functions() {
 
 #[test]
 fn the_meta_section_names_functions_and_classes() {
-	let module = warp::pipeline::compile("class P{width:int; height:int; area() := width * height}\nf(a:int) := a + 1\nf(P(1, 2).area())").expect("a module");
+	let module = warp::pipeline::compile(
+		"class P{width:int; height:int; area() := width * height}\nf(a:int) := a + 1\nf(P(1, 2).area())",
+	)
+	.expect("a module");
 	let functions = warp::meta_section::entry(&module.bytes, "functions").expect("a functions entry");
 	assert_eq!(functions["f"]["signature"].serialize(), "\"(a:int) -> int\"");
 	let classes = warp::meta_section::entry(&module.bytes, "classes").expect("a classes entry");

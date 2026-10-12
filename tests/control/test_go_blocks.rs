@@ -14,8 +14,14 @@ fn a_go_block_prints_after_the_program_goes_on() {
 
 #[test]
 fn a_go_block_does_not_hold_up_the_program() {
-	is!("def hi: {sleep(1000);print('hi')}; started = clock(); go { hi() }; clock() - started < 500", true);
-	is!("hi() := { sleep(1000); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500", true);
+	is!(
+		"def hi: {sleep(1000);print('hi')}; started = clock(); go { hi() }; clock() - started < 500",
+		true
+	);
+	is!(
+		"hi() := { sleep(1000); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500",
+		true
+	);
 }
 
 #[test]
@@ -40,7 +46,10 @@ fn sleep_takes_a_duration() {
 /// A go block inside a call or a loop: `jobs.add(go { … })` keeps the task, the loop variable goes in at its start
 #[test]
 fn go_blocks_fill_a_job_list() {
-	is!("jobs = []; for i in 1..4 { jobs.add(go { sleep(100); i * 10 }) }; await all jobs", warp::ints(vec![10, 20, 30]));
+	is!(
+		"jobs = []; for i in 1..4 { jobs.add(go { sleep(100); i * 10 }) }; await all jobs",
+		warp::ints(vec![10, 20, 30])
+	);
 	is!("f(n) := { job = go { n + 1 }; await job }; f(4)", 5);
 }
 
@@ -51,14 +60,20 @@ fn lines_printed_by_tasks_stay_whole() {
 	let printed = crate::common::printed("for i in 10..30 { go { print(i) } }");
 	let lines: Vec<&str> = printed.lines().filter(|line| !line.starts_with('»')).collect();
 	assert_eq!(lines.len(), 20, "printed {printed:?}");
-	assert!(lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()), "printed {printed:?}");
+	assert!(
+		lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()),
+		"printed {printed:?}"
+	);
 }
 
 /// `f() := { go h(2) }` is a function in braces, no getter: no warning about running at every read
 #[test]
 #[cfg(feature = "native")]
 fn a_function_starting_a_task_is_no_getter() {
-	let output = crate::common::warp_command().args(["--no-ask", "h(x) := { print(x) }; f() := { go h(2) }; f()"]).output().expect("warp runs");
+	let output = crate::common::warp_command()
+		.args(["--no-ask", "h(x) := { print(x) }; f() := { go h(2) }; f()"])
+		.output()
+		.expect("warp runs");
 	let errors = String::from_utf8_lossy(&output.stderr);
 	assert!(!errors.contains("at every read"), "warned {errors:?}");
 }

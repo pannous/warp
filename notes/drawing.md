@@ -3,7 +3,8 @@
 One pipeline paints, on the GPU or without one: `paint(pixels, width, height)` shows a list of 0xAARRGGBB numbers,
 natively in a window (a PNG with WARP_NO_WINDOW or CI, src/paint.rs) and in the playground on a canvas
 (playground.js showPaintings, ⛶ full screen). `paint(shader, w, h, values)` renders WGSL to those pixels first
-(notes/web_framework.md "Values", "Holes").
+(notes/web_framework.md "Values", "Holes"). Without a size, `paint(x)` / `paint(x, values)` take the program's
+`width` and `height` variables, else view_width × view_height (src/shader_holes.rs with_sizes).
 
 `use draw` (lib/draw.warp) keeps a canvas of such pixels: `canvas(w, h)`, `clear`, `dot`, `rect`, `circle`, `line`,
 colors (`red`, `rgb`, `hsv`, `with_alpha`), and `show()` paints it. tests/programs/test_draw.rs.

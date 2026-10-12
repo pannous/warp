@@ -1,5 +1,5 @@
-use crate::is;
 use crate::common;
+use crate::is;
 
 #[test]
 fn test_float_modulo_keeps_fraction() {

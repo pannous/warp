@@ -49,12 +49,7 @@ impl WarpParser {
 		if node == Empty {
 			return node;
 		}
-		let node = node.with_meta_data(LineInfo {
-			line_nr,
-			column,
-			#[cfg(debug_assertions)]
-			line: self.current_line.s(),
-		});
+		let node = node.with_meta_data(LineInfo::at(line_nr, column, || self.current_line.s()));
 		// Attach preceding comment as metadata
 		if let Some(comment_text) = comment {
 			node.with_comment(comment_text)
@@ -71,10 +66,18 @@ impl WarpParser {
 		self.advance(); // skip opening quote
 
 		// `Hello ${name}`: a JavaScript template literal is warp's interpolated text (card text-backtick)
-		let interpolates = (quote == '"' || quote == BACKTICK) && !self.options.data_mode && !self.options.xml_mode && !self.options.wit_mode;
+		let interpolates = (quote == '"' || quote == BACKTICK)
+			&& !self.options.data_mode
+			&& !self.options.xml_mode
+			&& !self.options.wit_mode;
 		if quote == BACKTICK {
 			set_hint_position(quote_line, quote_column);
-			crate::diagnostic::educate_once(BACKTICK_TOPIC, "`…${x}…`", "\"…\\(x)…\"", "warp writes texts in double quotes");
+			crate::diagnostic::educate_once(
+				BACKTICK_TOPIC,
+				"`…${x}…`",
+				"\"…\\(x)…\"",
+				"warp writes texts in double quotes",
+			);
 		}
 		let mut s = String::new();
 		// the same literal in injection::parts syntax (holes `${expr}`, literal dollars `$$`), kept while it has a hole
@@ -83,7 +86,9 @@ impl WarpParser {
 		loop {
 			let ch = self.current_char();
 			if ch == '\0' {
-				let message = format!("Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`");
+				let message = format!(
+					"Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`"
+				);
 				return missing_closer(message, closing, crate::fixits::end_of_line(&self.input, quote_line));
 			}
 			if ch == closing {
@@ -123,7 +128,10 @@ impl WarpParser {
 				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
 				match escaped {
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
-						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1) else { unreachable!("a letter follows") };
+						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
+						else {
+							unreachable!("a letter follows")
+						};
 						let Some(characters) = crate::uniscript_entities::entity(&name) else {
 							if let Err(strict) = self.warn_unknown_entity(&name, self.column - 1) {
 								return strict;
@@ -141,7 +149,9 @@ impl WarpParser {
 					't' => '\t',
 					'r' => '\r',
 					'e' => ESCAPE_CHARACTER,
-					'x' if self.peek_char(1).is_ascii_hexdigit() && self.peek_char(2).is_ascii_hexdigit() => self.hex_byte_escape(),
+					'x' if self.peek_char(1).is_ascii_hexdigit() && self.peek_char(2).is_ascii_hexdigit() => {
+						self.hex_byte_escape()
+					}
 					'u' if self.peek_char(1) == '{' => or_return_error!(self.unicode_escape()),
 					c => c,
 				}
@@ -168,12 +178,26 @@ impl WarpParser {
 			}
 			return Node::text(&text);
 		};
-		match self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
+		match self
+			.number_cast_follows()
+			.filter(|_| interpolates && !c.is_ascii_digit())
+		{
 			Some(number_type) => {
 				let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
 				let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
-				Diagnostic { message, line, column, ..Default::default() }.fix(&explicit)
-					.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit).into_error()
+				Diagnostic {
+					message,
+					line,
+					column,
+					..Default::default()
+				}
+				.fix(&explicit)
+				.offer(
+					"the code point of the character",
+					format!("\"{c}\" as {number_type}"),
+					explicit,
+				)
+				.into_error()
 			}
 			None => Node::codepoint(c),
 		}
@@ -182,7 +206,12 @@ impl WarpParser {
 	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
 	pub(super) fn warn_unknown_entity(&self, name: &str, column: usize) -> Result<(), Node> {
 		let message = crate::uniscript_entities::unknown_entity(name);
-		crate::diagnostic::report(&[Diagnostic { message, line: self.line_nr, column, ..Default::default() }])
+		crate::diagnostic::report(&[Diagnostic {
+			message,
+			line: self.line_nr,
+			column,
+			..Default::default()
+		}])
 	}
 
 	/// Python's `f"hi {name}"` at the cursor: interpolated text whose holes are braces, `"hi \(name)"`
@@ -191,7 +220,12 @@ impl WarpParser {
 			return None;
 		}
 		set_hint_position(self.line_nr, self.column);
-		crate::diagnostic::educate_once(F_STRING_TOPIC, "f\"…{x}…\"", "\"…\\(x)…\"", "warp text interpolates without a prefix");
+		crate::diagnostic::educate_once(
+			F_STRING_TOPIC,
+			"f\"…{x}…\"",
+			"\"…\\(x)…\"",
+			"warp text interpolates without a prefix",
+		);
 		self.advance();
 		let outer = std::mem::replace(&mut self.brace_holes, true);
 		let text = self.parse_string();
@@ -205,7 +239,9 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		let word = SHADER_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
+		let word = SHADER_WORDS
+			.iter()
+			.find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
 		let mut open = word.len();
 		if self.is_identifier_start(open) || self.peek_char(open).is_ascii_digit() {
 			return None;
@@ -219,7 +255,11 @@ impl WarpParser {
 		let start = self.pos + open + 1;
 		let Some(end) = closing_brace(&self.chars[start..]).map(|length| start + length) else {
 			self.advance_by(self.chars.len() - self.pos);
-			return Some(missing_closer(format!("the {{ of `{word} {{ … }}` is never closed"), "}", crate::fixits::end_of_source(&self.input)));
+			return Some(missing_closer(
+				format!("the {{ of `{word} {{ … }}` is never closed"),
+				"}",
+				crate::fixits::end_of_source(&self.input),
+			));
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);
@@ -243,10 +283,15 @@ impl WarpParser {
 			hex.push(self.current_char());
 		}
 		if self.peek_char(1) != '}' {
-			return Err(format!("\\u{{{hex}…: a unicode escape is hex digits in braces, like \\u{{e9}}"));
+			return Err(format!(
+				"\\u{{{hex}…: a unicode escape is hex digits in braces, like \\u{{e9}}"
+			));
 		}
 		self.advance(); // now at `}`
-		u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).ok_or_else(|| format!("\\u{{{hex}}} is no unicode code point"))
+		u32::from_str_radix(&hex, 16)
+			.ok()
+			.and_then(char::from_u32)
+			.ok_or_else(|| format!("\\u{{{hex}}} is no unicode code point"))
 	}
 
 	/// The number type of a following `as int` / `as float` …
@@ -255,7 +300,8 @@ impl WarpParser {
 		let words: Vec<&str> = rest.split_whitespace().take(2).collect();
 		let number_type = words.get(1)?.trim_end_matches(|c: char| !is_identifier_char(c));
 		use crate::type_kinds::Kind::{Float, Int};
-		let is_number = matches!(crate::analyzer::builtin_type_kind(number_type), Some(Int | Float)) && !number_type.starts_with("bool");
+		let is_number = matches!(crate::analyzer::builtin_type_kind(number_type), Some(Int | Float))
+			&& !number_type.starts_with("bool");
 		(words.first() == Some(&"as") && is_number).then(|| number_type.to_string())
 	}
 
@@ -302,7 +348,11 @@ impl WarpParser {
 					if depth == 0 {
 						let expression: String = self.chars[start..self.pos].iter().collect();
 						self.advance();
-						return if expression.trim().is_empty() { Err("empty interpolation hole".into()) } else { Ok(expression) };
+						return if expression.trim().is_empty() {
+							Err("empty interpolation hole".into())
+						} else {
+							Ok(expression)
+						};
 					}
 				}
 				_ => {}
@@ -315,7 +365,10 @@ impl WarpParser {
 		let number = self.parse_number_value();
 		let literal: String = self.chars[start..self.pos].iter().collect();
 		let number = self.keep_source_literal(number, &literal);
-		match self.literal_type_suffix().or_else(|| self.scientific_float(&number, &literal)) {
+		match self
+			.literal_type_suffix()
+			.or_else(|| self.scientific_float(&number, &literal))
+		{
 			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
 			None => self.with_juxtaposed_factor(number),
 		}
@@ -339,9 +392,14 @@ impl WarpParser {
 		if superscript_letter(next).is_some() {
 			return number;
 		}
-		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::units::DEGREE) && !self.at_ordinal_suffix();
+		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::units::DEGREE)
+			&& !self.at_ordinal_suffix();
 		// `1500 meters` stays the pair the unit lowering reads (`3010 meters`), joined so it binds tighter than `>`
-		if !tight && self.spaced_word().is_some_and(|word| crate::units::is_long_unit_name(&word)) {
+		if !tight
+			&& self
+				.spaced_word()
+				.is_some_and(|word| crate::units::is_long_unit_name(&word))
+		{
 			self.skip_spaces();
 			let unit = self.parse_atom();
 			return Node::List(vec![number, unit], Bracket::None, Separator::Space);
@@ -363,16 +421,25 @@ impl WarpParser {
 	/// `if x > 1500 m : "far"`. σ joins like a unit: `5 ± 1 σ` is the Gaussian `5 ± 1σ` (card trailing-symbol)
 	pub(super) fn at_spaced_unit(&self) -> bool {
 		// `2 m²`: the power is no part of the unit's name
-		self.spaced_word().is_some_and(|word| word == crate::uncertain::SIGMA || crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some())))
+		self.spaced_word().is_some_and(|word| {
+			word == crate::uncertain::SIGMA
+				|| crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some()))
+		})
 	}
 
 	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
 	fn hint_glued_unit(&self, number: &Node) {
-		let Some(unit) = self.spaced_word().filter(|word| word != crate::uncertain::SIGMA) else { return };
+		let Some(unit) = self.spaced_word().filter(|word| word != crate::uncertain::SIGMA) else {
+			return;
+		};
 		let amount = number.serialize();
 		let (line, column) = self.get_position();
 		set_hint_position(line, column);
-		crate::normalize::hint(&format!("{amount} {unit}"), &format!("{amount}{unit}"), "a unit is written on its number");
+		crate::normalize::hint(
+			&format!("{amount} {unit}"),
+			&format!("{amount}{unit}"),
+			"a unit is written on its number",
+		);
 	}
 
 	/// The word after one or more spaces, unless it starts the next entry or assignment
@@ -387,7 +454,10 @@ impl WarpParser {
 	}
 
 	pub(super) fn at_ordinal_suffix(&self) -> bool {
-		let word: String = self.chars[self.pos..].iter().take_while(|c| is_identifier_char(**c)).collect();
+		let word: String = self.chars[self.pos..]
+			.iter()
+			.take_while(|c| is_identifier_char(**c))
+			.collect();
 		ORDINAL_SUFFIXES.contains(&word.as_str())
 	}
 
@@ -397,7 +467,9 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		let suffix = LITERAL_SUFFIXES.iter().find(|(letter, _)| *letter == self.current_char());
+		let suffix = LITERAL_SUFFIXES
+			.iter()
+			.find(|(letter, _)| *letter == self.current_char());
 		if let Some((_, number_type)) = suffix.filter(|_| !is_identifier_char(self.peek_char(1))) {
 			self.advance();
 			return Some(number_type.to_string());
@@ -405,7 +477,10 @@ impl WarpParser {
 		if self.current_char() != ':' {
 			return None;
 		}
-		let name: String = self.chars[self.pos + 1..].iter().take_while(|c| is_identifier_char(**c)).collect();
+		let name: String = self.chars[self.pos + 1..]
+			.iter()
+			.take_while(|c| is_identifier_char(**c))
+			.collect();
 		// `0.1:float`, `1.5:int`, `x:exact`: a number type binds tightly, unlike the loose `as`
 		if !crate::type_tests::is_number_type_word(&name) {
 			return None;
@@ -427,7 +502,11 @@ impl WarpParser {
 	pub(super) fn parse_number_value(&mut self) -> Node {
 		// RFC 3339 / RFC 9557 literal: 2024-01-31, 2024-01-31T10:00Z, 2024-01-31T10:00[Europe/Berlin]
 		// Not in data mode yet: the data path round-trips source text and has no date serialization
-		let literal_len = if self.options.data_mode { 0 } else { crate::time::literal_len(&self.chars[self.pos..]) };
+		let literal_len = if self.options.data_mode {
+			0
+		} else {
+			crate::time::literal_len(&self.chars[self.pos..])
+		};
 		if literal_len > 0 {
 			let literal = self.take_chars(literal_len);
 			return Node::data(crate::time::TimeLiteral(literal));
@@ -445,6 +524,18 @@ impl WarpParser {
 			self.advance();
 		}
 
+		if self.current_char() == '0'
+			&& matches!(self.peek_char(1), 'b' | 'B')
+			&& matches!(self.peek_char(2), '0' | '1')
+		{
+			self.advance_by(2);
+			let bits: String = self
+				.take_while_char(|ch| matches!(ch, '0' | '1' | '_'))
+				.replace('_', "");
+			return i64::from_str_radix(&format!("{num_str}{bits}"), 2)
+				.map(Node::int)
+				.unwrap_or_else(|_| error(&format!("Invalid binary: 0b{bits}")));
+		}
 		if self.current_char() == '0' && matches!(self.peek_char(1), 'x' | 'X') {
 			self.advance_by(2);
 			let hex_str = self.take_while_char(|ch| ch.is_ascii_hexdigit());
@@ -498,8 +589,12 @@ impl WarpParser {
 		let fraction = &self.chars[self.pos + 1..];
 		let (fixed, period, length) = overlined_fraction(fraction)?;
 		self.advance_by(1 + length);
-		let (negative, integer) = integer.strip_prefix('-').map_or((false, integer), |digits| (true, digits));
-		Some(Node::Number(Number::repeating_decimal(negative, integer, &fixed, &period)))
+		let (negative, integer) = integer
+			.strip_prefix('-')
+			.map_or((false, integer), |digits| (true, digits));
+		Some(Node::Number(Number::repeating_decimal(
+			negative, integer, &fixed, &period,
+		)))
 	}
 
 	/// `⅓` is the exact ratio 1/3; a number written directly after it multiplies: `⅓9` is 3
@@ -539,7 +634,11 @@ impl WarpParser {
 	/// starts the next entry or assignment is no unit
 	fn time_unit_at(&self, offset: usize) -> Option<(crate::time::Duration, usize)> {
 		let (unit, length) = crate::time::unit_after(&self.chars[self.pos + offset..])?;
-		let after_word: String = self.chars[self.pos + offset + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
+		let after_word: String = self.chars[self.pos + offset + length..]
+			.iter()
+			.skip_while(|c| **c == ' ')
+			.take(2)
+			.collect();
 		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
 		(!starts_entry).then_some((unit, length))
 	}
@@ -594,7 +693,10 @@ impl WarpParser {
 			self.advance();
 		}
 		self.push_digits(&mut exponent);
-		exponent.parse::<i64>().map(Some).map_err(|_| format!("Invalid exponent: e{}", exponent))
+		exponent
+			.parse::<i64>()
+			.map(Some)
+			.map_err(|_| format!("Invalid exponent: e{}", exponent))
 	}
 
 	/// `?` directly after a type name, then `=` (not `==`) or a closing bracket or separator
@@ -605,10 +707,16 @@ impl WarpParser {
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
 	/// one line is two optional fields, no ternary
 	pub(super) fn next_field_follows(&self, width: usize) -> bool {
-		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = (width..)
+			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
+			.count();
 		let name = self.word_at(width + blanks).chars().count();
 		let colon = width + blanks + name;
-		self.type_fields.is_some() && blanks > 0 && name > 0 && self.peek_char(colon) == ':' && !matches!(self.peek_char(colon + 1), '=' | ':')
+		self.type_fields.is_some()
+			&& blanks > 0
+			&& name > 0
+			&& self.peek_char(colon) == ':'
+			&& !matches!(self.peek_char(colon + 1), '=' | ':')
 	}
 
 	/// Do blanks and then `bracket` follow (`c {`, not the glued `c{`)
@@ -620,23 +728,35 @@ impl WarpParser {
 	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
 	/// `assignments`: C#'s object initializer `Point { X = 3 }` of a declared class sets its fields with `=` too
 	pub(super) fn block_after_blanks(&self, assignments: bool) -> bool {
-		let blanks_from = |start: usize| (start..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks_from = |start: usize| {
+			(start..)
+				.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
+				.count()
+		};
 		let blanks = blanks_from(0);
 		if blanks == 0 || self.peek_char(blanks) != '{' {
 			return false;
 		}
 		// the block's first entry may start on the next line (`Person {⏎ name: "Alice" …}`)
-		let first = blanks + 1 + (blanks + 1..).take_while(|at| self.peek_char(*at).is_whitespace()).count();
-		let name = (first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
+		let first = blanks
+			+ 1 + (blanks + 1..)
+			.take_while(|at| self.peek_char(*at).is_whitespace())
+			.count();
+		let name = (first..)
+			.take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_')
+			.count();
 		let after_name = first + name + blanks_from(first + name);
 		let assigns = assignments && self.peek_char(after_name) == '=' && self.peek_char(after_name + 1) != '=';
-		self.peek_char(first) == '}' || (name > 0 && ((self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=') || assigns))
+		self.peek_char(first) == '}'
+			|| (name > 0 && ((self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=') || assigns))
 	}
 
 	/// Do blanks and then a closing bracket, `,`, `;`, an assignment `=`, a comment or the line end follow `offset`:
 	/// nothing a ternary could be followed by
 	pub(super) fn closes_after_blanks(&self, offset: usize) -> bool {
-		let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = (offset..)
+			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
+			.count();
 		let at = offset + blanks;
 		let comment_starts = self.peek_char(at) == '/' && matches!(self.peek_char(at + 1), '/' | '*');
 		blanks > 0 && (comment_starts || self.ends_optional_type(self.peek_char(at), self.peek_char(at + 1)))
@@ -648,8 +768,18 @@ fn closing_brace(chars: &[char]) -> Option<usize> {
 	let (mut depth, mut at) = (1, 0);
 	while at < chars.len() {
 		match (chars[at], chars.get(at + 1)) {
-			('/', Some('/')) => at += chars[at..].iter().position(|&ch| ch == '\n').unwrap_or(chars.len() - at),
-			('/', Some('*')) => at += chars[at..].windows(2).position(|pair| pair == ['*', '/']).map_or(chars.len() - at, |end| end + 1),
+			('/', Some('/')) => {
+				at += chars[at..]
+					.iter()
+					.position(|&ch| ch == '\n')
+					.unwrap_or(chars.len() - at)
+			}
+			('/', Some('*')) => {
+				at += chars[at..]
+					.windows(2)
+					.position(|pair| pair == ['*', '/'])
+					.map_or(chars.len() - at, |end| end + 1)
+			}
 			('{', _) => depth += 1,
 			('}', _) if depth == 1 => return Some(at),
 			('}', _) => depth -= 1,
@@ -664,8 +794,19 @@ fn closing_brace(chars: &[char]) -> Option<usize> {
 fn without_common_indentation(source: &str) -> String {
 	let lines: Vec<&str> = source.trim_matches(|ch| ch == '\n' || ch == '\r').lines().collect();
 	let indentation = |line: &&str| line.len() - line.trim_start().len();
-	let common = lines.iter().filter(|line| !line.trim().is_empty()).map(indentation).min().unwrap_or(0);
-	lines.iter().map(|line| line.get(common..).unwrap_or("").trim_end()).collect::<Vec<_>>().join("\n").trim().to_string()
+	let common = lines
+		.iter()
+		.filter(|line| !line.trim().is_empty())
+		.map(indentation)
+		.min()
+		.unwrap_or(0);
+	lines
+		.iter()
+		.map(|line| line.get(common..).unwrap_or("").trim_end())
+		.collect::<Vec<_>>()
+		.join("\n")
+		.trim()
+		.to_string()
 }
 
 /// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an
@@ -692,5 +833,7 @@ fn float_node(text: &str) -> Node {
 	if let Some(exact) = crate::extensions::numbers::long_decimal(text) {
 		return Node::Number(exact);
 	}
-	text.parse::<f64>().map(Node::float).unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
+	text.parse::<f64>()
+		.map(Node::float)
+		.unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
 }

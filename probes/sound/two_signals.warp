@@ -1,0 +1,17 @@
+// card two-signal-kinds: siren (play_signal) and chord (play_blocks) each run alone; together: "list / float" at 37:37
+use sound
+global phase = 0.0 as float
+siren(t) := {
+	pitch = 440 + 110 * sin(pi * t)   // glides between 330 and 550 Hz
+	phase = phase + 2 * pi * pitch / sample_rate
+	0.3 * sin(phase)
+}
+play siren for 4s
+chord(left, right, t) := for i in 1 to #left {
+	time = t + (i - 1) / sample_rate
+	low = sin(2 * pi * 262 * time)
+	high = sin(2 * pi * 392 * time)
+	left#i = 0.4 * low + 0.1 * high
+	right#i = 0.1 * low + 0.4 * high
+}
+play chord for 3s

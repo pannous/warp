@@ -120,7 +120,6 @@ impl PartialEqStr for char {
 
 // Test it see tests/string_tests.rs !!
 
-
 /// Code points that continue the grapheme cluster before them: combining marks, variation selectors,
 /// emoji skin tone modifiers, tags, ZWNJ and ZWJ (UAX #29 Extend, SpacingMark and ZWJ, abridged to common scripts).
 /// The emitted `grapheme_end` runtime and `grapheme_clusters` share this table, so both count the same unit.
@@ -144,11 +143,11 @@ pub const GRAPHEME_EXTEND: [(u32, u32); 27] = [
 	(0x0E47, 0x0E4E),
 	(0x1AB0, 0x1AFF), // combining marks extended and supplement
 	(0x1DC0, 0x1DFF),
-	(0x200C, 0x200D), // ZWNJ, ZWJ
-	(0x20D0, 0x20FF), // combining marks for symbols
-	(0x3099, 0x309A), // kana voicing marks
-	(0xFE00, 0xFE0F), // variation selectors
-	(0xFE20, 0xFE2F), // combining half marks
+	(0x200C, 0x200D),   // ZWNJ, ZWJ
+	(0x20D0, 0x20FF),   // combining marks for symbols
+	(0x3099, 0x309A),   // kana voicing marks
+	(0xFE00, 0xFE0F),   // variation selectors
+	(0xFE20, 0xFE2F),   // combining half marks
 	(0x1F3FB, 0x1F3FF), // emoji skin tone modifiers
 	(0xE0020, 0xE007F), // tags (subdivision flags)
 	(0xE0100, 0xE01EF), // variation selectors supplement
@@ -221,7 +220,9 @@ pub fn edit_distance(a: &str, b: &str) -> usize {
 	for i in 1..=a.len() {
 		for j in 1..=b.len() {
 			let cost = usize::from(a[i - 1] != b[j - 1]);
-			rows[i][j] = (rows[i - 1][j] + 1).min(rows[i][j - 1] + 1).min(rows[i - 1][j - 1] + cost);
+			rows[i][j] = (rows[i - 1][j] + 1)
+				.min(rows[i][j - 1] + 1)
+				.min(rows[i - 1][j - 1] + cost);
 			if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
 				rows[i][j] = rows[i][j].min(rows[i - 2][j - 2] + 1);
 			}
@@ -233,7 +234,10 @@ pub fn edit_distance(a: &str, b: &str) -> usize {
 /// The first of the names one letter away from `word` (two for words of six letters or more): `pirnt` → print
 pub fn near_miss(word: &str, names: impl IntoIterator<Item = String>) -> Option<String> {
 	let allowed = if word.chars().count() < 6 { 1 } else { 2 };
-	names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed)
+	names
+		.into_iter()
+		.filter(|name| name != word)
+		.find(|name| edit_distance(word, name) <= allowed)
 }
 
 #[cfg(test)]

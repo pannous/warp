@@ -1,7 +1,7 @@
 //! true/false are a shallow type of their own (card bool-type, notes/decisions.md): they act as 1/0 in arithmetic and
 //! comparisons, but `type(true)` is bool and they print as true/false; `===` also compares the type (card zero-false)
-use warp::wasm_emitter::eval;
 use crate::is;
+use warp::wasm_emitter::eval;
 
 fn text_of(code: &str) -> String {
 	eval(code).serialize()

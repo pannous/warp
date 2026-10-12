@@ -210,6 +210,9 @@ inductive Expr where
   | push (l v : Expr)
   /-- `xs#i = v`: v replaces the i-th item of the shared list xs if it fits xs's element type, else a loud error; gives v -/
   | setAt (l i v : Expr)
+  /-- `xs.insert(v, at: i)`: v joins the shared list xs before its item i (from 0), or at its end when i is no
+  position in it, if v fits xs's element type, else a loud error; gives xs -/
+  | insertAt (l i v : Expr)
   /-- `for y in l { body }`: body runs once per item of the list l, the local y holding the item; gives ø -/
   | forIn (y : String) (l body last : Expr)
   /-- `y => body`, a lambda: it evaluates to the closure `clo y body` once the locals it captures are substituted -/
@@ -268,6 +271,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | share e t => share (e.subst y v) t
   | push l w => push (l.subst y v) (w.subst y v)
   | setAt l i w => setAt (l.subst y v) (i.subst y v) (w.subst y v)
+  | insertAt l i w => insertAt (l.subst y v) (i.subst y v) (w.subst y v)
   | e => e
 
 /-- the main-level names an expression assigns or binds -/
@@ -276,7 +280,7 @@ def assigned : Expr → List String
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | seq a b | index a b | range a b | append a b
   | tryCatch a b | orElse a b | app a b | push a b
   | handle _ a b => a.assigned ++ b.assigned
-  | ite c a b | loop c a b | setAt c a b => c.assigned ++ a.assigned ++ b.assigned
+  | ite c a b | loop c a b | setAt c a b | insertAt c a b => c.assigned ++ a.assigned ++ b.assigned
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned

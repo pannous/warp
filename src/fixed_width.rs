@@ -13,11 +13,21 @@ pub struct FixedWidth {
 }
 
 const fn signed(type_name: &'static str, trap: &'static str, bits: u32) -> FixedWidth {
-	FixedWidth { type_name, trap, low: -(1 << (bits - 1)), high: (1 << (bits - 1)) - 1 }
+	FixedWidth {
+		type_name,
+		trap,
+		low: -(1 << (bits - 1)),
+		high: (1 << (bits - 1)) - 1,
+	}
 }
 
 const fn unsigned(type_name: &'static str, trap: &'static str, bits: u32) -> FixedWidth {
-	FixedWidth { type_name, trap, low: 0, high: (1 << bits) - 1 }
+	FixedWidth {
+		type_name,
+		trap,
+		low: 0,
+		high: (1 << bits) - 1,
+	}
 }
 
 pub const FIXED_WIDTHS: [FixedWidth; 8] = [
@@ -35,7 +45,10 @@ pub const FIXED_WIDTHS: [FixedWidth; 8] = [
 const ALIASES: [(&str, &str); 2] = [("uint8", "byte"), ("u8", "byte")];
 
 pub fn fixed_width(type_name: &str) -> Option<&'static FixedWidth> {
-	let type_name = ALIASES.iter().find(|(alias, _)| *alias == type_name).map_or(type_name, |(_, name)| *name);
+	let type_name = ALIASES
+		.iter()
+		.find(|(alias, _)| *alias == type_name)
+		.map_or(type_name, |(_, name)| *name);
 	FIXED_WIDTHS.iter().find(|width| width.type_name == type_name)
 }
 
@@ -50,7 +63,10 @@ pub fn wider(a: Option<&'static FixedWidth>, b: Option<&'static FixedWidth>) -> 
 /// The message of the trap in `overflow_of_<type>`
 pub fn overflow_message(type_name: &str) -> String {
 	match fixed_width(type_name) {
-		Some(width) => format!("{type_name} overflow: the value does not fit {type_name} ({}…{}); fix: declare it int, which is unbounded", width.low, width.high),
+		Some(width) => format!(
+			"{type_name} overflow: the value does not fit {type_name} ({}…{}); fix: declare it int, which is unbounded",
+			width.low, width.high
+		),
 		None => format!("{type_name} overflow"),
 	}
 }

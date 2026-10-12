@@ -1,6 +1,6 @@
 // Temperatures are units with a zero of their own: °C, °F and K convert with an offset (card temperature)
-use warp::wasm_emitter::eval;
 use crate::common;
+use warp::wasm_emitter::eval;
 
 fn text_of(code: &str) -> String {
 	eval(code).serialize()

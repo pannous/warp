@@ -20,16 +20,24 @@ pub fn lower(node: Node) -> Node {
 }
 
 fn lowered(node: Node, counter: &mut usize) -> Node {
-	let Some(place) = changed_place(&node) else { return node.map_children(|child| lowered(child, counter)) };
+	let Some(place) = changed_place(&node) else {
+		return node.map_children(|child| lowered(child, counter));
+	};
 	if let Some(call) = called_root(place) {
 		let change = node.drop_meta().serialize();
 		let message = format!("{call}() gives a copy: {change} changes nothing");
-		return Diagnostic::at(&node, message).fix(format!("keep it first: x = {call}(); then change x")).into_error();
+		return Diagnostic::at(&node, message)
+			.fix(format!("keep it first: x = {call}(); then change x"))
+			.into_error();
 	}
-	let Some(element) = element_below(place).cloned() else { return node.map_children(|child| lowered(child, counter)) };
+	let Some(element) = element_below(place).cloned() else {
+		return node.map_children(|child| lowered(child, counter));
+	};
 	let number = *counter;
 	*counter += 1;
-	let Node::Key(base, Op::Hash, index) = element.drop_meta() else { unreachable!("element_below finds an index") };
+	let Node::Key(base, Op::Hash, index) = element.drop_meta() else {
+		unreachable!("element_below finds an index")
+	};
 	let (index_binding, index) = match index.drop_meta() {
 		Node::Number(_) | Node::Symbol(_) => (None, index.as_ref().clone()),
 		_ => {
@@ -40,20 +48,32 @@ fn lowered(node: Node, counter: &mut usize) -> Node {
 	let element = Node::Key(base.clone(), Op::Hash, Box::new(index));
 	let inner = Node::Symbol(format!("{INNER}{number}"));
 	let changed = with_element_replaced(node, &inner);
-	let statements = index_binding.into_iter()
-		.chain([assign(inner.clone(), element.clone()), lowered(changed, counter), lowered(assign(element, inner), counter)])
+	let statements = index_binding
+		.into_iter()
+		.chain([
+			assign(inner.clone(), element.clone()),
+			lowered(changed, counter),
+			lowered(assign(element, inner), counter),
+		])
 		.collect();
 	Node::List(statements, Bracket::None, Separator::Semicolon)
 }
 
 /// The place a statement changes: the target of `t = v`, `t += v`, `t++`, or the list `l` of `l.add(v)`, `l.pop()`
 fn changed_place(node: &Node) -> Option<&Node> {
-	let Node::Key(target, op, value) = node.drop_meta() else { return None };
+	let Node::Key(target, op, value) = node.drop_meta() else {
+		return None;
+	};
 	if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) {
 		return Some(target);
 	}
-	let Node::List(items, _, _) = value.drop_meta() else { return None };
-	let changes_list = *op == Op::Dot && items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&method.name()));
+	let Node::List(items, _, _) = value.drop_meta() else {
+		return None;
+	};
+	let changes_list = *op == Op::Dot
+		&& items
+			.first()
+			.is_some_and(|method| crate::analyzer::is_list_mutating_method(&method.name()));
 	changes_list.then_some(target)
 }
 
@@ -91,7 +111,10 @@ fn called_root(place: &Node) -> Option<String> {
 /// The statement with the element inside its place (element_below) replaced by `inner`
 fn with_element_replaced(node: Node, inner: &Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_element_replaced(*node, inner)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_element_replaced(*node, inner)),
+			data,
+		},
 		Node::Key(target, op, value) => Node::Key(Box::new(replaced_below(*target, inner)), op, value),
 		other => other,
 	}
@@ -99,13 +122,19 @@ fn with_element_replaced(node: Node, inner: &Node) -> Node {
 
 fn replaced_below(place: Node, inner: &Node) -> Node {
 	match place {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(replaced_below(*node, inner)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(replaced_below(*node, inner)),
+			data,
+		},
 		Node::Key(left, op, right) if inside(&Node::Key(left.clone(), op, right.clone())).is_some() => {
 			let is_index = matches!(left.drop_meta(), Node::Key(_, Op::Hash, _));
-			let left = if is_index { inner.clone() } else { replaced_below(*left, inner) };
+			let left = if is_index {
+				inner.clone()
+			} else {
+				replaced_below(*left, inner)
+			};
 			Node::Key(Box::new(left), op, right)
 		}
 		other => other,
 	}
 }
-

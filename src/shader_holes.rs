@@ -17,10 +17,35 @@ pub const VALUES: &str = "values";
 /// The words rendering a shader with a values map last: `paint(shader, width, height, values)`
 const RENDERING_WORDS: [&str; 2] = [crate::host::PAINT, warp_runtime::host_words::GPU_RENDER];
 const VALUES_INDEX: usize = 4;
+const SIZE_INDEX: usize = 2;
+/// The program's own size words, which paint(shader) takes before the view's size
+const SIZE_WORDS: [&str; 2] = ["width", "height"];
 /// Holes every shader has, filled by the host: the image's size in pixels, seconds since the first render, the renders
 /// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
 /// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
-pub const BUILTIN_HOLES: [&str; 8] = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key"];
+/// and `$previous(at)`, the shader's own previous frame at a pixel (src/gpu.rs PREVIOUS_FRAME)
+pub const BUILTIN_HOLES: [&str; 9] = [
+	"width",
+	"height",
+	"size",
+	"time",
+	"frame",
+	"mouse",
+	"mouse_down",
+	"key",
+	PREVIOUS_HOLE,
+];
+pub const PREVIOUS_HOLE: &str = "previous";
+/// other words for $previous, which stay the program's own names: a value missing under one of them hints at $previous
+pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
+
+/// what a shader missing the value `name` may have meant ("" for nothing)
+pub fn missing_value_hint(name: &str) -> &'static str {
+	match PREVIOUS_WORDS.contains(&name) {
+		true => "; the shader's own previous frame is $previous(at)",
+		false => "",
+	}
+}
 
 /// The WGSL of a shader block with each `$name` as `values.name`, and the names in order (none: no hole)
 pub fn written(wgsl: &str) -> (String, Vec<String>) {
@@ -30,7 +55,9 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 	while let Some(at) = rest.find('$') {
 		text.push_str(&rest[..at]);
 		let after = &rest[at + 1..];
-		let length = after.find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(after.len());
+		let length = after
+			.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+			.unwrap_or(after.len());
 		let name = &after[..length];
 		if name.is_empty() || name.starts_with(|ch: char| ch.is_ascii_digit()) {
 			text.push('$');
@@ -52,7 +79,14 @@ pub fn shader_text(wgsl: &str) -> Node {
 	let (text, names) = written(wgsl);
 	match names.is_empty() {
 		true => Node::Text(text),
-		false => Node::Text(text).with_attribute(HOLES_ATTRIBUTE, Node::List(names.into_iter().map(Node::Symbol).collect(), Bracket::Square, Separator::Space)),
+		false => Node::Text(text).with_attribute(
+			HOLES_ATTRIBUTE,
+			Node::List(
+				names.into_iter().map(Node::Symbol).collect(),
+				Bracket::Square,
+				Separator::Space,
+			),
+		),
 	}
 }
 
@@ -69,12 +103,59 @@ pub fn lower(program: Node) -> Node {
 			}
 		}
 	});
+	let program = with_sizes(program, &sizes(&variables));
 	if shaders.is_empty() && !mentions_holes(&program) {
 		return program;
 	}
-	let passed = |holes: Vec<String>| holes.into_iter().filter(|name| !BUILTIN_HOLES.contains(&name.as_str()) || variables.contains(name)).collect::<Vec<_>>();
-	let shaders = shaders.into_iter().map(|(shader, holes)| (shader, passed(holes))).collect();
+	let passed = |holes: Vec<String>| {
+		holes
+			.into_iter()
+			.filter(|name| !BUILTIN_HOLES.contains(&name.as_str()) || variables.contains(name))
+			.collect::<Vec<_>>()
+	};
+	let shaders = shaders
+		.into_iter()
+		.map(|(shader, holes)| (shader, passed(holes)))
+		.collect();
 	with_values(program, &shaders, &passed)
+}
+
+/// The width and height a paint without them takes: the program's `width` and `height`, else the view's size
+fn sizes(variables: &HashSet<String>) -> [Node; 2] {
+	let own = SIZE_WORDS.iter().all(|word| variables.contains(*word));
+	let words = match own {
+		true => SIZE_WORDS,
+		false => [
+			warp_runtime::host_words::VIEW_WIDTH,
+			warp_runtime::host_words::VIEW_HEIGHT,
+		],
+	};
+	words.map(|word| Node::Symbol(word.to_string()))
+}
+
+/// `paint(shader)` and `paint(shader, values)` as `paint(shader, width, height, values)`
+fn with_sizes(node: Node, sizes: &[Node; 2]) -> Node {
+	let node = node.map_children(|child| with_sizes(child, sizes));
+	let Node::List(items, bracket, separator) = node.drop_meta() else {
+		return node;
+	};
+	let rendering = renders(items);
+	let without_size = match items.len() {
+		2 => true,
+		3 => matches!(items[SIZE_INDEX].drop_meta(), Node::List(_, Bracket::Curly, _)),
+		_ => false,
+	};
+	if !rendering || !without_size {
+		return node;
+	}
+	let mut items = items.clone();
+	items.splice(SIZE_INDEX..SIZE_INDEX, sizes.iter().cloned());
+	Node::List(items, bracket.clone(), separator.clone()).with_meta_of(&node)
+}
+
+/// A call of paint or gpu_render: the word, then its arguments
+fn renders(items: &[Node]) -> bool {
+	matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if RENDERING_WORDS.contains(&word.as_str()))
 }
 
 fn holes_of(node: &Node) -> Option<Vec<String>> {
@@ -90,23 +171,59 @@ fn mentions_holes(program: &Node) -> bool {
 	found
 }
 
-fn with_values(node: Node, shaders: &HashMap<String, Vec<String>>, passed: &impl Fn(Vec<String>) -> Vec<String>) -> Node {
+fn with_values(
+	node: Node,
+	shaders: &HashMap<String, Vec<String>>,
+	passed: &impl Fn(Vec<String>) -> Vec<String>,
+) -> Node {
 	let node = node.map_children(|child| with_values(child, shaders, passed));
-	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
-	let rendering = items.first().is_some_and(|word| RENDERING_WORDS.contains(&word.name().as_str()));
-	let holes = items.get(1).filter(|_| rendering).and_then(|shader| holes_of(shader).map(passed).or_else(|| shaders.get(&shader.drop_meta().name()).cloned()));
-	let Some(holes) = holes.filter(|holes| !holes.is_empty() && items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1) else { return node };
+	let Node::List(items, bracket, separator) = node.drop_meta() else {
+		return node;
+	};
+	let rendering = renders(items);
+	let holes = items.get(1).filter(|_| rendering).and_then(|shader| {
+		holes_of(shader)
+			.map(passed)
+			.or_else(|| shaders.get(&shader.drop_meta().name()).cloned())
+	});
+	let Some(holes) =
+		holes.filter(|holes| !holes.is_empty() && items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1)
+	else {
+		return node;
+	};
 	let mut items = items.clone();
-	let entries = |given: &[Node]| holes.iter().filter(|name| !given.iter().any(|entry| entry_name(entry).as_deref() == Some(name.as_str()))).map(|name| entry(name)).collect::<Vec<_>>();
+	let entries = |given: &[Node]| {
+		holes
+			.iter()
+			.filter(|name| {
+				!given
+					.iter()
+					.any(|entry| entry_name(entry).as_deref() == Some(name.as_str()))
+			})
+			.map(|name| entry(name))
+			.collect::<Vec<_>>()
+	};
 	match items.get(VALUES_INDEX).map(|values| values.drop_meta().clone()) {
 		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Colon)),
 		Some(Node::List(given, Bracket::Curly, map_separator)) => {
 			let added = entries(&given);
-			items[VALUES_INDEX] = Node::List(given.into_iter().chain(added).collect(), Bracket::Curly, map_separator).with_meta_of(&items[VALUES_INDEX]);
+			items[VALUES_INDEX] = Node::List(given.into_iter().chain(added).collect(), Bracket::Curly, map_separator)
+				.with_meta_of(&items[VALUES_INDEX]);
 		}
 		Some(_) => {
-			let names = holes.iter().map(|name| format!("${name}")).collect::<Vec<_>>().join(", ");
-			let message = format!("the shader's holes {names} need the values map written out here, `{{{}}}`, to add their entries", holes.iter().map(|name| format!("{name}: {name}")).collect::<Vec<_>>().join(", "));
+			let names = holes
+				.iter()
+				.map(|name| format!("${name}"))
+				.collect::<Vec<_>>()
+				.join(", ");
+			let message = format!(
+				"the shader's holes {names} need the values map written out here, `{{{}}}`, to add their entries",
+				holes
+					.iter()
+					.map(|name| format!("{name}: {name}"))
+					.collect::<Vec<_>>()
+					.join(", ")
+			);
 			return crate::diagnostic::Diagnostic::at(&items[VALUES_INDEX], message).into_error();
 		}
 	}

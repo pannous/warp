@@ -1,5 +1,5 @@
+use crate::{eq, is, put, skip};
 use warp::{CharExtensions, StringExtensions};
-use crate::{is, eq, skip, put};
 
 macro_rules! s {
 	($lit:literal) => {
@@ -156,7 +156,6 @@ fn test_string_operations() {
 	is!("'hello'", "hello");
 	is!("`${1+1}`", "2"); // a template literal is a text (warp's meaning of a legacy line, as decided for test_recent_random_bugs)
 }
-
 
 #[test]
 fn test_string_index() {

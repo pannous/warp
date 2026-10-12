@@ -1,0 +1,3 @@
+// a fraction reaching a declared int result is an error (user 2026-10-12, card lossy-return); swap in `as float` for 1.5
+def half(x) as int { x / 2 }
+half(3)

@@ -27,9 +27,11 @@ fn a_try_without_a_direct_call_keeps_todays_behaviour() {
 #[test]
 #[cfg(feature = "native")]
 fn untrusted_code_may_guard_a_call() {
-	assert_eq!(warp::wasm_emitter::eval_untrusted("f(x) := x * 2; try f(3) else 7"), warp::Node::int(6));
+	assert_eq!(
+		warp::wasm_emitter::eval_untrusted("f(x) := x * 2; try f(3) else 7"),
+		warp::Node::int(6)
+	);
 }
-
 
 #[test]
 fn a_guarded_call_of_no_arguments() {

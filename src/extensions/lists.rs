@@ -25,7 +25,6 @@ impl Indexed<Node> for Node {
 	}
 }
 
-
 pub trait Filter<T> {
 	fn filter(self, f: fn(&T) -> bool) -> Vec<T>;
 }

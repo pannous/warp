@@ -1,7 +1,7 @@
 // use warp::warp_parser::WarpParser::parse;
-use warp::Node;
+use crate::{eq, is, put};
 use warp::warp_parser::{parse, WarpParser};
-use crate::{is, eq, put};
+use warp::Node;
 
 #[test]
 fn test_line_comments() {

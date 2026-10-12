@@ -2,7 +2,7 @@
 //! optional does (P179): used as a T it is one, ø there is the loud error of ø as a T. The value is computed once:
 //! `f() as text?` becomes `(optional·0 = f(); if optional·0 == ø then ø else optional·0 as text)`.
 
-use super::nodes::{Counter, if_then_else, key};
+use super::nodes::{if_then_else, key, Counter};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -10,7 +10,10 @@ const OPTIONAL_PREFIX: &str = "optional·";
 const OPTIONAL_MARK: char = '?';
 
 pub fn lower(node: Node) -> Node {
-	Optionals { counter: Counter::default() }.rewrite(node)
+	Optionals {
+		counter: Counter::default(),
+	}
+	.rewrite(node)
 }
 
 struct Optionals {

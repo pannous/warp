@@ -11,8 +11,8 @@
 //! `after tested: print "ok"` (or `after test`) runs after every later statement that calls the function test,
 //! `before test {…}` before it.
 
+use super::nodes::{block, call, children_rewritten, if_then, key, Counter};
 use super::words::{GLOBAL_WORD, ON_WORD};
-use super::nodes::{Counter, block, call, children_rewritten, if_then, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -77,8 +77,16 @@ impl Listener {
 	/// A write of `p.age` concerns listeners of p and of p.age; a write of p (or of `p#1`) those of p and of its fields
 	fn watches(&self, written: &str) -> bool {
 		let root = written.split(FIELD_SEPARATOR).next().unwrap_or(written);
-		let field_of_written = |watched: &str| watched.strip_prefix(written).is_some_and(|rest| rest.starts_with(FIELD_SEPARATOR));
-		self.watched().is_some_and(|watched| watched.iter().any(|name| name == written || name == root || field_of_written(name)))
+		let field_of_written = |watched: &str| {
+			watched
+				.strip_prefix(written)
+				.is_some_and(|rest| rest.starts_with(FIELD_SEPARATOR))
+		};
+		self.watched().is_some_and(|watched| {
+			watched
+				.iter()
+				.any(|name| name == written || name == root || field_of_written(name))
+		})
 	}
 
 	fn watched(&self) -> Option<&HashSet<String>> {
@@ -89,7 +97,9 @@ impl Listener {
 	}
 
 	fn check(&self) -> Node {
-		let Some(condition) = &self.condition else { return block(vec![self.body.clone()]) };
+		let Some(condition) = &self.condition else {
+			return block(vec![self.body.clone()]);
+		};
 		if let Some((held, was)) = &self.held {
 			return edge_check(held, was, condition.clone(), self.body.clone());
 		}
@@ -109,7 +119,11 @@ impl Listener {
 pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
 	let not_before = key(Node::Empty, Op::Not, symbol(was));
 	let became_true = key(symbol(held), Op::And, not_before);
-	let parts = vec![assign(was, symbol(held)), assign(held, condition), if_then(became_true, block(vec![body]))];
+	let parts = vec![
+		assign(was, symbol(held)),
+		assign(held, condition),
+		if_then(became_true, block(vec![body])),
+	];
 	Node::List(parts, Bracket::Round, Separator::Semicolon)
 }
 
@@ -177,15 +191,25 @@ impl Signals {
 				// checks added to a block of one statement (`{ x = i }`) make it a sequence: `{ x = i; check }`
 				let count = items.len();
 				let statements = self.statements(items, listeners);
-				let separator = if statements.len() > count { Separator::Semicolon } else { separator };
+				let separator = if statements.len() > count {
+					Separator::Semicolon
+				} else {
+					separator
+				};
 				Node::List(statements, bracket, separator)
 			}
 			Node::List(items, bracket, separator) => {
 				// a function body is not in the flow of the statements around it (P111: remote_checks)
 				let listeners = if defines_function(&items) { &[] } else { listeners };
-				Node::List(items.into_iter().map(|item| self.lower(item, listeners)).collect(), bracket, separator)
+				Node::List(
+					items.into_iter().map(|item| self.lower(item, listeners)).collect(),
+					bracket,
+					separator,
+				)
 			}
-			Node::Key(target, Op::Define, body) if is_call_head(&target) => Node::Key(target, Op::Define, Box::new(self.lower(*body, &[]))),
+			Node::Key(target, Op::Define, body) if is_call_head(&target) => {
+				Node::Key(target, Op::Define, Box::new(self.lower(*body, &[])))
+			}
 			Node::Key(target, op, value) => {
 				let written = written_variable(&target, op).filter(|name| watches(listeners, name));
 				let node = Node::Key(target.clone(), op, Box::new(self.lower(*value, listeners)));
@@ -226,19 +250,31 @@ impl Signals {
 				Some((ListenerWord::Whenever, condition, _)) => (WHENEVER_WORD, condition),
 				_ => continue,
 			};
-			let mut roots: Vec<String> = self.sources(&condition).iter().map(|name| root_name(name).to_string()).collect::<HashSet<_>>().into_iter().collect();
+			let mut roots: Vec<String> = self
+				.sources(&condition)
+				.iter()
+				.map(|name| root_name(name).to_string())
+				.collect::<HashSet<_>>()
+				.into_iter()
+				.collect();
 			roots.sort();
 			let constant = |root: &String| copies.contains_key(root) && writes.get(root) == Some(&1);
-			let Some(name) = roots.first().filter(|_| roots.iter().all(constant)) else { continue };
+			let Some(name) = roots.first().filter(|_| roots.iter().all(constant)) else {
+				continue;
+			};
 			let value = copies[name];
 			let never_fires = format!("{keyword} {} never fires", condition.serialize().trim());
 			let value_text = value.serialize().trim().to_string();
 			let warning = match symbols(value).is_empty() {
-				true => crate::diagnostic::Diagnostic::at(statement, format!("{never_fires}: nothing writes {name} again")),
+				true => {
+					crate::diagnostic::Diagnostic::at(statement, format!("{never_fires}: nothing writes {name} again"))
+				}
 				false => {
 					let derived = format!("{name} := {value_text}");
 					let message = format!("{never_fires}: {name} is a copy of {value_text} that nothing writes again; did you mean {derived}?");
-					crate::diagnostic::Diagnostic::at(statement, message).fix(derived.clone()).offer("a derived value", format!("{name} = {value_text}"), derived)
+					crate::diagnostic::Diagnostic::at(statement, message)
+						.fix(derived.clone())
+						.offer("a derived value", format!("{name} = {value_text}"), derived)
 				}
 			};
 			if let Err(error) = crate::diagnostic::report(&[warning]) {
@@ -256,7 +292,11 @@ impl Signals {
 		for item in items {
 			if let Some(listener) = self.listener(&item) {
 				out.extend(listener.start.clone());
-				if self.depth == 1 && listener.watched().is_some_and(|watched| !watched.is_disjoint(&self.declared_global)) {
+				if self.depth == 1
+					&& listener
+						.watched()
+						.is_some_and(|watched| !watched.is_disjoint(&self.declared_global))
+				{
 					out.extend(self.remote_listener(&listener));
 				}
 				listeners.push(listener);
@@ -267,7 +307,9 @@ impl Signals {
 			let destructured = crate::tuples::destructured_names(&item);
 			match statement_write(&item).filter(|name| watches(&listeners, name)) {
 				Some(name) => {
-					let Node::Key(target, op, value) = item.drop_meta().clone() else { unreachable!("a write is a key") };
+					let Node::Key(target, op, value) = item.drop_meta().clone() else {
+						unreachable!("a write is a key")
+					};
 					out.push(Node::Key(target, op, Box::new(self.lower(*value, &listeners))));
 					out.extend(checks(&listeners, &[name]));
 				}
@@ -291,7 +333,12 @@ impl Signals {
 		let listening = format!("{LISTENING_PREFIX}{number}");
 		self.main_variables.insert(listening.clone());
 		let guarded = if_then(Node::Symbol(listening.clone()), block(vec![listener.check()]));
-		let check = crate::event_signals::function_with_globals(&format!("{CHECK_PREFIX}{number}"), false, &[guarded], &self.main_variables);
+		let check = crate::event_signals::function_with_globals(
+			&format!("{CHECK_PREFIX}{number}"),
+			false,
+			&[guarded],
+			&self.main_variables,
+		);
 		self.remote.push(listener.clone());
 		vec![check, assign(&listening, Node::True)]
 	}
@@ -303,20 +350,28 @@ impl Signals {
 			return program;
 		}
 		let program = self.function_bodies(program);
-		let Node::List(statements, bracket, separator) = program.drop_meta().clone() else { return program };
+		let Node::List(statements, bracket, separator) = program.drop_meta().clone() else {
+			return program;
+		};
 		let flags = (0..self.remote.len()).map(|number| assign(&format!("{LISTENING_PREFIX}{number}"), Node::False));
 		Node::List(flags.chain(statements).collect(), bracket, separator)
 	}
 
 	fn function_bodies(&mut self, node: Node) -> Node {
 		match node {
-			Node::Key(target, Op::Define, body) if is_call_head(&target) && !word(&head_word(&target)).starts_with(CHECK_PREFIX) => {
+			Node::Key(target, Op::Define, body)
+				if is_call_head(&target) && !word(&head_word(&target)).starts_with(CHECK_PREFIX) =>
+			{
 				let proxies = self.proxies(&body);
 				Node::Key(target, Op::Define, Box::new(self.lower(*body, &proxies)))
 			}
 			Node::List(items, bracket, separator) if defines_function(&items) => {
 				let proxies = self.proxies(&Node::List(items.clone(), bracket.clone(), separator.clone()));
-				Node::List(items.into_iter().map(|item| self.lower(item, &proxies)).collect(), bracket, separator)
+				Node::List(
+					items.into_iter().map(|item| self.lower(item, &proxies)).collect(),
+					bracket,
+					separator,
+				)
 			}
 			other => children_rewritten(other, |child| self.function_bodies(child)),
 		}
@@ -325,11 +380,22 @@ impl Signals {
 	/// Listeners for a function body: each calls a check function after a write of a variable the body declares global
 	fn proxies(&self, body: &Node) -> Vec<Listener> {
 		let globals = declared_globals(body);
-		self.remote.iter().enumerate().filter_map(|(number, listener)| {
-			let watched: HashSet<String> = listener.watched()?.intersection(&globals).cloned().collect();
-			let call = call(&format!("{CHECK_PREFIX}{number}"), vec![]);
-			(!watched.is_empty()).then(|| Listener { trigger: Trigger::Write(watched), condition: None, body: call, fired: None, held: None, start: None })
-		}).collect()
+		self.remote
+			.iter()
+			.enumerate()
+			.filter_map(|(number, listener)| {
+				let watched: HashSet<String> = listener.watched()?.intersection(&globals).cloned().collect();
+				let call = call(&format!("{CHECK_PREFIX}{number}"), vec![]);
+				(!watched.is_empty()).then(|| Listener {
+					trigger: Trigger::Write(watched),
+					condition: None,
+					body: call,
+					fired: None,
+					held: None,
+					start: None,
+				})
+			})
+			.collect()
 	}
 
 	/// `once x==5 {body}`, `whenever x>1 : body`, `on set x {body}`
@@ -348,14 +414,26 @@ impl Signals {
 			return None;
 		}
 		let fired = (word == ListenerWord::Once).then(|| self.fresh_name(FIRED_PREFIX));
-		let held = (word == ListenerWord::Whenever).then(|| (self.fresh_name(HELD_PREFIX), self.fresh_name(WAS_PREFIX)));
+		let held =
+			(word == ListenerWord::Whenever).then(|| (self.fresh_name(HELD_PREFIX), self.fresh_name(WAS_PREFIX)));
 		let start = match (&fired, &held) {
 			(Some(fired), _) => Some(assign(fired, Node::False)),
-			(_, Some((held, was))) => Some(Node::List(vec![assign(held, Node::False), assign(was, Node::False)], Bracket::Round, Separator::Semicolon)),
+			(_, Some((held, was))) => Some(Node::List(
+				vec![assign(held, Node::False), assign(was, Node::False)],
+				Bracket::Round,
+				Separator::Semicolon,
+			)),
 			_ => None,
 		};
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Write(watched), condition: Some(subject), body, fired, held, start })
+		Some(Listener {
+			trigger: Trigger::Write(watched),
+			condition: Some(subject),
+			body,
+			fired,
+			held,
+			start,
+		})
 	}
 
 	fn fresh_name(&mut self, prefix: &str) -> String {
@@ -370,7 +448,12 @@ impl Signals {
 		let mut sources = HashSet::new();
 		let mut pending = symbols(expression);
 		while let Some(name) = pending.pop() {
-			if let Some(read) = self.derived.get(&name).or_else(|| self.function_reads.get(&name)).filter(|_| !sources.contains(&name)) {
+			if let Some(read) = self
+				.derived
+				.get(&name)
+				.or_else(|| self.function_reads.get(&name))
+				.filter(|_| !sources.contains(&name))
+			{
 				pending.extend(read.iter().cloned());
 			}
 			sources.insert(name);
@@ -391,12 +474,22 @@ impl Signals {
 				// the value seen at the last write: every write runs this check, so it is the value before this one
 				let last = self.fresh_name(LAST_PREFIX);
 				let (remembered, body) = self.remembering_old(with_old, &last);
-				(block([remembered, vec![assign(&last, variable.clone()), body]].concat()), Some(assign(&last, variable.clone())))
+				(
+					block([remembered, vec![assign(&last, variable.clone()), body]].concat()),
+					Some(assign(&last, variable.clone())),
+				)
 			}
 			None => (body, None),
 		};
 		let body = self.lower(with_value(&body, &variable), &[]);
-		Some(Listener { trigger: Trigger::Write(HashSet::from([name])), condition: None, body, fired: None, held: None, start })
+		Some(Listener {
+			trigger: Trigger::Write(HashSet::from([name])),
+			condition: None,
+			body,
+			fired: None,
+			held: None,
+			start,
+		})
 	}
 
 	/// `on change x {body}`: the body after every write that changed x (a variable or a `:=` value), `value` in it is x
@@ -433,13 +526,25 @@ impl Signals {
 		let (subject, body) = subject_and_body(rest)?;
 		let function = self.function_named(&word(&subject))?;
 		let body = self.lower(body, &[]);
-		Some(Listener { trigger: Trigger::Call { function, before }, condition: None, body, fired: None, held: None, start: None })
+		Some(Listener {
+			trigger: Trigger::Call { function, before },
+			condition: None,
+			body,
+			fired: None,
+			held: None,
+			start: None,
+		})
 	}
 
 	/// `test`, `tested` (and `saved` for save, `stopped` for stop) name the defined function
 	fn function_named(&self, name: &str) -> Option<String> {
 		let mut stems = vec![name.to_string()];
-		stems.extend(PAST_SUFFIXES.iter().filter_map(|suffix| name.strip_suffix(suffix)).map(str::to_string));
+		stems.extend(
+			PAST_SUFFIXES
+				.iter()
+				.filter_map(|suffix| name.strip_suffix(suffix))
+				.map(str::to_string),
+		);
 		if let Some(stem) = name.strip_suffix(PAST_SUFFIXES[0]) {
 			let mut letters: Vec<char> = stem.chars().collect();
 			if letters.len() > 1 && letters[letters.len() - 1] == letters[letters.len() - 2] {
@@ -462,7 +567,9 @@ pub(crate) enum ListenerWord {
 /// `once cond {body}`, `whenever cond : body`, `on set x {body}`, `on change x {body}`: the word, the condition or the
 /// variable, and the body
 pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
 	let items = &ungrouped(items);
 	let keyword = word(items.first()?);
 	if keyword == ON_WORD {
@@ -479,7 +586,8 @@ pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, No
 		WHENEVER_WORD => ListenerWord::Whenever,
 		_ => return None,
 	};
-	let (condition, body) = subject_and_body(&items[1..]).or_else(|| trailing_block(items.get(1)?).filter(|_| items.len() == 2))?;
+	let (condition, body) =
+		subject_and_body(&items[1..]).or_else(|| trailing_block(items.get(1)?).filter(|_| items.len() == 2))?;
 	Some((listener_word, condition, body))
 }
 
@@ -487,15 +595,25 @@ pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, No
 /// `watched·0 := b + c; on change watched·0 {…}`; `on set` the same
 fn with_watched_expressions(node: Node, count: &Counter) -> Node {
 	let node = node.map_children(|child| with_watched_expressions(child, count));
-	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
-	if !is_statement_list(bracket, separator) || !items.iter().any(|statement| watched_expression(statement).is_some()) {
+	let Node::List(items, bracket, separator) = node.drop_meta() else {
+		return node;
+	};
+	if !is_statement_list(bracket, separator) || !items.iter().any(|statement| watched_expression(statement).is_some())
+	{
 		return node;
 	}
 	let items = items.iter().flat_map(|statement| match watched_expression(statement) {
 		Some((listener_word, expression, body)) => {
 			let name = Node::Symbol(format!("{WATCHED_PREFIX}{}", count.next_number()));
 			let derived = key(name.clone(), Op::Define, expression);
-			vec![derived, Node::List(vec![symbol(ON_WORD), listener_word, name, body], Bracket::None, Separator::Space)]
+			vec![
+				derived,
+				Node::List(
+					vec![symbol(ON_WORD), listener_word, name, body],
+					Bracket::None,
+					Separator::Space,
+				),
+			]
 		}
 		None => vec![statement.clone()],
 	});
@@ -505,7 +623,9 @@ fn with_watched_expressions(node: Node, count: &Counter) -> Node {
 /// `on change b + c {body}`, arriving as `on change (b + (c {body}))`: the word set or change, the expression and the
 /// body. A path (`p.age`) and `x: body` are no expressions
 fn watched_expression(statement: &Node) -> Option<(Node, Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
 	let [on, listener_word, subject] = ungrouped(items).try_into().ok()?;
 	let watches = word(&on) == ON_WORD && [SET_WORD, CHANGE_WORD].contains(&word(&listener_word).as_str());
 	let expression = matches!(subject.drop_meta(), Node::Key(_, op, _) if !matches!(op, Op::Colon | Op::Dot));
@@ -522,15 +642,21 @@ fn ungrouped(items: &[Node]) -> Vec<Node> {
 	if !items.first().is_some_and(is_group) {
 		return items.to_vec();
 	}
-	items.iter().flat_map(|item| match item.drop_meta() {
-		Node::List(parts, Bracket::None, _) => parts.clone(),
-		_ => vec![item.clone()],
-	}).collect()
+	// `on change p.age {…}` arrives nested a level deeper: `((on change) p.age) {…}`
+	items
+		.iter()
+		.flat_map(|item| match item.drop_meta() {
+			Node::List(parts, Bracket::None, _) => ungrouped(parts),
+			_ => vec![item.clone()],
+		})
+		.collect()
 }
 
 /// `after tested: body`, `before test {body}`: the word and what follows it
 fn call_listener_word(statement: &Node) -> Option<(String, Vec<Node>)> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
 	let keyword = word(items.first()?);
 	(keyword == AFTER_WORD || keyword == BEFORE_WORD).then(|| (keyword, items[1..].to_vec()))
 }
@@ -539,19 +665,29 @@ fn call_listener_word(statement: &Node) -> Option<(String, Vec<Node>)> {
 /// A body reading `old` (or an alias the program does not use as a variable of its own): the body with a given
 /// value standing for it; None when it reads none. An alias gets a note naming `old`
 pub(crate) fn with_old(body: &Node, main_variables: &HashSet<String>) -> Option<impl Fn(&Node) -> Node> {
-	let read: Vec<String> = symbols(body).into_iter().filter(|name| OLD_WORDS.contains(&name.as_str()) && !main_variables.contains(name)).collect();
+	let read: Vec<String> = symbols(body)
+		.into_iter()
+		.filter(|name| OLD_WORDS.contains(&name.as_str()) && !main_variables.contains(name))
+		.collect();
 	if read.is_empty() {
 		return None;
 	}
 	crate::normalize::set_position_of(body);
-	read.iter().filter(|word| word.as_str() != OLD_WORDS[0]).for_each(|alias| crate::normalize::hint(alias, OLD_WORDS[0], OLD_REASON));
+	read.iter()
+		.filter(|word| word.as_str() != OLD_WORDS[0])
+		.for_each(|alias| crate::normalize::hint(alias, OLD_WORDS[0], OLD_REASON));
 	let body = body.clone();
-	Some(move |old: &Node| crate::law::substitute(&body, &read.iter().map(|word| (word.clone(), old.clone())).collect()))
+	Some(move |old: &Node| {
+		crate::law::substitute(&body, &read.iter().map(|word| (word.clone(), old.clone())).collect())
+	})
 }
 
 /// The listener body with `value` (or `signal`, `event`) standing for the written value
 pub(crate) fn with_value(body: &Node, value: &Node) -> Node {
-	let bindings = VALUE_WORDS.iter().map(|word| (word.to_string(), value.clone())).collect();
+	let bindings = VALUE_WORDS
+		.iter()
+		.map(|word| (word.to_string(), value.clone()))
+		.collect();
 	crate::law::substitute(body, &bindings)
 }
 
@@ -562,10 +698,13 @@ fn defined_functions(node: &Node) -> HashSet<String> {
 
 /// Each defined function and the names its definition reads, `global` variables included
 fn function_reads(node: &Node) -> HashMap<String, HashSet<String>> {
-	function_definitions(node).into_iter().map(|(name, definition)| {
-		let reads = symbols(definition).into_iter().filter(|read| *read != name).collect();
-		(name, reads)
-	}).collect()
+	function_definitions(node)
+		.into_iter()
+		.map(|(name, definition)| {
+			let reads = symbols(definition).into_iter().filter(|read| *read != name).collect();
+			(name, reads)
+		})
+		.collect()
 }
 
 /// The functions by name, each with its whole definition (`f(x) := …`, `def f(x) {…}`, `def f(x): …`)
@@ -612,16 +751,22 @@ fn derived_values(node: &Node) -> HashMap<String, HashSet<String>> {
 
 pub(crate) fn symbols(node: &Node) -> Vec<String> {
 	let mut names = vec![];
-	node.visit(&mut |part| if let Node::Symbol(name) = part { names.push(name.clone()); });
+	node.visit(&mut |part| {
+		if let Node::Symbol(name) = part {
+			names.push(name.clone());
+		}
+	});
 	names
 }
 
 /// The names declared `global x` anywhere in the node
 fn declared_globals(node: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	node.visit(&mut |part| if let Node::Key(keyword, Op::Colon, name) = part {
-		if word(keyword) == GLOBAL_WORD {
-			names.extend(Some(word(name)).filter(|name| !name.is_empty()));
+	node.visit(&mut |part| {
+		if let Node::Key(keyword, Op::Colon, name) = part {
+			if word(keyword) == GLOBAL_WORD {
+				names.extend(Some(word(name)).filter(|name| !name.is_empty()));
+			}
 		}
 	});
 	names
@@ -641,16 +786,26 @@ fn head_word(head: &Node) -> Node {
 
 /// `def f(x) {…}`, `fun f …`: a keyword definition
 pub(crate) fn defines_function(items: &[Node]) -> bool {
-	items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first)))
+	items
+		.first()
+		.is_some_and(|first| crate::operators::is_function_keyword(&word(first)))
 }
 
 /// The bodies of the call listeners to run before and after the statement
 fn call_listeners(listeners: &[Listener], statement: &Node) -> (Vec<Node>, Vec<Node>) {
 	let (mut before, mut after) = (vec![], vec![]);
 	for listener in listeners {
-		if let Trigger::Call { function, before: runs_before } = &listener.trigger {
+		if let Trigger::Call {
+			function,
+			before: runs_before,
+		} = &listener.trigger
+		{
 			if calls(statement, function) {
-				if *runs_before { before.push(listener.check()) } else { after.push(listener.check()) }
+				if *runs_before {
+					before.push(listener.check())
+				} else {
+					after.push(listener.check())
+				}
 			}
 		}
 	}
@@ -662,7 +817,8 @@ fn calls(node: &Node, function: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => name == function,
 		Node::List(items, bracket, separator) if !is_statement_list(bracket, separator) => {
-			word(items.first().unwrap_or(&Node::Empty)) == function || items.iter().skip(1).any(|item| calls_inside(item, function))
+			word(items.first().unwrap_or(&Node::Empty)) == function
+				|| items.iter().skip(1).any(|item| calls_inside(item, function))
 		}
 		Node::Key(left, _, right) => calls_inside(left, function) || calls_inside(right, function),
 		_ => false,
@@ -677,7 +833,9 @@ fn calls_inside(node: &Node, function: &str) -> bool {
 /// `subject {body}`, `subject: body` or `subject do body`
 pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 	match rest {
-		[subject, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => Some((subject.clone(), body.clone())),
+		[subject, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			Some((subject.clone(), body.clone()))
+		}
 		[handler] if matches!(handler.drop_meta(), Node::Key(_, Op::Do, _)) => match handler.drop_meta() {
 			Node::Key(subject, _, body) => Some((subject.drop_meta().clone(), body.as_ref().clone())),
 			_ => unreachable!("guarded"),
@@ -690,8 +848,12 @@ pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 /// `a == b {body}` arrives as `a == (b {body})`: the condition and the body
 fn trailing_block(condition: &Node) -> Option<(Node, Node)> {
 	match condition.drop_meta() {
-		Node::Key(left, op, right) => trailing_block(right).map(|(right, body)| (Node::Key(left.clone(), *op, Box::new(right)), body)),
-		Node::List(items, Bracket::None | Bracket::Round, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+		Node::Key(left, op, right) => {
+			trailing_block(right).map(|(right, body)| (Node::Key(left.clone(), *op, Box::new(right)), body))
+		}
+		Node::List(items, Bracket::None | Bracket::Round, _)
+			if items.len() == 2 && matches!(items[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
 			Some((without_empty_argument(&items[0]), items[1].clone()))
 		}
 		_ => None,
@@ -701,7 +863,9 @@ fn trailing_block(condition: &Node) -> Option<(Node, Node)> {
 /// `big() {body}` arrives as `big(ø) {body}`: the call `big()`
 fn without_empty_argument(call: &Node) -> Node {
 	match call.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && is_nothing(&items[1]) => Node::List(vec![items[0].clone()], Bracket::Round, Separator::None),
+		Node::List(items, _, _) if items.len() == 2 && is_nothing(&items[1]) => {
+			Node::List(vec![items[0].clone()], Bracket::Round, Separator::None)
+		}
 		_ => call.clone(),
 	}
 }
@@ -722,7 +886,9 @@ pub(crate) fn is_statement_list(bracket: &Bracket, separator: &Separator) -> boo
 /// (`on every day at 9:00 {…}`) is a list of that one
 pub(crate) fn main_statements(program: &Node) -> (Vec<Node>, Bracket, Separator) {
 	match program.drop_meta() {
-		Node::List(items, bracket, separator) if is_statement_list(bracket, separator) => (items.clone(), bracket.clone(), separator.clone()),
+		Node::List(items, bracket, separator) if is_statement_list(bracket, separator) => {
+			(items.clone(), bracket.clone(), separator.clone())
+		}
 		single => (vec![single.clone()], Bracket::None, Separator::Newline),
 	}
 }
@@ -733,7 +899,11 @@ fn watches(listeners: &[Listener], name: &str) -> bool {
 
 /// The checks of the listeners watching any of the written names, each once
 fn checks(listeners: &[Listener], written: &[String]) -> Vec<Node> {
-	listeners.iter().filter(|listener| written.iter().any(|name| listener.watches(name))).map(Listener::check).collect()
+	listeners
+		.iter()
+		.filter(|listener| written.iter().any(|name| listener.watches(name)))
+		.map(Listener::check)
+		.collect()
 }
 
 /// The variable `x = …`, `x += …`, `x++`, `x--` writes; a field or item write `p.age = 2`, `xs#1 = 9` writes p, xs
@@ -745,7 +915,11 @@ fn written_variable(target: &Node, op: Op) -> Option<String> {
 /// `x`, `p.age`, `p.home.city`; an item `xs#1` is a write of xs
 fn written_path(target: &Node) -> Option<String> {
 	match target.drop_meta() {
-		Node::Key(base, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => Some(format!("{}{FIELD_SEPARATOR}{}", written_path(base)?, field.drop_meta().name())),
+		Node::Key(base, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => Some(format!(
+			"{}{FIELD_SEPARATOR}{}",
+			written_path(base)?,
+			field.drop_meta().name()
+		)),
 		_ => root_variable(target),
 	}
 }
@@ -762,7 +936,13 @@ pub(crate) fn root_variable(target: &Node) -> Option<String> {
 fn statement_write(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
 		Node::Key(list, Op::Dot, call) => match call.drop_meta() {
-			Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))) => written_path(list),
+			Node::List(items, _, _)
+				if items
+					.first()
+					.is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))) =>
+			{
+				written_path(list)
+			}
 			_ => None,
 		},
 		Node::Key(target, op, _) => written_variable(target, *op),

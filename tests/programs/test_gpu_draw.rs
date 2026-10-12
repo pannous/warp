@@ -48,5 +48,8 @@ fn gpu_draws_what_cpu_draws() {
 #[test]
 fn an_unknown_draw_choice_warns() {
 	let run = drawn_by("quantum").args(["--no-ask", "eval", "1"]).output().unwrap();
-	assert!(String::from_utf8_lossy(&run.stderr).contains("WARP_DRAW=quantum is neither"), "{run:?}");
+	assert!(
+		String::from_utf8_lossy(&run.stderr).contains("WARP_DRAW=quantum is neither"),
+		"{run:?}"
+	);
 }

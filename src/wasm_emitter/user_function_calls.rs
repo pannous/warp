@@ -4,6 +4,8 @@ use super::*;
 
 /// The kinds a call's argument has for sure when inference names them: what a declared parameter type is checked against
 const SCALAR_KINDS: [Kind; 5] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List];
+/// The kinds that are never a map
+const PLAIN_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
 
 impl WasmGcEmitter {
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -13,9 +15,7 @@ impl WasmGcEmitter {
 	/// Compile all extracted user functions to WASM
 	/// Pre-allocate strings from user function bodies before compiling
 	pub(super) fn collect_user_function_strings(&mut self) {
-		let bodies: Vec<Box<Node>> = self.ctx.user_functions.values()
-			.map(|f| f.body.clone())
-			.collect();
+		let bodies: Vec<Box<Node>> = self.ctx.user_functions.values().map(|f| f.body.clone()).collect();
 		for body in bodies {
 			self.collect_and_allocate_strings(&body);
 		}
@@ -23,19 +23,22 @@ impl WasmGcEmitter {
 
 	/// A program that starts tasks (`go`): each runs in a fresh instance of the module (src/tasks.rs)
 	pub(super) fn spawns_tasks(&self) -> bool {
-		self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN)
+		self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES)
+			|| self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN)
 	}
 
 	/// A global whose value a task's instance gets from the spawning instance (src/tasks.rs copies these at the start)
 	pub(super) fn export_to_tasks(&mut self, label: &str, global: u32) {
 		if self.spawns_tasks() {
-			self.exports.export(&format!("{CAPTURE_EXPORT_PREFIX}{label}"), ExportKind::Global, global);
+			self.exports
+				.export(&format!("{CAPTURE_EXPORT_PREFIX}{label}"), ExportKind::Global, global);
 		}
 	}
 
 	/// Give every outer variable a function reads a global, set from the variable where the function is defined
 	pub(super) fn allocate_closure_captures(&mut self, program: &Node) {
-		let mut outer = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
+		let mut outer = Scope::with_function_kinds(self.user_function_kinds())
+			.with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
 		// a typed list of main captured by a function is passed in a global of its array type (a task's instance copies
 		// capture globals as Nodes, so not with tasks)
@@ -50,28 +53,44 @@ impl WasmGcEmitter {
 				// `outer·inner` reads outer's parameters and variables, main's where outer has none of that name
 				Some(enclosing) => {
 					let mut captured = captured_variables(&function, enclosing);
-					captured.extend(captured_variables(&function, &outer).into_iter().filter(|(name, _)| enclosing.lookup(name).is_none()));
+					captured.extend(
+						captured_variables(&function, &outer)
+							.into_iter()
+							.filter(|(name, _)| enclosing.lookup(name).is_none()),
+					);
 					captured
 				}
 				None => captured_variables(&function, &outer),
 			}
-				.into_iter()
-				.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
-				.collect();
-			let bindings = captured.iter().filter_map(|(name, kind)| {
-				let binding = enclosing.as_ref().and_then(|enclosing| enclosing.lookup(name)).or_else(|| outer.lookup(name));
-				binding.map(|local| Local { kind: *kind, ..local.clone() })
-			}).collect();
-			self.ctx.capture_bindings.insert(function.name.clone(), bindings);
-			let captures: Vec<(String, (u32, Kind))> = captured.into_iter()
-				.map(|(name, kind)| match main_typed.get(&name).filter(|_| enclosing.is_none() && !tasks) {
-					Some(&list) => {
-						let global = self.declare_typed_list_global(list.element);
-						self.typed_capture_globals.insert(global, list);
-						(name, (global, kind))
-					}
-					None => (name, (self.declare_mutable_global(kind), kind)),
+			.into_iter()
+			.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
+			.collect();
+			let bindings = captured
+				.iter()
+				.filter_map(|(name, kind)| {
+					let binding = enclosing
+						.as_ref()
+						.and_then(|enclosing| enclosing.lookup(name))
+						.or_else(|| outer.lookup(name));
+					binding.map(|local| Local {
+						kind: *kind,
+						..local.clone()
+					})
 				})
+				.collect();
+			self.ctx.capture_bindings.insert(function.name.clone(), bindings);
+			let captures: Vec<(String, (u32, Kind))> = captured
+				.into_iter()
+				.map(
+					|(name, kind)| match main_typed.get(&name).filter(|_| enclosing.is_none() && !tasks) {
+						Some(&list) => {
+							let global = self.declare_typed_list_global(list.element);
+							self.typed_capture_globals.insert(global, list);
+							(name, (global, kind))
+						}
+						None => (name, (self.declare_mutable_global(kind), kind)),
+					},
+				)
 				.collect();
 			for (name, (global, _)) in &captures {
 				self.export_to_tasks(&format!("{}·{name}", function.name), *global);
@@ -84,7 +103,19 @@ impl WasmGcEmitter {
 	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
 	/// fixnums from fixnum pieces with these (tasks.rs Builders)
 	pub(super) fn export_exact_builders(&mut self) {
-		let hands_values_in = [crate::host::RUN_BLOCK, crate::host::BLOCK_VALUE, crate::host::FOREIGN_CALL, crate::host::STD_PURE, crate::host::STD_IO, crate::host::TASK_SPAWN, crate::host::TASK_AWAIT, crate::host::TASK_SPAWN_VALUES, crate::host::TASK_AWAIT_VALUE].iter().any(|word| self.ctx.ffi_imports.contains_key(*word));
+		let hands_values_in = [
+			crate::host::RUN_BLOCK,
+			crate::host::BLOCK_VALUE,
+			crate::host::FOREIGN_CALL,
+			crate::host::STD_PURE,
+			crate::host::STD_IO,
+			crate::host::TASK_SPAWN,
+			crate::host::TASK_AWAIT,
+			crate::host::TASK_SPAWN_VALUES,
+			crate::host::TASK_AWAIT_VALUE,
+		]
+		.iter()
+		.any(|word| self.ctx.ffi_imports.contains_key(*word));
 		if !hands_values_in || !self.int_runtime() {
 			return;
 		}
@@ -108,12 +139,24 @@ impl WasmGcEmitter {
 	/// (`outer·mid·deep` reads outer's too, card nested-two), then main's, which outer reads too (`under = paper` copies
 	/// main's kind, card captured-copy)
 	pub(super) fn enclosing_scope(&self, function: &str, main: &Scope) -> Option<Scope> {
-		let enclosing = self.ctx.enclosing_functions.get(function).and_then(|name| self.ctx.user_functions.get(name))?;
-		let mut scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
-		scope.parent = Some(Box::new(self.enclosing_scope(&enclosing.name, main).unwrap_or_else(|| main.clone())));
+		let enclosing = self
+			.ctx
+			.enclosing_functions
+			.get(function)
+			.and_then(|name| self.ctx.user_functions.get(name))?;
+		let mut scope = Scope::with_function_kinds(self.user_function_kinds())
+			.with_closure_targets(self.ctx.closure_variable_targets.clone());
+		scope.parent = Some(Box::new(
+			self.enclosing_scope(&enclosing.name, main)
+				.unwrap_or_else(|| main.clone()),
+		));
 		scope.globals = self.ctx.declared_globals.clone();
 		for (index, param) in enclosing.params.iter().enumerate() {
-			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
+			let kind = if self.takes_list_abi(&enclosing.name, index) {
+				Kind::List
+			} else {
+				param_kind(param)
+			};
 			scope.define_param(param, kind);
 		}
 		collect_variables(&enclosing.body, &mut scope);
@@ -124,7 +167,9 @@ impl WasmGcEmitter {
 	/// `apply(inner)`), and inner reads outer's variables as they are now (`nonlocal y`, cards g-qUkY, g-rQ-U): the
 	/// capture globals of all of outer's nested functions are set anew before each call
 	pub(super) fn refresh_enclosing_captures(&mut self, func: &mut Function) {
-		let Some(compiling) = self.compiling.clone() else { return };
+		let Some(compiling) = self.compiling.clone() else {
+			return;
+		};
 		for inner in self.nested_functions(&compiling) {
 			self.emit_closure_capture(func, &inner);
 		}
@@ -135,7 +180,9 @@ impl WasmGcEmitter {
 	pub(super) fn emit_closure_capture(&mut self, func: &mut Function, function_name: &str) {
 		let captures = self.ctx.captures.get(function_name).cloned().unwrap_or_default();
 		for (name, (global, kind)) in captures {
-			if self.emit_typed_capture(func, &name, global) || (kind.is_ref() && self.emit_typed_list_as_node(func, &name)) {
+			if self.emit_typed_capture(func, &name, global)
+				|| (kind.is_ref() && self.emit_typed_list_as_node(func, &name))
+			{
 				func.instruction(&I::GlobalSet(global));
 				continue;
 			}
@@ -151,7 +198,13 @@ impl WasmGcEmitter {
 
 	/// The functions defined in the body of `function` (`outer·inner` of outer), in a stable order
 	pub(super) fn nested_functions(&self, function: &str) -> Vec<String> {
-		let mut nested: Vec<String> = self.ctx.enclosing_functions.iter().filter(|(_, enclosing)| *enclosing == function).map(|(inner, _)| inner.clone()).collect();
+		let mut nested: Vec<String> = self
+			.ctx
+			.enclosing_functions
+			.iter()
+			.filter(|(_, enclosing)| *enclosing == function)
+			.map(|(inner, _)| inner.clone())
+			.collect();
 		nested.sort();
 		nested
 	}
@@ -183,10 +236,13 @@ impl WasmGcEmitter {
 	/// Register a user function's signature and assign it an index (PASS 1)
 	pub(super) fn register_user_function_signature(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
-		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
+		let returns_node = user_fn.return_kind.is_ref(); // Text, Symbol, List, etc. return Node refs
 
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
-		let param_types: Vec<ValType> = user_fn.params.iter().enumerate()
+		let param_types: Vec<ValType> = user_fn
+			.params
+			.iter()
+			.enumerate()
 			.map(|(index, param)| match self.struct_parameter(name, index) {
 				Some(class) => Ref(self.instance_ref(class)),
 				None if self.takes_list_abi(name, index) => self.node_list_type(),
@@ -219,42 +275,71 @@ impl WasmGcEmitter {
 	/// Compile a user function's body (PASS 2)
 	pub(super) fn compile_user_function_body(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
-		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
+		let returns_node = user_fn.return_kind.is_ref(); // Text, Symbol, List, etc. return Node refs
 		let saved_compiling = self.compiling.replace(name.to_string());
 
 		// Create function scope with parameters
-		let function_scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
+		let function_scope = Scope::with_function_kinds(self.user_function_kinds())
+			.with_closure_targets(self.ctx.closure_variable_targets.clone());
 		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
 		// declared globals are changed in place, never shadowed by a local of the same name
 		self.scope.globals = self.function_globals(name);
 		for (index, param) in user_fn.params.iter().enumerate() {
-			let kind = if self.takes_list_abi(name, index) { Kind::List } else { param_kind(param) };
+			let kind = if self.takes_list_abi(name, index) {
+				Kind::List
+			} else {
+				param_kind(param)
+			};
 			self.scope.define_param(param, kind);
 		}
 
 		// a captured typed list of main is read from its capture global (shadowing a typed global of that name)
 		let captures = self.ctx.captures.get(name).cloned().unwrap_or_default();
-		let shadowed_typed: Vec<_> = captures.iter().map(|(variable, (global, _))| {
-			let previous = match self.typed_capture_globals.get(global) {
-				Some(&list) => self.typed_globals.insert(variable.clone(), (*global, list)),
-				None => self.typed_globals.remove(variable),
-			};
-			(variable.clone(), previous)
-		}).collect();
+		let shadowed_typed: Vec<_> = captures
+			.iter()
+			.map(|(variable, (global, _))| {
+				let previous = match self.typed_capture_globals.get(global) {
+					Some(&list) => self.typed_globals.insert(variable.clone(), (*global, list)),
+					None => self.typed_globals.remove(variable),
+				};
+				(variable.clone(), previous)
+			})
+			.collect();
 
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
-		for (_, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
-			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true, aliased: true });
+		for (_, param) in user_fn
+			.params
+			.iter()
+			.enumerate()
+			.filter(|(index, _)| self.takes_list_abi(name, *index))
+		{
+			typed_lists.insert(
+				param.name.clone(),
+				list_dispatch::TypedList {
+					element: list_dispatch::ElementType::Node,
+					updated: true,
+					aliased: true,
+				},
+			);
 		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);
 		let saved_typed_maps = std::mem::replace(&mut self.typed_maps, typed_maps);
 		let mut typed_structs = self.find_typed_structs(&user_fn.body);
-		typed_structs.extend(user_fn.params.iter().enumerate().filter_map(|(index, param)| Some((param.name.clone(), self.struct_parameter(name, index)?.clone()))));
+		typed_structs.extend(
+			user_fn
+				.params
+				.iter()
+				.enumerate()
+				.filter_map(|(index, param)| Some((param.name.clone(), self.struct_parameter(name, index)?.clone()))),
+		);
 		let saved_typed_structs = std::mem::replace(&mut self.typed_structs, typed_structs);
-		let saved_bounded_counters = std::mem::replace(&mut self.bounded_counters, super::big_int::bounded_counters(&user_fn.body));
+		let saved_bounded_counters = std::mem::replace(
+			&mut self.bounded_counters,
+			super::big_int::bounded_counters(&user_fn.body),
+		);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -278,8 +363,14 @@ impl WasmGcEmitter {
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
 		// Captured variables read their definition-time globals
-		let shadowed: Vec<_> = captures.iter()
-			.map(|(variable, global)| (variable.clone(), self.ctx.user_globals.insert(variable.clone(), *global)))
+		let shadowed: Vec<_> = captures
+			.iter()
+			.map(|(variable, global)| {
+				(
+					variable.clone(),
+					self.ctx.user_globals.insert(variable.clone(), *global),
+				)
+			})
 			.collect();
 
 		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
@@ -337,7 +428,12 @@ impl WasmGcEmitter {
 	}
 
 	/// The call of `fn_name` with its own result on the stack, and its definition; a type error when it is undefined
-	fn emit_defined_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) -> Option<UserFunctionDef> {
+	fn emit_defined_user_function_call(
+		&mut self,
+		func: &mut Function,
+		fn_name: &str,
+		args: &[Node],
+	) -> Option<UserFunctionDef> {
 		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
 			self.emit_type_error(func, self.ctx.undefined_function_message(fn_name));
 			return None;
@@ -348,7 +444,9 @@ impl WasmGcEmitter {
 
 	/// A call of a user function whose result is wanted as a Node
 	pub(super) fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else { return };
+		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else {
+			return;
+		};
 		let returns_node = user_fn.return_kind.is_ref();
 		if self.returns_list_abi(fn_name) {
 			self.emit_call(func, "node_list_as_node");
@@ -366,14 +464,35 @@ impl WasmGcEmitter {
 	/// Result kinds of the user functions, of `floor(x)`, `round(x)`…, which build an Int (emit_introspection_fn)
 	/// unless libm's f64 version is imported, and of the exports of imported WebAssembly modules (`shout("hi")`, a text)
 	pub(super) fn user_function_kinds(&self) -> HashMap<String, Kind> {
-		let rounding = ROUNDING_FUNCTIONS.iter().filter(|name| !self.ctx.ffi_imports.contains_key(**name)).map(|name| (name.to_string(), Kind::Int));
+		let rounding = ROUNDING_FUNCTIONS
+			.iter()
+			.filter(|name| !self.ctx.ffi_imports.contains_key(**name))
+			.map(|name| (name.to_string(), Kind::Int));
 		let tuple_values = self.ctx.user_functions.iter().flat_map(|(name, function)| {
-			function.tuple_kinds.iter().enumerate().map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
+			function
+				.tuple_kinds
+				.iter()
+				.enumerate()
+				.map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
 		});
 		let fields = crate::analyzer::declared_field_kinds(&self.ctx.type_registry);
-		let module_exports = self.ctx.ffi_imports.iter().filter(|(_, import)| crate::wasm_modules::is_module_path(import.library))
+		let module_exports = self
+			.ctx
+			.ffi_imports
+			.iter()
+			.filter(|(_, import)| crate::wasm_modules::is_module_path(import.library))
 			.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)));
-		module_exports.chain(rounding).chain(self.ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind))).chain(tuple_values).chain(fields).collect()
+		module_exports
+			.chain(rounding)
+			.chain(
+				self.ctx
+					.user_functions
+					.iter()
+					.map(|(name, function)| (name.clone(), function.return_kind)),
+			)
+			.chain(tuple_values)
+			.chain(fields)
+			.collect()
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
@@ -393,7 +512,9 @@ impl WasmGcEmitter {
 
 	/// A call of a user function whose result is wanted as a raw i64: the Int of a Node result
 	pub(super) fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else { return };
+		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else {
+			return;
+		};
 		let returns_node = user_fn.return_kind.is_ref();
 		if self.returns_list_abi(fn_name) {
 			self.emit_call(func, "node_list_as_node");
@@ -406,7 +527,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Inner helper for emitting user function calls; a tuple function's values are packed into a list
-	pub(super) fn emit_user_function_call_inner(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
+	pub(super) fn emit_user_function_call_inner(
+		&mut self,
+		func: &mut Function,
+		user_fn: &UserFunctionDef,
+		args: &[Node],
+	) {
 		self.emit_user_function_values(func, user_fn, args);
 		if !user_fn.tuple_kinds.is_empty() && user_fn.func_index.is_some() {
 			self.emit_pack_tuple(func, &user_fn.name);
@@ -425,26 +551,58 @@ impl WasmGcEmitter {
 		}
 
 		if args.len() > user_fn.params.len() {
-			let count = |n: usize| if n == 1 { "1 argument".to_string() } else { format!("{n} arguments") };
-			self.emit_type_error(func, format!("{} takes {}, got {}", user_fn.name, count(user_fn.params.len()), args.len()));
+			let count = |n: usize| {
+				if n == 1 {
+					"1 argument".to_string()
+				} else {
+					format!("{n} arguments")
+				}
+			};
+			self.emit_type_error(
+				func,
+				format!(
+					"{} takes {}, got {}",
+					user_fn.name,
+					count(user_fn.params.len()),
+					args.len()
+				),
+			);
 			return;
 		}
 		// Emit arguments; a missing argument evaluates its default anew at every call
 		// a default reads the parameters before it as the values given for them: `f(a, b = a * 2)`
 		let mut given: HashMap<String, Node> = HashMap::new();
+		let shown_name = crate::lowering::folding::unspecialised_name(&user_fn.name);
 		for (i, param) in user_fn.params.iter().enumerate() {
-			let defaulted = param.default.as_ref().map(|default| crate::law::substitute(default, &given));
+			let defaulted = param
+				.default
+				.as_ref()
+				.map(|default| crate::law::substitute(default, &given));
 			let Some(argument) = args.get(i).or(defaulted.as_ref()).cloned() else {
-				self.emit_type_error(func, format!("{} needs a value for parameter {} (it has no default)", user_fn.name, param.name));
+				self.emit_type_error(
+					func,
+					format!(
+						"{} needs a value for parameter {} (it has no default)",
+						shown_name, param.name
+					),
+				);
 				return;
 			};
 			given.insert(param.name.clone(), argument.clone());
 			let argument = &argument;
 			// `f(xs: texts)` refuses a list of ints (W0: list int ≰ list text)
-			let element = param.annotation.as_ref().and_then(crate::analyzer::declared_element_type);
+			let element = param
+				.annotation
+				.as_ref()
+				.and_then(crate::analyzer::declared_element_type);
 			let list_type = crate::analyzer::list_type_name(argument, &self.scope);
 			if let Some(element) = element.filter(|element| !crate::analyzer::elements_fit(element, &list_type)) {
-				let message = format!("{} needs a list of {element} for parameter {}, got {} (a {list_type})", user_fn.name, param.name, argument.serialize());
+				let message = format!(
+					"{} needs a list of {element} for parameter {}, got {} (a {list_type})",
+					shown_name,
+					param.name,
+					argument.serialize()
+				);
 				self.emit_type_error(func, message);
 				return;
 			}
@@ -460,30 +618,66 @@ impl WasmGcEmitter {
 			let given = self.get_type(argument);
 			// a declared list (`xs:list`, `xs:ints`) refuses a number or text loudly (wiki/Footguns.md "Type annotations not enforced loudly")
 			let declared_list = expected == Kind::List && param.annotation.is_some();
-			let refused: &[Kind] = if declared_list { &[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint] } else { &[Kind::List, Kind::Text] };
+			let refused: &[Kind] = if declared_list {
+				&[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint]
+			} else {
+				&[Kind::List, Kind::Text]
+			};
 			// a declared builtin type takes only its subtypes, `f(x: text)` refuses 3 (W0, notes/type_theory.md)
-			let declared_misfit = param.annotation.as_ref().and_then(crate::analyzer::annotated_builtin_type).is_some_and(|type_name| SCALAR_KINDS.contains(&given) && !crate::analyzer::admits(type_name, given));
+			let declared_misfit = param
+				.annotation
+				.as_ref()
+				.and_then(crate::analyzer::annotated_builtin_type)
+				.is_some_and(|type_name| SCALAR_KINDS.contains(&given) && !crate::analyzer::admits(type_name, given));
+			// `g(m: map)` refuses 3 and "ab"
+			let declared_map = param
+				.annotation
+				.as_ref()
+				.is_some_and(|annotation| crate::analyzer::is_map_type(&annotation.drop_meta().name()));
+			let declared_misfit = declared_misfit || (declared_map && PLAIN_KINDS.contains(&given));
 			// `f(b: bool)` refuses 2 but takes yes, no, 1 and 0 (card bool-assign, P199)
-			let annotated_bool = param.annotation.as_ref().map(Node::name).filter(|type_name| crate::analyzer::is_bool_type(type_name));
+			let annotated_bool = param
+				.annotation
+				.as_ref()
+				.map(Node::name)
+				.filter(|type_name| crate::analyzer::is_bool_type(type_name));
 			if annotated_bool.is_some_and(|type_name| crate::analyzer::literal_misfit(&type_name, argument).is_some()) {
-				let message = format!("{} needs a bool for parameter {}, got {} ({})", user_fn.name, param.name, argument.serialize(), kind_with_article(given));
+				let message = format!(
+					"{} needs a bool for parameter {}, got {} ({})",
+					shown_name,
+					param.name,
+					argument.serialize(),
+					kind_with_article(given)
+				);
 				self.emit_type_error(func, message);
 				return;
 			}
 			// `[]` is ø here: the empty list fits every declared list
 			let is_empty_list = matches!(argument.drop_meta(), Node::Empty);
-			if declared_misfit || ((!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected && !is_empty_list) {
+			if declared_misfit
+				|| ((!expected.is_ref() || declared_list)
+					&& refused.contains(&given)
+					&& given != expected
+					&& !is_empty_list)
+			{
 				// a parameter held as a Node (`a:number` of a program with ± values, `x: int or text`) names its type, not its kind
 				let wanted = match param.annotation.as_ref().filter(|_| expected == Kind::Empty) {
 					Some(annotation) => crate::analyzer::with_article(&annotation.drop_meta().name()),
 					None => kind_with_article(expected),
 				};
-				let message = format!("{} needs {wanted} for parameter {}, got {} ({})", user_fn.name, param.name, argument.serialize(), kind_with_article(given));
+				let message = format!(
+					"{} needs {wanted} for parameter {}, got {} ({})",
+					shown_name,
+					param.name,
+					argument.serialize(),
+					kind_with_article(given)
+				);
 				self.emit_type_error(func, message);
 				return;
 			}
 			self.emit_declared_value(func, param.annotation.as_ref(), argument, expected);
-			if expected == Kind::Text && given == Kind::Codepoint { // f("a") for f(t:text): "a" lexes as a character
+			if expected == Kind::Text && given == Kind::Codepoint {
+				// f("a") for f(t:text): "a" lexes as a character
 				self.emit_call(func, text_builtins::TEXT_OF);
 			}
 		}
@@ -497,7 +691,11 @@ impl WasmGcEmitter {
 fn statements_run(body: &Node) -> Node {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, separator @ (Separator::Semicolon | Separator::Newline))
-			if items.len() > 1 && !items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) => {
+			if items.len() > 1
+				&& !items
+					.iter()
+					.any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
 			Node::List(items.clone(), Bracket::None, separator.clone())
 		}
 		_ => body.clone(),

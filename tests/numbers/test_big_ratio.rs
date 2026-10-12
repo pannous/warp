@@ -1,13 +1,16 @@
 //! Ratios whose numerator or denominator exceed i64 stay exact as Number::BigQuotient (g-qU7E).
+use crate::is;
 use num_bigint::BigInt;
 use warp::extensions::numbers::Number;
 use warp::extensions::reals::Rational;
 use warp::wasm_emitter::eval;
 use warp::Node;
-use crate::is;
 
 fn big_ratio(numerator: &str, denominator: &str) -> Node {
-	let ratio = Rational::new(numerator.parse::<BigInt>().unwrap(), denominator.parse::<BigInt>().unwrap());
+	let ratio = Rational::new(
+		numerator.parse::<BigInt>().unwrap(),
+		denominator.parse::<BigInt>().unwrap(),
+	);
 	Node::Number(Number::from_rational(ratio))
 }
 
@@ -31,6 +34,12 @@ fn test_big_ratio_terminating_decimal() {
 #[test]
 fn test_big_ratio_unit_amounts_stay_exact() {
 	// 2^62 km / 7 mm → (2^62 · 10^6)/7, beyond i64, stays BigQuotient
-	assert_eq!(eval("4611686018427387904 km / 7 mm").serialize(), "4611686018427387904000000/7");
-	assert_eq!(eval("4611686018427387904 m / 7").serialize(), "(4611686018427387904/7)m");
+	assert_eq!(
+		eval("4611686018427387904 km / 7 mm").serialize(),
+		"4611686018427387904000000/7"
+	);
+	assert_eq!(
+		eval("4611686018427387904 m / 7").serialize(),
+		"(4611686018427387904/7)m"
+	);
 }

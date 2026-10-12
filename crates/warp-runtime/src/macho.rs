@@ -46,7 +46,9 @@ fn load_commands(bytes: &[u8]) -> Vec<(u32, Range<usize>)> {
 	let count = u32_at(bytes, COMMAND_COUNT_AT).unwrap_or(0);
 	let mut at = HEADER_BYTES;
 	for _ in 0..count {
-		let (Some(command), Some(size)) = (u32_at(bytes, at), u32_at(bytes, at + 4)) else { break };
+		let (Some(command), Some(size)) = (u32_at(bytes, at), u32_at(bytes, at + 4)) else {
+			break;
+		};
 		commands.push((command, at..at + size as usize));
 		at += size as usize;
 	}
@@ -55,34 +57,54 @@ fn load_commands(bytes: &[u8]) -> Vec<(u32, Range<usize>)> {
 
 /// Where the code signature starts, if the executable is a signed Mach-O
 pub fn signature_offset(bytes: &[u8]) -> Option<usize> {
-	let (_, signature) = load_commands(bytes).into_iter().find(|(command, _)| *command == CODE_SIGNATURE)?;
+	let (_, signature) = load_commands(bytes)
+		.into_iter()
+		.find(|(command, _)| *command == CODE_SIGNATURE)?;
 	u32_at(bytes, signature.start + DATA_OFFSET_AT).map(|offset| offset as usize)
 }
 
 /// The executable without its code signature: the signature's bytes and its load command removed
 pub fn unsigned(bytes: &[u8]) -> Vec<u8> {
 	let mut image = bytes.to_vec();
-	let Some((_, signature)) = load_commands(bytes).into_iter().find(|(command, _)| *command == CODE_SIGNATURE) else { return image };
+	let Some((_, signature)) = load_commands(bytes)
+		.into_iter()
+		.find(|(command, _)| *command == CODE_SIGNATURE)
+	else {
+		return image;
+	};
 	let offset = signature_offset(bytes).expect("a signature command names its offset");
 	image.truncate(offset);
 	let commands_end = HEADER_BYTES + u32_at(bytes, COMMANDS_SIZE_AT).unwrap_or(0) as usize;
 	let removed = signature.len();
 	image.copy_within(signature.end..commands_end, signature.start);
 	image[commands_end - removed..commands_end].fill(0);
-	set_u32(&mut image, COMMAND_COUNT_AT, u32_at(bytes, COMMAND_COUNT_AT).unwrap_or(1) - 1);
-	set_u32(&mut image, COMMANDS_SIZE_AT, (commands_end - HEADER_BYTES - removed) as u32);
+	set_u32(
+		&mut image,
+		COMMAND_COUNT_AT,
+		u32_at(bytes, COMMAND_COUNT_AT).unwrap_or(1) - 1,
+	);
+	set_u32(
+		&mut image,
+		COMMANDS_SIZE_AT,
+		(commands_end - HEADER_BYTES - removed) as u32,
+	);
 	extend_last_segment_to_end(&mut image);
 	image
 }
 
 /// Make the segment that ends the file (__LINKEDIT) reach the end of the file: what was appended becomes its content
 pub fn extend_last_segment_to_end(image: &mut [u8]) {
-	let last_segment = load_commands(image).into_iter()
+	let last_segment = load_commands(image)
+		.into_iter()
 		.filter(|(command, _)| *command == SEGMENT_64)
 		.max_by_key(|(_, segment)| u64_at(image, segment.start + SEGMENT_FILEOFF_AT));
 	let Some((_, segment)) = last_segment else { return };
 	let file_offset = u64_at(image, segment.start + SEGMENT_FILEOFF_AT).unwrap_or(0);
 	let file_size = image.len() as u64 - file_offset;
 	set_u64(image, segment.start + SEGMENT_FILESIZE_AT, file_size);
-	set_u64(image, segment.start + SEGMENT_VMSIZE_AT, file_size.next_multiple_of(PAGE_BYTES));
+	set_u64(
+		image,
+		segment.start + SEGMENT_VMSIZE_AT,
+		file_size.next_multiple_of(PAGE_BYTES),
+	);
 }

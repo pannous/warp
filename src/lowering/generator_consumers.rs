@@ -5,10 +5,10 @@
 //! (`iter(g(args))`, generator_objects.rs), from an object by `.next()` until ø, from any other list by its index.
 //! A call inside a `while` condition stays as it is: computed once before the loop it would not change per test.
 
+use super::nodes::{assign, block, call, int, statement_list, symbol, Counter};
 use super::words::OF_WORD;
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
 use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
-use super::nodes::{Counter, assign, block, call, int, statement_list, symbol};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -46,7 +46,11 @@ struct Consumers<'a> {
 pub(crate) fn lower(node: Node, generators: &HashMap<String, Generator>) -> Node {
 	let mut objects = advanced_variables(&node);
 	objects.extend(lazily_read_variables(&node, generators));
-	let consumers = Consumers { generators, objects, counter: Counter::starting_at(1) };
+	let consumers = Consumers {
+		generators,
+		objects,
+		counter: Counter::starting_at(1),
+	};
 	let mut found = false;
 	node.visit(&mut |part| found |= consumers.consumer(part).is_some());
 	if !found {
@@ -80,7 +84,9 @@ fn lazily_read_variables(node: &Node, generators: &HashMap<String, Generator>) -
 
 /// `word(arguments)`, `take 3 of xs` as `take(xs, 3)`
 fn consumer_call(node: &Node) -> Option<(&str, Vec<Node>)> {
-	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
+		return None;
+	};
 	let is_take = |word: &Node| word.symbol_name().is_some_and(|name| TAKE_WORDS.contains(&name));
 	if let [word, count, of, source] = items.as_slice() {
 		if is_take(word) && of.is_symbol(OF_WORD) {
@@ -89,7 +95,11 @@ fn consumer_call(node: &Node) -> Option<(&str, Vec<Node>)> {
 	}
 	let (name, arguments) = items.split_first()?;
 	let arguments: Vec<Node> = arguments.iter().flat_map(crate::ruby_blocks::arguments).collect();
-	let word = if is_take(name) && arguments.len() == 2 { TAKE_WORD } else { name.symbol_name()? };
+	let word = if is_take(name) && arguments.len() == 2 {
+		TAKE_WORD
+	} else {
+		name.symbol_name()?
+	};
 	Some((word, arguments))
 }
 
@@ -99,7 +109,9 @@ fn is_while(node: &Node) -> bool {
 
 /// The statements of a template with its placeholders filled in
 pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
-	let filled = bindings.iter().fold(parse(text), |node, (placeholder, value)| substitute(node, placeholder, value));
+	let filled = bindings.iter().fold(parse(text), |node, (placeholder, value)| {
+		substitute(node, placeholder, value)
+	});
 	match filled.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
 		single => vec![single.clone()],
@@ -113,11 +125,21 @@ impl Consumers<'_> {
 		let limit = match word {
 			TAKE_WORD if arguments.len() == 2 => arguments.pop(),
 			ZIP_WORD if arguments.len() >= 2 => None,
-			_ if DRAINING_WORDS.contains(&crate::library_words::canonical_spelling(word)) && arguments.len() == 1 && arguments[0].symbol_name().is_some_and(|name| self.objects.contains(name)) => None,
+			_ if DRAINING_WORDS.contains(&crate::library_words::canonical_spelling(word))
+				&& arguments.len() == 1
+				&& arguments[0]
+					.symbol_name()
+					.is_some_and(|name| self.objects.contains(name)) =>
+			{
+				None
+			}
 			_ => return None,
 		};
 		let sources: Vec<Source> = arguments.into_iter().map(|argument| self.source(argument)).collect();
-		sources.iter().any(|source| matches!(source, Source::Pulled(_))).then(|| (word.to_string(), sources, limit))
+		sources
+			.iter()
+			.any(|source| matches!(source, Source::Pulled(_)))
+			.then(|| (word.to_string(), sources, limit))
 	}
 
 	fn source(&self, argument: Node) -> Source {
@@ -135,7 +157,11 @@ impl Consumers<'_> {
 	fn hoisted(&self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) if is_statement_list(&items, &bracket, &separator) => {
-				let separator = if separator == Separator::Newline { separator } else { Separator::Semicolon };
+				let separator = if separator == Separator::Newline {
+					separator
+				} else {
+					Separator::Semicolon
+				};
 				let items = items.into_iter().flat_map(|item| {
 					let item = self.hoisted(item);
 					if is_while(&item) {
@@ -148,18 +174,25 @@ impl Consumers<'_> {
 				});
 				Node::List(items.collect(), bracket, separator)
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.hoisted(*node)), data },
+			Node::Meta { node, data } => Node::Meta {
+				node: Box::new(self.hoisted(*node)),
+				data,
+			},
 			other => other.map_children(|child| self.hoisted(child)),
 		}
 	}
 
 	/// The statement with each consumer replaced by the variable its statements, put into `before`, compute
 	fn extracted(&self, node: Node, before: &mut Vec<Node>) -> Node {
-		if matches!(node.drop_meta(), Node::List(items, bracket, separator) if is_statement_list(items, bracket, separator)) || matches!(node.drop_meta(), Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _)) {
+		if matches!(node.drop_meta(), Node::List(items, bracket, separator) if is_statement_list(items, bracket, separator))
+			|| matches!(node.drop_meta(), Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _))
+		{
 			return node;
 		}
 		let node = node.map_children(|child| self.extracted(child, before));
-		let Some((word, sources, limit)) = self.consumer(&node) else { return node };
+		let Some((word, sources, limit)) = self.consumer(&node) else {
+			return node;
+		};
 		let number = self.counter.next_number().to_string();
 		let name = |parts: &[&str]| symbol(&[&[word.as_str(), &number], parts].concat().join(NAME_SEPARATOR));
 		let out = name(&[]);
@@ -182,11 +215,20 @@ impl Consumers<'_> {
 					(expression, INDEXED)
 				}
 			};
-			let pulled_from = if expression.symbol_name().is_some() && pull == PULLED { expression } else {
+			let pulled_from = if expression.symbol_name().is_some() && pull == PULLED {
+				expression
+			} else {
 				before.push(assign(source_name.clone(), expression));
 				source_name
 			};
-			body.extend(template(pull, &[("VALUE", &value), ("SOURCE", &pulled_from), ("INDEX", &name(&["index", &index.to_string()]))]));
+			body.extend(template(
+				pull,
+				&[
+					("VALUE", &value),
+					("SOURCE", &pulled_from),
+					("INDEX", &name(&["index", &index.to_string()])),
+				],
+			));
 			values.push(value);
 		}
 		body.extend(template(COLLECTED, &[("OUT", &out), ("VALUE", &yielded_value(values))]));

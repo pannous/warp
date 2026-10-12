@@ -257,6 +257,32 @@ theorem replaceAt_typed {Γ v tv e} (hv : HasType P Γ v tv) (vv : v.isValue = t
         exact ⟨by simp [isValue, va.1, vr], _, .cons hh htr he', by simpa using join_least sa se⟩
   | _ => intro txs n r _ _ _ hr; simp [replaceAt] at hr
 
+/-- inserting a value of type at most e into a list value keeps it a list of at most e -/
+theorem insertItems_typed {Γ v tv e} (hv : HasType P Γ v tv) (vv : v.isValue = true) (sv : sub tv e = true) :
+    ∀ {xs : Expr} {txs} (n : Int), xs.isValue = true → HasType P Γ xs txs → sub txs (.list e) = true →
+    (insertItems xs n v).isValue = true ∧ ∃ tr, HasType P Γ (insertItems xs n v) tr ∧ sub tr (.list e) = true := by
+  intro xs
+  induction xs with
+  | cons h t _ iht =>
+    intro txs n va hxs st
+    simp only [isValue, Bool.and_eq_true] at va
+    cases hxs with
+    | cons hh ht hel =>
+      simp only [sub_list] at st
+      have sa := sub_trans (join_upper_left _ _) st
+      have sl := sub_trans (join_upper_right _ _) st
+      have tl := value_list ht va.2 hel
+      subst tl
+      simp only [insertItems]
+      split
+      · exact ⟨by simp [isValue, vv, va.1, va.2], _, .cons hv (.cons hh ht hel) rfl, by simpa using join_least sv st⟩
+      · obtain ⟨vr, tr, htr, str⟩ := iht (n - 1) va.2 ht (by simpa using sl)
+        obtain ⟨e', he', se⟩ := element_mono str rfl
+        exact ⟨by simp [isValue, va.1, vr], _, .cons hh htr he', by simpa using join_least sa se⟩
+  | _ =>
+    intro txs n _ _ _; simp only [insertItems]
+    exact ⟨by simp [isValue, vv], _, .cons hv .nil rfl, by simpa using join_least sv (sub_never _)⟩
+
 /-- a list value's type has elements -/
 theorem list_element {Γ v t} (h : HasType P Γ v t) (hl : isList v = true) : ∃ e, element t = some e := by
   cases h <;> simp_all [isList, element]
@@ -350,12 +376,12 @@ theorem fits_typed {Γ} : ∀ {v : Expr} {t}, fits v t = true → ∃ tv, HasTyp
 /-- a conversion gives a value of the target type, or an error -/
 theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
     ∃ t', HasType P Γ (convertValue μ v t) t' ∧ sub t' t = true := by
-  have parsed (make : Int → Expr) (u : Ty) (hm : ∀ n, HasType P Γ (make n) u) (hu : sub u u = true) :
+  have parsed (make : Rat → Expr) (u : Ty) (hm : ∀ q, ∃ t', HasType P Γ (make q) t' ∧ sub t' u = true) :
       ∃ t', HasType P Γ (convertValue.parsed make v) t' ∧ sub t' u = true := by
     unfold convertValue.parsed
     split
-    · cases (‹String›).toInt? with
-      | some n => exact ⟨_, hm n, hu⟩
+    · cases textNumber _ with
+      | some q => exact hm q
       | none => exact ⟨_, .error, sub_never _⟩
     · exact ⟨_, .error, sub_never _⟩
   have checked (t : Ty) : ∃ t', HasType P Γ (if fits v t then v else .error "cannot cast") t' ∧ sub t' t = true := by
@@ -368,11 +394,21 @@ theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
   case int =>
     simp only [convertValue]; split
     · exact ⟨_, .int, sub_refl _⟩
-    · exact parsed _ _ (fun _ => .int) (sub_refl _)
+    · exact parsed _ _ (fun _ => ⟨_, .int, sub_refl _⟩)
   case number =>
     simp only [convertValue]; split
     · exact ⟨_, .flt, sub_refl _⟩
-    · exact parsed _ _ (fun _ => .flt) (sub_refl _)
+    · exact parsed _ _ (fun _ => ⟨_, .flt, sub_refl _⟩)
+  case exact =>
+    simp only [convertValue]; split
+    · exact fits_typed ‹_›
+    · exact parsed _ _ (fun q => exactValue_typed q)
+  case codepoint =>
+    simp only [convertValue]; split
+    · unfold codepointOf; split
+      · exact ⟨_, .codepoint (by simp [String.length_singleton]), sub_refl _⟩
+      · exact ⟨_, .error, sub_never _⟩
+    · exact checked _
   all_goals exact checked _
 
 /-- a smaller object type reads a smaller field type -/
@@ -559,6 +595,12 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨_, h2, _⟩ := ih2 hs
     obtain ⟨_, h3, s3⟩ := ih3 hs
     exact ⟨_, .setAt h1 h2 h3, s3⟩
+  | insertAt _ _ _ ih1 ih2 ih3 =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih1 hs
+    obtain ⟨_, h2, _⟩ := ih2 hs
+    obtain ⟨_, h3, _⟩ := ih3 hs
+    exact ⟨_, .insertAt h1 h2 h3, s1⟩
   | new => intros; exact ⟨_, .new, sub_refl _⟩
   | get _ ih =>
     intro Γ' hs
@@ -683,6 +725,8 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | push _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .push (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | setAt _ _ _ ih1 ih2 ih3 =>
     intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .setAt (ih1 hΓ hv htv) (ih2 hΓ hv htv) (ih3 hΓ hv htv)
+  | insertAt _ _ _ ih1 ih2 ih3 =>
+    intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .insertAt (ih1 hΓ hv htv) (ih2 hΓ hv htv) (ih3 hΓ hv htv)
   | new => intros; simp only [Expr.subst]; exact .new
   | get _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv)
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st

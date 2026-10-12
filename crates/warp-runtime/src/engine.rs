@@ -47,7 +47,9 @@ const BYTES_PER_MB: usize = 1 << 20;
 pub fn memory_cap_bytes() -> usize {
 	static CAP: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 	*CAP.get_or_init(|| {
-		let megabytes = std::env::var(MEMORY_CAP_VARIABLE).ok().and_then(|value| value.trim().parse().ok());
+		let megabytes = std::env::var(MEMORY_CAP_VARIABLE)
+			.ok()
+			.and_then(|value| value.trim().parse().ok());
 		megabytes.unwrap_or(DEFAULT_MEMORY_CAP_MB).saturating_mul(BYTES_PER_MB)
 	})
 }
@@ -65,7 +67,11 @@ impl wasmtime::ResourceLimiter for MemoryCap {
 	fn memory_growing(&mut self, _current: usize, desired: usize, maximum: Option<usize>) -> wasmtime::Result<bool> {
 		let cap = memory_cap_bytes();
 		if desired > cap {
-			let refusal = format!("memory cap: growing a memory to {} MB passes the cap of {} MB ({MEMORY_CAP_VARIABLE})", desired / BYTES_PER_MB, cap / BYTES_PER_MB);
+			let refusal = format!(
+				"memory cap: growing a memory to {} MB passes the cap of {} MB ({MEMORY_CAP_VARIABLE})",
+				desired / BYTES_PER_MB,
+				cap / BYTES_PER_MB
+			);
 			// also on stderr: wasmtime drops this error for the GC heap and traps with "GC heap out of memory"
 			eprintln!("{refusal}");
 			wasmtime::bail!(refusal);

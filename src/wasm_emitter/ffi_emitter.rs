@@ -11,7 +11,11 @@ impl WasmGcEmitter {
 	/// Emit arguments for FFI function call with type conversion
 	pub(super) fn emit_ffi_args(&mut self, func: &mut Function, args: &[Node], sig: &crate::ffi::FfiSignature) {
 		// a text whose length the call leaves out crosses as (pointer, length): strcmp's, a module's `const void *, size_t`
-		let texts_with_lengths = if args.len() < sig.params.len() { crate::wasm_modules::texts_with_lengths(sig) } else { vec![] };
+		let texts_with_lengths = if args.len() < sig.params.len() {
+			crate::wasm_modules::texts_with_lengths(sig)
+		} else {
+			vec![]
+		};
 		let mut args = args.iter();
 		let mut param_idx = 0;
 		while param_idx < sig.params.len() {
@@ -32,8 +36,11 @@ impl WasmGcEmitter {
 			}
 			match arg {
 				// paint's pixels, sound's samples: a typed list of ints crosses as its array, list_to_ints copies it
-				Some(arg) if param_idx == 0 && sig.library == crate::host::HOST_LIBRARY && crate::host::INT_LIST_WORDS.contains(&sig.name)
-					&& self.emit_typed_int_list(func, arg) => {}
+				Some(arg)
+					if param_idx == 0
+						&& sig.library == crate::host::HOST_LIBRARY
+						&& crate::host::INT_LIST_WORDS.contains(&sig.name)
+						&& self.emit_typed_int_list(func, arg) => {}
 				Some(arg) => self.emit_ffi_arg(func, arg, &sig.params[param_idx]),
 				None => self.emit_ffi_default(func, &sig.params[param_idx]),
 			}
@@ -70,7 +77,10 @@ impl WasmGcEmitter {
 			ValType::F64 => func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits()))),
 			ValType::F32 => func.instruction(&I::F32Const(Ieee32::new(0.0f32.to_bits()))),
 			ValType::I64 => func.instruction(&I::I64Const(0)),
-			ValType::Ref(_) => func.instruction(&I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any })),
+			ValType::Ref(_) => func.instruction(&I::RefNull(HeapType::Abstract {
+				shared: false,
+				ty: AbstractHeapType::Any,
+			})),
 			_ => func.instruction(&I::I32Const(0)),
 		};
 	}
@@ -115,18 +125,29 @@ impl WasmGcEmitter {
 				_ => self.emit_call(func, "new_int"),
 			},
 			Some(Kind::Float) => match result_type {
-				None => { func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits()))); }
-				Some(ValType::F32) => { func.instruction(&I::F64PromoteF32); }
-				Some(ValType::I64) => { func.instruction(&I::F64ConvertI64S); }
+				None => {
+					func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits())));
+				}
+				Some(ValType::F32) => {
+					func.instruction(&I::F64PromoteF32);
+				}
+				Some(ValType::I64) => {
+					func.instruction(&I::F64ConvertI64S);
+				}
 				Some(ValType::I32) => {
 					Self::emit_list(func, &[I::I64ExtendI32S, I::F64ConvertI64S]);
 				}
 				_ => {} // F64 already correct
 			},
-			Some(_) => match result_type { // Int or other → i64
-				None => { func.instruction(&I::I64Const(0)); }
+			Some(_) => match result_type {
+				// Int or other → i64
+				None => {
+					func.instruction(&I::I64Const(0));
+				}
 				Some(ValType::F64 | ValType::F32) => self.emit_float_in_exact_context(func, sig.name),
-				Some(ValType::I32) => { func.instruction(&I::I64ExtendI32S); }
+				Some(ValType::I32) => {
+					func.instruction(&I::I64ExtendI32S);
+				}
 				_ => {} // I64 already correct
 			},
 		}
@@ -134,6 +155,9 @@ impl WasmGcEmitter {
 
 	/// Emit FFI function call with automatic result handling based on context
 	pub(super) fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
+		if [crate::host::STD_PURE, crate::host::STD_IO].contains(&fn_name) {
+			self.note_std_module(args.first());
+		}
 		if self.emit_import_call(func, fn_name, args, ctx) {
 			return;
 		}
@@ -148,6 +172,15 @@ impl WasmGcEmitter {
 		self.emit_ffi_result(func, &sig, ctx);
 	}
 
+	/// The std module a std_pure / std_io call names, for the host parts a site ships (host_parts.rs std_modules_of)
+	fn note_std_module(&mut self, module: Option<&Node>) {
+		let name = match module.map(Node::drop_meta) {
+			Some(Node::Text(name)) => name.clone(),
+			_ => crate::host::ANY_STD_MODULE.to_string(),
+		};
+		self.std_modules.insert(name);
+	}
+
 	/// Check if a node argument should be treated as a string
 	pub(super) fn is_string_arg(&self, node: &Node) -> bool {
 		match node.drop_meta() {
@@ -159,7 +192,8 @@ impl WasmGcEmitter {
 
 	/// A text (or one-character text) whose letters exist only at run time: a list element, a text variable
 	pub(super) fn is_runtime_text(&self, node: &Node) -> bool {
-		!matches!(node.drop_meta(), Node::Text(_) | Node::Char(_)) && matches!(self.get_type(node), Kind::Text | Kind::Codepoint)
+		!matches!(node.drop_meta(), Node::Text(_) | Node::Char(_))
+			&& matches!(self.get_type(node), Kind::Text | Kind::Codepoint)
 	}
 
 	/// The text node of a run-time text in the node scratch local, as a Text (a character becomes one)
@@ -206,7 +240,9 @@ impl WasmGcEmitter {
 			Node::Char(c) => CompileTimeString::Spelled(c.to_string()),
 			Node::Text(text) => CompileTimeString::Spelled(text.clone()),
 			Node::Symbol(name) => match self.scope.lookup(name) {
-				Some(local) if local.data_pointer > 0 => CompileTimeString::Stored(local.data_pointer, local.data_length),
+				Some(local) if local.data_pointer > 0 => {
+					CompileTimeString::Stored(local.data_pointer, local.data_length)
+				}
 				_ => CompileTimeString::Spelled(name.clone()),
 			},
 			_ => CompileTimeString::Spelled(node.to_string()),

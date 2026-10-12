@@ -1,7 +1,7 @@
 // User decisions 2026-10-03 (notes/open_decisions.md): #25/#36 a space before `[` never indexes,
 // #27 Unicode operators normalized to ASCII and `be` as `:=`, D8 similarity with a relative tolerance.
+use crate::{eq, is};
 use warp::warp_parser::parse;
-use crate::{is, eq};
 
 #[test]
 fn space_before_bracket_passes_the_list() {
@@ -15,7 +15,15 @@ fn space_before_bracket_passes_the_list() {
 
 #[test]
 fn unicode_operators_are_their_ascii_spelling() {
-	for (unicode, ascii) in [("3 ≤ 4", "3 <= 4"), ("3 ≥ 4", "3 >= 4"), ("3 ≠ 4", "3 != 4"), ("3 × 4", "3 * 4"), ("8 ÷ 4", "8 / 4"), ("¬ x", "not x"), ("√ x", "sqrt x")] {
+	for (unicode, ascii) in [
+		("3 ≤ 4", "3 <= 4"),
+		("3 ≥ 4", "3 >= 4"),
+		("3 ≠ 4", "3 != 4"),
+		("3 × 4", "3 * 4"),
+		("8 ÷ 4", "8 / 4"),
+		("¬ x", "not x"),
+		("√ x", "sqrt x"),
+	] {
 		eq!(parse(unicode), parse(ascii));
 	}
 	is!("3 ≤ 4", true);
@@ -61,7 +69,8 @@ fn similarity_combines_and_takes_any_operand() {
 	is!("π ≈ 3.14159265358979", true);
 	is!("π ≈ 3.14", false);
 	is!("x=0; x ≈ 0", true);
-	is!("x=0; x ≈ 1e-12", false);
+	is!("x=0; x ≈ 1e-12", true); // decision approx-zero: an absolute floor of 1e-12 near zero
+	is!("x=0; x ≈ 1e-11", false);
 	is!("xs=[1 2]; xs#2 ≈ 2.0000000001", true);
 	is!("1 ~~ 1.0000000001", true);
 	is!("1 ⋍ 1.0000000001", true);

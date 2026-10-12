@@ -1,0 +1,4 @@
+// can warp code construct a new Node (key, call) from parts, as a parser must?
+name = "x"
+k = name : 3
+[k, type(k)]

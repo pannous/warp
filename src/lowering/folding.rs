@@ -9,9 +9,9 @@ use super::nodes::{call, children_rewritten, key};
 use crate::analyzer::{captured_variables, collect_variables, Scope};
 use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
+use crate::function_values::{definitions, Definition};
 use crate::late_binding::{changes_in, functions_in, map_statements, statements_of};
 use crate::node::{Bracket, Node, Separator};
-use crate::function_values::{definitions, Definition};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -20,6 +20,11 @@ use std::collections::{HashMap, HashSet};
 const MAX_VARIANTS: usize = 32;
 /// Between a function's name and the constant arguments of its variant: `power·n3`
 const VARIANT_SEPARATOR: &str = "·";
+
+/// The function a variant was made of, as its messages name it: `f` of `f·a1`
+pub fn unspecialised_name(name: &str) -> &str {
+	name.split(VARIANT_SEPARATOR).next().unwrap_or(name)
+}
 
 /// The precomputed paths of a compiled module: constant free variables inlined, constant arguments specialised, the
 /// variants inlined where small, constant calls folded
@@ -49,13 +54,18 @@ pub fn fold_constant_free_variables(program: Node) -> Node {
 /// The definition in statement `index` with its constant free variables in place
 fn with_constant_free_variables(statement: Node, statements: &[Node], index: usize, main: &Scope) -> Node {
 	let functions = functions_in(&statement);
-	let [function] = functions.as_slice() else { return statement };
-	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = statement.drop_meta() else { return statement };
+	let [function] = functions.as_slice() else {
+		return statement;
+	};
+	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = statement.drop_meta() else {
+		return statement;
+	};
 	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name));
 	if !is_head || defines_functions(body) {
 		return statement;
 	}
-	let constants: Vec<(String, Node)> = captured_variables(function, main).into_iter()
+	let constants: Vec<(String, Node)> = captured_variables(function, main)
+		.into_iter()
 		.map(|(name, _)| name)
 		.filter(|name| !main.is_global(name) && changes_in(body, name).is_empty() && is_read_as_value_only(body, name))
 		.filter_map(|name| constant_binding(statements, index, &name).map(|value| (name, value)))
@@ -69,7 +79,10 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 	}
 	let rewritten = Node::Key(head.clone(), *op, Box::new(computed(folded)));
 	match statement {
-		Node::Meta { data, .. } => Node::Meta { node: Box::new(rewritten), data },
+		Node::Meta { data, .. } => Node::Meta {
+			node: Box::new(rewritten),
+			data,
+		},
 		_ => rewritten,
 	}
 }
@@ -77,15 +90,23 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 /// The constant `name` is bound to by the only change of it in main: a statement `name = constant` before the
 /// definition in statement `index`, the name without a declared type
 fn constant_binding(statements: &[Node], index: usize, name: &str) -> Option<Node> {
-	let mut changes = statements.iter().enumerate()
+	let mut changes = statements
+		.iter()
+		.enumerate()
 		.filter(|(_, statement)| functions_in(statement).is_empty())
-		.flat_map(|(at, statement)| changes_in(statement, name).into_iter().map(move |change| (at, statement, change)));
+		.flat_map(|(at, statement)| {
+			changes_in(statement, name)
+				.into_iter()
+				.map(move |change| (at, statement, change))
+		});
 	let (at, statement, change) = changes.next()?;
 	if changes.next().is_some() || at >= index || !std::ptr::eq(statement.drop_meta(), change.drop_meta()) {
 		return None;
 	}
 	match change.drop_meta() {
-		Node::Key(target, Op::Assign, value) if is_plain_symbol(target) && is_constant(value) => Some(value.drop_meta().clone()),
+		Node::Key(target, Op::Assign, value) if is_plain_symbol(target) && is_constant(value) => {
+			Some(value.drop_meta().clone())
+		}
 		_ => None,
 	}
 }
@@ -118,11 +139,15 @@ fn is_read_as_value_only(node: &Node, name: &str) -> bool {
 		Node::Meta { node, .. } => is_read_as_value_only(node, name),
 		// `c ? a : b`: both branches are values
 		Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
-			Node::Key(chosen, Op::Colon, otherwise) => [condition, chosen, otherwise].iter().all(|part| is_read_as_value_only(part, name)),
+			Node::Key(chosen, Op::Colon, otherwise) => [condition, chosen, otherwise]
+				.iter()
+				.all(|part| is_read_as_value_only(part, name)),
 			_ => is_read_as_value_only(condition, name) && is_read_as_value_only(branches, name),
 		},
 		Node::Key(left, Op::Colon, right) => !mentions(left) && is_read_as_value_only(right, name),
-		Node::Key(left, Op::Dot | Op::Hash, right) => !named(right) && is_read_as_value_only(left, name) && is_read_as_value_only(right, name),
+		Node::Key(left, Op::Dot | Op::Hash, right) => {
+			!named(right) && is_read_as_value_only(left, name) && is_read_as_value_only(right, name)
+		}
 		Node::Key(left, _, right) => is_read_as_value_only(left, name) && is_read_as_value_only(right, name),
 		Node::List(items, _, _) => items.iter().all(|item| is_read_as_value_only(item, name)),
 		_ => true,
@@ -134,10 +159,12 @@ fn is_read_as_value_only(node: &Node, name: &str) -> bool {
 fn computed(node: Node) -> Node {
 	let node = children_rewritten(node, computed);
 	match node.drop_meta() {
-		Node::Key(left, op @ (Op::Add | Op::Sub | Op::Mul), right) => match decided(Node::Key(left.clone(), *op, right.clone())) {
-			value @ Node::Number(Number::Int(_)) => value,
-			_ => node,
-		},
+		Node::Key(left, op @ (Op::Add | Op::Sub | Op::Mul), right) => {
+			match decided(Node::Key(left.clone(), *op, right.clone())) {
+				value @ Node::Number(Number::Int(_)) => value,
+				_ => node,
+			}
+		}
 		Node::Key(if_then, Op::Else, _) => match if_then.drop_meta() {
 			Node::Key(head, Op::Then, _) => match head.drop_meta() {
 				Node::Key(_, Op::If, condition) if is_int_comparison(condition) => decided(node),
@@ -171,14 +198,28 @@ pub fn fold_constant_calls(program: Node) -> Node {
 	if calls.is_empty() {
 		return program;
 	}
-	let definitions = statements.iter().filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)));
-	let probe = [definitions.cloned().collect(), vec![Node::List(calls.clone(), Bracket::Square, Separator::Colon)]].concat();
-	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else { return program };
+	let definitions = statements.iter().filter(|statement| {
+		functions_in(statement)
+			.iter()
+			.any(|function| foldable.contains(&function.name))
+	});
+	let probe = [
+		definitions.cloned().collect(),
+		vec![Node::List(calls.clone(), Bracket::Square, Separator::Colon)],
+	]
+	.concat();
+	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
+		return program;
+	};
 	let values = match crate::pipeline::run_module(module).drop_meta() {
 		Node::List(values, _, _) if values.len() == calls.len() => values.clone(),
 		_ => return program,
 	};
-	let folded: Vec<(Node, Node)> = calls.into_iter().zip(values).filter(|(_, value)| is_constant(value)).collect();
+	let folded: Vec<(Node, Node)> = calls
+		.into_iter()
+		.zip(values)
+		.filter(|(_, value)| is_constant(value))
+		.collect();
 	replaced(program, &folded)
 }
 
@@ -193,22 +234,33 @@ fn functions_within(program: &Node, statements: &[Node], allowed: crate::effects
 	let report = EffectReport::of(program);
 	let mut main = Scope::new();
 	collect_variables(program, &mut main);
-	statements.iter().flat_map(functions_in)
-		.filter(|function| report.effects_of(&function.name).is_some_and(|effects| effects.is_subset_of(allowed)))
+	statements
+		.iter()
+		.flat_map(functions_in)
+		.filter(|function| {
+			report
+				.effects_of(&function.name)
+				.is_some_and(|effects| effects.is_subset_of(allowed))
+		})
 		.filter(|function| captured_variables(function, &main).is_empty())
 		.map(|function| function.name)
 		.collect()
 }
 
 fn is_constant(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Number(Number::Int(_) | Number::Float(_)) | Node::Text(_) | Node::Char(_))
+	matches!(
+		node.drop_meta(),
+		Node::Number(Number::Int(_) | Number::Float(_)) | Node::Text(_) | Node::Char(_)
+	)
 }
 
 /// `f(10)`, `f(2, "a")`: a foldable function applied to constants only
 fn is_constant_call(node: &Node, foldable: &HashSet<String>) -> bool {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() > 1 =>
-			matches!(items[0].drop_meta(), Node::Symbol(name) if foldable.contains(name)) && items[1..].iter().all(is_constant),
+		Node::List(items, Bracket::Round, _) if items.len() > 1 => {
+			matches!(items[0].drop_meta(), Node::Symbol(name) if foldable.contains(name))
+				&& items[1..].iter().all(is_constant)
+		}
 		_ => false,
 	}
 }
@@ -220,30 +272,53 @@ fn replaced(node: Node, folded: &[(Node, Node)]) -> Node {
 	node.map_children(|child| replaced(child, folded))
 }
 
-
 /// Specialised paths (wiki/charged.md §3): a call of a pure function (as folding chooses them) with some constant Int
 /// arguments calls a variant with those constants in place and every condition on them decided, recursively:
 /// `power(y, 3)` calls power·n3, whose body is `y * power·n2(y)`, down to power·n0 = 1; inlining then removes the chain
 pub fn specialise_constant_arguments(program: Node) -> Node {
 	let statements = statements_of(&program);
 	// possible divergence is allowed: specialising is bounded (MAX_VARIANTS), and the call keeps its meaning
-	let pure = functions_within(&program, &statements, crate::effects::EffectSet::of(&[crate::effects::Effect::Div]));
+	let pure = functions_within(
+		&program,
+		&statements,
+		crate::effects::EffectSet::of(&[crate::effects::Effect::Div]),
+	);
 	let mut found = vec![];
 	definitions(&program, &mut found);
-	let definitions: HashMap<String, Definition> = found.into_iter().filter(|definition| pure.contains(&definition.name)).map(|definition| (definition.name.clone(), definition)).collect();
+	let definitions: HashMap<String, Definition> = found
+		.into_iter()
+		.filter(|definition| pure.contains(&definition.name))
+		.map(|definition| (definition.name.clone(), definition))
+		.collect();
 	if definitions.is_empty() {
 		return program;
 	}
-	let mut specialiser = Specialiser { definitions, variants: vec![], names: vec![] };
+	let mut specialiser = Specialiser {
+		definitions,
+		variants: vec![],
+		names: vec![],
+	};
 	let rewritten = specialiser.rewrite(program);
 	if specialiser.variants.is_empty() {
 		return rewritten;
 	}
 	let rewritten = specialiser.inlined(rewritten, 0);
-	let variants: Vec<Node> = specialiser.variants.iter().filter(|(name, _)| calls(&rewritten, name) || specialiser.variants.iter().any(|(other, definition)| other != name && calls(definition, name)))
-		.map(|(_, definition)| definition.clone()).collect();
+	let variants: Vec<Node> = specialiser
+		.variants
+		.iter()
+		.filter(|(name, _)| {
+			calls(&rewritten, name)
+				|| specialiser
+					.variants
+					.iter()
+					.any(|(other, definition)| other != name && calls(definition, name))
+		})
+		.map(|(_, definition)| definition.clone())
+		.collect();
 	match rewritten {
-		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List([variants, items].concat(), Bracket::None, separator),
+		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			Node::List([variants, items].concat(), Bracket::None, separator)
+		}
 		single => Node::List([variants, vec![single]].concat(), Bracket::None, Separator::Semicolon),
 	}
 }
@@ -266,29 +341,49 @@ impl Specialiser {
 	/// `f(y, 3)` → `f·n3(y)`, or None when f is no pure function, no argument or every argument is constant (folding
 	/// takes that), or the chain of variants would be too deep
 	fn specialised_call(&mut self, called: &Node, depth: usize) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = called.drop_meta() else { return None };
+		let Node::List(items, Bracket::Round, _) = called.drop_meta() else {
+			return None;
+		};
 		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else { return None };
+		let Node::Symbol(name) = head.drop_meta() else {
+			return None;
+		};
 		let definition = self.definitions.get(name)?.clone();
 		let parameters = definition.param_names();
 		if parameters.len() != arguments.len() {
 			return None;
 		}
 		let constant = |argument: &Node| matches!(argument.drop_meta(), Node::Number(Number::Int(_)));
-		let constants: Vec<(String, Node)> = parameters.iter().zip(arguments).filter(|(_, argument)| constant(argument)).map(|(parameter, argument)| (parameter.clone(), argument.drop_meta().clone())).collect();
+		let constants: Vec<(String, Node)> = parameters
+			.iter()
+			.zip(arguments)
+			.filter(|(_, argument)| constant(argument))
+			.map(|(parameter, argument)| (parameter.clone(), argument.drop_meta().clone()))
+			.collect();
 		if constants.is_empty() || constants.len() == arguments.len() {
 			return None;
 		}
 		let variant = self.variant(&definition, &constants, depth)?;
-		let kept: Vec<Node> = arguments.iter().filter(|argument| !constant(argument)).cloned().collect();
+		let kept: Vec<Node> = arguments
+			.iter()
+			.filter(|argument| !constant(argument))
+			.cloned()
+			.collect();
 		Some(call(&variant, kept))
 	}
 
 	/// The variant of `definition` with `constants` in place, made once per key; None (and nothing kept of the attempt)
 	/// when its chain reaches MAX_VARIANTS
 	fn variant(&mut self, definition: &Definition, constants: &[(String, Node)], depth: usize) -> Option<String> {
-		let suffix: Vec<String> = constants.iter().map(|(parameter, value)| format!("{parameter}{}", value.serialize())).collect();
-		let name = format!("{}{VARIANT_SEPARATOR}{}", definition.name, suffix.join(VARIANT_SEPARATOR));
+		let suffix: Vec<String> = constants
+			.iter()
+			.map(|(parameter, value)| format!("{parameter}{}", value.serialize()))
+			.collect();
+		let name = format!(
+			"{}{VARIANT_SEPARATOR}{}",
+			definition.name,
+			suffix.join(VARIANT_SEPARATOR)
+		);
 		if self.names.contains(&name) {
 			return Some(name);
 		}
@@ -303,8 +398,13 @@ impl Specialiser {
 		}
 		match self.specialise_body(decided(body), depth + 1) {
 			Some(body) => {
-				let parameters: Vec<Node> = definition.params.iter().zip(definition.param_names())
-					.filter(|(_, name)| !constants.iter().any(|(constant, _)| constant == name)).map(|(parameter, _)| parameter.clone()).collect();
+				let parameters: Vec<Node> = definition
+					.params
+					.iter()
+					.zip(definition.param_names())
+					.filter(|(_, name)| !constants.iter().any(|(constant, _)| constant == name))
+					.map(|(parameter, _)| parameter.clone())
+					.collect();
 				let head = call(&name, parameters);
 				self.variants.push((name.clone(), key(head, Op::Define, body)));
 				Some(name)
@@ -321,12 +421,30 @@ impl Specialiser {
 	/// its parameters, as long as that body calls no variant whose arguments are not plain: power·n3(y) → y*(y*(y*1))
 	fn inlined(&self, node: Node, depth: usize) -> Node {
 		let node = node.map_children(|child| self.inlined(child, depth));
-		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return node };
-		let Some((head, arguments)) = items.split_first() else { return node };
-		let plain = arguments.iter().all(|argument| matches!(argument.drop_meta(), Node::Symbol(_) | Node::Number(_)));
-		let Some((_, Node::Key(variant_head, Op::Define, body))) = self.variants.iter().find(|(name, _)| matches!(head.drop_meta(), Node::Symbol(called) if called == name)) else { return node };
-		let Node::List(head_items, _, _) = variant_head.drop_meta() else { return node };
-		if !plain || depth >= MAX_VARIANTS || !is_expression(body) {
+		let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
+			return node;
+		};
+		let Some((head, arguments)) = items.split_first() else {
+			return node;
+		};
+		let plain = arguments
+			.iter()
+			.all(|argument| matches!(argument.drop_meta(), Node::Symbol(_) | Node::Number(_)));
+		let Some((_, Node::Key(variant_head, Op::Define, body))) = self
+			.variants
+			.iter()
+			.find(|(name, _)| matches!(head.drop_meta(), Node::Symbol(called) if called == name))
+		else {
+			return node;
+		};
+		let Node::List(head_items, _, _) = variant_head.drop_meta() else {
+			return node;
+		};
+		// a declared parameter `b: int` checks its argument at the call: inlined, `f(1, 2.5)` would pass 2.5 unchecked
+		let declares_types = head_items[1..]
+			.iter()
+			.any(|parameter| !matches!(parameter.drop_meta(), Node::Symbol(_)));
+		if !plain || declares_types || depth >= MAX_VARIANTS || !is_expression(body) {
 			return node;
 		}
 		let mut inlined = body.as_ref().clone();
@@ -339,14 +457,30 @@ impl Specialiser {
 	/// A variant's body with its own calls specialised in turn; None when one of them is too deep
 	fn specialise_body(&mut self, node: Node, depth: usize) -> Option<Node> {
 		let node = match node {
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.specialise_body(item, depth)).collect::<Option<_>>()?, bracket, separator),
-			Node::Key(left, op, right) => key(self.specialise_body(*left, depth)?, op, self.specialise_body(*right, depth)?),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.specialise_body(*node, depth)?), data },
+			Node::List(items, bracket, separator) => Node::List(
+				items
+					.into_iter()
+					.map(|item| self.specialise_body(item, depth))
+					.collect::<Option<_>>()?,
+				bracket,
+				separator,
+			),
+			Node::Key(left, op, right) => key(
+				self.specialise_body(*left, depth)?,
+				op,
+				self.specialise_body(*right, depth)?,
+			),
+			Node::Meta { node, data } => Node::Meta {
+				node: Box::new(self.specialise_body(*node, depth)?),
+				data,
+			},
 			other => other,
 		};
-		let is_specialisable = |node: &Node| matches!(node.drop_meta(), Node::List(items, Bracket::Round, _)
+		let is_specialisable = |node: &Node| {
+			matches!(node.drop_meta(), Node::List(items, Bracket::Round, _)
 			if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(name) if self.definitions.contains_key(name))
-			&& items[1..].iter().any(|argument| matches!(argument.drop_meta(), Node::Number(Number::Int(_)))));
+			&& items[1..].iter().any(|argument| matches!(argument.drop_meta(), Node::Number(Number::Int(_)))))
+		};
 		if !is_specialisable(&node) {
 			return Some(node);
 		}
@@ -386,8 +520,14 @@ fn decided(node: Node) -> Node {
 		// `if c then a else b` with c decided
 		Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
 			Node::Key(head, Op::Then, chosen) => match head.drop_meta() {
-				Node::Key(empty, Op::If, condition) if matches!(empty.drop_meta(), Node::Empty) && int(condition).is_some() => {
-					if int(condition) != Some(0) { chosen.as_ref().clone() } else { otherwise.as_ref().clone() }
+				Node::Key(empty, Op::If, condition)
+					if matches!(empty.drop_meta(), Node::Empty) && int(condition).is_some() =>
+				{
+					if int(condition) != Some(0) {
+						chosen.as_ref().clone()
+					} else {
+						otherwise.as_ref().clone()
+					}
 				}
 				_ => node,
 			},
@@ -395,7 +535,13 @@ fn decided(node: Node) -> Node {
 		},
 		// `c ? a : b` with c decided
 		Node::Key(condition, Op::Question, branches) if int(condition).is_some() => match branches.drop_meta() {
-			Node::Key(chosen, Op::Colon, otherwise) => if int(condition) != Some(0) { chosen.as_ref().clone() } else { otherwise.as_ref().clone() },
+			Node::Key(chosen, Op::Colon, otherwise) => {
+				if int(condition) != Some(0) {
+					chosen.as_ref().clone()
+				} else {
+					otherwise.as_ref().clone()
+				}
+			}
 			_ => node,
 		},
 		_ => node,
@@ -405,7 +551,14 @@ fn decided(node: Node) -> Node {
 /// An expression without statements, definitions or blocks: its value is all it does, so it can stand where it is called
 fn is_expression(body: &Node) -> bool {
 	let mut plain = true;
-	body.visit(&mut |part| plain &= !matches!(part, Node::Key(_, Op::Define | Op::Assign, _) | Node::List(_, Bracket::Curly, _) | Node::List(_, _, Separator::Semicolon | Separator::Newline)));
+	body.visit(&mut |part| {
+		plain &= !matches!(
+			part,
+			Node::Key(_, Op::Define | Op::Assign, _)
+				| Node::List(_, Bracket::Curly, _)
+				| Node::List(_, _, Separator::Semicolon | Separator::Newline)
+		)
+	});
 	plain
 }
 

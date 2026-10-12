@@ -6,8 +6,11 @@
 //! b's class (`b = bag(…)`), else guarded by each class with a list field of that name, `if (b is bag) and not (v is text)`.
 //! The check is a statement before the store, so the store keeps its form (a typed int list stays an array).
 
-use super::nodes::{Counter, assign, key};
-use crate::analyzer::{added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list, list_element_type, of_type_declaration};
+use super::nodes::{assign, key, Counter};
+use crate::analyzer::{
+	added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list,
+	insert_position, inserted_item, list_element_type, of_type_declaration,
+};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -27,7 +30,13 @@ pub fn lower(node: Node) -> Node {
 	let class_fields = crate::class_methods::class_fields(&node);
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
 	let instances = crate::class_methods::instance_classes(&node, &classes);
-	ElementChecks { declared: HashMap::new(), class_fields, instances, temporaries: Counter::starting_at(1) }.lower(node)
+	ElementChecks {
+		declared: HashMap::new(),
+		class_fields,
+		instances,
+		temporaries: Counter::starting_at(1),
+	}
+	.lower(node)
 }
 
 struct ElementChecks {
@@ -90,10 +99,15 @@ impl ElementChecks {
 					return self.checked_store(&field_tests, &target.clone(), *target, op, value);
 				}
 				let declaration = match target.drop_meta() {
-					Node::Symbol(name) => self.declared.get(name).map(|type_name| (name.clone(), type_name.clone())),
+					Node::Symbol(name) => self
+						.declared
+						.get(name)
+						.map(|type_name| (name.clone(), type_name.clone())),
 					declaring => declaring_name_and_type(declaring),
 				};
-				let Some((name, type_name)) = declaration else { return Node::Key(target, op, Box::new(value)) };
+				let Some((name, type_name)) = declaration else {
+					return Node::Key(target, op, Box::new(value));
+				};
 				self.declared.insert(name.clone(), type_name.clone());
 				match element_test(&name, &type_name) {
 					Some(test) => self.checked_store(&[test], &Node::Symbol(name), *target, op, value),
@@ -101,16 +115,19 @@ impl ElementChecks {
 				}
 			}
 			// `xs += ys` of a declared list stores `xs + ys`, checked as that assignment
-			Node::Key(target, Op::AddAssign, value) if matches!(target.drop_meta(), Node::Symbol(name) if self.declared_test(name).is_some()) => {
+			Node::Key(target, Op::AddAssign, value) if matches!(target.drop_meta(), Node::Symbol(name) if self.declared_test(name).is_some()) =>
+			{
 				let sum = Node::Key(target.clone(), Op::Add, value);
 				self.lower(Node::Key(target, Op::Assign, Box::new(sum)))
 			}
 			Node::Key(list, Op::Dot, call) => {
 				let append = Node::Key(list, Op::Dot, call);
-				if appended_items(&append).is_none() {
+				if appended_items(&append).or_else(|| inserted_item(&append)).is_none() {
 					return append.map_children(|child| self.lower(child));
 				}
-				let Node::Key(list, _, _) = append.drop_meta() else { unreachable!("an append call") };
+				let Node::Key(list, _, _) = append.drop_meta() else {
+					unreachable!("an append call")
+				};
 				let tests = match list.drop_meta() {
 					Node::Symbol(name) => self.declared_test(name).into_iter().collect(),
 					field => self.field_tests(field),
@@ -154,32 +171,50 @@ impl ElementChecks {
 
 	/// `names.add(v)`
 	fn checked_append(&mut self, tests: &[ElementTest], append: Node) -> Node {
-		let Node::Key(list, Op::Dot, call) = append.drop_meta() else { return append };
-		let Node::List(items, bracket, separator) = call.drop_meta() else { return append };
+		let Node::Key(list, Op::Dot, call) = append.drop_meta() else {
+			return append;
+		};
+		let Node::List(items, bracket, separator) = call.drop_meta() else {
+			return append;
+		};
 		let (method, arguments) = items.split_first().expect("an append call has its method");
 		let mut checks = vec![];
-		let arguments = self.checked_items(arguments.to_vec(), tests, &mut checks);
-		let call = Node::List([vec![method.clone()], arguments].concat(), bracket.clone(), separator.clone());
+		// `xs.insert(v, at: i)`: the value is checked, not its position
+		let arguments: Vec<Node> = arguments
+			.iter()
+			.flat_map(|argument| match insert_position(argument).is_some() {
+				true => vec![argument.clone()],
+				false => self.checked_items(vec![argument.clone()], tests, &mut checks),
+			})
+			.collect();
+		let call = Node::List(
+			[vec![method.clone()], arguments].concat(),
+			bracket.clone(),
+			separator.clone(),
+		);
 		self.with_checks(checks, Node::Key(list.clone(), Op::Dot, Box::new(call)))
 	}
 
 	/// The items as stored, each run-time one checked first; a call's item is held in a temporary so it runs once
 	fn checked_items(&mut self, items: Vec<Node>, tests: &[ElementTest], checks: &mut Vec<Node>) -> Vec<Node> {
-		items.into_iter().map(|item| {
-			if checked_at_compile_time(&item, tests) {
-				return item;
-			}
-			let held = match item.drop_meta() {
-				Node::Symbol(_) => item,
-				_ => {
-					let temporary = self.temporary();
-					checks.push(assign(temporary.clone(), item));
-					temporary
+		items
+			.into_iter()
+			.map(|item| {
+				if checked_at_compile_time(&item, tests) {
+					return item;
 				}
-			};
-			checks.extend(tests.iter().map(|test| item_check(&held, test)));
-			held
-		}).collect()
+				let held = match item.drop_meta() {
+					Node::Symbol(_) => item,
+					_ => {
+						let temporary = self.temporary();
+						checks.push(assign(temporary.clone(), item));
+						temporary
+					}
+				};
+				checks.extend(tests.iter().map(|test| item_check(&held, test)));
+				held
+			})
+			.collect()
 	}
 
 	fn declared_test(&self, name: &str) -> Option<ElementTest> {
@@ -193,7 +228,10 @@ impl ElementChecks {
 			return true;
 		}
 		let element = |variable: &Node| match variable.drop_meta() {
-			Node::Symbol(name) => self.declared.get(name).and_then(|type_name| list_element_type(type_name)),
+			Node::Symbol(name) => self
+				.declared
+				.get(name)
+				.and_then(|type_name| list_element_type(type_name)),
 			_ => None,
 		};
 		element(list).is_some_and(|element_type| element(stored) == Some(element_type))
@@ -202,8 +240,12 @@ impl ElementChecks {
 	/// The tests of a list field `b.items`: by b's class when the pass knows it, else one guarded test per class with a
 	/// checked list field of that name
 	fn field_tests(&self, list: &Node) -> Vec<ElementTest> {
-		let Node::Key(instance, Op::Dot, field) = list.drop_meta() else { return vec![] };
-		let Node::Symbol(name) = instance.drop_meta() else { return vec![] };
+		let Node::Key(instance, Op::Dot, field) = list.drop_meta() else {
+			return vec![];
+		};
+		let Node::Symbol(name) = instance.drop_meta() else {
+			return vec![];
+		};
 		let field = field.drop_meta().name();
 		let test_of = |class: &String| {
 			let (_, type_name) = self.class_fields.get(class)?.iter().find(|(name, _)| *name == field)?;
@@ -211,10 +253,19 @@ impl ElementChecks {
 		};
 		match self.instances.get(name) {
 			Some(class) => test_of(class).into_iter().collect(),
-			None => self.class_fields.keys().collect::<std::collections::BTreeSet<_>>().into_iter().filter_map(|class| {
-				let test = test_of(class)?;
-				Some(ElementTest { guard: Some((instance.drop_meta().clone(), class.clone())), ..test })
-			}).collect(),
+			None => self
+				.class_fields
+				.keys()
+				.collect::<std::collections::BTreeSet<_>>()
+				.into_iter()
+				.filter_map(|class| {
+					let test = test_of(class)?;
+					Some(ElementTest {
+						guard: Some((instance.drop_meta().clone(), class.clone())),
+						..test
+					})
+				})
+				.collect(),
 		}
 	}
 
@@ -238,9 +289,17 @@ fn checked_at_compile_time(value: &Node, tests: &[ElementTest]) -> bool {
 fn element_test(name: &str, type_name: &str) -> Option<ElementTest> {
 	let element = list_element_type(type_name)?;
 	let kind = builtin_type_kind(element)?;
-	let type_word = if kind == Kind::Float { NUMBER_WORD.to_string() } else { element.to_string() };
+	let type_word = if kind == Kind::Float {
+		NUMBER_WORD.to_string()
+	} else {
+		element.to_string()
+	};
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}");
-	Some(ElementTest { type_word, message, guard: None })
+	Some(ElementTest {
+		type_word,
+		message,
+		guard: None,
+	})
 }
 
 /// `if not (v is text) { raise "…" }`
@@ -250,12 +309,13 @@ fn item_check(item: &Node, test: &ElementTest) -> Node {
 
 /// `for item in list { if not (item is text) { raise "…" } }`
 fn each_item_check(list: &Node, test: &ElementTest) -> Node {
-	let template = crate::warp_parser::parse(&format!("for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {CHECK_PLACEHOLDER} }}"));
+	let template = crate::warp_parser::parse(&format!(
+		"for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {CHECK_PLACEHOLDER} }}"
+	));
 	let template = substitute(template, CHECK_PLACEHOLDER, &test.check());
 	let item = Node::Symbol(format!("{}·item", list.name()));
 	substitute(substitute(template, LIST_PLACEHOLDER, list), ITEM_PLACEHOLDER, &item)
 }
-
 
 /// The value `[a b]` or `xs + [a b]` with its added items replaced
 fn with_added_items(value: &Node, items: Vec<Node>) -> Node {

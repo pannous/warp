@@ -5,7 +5,11 @@ use std::process::Command;
 const KEYWORDS_SCRIPT: &str = "web/playground/keywords.py";
 
 fn registered_keywords() -> serde_json::Value {
-	let output = Command::new("python3").arg(KEYWORDS_SCRIPT).current_dir(env!("CARGO_MANIFEST_DIR")).output().expect("python3 runs");
+	let output = Command::new("python3")
+		.arg(KEYWORDS_SCRIPT)
+		.current_dir(env!("CARGO_MANIFEST_DIR"))
+		.output()
+		.expect("python3 runs");
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 	serde_json::from_slice(&output.stdout).expect("keywords.py prints JSON")
 }
@@ -13,7 +17,12 @@ fn registered_keywords() -> serde_json::Value {
 #[test]
 fn keywords_of_passes_are_highlighted() {
 	let keywords = registered_keywords();
-	let soft: Vec<&str> = keywords["soft"].as_array().unwrap().iter().filter_map(|word| word.as_str()).collect();
+	let soft: Vec<&str> = keywords["soft"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.filter_map(|word| word.as_str())
+		.collect();
 	for word in ["where", "loop", "when", "finally", "emit", "try"] {
 		assert!(soft.contains(&word), "{word} is not highlighted: {soft:?}");
 	}

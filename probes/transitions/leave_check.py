@@ -1,4 +1,5 @@
-# web-transitions: a removed item is marked leaving while it fades, then gone; run via tests/queue.sh
+# web-transitions: a removed item is marked leaving while it fades, then gone, and the items after it glide into its
+# space (glided, card web-leave-space); run via tests/queue.sh
 import json, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "web", "playground"))
 import test_in_browser as page
@@ -15,8 +16,10 @@ script = """(async () => {
 	[...root.querySelectorAll("button")].find(button => button.textContent === "remove").click();
 	let during = [];
 	for (let tries = 0; tries < 40 && !during.some(text => text.includes("leaving")); tries++) { await pause(10); during = snapshot(); }
+	let glided = false;
+	for (let tries = 0; tries < 60 && !glided; tries++) { await pause(10); glided = [...root.querySelectorAll("li:not([data-warp-leaving])")].some(li => li.getAnimations().length > 0); }
 	await pause(400);
-	return JSON.stringify({ during, after: snapshot() });
+	return JSON.stringify({ during, glided, after: snapshot() });
 })()"""
 print(json.loads(page.browser("eval", script)))
 page.browser("close")

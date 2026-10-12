@@ -1,17 +1,17 @@
+use crate::{eq, is, skip};
 use warp::extensions::{assert_throws, print};
 use warp::warp_parser::parse;
 use warp::Node;
 use warp::Node::{Empty, False, True};
-use crate::{is, eq, skip};
 
 #[test]
 fn test_range() {
-	is!("0..3", ints(0, 1, 2));       // exclusive: 0, 1, 2
-	is!("0..<3", ints(0, 1, 2));      // Swift-style exclusive
-	is!("0...3", ints4(0, 1, 2, 3));  // inclusive: 0, 1, 2, 3
-	is!("0…3", ints4(0, 1, 2, 3));    // ellipsis = inclusive
+	is!("0..3", ints(0, 1, 2)); // exclusive: 0, 1, 2
+	is!("0..<3", ints(0, 1, 2)); // Swift-style exclusive
+	is!("0...3", ints4(0, 1, 2, 3)); // inclusive: 0, 1, 2, 3
+	is!("0…3", ints4(0, 1, 2, 3)); // ellipsis = inclusive
 	is!("0 to 3", ints4(0, 1, 2, 3)); // inclusive like math
-	is!("range 1 3", ints(1, 2, 3));  // range function = inclusive
+	is!("range 1 3", ints(1, 2, 3)); // range function = inclusive
 	skip!(
 		is!("[0 to 3]", ints4(0, 1, 2, 3)); // bracketed range
 	);
@@ -791,12 +791,10 @@ fn test_old_random_bugs() {
 //}
 
 #[test]
-fn test_merge_wabt() {
-}
+fn test_merge_wabt() {}
 #[test]
 #[ignore]
 fn test_wasm_runtime_extension() {
-
 	is!("43", 43);
 	is!("strlen('123')", 3); // todo broke
 	is!("strlen('123')", 3); // todo broke
@@ -876,7 +874,6 @@ fn test_wasm_runtime_extension() {
 fn test_string_concat_wasm() {
 	is!("'Hello, ' + 'World!'", "Hello, World!");
 }
-
 
 #[test]
 fn test_object_properties_wasm() {
@@ -1134,7 +1131,6 @@ fn test_custom_operators() {
 	//	is!(("3⁴"),9*9);
 }
 
-
 #[test]
 fn test_import_wasm() {
 	//	Code fourty_two=emit(analyze(parse("ft=42")));
@@ -1238,7 +1234,7 @@ fn test_logarithm2() {
 	is!("use math; ℯ⌟", 1.); // P226: the postfix ⌟ is the natural log
 	is!("use math; ℯ⌟", 1.);
 	is!("log10(100)", 2.); // requires pre-parsing lib and dictionary lookup
-	// P226b: x⌟b is log base b of x, so the base comes second
+						// P226b: x⌟b is log base b of x, so the base comes second
 	is!("use math; 10⌟100", 0.5);
 	is!("10⌟100", 0.5);
 	skip!( // a subscript base ₁₀ is undecided
@@ -1454,7 +1450,6 @@ fn test_todo_browser() {
 		   testBadInWasm(); // NO, breaks!
 	   );
 }
-
 
 // ⚠️ ALL tests containing is! must go here! in wasm use testCurrent() only for basics
 #[test]
