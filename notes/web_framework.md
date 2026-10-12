@@ -108,8 +108,12 @@ Each step is useful on its own and is what the next ones stand on.
   fewer instances of the component than the one before (the last ones are the ones gone, by the order rule), then
   their state entries are dropped. What a cleanup reads is kept per instance like handler state. Tour example cleanup.
 - `(if c then A() else [])` among an element's children is a child (markup_tags.rs), not a statement.
+- Outside its component a state variable is its list (card web-outside-state): `Counter.count` is every Counter's
+  count in page order, `Counter.count#1` the first's; a handler or markup outside reads and writes it
+  (component_state.rs with_state_lists; undoable default, naming question with the Interviewer). Sample
+  samples/component_totals.warp.
 - Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it; card
-  web-instance-keys), state of a component read by a handler outside it (card web-outside-state).
+  web-instance-keys).
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
@@ -142,9 +146,10 @@ Each step is useful on its own and is what the next ones stand on.
   samples/component_binding.warp.
 - Validation from declared types (card web-validate): element_events::lower_binds gives a bound field the checks of
   its variable's declared type (`age: int = 30`): int → type number, step 1 (the browser marks 2.5 :invalid and a
-  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. Not yet:
-  ranges or text patterns as types, and `int age = 30` (C-style) declarations (card bind-ignores). Sample
-  samples/typed_form.warp.
+  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. The C-style
+  `int age = 30` is the same declaration: type_name_matching::lower_prefixed_declarations rewrites it early to
+  `age: int = 30`, so handlers also treat it as the main-level variable (card bind-ignores). Not yet: ranges or text
+  patterns as types. Sample samples/typed_form.warp.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style

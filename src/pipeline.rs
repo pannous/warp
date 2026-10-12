@@ -306,6 +306,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
+	crate::type_name_matching::lower_prefixed_declarations,
 	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
 	crate::lowering::test_blocks::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test

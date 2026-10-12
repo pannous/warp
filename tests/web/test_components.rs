@@ -56,3 +56,28 @@ fn a_bound_field_in_a_component_binds_its_instance() {
 	page.type_into("name", "Ann").expect("typed");
 	assert!(page.text().contains("Hi Ann") && page.text().contains("Hi there"), "{}", page.html());
 }
+
+// A component's handler reads and writes the program's own variables: each Counter counts on its own by the shared step,
+// and the page total counts every click (card web-outside-state)
+#[test]
+#[cfg(feature = "native")]
+fn a_component_handler_changes_state_outside_it() {
+	let counter = "step = 2\ntotal = 0\ndef Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += step; total += 1 } \"+\" } p{ \"n \" + count } }\n}\n";
+	let mut page = warp::headless::Page::render(&format!("{counter}div{{ Counter(0) Counter(10) p{{ \"total \" + total }} }}")).expect("the page");
+	page.click("+").expect("clicked");
+	assert!(page.text().contains("n 2") && page.text().contains("n 10") && page.text().contains("total 1"), "{}", page.html());
+}
+
+// Outside its component a state variable is the list of every instance's value, `Counter.count#1` the first's: the
+// page's own button reads and resets it (card web-outside-state)
+#[test]
+#[cfg(feature = "native")]
+fn a_handler_outside_a_component_reads_its_state() {
+	let counter = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += 1 } \"+\" } p{ \"n \" + count } }\n}\n";
+	let page_markup = "div{ Counter(0) Counter(10) button{ on click { Counter.count#1 = 0 } \"Reset\" } p{ \"sum \" + sum(Counter.count) } }";
+	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	page.click("+").expect("clicked");
+	assert!(page.text().contains("sum 11"), "{}", page.html());
+	page.click("Reset").expect("reset");
+	assert!(page.text().contains("n 0") && page.text().contains("sum 10"), "{}", page.html());
+}

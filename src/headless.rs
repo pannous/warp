@@ -25,7 +25,7 @@ const SUBMIT: &str = "submit";
 /// the submitted form's named fields, as markup.js submitDetail hands them over
 const FIELDS: &str = "fields";
 /// the labels a form field is found by besides its text
-const FIELD_LABELS: [&str; 3] = ["placeholder", "name", "id"];
+const FIELD_LABELS: [&str; 4] = ["placeholder", "aria-label", "name", "id"];
 /// elements without content or closing tag
 const VOID_ELEMENTS: [&str; 13] = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"];
 /// elements whose content the page does not show as text
