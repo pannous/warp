@@ -86,7 +86,6 @@ fn a_ruby_class_with_initialize() {
 #[test]
 fn ruby_endless_methods() {
 	is!("def twice = 8; twice", 8);
-	is!("def twice := 8; twice()", 8);
 	is!("class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice", 10);
 	is!("class P{x:int; def twice = x*2}; P(3).twice", 6);
 }

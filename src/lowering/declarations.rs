@@ -1629,8 +1629,9 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		None => definition,
 	};
 	let (head, op, body) = match definition {
-		// `def test: print "test"` (wiki/signal.md), Ruby's endless `def twice = x * 2`: a function without parameters
-		Node::Key(name, Op::Colon | Op::Define | Op::Assign, body) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+		// `def test: print "test"` (wiki/signal.md), Ruby's endless `def twice = x * 2`: a function without parameters;
+		// `def square := it * it` and `def add := a + b` keep their implicit parameters (later passes)
+		Node::Key(name, op @ (Op::Colon | Op::Assign), body) if matches!(name.drop_meta(), Node::Symbol(_)) && (op == Op::Colon || !crate::type_name_matching::uses_it(&body)) => {
 			(Node::List(vec![*name], Bracket::Round, Separator::None), Op::Define, *body)
 		}
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => (*head, op, *body),
