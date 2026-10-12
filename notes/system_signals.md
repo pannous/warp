@@ -189,7 +189,11 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   (`key == ESCAPEE`, `key == q`) warns: it never holds.
 - Keyboard state (card keyboard-state): `key_down` is the system value whether a key is held now (natively the paint
   window's held key, in the playground canvas.js trackKey's), for loops as mouse_down: `if key_down { clear(white) }`.
-  Which key is held is not a value yet; `on key` names each press.
+- Held key (card held-key): `held_key` names the key held now as `on key` names a press ("a", "ArrowUp", "Enter",
+  "" for none), for loops that steer: `if held_key == "ArrowLeft" { x -= 1 }`. It reads the system value
+  `key code held` once into `held·code` and names it by system_signals.rs key_named, which the native `on key` reader
+  shares (KEY_NAMES); the playground's canvas.js KEY_CODES gives Enter, Escape, Backspace and Tab their codes too.
+  Test: tests/control/test_held_key.rs; probe probes/held_key/steer.warp.
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
   `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
 - System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),

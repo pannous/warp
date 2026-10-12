@@ -79,6 +79,7 @@ mod test_go_blocks;
 mod test_go_statement; // card go-play
 mod test_handler_globals;
 mod test_handler_unwinding; // card on-error-abort
+mod test_held_key; // card held-key
 mod test_help_word;
 mod test_if_call_condition;
 mod test_if_empty_branch;
