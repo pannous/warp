@@ -10,6 +10,8 @@ pub struct Diagnostic {
 	pub message: String,
 	pub line: usize,
 	pub column: usize,
+	/// The module file of the position, None in the program itself (card module-error-file)
+	pub file: Option<String>,
 	/// How to fix it, in words (shown after `; fix: `)
 	pub fix: Option<String>,
 	/// The same as edits a host applies: one per reading the user might have meant (src/fixits.rs)
@@ -23,11 +25,12 @@ pub struct Diagnostic {
 impl Diagnostic {
 	/// A diagnostic at the source position of `node`, else of its first part that has one (0:0 if the parser recorded none)
 	pub fn at(node: &Node, message: impl Into<String>) -> Self {
-		let (line, column) = position(node).unwrap_or_default();
+		let position = line_info(node).unwrap_or_default();
 		Diagnostic {
 			message: message.into(),
-			line,
-			column,
+			line: position.line_nr,
+			column: position.column,
+			file: position.file,
 			..Default::default()
 		}
 	}
@@ -121,7 +124,7 @@ pub fn paint(color: Color, text: &str) -> String {
 
 /// Does a message end its description with a position ` at line:column`
 pub fn names_position(message: &str) -> bool {
-	message_position(message).is_some()
+	message_position(message).is_some() || message_file_position(message).is_some()
 }
 
 /// The position ` at line:column` that ends a message's description
@@ -275,13 +278,18 @@ fn statement_prefix(text: &str) -> &str {
 /// The line and column the parser recorded for `node`, or for the first of its parts that has them: a node a lowering
 /// pass rebuilt keeps the positions of the parts it was built from
 pub fn position(node: &Node) -> Option<(usize, usize)> {
+	line_info(node).map(|info| (info.line_nr, info.column))
+}
+
+/// The position `position` finds, with the module file it is in
+pub fn line_info(node: &Node) -> Option<crate::meta::LineInfo> {
 	if let Some(info) = node.get_lineinfo() {
-		return Some((info.line_nr, info.column));
+		return Some(info);
 	}
 	match node {
-		Node::Meta { node, .. } => position(node),
-		Node::Key(left, _, right) => position(left).or_else(|| position(right)),
-		Node::List(items, _, _) => items.iter().find_map(position),
+		Node::Meta { node, .. } => line_info(node),
+		Node::Key(left, _, right) => line_info(left).or_else(|| line_info(right)),
+		Node::List(items, _, _) => items.iter().find_map(line_info),
 		_ => None,
 	}
 }
@@ -291,7 +299,11 @@ impl fmt::Display for Diagnostic {
 		write!(f, "{}", self.message)?;
 		// 0:0 is no position: a diagnostic of something written nowhere in the source
 		if self.line > 0 {
-			write!(f, " at {}:{}", self.line, self.column)?;
+			write!(
+				f,
+				" at {}",
+				crate::meta::place_text(self.file.as_deref(), self.line, self.column)
+			)?;
 		}
 		if let Some(fix) = &self.fix {
 			write!(f, "; fix: {}", fix)?;

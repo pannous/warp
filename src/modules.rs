@@ -1072,9 +1072,10 @@ impl<'a> Loader<'a> {
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
 		}
-		let module = WarpParser::parse(source);
+		let shown = shown_path(&path);
+		let module = crate::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
 		if let Some(failure) = module.first_error() {
-			return Err(crate::diagnostic::located_in_file(failure, &path));
+			return Err(crate::diagnostic::located_in_file(failure, &shown));
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use
@@ -2375,4 +2376,11 @@ fn as_use(statement: &Node) -> Node {
 		),
 		other => other.clone(),
 	}
+}
+
+/// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
+fn shown_path(path: &Path) -> PathBuf {
+	path.components()
+		.filter(|component| !matches!(component, std::path::Component::CurDir))
+		.collect()
 }
