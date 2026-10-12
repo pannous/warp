@@ -7,14 +7,21 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
+  in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup). The long form
+  `Counter.all` (or `Counter.instances` if `all` is taken) means the same and hints to use `counters`.
+- signal-samples: samples/signal.warp (siren, play_signal) and samples/signal_blocks.warp (stereo chord, play_blocks)
+  leave samples/ but are kept as examples under "Signals" on the wiki sound page (warp-sound).
+- consistency (card #376, sub-card of #35 cleanup): an agent regularly checks the app against the documentation.
+  Clear mismatches: fix the docs (small cases: the app); ambiguous ones go through the Interviewer to the user.
 - self-hosting (user, asked directly; plan notes/self_hosting.md, topic card self-hosted): it is for dogfooding,
   independence from Rust and as a showcase. Scope: the parser first (lexer, parser, serializer), and later parts are
   planned once it matches. Each warp part is a twin of its Rust part, checked by a differential test over every sample
   before the Rust part goes. Language gaps found on the way (text indexing, Node API, byte buffer) are fixed in the
   language, not worked around.
-- site-budget (user, via warp-supervisor): the hello-world site budget is raised modestly to today's size plus 2 KB,
-  not doubled (the 23 KB was the measured 21.9 KB plus headroom, nothing deeper). warp-bundle-size finds what grew
-  every program's app.wasm and host.js and lowers the budget again as bytes are won back (a ratchet).
+- site-budget (user, directly to warp-bundle-size, 2026-10-12; replaces the earlier modest raise + ratchet): the
+  hello-world site budget is 100 KB gzipped, "plenty compared to other huge web sites"; no ratchet. Today it is
+  19.8 KB; the test still prints the size.
 - no-executable-by-default (user, via warp-supervisor; replaces P103's default): a plain `warp file.warp` run no
   longer writes the standalone executable next to the file; WARP_EXECUTABLE=1 turns it back on, `warp build` still
   makes it (worker warp-executable-flag).
@@ -140,6 +147,10 @@ notes/open_decisions.md.
 - P239 (warp-class, cards lambda-def, unbound-lambda): in a lambda naming its parameter, `it` is the surrounding
   code's `it`: `scale := [1 2].map(x => x * it); scale 3` is [3 6]; with no outer `it`, `[1 2].map(x => it)` is
   the error "undefined variable: it". As implemented.
+- P241 (user directly to warp-dispatch, 2026-10-12, extends P157; "do we really need a new vector type or can we use our list"): no vector type and no Rust syntax in warp: warp's list holds any elements,
+  blocks and unboxed numbers alike, so a list type is `ints` (or `list of int`). Ported `Vec<int>`, `vector<int>`,
+  `vector of int`, `Array<int>`, `ArrayList<int>` read as that list with the note "warp says list"
+  (warp_parser FOREIGN_LIST_HEADS); `Vec<T>` of a type parameter drops with it.
 - P240 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
   so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
   (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and

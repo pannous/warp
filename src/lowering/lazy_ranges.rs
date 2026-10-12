@@ -34,7 +34,7 @@ pub fn lower(node: Node) -> Node {
 	if !has_range(&node) {
 		return node;
 	}
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let own = |word: &str| context.user_functions.contains_key(word);
 	let mut lowering = Lowering { counts: !own(COUNT_WORD), sums: !own(SUM_WORD), temporaries: Counter::starting_at(1) };
 	let producers = range_producers(&node);

@@ -27,7 +27,7 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
 		return node;
 	}
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let words: Vec<&str> = SWITCH_WORDS.into_iter().filter(|word| !context.user_functions.contains_key(*word)).collect();
 	if words.is_empty() {
 		return node;

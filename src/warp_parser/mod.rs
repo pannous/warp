@@ -59,6 +59,9 @@ pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
+/// Other languages' list types: warp's list holds any elements, unboxed numbers too, so `Vec<int>` is `list of int`
+const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"];
+const LIST_HEAD: &str = "list";
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
@@ -550,7 +553,20 @@ fn names_a_type(word: &str) -> bool {
 /// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
 fn type_application_name(name: &str, arguments: &str) -> String {
 	let arguments = arguments.replace('<', " of ").replace('>', "");
-	format!("{name} of {}", arguments.split_whitespace().collect::<Vec<_>>().join(" "))
+	format!("{} of {}", noted_list_type_head(name), arguments.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// The head of a list type: `Vec`, `vector`, `Array`… are list
+pub(crate) fn list_type_head(name: &str) -> &str {
+	if FOREIGN_LIST_HEADS.contains(&name) { LIST_HEAD } else { name }
+}
+
+/// list_type_head, with a note naming warp's word for a foreign one
+pub(crate) fn noted_list_type_head(name: &str) -> &str {
+	if FOREIGN_LIST_HEADS.contains(&name) {
+		crate::diagnostic::note_alias(name, LIST_HEAD);
+	}
+	list_type_head(name)
 }
 
 /// The sign of a superscript exponent: ⁺ is +1, ⁻ is -1
@@ -1021,6 +1037,10 @@ fn typed_parameter(arguments: Node) -> Node {
 	match arguments.drop_meta() {
 		Node::List(items, _, Separator::Space) => match items.as_slice() {
 			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone())),
+			// `x of int`: the parameter x of type int
+			[name, of, type_word] if of.drop_meta().is_symbol(OF_WORD) && is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) && !is_type_word(name) => {
+				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
+			}
 			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
 			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => match name.drop_meta() {
 				Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),

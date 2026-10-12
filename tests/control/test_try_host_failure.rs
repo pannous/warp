@@ -25,8 +25,8 @@ fn an_uncaught_adapter_failure_stays_loud() {
 }
 
 #[test]
-#[cfg(feature = "native")] // the file system, httpbin.org: the page's in-memory files take any path
+#[cfg(feature = "native")] // the file system: the page's in-memory files take any path
 fn try_catches_a_file_or_http_failure() {
 	is!("try write(\"/no/such/folder/x.txt\", \"x\") else 7", 7);
-	is!("use net\ntry post(\"https://httpbin.org/status/401\", \"x\") else \"caught\"", "caught");
+	is!(&format!("use net\ntry post(\"{}\", \"x\") else \"caught\"", crate::common::serve("401 Unauthorized", "no")), "caught");
 }

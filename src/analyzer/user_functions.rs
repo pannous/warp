@@ -219,7 +219,7 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	type_word_kind(&type_name)
 }
 
-fn is_map_type(type_name: &str) -> bool {
+pub(crate) fn is_map_type(type_name: &str) -> bool {
 	type_name == super::checks::MAP_TYPE || type_name.starts_with(super::checks::MAP_TYPE_PREFIX)
 }
 
@@ -491,6 +491,14 @@ pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 pub fn function_context(node: &Node) -> Context {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, node);
+	context
+}
+
+/// A fresh context holding only what the program defines (defined_functions), no inferred kinds: for the passes that
+/// read names, parameters and bodies, which so cost no analysis of the program as it stands
+pub fn function_definitions(node: &Node) -> Context {
+	let mut context = Context::new();
+	defined_functions(&mut context, node);
 	context
 }
 
@@ -1262,7 +1270,7 @@ pub(super) fn with_list_annotation<'a>(param: Param, items: &mut std::iter::Peek
 	};
 	let element = match next_word(items).as_deref() {
 		Some(LIST_WORD) => annotation,
-		Some(OF_WORD) if annotation == LIST_WORD => {
+		Some(OF_WORD) if crate::warp_parser::list_type_head(&annotation) == LIST_WORD => {
 			items.next();
 			match next_word(items) {
 				Some(element) => element,

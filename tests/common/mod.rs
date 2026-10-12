@@ -6,6 +6,16 @@ const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
 /// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
 /// samples is SAMPLE_SLICES tests, each over one slice
 const SAMPLE_SLICES: usize = 4;
+/// How a failed request reads when it never got an answer (src/extensions/utils.rs network_reason, ureq's io errors,
+/// host-files.js): worth one retry
+const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection", "network error"];
+/// How it reads when the host answered: a wrong answer, never retried
+const ANSWERED: &str = "http status";
+#[cfg(feature = "native")]
+const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+/// The echo server of echo_url: what a POST sent, as httpbin.org/post answers it
+#[cfg(feature = "native")]
+const ECHO_SERVER: &str = "post \"/post\" { {data: request.body, headers: request.headers} }";
 
 /// Every SAMPLE_SLICES-th item from `slice` on
 pub fn sample_slice<T>(items: &[T], slice: usize) -> impl Iterator<Item = &T> {
@@ -49,6 +59,15 @@ macro_rules! is {
 	($a:expr, $b:expr, gc) => {{
 		let result = ::warp::wasm_emitter::eval($a);
 		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
+	}};
+}
+
+/// is! for code that reaches another host: retried once when only the network failed it (common::online_eval)
+#[macro_export]
+macro_rules! is_online {
+	($a:expr, $b:expr) => {{
+		let result = $crate::common::online_eval($a);
+		assert_eq!(result, $b, "{}", $a);
 	}};
 }
 
@@ -164,6 +183,51 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 pub fn serve(status: &'static str, body: &'static str) -> String {
 	let stub = std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)");
 	format!("{stub}?status={}&body={}", percent_encoded(status), percent_encoded(body))
+}
+
+/// A warp server (web_server.rs, end to end) answering POST /post with what it got, as httpbin.org does: {data,
+/// headers}; started once per test process on a free port
+#[cfg(feature = "native")]
+pub fn echo_url() -> String {
+	static URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+	URL.get_or_init(|| {
+		let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+		std::thread::spawn(move || warp::pipeline::serving_at(port, || eval(ECHO_SERVER).serialize()));
+		let started = std::time::Instant::now();
+		while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+			assert!(started.elapsed() < SERVER_START_LIMIT, "the echo server did not start");
+			std::thread::sleep(std::time::Duration::from_millis(50));
+		}
+		format!("http://127.0.0.1:{port}/post")
+	}).clone()
+}
+
+/// In the browser the test server echoes a POST to its stub (web/playground/test_in_browser.py /__stub__)
+#[cfg(not(feature = "native"))]
+pub fn echo_url() -> String {
+	std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)")
+}
+
+/// `attempt` once more when it failed for the network alone (`network_failure` names why), logged loudly: a slow or
+/// unreachable host fails a test only twice in a row. A wrong answer is never retried
+pub fn retried_on_network_failure<T>(what: &str, attempt: impl Fn() -> T, network_failure: impl Fn(&T) -> Option<String>) -> T {
+	let first = attempt();
+	let Some(reason) = network_failure(&first) else { return first };
+	eprintln!("⚠️  RETRY {what}: network failure ({reason}), trying once more");
+	attempt()
+}
+
+/// The reason of an error value from a request that got no answer (no connection, DNS, timeout), else None
+pub fn network_failure_of(value: &Node) -> Option<String> {
+	let Node::Error(message) = value.drop_meta() else { return None };
+	let reason = message.to_string();
+	let lower = reason.to_lowercase();
+	(!lower.contains(ANSWERED) && NETWORK_FAILURES.iter().any(|failure| lower.contains(failure))).then_some(reason)
+}
+
+/// The value of `code`, which reaches another host: run again once when the network failed it
+pub fn online_eval(code: &str) -> Node {
+	retried_on_network_failure(code, || eval(code), network_failure_of)
 }
 
 #[cfg(not(feature = "native"))]

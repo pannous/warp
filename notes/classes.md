@@ -278,7 +278,8 @@ method (`p.new(2)`, Rust's `Point::new(1, 2)`: method_calls_named) stays a metho
 Run-time dispatch (classes-27, card class-method): a library-word method (`sum`, the counting words `count`/`size`/…,
 type words) called on a variable of no known class outside the class bodies, `total(x) := x.sum()`, is
 `if x is Bag then x.method·sum() else x.sum()` (class_methods dispatched_by_class, one branch per class defining it).
-A list mutation (`xs.pop()`) on an unknown receiver stays the list's (an if around a mutation is not built; card mutation-unknown); inside
+A list mutation (`x.pop()`) on an unknown receiver dispatches the same way (card mutation-unknown; the list's branch
+still writes the change back to x); inside
 class bodies receivers are fields of declared types. An operator on a variable of no known class
 (`for q in [V(1), W(9)] { q + q }`, card class-operators) is `if q is V then q.plus(q) else … else q + q` per class
 defining the operator's method (operators.rs dispatched_operator); variables assigned a number or a text, looping over

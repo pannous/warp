@@ -331,7 +331,7 @@ fn page(title: &str, body: &str, replies: &str, scripts: &[Script], worker_scrip
 	let worker = if worker_list.is_empty() { String::new() } else { format!(" {WORKER_ATTRIBUTE}=\"{}\"", worker_list.join(LIST_SEPARATOR)) };
 	let base = if root == BESIDE { String::new() } else { format!("<base href=\"{root}\">\n") };
 	// the program's texts last, so nothing in them is read as a placeholder
-	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{worker}}", &worker).replace("{{base}}", &base).replace("{{title}}", &escaped(title)).replace("{{replies}}", replies).replace("{{body}}", body)
+	PAGE_TEMPLATE.replace("{{root}}", ROOT_ID).replace("{{scripts}}", &scripts).replace("{{worker}}", &worker).replace("{{base}}", &base).replace("{{title}}", &crate::markup::escaped(title)).replace("{{replies}}", replies).replace("{{body}}", body)
 }
 
 /// A script without its comment lines, trailing comments after a statement, blank lines and indentation (card
@@ -362,8 +362,4 @@ pub(crate) fn read_program(program: &Path) -> Result<String, String> {
 /// app.warp → app, the name of its page and Worker
 pub(crate) fn program_stem(program: &Path) -> String {
 	program.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
-}
-
-pub(crate) fn escaped(text: &str) -> String {
-	text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }

@@ -353,3 +353,19 @@ fn r_words_work_with_a_note_naming_warps_form() {
 	assert!(hints.iter().any(|hint| hint.canonical == "map(" && hint.original == "sapply("), "{hints:?}");
 	assert!(hints.iter().any(|hint| hint.canonical == "[" && hint.original == "c("), "{hints:?}");
 }
+
+#[test]
+fn types_built_from_type_parameters_drop_with_them() {
+	assert_eq!(shown("fn first<T>(xs: Vec<T>) -> T { xs[0] }; first([4, 5])"), "4");
+	assert_eq!(shown("fn wrap<T>(x: T) -> Vec<T> { [x] }; wrap(3)"), "[3]");
+	assert_eq!(shown("fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }; pair(1, \"x\")"), "(1 \"x\")");
+}
+
+#[test]
+fn other_languages_list_types_are_lists_with_a_note() {
+	for code in ["f(xs: Vec<int>) := count(xs); f([1, 2])", "f(xs: array<int>) := count(xs); f([1, 2])", "f(xs: vector of int) := count(xs); f([1, 2])"] {
+		let (value, hints) = warp::normalize::capture_hints(|| shown(code));
+		assert_eq!(value, "2", "{code}");
+		assert!(hints.iter().any(|hint| hint.canonical == "list"), "{code}: {hints:?}");
+	}
+}

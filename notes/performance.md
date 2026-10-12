@@ -77,3 +77,11 @@ generic int_gcd/ratio_new path (36 %/41 % of a stroke's profile) stays for bigge
 (probes/perf/decimal_hot_loop.warp): float 4 ms, exact 135 → 11 ms. A finger paint stroke: float 0.3 ms, exact
 13 → 5 ms; what's left is circle's per-pixel `col + 0.5 - x` in exact math (a scaled-decimal i64 representation, or
 hoisting the conversion into the float path, would drop it).
+Everyday operations (card runtime-speed, 2026-10-12, quick-release; probes/perf/runtime_mix.warp, n=200k, ms):
+push 1, index read/write 1, typed write 2, map 2, filter 3, concat 30 → 0 (int_list_concat: array.copy into an array
+variable), slice 5, map insert 12 (20k), map lookup 7, sort 11. Left: slice, map insert/lookup, sort.
+Compile time (samples/visualizer.warp, CPU s): 0.84 → 0.50. The passes that need only names/params/bodies take
+analyzer::function_definitions; a full analyse_user_functions runs per changed program state (the memo misses on
+each), so a pass asking for one paid ~5–60 ms. Profile with probes/perf/xctrace_summary.py (unstripped build:
+CARGO_PROFILE_QUICK_RELEASE_STRIP=false; --callers <name> shows who pays). Left: module loading of std (~190 ms of
+samples), emit ~120 ms, Node clone/drop ~250 ms, the remaining full analyses (lambdas, closures, list_phrases).

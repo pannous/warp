@@ -12,9 +12,8 @@ guess (user 2026-10-10: show() without a canvas gets a default size, not an erro
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
-- Every spawned session is announced to the user's Codex thread "Warp Boss" (user, 2026-10-12: inform the Codex Boss
-  every time we spawn a session): ~/dev/bin/claude-remote.sh (start.sh through it) and the Codex cron run (start and
-  end) do it; other spawns send name, folder and URL themselves with `~/dev/bin/codex-notify.sh "Warp Boss" "<text>"`.
+- Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
+  Claude spawns never notify it (user, 2026-10-12: a Claude spawn notice landing in Codex is "not at all what we want").
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
@@ -66,7 +65,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
   `git -C /Users/me/dev/angles/warp worktree remove --force <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>`.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
-  Cargo.lock build tweak and whose commits a ref holds, a branch whose tip main or a remote branch holds. If it blocks,
+  Cargo.lock build tweak and whose commits a ref holds, a merged worktree (a remote branch holds its HEAD) whatever it
+  changes, saved first under refs/removed-worktrees, a branch whose tip main or a remote branch holds. If it blocks,
   something would be lost: look before you delete.
 - Un-ignoring tests (user, 2026-10-05): "it's allowed to un ignore test that are suddenly passing". Dropping
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
@@ -76,6 +76,9 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out
   again); `todo list Now` costs as much, while commands naming a card by its key cost ~1.
+  Never `gh project item-list` (200-530 points a call, and its slow pages trip GitHub's secondary limit, which locks
+  every session out with 502/504; gh refuses it now): read the board with `todo list [--json] [column]`, served from a
+  60 s machine-wide snapshot.
 - JSON5, not strict JSON, for anything people or agents write (user, 2026-10-10): new hand-written configs, probe
   commands and data files use JSON5 (or warp notation). Strict JSON stays only where a tool or protocol requires it
   (package.json, .claude settings, Lake manifest, WebDriver BiDi, machine-to-machine buffers).

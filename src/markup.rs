@@ -140,6 +140,11 @@ fn is_declarations(value: &Node) -> bool {
 	content_items(value).iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::Key(..) | Node::List(_, Bracket::Curly, _))))
 }
 
+/// Text made safe inside HTML: its markup characters as entities
+pub fn escaped(text: &str) -> String {
+	text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
 /// The HTML of a markup value, any other value as escaped text, by lib/markup.warp's to_html; a failed rendering is
 /// its error, shown, never an empty page. Quietly: the program that made the value already warned about it, and the
 /// renderer's positions are not the program's
@@ -147,6 +152,6 @@ pub fn to_html(node: &Node) -> String {
 	let program = crate::law::substitute(&crate::warp_parser::parse(RENDER_PROGRAM), &HashMap::from([(RENDERED.to_string(), node.clone())]));
 	match crate::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
 		Node::Text(html) => html.clone(),
-		failed => format!("<pre>{}</pre>", failed.serialize().replace('&', "&amp;").replace('<', "&lt;")),
+		failed => format!("<pre>{}</pre>", escaped(&failed.serialize())),
 	}
 }

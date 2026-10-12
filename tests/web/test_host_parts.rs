@@ -78,3 +78,26 @@ fn a_page_painting_or_sounding_ships_the_media_part() {
 	assert!(part_files("use sound\ntone(440, 0.1, \"sine\")\np{ \"played\" }").contains(&"host-media.js"));
 	assert!(!HOST_SCRIPT.contains("function textCoverage") && !HOST_SCRIPT.contains("sound_samples:"));
 }
+
+// card web-bundle-growth: exact numbers beyond the fixnums cross only through tasks, foreign calls and run blocks, so
+// their helpers (exact.js) start those parts and a hello-world site's host.js has none
+#[test]
+fn exact_numbers_cross_only_with_the_parts_that_carry_them() {
+	assert!(!HOST_SCRIPT.contains("function exactHandle"));
+	for file in ["host-tasks.js", "host-foreign.js", "host-compiler.js"] {
+		let part = HOST_PARTS.iter().find(|part| part.script.0 == file).expect("the part").script.1;
+		assert!(part.contains("function exactHandle") && part.contains("function exactOfPayload"), "{file}");
+	}
+}
+
+// card web-bundle-growth: std_pure and std_io (stdCall, std.js) start the hashes and files parts that give them, so a
+// hello-world site's host.js has neither
+#[test]
+fn std_calls_ship_only_with_the_std_parts() {
+	assert!(!HOST_SCRIPT.contains("function stdCall") && !HOST_SCRIPT.contains("std_pure:"));
+	for file in ["host-hashes.js", "host-files.js"] {
+		let part = HOST_PARTS.iter().find(|part| part.script.0 == file).expect("the part").script.1;
+		assert!(part.contains("function stdCall"), "{file}");
+	}
+	assert!(part_files("use json\nprint(json.to_json([1, 2]))").contains(&"host-hashes.js"));
+}

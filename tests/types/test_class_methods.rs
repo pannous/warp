@@ -83,3 +83,11 @@ fn a_python_style_def_method_without_parameters_is_found() {
 	is!("class P{x:int; def f(): x + 1; def g(): f() * 2}; P(3).g()", 8);
 	is!("class P{x:int; def add(n): x + n}; P(3).add(2)", 5);
 }
+
+#[test]
+fn a_list_mutation_method_dispatches_at_run_time() {
+	let stack = "class Stack{items:list; pop() := 42}; ";
+	is!(&format!("{stack}f(x) := x.pop(); f(Stack([1])) + f([1, 2, 3])"), 45);
+	is!(&format!("{stack}t = 0; for s in [Stack([1]), [7, 8]] {{ t = t * 100 + s.pop() }}; t"), 4208);
+	is!(&format!("{stack}g(x) := {{ x.pop(); x }}; count(g([1, 2, 3]))"), 2);
+}

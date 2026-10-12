@@ -399,15 +399,18 @@ fn marked_generic_names(node: &Node) -> Option<(String, Vec<String>)> {
 
 /// P157: the definition without its generics: the mark, `x: T` annotations and a `-> T` / `: T` result naming them
 fn without_type_parameters(node: Node, names: &[String]) -> Node {
-	let is_type_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if names.contains(name));
+	let is_type_parameter = |node: &Node| mentions_type_parameter(node, names);
 	match node {
 		Node::Meta { node, data } if matches!(data.as_ref(), Node::Key(mark, _, _) if mark.name() == GENERIC_MARK) => without_type_parameters(*node, names),
-		Node::Key(name, Op::Colon, kind) if is_type_parameter(&kind) => without_type_parameters(*name, names),
 		// `head -> T { body }`, `head: T { body }`: the definition `(head { body })`
 		Node::Key(head, Op::Arrow | Op::Colon, typed_body) if matches!(typed_body.drop_meta(), Node::List(parts, Bracket::None, Separator::Space) if parts.len() == 2 && is_type_parameter(&parts[0])) => {
 			let Node::List(parts, _, _) = typed_body.drop_meta() else { unreachable!("guarded") };
 			Node::List(vec![without_type_parameters(*head, names), without_type_parameters(parts[1].clone(), names)], Bracket::Round, Separator::None)
 		}
+		// `x: T`, `xs: Vec<T>`: the parameter x
+		Node::Key(name, Op::Colon, kind) if is_type_parameter(&kind) => without_type_parameters(*name, names),
+		// `head -> (A, B)` before its block: the head
+		Node::Key(head, Op::Arrow, kind) if matches!(kind.drop_meta(), Node::List(_, Bracket::Round, _)) && is_type_parameter(&kind) => without_type_parameters(*head, names),
 		// Swift's `_ x: T`: without its type `_ x` would read as a placeholder `_` (partial application), so the label goes too
 		Node::List(items, bracket, separator) if items.windows(2).any(|pair| pair[0].is_symbol(WILDCARD) && generic_parameter(&pair[1], names)) => {
 			let mut kept: Vec<Node> = Vec::new();
@@ -426,9 +429,16 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 	}
 }
 
-/// `x: T` of a type parameter T
+/// `T`, `Vec<T>` (the parser's symbol `Vec of T`), `[T]` of a type parameter T
+fn mentions_type_parameter(kind: &Node, names: &[String]) -> bool {
+	let mut found = false;
+	kind.visit(&mut |node| found |= matches!(node, Node::Symbol(words) if words.split_whitespace().any(|word| names.iter().any(|name| name == word))));
+	found
+}
+
+/// `x: T`, `xs: Vec<T>` of a type parameter T
 fn generic_parameter(node: &Node, names: &[String]) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, Op::Colon, kind) if matches!(kind.drop_meta(), Node::Symbol(name) if names.contains(name)))
+	matches!(node.drop_meta(), Node::Key(_, Op::Colon, kind) if mentions_type_parameter(kind, names))
 }
 
 /// R's `function(x) x * 2` as an argument, `map(xs, function(x) x * 2)`: the keyword head and the expression after it
