@@ -92,8 +92,14 @@ Each step is useful on its own and is what the next ones stand on.
   reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
   value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
   part, when the last line is a name (components: `page·markup`), or when a hole fails.
-- Left (card web-fine-text-nodes): holes inside components (an instance's elements by instance), text-node
-  granularity (a hole is an element).
+- Done (card web-fine-text-nodes, 2026-10-12): a computed text standing alone between an element's children
+  (`section{ h1{…} button{…} "clicked " + n + " times" }`) is a text hole `page·hole·<path>·text·<n>` (markup.rs
+  text_holes, n the child elements before it); worker.js sends its plain text, playground.js showText sets that text
+  node only, and the element is no element hole. Only a sum starting with a literal text counts (a bare `n` may be
+  markup); a text beside it (one DOM text node), a computed attribute, no child elements, or style/script/option/
+  select/textarea keep the element hole. Browser check: test_in_browser.py TEXT_HOLE (CI).
+- Left: holes inside components (an instance's elements by instance); the root's own text holes (a computed part in
+  the root still means no holes); built sites (site.js) morph the whole page·html, holes are the playground's.
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left

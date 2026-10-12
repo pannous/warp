@@ -114,6 +114,7 @@ mod test_styles;
 mod test_tag_lists;
 mod test_task_files; // card task-sound-play
 mod test_task_voices; // card playground-go
+mod test_text_holes; // card web-fine-text-nodes
 mod test_transitions;
 mod test_typed_variable_not_markup; // card annotation-html
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
