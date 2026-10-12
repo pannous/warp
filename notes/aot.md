@@ -97,6 +97,15 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
 The .cwasm is ~10× the .wasm: every module carries warp's runtime functions (texts, lists, maps …), so each compiled
 module repeats their machine code. A shared runtime module linked to the programs would shrink both.
 
+## Page apps (card build-links, 2026-10-13, user: option A)
+`warp build page.warp` of a program showing a page (serve::shows_page, what `warp page.warp` opens in a window) writes
+the executable `page`: the stub carrying the page's site packed (site_files::packed, behind the same trailer as machine
+code, which the stub tells apart by PACKED_SITE) and showing it in the system's web view (warp-runtime webview.rs, the
+window `warp app` uses too, moved there). `page --check` prints the page text from a hidden window (tests/web/
+test_built_app.rs, probe probes/build_app/hello_app.warp). The release stub grew ~170 KB (wry, winit: 1.03 → 1.2 MB),
+macOS only for now (elsewhere build writes the console executable as before). Later: `warp build --app`, a .app bundle
+(card build-app-bundle).
+
 ## Executable size (card g_gFs8, 2026-10-09)
 User: "quicksort: enormous file size of simple algorithms should be reduced with tree shaking". The 21 MB were a debug
 stub (a debug warp built the stub in its own profile; that stub is 5.6 MB today). Now:

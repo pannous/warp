@@ -15,17 +15,25 @@ path = "src/main.rs"
 required-features = ["engine"]
 
 [features]
-default = ["engine"]
+default = ["engine", "webview"]
 # running modules: wasmtime's runtime and GC, the host words; without it only the names of the host words
 engine = ["dep:wasmtime", "dep:miniz_oxide", "dep:serde_json"]
 # compiling modules too (warp itself): Cranelift and its settings; warp's wasmtime has the component model (through
 # wasmtime-wasi), which its engines turn off
 compiler = ["engine", "wasmtime/cranelift", "wasmtime/component-model"]
+# showing a page in the system's web view (webview.rs): `warp app`, and the apps `warp build` makes of page programs
+# (card build-links); macOS only for now, Linux needs webkit2gtk's dev packages on every builder
+webview = ["dep:wry", "dep:winit", "dep:objc2"]
 
 [dependencies]
 miniz_oxide = { version = "0.9", optional = true } # the carried machine code is deflated (standalone.rs)
 serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"], optional = true } # foreign calls speak JSON lines (foreign.rs)
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "gc", "gc-copying", "runtime", "std"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+wry = { version = "0.57", optional = true, default-features = false }
+winit = { version = "0.30", optional = true, default-features = false, features = ["rwh_06"] }
+objc2 = { version = "0.6", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2" # the SIGINT handler of `on interrupt` (host_words.rs signal_poll); in the tree through wasmtime already

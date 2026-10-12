@@ -1,0 +1,4 @@
+// card build-links: `warp build hello_app.warp` writes the app hello_app, which opens this page in a web view window
+// (no warp needed to run it); `./hello_app --check` prints its text instead. Any key closes it
+on key { exit }
+div{ h1{ "hello" } p{ "built as an app" } }

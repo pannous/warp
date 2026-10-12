@@ -12,8 +12,9 @@ pub(crate) use crate::host_parts::{
 pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
+pub use warp_runtime::site_files::{content_type, file_at, SiteFile};
+use warp_runtime::site_files::{PAGE_FILE, ROUTED_PAGE_FILE};
 
-const PAGE_FILE: &str = "index.html";
 const MODULE_FILE: &str = "app.wasm";
 /// The scripts every page loads after the host's (host_parts.rs HOST_SCRIPTS)
 const PAGE_SCRIPTS: [Script; 2] = [
@@ -78,17 +79,6 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 /// `warp dev` adds the script asking the dev server for new builds (src/dev_server.rs)
 const DEV_SCRIPT: (&str, &str) = ("dev.js", include_str!("../web/playground/dev.js"));
 
-/// The content types of a site's files, by their extension
-const CONTENT_TYPES: [(&str, &str); 3] = [
-	("html", "text/html; charset=utf-8"),
-	("js", "text/javascript; charset=utf-8"),
-	("wasm", "application/wasm"),
-];
-const OTHER_CONTENT: &str = "application/octet-stream";
-const INDEX_PATH: &str = "/";
-/// The page of a program with routes for any other path (card single-page): a static host such as GitHub Pages serves
-/// 404.html for a path it has no file of, `warp dev` and `serve` do the same; the page's router shows that path's route
-const ROUTED_PAGE_FILE: &str = "404.html";
 /// Where the page finds the site's files: index.html beside them, 404.html at any depth from the site's root
 const BESIDE: &str = "";
 const SITE_ROOT: &str = "/";
@@ -98,9 +88,6 @@ pub struct BuiltSite {
 	pub directory: PathBuf,
 	pub files: Vec<String>,
 }
-
-/// A file of a site: its name and content
-pub type SiteFile = (String, Vec<u8>);
 
 /// The site of the program `code` in `directory`, titled `title`: the page, the module and the scripts
 pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, String> {
@@ -373,30 +360,6 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		renderer,
 		page_routes,
 	}))
-}
-
-/// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …, any other path the page of a
-/// program with routes (404.html)
-pub fn file_at<'a>(files: &'a [SiteFile], path: &str) -> Option<&'a SiteFile> {
-	let name = if path == INDEX_PATH {
-		PAGE_FILE
-	} else {
-		path.trim_start_matches('/')
-	};
-	let named = |wanted: &str| files.iter().find(|(file, _)| file == wanted);
-	named(name).or_else(|| named(ROUTED_PAGE_FILE))
-}
-
-/// The content type of a site's file, by its extension
-pub fn content_type(name: &str) -> &'static str {
-	let extension = Path::new(name)
-		.extension()
-		.and_then(|extension| extension.to_str())
-		.unwrap_or_default();
-	CONTENT_TYPES
-		.iter()
-		.find(|(known, _)| *known == extension)
-		.map_or(OTHER_CONTENT, |(_, content_type)| content_type)
 }
 
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure

@@ -9,6 +9,8 @@ mod test_async_data; // the browser: a task Worker fetches into shared memory, r
 mod test_bound_field_types; // card guest-type
 #[cfg(feature = "native")] // runs node
 mod test_browser_tables; // card orm-browser-stores
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
+mod test_built_app; // card build-links
 #[cfg(feature = "native")] // builds a site natively
 mod test_bundle_budget;
 mod test_class_components;

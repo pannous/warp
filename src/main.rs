@@ -429,7 +429,12 @@ fn run_command(args: &[String]) {
 			return write_wagi(&code, &target);
 		}
 		if standalone {
-			match write_standalone_executable(&code, &target) {
+			let written = if builds_an_app(&code) {
+				write_web_view_app(&code, &target)
+			} else {
+				write_standalone_executable(&code, &target)
+			};
+			match written {
 				Ok(report) => println!("{report}"),
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
@@ -757,23 +762,65 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 		return Err(format!("{} used runtime.", missing.join(", ")));
 	}
 	let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
+	let (stub, runtime) = runtime_stub()?;
+	let output = standalone_output_path(target);
+	let executable = warp_runtime::standalone::with_machine_code(&runtime, &machine_code);
+	write_executable(&executable, &output)?;
+	Ok(format!(
+		"wrote {} ({} bytes: runtime {}, machine code {})",
+		output.display(),
+		executable.len(),
+		stub.display(),
+		machine_code.len()
+	))
+}
+
+/// `warp build page.warp` of a program showing a page, as `warp page.warp` opens it in a window: an app, the stub
+/// carrying the page's site, which it shows in the system's web view (card build-links); macOS only for now
+fn builds_an_app(code: &str) -> bool {
+	cfg!(target_os = "macos") && warp::serve::shows_page(code)
+}
+
+fn write_web_view_app(code: &str, target: &str) -> Result<String, String> {
+	let output = standalone_output_path(target);
+	let title = output
+		.file_stem()
+		.map(|stem| stem.to_string_lossy().into_owned())
+		.unwrap_or_default();
+	let site = warp::site::files(code, &title, false)?;
+	let (stub, runtime) = runtime_stub()?;
+	let executable = warp_runtime::standalone::with_site(&runtime, &site);
+	write_executable(&executable, &output)?;
+	Ok(format!(
+		"wrote {} ({} bytes: runtime {}, the page in a web view window)",
+		output.display(),
+		executable.len(),
+		stub.display()
+	))
+}
+
+/// The runtime stub's path and bytes
+fn runtime_stub() -> Result<(std::path::PathBuf, Vec<u8>), String> {
 	let stub = runtime_stub_path()?;
 	let runtime =
 		fs::read(&stub).map_err(|failure| format!("cannot read the runtime {}: {failure}", stub.display()))?;
-	let output = standalone_output_path(target);
-	let executable = warp_runtime::standalone::with_machine_code(&runtime, &machine_code);
-	fs::write(&output, &executable).map_err(|failure| format!("cannot write {}: {failure}", output.display()))?;
+	Ok((stub, runtime))
+}
+
+/// The executable written, runnable and (macOS) signed
+fn write_executable(executable: &[u8], output: &std::path::Path) -> Result<(), String> {
+	fs::write(output, executable).map_err(|failure| format!("cannot write {}: {failure}", output.display()))?;
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::PermissionsExt;
-		fs::set_permissions(&output, fs::Permissions::from_mode(EXECUTABLE_MODE))
+		fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_MODE))
 			.map_err(|failure| failure.to_string())?;
 	}
 	// macOS starts only signed executables: an ad-hoc signature, which `codesign --verify --strict` accepts
 	#[cfg(target_os = "macos")]
 	match std::process::Command::new("codesign")
 		.args(["--sign", "-", "--force"])
-		.arg(&output)
+		.arg(output)
 		.output()
 	{
 		Ok(signed) if signed.status.success() => {}
@@ -786,13 +833,7 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 		}
 		Err(failure) => return Err(format!("cannot run codesign for {}: {failure}", output.display())),
 	}
-	Ok(format!(
-		"wrote {} ({} bytes: runtime {}, machine code {})",
-		output.display(),
-		executable.len(),
-		stub.display(),
-		machine_code.len()
-	))
+	Ok(())
 }
 
 /// What an import the standalone runtime lacks is for, in the user's words (card g-13Vk: "tasks need runtime."): the
