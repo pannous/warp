@@ -4225,6 +4225,8 @@ PASSED:
   ✓ web::test_host_parts::a_page_with_routes_ships_the_routes_part
   ✓ web::test_host_parts::each_part_is_chosen_by_the_words_it_gives
   ✓ web::test_host_parts::the_sites_parts_are_the_playgrounds_parts
+  ✓ web::test_html_escape::test_escaped_replaces_the_three_markup_characters
+  ✓ web::test_html_escape::test_one_html_escaper
   ✓ web::test_html_render::a_computed_child_next_to_an_attribute
   ✓ web::test_html_render::a_for_loop_inside_markup
   ✓ web::test_html_render::a_for_loop_nested_in_html
@@ -4815,4 +4817,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4810 passed, 0 failed, 4810 total tested
+10 ignored, 4812 passed, 0 failed, 4812 total tested
