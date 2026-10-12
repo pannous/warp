@@ -20,6 +20,9 @@ pub const SIGNAL_DAILY: &str = "signal_daily";
 /// `signal_at(id, minute_of_day)`: `at 9:00 {…}`, on·every·id once at the next such local time
 pub const SIGNAL_AT: &str = "signal_at";
 pub const SIGNAL_WATCH: &str = "signal_watch";
+/// `signal_frame(id, ms)`: `on frame {…}`, on·every·id every frame of the paint window while it shows; without a window
+/// once (system_signals.rs Trigger::WindowShows)
+pub const SIGNAL_FRAME: &str = "signal_frame";
 /// `system_value(name)`: the machine's `battery` percent, `charging`, `online`, `dark mode` (system_values.rs)
 pub const SYSTEM_VALUE: &str = "system_value";
 pub const BATTERY: &str = "battery";
@@ -43,6 +46,9 @@ pub const VIEW_WIDTH: &str = "view_width";
 pub const VIEW_HEIGHT: &str = "view_height";
 /// Whether `use draw` draws on the GPU (src/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
 pub const GPU_DRAWING: &str = "gpu_drawing";
+/// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
+/// (lowering/system_signals.rs); not a value a program names
+pub const KEY_PRESSED: &str = "key_pressed";
 pub const SYSTEM_VALUES: [(&str, bool); 12] = [
 	(BATTERY, false),
 	(CHARGING, true),
@@ -100,7 +106,7 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 13] = [
+pub const BASIC_HOST_WORDS: [&str; 14] = [
 	SLEEP,
 	RANDOM,
 	RANDOM_BELOW,
@@ -112,6 +118,7 @@ pub const BASIC_HOST_WORDS: [&str; 13] = [
 	SIGNAL_DAILY,
 	SIGNAL_AT,
 	SIGNAL_WATCH,
+	SIGNAL_FRAME,
 	SYSTEM_VALUE,
 	EXIT,
 ];
@@ -160,6 +167,7 @@ mod linking {
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_DAILY, system_signals::start_daily_timer)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_AT, system_signals::start_one_shot_timer)?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_FRAME, system_signals::start_frame_timer)?;
 		linker.func_wrap(
 			HOST_LIBRARY,
 			SIGNAL_WATCH,

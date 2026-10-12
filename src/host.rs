@@ -17,8 +17,8 @@ const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetc
 pub use warp_runtime::host_words::{
 	CLIPBOARD_TEXT, CLOCK, EXIT, FETCH_HANDLER_PREFIX, FILE_HANDLER_PREFIX, GPU_COMPUTE, GPU_COMPUTE_LINEAR,
 	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, INTERRUPT_HANDLER, LOCAL_OFFSET, NOTIFY, PAGE_PATH,
-	RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL,
-	SIGNAL_WATCH, SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
+	RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_FRAME,
+	SIGNAL_POLL, SIGNAL_WATCH, SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
 };
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
@@ -160,7 +160,7 @@ pub const VALUE_GIVING_WORDS: [&str; 14] = [
 	STD_IO,
 	SERVE_ROUTES,
 ];
-pub const HOST_WORDS: [&str; 65] = [
+pub const HOST_WORDS: [&str; 66] = [
 	DRAW_SHAPE,
 	DRAW_SHOW,
 	GPU_COMPUTE,
@@ -197,6 +197,7 @@ pub const HOST_WORDS: [&str; 65] = [
 	SIGNAL_EVERY,
 	SIGNAL_DAILY,
 	SIGNAL_AT,
+	SIGNAL_FRAME,
 	SIGNAL_WATCH,
 	SYSTEM_VALUE,
 	EXIT,
@@ -229,7 +230,7 @@ pub const HOST_WORDS: [&str; 65] = [
 ];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 65] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 66] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[
@@ -269,6 +270,7 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 		(SIGNAL_EVERY, vec![I64, I64], vec![]),
 		(SIGNAL_DAILY, vec![I64, I64, I64], vec![]),
 		(SIGNAL_AT, vec![I64, I64], vec![]),
+		(SIGNAL_FRAME, vec![I64, I64], vec![]),
 		(SIGNAL_WATCH, vec![I64, I32], vec![]),
 		(SYSTEM_VALUE, vec![I32], vec![I64]),
 		(EXIT, vec![I64], vec![]),

@@ -35,9 +35,10 @@ function startTimers(holder, fire) {
 }
 
 // what a timer says in the page: "every 500 ms", "at 09:00", "every day at 09:00", or the channel its listener reads
-function timerLabel(holder, { id, every, minute, once }) {
+function timerLabel(holder, { id, every, minute, once, frame }) {
 	const channel = holder.channels?.get(id);
 	if (channel) return `message from "${channel.name}"`;
+	if (frame) return "every frame";
 	if (every !== undefined) return every % 1000 ? `every ${every} ms` : `every ${every / 1000} s`;
 	const time = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 	return once ? `at ${time}` : `every day at ${time}`;
@@ -48,5 +49,7 @@ addHostPart({
 		signal_every: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds) }, "on every …"),
 		signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
 		signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
+		// `on frame {…}`: the page's canvas always shows, so every frame's milliseconds until the next run
+		signal_frame: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds), frame: true }, "on frame {…}"),
 	}),
 });

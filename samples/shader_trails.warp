@@ -18,9 +18,7 @@ trails = shader {
 	}
 }
 
-// the first paint opens the window; then until it closes (headless: no window, so the loop never starts)
-paint(trails, width, height)
-while window_open {
+// each frame of the window, until it closes; the first paint opens it (headless: one frame, as a PNG)
+on frame {
 	paint(trails, width, height)
-	sleep 16ms
 }
