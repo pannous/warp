@@ -5,7 +5,7 @@
 //! macOS asks `pmset` and `defaults`, Linux /sys and `gsettings`; `online` is whether a route to the internet exists
 //! (a UDP connect sends nothing). A value the platform cannot give is a loud error, never a made-up reading.
 //! `mouse_x`, `mouse_y`, `mouse_down`: natively the pointer over the paint window (window_input), read each time;
-//! `window_open` whether that window shows.
+//! `window_open` whether that window shows; read before any paint, it opens the window (blank) where one can show.
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
@@ -15,7 +15,7 @@ use crate::host_words::{
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const NOTIFICATION_TITLE: &str = "warp";
@@ -38,6 +38,30 @@ pub fn tell_window_open(open: bool) {
 
 pub fn window_shows() -> bool {
 	WINDOW_SHOWN.load(Ordering::Relaxed)
+}
+
+/// Opens the paint window before any frame: the warp binary's (src/paint.rs allow_windows), none headless
+static WINDOW_OPENER: OnceLock<fn()> = OnceLock::new();
+/// Whether window_open asked the opener: once a run, so a window the user closed stays closed (card window-loop)
+static WINDOW_ASKED: AtomicBool = AtomicBool::new(false);
+
+pub fn tell_window_opener(open: fn()) {
+	let _ = WINDOW_OPENER.set(open);
+}
+
+/// `while window_open { … }` before any paint: the window opens as the loop asks, else the loop would never run
+fn window_open() -> bool {
+	if let Some(open) = WINDOW_OPENER.get() {
+		if !window_shows() && !WINDOW_ASKED.swap(true, Ordering::Relaxed) {
+			open();
+		}
+	}
+	window_shows()
+}
+
+/// view_width × view_height before any window shows a picture
+pub fn native_view() -> (i64, i64) {
+	NATIVE_VIEW
 }
 
 /// The keys pressed over the paint window not read yet (KEY_PRESSED), oldest first; a program that never reads them
@@ -90,7 +114,7 @@ pub fn read(name: &str) -> Result<i64, String> {
 		return Ok(crate::system_signals::millisecond_of_day());
 	}
 	if name == WINDOW_OPEN {
-		return Ok(window_shows() as i64);
+		return Ok(window_open() as i64);
 	}
 	if name == KEY_PRESSED {
 		return Ok(KEY_PRESSES.lock().unwrap().pop_front().unwrap_or(0));
