@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+// card print-closure: a function value prints as its name or as written
+make(n) := x => x + n
+f(x) := x + 1
+print make(1)
+print [&f, x => x * 2]
