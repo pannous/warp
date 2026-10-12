@@ -3563,8 +3563,11 @@ PASSED:
   ✓ types::test_dispatch::a_value_of_run_time_type_dispatches_at_run_time
   ✓ types::test_dispatch::an_untyped_definition_is_the_fallback
   ✓ types::test_dispatch::classes_sharing_a_library_named_method_keep_the_library_function
+  ✓ types::test_dispatch::every_positional_argument_dispatches_at_run_time
+  ✓ types::test_dispatch::every_positional_argument_picks_the_method
   ✓ types::test_dispatch::methods_of_several_classes_share_a_name
   ✓ types::test_dispatch::no_method_for_a_type_is_a_welcoming_error
+  ✓ types::test_dispatch::the_method_closest_at_every_position_wins
   ✓ types::test_dispatch::the_most_specific_method_wins
   ✓ types::test_dispatch::two_equally_specific_methods_are_an_ambiguity_error
   ✓ types::test_element_field_writes::a_character_stored_into_a_list_of_unknown_type_stays_a_character
@@ -4797,4 +4800,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4792 passed, 0 failed, 4792 total tested
+10 ignored, 4795 passed, 0 failed, 4795 total tested
