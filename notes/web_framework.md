@@ -216,11 +216,12 @@ Each step is useful on its own and is what the next ones stand on.
   positioning); when it is removed, its keyed siblings with a transform transition glide into the space (FLIP in
   markup-transitions.js leave) instead of jumping. Sample samples/leaving_list.warp; probes/transitions/leave_check.py
   reports `glided`.
-- Keyframes as data (card web-keyframes): `keyframes: [{ opacity: 0 transform: "scale(0.5)" } { transform:
-  "scale(1.15)" } {}]` in an element is the attribute data-warp-keyframes (transitions.rs page_attribute: each frame's
-  declarations, joined by " | "; `{}` the element's own style). The page enters through the frames, timed by the
-  element's transition, and leaves through them backwards; they win over a starting style. Undoable default (name and
-  form, close to CSS @keyframes; a named sheet-level `@keyframes` is not read). Sample samples/keyframes.warp.
+- Keyframes are CSS's own (card web-keyframes, user decision via P188): `style{ "@keyframes pop": { from: {…} "60%":
+  {…} to: {…} } }` in the sheet, `animation: pop 400ms` in an element joins its inline style beside a transition.
+  What CSS lacks is a removal that waits: `leave: pop 400ms reverse` is the attribute data-warp-leave, the animation
+  markup-transitions.js plays before it removes the element (then its siblings glide into the space). The sheet's key
+  must be quoted: unquoted `@keyframes pop { from … to … }` reads `from … to` as a range. The invented inline
+  `keyframes: [...]` list was dropped. Sample samples/keyframes.warp.
 - Left: `0.3s` (card fractional-durations).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-warp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with

@@ -17,7 +17,8 @@ const MODULE_FILE: &str = "app.wasm";
 const PAGE_SCRIPTS: [Script; 2] = [("markup.js", include_str!("../web/playground/markup.js")), ("site.js", include_str!("../web/playground/site.js"))];
 /// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
 const TRANSITIONS_SCRIPT: Script = ("markup-transitions.js", include_str!("../web/playground/markup-transitions.js"));
-const TRANSITION_WORD: &[u8] = b"transition";
+/// A transition, or a leave animation (`leave: pop 400ms`, data-warp-leave), needs the transitions part
+const TRANSITION_WORDS: [&[u8]; 2] = [b"transition", b"data-warp-leave"];
 /// The part of markup.js for forms with `on submit` (card web-submit): only a module with such a handler has them
 const FORMS_SCRIPT: Script = ("markup-forms.js", include_str!("../web/playground/markup-forms.js"));
 const SUBMIT_HANDLER_WORD: &[u8] = "on·submit".as_bytes();
@@ -293,7 +294,7 @@ pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
 fn page_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 	let [markup, site] = PAGE_SCRIPTS;
 	let canvas = paints(&imports_of(module)?).then_some(PAINT_SCRIPT);
-	let transitions = names(module, TRANSITION_WORD).then_some(TRANSITIONS_SCRIPT);
+	let transitions = TRANSITION_WORDS.iter().any(|word| names(module, word)).then_some(TRANSITIONS_SCRIPT);
 	let forms = names(module, SUBMIT_HANDLER_WORD).then_some(FORMS_SCRIPT);
 	Ok(canvas.into_iter().chain([markup]).chain(transitions).chain(forms).chain([site]).collect())
 }
