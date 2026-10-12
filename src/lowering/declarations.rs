@@ -21,6 +21,14 @@ const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [
 	("dict", "map"),
 	("array", "list"),
 ];
+
+/// `tuple`, the annotation `tuple t = (…)` lowers to, and the other collection words a declaration takes
+pub(crate) fn is_collection_type_word(word: &str) -> bool {
+	COLLECTION_DECLARATION_WORDS
+		.iter()
+		.any(|(written, meant)| *written == word || *meant == word)
+}
+
 const SELF_WORD: &str = "self";
 /// Swift's block of methods added to a type: `extension Int {…}`
 const EXTENSION_WORD: &str = "extension";
