@@ -24,8 +24,9 @@ Works:
 - `data (x: 3)` with `.x`
 
 Gaps (each a card below):
-- `text[i]` costs O(n): lexing 8 KB char by char takes 0.69 s and 16 KB takes 2.6 s, and the parser's own 35 KB file
-  runs out of fuel (index_cost.warp, scan_speed.warp). → self-text-index
+- ~~`text[i]` costs O(n)~~ fixed (self-text-index): text_grapheme_offset keeps two text cursors and steps back by the
+  ASCII bytes before one, so a char-by-char scan with look-backs is linear (scan_speed.warp: 35 KB in 0.14 s, was out
+  of fuel; tests/text/test_scan_by_index.rs). It relies on runtime texts never changing in place.
 - ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/node_api.rs): `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still

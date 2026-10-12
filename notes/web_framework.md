@@ -108,8 +108,17 @@ Each step is useful on its own and is what the next ones stand on.
   fewer instances of the component than the one before (the last ones are the ones gone, by the order rule), then
   their state entries are dropped. What a cleanup reads is kept per instance like handler state. Tour example cleanup.
 - `(if c then A() else [])` among an element's children is a child (markup_tags.rs), not a statement.
-- Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it; card
-  web-instance-keys), state of a component read by a handler outside it (card web-outside-state).
+- Outside its component (card web-outside-state, user decision): `counters`, Counter's lower-case plural, is its
+  instances in page order; `counters#1.count` is the first one's count (readable and assignable), `counters.count`
+  every one's. `Counter.instances` is the long form, with a hint to write `counters` (`Counter.all` would clash with the
+  list method all); `Counter.count` stays short for `counters.count`. A program's own variable `counters` stays its
+  own. component_state.rs with_state_lists maps them to the state lists `Counter·count`. Sample
+  samples/component_totals.warp.
+- Keyed instances (card web-instance-keys): `Counter(t, key: t.id)` ties an instance's state to its key. A keyed
+  component gets the parameter `key = ø` and the list `Counter·keys`; each instance moves its key's entries of the
+  render before to its position (a swap), a new key takes a fresh slot (what stood there moves to the end), so after
+  the render the state lists are in page order again and truncation, cleanup and `event.instance` work as before;
+  mount runs for a new key. Unkeyed calls keep the order rule. Sample samples/keyed_counters.warp.
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
@@ -142,9 +151,10 @@ Each step is useful on its own and is what the next ones stand on.
   samples/component_binding.warp.
 - Validation from declared types (card web-validate): element_events::lower_binds gives a bound field the checks of
   its variable's declared type (`age: int = 30`): int → type number, step 1 (the browser marks 2.5 :invalid and a
-  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. Not yet:
-  ranges or text patterns as types, and `int age = 30` (C-style) declarations (card bind-ignores). Sample
-  samples/typed_form.warp.
+  form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. The C-style
+  `int age = 30` is the same declaration: type_name_matching::lower_prefixed_declarations rewrites it early to
+  `age: int = 30`, so handlers also treat it as the main-level variable (card bind-ignores). Not yet: ranges or text
+  patterns as types. Sample samples/typed_form.warp.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
@@ -339,11 +349,17 @@ Each step is useful on its own and is what the next ones stand on.
   wasm_emitter/text_unicode.rs: app.wasm 17.5 → 11.9) → 32.1 KB (site::compacted: shipped scripts without comment
   lines and indentation, host.js 23.8 → 16.7); 2026-10-12: 23.0 → 22.4 KB (also without a statement's trailing
   `; // comment`, card web-submit). Svelte's hello world is about 3 KB, Solid's about 5 KB.
+- Card web-bundle-growth (2026-10-12): 23.0 → 19.8 KB. host-media.js (paint, text_coverage, int-list helpers), html_kebab
+  ASCII-only (the Unicode case table was reached only through html_kebab → lower: app.wasm 12.0 → 10.8), exact.js
+  (exact numbers, starts the tasks, foreign and compiler parts) and std.js (stdCall with std_pure/std_io, starts the
+  hashes and files parts). Helper files prepended to parts hold function declarations only (a site may load them twice).
+  Find growth with integrator_tools/site_size.sh per merge, then scratch tools: gzip per JS block, wasm export →
+  function reachability. User, 2026-10-12: the budget is 100 KB, so it never blocks a branch; the test still prints sizes.
 - Not taken: wasm-opt -Oz on app.wasm (11 KB smaller raw, 0.6 KB larger gzipped).
 - What is left in app.wasm is the runtime lib/markup.warp's to_html reaches (texts, lists, equality, floats): a shared
   runtime module, cached across pages, would help sites with several pages, not the first load.
 - host.js split (2026-10-07, 32.1 → 21.9 KB, host.js 16.7 → 6.1): the core keeps what every page runs (run, outcome,
-  page events, values between JS and warp, std_pure/std_io's dispatch); the parts add themselves with addHostPart:
+  page events, values between JS and warp); the parts add themselves with addHostPart:
   host-files.js (fetch, read, std file, net, store and os), host-hashes.js (std_pure: hash, json, regex), host-timers.js
   (on every …, at 9:00), host-random.js (random, seeded), host-tasks.js (tasks, channels,
   BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm

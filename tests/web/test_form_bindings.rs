@@ -77,3 +77,16 @@ fn a_bound_field_is_validated_by_the_declared_type() {
 	assert_eq!(html_of("done: bool = yes\ninput{ bind: done aria-label: \"done\" }"), "<input type=\"checkbox\" checked data-warp-input=\"1\" aria-label=\"done\">");
 	assert_eq!(html_of("age: int = 30\ninput{ bind: age type: \"range\" aria-label: \"age\" }"), "<input step=\"1\" value=\"30\" data-warp-input=\"1\" type=\"range\" aria-label=\"age\">");
 }
+
+// `int age = 30` declares as `age: int = 30` does: a handler changes it, a bound field takes its checks (card
+// bind-ignores)
+#[test]
+#[cfg(feature = "native")]
+fn a_c_style_declared_variable_is_bound() {
+	let code = "int age = 30\nint clicks = 0\ndiv{ input{ bind: age aria-label: \"age\" } button{ on click { clicks += 1 } \"More\" } p{ \"\" + age + \"/\" + clicks } }";
+	assert!(html_of(code).contains("<input type=\"number\" step=\"1\" value=\"30\""), "{}", html_of(code));
+	let mut page = warp::headless::Page::render(code).expect("the page");
+	page.type_into("age", "31").expect("typed");
+	page.click("More").expect("clicked");
+	assert!(page.text().ends_with("31/1"), "{}", page.html());
+}

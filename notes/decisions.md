@@ -147,6 +147,10 @@ notes/open_decisions.md.
 - P239 (warp-class, cards lambda-def, unbound-lambda): in a lambda naming its parameter, `it` is the surrounding
   code's `it`: `scale := [1 2].map(x => x * it); scale 3` is [3 6]; with no outer `it`, `[1 2].map(x => it)` is
   the error "undefined variable: it". As implemented.
+- P241 (user directly to warp-dispatch, 2026-10-12, extends P157; "do we really need a new vector type or can we use our list"): no vector type and no Rust syntax in warp: warp's list holds any elements,
+  blocks and unboxed numbers alike, so a list type is `ints` (or `list of int`). Ported `Vec<int>`, `vector<int>`,
+  `vector of int`, `Array<int>`, `ArrayList<int>` read as that list with the note "warp says list"
+  (warp_parser FOREIGN_LIST_HEADS); `Vec<T>` of a type parameter drops with it.
 - P240 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
   so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
   (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and

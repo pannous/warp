@@ -39,6 +39,13 @@ const SHORT_WALK: i64 = 8;
 /// Lists whose read cursors are kept at once: a loop reading several long lists by turns (`room#i for room in rooms`,
 /// lib/sound.warp's four reverb combs) walks on in each instead of from the head of all but one (quadratic)
 const READ_CURSORS: u32 = 4;
+/// Texts whose grapheme cursors are kept at once (emit_text_cursor_globals): a lexer comparing its source with a word
+/// (`src#i == word#j`) walks on in both instead of from the start of the source at each index (quadratic)
+const TEXT_CURSORS: u32 = 2;
+/// How far (bytes) text_grapheme_back looks back from a cursor; further back, an index walks from the start of the text
+const BACK_REACH: i32 = 256;
+/// The globals of a text cursor: the text's address, a 1-based grapheme index in it and that grapheme's address
+const TEXT_CURSOR_PARTS: [(&str, ValType); 3] = [("text", ValType::I32), ("index", ValType::I64), ("at", ValType::I32)];
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(super) struct CopyCells {
@@ -107,6 +114,31 @@ impl WasmGcEmitter {
 				self.next_global_idx += 1;
 			}
 		}
+	}
+
+	/// The text cursors of text_grapheme_offset, newest first. Runtime texts are bump-allocated, never freed and never
+	/// changed in place (an append writes after their end), so a cursor stays true for any text at the same address
+	/// that still holds it: the same text, the text grown, a prefix sharing its bytes
+	pub(super) fn emit_text_cursor_globals(&mut self) {
+		if !TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
+			return;
+		}
+		self.text_cursor_global = Some(self.next_global_idx);
+		for slot in 0..TEXT_CURSORS {
+			for (part, val_type) in TEXT_CURSOR_PARTS {
+				// no text starts at address -1
+				let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::i32_const(-1) };
+				self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
+				self.extra_global_names.push((self.next_global_idx, format!("text_cursor_{slot}_{part}")));
+				self.next_global_idx += 1;
+			}
+		}
+	}
+
+	/// The globals (text, index, at) of each text cursor, newest first
+	fn text_cursors(&self) -> Vec<(u32, u32, u32)> {
+		let Some(first) = self.text_cursor_global else { return vec![] };
+		(0..TEXT_CURSORS).map(|slot| first + slot * TEXT_CURSOR_PARTS.len() as u32).map(|text| (text, text + 1, text + 2)).collect()
 	}
 
 	/// The globals (list, cell, index) of read cursor `slot`: the first is the list cursor's own
@@ -500,12 +532,69 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End, I::LocalGet(0)]);
 		});
 
-		// text_grapheme_offset(text, index): address of the grapheme at the 1-based index, trapping out of range
-		self.runtime_function("text_grapheme_offset", vec![node_ref, long], vec![int], vec![int; 2], |s, f| {
-			let (pointer, end) = (2, 3);
+		// text_grapheme_back(start, at, end, index, wanted) -> (address, index): from the grapheme `index` at `at` back to
+		// one at or before `wanted`, by the ASCII bytes before it (each but \n starts a grapheme: nothing joins an ASCII
+		// character to what precedes it, \r\n aside) and the graphemes counted from there; (start, 1) beyond BACK_REACH
+		self.runtime_function("text_grapheme_back", vec![int, int, int, long, long], vec![int, long], vec![int; 3], |s, f| {
+			let (start, at, end, index, wanted, back, pointer, counted) = (0, 1, 2, 3, 4, 5, 6, 7);
+			Self::emit_list(f, &[
+				I::LocalGet(at), I::LocalSet(pointer),
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(index), I::LocalGet(wanted), I::I64LeS, I::If(BlockType::Empty), I::LocalGet(pointer), I::LocalGet(index), I::Return, I::End,
+				// the nearest ASCII byte but \n before pointer
+				I::LocalGet(pointer), I::LocalSet(back),
+				I::Loop(BlockType::Empty),
+				I::LocalGet(back), I32Const(1), I::I32Sub, I::LocalTee(back), I::LocalGet(start), I::I32LtU,
+				I::LocalGet(back), I32Const(BACK_REACH), I::I32Add, I::LocalGet(at), I::I32LtU, I::I32Or, I::BrIf(2),
+				I::LocalGet(back), I::I32Load8U(BYTE), I::LocalTee(counted), I32Const(utf8::ONE_BYTE_END), I::I32GeU,
+				I::LocalGet(counted), I32Const(b'\n' as i32), I::I32Eq, I::I32Or, I::BrIf(0),
+				I::End,
+				// its graphemes up to pointer
+				I::LocalGet(back), I::LocalSet(counted),
+				I::Loop(BlockType::Empty), I::LocalGet(counted), I::LocalGet(end),
+			]);
+			s.call(f, "grapheme_end");
+			Self::emit_list(f, &[
+				I::LocalSet(counted), I::LocalGet(index), I::I64Const(1), I::I64Sub, I::LocalSet(index),
+				I::LocalGet(counted), I::LocalGet(pointer), I::I32LtU, I::BrIf(0), I::End,
+				I::LocalGet(back), I::LocalSet(pointer), I::Br(0),
+				I::End, I::End,
+				I::LocalGet(start), I::I64Const(1),
+			]);
+		});
+
+		// text_grapheme_offset(text, index): address of the grapheme at the 1-based index, trapping out of range. It walks
+		// on from the nearest text cursor at or before the index in the same text, or back from one past it (a look
+		// back, `src#(i-1)`, text_grapheme_back), then becomes the newest cursor: a scan takes linear time
+		let locals = vec![int, int, int, long, long, int, long];
+		self.runtime_function("text_grapheme_offset", vec![node_ref, long], vec![int], locals, |s, f| {
+			let (pointer, end, start, wanted, base, back, back_index) = (2, 3, 4, 5, 6, 7, 8);
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
 			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalSet(start), I::LocalGet(1), I::LocalSet(wanted), I::I64Const(1), I::LocalSet(base)]);
+			let cursors = s.text_cursors();
+			for &(text, index, at) in &cursors {
+				let in_this_text = [I::GlobalGet(text), I::LocalGet(start), I::I32Eq, I::GlobalGet(at), I::LocalGet(end), I::I32LtU, I::I32And];
+				Self::emit_list(f, &in_this_text);
+				Self::emit_list(f, &[
+					I::GlobalGet(index), I::LocalGet(wanted), I::I64LeS, I::I32And, I::GlobalGet(index), I::LocalGet(base), I::I64GtS, I::I32And,
+					I::If(BlockType::Empty), I::GlobalGet(at), I::LocalSet(pointer), I::GlobalGet(index), I::LocalSet(base), I::End,
+				]);
+				Self::emit_list(f, &in_this_text);
+				Self::emit_list(f, &[
+					I::GlobalGet(index), I::LocalGet(wanted), I::I64GtS, I::I32And, I::LocalGet(base), I::LocalGet(wanted), I::I64LtS, I::I32And,
+					I::If(BlockType::Empty), I::LocalGet(start), I::GlobalGet(at), I::LocalGet(end), I::GlobalGet(index), I::LocalGet(wanted),
+				]);
+				s.call(f, "text_grapheme_back");
+				Self::emit_list(f, &[
+					I::LocalSet(back_index), I::LocalSet(back),
+					I::LocalGet(back_index), I::LocalGet(base), I::I64GtS,
+					I::If(BlockType::Empty), I::LocalGet(back), I::LocalSet(pointer), I::LocalGet(back_index), I::LocalSet(base), I::End,
+					I::End,
+				]);
+			}
+			Self::emit_list(f, &[I::LocalGet(wanted), I::LocalGet(base), I::I64Sub, I::I64Const(1), I::I64Add, I::LocalSet(1)]);
 			Self::emit_list(f, &[
 				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 				I::LocalGet(pointer), I::LocalGet(end), I::I32GeU,
@@ -516,7 +605,17 @@ impl WasmGcEmitter {
 			s.call(f, "grapheme_end");
 			f.instruction(&I::LocalSet(pointer));
 			Self::emit_index_compare(f, I::I64Sub);
-			Self::emit_list(f, &[I::LocalSet(1), I::Br(0), I::End, I::End, I::LocalGet(pointer)]);
+			Self::emit_list(f, &[I::LocalSet(1), I::Br(0), I::End, I::End]);
+			if let Some(&(newest, newest_index, newest_at)) = cursors.first() {
+				// another text than the newest cursor's: the older cursors move down one place
+				Self::emit_list(f, &[I::GlobalGet(newest), I::LocalGet(start), I::I32Ne, I::If(BlockType::Empty)]);
+				for pair in cursors.windows(2).rev() {
+					let ((text, index, at), (older_text, older_index, older_at)) = (pair[0], pair[1]);
+					Self::emit_list(f, &[I::GlobalGet(text), I::GlobalSet(older_text), I::GlobalGet(index), I::GlobalSet(older_index), I::GlobalGet(at), I::GlobalSet(older_at)]);
+				}
+				Self::emit_list(f, &[I::End, I::LocalGet(start), I::GlobalSet(newest), I::LocalGet(wanted), I::GlobalSet(newest_index), I::LocalGet(pointer), I::GlobalSet(newest_at)]);
+			}
+			f.instruction(&I::LocalGet(pointer));
 		});
 
 		// text_grapheme_count(text) -> i64

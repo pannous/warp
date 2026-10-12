@@ -100,7 +100,10 @@ The only session that runs the full suite and the only one that pushes code to m
   nothing compiled: notes, docs, wiki, probes, scripts, samples, playground text, go straight onto main in the main
   checkout /Users/me/dev/angles/warp, no worktree or branch. Anything in src/, crates/, tests/, Cargo.* or build.rs
   keeps its worktree, however small: a half-done edit there breaks every build of the main checkout (the user's and
-  every session's working on main). There: never touch the user's uncommitted files (commit only your own paths: `git commit -- <paths>`), run
+  every session's working on main). There: commit your own paths in their own commit (`git commit -- <paths>`), and
+  the user's uncommitted edits you meet are integrated too, not left lying (user, 2026-10-12: "integrate and commit
+  my changes instead of leaving them there"): read each diff, fix what it breaks (a deleted sample's references, a
+  test it changes the meaning of goes to the Interviewer), commit it as the user's change in a commit of its own; run
   the targeted tests through the queue, `git pull --rebase --autostash`, push, and tell the Integrator the commit and
   filters (its next full run is the check). Bigger or overlapping work keeps its worktree and branch.
   Moving on demand: a change that grows (more than a few files, many build/test rounds, or another session's files)
