@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
+  are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
+  position `or` stays the boolean or (warp-dispatch).
 - web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
   in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup). The long form
   `Counter.all` (or `Counter.instances` if `all` is taken) means the same and hints to use `counters`.
