@@ -214,8 +214,8 @@ pub(super) fn infer_function_return_kind(
 		}
 	});
 	// `{ print b }`: the words of one statement, whose value is print's, not b's
-	let statements = crate::lowering::event_signals::statements_of(body);
-	let last = statements.last().unwrap_or(body);
+	let last = crate::lowering::event_signals::last_statement(body);
+	let last = last.as_ref();
 	// `f() := {}`, a handler `{{}}`: a body doing nothing returns ø
 	// `f() = ø` too
 	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty())
@@ -360,13 +360,13 @@ pub fn param_kind(param: &Param) -> Kind {
 }
 
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
-pub(super) fn user_function(name: &str, params: Vec<Param>, body: &Node) -> UserFunctionDef {
-	let params = with_usage_kinds(params, body);
-	let return_kind = infer_function_return_kind(&params, body, &HashMap::new(), &HashMap::new(), &HashMap::new());
+pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserFunctionDef {
+	let params = with_usage_kinds(params, &body);
+	let return_kind = infer_function_return_kind(&params, &body, &HashMap::new(), &HashMap::new(), &HashMap::new());
 	UserFunctionDef {
 		name: name.to_string(),
 		params,
-		body: Box::new(body.clone()),
+		body: Box::new(body),
 		return_kind,
 		tuple_kinds: vec![],
 		func_index: None,
@@ -1543,7 +1543,7 @@ pub(super) fn register_user_function(
 		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
 	}
 	ctx.user_functions
-		.insert(name.clone(), user_function(&name, params, &body));
+		.insert(name.clone(), user_function(&name, params, body));
 }
 
 /// Nested function definitions in `body` become UserFunctionDefs named `parent·short`; their statements stay (emit skips
@@ -1802,7 +1802,11 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 		if let Node::List(sig_items, bracket, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {
-					return Some(user_function(name, extract_params(sig_items, bracket), body));
+					return Some(user_function(
+						name,
+						extract_params(sig_items, bracket),
+						body.as_ref().clone(),
+					));
 				}
 			}
 		}
@@ -1824,7 +1828,7 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 								_ => extract_param(item).into_iter().collect(),
 							})
 							.collect();
-						return Some(user_function(name, params, &inner_items[1]));
+						return Some(user_function(name, params, inner_items[1].clone()));
 					}
 				}
 			}

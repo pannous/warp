@@ -1,0 +1,4 @@
+// warp dev probes/dev/uses_module.warp: edit probes/dev/greeting_module.warp and the page reloads; break it (delete a })
+// and the overlay names greeting_module.warp and its line (card web-dev-modules)
+use greeting_module
+p{ greeting() }

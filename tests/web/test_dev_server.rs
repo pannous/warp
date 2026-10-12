@@ -89,3 +89,51 @@ fn a_dev_build_keeps_component_state() {
 	let text = reloaded.text();
 	assert!(text.contains("a 0") && text.contains("b 2"), "{}", reloaded.html());
 }
+
+// card web-dev-modules: a change of a module the program uses builds anew too, and a failure in the module shows the
+// module's file and line, not the program's
+#[test]
+fn the_dev_server_watches_the_modules_used() {
+	const MODULES_PORT: u16 = 18441;
+	const MODULES_FOLDER: &str = "scratch/dev_modules";
+	std::fs::create_dir_all(MODULES_FOLDER).expect("scratch folder");
+	let folder = std::path::Path::new(MODULES_FOLDER);
+	let (program, module) = (folder.join("app.warp"), folder.join("dev_greeting.warp"));
+	std::fs::write(&module, "def greeting(){ \"one\" }").expect("the module");
+	std::fs::write(&program, "use dev_greeting\np{ greeting() }").expect("the program");
+	std::thread::spawn(move || {
+		warp::web_server::stop_after(5);
+		warp::dev_server::serve(&program, MODULES_PORT)
+	});
+	let get = |path: &str| {
+		ureq::get(&format!("http://127.0.0.1:{MODULES_PORT}{path}"))
+			.call()
+			.expect("an answer")
+			.body_mut()
+			.read_to_string()
+			.expect("a text")
+	};
+	let state = || serde_json::from_str::<serde_json::Value>(&get("/warp-dev/state")).expect("json");
+	let started = std::time::Instant::now();
+	while std::net::TcpStream::connect(("127.0.0.1", MODULES_PORT)).is_err() {
+		assert!(
+			started.elapsed() < Duration::from_secs(60),
+			"the dev server did not start"
+		);
+		std::thread::sleep(Duration::from_millis(50));
+	}
+	assert!(get("/").contains("<p>one</p>"));
+	let first = state();
+
+	std::fs::write(&module, "def greeting(){ \"two\" }").expect("the changed module");
+	let changed = state();
+	assert!(changed["version"].as_u64() > first["version"].as_u64(), "{changed}");
+	assert!(get("/").contains("<p>two</p>"));
+
+	std::fs::write(&module, "x = 1\ndef greeting(){ (\"three\" }").expect("a failing module");
+	let error = state()["error"].as_str().expect("the failure").to_string();
+	assert!(
+		error.contains("dev_greeting.warp") && error.contains("2 | def greeting(){ (\"three\" }"),
+		"{error}"
+	);
+}
