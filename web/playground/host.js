@@ -190,10 +190,11 @@ function buildValue(module, tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
 		case 1: {
-			const exact = exactOfPayload(payload);
+			if (payload.int !== undefined) return module.new_int(BigInt(payload.int));
+			// beyond the fixnums: exact.js starts the parts that carry such numbers (tasks, foreign calls, run blocks)
+			const exact = typeof exactOfPayload === "function" ? exactOfPayload(payload) : undefined;
 			if (exact) return module.new_int(exactHandle(module, ...exact));
-			if (payload.int === undefined) throw new Error(`an Int payload of no known form: ${JSON.stringify(payload)}`);
-			return module.new_int(BigInt(payload.int));
+			throw new Error(`an Int payload of no known form (or exact.js not loaded): ${JSON.stringify(payload)}`);
 		}
 		case 2: return module.new_float(Number(payload.float));
 		case 3: case 5: {
@@ -293,37 +294,6 @@ function treeOfPlain(value) {
 	if (typeof value === "object" && Object.keys(value).length === 1 && typeof value.$int === "string") return { kind: KIND_INT, data: { exact: [value.$int, "1"] }, chain: [] };
 	if (typeof value === "object") return { kind: CURLY_LIST, items: Object.entries(value).map(([key, item]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: key }, chain: [] }, treeOfPlain(item)] })) };
 	return textTree(String(value));
-}
-
-// the Int handle of an exact number beyond the fixnums, composed from fixnum pieces with the module's exported Int
-// operations (src/tasks.rs EXACT_BUILDERS, integer_handle)
-// an integer as reader.js reads it (src/web.rs int_payload): a fixnum, or a big one's 32-bit limbs, least significant first
-function integerOfPayload(payload) {
-	if (payload.int !== undefined) return BigInt(payload.int);
-	const magnitude = payload.big.limbs.reduceRight((value, limb) => (value << 32n) | BigInt(limb), 0n);
-	return payload.big.negative ? -magnitude : magnitude;
-}
-
-// numerator and denominator of an exact number beyond the fixnums: digits (src/web.rs tree_of, Python), a big integer
-// or a ratio as reader.js reads them (a task's value); undefined for a fixnum
-function exactOfPayload(payload) {
-	if (payload.exact) return payload.exact.map(BigInt);
-	if (payload.ratio) return payload.ratio.map(integerOfPayload);
-	if (payload.big) return [integerOfPayload(payload), 1n];
-}
-
-const FIXNUM_MIN = -(2n ** 62n - 1n);
-const FIXNUM_MAX = 2n ** 62n;
-const isExactHandle = value => typeof value === "bigint" && (value < FIXNUM_MIN || value > FIXNUM_MAX);
-function exactHandle(module, numerator, denominator) {
-	const integer = n => {
-		if (n >= FIXNUM_MIN && n <= FIXNUM_MAX) return n;
-		const limbs = [];
-		for (let rest = n < 0n ? -n : n; rest > 0n; rest >>= 32n) limbs.push(rest & 0xffffffffn);
-		const magnitude = limbs.reduceRight((handle, limb) => module.exact_add(module.int_shift_left(handle, 32n), limb), 0n);
-		return n < 0n ? module.exact_sub(0n, magnitude) : magnitude;
-	};
-	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
 }
 
 // a run's timers and channels end with it (the next run, worker.js)

@@ -78,3 +78,14 @@ fn a_page_painting_or_sounding_ships_the_media_part() {
 	assert!(part_files("use sound\ntone(440, 0.1, \"sine\")\np{ \"played\" }").contains(&"host-media.js"));
 	assert!(!HOST_SCRIPT.contains("function textCoverage") && !HOST_SCRIPT.contains("sound_samples:"));
 }
+
+// card web-bundle-growth: exact numbers beyond the fixnums cross only through tasks, foreign calls and run blocks, so
+// their helpers (exact.js) start those parts and a hello-world site's host.js has none
+#[test]
+fn exact_numbers_cross_only_with_the_parts_that_carry_them() {
+	assert!(!HOST_SCRIPT.contains("function exactHandle"));
+	for file in ["host-tasks.js", "host-foreign.js", "host-compiler.js"] {
+		let part = HOST_PARTS.iter().find(|part| part.script.0 == file).expect("the part").script.1;
+		assert!(part.contains("function exactHandle") && part.contains("function exactOfPayload"), "{file}");
+	}
+}

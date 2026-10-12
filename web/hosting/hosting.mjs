@@ -8,6 +8,7 @@
 import readerScript from "../playground/reader.js";
 import hostScript from "../playground/host.js";
 import importsScript from "../playground/imports.js";
+import exactScript from "../playground/exact.js";
 import filesScript from "../playground/host-files.js";
 import hashesScript from "../playground/host-hashes.js";
 import tasksScript from "../playground/host-tasks.js";
@@ -26,9 +27,9 @@ const HOST_SCRIPTS = {
 	"host.js": hostScript,
 	"host-files.js": filesScript,
 	"host-hashes.js": hashesScript,
-	"host-tasks.js": importsScript + tasksScript,
-	"host-foreign.js": foreignScript,
-	"host-compiler.js": compilerScript,
+	"host-tasks.js": importsScript + exactScript + tasksScript,
+	"host-foreign.js": exactScript + foreignScript,
+	"host-compiler.js": exactScript + compilerScript,
 	"host-routes.js": importsScript + routesScript,
 	"host-gpu.js": gpuScript,
 	"host-timers.js": timersScript,
