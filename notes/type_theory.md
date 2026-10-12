@@ -532,8 +532,11 @@ number, it becomes a float (`(1/3) as float`); a text is parsed ("4" is 4, "a" t
 convert to a number type (`[1] as int`, a compile error in warp too). The exporter takes scalar targets (int, number,
 text, bool and their spellings); `x as Point`, `x as texts` and `x as int?` are other operations in warp and stay out.
 
-A declared result converts the body's value, as warp lowers it (lowering/declarations.rs: `body as T`), so the
-exporter wraps the body in `.conv`, returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
+A declared result converts the body's value only when nothing is lost (user 2026-10-12, card lossy-return): `-> text`,
+`-> float` convert as `body as T` and the exporter wraps the body in `.conv`; a whole-number type (`-> int`) and a
+union check it as a variable declared of the type is (type_name_matching `checked_result`, the local `the result`),
+`.cast` in W0: `def f() -> int { 2.5 }` is a compile error, `half(3)` of `-> int { x / 2 }` fails when it runs with
+"an int must be a whole number" (W0 refuses it statically: KNOWN_HOLES, card static-int). Returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
 `fun f(x: Int): Int`, `function f(x: number): number`, `def f(x) -> int: body`, `f(a, b): int := …`,
 `square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …` (`typed_definition` in
 src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all

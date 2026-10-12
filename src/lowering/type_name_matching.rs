@@ -216,11 +216,16 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 			let then = key(head.as_ref().clone(), Op::Then, as_type(chosen.as_ref().clone(), type_name));
 			key(then, Op::Else, as_type(otherwise.as_ref().clone(), type_name))
 		}
-		Node::List(items, Bracket::Curly, _) if !items.is_empty() => converted_last(value, type_name),
-		_ if type_name.symbol_name().is_some_and(is_union) => checked_as_union(value, type_name),
+		_ if is_statement_block(&value) => converted_last(value, type_name),
+		_ if type_name.symbol_name().is_some_and(is_checked_result) => checked_result(value, type_name),
 		Node::Key(_, op, _) if op.is_arithmetic() => key(Node::List(vec![value], Bracket::Round, Separator::None), Op::As, type_name.clone()),
 		_ => key(value, Op::As, type_name.clone()),
 	}
+}
+
+/// `{a; b}`: a block of statements, its last one the value; `{cube 3}` is the one statement `cube 3`
+fn is_statement_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::Curly, separator) if !items.is_empty() && (*separator != Separator::Space || items.len() == 1))
 }
 
 /// `int or text`, `Circle or Square`: the name of an inline union (analyzer lower_inline_unions)
@@ -228,14 +233,17 @@ fn is_union(word: &str) -> bool {
 	crate::analyzer::union_parts(word.trim_end_matches('?')).is_some()
 }
 
-/// The local a union result passes through: errors read "the result is declared int or text, …"
-const UNION_RESULT: &str = "the result";
+/// A result checked rather than converted, where converting could lose something: a union (user 2026-10-12, `-> int or
+/// text`) and a whole-number type (decision float-result: `-> int { 2.5 }` is no 2); `-> text { 3 }` still converts
+pub(crate) fn is_checked_result(word: &str) -> bool {
+	is_union(word) || (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
+}
 
-/// A result of a union type is checked, not converted (user 2026-10-12: `-> int or text`): `{the result: int or text =
-/// value; the result}`, admitted as any variable declared of the union is
-fn checked_as_union(value: Node, union: &Node) -> Node {
-	let declared = key(key(symbol(UNION_RESULT), Op::Colon, union.clone()), Op::Assign, value);
-	Node::List(vec![declared, symbol(UNION_RESULT)], Bracket::Curly, Separator::Semicolon)
+/// `{the result: int or text = value; the result}`: the value admitted as a variable declared of the type is, a
+/// literal when compiled, a fraction known at run time with "an int must be a whole number"
+fn checked_result(value: Node, type_name: &Node) -> Node {
+	let declared = key(key(symbol(crate::analyzer::CHECKED_RESULT), Op::Colon, type_name.clone()), Op::Assign, value);
+	Node::List(vec![declared, symbol(crate::analyzer::CHECKED_RESULT)], Bracket::Curly, Separator::Semicolon)
 }
 
 /// `error("e")`
@@ -261,12 +269,14 @@ fn converted(body: &Node, type_name: &Node) -> Node {
 /// The last statement of a block converted, the value itself outside a block; a `return` is converted already
 fn converted_last(body: Node, type_name: &Node) -> Node {
 	match body.drop_meta().clone() {
-		Node::List(mut items, Bracket::Curly, separator) if !items.is_empty() => {
+		Node::List(mut items, Bracket::Curly, separator) if is_statement_block(&body) => {
 			let last = items.pop().expect("not empty");
 			items.push(if is_return(&last) { last } else { as_type(last, type_name) });
 			Node::List(items, Bracket::Curly, separator)
 		}
 		body if is_return(&body) => body,
+		// `{cube 3}`: its one statement, so the check reads `cube 3` as a call, not a block value
+		Node::List(items, Bracket::Curly, Separator::Space) => as_type(Node::List(items, Bracket::None, Separator::Space), type_name),
 		body => as_type(body, type_name),
 	}
 }

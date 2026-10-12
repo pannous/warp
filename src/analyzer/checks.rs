@@ -1399,6 +1399,10 @@ fn strip_round(node: &Node) -> &Node {
 	}
 }
 
+/// The local a checked result passes through (type_name_matching, `-> int`, `-> int or text`): errors read "the
+/// result is declared int, …"
+pub const CHECKED_RESULT: &str = "the result";
+
 /// `x: int | zork`: the refusal of a union part that names no type, at the variable, parameter or field declared so
 fn unknown_union_part(at: &Node, place: &str, name: &str, type_name: &str, part: &str) -> Diagnostic {
 	let message = format!("{place} is declared {type_name}: an inline union joins builtin types and declared classes, {part} is neither");
@@ -1610,8 +1614,16 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
 	let actual = format!("{actual:?}").to_lowercase();
 	// a union converts nothing: `int or text(2.5)` is no call, the union grows a part instead
+	let widened = match union_parts(type_name) {
+		Some(_) => format!("{type_name}{UNION_JOINER}{actual}"),
+		None if is_whole_type(type_name) && actual == "float" => NUMBER_WORD.to_string(),
+		None => actual.clone(),
+	};
+	if name == CHECKED_RESULT {
+		let truncate = if union_parts(type_name).is_some() { String::new() } else { format!(", or convert with `{value_text} as {type_name}`") };
+		return Some(Diagnostic::at(assignment, message).fix(format!("declare the result {widened} to keep the {actual}{truncate}")));
+	}
 	if union_parts(type_name).is_some() {
-		let widened = format!("{type_name}{UNION_JOINER}{actual}");
 		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{widened}")).offer(format!("{name} holds {actual} too"), format!("{name}:{type_name}"), format!("{name}:{widened}")));
 	}
 	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{actual}"))
