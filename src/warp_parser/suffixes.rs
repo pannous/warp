@@ -445,6 +445,7 @@ impl WarpParser {
 		self.advance(); // skip '['
 		self.skip_whitespace();
 
+		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, false); // `xs[i -1]` subtracts
 		let mut indices = vec![self.parse_slice_from_start().unwrap_or_else(|| self.parse_expr(0))];
 		self.skip_whitespace();
 
@@ -454,6 +455,7 @@ impl WarpParser {
 			indices.push(self.parse_expr(0));
 			self.skip_whitespace();
 		}
+		self.in_spaced_list = outer_spaced_list;
 
 		if self.current_char() != ']' {
 			self.rewind(before_bracket); // `foo [1 2 3]`: a list argument, not an index

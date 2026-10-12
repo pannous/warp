@@ -93,9 +93,12 @@ impl WarpParser {
 																		 // `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
 		let inner_header = self.in_for_header && bracket_type == Bracket::Round;
 		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
+		let spaced_list = bracket_type == Bracket::Square && !self.group_holds_comma();
+		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, spaced_list);
 		let list = self.with_equals_comparing(compares, |parser| {
 			parser.parse_list_with_separators(Some(close), bracket_type)
 		});
+		self.in_spaced_list = outer_spaced_list;
 		self.in_for_header = outer_header;
 		self.group_start = outer_start;
 		list

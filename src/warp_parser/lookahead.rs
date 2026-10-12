@@ -459,6 +459,26 @@ impl WarpParser {
 		Some(call(AFTER_MARKER, vec![condition, value]))
 	}
 
+	/// At an opening bracket: a comma separates the group's own items (`[a -1, 2]`), not one of a nested group or text
+	pub(super) fn group_holds_comma(&self) -> bool {
+		let (mut depth, mut quote) = (0i32, None);
+		for offset in 1.. {
+			let ch = self.peek_char(offset);
+			match (quote, ch) {
+				(_, '\0') => return false,
+				(Some(open), _) if ch == open => quote = None,
+				(Some(_), _) => {}
+				(None, '"' | '\'') => quote = Some(ch),
+				(None, '(' | '[' | '{') => depth += 1,
+				(None, ')' | ']' | '}') if depth == 0 => return false,
+				(None, ')' | ']' | '}') => depth -= 1,
+				(None, ',') if depth == 0 => return true,
+				_ => {}
+			}
+		}
+		false
+	}
+
 	/// Is there a `return` word later on this statement, outside brackets
 	fn return_ahead(&self) -> bool {
 		let mut depth = 0i32;
