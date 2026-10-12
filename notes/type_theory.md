@@ -48,8 +48,8 @@ program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (function
 
 Code: `Node` (src/node/mod.rs) carries all of this untyped; `Kind` (src/type_kinds.rs) is the run-time tag. W0 types
 are the static view: `bool` is BOOL_KIND (an Int marked above the kind bits, notes/bool_type.md), `exact` the
-decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's word `rational`), `number` the floats
-(Kind::Float: `sqrt(2)`, `x as float`; warp's words `float` and `number`), see Exact numbers and floats below. `never` is the type of `error(…)` (inference.rs
+decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's word `rational`), `float` the floats
+(Kind::Float: `sqrt(2)`, `x as float`), `number` either, kept as given (card number-keeps-exact), see Exact numbers and floats below. `never` is the type of `error(…)` (inference.rs
 `raises_error`: "an `error(…)` branch is the bottom kind", notes/error_branch_kind.md) and of the elements of `[]`.
 
 ## Subtyping (≤)
@@ -58,7 +58,7 @@ decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's wor
 | --- | --- | --- |
 | τ ≤ τ, never ≤ τ, τ ≤ any | reflexive, bottom, top (`any` = a Node, `value:any`) | — |
 | bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
-| int ≤ exact ≤ number | `x: rational = 2`, `x: float = 0.5` are accepted; `x: rational = sqrt(2)` is not | checks.rs `assignment_mismatch` (Float ← Int), user_functions.rs (a float where an exact is expected) |
+| int ≤ exact ≤ number, int ≤ float ≤ number | `x: rational = 2`, `x: float = 2` are accepted; `x: rational = sqrt(2)` is not | checks.rs `assignment_mismatch` (Float ← Int), user_functions.rs (a float where an exact is expected) |
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
 | ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
@@ -594,15 +594,16 @@ digit '5' but `x = 5; x as codepoint` U+0005, and an invalid code point quietly 
 ## Exact numbers and floats
 Warp computes exactly until a float comes in: `0.1 + 0.2` is 0.3, `7/2` is 3.5, `1/3` stays 1/3, a whole result is an
 int again (`0.5 * 2` is 1, `6/2` is 3). W0 has the same values: `num q` a rational that is no int (Lean core `Rat`,
-typed `exact`), `flt bits` a float (Lean `Float` by its bits, typed `number`), and `exactValue` turns a whole rational
-into an `int`. `bool ≤ int ≤ exact ≤ number`, a fixed width below int. `arith` gives int for ints, exact for exact
-numbers, number when a float takes part; `/` widens its left side to exact (`7/2`), `^` to exact for a whole exponent
+typed `exact`), `flt bits` a float (Lean `Float` by its bits, typed `float`), and `exactValue` turns a whole rational
+into an `int`. `bool ≤ int ≤ exact ≤ number` and `int ≤ float ≤ number` (exact and float meet in int, join in number),
+a fixed width below int. `arith` gives int for ints, exact for exact numbers, float for ints and floats, number when a
+float meets an exact number; `/` widens its left side to exact (`7/2`), `^` to exact for a whole exponent
 (`2^-1` is 0.5) and to number for a fractional one (`2^0.5`, the only rational operation that leaves the rationals).
-`%` is Euclidean on rationals too (`7.5 % 2` is 1.5). `as float` (Ty `number`) makes a float, `as int` cuts toward
+`%` is Euclidean on rationals too (`7.5 % 2` is 1.5). `as float` (Ty `float`) makes a float, `as int` cuts toward
 zero. Printing follows warp's `Number` display: a terminating decimal (`3.5`, `0.0009765625`), else `n/d`; floats print
 `?` unless whole. The exporter reads a decimal literal warp keeps exact (`Number::is_exact_decimal`, through
 `decimal_fraction`) and a quotient as `exactValue (n / d)`, any other float literal as a float, and the type words
-`exact`, `rational`, `real` as `exact`, `float`, `number` as `number`. Soundness re-proved (one lemma,
+`exact`, `rational`, `real` as `exact`, `float` as `float`, `number` as `number`. Soundness re-proved (one lemma,
 `exactNumber_typed`: an operation on exact numbers gives an exact number, or a float only where the type says number).
 warp's analyzer sees a decimal and a float as one Kind (Float), so admits is compared on the decimal (`.exact`).
 Found: card rational-float (`x: rational = sqrt(2)`, `x: rational = 0.5 as float` fail with an internal WASM
@@ -611,8 +612,11 @@ Conversions (card w0-conversions): `as int`, `as number` and `as rational` read 
 does (`textNumber`: `12`, `-4.5`, `1/3`); `as rational` keeps an exact number and refuses a float when it runs (warp
 refuses it statically; W0's `number` is floats and exact numbers alike, so the corpus leaves it out). An exact number
 given to a float place (`x: float = 1/3`, a name already holding a float, a float parameter) is converted
-(`castDynamicValues` inserts `.conv v .number`), and the model prints floats as warp's float_text does (`floatText`).
-Warp keeps 1/3 for a `number` parameter, a float field and a `floats` list (card number-converts).
+(`castDynamicValues` inserts `.conv v .float`), and the model prints floats as warp's float_text does (`floatText`).
+A `number` place keeps what it is given and `as number` converts only a text (`yes as number` is yes); a name given
+both a float and an exact number is a float place (`widenNumber`: `x = 1/3; x = 0.5 as float` holds 0.5, and a later
+`x = 1/3` 0.333…). Admits is compared with `Ty.admits`: `Ty.sub`, plus an exact number a float place converts
+(card number-keeps-exact; user: "`number` means any number, keeping whatever it holds; only `float` converts").
 
 ## Stored errors (errors as values)
 
