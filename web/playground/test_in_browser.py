@@ -382,6 +382,8 @@ def report_wrong(page_url):
 	open_page(with_parameter("report=off"))
 	wait_for_isolation()
 	hidden = browser("eval", 'document.getElementById("report").hidden')
+	open_page(page_url)  # last: its reloads to other addresses come after the checks that reload the page themselves
+	wait_for_isolation()
 	wrong = [] if shown == "true" else [f"report button hidden after ?report: {shown}"]
 	wrong += [] if hidden == "true" else [f"report button shown after ?report=off: {hidden}"]
 	body = urllib.parse.parse_qs(urllib.parse.urlparse(address).query).get("body", [""])[0]
@@ -584,7 +586,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (REPORT, lambda: report_wrong(page_url)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
