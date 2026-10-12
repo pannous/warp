@@ -58,3 +58,4 @@ mod test_text_plus_anything; // card print-oldest
 mod test_text_plus_printable; // card print-oldest
 mod test_text_type_words; // card cleanup-closed-lists
 mod test_scan_by_index; // card self-text-index
+mod test_for_each_char;

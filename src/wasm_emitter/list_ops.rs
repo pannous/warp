@@ -46,6 +46,9 @@ const TEXT_CURSORS: u32 = 2;
 const BACK_REACH: i32 = 256;
 /// The globals of a text cursor: the text's address, a 1-based grapheme index in it and that grapheme's address
 const TEXT_CURSOR_PARTS: [(&str, ValType); 3] = [("text", ValType::I32), ("index", ValType::I64), ("at", ValType::I32)];
+/// The globals of the text counted last (text_grapheme_count): its start and end address and its count, so a loop's
+/// `i < #text` counts once
+const TEXT_COUNTED_PARTS: [(&str, ValType); 3] = [("start", ValType::I32), ("end", ValType::I32), ("count", ValType::I64)];
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(super) struct CopyCells {
@@ -124,15 +127,20 @@ impl WasmGcEmitter {
 			return;
 		}
 		self.text_cursor_global = Some(self.next_global_idx);
-		for slot in 0..TEXT_CURSORS {
-			for (part, val_type) in TEXT_CURSOR_PARTS {
-				// no text starts at address -1
-				let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::i32_const(-1) };
-				self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
-				self.extra_global_names.push((self.next_global_idx, format!("text_cursor_{slot}_{part}")));
-				self.next_global_idx += 1;
-			}
+		let names = (0..TEXT_CURSORS).flat_map(|slot| TEXT_CURSOR_PARTS.map(|(part, val_type)| (format!("text_cursor_{slot}_{part}"), val_type)));
+		for (name, val_type) in names.chain(TEXT_COUNTED_PARTS.map(|(part, val_type)| (format!("text_counted_{part}"), val_type))) {
+			// no text starts at address -1
+			let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::i32_const(-1) };
+			self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
+			self.extra_global_names.push((self.next_global_idx, name));
+			self.next_global_idx += 1;
 		}
+	}
+
+	/// The globals (start, end, count) of the text counted last
+	fn text_counted(&self) -> Option<(u32, u32, u32)> {
+		let start = self.text_cursor_global? + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32;
+		Some((start, start + 1, start + 2))
 	}
 
 	/// The globals (text, index, at) of each text cursor, newest first
@@ -627,6 +635,13 @@ impl WasmGcEmitter {
 		self.runtime_function("text_grapheme_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
 			let (pointer, end, count) = (1, 2, 3);
 			s.emit_text_bounds(f, pointer, end);
+			// the text counted last (its bytes never change): its count
+			let counted = s.text_counted();
+			if let Some((counted_start, counted_end, counted_count)) = counted {
+				Self::emit_list(f, &[I::LocalGet(pointer), I::GlobalGet(counted_start), I::I32Eq, I::LocalGet(end), I::GlobalGet(counted_end), I::I32Eq, I::I32And]);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::GlobalGet(counted_count), I::Return, I::End]);
+				Self::emit_list(f, &[I::LocalGet(pointer), I::GlobalSet(counted_start), I::LocalGet(end), I::GlobalSet(counted_end)]);
+			}
 			Self::emit_list(f, &[
 				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 				I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
@@ -638,6 +653,9 @@ impl WasmGcEmitter {
 				I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count),
 				I::Br(0), I::End, I::End, I::LocalGet(count),
 			]);
+			if let Some((_, _, counted_count)) = counted {
+				Self::emit_list(f, &[I::LocalGet(count), I::GlobalSet(counted_count)]);
+			}
 		});
 
 		// text_codepoint_count(text) -> i64: every byte but a continuation byte (10xxxxxx) starts a code point

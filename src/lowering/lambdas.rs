@@ -70,7 +70,8 @@ const ITERATIONS: [Iteration; 9] = [
 		function_arguments: 2,
 		template: "(list=loop_list; if count(list) == 0 then empty_extremum(reduce) else (acc=list#1; index=2; while index <= count(list) { item=list#index; acc = loop_call; index=index+1 }; acc))",
 	},
-	// a stable insertion sort of a copy; loop_call is whether acc sorts before item (sort_order)
+	// a stable insertion sort of a copy; loop_call is whether acc sorts before item (sort_order); sorting by a key of
+	// one item takes key_sort_template
 	Iteration {
 		word: SORT_WORD,
 		extra_arguments: 0,
@@ -78,6 +79,12 @@ const ITERATIONS: [Iteration; 9] = [
 		template: "(out=[]; for value in loop_list { out = out + [value]; index=count(out); moving=1; while moving and index > 1 { acc=out#index; item=out#(index-1); if loop_call { out#index=item; out#(index-1)=acc; index=index-1 } else { moving=0 } } }; out)",
 	},
 ];
+
+/// Sorting by a key of one item (`xs.sort_by(p => p.k)`): the keys computed once, then a merge sort by them in n log n
+fn key_sort_template() -> String {
+	let sorted_by = crate::wasm_emitter::library_ops::LIST_SORTED_BY;
+	format!("(list=loop_list; out=[]; for item in list {{ out = out + [loop_call] }}; {sorted_by}(list, out))")
+}
 
 pub(crate) struct Lambda {
 	pub(crate) params: Vec<String>,
@@ -737,16 +744,11 @@ impl Lowering {
 		}
 	}
 
-	/// Whether the first of `pair` sorts before the second: a key of one item is smaller (Python `key=len`), a comparison
-	/// holds (Swift `by: >`), any other comparator is negative (JS `(a,b) => a-b`)
+	/// Whether the first of `pair` sorts before the second: a comparison holds (Swift `by: >`), any other comparator is
+	/// negative (JS `(a,b) => a-b`); a key of one item (Python `key=len`) sorts by key_sort_template instead
 	fn sort_order(&self, iteration: &Iteration, list: &Node, function: &Node, pair: [Node; 2]) -> Result<Node, Option<Node>> {
-		let less = |left: Node, right: Node| key(left, Op::Lt, right);
-		if self.parameter_count(function) == Some(1) {
-			let [first, second] = pair;
-			return Ok(less(self.applied(iteration, list, function, &[first])?, self.applied(iteration, list, function, &[second])?));
-		}
 		let compared = self.applied(iteration, list, function, &pair)?;
-		Ok(if self.compares(function) { compared } else { less(compared, Node::int(0)) })
+		Ok(if self.compares(function) { compared } else { key(compared, Op::Lt, Node::int(0)) })
 	}
 
 	fn parameter_count(&self, function: &Node) -> Option<usize> {
@@ -775,9 +777,12 @@ impl Lowering {
 		let names: Vec<(&str, String)> =
 			["out", "item", "acc", "list", "index", "value", "moving"].into_iter().map(|name| (name, self.fresh(&format!("loop_{name}")))).collect();
 		let symbol = |name: &str| Node::Symbol(names.iter().find(|(prefix, _)| *prefix == name).expect("a loop name").1.clone());
-		let arguments: Vec<Node> = if iteration.function_arguments == 2 { vec![symbol("acc"), symbol("item")] } else { vec![symbol("item")] };
-		let applied = if iteration.word == SORT_WORD {
-			self.sort_order(iteration, &list, &unlabeled(function), [symbol("acc"), symbol("item")])
+		let sorting = iteration.word == SORT_WORD;
+		let function = if sorting { unlabeled(function) } else { function };
+		let by_key = sorting && self.parameter_count(&function) == Some(1);
+		let arguments: Vec<Node> = if iteration.function_arguments == 2 && !by_key { vec![symbol("acc"), symbol("item")] } else { vec![symbol("item")] };
+		let applied = if sorting && !by_key {
+			self.sort_order(iteration, &list, &function, [symbol("acc"), symbol("item")])
 		} else {
 			self.applied(iteration, &list, &function, &arguments)
 		};
@@ -785,7 +790,7 @@ impl Lowering {
 			Ok(applied) => applied,
 			Err(error) => return error,
 		};
-		let mut template = iteration.template.to_string();
+		let mut template = if by_key { key_sort_template() } else { iteration.template.to_string() };
 		for (name, fresh) in &names {
 			template = replace_word(&template, name, fresh);
 		}
