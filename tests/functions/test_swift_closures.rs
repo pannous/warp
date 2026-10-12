@@ -20,5 +20,5 @@ fn swift_shorthand_arguments() {
 
 #[test]
 fn membership_in_a_block_stays_membership() {
-	is!("xs=[1,2]; x=2; { x in xs }", 2); // the position, as `x in xs` gives it
+	is!("xs=[1,2]; x=2; { x in xs }", true); // yes, as `x in xs` gives it
 }
