@@ -82,7 +82,8 @@ pub fn lower(node: Node) -> Node {
 	let node = crate::gpu_maps::kept_on_gpu(node);
 	// the first array the program itself declares linear, before the compiler picks any
 	let mut first_linear: Option<(Node, String, Element)> = None;
-	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part).filter(|(_, _, shared)| shared.storage == Storage::Linear) {
+	// the compiler's own (a name with TEMPORARY_SEPARATOR, as music_words' blocks) are not the program's
+	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part).filter(|(name, _, shared)| shared.storage == Storage::Linear && !name.contains(crate::analyzer::TEMPORARY_SEPARATOR)) {
 		first_linear.get_or_insert((part.clone(), name, shared.element));
 	});
 	let (mut node, picked) = picked_linear(node);
@@ -429,6 +430,7 @@ impl Rewrite<'_> {
 					return crate::diagnostic::Diagnostic::at(array, format!("a task cannot take the linear array {}: it lives in this task's memory; `shared {} = int[n]` shares one", array.name(), array.name())).into_error();
 				}
 				match items.as_slice() {
+					[word, array] if word.name() == crate::wasm_emitter::linear_arrays::LINEAR_ADDRESS && shared(array, &names).is_some_and(|kind| kind.storage == Storage::Linear) => array.clone(),
 					[word, array] if crate::analyzer::is_counting_word(&word.name()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
 					[word, left, right] if word.name() == crate::wasm_emitter::linear_arrays::LINEAR_DOT && is_linear_floats(left, &names) && is_linear_floats(right, &names) => builtin(&word.name(), vec![left.clone(), right.clone()]),
 					[word, shader, array, workgroups] if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, &names) => {

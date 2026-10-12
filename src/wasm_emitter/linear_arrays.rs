@@ -19,6 +19,8 @@ pub const LINEAR_FLOAT_WORDS: [&str; 3] = ["linear_getf", "linear_setf", "linear
 /// linear_dotf(xs, ys) -> the sum of xs#i * ys#i over xs's count of cells, two pairs at a time in f64x2 lanes: `dot` and
 /// `sum(xs .* ys)` of two linear float arrays of equal length (shared_arrays.rs checks it)
 pub const LINEAR_DOT: &str = "linear_dotf";
+/// linear_address(xs): the Int of a linear array's address, for a host word that reads its block (shared_arrays.rs)
+pub const LINEAR_ADDRESS: &str = "linear_address";
 /// The registry names crate::wasm_emitter's ffi_func_index looks the words up by
 const FUNCTION_NAMES: [(&str, &str); 9] = [
 	(LINEAR_NEW, "ffi_linear_new"), (LINEAR_COUNT, "ffi_linear_count"),
