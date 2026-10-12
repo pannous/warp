@@ -15,6 +15,10 @@ const AMPLITUDE: f32 = 32_768.0;
 /// A sound of the same handle starting this close to where the last one ends continues it (a signal's next block):
 /// both starts round to frames on their own
 const SEAM_FRAMES: u64 = 2;
+/// The most sounds sounding at once (card sound-voice-stealing): one more steals the oldest, which fades out in
+/// STEAL_SECONDS and leaves the mix, so live playing never piles up past what the device mixes in time
+pub const MAX_VOICES: usize = 32;
+const STEAL_SECONDS: f64 = 0.005;
 
 /// A sound in the mix: its samples as given (`channels` interleaved) and their frames a device frame (`ratio`, their
 /// rate over the device's), the frame it starts at, its gain and the gain it ramps to by `step` a frame (fade_sound)
@@ -27,6 +31,7 @@ struct Mixed {
 	gain: f32,
 	target: f32,
 	step: f32,
+	stolen: bool,
 }
 
 impl Mixed {
@@ -73,7 +78,23 @@ impl Mixer {
 		let continued = self.sounds.iter_mut().find(|sound| sound.handle == handle && sound.channels == channels && sound.ratio == ratio && (sound.start + sound.frames()).abs_diff(start) <= SEAM_FRAMES);
 		match continued {
 			Some(sound) => sound.samples.extend(samples),
-			None => self.sounds.push(Mixed { handle, start, samples: samples.collect(), channels, ratio, gain: 1.0, target: 1.0, step: 0.0 }),
+			None => {
+				self.steal_for(start);
+				self.sounds.push(Mixed { handle, start, samples: samples.collect(), channels, ratio, gain: 1.0, target: 1.0, step: 0.0, stolen: false });
+			}
+		}
+	}
+
+	/// Room for one more sound sounding at the frame: the oldest of MAX_VOICES sounding then fades out and leaves
+	fn steal_for(&mut self, start: u64) {
+		let rate = self.rate;
+		let mut sounding: Vec<&mut Mixed> = self.sounds.iter_mut().filter(|sound| !sound.stolen && sound.start <= start && start < sound.start + sound.frames()).collect();
+		if sounding.len() >= MAX_VOICES {
+			sounding.sort_by_key(|sound| sound.start);
+			let oldest = &mut sounding[0];
+			oldest.stolen = true;
+			oldest.target = 0.0;
+			oldest.step = -oldest.gain / (STEAL_SECONDS * rate as f64).round().max(1.0) as f32;
 		}
 	}
 
@@ -115,7 +136,7 @@ impl Mixer {
 		}
 		self.frame += frames;
 		let frame = self.frame;
-		self.sounds.retain(|sound| sound.start + sound.frames() > frame);
+		self.sounds.retain(|sound| sound.start + sound.frames() > frame && !(sound.stolen && sound.gain == 0.0));
 		buffer.iter_mut().for_each(|sample| *sample = sample.clamp(-1.0, 1.0));
 	}
 
