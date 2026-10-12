@@ -36,10 +36,17 @@ fn declared_positions_and_indexes() {
 }
 
 #[test]
-fn arithmetic_stays_plain() {
-	// `p + 1` is the next position, written by hand: no conversion inside the arithmetic
+fn arithmetic_keeps_the_dimension() {
+	// user decision: position ± int stays a position, index ± int an index, as size_t or a pointer does
+	is!(&with_xs("xs[xs.index_of(10) + 1]"), 20);
 	is!(&with_xs("xs#(xs.index_of(10) + 1)"), 20);
-	is!(&with_xs("xs[xs.index_of(10) + 1]"), 30);
+	is!(&with_xs("p = xs.index_of(30); xs[p - 1]"), 20);
+	is!(&with_xs("xs#(argmin(xs) + 1)"), 20);
+	is!(&with_xs("next = xs.index_of(10) + 1; xs[next]"), 20);
+	// position − position is a plain count
+	is!(&with_xs("p = xs.index_of(10); q = xs.index_of(30); q - p"), 2);
+	is!(&with_xs("p = xs.index_of(10); q = xs.index_of(30); xs[q - p]"), 30);
+	fails_with(&with_xs("p = xs.index_of(10); q = xs.index_of(30); p + q"), "position");
 }
 
 #[test]

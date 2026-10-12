@@ -26,8 +26,10 @@ Rules and defaults (worker defaults, which the interviewer can change):
 - **Convert, don't refuse.** A position inside `[ ]` gives what the programmer obviously meant. It is not an error.
 - **A missing element is an error.** `xs[xs.index_of(99)]` reads `xs#0`, which gives "index out of range: 0 not in
   1…3". It never wraps to -1.
-- **Arithmetic gives a plain int.** `xs[xs.index_of(10) + 1]` is `xs[2]`. The `+ 1` you write is yours. Only the
-  `+ 1` that `xs[i]` adds itself (marked `SubscriptOffset` by the parser) is dropped for a position.
+- **Arithmetic keeps the dimension** (user decision, like size_t or a pointer): position ± int stays a position,
+  index ± int stays an index, so `xs[xs.index_of(10) + 1]` is the next item. position − position is a plain count
+  (`q - p`). Adding two positions or indexes is an error. A mixed sum (position + index) is an error too (worker
+  default).
 - **Names live in scopes.** Each function is its own scope. A parameter or a loop variable rebinds a name as a plain
   int. A name assigned both a position and something else counts as neither.
 - **Program names take priority.** If a program binds `index` or `position` as a name, that word is no type word.

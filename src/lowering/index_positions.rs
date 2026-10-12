@@ -2,13 +2,16 @@
 //! (`xs[i]`), a position from 1 (`xs#p`). `xs.index_of(x)` gives a position, `argmax(xs)` and `argmin(xs)` an index,
 //! `xs.insert(v, at: i)` takes an index, and a variable may be declared either (`p: position`, `i: index`).
 //! Where one meets the other's brackets it converts: `xs[p]` is `xs#p`, `xs#i` is `xs[i]`, `at: p` is `at: p - 1`.
-//! Arithmetic gives a plain int: `xs[p + 1]` is the item after `xs#(p + 1)`. Printing is the plain number.
+//! Arithmetic keeps the dimension (user decision), as size_t or a pointer does: `p + 1` is the next position, `i - 1`
+//! the index before; `q - p` of two positions is a plain count, and adding two of them is an error. Printing is the
+//! plain number.
 //! A name counts as a position (an index) when it is declared one, or when every value assigned to it is one.
 //! Design: notes/index_position.md
 
 use super::memoization::definition_parts;
 use super::nodes::{children_rewritten, for_in_variable, key, parameter_name};
 use crate::analyzer::{insert_position, AT_WORD, INSERT_METHOD};
+use crate::diagnostic::Diagnostic;
 use crate::library_words::COLLECTION_POSITION;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -92,6 +95,16 @@ fn converted(node: Node, counted: &HashMap<String, Count>) -> Node {
 	let node = children_rewritten(node, |child| converted(child, counted));
 	match node {
 		Node::Key(target, Op::Hash, place) => key(*target, Op::Hash, hash_place(*place, counted)),
+		Node::Key(left, Op::Add, right)
+			if count_of(&left, counted).is_some() && count_of(&right, counted).is_some() =>
+		{
+			let sum = key(*left, Op::Add, *right);
+			let message = format!(
+				"{} adds two positions or indexes: subtract them for a count",
+				sum.serialize()
+			);
+			Diagnostic::at(&sum, message).into_error()
+		}
 		Node::List(items, Bracket::Round, Separator::None) if is_call(&items, INSERT_METHOD) => {
 			let items = items.into_iter().map(|item| at_index(item, counted)).collect();
 			Node::List(items, Bracket::Round, Separator::None)
@@ -153,6 +166,12 @@ fn count_of(node: &Node, counted: &HashMap<String, Count>) -> Option<Count> {
 			Some(Count::Index)
 		}
 		Node::List(items, _, _) if items.len() == 1 => count_of(&items[0], counted),
+		Node::Key(left, op @ (Op::Add | Op::Sub), right) => {
+			match (count_of(left, counted), count_of(right, counted), op) {
+				(Some(count), None, _) | (None, Some(count), Op::Add) => Some(count),
+				_ => None,
+			}
+		}
 		_ => None,
 	}
 }
