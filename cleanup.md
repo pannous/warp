@@ -79,3 +79,9 @@
 - Reuse the existing `Meta`, diagnostic, and runtime-error helpers.
 - Remove any temporary probes or debug output once the focused tests pass.
 - Keep the worktree-only Cargo version suffix uncommitted.
+
+## Done (2026-10-12)
+
+- Parser: `diagnostic::first_located_error` in the pipeline. Runtime: the `trap_position` global. Guide in
+  notes/error_positions.md.
+- Upgraded two exact-error pins (welcoming ask/slices) to include the new position.
