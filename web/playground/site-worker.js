@@ -35,7 +35,7 @@ function showAfter(outcome) {
 		site?.stopTimers?.();
 		return post({ failure: outcome.failure ?? outcome.trap ?? outcome.error });
 	}
-	post(pageMarkup());
+	post({ ...pageMarkup(), exited: outcome.exited });
 }
 
 // the page's markup anew, as a message to the page

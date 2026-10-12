@@ -1,4 +1,6 @@
 mod test_accessibility;
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
+mod test_app_keys;
 #[cfg(feature = "native")] // runs node
 mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs wrangler dev and node
@@ -120,4 +122,4 @@ mod test_webgpu;
 mod test_webgpu_ints;
 mod test_webgpu_named; // card web-apis-rest
 #[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
-mod test_webview; // card read-chron
+mod test_webview; // card read-chron // card key-app

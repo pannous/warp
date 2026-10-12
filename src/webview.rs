@@ -20,6 +20,8 @@ const CHECK_DELAY_MS: u32 = 500;
 /// A checked page that never reports its text ends the check as a failure after this long
 const CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 const DEFAULT_WIDTH: f64 = 900.0;
+/// What the page posts when its program ran `exit(code)`, the code after it
+const EXIT_MESSAGE: &str = "warp-exit ";
 const DEFAULT_HEIGHT: f64 = 700.0;
 
 /// The bytes a path of the page names and their content type, None when there is no such file
@@ -113,14 +115,24 @@ impl Viewer {
 		let mut builder = WebViewBuilder::new()
 			.with_url(START_URL)
 			.with_custom_protocol(PROTOCOL.to_string(), move |_, request| answer(&files, &request));
+		// `exit` in a handler of the page's program (site.js endApp) ends the app with its code
+		builder = builder.with_initialization_script(format!(
+			"self.endApp = code => window.ipc.postMessage('{EXIT_MESSAGE}' + code)"
+		));
 		if self.check {
 			builder = builder.with_initialization_script(format!(
-				"addEventListener('load', () => setTimeout(() => window.ipc.postMessage(document.body.innerText), {CHECK_DELAY_MS}))"))
-				.with_ipc_handler(|text: Request<String>| {
-					println!("{}", text.body());
-					std::process::exit(0);
-				});
+				"addEventListener('load', () => setTimeout(() => window.ipc.postMessage(document.body.innerText), {CHECK_DELAY_MS}))"));
 		}
+		let check = self.check;
+		builder = builder.with_ipc_handler(move |message: Request<String>| {
+			if let Some(code) = message.body().strip_prefix(EXIT_MESSAGE) {
+				std::process::exit(code.trim().parse().unwrap_or(0));
+			}
+			if check {
+				println!("{}", message.body());
+				std::process::exit(0);
+			}
+		});
 		// a child of winit's view, never `build`: that swaps wry's view in as the window's content, which winit still
 		// reads as its own (a crash when the window loses focus, card focus-crash)
 		builder = builder.with_bounds(window_bounds(&window)).with_focused(true);

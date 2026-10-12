@@ -33,6 +33,7 @@ async function startSiteWorker() {
 			if (data.navigated) focusRoute(root);
 		}
 		if (data.dispatch) dispatchToPage(data.dispatch); // card page-custom-event
+		if (data.exited !== undefined) self.endApp?.(data.exited); // `exit` in `warp app` (src/webview.rs) closes it
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);
 		if (data.clipboard !== undefined) copyText(data.clipboard);
 		if (data.clipboardRead) pasteInto(data.clipboardRead);

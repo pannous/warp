@@ -144,7 +144,9 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   stop)"); in-process eval and tests never wait. Only a program with `on interrupt` watches ctrl-c: any other ends at
   one ctrl-c as usual.
 - `exit`, `exit(code)` (P121): a host word whose error unwinds the run (ExitRequest); the run's value is ø, the CLI and
-  executables exit with the code, the page ends the run. A bare `exit` / `exit()` statement is `exit(0)`.
+  executables exit with the code, the page ends the run, `warp app` closes its window with the code (site.js endApp →
+  webview.rs ipc "warp-exit N"; card key-app). A bare `exit` / `exit()` statement is `exit(0)`; braces holding
+  `exit 3` (`on key { exit 3 }`) are that one call (tests/control/test_exit_in_handler.rs).
 - File change (2026-10-06): `on file "notes.txt" change {…}` (or `changes`) is the handler `on·file·N()` and
   `signal_watch(N, "notes.txt")`: a timer of 100 ms that runs the handler when the file's modification time or size
   changed since the last check (written, appeared, deleted). Polling on the existing check points instead of the

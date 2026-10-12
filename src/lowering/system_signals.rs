@@ -542,7 +542,7 @@ fn minute_of_day(words: &[Node]) -> Option<Option<i64>> {
 	)
 }
 
-/// `exit` or `exit()` as a statement: `exit(0)`
+/// `exit` or `exit()` as a statement: `exit(0)`; braces holding `exit 3` are one call, not two statements
 fn bare_exits(node: Node) -> Node {
 	let is_exit = |item: &Node| match item.drop_meta() {
 		Node::Symbol(name) => name == crate::host::EXIT,
@@ -552,7 +552,7 @@ fn bare_exits(node: Node) -> Node {
 	let exit_zero = || call(crate::host::EXIT, vec![Node::int(0)]);
 	match node {
 		Node::List(items, bracket, separator)
-			if crate::variable_signals::is_statement_list(&bracket, &separator) || bracket == Bracket::Curly =>
+			if separator.separates_statements() || (bracket == Bracket::Curly && items.len() == 1) =>
 		{
 			Node::List(
 				items
