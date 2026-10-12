@@ -17,6 +17,7 @@ mod test_bool_type;
 mod test_cast_bugs;
 mod test_chained_assignments;
 mod test_checked_call_kinds;
+mod test_checked_results;
 mod test_class_aliases;
 mod test_class_cases_ported;
 mod test_class_destructuring;
@@ -148,8 +149,10 @@ mod test_typed_arrays;
 mod test_typed_list_elements; // card typed-list-elements
 mod test_types;
 mod test_types_scope;
+mod test_union_returns;
+mod test_union_spellings;
 mod test_unknown_conversion; // card unknown-word
 mod test_upcast_fields;
 mod test_value_constructor;
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error

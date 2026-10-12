@@ -425,7 +425,8 @@ const CORPUS: &[&str] = &[
 	"f(x) := x as int; f(\"7\")",
 	"f(x) := x as int; f(\"a\")",
 	"f(x) := x as text; f([1, 2])",
-	// a declared result converts the body's value, as `body as T`, in every spelling
+	// a declared result converts the body's value when nothing is lost, as `body as T`, and checks it as a declared
+	// variable for a whole-number type or a union (card lossy-return), in every spelling
 	"def f(x: int) -> int { x + 1 }; f(1)",
 	"func f(x: Int) -> Int { return x + 1 }; f(1)",
 	"fun f(x: Int): Int { return x + 1 }; f(1)",
@@ -597,6 +598,11 @@ const CORPUS: &[&str] = &[
 const KNOWN_HOLES: &[(&str, &str)] = &[
 	("b: bool = no; b++; b", "bool-assign"),
 	("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"),
+	// a declared int result is checked when it runs (card lossy-return), W0 already when it is compiled
+	("def half(x) -> int { x / 2 }; half(3)", "static-int"),
+	("int square(x) = x*x; square(4) + square 3.1", "static-int"),
+	("def square(x) as int = x*x; square 3.1", "static-int"),
+	("def f(x) -> int { x }; f(\"a\")", "static-int"),
 ];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes

@@ -2237,6 +2237,18 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		[keyword, head, rest] if curried_definition(head, rest).is_some() => {
 			(keyword, curried_definition(head, rest).expect("guarded"), None)
 		}
+		// `def f(x) as int { … }`: the result type before a block body, read as `-> int { … }` is (user 2026-10-12, return-as)
+		[keyword, head, body]
+			if let Node::Key(head, Op::As, result_type) = head.drop_meta()
+				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			let typed_body = Node::List(
+				vec![result_type.as_ref().clone(), body.clone()],
+				Bracket::None,
+				Separator::Space,
+			);
+			(keyword, key(head.as_ref().clone(), Op::As, typed_body), None)
+		}
 		[keyword, head, body] => (
 			keyword,
 			Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None),
@@ -2266,6 +2278,9 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let definition = function_typed_result(extension_definition(definition));
 	let definition = match typed_result(&definition) {
 		Some((untyped, written_type)) => {
+			if matches!(definition, Node::Key(_, Op::Arrow, _)) {
+				hint_as_result(&written_type);
+			}
 			result_type = Some(written_type);
 			untyped
 		}
@@ -2480,7 +2495,8 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
 pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
-	let Node::Key(head, Op::Arrow | Op::Colon, typed_body) = definition else {
+	let rotated = as_union_result(definition).map(|(head, union)| key(head, Op::As, union));
+	let Node::Key(head, Op::Arrow | Op::Colon | Op::As, typed_body) = rotated.as_ref().unwrap_or(definition) else {
 		return None;
 	};
 	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
@@ -2498,9 +2514,55 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		Node::Key(result_type, Op::Colon, body) if is_type_word(result_type) => {
 			(result_type.as_ref().clone(), body.as_ref().clone())
 		}
+		union @ Node::Key(_, Op::Or, _) => {
+			let (union, body) = union_result(union)?;
+			// named as lower_inline_unions names a union, which has run; the analyzer refuses a part naming no type
+			(Node::Symbol(crate::analyzer::union_of_types(&union, &|_| true)?), body)
+		}
 		_ => return None,
 	};
 	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
+/// spells canonically (user 2026-10-12, return-as)
+pub(crate) fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
+	let Node::Key(left, Op::Or, rest) = definition.drop_meta() else {
+		return None;
+	};
+	let (head, first) = match left.drop_meta() {
+		Node::Key(head, Op::As, first) => (head.as_ref().clone(), first.as_ref().clone()),
+		left => as_union_result(left)?,
+	};
+	Some((head, key(first, Op::Or, rest.as_ref().clone())))
+}
+
+/// `def f(x) -> int` keeps working; warp writes a result type with `as`, unions too (user 2026-10-12, return-as)
+fn hint_as_result(result_type: &Node) {
+	let written = result_type.serialize();
+	crate::normalize::hint(
+		&format!("-> {written}"),
+		&format!("as {written}"),
+		&format!("prefer `def f(x) as {written}`"),
+	);
+}
+
+/// `-> int or text { body }` arrives as `int or (text { body })`: the parts `int or text` and the body
+fn union_result(typed_body: &Node) -> Option<(Node, Node)> {
+	match typed_body.drop_meta() {
+		Node::Key(part, Op::Or, rest) => {
+			let (rest, body) = union_result(rest)?;
+			Some((key(part.as_ref().clone(), Op::Or, rest), body))
+		}
+		Node::List(parts, _, Separator::Space)
+			if parts.len() == 2
+				&& matches!(parts[0].drop_meta(), Node::Symbol(_))
+				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			Some((parts[0].clone(), parts[1].clone()))
+		}
+		_ => None,
+	}
 }
 
 /// Scala's curried `def add(x: Int)(y: Int): Int = x + y`: `add(x: Int) := (y: Int) => x + y`, so `add(1)(2)` calls the

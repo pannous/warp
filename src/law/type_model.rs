@@ -1444,6 +1444,9 @@ impl Exporter {
 				)
 			});
 		let body = match result {
+			Some(result) if crate::type_name_matching::is_checked_result(&result.name()) => {
+				self.checked_result(body, result)?
+			}
 			Some(result) => self.conversion_of(body, result)?,
 			None => body,
 		};
@@ -1662,6 +1665,16 @@ impl Exporter {
 			return Err(format!("not in W0: as {}", target.serialize().trim()));
 		};
 		Ok(format!(".conv ({value}) ({target})"))
+	}
+
+	/// `-> int`, `-> int or text`: the result checked when it runs, as warp lowers it (type_name_matching
+	/// checked_result), where converting could lose something
+	fn checked_result(&self, value: String, target: &Node) -> Lean {
+		let declared = self.annotation_type(target)?;
+		Ok(match union_alternatives(&declared) {
+			Some(alternatives) => format!(".cast ({value}) {alternatives}"),
+			None => format!(".cast ({value}) [{declared}]"),
+		})
 	}
 
 	/// `if c then a else b` and `c ? a : b`

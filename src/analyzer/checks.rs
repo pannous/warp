@@ -540,6 +540,7 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_type_word_functions(program)
 		.or_else(|| check_parameter_annotations(program))
+		.or_else(|| check_union_fields(program))
 		.or_else(|| {
 			check_declared_types(
 				program,
@@ -1208,7 +1209,9 @@ pub(super) fn negative_modulo_warning(left: &Node, right: &Node) -> String {
 		Some((euclidean, truncated)) if euclidean != truncated => format!(
 			"`{a} % {b}` is {euclidean}: % is Euclidean as in mathematics; C/Java/JS give {truncated}; use `rem` for the truncated remainder"
 		),
-		_ => format!("`{a} % {b}`: % is Euclidean as in mathematics (never negative), unlike C/Java/JS; use `rem` for the truncated remainder"),
+		_ => format!(
+			"`{a} % {b}`: % is Euclidean as in mathematics (never negative), unlike C/Java/JS; use `rem` for the truncated remainder"
+		),
 	}
 }
 
@@ -1331,7 +1334,12 @@ pub(super) fn check_subjectless_comparison(node: &Node) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::Key(left, op, right) if op.is_ordering() && matches!(left.drop_meta(), Node::Empty) => {
 			let written = format!("{} {}", op.as_str(), right.serialize());
-			Some(Diagnostic::at(node, format!("`{written}` compares nothing: write what is compared, `x {written}` (in a match arm it compares the subject)")))
+			Some(Diagnostic::at(
+				node,
+				format!(
+					"`{written}` compares nothing: write what is compared, `x {written}` (in a match arm it compares the subject)"
+				),
+			))
 		}
 		Node::Key(left, _, right) => check_subjectless_comparison(left).or_else(|| check_subjectless_comparison(right)),
 		Node::List(items, _, _) => items.iter().find_map(check_subjectless_comparison),
@@ -1639,6 +1647,17 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 			let is_known_name = |name: &str| {
 				type_word_kind(name).is_some() || user_types.get_by_name(name).is_some() || traits.is_trait(name)
 			};
+			if let Some(part) = union_parts(type_name.trim_end_matches('?'))
+				.and_then(|parts| parts.into_iter().find(|part| !is_known_name(part)))
+			{
+				return Some(unknown_union_part(
+					annotation,
+					&format!("parameter {}", param.name),
+					&param.name,
+					&type_name,
+					part,
+				));
+			}
 			let known = match type_name.strip_prefix(LIST_OF_PREFIX) {
 				Some(element) => is_known_name(element) || names_list_type(element),
 				None => {
@@ -1735,9 +1754,11 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
 	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
 	parts.dedup();
-	// a class covers no builtin type: `Point | text` keeps both
+	// only a builtin type covers another: `Point | text` keeps both, `int | zork` keeps zork to be refused
 	let admits_part = |wide: &String, narrow: &String| {
-		!is_bool_type(wide) && !is_declared(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind))
+		!is_bool_type(wide)
+			&& builtin_type_kind(wide).is_some()
+			&& builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind))
 	};
 	// two parts held alike (`rational | int`) admit each other: the subtype goes
 	let covers = |wide: &String, narrow: &String| {
@@ -1770,6 +1791,44 @@ fn strip_round(node: &Node) -> &Node {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => strip_round(&items[0]),
 		other => other,
 	}
+}
+
+/// The local a checked result passes through (type_name_matching, `-> int`, `-> int or text`): errors read "the
+/// result is declared int, …"
+pub const CHECKED_RESULT: &str = "the result";
+
+/// `x: int | zork`: the refusal of a union part that names no type, at the variable, parameter or field declared so
+fn unknown_union_part(at: &Node, place: &str, name: &str, type_name: &str, part: &str) -> Diagnostic {
+	let message = format!(
+		"{place} is declared {type_name}: an inline union joins builtin types and declared classes, {part} is neither"
+	);
+	Diagnostic::at(at, message).fix(format!("declare {name}:any to hold any value"))
+}
+
+/// A field `size: int | zork` of a class: its union names no type zork
+pub(super) fn check_union_fields(program: &Node) -> Option<Diagnostic> {
+	let classes = declared_classes(program);
+	let mut class_nodes = vec![];
+	program.visit(&mut |part| {
+		if let Node::Type { .. } = part {
+			class_nodes.push(part.clone());
+		}
+	});
+	class_nodes.iter().find_map(|class| {
+		let mut registry = crate::type_kinds::TypeRegistry::new();
+		registry.register_from_node(class)?;
+		let type_def = registry.types().first()?;
+		type_def.fields.iter().find_map(|field| {
+			let part = unsupported_union_part(&field.type_name, &classes)?;
+			Some(unknown_union_part(
+				class,
+				&format!("field {}.{}", type_def.name, field.name),
+				&field.name,
+				&field.type_name,
+				part,
+			))
+		})
+	})
 }
 
 /// The first part of an inline union that is neither a builtin type nor a declared class: `point` of `point or text`
@@ -1827,8 +1886,7 @@ pub(super) fn check_declared_types(
 			};
 			if let Some((name, type_name)) = declaration {
 				if let Some(part) = unsupported_union_part(&type_name, classes) {
-					let message = format!("{name} is declared {type_name}: an inline union joins builtin types and declared classes, {part} is neither");
-					return Some(Diagnostic::at(node, message).fix(format!("declare {name}:any to hold any value")));
+					return Some(unknown_union_part(node, &name, &name, &type_name, part));
 				}
 				declared.insert(name.clone(), type_name.clone());
 				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value)
@@ -2005,6 +2063,34 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 		format!("{actual:?}").to_lowercase()
 	);
 	let actual = format!("{actual:?}").to_lowercase();
+	// a union converts nothing: `int or text(2.5)` is no call, the union grows a part instead
+	let widened = match union_parts(type_name) {
+		Some(_) => format!("{type_name}{UNION_JOINER}{actual}"),
+		None if is_whole_type(type_name) && actual == "float" => NUMBER_WORD.to_string(),
+		None => actual.clone(),
+	};
+	if name == CHECKED_RESULT {
+		let truncate = if union_parts(type_name).is_some() {
+			String::new()
+		} else {
+			format!(", or convert with `{value_text} as {type_name}`")
+		};
+		return Some(
+			Diagnostic::at(assignment, message)
+				.fix(format!("declare the result {widened} to keep the {actual}{truncate}")),
+		);
+	}
+	if union_parts(type_name).is_some() {
+		return Some(
+			Diagnostic::at(assignment, message)
+				.fix(format!("declare {name}:{widened}"))
+				.offer(
+					format!("{name} holds {actual} too"),
+					format!("{name}:{type_name}"),
+					format!("{name}:{widened}"),
+				),
+		);
+	}
 	Some(
 		Diagnostic::at(assignment, message)
 			.fix(format!("{name}={type_name}({value_text}) or declare {name}:{actual}"))
@@ -2101,7 +2187,9 @@ fn evident_items_mismatch(
 		.strip_prefix(LIST_OF_PREFIX)
 		.filter(|_| !elements_fit(element, &list_type))?;
 	// the value may be a temporary of the element checks (`checked·1`): its items are named, not it
-	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}: the assigned items are {items}");
+	let message = format!(
+		"type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}: the assigned items are {items}"
+	);
 	Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:list to hold any items")))
 }
 
