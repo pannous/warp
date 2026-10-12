@@ -18,7 +18,10 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = OPERATOR_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
+	let aliases: Vec<_> = OPERATOR_ALIASES
+		.into_iter()
+		.filter(|(alias, _, _)| !defined.contains(*alias))
+		.collect();
 	if aliases.is_empty() {
 		return node;
 	}
@@ -27,11 +30,14 @@ pub fn lower(node: Node) -> Node {
 
 fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 	let alias_of = |word: &Node| match word.drop_meta() {
-		Node::Symbol(name) => aliases.iter().find(|(alias, _, _)| alias == name).map(|(alias, canonical, op)| {
-			crate::normalize::set_position_of(word);
-			crate::normalize::hint(alias, canonical, &format!("{alias} is the word {canonical}"));
-			*op
-		}),
+		Node::Symbol(name) => aliases
+			.iter()
+			.find(|(alias, _, _)| alias == name)
+			.map(|(alias, canonical, op)| {
+				crate::normalize::set_position_of(word);
+				crate::normalize::hint(alias, canonical, &format!("{alias} is the word {canonical}"));
+				*op
+			}),
 		_ => None,
 	};
 	match node {
@@ -43,9 +49,17 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 			key(Node::Empty, op, operators(argument, aliases))
 		}
 		// the pipe stage `| root` (pipes.rs reads the operator alone)
-		Node::Meta { node, data } if crate::pipes::is_pipe_stage(&Node::Meta { node: node.clone(), data: data.clone() }) && alias_of(&node).is_some() => {
+		Node::Meta { node, data }
+			if crate::pipes::is_pipe_stage(&Node::Meta {
+				node: node.clone(),
+				data: data.clone(),
+			}) && alias_of(&node).is_some() =>
+		{
 			let op = alias_of(&node).expect("guarded");
-			Node::Meta { node: Box::new(key(Node::Empty, op, Node::Empty)), data }
+			Node::Meta {
+				node: Box::new(key(Node::Empty, op, Node::Empty)),
+				data,
+			}
 		}
 		// the stage `then root` (P158, pipes.rs reads the operator alone)
 		Node::Key(value, Op::Then, stage) if alias_of(&stage).is_some() => {
@@ -59,9 +73,10 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 fn log_calls(node: Node) -> Node {
 	match node {
 		Node::Key(base, Op::LogBase, value) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
-		Node::Key(value, Op::LogOf, base) if matches!(base.drop_meta(), Node::Empty) => call(NATURAL_LOG, vec![log_calls(*value)]),
+		Node::Key(value, Op::LogOf, base) if matches!(base.drop_meta(), Node::Empty) => {
+			call(NATURAL_LOG, vec![log_calls(*value)])
+		}
 		Node::Key(value, Op::LogOf, base) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
 		other => other.map_children(log_calls),
 	}
 }
-

@@ -10,7 +10,6 @@ fn a_variable_given_another_kind_is_a_compile_error() {
 	fails_with("x = \"a\"; x = 5; x + 1", "x was a Text, is given an Int");
 }
 
-
 #[test]
 fn a_function_body_is_checked_too() {
 	fails_with("f() := (x = 1; x = \"a\"; x); f()", "x was an Int, is given a Text");

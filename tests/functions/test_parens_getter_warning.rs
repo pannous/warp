@@ -6,7 +6,11 @@ use crate::is;
 fn every_read_warnings(code: &str) -> Vec<String> {
 	warp::diagnostic::take_warnings();
 	warp::wasm_emitter::eval(code);
-	warp::diagnostic::take_warnings().into_iter().map(|warning| warning.message).filter(|message| message.contains("at every read")).collect()
+	warp::diagnostic::take_warnings()
+		.into_iter()
+		.map(|warning| warning.message)
+		.filter(|message| message.contains("at every read"))
+		.collect()
 }
 
 #[test]

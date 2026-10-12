@@ -1,9 +1,9 @@
-use warp::Node::*;
-use warp::{Bracket, Node};
+use crate::{eq, is};
 use warp::run::wasmtime_runner::run;
 use warp::wasm_emitter::{eval, WasmGcEmitter};
 use warp::write_wasm;
-use crate::{is, eq};
+use warp::Node::*;
+use warp::{Bracket, Node};
 
 fn normalize_blocks(node: &Node) -> Node {
 	let node = node.drop_meta();
@@ -111,12 +111,22 @@ fn test_function_usage_tracking() {
 	assert!(used.contains(&"new_codepoint"), "new_codepoint should be used for char");
 
 	// Many functions should be unused for a simple char
-	assert!(unused.iter().any(|s| s == "new_text"), "new_text should be unused for char");
-	assert!(unused.iter().any(|s| s == "new_symbol"), "new_symbol should be unused for char");
+	assert!(
+		unused.iter().any(|s| s == "new_text"),
+		"new_text should be unused for char"
+	);
+	assert!(
+		unused.iter().any(|s| s == "new_symbol"),
+		"new_symbol should be unused for char"
+	);
 	// new_pair was removed (Pair variant removed from Node)
 
 	// Verify unused count is significant (for tree-shaking validation)
-	assert!(unused.len() >= 5, "Should have at least 5 unused functions, got {}", unused.len());
+	assert!(
+		unused.len() >= 5,
+		"Should have at least 5 unused functions, got {}",
+		unused.len()
+	);
 }
 
 #[test]

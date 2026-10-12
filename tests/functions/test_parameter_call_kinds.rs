@@ -1,6 +1,6 @@
+use crate::is;
 use warp::wasm_emitter::eval;
 use warp::Node;
-use crate::is;
 
 fn error_text(code: &str) -> String {
 	match eval(code) {

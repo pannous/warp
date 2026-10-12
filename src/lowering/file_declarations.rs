@@ -12,13 +12,17 @@ pub const FILE_CLASS_MARK: &str = "file_class";
 /// The class name without the parser's mark, which is its outermost attribute
 fn unmarked(name: Node) -> Node {
 	match name {
-		Node::Meta { node, data } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name().ends_with(FILE_CLASS_MARK)) => *node,
+		Node::Meta { node, data } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name().ends_with(FILE_CLASS_MARK)) => {
+			*node
+		}
 		other => other,
 	}
 }
 
 pub fn lower(program: Node) -> Node {
-	let Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) = program else { return program };
+	let Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) = program else {
+		return program;
+	};
 	let mut namespaces: Vec<String> = vec![];
 	let mut lowered = vec![];
 	let mut statements = statements.into_iter().peekable();
@@ -32,15 +36,24 @@ pub fn lower(program: Node) -> Node {
 				let members: Vec<Node> = std::iter::from_fn(|| statements.next_if(is_member)).collect();
 				let body = match members.is_empty() {
 					true => body.clone(),
-					false => Box::new(crate::warp_parser::WarpParser::class_body(Node::List(members, Bracket::Curly, Separator::Semicolon))),
+					false => Box::new(crate::warp_parser::WarpParser::class_body(Node::List(
+						members,
+						Bracket::Curly,
+						Separator::Semicolon,
+					))),
 				};
-				lowered.push(Node::Type { name: Box::new(unmarked(*name.clone())), body });
+				lowered.push(Node::Type {
+					name: Box::new(unmarked(*name.clone())),
+					body,
+				});
 			}
 			_ => lowered.push(statement),
 		}
 	}
 	let program = Node::List(lowered, Bracket::None, separator);
-	namespaces.iter().fold(program, |program, namespace| unqualified(program, namespace))
+	namespaces
+		.iter()
+		.fold(program, |program, namespace| unqualified(program, namespace))
 }
 
 /// `namespace test`
@@ -56,8 +69,10 @@ fn namespace_name(statement: &Node) -> Option<String> {
 
 /// A definition a file class takes in: a method `bar() := …`, `int bar(){…}`, `def bar…`, a field `x: int`
 fn is_member(statement: &Node) -> bool {
-	let is_declaring_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word)
-		if crate::operators::is_function_keyword(word) || crate::analyzer::builtin_type_kind(word).is_some());
+	let is_declaring_word = |word: &Node| {
+		matches!(word.drop_meta(), Node::Symbol(word)
+		if crate::operators::is_function_keyword(word) || crate::analyzer::builtin_type_kind(word).is_some())
+	};
 	match statement.drop_meta() {
 		Node::Key(_, Op::Define, _) => true,
 		Node::Key(target, Op::Assign, _) => matches!(target.drop_meta(), Node::List(_, Bracket::Round, _)),
@@ -70,7 +85,9 @@ fn is_member(statement: &Node) -> bool {
 /// `test.bar()` as `bar()`, `test.Foo` as `Foo`
 fn unqualified(node: Node, namespace: &str) -> Node {
 	match node {
-		Node::Key(qualifier, Op::Dot, member) if matches!(qualifier.drop_meta(), Node::Symbol(name) if name == namespace) => unqualified(*member, namespace),
+		Node::Key(qualifier, Op::Dot, member) if matches!(qualifier.drop_meta(), Node::Symbol(name) if name == namespace) => {
+			unqualified(*member, namespace)
+		}
 		other => other.map_children(|child| unqualified(child, namespace)),
 	}
 }

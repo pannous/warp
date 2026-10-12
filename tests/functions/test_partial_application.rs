@@ -1,6 +1,6 @@
 // `add(1, _)` is the lambda of the left-out arguments (samples/functions.warp), and a zero-argument closure is called
-use warp::ints;
 use crate::is;
+use warp::ints;
 
 #[test]
 fn a_placeholder_makes_a_partial_application() {
@@ -11,6 +11,9 @@ fn a_placeholder_makes_a_partial_application() {
 
 #[test]
 fn a_returned_zero_argument_closure_is_called() {
-	is!("def counter(start) { count = start; return () => { count = count + 1; return count } }; c = counter(5); c()", 6);
+	is!(
+		"def counter(start) { count = start; return () => { count = count + 1; return count } }; c = counter(5); c()",
+		6
+	);
 	is!("mk(n) := { return x => x + n }; f = mk(2); f(5)", 7);
 }

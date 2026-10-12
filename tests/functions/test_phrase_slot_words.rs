@@ -4,8 +4,14 @@ use crate::is;
 
 #[test]
 fn an_unused_word_after_a_preposition_belongs_to_the_phrase() {
-	is!(r#"to mail x to address with subject title { "\(address): \(title)" }; mail 1 to "a@b" with subject "hi""#, "a@b: hi");
-	is!(r#"to email address with subject text { text }; email "a@b" with subject "Hello""#, "Hello");
+	is!(
+		r#"to mail x to address with subject title { "\(address): \(title)" }; mail 1 to "a@b" with subject "hi""#,
+		"a@b: hi"
+	);
+	is!(
+		r#"to email address with subject text { text }; email "a@b" with subject "Hello""#,
+		"Hello"
+	);
 }
 
 #[test]

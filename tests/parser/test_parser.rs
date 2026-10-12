@@ -35,7 +35,6 @@ fn test_group_cascade0() {
 	eq!(result.length(), 3);
 }
 
-
 #[test]
 fn test_colon_object() {
 	let person = parse(r#"person:{name:"Joe" age:42}"#);
@@ -50,14 +49,12 @@ fn test_colon_object() {
 	eq!(person[1], 42);
 }
 
-
 #[test]
 fn test_key_object_set() {
 	let mut person = parse(r#"person:{name:"Joe" age:42}"#);
 	person["age"] = int(41);
 	eq!(person["age"], 41);
 }
-
 
 #[test]
 fn test_colon_lists() {

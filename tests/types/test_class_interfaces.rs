@@ -3,7 +3,8 @@
 // and the declarations as other languages write them
 use crate::is;
 
-const SHAPES: &str = "trait Shape { area }\nclass Sq{side:int; area() := side*side}\nclass Re{w:int; h:int; area() := w*h}\n";
+const SHAPES: &str =
+	"trait Shape { area }\nclass Sq{side:int; area() := side*side}\nclass Re{w:int; h:int; area() := w*h}\n";
 
 #[test]
 fn a_class_method_satisfies_a_trait_operation() {

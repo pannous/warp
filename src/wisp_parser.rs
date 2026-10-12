@@ -280,9 +280,17 @@ impl WispParser {
 			[body] => body.clone(),
 			[params, body] => Meta {
 				node: Box::new(body.clone()),
-				data: Box::new(List(vec![Symbol(PARAMS_WORD.to_string()), params.clone()], Bracket::Round, Separator::Space)),
+				data: Box::new(List(
+					vec![Symbol(PARAMS_WORD.to_string()), params.clone()],
+					Bracket::Round,
+					Separator::Space,
+				)),
 			},
-			_ => Error(Box::new(Text(format!("def {} takes a body, or parameters and a body; got {} parts", name.serialize(), parts.len())))),
+			_ => Error(Box::new(Text(format!(
+				"def {} takes a body, or parameters and a body; got {} parts",
+				name.serialize(),
+				parts.len()
+			)))),
 		};
 		Key(Box::new(name), Op::Define, Box::new(body))
 	}
@@ -386,8 +394,14 @@ impl WispParser {
 			false => digits.parse::<num_bigint::BigInt>().ok().map(Number::from_bigint),
 		};
 		number.map(Number).unwrap_or_else(|| {
-			let found: String = self.chars[self.pos..].iter().take_while(|c| !c.is_whitespace() && **c != ')').collect();
-			self.complain(format!("expected a number, got {}", if s.is_empty() { found } else { s }));
+			let found: String = self.chars[self.pos..]
+				.iter()
+				.take_while(|c| !c.is_whitespace() && **c != ')')
+				.collect();
+			self.complain(format!(
+				"expected a number, got {}",
+				if s.is_empty() { found } else { s }
+			));
 			Empty
 		})
 	}
@@ -435,7 +449,11 @@ impl WispParser {
 	fn expect(&mut self, ch: char) {
 		self.skip_whitespace();
 		if self.current() != ch {
-			let found = if self.end() { "the end".to_string() } else { format!("{:?}", self.current()) };
+			let found = if self.end() {
+				"the end".to_string()
+			} else {
+				format!("{:?}", self.current())
+			};
 			self.complain(format!("expected {ch:?}, got {found}"));
 		}
 		if self.current() == ch {
@@ -453,7 +471,11 @@ impl WispParser {
 
 /// `name(args…)`: the name keyed to its round argument list
 fn call_of(name: Node, args: Vec<Node>) -> Node {
-	Key(Box::new(name), Op::None, Box::new(List(args, Bracket::Round, Separator::Space)))
+	Key(
+		Box::new(name),
+		Op::None,
+		Box::new(List(args, Bracket::Round, Separator::Space)),
+	)
 }
 
 pub fn parse_wisp(input: &str) -> Node {
@@ -585,8 +607,8 @@ macro_rules! wisp {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::type_kinds::Kind;
 	use crate::expression;
+	use crate::type_kinds::Kind;
 
 	#[test]
 	fn test_wisp_basic_atom_types() {

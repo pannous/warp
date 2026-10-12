@@ -1,10 +1,10 @@
+use super::reals::{Exact, Rational, Real};
+use num_bigint::BigInt;
+use num_integer::Integer;
+use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Neg, Sub};
-use num_bigint::BigInt;
-use super::reals::{Exact, Rational, Real};
-use num_integer::Integer;
-use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 
 /// Positional notation for decimal exponents in [SMALLEST_POSITIONAL, LARGEST_POSITIONAL), at compile time (float_text
 /// below) and at run time (src/wasm_emitter/float_text.rs) alike
@@ -20,7 +20,11 @@ pub fn decimal_text_fraction(text: &str) -> Option<(BigInt, BigInt)> {
 	let digits: BigInt = mantissa.replace('.', "").parse().ok()?;
 	let scale = exponent.parse::<i64>().ok()? - fraction_digits;
 	let power = BigInt::from(10).pow(scale.unsigned_abs() as u32);
-	Some(if scale >= 0 { (digits * power, BigInt::one()) } else { (digits, power) })
+	Some(if scale >= 0 {
+		(digits * power, BigInt::one())
+	} else {
+		(digits, power)
+	})
 }
 
 /// A decimal written with more significant digits than a float keeps is the exact ratio it spells (card keep-exact):
@@ -35,7 +39,10 @@ pub fn long_decimal(text: &str) -> Option<Number> {
 		return None;
 	}
 	let (numerator, denominator) = decimal_text_fraction(text)?;
-	Some(Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator)))
+	Some(Number::ratio(
+		Number::from_bigint(numerator),
+		Number::from_bigint(denominator),
+	))
 }
 
 /// The text of a float as the run-time float_text writes it (user decision float-text): the shortest digits that read
@@ -56,7 +63,11 @@ pub fn float_text(x: f64) -> String {
 	let sign = if x < 0.0 { "-" } else { "" };
 	let zeros = |how_many: i32| "0".repeat(how_many.max(0) as usize);
 	let placed = if !(SMALLEST_POSITIONAL..LARGEST_POSITIONAL).contains(&exponent) {
-		let rest = if count > 1 { format!(".{}", &digits[1..]) } else { String::new() };
+		let rest = if count > 1 {
+			format!(".{}", &digits[1..])
+		} else {
+			String::new()
+		};
 		format!("{}{rest}e{exponent}", &digits[..1])
 	} else if exponent >= count - 1 {
 		digits.clone() + &zeros(exponent - count + 1)
@@ -74,7 +85,10 @@ pub fn float_text(x: f64) -> String {
 fn shortest_digits(x: f64) -> (i64, i32) {
 	let written = format!("{:e}", x.abs()); // Rust writes the shortest digits that read back
 	let (mantissa, exponent) = written.split_once('e').unwrap_or((&written, "0"));
-	(mantissa.replace('.', "").parse().unwrap_or(0), exponent.parse().unwrap_or(0))
+	(
+		mantissa.replace('.', "").parse().unwrap_or(0),
+		exponent.parse().unwrap_or(0),
+	)
 }
 
 fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Real, D::Error> {
@@ -85,7 +99,9 @@ fn deserialize_leaked_bigint<'de, D: serde::Deserializer<'de>>(deserializer: D) 
 	BigInt::deserialize(deserializer).map(|big| &*Box::leak(Box::new(big)))
 }
 
-fn deserialize_leaked_rational<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Rational, D::Error> {
+fn deserialize_leaked_rational<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> Result<&'static Rational, D::Error> {
 	Rational::deserialize(deserializer).map(|ratio| &*Box::leak(Box::new(ratio)))
 }
 
@@ -149,7 +165,9 @@ impl Number {
 impl Number {
 	/// Normalize: an integer that fits i64 is always `Int`, only larger ones are `BigInt`
 	pub fn from_bigint(big: BigInt) -> Number {
-		big.to_i64().map(Number::Int).unwrap_or_else(|| Number::BigInt(Box::leak(Box::new(big))))
+		big.to_i64()
+			.map(Number::Int)
+			.unwrap_or_else(|| Number::BigInt(Box::leak(Box::new(big))))
 	}
 
 	pub fn real(real: Real) -> Number {
@@ -216,7 +234,11 @@ impl Number {
 		let power_of_ten = |length: usize| BigInt::from(10).pow(length as u32);
 		let denominator = power_of_ten(fixed.len()) * (power_of_ten(period.len()) - 1);
 		let magnitude = Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator));
-		if negative { -magnitude } else { magnitude }
+		if negative {
+			-magnitude
+		} else {
+			magnitude
+		}
 	}
 
 	/// Normalize: a ratio that fits two i64 is `Quotient`, only larger ones are `BigQuotient`
@@ -281,7 +303,6 @@ impl Number {
 	pub fn parse_integer(digits: &str) -> Option<Number> {
 		digits.parse::<BigInt>().ok().map(Number::from_bigint)
 	}
-
 }
 
 impl Display for Number {
@@ -294,7 +315,8 @@ impl Display for Number {
 				Some(decimal) => write!(f, "{}", decimal),
 				None => write!(f, "{}/{}", numer, denom),
 			},
-			Number::BigQuotient(q) => match Number::terminating_decimal_big(q.numerator.clone(), q.denominator.clone()) {
+			Number::BigQuotient(q) => match Number::terminating_decimal_big(q.numerator.clone(), q.denominator.clone())
+			{
 				Some(decimal) => write!(f, "{}", decimal),
 				None => write!(f, "{}", q),
 			},
@@ -398,8 +420,13 @@ fn mixed(a: Number, b: Number, operation: Operation) -> Number {
 		return operation.of_complex(complex(a), complex(b));
 	}
 	if matches!(a, Number::Real(_)) || matches!(b, Number::Real(_)) {
-		let exact = exact_of(&a).zip(exact_of(&b)).and_then(|(a, b)| operation.of_exact(&a, &b));
-		return Number::real(exact.map_or_else(|| Real::Approx(operation.of_f64(f64::from(a), f64::from(b))), Real::Exact));
+		let exact = exact_of(&a)
+			.zip(exact_of(&b))
+			.and_then(|(a, b)| operation.of_exact(&a, &b));
+		return Number::real(exact.map_or_else(
+			|| Real::Approx(operation.of_f64(f64::from(a), f64::from(b))),
+			Real::Exact,
+		));
 	}
 	Number::of_f64(operation.of_f64(f64::from(a), f64::from(b)))
 }
@@ -409,7 +436,10 @@ impl Neg for Number {
 
 	fn neg(self) -> Self::Output {
 		match self {
-			Number::Int(n) => n.checked_neg().map(Number::Int).unwrap_or_else(|| Number::from_bigint(-BigInt::from(n))),
+			Number::Int(n) => n
+				.checked_neg()
+				.map(Number::Int)
+				.unwrap_or_else(|| Number::from_bigint(-BigInt::from(n))),
 			Number::BigInt(big) => Number::from_bigint(-big.clone()),
 			Number::Float(f) => Number::Float(-f),
 			Number::Quotient(n, d) => Number::Quotient(-n, d),
@@ -427,10 +457,13 @@ impl Neg for Number {
 /// BigInt), f64 for floats (an infinite or NaN result stays a Float), else mixed
 fn arithmetic(a: Number, b: Number, operation: Operation) -> Number {
 	match (a, b) {
-		(Number::Int(n1), Number::Int(n2)) => {
-			operation.of_i64(n1, n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(operation.of_bigint(BigInt::from(n1), BigInt::from(n2))))
+		(Number::Int(n1), Number::Int(n2)) => operation
+			.of_i64(n1, n2)
+			.map(Number::Int)
+			.unwrap_or_else(|| Number::from_bigint(operation.of_bigint(BigInt::from(n1), BigInt::from(n2)))),
+		(a, b) if a.is_integer() && b.is_integer() => {
+			Number::from_bigint(operation.of_bigint(a.to_bigint(), b.to_bigint()))
 		}
-		(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(operation.of_bigint(a.to_bigint(), b.to_bigint())),
 		(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
 			Number::from_rational(operation.of_rational(&a.to_rational(), &b.to_rational()))
 		}
@@ -470,10 +503,21 @@ impl Div for Number {
 
 	fn div(self, other: Self) -> Self::Output {
 		match (self, other) {
-			(ratio @ (Number::Quotient(..) | Number::BigQuotient(_)), Number::Float(n2)) => Number::Float(f64::from(ratio) / n2),
-			(Number::Float(n1), ratio @ (Number::Quotient(..) | Number::BigQuotient(_))) => Number::Float(n1 / f64::from(ratio)),
-			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_))
-				&& matches!(b, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)) => {
+			(ratio @ (Number::Quotient(..) | Number::BigQuotient(_)), Number::Float(n2)) => {
+				Number::Float(f64::from(ratio) / n2)
+			}
+			(Number::Float(n1), ratio @ (Number::Quotient(..) | Number::BigQuotient(_))) => {
+				Number::Float(n1 / f64::from(ratio))
+			}
+			(a, b)
+				if matches!(
+					a,
+					Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)
+				) && matches!(
+					b,
+					Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)
+				) =>
+			{
 				Number::ratio(a, b)
 			}
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 / n2),
@@ -493,7 +537,13 @@ impl From<Number> for f64 {
 			Number::Quotient(numer, denom) => numer as f64 / denom as f64,
 			Number::BigQuotient(q) => q.to_f64(),
 			// a complex number is a real number only without an imaginary part
-			Number::Complex(real, imaginary) => if imaginary == 0.0 { real } else { f64::NAN },
+			Number::Complex(real, imaginary) => {
+				if imaginary == 0.0 {
+					real
+				} else {
+					f64::NAN
+				}
+			}
 			Number::Real(r) => r.to_f64(),
 			Number::Nan => f64::NAN,
 			Number::Inf => f64::INFINITY,
@@ -534,9 +584,8 @@ impl PartialEq for Number {
 			(Number::BigQuotient(q), Number::BigInt(b)) | (Number::BigInt(b), Number::BigQuotient(q)) => {
 				q.is_integer() && &q.numerator == *b
 			}
-			(quotient @ Number::Quotient(..), Number::Float(f)) | (Number::Float(f), quotient @ Number::Quotient(..)) => {
-				f64::from(*quotient) as f32 == *f as f32
-			}
+			(quotient @ Number::Quotient(..), Number::Float(f))
+			| (Number::Float(f), quotient @ Number::Quotient(..)) => f64::from(*quotient) as f32 == *f as f32,
 			(Number::BigQuotient(q), Number::Float(f)) | (Number::Float(f), Number::BigQuotient(q)) => {
 				q.to_f64() as f32 == *f as f32
 			}
@@ -579,7 +628,6 @@ impl PartialEq<i64> for Number {
 	}
 }
 
-
 impl PartialEq<f32> for Number {
 	fn eq(&self, other: &f32) -> bool {
 		match self {
@@ -597,4 +645,3 @@ impl PartialEq<f32> for Number {
 		}
 	}
 }
-

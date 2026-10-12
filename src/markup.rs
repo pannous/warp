@@ -28,7 +28,10 @@ pub const SCOPE_ATTRIBUTE: &str = "data-warp-scope";
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
 	static ELEMENTS: OnceLock<Vec<String>> = OnceLock::new();
-	ELEMENTS.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ELEMENTS_LIST)).iter().any(|element| element == word)
+	ELEMENTS
+		.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ELEMENTS_LIST))
+		.iter()
+		.any(|element| element == word)
 }
 
 /// Does the word name an HTML attribute: a listed one or a `data-` one
@@ -38,7 +41,10 @@ pub fn names_attribute(word: &str) -> bool {
 
 fn is_attribute_name(word: &str) -> bool {
 	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
-	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST)).iter().any(|attribute| attribute == word)
+	ATTRIBUTES
+		.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST))
+		.iter()
+		.any(|attribute| attribute == word)
 }
 
 /// Is the value an element (`div{…}`, `h1: "Hi"`, a key named after an element): what the CLI prints as HTML and the
@@ -60,9 +66,15 @@ fn element_parts(node: &Node) -> Option<(&str, &Node)> {
 
 /// `class: …` inside an element, its value plain or still to be computed (`title` is the element only in head)
 fn named_attribute<'a>(node: &'a Node, parent: &str) -> Option<(&'a str, &'a Node)> {
-	let Node::Key(name, Op::Colon, value) = node.drop_meta() else { return None };
-	let Node::Symbol(name) = name.drop_meta() else { return None };
-	let is_attribute = name.starts_with(DATA_ATTRIBUTE_PREFIX) || name == KEY || (is_attribute_name(name) && !(parent == HEAD && is_element_tag(name)));
+	let Node::Key(name, Op::Colon, value) = node.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(name) = name.drop_meta() else {
+		return None;
+	};
+	let is_attribute = name.starts_with(DATA_ATTRIBUTE_PREFIX)
+		|| name == KEY
+		|| (is_attribute_name(name) && !(parent == HEAD && is_element_tag(name)));
 	is_attribute.then_some((name.as_str(), value.as_ref()))
 }
 
@@ -88,7 +100,9 @@ pub fn holes(markup: &Node) -> Vec<(Vec<usize>, Node)> {
 }
 
 fn collect_holes(element: &Node, path: &mut Vec<usize>, holes: &mut Vec<(Vec<usize>, Node)>) {
-	let Some((tag, content)) = element_parts(element) else { return };
+	let Some((tag, content)) = element_parts(element) else {
+		return;
+	};
 	let items = content_items(content);
 	let computed = |item: &&Node| match named_attribute(item, tag) {
 		Some((_, value)) => !is_literal(value),
@@ -125,13 +139,18 @@ fn is_fixed(child: &Node) -> bool {
 fn is_literal(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Square, _) => items.iter().all(is_literal),
-		other => matches!(other, Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::True | Node::False | Node::Empty),
+		other => matches!(
+			other,
+			Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::True | Node::False | Node::Empty
+		),
 	}
 }
 
 /// `style{ ".card": { … } }`: a style sheet among an element's items (not the inline `style: { color: … }`)
 pub fn is_style_sheet(node: &Node) -> bool {
-	let Node::Key(name, Op::Colon, value) = node.drop_meta() else { return false };
+	let Node::Key(name, Op::Colon, value) = node.drop_meta() else {
+		return false;
+	};
 	name.drop_meta().name() == STYLE && !is_declarations(value)
 }
 
@@ -149,7 +168,10 @@ pub fn escaped(text: &str) -> String {
 /// its error, shown, never an empty page. Quietly: the program that made the value already warned about it, and the
 /// renderer's positions are not the program's
 pub fn to_html(node: &Node) -> String {
-	let program = crate::law::substitute(&crate::warp_parser::parse(RENDER_PROGRAM), &HashMap::from([(RENDERED.to_string(), node.clone())]));
+	let program = crate::law::substitute(
+		&crate::warp_parser::parse(RENDER_PROGRAM),
+		&HashMap::from([(RENDERED.to_string(), node.clone())]),
+	);
 	match crate::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
 		Node::Text(html) => html.clone(),
 		failed => format!("<pre>{}</pre>", escaped(&failed.serialize())),

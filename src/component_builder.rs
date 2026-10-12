@@ -16,6 +16,12 @@ pub fn build(code: &str) -> Result<Vec<u8>, String> {
 	let mut resolve = wit_parser::Resolve::default();
 	let package = resolve.push_str(WIT_PATH, &wit).map_err(failure)?;
 	let world_id = resolve.select_world(&[package], None).map_err(failure)?;
-	wit_component::embed_component_metadata(&mut bytes, &resolve, world_id, wit_component::StringEncoding::UTF8).map_err(failure)?;
-	wit_component::ComponentEncoder::default().validate(true).module(&bytes).map_err(failure)?.encode().map_err(failure)
+	wit_component::embed_component_metadata(&mut bytes, &resolve, world_id, wit_component::StringEncoding::UTF8)
+		.map_err(failure)?;
+	wit_component::ComponentEncoder::default()
+		.validate(true)
+		.module(&bytes)
+		.map_err(failure)?
+		.encode()
+		.map_err(failure)
 }

@@ -12,14 +12,18 @@ fn a_hole_is_read_from_the_values() {
 
 #[test]
 fn each_paint_passes_the_holes_given_no_value() {
-	let lowered = warp::pipeline::lower(&format!("{HOLES}paint(glow, 2, 1)\npaint(glow, 2, 1, {{blue: 0.5}})")).expect("lowers").serialize();
+	let lowered = warp::pipeline::lower(&format!("{HOLES}paint(glow, 2, 1)\npaint(glow, 2, 1, {{blue: 0.5}})"))
+		.expect("lowers")
+		.serialize();
 	assert!(lowered.contains("(paint glow 2 1 {size:size, blue:blue})"), "{lowered}");
 	assert!(lowered.contains("(paint glow 2 1 {blue:0.5, size:size})"), "{lowered}");
 }
 
 #[test]
 fn values_not_written_out_cannot_take_the_holes() {
-	let failure = warp::pipeline::lower(&format!("{HOLES}given = {{blue: 0.5}}\npaint(glow, 2, 1, given)")).expect_err("needs the map written out").serialize();
+	let failure = warp::pipeline::lower(&format!("{HOLES}given = {{blue: 0.5}}\npaint(glow, 2, 1, given)"))
+		.expect_err("needs the map written out")
+		.serialize();
 	assert!(failure.contains("size: size, blue: blue"), "{failure}");
 }
 
@@ -27,10 +31,16 @@ fn values_not_written_out_cannot_take_the_holes() {
 #[test]
 fn a_shader_with_holes_paints_as_with_the_values_given() {
 	use super::test_paint_lists::painted_rows;
-	let probe = crate::common::warp_command().args(["--no-ask", "eval", &format!("{HOLES}gpu_render(glow, 1, 1)")]).output().unwrap();
+	let probe = crate::common::warp_command()
+		.args(["--no-ask", "eval", &format!("{HOLES}gpu_render(glow, 1, 1)")])
+		.output()
+		.unwrap();
 	if format!("{probe:?}").contains("no WebGPU adapter") {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
-	let given = painted_rows(&format!("{HOLES}paint(glow, 2, 1, {{size: 2.0, blue: 1.0}})"), "paint-holes-given");
+	let given = painted_rows(
+		&format!("{HOLES}paint(glow, 2, 1, {{size: 2.0, blue: 1.0}})"),
+		"paint-holes-given",
+	);
 	assert_eq!(painted_rows(&format!("{HOLES}paint(glow, 2, 1)"), "paint-holes"), given);
 }

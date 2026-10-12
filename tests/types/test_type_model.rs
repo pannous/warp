@@ -1,10 +1,20 @@
 //! Warp's type checks against W0, the Lean model of warp's type theory (notes/type_theory.md, lean/WarpTypes):
 //! the proofs must build without `sorry`, and warp must reject every program the model rejects, except the known
 //! holes, each with its card. A fixed hole fails the test until it is taken off the list.
-use warp::law::type_model::{admits_disagreements, axioms, export, model_sources, outcomes, verdicts, warp_value, warp_verdict, ModelVerdict};
+use warp::law::type_model::{
+	admits_disagreements, axioms, export, model_sources, outcomes, verdicts, warp_value, warp_verdict, ModelVerdict,
+};
 
 /// The soundness theorems the tie-in rests on
-const THEOREMS: [&str; 7] = ["Warp.progress", "Warp.preservation", "Warp.safety", "Warp.typeOf_sound", "Warp.check_safe", "Warp.step_sound", "Warp.run_sound"];
+const THEOREMS: [&str; 7] = [
+	"Warp.progress",
+	"Warp.preservation",
+	"Warp.safety",
+	"Warp.typeOf_sound",
+	"Warp.check_safe",
+	"Warp.step_sound",
+	"Warp.run_sound",
+];
 /// The axioms of Lean's core logic; anything else (sorryAx above all) is an unproved assumption
 const STANDARD_AXIOMS: [&str; 3] = ["propext", "Quot.sound", "Classical.choice"];
 /// An unproved step: the `sorry` tactic, or a declared `axiom`
@@ -176,15 +186,12 @@ const CORPUS: &[&str] = &[
 	"f(n: int) := n + 1; y: any = 3; f(y)",
 	"x: int = 0; xs = [1, \"a\"]; x = xs#1; x",
 	"f(n: int) := n; f(\"a\")",
-
 	"class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r",
 	"type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r",
-
 	"s = 0; for x in [1, 2, 3] { s += x }; s",
 	"out = []; for x in [1, 2] { out.add(x) }; out",
 	"class P { x: int }; s = 0; for p in [P(1), P(2)] { s += p.x }; s",
 	"t = \"\"; for w in [\"a\", \"b\"] { t = t + w }; t",
-
 	"def f(){ m = 5; m }; f()",
 	"def f(){ m = 5; m = \"a\"; m }; f()",
 	"product(xs) := { out = 1; for x in xs { out = out * x }; out }; product([2, 3, 4])",
@@ -193,14 +200,12 @@ const CORPUS: &[&str] = &[
 	"fact(n) := { r = 1; if n > 1 then r = n * fact(n - 1); r }; fact(5)",
 	"g(n) := n; fact(n) := { r = 1; r = g(n); r }; fact(5)",
 	"y: any = 3; class P { v: int }; p = P(1); p.v = y; p.v",
-
 	"let x = 1; x = 2; x", // rejected: a let is fully immutable (user, card let-reassign)
 	"shared n = 5; n += 2; n",
 	"String s = 'ab'; s",
 	"String s = 3; s",
 	"int i = 2; i = \"a\"; i",
 	"int i = 2.5; i",
-
 	"0..3",
 	"1 to 3",
 	"s = 0; for i in 0..3 { s += i }; s",
@@ -209,7 +214,6 @@ const CORPUS: &[&str] = &[
 	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
 	"to add number a to number b: a+b; add 1 to 2",
 	"b = 0; a = on fail { break 1 } in { b = on fail { break 2 } in { emit fail; 9 }; b * 10 }; a",
-
 	"0 and 7",
 	"1 and 7",
 	"(not 0) and 7",
@@ -217,9 +221,7 @@ const CORPUS: &[&str] = &[
 	"i=0; !i",
 	"f(a:bool,b:bool):=not (a or b); f(true, false)",
 	"x = 1 < 2 or 3 < 2; x",
-
 	"s = 0; for x in 3 { s += x }; s",
-
 	"xs = [1, 2]; a, b = xs; a*10+b",
 	"f() := [1, 2]; a, b = f(); a*10+b",
 	"a, b = [1]; b",
@@ -293,7 +295,6 @@ const CORPUS: &[&str] = &[
 	"p = {x:1}; p.x - \"a\"",
 	"a: int = 0; a, b = 3, \"x\"; a + 1",
 	"a: int = 0; a, b = \"xy\", 6; a",
-
 	"f = x => x*2; f(3)",
 	"make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)",
 	"t = 7; shout = s => s + t; shout(1)",
@@ -600,7 +601,10 @@ const KNOWN_HOLES: &[(&str, &str)] = &[
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
-const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
+const KNOWN_ADMITS_GAPS: [&str; 2] = [
+	"bool ← .int: warp admits true / W0 sub false",
+	"boolean ← .int: warp admits true / W0 sub false",
+];
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
@@ -617,34 +621,64 @@ fn test_type_model_is_proved() {
 	crate::requires!(crate::common::LEAN);
 	for source in model_sources() {
 		let text = std::fs::read_to_string(&source).unwrap();
-		let unproved = text.lines().find(|line| line.split(|c: char| !c.is_alphanumeric()).any(|word| word == SORRY) || line.trim_start().starts_with(AXIOM_DECLARATION));
-		assert!(unproved.is_none(), "{}: {}: the model must be proved", source.display(), unproved.unwrap_or_default());
+		let unproved = text.lines().find(|line| {
+			line.split(|c: char| !c.is_alphanumeric()).any(|word| word == SORRY)
+				|| line.trim_start().starts_with(AXIOM_DECLARATION)
+		});
+		assert!(
+			unproved.is_none(),
+			"{}: {}: the model must be proved",
+			source.display(),
+			unproved.unwrap_or_default()
+		);
 	}
 	let listed = axioms(&THEOREMS).unwrap_or_else(|why| panic!("the model does not build:\n{why}"));
 	for line in listed.lines().filter(|line| line.contains("depends on axioms")) {
 		let used = line.split('[').nth(1).unwrap_or_default().trim_end_matches(']');
 		for axiom in used.split(',').map(str::trim) {
-			assert!(STANDARD_AXIOMS.contains(&axiom), "{line}: {axiom} is no axiom of Lean's core logic");
+			assert!(
+				STANDARD_AXIOMS.contains(&axiom),
+				"{line}: {axiom} is no axiom of Lean's core logic"
+			);
 		}
 	}
-	assert_eq!(listed.lines().filter(|line| line.contains("axioms")).count(), THEOREMS.len(), "{listed}");
+	assert_eq!(
+		listed.lines().filter(|line| line.contains("axioms")).count(),
+		THEOREMS.len(),
+		"{listed}"
+	);
 }
 
 #[test]
 fn test_warp_rejects_what_the_type_model_rejects() {
 	crate::requires!(crate::common::LEAN);
-	let programs: Vec<&str> = CORPUS.iter().copied().chain(KNOWN_HOLES.iter().map(|(code, _)| *code)).collect();
-	let exported: Vec<String> = programs.iter().map(|code| export(code).unwrap_or_else(|why| panic!("{code}: {why}"))).collect();
+	let programs: Vec<&str> = CORPUS
+		.iter()
+		.copied()
+		.chain(KNOWN_HOLES.iter().map(|(code, _)| *code))
+		.collect();
+	let exported: Vec<String> = programs
+		.iter()
+		.map(|code| export(code).unwrap_or_else(|why| panic!("{code}: {why}")))
+		.collect();
 	let model = verdicts(&exported).unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
 	let mut disagreements = Vec::new();
 	for (code, model) in programs.iter().zip(model) {
 		let warp = warp_verdict(code);
 		let hole = KNOWN_HOLES.iter().find(|(hole, _)| hole == code).map(|(_, card)| card);
 		match (&model, &warp, hole) {
-			(ModelVerdict::Rejected, Ok(()), None) => disagreements.push(format!("{code}: warp compiles what the model rejects")),
-			(ModelVerdict::Accepted(type_name), Err(why), _) => disagreements.push(format!("{code}: warp rejects ({why}), the model accepts it as {type_name}")),
-			(ModelVerdict::Rejected, Err(_), Some(card)) => disagreements.push(format!("{code}: hole fixed (card {card}), take it off KNOWN_HOLES")),
-			(ModelVerdict::Accepted(_), Ok(()), Some(card)) => disagreements.push(format!("{code}: the model accepts a listed hole (card {card})")),
+			(ModelVerdict::Rejected, Ok(()), None) => {
+				disagreements.push(format!("{code}: warp compiles what the model rejects"))
+			}
+			(ModelVerdict::Accepted(type_name), Err(why), _) => disagreements.push(format!(
+				"{code}: warp rejects ({why}), the model accepts it as {type_name}"
+			)),
+			(ModelVerdict::Rejected, Err(_), Some(card)) => {
+				disagreements.push(format!("{code}: hole fixed (card {card}), take it off KNOWN_HOLES"))
+			}
+			(ModelVerdict::Accepted(_), Ok(()), Some(card)) => {
+				disagreements.push(format!("{code}: the model accepts a listed hole (card {card})"))
+			}
 			_ => {}
 		}
 	}
@@ -662,17 +696,30 @@ fn test_warp_admits_what_the_type_model_subtypes() {
 fn test_warp_computes_what_the_type_model_computes() {
 	crate::requires!(crate::common::LEAN);
 	let mut programs: Vec<&str> = CORPUS.to_vec();
-	programs.extend(KNOWN_VALUE_DIFFERENCES.iter().map(|(code, _)| *code).filter(|code| !CORPUS.contains(code)));
-	let exported: Vec<String> = programs.iter().map(|code| export(code).unwrap_or_else(|why| panic!("{code}: {why}"))).collect();
+	programs.extend(
+		KNOWN_VALUE_DIFFERENCES
+			.iter()
+			.map(|(code, _)| *code)
+			.filter(|code| !CORPUS.contains(code)),
+	);
+	let exported: Vec<String> = programs
+		.iter()
+		.map(|code| export(code).unwrap_or_else(|why| panic!("{code}: {why}")))
+		.collect();
 	let model = outcomes(&exported).unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
 	let mut differences = Vec::new();
 	for (code, model) in programs.iter().zip(model) {
 		let warp = warp_value(code);
 		let compared = model != REJECTED && model != UNKEPT && warp != UNKEPT;
-		let known = KNOWN_VALUE_DIFFERENCES.iter().find(|(known, _)| known == code).map(|(_, card)| card);
+		let known = KNOWN_VALUE_DIFFERENCES
+			.iter()
+			.find(|(known, _)| known == code)
+			.map(|(_, card)| card);
 		match (compared && model != warp, known) {
 			(true, None) => differences.push(format!("{code}: warp gives {warp}, the model {model}")),
-			(false, Some(card)) => differences.push(format!("{code}: values agree now (card {card}), take it off KNOWN_VALUE_DIFFERENCES")),
+			(false, Some(card)) => differences.push(format!(
+				"{code}: values agree now (card {card}), take it off KNOWN_VALUE_DIFFERENCES"
+			)),
 			_ => {}
 		}
 	}

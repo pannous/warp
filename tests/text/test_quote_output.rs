@@ -2,15 +2,18 @@
 use crate::is;
 use std::sync::Mutex;
 use warp::normalize::*;
-use warp::wasm_emitter::eval;
 use warp::warp_parser::{parse, WarpParser};
+use warp::wasm_emitter::eval;
 
 /// The style is global: tests that read or swap it run one at a time
 static GLOBAL_STYLE: Mutex<()> = Mutex::new(());
 
 fn with_quotes<T>(quotes: QuoteStyle, action: impl FnOnce() -> T) -> T {
 	let _guard = GLOBAL_STYLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	set_style(Style { quotes, ..Style::default() });
+	set_style(Style {
+		quotes,
+		..Style::default()
+	});
 	let result = action();
 	set_style(Style::default());
 	result
@@ -34,7 +37,9 @@ fn test_codepoints_keep_single_quotes() {
 
 #[test]
 fn test_texts_inside_lists_print_with_the_canonical_quote() {
-	with_quotes(QuoteStyle::Double, || assert_eq!(eval("[\"ab\" \"cd\"]").serialize(), "[\"ab\" \"cd\"]"));
+	with_quotes(QuoteStyle::Double, || {
+		assert_eq!(eval("[\"ab\" \"cd\"]").serialize(), "[\"ab\" \"cd\"]")
+	});
 }
 
 #[test]

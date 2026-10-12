@@ -5,7 +5,9 @@
 //! A function f with a companion f_as(…, type) gets its expected type that way: `x:int = agent "33/3"` is
 //! `x:int = agent_as("33/3", "int")` (card int-let, lib/agent.warp).
 
-use super::nodes::{call, children_rewritten, in_block_as_written, is_assigned_data, is_words_call, key, with_parts_rewritten};
+use super::nodes::{
+	call, children_rewritten, in_block_as_written, is_assigned_data, is_words_call, key, with_parts_rewritten,
+};
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
@@ -31,7 +33,9 @@ struct Definition<'a> {
 }
 
 fn definition(node: &Node) -> Option<Definition<'_>> {
-	let Node::Key(target, Op::Assign | Op::Define, body) = node.drop_meta() else { return None };
+	let Node::Key(target, Op::Assign | Op::Define, body) = node.drop_meta() else {
+		return None;
+	};
 	let (head, written_result) = match target.drop_meta() {
 		Node::Key(head, Op::Colon | Op::As, result) => match result.drop_meta() {
 			Node::Symbol(result) => (head.drop_meta(), Some(result.clone())),
@@ -40,7 +44,13 @@ fn definition(node: &Node) -> Option<Definition<'_>> {
 		head => (head, None),
 	};
 	match head {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => Some(Definition { head: items, written_result, body }),
+		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+			Some(Definition {
+				head: items,
+				written_result,
+				body,
+			})
+		}
 		_ => None,
 	}
 }
@@ -49,18 +59,37 @@ pub fn lower(node: Node) -> Node {
 	let node = lower_parameter_overloads(node);
 	let mut registry = TypeRegistry::new();
 	collect_all_types(&mut registry, &node);
-	let mut lowering = Lowering { registry, types: InstanceTypes::of(&node), overloads: HashMap::new(), parameter_types: HashMap::new(), companions: HashSet::new() };
+	let mut lowering = Lowering {
+		registry,
+		types: InstanceTypes::of(&node),
+		overloads: HashMap::new(),
+		parameter_types: HashMap::new(),
+		companions: HashSet::new(),
+	};
 	let mut results: Vec<(String, Option<String>)> = vec![];
 	lowering.collect(&node, &mut results);
 	lowering.overloads = overloads(&results);
 	// by operation: the arity variants agent·1 and agent·2 are agent (lower_arity_overloads ran before)
 	let defined: HashSet<&str> = results.iter().map(|(name, _)| witness_operation(name)).collect();
-	lowering.companions = defined.iter().filter(|name| defined.contains(format!("{name}{COMPANION_SUFFIX}").as_str())).map(|name| name.to_string()).collect();
+	lowering.companions = defined
+		.iter()
+		.filter(|name| defined.contains(format!("{name}{COMPANION_SUFFIX}").as_str()))
+		.map(|name| name.to_string())
+		.collect();
 	// definitions that differ in a parameter type (methods of two classes) dispatch on it (traits.rs), not on their result
 	let mut signatures = HashMap::new();
 	collect_signatures(&node, &mut signatures);
-	lowering.overloads.retain(|name, _| signatures.get(name).is_none_or(|variants| variants.iter().all(|types| *types == variants[0])));
-	if lowering.overloads.is_empty() && lowering.companions.is_empty() && !results.iter().any(|(_, result)| result.as_deref().is_some_and(|result| lowering.is_declared(result))) {
+	lowering.overloads.retain(|name, _| {
+		signatures
+			.get(name)
+			.is_none_or(|variants| variants.iter().all(|types| *types == variants[0]))
+	});
+	if lowering.overloads.is_empty()
+		&& lowering.companions.is_empty()
+		&& !results
+			.iter()
+			.any(|(_, result)| result.as_deref().is_some_and(|result| lowering.is_declared(result)))
+	{
 		return node;
 	}
 	lowering.rewrite(node, None)
@@ -68,11 +97,15 @@ pub fn lower(node: Node) -> Node {
 
 /// The call of a function `named` with its arguments: `f "x"`, `f("x")`, `(f "x")`
 fn named_call<'a>(node: &'a Node, named: &dyn Fn(&str) -> bool) -> Option<(&'a Node, &'a [Node])> {
-	let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
+	let Node::List(items, bracket, separator) = node.drop_meta() else {
+		return None;
+	};
 	if let ([single], Bracket::Round) = (items.as_slice(), bracket) {
 		return named_call(single, named);
 	}
-	let [head, arguments @ ..] = items.as_slice() else { return None };
+	let [head, arguments @ ..] = items.as_slice() else {
+		return None;
+	};
 	(is_call(items, bracket, separator) && !arguments.is_empty() && named(&head.name())).then_some((head, arguments))
 }
 
@@ -106,7 +139,10 @@ fn overloads(results: &[(String, Option<String>)]) -> HashMap<String, Vec<String
 		.filter(|(_, results)| results.len() > 1)
 		.filter_map(|(name, results)| {
 			let results: Vec<String> = results.into_iter().collect::<Option<_>>()?;
-			let distinct = results.iter().enumerate().all(|(index, result)| !results[..index].contains(result));
+			let distinct = results
+				.iter()
+				.enumerate()
+				.all(|(index, result)| !results[..index].contains(result));
 			distinct.then_some((name, results))
 		})
 		.collect()
@@ -127,7 +163,8 @@ impl Lowering {
 		if let Some(definition) = definition(node) {
 			let name = definition.head[0].name();
 			results.push((name.clone(), self.result_type(&definition)));
-			self.parameter_types.insert(name, definition.head[1..].iter().map(parameter_type).collect());
+			self.parameter_types
+				.insert(name, definition.head[1..].iter().map(parameter_type).collect());
 			return self.collect(definition.body, results);
 		}
 		match node.drop_meta() {
@@ -155,7 +192,9 @@ impl Lowering {
 
 	/// A call of a function with a companion (`agent "33/3"`) and its arguments
 	fn companion_call<'a>(&self, node: &'a Node) -> Option<(&'a Node, &'a [Node])> {
-		named_call(node, &|name| self.companions.contains(witness_operation(name)) && !self.overloads.contains_key(name))
+		named_call(node, &|name| {
+			self.companions.contains(witness_operation(name)) && !self.overloads.contains_key(name)
+		})
 	}
 
 	/// The call of the variant or the companion that gives `result`
@@ -163,7 +202,10 @@ impl Lowering {
 		if self.overloads.contains_key(&head.name()) {
 			return self.call(head, result, arguments);
 		}
-		let companion = call(&format!("{}{COMPANION_SUFFIX}", witness_operation(&head.name())), [arguments, vec![Node::Text(result.to_string())]].concat());
+		let companion = call(
+			&format!("{}{COMPANION_SUFFIX}", witness_operation(&head.name())),
+			[arguments, vec![Node::Text(result.to_string())]].concat(),
+		);
 		// the companion's answer has no static type: `as bool` keeps the type it was asked for, so `yes` shows as yes, not 1
 		match type_word_kind(result) {
 			Some(_) => key(companion, Op::As, Node::Symbol(result.to_string())),
@@ -179,20 +221,31 @@ impl Lowering {
 			return in_block_as_written(&bracket_of(&node), self.resolve(&node, head, arguments, expected));
 		}
 		if let (Some(expected), Some((head, arguments))) = (expected, self.companion_call(&node)) {
-			let arguments = arguments.iter().map(|argument| self.rewrite(argument.clone(), None)).collect();
+			let arguments = arguments
+				.iter()
+				.map(|argument| self.rewrite(argument.clone(), None))
+				.collect();
 			return in_block_as_written(&bracket_of(&node), self.typed_call(head, expected, arguments));
 		}
 		match node {
 			// `render "x" as pdf` reads as `render ("x" as pdf)`: the `as` names the result of an overloaded call, also
 			// after lower_arity_overloads wrote it `agent·1("x" as bool)`
-			Node::List(items, bracket, separator) if is_call(&items, &bracket, &separator) && self.as_result(&items).is_some() => {
+			Node::List(items, bracket, separator)
+				if is_call(&items, &bracket, &separator) && self.as_result(&items).is_some() =>
+			{
 				let (head, argument, result) = self.as_result(&items).expect("checked");
 				let argument = self.rewrite(argument.clone(), None);
 				self.typed_call(head, &result, vec![argument])
 			}
 			// `(render "x") as pdf`
-			Node::Key(value, Op::As, result) if self.picks(&value, &result.drop_meta().name()) => self.rewrite(*value, Some(&result.drop_meta().name())),
-			Node::Key(target, Op::Assign, value) if is_assigned_data(&target, &value) => key(*target, Op::Assign, with_parts_rewritten(*value, &mut |part| self.rewrite(part, None))),
+			Node::Key(value, Op::As, result) if self.picks(&value, &result.drop_meta().name()) => {
+				self.rewrite(*value, Some(&result.drop_meta().name()))
+			}
+			Node::Key(target, Op::Assign, value) if is_assigned_data(&target, &value) => key(
+				*target,
+				Op::Assign,
+				with_parts_rewritten(*value, &mut |part| self.rewrite(part, None)),
+			),
 			// `d:docx = render "x"`
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 				let declared = match target.drop_meta() {
@@ -207,9 +260,17 @@ impl Lowering {
 				let declared = self.typed_declaration(&items).expect("checked");
 				let mut items = items.into_iter();
 				let type_word = items.next().expect("checked");
-				let Some(Node::Key(target, op, value)) = items.next().map(|declaration| declaration.drop_meta().clone()) else { unreachable!("checked") };
+				let Some(Node::Key(target, op, value)) =
+					items.next().map(|declaration| declaration.drop_meta().clone())
+				else {
+					unreachable!("checked")
+				};
 				let declaration = Node::Key(target, op, Box::new(self.rewrite(*value, Some(&declared))));
-				if self.is_declared(&declared) { declaration } else { Node::List(vec![type_word, declaration], Bracket::None, Separator::Space) }
+				if self.is_declared(&declared) {
+					declaration
+				} else {
+					Node::List(vec![type_word, declaration], Bracket::None, Separator::Space)
+				}
 			}
 			// `(render "x")` passes the expected type on
 			Node::List(items, Bracket::Round, separator) if items.len() == 1 => {
@@ -219,7 +280,9 @@ impl Lowering {
 			Node::List(items, bracket, separator) => {
 				let expected_arguments = self.argument_types(&items, &bracket, &separator);
 				let items = items.into_iter().enumerate().map(|(index, item)| {
-					let expected = expected_arguments.as_ref().and_then(|types| types.get(index.wrapping_sub(1)).cloned().flatten());
+					let expected = expected_arguments
+						.as_ref()
+						.and_then(|types| types.get(index.wrapping_sub(1)).cloned().flatten());
 					self.rewrite(item, expected.as_deref())
 				});
 				Node::List(items.collect(), bracket, separator)
@@ -232,11 +295,21 @@ impl Lowering {
 	/// body constructs it); its body rewritten
 	fn rewrite_definition(&self, node: &Node) -> Option<Node> {
 		let definition = definition(node)?;
-		let Node::Key(target, op, _) = node.drop_meta() else { return None };
+		let Node::Key(target, op, _) = node.drop_meta() else {
+			return None;
+		};
 		let name = definition.head[0].name();
 		let body = Box::new(self.rewrite(definition.body.clone(), None));
-		let variant = self.overloads.contains_key(&name).then(|| self.result_type(&definition)).flatten().map(|result| witness_name(&name, &result));
-		let drops_result = definition.written_result.as_deref().is_some_and(|result| self.is_declared(result));
+		let variant = self
+			.overloads
+			.contains_key(&name)
+			.then(|| self.result_type(&definition))
+			.flatten()
+			.map(|result| witness_name(&name, &result));
+		let drops_result = definition
+			.written_result
+			.as_deref()
+			.is_some_and(|result| self.is_declared(result));
 		if variant.is_none() && !drops_result {
 			return Some(Node::Key(target.clone(), *op, body));
 		}
@@ -244,55 +317,88 @@ impl Lowering {
 		if let Some(variant) = variant {
 			head[0] = Node::Symbol(variant);
 		}
-		Some(Node::Key(Box::new(Node::List(head, Bracket::Round, Separator::None)), *op, body))
+		Some(Node::Key(
+			Box::new(Node::List(head, Bracket::Round, Separator::None)),
+			*op,
+			body,
+		))
 	}
 
 	/// The written result type, else the type of the instance the body constructs
 	fn result_type(&self, definition: &Definition) -> Option<String> {
-		definition.written_result.clone().or_else(|| match self.types.shape(definition.body) {
-			Some(Shape::Instance(type_name)) => Some(type_name),
-			_ => None,
-		})
+		definition
+			.written_result
+			.clone()
+			.or_else(|| match self.types.shape(definition.body) {
+				Some(Shape::Instance(type_name)) => Some(type_name),
+				_ => None,
+			})
 	}
 
 	/// `render ("x" as pdf)` as the parser groups it: the overloaded function, its argument and the result type
 	fn as_result<'a>(&self, items: &'a [Node]) -> Option<(&'a Node, &'a Node, String)> {
 		let [head, argument] = items else { return None };
-		let Node::Key(value, Op::As, result) = argument.drop_meta() else { return None };
+		let Node::Key(value, Op::As, result) = argument.drop_meta() else {
+			return None;
+		};
 		let result = result.drop_meta().name();
-		let gives = self.overloads.get(&head.name()).map_or(self.companions.contains(witness_operation(&head.name())), |results| results.contains(&result));
+		let gives = self
+			.overloads
+			.get(&head.name())
+			.map_or(self.companions.contains(witness_operation(&head.name())), |results| {
+				results.contains(&result)
+			});
 		gives.then_some((head, value.as_ref(), result))
 	}
 
 	fn picks(&self, value: &Node, result: &str) -> bool {
-		self.companion_call(value).is_some() || self.overloaded_call(value).is_some_and(|(head, _)| self.overloads[&head.name()].iter().any(|candidate| candidate == result))
+		self.companion_call(value).is_some()
+			|| self
+				.overloaded_call(value)
+				.is_some_and(|(head, _)| self.overloads[&head.name()].iter().any(|candidate| candidate == result))
 	}
 
 	/// `docx d = …`: the type word of a typed declaration
 	fn typed_declaration(&self, items: &[Node]) -> Option<String> {
 		let [type_word, declaration] = items else { return None };
-		let Node::Symbol(type_word) = type_word.drop_meta() else { return None };
+		let Node::Symbol(type_word) = type_word.drop_meta() else {
+			return None;
+		};
 		let is_declaration = matches!(declaration.drop_meta(), Node::Key(target, Op::Assign | Op::Define, _) if matches!(target.drop_meta(), Node::Symbol(_)));
 		(is_declaration && self.is_type(type_word)).then(|| type_word.clone())
 	}
 
 	/// The declared parameter types of the function a call names
 	fn argument_types(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Vec<Option<String>>> {
-		is_call(items, bracket, separator).then(|| self.parameter_types.get(&items.first()?.name()).cloned()).flatten()
+		is_call(items, bracket, separator)
+			.then(|| self.parameter_types.get(&items.first()?.name()).cloned())
+			.flatten()
 	}
 
 	/// The variant the expected type names, else the first-declared one with a got-it warning
 	fn resolve(&self, call: &Node, head: &Node, arguments: &[Node], expected: Option<&str>) -> Node {
 		let name = head.name();
 		let results = &self.overloads[&name];
-		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone(), None)).collect();
+		let arguments: Vec<Node> = arguments
+			.iter()
+			.map(|argument| self.rewrite(argument.clone(), None))
+			.collect();
 		if let Some(result) = expected.filter(|expected| results.iter().any(|result| result == expected)) {
 			return self.call(head, result, arguments);
 		}
 		let written = call.serialize().trim().to_string();
-		let question = format!("{name} has variants returning {}: which does `{written}` mean?", results.join(", "));
-		let readings = results.iter().map(|result| reading(result, &format!("{written} as {result}"))).collect();
-		match ask(&Ask::new(TOPIC, question, readings, Fallback::Warning).written(&written).at_node(head)) {
+		let question = format!(
+			"{name} has variants returning {}: which does `{written}` mean?",
+			results.join(", ")
+		);
+		let readings = results
+			.iter()
+			.map(|result| reading(result, &format!("{written} as {result}")))
+			.collect();
+		match ask(&Ask::new(TOPIC, question, readings, Fallback::Warning)
+			.written(&written)
+			.at_node(head))
+		{
 			Ok(chosen) => self.call(head, &results[chosen], arguments),
 			Err(error) => error,
 		}
@@ -314,10 +420,19 @@ fn lower_parameter_overloads(node: Node) -> Node {
 		.into_iter()
 		.filter(|(_, variants)| variants.len() > 1)
 		.filter_map(|(name, variants)| {
-			let variants: Vec<Vec<String>> = variants.into_iter().map(|types| types.into_iter().collect::<Option<_>>()).collect::<Option<_>>()?;
-			let distinct = variants.iter().enumerate().all(|(index, types)| !variants[..index].contains(types));
+			let variants: Vec<Vec<String>> = variants
+				.into_iter()
+				.map(|types| types.into_iter().collect::<Option<_>>())
+				.collect::<Option<_>>()?;
+			let distinct = variants
+				.iter()
+				.enumerate()
+				.all(|(index, types)| !variants[..index].contains(types));
 			// parameters of declared types dispatch through traits (traits.rs)
-			let builtin = variants.iter().flatten().all(|type_name| type_word_kind(type_name).is_some());
+			let builtin = variants
+				.iter()
+				.flatten()
+				.all(|type_name| type_word_kind(type_name).is_some());
 			(distinct && builtin).then_some((name, variants))
 		})
 		.collect();
@@ -326,7 +441,11 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	}
 	let mut variables = HashMap::new();
 	collect_variable_kinds(&node, &mut variables);
-	let mut renaming = ParameterOverloads { overloaded, variables, seen: HashMap::new() };
+	let mut renaming = ParameterOverloads {
+		overloaded,
+		variables,
+		seen: HashMap::new(),
+	};
 	renaming.rewrite(node)
 }
 
@@ -339,8 +458,14 @@ struct Arity {
 
 impl Arity {
 	fn of(parameters: &[Node]) -> Self {
-		let required = parameters.iter().filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _))).count();
-		Arity { required, total: parameters.len() }
+		let required = parameters
+			.iter()
+			.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _)))
+			.count();
+		Arity {
+			required,
+			total: parameters.len(),
+		}
 	}
 
 	fn accepts(&self, count: usize) -> bool {
@@ -352,8 +477,19 @@ impl Arity {
 /// functions `f·1`, `f·2`; every call names the one its argument count fits, so dispatch stays static
 pub fn lower_arity_overloads(node: Node) -> Node {
 	let mut arities: HashMap<String, Vec<Arity>> = HashMap::new();
-	each_definition(&node, &mut |definition| arities.entry(definition.head[0].name()).or_default().push(Arity::of(&definition.head[1..])));
-	arities.retain(|_, variants| variants.len() > 1 && variants.iter().enumerate().all(|(index, arity)| variants[..index].iter().all(|other| other.total != arity.total)));
+	each_definition(&node, &mut |definition| {
+		arities
+			.entry(definition.head[0].name())
+			.or_default()
+			.push(Arity::of(&definition.head[1..]))
+	});
+	arities.retain(|_, variants| {
+		variants.len() > 1
+			&& variants
+				.iter()
+				.enumerate()
+				.all(|(index, arity)| variants[..index].iter().all(|other| other.total != arity.total))
+	});
 	if arities.is_empty() {
 		return node;
 	}
@@ -398,21 +534,31 @@ trait VariantRenaming {
 			return in_block_as_written(&bracket_of(&node), call);
 		}
 		match node {
-			Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| self.rewrite(part))),
+			Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(
+				*left,
+				Op::Assign,
+				with_parts_rewritten(*right, &mut |part| self.rewrite(part)),
+			),
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 
 	fn rewrite_definition(&mut self, node: &Node) -> Option<Node> {
 		let definition = definition(node)?;
-		let Node::Key(target, op, _) = node.drop_meta() else { return None };
+		let Node::Key(target, op, _) = node.drop_meta() else {
+			return None;
+		};
 		let body = Box::new(self.rewrite(definition.body.clone()));
-		let Some(variant) = self.renamed(&definition.head[0].name(), &definition.head[1..]) else { return Some(Node::Key(target.clone(), *op, body)) };
+		let Some(variant) = self.renamed(&definition.head[0].name(), &definition.head[1..]) else {
+			return Some(Node::Key(target.clone(), *op, body));
+		};
 		let mut head = definition.head.to_vec();
 		head[0] = Node::Symbol(variant);
 		let head = Node::List(head, Bracket::Round, Separator::None);
 		let target = match target.drop_meta() {
-			Node::Key(_, result_op @ (Op::Colon | Op::As), result) => Node::Key(Box::new(head), *result_op, result.clone()),
+			Node::Key(_, result_op @ (Op::Colon | Op::As), result) => {
+				Node::Key(Box::new(head), *result_op, result.clone())
+			}
 			_ => head,
 		};
 		Some(Node::Key(Box::new(target), *op, body))
@@ -421,22 +567,37 @@ trait VariantRenaming {
 
 impl VariantRenaming for ArityOverloads {
 	fn renamed(&mut self, name: &str, parameters: &[Node]) -> Option<String> {
-		self.arities.contains_key(name).then(|| arity_variant(name, Arity::of(parameters)))
+		self.arities
+			.contains_key(name)
+			.then(|| arity_variant(name, Arity::of(parameters)))
 	}
 
 	/// `f(1, 2)`, `f 1 2`: the call of the definition that accepts two arguments
 	fn resolve_call(&mut self, node: &Node) -> Option<Node> {
-		let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
-		let [head, arguments @ ..] = items.as_slice() else { return None };
+		let Node::List(items, bracket, separator) = node.drop_meta() else {
+			return None;
+		};
+		let [head, arguments @ ..] = items.as_slice() else {
+			return None;
+		};
 		// `(quantity("5 m"))`: parentheses around a call are no call of it without arguments
-		let Node::Symbol(name) = head.drop_meta() else { return None };
+		let Node::Symbol(name) = head.drop_meta() else {
+			return None;
+		};
 		let name = name.clone();
 		let variants = self.arities.get(&name)?.clone();
 		if !is_call(items, bracket, separator) {
 			return None;
 		}
 		let fitting: Vec<&Arity> = variants.iter().filter(|arity| arity.accepts(arguments.len())).collect();
-		let written = format!("{name}({})", arguments.iter().map(|argument| argument.serialize().trim().to_string()).collect::<Vec<_>>().join(", "));
+		let written = format!(
+			"{name}({})",
+			arguments
+				.iter()
+				.map(|argument| argument.serialize().trim().to_string())
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
 		let chosen = match fitting.as_slice() {
 			[arity] => **arity,
 			[] => {
@@ -444,26 +605,57 @@ impl VariantRenaming for ArityOverloads {
 				counts.sort();
 				counts.dedup();
 				let counts = counts.iter().map(usize::to_string).collect::<Vec<_>>().join(" or ");
-				return Some(crate::diagnostic::Diagnostic::at(head, format!("{name} takes {counts} arguments, got {}", arguments.len())).into_error());
+				return Some(
+					crate::diagnostic::Diagnostic::at(
+						head,
+						format!("{name} takes {counts} arguments, got {}", arguments.len()),
+					)
+					.into_error(),
+				);
 			}
-			_ => return Some(crate::diagnostic::Diagnostic::at(head, format!("`{written}` fits two definitions of {name}: pass every argument of the one you mean")).into_error()),
+			_ => {
+				return Some(
+					crate::diagnostic::Diagnostic::at(
+						head,
+						format!("`{written}` fits two definitions of {name}: pass every argument of the one you mean"),
+					)
+					.into_error(),
+				)
+			}
 		};
-		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
+		let arguments: Vec<Node> = arguments
+			.iter()
+			.map(|argument| self.rewrite(argument.clone()))
+			.collect();
 		Some(call(&arity_variant(&name, chosen), arguments))
 	}
 }
 
 fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Vec<Vec<Option<String>>>>) {
-	each_definition(node, &mut |definition| signatures.entry(definition.head[0].name()).or_default().push(definition.head[1..].iter().map(parameter_type).collect()));
+	each_definition(node, &mut |definition| {
+		signatures
+			.entry(definition.head[0].name())
+			.or_default()
+			.push(definition.head[1..].iter().map(parameter_type).collect())
+	});
 }
 
 /// The kind a variable is assigned everywhere in the program; a variable assigned values of different kinds has none
 fn collect_variable_kinds(node: &Node, variables: &mut HashMap<String, Option<Kind>>) {
 	node.visit(&mut |part| {
-		let Node::Key(target, Op::Assign | Op::Define, value) = part else { return };
+		let Node::Key(target, Op::Assign | Op::Define, value) = part else {
+			return;
+		};
 		let Node::Symbol(name) = target.drop_meta() else { return };
 		let kind = argument_kind(value, &HashMap::new());
-		variables.entry(name.clone()).and_modify(|known| if *known != kind { *known = None }).or_insert(kind);
+		variables
+			.entry(name.clone())
+			.and_modify(|known| {
+				if *known != kind {
+					*known = None
+				}
+			})
+			.or_insert(kind);
 	});
 }
 
@@ -478,11 +670,13 @@ fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> 
 		Node::Char(_) => Some(Kind::Codepoint),
 		Node::Symbol(name) => variables.get(name).copied().flatten(),
 		Node::Key(_, Op::As, type_node) => type_word_kind(&type_node.drop_meta().name()),
-		Node::Key(left, op, right) if op.is_arithmetic() => match (argument_kind(left, variables)?, argument_kind(right, variables)?) {
-			(Kind::Int, Kind::Int) => Some(Kind::Int),
-			(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
-			_ => None,
-		},
+		Node::Key(left, op, right) if op.is_arithmetic() => {
+			match (argument_kind(left, variables)?, argument_kind(right, variables)?) {
+				(Kind::Int, Kind::Int) => Some(Kind::Int),
+				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
+				_ => None,
+			}
+		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => argument_kind(&items[0], variables),
 		_ => None,
 	}
@@ -525,35 +719,67 @@ impl VariantRenaming for ParameterOverloads {
 
 impl ParameterOverloads {
 	fn variant_name(name: &str, types: &[String]) -> String {
-		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, type_name))
+		types
+			.iter()
+			.fold(name.to_string(), |variant, type_name| witness_name(&variant, type_name))
 	}
 
 	/// `combine(1.1, 2.2)`: the call of the variant the arguments fit best
 	fn resolve_typed_call(&mut self, node: &Node) -> Option<Node> {
-		let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
-		let [head, arguments @ ..] = items.as_slice() else { return None };
+		let Node::List(items, bracket, separator) = node.drop_meta() else {
+			return None;
+		};
+		let [head, arguments @ ..] = items.as_slice() else {
+			return None;
+		};
 		let variants = self.overloaded.get(&head.drop_meta().name())?.clone();
 		if arguments.is_empty() || !is_call(items, bracket, separator) {
 			return None;
 		}
 		let name = head.drop_meta().name();
-		let kinds: Vec<Option<Kind>> = arguments.iter().map(|argument| argument_kind(argument, &self.variables)).collect();
+		let kinds: Vec<Option<Kind>> = arguments
+			.iter()
+			.map(|argument| argument_kind(argument, &self.variables))
+			.collect();
 		let scores: Vec<(u32, &Vec<String>)> = variants
 			.iter()
 			.filter(|types| types.len() == arguments.len())
 			.filter_map(|types| {
-				let fits: Option<Vec<u32>> = kinds.iter().zip(types.iter()).map(|(kind, type_name)| fit((*kind)?, type_name)).collect();
+				let fits: Option<Vec<u32>> = kinds
+					.iter()
+					.zip(types.iter())
+					.map(|(kind, type_name)| fit((*kind)?, type_name))
+					.collect();
 				Some((fits?.iter().sum(), types))
 			})
 			.collect();
 		let best = scores.iter().map(|(score, _)| *score).min();
-		let chosen: Vec<&Vec<String>> = scores.iter().filter(|(score, _)| Some(*score) == best).map(|(_, types)| *types).collect();
+		let chosen: Vec<&Vec<String>> = scores
+			.iter()
+			.filter(|(score, _)| Some(*score) == best)
+			.map(|(_, types)| *types)
+			.collect();
 		let written = node.serialize().trim().to_string();
-		let listed = variants.iter().map(|types| format!("{name}({})", types.join(", "))).collect::<Vec<_>>().join(", ");
-		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
+		let listed = variants
+			.iter()
+			.map(|types| format!("{name}({})", types.join(", ")))
+			.collect::<Vec<_>>()
+			.join(", ");
+		let arguments: Vec<Node> = arguments
+			.iter()
+			.map(|argument| self.rewrite(argument.clone()))
+			.collect();
 		match chosen.as_slice() {
 			[types] => Some(call(&Self::variant_name(&name, types), arguments)),
-			_ => Some(crate::diagnostic::Diagnostic::at(head, format!("`{written}` fits no single variant of {listed}: give the arguments a type, e.g. `x as float`")).into_error()),
+			_ => Some(
+				crate::diagnostic::Diagnostic::at(
+					head,
+					format!(
+						"`{written}` fits no single variant of {listed}: give the arguments a type, e.g. `x as float`"
+					),
+				)
+				.into_error(),
+			),
 		}
 	}
 }

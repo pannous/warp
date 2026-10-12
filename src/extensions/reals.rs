@@ -36,7 +36,10 @@ impl Rational {
 	pub fn new(numerator: BigInt, denominator: BigInt) -> Rational {
 		assert!(!denominator.is_zero(), "rational with zero denominator");
 		let divisor = numerator.gcd(&denominator) * denominator.signum();
-		Rational { numerator: numerator / &divisor, denominator: denominator / &divisor }
+		Rational {
+			numerator: numerator / &divisor,
+			denominator: denominator / &divisor,
+		}
 	}
 
 	/// The decimal a float was written as, exact: 0.3 is 3/10 (its shortest text, which reads back as the same float)
@@ -58,16 +61,25 @@ impl Rational {
 			rest /= factor;
 			digits += 1;
 		}
-		let scaled = (&self.numerator * BigInt::from(10).pow(digits) / &self.denominator).abs().to_string();
+		let scaled = (&self.numerator * BigInt::from(10).pow(digits) / &self.denominator)
+			.abs()
+			.to_string();
 		let padded = format!("{scaled:0>width$}", width = digits as usize + 1);
 		let (whole, fraction) = padded.split_at(padded.len() - digits as usize);
 		let fraction = fraction.trim_end_matches('0');
 		let sign = if self.is_negative() { "-" } else { "" };
-		Some(if fraction.is_empty() { format!("{sign}{whole}") } else { format!("{sign}{whole}.{fraction}") })
+		Some(if fraction.is_empty() {
+			format!("{sign}{whole}")
+		} else {
+			format!("{sign}{whole}.{fraction}")
+		})
 	}
 
 	pub fn integer(value: impl Into<BigInt>) -> Rational {
-		Rational { numerator: value.into(), denominator: BigInt::one() }
+		Rational {
+			numerator: value.into(),
+			denominator: BigInt::one(),
+		}
 	}
 
 	pub fn zero() -> Rational {
@@ -87,15 +99,24 @@ impl Rational {
 	}
 
 	pub fn add(&self, other: &Rational) -> Rational {
-		Rational::new(&self.numerator * &other.denominator + &other.numerator * &self.denominator, &self.denominator * &other.denominator)
+		Rational::new(
+			&self.numerator * &other.denominator + &other.numerator * &self.denominator,
+			&self.denominator * &other.denominator,
+		)
 	}
 
 	pub fn neg(&self) -> Rational {
-		Rational { numerator: -&self.numerator, denominator: self.denominator.clone() }
+		Rational {
+			numerator: -&self.numerator,
+			denominator: self.denominator.clone(),
+		}
 	}
 
 	pub fn mul(&self, other: &Rational) -> Rational {
-		Rational::new(&self.numerator * &other.numerator, &self.denominator * &other.denominator)
+		Rational::new(
+			&self.numerator * &other.numerator,
+			&self.denominator * &other.denominator,
+		)
 	}
 
 	/// None for division by zero
@@ -104,13 +125,17 @@ impl Rational {
 	}
 
 	pub fn to_f64(&self) -> f64 {
-		let (n, d) = (self.numerator.to_f64().unwrap_or(f64::NAN), self.denominator.to_f64().unwrap_or(f64::NAN));
+		let (n, d) = (
+			self.numerator.to_f64().unwrap_or(f64::NAN),
+			self.denominator.to_f64().unwrap_or(f64::NAN),
+		);
 		if n.is_finite() && d.is_finite() {
 			n / d
 		} else {
 			// huge parts: scale both down before dividing
 			let shift = self.numerator.bits().max(self.denominator.bits()).saturating_sub(1000) as usize;
-			(&self.numerator >> shift).to_f64().unwrap_or(f64::NAN) / (&self.denominator >> shift).to_f64().unwrap_or(f64::NAN)
+			(&self.numerator >> shift).to_f64().unwrap_or(f64::NAN)
+				/ (&self.denominator >> shift).to_f64().unwrap_or(f64::NAN)
 		}
 	}
 
@@ -224,7 +249,10 @@ impl Monomial {
 		if !inside.is_one() {
 			powers.insert(Generator::CubeRoot(inside), 1);
 		}
-		(coefficient, Monomial(powers.into_iter().filter(|(_, e)| *e != 0).collect()))
+		(
+			coefficient,
+			Monomial(powers.into_iter().filter(|(_, e)| *e != 0).collect()),
+		)
 	}
 
 	/// 1/m as coefficient × monomial: 1/√r = √r/r, 1/∛r = ∛r²/r, 1/ⅈ = -ⅈ
@@ -244,7 +272,8 @@ impl Monomial {
 				}
 				Generator::CubeRoot(r) => {
 					coefficient = coefficient.mul(&Rational::new(BigInt::one(), r.clone()));
-					let (square_coefficient, square) = Monomial::of(generator.clone()).times(&Monomial::of(generator.clone()));
+					let (square_coefficient, square) =
+						Monomial::of(generator.clone()).times(&Monomial::of(generator.clone()));
 					coefficient = coefficient.mul(&square_coefficient);
 					square
 				}
@@ -403,18 +432,30 @@ impl Exact {
 
 	/// A hyperreal that is no real: some term has a power of ε
 	pub fn has_epsilon(&self) -> bool {
-		self.0.keys().any(|monomial| monomial.exponent(&Generator::Epsilon) != 0)
+		self.0
+			.keys()
+			.any(|monomial| monomial.exponent(&Generator::Epsilon) != 0)
 	}
 
 	/// The terms with ε^power, ε removed from them
 	fn epsilon_part(&self, power: i64) -> Exact {
-		let terms = self.0.iter().filter(|(monomial, _)| monomial.exponent(&Generator::Epsilon) == power);
-		Exact(terms.map(|(monomial, coefficient)| (monomial.without(&Generator::Epsilon), coefficient.clone())).collect())
+		let terms = self
+			.0
+			.iter()
+			.filter(|(monomial, _)| monomial.exponent(&Generator::Epsilon) == power);
+		Exact(
+			terms
+				.map(|(monomial, coefficient)| (monomial.without(&Generator::Epsilon), coefficient.clone()))
+				.collect(),
+		)
 	}
 
 	/// The lowest power of ε among the terms: negative for an infinite number, positive for an infinitesimal
 	fn lowest_epsilon_power(&self) -> Option<i64> {
-		self.0.keys().map(|monomial| monomial.exponent(&Generator::Epsilon)).min()
+		self.0
+			.keys()
+			.map(|monomial| monomial.exponent(&Generator::Epsilon))
+			.min()
 	}
 
 	/// The standard part st(x): the real nearest to a finite hyperreal; an error for an infinite one
@@ -428,7 +469,9 @@ impl Exact {
 	pub fn add(&self, other: &Exact) -> Exact {
 		let mut terms = self.0.clone();
 		for (monomial, coefficient) in &other.0 {
-			let sum = terms.get(monomial).map_or_else(|| coefficient.clone(), |c| c.add(coefficient));
+			let sum = terms
+				.get(monomial)
+				.map_or_else(|| coefficient.clone(), |c| c.add(coefficient));
 			if sum.is_zero() {
 				terms.remove(monomial);
 			} else {
@@ -494,7 +537,10 @@ impl Exact {
 		for (generator, exponent) in &monomial.0 {
 			match generator {
 				Generator::Pi | Generator::Euler | Generator::Epsilon if exponent % index as i64 == 0 => {
-					result = result.mul(&Exact::term(Rational::integer(1), Monomial(vec![(generator.clone(), exponent / index as i64)])));
+					result = result.mul(&Exact::term(
+						Rational::integer(1),
+						Monomial(vec![(generator.clone(), exponent / index as i64)]),
+					));
 				}
 				_ => return None,
 			}
@@ -505,11 +551,19 @@ impl Exact {
 		let (outside, inside) = extract_power(&radicand, index);
 		let mut root = Exact::rational(Rational::new(outside, coefficient.denominator.clone()));
 		if !inside.is_one() {
-			let generator = if index == 2 { Generator::SquareRoot(inside) } else { Generator::CubeRoot(inside) };
+			let generator = if index == 2 {
+				Generator::SquareRoot(inside)
+			} else {
+				Generator::CubeRoot(inside)
+			};
 			root = root.mul(&Exact::generator(generator));
 		}
 		if negative {
-			root = if index == 2 { root.mul(&Exact::imaginary()) } else { root.neg() };
+			root = if index == 2 {
+				root.mul(&Exact::imaginary())
+			} else {
+				root.neg()
+			};
 		}
 		Some(root.mul(&result))
 	}
@@ -547,7 +601,9 @@ impl Exact {
 			}
 			precision *= 2;
 		}
-		Err(format!("undecidable: the sign of {self} is not known within {PRECISION_BUDGET} bits"))
+		Err(format!(
+			"undecidable: the sign of {self} is not known within {PRECISION_BUDGET} bits"
+		))
 	}
 
 	/// `nearest(x, rational)` of an exact value, by its continued fraction: with `within`, the first convergent that
@@ -562,17 +618,28 @@ impl Exact {
 		while precision <= PRECISION_BUDGET {
 			let interval = self.interval(precision);
 			let scale = BigInt::one() << precision;
-			let (low, high) = (Rational::new(interval.lo, scale.clone()), Rational::new(interval.hi, scale));
+			let (low, high) = (
+				Rational::new(interval.lo, scale.clone()),
+				Rational::new(interval.hi, scale),
+			);
 			if let Some(found) = self.convergent_search(&low, &high, limit, within)? {
 				return Ok(found);
 			}
 			precision *= 2;
 		}
-		Err(format!("nearest({self}, rational) needs more than {PRECISION_BUDGET} bits: ask for a larger `within`"))
+		Err(format!(
+			"nearest({self}, rational) needs more than {PRECISION_BUDGET} bits: ask for a larger `within`"
+		))
 	}
 
 	/// The convergents of a value in [low, high]; None once the interval no longer decides the next partial quotient
-	fn convergent_search(&self, low: &Rational, high: &Rational, limit: Option<&BigInt>, within: Option<&Rational>) -> Result<Option<Rational>, String> {
+	fn convergent_search(
+		&self,
+		low: &Rational,
+		high: &Rational,
+		limit: Option<&BigInt>,
+		within: Option<&Rational>,
+	) -> Result<Option<Rational>, String> {
 		let floor = |q: &Rational| q.numerator.div_floor(&q.denominator);
 		let (mut low, mut high) = (low.clone(), high.clone());
 		let (mut p0, mut q0, mut p1, mut q1) = (BigInt::zero(), BigInt::one(), BigInt::one(), BigInt::zero());
@@ -593,14 +660,21 @@ impl Exact {
 			(p0, q0, p1, q1) = (p1, q1, p2, q2);
 			let fraction = Rational::new(p1.clone(), q1.clone());
 			let close_enough = match within {
-				Some(within) => self.distance(&fraction).sub(&Exact::rational(within.clone())).sign()? != Ordering::Greater,
+				Some(within) => {
+					self.distance(&fraction).sub(&Exact::rational(within.clone())).sign()? != Ordering::Greater
+				}
 				None => limit.is_none() && fraction.to_f64() == self.to_f64(),
 			};
-			let (low_rest, high_rest) = (low.add(&Rational::integer(-term.clone())), high.add(&Rational::integer(-term)));
+			let (low_rest, high_rest) = (
+				low.add(&Rational::integer(-term.clone())),
+				high.add(&Rational::integer(-term)),
+			);
 			if close_enough || low_rest.is_zero() && high_rest.is_zero() {
 				return Ok(Some(fraction));
 			}
-			let (Some(next_low), Some(next_high)) = (high_rest.inverse(), low_rest.inverse()) else { return Ok(None) };
+			let (Some(next_low), Some(next_high)) = (high_rest.inverse(), low_rest.inverse()) else {
+				return Ok(None);
+			};
 			(low, high) = (next_low, next_high);
 		}
 	}
@@ -615,10 +689,16 @@ impl Exact {
 	}
 
 	fn interval(&self, precision: usize) -> Interval {
-		let mut sum = Interval { lo: BigInt::zero(), hi: BigInt::zero() };
+		let mut sum = Interval {
+			lo: BigInt::zero(),
+			hi: BigInt::zero(),
+		};
 		for (monomial, coefficient) in &self.0 {
 			let term = monomial.interval(precision).scale(coefficient);
-			sum = Interval { lo: sum.lo + term.lo, hi: sum.hi + term.hi };
+			sum = Interval {
+				lo: sum.lo + term.lo,
+				hi: sum.hi + term.hi,
+			};
 		}
 		sum
 	}
@@ -661,26 +741,43 @@ struct Interval {
 
 impl Interval {
 	fn exact(value: BigInt) -> Interval {
-		Interval { lo: value.clone(), hi: value }
+		Interval {
+			lo: value.clone(),
+			hi: value,
+		}
 	}
 
 	/// Product of two positive intervals
 	fn times(&self, other: &Interval, precision: usize) -> Interval {
-		Interval { lo: (&self.lo * &other.lo) >> precision, hi: ((&self.hi * &other.hi) >> precision) + 1 }
+		Interval {
+			lo: (&self.lo * &other.lo) >> precision,
+			hi: ((&self.hi * &other.hi) >> precision) + 1,
+		}
 	}
 
 	/// 1/x of a positive interval; its lower end may round to 0, then the result is just wide
 	fn inverse(&self, precision: usize) -> Interval {
 		let one = BigInt::one() << (2 * precision);
-		let lo = if self.hi.is_positive() { &one / &self.hi } else { BigInt::zero() };
-		let hi = if self.lo.is_positive() { &one / &self.lo + 1 } else { one.clone() << precision };
+		let lo = if self.hi.is_positive() {
+			&one / &self.hi
+		} else {
+			BigInt::zero()
+		};
+		let hi = if self.lo.is_positive() {
+			&one / &self.lo + 1
+		} else {
+			one.clone() << precision
+		};
 		Interval { lo, hi }
 	}
 
 	fn scale(&self, q: &Rational) -> Interval {
 		let (a, b) = (&self.lo * &q.numerator, &self.hi * &q.numerator);
 		let (low, high) = if q.is_negative() { (b, a) } else { (a, b) };
-		Interval { lo: low.div_floor(&q.denominator), hi: -((-high).div_floor(&q.denominator)) }
+		Interval {
+			lo: low.div_floor(&q.denominator),
+			hi: -((-high).div_floor(&q.denominator)),
+		}
 	}
 }
 
@@ -706,7 +803,10 @@ const GUARD: usize = 64;
 fn generator_interval(generator: &Generator, precision: usize) -> Interval {
 	let widen = |value: BigInt| {
 		let error = BigInt::one() << (GUARD - 16);
-		Interval { lo: (&value - &error) >> GUARD, hi: ((value + error) >> GUARD) + 1 }
+		Interval {
+			lo: (&value - &error) >> GUARD,
+			hi: ((value + error) >> GUARD) + 1,
+		}
 	};
 	match generator {
 		// Machin: π = 16·atan(1/5) - 4·atan(1/239)
@@ -714,11 +814,17 @@ fn generator_interval(generator: &Generator, precision: usize) -> Interval {
 		Generator::Euler => widen(euler(precision + GUARD)),
 		Generator::SquareRoot(r) => {
 			let root = (r << (2 * precision)).sqrt();
-			Interval { lo: root.clone(), hi: root + 1 }
+			Interval {
+				lo: root.clone(),
+				hi: root + 1,
+			}
 		}
 		Generator::CubeRoot(r) => {
 			let root = (r << (3 * precision)).cbrt();
-			Interval { lo: root.clone(), hi: root + 1 }
+			Interval {
+				lo: root.clone(),
+				hi: root + 1,
+			}
 		}
 		Generator::Imaginary => unreachable!("complex values are rejected before interval evaluation"),
 		Generator::Epsilon => unreachable!("hyperreals are signed by their ε powers before interval evaluation"),
@@ -806,7 +912,9 @@ impl Real {
 				} else if b - a > tolerance {
 					Ok(Ordering::Less)
 				} else {
-					Err(format!("undecidable: {self} and {other} agree to f64 precision but one is an approximation"))
+					Err(format!(
+						"undecidable: {self} and {other} agree to f64 precision but one is an approximation"
+					))
 				}
 			}
 		}

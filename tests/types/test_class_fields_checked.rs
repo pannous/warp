@@ -12,7 +12,10 @@ fn shapes(program: &str) -> String {
 #[test]
 fn a_declared_variable_keeps_its_class() {
 	fails_with(&shapes("s: Circle = Circle(1); s = Point(2)"), "Point is not a Circle");
-	fails_with(&shapes("s: Circle | Square = Circle(1); s = Point(2)"), "Point is none of them");
+	fails_with(
+		&shapes("s: Circle | Square = Circle(1); s = Point(2)"),
+		"Point is none of them",
+	);
 	is!(&shapes("s: Circle | Square = Circle(1); s = Square(2); s.side"), 2);
 }
 
@@ -23,13 +26,28 @@ fn a_function_local_of_the_same_name_is_its_own() {
 
 #[test]
 fn a_field_of_a_class_takes_its_declared_class() {
-	fails_with(&shapes("class Box{content: Circle}; b = Box(Point(3))"), "Box.content is a Circle");
-	fails_with(&shapes("class Box{content: Circle | Square}; b = Box(Point(3))"), "Point is none of them");
-	is!(&shapes("class Box{content: Circle | Square}; b = Box(Square(3)); b.content.side"), 3);
+	fails_with(
+		&shapes("class Box{content: Circle}; b = Box(Point(3))"),
+		"Box.content is a Circle",
+	);
+	fails_with(
+		&shapes("class Box{content: Circle | Square}; b = Box(Point(3))"),
+		"Point is none of them",
+	);
+	is!(
+		&shapes("class Box{content: Circle | Square}; b = Box(Square(3)); b.content.side"),
+		3
+	);
 }
 
 #[test]
 fn a_field_write_takes_its_declared_class() {
-	fails_with(&shapes("class Box{content: Circle}; b = Box(Circle(1)); b.content = Point(1)"), "Point is not a Circle");
-	is!(&shapes("class Box{content: Circle | Square}; b = Box(Circle(1)); b.content = Square(2); b.content.side"), 2);
+	fails_with(
+		&shapes("class Box{content: Circle}; b = Box(Circle(1)); b.content = Point(1)"),
+		"Point is not a Circle",
+	);
+	is!(
+		&shapes("class Box{content: Circle | Square}; b = Box(Circle(1)); b.content = Square(2); b.content.side"),
+		2
+	);
 }

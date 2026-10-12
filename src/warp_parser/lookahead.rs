@@ -6,7 +6,12 @@ use super::*;
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
 /// `∜x`, read as `√√x`
 pub(super) const FOURTH_ROOT: char = '∜';
-pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs)];
+pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [
+	("sqrt", Op::Sqrt),
+	("cbrt", Op::Cbrt),
+	("abs", Op::Abs),
+	("norm", Op::Abs),
+];
 /// Infix operators that may follow a suffix: `10% + 1`, `x abs * 2`
 const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
 /// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
@@ -27,8 +32,17 @@ impl WarpParser {
 	/// Check if current character can start an atom (for implicit application)
 	pub(super) fn can_start_atom(&self) -> bool {
 		let ch = self.current_char();
-		ch.is_alphanumeric() || ch == '_' || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{'
-			|| self.number_starts_at(0) || self.starts_function_reference() || self.starts_path_literal() || self.url_follows()
+		ch.is_alphanumeric()
+			|| ch == '_'
+			|| ch == '"'
+			|| ch == '\''
+			|| ch == '('
+			|| ch == '['
+			|| ch == '{'
+			|| self.number_starts_at(0)
+			|| self.starts_function_reference()
+			|| self.starts_path_literal()
+			|| self.url_follows()
 	}
 
 	/// `function add` (P82): the function itself where a name and then the end of the expression follow the keyword;
@@ -41,11 +55,20 @@ impl WarpParser {
 		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
 			return None;
 		}
-		let name: String = (blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let name: String = (blanks..)
+			.map(|at| self.peek_char(at))
+			.take_while(|ch| is_identifier_char(*ch))
+			.collect();
 		let after = blanks + name.chars().count();
-		let rest = (after..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(after);
+		let rest = (after..)
+			.find(|at| !matches!(self.peek_char(*at), ' ' | '\t'))
+			.unwrap_or(after);
 		// `map function square on [1 2 3]`: the iteration words' `on` ends it too
-		let on_follows = (rest..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect::<String>() == crate::lowering::words::ON_WORD;
+		let on_follows = (rest..)
+			.map(|at| self.peek_char(at))
+			.take_while(|ch| is_identifier_char(*ch))
+			.collect::<String>()
+			== crate::lowering::words::ON_WORD;
 		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !on_follows {
 			return None;
 		}
@@ -59,8 +82,12 @@ impl WarpParser {
 	/// file path without quotes; `xs ./ 2` and `xs./2` divide each element
 	pub(super) fn starts_path_literal(&self) -> bool {
 		let dots = if self.peek_char(1) == '.' { 2 } else { 1 };
-		let glued_to_operand = is_identifier_char(self.prev_char()) || matches!(self.prev_char(), ')' | ']' | '}' | '"' | '\'');
-		self.current_char() == '.' && self.peek_char(dots) == '/' && !ends_path(self.peek_char(dots + 1)) && !glued_to_operand
+		let glued_to_operand =
+			is_identifier_char(self.prev_char()) || matches!(self.prev_char(), ')' | ']' | '}' | '"' | '\'');
+		self.current_char() == '.'
+			&& self.peek_char(dots) == '/'
+			&& !ends_path(self.peek_char(dots + 1))
+			&& !glued_to_operand
 	}
 
 	pub(super) fn starts_function_reference(&self) -> bool {
@@ -98,22 +125,41 @@ impl WarpParser {
 		while matches!(self.peek_char(position), ' ' | '\t') {
 			position += 1;
 		}
-		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
+		!matches!(
+			self.peek_char(position),
+			'\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '='
+		)
 	}
 
 	/// Check if character terminates a URL
 	pub(super) fn is_url_terminator(&self, ch: char) -> bool {
-		ch == '\0' || ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
-			|| ch == ';' || ch == ')' || ch == ']' || ch == '}' || ch == '>'
-			|| ch == '"' || ch == '\'' || ch == ',' || ch == '«'
+		ch == '\0'
+			|| ch == ' '
+			|| ch == '\t'
+			|| ch == '\n'
+			|| ch == '\r'
+			|| ch == ';'
+			|| ch == ')'
+			|| ch == ']'
+			|| ch == '}'
+			|| ch == '>'
+			|| ch == '"'
+			|| ch == '\''
+			|| ch == ','
+			|| ch == '«'
 	}
 
 	/// `{from:1 to:2}`: an operator word directly before a key colon names the key; `else:` and `then:` open blocks
 	fn word_names_key(&self) -> bool {
-		let word: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
+		let word: String = (0..)
+			.map(|offset| self.peek_char(offset))
+			.take_while(|&c| is_identifier_char(c))
+			.collect();
 		let after = word.chars().count();
-		!word.is_empty() && !BLOCK_COLON_WORDS.contains(&word.as_str())
-			&& self.peek_char(after) == ':' && !matches!(self.peek_char(after + 1), ':' | '=')
+		!word.is_empty()
+			&& !BLOCK_COLON_WORDS.contains(&word.as_str())
+			&& self.peek_char(after) == ':'
+			&& !matches!(self.peek_char(after + 1), ':' | '=')
 	}
 
 	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
@@ -132,8 +178,12 @@ impl WarpParser {
 			return Some((Op::Similar, word.len()));
 		}
 		// Keywords (4-char)
-		if self.matches_keyword("then") { return Some((Op::Then, 4)); }
-		if self.matches_keyword("else") { return Some((Op::Else, 4)); }
+		if self.matches_keyword("then") {
+			return Some((Op::Then, 4));
+		}
+		if self.matches_keyword("else") {
+			return Some((Op::Else, 4));
+		}
 
 		// 3-char operators
 		match (c1, c2, c3) {
@@ -148,9 +198,15 @@ impl WarpParser {
 			_ => {}
 		}
 		// Keywords (3-char)
-		if self.matches_keyword("and") { return Some((Op::And, 3)); }
-		if self.matches_keyword("xor") { return Some((Op::Xor, 3)); }
-		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
+		if self.matches_keyword("and") {
+			return Some((Op::And, 3));
+		}
+		if self.matches_keyword("xor") {
+			return Some((Op::Xor, 3));
+		}
+		if self.matches_keyword("not") {
+			return Some((Op::Not, 3));
+		}
 
 		// 2-char operators
 		match (c1, c2) {
@@ -187,25 +243,50 @@ impl WarpParser {
 			_ => {}
 		}
 		// a blank after it: `plus(a, b)` stays a call of the function plus
-		if let Some((phrase, op)) = WORD_OPERATORS.iter().find(|(phrase, _)| self.matches_keyword(phrase) && matches!(self.peek_char(phrase.len()), ' ' | '\t')) {
+		if let Some((phrase, op)) = WORD_OPERATORS
+			.iter()
+			.find(|(phrase, _)| self.matches_keyword(phrase) && matches!(self.peek_char(phrase.len()), ' ' | '\t'))
+		{
 			return Some((*op, phrase.len()));
 		}
 		// Keywords (2-char)
-		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
-		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
-		if self.matches_keyword("be") { return Some((Op::Define, 2)); } // wiki/be.md
-		if self.matches_keyword("if") && !self.condition_has_branch(2) { return Some((Op::If, 2)); }
-		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
-		if self.matches_keyword("to") { return Some((Op::To, 2)); }
-		if self.matches_keyword("upto") { return Some((Op::Range, 4)); } // wiki/range.md: `1 upto 10` excludes 10
-		if let Some(length) = self.down_to_length() { return Some((Op::To, length)); }
+		if self.matches_keyword("or") {
+			return Some((Op::Or, 2));
+		}
+		if self.matches_keyword("is") {
+			return Some((Op::Eq, 2));
+		} // wiki/equality.md: `is` compares by value like ==
+		if self.matches_keyword("be") {
+			return Some((Op::Define, 2));
+		} // wiki/be.md
+		if self.matches_keyword("if") && !self.condition_has_branch(2) {
+			return Some((Op::If, 2));
+		}
+		if self.matches_keyword("do") {
+			return Some((Op::Do, 2));
+		}
+		if self.matches_keyword("to") {
+			return Some((Op::To, 2));
+		}
+		if self.matches_keyword("upto") {
+			return Some((Op::Range, 4));
+		} // wiki/range.md: `1 upto 10` excludes 10
+		if let Some(length) = self.down_to_length() {
+			return Some((Op::To, length));
+		}
 		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
-		if self.in_for_header && self.matches_keyword("until") { return Some((Op::Range, 5)); }
+		if self.in_for_header && self.matches_keyword("until") {
+			return Some((Op::Range, 5));
+		}
 
 		if self.css_color_length().is_some() || self.at_pseudo_class_selector() {
 			return None; // `solid #8884`: the color is the next word of the value
 		}
-		if self.in_style_sheet && matches!(c1, '.' | '#') && self.prev_char().is_whitespace() && self.is_identifier_start(1) {
+		if self.in_style_sheet
+			&& matches!(c1, '.' | '#')
+			&& self.prev_char().is_whitespace()
+			&& self.is_identifier_start(1)
+		{
 			return None; // `#main .x`: the descendant selector's next part
 		}
 		// 1-char operators
@@ -252,7 +333,8 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		STATEMENT_MODIFIERS.iter()
+		STATEMENT_MODIFIERS
+			.iter()
 			.find(|(word, _, negated)| *negated && self.matches_keyword(word))
 			.map(|(word, op, _)| (*op, word.len()))
 	}
@@ -262,8 +344,11 @@ impl WarpParser {
 		if !self.matches_keyword(DOWN_WORD) {
 			return None;
 		}
-		let blanks = (DOWN_WORD.len()..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD).then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
+		let blanks = (DOWN_WORD.len()..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
+		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD)
+			.then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
 	}
 
 	/// `try` or `assert` followed by an operand: the words that guard a statement
@@ -276,7 +361,9 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		GUARD_MARKERS.iter().copied().find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':'))
+		GUARD_MARKERS.iter().copied().find(|(word, _)| {
+			self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':')
+		})
 	}
 
 	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
@@ -296,7 +383,11 @@ impl WarpParser {
 		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
 			self.advance_by(ahead + word.len());
 			self.skip_spaces();
-			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
+			caught = if word == ELSE_KEYWORD {
+				None
+			} else {
+				self.parse_caught_name(word)
+			};
 			self.skip_python_colon();
 			// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
 			self.parse_guarded_phrase()
@@ -313,7 +404,15 @@ impl WarpParser {
 		};
 		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
 		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
-		let guard = Node::List([vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(), Bracket::Round, Separator::None);
+		let guard = Node::List(
+			[
+				vec![Symbol(marker.to_string()), guarded, fallback],
+				binding.into_iter().collect(),
+			]
+			.concat(),
+			Bracket::Round,
+			Separator::None,
+		);
 		self.with_finally(guard)
 	}
 
@@ -324,7 +423,11 @@ impl WarpParser {
 		};
 		self.advance_by(ahead + FINALLY_KEYWORD.len());
 		self.skip_spaces();
-		let cleanup = if self.current_char() == ':' { self.colon_body(":") } else { self.rest_of_statement() };
+		let cleanup = if self.current_char() == ':' {
+			self.colon_body(":")
+		} else {
+			self.rest_of_statement()
+		};
 		self.finally_blocks += 1;
 		let value = Symbol(format!("{FINALLY_KEYWORD}·{}", self.finally_blocks));
 		let held = Node::Key(Box::new(value.clone()), Op::Assign, Box::new(guard));
@@ -333,7 +436,9 @@ impl WarpParser {
 
 	/// The blanks before a following `finally`, if one follows
 	fn finally_ahead(&self) -> Option<usize> {
-		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		let ahead = (0..)
+			.take_while(|&offset| self.peek_char(offset).is_whitespace())
+			.count();
 		(self.word_at(ahead) == FINALLY_KEYWORD).then_some(ahead)
 	}
 
@@ -375,10 +480,18 @@ impl WarpParser {
 		if self.options.data_mode || !self.matches_keyword(AND_KEYWORD) {
 			return false;
 		}
-		let blanks = |from: usize| (from..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
+		let blanks = |from: usize| {
+			(from..)
+				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
+				.count()
+		};
 		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
 		let word = self.word_at(word_start);
-		if word.is_empty() || CONTINUING_WORDS.contains(&word.as_str()) || OPERAND_PREFIX_WORDS.contains(&word.as_str()) || !self.peek_char(word_start).is_alphabetic() {
+		if word.is_empty()
+			|| CONTINUING_WORDS.contains(&word.as_str())
+			|| OPERAND_PREFIX_WORDS.contains(&word.as_str())
+			|| !self.peek_char(word_start).is_alphabetic()
+		{
 			return false;
 		}
 		let word_end = word_start + word.chars().count();
@@ -388,15 +501,21 @@ impl WarpParser {
 		}
 		let next = self.peek_char(argument);
 		let argument_word = self.word_at(argument);
-		let joins_operands = CONTINUING_WORDS.contains(&argument_word.as_str()) || INFIX_WORDS.contains(&argument_word.as_str());
+		let joins_operands =
+			CONTINUING_WORDS.contains(&argument_word.as_str()) || INFIX_WORDS.contains(&argument_word.as_str());
 		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands
 	}
 
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
 	/// with how many blanks (line breaks included) come before it
 	pub(super) fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
-		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
-		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
+		let ahead = (0..)
+			.take_while(|&offset| self.peek_char(offset).is_whitespace())
+			.count();
+		FALLBACK_WORDS
+			.iter()
+			.find(|word| self.word_at(ahead) == **word)
+			.map(|word| (*word, ahead))
 	}
 
 	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to
@@ -431,7 +550,12 @@ impl WarpParser {
 		let mut items = vec![self.parse_expr(0)];
 		loop {
 			self.skip_spaces();
-			if FALLBACK_WORDS.iter().chain([&FINALLY_KEYWORD]).any(|word| self.matches_keyword(word)) || matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',') {
+			if FALLBACK_WORDS
+				.iter()
+				.chain([&FINALLY_KEYWORD])
+				.any(|word| self.matches_keyword(word))
+				|| matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',')
+			{
 				break;
 			}
 			let position = self.pos;
@@ -476,13 +600,22 @@ impl WarpParser {
 
 	/// `def ` right before here: what follows heads a definition
 	pub(super) fn after_function_keyword_word(&self) -> bool {
-		let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
+		let before: String = self.chars[..self.pos]
+			.iter()
+			.rev()
+			.skip_while(|c| c.is_whitespace())
+			.take_while(|c| c.is_alphanumeric())
+			.collect();
 		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
 	}
 
 	/// `Int` or `float` after the colon of a definition's head: its result type, not its body
 	pub(super) fn result_type_follows(&self) -> bool {
-		let word: String = self.chars[self.pos..].iter().skip_while(|c| **c == ' ' || **c == '\t').take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+		let word: String = self.chars[self.pos..]
+			.iter()
+			.skip_while(|c| **c == ' ' || **c == '\t')
+			.take_while(|c| c.is_alphanumeric() || **c == '_')
+			.collect();
 		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
 	}
 
@@ -493,30 +626,52 @@ impl WarpParser {
 		if !self.in_style_sheet || self.current_char() != '#' {
 			return None;
 		}
-		let digits = (1..).take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit()).count();
+		let digits = (1..)
+			.take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit())
+			.count();
 		let after = self.peek_char(digits + 1);
 		if !CSS_COLOR_DIGITS.contains(&digits) || after.is_alphanumeric() || matches!(after, '_' | '-') {
 			return None;
 		}
-		let next = (digits + 1..).map(|offset| self.peek_char(offset)).find(|ch| !ch.is_whitespace()).unwrap_or('\0');
+		let next = (digits + 1..)
+			.map(|offset| self.peek_char(offset))
+			.find(|ch| !ch.is_whitespace())
+			.unwrap_or('\0');
 		(self.peek_char(1).is_ascii_digit() || !SELECTOR_FOLLOWERS.contains(&next)).then_some(digits + 1)
 	}
 
 	/// `:root { … }`, `:hover { … }` starting a rule of a style sheet: a selector, not the colon of a declaration (card
 	/// markup-style-block)
 	pub(super) fn at_pseudo_class_selector(&self) -> bool {
-		let previous = self.chars[..self.pos].iter().rev().find(|ch| !ch.is_whitespace()).copied().unwrap_or('\0');
-		self.in_style_sheet && self.current_char() == ':' && self.is_identifier_start(1) && SELECTOR_STARTS_AFTER.contains(&previous)
+		let previous = self.chars[..self.pos]
+			.iter()
+			.rev()
+			.find(|ch| !ch.is_whitespace())
+			.copied()
+			.unwrap_or('\0');
+		self.in_style_sheet
+			&& self.current_char() == ':'
+			&& self.is_identifier_start(1)
+			&& SELECTOR_STARTS_AFTER.contains(&previous)
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
-		if self.matches_keyword("while") { return Some((Op::While, 5)); }
-		if let Some((word, op)) = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word)) {
+		if self.matches_keyword("while") {
+			return Some((Op::While, 5));
+		}
+		if let Some((word, op)) = PREFIX_OPERATOR_WORDS
+			.into_iter()
+			.find(|(word, _)| self.matches_keyword(word))
+		{
 			return (!self.defines_named(word.len())).then_some((op, word.len()));
 		}
-		if self.matches_keyword("not") { return Some((Op::Not, 3)); }
-		if self.matches_keyword("if") { return Some((Op::If, 2)); }
+		if self.matches_keyword("not") {
+			return Some((Op::Not, 3));
+		}
+		if self.matches_keyword("if") {
+			return Some((Op::If, 2));
+		}
 
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 		let variable_follows = c3.is_alphabetic() || c3 == '_';
@@ -571,7 +726,9 @@ impl WarpParser {
 		while matches!(self.peek_char(position), ' ' | '\t') {
 			position += 1;
 		}
-		let infix_apart = position > offset && SUFFIX_FOLLOWERS.contains(&self.peek_char(position)) && matches!(self.peek_char(position + 1), ' ' | '\t');
+		let infix_apart = position > offset
+			&& SUFFIX_FOLLOWERS.contains(&self.peek_char(position))
+			&& matches!(self.peek_char(position + 1), ' ' | '\t');
 		!self.operand_follows(offset) || infix_apart
 	}
 
@@ -598,12 +755,20 @@ impl WarpParser {
 			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
 		}
 		if self.type_fields.is_some() && self.reads_instance_variable() {
-			return Node::Key(Box::new(Symbol(RECEIVER_WORD.to_string())), Op::Dot, Box::new(Symbol(name)));
+			return Node::Key(
+				Box::new(Symbol(RECEIVER_WORD.to_string())),
+				Op::Dot,
+				Box::new(Symbol(name)),
+			);
 		}
 		if self.current_char() == ':' && self.peek_char(1) != '=' {
 			self.advance();
 			self.skip_spaces();
-			return Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{name}"))), Op::Colon, Box::new(self.parse_atom()));
+			return Node::Key(
+				Box::new(Symbol(format!("{ATTRIBUTE_MARK}{name}"))),
+				Op::Colon,
+				Box::new(self.parse_atom()),
+			);
 		}
 		let value = self.attribute_value();
 		self.parse_atom().with_attribute(&name, value)
@@ -612,11 +777,19 @@ impl WarpParser {
 	/// Ruby's instance variable `@x` in a class body, after its name: an operator, the end of the statement, or the line
 	/// end before an `end` follows (an annotation `@deprecated fun f()` stands before a word or its own value)
 	fn reads_instance_variable(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
 		match self.peek_char(blanks) {
 			'\n' => {
-				let next_line = blanks + 1 + (0..).take_while(|&offset| matches!(self.peek_char(blanks + 1 + offset), ' ' | '\t')).count();
-				let word: String = (next_line..).map(|offset| self.peek_char(offset)).take_while(|ch| is_identifier_char(*ch)).collect();
+				let next_line = blanks
+					+ 1 + (0..)
+					.take_while(|&offset| matches!(self.peek_char(blanks + 1 + offset), ' ' | '\t'))
+					.count();
+				let word: String = (next_line..)
+					.map(|offset| self.peek_char(offset))
+					.take_while(|ch| is_identifier_char(*ch))
+					.collect();
 				word == END_KEYWORD
 			}
 			'(' => false,
@@ -626,7 +799,11 @@ impl WarpParser {
 
 	/// The value of `@name(value)`, true for a bare `@name`
 	fn attribute_value(&mut self) -> Node {
-		if self.current_char() == '(' { Self::unwrap_single(self.parse_bracketed('(')) } else { Node::True }
+		if self.current_char() == '(' {
+			Self::unwrap_single(self.parse_bracketed('('))
+		} else {
+			Node::True
+		}
 	}
 
 	/// `ys = xs.map(f) @parallel`: an `@name` or `@name(value)` with nothing after it on the statement annotates the
@@ -651,7 +828,10 @@ impl WarpParser {
 			}
 			end += 1;
 		}
-		let after = end + (end..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
+		let after = end
+			+ (end..)
+				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
+				.count();
 		if !matches!(self.peek_char(after), '\0' | '\n' | '\r' | ';' | ',' | ')' | ']' | '}') {
 			return None;
 		}

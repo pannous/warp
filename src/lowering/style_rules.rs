@@ -12,7 +12,9 @@ use crate::operators::Op;
 const STYLE: &str = "style";
 const SELECTOR_VALUE_PROPERTY: &str = "color";
 const CLASS_OR_ID: [char; 2] = ['.', '#'];
-const CSS_UNITS: [&str; 17] = ["px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm"];
+const CSS_UNITS: [&str; 17] = [
+	"px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm",
+];
 
 pub fn lower(node: Node) -> Node {
 	style_block(&node).unwrap_or_else(|| node.map_children(lower))
@@ -20,10 +22,23 @@ pub fn lower(node: Node) -> Node {
 
 /// `style{ … }` and `style: { … }`: the block with its rules and declarations styled
 fn style_block(node: &Node) -> Option<Node> {
-	let Node::Key(name, Op::Colon, body) = node.drop_meta() else { return None };
-	let Node::List(items, Bracket::Curly, separator) = body.drop_meta() else { return None };
-	name.is_symbol(STYLE)
-		.then(|| Node::Key(name.clone(), Op::Colon, Box::new(Node::List(styled(items.clone(), separator), Bracket::Curly, separator.clone()))))
+	let Node::Key(name, Op::Colon, body) = node.drop_meta() else {
+		return None;
+	};
+	let Node::List(items, Bracket::Curly, separator) = body.drop_meta() else {
+		return None;
+	};
+	name.is_symbol(STYLE).then(|| {
+		Node::Key(
+			name.clone(),
+			Op::Colon,
+			Box::new(Node::List(
+				styled(items.clone(), separator),
+				Bracket::Curly,
+				separator.clone(),
+			)),
+		)
+	})
 }
 
 /// A selector word waiting for its block, with the combinator before it: `ul li` waits with `ul`, `h1, h2` with `h1`
@@ -43,11 +58,21 @@ fn styled(items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 
 /// The items of a block or of a group in it (`h1, .x { … }` is `h1` and the group `.x { … }`): a selector started
 /// before the group continues in it
-fn style_items(items: Vec<Node>, separator: &Separator, leading_joiner: Option<&'static str>, output: &mut Vec<Node>, pending: &mut Vec<PendingSelector>) {
+fn style_items(
+	items: Vec<Node>,
+	separator: &Separator,
+	leading_joiner: Option<&'static str>,
+	output: &mut Vec<Node>,
+	pending: &mut Vec<PendingSelector>,
+) {
 	// Separator::Colon is the comma: `h1, h2 { … }`
 	let list_joiner = if *separator == Separator::Colon { ", " } else { " " };
 	for (index, item) in items.into_iter().flat_map(split_chained).enumerate() {
-		let joiner = if index == 0 { leading_joiner.unwrap_or(list_joiner) } else { list_joiner };
+		let joiner = if index == 0 {
+			leading_joiner.unwrap_or(list_joiner)
+		} else {
+			list_joiner
+		};
 		if let Node::List(group, Bracket::None, group_separator) = item.drop_meta() {
 			style_items(group.clone(), group_separator, Some(joiner), output, pending);
 		} else if let Some((selector, body)) = rule_parts(&item) {
@@ -56,11 +81,16 @@ fn style_items(items: Vec<Node>, separator: &Separator, leading_joiner: Option<&
 			// `.card { … }`: a leading-dot name stays apart from its block
 			output.push(rule(joined_selector(pending, None), &item));
 		} else if let Some((selector, value)) = selector_value(&item) {
-			output.push(rule(selector, &key(symbol(SELECTOR_VALUE_PROPERTY), Op::Colon, value.clone())));
+			output.push(rule(
+				selector,
+				&key(symbol(SELECTOR_VALUE_PROPERTY), Op::Colon, value.clone()),
+			));
 		} else if let Some((name, value)) = declaration_value(&item) {
 			let value = css_length(value).map(Node::Text).unwrap_or_else(|| value.clone());
 			output.push(key(name.clone(), Op::Colon, value));
-		} else if let Some(Node::Key(_, Op::Colon, value)) = output.last_mut().filter(|last| declaration_value(last).is_some()) {
+		} else if let Some(Node::Key(_, Op::Colon, value)) =
+			output.last_mut().filter(|last| declaration_value(last).is_some())
+		{
 			match continued_value(value, &item) {
 				Some(joined) => **value = Node::Text(joined),
 				None => output.push(item),
@@ -76,7 +106,9 @@ fn style_items(items: Vec<Node>, separator: &Separator, leading_joiner: Option<&
 /// `ul li { … }` and `.a { … }` on the next line: the parser chains the leading dot onto the rule before it
 /// (`rule.a{…}`), as it does `#main` on the same line (`rule#main{…}`); the rules apart again
 fn split_chained(node: Node) -> Vec<Node> {
-	let Node::Key(left, op @ (Op::Dot | Op::Hash), right) = node.drop_meta().clone() else { return vec![node] };
+	let Node::Key(left, op @ (Op::Dot | Op::Hash), right) = node.drop_meta().clone() else {
+		return vec![node];
+	};
 	let mut parts = split_chained(*left);
 	let last = parts.pop().expect("split_chained gives at least one part");
 	if rule_parts(&last).is_some() {
@@ -91,8 +123,14 @@ fn split_chained(node: Node) -> Vec<Node> {
 
 /// `ul li`, `h1, h2`: the selector words waiting for their block, joined with the last one
 fn joined_selector(pending: &mut Vec<PendingSelector>, last: Option<(String, &'static str)>) -> String {
-	let parts = pending.drain(..).map(|selector| (selector.text, selector.joiner)).chain(last);
-	parts.enumerate().map(|(index, (text, joiner))| if index == 0 { text } else { format!("{joiner}{text}") }).collect()
+	let parts = pending
+		.drain(..)
+		.map(|selector| (selector.text, selector.joiner))
+		.chain(last);
+	parts
+		.enumerate()
+		.map(|(index, (text, joiner))| if index == 0 { text } else { format!("{joiner}{text}") })
+		.collect()
 }
 
 fn rule(selector: String, body: &Node) -> Node {
@@ -101,24 +139,38 @@ fn rule(selector: String, body: &Node) -> Node {
 
 fn styled_body(body: &Node) -> Node {
 	match body.drop_meta() {
-		Node::List(items, Bracket::Curly, separator) => Node::List(styled(items.clone(), separator), Bracket::Curly, separator.clone()),
-		single => Node::List(styled(vec![single.clone()], &Separator::None), Bracket::Curly, Separator::None),
+		Node::List(items, Bracket::Curly, separator) => {
+			Node::List(styled(items.clone(), separator), Bracket::Curly, separator.clone())
+		}
+		single => Node::List(
+			styled(vec![single.clone()], &Separator::None),
+			Bracket::Curly,
+			Separator::None,
+		),
 	}
 }
 
 /// `color: theme`: a property name and a value that is no block
 fn declaration_value(node: &Node) -> Option<(&Node, &Node)> {
-	let Node::Key(name, Op::Colon, value) = node.drop_meta() else { return None };
+	let Node::Key(name, Op::Colon, value) = node.drop_meta() else {
+		return None;
+	};
 	let is_name = matches!(name.drop_meta(), Node::Symbol(_) | Node::Text(_));
-	(is_name && !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _))).then_some((name.as_ref(), value.as_ref()))
+	(is_name && !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)))
+		.then_some((name.as_ref(), value.as_ref()))
 }
 
 /// `#done = "red"`, `.done: "red"`: a class or id selector and a value that is no block, nor the one declaration
 /// the parser chains onto it (`.done{color:red}` reads `.done:color:red`)
 fn selector_value(node: &Node) -> Option<(String, &Node)> {
-	let Node::Key(name, Op::Colon | Op::Assign, value) = node.drop_meta() else { return None };
+	let Node::Key(name, Op::Colon | Op::Assign, value) = node.drop_meta() else {
+		return None;
+	};
 	let selector = selector_text(name).filter(|selector| selector.starts_with(CLASS_OR_ID))?;
-	let is_body = matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _));
+	let is_body = matches!(
+		value.drop_meta(),
+		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _)
+	);
 	(!is_body).then_some((selector, value.as_ref()))
 }
 
@@ -140,14 +192,18 @@ fn value_piece(node: &Node) -> Option<String> {
 fn css_length(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Key(amount, Op::Mul, unit) => match (amount.drop_meta(), unit.drop_meta()) {
-			(Node::Number(number), Node::Symbol(unit)) if CSS_UNITS.contains(&unit.as_str()) => Some(format!("{number}{unit}")),
+			(Node::Number(number), Node::Symbol(unit)) if CSS_UNITS.contains(&unit.as_str()) => {
+				Some(format!("{number}{unit}"))
+			}
 			_ => None,
 		},
 		Node::Key(amount, Op::Mod, nothing) if matches!(nothing.drop_meta(), Node::Empty) => match amount.drop_meta() {
 			Node::Number(number) => Some(format!("{number}%")),
 			_ => None,
 		},
-		Node::Key(nothing, Op::Sub | Op::Neg, length) if matches!(nothing.drop_meta(), Node::Empty) => css_length(length).map(|length| format!("-{length}")),
+		Node::Key(nothing, Op::Sub | Op::Neg, length) if matches!(nothing.drop_meta(), Node::Empty) => {
+			css_length(length).map(|length| format!("-{length}"))
+		}
 		_ => None,
 	}
 }
@@ -167,7 +223,9 @@ fn combinator(op: &Op) -> Option<&'static str> {
 
 /// A rule: its selector as CSS text and its block of declarations
 fn rule_parts(node: &Node) -> Option<(String, &Node)> {
-	let Node::Key(left, op, right) = node.drop_meta() else { return None };
+	let Node::Key(left, op, right) = node.drop_meta() else {
+		return None;
+	};
 	if *op == Op::Colon && matches!(right.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return Some((selector_text(left)?, right.as_ref()));
 	}
@@ -180,7 +238,12 @@ fn selector_text(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(text) | Node::Text(text) => Some(text.clone()),
 		Node::Empty => Some(String::new()),
-		Node::Key(left, op, right) => Some(format!("{}{}{}", selector_text(left)?, combinator(op)?, selector_text(right)?)),
+		Node::Key(left, op, right) => Some(format!(
+			"{}{}{}",
+			selector_text(left)?,
+			combinator(op)?,
+			selector_text(right)?
+		)),
 		_ => None,
 	}
 }

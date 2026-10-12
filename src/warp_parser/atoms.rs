@@ -31,13 +31,25 @@ fn type_parameter_names(written: &str) -> Vec<String> {
 			parts.last_mut().expect("one part").push(ch);
 		}
 	}
-	parts.iter().filter_map(|part| part.split(':').next().map(str::trim).filter(|name| !name.is_empty()).map(str::to_string)).collect()
+	parts
+		.iter()
+		.filter_map(|part| {
+			part.split(':')
+				.next()
+				.map(str::trim)
+				.filter(|name| !name.is_empty())
+				.map(str::to_string)
+		})
+		.collect()
 }
 
 impl WarpParser {
 	/// The path literal at the cursor, up to whitespace, a closing bracket or a separator
 	pub(super) fn parse_path_literal(&mut self) -> Node {
-		let path: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
+		let path: String = (0..)
+			.map(|offset| self.peek_char(offset))
+			.take_while(|&c| !super::lookahead::ends_path(c))
+			.collect();
 		self.advance_by(path.chars().count());
 		Node::Text(path)
 	}
@@ -72,12 +84,14 @@ impl WarpParser {
 				Node::Symbol(format!("${}", position.saturating_sub(1)))
 			}
 			// Ruby's `&:to_s`: the block `{$0.to_s}`, the method called on each element
-			'&' if self.peek_char(1) == ':' && self.peek_char(2).is_alphabetic() => {
-				self.symbol_after(2, |method| {
-					let call = Node::Key(Box::new(Node::Symbol(CAPTURED_ARGUMENT.to_string())), Op::Dot, Box::new(Node::Symbol(method)));
-					Node::List(vec![call], Bracket::Curly, Separator::None)
-				})
-			}
+			'&' if self.peek_char(1) == ':' && self.peek_char(2).is_alphabetic() => self.symbol_after(2, |method| {
+				let call = Node::Key(
+					Box::new(Node::Symbol(CAPTURED_ARGUMENT.to_string())),
+					Op::Dot,
+					Box::new(Node::Symbol(method)),
+				);
+				Node::List(vec![call], Bracket::Curly, Separator::None)
+			}),
 			'"' | '\'' | '«' | '`' => self.parse_string(),
 			'#' if let Some(length) = self.css_color_length() => Node::Text(self.take_chars(length)),
 			// `://warp.pannous.com/lib/libc.h`: a URL taking the page's protocol (card pannous-com, with_default_scheme)
@@ -86,7 +100,9 @@ impl WarpParser {
 			'.' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
-			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => self.parse_starred(3),
+			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => {
+				self.parse_starred(3)
+			}
 			// Python's `**kw`: the keyword arguments as one object (src/lowering/variadic.rs)
 			'*' if self.peek_char(1) == '*' && self.is_identifier_start(2) => match self.parse_starred(2) {
 				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::tuples::STARRED)),
@@ -100,11 +116,22 @@ impl WarpParser {
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
-			'ø' => { self.advance(); return Empty }
-			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
+			'ø' => {
+				self.advance();
+				return Empty;
+			}
+			'∞' => {
+				self.advance();
+				return Node::Number(Number::Inf);
+			} // the float infinity (P56)
 			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
-			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE))),
-			crate::units::DEGREE => { self.advance(); Node::Symbol(crate::units::DEGREE.to_string()) }
+			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => {
+				self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE)))
+			}
+			crate::units::DEGREE => {
+				self.advance();
+				Node::Symbol(crate::units::DEGREE.to_string())
+			}
 			_ if let Some((truth, length)) = self.truth_glyph_at() => {
 				self.advance_by(length);
 				return truth;
@@ -115,7 +142,10 @@ impl WarpParser {
 			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
 			'@' if self.peek_char(1).is_ascii_digit() => {
 				self.advance(); // skip '@'
-				Node::Symbol(format!("{ATTRIBUTE_MARK}{}", self.take_while_char(|ch| ch.is_ascii_digit())))
+				Node::Symbol(format!(
+					"{ATTRIBUTE_MARK}{}",
+					self.take_while_char(|ch| ch.is_ascii_digit())
+				))
 			}
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
 			// `$0`, the first parameter
@@ -127,14 +157,25 @@ impl WarpParser {
 				self.parse_number()
 			}
 			ch if ch.is_alphabetic() || ch == '_' => {
-				let atom = self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).or_else(|| self.parse_shader_block()).unwrap_or_else(|| self.parse_symbol_with_suffix());
+				let atom = self
+					.parse_elixir_function()
+					.or_else(|| self.parse_python_lambda())
+					.or_else(|| self.parse_f_string())
+					.or_else(|| self.parse_shader_block())
+					.unwrap_or_else(|| self.parse_symbol_with_suffix());
 				// the function's own atom takes the mark, not an atom parsed inside it (its parameters)
 				let head = match atom.drop_meta() {
 					Node::List(items, _, _) => items.first().map(Node::name),
 					other => Some(other.name()),
 				};
 				match self.generic_names.take() {
-					Some((name, names)) if head.as_ref() == Some(&name) => Node::Meta { node: Box::new(atom), data: Box::new(Node::key(crate::welcome_forms::GENERIC_MARK, Node::Text(names.join(" ")))) },
+					Some((name, names)) if head.as_ref() == Some(&name) => Node::Meta {
+						node: Box::new(atom),
+						data: Box::new(Node::key(
+							crate::welcome_forms::GENERIC_MARK,
+							Node::Text(names.join(" ")),
+						)),
+					},
 					pending => {
 						self.generic_names = pending;
 						atom
@@ -148,19 +189,20 @@ impl WarpParser {
 			}
 			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
 				self.advance_by(name.len() + 1);
-				Diagnostic::default().message(format!("a uniscript entity is written \\:{name}, not \\{name}"))
-					.offer("the uniscript entity", format!("\\{name}"), format!("\\:{name}")).into_error()
+				Diagnostic::default()
+					.message(format!("a uniscript entity is written \\:{name}, not \\{name}"))
+					.offer("the uniscript entity", format!("\\{name}"), format!("\\:{name}"))
+					.into_error()
 			}
 			_ if let Some((operator, length)) = self.bare_operator_in_block() => {
 				self.advance_by(length);
-				error(&format!("{{{operator}}} is an operator without operands, no function: write them, e.g. map xs {{it + 1}}"))
+				error(&format!(
+					"{{{operator}}} is an operator without operands, no function: write them, e.g. map xs {{it + 1}}"
+				))
 			}
 			ch if crate::extensions::strings::starts_an_emoji(ch) => self.parse_emoji(),
 			ch => {
-				warn!(
-					"Unexpected character '{}' at line {}, column {}",
-					ch, line_nr, column
-				);
+				warn!("Unexpected character '{}' at line {}, column {}", ch, line_nr, column);
 				self.advance();
 				error(&format!("Unexpected character '{}'", ch))
 			}
@@ -187,7 +229,10 @@ impl WarpParser {
 	/// The word of `length` characters just parsed is the first thing of its statement: nothing, a newline, `;` or `{` before it
 	pub(super) fn word_starts_statement(&self, length: usize) -> bool {
 		let word_start = self.pos.saturating_sub(length);
-		let before = self.chars[..word_start].iter().rev().find(|ch| !matches!(ch, ' ' | '\t' | '\r'));
+		let before = self.chars[..word_start]
+			.iter()
+			.rev()
+			.find(|ch| !matches!(ch, ' ' | '\t' | '\r'));
 		matches!(before, None | Some('\n' | ';' | '{'))
 	}
 
@@ -234,17 +279,24 @@ impl WarpParser {
 		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
 		let declared_types = &self.declared_types;
 		let is_known_type = |word: &str| {
-			crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || declared_types.contains(word)
+			crate::analyzer::type_word_kind(word).is_some()
+				|| crate::analyzer::plural_element_type(word).is_some()
+				|| declared_types.contains(word)
 		};
 		let in_phrase = crate::type_name_matching::phrase_words(&words, &body, &is_known_type);
 		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
 			Ok(slots) => slots,
 			Err(message) => return Some(error(&message)),
 		};
-		let parameters: Vec<Node> = parameters.into_iter().map(|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
-			Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
-			None => parameter,
-		}).collect();
+		let parameters: Vec<Node> = parameters
+			.into_iter()
+			.map(
+				|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
+					Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
+					None => parameter,
+				},
+			)
+			.collect();
 		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
 			return Some(clash);
 		}
@@ -253,13 +305,24 @@ impl WarpParser {
 		} else {
 			self.functions_with_parameters.insert(name.clone());
 			self.phrase_definitions.insert(name.clone(), parameters.clone());
-			let head = Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None);
+			let head = Node::List(
+				[vec![Symbol(name)], parameters].concat(),
+				Bracket::Round,
+				Separator::None,
+			);
 			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
 			let pattern = crate::phrase_calls::pattern_text(&words, &in_phrase);
 			// `To square a number: …` of one slot is called in English as `square of x` too (`square 3` stays a call)
-			let pattern = if pattern == crate::phrase_calls::SLOT { format!("{OF_WORD} {pattern}") } else { pattern };
+			let pattern = if pattern == crate::phrase_calls::SLOT {
+				format!("{OF_WORD} {pattern}")
+			} else {
+				pattern
+			};
 			if pattern.split(' ').any(|part| part != crate::phrase_calls::SLOT) {
-				Node::Meta { node: Box::new(head), data: Box::new(Node::key(crate::phrase_calls::PHRASE_MARK, Node::Text(pattern))) }
+				Node::Meta {
+					node: Box::new(head),
+					data: Box::new(Node::key(crate::phrase_calls::PHRASE_MARK, Node::Text(pattern))),
+				}
 			} else {
 				head
 			}
@@ -269,14 +332,28 @@ impl WarpParser {
 
 	/// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns can only be told apart by types
 	pub(super) fn phrase_redefinition(&self, name: &str, parameters: &[Node]) -> Option<Node> {
-		let earlier = self.phrase_definitions.get(name).filter(|earlier| earlier.len() == parameters.len())?;
+		let earlier = self
+			.phrase_definitions
+			.get(name)
+			.filter(|earlier| earlier.len() == parameters.len())?;
 		let untyped = |parameter: &Node| matches!(parameter.drop_meta(), Symbol(_));
-		let differing: Vec<(&Node, &Node)> = earlier.iter().zip(parameters).filter(|(before, now)| before != now).collect();
+		let differing: Vec<(&Node, &Node)> = earlier
+			.iter()
+			.zip(parameters)
+			.filter(|(before, now)| before != now)
+			.collect();
 		if differing.is_empty() || !differing.iter().all(|(before, now)| untyped(before) && untyped(now)) {
 			return None;
 		}
-		let classes: Vec<String> = differing.iter().flat_map(|(before, now)| [before.name(), now.name()]).map(|noun| format!("class {noun}")).collect();
-		Some(error(&format!("{name} is defined twice; declare {} to dispatch on them", classes.join(" and "))))
+		let classes: Vec<String> = differing
+			.iter()
+			.flat_map(|(before, now)| [before.name(), now.name()])
+			.map(|noun| format!("class {noun}"))
+			.collect();
+		Some(error(&format!(
+			"{name} is defined twice; declare {} to dispatch on them",
+			classes.join(" and ")
+		)))
 	}
 
 	/// Move back to the end of the last thing before the whitespace run behind the cursor
@@ -285,7 +362,10 @@ impl WarpParser {
 		while position > 0 && self.chars[position - 1].is_whitespace() {
 			position -= 1;
 		}
-		let line_start = self.chars[..position].iter().rposition(|ch| *ch == '\n').map_or(0, |newline| newline + 1);
+		let line_start = self.chars[..position]
+			.iter()
+			.rposition(|ch| *ch == '\n')
+			.map_or(0, |newline| newline + 1);
 		self.pos = position;
 		self.line_nr = 1 + self.chars[..position].iter().filter(|ch| **ch == '\n').count();
 		self.column = position - line_start + 1;
@@ -300,7 +380,8 @@ impl WarpParser {
 		if !self.only_blanks_before_newline() {
 			return self.rest_of_statement(); // `to mail x to address: print address`
 		}
-		self.parse_indented_block().unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
+		self.parse_indented_block()
+			.unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
 	}
 
 	pub(super) fn next_line_starts_with_tab(&self) -> bool {
@@ -372,7 +453,12 @@ impl WarpParser {
 	/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned variable
 	/// (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
 	fn names_end(&self) -> bool {
-		let next_visible = |from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
+		let next_visible = |from: usize| {
+			self.chars[from..]
+				.iter()
+				.position(|ch| !ch.is_whitespace())
+				.map(|offset| from + offset)
+		};
 		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
 		code_words(&self.chars, 0).any(|(word_start, word_end)| {
 			if self.chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
@@ -380,9 +466,11 @@ impl WarpParser {
 			}
 			let before = previous_visible(word_start).map(|index| self.chars[index]);
 			let after = next_visible(word_end);
-			let assigned = after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
+			let assigned =
+				after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
 			// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
-			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')')) || assigned
+			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')'))
+				|| assigned
 		})
 	}
 
@@ -413,16 +501,28 @@ impl WarpParser {
 			return None;
 		}
 		let start = self.pos + ELIXIR_FUNCTION_KEYWORD.len();
-		let line_end = (start..self.chars.len()).find(|&at| self.chars[at] == '\n').unwrap_or(self.chars.len());
-		let arrow = (start..line_end.saturating_sub(1)).find(|&at| self.chars[at] == '-' && self.chars[at + 1] == '>')?;
+		let line_end = (start..self.chars.len())
+			.find(|&at| self.chars[at] == '\n')
+			.unwrap_or(self.chars.len());
+		let arrow =
+			(start..line_end.saturating_sub(1)).find(|&at| self.chars[at] == '-' && self.chars[at + 1] == '>')?;
 		let head: String = self.chars[start..arrow].iter().collect();
-		let is_parameter_text = head.chars().all(|ch| is_identifier_char(ch) || matches!(ch, ' ' | ',' | '(' | ')'));
-		let names: Vec<String> = head.split([',', '(', ')', ' ']).filter(|name| !name.is_empty()).map(str::to_string).collect();
+		let is_parameter_text = head
+			.chars()
+			.all(|ch| is_identifier_char(ch) || matches!(ch, ' ' | ',' | '(' | ')'));
+		let names: Vec<String> = head
+			.split([',', '(', ')', ' '])
+			.filter(|name| !name.is_empty())
+			.map(str::to_string)
+			.collect();
 		let body_start = arrow + 2;
 		let after: String = self.chars[body_start..].iter().collect();
 		let mut words = after.trim_start().splitn(2, |ch: char| !is_identifier_char(ch));
-		let is_result_type = words.next().is_some_and(|word| !word.is_empty()) && words.next().is_some_and(|rest| rest.trim_start().starts_with('{'));
-		let is_function = is_parameter_text && !is_result_type && self.closing_end_follows_from(body_start, &[ELIXIR_FUNCTION_KEYWORD, "do"]);
+		let is_result_type = words.next().is_some_and(|word| !word.is_empty())
+			&& words.next().is_some_and(|rest| rest.trim_start().starts_with('{'));
+		let is_function = is_parameter_text
+			&& !is_result_type
+			&& self.closing_end_follows_from(body_start, &[ELIXIR_FUNCTION_KEYWORD, "do"]);
 		is_function.then_some((names, body_start))
 	}
 
@@ -433,7 +533,11 @@ impl WarpParser {
 		let body = self.parse_end_block(false);
 		let parameters = match names.as_slice() {
 			[single] => Node::Symbol(single.clone()),
-			several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
+			several => Node::List(
+				several.iter().cloned().map(Node::Symbol).collect(),
+				Bracket::Round,
+				Separator::Colon,
+			),
 		};
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
@@ -446,7 +550,9 @@ impl WarpParser {
 		}
 		let start = self.pos + PYTHON_LAMBDA_KEYWORD.len();
 		let rest = &self.chars[start..];
-		let colon = rest.iter().position(|ch| matches!(ch, ':' | '\n' | ';' | '{' | '[' | ')'))?;
+		let colon = rest
+			.iter()
+			.position(|ch| matches!(ch, ':' | '\n' | ';' | '{' | '[' | ')'))?;
 		let parameters: String = rest[..colon].iter().collect();
 		let names_a_variable = parameters.trim_start().starts_with('=');
 		if rest[colon] != ':' || names_a_variable || rest.get(colon + 1) == Some(&'=') {
@@ -498,10 +604,18 @@ impl WarpParser {
 
 	/// `\x ->`, `\a b ->`: names and an arrow after the backslash (`\alpha` alone is an entity)
 	fn backslash_lambda_ahead(&self) -> bool {
-		let rest: String = self.chars[self.pos + 1..].iter().take_while(|ch| **ch != '\n').collect();
-		let Some((names, _)) = rest.split_once("->") else { return false };
+		let rest: String = self.chars[self.pos + 1..]
+			.iter()
+			.take_while(|ch| **ch != '\n')
+			.collect();
+		let Some((names, _)) = rest.split_once("->") else {
+			return false;
+		};
 		let names: Vec<&str> = names.split_whitespace().collect();
-		!names.is_empty() && names.iter().all(|name| name.starts_with(char::is_alphabetic) && name.chars().all(|ch| ch.is_alphanumeric() || ch == '_'))
+		!names.is_empty()
+			&& names.iter().all(|name| {
+				name.starts_with(char::is_alphabetic) && name.chars().all(|ch| ch.is_alphanumeric() || ch == '_')
+			})
 	}
 
 	/// Haskell's `\x -> x * 2`, `\a b -> a + b`: the lambda
@@ -569,7 +683,8 @@ impl WarpParser {
 
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
 	pub(super) fn at_block_close(&self) -> bool {
-		self.stops_at_end && (self.matches_keyword(END_KEYWORD) || (self.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
+		self.stops_at_end
+			&& (self.matches_keyword(END_KEYWORD) || (self.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
 	}
 
 	/// `*rest`, `...rest`: the name after the `prefix` characters, starred
@@ -579,22 +694,35 @@ impl WarpParser {
 
 	/// ` name(`: blanks, a name and its parenthesis
 	fn named_call_follows(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		let name = (blanks..).take_while(|&offset| is_identifier_char(self.peek_char(offset))).count();
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
+		let name = (blanks..)
+			.take_while(|&offset| is_identifier_char(self.peek_char(offset)))
+			.count();
 		blanks > 0 && name > 0 && self.is_identifier_start(blanks) && self.peek_char(blanks + name) == '('
 	}
 
 	/// ` () {` after a name
 	fn empty_parameters_and_block_follow(&self) -> bool {
-		let blanks_from = |start: usize| (start..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks_from = |start: usize| {
+			(start..)
+				.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+				.count()
+		};
 		let blanks = blanks_from(0);
 		let inner = blanks_from(blanks + 1);
 		let closed = blanks + 1 + inner;
-		blanks > 0 && self.peek_char(blanks) == '(' && self.peek_char(closed) == ')' && self.peek_char(closed + 1 + blanks_from(closed + 1)) == '{'
+		blanks > 0
+			&& self.peek_char(blanks) == '('
+			&& self.peek_char(closed) == ')'
+			&& self.peek_char(closed + 1 + blanks_from(closed + 1)) == '{'
 	}
 
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
 		blanks > 0 && self.peek_char(blanks) == '('
 	}
 
@@ -610,9 +738,15 @@ impl WarpParser {
 		if blanks == 0 || length == 0 {
 			return None;
 		}
-		let operand: String = self.chars[self.pos + blanks..self.pos + blanks + length].iter().collect();
+		let operand: String = self.chars[self.pos + blanks..self.pos + blanks + length]
+			.iter()
+			.collect();
 		self.advance_by(blanks + length);
-		Some(Node::List(vec![Node::Symbol(symbol.to_string()), Node::Symbol(operand)], Bracket::None, Separator::Space))
+		Some(Node::List(
+			vec![Node::Symbol(symbol.to_string()), Node::Symbol(operand)],
+			Bracket::None,
+			Separator::Space,
+		))
 	}
 
 	pub(super) fn parse_symbol_with_suffix(&mut self) -> Node {
@@ -629,12 +763,19 @@ impl WarpParser {
 		// `x°`: a variable in degrees, as `30°` (card angles-degrees)
 		if self.current_char() == crate::units::DEGREE && !self.peek_char(1).is_alphabetic() {
 			self.advance();
-			return Node::Key(Box::new(Node::Symbol(symbol)), Op::Mul, Box::new(Node::Symbol(crate::units::DEGREE.to_string())));
+			return Node::Key(
+				Box::new(Node::Symbol(symbol)),
+				Op::Mul,
+				Box::new(Node::Symbol(crate::units::DEGREE.to_string())),
+			);
 		}
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
 		let in_code = self.in_code();
-		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && in_code);
+		let names_function = std::mem::replace(
+			&mut self.after_function_keyword,
+			is_function_keyword(&symbol) && in_code,
+		);
 		// C's `int boom () { -1 }` (wiki/type.md): a name, `()` and a block are a definition like `boom() {…}`
 		let spaced_definition = in_code && self.empty_parameters_and_block_follow();
 		if (names_function && self.parameters_follow_after_blanks()) || spaced_definition {
@@ -643,7 +784,11 @@ impl WarpParser {
 		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing warp needs
 		// P157 (user): no generics in warp; the name carries the type parameters' names (GENERIC_MARK), welcome_forms.rs
 		// drops their annotations: `fn id<T>(x: T) -> T` is `def id(x)`
-		if let Some(length) = if names_function { self.generic_parameters_length() } else { None } {
+		if let Some(length) = if names_function {
+			self.generic_parameters_length()
+		} else {
+			None
+		} {
 			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
 			self.advance_by(length);
 			self.generic_names = Some((symbol.clone(), type_parameter_names(&written)));
@@ -665,7 +810,9 @@ impl WarpParser {
 		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
 			return error(NONE_CALL_ERROR);
 		}
-		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count())) {
+		if let Some(constant) =
+			check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count()))
+		{
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
@@ -676,18 +823,32 @@ impl WarpParser {
 		}
 
 		// Possessive: `p's name` is the field `p.name`
-		if !self.options.data_mode && self.current_char() == '\'' && self.peek_char(1) == 's' && self.peek_char(2) == ' ' && self.is_identifier_start(3) {
-			return self.symbol_after(3, |field| Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field))));
+		if !self.options.data_mode
+			&& self.current_char() == '\''
+			&& self.peek_char(1) == 's'
+			&& self.peek_char(2) == ' '
+			&& self.is_identifier_start(3)
+		{
+			return self.symbol_after(3, |field| {
+				Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field)))
+			});
 		}
 
 		// Optional type: `x:int?=ø`, `f(x:int?)`, the field `right? }` (wiki/null.md); a ternary `?` is followed by its branch instead
-		if self.current_char() == '?' && (self.ends_optional_type(self.peek_char(1), self.peek_char(2)) || self.closes_after_blanks(1) || self.next_field_follows(1)) {
+		if self.current_char() == '?'
+			&& (self.ends_optional_type(self.peek_char(1), self.peek_char(2))
+				|| self.closes_after_blanks(1)
+				|| self.next_field_follows(1))
+		{
 			self.advance();
 			return Symbol(format!("{symbol}?"));
 		}
 
 		// `To square a number: …` starts an English sentence with a capital
-		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && self.in_code() && self.word_starts_statement(symbol.len()) {
+		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD)
+			&& self.in_code()
+			&& self.word_starts_statement(symbol.len())
+		{
 			if let Some(definition) = self.try_parse_to_definition() {
 				return definition;
 			}
@@ -764,18 +925,34 @@ impl WarpParser {
 		}
 		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
 		if RUBY_FIELD_WORDS.contains(&symbol) && self.type_fields.is_some() {
-			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
-			let names: Vec<String> = line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
-			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
+			let line: String = (0..)
+				.map(|offset| self.peek_char(offset))
+				.take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}'))
+				.collect();
+			let names: Vec<String> = line
+				.split(',')
+				.map(|name| name.trim().trim_start_matches(':').to_string())
+				.collect();
+			if names
+				.iter()
+				.all(|name| !name.is_empty() && name.chars().all(is_identifier_char))
+			{
 				self.advance_by(line.chars().count());
 				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
-				return Some(Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon));
+				return Some(Node::List(
+					names.into_iter().map(Symbol).collect(),
+					Bracket::None,
+					Separator::Semicolon,
+				));
 			}
 		}
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
 			self.skip_blanks();
 			if let Some(head) = self.try_parse_operator_method_head() {
-				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
+				crate::diagnostic::note_alias(
+					&format!("{OPERATOR_WORD} {}", head.first().name()),
+					&head.first().name(),
+				);
 				return Some(head);
 			}
 		}
@@ -797,7 +974,10 @@ impl WarpParser {
 		}
 		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
 			return Some(match self.parse_type_declaration() {
-				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
+				Node::Type { name, body } => Node::Type {
+					name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)),
+					body,
+				},
 				other => other,
 			});
 		}
@@ -816,7 +996,9 @@ impl WarpParser {
 			return false;
 		}
 		let declares = self.assignment_follows() || self.type_annotation_follows();
-		let Some(fields) = self.type_fields.as_mut() else { return false };
+		let Some(fields) = self.type_fields.as_mut() else {
+			return false;
+		};
 		if declares {
 			fields.insert(symbol.to_string());
 		}
@@ -833,12 +1015,23 @@ impl WarpParser {
 	fn refuse_constant_assignment(&self, symbol: &str) -> Option<Node> {
 		let column = self.column.saturating_sub(symbol.chars().count());
 		let message = format!("{symbol} is a constant");
-		self.assignment_follows().then(|| Diagnostic { message, line: self.line_nr, column, ..Default::default() }.fix("another name").into_error())
+		self.assignment_follows().then(|| {
+			Diagnostic {
+				message,
+				line: self.line_nr,
+				column,
+				..Default::default()
+			}
+			.fix("another name")
+			.into_error()
+		})
 	}
 
 	/// `= …` or `:= …` after blanks, not the comparison `==` nor the arrow `=>`
 	fn assignment_follows(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
 		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
 		let assigns = self.peek_char(blanks) == '=' && !matches!(self.peek_char(blanks + 1), '=' | '>'); // `None => 0` is a match arm
 		defines || assigns
@@ -846,7 +1039,10 @@ impl WarpParser {
 
 	/// `http://…`, `file://…`, `ssh://…`: the scheme of a URL, the rest of which reads as one text
 	pub(super) fn url_follows(&self) -> bool {
-		URL_MARK.chars().enumerate().all(|(offset, mark)| self.peek_char(offset) == mark)
+		URL_MARK
+			.chars()
+			.enumerate()
+			.all(|(offset, mark)| self.peek_char(offset) == mark)
 	}
 
 	pub(super) fn parse_url(&mut self, scheme: String) -> Node {
@@ -861,12 +1057,16 @@ impl WarpParser {
 	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
 	/// `class="btn"`, `type = "text"` (html attributes, P188), `x.class`, `type(x)` and `type 3.5` are no declarations
 	pub(super) fn declares_type(&self, symbol: &str) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
 		let is_assigned = self.peek_char(blanks) == '=' && self.peek_char(blanks + 1) != '=';
 		let is_key = (self.current_char() == ':' && self.peek_char(1) != '=') || is_assigned;
 		let start = self.pos.saturating_sub(symbol.chars().count());
 		let is_field = start > 0 && self.chars[start - 1] == '.';
-		!is_key && !is_field && (TYPE_DECLARATION_WORDS.contains(&symbol)
+		!is_key
+			&& !is_field
+			&& (TYPE_DECLARATION_WORDS.contains(&symbol)
 			|| (symbol == RECORD_WORD && (self.name_and_block_follow() || self.name_and_parameters_follow()))
 			// `type 3.5`, `type pi`, `type(x)`: the type of a value; a declaration names its type
 			|| (symbol == "type" && self.type_declaration_follows()))
@@ -877,12 +1077,21 @@ impl WarpParser {
 		if !self.name_after_blanks() {
 			return false;
 		}
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		let name_length = (blanks..).take_while(|&offset| is_identifier_char(self.peek_char(offset)) || self.peek_char(offset) == '-').count();
-		let after_name = (blanks + name_length..).find(|&offset| !matches!(self.peek_char(offset), ' ' | '\t')).unwrap_or(blanks + name_length);
-		let body_follows = TYPE_BODY_STARTS.contains(&self.peek_char(after_name)) && self.peek_char(after_name + 1) != '=';
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
+		let name_length = (blanks..)
+			.take_while(|&offset| is_identifier_char(self.peek_char(offset)) || self.peek_char(offset) == '-')
+			.count();
+		let after_name = (blanks + name_length..)
+			.find(|&offset| !matches!(self.peek_char(offset), ' ' | '\t'))
+			.unwrap_or(blanks + name_length);
+		let body_follows =
+			TYPE_BODY_STARTS.contains(&self.peek_char(after_name)) && self.peek_char(after_name + 1) != '=';
 		// `type of x` arrives as the declaration of `of`, which lowering (type_tests::type_of_word) reads as `type(x)`
-		let of_follows = (blanks..blanks + name_length).map(|offset| self.peek_char(offset)).eq("of".chars());
+		let of_follows = (blanks..blanks + name_length)
+			.map(|offset| self.peek_char(offset))
+			.eq("of".chars());
 		self.peek_char(blanks).is_uppercase() || body_follows || of_follows
 	}
 
@@ -906,17 +1115,39 @@ impl WarpParser {
 			_ => vec![],
 		};
 		if angled {
-			crate::normalize::hint(&format!("{type_name}<{}>", type_parameters.join(", ")), &type_name, "warp infers types: write the class without type parameters");
+			crate::normalize::hint(
+				&format!("{type_name}<{}>", type_parameters.join(", ")),
+				&type_name,
+				"warp infers types: write the class without type parameters",
+			);
 		}
 		if let Some(variants_start) = self.variants_ahead() {
 			return self.parse_sum_type(type_name, &type_parameters, variants_start);
 		}
-		let mut constructor_fields = if self.current_char() == '(' { self.parse_primary_constructor() } else { vec![] };
+		let mut constructor_fields = if self.current_char() == '(' {
+			self.parse_primary_constructor()
+		} else {
+			vec![]
+		};
 		let (kotlin_parent, claims) = self.skip_conformances().unwrap_or_default();
 		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
 		let python_body = self.current_char() == ':' && self.peek_char(1) != '=';
-		let python_parent = python_body.then(|| std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS)).flatten();
-		let ends_statement = matches!(self.peek_char((0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()), '\n' | ';' | '}' | '\0');
+		let python_parent = python_body
+			.then(|| {
+				std::mem::take(&mut constructor_fields)
+					.into_iter()
+					.map(|parent| parent.drop_meta().name())
+					.find(|parent| parent != PYTHON_ROOT_CLASS)
+			})
+			.flatten();
+		let ends_statement = matches!(
+			self.peek_char(
+				(0..)
+					.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+					.count()
+			),
+			'\n' | ';' | '}' | '\0'
+		);
 		let before_body = self.mark();
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		if constructor_fields.is_empty() {
@@ -954,11 +1185,19 @@ impl WarpParser {
 			self.skip_whitespace();
 			if self.current_char() == '{' {
 				let block = self.parse_bracketed('{');
-				return Node::List(vec![Symbol(GO_INTERFACE_WORD.to_string()), name, block], Bracket::None, Separator::Space);
+				return Node::List(
+					vec![Symbol(GO_INTERFACE_WORD.to_string()), name, block],
+					Bracket::None,
+					Separator::Space,
+				);
 			}
 		}
 		self.skip_struct_words();
-		let body = if self.current_char() == '{' { Self::class_body(self.parse_bracketed('{')) } else { Empty };
+		let body = if self.current_char() == '{' {
+			Self::class_body(self.parse_bracketed('{'))
+		} else {
+			Empty
+		};
 		// Python's `class Point:` and the lines indented below it
 		let body = match (python_body, body) {
 			(true, Empty) => {
@@ -969,13 +1208,19 @@ impl WarpParser {
 				if self.current_char() == '{' {
 					Self::class_body(self.parse_bracketed('{'))
 				} else {
-					self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty)
+					self.parse_indented_block()
+						.map(Self::transform_fields_to_types)
+						.unwrap_or(Empty)
 				}
 			}
 			// Ruby's `class Point` and the lines indented below it, up to its `end`
 			(false, Empty) if self.pos > before_body.pos && self.closing_end_follows(&RUBY_END_OPENERS) => {
 				self.rewind(before_body);
-				let body = self.parse_indented_block().map(without_end_lines).map(Self::transform_fields_to_types).unwrap_or(Empty);
+				let body = self
+					.parse_indented_block()
+					.map(without_end_lines)
+					.map(Self::transform_fields_to_types)
+					.unwrap_or(Empty);
 				self.skip_whitespace();
 				if self.matches_keyword(END_KEYWORD) {
 					self.advance_by(END_KEYWORD.len());
@@ -988,18 +1233,33 @@ impl WarpParser {
 			body
 		} else {
 			let fields = constructor_fields.into_iter().map(Self::transform_fields_to_types);
-			Node::List(fields.chain(statements(body)).collect(), Bracket::Curly, Separator::Semicolon)
+			Node::List(
+				fields.chain(statements(body)).collect(),
+				Bracket::Curly,
+				Separator::Semicolon,
+			)
 		};
-		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
+		let body = if type_parameters.is_empty() {
+			body
+		} else {
+			any_for_type_parameters(body, &type_parameters)
+		};
 		// Kotlin's `sealed class Shape`, Swift's `class Marker`: a class without fields, when its line ends after the name
 		// (`type of x` goes on: no declaration)
 		let bodyless = matches!(body, Empty) && ends_statement;
-		let body = if bodyless { Node::List(vec![], Bracket::Curly, Separator::None) } else { body };
+		let body = if bodyless {
+			Node::List(vec![], Bracket::Curly, Separator::None)
+		} else {
+			body
+		};
 		// C#'s file-scoped `class Foo;` takes in the definitions after it (file_declarations.rs)
 		if bodyless && self.current_char() == ';' {
 			name = name.with_attribute(crate::lowering::file_declarations::FILE_CLASS_MARK, Node::True);
 		}
-		Node::Type { name: Box::new(name), body: Box::new(body) }
+		Node::Type {
+			name: Box::new(name),
+			body: Box::new(body),
+		}
 	}
 
 	/// `Walker, Swimmer`: names separated by commas
@@ -1031,33 +1291,54 @@ impl WarpParser {
 	/// to a trait by defining its operations (notes/traits.md T2); a named one is a claim, checked (P177). Kotlin's
 	/// superclass `: Shape()` (its constructor called) is the parent, as `extends Shape`
 	fn skip_conformances(&mut self) -> Option<(Option<String>, Vec<Node>)> {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
 		let start = if self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) != '=' {
 			blanks + 1
-		} else if (0..IMPLEMENTS_WORD.len()).all(|i| self.peek_char(blanks + i) == IMPLEMENTS_WORD.as_bytes()[i] as char) && !is_identifier_char(self.peek_char(blanks + IMPLEMENTS_WORD.len())) {
+		} else if (0..IMPLEMENTS_WORD.len())
+			.all(|i| self.peek_char(blanks + i) == IMPLEMENTS_WORD.as_bytes()[i] as char)
+			&& !is_identifier_char(self.peek_char(blanks + IMPLEMENTS_WORD.len()))
+		{
 			blanks + IMPLEMENTS_WORD.len()
 		} else {
 			return None;
 		};
-		let names: String = (start..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '{' | '\n' | '\0')).collect();
+		let names: String = (start..)
+			.map(|offset| self.peek_char(offset))
+			.take_while(|ch| !matches!(ch, '{' | '\n' | '\0'))
+			.collect();
 		let names_list: Vec<&str> = names.split(',').map(str::trim).collect();
 		let is_name = |name: &str| !name.is_empty() && name.chars().all(is_identifier_char);
-		let parent = names_list.iter().find_map(|name| name.strip_suffix("()").filter(|parent| is_name(parent)));
-		let are_names = names_list.iter().all(|name| is_name(name.strip_suffix("()").unwrap_or(name)));
+		let parent = names_list
+			.iter()
+			.find_map(|name| name.strip_suffix("()").filter(|parent| is_name(parent)));
+		let are_names = names_list
+			.iter()
+			.all(|name| is_name(name.strip_suffix("()").unwrap_or(name)));
 		let ends_well = self.peek_char(start + names.chars().count()) == '{' || parent.is_some();
 		if !are_names || !ends_well {
 			return None;
 		}
 		let parent = parent.map(str::to_string);
-		let claims = names_list.iter().filter(|name| !name.ends_with("()")).map(|name| Symbol(name.to_string())).collect();
+		let claims = names_list
+			.iter()
+			.filter(|name| !name.ends_with("()"))
+			.map(|name| Symbol(name.to_string()))
+			.collect();
 		self.advance_by(start + names.trim_end().chars().count());
 		Some((parent, claims))
 	}
 
 	/// The name of a declared type after blanks: `new Point(…)`
 	fn declared_type_after_blanks(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		let name: String = (blanks..).map(|offset| self.peek_char(offset)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
+		let name: String = (blanks..)
+			.map(|offset| self.peek_char(offset))
+			.take_while(|ch| is_identifier_char(*ch))
+			.collect();
 		blanks > 0 && self.declared_types.contains(&name)
 	}
 
@@ -1065,12 +1346,18 @@ impl WarpParser {
 	fn class_keyword_after_blanks(&self) -> Option<&'static str> {
 		let blanks = self.blanks_ahead();
 		TYPE_DECLARATION_WORDS.into_iter().find(|keyword| {
-			keyword.chars().enumerate().all(|(i, c)| self.peek_char(blanks + i) == c) && !is_identifier_char(self.peek_char(blanks + keyword.len()))
+			keyword
+				.chars()
+				.enumerate()
+				.all(|(i, c)| self.peek_char(blanks + i) == c)
+				&& !is_identifier_char(self.peek_char(blanks + keyword.len()))
 		})
 	}
 
 	fn blanks_ahead(&self) -> usize {
-		(0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
+		(0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count()
 	}
 
 	/// `constant x`: a name after one or more blanks
@@ -1082,25 +1369,36 @@ impl WarpParser {
 	/// Kotlin's primary constructor `class Point(val x: Int, var y: Int = 0)`: its parameters are the fields
 	fn parse_primary_constructor(&mut self) -> Vec<Node> {
 		let parameters = statements(self.parse_bracketed('('));
-		parameters.into_iter().map(|parameter| match parameter.drop_meta() {
-			// `val x: Int`, `var y: Int = 0`: the field, its keyword dropped
-			Node::List(words, _, _) if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) => {
-				let field = crate::lowering::class_methods::leading_name(&words[1]);
-				crate::diagnostic::note_alias(&format!("{} {field}", words[0].drop_meta().name()), &field);
-				words[1].clone()
-			}
-			// C#'s `int X`: the field X of type int
-			Node::List(words, _, _) if words.len() == 2 && matches!(words[1].drop_meta(), Node::Symbol(_)) && crate::analyzer::type_word_kind(&words[0].drop_meta().name()).is_some() => {
-				Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
-			}
-			_ => parameter,
-		}).collect()
+		parameters
+			.into_iter()
+			.map(|parameter| match parameter.drop_meta() {
+				// `val x: Int`, `var y: Int = 0`: the field, its keyword dropped
+				Node::List(words, _, _)
+					if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) =>
+				{
+					let field = crate::lowering::class_methods::leading_name(&words[1]);
+					crate::diagnostic::note_alias(&format!("{} {field}", words[0].drop_meta().name()), &field);
+					words[1].clone()
+				}
+				// C#'s `int X`: the field X of type int
+				Node::List(words, _, _)
+					if words.len() == 2
+						&& matches!(words[1].drop_meta(), Node::Symbol(_))
+						&& crate::analyzer::type_word_kind(&words[0].drop_meta().name()).is_some() =>
+				{
+					Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
+				}
+				_ => parameter,
+			})
+			.collect()
 	}
 
 	/// `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the
 	/// offset after the `=` or `:` when the declaration lists alternatives one of which carries a payload
 	fn variants_ahead(&self) -> Option<usize> {
-		let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		let blanks = (0..)
+			.take_while(|&offset| self.peek_char(offset).is_whitespace())
+			.count();
 		let (sign, next) = (self.peek_char(blanks), self.peek_char(blanks + 1));
 		let opens = (sign == '=' && !matches!(next, '=' | '>')) || (sign == ':' && next != '=');
 		if !opens {
@@ -1115,7 +1413,9 @@ impl WarpParser {
 			match ch {
 				'\0' | ';' if depth == 0 => break,
 				'\n' if depth == 0 => {
-					let blanks = (offset + 1..).take_while(|&at| self.peek_char(at).is_whitespace()).count();
+					let blanks = (offset + 1..)
+						.take_while(|&at| self.peek_char(at).is_whitespace())
+						.count();
 					if self.peek_char(offset + 1 + blanks) != '|' {
 						break;
 					}
@@ -1153,7 +1453,11 @@ impl WarpParser {
 				Ok(name) => name,
 				Err(message) => return error(&format!("a variant of {type_name} needs a name: {message}")),
 			};
-			let mut payload = if self.current_char() == '(' { statements(self.parse_bracketed('(')) } else { vec![] };
+			let mut payload = if self.current_char() == '(' {
+				statements(self.parse_bracketed('('))
+			} else {
+				vec![]
+			};
 			// Elm's `Failure HttpError`: the payload's types after the name
 			self.skip_spaces();
 			while self.is_identifier_start(0) {
@@ -1164,7 +1468,9 @@ impl WarpParser {
 				true => bare_variants.push(Symbol(variant)),
 				false => declarations.push(self.variant_class(&type_name, variant, payload, type_parameters)),
 			}
-			let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+			let blanks = (0..)
+				.take_while(|&offset| self.peek_char(offset).is_whitespace())
+				.count();
 			if self.peek_char(blanks) != '|' {
 				return sum_type(type_name, bare_variants, declarations);
 			}
@@ -1174,8 +1480,12 @@ impl WarpParser {
 
 	/// ` Shape { Circle(r), … }` after `enum`: a case followed by its values in parentheses
 	fn enum_with_values_ahead(&self) -> bool {
-		let mut offset = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		let name_length = (offset..).take_while(|&at| is_identifier_char(self.peek_char(at))).count();
+		let mut offset = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
+		let name_length = (offset..)
+			.take_while(|&at| is_identifier_char(self.peek_char(at)))
+			.count();
 		if name_length == 0 {
 			return false;
 		}
@@ -1204,45 +1514,81 @@ impl WarpParser {
 		self.skip_spaces();
 		let type_name = or_return_error!(self.parse_symbol());
 		self.skip_whitespace();
-		let Node::List(cases, _, _) = self.parse_bracketed('{').drop_meta().clone() else { return error(&format!("enum {type_name} needs its cases in braces")) };
+		let Node::List(cases, _, _) = self.parse_bracketed('{').drop_meta().clone() else {
+			return error(&format!("enum {type_name} needs its cases in braces"));
+		};
 		let mut bare_variants = vec![];
 		let mut declarations = vec![];
 		for case in cases.iter().map(without_case_keyword) {
 			match case.drop_meta() {
 				Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-					declarations.push(self.variant_class(&type_name, items[0].drop_meta().name(), items[1..].to_vec(), &[]));
+					declarations.push(self.variant_class(
+						&type_name,
+						items[0].drop_meta().name(),
+						items[1..].to_vec(),
+						&[],
+					));
 				}
 				Node::Symbol(_) => bare_variants.push(case.drop_meta().clone()),
-				other => return error(&format!("a case of enum {type_name} is a name with optional values, got {}", other.serialize())),
+				other => {
+					return error(&format!(
+						"a case of enum {type_name} is a name with optional values, got {}",
+						other.serialize()
+					))
+				}
 			}
 		}
 		sum_type(type_name, bare_variants, declarations)
 	}
 
-	fn variant_class(&mut self, type_name: &str, variant: String, payload: Vec<Node>, type_parameters: &[String]) -> Node {
+	fn variant_class(
+		&mut self,
+		type_name: &str,
+		variant: String,
+		payload: Vec<Node>,
+		type_parameters: &[String],
+	) -> Node {
 		let count = payload.len();
-		let field_name = |index: usize| if count == 1 { VARIANT_FIELD.to_string() } else { format!("{VARIANT_FIELD}{}", index + 1) };
+		let field_name = |index: usize| {
+			if count == 1 {
+				VARIANT_FIELD.to_string()
+			} else {
+				format!("{VARIANT_FIELD}{}", index + 1)
+			}
+		};
 		// `(T)` and `(radius: int)` arrive as groups of one
 		let sole = |field: Node| match field.drop_meta() {
 			Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
 			_ => field,
 		};
 		// P179: `rgb(r, g, b)` names its fields; `Some(T)`, `rgb(int, int, int)` and `Pair(Point, Point)` give types
-		let is_type = |name: &str| crate::analyzer::builtin_type_kind(name).is_some() || type_parameters.iter().any(|parameter| parameter == name)
-			|| self.declared_types.contains(name) || name.starts_with(char::is_uppercase);
+		let is_type = |name: &str| {
+			crate::analyzer::builtin_type_kind(name).is_some()
+				|| type_parameters.iter().any(|parameter| parameter == name)
+				|| self.declared_types.contains(name)
+				|| name.starts_with(char::is_uppercase)
+		};
 		let mut untyped = type_parameters.to_vec();
-		let fields: Vec<Node> = payload.into_iter().map(sole).enumerate().map(|(index, field)| match field.drop_meta() {
-			Node::Key(_, Op::Colon, _) => field,
-			Node::Symbol(name) if !is_type(name) => {
-				untyped.push(name.clone());
-				Node::Key(Box::new(Symbol(name.clone())), Op::Colon, Box::new(field))
-			}
-			_ => Node::Key(Box::new(Symbol(field_name(index))), Op::Colon, Box::new(field)),
-		}).collect();
+		let fields: Vec<Node> = payload
+			.into_iter()
+			.map(sole)
+			.enumerate()
+			.map(|(index, field)| match field.drop_meta() {
+				Node::Key(_, Op::Colon, _) => field,
+				Node::Symbol(name) if !is_type(name) => {
+					untyped.push(name.clone());
+					Node::Key(Box::new(Symbol(name.clone())), Op::Colon, Box::new(field))
+				}
+				_ => Node::Key(Box::new(Symbol(field_name(index))), Op::Colon, Box::new(field)),
+			})
+			.collect();
 		let body = Self::transform_fields_to_types(Node::List(fields, Bracket::Curly, Separator::Semicolon));
 		self.declared_types.insert(variant.clone());
 		let name = Symbol(variant).with_attribute(EXTENDS_KEYWORD, Symbol(type_name.to_string()));
-		Node::Type { name: Box::new(name), body: Box::new(any_for_type_parameters(body, &untyped)) }
+		Node::Type {
+			name: Box::new(name),
+			body: Box::new(any_for_type_parameters(body, &untyped)),
+		}
 	}
 
 	/// `<T>`, `<A, B>`, `[T]`: the names of the type parameters of a declared type
@@ -1260,7 +1606,12 @@ impl WarpParser {
 					self.advance();
 					return Ok(names);
 				}
-				other => return Err(format!("type parameters <{}…> end with {close}, got {other}", names.join(", "))),
+				other => {
+					return Err(format!(
+						"type parameters <{}…> end with {close}, got {other}",
+						names.join(", ")
+					))
+				}
 			}
 		}
 	}
@@ -1272,7 +1623,11 @@ impl WarpParser {
 			'{' if GLUED_BLOCK_KEYWORDS.contains(&symbol.as_str()) && self.in_code() => Node::symbol(&symbol),
 			'{' => {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
-				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
+				let op = if self.declared_types.contains(&symbol) {
+					Op::None
+				} else {
+					Op::Colon
+				};
 				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				// a rule `p { … }` of a style sheet is still the sheet
 				let in_style_sheet = op == Op::Colon && (symbol == STYLE_WORD || self.in_style_sheet);
@@ -1288,10 +1643,16 @@ impl WarpParser {
 				let block = Node::single_or_list(blocks, Bracket::None, Separator::None);
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
-			'<' if !self.options.xml_mode && !self.options.data_mode && let Some(length) = self.type_application_length() => {
+			'<' if !self.options.xml_mode
+				&& !self.options.data_mode
+				&& let Some(length) = self.type_application_length() =>
+			{
 				let arguments: String = (1..length - 1).map(|offset| self.peek_char(offset)).collect();
 				if symbol == "list" && !arguments.contains(',') {
-					let element_words: Vec<&str> = arguments.split(|c: char| c == '<' || c == '>' || c.is_whitespace()).filter(|word| !word.is_empty()).collect();
+					let element_words: Vec<&str> = arguments
+						.split(|c: char| c == '<' || c == '>' || c.is_whitespace())
+						.filter(|word| !word.is_empty())
+						.collect();
 					set_hint_position(self.line_nr, self.column.saturating_sub(symbol.chars().count()));
 					norm::list_type(ListTypeStyle::Generic, &element_words);
 				}
@@ -1302,7 +1663,11 @@ impl WarpParser {
 				}
 				Symbol(type_application_name(&symbol, &arguments))
 			}
-			'<' if !self.options.xml_mode && !self.peek_char(1).is_numeric() && self.peek_char(1) != '<' && names_a_type(&symbol) => {
+			'<' if !self.options.xml_mode
+				&& !self.peek_char(1).is_numeric()
+				&& self.peek_char(1) != '<'
+				&& names_a_type(&symbol) =>
+			{
 				// Only treat as generic if immediately after a type name (no space)
 				// and NOT followed by a number (that would be comparison: i<9); `it<k` and `a<b` compare
 				let generic = self.parse_bracketed('<');
@@ -1310,17 +1675,25 @@ impl WarpParser {
 			}
 			// `info@pannous.com` in data is one word; `p@unit` in code reads the meta key: `p.@unit`
 			'@' if self.peek_char(1).is_alphabetic() && self.options.data_mode => {
-				let rest: String = self.chars[self.pos..].iter().take_while(|c| is_identifier_char(**c) || matches!(c, '@' | '.' | '-')).collect();
+				let rest: String = self.chars[self.pos..]
+					.iter()
+					.take_while(|c| is_identifier_char(**c) || matches!(c, '@' | '.' | '-'))
+					.collect();
 				let rest = rest.trim_end_matches(['.', '-']).to_string();
 				self.advance_by(rest.chars().count());
 				Symbol(format!("{symbol}{rest}"))
 			}
-			'@' if self.peek_char(1).is_alphabetic() => {
-				self.symbol_after(1, |key| Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}")))))
-			}
+			'@' if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |key| {
+				Node::Key(
+					Box::new(Symbol(symbol)),
+					Op::Dot,
+					Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}"))),
+				)
+			}),
 			'(' => {
 				// `match f(3, 4) {…}`: the block holds the cases, no body of a definition of f
-				let is_switch_subject = SWITCH_WORDS.contains(&self.word_ending_before(self.pos - symbol.chars().count()).as_str());
+				let is_switch_subject =
+					SWITCH_WORDS.contains(&self.word_ending_before(self.pos - symbol.chars().count()).as_str());
 				// Parse arguments as a proper Node
 				let args_node = self.parse_bracketed('(');
 				// `add(2)(5)`: each glued group calls what the call before returned (closures.rs), one operand
@@ -1376,12 +1749,20 @@ fn argument_group(arguments: Node) -> Node {
 fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
 	let is_parameter = |node: &Node| match node.drop_meta() {
 		Node::Symbol(name) => parameters.contains(name),
-		Node::Type { name, body } => matches!(body.drop_meta(), Node::Empty) && parameters.contains(&name.drop_meta().name()),
+		Node::Type { name, body } => {
+			matches!(body.drop_meta(), Node::Empty) && parameters.contains(&name.drop_meta().name())
+		}
 		_ => false,
 	};
 	match node {
-		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => Node::Key(name, Op::Colon, Box::new(Symbol(crate::type_kinds::UNTYPED_FIELD.to_string()))),
-		Node::Key(head, Op::Define, body) => Node::Key(Box::new(untyped_parameters(*head, &is_parameter)), Op::Define, body),
+		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => Node::Key(
+			name,
+			Op::Colon,
+			Box::new(Symbol(crate::type_kinds::UNTYPED_FIELD.to_string())),
+		),
+		Node::Key(head, Op::Define, body) => {
+			Node::Key(Box::new(untyped_parameters(*head, &is_parameter)), Op::Define, body)
+		}
 		other => other.map_children(|child| any_for_type_parameters(child, parameters)),
 	}
 }
@@ -1390,7 +1771,10 @@ fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
 fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node {
 	match head {
 		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => *name,
-		Node::Meta { node, data } => Node::Meta { node: Box::new(untyped_parameters(*node, is_parameter)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(untyped_parameters(*node, is_parameter)),
+			data,
+		},
 		other => other.map_children(|child| untyped_parameters(child, is_parameter)),
 	}
 }
@@ -1399,9 +1783,19 @@ fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node 
 /// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name
 /// (`red is Color`, P179), then the classes of the variants with payload
 fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
-	let name = Symbol(type_name).with_attribute(crate::lowering::sum_variants::VARIANTS_MARK, Node::List(bare_variants, Bracket::None, Separator::Space));
-	let sum_type = Node::Type { name: Box::new(name), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) };
-	Node::List([vec![sum_type], declarations].concat(), Bracket::None, Separator::Semicolon)
+	let name = Symbol(type_name).with_attribute(
+		crate::lowering::sum_variants::VARIANTS_MARK,
+		Node::List(bare_variants, Bracket::None, Separator::Space),
+	);
+	let sum_type = Node::Type {
+		name: Box::new(name),
+		body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)),
+	};
+	Node::List(
+		[vec![sum_type], declarations].concat(),
+		Bracket::None,
+		Separator::Semicolon,
+	)
 }
 
 /// Swift's `case circle(radius: Double)`: the case without its keyword
@@ -1416,7 +1810,9 @@ fn statements(block: Node) -> Vec<Node> {
 	match block {
 		Node::List(items, _, Separator::Colon | Separator::Semicolon | Separator::Newline) => items,
 		Empty => vec![],
-		Node::List(items, Bracket::Curly | Bracket::Round, separator) => vec![Node::List(items, Bracket::None, separator)],
+		Node::List(items, Bracket::Curly | Bracket::Round, separator) => {
+			vec![Node::List(items, Bracket::None, separator)]
+		}
 		single => vec![single],
 	}
 }
@@ -1425,7 +1821,15 @@ fn statements(block: Node) -> Vec<Node> {
 fn without_end_lines(body: Node) -> Node {
 	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
+		Node::List(items, bracket, separator) => Node::List(
+			items
+				.into_iter()
+				.filter(|item| !is_end(item))
+				.map(without_end_lines)
+				.collect(),
+			bracket,
+			separator,
+		),
 		other => children_rewritten(other, without_end_lines),
 	}
 }
@@ -1436,13 +1840,19 @@ fn without_end_lines(body: Node) -> Node {
 /// parameters and `=` on one line, closed by no `end`
 fn is_endless_definition(chars: &[char], def_end: usize) -> bool {
 	let line: String = chars[def_end..].iter().take_while(|&&ch| ch != '\n').collect();
-	let head = line.trim_start().trim_start_matches(|ch: char| is_identifier_char(ch) || ch == '?' || ch == '!').trim_start();
+	let head = line
+		.trim_start()
+		.trim_start_matches(|ch: char| is_identifier_char(ch) || ch == '?' || ch == '!')
+		.trim_start();
 	let after_parameters = match head.strip_prefix('(') {
 		Some(parameters) => parameters.find(')').map_or("", |close| &parameters[close + 1..]),
 		None => head,
 	};
 	let after_parameters = after_parameters.trim_start();
-	after_parameters.starts_with(":=") || (after_parameters.starts_with('=') && !after_parameters.starts_with("==") && !after_parameters.starts_with("=>"))
+	after_parameters.starts_with(":=")
+		|| (after_parameters.starts_with('=')
+			&& !after_parameters.starts_with("==")
+			&& !after_parameters.starts_with("=>"))
 }
 
 fn code_words(chars: &[char], start: usize) -> impl Iterator<Item = (usize, usize)> + '_ {

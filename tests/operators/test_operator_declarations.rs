@@ -1,6 +1,6 @@
 //! `prefix|suffix|infix operator ⊕ := body` declares an operator (wiki operator.md); the parser learns it from a pre-scan
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 #[test]
 fn test_suffix_operator() {
@@ -35,8 +35,14 @@ fn test_operators_declared_later_are_known_to_the_whole_program() {
 
 #[test]
 fn test_precedence_declarations_are_followed() {
-	is!("infix operator ⊕ := a+b; operator ⊕ has precedence above *; 2 * 3 ⊕ 4", 14);
-	fails_with("operator + has precedence above *", "only a declared operator gets a precedence");
+	is!(
+		"infix operator ⊕ := a+b; operator ⊕ has precedence above *; 2 * 3 ⊕ 4",
+		14
+	);
+	fails_with(
+		"operator + has precedence above *",
+		"only a declared operator gets a precedence",
+	);
 }
 
 #[test]

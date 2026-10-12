@@ -1,20 +1,23 @@
-use serde_json::json;
 use crate::eq;
+use serde_json::json;
+use warp::util::show_type_name;
 use warp::Bracket;
 use warp::Node;
 use warp::Node::Symbol;
 use warp::Op;
 use warp::Separator;
-use warp::util::show_type_name;
 
 #[test]
 fn test_node_to_json_compact() {
 	let n = Node::keys("name", "Alice");
 	let json = n.to_json().unwrap();
 	println!("Wide JSON:\n{}", json);
-	eq!(json, r#"{
+	eq!(
+		json,
+		r#"{
   "name": "Alice"
-}"#);
+}"#
+	);
 	eq!(json, "{\n  \"name\": \"Alice\"\n}");
 	// eq!(json, "{\n\t\"name\": \"Alice\"\n}");
 	// println!("Compact JSON:\n{}", json);

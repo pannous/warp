@@ -8,9 +8,9 @@
 //! The outermost element showing a fetched value is a live region, `aria-live: "polite"` (card web-a11y-live): a screen
 //! reader announces the value when it arrives; an element setting aria-live itself keeps its own.
 
-use crate::host::FETCH_WORD;
-use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::element_events::{element_items, with_element_items};
+use crate::event_signals::{function_with_globals, main_level_variables};
+use crate::host::FETCH_WORD;
 use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -37,8 +37,15 @@ pub fn lower(program: Node) -> Node {
 	if fetched.is_empty() {
 		return program;
 	}
-	let main_variables: HashSet<String> = main_level_variables(&statements).into_iter()
-		.chain(fetched.iter().flat_map(|fetched| [fetched.name.clone(), generated(&fetched.name, LOADING_FIELD), generated(&fetched.name, ERROR_FIELD)]))
+	let main_variables: HashSet<String> = main_level_variables(&statements)
+		.into_iter()
+		.chain(fetched.iter().flat_map(|fetched| {
+			[
+				fetched.name.clone(),
+				generated(&fetched.name, LOADING_FIELD),
+				generated(&fetched.name, ERROR_FIELD),
+			]
+		}))
 		.collect();
 	let mut count = 0;
 	let mut lowered = vec![];
@@ -49,31 +56,58 @@ pub fn lower(program: Node) -> Node {
 		};
 		let bindings = bindings(&name, &url, default, count);
 		let handler = format!("{}{count}", crate::host::FETCH_HANDLER_PREFIX);
-		lowered.push(function_with_globals(&handler, false, &instantiated(ARRIVED_TEMPLATE, &bindings), &main_variables));
+		lowered.push(function_with_globals(
+			&handler,
+			false,
+			&instantiated(ARRIVED_TEMPLATE, &bindings),
+			&main_variables,
+		));
 		lowered.extend(instantiated(START_TEMPLATE, &bindings));
-		let mut sources: Vec<String> = crate::variable_signals::symbols(&url).into_iter().filter(|symbol| main_variables.contains(symbol)).collect();
+		let mut sources: Vec<String> = crate::variable_signals::symbols(&url)
+			.into_iter()
+			.filter(|symbol| main_variables.contains(symbol))
+			.collect();
 		sources.dedup();
 		for source in sources {
-			let bindings: HashMap<String, Node> = bindings.clone().into_iter().chain([("SOURCE".to_string(), Node::Symbol(source))]).collect();
+			let bindings: HashMap<String, Node> = bindings
+				.clone()
+				.into_iter()
+				.chain([("SOURCE".to_string(), Node::Symbol(source))])
+				.collect();
 			lowered.extend(instantiated(REFETCH_TEMPLATE, &bindings));
 		}
 		count += 1;
 	}
 	let names: Vec<String> = fetched.into_iter().map(|fetched| fetched.name).collect();
-	let lowered = lowered.into_iter().map(|statement| with_live_regions(statement, &names)).collect();
+	let lowered = lowered
+		.into_iter()
+		.map(|statement| with_live_regions(statement, &names))
+		.collect();
 	with_state_variables(Node::List(lowered, bracket, separator), &names)
 }
 
 /// The outermost elements whose own content (not a child element's) reads a fetched value, marked live
 fn with_live_regions(node: Node, names: &[String]) -> Node {
 	let names_read: Vec<&str> = names.iter().map(String::as_str).collect();
-	let shows_fetched = element_items(&node).is_some_and(|items| items.iter().any(|item| element_items(item.drop_meta()).is_none() && item.mentions_any(&names_read)));
+	let shows_fetched = element_items(&node).is_some_and(|items| {
+		items
+			.iter()
+			.any(|item| element_items(item.drop_meta()).is_none() && item.mentions_any(&names_read))
+	});
 	if !shows_fetched {
 		return node.map_children(|child| with_live_regions(child, names));
 	}
 	with_element_items(node, |items| {
-		let sets_live = items.iter().any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(LIVE_ATTRIBUTE)));
-		let live = (!sets_live).then(|| Node::Key(Box::new(symbol(LIVE_ATTRIBUTE)), Op::Colon, Box::new(Node::Text(POLITE.to_string()))));
+		let sets_live = items
+			.iter()
+			.any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(LIVE_ATTRIBUTE)));
+		let live = (!sets_live).then(|| {
+			Node::Key(
+				Box::new(symbol(LIVE_ATTRIBUTE)),
+				Op::Colon,
+				Box::new(Node::Text(POLITE.to_string())),
+			)
+		});
 		live.into_iter().chain(items).collect()
 	})
 }
@@ -86,14 +120,22 @@ struct Fetched {
 
 /// `users := fetch url` or `users := fetch url ?? default` (a fetch with a timeout stays a fetch on each read)
 fn async_fetch(statement: &Node) -> Option<Fetched> {
-	let Node::Key(target, Op::Define, value) = statement.drop_meta() else { return None };
-	let Node::Symbol(name) = target.drop_meta() else { return None };
+	let Node::Key(target, Op::Define, value) = statement.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(name) = target.drop_meta() else {
+		return None;
+	};
 	let (fetch, default) = match value.drop_meta() {
 		Node::Key(fetch, Op::Coalesce, default) => (fetch.as_ref(), Some(default.as_ref().clone())),
 		fetch => (fetch, None),
 	};
 	match crate::host::fetch_call(fetch)? {
-		(url, None) => Some(Fetched { name: name.clone(), url, default }),
+		(url, None) => Some(Fetched {
+			name: name.clone(),
+			url,
+			default,
+		}),
 		_ => None,
 	}
 }
@@ -105,8 +147,19 @@ fn generated(name: &str, field: &str) -> String {
 
 fn bindings(name: &str, url: &Node, default: Option<Node>, id: usize) -> HashMap<String, Node> {
 	let symbol = |text: String| Node::Symbol(text);
-	let reply = HashMap::from([("REPLY".to_string(), symbol(generated(name, REPLY_FIELD))), ("DEFAULT".to_string(), default.clone().unwrap_or(Node::Empty))]);
-	let arrived = crate::law::substitute(crate::warp_parser::parse(if default.is_some() { ARRIVED_OR_DEFAULT } else { ARRIVED_VALUE }).drop_meta(), &reply);
+	let reply = HashMap::from([
+		("REPLY".to_string(), symbol(generated(name, REPLY_FIELD))),
+		("DEFAULT".to_string(), default.clone().unwrap_or(Node::Empty)),
+	]);
+	let arrived = crate::law::substitute(
+		crate::warp_parser::parse(if default.is_some() {
+			ARRIVED_OR_DEFAULT
+		} else {
+			ARRIVED_VALUE
+		})
+		.drop_meta(),
+		&reply,
+	);
 	HashMap::from([
 		("DEFAULT".to_string(), default.unwrap_or(Node::Empty)),
 		("ARRIVED".to_string(), arrived),
@@ -122,7 +175,10 @@ fn bindings(name: &str, url: &Node, default: Option<Node>, id: usize) -> HashMap
 /// The statements of a template with its placeholders bound
 fn instantiated(template: &str, bindings: &HashMap<String, Node>) -> Vec<Node> {
 	let (statements, _, _) = crate::variable_signals::main_statements(&crate::warp_parser::parse(template));
-	statements.iter().map(|statement| crate::law::substitute(statement.drop_meta(), bindings)).collect()
+	statements
+		.iter()
+		.map(|statement| crate::law::substitute(statement.drop_meta(), bindings))
+		.collect()
 }
 
 /// `users.loading` and `users.error` anywhere in the program are the variables users·loading and users·error

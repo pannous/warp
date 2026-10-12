@@ -114,7 +114,15 @@ impl EffectSet {
 
 	/// `Pure` or effect names; `None` if any name is not an effect
 	pub fn named(names: &[&str]) -> Option<EffectSet> {
-		names.iter().map(|name| if *name == PURE { Some(Self::PURE) } else { Effect::named(name).map(|e| Self::of(&[e])) })
+		names
+			.iter()
+			.map(|name| {
+				if *name == PURE {
+					Some(Self::PURE)
+				} else {
+					Effect::named(name).map(|e| Self::of(&[e]))
+				}
+			})
 			.try_fold(Self::PURE, |all, one| one.map(|one| all.union(one)))
 	}
 }
@@ -221,9 +229,16 @@ pub struct EffectViolation {
 
 impl fmt::Display for EffectViolation {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "effect violation at {}:{}: {} is declared ! {} but performs {} via {}",
-			self.constraint.line, self.constraint.column, self.function,
-			effect_names(self.constraint.allowed, &self.constraint.events), effect_names(self.excess, &self.excess_events), self.chain.join(" → "))?;
+		write!(
+			f,
+			"effect violation at {}:{}: {} is declared ! {} but performs {} via {}",
+			self.constraint.line,
+			self.constraint.column,
+			self.function,
+			effect_names(self.constraint.allowed, &self.constraint.events),
+			effect_names(self.excess, &self.excess_events),
+			self.chain.join(" → ")
+		)?;
 		if self.excess.contains(Div) {
 			write!(f, " (Div: may not terminate: a while loop, or recursion without a parameter that shrinks toward a guarded base case)")?;
 		}
@@ -250,7 +265,8 @@ impl EffectReport {
 		let resolver = Resolver { context: &context };
 
 		let mut report = EffectReport::default();
-		let (plumbing_globals, user_globals): (Vec<String>, Vec<String>) = main_level_globals(program).into_iter()
+		let (plumbing_globals, user_globals): (Vec<String>, Vec<String>) = main_level_globals(program)
+			.into_iter()
 			.partition(|name| crate::scoped_handlers::is_plumbing_variable(name));
 		for (name, definition) in &context.user_functions {
 			let mut function = resolver.function(&definition.body);
@@ -273,7 +289,10 @@ impl EffectReport {
 				_ => report.misplaced.push((name, constraint)),
 			}
 		}
-		report.externals = report.functions.values().flat_map(|f| f.calls.iter())
+		report.externals = report
+			.functions
+			.values()
+			.flat_map(|f| f.calls.iter())
 			.filter_map(|name| resolver.external(name).map(|external| (name.clone(), external)))
 			.collect();
 		report.infer_to_fixpoint();
@@ -282,9 +301,17 @@ impl EffectReport {
 
 	/// A cycle through another function has no measure we can check: Div
 	fn mark_mutual_recursion(&mut self) {
-		let cyclic: Vec<String> = self.functions.iter()
-			.filter(|(name, function)| function.calls.iter().any(|callee| callee != *name && self.reaches(callee, name)))
-			.map(|(name, _)| name.clone()).collect();
+		let cyclic: Vec<String> = self
+			.functions
+			.iter()
+			.filter(|(name, function)| {
+				function
+					.calls
+					.iter()
+					.any(|callee| callee != *name && self.reaches(callee, name))
+			})
+			.map(|(name, _)| name.clone())
+			.collect();
 		for name in cyclic {
 			self.functions.get_mut(&name).expect("known function").perform(Div);
 		}
@@ -299,7 +326,12 @@ impl EffectReport {
 				return true;
 			}
 			if seen.insert(current.clone()) {
-				queue.extend(self.functions.get(&current).into_iter().flat_map(|f| f.calls.iter().cloned()));
+				queue.extend(
+					self.functions
+						.get(&current)
+						.into_iter()
+						.flat_map(|f| f.calls.iter().cloned()),
+				);
 			}
 		}
 		false
@@ -310,10 +342,18 @@ impl EffectReport {
 			let mut changed = false;
 			let names: Vec<String> = self.functions.keys().cloned().collect();
 			for name in names {
-				let inferred = self.functions[&name].calls.iter()
-					.fold(self.functions[&name].effects, |all, callee| all.union(self.effects_of(callee).unwrap_or_default()));
-				let reported = self.functions[&name].calls.iter()
-					.fold(self.functions[&name].reported, |all, callee| all.union(self.reported_effects_of(callee)));
+				let inferred = self.functions[&name]
+					.calls
+					.iter()
+					.fold(self.functions[&name].effects, |all, callee| {
+						all.union(self.effects_of(callee).unwrap_or_default())
+					});
+				let reported = self.functions[&name]
+					.calls
+					.iter()
+					.fold(self.functions[&name].reported, |all, callee| {
+						all.union(self.reported_effects_of(callee))
+					});
 				let function = self.functions.get_mut(&name).expect("known function");
 				changed |= function.effects != inferred || function.reported != reported;
 				function.effects = inferred;
@@ -326,28 +366,45 @@ impl EffectReport {
 	}
 
 	fn check_constraints(&self) -> Vec<EffectViolation> {
-		self.functions.iter().filter_map(|(name, function)| {
-			let constraint = function.declared.clone()?;
-			let excess = function.reported.minus(constraint.allowed).observable();
-			let excess_events: BTreeSet<String> = function.events.difference(&constraint.events).cloned().collect();
-			let chain = match (excess.iter().next(), excess_events.iter().next()) {
-				(Some(effect), _) => self.call_chain(name, effect),
-				(None, Some(event)) => self.chain_to(name, |function| function.own_events.contains(event), |_| false),
-				(None, None) => return None,
-			};
-			Some(EffectViolation { function: name.clone(), constraint, excess, excess_events, chain })
-		}).collect()
+		self.functions
+			.iter()
+			.filter_map(|(name, function)| {
+				let constraint = function.declared.clone()?;
+				let excess = function.reported.minus(constraint.allowed).observable();
+				let excess_events: BTreeSet<String> = function.events.difference(&constraint.events).cloned().collect();
+				let chain = match (excess.iter().next(), excess_events.iter().next()) {
+					(Some(effect), _) => self.call_chain(name, effect),
+					(None, Some(event)) => {
+						self.chain_to(name, |function| function.own_events.contains(event), |_| false)
+					}
+					(None, None) => return None,
+				};
+				Some(EffectViolation {
+					function: name.clone(),
+					constraint,
+					excess,
+					excess_events,
+					chain,
+				})
+			})
+			.collect()
 	}
 
 	/// Resolved effects of a user function, external, or `main`
 	pub fn effects_of(&self, name: &str) -> Option<EffectSet> {
-		self.functions.get(name).map(|f| f.effects)
+		self.functions
+			.get(name)
+			.map(|f| f.effects)
 			.or_else(|| self.externals.get(name).map(|e| e.effects))
 			.or_else(|| trusted_external(name).map(|e| e.effects))
 	}
 
 	fn reported_effects_of(&self, name: &str) -> EffectSet {
-		self.functions.get(name).map(|f| f.reported).or_else(|| self.effects_of(name)).unwrap_or_default()
+		self.functions
+			.get(name)
+			.map(|f| f.reported)
+			.or_else(|| self.effects_of(name))
+			.unwrap_or_default()
 	}
 
 	/// The events of each function as the source program emits them (`program` as written, before the passes lower its
@@ -369,13 +426,18 @@ impl EffectReport {
 
 	/// Whether the module must import from this capability's module
 	pub fn needs(&self, capability: Capability) -> bool {
-		self.externals.values().any(|external| external.capability == capability)
+		self.externals
+			.values()
+			.any(|external| external.capability == capability)
 	}
 
 	/// First capability the module needs beyond `granted`, with the external that needs it
 	pub fn denied(&self, granted: &[Capability]) -> Option<(String, Capability)> {
 		// `try f(x) else …` calls the program's own function through the host (guarded_call): nothing from outside
-		self.externals.iter().filter(|(name, _)| name.as_str() != crate::host::GUARDED_CALL).find(|(_, external)| !granted.contains(&external.capability))
+		self.externals
+			.iter()
+			.filter(|(name, _)| name.as_str() != crate::host::GUARDED_CALL)
+			.find(|(_, external)| !granted.contains(&external.capability))
 			.map(|(name, external)| (name.clone(), external.capability))
 	}
 
@@ -385,15 +447,25 @@ impl EffectReport {
 
 	/// Shortest call path from `from` to the external or function body that introduces `effect`
 	pub fn call_chain(&self, from: &str, effect: Effect) -> Vec<String> {
-		self.chain_to(from, |function| function.own.contains(effect), |external| external.effects.contains(effect))
+		self.chain_to(
+			from,
+			|function| function.own.contains(effect),
+			|external| external.effects.contains(effect),
+		)
 	}
 
 	/// Shortest call path from `from` to the function body (`in_body`) or external that introduces an effect
-	fn chain_to(&self, from: &str, in_body: impl Fn(&FunctionEffects) -> bool, in_external: impl Fn(&External) -> bool) -> Vec<String> {
+	fn chain_to(
+		&self,
+		from: &str,
+		in_body: impl Fn(&FunctionEffects) -> bool,
+		in_external: impl Fn(&External) -> bool,
+	) -> Vec<String> {
 		let mut predecessor: BTreeMap<String, String> = BTreeMap::new();
 		let mut queue = VecDeque::from([from.to_string()]);
 		while let Some(current) = queue.pop_front() {
-			let introduces = self.externals.get(&current).is_some_and(&in_external) || self.functions.get(&current).is_some_and(&in_body);
+			let introduces = self.externals.get(&current).is_some_and(&in_external)
+				|| self.functions.get(&current).is_some_and(&in_body);
 			if introduces {
 				let mut chain = vec![current.clone()];
 				while let Some(previous) = predecessor.get(chain.last().expect("non-empty")) {
@@ -421,11 +493,15 @@ impl EffectReport {
 		if let Some((name, constraint)) = self.misplaced.first() {
 			return Some(Node::Error(Box::new(Node::Text(format!(
 				"misplaced effect constraint at {}:{}: {name} is not a function, `! {}` needs a function definition",
-				constraint.line, constraint.column, constraint.allowed)))));
+				constraint.line, constraint.column, constraint.allowed
+			)))));
 		}
 		let name = effects_query(last_statement(program))?;
 		// the query mentions f, which reads as a call of it: the top level without the query
-		EffectReport::of(&statements_before_last(program)).entry_effects().is_pure().then(|| self.query_answer(&name))
+		EffectReport::of(&statements_before_last(program))
+			.entry_effects()
+			.is_pure()
+			.then(|| self.query_answer(&name))
 	}
 
 	/// Every `effects of f` in the program as its constant answer (`IO`, `(IO ask)`), so it is a value anywhere: assigned,
@@ -452,8 +528,13 @@ pub fn effects_of(code: &str, function: &str) -> Option<EffectSet> {
 }
 
 fn trusted_external(name: &str) -> Option<External> {
-	TRUSTED_EXTERNALS.iter().find(|(known, _, _)| *known == name)
-		.map(|(_, capability, effects)| External { capability: *capability, effects: EffectSet::of(effects) })
+	TRUSTED_EXTERNALS
+		.iter()
+		.find(|(known, _, _)| *known == name)
+		.map(|(_, capability, effects)| External {
+			capability: *capability,
+			effects: EffectSet::of(effects),
+		})
 }
 
 struct Resolver<'a> {
@@ -466,23 +547,41 @@ impl Resolver<'_> {
 			return None;
 		}
 		if name == crate::host::RUN_BLOCK {
-			return Some(External { capability: Host, effects: EffectSet::of(&[Eval]) });
+			return Some(External {
+				capability: Host,
+				effects: EffectSet::of(&[Eval]),
+			});
 		}
 		if name == crate::host::FOREIGN_CALL {
-			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI]) });
+			return Some(External {
+				capability: Foreign,
+				effects: EffectSet::of(&[IO, FFI]),
+			});
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
-			let pure_library = import.library == crate::ffi::LIBM || import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY;
+			let pure_library = import.library == crate::ffi::LIBM
+				|| import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY;
 			// warp's own host words (serve_routes, sleep, gpu_render …) are the Host capability, not C: a sandboxed program
 			// (warp --sandbox) keeps them
 			let host_word = import.library == crate::host::HOST_LIBRARY;
 			let capability = if host_word { Host } else { Ffi };
-			return Some(match (pure_library, host_word && crate::host::TASK_WORDS.contains(&name)) {
-				(true, _) => External { capability: Libm, effects: EffectSet::PURE },
-				(_, true) => External { capability, effects: EffectSet::of(&[Async]) },
-				_ => External { capability, effects: EffectSet::of(&[FFI]) },
-			});
+			return Some(
+				match (pure_library, host_word && crate::host::TASK_WORDS.contains(&name)) {
+					(true, _) => External {
+						capability: Libm,
+						effects: EffectSet::PURE,
+					},
+					(_, true) => External {
+						capability,
+						effects: EffectSet::of(&[Async]),
+					},
+					_ => External {
+						capability,
+						effects: EffectSet::of(&[FFI]),
+					},
+				},
+			);
 		}
 		trusted_external(name)
 	}
@@ -512,7 +611,11 @@ impl Resolver<'_> {
 			}
 			// the arguments a lowering pass builds for a host word (`run_block xs#1 "xs" [xs]`) are no construction of
 			// the program's own: the call keeps their other effects only
-			Node::List(items, _, _) if items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if self.external(name).is_some())) => {
+			Node::List(items, _, _)
+				if items.first().is_some_and(
+					|head| matches!(head.drop_meta(), Node::Symbol(name) if self.external(name).is_some()),
+				) =>
+			{
 				let mut arguments = FunctionEffects::default();
 				items.iter().for_each(|item| self.collect(item, &mut arguments));
 				function.calls.extend(arguments.calls);
@@ -529,7 +632,11 @@ impl Resolver<'_> {
 				if *op == Op::While && !never_true(right) {
 					function.perform(Div);
 				}
-				if *op == Op::Add && [left, right].iter().any(|operand| matches!(operand.drop_meta(), Node::Text(_))) {
+				if *op == Op::Add
+					&& [left, right]
+						.iter()
+						.any(|operand| matches!(operand.drop_meta(), Node::Text(_)))
+				{
 					function.perform(Allocation); // a text joined: "hi " + name
 				}
 				self.collect(left, function);
@@ -569,8 +676,15 @@ fn is_plumbing_declaration(node: &Node) -> bool {
 		Node::Key(keyword, Op::Colon, variable) => (keyword, vec![variable]),
 		_ => return false,
 	};
-	let names: Vec<String> = variables.into_iter().flat_map(crate::variable_signals::symbols).collect();
-	keyword.drop_meta().name() == STATE_KEYWORD && !names.is_empty() && names.iter().all(|name| crate::scoped_handlers::is_plumbing_variable(name))
+	let names: Vec<String> = variables
+		.into_iter()
+		.flat_map(crate::variable_signals::symbols)
+		.collect();
+	keyword.drop_meta().name() == STATE_KEYWORD
+		&& !names.is_empty()
+		&& names
+			.iter()
+			.all(|name| crate::scoped_handlers::is_plumbing_variable(name))
 }
 
 /// The effects and then the events: as a value texts like the other reflection words' answers (`f.params`), `"IO"`,
@@ -579,13 +693,22 @@ fn is_plumbing_declaration(node: &Node) -> bool {
 fn quoted(answer: Node) -> Node {
 	match answer {
 		Node::Error(_) => answer,
-		_ => Node::List(vec![Node::Symbol(crate::lowering::blocks::DATA_WORD.into()), answer], Bracket::None, crate::node::Separator::Space),
+		_ => Node::List(
+			vec![Node::Symbol(crate::lowering::blocks::DATA_WORD.into()), answer],
+			Bracket::None,
+			crate::node::Separator::Space,
+		),
 	}
 }
 
 /// P230: symbols, `(State IO)`, `Pure`
 fn effects_node(effects: EffectSet, events: &BTreeSet<String>) -> Node {
-	let mut names: Vec<Node> = effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).map(Node::Symbol).collect();
+	let mut names: Vec<Node> = effects
+		.iter()
+		.map(|effect| format!("{effect:?}"))
+		.chain(events.iter().cloned())
+		.map(Node::Symbol)
+		.collect();
 	match names.len() {
 		0 => Node::Symbol(PURE.into()),
 		1 => names.remove(0),
@@ -595,8 +718,16 @@ fn effects_node(effects: EffectSet, events: &BTreeSet<String>) -> Node {
 
 /// `IO, ask`, `Pure`
 fn effect_names(effects: EffectSet, events: &BTreeSet<String>) -> String {
-	let names: Vec<String> = effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).collect();
-	if names.is_empty() { PURE.to_string() } else { names.join(", ") }
+	let names: Vec<String> = effects
+		.iter()
+		.map(|effect| format!("{effect:?}"))
+		.chain(events.iter().cloned())
+		.collect();
+	if names.is_empty() {
+		PURE.to_string()
+	} else {
+		names.join(", ")
+	}
 }
 
 /// Each function's events, own and with its callees' (main for the top level): an `emit ask` adds ask, a call inside
@@ -605,16 +736,31 @@ pub fn event_effects(program: &Node) -> BTreeMap<String, (BTreeSet<String>, BTre
 	let context = function_definitions(program);
 	let functions: BTreeSet<String> = context.user_functions.keys().cloned().collect();
 	let verbs = crate::event_signals::emit_verbs(program);
-	let mut uses: BTreeMap<String, EventUses> = context.user_functions.iter()
+	let mut uses: BTreeMap<String, EventUses> = context
+		.user_functions
+		.iter()
 		.map(|(name, definition)| (name.clone(), EventUses::of(&definition.body, &functions, &verbs)))
 		.collect();
 	uses.insert(ENTRY.into(), EventUses::of(program, &functions, &verbs));
-	let mut events: BTreeMap<String, BTreeSet<String>> = uses.iter().map(|(name, uses)| (name.clone(), uses.own.clone())).collect();
+	let mut events: BTreeMap<String, BTreeSet<String>> = uses
+		.iter()
+		.map(|(name, uses)| (name.clone(), uses.own.clone()))
+		.collect();
 	loop {
 		let mut changed = false;
 		for (name, function) in &uses {
-			let reached: BTreeSet<String> = function.calls.iter()
-				.flat_map(|(callee, handled)| events.get(callee).into_iter().flatten().filter(|event| !handled.contains(*event)).cloned().collect::<Vec<_>>())
+			let reached: BTreeSet<String> = function
+				.calls
+				.iter()
+				.flat_map(|(callee, handled)| {
+					events
+						.get(callee)
+						.into_iter()
+						.flatten()
+						.filter(|event| !handled.contains(*event))
+						.cloned()
+						.collect::<Vec<_>>()
+				})
 				.collect();
 			let all = events.get_mut(name).expect("every function has its events");
 			let before = all.len();
@@ -622,7 +768,13 @@ pub fn event_effects(program: &Node) -> BTreeMap<String, (BTreeSet<String>, BTre
 			changed |= all.len() != before;
 		}
 		if !changed {
-			return uses.into_iter().map(|(name, function)| { let all = events.remove(&name).unwrap_or_default(); (name, (function.own, all)) }).collect();
+			return uses
+				.into_iter()
+				.map(|(name, function)| {
+					let all = events.remove(&name).unwrap_or_default();
+					(name, (function.own, all))
+				})
+				.collect();
 		}
 	}
 }
@@ -659,7 +811,9 @@ impl EventUses {
 		}
 		match node.drop_meta() {
 			Node::Symbol(name) if functions.contains(name) => self.calls.push((name.clone(), handled.clone())),
-			Node::List(items, _, _) => items.iter().for_each(|item| self.collect(item, handled, functions, verbs)),
+			Node::List(items, _, _) => items
+				.iter()
+				.for_each(|item| self.collect(item, handled, functions, verbs)),
 			Node::Key(left, _, right) => {
 				self.collect(left, handled, functions, verbs);
 				self.collect(right, handled, functions, verbs);
@@ -689,7 +843,9 @@ fn main_level_globals(program: &Node) -> Vec<String> {
 /// Does a function body read one of `globals` that is not one of its parameters?
 fn reads_global(body: &Node, globals: &[String], parameters: &[&str]) -> bool {
 	let mut found = false;
-	body.visit(&mut |node| found |= matches!(node, Node::Symbol(name) if globals.contains(name) && !parameters.contains(&name.as_str())));
+	body.visit(&mut |node| {
+		found |= matches!(node, Node::Symbol(name) if globals.contains(name) && !parameters.contains(&name.as_str()))
+	});
 	found
 }
 
@@ -722,8 +878,12 @@ enum Bound {
 type Facts = Vec<(String, Bound)>;
 
 fn recursion_shrinks(name: &str, parameters: &[&str], body: &Node) -> bool {
-	let measures = parameters.iter().enumerate().filter(|(_, parameter)| !assigns(body, parameter));
-	measures.flat_map(|(index, parameter)| [(index, *parameter, Bound::Lower), (index, *parameter, Bound::Upper)])
+	let measures = parameters
+		.iter()
+		.enumerate()
+		.filter(|(_, parameter)| !assigns(body, parameter));
+	measures
+		.flat_map(|(index, parameter)| [(index, *parameter, Bound::Lower), (index, *parameter, Bound::Upper)])
 		.any(|(index, parameter, bound)| calls_shrink(body, name, index, parameter, bound, &mut vec![]))
 }
 
@@ -743,15 +903,27 @@ fn calls_shrink(node: &Node, name: &str, index: usize, parameter: &str, bound: B
 	}
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol != name, // the function used as a value: unknown calls
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(callee)) if callee == name) => {
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(callee)) if callee == name) =>
+		{
 			let arguments = call_arguments(&items[1..]);
-			let bounded = facts.iter().any(|(known, known_bound)| known == parameter && *known_bound == bound);
-			bounded && arguments.get(index).is_some_and(|argument| moves_toward(argument, parameter, bound))
-				&& arguments.iter().all(|argument| calls_shrink(argument, name, index, parameter, bound, facts))
+			let bounded = facts
+				.iter()
+				.any(|(known, known_bound)| known == parameter && *known_bound == bound);
+			bounded
+				&& arguments
+					.get(index)
+					.is_some_and(|argument| moves_toward(argument, parameter, bound))
+				&& arguments
+					.iter()
+					.all(|argument| calls_shrink(argument, name, index, parameter, bound, facts))
 		}
-		Node::List(items, _, _) => items.iter().all(|item| calls_shrink(item, name, index, parameter, bound, facts)),
-		Node::Key(left, _, right) => calls_shrink(left, name, index, parameter, bound, facts)
-			&& calls_shrink(right, name, index, parameter, bound, facts),
+		Node::List(items, _, _) => items
+			.iter()
+			.all(|item| calls_shrink(item, name, index, parameter, bound, facts)),
+		Node::Key(left, _, right) => {
+			calls_shrink(left, name, index, parameter, bound, facts)
+				&& calls_shrink(right, name, index, parameter, bound, facts)
+		}
 		Node::Error(inner) => calls_shrink(inner, name, index, parameter, bound, facts),
 		_ => true,
 	}
@@ -785,7 +957,9 @@ fn conditional(node: &Node) -> Option<(&Node, &Node, Option<&Node>)> {
 }
 
 fn if_then_parts(node: &Node) -> Option<(&Node, &Node, Option<&Node>)> {
-	let Node::Key(if_guard, Op::Then, then) = node.drop_meta() else { return None };
+	let Node::Key(if_guard, Op::Then, then) = node.drop_meta() else {
+		return None;
+	};
 	match if_guard.drop_meta() {
 		Node::Key(_, Op::If, guard) => Some((&**guard, &**then, None)),
 		_ => None,
@@ -800,11 +974,19 @@ fn guard_bounds(guard: &Node, holds: bool) -> Facts {
 		Node::Key(left, Op::Or, right) if !holds => [guard_bounds(left, false), guard_bounds(right, false)].concat(),
 		Node::Key(left, op @ (Op::Lt | Op::Le | Op::Gt | Op::Ge), right) => {
 			let (parameter, below_literal) = match (left.drop_meta(), right.drop_meta()) {
-				(Node::Symbol(parameter), Node::Number(limit)) if is_finite(limit) => (parameter, matches!(op, Op::Lt | Op::Le)),
-				(Node::Number(limit), Node::Symbol(parameter)) if is_finite(limit) => (parameter, matches!(op, Op::Gt | Op::Ge)),
+				(Node::Symbol(parameter), Node::Number(limit)) if is_finite(limit) => {
+					(parameter, matches!(op, Op::Lt | Op::Le))
+				}
+				(Node::Number(limit), Node::Symbol(parameter)) if is_finite(limit) => {
+					(parameter, matches!(op, Op::Gt | Op::Ge))
+				}
 				_ => return vec![],
 			};
-			let bound = if below_literal == holds { Bound::Upper } else { Bound::Lower };
+			let bound = if below_literal == holds {
+				Bound::Upper
+			} else {
+				Bound::Lower
+			};
 			vec![(parameter.clone(), bound)]
 		}
 		_ => vec![],
@@ -816,8 +998,12 @@ fn moves_toward(argument: &Node, parameter: &str, bound: Bound) -> bool {
 	match argument.drop_meta() {
 		Node::List(items, _, _) if items.len() == 1 => moves_toward(&items[0], parameter, bound),
 		Node::Key(left, op @ (Op::Sub | Op::Add), step) => {
-			let Node::Number(step) = step.drop_meta() else { return false };
-			let Node::Symbol(moved) = left.drop_meta() else { return false };
+			let Node::Number(step) = step.drop_meta() else {
+				return false;
+			};
+			let Node::Symbol(moved) = left.drop_meta() else {
+				return false;
+			};
 			let direction = if *op == Op::Sub { -sign(step) } else { sign(step) };
 			moved == parameter && direction == if bound == Bound::Lower { -1 } else { 1 }
 		}
@@ -851,18 +1037,34 @@ fn sign(number: &crate::extensions::numbers::Number) -> i8 {
 		Number::BigQuotient(q) => q.is_negative(),
 		_ => false,
 	};
-	if positive { 1 } else if negative { -1 } else { 0 }
+	if positive {
+		1
+	} else if negative {
+		-1
+	} else {
+		0
+	}
 }
 
 /// The body writes `parameter` (`p = …`, `p += …`, `p++`): its value at a call is no longer the guarded one
 fn assigns(node: &Node, parameter: &str) -> bool {
 	match node.drop_meta() {
 		Node::Key(left, op, right) => {
-			let writes = matches!(op, Op::Assign | Op::Define | Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign
-				| Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign | Op::XorAssign | Op::Inc | Op::Dec);
+			let writes = matches!(
+				op,
+				Op::Assign
+					| Op::Define | Op::AddAssign
+					| Op::SubAssign | Op::MulAssign
+					| Op::DivAssign | Op::ModAssign
+					| Op::PowAssign | Op::AndAssign
+					| Op::OrAssign | Op::XorAssign
+					| Op::Inc | Op::Dec
+			);
 			(writes && matches!(left.drop_meta(), Node::Symbol(name) if name == parameter))
-				|| (matches!(op, Op::Inc | Op::Dec) && matches!(right.drop_meta(), Node::Symbol(name) if name == parameter))
-				|| assigns(left, parameter) || assigns(right, parameter)
+				|| (matches!(op, Op::Inc | Op::Dec)
+					&& matches!(right.drop_meta(), Node::Symbol(name) if name == parameter))
+				|| assigns(left, parameter)
+				|| assigns(right, parameter)
 		}
 		Node::List(items, _, _) => items.iter().any(|item| assigns(item, parameter)),
 		Node::Error(inner) => assigns(inner, parameter),
@@ -874,7 +1076,11 @@ fn assigns(node: &Node, parameter: &str) -> bool {
 fn defined_name(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Key(left, Op::Define | Op::Assign, _) => leading_symbol(left),
-		Node::List(items, _, _) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s)) => leading_symbol(&items[1]),
+		Node::List(items, _, _)
+			if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s)) =>
+		{
+			leading_symbol(&items[1])
+		}
 		_ => None,
 	}
 }
@@ -890,7 +1096,9 @@ fn leading_symbol(node: &Node) -> Option<String> {
 /// `import f from lib` / `use lib`
 fn is_declaration(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)),
+		Node::List(items, _, _) => {
+			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word))
+		}
 		_ => false,
 	}
 }
@@ -898,7 +1106,10 @@ fn is_declaration(node: &Node) -> bool {
 fn constraint_names(node: &Node) -> Option<Vec<String>> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(vec![name.clone()]),
-		Node::List(items, _, _) => items.iter().map(|item| constraint_names(item).and_then(|n| n.into_iter().next())).collect(),
+		Node::List(items, _, _) => items
+			.iter()
+			.map(|item| constraint_names(item).and_then(|n| n.into_iter().next()))
+			.collect(),
 		_ => None,
 	}
 }
@@ -909,7 +1120,9 @@ fn is_effect_name(node: &Node) -> bool {
 
 /// `definition ! Effects` → (definition, allowed effects)
 fn split_constraint(node: &Node) -> Option<(&Node, (EffectSet, BTreeSet<String>))> {
-	let Node::Key(definition, Op::Not, declared) = node.drop_meta() else { return None };
+	let Node::Key(definition, Op::Not, declared) = node.drop_meta() else {
+		return None;
+	};
 	defined_name(definition)?;
 	let names = constraint_names(declared)?;
 	let allowed = allowed_names(&names)?;
@@ -940,7 +1153,10 @@ fn constrained_statements(items: &[Node]) -> Vec<(usize, usize)> {
 	let mut index = 0;
 	while index < items.len() {
 		let trailing = if split_constraint(&items[index]).is_some() {
-			items[index + 1..].iter().take_while(|item| is_effect_name(item)).count()
+			items[index + 1..]
+				.iter()
+				.take_while(|item| is_effect_name(item))
+				.count()
 		} else {
 			0
 		};
@@ -958,18 +1174,32 @@ fn constraints(program: &Node) -> Vec<(String, Constraint)> {
 
 fn collect_constraints(node: &Node, found: &mut Vec<(String, Constraint)>) {
 	if let Some((definition, (allowed, events))) = split_constraint(node) {
-		let (line, column) = node.get_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
-		found.push((defined_name(definition).expect("checked by split_constraint"), Constraint { allowed, events, line, column }));
+		let (line, column) = node
+			.get_lineinfo()
+			.map(|info| (info.line_nr, info.column))
+			.unwrap_or_default();
+		found.push((
+			defined_name(definition).expect("checked by split_constraint"),
+			Constraint {
+				allowed,
+				events,
+				line,
+				column,
+			},
+		));
 		return;
 	}
 	if let Node::List(items, _, _) = node.drop_meta() {
 		for (index, trailing) in constrained_statements(items) {
 			let before = found.len();
 			collect_constraints(&items[index], found);
-			let extra: Vec<&str> = items[index + 1..=index + trailing].iter().filter_map(|item| match item.drop_meta() {
-				Node::Symbol(name) => Some(name.as_str()),
-				_ => None,
-			}).collect();
+			let extra: Vec<&str> = items[index + 1..=index + trailing]
+				.iter()
+				.filter_map(|item| match item.drop_meta() {
+					Node::Symbol(name) => Some(name.as_str()),
+					_ => None,
+				})
+				.collect();
 			if let (Some((_, constraint)), Some(more)) = (found.get_mut(before), EffectSet::named(&extra)) {
 				constraint.allowed = constraint.allowed.union(more);
 			}
@@ -983,9 +1213,15 @@ pub fn without_constraints(node: Node) -> Node {
 		return definition.clone();
 	}
 	match node {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_constraints(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(without_constraints(*node)),
+			data,
+		},
 		Node::List(items, bracket, separator) => {
-			let mut kept: Vec<Node> = constrained_statements(&items).into_iter().map(|(index, _)| without_constraints(items[index].clone())).collect();
+			let mut kept: Vec<Node> = constrained_statements(&items)
+				.into_iter()
+				.map(|(index, _)| without_constraints(items[index].clone()))
+				.collect();
 			if kept.len() == 1 && items.len() > 1 {
 				return kept.remove(0); // only the comma split `f := … ! IO, FFI` made this a list
 			}
@@ -997,25 +1233,34 @@ pub fn without_constraints(node: Node) -> Node {
 
 fn statements_before_last(program: &Node) -> Node {
 	match program.drop_meta() {
-		Node::List(items, bracket, separator) if !items.is_empty() => Node::List(items[..items.len() - 1].to_vec(), bracket.clone(), separator.clone()),
+		Node::List(items, bracket, separator) if !items.is_empty() => {
+			Node::List(items[..items.len() - 1].to_vec(), bracket.clone(), separator.clone())
+		}
 		_ => Node::Empty,
 	}
 }
 
 fn last_statement(program: &Node) -> &Node {
 	match program.drop_meta() {
-		Node::List(items, _, _) if matches!(items.last().map(Node::drop_meta), Some(Node::List(..))) => items.last().expect("non-empty"),
+		Node::List(items, _, _) if matches!(items.last().map(Node::drop_meta), Some(Node::List(..))) => {
+			items.last().expect("non-empty")
+		}
 		_ => program,
 	}
 }
 
 /// `effects of f` → `f`
 fn effects_query(statement: &Node) -> Option<String> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let words: Vec<&str> = items.iter().filter_map(|item| match item.drop_meta() {
-		Node::Symbol(word) => Some(word.as_str()),
-		_ => None,
-	}).collect();
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let words: Vec<&str> = items
+		.iter()
+		.filter_map(|item| match item.drop_meta() {
+			Node::Symbol(word) => Some(word.as_str()),
+			_ => None,
+		})
+		.collect();
 	match words.as_slice() {
 		[effects, of, name] if items.len() == 3 && [*effects, *of] == QUERY_WORDS => Some(name.to_string()),
 		_ => None,

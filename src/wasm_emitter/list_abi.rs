@@ -29,30 +29,36 @@ pub(super) struct ListAbi {
 /// The variable each list parameter p is copied into, `v = p`, its only use: `p·list = p` (analyzer
 /// indexed_parameter_copies) or a for loop's `items = p`
 fn list_parameters(function: &UserFunctionDef) -> Vec<Option<String>> {
-	function.params.iter().map(|param| {
-		let mut copy = None;
-		let mut uses = 0;
-		function.body.visit(&mut |part| match part {
-			Node::Symbol(name) if *name == param.name => uses += 1,
-			Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Symbol(name) if *name == param.name) => {
-				if let Node::Symbol(target) = target.drop_meta() {
-					copy = Some(target.clone());
+	function
+		.params
+		.iter()
+		.map(|param| {
+			let mut copy = None;
+			let mut uses = 0;
+			function.body.visit(&mut |part| match part {
+				Node::Symbol(name) if *name == param.name => uses += 1,
+				Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Symbol(name) if *name == param.name) => {
+					if let Node::Symbol(target) = target.drop_meta() {
+						copy = Some(target.clone());
+					}
 				}
-			}
-			_ => {}
-		});
-		// a text keeps its letters
-		copy.filter(|_| uses == 1 && param.default.is_none() && param_kind(param) == Kind::List)
-	}).collect()
+				_ => {}
+			});
+			// a text keeps its letters
+			copy.filter(|_| uses == 1 && param.default.is_none() && param_kind(param) == Kind::List)
+		})
+		.collect()
 }
 
 /// What a body gives back: its last statement (or what its final `return` returns) and every `return` value
 fn results(body: &Node) -> Vec<&Node> {
 	let mut found = vec![];
-	body.visit(&mut |part| if let Node::List(items, _, _) = part {
-		if let [word, value] = items.as_slice() {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == RETURN) {
-				found.push(value);
+	body.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			if let [word, value] = items.as_slice() {
+				if matches!(word.drop_meta(), Node::Symbol(name) if name == RETURN) {
+					found.push(value);
+				}
 			}
 		}
 	});
@@ -81,7 +87,11 @@ pub(super) fn body_statements(body: &Node) -> Vec<Node> {
 /// The last value of a block `(…; x)`
 fn last_value(node: &Node) -> &Node {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) if !items.is_empty() => last_value(&items[items.len() - 1]),
+		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline)
+			if !items.is_empty() =>
+		{
+			last_value(&items[items.len() - 1])
+		}
 		other => other,
 	}
 }
@@ -111,7 +121,13 @@ impl WasmGcEmitter {
 			}
 			// a parameter whose copy is no array after all takes a Node
 			let mut typed = self.body_typed_lists(function, &params);
-			let arrays: Vec<bool> = copies.iter().map(|copy| copy.as_ref().is_some_and(|copy| typed.get(copy).is_some_and(|list| list.element == ElementType::Node))).collect();
+			let arrays: Vec<bool> = copies
+				.iter()
+				.map(|copy| {
+					copy.as_ref()
+						.is_some_and(|copy| typed.get(copy).is_some_and(|list| list.element == ElementType::Node))
+				})
+				.collect();
 			if arrays != params {
 				params = arrays;
 				if !params.contains(&true) {
@@ -120,7 +136,10 @@ impl WasmGcEmitter {
 				typed = self.body_typed_lists(function, &params);
 			}
 			// a result that is the array copy itself, held as a $NodeList; the calls among the results are judged below
-			let results: Vec<Node> = results(&function.body).into_iter().map(|result| last_value(result).clone()).collect();
+			let results: Vec<Node> = results(&function.body)
+				.into_iter()
+				.map(|result| last_value(result).clone())
+				.collect();
 			let arrays = results.iter().all(|result| match result.drop_meta() {
 				Node::Symbol(name) => typed.get(name).is_some_and(|list| list.element == ElementType::Node),
 				other => called_function(other).is_some(),
@@ -128,15 +147,27 @@ impl WasmGcEmitter {
 			if arrays {
 				list_results.insert(function.name.clone(), results);
 			}
-			abi.insert(function.name.clone(), ListAbi { params, returns_list: false });
+			abi.insert(
+				function.name.clone(),
+				ListAbi {
+					params,
+					returns_list: false,
+				},
+			);
 		}
 		// greatest fixpoint: a result call returns an array when its function does
 		let mut returning: HashSet<String> = list_results.keys().cloned().collect();
 		loop {
-			let kept: HashSet<String> = returning.iter().filter(|name| list_results[*name].iter().all(|result| match called_function(result) {
-				Some(callee) => returning.contains(callee),
-				None => true,
-			})).cloned().collect();
+			let kept: HashSet<String> = returning
+				.iter()
+				.filter(|name| {
+					list_results[*name].iter().all(|result| match called_function(result) {
+						Some(callee) => returning.contains(callee),
+						None => true,
+					})
+				})
+				.cloned()
+				.collect();
 			if kept == returning {
 				break;
 			}
@@ -151,32 +182,60 @@ impl WasmGcEmitter {
 	/// The user functions only ever called directly, never as a closure, a tuple function or a witness the runtime
 	/// dispatches to (witness.rs): those may take a calling convention of their own (lists as arrays, instances as structs)
 	pub(super) fn directly_called_functions(&self) -> Vec<UserFunctionDef> {
-		let excluded: HashSet<String> = self.ctx.closure_targets.iter().map(|(target, _)| target.clone()).collect();
-		self.ctx.user_functions.values()
-			.filter(|function| !excluded.contains(&function.name) && function.tuple_kinds.is_empty() && !self.is_closure_call(&function.name))
+		let excluded: HashSet<String> = self
+			.ctx
+			.closure_targets
+			.iter()
+			.map(|(target, _)| target.clone())
+			.collect();
+		self.ctx
+			.user_functions
+			.values()
+			.filter(|function| {
+				!excluded.contains(&function.name)
+					&& function.tuple_kinds.is_empty()
+					&& !self.is_closure_call(&function.name)
+			})
 			.filter(|function| crate::traits::witness_type(&function.name, crate::traits::COMPARE).is_none())
-			.cloned().collect()
+			.cloned()
+			.collect()
 	}
 
 	/// The typed lists of a function body, as compile_user_function_body will find them, its list parameters typed
-	pub(super) fn body_typed_lists(&mut self, function: &UserFunctionDef, list_params: &[bool]) -> HashMap<String, TypedList> {
-		let scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
+	pub(super) fn body_typed_lists(
+		&mut self,
+		function: &UserFunctionDef,
+		list_params: &[bool],
+	) -> HashMap<String, TypedList> {
+		let scope = Scope::with_function_kinds(self.user_function_kinds())
+			.with_closure_targets(self.ctx.closure_variable_targets.clone());
 		let saved_scope = std::mem::replace(&mut self.scope, scope);
 		self.scope.globals = self.function_globals(&function.name);
 		for (param, is_list) in function.params.iter().zip(list_params) {
-			self.scope.define_param(param, if *is_list { Kind::List } else { param_kind(param) });
+			self.scope
+				.define_param(param, if *is_list { Kind::List } else { param_kind(param) });
 		}
 		collect_variables(&function.body, &mut self.scope);
 		let mut typed = self.find_typed_lists(&function.body);
 		self.scope = saved_scope;
 		for (param, _) in function.params.iter().zip(list_params).filter(|(_, is_list)| **is_list) {
-			typed.insert(param.name.clone(), TypedList { element: ElementType::Node, updated: true, aliased: true });
+			typed.insert(
+				param.name.clone(),
+				TypedList {
+					element: ElementType::Node,
+					updated: true,
+					aliased: true,
+				},
+			);
 		}
 		typed
 	}
 
 	pub(super) fn node_list_type(&self) -> ValType {
-		ValType::Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_list_type) })
+		ValType::Ref(RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(self.type_manager.node_list_type),
+		})
 	}
 
 	/// Does a call of this function give back a $NodeList
@@ -185,21 +244,29 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn takes_list_abi(&self, name: &str, index: usize) -> bool {
-		self.list_abi.get(name).is_some_and(|abi| abi.params.get(index).copied().unwrap_or(false))
+		self.list_abi
+			.get(name)
+			.is_some_and(|abi| abi.params.get(index).copied().unwrap_or(false))
 	}
 
 	/// A value where a $NodeList is wanted: a Node-list variable as its array, a call of a function returning one as it
 	/// is, any other Node list converted once
 	pub(super) fn emit_list_abi_value(&mut self, func: &mut Function, value: &Node) {
 		// `(statements; x)`: the statements run, x is the value
-		if let Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) = value.drop_meta() {
+		if let Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) =
+			value.drop_meta()
+		{
 			if let Some((last, statements)) = items.split_last() {
 				self.emit_discarded_statements(func, statements);
 				return self.emit_list_abi_value(func, last);
 			}
 		}
 		if let Node::Symbol(name) = value.drop_meta() {
-			if self.typed_lists.get(name).is_some_and(|list| list.element == ElementType::Node) {
+			if self
+				.typed_lists
+				.get(name)
+				.is_some_and(|list| list.element == ElementType::Node)
+			{
 				let slot = self.scope.lookup(name).expect("a typed list is a local").position;
 				func.instruction(&I::LocalGet(slot));
 				return;
@@ -210,7 +277,9 @@ impl WasmGcEmitter {
 		}
 		if let Some(callee) = called_function(value).filter(|callee| self.returns_list_abi(callee)) {
 			let callee = callee.to_string();
-			let Node::List(items, _, _) = value.drop_meta() else { unreachable!("a call") };
+			let Node::List(items, _, _) = value.drop_meta() else {
+				unreachable!("a call")
+			};
 			let user_fn = self.ctx.user_functions[&callee].clone();
 			self.emit_user_function_call_inner(func, &user_fn, &items[1..]);
 			return;
@@ -227,7 +296,12 @@ impl WasmGcEmitter {
 	}
 
 	/// A function body: its statements, then its last value as `emit_last` gives it (a `return` returns)
-	pub(super) fn emit_body_then(&mut self, func: &mut Function, body: &Node, emit_last: impl FnOnce(&mut Self, &mut Function, &Node)) {
+	pub(super) fn emit_body_then(
+		&mut self,
+		func: &mut Function,
+		body: &Node,
+		emit_last: impl FnOnce(&mut Self, &mut Function, &Node),
+	) {
 		let statements = body_statements(body);
 		let Some((last, before)) = statements.split_last() else {
 			emit_last(self, func, &Node::Empty);

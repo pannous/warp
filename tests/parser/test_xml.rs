@@ -1,6 +1,6 @@
 use crate::eq;
-use warp::Node;
 use warp::warp_parser::parse_xml;
+use warp::Node;
 use Node::*;
 
 #[test]
@@ -94,7 +94,8 @@ fn test_nested_xml() {
 #[test]
 fn test_xml_roundtrip() {
 	// Test that we can parse XML, convert to XML, and re-parse
-	let xml = r#"<html><head><title>My Page</title></head><body><h1>Hello</h1><p class="intro">Welcome</p></body></html>"#;
+	let xml =
+		r#"<html><head><title>My Page</title></head><body><h1>Hello</h1><p class="intro">Welcome</p></body></html>"#;
 	let node1 = parse_xml(xml);
 	println!("Parsed 1: {:?}", node1);
 
@@ -358,8 +359,16 @@ fn test_parse_all_xml_files() {
 
 	println!("\n=== Results ===");
 	println!("Total files:  {}", total_files);
-	println!("Successful:   {} ({:.1}%)", successful, (successful as f64 / total_files as f64) * 100.0);
-	println!("Failed:       {} ({:.1}%)", failed, (failed as f64 / total_files as f64) * 100.0);
+	println!(
+		"Successful:   {} ({:.1}%)",
+		successful,
+		(successful as f64 / total_files as f64) * 100.0
+	);
+	println!(
+		"Failed:       {} ({:.1}%)",
+		failed,
+		(failed as f64 / total_files as f64) * 100.0
+	);
 
 	if !errors.is_empty() {
 		println!("\n=== First {} Errors ===", errors.len());

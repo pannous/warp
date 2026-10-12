@@ -1,6 +1,6 @@
-use warp::Number::{Float, Int};
+use crate::{eq, is, put};
 use warp::Number;
-use crate::{is, eq, put};
+use warp::Number::{Float, Int};
 // use warp::Node::Number as Number;
 // use warp::Number::{Float, Int};
 
@@ -29,12 +29,7 @@ fn test_number_floats() {
 	let n3 = n + n2;
 	put!("n3", n3);
 	// eq!(n3, 3.3);
-	assert!(
-		approx_equal(n3, Float(3.3), 1e-10),
-		"Left: {}, Right: {}",
-		n3,
-		3.3
-	);
+	assert!(approx_equal(n3, Float(3.3), 1e-10), "Left: {}, Right: {}", n3, 3.3);
 	eq!(n3, Float(3.3)); // ⚠️ 3.3000000000000003
 	eq!(n3, Float(3.3));
 	eq!(n3, 3.3);

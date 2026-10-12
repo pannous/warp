@@ -8,9 +8,11 @@
 //! `break value` in a handler body aborts (step 3): the handler stores value in `effect_handler_aborted_ask_i` and
 //! throws to its block, which runs under `ran_without_abort(i, {…})` and then has that value.
 
-use super::words::{IN_WORD, ON_WORD};
 use super::nodes::{call, if_then_else, key};
-use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of};
+use super::words::{IN_WORD, ON_WORD};
+use crate::event_signals::{
+	emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of,
+};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::assign;
@@ -42,7 +44,9 @@ pub fn lower(program: Node) -> Node {
 	}
 	// a program of one statement is that statement
 	let (statements, bracket, separator) = match program.drop_meta().clone() {
-		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => (statements, bracket, separator),
+		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			(statements, bracket, separator)
+		}
 		statement => (vec![statement], Bracket::None, Separator::Semicolon),
 	};
 	let mut by_event: BTreeMap<String, Vec<usize>> = BTreeMap::new();
@@ -50,21 +54,44 @@ pub fn lower(program: Node) -> Node {
 		by_event.entry(handler.event.clone()).or_default().push(handler.number);
 	}
 	let verbs = emit_verbs(&program);
-	let initial = by_event.keys().map(|event| assign(&active_variable(event), Node::int(0)))
-		.chain(handlers.iter().map(|handler| assign(&outer_variable(&handler.event, handler.number), Node::int(0))))
-		.chain(handlers.iter().filter(|handler| aborts(&handler.body)).map(|handler| assign(&aborted_variable(&handler.event, handler.number), Node::Empty)));
+	let initial = by_event
+		.keys()
+		.map(|event| assign(&active_variable(event), Node::int(0)))
+		.chain(
+			handlers
+				.iter()
+				.map(|handler| assign(&outer_variable(&handler.event, handler.number), Node::int(0))),
+		)
+		.chain(
+			handlers
+				.iter()
+				.filter(|handler| aborts(&handler.body))
+				.map(|handler| assign(&aborted_variable(&handler.event, handler.number), Node::Empty)),
+		);
 	let mut main: Vec<Node> = initial.collect();
 	let main_variables = main_level_variables(&[main.clone(), statements.clone()].concat());
 	for event in by_event.keys() {
-		main.push(function_with_globals(&active_function(event), false, &[Node::Symbol(active_variable(event))], &main_variables));
+		main.push(function_with_globals(
+			&active_function(event),
+			false,
+			&[Node::Symbol(active_variable(event))],
+			&main_variables,
+		));
 		let restore = assign(&active_variable(event), symbol(crate::event_signals::EVENT_WORD));
-		main.push(function_with_globals(&leave_function(event), true, &[restore], &main_variables));
+		main.push(function_with_globals(
+			&leave_function(event),
+			true,
+			&[restore],
+			&main_variables,
+		));
 	}
 	for handler in &handlers {
 		main.push(enter_function(handler, &main_variables));
 		main.push(handler_function(handler, &by_event, &verbs, &main_variables));
 	}
-	let statements = statements.into_iter().map(|statement| dispatched_emits(statement, &by_event, &verbs));
+	let statements = statements
+		.into_iter()
+		.map(|statement| dispatched_emits(statement, &by_event, &verbs));
 	Node::List(main.into_iter().chain(statements).collect(), bracket, separator)
 }
 
@@ -77,7 +104,9 @@ pub(crate) fn has_block_handler(program: &Node, event: &str) -> bool {
 /// The program with each `on ask {…} in {…}` replaced by its block run under handler i, the handlers collected
 fn scoped_blocks(node: Node, handlers: &mut Vec<Handler>) -> Node {
 	let node = operand_phrase(node).map_children(|child| scoped_blocks(child, handlers));
-	let Some((event, body, block)) = scoped_handler(&node) else { return node };
+	let Some((event, body, block)) = scoped_handler(&node) else {
+		return node;
+	};
 	let number = handlers.len() + 1;
 	let saved = generated(&[SAVED_WORD, &event_word(&event), &number.to_string()]);
 	let value = generated(&[RESULT_WORD, &event_word(&event), &number.to_string()]);
@@ -88,13 +117,24 @@ fn scoped_blocks(node: Node, handlers: &mut Vec<Handler>) -> Node {
 		// `finished = ran_without_abort(i, {value = block}); leave; if finished then value else aborted_i`
 		let finished = generated(&[FINISHED_WORD, &event_word(&event), &number.to_string()]);
 		let guarded = Node::List(vec![run_block], Bracket::Curly, Separator::Semicolon);
-		let ran = call(crate::wasm_emitter::RAN_WITHOUT_ABORT, vec![Node::int(number as i64), guarded]);
-		let value_or_aborted = if_then_else(Node::Symbol(finished.clone()), Node::Symbol(value), Node::Symbol(aborted_variable(&event, number)));
+		let ran = call(
+			crate::wasm_emitter::RAN_WITHOUT_ABORT,
+			vec![Node::int(number as i64), guarded],
+		);
+		let value_or_aborted = if_then_else(
+			Node::Symbol(finished.clone()),
+			Node::Symbol(value),
+			Node::Symbol(aborted_variable(&event, number)),
+		);
 		sequence(vec![enter, assign(&finished, ran), leave, value_or_aborted])
 	} else {
 		sequence(vec![enter, run_block, leave, Node::Symbol(value)])
 	};
-	handlers.push(Handler { event: event.clone(), number, body });
+	handlers.push(Handler {
+		event: event.clone(),
+		number,
+		body,
+	});
 	// `{ on ask {…} in {…} }`, a block of this one statement, stays a block
 	match node.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => Node::List(vec![run], Bracket::Curly, Separator::Semicolon),
@@ -104,11 +144,20 @@ fn scoped_blocks(node: Node, handlers: &mut Vec<Handler>) -> Node {
 
 /// `on ask {body} in {block}`: the event, the handler body and the block
 pub(crate) fn scoped_handler(node: &Node) -> Option<(String, Node, Node)> {
-	let Node::List(items, _, Separator::Space) = node.drop_meta() else { return None };
+	let Node::List(items, _, Separator::Space) = node.drop_meta() else {
+		return None;
+	};
 	let items = phrase_words(items);
-	let [on, words @ .., body, in_word, block] = items.as_slice() else { return None };
+	let [on, words @ .., body, in_word, block] = items.as_slice() else {
+		return None;
+	};
 	let curly = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
-	if crate::declarations::word(on) != ON_WORD || crate::declarations::word(in_word) != IN_WORD || !curly(body) || !curly(block) || words.is_empty() {
+	if crate::declarations::word(on) != ON_WORD
+		|| crate::declarations::word(in_word) != IN_WORD
+		|| !curly(body)
+		|| !curly(block)
+		|| words.is_empty()
+	{
 		return None;
 	}
 	let words: Vec<String> = words.iter().map(crate::declarations::word).collect();
@@ -121,14 +170,26 @@ pub(crate) fn scoped_handler(node: &Node) -> Option<(String, Node, Node)> {
 /// `print "x " + on ask {…} in {…}` parses as `print ("x " + on) ask {…} in {…}`: the handler phrase back in the place
 /// of its `on`, a word of the phrase or the last operand of an operator (`"x " + (on ask {…} in {…})`)
 fn operand_phrase(node: Node) -> Node {
-	let Node::List(items, _, Separator::Space) = node.drop_meta() else { return node };
+	let Node::List(items, _, Separator::Space) = node.drop_meta() else {
+		return node;
+	};
 	let items = phrase_words(items);
 	let starts_handler = |index: &usize| {
 		let rest = [&[symbol(ON_WORD)], &items[index + 1..]].concat();
 		scoped_handler(&Node::List(rest, Bracket::None, Separator::Space)).is_some()
 	};
-	let Some(start) = (0..items.len()).filter(|index| ends_with_on(&items[*index])).find(|index| *index > 0 || !is_on(&items[0])).filter(starts_handler) else { return node };
-	let phrase = Node::List([&[symbol(ON_WORD)], &items[start + 1..]].concat(), Bracket::None, Separator::Space);
+	let Some(start) = (0..items.len())
+		.filter(|index| ends_with_on(&items[*index]))
+		.find(|index| *index > 0 || !is_on(&items[0]))
+		.filter(starts_handler)
+	else {
+		return node;
+	};
+	let phrase = Node::List(
+		[&[symbol(ON_WORD)], &items[start + 1..]].concat(),
+		Bracket::None,
+		Separator::Space,
+	);
 	let head = &items[..start];
 	let placed = with_last_operand(items[start].clone(), phrase);
 	match head.is_empty() {
@@ -158,10 +219,13 @@ fn with_last_operand(node: Node, phrase: Node) -> Node {
 
 /// The words of a phrase, the groups the parser makes of it (`on (ask {…}) in {…}`, `on ask ({…} in {…})`) undone
 fn phrase_words(items: &[Node]) -> Vec<Node> {
-	items.iter().flat_map(|item| match item.drop_meta() {
-		Node::List(inner, Bracket::None, Separator::Space) => phrase_words(inner),
-		_ => vec![item.clone()],
-	}).collect()
+	items
+		.iter()
+		.flat_map(|item| match item.drop_meta() {
+			Node::List(inner, Bracket::None, Separator::Space) => phrase_words(inner),
+			_ => vec![item.clone()],
+		})
+		.collect()
 }
 
 /// `emit ask{…}`: `if ask·active() == 1 then ask·handler·1({…}) else … else emit ask{…}`
@@ -171,8 +235,16 @@ fn dispatched_emits(node: Node, by_event: &BTreeMap<String, Vec<usize>>, verbs: 
 			let active = call(&active_function(&event), vec![]);
 			return numbers.iter().rev().fold(node, |otherwise, number| {
 				let condition = key(active.clone(), Op::Eq, Node::int(*number as i64));
-				let arguments = if matches!(data, Node::Empty) { vec![] } else { vec![data.clone()] };
-				sequence(vec![if_then_else(condition, call(&handler_name(&event, *number), arguments), otherwise)])
+				let arguments = if matches!(data, Node::Empty) {
+					vec![]
+				} else {
+					vec![data.clone()]
+				};
+				sequence(vec![if_then_else(
+					condition,
+					call(&handler_name(&event, *number), arguments),
+					otherwise,
+				)])
 			});
 		}
 	}
@@ -182,22 +254,45 @@ fn dispatched_emits(node: Node, by_event: &BTreeMap<String, Vec<usize>>, verbs: 
 /// `ask·enter·i() := { global active, outer_i; outer_i = active; active = i; outer_i }`: handler i active, the one
 /// before it kept
 fn enter_function(handler: &Handler, main_variables: &std::collections::HashSet<String>) -> Node {
-	let (active, outer) = (active_variable(&handler.event), outer_variable(&handler.event, handler.number));
-	let body = [assign(&outer, Node::Symbol(active.clone())), assign(&active, Node::int(handler.number as i64)), Node::Symbol(outer)];
-	function_with_globals(&enter_name(&handler.event, handler.number), false, &body, main_variables)
+	let (active, outer) = (
+		active_variable(&handler.event),
+		outer_variable(&handler.event, handler.number),
+	);
+	let body = [
+		assign(&outer, Node::Symbol(active.clone())),
+		assign(&active, Node::int(handler.number as i64)),
+		Node::Symbol(outer),
+	];
+	function_with_globals(
+		&enter_name(&handler.event, handler.number),
+		false,
+		&body,
+		main_variables,
+	)
 }
 
 /// `ask·handler·i(event) := { previous = active; active = outer_i; handled = (body); active = previous; handled }`:
 /// while the body runs, an emit of ask reaches the handler outside block i
-fn handler_function(handler: &Handler, by_event: &BTreeMap<String, Vec<usize>>, verbs: &[String], main_variables: &std::collections::HashSet<String>) -> Node {
+fn handler_function(
+	handler: &Handler,
+	by_event: &BTreeMap<String, Vec<usize>>,
+	verbs: &[String],
+	main_variables: &std::collections::HashSet<String>,
+) -> Node {
 	let active = active_variable(&handler.event);
 	let previous = generated(&[SAVED_WORD, "previous"]);
 	let result = generated(&[RESULT_WORD, "value"]);
-	let statements = statements_of(&handler.body).into_iter().map(|statement| match broken_value(&statement) {
-		// `break value`: the value for the block, then the jump to it
-		Some(value) => sequence(vec![assign(&aborted_variable(&handler.event, handler.number), value), call(crate::wasm_emitter::ABORT_TO, vec![Node::int(handler.number as i64)])]),
-		None => statement,
-	}).collect();
+	let statements = statements_of(&handler.body)
+		.into_iter()
+		.map(|statement| match broken_value(&statement) {
+			// `break value`: the value for the block, then the jump to it
+			Some(value) => sequence(vec![
+				assign(&aborted_variable(&handler.event, handler.number), value),
+				call(crate::wasm_emitter::ABORT_TO, vec![Node::int(handler.number as i64)]),
+			]),
+			None => statement,
+		})
+		.collect();
 	let body = dispatched_emits(sequence(statements), by_event, verbs);
 	let statements = [
 		assign(&previous, Node::Symbol(active.clone())),
@@ -206,7 +301,12 @@ fn handler_function(handler: &Handler, by_event: &BTreeMap<String, Vec<usize>>, 
 		assign(&active, Node::Symbol(previous)),
 		Node::Symbol(result),
 	];
-	function_with_globals(&handler_name(&handler.event, handler.number), reads_event(std::slice::from_ref(&handler.body)), &statements, main_variables)
+	function_with_globals(
+		&handler_name(&handler.event, handler.number),
+		reads_event(std::slice::from_ref(&handler.body)),
+		&statements,
+		main_variables,
+	)
 }
 
 /// `(a; b; c)`: the statements run in order, the last one's value is the value
@@ -241,7 +341,9 @@ fn aborted_variable(event: &str, number: usize) -> String {
 
 /// Does a handler body end its block: a `break` among its statements (one inside a loop belongs to the loop)
 fn aborts(body: &Node) -> bool {
-	statements_of(body).iter().any(|statement| broken_value(statement).is_some())
+	statements_of(body)
+		.iter()
+		.any(|statement| broken_value(statement).is_some())
 }
 
 /// `break value` (ø for a bare `break`): the value its block ends with
@@ -250,7 +352,9 @@ fn broken_value(statement: &Node) -> Option<Node> {
 	match statement.drop_meta() {
 		word if is_break(word) => Some(Node::Empty),
 		// `break -1` parses as the subtraction `break - 1`
-		Node::Key(word, Op::Sub, value) if is_break(word) => Some(Node::Key(Box::new(Node::int(0)), Op::Sub, value.clone())),
+		Node::Key(word, Op::Sub, value) if is_break(word) => {
+			Some(Node::Key(Box::new(Node::int(0)), Op::Sub, value.clone()))
+		}
 		Node::List(items, _, Separator::Space) if items.first().is_some_and(is_break) => Some(match &items[1..] {
 			[value] => value.clone(),
 			words => Node::List(words.to_vec(), Bracket::None, Separator::Space),

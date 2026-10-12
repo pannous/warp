@@ -1,6 +1,6 @@
 //! Property access on objects: `o.a`, `a of o`, `o's a` and `o["a"]` are one lookup; a missing key is a loud error value
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 #[test]
 fn test_dot_on_an_object_literal() {

@@ -12,7 +12,10 @@ fn main() {
 	match warp_runtime::standalone::run_carried_program() {
 		Some(exit_code) => std::process::exit(exit_code),
 		None => {
-			eprintln!("warp-runtime ({} from {BUILT_FROM}) carries no program: make an executable with `warp build <file>`", env!("CARGO_PKG_VERSION"));
+			eprintln!(
+				"warp-runtime ({} from {BUILT_FROM}) carries no program: make an executable with `warp build <file>`",
+				env!("CARGO_PKG_VERSION")
+			);
 			std::process::exit(2);
 		}
 	}

@@ -4,8 +4,8 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use super::words::FOR_WORD;
 use super::nodes::{call, children_rewritten, key};
+use super::words::FOR_WORD;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -41,7 +41,13 @@ pub fn lower(program: Node) -> Node {
 	if modules.is_empty() {
 		return program;
 	}
-	Foreign { modules: &modules, values: HashMap::new(), component_values: Default::default(), web_idl_values: HashMap::new() }.rewrite(program)
+	Foreign {
+		modules: &modules,
+		values: HashMap::new(),
+		component_values: Default::default(),
+		web_idl_values: HashMap::new(),
+	}
+	.rewrite(program)
 }
 
 /// The components the program uses, by alias: `use wasm "calc.wasm" as calc`, `use calc.wasm` (their paths beside the
@@ -50,7 +56,11 @@ pub fn component_modules(program: &Node) -> HashMap<String, String> {
 	let mut modules = HashMap::new();
 	component_uses(program.clone()).visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
-			modules.extend(foreign_use(items).filter(|(_, (runtime, _))| runtime == COMPONENT_RUNTIME).map(|(alias, (_, path))| (alias, path)));
+			modules.extend(
+				foreign_use(items)
+					.filter(|(_, (runtime, _))| runtime == COMPONENT_RUNTIME)
+					.map(|(alias, (_, path))| (alias, path)),
+			);
 		}
 	});
 	modules
@@ -65,7 +75,11 @@ fn component_uses(node: Node) -> Node {
 	};
 	match (module, node) {
 		(Some(Err(problem)), _) => crate::node::error(&problem),
-		(Some(Ok(module)), Node::List(_, bracket, separator)) => Node::List(vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module], bracket, separator),
+		(Some(Ok(module)), Node::List(_, bracket, separator)) => Node::List(
+			vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module],
+			bracket,
+			separator,
+		),
 		(_, node) => node.map_children(component_uses),
 	}
 }
@@ -85,7 +99,12 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 	let path = match (component_path(&written), alias) {
 		(Some(path), _) => path,
 		// `use nothere as x`: no C library without functions
-		(None, Some(_)) if !crate::modules::resolves(&written) => Err(format!("no module, component or library {written}; {}", listing(&known_components(&crate::modules::beside_program(&format!("{written}{COMPONENT_EXTENSION}")))))),
+		(None, Some(_)) if !crate::modules::resolves(&written) => Err(format!(
+			"no module, component or library {written}; {}",
+			listing(&known_components(&crate::modules::beside_program(&format!(
+				"{written}{COMPONENT_EXTENSION}"
+			))))
+		)),
 		(None, _) => return None,
 	};
 	Some(path.map(|path| match alias {
@@ -120,7 +139,9 @@ fn listing(components: &[String]) -> String {
 }
 
 fn component_name(path: &str) -> String {
-	Path::new(path).file_stem().map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
+	Path::new(path)
+		.file_stem()
+		.map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
 }
 
 /// A file that is no component, else none or unreadable here
@@ -139,9 +160,19 @@ fn bare_component(name: &str) -> Option<String> {
 /// The components in the folder of `path`
 #[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
 fn known_components(path: &str) -> Vec<String> {
-	let folder = Path::new(path).parent().filter(|folder| !folder.as_os_str().is_empty()).unwrap_or(Path::new("."));
-	let files = std::fs::read_dir(folder).into_iter().flatten().flatten().map(|entry| entry.path().to_string_lossy().into_owned());
-	let mut names: Vec<String> = files.filter(|file| file.ends_with(COMPONENT_EXTENSION) && !is_core_module(file)).map(|file| component_name(&file)).collect();
+	let folder = Path::new(path)
+		.parent()
+		.filter(|folder| !folder.as_os_str().is_empty())
+		.unwrap_or(Path::new("."));
+	let files = std::fs::read_dir(folder)
+		.into_iter()
+		.flatten()
+		.flatten()
+		.map(|entry| entry.path().to_string_lossy().into_owned());
+	let mut names: Vec<String> = files
+		.filter(|file| file.ends_with(COMPONENT_EXTENSION) && !is_core_module(file))
+		.map(|file| component_name(&file))
+		.collect();
 	names.sort();
 	names
 }
@@ -162,7 +193,14 @@ fn bare_component(name: &str) -> Option<String> {
 /// The page's components, by name (components.js loads one by the name of its file)
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
 fn known_components(_path: &str) -> Vec<String> {
-	crate::web::read_text(PAGE_COMPONENTS).map_or_else(Vec::new, |names| names.lines().map(str::trim).filter(|name| !name.is_empty()).map(String::from).collect())
+	crate::web::read_text(PAGE_COMPONENTS).map_or_else(Vec::new, |names| {
+		names
+			.lines()
+			.map(str::trim)
+			.filter(|name| !name.is_empty())
+			.map(String::from)
+			.collect()
+	})
 }
 
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
@@ -176,7 +214,9 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	if !word.is_symbol(USE_WORD) {
 		return None;
 	}
-	let Node::Symbol(runtime) = runtime.drop_meta() else { return None };
+	let Node::Symbol(runtime) = runtime.drop_meta() else {
+		return None;
+	};
 	if !FOREIGN_RUNTIMES.contains(&runtime.as_str()) {
 		return None;
 	}
@@ -188,7 +228,10 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 		Node::Key(module, Op::As, alias) => (name(module)?, name(alias)?),
 		other if runtime == COMPONENT_RUNTIME => {
 			let file = name(other)?;
-			let stem = std::path::Path::new(&file).file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_else(|| file.clone());
+			let stem = std::path::Path::new(&file)
+				.file_stem()
+				.map(|stem| stem.to_string_lossy().into_owned())
+				.unwrap_or_else(|| file.clone());
 			(file, stem)
 		}
 		other => {
@@ -196,7 +239,11 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 			(module.clone(), module.rsplit('.').next().unwrap_or(&module).to_string())
 		}
 	};
-	let module = if runtime == COMPONENT_RUNTIME { crate::modules::beside_program(&module) } else { module };
+	let module = if runtime == COMPONENT_RUNTIME {
+		crate::modules::beside_program(&module)
+	} else {
+		module
+	};
 	Some((alias, (runtime.clone(), module)))
 }
 
@@ -219,14 +266,18 @@ fn foreign_runtime(node: &Node) -> Option<String> {
 
 /// `foreign_call(runtime, …)`, also in a group of one: its runtime
 fn called_runtime(node: &Node) -> Option<String> {
-	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
+		return None;
+	};
 	match items.as_slice() {
 		// `(a * 2)`: the group of one
 		[grouped] => called_runtime(grouped),
-		[call, runtime, ..] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL) => match runtime.drop_meta() {
-			Node::Text(runtime) => Some(runtime.clone()),
-			_ => None,
-		},
+		[call, runtime, ..] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL) => {
+			match runtime.drop_meta() {
+				Node::Text(runtime) => Some(runtime.clone()),
+				_ => None,
+			}
+		}
 		_ => None,
 	}
 }
@@ -234,7 +285,9 @@ fn called_runtime(node: &Node) -> Option<String> {
 /// The items of a method call `name(arguments…)` after a dot
 fn called_method(member: &Node) -> Option<&Vec<Node>> {
 	match member.drop_meta() {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => Some(items),
+		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+			Some(items)
+		}
 		_ => None,
 	}
 }
@@ -242,7 +295,8 @@ fn called_method(member: &Node) -> Option<&Vec<Node>> {
 /// A word warp's own values answer as a method: `xs.reverse()`, `t.upper()`; on a component's plain result it stays
 /// warp's, any other method is the component's (a resource's: `counter.increment(2)`)
 fn is_warp_method(name: &str) -> bool {
-	crate::library_words::is_library_word(name) || crate::analyzer::is_list_mutating_method(name)
+	crate::library_words::is_library_word(name)
+		|| crate::analyzer::is_list_mutating_method(name)
 		|| (1..=3).any(|arity| crate::wasm_emitter::text_builtins::text_builtin_kind(name, arity).is_some())
 }
 
@@ -269,26 +323,47 @@ fn operator_member(op: &Op) -> Option<&'static str> {
 }
 
 fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, arguments: Node) -> Node {
-	call(crate::host::FOREIGN_CALL, vec![text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments])
+	call(
+		crate::host::FOREIGN_CALL,
+		vec![
+			text(runtime),
+			module,
+			text(member),
+			Node::int(i64::from(is_call)),
+			arguments,
+		],
+	)
 }
 
 /// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
 /// member, whether it is a call and its arguments
 fn javascript_member(node: &Node) -> Option<(&Node, &str, bool, &Node)> {
-	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
+		return None;
+	};
 	match items.as_slice() {
-		[call, runtime, receiver, member, is_call, arguments] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL)
-			&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) => match member.drop_meta() {
-			Node::Text(member) => Some((receiver, member, *is_call == Node::int(1), arguments)),
-			_ => None,
-		},
+		[call, runtime, receiver, member, is_call, arguments]
+			if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL)
+				&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) =>
+		{
+			match member.drop_meta() {
+				Node::Text(member) => Some((receiver, member, *is_call == Node::int(1), arguments)),
+				_ => None,
+			}
+		}
 		_ => None,
 	}
 }
 
 /// `operator.member(arguments…)` in `runtime`
 fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
-	foreign_call(runtime, text(OPERATOR_MODULE), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
+	foreign_call(
+		runtime,
+		text(OPERATOR_MODULE),
+		member,
+		true,
+		Node::List(arguments, Bracket::Square, Separator::Space),
+	)
 }
 
 impl Foreign<'_> {
@@ -304,10 +379,16 @@ impl Foreign<'_> {
 	fn forwarded(&mut self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
 			// `-a`, `#a`
-			Node::Key(empty, op @ (Op::Neg | Op::Sub | Op::Hash), operand) if matches!(empty.drop_meta(), Node::Empty) => {
+			Node::Key(empty, op @ (Op::Neg | Op::Sub | Op::Hash), operand)
+				if matches!(empty.drop_meta(), Node::Empty) =>
+			{
 				let operand = self.rewrite(operand.as_ref().clone());
 				let runtime = self.foreign_value(&operand)?;
-				Some(operator_call(&runtime, if *op == Op::Hash { "len" } else { "neg" }, vec![operand]))
+				Some(operator_call(
+					&runtime,
+					if *op == Op::Hash { "len" } else { "neg" },
+					vec![operand],
+				))
 			}
 			// `a#2`, 1-based: the item at 0-based 1
 			Node::Key(indexed, Op::Hash, index) => {
@@ -317,18 +398,29 @@ impl Foreign<'_> {
 				Some(operator_call(&runtime, "getitem", vec![indexed, zero_based]))
 			}
 			Node::Key(left, op, right) if operator_member(op).is_some() => {
-				let (left, right) = (self.rewrite(left.as_ref().clone()), self.rewrite(right.as_ref().clone()));
+				let (left, right) = (
+					self.rewrite(left.as_ref().clone()),
+					self.rewrite(right.as_ref().clone()),
+				);
 				let runtime = self.foreign_value(&left).or_else(|| self.foreign_value(&right))?;
-				Some(operator_call(&runtime, operator_member(op).expect("guarded"), vec![left, right]))
+				Some(operator_call(
+					&runtime,
+					operator_member(op).expect("guarded"),
+					vec![left, right],
+				))
 			}
 			// `count a`, `len(a)`
-			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(word) if crate::analyzer::is_counting_word(word))) => {
+			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(word) if crate::analyzer::is_counting_word(word))) =>
+			{
 				let counted = self.rewrite(items[1].clone());
 				let runtime = self.foreign_value(&counted)?;
 				Some(operator_call(&runtime, "len", vec![counted]))
 			}
 			// `for x in a { … }`: over the items of a, as a list
-			Node::List(items, bracket, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD) && items.len() >= 4 => {
+			Node::List(items, bracket, separator)
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD)
+					&& items.len() >= 4 =>
+			{
 				let iterated = self.rewrite(items[3].clone());
 				let runtime = self.foreign_value(&iterated)?;
 				let mut items: Vec<Node> = items.iter().cloned().map(|item| self.rewrite(item)).collect();
@@ -351,41 +443,67 @@ impl Foreign<'_> {
 	/// such a value, or what a member of one gives (`navigator.clipboard`: Clipboard, `document.body`: HTMLElement,
 	/// `document.getElementById(id)`: Element); Err for a global only a page has
 	fn web_idl_receiver(&self, receiver: &Node) -> Result<Option<(String, String)>, String> {
-		let global = |name: &str, path: &str| Ok(crate::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())));
+		let global = |name: &str, path: &str| {
+			Ok(crate::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())))
+		};
 		match receiver.drop_meta() {
 			Node::Symbol(name) => match self.modules.get(name) {
 				Some((runtime, module)) if runtime == JS_RUNTIME => global(module, name),
-				_ => Ok(self.web_idl_values.get(name).map(|interface| (interface.clone(), name.clone()))),
+				_ => Ok(self
+					.web_idl_values
+					.get(name)
+					.map(|interface| (interface.clone(), name.clone()))),
 			},
 			// the global inside a lowered read
 			Node::Text(name) => global(name, name),
 			other => {
-				let Some((inner, member, is_call, arguments)) = javascript_member(other) else { return Ok(None) };
+				let Some((inner, member, is_call, arguments)) = javascript_member(other) else {
+					return Ok(None);
+				};
 				if let (CONSTRUCTOR_MEMBER, Node::Text(interface)) = (member, inner.drop_meta()) {
-					return Ok(crate::web_idl::constructible(interface).then(|| (interface.clone(), format!("{interface}(…)"))));
+					return Ok(crate::web_idl::constructible(interface)
+						.then(|| (interface.clone(), format!("{interface}(…)"))));
 				}
-				let Some((interface, path)) = self.web_idl_receiver(inner)? else { return Ok(None) };
-				let read = if is_call { format!("{path}.{member}(…)") } else { format!("{path}.{member}") };
+				let Some((interface, path)) = self.web_idl_receiver(inner)? else {
+					return Ok(None);
+				};
+				let read = if is_call {
+					format!("{path}.{member}(…)")
+				} else {
+					format!("{path}.{member}")
+				};
 				let context = match arguments.drop_meta() {
 					Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
-						Some(Node::Text(context_id)) => crate::web_idl::context_interface(&interface, member, context_id),
+						Some(Node::Text(context_id)) => {
+							crate::web_idl::context_interface(&interface, member, context_id)
+						}
 						_ => None,
 					},
 					_ => None,
 				};
-				Ok(context.or_else(|| crate::web_idl::result_interface(&interface, member, is_call)).map(|interface| (interface, read)))
+				Ok(context
+					.or_else(|| crate::web_idl::result_interface(&interface, member, is_call))
+					.map(|interface| (interface, read)))
 			}
 		}
 	}
 
 	/// The warp type WebIDL declares for what the member gives (`crypto.randomUUID()`: text); Err when WebIDL declares
 	/// something else for the receiver (`crypto.randomUuid()`)
-	fn web_idl_result(&self, receiver: &Node, member: &str, is_call: bool, arguments: &Node) -> Result<Option<String>, String> {
+	fn web_idl_result(
+		&self,
+		receiver: &Node,
+		member: &str,
+		is_call: bool,
+		arguments: &Node,
+	) -> Result<Option<String>, String> {
 		let count = match arguments {
 			Node::List(items, _, _) => items.len(),
 			_ => 0,
 		};
-		let Some((interface, path)) = self.web_idl_receiver(receiver)? else { return Ok(None) };
+		let Some((interface, path)) = self.web_idl_receiver(receiver)? else {
+			return Ok(None);
+		};
 		crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
 		Ok(crate::web_idl::optional_result_type(&interface, member, is_call))
 	}
@@ -393,22 +511,44 @@ impl Foreign<'_> {
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
 	/// the interface
 	fn constructed(&mut self, node: &Node) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+		let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
+			return None;
+		};
 		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else { return None };
-		let (runtime, module) = self.modules.get(name).filter(|(runtime, _)| runtime == JS_RUNTIME)?.clone();
+		let Node::Symbol(name) = head.drop_meta() else {
+			return None;
+		};
+		let (runtime, module) = self
+			.modules
+			.get(name)
+			.filter(|(runtime, _)| runtime == JS_RUNTIME)?
+			.clone();
 		if let Err(problem) = crate::web_idl::check_constructor(&module, arguments.len()) {
 			return Some(crate::diagnostic::Diagnostic::at(node, problem).into_error());
 		}
-		let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
-		Some(foreign_call(&runtime, Node::Text(module), CONSTRUCTOR_MEMBER, true, Node::List(arguments, Bracket::Square, Separator::Space)))
+		let arguments = arguments
+			.iter()
+			.cloned()
+			.map(|argument| self.rewrite(argument))
+			.collect();
+		Some(foreign_call(
+			&runtime,
+			Node::Text(module),
+			CONSTRUCTOR_MEMBER,
+			true,
+			Node::List(arguments, Bracket::Square, Separator::Space),
+		))
 	}
 
 	/// `receiver.member = value` of a foreign receiver: the member set in its runtime, checked by WebIDL when it declares
 	/// the receiver (`document.getElementById("r").innerHTML = "x"`)
 	fn member_set(&mut self, target: &Node, value: &Node) -> Option<Node> {
-		let Node::Key(receiver, Op::Dot, member) = target.drop_meta() else { return None };
-		let Node::Symbol(member) = member.drop_meta() else { return None };
+		let Node::Key(receiver, Op::Dot, member) = target.drop_meta() else {
+			return None;
+		};
+		let Node::Symbol(member) = member.drop_meta() else {
+			return None;
+		};
 		let receiver = self.rewrite(receiver.as_ref().clone());
 		let (runtime, module) = self.receiver(&receiver)?;
 		let checked = match runtime == JS_RUNTIME {
@@ -421,7 +561,13 @@ impl Foreign<'_> {
 		if let Err(problem) = checked {
 			return Some(crate::diagnostic::Diagnostic::at(target, problem).into_error());
 		}
-		Some(foreign_call(&runtime, module, &format!("{SETTER_PREFIX}{member}"), true, Node::List(vec![value.clone()], Bracket::Square, Separator::Space)))
+		Some(foreign_call(
+			&runtime,
+			module,
+			&format!("{SETTER_PREFIX}{member}"),
+			true,
+			Node::List(vec![value.clone()], Bracket::Square, Separator::Space),
+		))
 	}
 
 	/// Does the node name a used foreign module or a variable holding a foreign value
@@ -461,7 +607,9 @@ impl Foreign<'_> {
 			return constructed;
 		}
 		// `"id \(crypto.randomUUID())"`: the holes are calls of this pass, the text is built later (interpolation.rs)
-		if let Some(text) = crate::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole)) {
+		if let Some(text) =
+			crate::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole))
+		{
 			return self.rewrite(text);
 		}
 		if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
@@ -471,8 +619,16 @@ impl Foreign<'_> {
 					Node::Symbol(member) => (member.clone(), false, Node::Empty),
 					Node::List(items, Bracket::Round, _) => match items.split_first() {
 						Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
-							let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
-							(head.name(), true, Node::List(arguments, Bracket::Square, Separator::Space))
+							let arguments = arguments
+								.iter()
+								.cloned()
+								.map(|argument| self.rewrite(argument))
+								.collect();
+							(
+								head.name(),
+								true,
+								Node::List(arguments, Bracket::Square, Separator::Space),
+							)
 						}
 						_ => return node,
 					},
@@ -491,9 +647,21 @@ impl Foreign<'_> {
 				};
 			}
 			// `counter.increment(2)` of a handle a component gave: the method of its resource
-			if let Some(items) = called_method(member).filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name())) {
-				let arguments = items[1..].iter().cloned().map(|argument| self.rewrite(argument)).collect();
-				return foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, Node::List(arguments, Bracket::Square, Separator::Space));
+			if let Some(items) = called_method(member)
+				.filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name()))
+			{
+				let arguments = items[1..]
+					.iter()
+					.cloned()
+					.map(|argument| self.rewrite(argument))
+					.collect();
+				return foreign_call(
+					COMPONENT_RUNTIME,
+					receiver,
+					&items[0].name(),
+					true,
+					Node::List(arguments, Bracket::Square, Separator::Space),
+				);
 			}
 		}
 		match node {

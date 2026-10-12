@@ -15,18 +15,37 @@ use Instruction as I;
 
 /// The core type of a WIT scalar, and whether a narrower integer widens with its sign
 const CORE_TYPES: [(&str, ValType, bool); 12] = [
-	("s8", ValType::I32, true), ("s16", ValType::I32, true), ("s32", ValType::I32, true), ("u8", ValType::I32, false),
-	("u16", ValType::I32, false), ("u32", ValType::I32, false), ("bool", ValType::I32, false), ("char", ValType::I32, false),
-	("s64", ValType::I64, true), ("u64", ValType::I64, false), ("f32", ValType::F32, true), ("f64", ValType::F64, true),
+	("s8", ValType::I32, true),
+	("s16", ValType::I32, true),
+	("s32", ValType::I32, true),
+	("u8", ValType::I32, false),
+	("u16", ValType::I32, false),
+	("u32", ValType::I32, false),
+	("bool", ValType::I32, false),
+	("char", ValType::I32, false),
+	("s64", ValType::I64, true),
+	("u64", ValType::I64, false),
+	("f32", ValType::F32, true),
+	("f64", ValType::F64, true),
 ];
 pub(super) const REALLOC: &str = "cabi_realloc";
 /// A text result's return area: its pointer and its length, two i32
 const RETURN_AREA_BYTES: i32 = 8;
 const RETURN_AREA_ALIGNMENT: i32 = 4;
 const LENGTH_OFFSET: u64 = 4;
-const WORD: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
+const WORD: MemArg = MemArg {
+	offset: 0,
+	align: 2,
+	memory_index: 0,
+};
 /// The runtime functions the adapters call
-const ADAPTER_NEEDS: [&str; 5] = ["new_text", "new_int", "new_float", "get_int_value", super::text_builtins::TEXT_OF];
+const ADAPTER_NEEDS: [&str; 5] = [
+	"new_text",
+	"new_int",
+	"new_float",
+	"get_int_value",
+	super::text_builtins::TEXT_OF,
+];
 
 /// Does the program compile as a component crossing the boundary: exporting or importing a function
 fn crosses_the_boundary() -> bool {
@@ -42,7 +61,10 @@ pub(super) fn add_dependencies(required: &mut std::collections::HashSet<&'static
 
 /// The function the component being compiled imports under `name` (`host.time`)
 fn imported(name: &str) -> Option<Signature> {
-	crate::pipeline::component_imports().into_iter().find(|(interface, function)| import_name(interface, &function.name) == name).map(|(_, function)| function)
+	crate::pipeline::component_imports()
+		.into_iter()
+		.find(|(interface, function)| import_name(interface, &function.name) == name)
+		.map(|(_, function)| function)
 }
 
 /// The kind of value a call of the imported function `name` gives
@@ -50,7 +72,9 @@ pub(crate) fn imported_kind(name: &str) -> Option<Kind> {
 	imported(name).map(|function| match function.result.as_deref() {
 		None => Kind::Empty,
 		Some(WIT_STRING) => Kind::Text,
-		Some(wit) if core_scalar(wit).is_some_and(|(core, _)| matches!(core, ValType::F32 | ValType::F64)) => Kind::Float,
+		Some(wit) if core_scalar(wit).is_some_and(|(core, _)| matches!(core, ValType::F32 | ValType::F64)) => {
+			Kind::Float
+		}
 		Some(_) => Kind::Int,
 	})
 }
@@ -59,28 +83,37 @@ pub(crate) fn imported_kind(name: &str) -> Option<Kind> {
 /// length, a text result a return area whose address is the last parameter
 pub(crate) fn imported_signatures() -> Vec<(String, FfiSignature)> {
 	let leaked = |name: &str| -> &'static str { Box::leak(name.to_string().into_boxed_str()) };
-	crate::pipeline::component_imports().into_iter().map(|(interface, function)| {
-		let mut params = vec![];
-		for wit in &function.parameters {
-			match core_scalar(wit) {
-				Some((core, _)) => params.push(core),
-				None => params.extend([ValType::I32, ValType::I32]),
+	crate::pipeline::component_imports()
+		.into_iter()
+		.map(|(interface, function)| {
+			let mut params = vec![];
+			for wit in &function.parameters {
+				match core_scalar(wit) {
+					Some((core, _)) => params.push(core),
+					None => params.extend([ValType::I32, ValType::I32]),
+				}
 			}
-		}
-		let results = match function.result.as_deref() {
-			None => vec![],
-			Some(WIT_STRING) => {
-				params.push(ValType::I32);
-				vec![]
-			}
-			Some(wit) => core_scalar(wit).map(|(core, _)| vec![core]).unwrap_or_default(),
-		};
-		(import_name(&interface, &function.name), FfiSignature::new(leaked(&function.name), leaked(&interface), params, results))
-	}).collect()
+			let results = match function.result.as_deref() {
+				None => vec![],
+				Some(WIT_STRING) => {
+					params.push(ValType::I32);
+					vec![]
+				}
+				Some(wit) => core_scalar(wit).map(|(core, _)| vec![core]).unwrap_or_default(),
+			};
+			(
+				import_name(&interface, &function.name),
+				FfiSignature::new(leaked(&function.name), leaked(&interface), params, results),
+			)
+		})
+		.collect()
 }
 
 fn core_scalar(wit: &str) -> Option<(ValType, bool)> {
-	CORE_TYPES.iter().find(|(scalar, _, _)| *scalar == wit).map(|(_, core, signed)| (*core, *signed))
+	CORE_TYPES
+		.iter()
+		.find(|(scalar, _, _)| *scalar == wit)
+		.map(|(_, core, signed)| (*core, *signed))
 }
 
 impl WasmGcEmitter {
@@ -103,28 +136,62 @@ impl WasmGcEmitter {
 		let int = ValType::I32;
 		let (old, old_size, align, size, address, padded) = (0, 1, 2, 3, 4, 5);
 		self.host_only_function(REALLOC, vec![int; 4], vec![int], vec![int; 2], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(size), I::LocalGet(align), I::I32Add, I::LocalSet(padded)]);
+			Self::emit_list(
+				f,
+				&[I::LocalGet(size), I::LocalGet(align), I::I32Add, I::LocalSet(padded)],
+			);
 			s.emit_text_allocation(f, padded, address);
 			Self::emit_aligned_up(f, address, I::LocalGet(align));
-			Self::emit_list(f, &[
-				I::LocalGet(old_size), I::If(BlockType::Empty),
-				I::LocalGet(address), I::LocalGet(old), I::LocalGet(old_size), I::MemoryCopy { src_mem: 0, dst_mem: 0 },
-				I::End, I::LocalGet(address),
-			]);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(old_size),
+					I::If(BlockType::Empty),
+					I::LocalGet(address),
+					I::LocalGet(old),
+					I::LocalGet(old_size),
+					I::MemoryCopy { src_mem: 0, dst_mem: 0 },
+					I::End,
+					I::LocalGet(address),
+				],
+			);
 		});
 	}
 
 	/// The address in local `address` rounded up to the alignment `align` pushes: (address + align - 1) & -align
 	fn emit_aligned_up(f: &mut Function, address: u32, align: Instruction) {
-		Self::emit_list(f, &[I::LocalGet(address), align.clone(), I::I32Add, I::I32Const(1), I::I32Sub, I::I32Const(0), align, I::I32Sub, I::I32And, I::LocalSet(address)]);
+		Self::emit_list(
+			f,
+			&[
+				I::LocalGet(address),
+				align.clone(),
+				I::I32Add,
+				I::I32Const(1),
+				I::I32Sub,
+				I::I32Const(0),
+				align,
+				I::I32Sub,
+				I::I32And,
+				I::LocalSet(address),
+			],
+		);
 	}
 
 	/// `interface#name`, calling the program's function `name`
 	fn emit_adapter(&mut self, interface: &str, function: &Signature) -> Result<(), String> {
 		let name = &function.name;
-		let user_fn = self.ctx.user_functions.get(name).cloned().ok_or_else(|| format!("export {interface}: the program has no `export def {name}`"))?;
+		let user_fn = self
+			.ctx
+			.user_functions
+			.get(name)
+			.cloned()
+			.ok_or_else(|| format!("export {interface}: the program has no `export def {name}`"))?;
 		if user_fn.params.len() != function.parameters.len() {
-			return Err(format!("{name} takes {} parameters, its interface says {}", user_fn.params.len(), function.parameters.len()));
+			return Err(format!(
+				"{name} takes {} parameters, its interface says {}",
+				user_fn.params.len(),
+				function.parameters.len()
+			));
 		}
 		let target = user_fn.func_index.ok_or_else(|| format!("{name} was not compiled"))?;
 		let mut parameters = vec![];
@@ -139,7 +206,11 @@ impl WasmGcEmitter {
 		let result = match function.result.as_deref() {
 			None => vec![],
 			Some(WIT_STRING) => vec![ValType::I32],
-			Some(wit) => vec![core_scalar(wit).ok_or_else(|| format!("{name}: {wit} cannot cross the component boundary yet"))?.0],
+			Some(wit) => vec![
+				core_scalar(wit)
+					.ok_or_else(|| format!("{name}: {wit} cannot cross the component boundary yet"))?
+					.0,
+			],
 		};
 		let target_kinds: Vec<_> = user_fn.params.iter().map(param_kind).collect();
 		let result_kind = user_fn.return_kind;
@@ -184,7 +255,13 @@ impl WasmGcEmitter {
 	}
 
 	/// A core scalar on the stack as the program's parameter of `kind`
-	fn emit_scalar_in(&mut self, f: &mut Function, from: ValType, signed: bool, kind: crate::type_kinds::Kind) -> Result<(), String> {
+	fn emit_scalar_in(
+		&mut self,
+		f: &mut Function,
+		from: ValType,
+		signed: bool,
+		kind: crate::type_kinds::Kind,
+	) -> Result<(), String> {
 		match (from, self.storage_type(kind)) {
 			(ValType::I32, ValType::I64) => f.instruction(if signed { &I::I64ExtendI32S } else { &I::I64ExtendI32U }),
 			(ValType::I64, ValType::I64) | (ValType::F64, ValType::F64) => f,
@@ -230,22 +307,49 @@ impl WasmGcEmitter {
 	fn emit_text_out(&mut self, f: &mut Function, text: u32, length: u32, address: u32) {
 		self.emit_call(f, super::text_builtins::TEXT_OF);
 		f.instruction(&I::LocalSet(text));
-		Self::emit_list(f, &[I::I32Const(RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT), I::LocalSet(length)]);
+		Self::emit_list(
+			f,
+			&[
+				I::I32Const(RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT),
+				I::LocalSet(length),
+			],
+		);
 		self.emit_text_allocation(f, length, address);
 		Self::emit_aligned_up(f, address, I::I32Const(RETURN_AREA_ALIGNMENT));
 		f.instruction(&I::LocalGet(address));
 		self.emit_text_field(f, text, 0);
 		Self::emit_list(f, &[I::I32Store(WORD), I::LocalGet(address)]);
 		self.emit_text_field(f, text, 1);
-		Self::emit_list(f, &[I::I32Store(MemArg { offset: LENGTH_OFFSET, ..WORD }), I::LocalGet(address)]);
+		Self::emit_list(
+			f,
+			&[
+				I::I32Store(MemArg {
+					offset: LENGTH_OFFSET,
+					..WORD
+				}),
+				I::LocalGet(address),
+			],
+		);
 	}
 
 	/// A call of the imported function `name` when it is one (`host.time()`): its value as a Node, or as the number
 	/// `context` wants
-	pub(super) fn emit_import_call(&mut self, f: &mut Function, name: &str, arguments: &[Node], context: Option<Kind>) -> bool {
-		let (Some(function), Some(signature)) = (imported(name), self.ctx.ffi_imports.get(name).cloned()) else { return false };
+	pub(super) fn emit_import_call(
+		&mut self,
+		f: &mut Function,
+		name: &str,
+		arguments: &[Node],
+		context: Option<Kind>,
+	) -> bool {
+		let (Some(function), Some(signature)) = (imported(name), self.ctx.ffi_imports.get(name).cloned()) else {
+			return false;
+		};
 		if arguments.len() != function.parameters.len() {
-			let reason = format!("{name} takes {} arguments, got {}", function.parameters.len(), arguments.len());
+			let reason = format!(
+				"{name} takes {} arguments, got {}",
+				function.parameters.len(),
+				arguments.len()
+			);
 			self.emit_type_error(f, reason);
 			return true;
 		}
@@ -267,10 +371,24 @@ impl WasmGcEmitter {
 		}
 		match (return_area, context) {
 			(Some(area), None) => {
-				Self::emit_list(f, &[I::I32Const(area), I::I32Load(WORD), I::I32Const(area), I::I32Load(MemArg { offset: LENGTH_OFFSET, ..WORD })]);
+				Self::emit_list(
+					f,
+					&[
+						I::I32Const(area),
+						I::I32Load(WORD),
+						I::I32Const(area),
+						I::I32Load(MemArg {
+							offset: LENGTH_OFFSET,
+							..WORD
+						}),
+					],
+				);
 				self.emit_call(f, "new_text");
 			}
-			(Some(_), Some(kind)) => self.emit_type_error(f, format!("{name} gives a text, not {}", crate::analyzer::kind_with_article(kind))),
+			(Some(_), Some(kind)) => self.emit_type_error(
+				f,
+				format!("{name} gives a text, not {}", crate::analyzer::kind_with_article(kind)),
+			),
 			(None, _) => self.emit_ffi_result(f, &signature, context),
 		}
 		true

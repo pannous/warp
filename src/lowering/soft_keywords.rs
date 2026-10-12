@@ -15,10 +15,83 @@ pub const HARD_KEYWORDS: [&str; 26] = [
 	"use", "import", "include", // modules
 ];
 /// emit's aliases fire, trigger and signal stay out: a program may define them (P163, test_event_footguns; asked)
-pub const SOFT_KEYWORDS: [&str; 12] = ["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners", "stored", "undo", "redo"];
+pub const SOFT_KEYWORDS: [&str; 12] = [
+	"emit",
+	"send",
+	"broadcast",
+	"every",
+	"whenever",
+	"init",
+	"new",
+	"root",
+	"listeners",
+	"stored",
+	"undo",
+	"redo",
+];
 /// Keyword-like words in neither list: the playground editor colors them like soft keywords (web/playground/keywords.py
 /// makes keywords.js; it also colors every `const …_KEYWORD: &str` in src/, so a pass registers its word by that name). Display only: P165 gives them no meaning; moving one into a list above is a user decision
-pub const HIGHLIGHTED_WORDS: [&str; 59] = ["try", "catch", "except", "switch", "match", "case", "do", "yield", "await", "go", "elif", "elsif", "elseif", "end", "until", "law", "on", "once", "within", "after", "of", "from", "to", "upto", "times", "is", "as", "with", "extends", "mixin", "static", "trait", "interface", "protocol", "struct", "record", "operator", "nonlocal", "lambda", "define", "function", "func", "result", "print", "assert", "linear", "shared", "ref", "meta", "raise", "throw", "require", "and", "or", "not", "xor", "fire", "trigger", "signal"];
+pub const HIGHLIGHTED_WORDS: [&str; 59] = [
+	"try",
+	"catch",
+	"except",
+	"switch",
+	"match",
+	"case",
+	"do",
+	"yield",
+	"await",
+	"go",
+	"elif",
+	"elsif",
+	"elseif",
+	"end",
+	"until",
+	"law",
+	"on",
+	"once",
+	"within",
+	"after",
+	"of",
+	"from",
+	"to",
+	"upto",
+	"times",
+	"is",
+	"as",
+	"with",
+	"extends",
+	"mixin",
+	"static",
+	"trait",
+	"interface",
+	"protocol",
+	"struct",
+	"record",
+	"operator",
+	"nonlocal",
+	"lambda",
+	"define",
+	"function",
+	"func",
+	"result",
+	"print",
+	"assert",
+	"linear",
+	"shared",
+	"ref",
+	"meta",
+	"raise",
+	"throw",
+	"require",
+	"and",
+	"or",
+	"not",
+	"xor",
+	"fire",
+	"trigger",
+	"signal",
+];
 const TOPIC: &str = "soft-keyword";
 
 pub fn lower(program: Node) -> Node {
@@ -50,13 +123,19 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 	if let Some(name) = defined_name(node) {
 		let refused = HARD_KEYWORDS.contains(&name.as_str()) || top_level && SOFT_KEYWORDS.contains(&name.as_str());
 		if refused {
-			let fix = if top_level && SOFT_KEYWORDS.contains(&name.as_str()) { "give it another name; a local variable, parameter or field may use it" } else { "give it another name" };
+			let fix = if top_level && SOFT_KEYWORDS.contains(&name.as_str()) {
+				"give it another name; a local variable, parameter or field may use it"
+			} else {
+				"give it another name"
+			};
 			return Some(Diagnostic::at(node, format!("{name} is a keyword: {fix}")).into_error());
 		}
 	}
 	match node.drop_meta() {
 		// the statements of the program, or of a block at its top level, stay at the top level
-		Node::List(items, Bracket::None | Bracket::Curly, _) if top_level => items.iter().find_map(|item| first_refused(item, true)),
+		Node::List(items, Bracket::None | Bracket::Curly, _) if top_level => {
+			items.iter().find_map(|item| first_refused(item, true))
+		}
 		Node::Key(_, Op::Define | Op::Assign, body) if defined_name(node).is_some() => first_refused(body, false),
 		Node::Key(left, _, right) => first_refused(left, false).or_else(|| first_refused(right, false)),
 		Node::List(items, _, _) => items.iter().find_map(|item| first_refused(item, false)),
@@ -80,12 +159,16 @@ fn defined_name(node: &Node) -> Option<String> {
 	}
 }
 
-
 /// The got-it note for each soft keyword the program uses as a local name
 fn note_local_names(program: &Node) {
 	walk_names(program, &mut |name, role| {
 		if SOFT_KEYWORDS.contains(&name) {
-			crate::diagnostic::educate_once(&format!("{TOPIC}-{name}"), name, name, &format!("{name} is a keyword; here it is your {role}"));
+			crate::diagnostic::educate_once(
+				&format!("{TOPIC}-{name}"),
+				name,
+				name,
+				&format!("{name} is a keyword; here it is your {role}"),
+			);
 		}
 	});
 }
@@ -100,7 +183,11 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 					if let Some(name) = items.first().and_then(Node::symbol_name) {
 						found(name, "function");
 					}
-					items.iter().skip(1).filter_map(parameter_name).for_each(|name| found(&name, "parameter"));
+					items
+						.iter()
+						.skip(1)
+						.filter_map(parameter_name)
+						.for_each(|name| found(&name, "parameter"));
 				}
 				_ => {}
 			}

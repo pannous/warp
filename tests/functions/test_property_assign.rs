@@ -1,7 +1,7 @@
 //! Assignment to a field (value semantics like `x#i=v`) and safe navigation `?.`
+use crate::common::fails_with;
 use crate::is;
 use warp::wasm_emitter::eval;
-use crate::common::fails_with;
 
 fn printed(code: &str) -> String {
 	eval(code).serialize().replace('\'', "\"")

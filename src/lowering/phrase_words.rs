@@ -14,7 +14,10 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let context = crate::analyzer::function_definitions(&node);
-	let phrases = Phrases { do_is_free: !context.user_functions.contains_key(DO_WORD), add_is_free: !context.user_functions.contains_key(ADD_WORD) };
+	let phrases = Phrases {
+		do_is_free: !context.user_functions.contains_key(DO_WORD),
+		add_is_free: !context.user_functions.contains_key(ADD_WORD),
+	};
 	phrases.expand(node)
 }
 
@@ -36,7 +39,9 @@ impl Phrases {
 
 	fn phrase(&self, items: &[Node]) -> Option<Node> {
 		let (word, rest) = items.split_first()?;
-		let Node::Symbol(word) = word.drop_meta() else { return None };
+		let Node::Symbol(word) = word.drop_meta() else {
+			return None;
+		};
 		// `do add 4 to pixel`: the phrase after `do` is lowered first
 		if word == DO_WORD && self.do_is_free && rest.len() > 1 {
 			return self.phrase(rest);
@@ -57,10 +62,16 @@ fn evaluated_block(argument: &Node) -> Option<Node> {
 
 /// `add x to list` parses as `add (x to list)`: the call `list.add(x)`
 fn appended_to(argument: &Node) -> Option<Node> {
-	let Node::Key(element, Op::To, list) = argument.drop_meta() else { return None };
+	let Node::Key(element, Op::To, list) = argument.drop_meta() else {
+		return None;
+	};
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let call = Node::List(vec![symbol(ADD_WORD), element.as_ref().clone()], Bracket::Round, Separator::Space);
+	let call = Node::List(
+		vec![symbol(ADD_WORD), element.as_ref().clone()],
+		Bracket::Round,
+		Separator::Space,
+	);
 	Some(Node::Key(list.clone(), Op::Dot, Box::new(call)))
 }

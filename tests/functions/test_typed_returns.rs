@@ -24,6 +24,9 @@ fn test_return_type_after_the_parameters() {
 fn test_block_bodies_and_returns_convert_too() {
 	is!("int half(x) := {return x/2}; half 3", 1);
 	is!("int half(x){ return x/2 }; half 3", 1);
-	is!("int half(x) := {y = x; if y > 2 {return y/2}; y/4}; half(3) + half(2)", 1);
+	is!(
+		"int half(x) := {y = x; if y > 2 {return y/2}; y/4}; half(3) + half(2)",
+		1
+	);
 	is!("float twice(x) := {x+x}; twice 2", 4.0);
 }

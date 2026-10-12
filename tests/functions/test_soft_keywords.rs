@@ -6,7 +6,12 @@ use crate::is;
 
 fn noted(code: &str, word: &str) -> warp::Node {
 	let (value, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
-	assert!(hints.iter().any(|hint| hint.original == word && hint.reason.contains("is a keyword; here it is your")), "{hints:?}");
+	assert!(
+		hints
+			.iter()
+			.any(|hint| hint.original == word && hint.reason.contains("is a keyword; here it is your")),
+		"{hints:?}"
+	);
 	value
 }
 
