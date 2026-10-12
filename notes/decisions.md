@@ -7,6 +7,8 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
+  in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup).
 - signal-samples: samples/signal.warp (siren, play_signal) and samples/signal_blocks.warp (stereo chord, play_blocks)
   leave samples/ but are kept as examples under "Signals" on the wiki sound page (warp-sound).
 - consistency (card #376, sub-card of #35 cleanup): an agent regularly checks the app against the documentation.
