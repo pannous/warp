@@ -1,0 +1,4 @@
+// card int-bool: a foreign call's result answers is int / is bool by its value: yes, no
+use python math
+print math.floor(2.5) is int
+print math.isnan(1) is int

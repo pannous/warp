@@ -1,0 +1,4 @@
+// card xs-xs: a list passed through a function is the same list, also a typed one: yes
+f(a) := a
+xs: ints = [1, 2]
+f(xs) === xs
