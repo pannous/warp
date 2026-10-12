@@ -607,6 +607,11 @@ fn definition_head(head: &Node) -> Option<&[Node]> {
 	}
 }
 
+/// `f()`: the head of a definition without parameters, whose body has variables of its own
+fn is_call_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [name] if matches!(name.drop_meta(), Node::Symbol(_))))
+}
+
 /// The parameters of a definition head written without a type: `p` and `p=default` in `f(p, q=1)`, the implicit `it` of
 /// a head without parameters (`f := it.width`)
 pub fn untyped_parameters(head: &Node) -> Vec<String> {
@@ -1313,7 +1318,7 @@ pub fn lower_dispatch(node: Node) -> Node {
 	let signatures = instance_signatures(&node, &types.registry);
 	let traits = Traits::of(&node);
 	let constraints = trait_constraints(&node, &traits);
-	let dispatch = Dispatch { traits, types, witnesses, signatures, constraints, likenesses, missing: RefCell::new(None), dispatched: RefCell::new(Default::default()) };
+	let dispatch = Dispatch { traits, types, witnesses, signatures, constraints, likenesses, missing: RefCell::new(None), dispatched: RefCell::new(Default::default()), declared: RefCell::new(vec![HashMap::new()]) };
 	let node = dispatch.expand(node);
 	let node = with_dispatchers(node, &dispatch.dispatched.into_inner());
 	dispatch.missing.into_inner().unwrap_or(node)
@@ -1389,6 +1394,9 @@ struct Dispatch {
 	/// Operations called on a value whose type is known only at run time: (operation, number of arguments) → the types
 	/// that define it, for a dispatcher `op·dispatch` (`dispatchers`)
 	dispatched: RefCell<std::collections::BTreeMap<(String, usize), Vec<String>>>,
+	/// The variables declared of a class (`s: C = …`), per definition being rewritten, innermost last: a later `s = v`
+	/// is admitted as the declaration was (card class-field)
+	declared: RefCell<Vec<HashMap<String, String>>>,
 }
 
 impl Dispatch {
@@ -1436,22 +1444,35 @@ impl Dispatch {
 	fn expand(&self, node: Node) -> Node {
 		match node {
 			// a definition head names parameters, it calls nothing
-			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
+			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() || is_call_head(&head) => {
+				self.declared.borrow_mut().push(HashMap::new());
 				let body = self.types.in_definition(&head, || self.expand(*body));
+				self.declared.borrow_mut().pop();
 				Node::Key(head, op, Box::new(body))
 			}
 			Node::Key(left, op, right) => {
 				let (left, right) = (self.expand(*left), self.expand(*right));
-				if let (Op::Assign, Some((name, declared))) = (&op, typed_target(&left, &self.types.registry)) {
-					return match self.admit(&right, &declared, &format!("{name}:{declared} needs {}", crate::analyzer::with_article(&declared))) {
+				if let (Op::Assign, Some((place, declared))) = (&op, self.declared_place(&left)) {
+					return match self.admit(&right, &declared, &format!("{place}:{declared} needs {}", crate::analyzer::with_article(&declared))) {
 						Ok(right) => key(left, op, right),
 						Err(error) => self.fail(error).expect("fail gives the error"),
 					};
 				}
 				self.operator(&left, &op, &right).unwrap_or(key(left, op, right))
 			}
+			// `Box(Point(3))` of `class Box{content: Circle}`: each field given an instance of a declared class admits it
+			instance if instance_parts(&instance).is_some() => {
+				let instance = children_rewritten(instance, |child| self.expand(child));
+				match self.misfit_field(&instance) {
+					Some(error) => self.fail(error).expect("fail gives the error"),
+					None => instance,
+				}
+			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
+				if let Some(error) = self.misfit_field_write(&items) {
+					return self.fail(error).expect("fail gives the error");
+				}
 				self.call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			other => children_rewritten(other, |child| self.expand(child)),
@@ -1571,6 +1592,52 @@ impl Dispatch {
 			*argument = self.admit(argument, declared, &format!("{name} needs {} for parameter {parameter}", crate::analyzer::with_article(declared)))?;
 		}
 		Ok((admitted != items).then_some(admitted))
+	}
+
+	/// The variable an assignment writes and the class it is declared of: `s: C = …` (remembered), a later `s = …` of it
+	fn declared_place(&self, target: &Node) -> Option<(String, String)> {
+		if let Some((name, declared)) = typed_target(target, &self.types.registry) {
+			self.declared.borrow_mut().last_mut().expect("main's scope").insert(name.clone(), declared.clone());
+			return Some((name, declared));
+		}
+		let Node::Symbol(name) = target.drop_meta() else { return None };
+		self.declared.borrow().last()?.get(name).map(|declared| (name.clone(), declared.clone()))
+	}
+
+	/// `b.content = v` is `b = field_with(b, "content", v)` here: the error of a value the field's declared class does not take
+	fn misfit_field_write(&self, items: &[Node]) -> Option<Node> {
+		let [head, object, field, value] = items else { return None };
+		if head.symbol_name() != Some(crate::library_words::FIELD_WITH) {
+			return None;
+		}
+		let Node::Text(field) = field.drop_meta() else { return None };
+		let class = self.instance_type(object)?;
+		let declared = self.class_field_type(&class, field, value)?;
+		self.admit(value, &declared, &format!("{class}.{field}:{declared} needs {}", crate::analyzer::with_article(&declared))).err()
+	}
+
+	/// The declared type of a field, when it names classes (`content: Circle`, `content: Circle | Square`); a field of a
+	/// class may also hold ø, as `left: Node` of a tree does at its leaves
+	fn class_field_type(&self, class: &str, field: &str, value: &Node) -> Option<String> {
+		if matches!(value.drop_meta(), Node::Empty) {
+			return None;
+		}
+		let type_def = self.types.registry.get_by_name(class)?;
+		let declared = type_def.fields.iter().find(|declared| declared.name == field)?.type_name.trim_end_matches('?');
+		names_classes(declared, &self.types.registry).then(|| declared.to_string())
+	}
+
+	/// The error of the first field of an instance given a value its declared class type does not take
+	fn misfit_field(&self, instance: &Node) -> Option<Node> {
+		let (name, fields) = instance_parts(instance)?;
+		let class = name.drop_meta().name();
+		let Node::List(entries, _, _) = fields.drop_meta() else { return None };
+		entries.iter().find_map(|entry| {
+			let Node::Key(field, Op::Colon, value) = entry.drop_meta() else { return None };
+			let field = field.drop_meta().name();
+			let declared = self.class_field_type(&class, &field, value)?;
+			self.admit(value, &declared, &format!("{class}.{field} is {}", crate::analyzer::with_article(&declared))).err()
+		})
 	}
 
 	/// `area(s)`, `area s`, `compare(p, q)`: the witness of the type of the first argument
