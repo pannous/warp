@@ -62,6 +62,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
+- Never retire with a card still yours (user, 2026-10-12: "cards disconnected from their agent"): before you stop, or
+  hand over, every card you took is either `todo done <card> <commit>` or released with `todo release <card>
+  "done: …; left: …; branch: …"`, which puts it back in Next with that note and no agent. Partial work that isn't
+  merged gets pushed to its branch first. This applies to Codex runs too.
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
   `git -C /Users/me/dev/angles/warp worktree remove --force <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>`.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
