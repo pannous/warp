@@ -123,6 +123,8 @@ mod test_typed_variable_not_markup; // card annotation-html
 mod test_uniscript;
 #[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
 mod test_wagi; // card fermyon-hosting
+#[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
+mod test_wagi_headers; // card wagi-build
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_warp_serve; // P222
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
