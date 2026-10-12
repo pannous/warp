@@ -41,7 +41,7 @@ Each step is useful on its own and is what the next ones stand on.
 ## Server and page (agreed with warp-f0, 2026-10-07; card web-server)
 - **Routes**: `serve 8080 { get "/api/users" { users } post "/api/users" { … } }`. A route's block value is the response:
   a text as text/plain, any other value as JSON (std json to_json). `request` holds method, path, query and body (the
-  body parsed when it is JSON); `status 404` sets the status; `header "name" "value"` later.
+  body parsed when it is JSON); `status 404` sets the status; `header "name" "value"` later (card web-route-header).
 - **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a warp value (arrays ↔ lists, objects ↔
   maps); a status of 400 or more is an Error value carrying the status and the body text.
 - **Typed RPC**: `server def users(min_age) {…}` in the same program. The server build exposes it as
@@ -63,9 +63,8 @@ Each step is useful on its own and is what the next ones stand on.
   `while users.loading { sleep 5 ms }` ends there too; a reply after main returned runs the handler like a timer's
   (worker.js hooks.arrived), then the page re-renders. Without cross-origin isolation (no task Workers) the reply
   only arrives after main.
-- Open: cancel on navigation; the page re-renders only a last line that is a name (event_signals with_output_binding),
-  so `if users.loading then "Loading…" else users` does not update yet (branch page-binding); diagnostics name
-  users·error.
+- Cancel on navigation: card fetch-cancel. A last line choosing between read-only values (`if users.loading then
+  "Loading…" else users`) re-renders too (branch page-binding, 48451663b). Open: diagnostics name users·error.
 
 ## Defaults for step 1 (web-dom), undoable
 - A markup value is any key whose name is an HTML tag (`div`, `p`, `ul`, `li`, `a`, `button`, … the HTML element list)
@@ -90,7 +89,8 @@ Each step is useful on its own and is what the next ones stand on.
   reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
   value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
   part, when the last line is a name (components: `page·markup`), or when a hole fails.
-- Left: holes inside components (an instance's elements by instance), text-node granularity (a hole is an element).
+- Left (card web-fine-text-nodes): holes inside components (an instance's elements by instance), text-node
+  granularity (a hole is an element).
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left
@@ -108,8 +108,8 @@ Each step is useful on its own and is what the next ones stand on.
   fewer instances of the component than the one before (the last ones are the ones gone, by the order rule), then
   their state entries are dropped. What a cleanup reads is kept per instance like handler state. Tour example cleanup.
 - `(if c then A() else [])` among an element's children is a child (markup_tags.rs), not a statement.
-- Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it), state of a
-  component read by a handler outside it.
+- Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it; card
+  web-instance-keys), state of a component read by a handler outside it (card web-outside-state).
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
@@ -128,8 +128,9 @@ Each step is useful on its own and is what the next ones stand on.
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
 - Boolean attributes (checked, disabled, …) are present or absent (lib/markup.warp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
-- Left: `select{ bind: choice }` (its first render shows the first option), `bind:` inside a component's state
-  (component_state.rs sees only handlers), form submit as an event with the fields as an object, validation from types.
+- Left: `select{ bind: choice }` (its first render shows the first option; card web-bind-select), `bind:` inside a
+  component's state (component_state.rs sees only handlers; card web-bind-component), form submit as an event with the
+  fields as an object (card web-submit), validation from types (card web-validate).
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
@@ -140,9 +141,9 @@ Each step is useful on its own and is what the next ones stand on.
   lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
   solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. In a style sheet a blank before
   `.x` / `#x` is the descendant combinator (`#main .x`, `.a .b #c`; parser flag in_style_sheet), and `.a {…} #main {…}`
-  are two rules on one line (card web-styles-parser). Limits: `50%` followed by another declaration without `;`, and
-  several rules on one line with a comma selector need their own lines.
-- Left: scoping a component's sheet to its own elements (a generated class per component), warp-cd.
+  are two rules on one line (card web-styles-parser). Limits (card web-styles-limits): `50%` followed by another
+  declaration without `;`, and several rules on one line with a comma selector need their own lines.
+- Scoping a component's sheet to its own elements: done (card web-scoped, under step 15 below).
 
 ## Step 14 (web-testing), what is done and what is left (classes-42, warp-06)
 - `warp::headless::Page` (src/headless.rs, tests/web/test_headless_pages.rs): `Page::render(code)` runs the program
@@ -181,14 +182,13 @@ Each step is useful on its own and is what the next ones stand on.
   animates on the first render or with prefers-reduced-motion. Tests: tests/web/test_css_transitions.rs,
   test_transitions.rs; tour example transitions (`animated` check of test_in_browser.py);
   probes/transitions/leave_check.py.
-- Left: custom keyframes as data, `0.3s` (card
-  fractional-durations), leaving items still take their space until removed (no absolute positioning while leaving).
+- Left: custom keyframes as data (card web-keyframes), `0.3s` (card fractional-durations), leaving items still take
+  their space until removed (no absolute positioning while leaving; card web-leave-space).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-warp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
   `[data-warp-scope="Card"] ` (html.rs), so they style only elements inside it (not the root itself; a nested
   component's elements still match).
-- Left (warp-06 takes the parser bits): `.card { … }` written
-  without quotes (the parser stops at `.`), `8px` written as a number with a unit (parses as 8 * px).
+- The parser bits (`.card { … }` without quotes, `8px` as a length) are done: step 7 above.
 
 ## Built sites (card web-ssr, 2026-10-07; split agreed with warp-cd, renderer decided by warp-96)
 - `warp build --site app.warp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
@@ -216,9 +216,9 @@ Each step is useful on its own and is what the next ones stand on.
   /app.wasm, /site.js … beside it; a route wins over a file of the same path. The page hydrates and fetches the
   program's own routes (probes/site/served.warp). Page events draw no "never raises it" warning there. Only program
   files serve a page (the host builds it from modules::program_file).
-- Open: the page is rendered once at start (per request later); a relative `fetch "/api/…"` fails during that render
-  (no server yet), so the first HTML shows the error state until the page fetches; `server def` bodies still run in the
-  page (the RPC stub of the page build is not done).
+- Since done: a page asking the server is rendered per request with the replies carried along (P221 step 3,
+  2da366f5e), the page build's RPC stub (cards rpc-stub, rpc-everywhere; notes/server_routes.md). Left there: a page's
+  main-level statement reading server data (card web-page-server-data), access rules (card route-access).
 - Programs in a Worker (card site-worker, step 1): a module importing task words (task_/channel_/shared_, site.rs
   runs_in_a_worker) runs in site-worker.js, where a blocking await may wait (Atomics.wait) and its tasks run together on
   the task Workers. The page loads site-thread.js, markup.js and site.js only; its root lists the Worker's scripts
@@ -293,7 +293,7 @@ Each step is useful on its own and is what the next ones stand on.
   once before the program runs (worker.js, site-worker.js, site.js; Workers have IndexedDB too), each change is
   written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory). Any store file ending in `database.json` (stored_values.rs DATABASE_STORE) is the
   database in the browser. Checked by hand in the playground across reloads; a built site's path is not yet checked
-  in a browser. Probe: probes/stores/database.warp.
+  in a browser (card web-database-site). Probe: probes/stores/database.warp.
 - Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
   std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
   markup.js copyText (navigator.clipboard.writeText, which needs a recent click; a refusal goes to the console), from a
@@ -330,7 +330,7 @@ Each step is useful on its own and is what the next ones stand on.
   steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
   a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
-  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it).
+  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it; card web-host-parts-std).
 - Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
   probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
   functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
@@ -342,7 +342,7 @@ Each step is useful on its own and is what the next ones stand on.
   Limits: functions the module exports (every user function, the runtime) stay in app.wasm, so a route's module holds
   its body (markup, its text constants' code), not the helpers it calls; data segments stay too. Next: let user
   functions only one route reaches move as well (wasm-split keeps their exports as thunks), once nothing on the host
-  calls them before the route loads.
+  calls them before the route loads (card web-split-helpers).
 
 ## web-apis: animation frames (card drawing-frames, first piece of web-apis)
 - In the playground a paint after a `sleep` is an animation's next frame: `loop { clear(paper); …; show(); sleep(16) }`
@@ -495,8 +495,8 @@ Each step is useful on its own and is what the next ones stand on.
   site.js hydrate loads the kept values and shows what main left (page·html).
 - Tests: tests/web/test_dev_server.rs; probes/dev/counter.warp (click, edit the label: the count stays),
   probes/dev/stored_check.py.
-- Left: watching used modules (only the program's file counts), component instance state (`Counter·count` lists) and
-  the playground editor's error marks in the overlay; a failure's source line is that of the program, not of a module.
+- Left: watching used modules (only the program's file counts; card web-dev-modules), component instance state (`Counter·count` lists; card web-dev-instances) and
+  the playground editor's error marks in the overlay (card web-dev-marks); a failure's source line is that of the program, not of a module.
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
 - Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of
@@ -509,4 +509,4 @@ Each step is useful on its own and is what the next ones stand on.
 - Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
   focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
   focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
-- Not here: live regions for async content (web-async). Markup built at run time (strings, computed tags) is not checked.
+- Not here: live regions for async content (card web-a11y-live). Markup built at run time (strings, computed tags) is not checked (card web-a11y-runtime).

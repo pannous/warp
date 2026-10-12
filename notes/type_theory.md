@@ -1,5 +1,7 @@
 # Warp's type theory: the core calculus W0 and its formal model
 
+Roadmap card: type-theory (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 User, 2026-10-08: "type theory is formally verifiable, let's make it highest priority to implement that". Card
 type-theory. Goal: warp's type system has a formal model in Lean 4 with machine-checked soundness (progress and
 preservation), and the implementation is tied to that model by tests so they cannot drift.
@@ -89,7 +91,7 @@ below `list t`) is what each write keeps, and since `t ≤ τ` for every `list �
 covariance stays sound (preservation, progress and safety proved, no sorry). The exporter shares a list where a
 main-level list name takes it (`xs = [1]`, `xs: ints = …`, `xs = []`), tagged with the declared element type (`any`
 when undeclared: warp's undeclared lists take anything); `ys = xs` stores the same cell. Function locals' lists
-stay values (`xs = xs ++ [v]` in their cell). Not yet: insert as a write, list identity for `===`
+stay values (`xs = xs ++ [v]` in their cell). Not yet (card w0-list-writes): insert as a write, list identity for `===`
 beyond names. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
 lists `ys: numbers = xs; ys.add(2.5)` and `ys#1 = 2.5` as known value differences (W0: error, warp: adds it; card p215-user).
 
@@ -279,7 +281,7 @@ for a whole number when they run. This is stricter than warp, never unsound, so 
 assigns only globals); `global y` inside a function, or bare at main level before `y = …`, only declares. The
 exporter collects every name declared `global` anywhere first. In warp a function's assignment to a name without
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
-(`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
+(`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet (card w0-globals): `global float y = …`
 (the exporter does not read the type word yet), `global x; x` (read before any value).
 
 ## Lambdas
@@ -419,7 +421,7 @@ checker admits a cast when the value's static type is consistent with an alterna
 subtyping: `any` stands for anything, `list any` fits `list int`), so `x: int | text = 3; x = 2.5` and
 `f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter (src/law/type_model.rs) reads the
 union with the analyzer's `union_type_name` (a covered part dropped, ø made optional: `.opt` of the rest) and wraps main-level bindings,
-assignments and single-parameter call arguments. Not yet: unions as fields or as one of several parameters, unions
+assignments and single-parameter call arguments. Not yet (card w0-unions): unions as fields or as one of several parameters, unions
 of classes (warp refuses them for now), `x as T?` (a conversion in warp: `"4" as int?` is 4; W0's cast only checks).
 
 ## Implicit casts from `any`
@@ -559,7 +561,7 @@ or codepoint) replaces `= text` in `+` (`plus`), `*` (`repeatTy`) and `#`/`for` 
 codepoints, which the walk (`peel_codepoint`) and `#` give. A name given no annotation widens a codepoint to text
 (`widen`: `x = "a"; x = "bc"` is accepted, `x = "a"; x = 1` is "x was a Text"). The checker rejects, as warp does,
 `x: codepoint = "ab"`, `f(c: codepoint) := c; f("ab")` and `x: codepoint = 97`. The exporter maps the words
-`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet: `97 as codepoint` (W0 converts
+`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet (card w0-conversions): `97 as codepoint` (W0 converts
 only by `fits`).
 
 ## Exact numbers and floats
@@ -578,7 +580,7 @@ zero. Printing follows warp's `Number` display: a terminating decimal (`3.5`, `0
 warp's analyzer sees a decimal and a float as one Kind (Float), so admits is compared on the decimal (`.exact`).
 Found: card rational-float (`x: rational = sqrt(2)`, `x: rational = 0.5 as float` fail with an internal WASM
 validation error rather than the compile error a parameter gets: `f(r: rational) := r; f(0.5 as float)`).
-Not yet: `as rational` (a cast, not a conversion, in W0), float display, `x: float = 1/3` converting (W0 keeps 1/3, of
+Not yet (card w0-conversions): `as rational` (a cast, not a conversion, in W0), float display, `x: float = 1/3` converting (W0 keeps 1/3, of
 type number; warp converts to 0.333…, which the comparison skips as a float).
 
 ## Stored errors (errors as values)

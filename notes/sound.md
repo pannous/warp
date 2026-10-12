@@ -1,5 +1,7 @@
 # Sound (card basic-sound)
 
+Roadmap card: sound (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 `lib/sound.warp` (sample: samples/music.warp), loaded without `use` when a program calls play, beep, stop_sound or
 wait_sound (src/modules.rs SOUND_SETUP_FREE_WORDS). Every other sound word (melody, tone, pattern, live_loop,
 render_sound, sound_queued, play_file, the midi words) needs `use sound`; called bare it is the error naming the use
@@ -59,9 +61,9 @@ flat whole numbers `[start ms, key, length ms, velocity …]` (src/midi.rs nativ
 the browser, the same codec twice). `midi_on(pitch, velocity = 100, channel = 1)`, `midi_off`, `midi_send(status, d1, d2, port)`.
 Natively a message goes to `sendmidi` (brew install gbevin/tools/sendmidi; missing → a loud error naming it), headless only
 `midi out <port>: 90 3c 64` on stderr. Browser: Web MIDI on the page (playground.js sendMidi, first output or by name,
-failures to the console). Open, each failing loudly today: `midi_receive()` (no CoreMIDI binding natively: needs the midir
+failures to the console). Open, each failing loudly today (card midi-receive): `midi_receive()` (no CoreMIDI binding natively: needs the midir
 crate or libloading CoreMIDI; in the browser the page's input would have to be handed to the Worker), `midi_outputs()` in the
-browser (a Worker cannot wait for the page's device list), clock-timed MIDI (messages are immediate, not scheduled with `at`).
+browser (a Worker cannot wait for the page's device list), clock-timed MIDI (messages are immediate, not scheduled with `at`; card midi-clock).
 A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word ("not a list").
 
 ## Probes and quirks (from the warp-sound handover, 2026-10-10)
@@ -112,7 +114,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    the voice's first sound (Voice origin), then the voice goes on where it stood. Exact to the sample in render_sound,
    which now counts from where the last render ended (so the silence before an `at` stays) and in the browser's
    WebAudio start(at); native live playback only to the millisecond (a sleeping thread per sound, then afplay).
-   Still to build: ramping a handle's gain, and native live sample accuracy: both need our own output engine (cpal,
+   Still to build: ramping a handle's gain (card sound-gain-ramps), and native live sample accuracy: both need our own output engine (cpal,
    "Our own API" below) instead of one player process per sound (card native-engine).
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
@@ -125,7 +127,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    notes, kinds in lib chord_intervals / scale_intervals, written as a word the program doesn't define (only directly
    in the call: `f(major)` passes an undefined symbol) or as a text. Notes stay frequencies at run time; sound's
    transpose/2 and matrix's transpose/1 coexist. Still to build: a `Note` value (pitch class, octave, cents) that
-   prints as its name, intervals as values, just intonation, velocity.
+   prints as its name, intervals as values, just intonation, velocity (card note-value).
 3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
@@ -144,13 +146,13 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    1 right, 0 mono) makes lib panned interleave left, right, the far side scaled by 1 - |pan|; sound_samples carries
    the channels (src/host.rs, 4th parameter), the WAV/AudioBuffer has them, render_sound mixes in stereo when any
    sound is (mono on both sides alike), natively and in host-files.js mixed. Still open: voice stealing (a cap on
-   voices sounding at once), which only matters for live playing (cards real-time / patterns-live). Still to build:
+   voices sounding at once; card sound-voice-stealing), which only matters for live playing (cards real-time / patterns-live). Still to build:
    Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
-   envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,
+   envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps; card sound-gain-ramps), gain in dB,
    stereo pan, polyphony with voice stealing.
 4. A signal graph. `osc(220Hz, saw) |> lowpass(1.2kHz, q: 4) |> delay(3/8 beat) |> reverb(0.3) |> gain(-6dB) |> out`:
    nodes and buses as values, effects (delay, reverb, compressor, distortion, EQ), a mixer.
-5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points; render offline to a file
+5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points (card sound-samples); render offline to a file
    (`render 8 bars to "song.wav"`), which is also how tests check audio without speakers.
 6. Patterns and sequencing. Sonic Pi `live_loop`, Tidal mini-notation (`"c4 e4 [g4 b4]*2"`), Euclidean rhythms,
    swing, randomness with seeds; live coding: redefine a loop while it plays.
@@ -171,7 +173,7 @@ their cumulated seconds reach (no drift), so the voice goes on after the cycle; 
 step of a group by swing·step/3 (1: triplet feel). `live_loop 4 { … }` is `live_voice = go { for … 0..4 { … } }`
 (music_words.rs lower_live_loops, before go_blocks): a voice of its own on the beat clock, so loops and `play` overlap; `await live_voice`
 waits for the last loop (renders after live loops need it: the task adds its sounds when it runs).
-Still open: seeded randomness (`?`), `<a b>` alternation per cycle, `_` elongation, an endless loop whose block is redefined while
+Still open: seeded randomness (`?`), `<a b>` alternation per cycle, `_` elongation (card pattern-extras), an endless loop (card live-redefine) whose block is redefined while
 it plays (needs the playground's live reload and voice stealing), a loop name for several awaits.
 
 ## Our own API or the platform's? (card our-sound)
@@ -215,4 +217,4 @@ output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase
 `distortion` (soft-clipper drive), `delay_time` / `delay_feedback` / `delay_mix`, `reverb_mix` (four Schroeder combs, 0.6 s
 tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
 own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
-and buses as values, shared buses between voices, compressor, EQ, effects on a running handle.
+and buses as values, shared buses between voices, compressor, EQ, effects on a running handle (card sound-pipe-graph).

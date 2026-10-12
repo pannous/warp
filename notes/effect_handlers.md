@@ -1,5 +1,7 @@
 # Effect handlers (card effect-handlers, user: "yes, steps 1+2")
 
+Roadmap card: effects (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 Events are warp's effects: `emit ask` performs the effect `ask`, an `on ask {…}` handler answers it. Handlers are
 tail-resumptive only: the handler's value is what `emit` gives, and the emitting code goes on (P163). No captured
 continuations, everything is plain calls.
@@ -50,6 +52,6 @@ Lowering (src/lowering/scoped_handlers.rs, before event_signals):
   both paths.
 - The effect row is unchanged: an aborting handler still handles (removes) its event.
 - on error of f (Error.md) is the same shape (a handler that gives the call's value instead of resuming); it keeps
-  its own lowering for now.
+  its own lowering for now (card on-error-abort).
 
 Scenarios, comparison with try/catch, unification plan: notes/scoped_handlers.md

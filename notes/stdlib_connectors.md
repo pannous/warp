@@ -1,5 +1,7 @@
 # Connectors to other ecosystems ("hijack the stdlib of others")
 
+Roadmap card: connectors (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 User, 2026-10-05: "write connectors to different libraries… FFI mechanism, but also Python, JavaScript, Rust and native
 libraries, maybe a shallow wrapper or a general mechanism… We want lots of functionality soon… a mode that allows
 access to anything." Card hijack-stdlib. Survey of what exists, options per ecosystem, recommendation, first step.
@@ -133,8 +135,8 @@ step 3.
   on a variable assigned a component's result (or on such a call) goes to the component unless it is a warp method
   (library words, list mutation, text builtins). Handles cross back as `own`/`borrow` arguments, also in lists;
   a handle of another resource type or component is refused.
-- Not yet: dropping a resource before the process ends, a component's exports as operators, components in the browser (host.js says it runs only in the native host; jco could transpile them),
-  `warp build --exe` (refused: foreign_call is a missing import). Capability: Ffi like the other foreign runtimes, though
+- Not yet: dropping a resource before the process ends (card component-drop), a component's exports as operators (card component-operators), components in the browser (host.js says it runs only in the native host; jco could transpile them),
+  `warp build --exe` (refused: foreign_call is a missing import; card exe-foreign). Capability: Ffi like the other foreign runtimes, though
   a component without preopened files is sandboxed: granting it to eval_untrusted is a later question.
 
 ## Status 2026-10-06 and next: C libraries compiled to WebAssembly (warp-06)

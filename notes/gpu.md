@@ -1,5 +1,7 @@
 # GPU vectors (card gpu-vectors, user 2026-10-08)
 
+Roadmap card: fast-numbers (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+
 User: list arithmetic on large number lists runs as WebGPU compute (wgpu natively, WebGPU in the playground) above a
 size threshold, on the CPU below it and without an adapter; tests compare GPU and CPU results. The GPU path reuses the
 gpu_compute / gpu_render plumbing (src/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
