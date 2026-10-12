@@ -1955,6 +1955,8 @@ PASSED:
   ✓ modules::test_std_named_program::a_file_shadowing_a_std_module_is_named
   ✓ modules::test_std_named_program::a_program_named_like_a_std_module_uses_the_std_module
   ✓ modules::test_std_names_offline::a_std_module_name_needs_no_file_lookup
+  ✓ modules::test_std_net::post_sends_the_headers_of_a_map
+  ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_prelude::a_local_named_like_a_prelude_word_is_the_local
   ✓ modules::test_std_prelude::a_module_word_inside_an_interpolation_comes_along
   ✓ modules::test_std_prelude::a_programs_own_prelude_word_wins
@@ -3079,6 +3081,7 @@ PASSED:
   ✓ programs::test_sound_use::an_own_word_named_like_a_rare_sound_word_is_the_program_s
   ✓ programs::test_sound_use::play_and_beep_need_no_use
   ✓ programs::test_sound_voices::a_task_is_a_voice_that_sounds_along
+  ✓ programs::test_sound_voices::a_voice_far_ahead_of_the_speaker_waits
   ✓ programs::test_sound_voices::a_voice_starts_where_its_starter_stands
   ✓ programs::test_sound_voices::voices_add_up
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
@@ -3491,6 +3494,8 @@ PASSED:
   ✓ types::test_class_mixins::a_class_takes_in_several_mixins_and_overrides
   ✓ types::test_class_operators::a_class_defines_an_operator_by_its_glyph
   ✓ types::test_class_operators::a_class_defines_an_operator_by_its_name
+  ✓ types::test_class_operators::a_value_either_an_instance_or_a_number_keeps_what_it_is
+  ✓ types::test_class_operators::an_operator_on_a_value_of_unknown_class_dispatches_at_run_time
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
@@ -4806,8 +4811,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ modules::test_std_net::post_sends_the_headers_of_a_map
-  ✗ modules::test_std_net::use_net_posts_a_text
 
 SUMMARY:
-10 ignored, 4803 passed, 2 failed, 4805 total tested
+10 ignored, 4808 passed, 0 failed, 4808 total tested
