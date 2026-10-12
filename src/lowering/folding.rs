@@ -250,9 +250,16 @@ pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
 	}
 	let definitions = statements
 		.iter()
-		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)))
+		.filter(|statement| {
+			functions_in(statement)
+				.iter()
+				.any(|function| foldable.contains(&function.name))
+		})
 		.map(|definition| without_result_checks(definition.clone()));
-	let computed = calls.iter().map(|(_, name, arguments)| call(name, arguments.clone())).collect();
+	let computed = calls
+		.iter()
+		.map(|(_, name, arguments)| call(name, arguments.clone()))
+		.collect();
 	let probe = [
 		definitions.collect(),
 		vec![Node::List(computed, Bracket::Square, Separator::Colon)],
@@ -267,7 +274,12 @@ pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
 	for ((called, name, arguments), value) in calls.iter().zip(values) {
 		if let Some(refusal) = crate::analyzer::assignment_mismatch(called, CHECKED_RESULT, &declared[name], &value) {
 			let arguments: Vec<String> = arguments.iter().map(Node::serialize).collect();
-			let message = format!("{name}({}) gives {}: {}", arguments.join(", "), value.serialize(), refusal.message);
+			let message = format!(
+				"{name}({}) gives {}: {}",
+				arguments.join(", "),
+				value.serialize(),
+				refusal.message
+			);
 			return Err(refusal.message(message).into_error());
 		}
 	}
@@ -280,7 +292,9 @@ fn constant_call<T>(node: &Node, functions: &HashMap<String, T>) -> Option<(Stri
 		return None;
 	};
 	let (head, arguments) = items.split_first()?;
-	let Node::Symbol(name) = head.drop_meta() else { return None };
+	let Node::Symbol(name) = head.drop_meta() else {
+		return None;
+	};
 	(functions.contains_key(name) && !arguments.is_empty() && arguments.iter().all(is_constant))
 		.then(|| (name.clone(), arguments.to_vec()))
 }
@@ -304,7 +318,9 @@ fn checked_result_type(body: &Node) -> Option<String> {
 /// A definition whose checked result keeps any value: `the result = v`
 fn without_result_checks(node: Node) -> Node {
 	match node {
-		Node::Meta { node: name, data } if name.is_symbol(CHECKED_RESULT) && matches!(data.as_ref(), Node::Symbol(_)) => {
+		Node::Meta { node: name, data }
+			if name.is_symbol(CHECKED_RESULT) && matches!(data.as_ref(), Node::Symbol(_)) =>
+		{
 			*name
 		}
 		other => children_rewritten(other, without_result_checks),

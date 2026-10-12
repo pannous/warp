@@ -8,11 +8,11 @@
 
 use super::list_dispatch::Slot;
 use super::WasmGcEmitter;
+use crate::context::UserFunctionDef;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK};
-use crate::context::UserFunctionDef;
 use std::collections::{BTreeMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;

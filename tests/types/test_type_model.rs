@@ -652,8 +652,14 @@ const KNOWN_HOLES: &[(&str, &str)] = &[
 /// Programs warp refuses when compiled that the model accepts and fails only when they run: warp computes a constant
 /// call whose value misfits its declared result (card static-int), the model checks that result with a run-time cast
 const KNOWN_EARLIER_REFUSALS: &[(&str, &str)] = &[
-	("int half(x) := {y = x; if y > 2 {return y/2}; y/4}; half(3) + half(2)", "static-int"),
-	("def outer(x) -> int { inner(y) := y * 2; inner(x) / 3 }; outer(5)", "static-int"),
+	(
+		"int half(x) := {y = x; if y > 2 {return y/2}; y/4}; half(3) + half(2)",
+		"static-int",
+	),
+	(
+		"def outer(x) -> int { inner(y) := y * 2; inner(x) / 3 }; outer(5)",
+		"static-int",
+	),
 ];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
