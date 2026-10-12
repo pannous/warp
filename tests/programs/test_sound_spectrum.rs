@@ -5,6 +5,17 @@ use crate::is;
 
 const SOUND: &str = "use sound\n";
 
+/// What a child warp run tells about itself: how it ended (an exit code, or a signal under load), its stdout and stderr
+#[cfg(feature = "native")]
+fn run_report(run: &std::process::Output) -> String {
+	format!(
+		"the run ended with status {}\nstdout:\n{}\nstderr:\n{}",
+		run.status,
+		String::from_utf8_lossy(&run.stdout),
+		String::from_utf8_lossy(&run.stderr)
+	)
+}
+
 #[test]
 fn a_tone_fills_its_own_band() {
 	is!(&format!("{SOUND}bars = spectrum(chord_samples([A4], 0.1, \"sine\"), 0.02, 8)\nbars[nearest_band(A4, 8)] == max(bars)"), true);
@@ -38,13 +49,28 @@ fn animates_while_it_plays(sample: &str) -> Option<()> {
 	if errors.contains("no WebGPU adapter") {
 		return None;
 	}
-	assert!(run.status.success(), "{errors}");
-	assert!(errors.contains("sound "), "{errors}");
+	assert!(run.status.success(), "{}", run_report(&run));
+	assert!(errors.contains("sound "), "{}", run_report(&run));
 	// the loop paints a frame per 40 ms of a 4 s song by the wall clock: a second frame shows it animates, however slow
 	// a frame gets under load (3 frames once failed in a full gate: card visualizer-test)
 	let painted = |output: &[u8]| String::from_utf8_lossy(output).matches("painted").count();
-	assert!(painted(&run.stderr).max(painted(&run.stdout)) >= 2, "{errors}");
+	assert!(
+		painted(&run.stderr).max(painted(&run.stdout)) >= 2,
+		"{}",
+		run_report(&run)
+	);
 	Some(())
+}
+
+#[cfg(feature = "native")]
+#[test]
+fn a_nonzero_visualizer_child_report_names_its_exit_status() {
+	let run = crate::common::warp_command()
+		.args(["--no-ask", "eval", "raise \"visualizer probe\""])
+		.output()
+		.unwrap();
+	assert!(!run.status.success());
+	assert!(run_report(&run).contains(&format!("status {}", run.status)));
 }
 
 #[cfg(feature = "native")]

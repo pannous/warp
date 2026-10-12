@@ -848,6 +848,8 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_zlib_discovery
   ✓ ffi::test_ffi::test_import_from_pattern_emit
   ✓ ffi::test_ffi::test_import_from_pattern_parse
+  ✓ ffi::test_foreign_bools::a_js_boolean_is_a_bool
+  ✓ ffi::test_foreign_bools::a_python_boolean_is_a_bool
   ✓ ffi::test_foreign_handles::test_a_handle_goes_back_as_an_argument
   ✓ ffi::test_foreign_handles::test_a_js_handle
   ✓ ffi::test_foreign_handles::test_python_handles
@@ -3146,6 +3148,7 @@ PASSED:
   ✓ programs::test_sound_signal::a_signal_louder_than_full_scale_is_clipped
   ✓ programs::test_sound_signal::a_signal_parameter_is_the_time_in_seconds_untyped_too
   ✓ programs::test_sound_signal::play_of_a_function_plays_it_as_a_signal
+  ✓ programs::test_sound_spectrum::a_nonzero_visualizer_child_report_names_its_exit_status
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
@@ -4999,4 +5002,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4994 passed, 0 failed, 4994 total tested
+10 ignored, 4997 passed, 0 failed, 4997 total tested

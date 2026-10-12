@@ -267,7 +267,9 @@ const handleOf = value => ({ $handle: foreignHandles.push(value), type: value?.c
 const unhandled = value => value !== null && typeof value === "object" && "$handle" in value ? foreignHandles[value.$handle - 1] : value;
 const isPlainObject = value => [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
-// a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans 1/0
+// a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans warp's
+// bools, an Int marked BOOL_INFO above the kind bits (src/type_kinds.rs BOOL_KIND, card booleans-foreign)
+const BOOL_KIND = String((1n << 8n) | 1n); // BOOL_INFO above Kind::Int
 const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
 const CURLY_LIST = String(KIND_LIST);
 const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: Colon is 1
@@ -276,7 +278,7 @@ const KIND_CODEPOINT = "4";
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
 function treeOfPlain(value) {
 	if (value === null || value === undefined) return { kind: "0", data: null, chain: [] };
-	if (typeof value === "boolean") return { kind: KIND_INT, data: { int: value ? "1" : "0" }, chain: [] };
+	if (typeof value === "boolean") return { kind: BOOL_KIND, data: { int: value ? "1" : "0" }, chain: [] };
 	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
 	if (typeof value === "number") return Number.isSafeInteger(value) ? { kind: KIND_INT, data: { int: String(value) }, chain: [] } : { kind: KIND_FLOAT, data: { float: value }, chain: [] };
 	if (typeof value === "string") return textTree(value);
