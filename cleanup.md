@@ -31,3 +31,24 @@
 - Reuse `TaskTable`; do not add a second scheduler abstraction or a new dependency.
 - Remove the per-task `JoinHandle` model once the pool owns worker handles.
 - Keep the worktree-only Cargo version suffix uncommitted.
+
+# Codex cron lifecycle cleanup
+
+## Scope
+
+- Keep scheduled runs as ordinary named app-server threads that are discoverable in the desktop app.
+- Treat every terminal app-server state, connection loss, wrapper signal, and timeout as an explicit lifecycle outcome.
+- Always close the app-server proxy and shell pipeline, atomically write a non-empty `.last.md`, and emit one accurate end notice.
+- Preserve merge-request extraction and the existing `codex exec` fallback without concealing failures.
+
+## Verification
+
+- Capture the current live run and scheduler evidence without terminating or modifying it.
+- Add focused real-process lifecycle probes under `probes/` for completed, interrupted, refused, disconnected, and timed-out outcomes where safely reproducible.
+- Run the established targeted script checks before and after the change, then perform one tiny real Codex app-server probe if the remaining usage budget permits.
+
+## Cleanup
+
+- Reuse one lifecycle result representation and one final-artifact writer rather than adding shell-only special cases.
+- Keep all failure details loud in the artifact, worker log, and Warp Boss end notice.
+- Keep the worktree-only Cargo version suffix uncommitted.
