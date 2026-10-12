@@ -112,13 +112,10 @@ pub fn serves(code: &str) -> bool {
 	top_level_statements(code).iter().any(is_serving_statement)
 }
 
-/// The tag whose value is a whole page
-const PAGE_TAG: &str = "html";
-
-/// Whether the program's value is a page, `html{ … }` its last statement: plain `warp page.warp` run from a terminal
-/// shows it in a window (main.rs) as `warp app page.warp` does
+/// Whether the program's value is a page, `html{ … }` or any other element (`div{ … }`, card div-opens-app) its last
+/// statement: plain `warp page.warp` run from a terminal shows it in a window (main.rs) as `warp app page.warp` does
 pub fn shows_page(code: &str) -> bool {
-	let is_page_tag = |tag: &Node| tag.symbol_name() == Some(PAGE_TAG);
+	let is_page_tag = |tag: &Node| tag.symbol_name().is_some_and(crate::markup::is_element_tag);
 	top_level_statements(code).last().is_some_and(|last| match last.drop_meta() {
 		Node::Key(tag, Op::Colon, _) => is_page_tag(tag),
 		Node::List(items, _, _) => matches!(items.as_slice(), [tag, body] if is_page_tag(tag) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))),
