@@ -750,13 +750,24 @@ function showEventOutput(data) {
 	(data.patches ?? []).forEach(showPatch);
 }
 
-// one element of the shown markup anew (card web-fine-holes): `path` its element indices from the root down
-function showPatch({ path, html }) {
+// one element of the shown markup anew (card web-fine-holes): `path` its element indices from the root down; or the
+// text node after `after` children of that element (card web-fine-text-nodes)
+function showPatch({ path, html, text, after }) {
 	const root = $("rendered").shadowRoot;
 	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
+	if (text !== undefined) return shown ? showText(shown, after, text) : console.error(`markup hole ${path.join("·")}: no element there`);
 	const wanted = parsedHtml(html).children[0];
 	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
 	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
+}
+
+// the text node after `after` children of the element set to `text`; an empty text has none, so one is made or dropped
+function showText(element, after, text) {
+	const next = after === 0 ? element.firstChild : element.children[after - 1]?.nextSibling;
+	const node = next?.nodeType === Node.TEXT_NODE ? next : null;
+	if (node && text) node.data = text;
+	else if (node) node.remove();
+	else if (text) element.insertBefore(document.createTextNode(text), after === 0 ? element.firstChild : next ?? null);
 }
 
 async function show(code) {

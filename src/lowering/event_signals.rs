@@ -73,6 +73,8 @@ pub fn is_page_event(name: &str) -> bool {
 pub const PAGE_VALUE: &str = "page·value";
 /// The bindings of the elements of shown markup that hold computed parts, `page·hole·<path>` (card web-fine-holes)
 const PAGE_HOLE: &str = "page·hole";
+/// `page·hole·0·text·1`: a text hole (card web-fine-text-nodes), the text node after that many children of the element
+const TEXT_HOLE: &str = "text";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
 pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
@@ -335,8 +337,18 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
 		let holes = crate::markup::holes(&shown)
 			.into_iter()
-			.map(|(path, element)| function_with_globals(&hole_name(&path), false, &[element], main_variables));
+			.map(|(path, element)| (hole_name(&path), element));
+		let text_holes = crate::markup::text_holes(&shown).into_iter().map(|hole| {
+			let name = format!(
+				"{}{NAME_JOINER}{TEXT_HOLE}{NAME_JOINER}{}",
+				hole_name(&hole.path),
+				hole.after
+			);
+			(name, hole.text)
+		});
 		let bindings: Vec<Node> = holes
+			.chain(text_holes)
+			.map(|(name, part)| function_with_globals(&name, false, &[part], main_variables))
 			.chain([function_with_globals(PAGE_VALUE, false, &[shown], main_variables)])
 			.collect();
 		let last = statements.len() - 1;

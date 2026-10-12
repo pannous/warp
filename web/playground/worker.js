@@ -31,6 +31,7 @@ let live; // the run whose page events are handled (host.js runProgram), until t
 const PAGE_VALUE = "page·value";
 const PAGE_HOLE = "page·hole";
 const PATH_JOINER = "·";
+const TEXT_HOLE = "text"; // page·hole·<path>·text·<n>: the text after n children of that element (card web-fine-text-nodes)
 // after a handler that patched holes, the value text waits this long for the next event before it is read whole
 const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
@@ -233,7 +234,7 @@ function shownOf(outcome) {
 }
 
 // markup with holes (PAGE_HOLE·<path>, src/lowering/event_signals.rs, card web-fine-holes): only the elements holding
-// computed parts are read, the page gets those whose HTML changed; the whole value follows once the events pause.
+// computed parts, or their computed texts alone between children (TEXT_HOLE), are read, the page gets those whose HTML changed; the whole value follows once the events pause.
 // False when there are none, or one fails (the whole value then shows the error)
 function showHoles(holder) {
 	const holes = Object.keys(holder.exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER));
@@ -243,10 +244,12 @@ function showHoles(holder) {
 	for (const name of holes) {
 		const outcome = outcomeOf(holder, hooks, holder.exports[name]);
 		if (outcome.result === undefined) return false;
-		const html = outcome.html ?? shownOf(outcome).html;
-		if (holder.holeHtml.get(name) === html) continue;
-		holder.holeHtml.set(name, html);
-		patches.push({ path: name.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number), html });
+		const [path, after] = name.split(PATH_JOINER + TEXT_HOLE + PATH_JOINER);
+		const shown = after === undefined ? { html: outcome.html ?? shownOf(outcome).html } : { text: String(plainOfTree(outcome.result)), after: Number(after) };
+		const seen = shown.html ?? shown.text;
+		if (holder.holeHtml.get(name) === seen) continue;
+		holder.holeHtml.set(name, seen);
+		patches.push({ path: path.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number), ...shown });
 	}
 	post({ type: "handled", patches });
 	clearTimeout(holder.valueTimer);

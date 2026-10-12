@@ -24,6 +24,8 @@ const RENDERED: &str = "rendered";
 const STYLE: &str = "style";
 /// the attribute naming the component of an element, whose style sheets style only its elements (card web-scoped)
 pub const SCOPE_ATTRIBUTE: &str = "data-warp-scope";
+/// Elements whose text lib/markup.warp renders its own way (style rules, raw script, the chosen option): no text holes
+const TEXT_ELEMENTS: [&str; 5] = ["style", "script", "option", "select", "textarea"];
 
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
@@ -87,19 +89,39 @@ fn content_items(content: &Node) -> Vec<&Node> {
 	}
 }
 
+/// A computed text between an element's children (card web-fine-text-nodes): the page sets that text node only
+pub struct TextHole {
+	/// the element's path, as a hole's
+	pub path: Vec<usize>,
+	/// the element's children before the text, so the text node follows the child `after - 1` (or comes first)
+	pub after: usize,
+	pub text: Node,
+}
+
 /// The holes of markup as written (card web-fine-holes, notes/web_framework.md step 3): the outermost elements holding
 /// a computed text, attribute or child directly, each with its path, the element indices from the root down (as the
-/// page's `children` count them). The other elements are fixed. Empty when the root itself holds one.
+/// page's `children` count them). The other elements are fixed. Empty when the root itself holds one. An element whose
+/// computed parts are all text_holes is none
 pub fn holes(markup: &Node) -> Vec<(Vec<usize>, Node)> {
-	let mut holes = vec![];
+	collect_all_holes(markup).0
+}
+
+/// The computed texts standing alone between an element's children, which the page sets as text nodes; empty when the
+/// root itself holds a computed part
+pub fn text_holes(markup: &Node) -> Vec<TextHole> {
+	collect_all_holes(markup).1
+}
+
+fn collect_all_holes(markup: &Node) -> (Vec<(Vec<usize>, Node)>, Vec<TextHole>) {
+	let mut holes = (vec![], vec![]);
 	collect_holes(markup, &mut vec![], &mut holes);
-	if holes.iter().any(|(path, _)| path.is_empty()) {
-		return vec![];
+	if holes.0.iter().any(|(path, _)| path.is_empty()) || holes.1.iter().any(|hole| hole.path.is_empty()) {
+		return (vec![], vec![]);
 	}
 	holes
 }
 
-fn collect_holes(element: &Node, path: &mut Vec<usize>, holes: &mut Vec<(Vec<usize>, Node)>) {
+fn collect_holes(element: &Node, path: &mut Vec<usize>, holes: &mut (Vec<(Vec<usize>, Node)>, Vec<TextHole>)) {
 	let Some((tag, content)) = element_parts(element) else {
 		return;
 	};
@@ -109,13 +131,77 @@ fn collect_holes(element: &Node, path: &mut Vec<usize>, holes: &mut Vec<(Vec<usi
 		None => !is_fixed(item),
 	};
 	if items.iter().any(computed) {
-		return holes.push((path.clone(), element.clone()));
+		let Some(texts) = lone_texts(tag, &items) else {
+			return holes.0.push((path.clone(), element.clone()));
+		};
+		holes.1.extend(texts.into_iter().map(|(after, text)| TextHole {
+			path: path.clone(),
+			after,
+			text: text.clone(),
+		}));
 	}
 	let children = items.into_iter().filter(|item| named_attribute(item, tag).is_none());
 	for (index, child) in children.flat_map(child_elements).enumerate() {
 		path.push(index);
 		collect_holes(child, path, holes);
 		path.pop();
+	}
+}
+
+/// The computed parts of an element's items as text holes, each with the child elements before it: only when every
+/// computed part is a text (`"count " + n`), its neighbours are elements (a text beside it would share its DOM text
+/// node), no attribute is computed, and the element has child elements (else the element is as small as its text)
+fn lone_texts<'a>(tag: &str, items: &[&'a Node]) -> Option<Vec<(usize, &'a Node)>> {
+	if TEXT_ELEMENTS.contains(&tag) {
+		return None;
+	}
+	let mut children: Vec<&Node> = vec![];
+	for item in items {
+		match named_attribute(item, tag) {
+			Some((_, value)) if !is_literal(value) => return None,
+			Some(_) => {}
+			None if is_fixed(item) => children.extend(fixed_nodes(item)),
+			None => children.push(item),
+		}
+	}
+	let is_element = |child: &&Node| element_parts(child).is_some();
+	let mut texts = vec![];
+	for (position, child) in children.iter().enumerate() {
+		if is_element(child) || is_fixed(child) {
+			continue;
+		}
+		let neighbours = [position.checked_sub(1), Some(position + 1)];
+		let alone = neighbours
+			.into_iter()
+			.flatten()
+			.filter_map(|neighbour| children.get(neighbour))
+			.all(is_element);
+		if !is_computed_text(child) || !alone {
+			return None;
+		}
+		texts.push((
+			children[..position].iter().filter(|before| is_element(before)).count(),
+			*child,
+		));
+	}
+	(children.iter().any(is_element)).then_some(texts)
+}
+
+/// The DOM nodes of a fixed child as it is written: its items if it is a literal list
+fn fixed_nodes(child: &Node) -> Vec<&Node> {
+	match child.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items.iter().flat_map(fixed_nodes).collect(),
+		_ => vec![child],
+	}
+}
+
+/// `"count " + n`, `"a" + b + "c"`: a sum starting with a literal text, which shows as text whatever it adds
+fn is_computed_text(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, Op::Add, _) => {
+			matches!(left.drop_meta(), Node::Text(_) | Node::Char(_)) || is_computed_text(left)
+		}
+		_ => false,
 	}
 }
 
