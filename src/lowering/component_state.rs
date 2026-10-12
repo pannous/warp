@@ -41,11 +41,29 @@ const CLEANED_FROM: &str = "CLEANED = COUNTER + 1";
 const CLEANUP_LOOP: &str = "while CLEANED <= SEEN { CLEANUP(CLEANED); CLEANED += 1 }";
 const TRUNCATED: &str = "if #STATE > COUNTER { STATE = STATE[0..COUNTER] }";
 const SEEN_SET: &str = "SEEN = COUNTER";
+/// `Counter(t, key: t.id)` (card web-instance-keys): the instance's state follows its key, not its position
+const KEY_PARAMETER: &str = "key = ø";
+const KEY_WORD: &str = "key";
+/// A keyed instance moves its key's entries of the render before to its position; a new key takes a fresh slot, the
+/// one it finds there moving to the end. FRESH: an instance not shown before, whose state starts anew
+const KEYED_PLACEMENT: &str = "FRESH = SEEN < KEY; if key != ø { FOUND = KEYS.index_of(key); FRESH = FOUND == 0; \
+	if FRESH { if #KEYS < KEY { KEYS.push(key) } else { KEYS.push(KEYS#KEY); KEYS#KEY = key; STALE_MOVES } } \
+	else if FOUND != KEY { SWAPS } } else { if #KEYS < KEY { KEYS.push(ø) } else { KEYS#KEY = ø } }";
+const STALE_MOVE: &str = "LIST.push(LIST#KEY); ";
+const SWAP: &str = "MOVED = LIST#FOUND; LIST#FOUND = LIST#KEY; LIST#KEY = MOVED; ";
+const KEYED_FIRST_SET: &str = "if #STATE < KEY { STATE.push(INITIAL) } else if FRESH { STATE#KEY = INITIAL }";
+/// moved keys may stand past the instances of the render before: the cleanup reaches every slot
+const KEYED_SEEN: &str = "SEEN = #KEYS";
+/// a keyed instance mounts when its key is new
+const FRESH_PLACEHOLDER: &str = "FRESH";
 const SHOWN: &str = "page·shown";
 const MOUNT: &str = "mount";
 const CLEANUP: &str = "cleanup";
 const SEEN: &str = "seen";
 const CLEANED: &str = "cleaned";
+const KEYS: &str = "keys";
+const FRESH: &str = "fresh";
+const FOUND: &str = "found";
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program else { return program };
@@ -53,13 +71,14 @@ pub fn lower(program: Node) -> Node {
 	if !statements.iter().any(|statement| has_element_handler(statement) || has_lifecycle(statement)) {
 		return Node::List(statements, bracket, separator);
 	}
+	let keyed = keyed_components(&statements);
 	let mut declarations = vec![];
 	let mut components = vec![];
 	let mut lowered: Vec<Node> = statements.into_iter().map(|statement| match stateful_component(&statement) {
 		Some((head, body, state)) => {
-			let component = Component::new(&head, state, &body);
+			let component = Component::new(&head, state, &body, &keyed);
 			declarations.extend(component.declarations());
-			let definition = key(head, Op::Define, component.body(body));
+			let definition = key(component.head(head), Op::Define, component.body(body));
 			components.push(component);
 			definition
 		}
@@ -91,6 +110,19 @@ fn with_state_lists(node: Node, state_lists: &HashMap<(String, String), String>)
 		Some(list) => Node::Symbol(list.clone()),
 		None => node.map_children(|child| with_state_lists(child, state_lists)),
 	}
+}
+
+/// The functions called with `key:`, `Counter(t, key: t.id)`
+fn keyed_components(statements: &[Node]) -> Vec<String> {
+	let mut keyed = vec![];
+	for statement in statements {
+		statement.visit(&mut |part| {
+			let Node::List(items, _, _) = part.drop_meta() else { return };
+			let has_key = items.iter().skip(1).any(|argument| matches!(argument.drop_meta(), Node::Key(word, Op::Colon, _) if word.is_symbol(KEY_WORD)));
+			keyed.extend(items.first().and_then(Node::symbol_name).filter(|_| has_key).map(str::to_string));
+		});
+	}
+	keyed
 }
 
 /// `on mount {…}` or `on cleanup {…}` among a component's statements: the word and the body
@@ -209,16 +241,54 @@ struct Component {
 	cleaned: String,
 	/// the bodies of `on cleanup {…}`
 	cleanups: Vec<Node>,
+	/// a component called with `key:`: `Counter·keys`, each instance's key, and the placement's `Counter·fresh`, `Counter·found`
+	keys: Option<String>,
+	fresh: String,
+	found: String,
 }
 
 impl Component {
-	fn new(head: &Node, state: Vec<(String, Node)>, statements: &[Node]) -> Self {
+	fn new(head: &Node, state: Vec<(String, Node)>, statements: &[Node], keyed: &[String]) -> Self {
 		let Node::List(parts, _, _) = head.drop_meta() else { unreachable!("a function head") };
 		let name = parts[0].name();
 		let named = |part: &str| format!("{name}{JOINER}{part}");
 		let state = state.into_iter().map(|(variable, initial)| { let list = named(&variable); (variable, initial, list) }).collect();
 		let cleanups = statements.iter().filter_map(lifecycle).filter(|(word, _)| word == CLEANUP).map(|(_, body)| body).collect();
-		Component { counter: named(INSTANCES), key: named(INSTANCE), state, seen: named(SEEN), cleanup: named(CLEANUP), cleaned: named(CLEANED), cleanups }
+		let keys = keyed.contains(&name).then(|| named(KEYS));
+		Component { counter: named(INSTANCES), key: named(INSTANCE), state, seen: named(SEEN), cleanup: named(CLEANUP), cleaned: named(CLEANED), cleanups, keys, fresh: named(FRESH), found: named(FOUND) }
+	}
+
+	/// The head, with the parameter `key = ø` for a keyed component
+	fn head(&self, head: Node) -> Node {
+		let Node::List(mut parts, bracket, separator) = head.drop_meta().clone() else { return head };
+		if self.keys.is_some() && !parts.iter().skip(1).any(|part| part.drop_meta().name() == KEY_WORD) {
+			parts.push(parse(KEY_PARAMETER).drop_meta().clone());
+		}
+		Node::List(parts, bracket, separator)
+	}
+
+	/// The lists kept per instance: each state variable's and, keyed, the keys
+	fn lists(&self) -> Vec<&String> {
+		self.keys.iter().chain(self.state.iter().map(|(_, _, list)| list)).collect()
+	}
+
+	/// The statements putting a keyed instance's entries at its position
+	fn placement(&self, keys: &str) -> Vec<Node> {
+		// placeholders LIST0, LIST1, … (the keys first) and MOVED0, …: a list's name `Counter·count` reads as a product
+		let lists = self.lists();
+		let placeholder = |word: &str, index: usize| format!("{word}{index}");
+		let numbered = |template: &str, index: usize| template.replace("LIST", &placeholder("LIST", index)).replace("MOVED", &placeholder("MOVED", index));
+		let stale_moves: String = (1..lists.len()).map(|index| numbered(STALE_MOVE, index)).collect();
+		let swaps: String = (0..lists.len()).map(|index| numbered(SWAP, index)).collect();
+		let template = KEYED_PLACEMENT.replace("STALE_MOVES", &stale_moves).replace("SWAPS", &swaps);
+		let numbered_names: Vec<(String, String)> = lists.iter().enumerate()
+			.flat_map(|(index, list)| [(placeholder("LIST", index), list.to_string()), (placeholder("MOVED", index), format!("{}{index}", self.found))]).collect();
+		let names: Vec<(&str, &str)> = [("FRESH", self.fresh.as_str()), ("SEEN", &self.seen), ("KEYS", keys), ("KEY", &self.key), ("FOUND", &self.found)].into_iter()
+			.chain(numbered_names.iter().map(|(placeholder, name)| (placeholder.as_str(), name.as_str()))).collect();
+		match filled(&template, &names) {
+			Node::List(statements, _, Separator::Semicolon) => statements,
+			statement => vec![statement],
+		}
 	}
 
 	/// (`Counter`, `count`) → `Counter·count` for each state variable
@@ -229,7 +299,7 @@ impl Component {
 
 	/// The main-level lists of the state, the instance counter and the instances of the render before
 	fn declarations(&self) -> Vec<Node> {
-		let lists = self.state.iter().map(|(_, _, list)| filled(STATE_DECLARATION, &[("STATE", list)]));
+		let lists = self.lists().into_iter().map(|list| filled(STATE_DECLARATION, &[("STATE", list)]));
 		[filled(COUNTER_DECLARATION, &[("COUNTER", &self.counter)]), filled(SEEN_DECLARATION, &[("SEEN", &self.seen)])].into_iter().chain(lists).collect()
 	}
 
@@ -250,24 +320,30 @@ impl Component {
 			true => vec![],
 			false => vec![filled(CLEANED_FROM, &names), filled(CLEANUP_LOOP, &names)],
 		};
-		let truncations = self.state.iter().map(|(_, _, list)| filled(TRUNCATED, &[("STATE", list), ("COUNTER", &self.counter)]));
-		cleaning.into_iter().chain(truncations).chain([filled(SEEN_SET, &names)]).collect()
+		let truncations = self.lists().into_iter().map(|list| filled(TRUNCATED, &[("STATE", list), ("COUNTER", &self.counter)]));
+		let all_seen = self.keys.iter().map(|keys| filled(KEYED_SEEN, &[("SEEN", &self.seen), ("KEYS", keys)]));
+		all_seen.chain(cleaning).chain(truncations).chain([filled(SEEN_SET, &names)]).collect()
 	}
 
 	/// The body counting its instance, setting the state at the first render, reading the instance's entries
 	fn body(&self, statements: Vec<Node>) -> Node {
 		let mut lowered = vec![filled(COUNTED, &[("COUNTER", &self.counter)]), filled(KEYED, &[("KEY", &self.key), ("COUNTER", &self.counter)])];
+		lowered.extend(self.keys.iter().flat_map(|keys| self.placement(keys)));
+		let (mount_condition, state_start) = match self.keys {
+			Some(_) => (FRESH_PLACEHOLDER, KEYED_FIRST_SET),
+			None => (FIRST_RENDER, FIRST_SET),
+		};
 		for statement in statements {
 			if let Some((word, body)) = lifecycle(&statement) {
 				if word == MOUNT {
-					let condition = filled(FIRST_RENDER, &[("SEEN", &self.seen), ("KEY", &self.key)]);
+					let condition = filled(mount_condition, &[("SEEN", &self.seen), ("KEY", &self.key), ("FRESH", &self.fresh)]);
 					lowered.push(if_then(condition, self.read(body)));
 				}
 				continue;
 			}
 			let first_set = named_assignment(&statement).and_then(|(name, initial)| self.state.iter().find(|(variable, _, _)| *variable == name).map(|(_, _, list)| (list.clone(), initial)));
 			lowered.push(match first_set {
-				Some((list, initial)) => with(FIRST_SET, vec![("STATE", Node::Symbol(list)), ("KEY", Node::Symbol(self.key.clone())), ("INITIAL", self.read(initial))]),
+				Some((list, initial)) => with(state_start, vec![("STATE", Node::Symbol(list)), ("KEY", Node::Symbol(self.key.clone())), ("FRESH", Node::Symbol(self.fresh.clone())), ("INITIAL", self.read(initial))]),
 				None => self.read(statement),
 			});
 		}

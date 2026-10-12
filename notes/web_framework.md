@@ -112,8 +112,11 @@ Each step is useful on its own and is what the next ones stand on.
   count in page order, `Counter.count#1` the first's; a handler or markup outside reads and writes it
   (component_state.rs with_state_lists; undoable default, naming question with the Interviewer). Sample
   samples/component_totals.warp.
-- Left: instances that move or leave from the middle (order identity; a `key:` per instance would fix it; card
-  web-instance-keys).
+- Keyed instances (card web-instance-keys): `Counter(t, key: t.id)` ties an instance's state to its key. A keyed
+  component gets the parameter `key = ø` and the list `Counter·keys`; each instance moves its key's entries of the
+  render before to its position (a swap), a new key takes a fresh slot (what stood there moves to the end), so after
+  the render the state lists are in page order again and truncation, cleanup and `event.instance` work as before;
+  mount runs for a new key. Unkeyed calls keep the order rule. Sample samples/keyed_counters.warp.
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,

@@ -81,3 +81,30 @@ fn a_handler_outside_a_component_reads_its_state() {
 	page.click("Reset").expect("reset");
 	assert!(page.text().contains("n 0") && page.text().contains("sum 10"), "{}", page.html());
 }
+
+// `key:` on a component call ties its state to the key, not to the position: after a swap the counted item keeps its
+// count (card web-instance-keys)
+#[test]
+#[cfg(feature = "native")]
+fn keyed_component_state_survives_reordering() {
+	let counter = "def Counter(name) {\n\tcount = 0\n\tdiv{ button{ on click { count += 1 } \"+\" } p{ name + \" \" + count } }\n}\nitems = [\"a\", \"b\"]\n";
+	let page_markup = "div{ button{ on click { items = [items#2, items#1] } \"Swap\" } [Counter(item, key: item) for item in items] }";
+	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	page.click("+").expect("clicked");
+	page.click("Swap").expect("swapped");
+	let text = page.text();
+	assert!(text.contains("a 1") && text.contains("b 0") && text.find("b 0") < text.find("a 1"), "{}", page.html());
+}
+
+// A keyed instance gone from the middle takes its state along: the ones after it keep theirs (card web-instance-keys)
+#[test]
+#[cfg(feature = "native")]
+fn keyed_component_state_survives_a_removal() {
+	let counter = "def Counter(name) {\n\tcount = 0\n\tdiv{ button{ on click { count += 1 } name } p{ name + \" \" + count } }\n}\nitems = [\"a\", \"b\", \"c\"]\n";
+	let page_markup = "div{ button{ on click { items = [items#2, items#3] } \"Drop a\" } [Counter(item, key: item) for item in items] }";
+	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	page.click("b").expect("clicked");
+	page.click("Drop a").expect("dropped");
+	let text = page.text();
+	assert!(!text.contains("a 0") && text.contains("b 1") && text.contains("c 0"), "{}", page.html());
+}
