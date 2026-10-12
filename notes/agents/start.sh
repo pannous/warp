@@ -4,12 +4,12 @@
 #   notes/agents/start.sh <role>                  one of integrator, interviewer, fixer
 #   notes/agents/start.sh worker <branch> "<task>"   a feature worker on that branch
 #   notes/agents/start.sh implementer <card> [mechanical|careful]   implements a card the planner specified
-#                                                 (mechanical: cheap model, low effort; careful: normal model)
+#                                                 (same model as every session: taste matters on simple
+#                                                 cards too; mechanical only lowers the effort to medium)
 # The prompt of a role is notes/agents/<role>.md, read from origin/main by the session itself.
 REPO=/Users/me/dev/angles/warp
 SPAWN="$HOME/dev/bin/claude-remote.sh"
 SERVICES=(integrator interviewer fixer)
-CHEAP_MODEL=claude-sonnet-5-5
 
 supervisor_name() { echo "${WARP_SUPERVISOR:-the session that started you (see ListAgents)}"; }
 
@@ -34,7 +34,7 @@ case "$1" in
 	implementer)
 		[ -n "$2" ] || { echo "usage: $0 implementer <card> [mechanical|careful]" >&2; exit 1; }
 		level=${3:-mechanical}
-		if [ "$level" = mechanical ]; then export CLAUDE_MODEL=$CHEAP_MODEL CLAUDE_EFFORT=low; else export CLAUDE_EFFORT=medium; fi
+		if [ "$level" = mechanical ]; then export CLAUDE_EFFORT=medium; fi
 		spawn "implement-$2" "$(prompt_for implementer) YOUR CARD: $2 ($level)." ;;
 	*) spawn "$1" "$(prompt_for "$1")" ;;
 esac
