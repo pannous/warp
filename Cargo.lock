@@ -3639,6 +3639,7 @@ version = "1.2.6"
 dependencies = [
  "libc",
  "miniz_oxide",
+ "serde_json",
  "wasmtime",
 ]
 

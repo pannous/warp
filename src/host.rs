@@ -81,8 +81,7 @@ pub const RUN_BLOCK: &str = "run_block";
 /// block·value(index): the number a block run at run time reads, of the values its run_block call passed
 /// (pipeline::eval_block): the block is compiled as a function of them, the same module for other values
 pub const BLOCK_VALUE: &str = "block·value";
-/// foreign_call(runtime, module, member, call, arguments): a module of another runtime (src/foreign.rs), Nodes in and out
-pub const FOREIGN_CALL: &str = "foreign_call";
+pub use warp_runtime::host_words::FOREIGN_CALL;
 /// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
 /// browser playground (host.js); natively a PNG file (src/paint.rs)
 pub const PAINT: &str = "paint";

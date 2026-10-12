@@ -143,52 +143,15 @@ pub fn write_bytes(
 	bytes: &[u8],
 ) -> Result<(u32, u32)> {
 	match heap {
-		Some(heap) => write_to_heap(memory, heap, store, bytes),
+		Some(heap) => Ok(write_to_heap(memory, heap, store, bytes)?),
 		None => {
 			let ptr = store.data_mut().alloc(bytes.len() as u32);
-			write_at(memory, store, ptr, bytes)
+			Ok(write_at(memory, store, ptr, bytes)?)
 		}
 	}
 }
 
-/// Copy bytes into a module's memory at its text heap, for any store (an FFI call's too, ffi.rs): fresh pages past the
-/// current memory when the heap is unset or full, the module's own emit_text_allocation rule
-pub fn write_to_heap<T>(
-	memory: &Memory,
-	heap: wasmtime::Global,
-	store: &mut wasmtime::StoreContextMut<'_, T>,
-	bytes: &[u8],
-) -> Result<(u32, u32)> {
-	let len = bytes.len() as u32;
-	let top = heap.get(&mut *store).i32().unwrap_or(0) as u32;
-	let memory_end = (memory.size(&*store) as u32) << PAGE_BITS;
-	let ptr = if top == 0 || top + len > memory_end {
-		memory.grow(&mut *store, ((len >> PAGE_BITS) + 1) as u64)?;
-		memory_end
-	} else {
-		top
-	};
-	let written = write_at(memory, store, ptr, bytes)?;
-	heap.set(&mut *store, Val::I32((ptr + len) as i32))?;
-	Ok(written)
-}
-
-/// The bytes at `ptr`, the memory grown to hold them
-fn write_at<T>(
-	memory: &Memory,
-	store: &mut wasmtime::StoreContextMut<'_, T>,
-	ptr: u32,
-	bytes: &[u8],
-) -> Result<(u32, u32)> {
-	let len = bytes.len() as u32;
-	let pages_needed = ((ptr + len) as usize).div_ceil(1 << PAGE_BITS);
-	let current_pages = memory.size(&*store) as usize;
-	if pages_needed > current_pages {
-		memory.grow(&mut *store, (pages_needed - current_pages) as u64)?;
-	}
-	memory.write(&mut *store, ptr as usize, bytes)?;
-	Ok((ptr, len))
-}
+pub use warp_runtime::gc_values::{write_at, write_to_heap};
 
 /// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
 fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len: i32) -> (i32, i32) {

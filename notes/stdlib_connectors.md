@@ -52,8 +52,8 @@ step 3.
   capability: granted by `eval` and the CLI, refused to `eval_untrusted`.
 - A CLI mode granting Process and Sql too (`warp --allow all file.warp`, or `--allow process,sql`) is the missing piece
   for `exec`/`execute`. Queued as a question to warp-08.
-- AOT: `warp build --exe` keeps refusing programs with foreign imports, naming them (as for FFI libraries). The stub
-  could link `foreign_call` later (std::process only, no Cranelift).
+- AOT: `warp build --exe` runs `use python`/`use js` too (card exe-foreign, notes/aot.md): the stub starts python3 or
+  node from PATH; callbacks, components and C libraries stay refused.
 
 ## Recommendation
 1. **Python bridge now** (S, biggest reach per line of code): one host word `foreign_call(runtime, module, member,
@@ -81,8 +81,8 @@ step 3.
 - Capability: foreign_call is a host word linked like an FFI import, so it needs Ffi: eval grants it, eval_untrusted
   refuses it. eval_untrusted used to check only the parsed program, before lowering added calls of its own; its grant
   now also applies to the check after lowering (pipeline `GRANTED`).
-- AOT (warp-ec, 2026-10-05): `warp build --exe` names foreign_call as a missing import and refuses the program; the stub
-  could link it later (std::process only) but an exe silently needing python3 would surprise.
+- AOT (warp-ec, 2026-10-05): `warp build --exe` refused foreign_call; since card exe-foreign (2026-10-12) the stub links
+  it and a missing interpreter is named loudly.
 - Next: the C gaps (card ffi-gaps); handles (card foreign-handles).
 
 ## Step 2: `use js` (branch use-js)
