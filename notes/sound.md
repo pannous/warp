@@ -216,3 +216,16 @@ output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase
 tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
 own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
 and buses as values, shared buses between voices, compressor, EQ, effects on a running handle.
+
+## Native output built (card native-sound, 2026-10-12, src/sound_engine.rs, tests/programs/test_sound_engine.rs)
+On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`
+holds the sounds, each converted to the device's rate (linear interpolation) and channels, starting at its frame;
+the device callback calls `fill`, which mixes them, advances the frame and drops finished ones. `sound.rs scheduled()`
+gives an Instant; the frame is (instant + 60 ms lead − stream start) × rate, so back-to-back sounds stay contiguous
+to the sample and `at 2 beats` lands to the sample live, not only in render_sound. The callback never waits:
+`try_lock`, silence when a queueing sound holds the lock. `fade_sound(handle, gain, seconds)` (lib/sound.warp) ramps a
+playing sound's gain linearly, frame by frame, 0 = all handles. Fallbacks: no output device → afplay as before
+(fade_sound then fails loudly); not audible (WARP_NO_WINDOW, CI) → nothing plays, the WAVs are still collected for
+render_sound. Not yet: Linux/Windows output (cpal supports them; only the macOS dependency is declared), fade_sound in
+the browser (playground: a GainNode per sound with linearRampToValueAtTime), fades in render_sound, and DSP in the
+callback itself (card real-time builds on this Mixer).
