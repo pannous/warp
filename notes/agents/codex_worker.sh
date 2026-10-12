@@ -4,7 +4,7 @@
 # A fresh Codex thread on the local app-server daemon (codex_app_run.py, so the user sees it in the Codex app) takes free cards from the Next column, works each on its own branch and worktree,
 # and ends with one MERGE REQUEST block per branch. Codex has no SendMessage, so ~/dev/bin/claude-relay.sh (a short
 # headless Haiku run) hands those blocks to warp-integrator. ~/dev/bin/codex-notify.sh tells the user's Codex thread
-# "Warp Boss" when the run starts and how it ended (user, 2026-10-12: "inform the Codex Boss every time we spawn").
+# "Warp Boss" when the run starts and how it ended (user, 2026-10-12: only Codex runs go to the Codex Boss).
 # A run still going when the next one is due makes the next one skip.
 #   CODEX_PROBE_PROMPT="Reply with just: ok" notes/agents/codex_worker.sh   a probe: that prompt, logs in codex/probe
 REPO=/Users/me/dev/angles/warp
