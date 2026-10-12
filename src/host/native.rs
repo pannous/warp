@@ -76,6 +76,8 @@ pub struct HostState {
 	pub c_handles: crate::ffi::CHandles,
 	/// The WebAssembly modules the program imports, instantiated at their first call (wasm_modules.rs), by path
 	pub wasm_modules: std::collections::HashMap<String, wasmtime::Instance>,
+	/// The events the program dispatched to its page (dispatch_event): name and detail as warp text, for the headless page
+	pub dispatched: Vec<(String, String)>,
 }
 
 impl Default for HostState {
@@ -97,6 +99,7 @@ impl HostState {
 			c_handles: Default::default(),
 			wasm_modules: Default::default(),
 			in_task: false,
+			dispatched: vec![],
 		}
 	}
 
@@ -322,6 +325,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GPU_MAP_LINEAR, gpu_map_linear)?;
 	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_reduce_linear)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
+	linker.func_wrap(HOST_LIBRARY, DISPATCH_EVENT, dispatch_event)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
 	linker.func_wrap(
 		HOST_LIBRARY,
@@ -1041,6 +1045,14 @@ fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: H
 		return crate::web_sockets::send(&channel.name(), &message).map_err(task_failure);
 	}
 	crate::channels::send(&channel.name(), message.serialize().trim()).map_err(task_failure)
+}
+
+/// An event for the page: kept for the headless page (headless.rs dispatched); a page without a browser shows nothing
+fn dispatch_event(mut caller: Caller<'_, HostState>, name: HostNode, detail: HostNode) -> wasmtime::Result<()> {
+	let name = given_node(&mut caller, name)?.name();
+	let detail = given_node(&mut caller, detail)?.serialize();
+	caller.data_mut().dispatched.push((name, detail));
+	Ok(())
 }
 
 /// `notify "text"`: a desktop notification of the text (a value other than a text as warp writes it)

@@ -48,6 +48,7 @@ mod test_markup_tags;
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_missing_row_404; // card missing-row-404
 mod test_missing_use; // card clickable-hint
+mod test_page_custom_events; // card page-custom-event
 mod test_page_play_file; // card browser-play
 mod test_page_rendered_sound; // card playground-refuses
 mod test_page_tests;
