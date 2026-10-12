@@ -226,7 +226,8 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
-One branch per task, in a git worktree outside the repo: /Users/me/dev/angles/warp.worktrees.noindex/<name>
+Small or non-conflicting changes may go straight onto main without a worktree (user, 2026-10-12; notes/roles.md
+"Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Users/me/dev/angles/warp.worktrees.noindex/<name>
 (notes/roles.md), or work on the same branch for small changes.
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
 
@@ -244,32 +245,24 @@ If previously passing test fail after the task as seen via git diff test_results
 try to fix failing tests and if it doesn't work roll back
 
 When fixing a problem do not modify the test itself without consulting!
-Standing permission (user, 2026-10-05: "allow all tests to be upgraded from a dumb thing to a better thing, from not
-working to working"): a test may be upgraded without asking when the code now does better than the test pinned: an
+A test may be upgraded without asking when the code now does better than the test pinned: an
 expected error, refusal or "not supported yet" becomes the working value, an ignored test that passes is un-ignored,
-a weaker assertion becomes the stronger one. Own commit, message naming this rule. Changing one working value into
-a different working value (a change of meaning) still needs a user decision via the Interviewer.
+a weaker assertion becomes the stronger one.
 
 git status before and after each task should show
 Your branch is up to date with 'origin/main'.
 nothing to commit
 
-use `cargo fix --offline --allow-dirty --lib --bins` after each commit and commit again (`--lib --bins` keeps it out of tests/, `--allow-dirty` because cargo flags git-ignored non-.rs files as dirty)
+cargo fix runs in the Integrator's gate for every batch (integrator_tools/gate.sh); workers need not run it.
 
 ## To-dos
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
-not in todo.md: every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next); `todo list`,
-`todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). `todo done` moves the card to Done and
-links the fixing commit in its body (default HEAD, so run it right after committing the fix; a wiki or other-repo
-change: pass the commit URL). Rule (user, 2026-10-06, issue #7 was closed without one): a card or issue is closed
-only with a commit linked in its description. Close cards with `todo done` only; never `gh issue close` and never
-the board UI; `todo move <card> Done` refuses a card whose description links no commit. Picking a card is
-`todo take <card> <session name>` (user, 2026-10-06): the GitHub assignee is the user (agents have no accounts), the
-board field Agent names the session, the card moves to Now. Without the board,
-`todo add` falls back to todo.md "## Fallback"; `todo import` moves those entries later.
+every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next) todo.md as fallback
+`todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
+Picking a card is `todo take <card> <session name>`
 
-Other than fixme comment you can find new tasks via tests marked #[ignore = "next"] or even #[ignore = "soon"] 
-un-ignore everything once it passes 
+<!-- un-ignore every #[ignore = "next"] or even #[ignore = "soon"]  once it passes  -->
 
-Add [profile.dev] debug = "line-tables-only" and incremental = false for probe builds!!
-Never create a local target/ or *_target dir. Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). Remove worktrees when done.
+Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). 
+Never create a local target/ or *_target dir. 
+Remove worktrees when done.
