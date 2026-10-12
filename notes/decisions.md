@@ -10,6 +10,10 @@ notes/open_decisions.md.
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
   are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
   position `or` stays the boolean or (warp-dispatch).
+- cargo-fmt: format the whole repo once in one chore commit, right after an Integrator batch, then the gate enforces
+  `cargo fmt --check`.
+- web-keyframes (implied by P188, not asked): CSS's own form in warp syntax, `@keyframes pop {…}` in `style{}` and
+  `animation: pop 400ms`; warp adds only the delayed removal for leaving, `leave: pop 400ms reverse`.
 - web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
   in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup). The long form
   `Counter.all` (or `Counter.instances` if `all` is taken) means the same and hints to use `counters`.
