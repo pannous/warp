@@ -53,6 +53,9 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
   built a million Int Nodes (int_list_as_node) only for list_to_ints to read them back. Now a typed int list crosses
   to the host words in host.rs INT_LIST_WORDS (paint, sound) as its `$IntList`, and list_to_ints copies its array.
   Release bench: show 96–120 ms → 40 ms (headless; what's left is mostly the PNG write).
+- **Drawing on the GPU** (card gpu-draw, 2026-10-12; notes/drawing.md "On the GPU"): in a window, `use draw` sends
+  shapes (24 bytes each) instead of the canvas's pixels. Finger paint, quick-release, 1024×768 window: show 29–45 →
+  0.2 ms, clear 10–29 → 0–1 ms, canvas() 25–46 → 0 ms (no pixel list allocated).
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a

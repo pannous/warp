@@ -5,7 +5,10 @@ use math
 // natively 640×480 (user 2026-10-10: defaults, no errors)
 global canvas_width = view_width
 global canvas_height = view_height
-global canvas_pixels = int[view_width * view_height]
+// natively in a window the shapes are drawn on the GPU (src/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels
+// here then, show() sends the shapes drawn since the last one
+global drawing_on_gpu = gpu_drawing
+global canvas_pixels = int[pixels_for(view_width, view_height)]
 // paper: the canvas before anything is drawn, as paint shows 0 (src/paint.rs PAPER)
 paper = 0xFFFAFAFA
 black = 0xFF000000
@@ -38,14 +41,23 @@ def hsv(h, s, v) {
 with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
 alpha_of(color) := color//16777216
 
+// what draw_shape's kind says (src/gpu_canvas.rs)
+clear_shape = 0
+rect_shape = 1
+circle_shape = 2
+
+// the pixels the canvas keeps here: none when they are on the GPU
+pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
+
 def canvas(width, height) {
 	canvas_width = width
 	canvas_height = height
-	canvas_pixels = int[width * height]
+	canvas_pixels = int[pixels_for(width, height)]
 }
 
 def clear(color) {
-	for i in 0..canvas_width * canvas_height { canvas_pixels[i] = color }
+	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color) }
+	else { for i in 0..canvas_width * canvas_height { canvas_pixels[i] = color } }
 }
 
 // the color over what is there, mixed by its alpha
@@ -63,18 +75,25 @@ channel_mix(color, under, a, place) := ((color//place % 256) * a + (under//place
 def dot(x, y, color) {
 	col = cell(x)
 	row = cell(y)
-	if col >= 0 and row >= 0 and col < canvas_width and row < canvas_height {
+	if drawing_on_gpu { draw_shape(rect_shape, col, row, 1, 1, color) }
+	else if col >= 0 and row >= 0 and col < canvas_width and row < canvas_height {
 		at = row * canvas_width + col
 		canvas_pixels[at] = mixed(canvas_pixels[at], color)
 	}
 }
 
 def rect(x, y, width, height, color) {
-	for row in cell(y)..cell(y + height) { for col in cell(x)..cell(x + width) { dot(col, row, color) } }
+	if drawing_on_gpu { draw_shape(rect_shape, x, y, width, height, color) }
+	else { for row in cell(y)..cell(y + height) { for col in cell(x)..cell(x + width) { dot(col, row, color) } } }
 }
 
 // a filled circle around x, y
 def circle(x, y, radius, color) {
+	if drawing_on_gpu { draw_shape(circle_shape, x, y, radius, 0, color) }
+	else { circle_pixels(x, y, radius, color) }
+}
+
+def circle_pixels(x, y, radius, color) {
 	for row in cell(y - radius)..cell(y + radius) + 1 {
 		for col in cell(x - radius)..cell(x + radius) + 1 {
 			if (col + 0.5 - x)^2 + (row + 0.5 - y)^2 <= radius^2 { dot(col, row, color) }
@@ -88,7 +107,8 @@ def line(x1, y1, x2, y2, color) {
 }
 
 def show() {
-	paint(canvas_pixels, canvas_width, canvas_height)
+	if drawing_on_gpu { draw_show(canvas_width, canvas_height) }
+	else { paint(canvas_pixels, canvas_width, canvas_height) }
 }
 
 // label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth
