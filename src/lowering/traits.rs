@@ -139,6 +139,11 @@ impl Traits {
 		self.named(name).is_some()
 	}
 
+	/// Is `name` an operation of a trait (a declared one, a built-in one, a class method several classes share)
+	pub fn is_operation(&self, name: &str) -> bool {
+		self.operation(name).is_some()
+	}
+
 	fn named(&self, name: &str) -> Option<&Trait> {
 		self.0.iter().find(|candidate| candidate.name == name)
 	}
