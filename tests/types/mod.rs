@@ -108,6 +108,7 @@ mod test_repeated_type_parameters;
 mod test_returned_instances; // card units-dynamic
 mod test_runtime_text_ratio;
 mod test_same_identity;
+mod test_self_typed_field; // card empty-field
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
 mod test_sized_array_values;
