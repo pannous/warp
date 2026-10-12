@@ -713,8 +713,10 @@ pub(crate) struct Generic {
 	methods: Vec<String>,
 	/// The first parameter's name in the first method, for the fix of a missing method
 	parameter: String,
-	/// Other values have a function to call: a library word (`sort` of lists) or an untyped definition `sort(x)`
-	fallback: bool,
+	/// Other values call the library word: `sort` of lists
+	library: bool,
+	/// The untyped definitions other values call, by the arguments they take: `sort(x)` (1, 1), `take(xs, n)` (2, 2)
+	untyped_arities: Vec<(usize, usize)>,
 }
 
 impl Generic {
@@ -739,6 +741,12 @@ impl Generic {
 		Ok(None)
 	}
 
+	/// Whether other values of a call with `arity` arguments have a function to call: `b.take()` of a class Box
+	/// never calls list's `take(xs, n)`
+	fn falls_back(&self, arity: usize) -> bool {
+		self.library || self.untyped_arities.iter().any(|(required, all)| (*required..=*all).contains(&arity))
+	}
+
 	fn signatures(&self, name: &str) -> String {
 		self.methods.iter().map(|type_name| format!("{name}({type_name})")).collect::<Vec<_>>().join(", ")
 	}
@@ -748,7 +756,7 @@ impl Generic {
 /// with a fallback. A declared trait's operations stay the traits' (witness_of)
 fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &Traits) -> HashMap<String, Generic> {
 	let mut typed: Vec<(String, String, String)> = vec![];
-	let mut untyped: Vec<String> = vec![];
+	let mut untyped: Vec<(String, (usize, usize))> = vec![];
 	node.visit(&mut |part| if let Node::Key(head, Op::Assign | Op::Define, _) = part {
 		let Some(items) = definition_head(head) else { return };
 		let Node::Symbol(name) = items[0].drop_meta() else { return };
@@ -757,19 +765,26 @@ fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &Traits) -> H
 		}
 		match parameter_type(&items[1], registry) {
 			Some(type_name) => typed.push((name.clone(), type_name.to_string(), items[1].drop_meta().name())),
-			None => untyped.push(name.clone()),
+			None => untyped.push((name.clone(), arities(&items[1..]))),
 		}
 	});
 	let mut generics: HashMap<String, Generic> = HashMap::new();
 	for (name, type_name, parameter) in typed {
-		let fallback = untyped.contains(&name) || crate::lowering::class_methods::is_library_method(&name);
-		let generic = generics.entry(name).or_insert(Generic { methods: vec![], parameter, fallback });
+		let library = crate::lowering::class_methods::is_library_method(&name);
+		let untyped_arities = untyped.iter().filter(|(untyped_name, _)| *untyped_name == name).map(|(_, arity)| *arity).collect();
+		let generic = generics.entry(name).or_insert(Generic { methods: vec![], parameter, library, untyped_arities });
 		if !generic.methods.contains(&type_name) {
 			generic.methods.push(type_name);
 		}
 	}
-	generics.retain(|_, generic| generic.fallback || generic.methods.len() > 1);
+	generics.retain(|_, generic| generic.library || !generic.untyped_arities.is_empty() || generic.methods.len() > 1);
 	generics
+}
+
+/// The arguments a definition takes, fewest and most: `add(a, b = 1)` takes 1 or 2
+fn arities(parameters: &[Node]) -> (usize, usize) {
+	let required = parameters.iter().filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _))).count();
+	(required, parameters.len())
 }
 
 /// `sort(d:Deck)` of a generic function: the method `sort·Deck`
@@ -848,26 +863,27 @@ impl GenericCalls {
 		let name = called_name(items, bracket, separator)?;
 		let generic = self.functions.get(name)?;
 		let arguments = items[1..].to_vec();
+		let fallback = generic.falls_back(arguments.len());
 		if let Some(Shape::Instance(type_name)) = self.types.shape(first) {
 			return match generic.method_for(&type_name, &self.likenesses) {
 				Ok(Some(method_type)) => Some(witness_call(name, &method_type, arguments)),
-				Ok(None) if generic.fallback => None,
+				Ok(None) if fallback => None,
 				Ok(None) => self.fail(no_method(head, name, &type_name, generic)),
 				Err((first_type, second_type)) => self.fail(ambiguous_method(head, name, &type_name, &first_type, &second_type)),
 			};
 		}
 		if let Some(kind) = self.plain_kind(first).or_else(|| matches!(self.types.shape(first), Some(Shape::ListOf(_))).then_some(crate::type_kinds::Kind::List)) {
-			return match generic.fallback {
+			return match fallback {
 				true => None,
 				false => self.fail(no_method(head, name, &format!("{kind:?}"), generic)),
 			};
 		}
 		let cases: Vec<(String, String)> = self.classes.iter().filter_map(|class| Some((class.clone(), generic.method_for(class, &self.likenesses).ok()??))).collect();
-		match (cases.as_slice(), generic.fallback) {
+		match (cases.as_slice(), fallback) {
 			([], true) => None,
 			([(_, method_type)], false) => Some(witness_call(name, method_type, arguments)),
 			_ => {
-				self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), (cases, generic.fallback));
+				self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), (cases, fallback));
 				Some(witness_call(name, DISPATCH, arguments))
 			}
 		}
