@@ -886,7 +886,7 @@ impl WasmGcEmitter {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		self.runtime_function(FIELD_SET_IN_PLACE, vec![nullable, node_ref, node_ref], vec![ValType::I32], vec![nullable, ValType::I64], |s, f| {
-			Self::emit_list(f, &s.forget_list_cursor());
+			Self::emit_list(f, &s.forget_list_cursor_keeping_map_indexes());
 			let (cells, name, value, entry, kind) = (0, 1, 2, 3, 4);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::BrIf(1)]);
@@ -916,8 +916,11 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		self.runtime_function(FIELDS_GROW, vec![node_ref, node_ref], vec![], vec![ValType::I64, nullable], |s, f| {
-			Self::emit_list(f, &s.forget_list_cursor());
+			Self::emit_list(f, &s.forget_list_cursor_keeping_map_indexes());
 			let (fields, entry, kind, cells) = (0, 1, 2, 3);
+			Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(entry)]);
+			s.call(f, super::map_index::MAP_INDEX_GROW);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::Return, I::End]);
 			s.emit_field(f, fields, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty)]);
@@ -969,8 +972,16 @@ impl WasmGcEmitter {
 		self.emit_field_set_in_place();
 		self.emit_fields_grow();
 		let has_instances = !self.ctx.type_registry.types().is_empty();
-		self.runtime_function("field_with", vec![node_ref, node_ref, node_ref], vec![node_ref], vec![node_ref, ValType::I64], |s, f| {
-			let (object, name, value, fields, kind) = (0, 1, 2, 3, 4);
+		let nullable = Ref(self.node_ref(true));
+		let locals = vec![node_ref, ValType::I64, nullable, ValType::I32];
+		self.runtime_function("field_with", vec![node_ref, node_ref, node_ref], vec![node_ref], locals, |s, f| {
+			let (object, name, value, fields, kind, entry, indexed) = (0, 1, 2, 3, 4, 5, 6);
+			let add_field = |s: &mut Self, f: &mut Function| {
+				Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(name), I::LocalGet(value), I::I64Const(colon)]);
+				s.call(f, "new_key");
+				f.instruction(&I::RefAsNonNull);
+				s.call(f, FIELDS_GROW);
+			};
 			f.instruction(&I::LocalGet(object));
 			if has_instances {
 				s.call(f, super::list_ops::STRUCT_BODY);
@@ -989,12 +1000,18 @@ impl WasmGcEmitter {
 			s.call(f, super::list_ops::MAP_KEY_NAME);
 			f.instruction(&I::LocalSet(name));
 			s.emit_require_kind(f, name, Kind::Symbol, "not_a_text");
+			// a map walked lately has an index: its entry takes the value, else the field is new
+			Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(name)]);
+			s.call(f, super::map_index::MAP_INDEX_ENTRY);
+			Self::emit_list(f, &[I::LocalSet(indexed), I::LocalSet(entry), I::LocalGet(indexed), I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(entry), I::RefIsNull, I::If(BlockType::Empty)]);
+			add_field(s, f);
+			Self::emit_list(f, &[I::Else, I::LocalGet(entry), I::LocalGet(value), I::StructSet { struct_type_index: s.type_manager.node_type, field_index: 2 }, I::End]);
+			Self::emit_list(f, &[I::LocalGet(object), I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(name), I::LocalGet(value)]);
 			s.call(f, FIELD_SET_IN_PLACE);
-			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(fields), I::LocalGet(name), I::LocalGet(value), I::I64Const(colon)]);
-			s.call(f, "new_key");
-			f.instruction(&I::RefAsNonNull);
-			s.call(f, FIELDS_GROW);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+			add_field(s, f);
 			Self::emit_list(f, &[I::End, I::LocalGet(object)]);
 		});
 	}

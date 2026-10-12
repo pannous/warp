@@ -43,6 +43,7 @@ pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
 mod map_backend;
+mod map_index;
 mod struct_backend;
 pub use map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
@@ -276,6 +277,8 @@ pub struct WasmGcEmitter {
 	list_cursor_global: Option<u32>,
 	/// the cursors of text indexing: the first of the globals text, index, at (list_ops.rs emit_text_cursor_globals)
 	text_cursor_global: Option<u32>,
+	/// the indexes of maps held as cons lists: the first of their globals (map_index.rs emit_map_index_globals)
+	map_index_global: Option<u32>,
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
 	returns_float: bool, // the function being compiled returns an f64, so `return 7` returns 7.0
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
@@ -361,6 +364,7 @@ impl WasmGcEmitter {
 			int_count_global: 0,
 			list_cursor_global: None,
 			text_cursor_global: None,
+			map_index_global: None,
 			returns_node: true,
 			returns_float: false,
 			returned_tuple: vec![],
@@ -984,6 +988,7 @@ impl WasmGcEmitter {
 		self.emit_int_heap_globals();
 		self.emit_list_cursor_globals();
 		self.emit_text_cursor_globals();
+		self.emit_map_index_globals();
 		constructors::emit_all_constructors(self);
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_int_runtime();
@@ -1012,8 +1017,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_math_helpers();
 		self.emit_text_builtins();
-		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
-		self.emit_node_map_runtime();
+		self.emit_map_get(); // after the text builtins: map keys are compared by text_of; with the hash tables
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
 		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls

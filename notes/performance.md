@@ -36,6 +36,12 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
   a `$NodeMap` (insertion-ordered keys and values, open-addressing slots, FNV-1a of the key's letters). It becomes
   the cons-list Node wherever the map is a value (a fresh copy, so value semantics hold); a lookup it cannot answer
   takes the generic way on that copy, with the same errors.
+- **Map nodes get an index** (card runtime-speed, 2026-10-12; wasm_emitter/map_index.rs): a map held as a cons list (a
+  parameter, a returned map, an object) that map_find or field_with walks a second time, with 16 or more entries, gets
+  a `$NodeMap` from name to entry in globals (two slots). field_with sets the entry or fields_grow appends after the
+  remembered last cell; any other in-place change of links or items forgets the indexes (forget_list_cursor,
+  list_with_at). 10000 inserts into a parameter: 4 s → 8 ms; 10000 lookups in a parameter: 1 s → 4 ms; in a returned
+  map: 0.86 s → 5 ms (scratch probes like tests/lists/test_map_index.rs).
 - **Texts grow in place** (text_concat): a left text ending where the heap starts gets right's bytes after it; a
   right text made just now (a character's bytes) already follows left, so nothing is copied. The left text's own
   bytes never change, so other values sharing them stay right.
@@ -63,9 +69,8 @@ Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a
 closure typing has nothing to win here yet. Loops over typed lists, map, append: 2 million items in under 0.1 s.
 
 ## Still slow
-A map that is not a hash table variable (a literal start `{a:1}`, a parameter, a global, one updated by `+=` or with
-dynamic keys) is still the immutable cons list: n keys cost n². Each use of a hash-table map as a whole value
-converts it (O(n)); a loop that prints or passes the map each round pays that every round.
+Each use of a hash-table map as a whole value converts it (O(n)); a loop that prints or passes the map each round
+pays that every round.
 Finger paint after runtime-speed: `dot(col, row)` passes Ints to `cell(v)`, whose v is a float: int → f64 → floor →
 int per pixel (a per-argument-kind specialization of functions would drop it); a function whose loop is its last
 value (`circle`) boxes that value per row although every caller drops it; int list get/set go through the Node layer.

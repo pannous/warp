@@ -138,7 +138,11 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::list_ops::NODE_WITH_NODE_AT) {
 		required.extend(["node_with_at", "get_int_value"]);
 	}
-	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get
+	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or set
+	// by name gets an index of the same tables (map_index.rs)
+	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
+		required.insert(super::map_backend::NODE_MAP_NEW);
+	}
 	if super::map_backend::NODE_MAP_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.extend(super::map_backend::NODE_MAP_FUNCTIONS);
 		required.insert("map_get");
