@@ -88,7 +88,8 @@ pub fn lower(program: Node) -> Node {
 		return Node::List(lowered, bracket, separator);
 	}
 	let state_lists: HashMap<(String, String), String> = components.iter().flat_map(Component::state_lists).collect();
-	lowered = lowered.into_iter().map(|statement| with_state_lists(statement, &state_lists)).collect();
+	let own_names: Vec<String> = lowered.iter().filter_map(named_assignment).map(|(name, _)| name).collect();
+	lowered = lowered.into_iter().map(|statement| with_state_lists(statement, &state_lists, &own_names)).collect();
 	let shown = lowered.pop().expect("a program with a component has a last line");
 	let resets = components.iter().map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
 	let rendered = crate::variable_signals::assign(SHOWN, shown);
@@ -99,16 +100,50 @@ pub fn lower(program: Node) -> Node {
 	Node::List(declarations.into_iter().chain(cleanups).chain(lowered).chain([render, symbol(RENDER)]).collect(), bracket, separator)
 }
 
-/// `Counter.count` outside Counter (card web-outside-state): the list of every instance's count, `Counter.count#1` the
-/// first's
-fn with_state_lists(node: Node, state_lists: &HashMap<(String, String), String>) -> Node {
-	let list = match node.drop_meta() {
-		Node::Key(component, Op::Dot, variable) => component.symbol_name().zip(variable.symbol_name()).and_then(|(component, variable)| state_lists.get(&(component.to_string(), variable.to_string()))),
+/// Outside its component (card web-outside-state): `counters`, Counter's lower-case plural, is its instances in page
+/// order: `counters#1.count` the first one's count, `counters.count` every one's. `Counter.instances` is the long form,
+/// `Counter.count` short for `counters.count`. A program's own variable `counters` stays its own.
+fn with_state_lists(node: Node, state_lists: &HashMap<(String, String), String>, own_names: &[String]) -> Node {
+	let rewritten = match node.drop_meta() {
+		Node::Key(target, Op::Dot, field) => match target.drop_meta() {
+			Node::Key(instances, Op::Hash, index) => state_list(instances, field, state_lists, own_names)
+				.map(|list| key(Node::Symbol(list), Op::Hash, with_state_lists(index.as_ref().clone(), state_lists, own_names))),
+			_ => state_list(target, field, state_lists, own_names).map(Node::Symbol),
+		},
 		_ => None,
 	};
-	match list {
-		Some(list) => Node::Symbol(list.clone()),
-		None => node.map_children(|child| with_state_lists(child, state_lists)),
+	rewritten.unwrap_or_else(|| node.map_children(|child| with_state_lists(child, state_lists, own_names)))
+}
+
+/// The list of the state variable `field` read through `instances`: `counters`, `Counter.instances` or `Counter`
+fn state_list(instances: &Node, field: &Node, state_lists: &HashMap<(String, String), String>, own_names: &[String]) -> Option<String> {
+	let field = field.symbol_name()?;
+	let component = state_lists.keys().map(|(component, _)| component).find(|component| names_instances(instances, component, own_names))?;
+	state_lists.get(&(component.clone(), field.to_string())).cloned()
+}
+
+fn names_instances(instances: &Node, component: &str, own_names: &[String]) -> bool {
+	match instances.drop_meta() {
+		Node::Symbol(word) => !own_names.contains(word) && (word == component || *word == instances_name(component)),
+		Node::Key(name, Op::Dot, word) if name.is_symbol(component) && word.is_symbol(INSTANCES) => {
+			crate::normalize::hint(&format!("{component}.{INSTANCES}"), &instances_name(component), "a component's instances are its lower-case plural");
+			true
+		}
+		_ => false,
+	}
+}
+
+/// `Counter` → `counters`, `Box` → `boxes`, `Story` → `stories`
+fn instances_name(component: &str) -> String {
+	let mut lower = component.to_string();
+	if let Some(first) = lower.get(..1).map(str::to_lowercase) {
+		lower.replace_range(..1, &first);
+	}
+	let consonant_y = lower.ends_with('y') && !lower[..lower.len() - 1].ends_with(['a', 'e', 'i', 'o', 'u']);
+	match () {
+		_ if consonant_y => format!("{}ies", &lower[..lower.len() - 1]),
+		_ if ["s", "x", "z", "ch", "sh"].iter().any(|ending| lower.ends_with(ending)) => format!("{lower}es"),
+		_ => format!("{lower}s"),
 	}
 }
 

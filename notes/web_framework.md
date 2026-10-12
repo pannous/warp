@@ -108,9 +108,11 @@ Each step is useful on its own and is what the next ones stand on.
   fewer instances of the component than the one before (the last ones are the ones gone, by the order rule), then
   their state entries are dropped. What a cleanup reads is kept per instance like handler state. Tour example cleanup.
 - `(if c then A() else [])` among an element's children is a child (markup_tags.rs), not a statement.
-- Outside its component a state variable is its list (card web-outside-state): `Counter.count` is every Counter's
-  count in page order, `Counter.count#1` the first's; a handler or markup outside reads and writes it
-  (component_state.rs with_state_lists; undoable default, naming question with the Interviewer). Sample
+- Outside its component (card web-outside-state, user decision): `counters`, Counter's lower-case plural, is its
+  instances in page order; `counters#1.count` is the first one's count (readable and assignable), `counters.count`
+  every one's. `Counter.instances` is the long form, with a hint to write `counters` (`Counter.all` would clash with the
+  list method all); `Counter.count` stays short for `counters.count`. A program's own variable `counters` stays its
+  own. component_state.rs with_state_lists maps them to the state lists `Counter·count`. Sample
   samples/component_totals.warp.
 - Keyed instances (card web-instance-keys): `Counter(t, key: t.id)` ties an instance's state to its key. A keyed
   component gets the parameter `key = ø` and the list `Counter·keys`; each instance moves its key's entries of the

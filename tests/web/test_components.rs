@@ -108,3 +108,17 @@ fn keyed_component_state_survives_a_removal() {
 	let text = page.text();
 	assert!(!text.contains("a 0") && text.contains("b 1") && text.contains("c 0"), "{}", page.html());
 }
+
+// `counters`, the lower-case plural, is Counter's instances in page order: `counters#1.count` the first one's count,
+// `counters.count` every one's; `Counter.instances` is the long form (card web-outside-state, user decision)
+#[test]
+#[cfg(feature = "native")]
+fn a_components_plural_names_its_instances() {
+	let counter = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += 1 } \"+\" } p{ \"n \" + count } }\n}\n";
+	let page_markup = "div{ Counter(0) Counter(10) button{ on click { counters#1.count = 0 } \"Reset\" } p{ \"sum \" + sum(counters.count) } p{ \"last \" + Counter.instances#2.count } }";
+	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	page.click("+").expect("clicked");
+	assert!(page.text().contains("sum 11") && page.text().contains("last 10"), "{}", page.html());
+	page.click("Reset").expect("reset");
+	assert!(page.text().contains("n 0") && page.text().contains("sum 10"), "{}", page.html());
+}
