@@ -219,7 +219,7 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	type_word_kind(&type_name)
 }
 
-fn is_map_type(type_name: &str) -> bool {
+pub(crate) fn is_map_type(type_name: &str) -> bool {
 	type_name == super::checks::MAP_TYPE || type_name.starts_with(super::checks::MAP_TYPE_PREFIX)
 }
 

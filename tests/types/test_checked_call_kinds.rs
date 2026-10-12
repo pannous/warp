@@ -40,3 +40,10 @@ fn a_declared_list_parameter_refuses_other_elements() {
 	is!("f(xs: floats) := count xs; f([1, 2])", 2);
 	is!("f(xs: ints) := count xs; f([])", 0);
 }
+
+#[test]
+fn a_map_parameter_refuses_a_plain_value() {
+	fails_with("g(m: map) := m; g(3)", "g needs a map for parameter m, got 3 (an Int)");
+	fails_with("g(m: map) := m; g(\"ab\")", "g needs a map for parameter m");
+	is!("g(m: map) := m.a; g({a:1})", 1);
+}
