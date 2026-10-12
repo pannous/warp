@@ -11,7 +11,11 @@ LOCK=$LOG_DIR/running.pid
 RELAY_MODEL=claude-haiku-5-5
 # ~/.local/bin holds claude (the relay), ~/.cargo/bin rustup's toolchain ahead of Homebrew's rust (card
 # homebrew-rustc); cron's PATH has none of these
-export PATH=/Users/me/.local/bin:/Users/me/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/bin:/bin:$PATH
+export PATH=/Users/me/.local/bin:/Users/me/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/sbin:/usr/bin:/bin:$PATH
+# cron can't read gh's keyring login: without the token file every todo and gh call of the run fails with 401, and
+# the overnight runs of 2026-10-11/12 stopped without claiming a card (`gh auth token > ~/.config/gh/cron-token`)
+GH_TOKEN=$(cat /Users/me/.config/gh/cron-token) || { echo "$(date '+%FT%T') no ~/.config/gh/cron-token" >&2; exit 1; }
+export GH_TOKEN
 
 mkdir -p "$LOG_DIR"
 if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
