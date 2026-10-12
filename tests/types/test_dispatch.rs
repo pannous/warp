@@ -77,3 +77,12 @@ fn classes_sharing_a_library_named_method_keep_the_library_function() {
 	is!(&with(classes, "Bag([1]).sum() + Box(5).sum() + sum([1,2])"), 15);
 	is!(&with(classes, "t=0; for b in [Bag([1]), Box(5)] { t += b.sum() }; t"), 12);
 }
+
+#[test]
+fn a_call_with_more_arguments_is_the_same_call_either_way() {
+	is!("class Account{balance:int}; deposit(a:Account, n:int) := a.balance + n; Account(5).deposit(3) * 100 + deposit(Account(5), 3)", 808);
+	is!("class Vec2{x:int}; def add(a:Vec2, b:Vec2):=Vec2(a.x+b.x); Vec2(1).add(Vec2(2)).x * 10 + add(Vec2(3), Vec2(4)).x", 37);
+	is!("class Deck{n:int; def take(k):=n - k}; Deck(5).take(2) * 100 + take(Deck(7), 2) * 10 + count(take([1,2,3],2))", 352);
+	is!("class Deck{n:int; def take(k):=n - k}; def g(x, k) := x.take(k); g(Deck(9), 2) * 10 + count(g([1,2,3], 2))", 72);
+	is!("class sq{s:int}; class rc{w:int}; scale(a:sq, k):=a.s*k; scale(b:rc, k):=b.w+k; t=0; for x in [sq(2), rc(3)] { t = t*100 + x.scale(10) }; t", 2013);
+}
