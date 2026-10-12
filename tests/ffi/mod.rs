@@ -1,4 +1,6 @@
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
+mod test_component_drop;
+#[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_component_short_use;
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_components;
