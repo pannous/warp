@@ -1028,8 +1028,9 @@ impl Lowering {
 			return Some(Node::List(call, Bracket::Round, Separator::None));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
-		// only the common conversions (not `xs.number`, a count, nor `e.text`, a common field)
-		let is_conversion = CONVERSION_METHODS.contains(&name.as_str()) || (is_called && crate::analyzer::type_word_kind(name).is_some());
+		// only the common conversions (not `e.text`, a common field); a counting word stays a count (`xs.number()`)
+		let is_type_word_call = is_called && crate::analyzer::type_word_kind(name).is_some() && counting_method(name, &self.context).is_none();
+		let is_conversion = CONVERSION_METHODS.contains(&name.as_str()) || is_type_word_call;
 		if is_conversion && arguments.is_empty() && !self.instances.is_declared_field(name) {
 			return Some(Node::List(vec![word_node.clone(), receiver.clone()], Bracket::Round, Separator::None));
 		}
