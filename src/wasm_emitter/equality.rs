@@ -79,10 +79,13 @@ impl WasmGcEmitter {
 
 	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text) or symbol
 	/// (`type(2) == type(3)`, card type-equal), and a value held as a Node whose kind shows only at run time (a cell's,
-	/// `cell_get(c) == 5`; a call giving a Node that holds a float)
+	/// `cell_get(c) == 5`; a call giving a Node that holds a float), and a function value (`make(1) == make(2)`)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
 		let by_value = |node: &Node| {
-			matches!(self.get_type(node), Kind::Text | Kind::Symbol | Kind::Empty) || self.is_held_cell_value(node)
+			matches!(
+				self.get_type(node),
+				Kind::Text | Kind::Symbol | Kind::Empty | Kind::Function
+			) || self.is_held_cell_value(node)
 		};
 		matches!(op, Op::Eq | Op::Ne)
 			&& (self.is_structural_operand(left)
@@ -635,6 +638,9 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32And, I::I32Eqz]);
 				Self::return_if(f, 0);
 				f.instruction(&I::End);
+				if !s.ctx.closure_targets.is_empty() {
+					s.emit_closures_equal(f, recurse);
+				}
 				// `{…}` objects are maps: their entries may come in any order
 				for kind in [2, 3] {
 					Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Eq]);
