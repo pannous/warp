@@ -124,7 +124,9 @@ pub fn parameter_slots(
 		.find(|(index, name)| names[..*index].contains(name))
 		.map(|(_, name)| name)
 	{
-		return Err(format!("two parameters are named {shared}: use one-word parameter names here (`first name`, `last name` need multi-word identifiers)"));
+		return Err(format!(
+			"two parameters are named {shared}: use one-word parameter names here (`first name`, `last name` need multi-word identifiers)"
+		));
 	}
 	if let [Node::Key(name, Op::Colon, type_name)] = parameters.as_slice() {
 		// `fibonacci number := … number … it …` uses both: the parameter keeps its name and `it` is the same value
@@ -228,7 +230,7 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
 	type_name
 		.symbol_name()
-		.filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+		.filter(|word| (is_type_word(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
@@ -285,7 +287,8 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 			);
 			key(then, Op::Else, as_type(otherwise.as_ref().clone(), type_name))
 		}
-		Node::List(items, Bracket::Curly, _) if !items.is_empty() => converted_last(value, type_name),
+		_ if is_statement_block(&value) => converted_last(value, type_name),
+		_ if type_name.symbol_name().is_some_and(is_checked_result) => checked_result(value, type_name),
 		Node::Key(_, op, _) if op.is_arithmetic() => key(
 			Node::List(vec![value], Bracket::Round, Separator::None),
 			Op::As,
@@ -293,6 +296,37 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 		),
 		_ => key(value, Op::As, type_name.clone()),
 	}
+}
+
+/// `{a; b}`: a block of statements, its last one the value; `{cube 3}` is the one statement `cube 3`
+fn is_statement_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::Curly, separator) if !items.is_empty() && (*separator != Separator::Space || items.len() == 1))
+}
+
+/// `int or text`, `Circle or Square`: the name of an inline union (analyzer lower_inline_unions)
+fn is_union(word: &str) -> bool {
+	crate::analyzer::union_parts(word.trim_end_matches('?')).is_some()
+}
+
+/// A result checked rather than converted, where converting could lose something: a union (user 2026-10-12, `-> int or
+/// text`) and a whole-number type (decision float-result: `-> int { 2.5 }` is no 2); `-> text { 3 }` still converts
+pub(crate) fn is_checked_result(word: &str) -> bool {
+	is_union(word) || (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
+}
+
+/// `{the result: int or text = value; the result}`: the value admitted as a variable declared of the type is, a
+/// literal when compiled, a fraction known at run time with "an int must be a whole number"
+fn checked_result(value: Node, type_name: &Node) -> Node {
+	let declared = key(
+		key(symbol(crate::analyzer::CHECKED_RESULT), Op::Colon, type_name.clone()),
+		Op::Assign,
+		value,
+	);
+	Node::List(
+		vec![declared, symbol(crate::analyzer::CHECKED_RESULT)],
+		Bracket::Curly,
+		Separator::Semicolon,
+	)
 }
 
 /// `error("e")`
@@ -318,7 +352,7 @@ fn converted(body: &Node, type_name: &Node) -> Node {
 /// The last statement of a block converted, the value itself outside a block; a `return` is converted already
 fn converted_last(body: Node, type_name: &Node) -> Node {
 	match body.drop_meta().clone() {
-		Node::List(mut items, Bracket::Curly, separator) if !items.is_empty() => {
+		Node::List(mut items, Bracket::Curly, separator) if is_statement_block(&body) => {
 			let last = items.pop().expect("not empty");
 			items.push(if is_return(&last) {
 				last
@@ -328,6 +362,10 @@ fn converted_last(body: Node, type_name: &Node) -> Node {
 			Node::List(items, Bracket::Curly, separator)
 		}
 		body if is_return(&body) => body,
+		// `{cube 3}`: its one statement, so the check reads `cube 3` as a call, not a block value
+		Node::List(items, Bracket::Curly, Separator::Space) => {
+			as_type(Node::List(items, Bracket::None, Separator::Space), type_name)
+		}
 		body => as_type(body, type_name),
 	}
 }
@@ -348,10 +386,15 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 	let Node::Key(target, op @ (Op::Assign | Op::Define), body) = node.drop_meta() else {
 		return None;
 	};
-	let Node::Key(head, Op::As | Op::Colon, type_name) = target.drop_meta() else {
-		return None;
+	let (head, type_name) = match target.drop_meta() {
+		Node::Key(head, Op::As | Op::Colon, type_name) => (head.as_ref().clone(), type_name.as_ref().clone()),
+		// `square(x) as int or text := …`
+		target => {
+			let (head, union) = crate::declarations::as_union_result(target)?;
+			(head, symbol(&crate::analyzer::union_of_types(&union, &|_| true)?))
+		}
 	};
-	typed_return(type_name, &Node::Key(head.clone(), *op, body.clone()))
+	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()))
 }
 
 /// `int age = 30` (C style) is `age: int = 30` (card bind-ignores), so every pass reads one form of a typed

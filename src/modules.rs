@@ -82,6 +82,14 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		})
 		.map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
+	let files = loader
+		.loaded
+		.iter()
+		.chain(&loader.included)
+		.filter(|path| path.is_file())
+		.cloned()
+		.collect();
+	MODULE_FILES.with(|modules| *modules.borrow_mut() = files);
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
 	MODULE_DEFINITIONS.with(|names| {
 		own_names.iter().for_each(|own| {
@@ -546,6 +554,13 @@ thread_local! {
 	static EARLY_CLASS_MODULES: std::cell::RefCell<HashSet<PathBuf>> = std::cell::RefCell::new(HashSet::new());
 	/// The names a used module defines for the program being compiled: their bodies never see the program's variables
 	static MODULE_DEFINITIONS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+	/// The module files the last program resolved used or included: `warp dev` builds anew when one changes
+	static MODULE_FILES: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(vec![]) };
+}
+
+/// The files of the modules the last program compiled on this thread used or included (card web-dev-modules)
+pub fn module_files() -> Vec<PathBuf> {
+	MODULE_FILES.with(|files| files.borrow().clone())
 }
 
 /// Whether `name` is defined by a module the program uses (`use markup`'s html_element), not by the program
@@ -1059,7 +1074,7 @@ impl<'a> Loader<'a> {
 		}
 		let module = WarpParser::parse(source);
 		if let Some(failure) = module.first_error() {
-			return Err(failure.clone());
+			return Err(crate::diagnostic::located_in_file(failure, &path));
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use
@@ -1497,40 +1512,34 @@ fn std_module_name(name: &str) -> &str {
 		.map_or(name, |(_, module)| *module)
 }
 
-/// Each standard module with the names it defines, in their order
-fn std_module_words() -> &'static [(&'static str, Vec<String>)] {
-	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	DEFINED.get_or_init(|| {
-		STD_MODULES
+/// The names the standard module at `index` of STD_MODULES defines, in their order; each module is parsed for them
+/// once, when first asked (a compile asks for a few of them)
+fn std_module_words(index: usize) -> &'static [String] {
+	static DEFINED: [std::sync::OnceLock<Vec<String>>; STD_MODULES.len()] =
+		[const { std::sync::OnceLock::new() }; STD_MODULES.len()];
+	DEFINED[index].get_or_init(|| {
+		let source = STD_MODULES[index].1;
+		statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
 			.iter()
-			.map(|(module, source)| {
-				(
-					*module,
-					statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
-						.iter()
-						.filter(|statement| used_module(statement).is_none())
-						.filter_map(declared_name)
-						.collect(),
-				)
-			})
+			.filter(|statement| used_module(statement).is_none())
+			.filter_map(declared_name)
 			.collect()
 	})
 }
 
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
-	std_module_words()
-		.iter()
-		.find(|(_, names)| names.iter().any(|name| name == word))
-		.map(|(module, _)| *module)
+	(0..STD_MODULES.len())
+		.find(|index| std_module_words(*index).iter().any(|name| name == word))
+		.map(|index| STD_MODULES[index].0)
 }
 
 /// The names a standard module defines, in their order (`dir(time)`); None for no standard module
 pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
-	std_module_words()
+	STD_MODULES
 		.iter()
-		.find(|(name, _)| *name == module)
-		.map(|(_, names)| names.as_slice())
+		.position(|(name, _)| *name == module)
+		.map(std_module_words)
 }
 
 /// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word

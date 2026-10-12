@@ -544,8 +544,12 @@ Each step is useful on its own and is what the next ones stand on.
   keeps its state across a reload (instances are found by call order or key, as within one run).
 - Tests: tests/web/test_dev_server.rs; probes/dev/counter.warp (click, edit the label: the count stays),
   probes/dev/stored_check.py.
-- Left: watching used modules (only the program's file counts; card web-dev-modules) and
-  the playground editor's error marks in the overlay (card web-dev-marks); a failure's source line is that of the program, not of a module.
+- Modules (card web-dev-modules): the loader records the files a build used or included (modules::module_files), and
+  dev_server.rs watches them beside the program. A module's parse failure names its file (` at greeting.warp:2:15`,
+  diagnostic::located_in_file), so the overlay shows the module's line (host_parts::with_excerpt reads that file).
+  Left: a failure past parsing in a module's code (an unknown word) still names a bare line, read as the program's;
+  node positions carry no file. Probe: probes/dev/uses_module.warp with probes/dev/greeting_module.warp.
+- Left: the playground editor's error marks in the overlay (card web-dev-marks).
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
 - Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of

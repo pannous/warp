@@ -2980,6 +2980,7 @@ PASSED:
   ✓ programs::test_paint::paint_frames_for_the_window_read_back_as_sent
   ✓ programs::test_paint::paint_writes_a_png_natively
   ✓ programs::test_paint::paint_writes_colors_as_a_truecolor_png
+  ✓ programs::test_paint::the_paint_window_hears_the_pointer_unfocused
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
@@ -3439,6 +3440,8 @@ PASSED:
   ✓ types::test_checked_call_kinds::a_declared_parameter_takes_its_subtypes
   ✓ types::test_checked_call_kinds::a_map_parameter_refuses_a_plain_value
   ✓ types::test_checked_call_kinds::a_variable_keeps_the_kind_of_a_call_result
+  ✓ types::test_checked_results::a_fraction_reaching_an_int_result_is_an_error
+  ✓ types::test_checked_results::a_lossless_result_still_converts
   ✓ types::test_class_aliases::a_constructor_alias_called_as_a_method_stays_a_method
   ✓ types::test_class_aliases::a_loop_in_init_keeps_its_variables_local
   ✓ types::test_class_aliases::a_type_parameter_of_a_class_is_noted
@@ -3993,6 +3996,15 @@ PASSED:
   ✓ types::test_types::test_types_simple
   ✓ types::test_types::test_types_simple2
   ✓ types::test_types::test_user_type_wasm_emission
+  ✓ types::test_union_returns::a_union_mismatch_offers_the_wider_union
+  ✓ types::test_union_returns::a_union_result_gives_back_each_part
+  ✓ types::test_union_returns::a_union_result_refuses_a_value_fitting_no_part
+  ✓ types::test_union_returns::as_spells_a_union_result_with_or_without_a_block
+  ✓ types::test_union_spellings::a_union_part_that_names_no_type_is_refused
+  ✓ types::test_union_spellings::or_of_values_stays_the_boolean_or
+  ✓ types::test_union_spellings::or_spells_a_union_of_a_field
+  ✓ types::test_union_spellings::or_spells_a_union_of_a_parameter
+  ✓ types::test_union_spellings::or_spells_a_union_of_a_variable
   ✓ types::test_unknown_conversion::an_unknown_as_word_is_loud
   ✓ types::test_unknown_conversion::fixed_width_casts
   ✓ types::test_unknown_conversion::known_as_words_still_convert
@@ -4228,6 +4240,7 @@ PASSED:
   ✓ web::test_dev_server::a_dev_build_keeps_component_state
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
+  ✓ web::test_dev_server::the_dev_server_watches_the_modules_used
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_dom_pages::main_sets_the_title_of_the_page
@@ -4866,4 +4879,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4861 passed, 0 failed, 4861 total tested
+10 ignored, 4874 passed, 0 failed, 4874 total tested

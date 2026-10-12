@@ -4,5 +4,5 @@
 people := fetch "https://api.github.com/repos/pannous/warp/contributors"
 main{
 	h1{ "Contributors" }
-	div{ if people.loading then p{ "Loading…" } else ul{ [li{ person.login } for person in people] } }
+	div{ if people.loading then p{ "Loading…" } else ul{ [li{ p.login } for p in people] } }
 }

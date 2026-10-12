@@ -433,7 +433,13 @@ and traits.rs `admit` refuses an instance like none of the classes. Class-typed 
 `Dispatch` remembers `s: C = …` per definition scope (a function's `s = …` is its own local) and admits a later `s = v`,
 each constructor field (`instance_parts`) and a field write, which reaches dispatch as `b = field_with(b, "content", v)`;
 a class field may hold ø (tree leaves). The analyzer lowers unions inside class bodies too: `map_children` skips field
-declarations, so `content: Circle | Square` had registered as `any`. Not yet: `x as T?` (a conversion in warp:
+declarations, so `content: Circle | Square` had registered as `any`. Every union part names a builtin type or a
+class (card undeclared-union): only a builtin part covers another, else `int | zork` collapsed to the unknown `zork`.
+`or` spells `|` everywhere (user 2026-10-12). A union result (card union-return, `def f(x) as int or text {…}`,
+`f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it, user 2026-10-12 return-as: `as` binds
+tighter than `or`, so declarations::as_union_result regroups `(f(x) as int) or text`) is checked, not converted: type_name_matching passes each returned value through the local
+`the result: int or text = v`, so a result gets the variable's checks. Not yet: a run-time check of a union
+variable (`x: int | text = f(2.5)` holds 2.5), `x is int` of a rational variable is yes (card int-accepts). Not yet: `x as T?` (a conversion in warp:
 `"4" as int?` is 4; W0's cast only checks).
 
 ## Implicit casts from `any`
@@ -527,8 +533,11 @@ number, it becomes a float (`(1/3) as float`); a text is parsed ("4" is 4, "a" t
 convert to a number type (`[1] as int`, a compile error in warp too). The exporter takes scalar targets (int, number,
 text, bool and their spellings); `x as Point`, `x as texts` and `x as int?` are other operations in warp and stay out.
 
-A declared result converts the body's value, as warp lowers it (lowering/declarations.rs: `body as T`), so the
-exporter wraps the body in `.conv`, returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
+A declared result converts the body's value only when nothing is lost (user 2026-10-12, card lossy-return): `-> text`,
+`-> float` convert as `body as T` and the exporter wraps the body in `.conv`; a whole-number type (`-> int`) and a
+union check it as a variable declared of the type is (type_name_matching `checked_result`, the local `the result`),
+`.cast` in W0: `def f() -> int { 2.5 }` is a compile error, `half(3)` of `-> int { x / 2 }` fails when it runs with
+"an int must be a whole number" (W0 refuses it statically: KNOWN_HOLES, card static-int). Returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
 `fun f(x: Int): Int`, `function f(x: number): number`, `def f(x) -> int: body`, `f(a, b): int := …`,
 `square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …` (`typed_definition` in
 src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all

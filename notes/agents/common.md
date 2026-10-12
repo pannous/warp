@@ -39,6 +39,11 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   written for an old version number silently changes nothing. The Integrator's version_tweak.sh does the same.
   In /Users/me/dev/angles/warp itself (the user's checkout) only small changes on main, and never the user's
   uncommitted files.
+- The user's uncommitted edits are the Integrator's to adopt (user 2026-10-12, "I told the agents ten times"): whoever
+  notices uncommitted user changes in the main checkout or wiki/ (`git status`), above all in files of their own task,
+  never leaves them lying and never reports them as "untouched": SendMessage warp-integrator the paths and what they
+  ask for (commented TODOs are wishes). The Integrator reviews, fixes and commits them on the user's behalf in their
+  own commit, and turns a TODO it cannot do at once into a card.
 - Word choices need no question (user 2026-10-06, the alias mechanism): when alternatives are only different words
   for the same thing, make the recommended word canonical and the others aliases that work with a got-it note and an
   "I meant: <word>" fix (diagnostic::note_alias; which hint call to use: notes/fixits.md "Hints, notes and
@@ -61,6 +66,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
   both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
+  A branch from before the whole-repo format (78607d62e) crosses it in three steps, which never drops main's changes:
+  `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
+  (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
+  Never "take your side" on a conflict that also holds main's changes.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
