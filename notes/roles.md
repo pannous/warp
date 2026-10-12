@@ -84,6 +84,12 @@ The only session that runs the full suite and the only one that pushes code to m
 - One task, one branch, one worktree: `cowtree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
   origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
   Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
+- Small changes on main (user, 2026-10-12, "new very important rule": "Agents can work on the main branch without
+  work tree if their changes are small or not conflicting with other work"): notes, docs, a sample, a one-file fix no
+  other session is touching go straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or
+  branch. There: never touch the user's uncommitted files (commit only your own paths: `git commit -- <paths>`), run
+  the targeted tests through the queue, `git pull --rebase --autostash`, push, and tell the Integrator the commit and
+  filters (its next full run is the check). Bigger or overlapping work keeps its worktree and branch.
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
 - Done = commit on the branch, push the branch, SendMessage the Integrator "branch, tip, new tests, filters". The
