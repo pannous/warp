@@ -38,3 +38,10 @@ fn a_float_array_mapped_otherwise_stays_a_list() {
 	assert!(!lowered(&printed).contains("linear"), "{}", lowered(&printed));
 	is!(&printed, 8.0);
 }
+
+#[test]
+fn a_float_kernel_may_group_and_call_sqrt() {
+	let grouped = format!("{FILLED}ys = xs.map(x => sqrt(x) * (x + 1)); [ys#1, ys#3]");
+	assert!(lowered(&grouped).contains("linear_mapf"), "{}", lowered(&grouped));
+	is!(&grouped, list(vec![float(2.0), float(30.0)]));
+}

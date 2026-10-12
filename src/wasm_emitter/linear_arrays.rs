@@ -23,7 +23,7 @@ pub const LINEAR_DOT: &str = "linear_dotf";
 pub const LINEAR_ADDRESS: &str = "linear_address";
 /// The registry names crate::wasm_emitter's ffi_func_index looks the words up by
 const FUNCTION_NAMES: [(&str, &str); 9] = [
-	(LINEAR_NEW, "ffi_linear_new"),
+	(LINEAR_NEW, SPLIT_BLOCK_NEW),
 	(LINEAR_COUNT, "ffi_linear_count"),
 	("linear_get", "ffi_linear_get"),
 	("linear_set", "ffi_linear_set"),
@@ -33,6 +33,10 @@ const FUNCTION_NAMES: [(&str, &str); 9] = [
 	("linear_addf", "ffi_linear_addf"),
 	(LINEAR_DOT, "ffi_linear_dotf"),
 ];
+
+/// The exported linear_new and kernel prefix the host calls to split a map (tasks.rs split_map)
+pub const SPLIT_BLOCK_NEW: &str = "ffi_linear_new";
+pub const SPLIT_KERNEL_PREFIX: &str = "ffi_";
 
 /// `ys = xs.map(x => x * 0.5 + 1)` over a linear float array: the kernel `linear_mapf·x·x*0.5+1`, its parameter and
 /// body in its name, a new block of the results computed two cells at a time with f64x2 (notes/simd.md)
@@ -60,7 +64,7 @@ const PAIR_ALIGNED: MemArg = MemArg {
 
 /// Whether `body` is float arithmetic of the parameter and number literals, which a kernel computes lane by lane
 pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
-	match body.drop_meta() {
+	match ungrouped(body) {
 		Node::Symbol(name) => name == parameter,
 		Node::Number(number) => !matches!(number, crate::extensions::numbers::Number::Complex(..)),
 		Node::Key(left, op, right) if KERNEL_BINARY.iter().any(|(known, _, _)| known == op) => {
@@ -72,6 +76,14 @@ pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
 			is_float_kernel(parameter, operand)
 		}
 		_ => false,
+	}
+}
+
+/// The body without the parentheses around it: `sqrt(x)` and `(x + 1) * 2` group a single operand
+fn ungrouped(body: &Node) -> &Node {
+	match body.drop_meta() {
+		Node::List(items, crate::node::Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),
+		bare => bare,
 	}
 }
 
@@ -138,6 +150,8 @@ impl WasmGcEmitter {
 			.cloned()
 			.collect();
 		kernels.sort();
+		// a `go` map splitting on the host calls the kernels and linear_new in instances of its own (tasks.rs split_map)
+		let splits = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPLIT_MAPF);
 		self.emit_text_heap_global();
 		for (word, params, results) in called {
 			let name = FUNCTION_NAMES
@@ -172,7 +186,7 @@ impl WasmGcEmitter {
 			let Some((parameter, body)) = kernel_of(&kernel) else {
 				continue;
 			};
-			let name: &'static str = Box::leak(format!("ffi_{kernel}").into_boxed_str());
+			let name: &'static str = Box::leak(format!("{SPLIT_KERNEL_PREFIX}{kernel}").into_boxed_str());
 			self.runtime_function(
 				name,
 				vec![I64],
@@ -180,6 +194,12 @@ impl WasmGcEmitter {
 				vec![I64, I32, I32, I32, F64, V128],
 				|s, f| s.emit_float_map(f, &parameter, &body),
 			);
+			if splits {
+				self.export_runtime_function(name);
+			}
+		}
+		if splits {
+			self.export_runtime_function(SPLIT_BLOCK_NEW);
 		}
 	}
 
@@ -466,7 +486,7 @@ impl WasmGcEmitter {
 /// The kernel's body on the parameter in local `value`: an f64, or two in f64x2 lanes
 fn emit_kernel(func: &mut Function, parameter: &str, body: &Node, value: u32, lanes: bool) {
 	let pick = |(_, scalar, vector): &(Op, I<'static>, I<'static>)| if lanes { vector.clone() } else { scalar.clone() };
-	match body.drop_meta() {
+	match ungrouped(body) {
 		Node::Symbol(name) if name == parameter => {
 			func.instruction(&I::LocalGet(value));
 		}
