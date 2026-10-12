@@ -1,0 +1,4 @@
+// can warp code build and inspect the parser's result? (code as data: `data expr`, wiki/charged.md)
+pair = data (x: 3)
+call = data f(1, 2)
+[pair.key, pair.value, type(pair), call.count, type(call)]
