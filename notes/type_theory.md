@@ -426,7 +426,7 @@ arguments object `f·args`) are casts where an instance is made and where a fiel
 at `o.size = v`, so it casts only when every class with a field of that name declares it alike (card w0-unions). Warp
 checks a union field's literal when it is constructed and written (type_kinds keeps the union's name, its storage is a
 Node), and folding no longer inlines a variant with a declared parameter: `f(a: int, b: int) := a + b; f(1, 2.5)`
-folded to 3.5 unchecked. Not yet (card w0-class-unions): unions of classes (warp refuses them for now), `x as T?` (a
+folded to 3.5 unchecked. Not yet (card union-types): unions of classes (warp refuses them for now), `x as T?` (a
 conversion in warp: `"4" as int?` is 4; W0's cast only checks).
 
 ## Implicit casts from `any`
