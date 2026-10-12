@@ -136,6 +136,14 @@ function programImports(holder, hooks) {
 				if (!hooks.notify) throw new Error(`notify ${JSON.stringify(shown)}: this page shows no notifications`);
 				hooks.notify(typeof shown === "string" ? shown : JSON.stringify(shown));
 			},
+			// an emit no handler of a page's program receives (card page-custom-event): a Worker posts it to its page
+			// (hooks.dispatch), a page's own thread dispatches it (markup.js dispatchToPage)
+			dispatch_event: (name, detail) => {
+				const dispatch = hooks.dispatch ?? globalThis.dispatchToPage;
+				const event = { name: plainOfTree(readNode(program(), name)), detail: plainOfTree(readNode(program(), detail)) };
+				if (!dispatch) throw new Error(`emit ${event.name}: this host has no page to dispatch it to`);
+				dispatch(event);
+			},
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);

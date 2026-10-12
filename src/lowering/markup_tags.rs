@@ -109,18 +109,15 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 				} else {
 					items
 				};
-				let items = items
-					.into_iter()
-					.map(|item| tag_with_attributes(attributed_tag(item, defined), defined))
-					.map(|item| if is_element { loop_as_comprehension(item) } else { item })
-					.map(|item| {
-						if is_element && is_computed_children(&item) {
-							Node::List(vec![item], Bracket::Square, Separator::None)
-						} else {
-							item
-						}
-					})
-					.collect();
+				let items = handlers_kept(items, |item| {
+					let item = tag_with_attributes(attributed_tag(item, defined), defined);
+					let item = if is_element { loop_as_comprehension(item) } else { item };
+					if is_element && is_computed_children(&item) {
+						Node::List(vec![item], Bracket::Square, Separator::None)
+					} else {
+						item
+					}
+				});
 				Node::Key(name, Op::Colon, Box::new(Node::List(items, Bracket::Curly, separator)))
 			}
 			body => Node::Key(name, Op::Colon, Box::new(tag_with_attributes(body, defined))),
@@ -128,6 +125,26 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 		// `[td{…} for job in jobs]`, also from a loop among the children: its elements read as the others do
 		other => other.map_children(|child| tag_with_attributes(child, defined)),
 	}
+}
+
+/// A tag's items, each rewritten by `rewrite` but its handlers (`on click { emit saved{id: 7} }`): their bodies are
+/// code, kept as written, not markup (card page-custom-event: `emit saved{…}` read as the tag `emit{saved{…}}`)
+fn handlers_kept(items: Vec<Node>, mut rewrite: impl FnMut(Node) -> Node) -> Vec<Node> {
+	let mut kept = Vec::with_capacity(items.len());
+	let mut index = 0;
+	while index < items.len() {
+		index += match crate::element_events::handler_at(&items, index) {
+			Some((_, _, length)) => {
+				kept.extend(items[index..index + length].iter().cloned());
+				length
+			}
+			None => {
+				kept.push(rewrite(items[index].clone()));
+				1
+			}
+		};
+	}
+	kept
 }
 
 /// An element's children with each spaced `ul { … }` the element; a lone one is the whole block, `{ ul { … } }`

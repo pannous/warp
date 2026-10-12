@@ -66,6 +66,7 @@ const hooks = {
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
+	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder, handler => runHandler(holder, handler));
