@@ -207,6 +207,7 @@ PASSED:
   ✓ control::test_event_signals::raise_runs_the_handlers_of_its_name
   ✓ control::test_event_signals::the_handled_signals_name_their_functions
   ✓ control::test_event_signals::the_handler_reads_the_event_data
+  ✓ control::test_exit_in_handler::exit_with_a_code_in_a_handler_body
   ✓ control::test_exit_signal::on_exit_reads_the_exit_code
   ✓ control::test_exit_signal::on_exit_runs_at_exit_and_keeps_its_code
   ✓ control::test_exit_signal::on_exit_runs_once
@@ -3216,6 +3217,9 @@ PASSED:
   ✓ scope::test_globals::test_global_reassignment
   ✓ scope::test_globals::test_global_with_expression
   ✓ scope::test_node_widening_in_loops::a_read_before_a_node_widening_in_a_loop_holds_the_node
+  ✓ scope::test_parameter_shadowing::a_parameter_is_not_typed_by_another_functions_real_value
+  ✓ scope::test_parameter_shadowing::a_parameter_may_walk_what_another_function_assigned_a_number
+  ✓ scope::test_parameter_shadowing::a_signal_and_a_block_play_in_one_program
   ✓ scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ scope::test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ scope::test_result_word::a_program_may_name_its_own_result
@@ -4095,6 +4099,10 @@ PASSED:
   ✓ wasm::test_emitter::test_compact_int
   ✓ wasm::test_emitter::test_optimizer_graph_generation
   ✓ wasm::test_emitter::test_tools_available
+  ✓ wasm::test_executable_foreign::a_missing_interpreter_is_named
+  ✓ wasm::test_executable_foreign::an_executable_calls_python_and_node
+  ✓ wasm::test_executable_foreign::the_runtime_reads_and_builds_nodes_with_warps_codes
+  ✓ wasm::test_executable_foreign::values_cross_both_ways_as_warp_does
   ✓ wasm::test_executable_output::test_executable_ending_in_a_print_prints_no_value
   ✓ wasm::test_executable_output::test_executable_shows_no_empty_value
   ✓ wasm::test_executable_output::test_executable_still_shows_its_value
@@ -4241,6 +4249,8 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
+  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -4393,6 +4403,7 @@ PASSED:
   ✓ web::test_route_data::a_route_reading_a_table_ships_without_it
   ✓ web::test_route_data::the_first_visit_gets_finished_html
   ✓ web::test_route_data::the_server_gives_only_what_the_route_shows
+  ✓ web::test_route_header::a_route_sets_its_status_and_headers
   ✓ web::test_route_modules::a_dev_site_and_a_site_without_routes_ship_one_module
   ✓ web::test_route_modules::each_route_comes_in_a_module_of_its_own
   ✓ web::test_route_phrase_body::a_one_line_route_block_reading_a_table_is_one_statement
@@ -4931,4 +4942,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4926 passed, 0 failed, 4926 total tested
+10 ignored, 4937 passed, 0 failed, 4937 total tested
