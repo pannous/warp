@@ -103,4 +103,6 @@ every node, and other passes once per word of their word lists (std module names
 words with called_names each); they now take names_given / called_names once. modules::defined borrows the
 statements (statements_of) instead of cloning the program. Then 0.38: closures::tail asks arrow_lambda of every
 block, which copied the block (block_lambda) and searched it for `$0`…`$9` to rule out a Swift closure; a block
-without a `$` name now returns at once (shorthand_block_lambda).
+without a `$` name now returns at once (shorthand_block_lambda). Then 0.34: user_function takes the lifted body
+instead of copying it again, and the return kind reads only the last statement (event_signals::last_statement)
+instead of copying all of them.
