@@ -32,6 +32,7 @@ mod test_read_bytes_plain_result;
 mod test_reproducible_builds;
 mod test_runtime_stub_found;
 mod test_runtime_stub_note; // card runtime-stub-note
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_standalone_executable;
 mod test_standalone_needs_runtime;
 mod test_wasm;
