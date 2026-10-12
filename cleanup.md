@@ -31,3 +31,10 @@
 - Reuse `TaskTable`; do not add a second scheduler abstraction or a new dependency.
 - Remove the per-task `JoinHandle` model once the pool owns worker handles.
 - Keep the worktree-only Cargo version suffix uncommitted.
+
+# wasm-split repair plan
+
+- Reproduce the route-module failure with the existing focused test.
+- Prefer the supported multi-split interface from the installed Binaryen toolchain.
+- Preserve the primary-module ABI while collecting each named route module.
+- Re-run the focused test, formatting, clippy, and the wasm32 check.
