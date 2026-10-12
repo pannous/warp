@@ -2429,6 +2429,7 @@ PASSED:
   ✓ numbers::test_unbounded_int::test_overflow_promotes_mul
   ✓ numbers::test_unbounded_int::test_overflow_promotes_neg_abs
   ✓ numbers::test_unbounded_int::test_overflow_promotes_pow
+  ✓ numbers::test_unbounded_int::test_ratio_reduced_by_a_big_gcd
   ✓ numbers::test_unbounded_int::test_small_arithmetic_unchanged
   ✓ numbers::test_unit_columns::a_column_sums_and_peaks_in_its_unit
   ✓ numbers::test_unit_columns::a_conversion_takes_a_compound_unit_whole
@@ -3017,6 +3018,12 @@ PASSED:
   ✓ programs::test_sound_effects::an_echo_sounds_where_the_dry_sound_was_silent
   ✓ programs::test_sound_effects::distortion_flattens_the_peaks_and_stays_in_range
   ✓ programs::test_sound_effects::effects_play_in_a_program
+  ✓ programs::test_sound_engine::a_sound_of_another_rate_keeps_its_length
+  ✓ programs::test_sound_engine::a_sound_starts_at_its_frame_across_buffers
+  ✓ programs::test_sound_engine::fade_ramps_a_playing_sound_sample_by_sample
+  ✓ programs::test_sound_engine::fade_sound_takes_a_handle_of_the_run
+  ✓ programs::test_sound_engine::sounds_back_to_back_follow_to_the_sample
+  ✓ programs::test_sound_engine::stop_drops_one_sound_or_all
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
@@ -3044,6 +3051,10 @@ PASSED:
   ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
+  ✓ programs::test_sound_signal::a_signal_function_plays_sample_by_sample
+  ✓ programs::test_sound_signal::a_signal_keeps_its_state_between_samples
+  ✓ programs::test_sound_signal::a_signal_louder_than_full_scale_is_clipped
+  ✓ programs::test_sound_signal::a_signal_parameter_is_the_time_in_seconds_untyped_too
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
@@ -3536,6 +3547,16 @@ PASSED:
   ✓ types::test_declared_list_marks::a_write_of_another_type_through_a_hidden_alias_fails_at_run_time
   ✓ types::test_declared_list_marks::an_empty_declared_list_checks_its_items
   ✓ types::test_declared_list_marks::an_inferred_element_type_marks_nothing
+  ✓ types::test_dispatch::a_call_with_more_arguments_is_the_same_call_either_way
+  ✓ types::test_dispatch::a_method_for_a_class_keeps_the_library_function
+  ✓ types::test_dispatch::a_method_in_a_class_body_is_a_method_of_the_generic_function
+  ✓ types::test_dispatch::a_value_of_run_time_type_dispatches_at_run_time
+  ✓ types::test_dispatch::an_untyped_definition_is_the_fallback
+  ✓ types::test_dispatch::classes_sharing_a_library_named_method_keep_the_library_function
+  ✓ types::test_dispatch::methods_of_several_classes_share_a_name
+  ✓ types::test_dispatch::no_method_for_a_type_is_a_welcoming_error
+  ✓ types::test_dispatch::the_most_specific_method_wins
+  ✓ types::test_dispatch::two_equally_specific_methods_are_an_ambiguity_error
   ✓ types::test_element_field_writes::a_character_stored_into_a_list_of_unknown_type_stays_a_character
   ✓ types::test_element_field_writes::a_field_of_a_list_element_changes
   ✓ types::test_element_field_writes::a_list_field_of_an_element_checks_its_items
@@ -4099,6 +4120,7 @@ PASSED:
   ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
   ✓ web::test_accessibility::head_attributes_count
+  ✓ web::test_accessibility::style_sheet_rules_are_no_elements
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
@@ -4195,6 +4217,7 @@ PASSED:
   ✓ web::test_markup_lines::a_line_of_attributes_renders_as_attributes
   ✓ web::test_markup_lines::an_aria_attribute_renders
   ✓ web::test_markup_renderer::a_style_sheet_inside_a_scoped_element_styles_only_its_elements
+  ✓ web::test_markup_renderer::an_element_of_a_loop_keeps_its_attributes_beside_a_condition
   ✓ web::test_markup_renderer::the_renderer_keeps_its_locals_apart_from_the_programs_variables
   ✓ web::test_markup_scripts::js_is_the_script_element
   ✓ web::test_markup_scripts::script_content_is_not_escaped
@@ -4281,7 +4304,9 @@ PASSED:
   ✓ web::test_sleep_run_limit::sleeping_does_not_count_toward_the_run_limit
   ✓ web::test_style_rules::a_selector_with_a_value_is_its_color
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
+  ✓ web::test_style_rules::hex_colors_in_a_style_sheet
   ✓ web::test_style_rules::lengths_keep_their_units
+  ✓ web::test_style_rules::root_and_element_rules_in_a_style_sheet
   ✓ web::test_style_rules::selectors_need_no_quotes
   ✓ web::test_styles::a_style_sheet_in_a_component_is_scoped_to_it
   ✓ web::test_styles::a_style_sheet_is_a_block_of_rules
@@ -4330,7 +4355,6 @@ PASSED:
   ✓ web::test_web_server::serve_answers_routes
   ✓ web::test_web::test_canvas
   ✓ web::test_web::test_dom
-  ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_warp
   ✓ web::test_web::test_inner_html
   ✓ web::test_web::test_js
@@ -4758,6 +4782,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ web::test_web::test_fetch
 
 SUMMARY:
-10 ignored, 4755 passed, 0 failed, 4755 total tested
+10 ignored, 4779 passed, 1 failed, 4780 total tested
