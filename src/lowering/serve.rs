@@ -322,6 +322,7 @@ fn with_route_data(program: Node) -> Node {
 	lowered.splice(first_route..first_route, data_functions);
 	// the shipped page asks the server, so the server data's definitions stay on the server
 	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
+		lowered.retain(|statement| !changes_server_data_only(statement, &reads_server_data));
 		let page_reads = |name: &String| {
 			lowered
 				.iter()
@@ -346,6 +347,21 @@ fn with_route_data(program: Node) -> Node {
 			.collect();
 	}
 	Node::List(lowered, bracket, separator)
+}
+
+/// A main-level statement that only changes server data (`if count(users) == 0 { users.add(…) }`): it defines nothing
+/// and shows nothing, so it runs on the server, which runs main, and the shipped page leaves it out (card
+/// web-page-server-data); in the browser it would open a table of the page's own
+fn changes_server_data_only(statement: &Node, reads_server_data: &dyn Fn(&Node) -> bool) -> bool {
+	let mut shows = false;
+	statement.visit(&mut |node| shows |= crate::markup::is_markup(node));
+	reads_server_data(statement)
+		&& !shows
+		&& server_variable(statement).is_none()
+		&& server_definition(statement).is_none()
+		&& !is_serving(statement)
+		&& !crate::routes::is_route(statement)
+		&& crate::event_signals::main_level_variables(std::slice::from_ref(statement)).is_empty()
 }
 
 /// `stored todos: [Todo]` or `todos: [Todo] = database.todos`: the class of the table's rows
