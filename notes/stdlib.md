@@ -60,8 +60,11 @@ matches format pad json parse`; `today` and `args` read as symbols; `exec sh "�
 - `use math` resolves: a local `math.warp` (the file wins) → the embedded `lib/math.warp` → an FFI library (`m`) →
   the package registry. lib/math.warp forwards to libm (P169), whose C names still work with a note; `use cmath` is
   libm alone.
-- Names: after `use list`, `zip(a, b)` and `list.zip(a, b)` both work; a program's own `zip` wins (as for prelude words).
-- A module word used without its `use`: the loud error naming the module, with the fix `use list`.
+- Names: after `use math`, `gcd(a, b)` and `math.gcd(a, b)` both work; a program's own `gcd` wins (as for prelude words).
+- A module word used without its `use`: the loud error naming the module, with the fix `use sound`.
+- The type modules list, text and map are the exception: their words are standard functions of every program,
+  `unique(xs)`, `unique xs` or `xs.unique()` without `use` (decision type-library-words, card dispatch); `use list` is
+  needed only for the qualified `list.zip`. A selective `from list import zip` keeps list's other words out.
 
 ### Coverage (card std-word)
 tests/modules/test_std_coverage.rs fails naming every lib/*.warp word no test calls: a word is covered when a test
@@ -77,7 +80,7 @@ Done (branch functions, 2026-10-07):
    std module's definitions aside and gives the program only those it calls, and those they call
    (`with_needed_definitions`): an unused word would compile with parameters of no kind.
    `use list`: unique zip enumerate product mean take drop flatten (tests/modules/test_std_list.rs).
-2. A std word without its `use`: "zip is in the standard module list: write `use list`" (ffi::undefined_function_message,
+2. A std word without its `use`: "midi is in the standard module sound: write `use sound`" (ffi::undefined_function_message,
    also for the braceless call).
 3. `use math` = libm (as before) + lib/math.warp: gcd lcm clamp sign; `use text`: repeat pad_left pad_right
    (tests/modules/test_std_math_text.rs). pi, e, tau already exist as exact symbols.
@@ -280,7 +283,8 @@ is the symbol args (no CLI way to pass them); a std module's `use list` worked, 
 - **Modules calling modules** (done, card std-module-uses-module): a std module may `use` another (lib/text.warp
   `use list`, camel_case calls drop). A module only std modules use is hidden from the program: modules.rs
   Loader::hidden_apart renames its words `lib·drop` in the std definitions, so the program's bare `drop` is the
-  error "drop is in the standard module list: write `use list`" and a program's own `drop` is its own
+  error "drop is in the standard module list: write `use list`" (since type-library-words list's words are
+  standard functions anyway) and a program's own `drop` is its own
   (tests/modules/test_std_module_uses_module.rs). A file module's `use` counts as the program's.
 - **Discoverability** (done, card std-module-docs): `warp help list` prints a module's leading comment and its words,
   each with the comment line right above it; `warp help --markdown` prints the same index as wiki/standard-library.md,

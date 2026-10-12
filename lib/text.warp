@@ -1,4 +1,4 @@
-// The standard library module text (notes/stdlib.md): `use text`
+// The standard library module text (notes/stdlib.md): standard functions of every program, `repeat(t, 2)` or `t.repeat(2)`, no `use` needed
 use list
 repeat(t, n) := n times t
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t

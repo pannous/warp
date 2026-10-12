@@ -5,7 +5,8 @@
   Construction: positional `person("Ann" 40)` or named `person{name:"Ann"}`. Field access `p.age`.
   Trees as values: the issue's `Tree`/`insert` example runs.
 - Methods as free functions over the type: `greet(p:person) := "hi " + p.name`, called as `greet(p)` or `p.greet()`
-  (uniform call syntax, library_words). Dispatch on the parameter type (overloads.rs).
+  (uniform call syntax, library_words). Methods are functions dispatching on their first argument's class: a method
+  adds to the function of that name, the most specific wins, at run time when needed (notes/dispatch.md "Methods").
 - Traits (wiki/trait.md): Comparable, Equatable, declared traits; conformance is structural, by free functions.
 - Missing: methods written **inside** the class body. `class person{name; greet() := "hi " + name}` counts `greet` as
   a field ("person takes 2 fields, got 1").
@@ -65,8 +66,9 @@
 - It declares `dog like animal` (traits.rs likeness), so a dog is accepted where an animal is wanted (`greet(a:animal)`).
 - The methods dog inherits or overrides are defined for dog itself, so a name both classes define dispatches per
   class like any shared method.
-- library_words: a class's own `sum·point` (any `name·Type` variant) shadows the library word `sum`, so a shared
-  method named like a library word stays the class's.
+- library_words: a class's own `sum·point` shadows the library word `sum` only for an arity overload or a trait
+  operation; a method named like a library word is a method of the generic function `sum` (notes/dispatch.md), and
+  `sum([1, 2])` stays the library's.
 
 ## Ported cases (tests/types/test_class_cases_ported.rs, probe probes/class_cases.sh)
 Cases from Python, Java, Kotlin, Swift, C# and Ruby. Batch 1 (branch classes-1) added:
@@ -240,7 +242,7 @@ The same class as other languages write it (parser atoms.rs, class_methods.rs cl
   with_impls; `impl Trait for Point` too), `&self` is the receiver.
 - Kotlin `p.copy(y = 5)` is `field_with(p, "y", 5)` (class_methods copies).
 Constructors of all of them are `init(params){…}` (classes-10, P162). A method named like a library word (`sum`, `count`)
-is renamed `method·sum` and called so only on instances, like list-mutation names (classes-16). - classes-21: Java's typed fields `int x;`, a constructor named like the class `Point(int x, int y) {…}`, C-style
+is a method of the generic function `sum` (card dispatch, notes/dispatch.md; formerly renamed `method·sum`, classes-16). - classes-21: Java's typed fields `int x;`, a constructor named like the class `Point(int x, int y) {…}`, C-style
   methods `int sum() {…}`, `Point p = new Point(3, 4);` (`p:Point = …`, the type kept for D10 dispatch);
   TypeScript `twice(): number {…}`; C# auto-properties `int X { get; set; }` and the object initializer
   `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
