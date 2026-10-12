@@ -64,6 +64,7 @@ mod test_file_declarations;
 mod test_filled_map_types; // card number-keyed
 mod test_flags;
 mod test_float_fields;
+mod test_floats_add_exact; // card floats-add-exact
 mod test_fraction_text;
 mod test_generic_classes;
 mod test_generic_types;
