@@ -50,6 +50,8 @@ const REMOVE_WORD: &str = "remove";
 const INDEX_JOINER: &str = "_index_";
 const WITHOUT_PLACEHOLDER: &str = "signal_without_placeholder";
 const WITHOUT_FUNCTION: &str = "signal·without";
+/// A field's signal is named by its path, `p.age` (cards signal-param-field, signal-field-escape)
+const FIELD_JOINER: char = '.';
 
 /// A function definition: its name, parameter names and body
 struct Definition {
@@ -301,8 +303,10 @@ fn without_leading_word(node: &Node) -> Option<(Node, Node)> {
 /// The variables a listener watches: `on set x` and `on change x` the one, `whenever` and `once` those of the condition
 fn watched_names(listener_word: ListenerWord, subject: &Node) -> Vec<String> {
 	match (listener_word, subject.drop_meta()) {
-		(ListenerWord::Set | ListenerWord::Change, Node::Symbol(name)) => vec![name.clone()],
-		(ListenerWord::Set | ListenerWord::Change, _) => vec![],
+		(ListenerWord::Set | ListenerWord::Change, _) => Some(signal_name(subject))
+			.filter(|name| !name.is_empty())
+			.into_iter()
+			.collect(),
 		_ => unique(symbols(subject)),
 	}
 }
@@ -457,7 +461,16 @@ impl Subscriptions {
 					|| over_params.contains(name)
 					|| (self.main_variables.contains(name) && !locals.contains(name))
 			};
-			let subscribable: HashSet<String> = symbols(&definition.body).into_iter().filter(subscribable).collect();
+			let fields = field_paths(&definition.body).into_iter().filter(|path| {
+				path.split(FIELD_JOINER)
+					.next()
+					.is_some_and(|object| subscribable(&object.to_string()))
+			});
+			let subscribable: HashSet<String> = symbols(&definition.body)
+				.into_iter()
+				.filter(subscribable)
+				.chain(fields)
+				.collect();
 			let body = self.subscriptions(definition.body.clone(), &subscribable);
 			return with_body(node, body);
 		}
@@ -551,10 +564,7 @@ impl Subscriptions {
 				let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
 				statements.push(key(head, Op::Define, block(body)));
 				for variable in &watched {
-					let place = call(
-						COUNT_WORD,
-						vec![call(SIGNAL_LISTENERS, vec![Node::Symbol(variable.clone())])],
-					);
+					let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![signal_node(variable)])]);
 					statements.push(assign(&index_name(name, variable), place));
 				}
 				symbol(name)
@@ -562,7 +572,7 @@ impl Subscriptions {
 			None => listener,
 		};
 		for name in watched {
-			let signal = Node::Symbol(name);
+			let signal = signal_node(&name);
 			let listeners = key(
 				call(SIGNAL_LISTENERS, vec![signal.clone()]),
 				Op::Add,
@@ -585,15 +595,17 @@ pub fn lower(program: Node) -> Node {
 	let Escaping {
 		signal_params,
 		list_params,
+		field_params,
 		signal_lists,
 		escaping,
 	} = escaping(&program, &definitions);
-	if signal_params.is_empty() && escaping.is_empty() {
+	if signal_params.is_empty() && escaping.is_empty() && field_params.is_empty() {
 		return program;
 	}
 	let mut signals = Signals {
 		signal_params,
 		list_params,
+		field_params,
 		signal_lists,
 		escaping,
 		made: HashSet::new(),
@@ -614,6 +626,8 @@ struct Signals {
 	signal_params: HashSet<(String, usize)>,
 	/// (function, parameter index) of each parameter that takes a list of signals (`for s in xs {on change s …}`)
 	list_params: HashSet<(String, usize)>,
+	/// (function, parameter index, field) of each parameter whose field holds a signal (`on change p.age …`)
+	field_params: HashSet<(String, usize, String)>,
 	/// the main-level variables holding a list of signals: their list literals keep the signals themselves
 	signal_lists: HashSet<String>,
 	/// the main-level variables that are signals
@@ -656,8 +670,19 @@ impl Signals {
 					.filter(|(_, list)| lists.contains(&list))
 					.map(|(variable, _)| variable),
 			);
+			inner.extend(
+				self.field_params
+					.iter()
+					.filter(|(function, _, _)| *function == definition.name)
+					.filter_map(|(_, index, field)| {
+						definition.params.get(*index).map(|param| field_path(param, field))
+					}),
+			);
 			let body = self.rewrite(definition.body.clone(), &inner, false);
 			return with_body(node, body);
+		}
+		if matches!(node.drop_meta(), Node::Key(_, Op::Dot, _)) && signals.contains(&signal_name(&node)) {
+			return call(CELL_GET, vec![node]);
 		}
 		match node {
 			Node::Symbol(ref name) if signals.contains(name) => call(CELL_GET, vec![node]),
@@ -682,10 +707,21 @@ impl Signals {
 			Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(name) if self.signal_lists.contains(name)) => {
 				Node::Key(target, Op::Assign, Box::new(self.signals_kept(*value, signals, main)))
 			}
-			Node::Key(target, op, value)
-				if is_write(op) && matches!(target.drop_meta(), Node::Symbol(name) if signals.contains(name)) =>
-			{
-				let name = target.drop_meta().name();
+			// `person = {age: a}` of an object whose fields are signals keeps them there
+			Node::Key(target, Op::Assign, value) if !fields_of(&word(&target), signals).is_empty() => {
+				let object = word(&target);
+				let fields = fields_of(&object, signals);
+				if main {
+					self.made.extend(fields.iter().map(|field| field_path(&object, field)));
+				}
+				Node::Key(
+					target,
+					Op::Assign,
+					Box::new(self.fields_kept(*value, &fields, signals, main)),
+				)
+			}
+			Node::Key(target, op, value) if is_write(op) && signals.contains(&signal_name(&target)) => {
+				let name = signal_name(&target);
 				let value = match op {
 					Op::Assign => self.rewrite(*value, signals, main),
 					Op::Inc | Op::Dec => key(
@@ -741,6 +777,19 @@ impl Signals {
 							Node::Symbol(name) if signals.contains(name) => item,
 							_ => call(SIGNAL_NEW, vec![self.rewrite(item, signals, main)]),
 						},
+						_ if self
+							.field_params
+							.iter()
+							.any(|(name, param, _)| *name == function && *param == index - 1) =>
+						{
+							let fields = self
+								.field_params
+								.iter()
+								.filter(|(name, param, _)| *name == function && *param == index - 1)
+								.map(|(_, _, field)| field.clone())
+								.collect();
+							self.fields_kept(item, &fields, signals, main)
+						}
 						_ => self.rewrite(item, signals, main),
 					})
 					.collect();
@@ -755,9 +804,40 @@ impl Signals {
 		let Some(first) = items.first() else { return false };
 		let function = word(first);
 		let subscribes = (function == SIGNAL_LISTENERS_SET || function == SIGNAL_LISTENERS)
-			&& items.get(1).is_some_and(|signal| signals.contains(&word(signal)));
+			&& items
+				.get(1)
+				.is_some_and(|signal| signals.contains(&signal_name(signal)));
 		let takes = |params: &HashSet<(String, usize)>| params.iter().any(|(name, _)| *name == function);
-		subscribes || (items.len() > 1 && (takes(&self.signal_params) || takes(&self.list_params)))
+		let takes_fields = self.field_params.iter().any(|(name, _, _)| *name == function);
+		subscribes || (items.len() > 1 && (takes(&self.signal_params) || takes(&self.list_params) || takes_fields))
+	}
+
+	/// An object literal whose `fields` are signals: a signal named there stays the signal, any other value becomes one
+	fn fields_kept(&mut self, object: Node, fields: &HashSet<String>, signals: &HashSet<String>, main: bool) -> Node {
+		let mut kept = |item: Node| match item.drop_meta().clone() {
+			Node::Key(field, Op::Colon, value) if fields.contains(&word(&field)) => {
+				let value = match value.drop_meta() {
+					Node::Symbol(name) if signals.contains(name) => *value,
+					_ => call(SIGNAL_NEW, vec![self.rewrite(*value, signals, main)]),
+				};
+				Node::Key(field, Op::Colon, Box::new(value))
+			}
+			_ => self.rewrite(item, signals, main),
+		};
+		match object.drop_meta().clone() {
+			Node::List(items, Bracket::Curly, separator) => {
+				Node::List(items.into_iter().map(&mut kept).collect(), Bracket::Curly, separator)
+			}
+			pair @ Node::Key(_, Op::Colon, _) => kept(pair),
+			// `{age: 1}` of one entry arrives as its map (one_entry_maps.rs)
+			Node::List(items, _, _) if items.len() == 2 && word(&items[0]) == crate::one_entry_maps::MAP_OF_ENTRY => {
+				call(
+					crate::one_entry_maps::MAP_OF_ENTRY,
+					vec![self.fields_kept(items[1].clone(), fields, signals, main)],
+				)
+			}
+			other => self.rewrite(other, signals, main),
+		}
 	}
 
 	/// A list literal of signals: its signal names stay the signals, everything else is rewritten as usual
@@ -782,6 +862,7 @@ impl Signals {
 struct Escaping {
 	signal_params: HashSet<(String, usize)>,
 	list_params: HashSet<(String, usize)>,
+	field_params: HashSet<(String, usize, String)>,
 	signal_lists: HashSet<String>,
 	escaping: HashSet<String>,
 }
@@ -792,6 +873,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 	let mut found = Escaping {
 		signal_params: HashSet::new(),
 		list_params: HashSet::new(),
+		field_params: HashSet::new(),
 		signal_lists: HashSet::new(),
 		escaping: HashSet::new(),
 	};
@@ -799,7 +881,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 	without_definitions(program).visit(&mut |node| {
 		let Node::List(items, _, _) = node else { return };
 		if items.len() >= 2 && [SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET].contains(&word(&items[0]).as_str()) {
-			found.escaping.insert(word(&items[1]));
+			found.escaping.insert(signal_name(&items[1]));
 		}
 	});
 	for definition in definitions {
@@ -809,7 +891,16 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 			if (items.len() == 3 && word(&items[0]) == SIGNAL_LISTENERS_SET)
 				|| (items.len() == 2 && word(&items[0]) == SIGNAL_LISTENERS)
 			{
-				let name = word(&items[1]);
+				let name = signal_name(&items[1]);
+				if let Some((object, field)) = name.split_once(FIELD_JOINER) {
+					match definition.params.iter().position(|param| param == object) {
+						Some(index) => found
+							.field_params
+							.insert((definition.name.clone(), index, field.to_string())),
+						None => found.escaping.insert(name.clone()),
+					};
+					return;
+				}
 				let over = loops
 					.iter()
 					.find(|(variable, _)| *variable == name)
@@ -832,13 +923,26 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 		});
 	}
 	let main_lists = main_list_literals(program);
+	let main_objects = main_object_literals(program);
 	loop {
 		let before = (
 			found.signal_params.len(),
 			found.list_params.len(),
+			found.field_params.len(),
 			found.signal_lists.len(),
 			found.escaping.len(),
 		);
+		// a variable kept in a field that is a signal becomes one: `person = {age: a}` with `person.age` watched
+		let kept_in_fields: Vec<String> = main_objects
+			.iter()
+			.flat_map(|(object, literal)| {
+				field_values(literal)
+					.into_iter()
+					.filter(|(field, _)| found.escaping.contains(&field_path(object, field)))
+					.map(|(_, value)| value)
+			})
+			.collect();
+		found.escaping.extend(kept_in_fields);
 		let mut passed = |scope: Option<&Definition>, node: &Node| {
 			let Node::List(items, _, _) = node else { return };
 			let Some(function) = items.first().map(word) else {
@@ -855,6 +959,31 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 			};
 			for (index, argument) in items.iter().skip(1).enumerate() {
 				let key = (function.clone(), index);
+				let fields: Vec<String> = found
+					.field_params
+					.iter()
+					.filter(|(name, param, _)| *name == function && *param == index)
+					.map(|(_, _, field)| field.clone())
+					.collect();
+				for field in fields {
+					match argument.drop_meta() {
+						Node::Symbol(name) => match param_of_scope(name) {
+							Some((scope_function, position)) => {
+								found.field_params.insert((scope_function, position, field))
+							}
+							None => found.escaping.insert(field_path(name, &field)),
+						},
+						literal => {
+							for (_, value) in field_values(literal).into_iter().filter(|(name, _)| *name == field) {
+								match param_of_scope(&value) {
+									Some(param) => found.signal_params.insert(param),
+									None => found.escaping.insert(value),
+								};
+							}
+							false
+						}
+					};
+				}
 				if found.signal_params.contains(&key) {
 					if let Node::Symbol(name) = argument.drop_meta() {
 						match param_of_scope(name) {
@@ -905,6 +1034,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 		if (
 			found.signal_params.len(),
 			found.list_params.len(),
+			found.field_params.len(),
 			found.signal_lists.len(),
 			found.escaping.len(),
 		) == before
@@ -936,6 +1066,90 @@ fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 		}
 	});
 	lists
+}
+
+/// The main-level `x = {…}` assignments: each variable and its object literal
+fn main_object_literals(program: &Node) -> Vec<(String, Node)> {
+	let mut objects = vec![];
+	without_definitions(program).visit(&mut |node| {
+		if let Node::Key(target, Op::Assign, value) = node {
+			if let (Node::Symbol(name), Some(literal)) = (target.drop_meta(), object_literal(value)) {
+				objects.push((name.clone(), literal.clone()));
+			}
+		}
+	});
+	objects
+}
+
+/// An object literal `{age: 1, …}`, also of one entry, which arrives as its map `map_of_entry({age: 1})` (one_entry_maps.rs)
+fn object_literal(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		literal @ (Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _)) => Some(literal),
+		Node::List(items, _, _) if items.len() == 2 && word(&items[0]) == crate::one_entry_maps::MAP_OF_ENTRY => {
+			object_literal(&items[1])
+		}
+		_ => None,
+	}
+}
+
+/// The fields of an object literal that hold a variable: `{age: a}` → (age, a)
+fn field_values(object: &Node) -> Vec<(String, String)> {
+	let pairs = match object.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.iter().collect(),
+		pair => vec![pair],
+	};
+	pairs
+		.into_iter()
+		.filter_map(|pair| match pair.drop_meta() {
+			Node::Key(field, Op::Colon, value) => Some((word(field), value.symbol_name()?.to_string())),
+			_ => None,
+		})
+		.collect()
+}
+
+/// The signal a node names: a variable `x`, or a field `p.age` by its path
+fn signal_name(node: &Node) -> String {
+	match node.drop_meta() {
+		Node::Key(object, Op::Dot, field) => match (object.drop_meta(), field.drop_meta()) {
+			(Node::Symbol(object), Node::Symbol(field)) => field_path(object, field),
+			_ => String::new(),
+		},
+		other => word(other),
+	}
+}
+
+fn field_path(object: &str, field: &str) -> String {
+	format!("{object}{FIELD_JOINER}{field}")
+}
+
+/// The node of a signal's name: `p.age` the field read
+fn signal_node(name: &str) -> Node {
+	match name.split_once(FIELD_JOINER) {
+		Some((object, field)) => key(symbol(object), Op::Dot, symbol(field)),
+		None => Node::Symbol(name.to_string()),
+	}
+}
+
+/// The fields of `object` that are signals
+fn fields_of(object: &str, signals: &HashSet<String>) -> HashSet<String> {
+	signals
+		.iter()
+		.filter_map(|name| name.split_once(FIELD_JOINER))
+		.filter(|(name, _)| *name == object)
+		.map(|(_, field)| field.to_string())
+		.collect()
+}
+
+/// The field paths `p.age` a node reads
+fn field_paths(node: &Node) -> Vec<String> {
+	let mut paths = vec![];
+	node.visit(&mut |part| {
+		if matches!(part, Node::Key(_, Op::Dot, _)) {
+			paths.push(signal_name(part));
+		}
+	});
+	paths.retain(|path| !path.is_empty());
+	paths
 }
 
 /// `for s in xs {…}`: the loop variable s
