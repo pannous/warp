@@ -4355,6 +4355,7 @@ PASSED:
   ✓ web::test_web_server::serve_answers_routes
   ✓ web::test_web::test_canvas
   ✓ web::test_web::test_dom
+  ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_warp
   ✓ web::test_web::test_inner_html
   ✓ web::test_web::test_js
@@ -4782,7 +4783,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ web::test_web::test_fetch
 
 SUMMARY:
-10 ignored, 4779 passed, 1 failed, 4780 total tested
+10 ignored, 4780 passed, 0 failed, 4780 total tested
