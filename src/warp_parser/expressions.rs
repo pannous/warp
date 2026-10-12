@@ -127,7 +127,9 @@ impl WarpParser {
 			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
 		}
 		let blanks = (chars..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') {
+		// a pattern's rest `Point{x, ..}` (lowering/switch.rs rest_pattern) also ends a block
+		let ends_rest = matches!(op, Op::Range | Op::To) && self.peek_char(chars + blanks) == '}';
+		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') && !ends_rest {
 			return None;
 		}
 		self.advance_by(chars);
