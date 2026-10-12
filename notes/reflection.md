@@ -58,7 +58,10 @@ Warp notation text (parsed by the reader we already have), one map:
    in `methods`.
 3. Functions: `f.params`, `f.signature`. Done in reflection::lower: constants from the user function's definition;
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
-   is `(x) -> int`). Not yet: library and host words (`sqrt.signature`; card reflect-library-signatures).
+   is `(x) -> int`). Library words (`sqrt.signature`, `first.params`, `dir(sqrt)`, `help(upper)`) answer from
+   lowering/library_signatures.rs: a hand table names and types the operator, rounding and text/list words (result
+   `number` where it depends on the argument), a prelude word shows its lib/prelude.warp head, libm, text builtins and
+   runtime words get positional names (`(a:float, b:float) -> float`) from their tables. A program's own definition wins.
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
    `x.doc` done (meta_entries.rs; a function's comment survived no lowering before: declarations::lower_c_functions
    and nonlocal_cells rebuilt the definition without its Meta, now `Node::with_meta_of`). `x.unit` waits for quantities

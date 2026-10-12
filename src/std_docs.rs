@@ -75,6 +75,15 @@ fn word_of(signature: &str) -> &str {
 	name.split(['(', ':', ' ']).next().unwrap_or(name)
 }
 
+/// A standard module word's head as its module writes it: `replace` of the prelude → `replace(t, old, new)`
+pub fn word_head(module: &str, word: &str) -> Option<String> {
+	module_index(module)
+		.1
+		.into_iter()
+		.map(|entry| entry.signature)
+		.find(|signature| word_of(signature) == word)
+}
+
 /// `warp help <module>`: the module, how to use it, and its words with their comment lines
 pub fn module_help(module: &str) -> Option<String> {
 	crate::modules::std_module_source(module)?;
