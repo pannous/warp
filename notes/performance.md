@@ -105,4 +105,5 @@ statements (statements_of) instead of cloning the program. Then 0.38: closures::
 block, which copied the block (block_lambda) and searched it for `$0`…`$9` to rule out a Swift closure; a block
 without a `$` name now returns at once (shorthand_block_lambda). Then 0.34: user_function takes the lifted body
 instead of copying it again, and the return kind reads only the last statement (event_signals::last_statement)
-instead of copying all of them.
+instead of copying all of them. std_module_definitions parsed all 24 std modules on first use (~35 ms); each
+module is now parsed when first asked: a tiny program compiles in 0.02 s instead of 0.04.
