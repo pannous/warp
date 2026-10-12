@@ -295,8 +295,15 @@ fn converted_returns(node: Node, type_name: &Node) -> Node {
 /// `square(x) as int := …` / `square(x) : int = …`: the head with its return type, as `typed_return`
 fn return_typed_definition(node: &Node) -> Option<Node> {
 	let Node::Key(target, op @ (Op::Assign | Op::Define), body) = node.drop_meta() else { return None };
-	let Node::Key(head, Op::As | Op::Colon, type_name) = target.drop_meta() else { return None };
-	typed_return(type_name, &Node::Key(head.clone(), *op, body.clone()))
+	let (head, type_name) = match target.drop_meta() {
+		Node::Key(head, Op::As | Op::Colon, type_name) => (head.as_ref().clone(), type_name.as_ref().clone()),
+		// `square(x) as int or text := …`
+		target => {
+			let (head, union) = crate::declarations::as_union_result(target)?;
+			(head, symbol(&crate::analyzer::union_of_types(&union, &|_| true)?))
+		}
+	};
+	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()))
 }
 
 /// `int age = 30` (C style) is `age: int = 30` (card bind-ignores), so every pass reads one form of a typed
