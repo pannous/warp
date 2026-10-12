@@ -582,6 +582,7 @@ fn fail(message: impl std::fmt::Display) -> ! {
 /// The program's value printed, its Int the exit status, an uncaught error status 1
 fn print_and_exit(result: Node) -> ! {
 	show(&result, "");
+	ended_well(&result);
 	std::process::exit(node_to_i32(&result));
 }
 
@@ -590,6 +591,14 @@ fn show_and_fail_on_error(result: &Node, mark: &str) {
 	show(result, mark);
 	if matches!(result.drop_meta(), Node::Error(_)) {
 		std::process::exit(ERROR_STATUS);
+	}
+	ended_well(result);
+}
+
+/// A program that ended well keeps its painted window up until the user closes it; exit() or a failure closes it
+fn ended_well(result: &Node) {
+	if !matches!(result.drop_meta(), Node::Error(_)) {
+		warp::paint_window::wait_until_closed();
 	}
 }
 
