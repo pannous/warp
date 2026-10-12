@@ -438,6 +438,14 @@ pub fn is_equality_operand(node: &Node) -> bool {
 	matches!(node, Node::Meta { data, .. } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name() == EQUALITY_OPERAND))
 }
 
+/// The right side of `x is int` or `x is a number` when it begins a type test, which no runtime's `==` may take over
+/// (foreign_modules.rs: `math.floor(2.5) is int` tests the result's kind, not `operator.eq(…, int)`)
+pub(crate) fn begins_type_test(right: &Node) -> bool {
+	!is_equality_operand(right)
+		&& matches!(right.drop_meta(), Node::Symbol(word)
+			if ARTICLES.contains(&word.as_str()) || type_spec(&[word], &Names::default()).is_some())
+}
+
 /// `x is int`; `type(x) is int` tests x, as the type of x is what it names (card type-int)
 fn is_type_call(subject: Node, spec: String) -> Node {
 	let tested = typed_argument(&subject).unwrap_or(subject);

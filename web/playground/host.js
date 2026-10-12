@@ -196,6 +196,8 @@ function buildValue(module, tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
 		case 1: {
+			// a module without bools (no new_bool) takes a truth as its Int 1/0, as src/tasks.rs does
+			if (payload.int !== undefined && String(kind) === BOOL_KIND && module.new_bool) return module.new_bool(BigInt(payload.int));
 			if (payload.int !== undefined) return module.new_int(BigInt(payload.int));
 			// beyond the fixnums: exact.js starts the parts that carry such numbers (tasks, foreign calls, run blocks)
 			const exact = typeof exactOfPayload === "function" ? exactOfPayload(payload) : undefined;
