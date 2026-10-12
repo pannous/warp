@@ -91,6 +91,7 @@ mod test_route_phrase_body; // card first-first
 mod test_routes;
 mod test_safari_imports;
 mod test_sandboxed_programs; // card ferron-hosting
+mod test_select_options; // card select-shorthand
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_serve_error_body; // card serve-error-body
 #[cfg(feature = "native")] // a server on a port, HTTP requests and its SQLite tables

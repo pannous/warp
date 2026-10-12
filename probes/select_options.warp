@@ -1,0 +1,7 @@
+// a list inside select{} gives its options; a map item gives value and label (card select-shorthand)
+fruit = "pear"
+size = "l"
+div{
+	select{ bind: fruit; ["apple" "pear" "plum"] }
+	select{ bind: size; ["s": "small", "l": "large"] }
+}
