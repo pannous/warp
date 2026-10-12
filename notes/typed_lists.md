@@ -150,6 +150,12 @@ alias `d = out` exists, though only after the loop (int[20000].map 0.5 s, 80000 
 (list_dispatch.rs appends_while_aliased) an append copies only if it can run after an assignment between its own
 variable and another (`ys = xs`, `xs = ys`) in program order, or in a loop around one. map / filter of 10^6 ints: 7–9
 ms (release); a variable given a second map result (`d = d.map(…)`) stays linear. Tests: tests/lists/test_map_typed.rs.
+In a loop around both (card map-inside, 2026-10-12: a map in a `for round` body, 100k floats 3.8 s a round) the
+alias at the end of one round no longer counts for the next round's appends when the round first gives the variable
+a fresh list (`out = ø`, a literal, a call's result), unconditionally, in that loop and before the append (ListEvent
+Fresh). Tests: tests/lists/test_map_inside_loop.rs, probes/map_inside_loop.warp. Not covered yet: a result variable
+declared before the loop (`d = []; for … { d = xs.map(…) }`) is no typed array, the map appends to a Node list
+(list_concat, quadratic), with or without this change.
   a fitting element type (a subclass), is fine. The run-time half (a lax alias `ys = names`, an unannotated parameter
   `f(xs) := xs.add(420)`): a declared Node-held list's head cell carries an element mark, the node_kind_in kinds its
   element type admits, in kind bits 16+ (type_kinds::element_mark, set by list_mark at the assignment);

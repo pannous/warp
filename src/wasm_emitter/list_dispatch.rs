@@ -248,13 +248,34 @@ pub struct TypedList {
 	pub aliased: bool,
 }
 
-/// An append to a list variable or an assignment of one list variable to another, numbered in the order it runs,
-/// with the loops around it
+/// An append to a list variable, an assignment of one list variable to another or of a fresh list to it, numbered in
+/// the order it runs, with the loops around it
 struct ListEvent {
-	append: bool,
+	kind: ListEventKind,
 	order: usize,
 	loops: Vec<usize>,
+	/// under an `if`, `and`, `or` or `?`: it may not run
+	conditional: bool,
 }
+
+#[derive(PartialEq)]
+enum ListEventKind {
+	Append,
+	Alias,
+	/// `out = ø`, `out = [1 2]`: the variable holds a list no one else does
+	Fresh,
+}
+
+/// The walk list_events makes: the loops around the node, the events numbered so far, the conditions it is under
+#[derive(Default)]
+struct EventWalk {
+	loops: Vec<usize>,
+	count: usize,
+	conditions: usize,
+	events: Vec<ListEvent>,
+}
+
+const CONDITIONAL_OPS: [Op; 6] = [Op::If, Op::Then, Op::Else, Op::And, Op::Or, Op::Question];
 
 /// Where a typed list variable lives: a local of the body, or a global main builds and functions read
 #[derive(Clone, Copy, Debug)]
@@ -514,68 +535,78 @@ impl WasmGcEmitter {
 	/// The source of `target = value`
 	/// Whether an append to `name` (`xs = xs + [v]`) can run while another variable holds its list: after an assignment
 	/// between it and another (`ys = xs`, `xs = ys`) or in a loop around one. A list aliased only once its appends are
-	/// done (`d = (out = ø; for … { out = out + [x] }; out)`, every lowered map and filter) grows in place (card map-typed).
+	/// done (`d = (out = ø; for … { out = out + [x] }; out)`, every lowered map and filter) grows in place (card map-typed),
+	/// also in a loop around all that, which gives `out` a fresh list before its appends each round (card map-inside).
 	/// `holds`: the places a holder takes the list as Nodes (`[xs, 5]`, `{r = xs}`), aliases too
 	fn appends_while_aliased(&self, program: &Node, name: &str, holds: &[&Node]) -> bool {
-		let mut events = vec![];
-		self.list_events(program, name, holds, &mut vec![], &mut 0, &mut events);
-		let runs_after = |append: &ListEvent, alias: &ListEvent| {
-			append.order > alias.order || append.loops.iter().any(|ring| alias.loops.contains(ring))
+		let mut walk = EventWalk::default();
+		self.list_events(program, name, holds, &mut walk);
+		let events = walk.events;
+		let of_kind = |kind: ListEventKind| events.iter().filter(move |event| event.kind == kind);
+		// a fresh list given in the innermost loop around both, before the append and wherever the append runs
+		let fresh_each_round = |append: &ListEvent, ring: usize| {
+			of_kind(ListEventKind::Fresh).any(|fresh| {
+				!fresh.conditional
+					&& fresh.order < append.order
+					&& fresh.loops.contains(&ring)
+					&& append.loops.starts_with(&fresh.loops)
+			})
 		};
-		events
-			.iter()
-			.filter(|alias| !alias.append)
-			.any(|alias| events.iter().any(|append| append.append && runs_after(append, alias)))
+		let runs_after = |append: &ListEvent, alias: &ListEvent| {
+			let innermost_shared = append.loops.iter().rev().find(|ring| alias.loops.contains(ring));
+			append.order > alias.order || innermost_shared.is_some_and(|ring| !fresh_each_round(append, *ring))
+		};
+		of_kind(ListEventKind::Alias)
+			.any(|alias| of_kind(ListEventKind::Append).any(|append| runs_after(append, alias)))
 	}
 
 	/// The appends to `name` and the assignments between it and another variable, in the order they run (an assignment
 	/// after its value), each with the loops around it
-	fn list_events(
-		&self,
-		node: &Node,
-		name: &str,
-		holds: &[&Node],
-		loops: &mut Vec<usize>,
-		count: &mut usize,
-		events: &mut Vec<ListEvent>,
-	) {
+	fn list_events(&self, node: &Node, name: &str, holds: &[&Node], walk: &mut EventWalk) {
 		let node = node.drop_meta();
 		let is_loop = matches!(node, Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)));
 		if is_loop {
-			loops.push(*count);
-			*count += 1;
+			walk.loops.push(walk.count);
+			walk.count += 1;
 		}
 		match node {
-			Node::Key(left, _, right) => [left, right]
-				.into_iter()
-				.for_each(|part| self.list_events(part, name, holds, loops, count, events)),
-			Node::List(items, _, _) => items
-				.iter()
-				.for_each(|item| self.list_events(item, name, holds, loops, count, events)),
+			Node::Key(left, op, right) => {
+				let conditional = CONDITIONAL_OPS.contains(op);
+				walk.conditions += usize::from(conditional);
+				[left, right]
+					.into_iter()
+					.for_each(|part| self.list_events(part, name, holds, walk));
+				walk.conditions -= usize::from(conditional);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| self.list_events(item, name, holds, walk)),
 			_ => {}
 		}
-		let append = match node {
-			_ if holds.iter().any(|place| std::ptr::eq(*place, node)) => Some(false),
+		let kind = match node {
+			_ if holds.iter().any(|place| std::ptr::eq(*place, node)) => Some(ListEventKind::Alias),
 			Node::Key(target, Op::Assign | Op::Define, value) => match target.drop_meta() {
 				Node::Symbol(target) => match self.number_source_of(target, value) {
-					Source::Append(_) if target == name => Some(true),
-					Source::Variable(other) if target == name || other == name => Some(false),
+					Source::Append(_) if target == name => Some(ListEventKind::Append),
+					Source::Variable(other) if target == name || other == name => Some(ListEventKind::Alias),
+					Source::Literal(_) | Source::Empty | Source::Converted { fresh: true } if target == name => {
+						Some(ListEventKind::Fresh)
+					}
 					_ => None,
 				},
 				_ => None,
 			},
 			_ => None,
 		};
-		if let Some(append) = append {
-			events.push(ListEvent {
-				append,
-				order: *count,
-				loops: loops.clone(),
+		if let Some(kind) = kind {
+			walk.events.push(ListEvent {
+				kind,
+				order: walk.count,
+				loops: walk.loops.clone(),
+				conditional: walk.conditions > 0,
 			});
-			*count += 1;
+			walk.count += 1;
 		}
 		if is_loop {
-			loops.pop();
+			walk.loops.pop();
 		}
 	}
 

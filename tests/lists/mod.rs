@@ -62,6 +62,7 @@ mod test_long_list_copies;
 mod test_long_list_result;
 mod test_map_get_kind;
 mod test_map_index;
+mod test_map_inside_loop; // card map-inside
 mod test_map_literal_number_keys; // card map-literal
 mod test_map_parameter_keys;
 mod test_map_starts;
