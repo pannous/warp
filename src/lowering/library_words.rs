@@ -57,7 +57,8 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 29] = [
+const SYNONYMS: [(&str, &[&str]); 30] = [
+	(crate::wasm_emitter::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
 	(MAP_KEYS, &["keys"]),
@@ -176,7 +177,7 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	(
 		crate::mutation::UNWRAP,
 		1,
-		"if hidden_value == ø then error(\"unwrapped ø\") else hidden_value",
+		"if hidden_value == ø then error \"unwrapped ø\" else hidden_value",
 	),
 ];
 const IS_DIGIT: &str = "is_digit";
@@ -405,10 +406,12 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 	names
 }
 
-/// `raise X`, `throw X`, `raise(X)`: the call `raise(X)`; `raise error("m")` raises the message m
-fn raise_call(items: &[Node]) -> Option<Node> {
+/// `raise X`, `throw X`, `fail X`, `panic X`, `raise(X)`: the call `raise(X)`; `raise error "m"` raises the message m.
+/// A word the program defines (`shadowed`) is its own
+fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 	let [word, raised] = items else { return None };
-	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| word.is_symbol(raise)) {
+	let is_raise_word = |raise: &&str| word.is_symbol(raise) && !shadowed.contains(*raise);
+	if !crate::pipeline::RAISE_WORDS.iter().any(is_raise_word) {
 		return None;
 	}
 	let message = crate::pipeline::returned_error_message(raised)
@@ -1076,7 +1079,7 @@ impl Lowering {
 		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
 			return Some(membership);
 		}
-		if let Some(raised) = raise_call(items) {
+		if let Some(raised) = raise_call(items, &self.shadowed) {
 			return Some(raised);
 		}
 		if let Err(error) = self.ask_braceless_argument(items, bracket, separator) {

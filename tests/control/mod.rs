@@ -55,6 +55,7 @@ mod test_empty_reset_in_if;
 mod test_error_branch_kind;
 mod test_error_value_return;
 mod test_error_values;
+mod test_error_words; // card raise-boom
 mod test_event_footguns;
 mod test_event_handler_lists;
 mod test_event_signals;
