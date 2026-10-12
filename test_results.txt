@@ -3023,6 +3023,7 @@ PASSED:
   ✓ programs::test_sound_effects::an_echo_sounds_where_the_dry_sound_was_silent
   ✓ programs::test_sound_effects::distortion_flattens_the_peaks_and_stays_in_range
   ✓ programs::test_sound_effects::effects_play_in_a_program
+  ✓ programs::test_sound_engine::a_signals_blocks_join_seamlessly_at_another_rate
   ✓ programs::test_sound_engine::a_sound_of_another_rate_keeps_its_length
   ✓ programs::test_sound_engine::a_sound_starts_at_its_frame_across_buffers
   ✓ programs::test_sound_engine::fade_ramps_a_playing_sound_sample_by_sample
@@ -4801,4 +4802,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4796 passed, 0 failed, 4796 total tested
+10 ignored, 4797 passed, 0 failed, 4797 total tested
