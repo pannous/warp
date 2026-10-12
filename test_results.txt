@@ -3036,6 +3036,8 @@ PASSED:
   ✓ programs::test_sound_engine::one_voice_over_the_cap_steals_the_oldest
   ✓ programs::test_sound_engine::sounds_back_to_back_follow_to_the_sample
   ✓ programs::test_sound_engine::stop_drops_one_sound_or_all
+  ✓ programs::test_sound_fades::a_headless_fade_waits_for_no_clock
+  ✓ programs::test_sound_fades::fade_sound_of_one_handle_leaves_the_others
   ✓ programs::test_sound_fades::fade_sound_ramps_a_sound_down_in_the_render
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
@@ -4182,9 +4184,12 @@ PASSED:
   ✓ web::test_components::a_bound_field_in_a_component_binds_its_instance
   ✓ web::test_components::a_component_handler_changes_state_outside_it
   ✓ web::test_components::a_component_is_a_function_returning_markup
+  ✓ web::test_components::a_components_plural_names_its_instances
   ✓ web::test_components::a_handler_outside_a_component_reads_its_state
   ✓ web::test_components::a_trailing_block_fills_a_function_parameter
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
+  ✓ web::test_components::keyed_component_state_survives_a_removal
+  ✓ web::test_components::keyed_component_state_survives_reordering
   ✓ web::test_components::on_mount_runs_once_per_new_instance
   ✓ web::test_components::the_block_after_the_call_is_the_children
   ✓ web::test_css_transitions::a_css_transition_is_the_inline_style
@@ -4832,7 +4837,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_fades::fade_sound_of_one_handle_leaves_the_others
 
 SUMMARY:
-10 ignored, 4829 passed, 1 failed, 4830 total tested
+10 ignored, 4834 passed, 0 failed, 4834 total tested
