@@ -369,7 +369,8 @@ impl TypeRegistry {
 				let name = Self::written_name(name_node)?;
 				let type_name = match type_node.drop_meta() {
 					Node::Type { name: type_name_node, .. } => Self::written_name(type_name_node),
-					written => Self::written_name(written), // none for a default value `x=0` or `x:0`
+					// `size: int | text`: the union's name, `int or text`
+					written => Self::written_name(written).or_else(|| crate::analyzer::union_type_name(written)), // none for a default value `x=0` or `x:0`
 				};
 				let type_name = type_name.unwrap_or_else(|| UNTYPED_FIELD.to_string());
 				Some(FieldDef { name, type_name })
@@ -430,6 +431,7 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 		"f32" | "float" => FieldStorage::F32,
 		"Text" | "String" | "string" | "text" => FieldStorage::Text,
 		"Node" | UNTYPED_FIELD => FieldStorage::Node,
+		_ if crate::analyzer::union_parts(word).is_some() => FieldStorage::Node,
 		_ if crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || word == "list" || word.starts_with("list of ") => FieldStorage::Node,
 		_ => FieldStorage::Named,
 	}

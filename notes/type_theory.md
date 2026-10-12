@@ -421,8 +421,13 @@ checker admits a cast when the value's static type is consistent with an alterna
 subtyping: `any` stands for anything, `list any` fits `list int`), so `x: int | text = 3; x = 2.5` and
 `f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter (src/law/type_model.rs) reads the
 union with the analyzer's `union_type_name` (a covered part dropped, ø made optional: `.opt` of the rest) and wraps main-level bindings,
-assignments and single-parameter call arguments. Not yet (card w0-unions): unions as fields or as one of several parameters, unions
-of classes (warp refuses them for now), `x as T?` (a conversion in warp: `"4" as int?` is 4; W0's cast only checks).
+assignments and call arguments. A union field (`size: int | text`) and one of several union parameters (a field of the
+arguments object `f·args`) are casts where an instance is made and where a field is written; W0 knows no object's class
+at `o.size = v`, so it casts only when every class with a field of that name declares it alike (card w0-unions). Warp
+checks a union field's literal when it is constructed and written (type_kinds keeps the union's name, its storage is a
+Node), and folding no longer inlines a variant with a declared parameter: `f(a: int, b: int) := a + b; f(1, 2.5)`
+folded to 3.5 unchecked. Not yet (card w0-class-unions): unions of classes (warp refuses them for now), `x as T?` (a
+conversion in warp: `"4" as int?` is 4; W0's cast only checks).
 
 ## Implicit casts from `any`
 

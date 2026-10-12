@@ -636,11 +636,16 @@ fn field_type_name(item: &Node) -> String {
 			Node::List(items, Bracket::Square, _) if items.len() == 1 => format!("[{}]", items[0].drop_meta().name()),
 			// a compound unit, `speed: km/h` (card unit-fields)
 			unit @ Node::Key(_, Op::Div | Op::Mul, _) => unit.serialize().trim().to_string(),
-			other => other.name(),
+			other => type_word(other),
 		},
 		Node::Key(field, Op::Assign, _) => field_type_name(field),
 		_ => String::new(),
 	}
+}
+
+/// The type an annotation names: `int`, and an inline union `int | text` whole, as `int or text`
+pub(crate) fn type_word(annotation: &Node) -> String {
+	crate::analyzer::union_type_name(annotation).unwrap_or_else(|| annotation.name())
 }
 
 fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Node {

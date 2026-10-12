@@ -485,7 +485,7 @@ fn first_value_is_list(body: &Node, local: &str) -> bool {
 /// The parameter's type word: `int` of `y: int`, none for an unannotated `y`
 fn parameter_type_word(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
-		Node::Key(_, Op::Colon, annotation) => Some(annotation.name()),
+		Node::Key(_, Op::Colon, annotation) => Some(crate::lowering::class_methods::type_word(annotation)),
 		Node::Key(parameter, Op::Assign, _) => parameter_type_word(parameter),
 		_ => None,
 	}
@@ -591,7 +591,7 @@ impl Exporter {
 	/// `(some T)` of a type word, `none` of an unannotated place: the model infers it from the values given to it
 	fn optional_type(&self, word: Option<&str>) -> Lean {
 		Ok(match word {
-			Some(word) => format!("(some ({}))", self.type_of(word)?),
+			Some(word) => format!("(some ({}))", self.union_type(word)?),
 			None => "none".to_string(),
 		})
 	}
@@ -694,10 +694,21 @@ impl Exporter {
 		let local = format!("new·{class}");
 		let writes: Result<Vec<String>, String> = fields.iter().map(|(field, value)| {
 			let field_type = self.classes[class].1.iter().find(|(own, _)| own == field).and_then(|(_, word)| word.clone());
-			Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.argument(field_type.as_deref(), value)?))
+			let value = self.argument(field_type.as_deref(), value)?;
+			Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.admitted_in_field(field, value)?))
 		}).collect();
 		let body = writes?.iter().rev().fold(format!(".loc {}", quoted(&local)), |rest, write| format!(".seq ({write}) ({rest})"));
 		Ok(format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(&local)))
+	}
+
+	/// a value written to a field: a union field (`size: int | text`) checks it when it runs. W0 knows no object's
+	/// class here, so the cast needs every class with a field of that name to declare it alike
+	fn admitted_in_field(&self, field: &str, value: String) -> Lean {
+		let declared: Vec<&Option<String>> = self.classes.values().flat_map(|(_, fields)| fields.iter().filter(|(own, _)| own == field).map(|(_, word)| word)).collect();
+		match declared.split_first() {
+			Some((Some(word), others)) if others.iter().all(|other| other.as_ref() == Some(word)) => Ok(admitted(&self.union_type(word)?, value)),
+			_ => Ok(value),
+		}
 	}
 
 	/// `ev·event` with every key the program emits ev with
@@ -1332,7 +1343,10 @@ impl Exporter {
 			},
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
-				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
+				Node::Key(object, Op::Dot, field) => {
+					let written = self.expression(value)?;
+					Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.admitted_in_field(&field.name(), written)?))
+				}
 				Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => {
 					let key = self.map_key(map, index).expect("a map key");
 					Ok(format!(".setAt ({}) ({}) ({})", self.expression(map)?, self.expression(key)?, self.expression(value)?))
