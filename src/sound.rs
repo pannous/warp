@@ -188,6 +188,22 @@ pub fn stop_one(handle: usize) -> Result<(), String> {
 	Ok(())
 }
 
+/// fade_sound(handle, gain, seconds): the playing sound's gain ramps to `gain` (1 as played, 0 silent) over the seconds;
+/// handle 0 fades all. Only warp's own output ramps a playing sound (sound_engine.rs); played by afplay it can't
+pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
+	if handle > last_handle() {
+		return Err(format!("fade_sound({handle}): no sound {handle} in this run, which played {}", last_handle()));
+	}
+	if !(0.0..=1.0).contains(&gain) || seconds < 0.0 {
+		return Err(format!("fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"));
+	}
+	let faded = crate::sound_engine::fade(handle, gain as f32, seconds);
+	if !faded && crate::paint::shows_windows() && last_handle() > 0 {
+		return Err("fade_sound: the sounds play by afplay here (no output stream of warp's own), which can't change a playing sound's gain".into());
+	}
+	Ok(())
+}
+
 /// The players of the handles chosen ended
 fn killed(chosen: impl Fn(usize) -> bool) {
 	let playing: Vec<Player> = PLAYING.lock().map(|playing| playing.iter().filter(|(handle, _)| chosen(*handle)).map(|(_, child)| child.clone()).collect()).unwrap_or_default();

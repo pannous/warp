@@ -13,11 +13,24 @@ use std::time::{Duration, Instant};
 const LEAD: Duration = Duration::from_millis(60);
 const AMPLITUDE: f32 = 32_768.0;
 
-/// A sound in the mix: its samples at the device's rate and channels, the frame it starts at
+/// A sound in the mix: its samples at the device's rate and channels, the frame it starts at, its gain and the gain it
+/// ramps to by `step` a frame (fade_sound)
 struct Mixed {
 	handle: usize,
 	start: u64,
 	samples: Vec<f32>,
+	gain: f32,
+	target: f32,
+	step: f32,
+}
+
+impl Mixed {
+	/// The gain of the frame played now, then one step on toward the target
+	fn next_gain(&mut self) -> f32 {
+		let gain = self.gain;
+		self.gain = if (self.target - gain).abs() <= self.step.abs() { self.target } else { gain + self.step };
+		gain
+	}
 }
 
 /// The sounds playing and to play, and the frame the device plays next
@@ -49,12 +62,22 @@ impl Mixer {
 				converted.push(at(before, channel) * (1.0 - share) + at(before + 1, channel) * share);
 			}
 		}
-		self.sounds.push(Mixed { handle, start, samples: converted });
+		self.sounds.push(Mixed { handle, start, samples: converted, gain: 1.0, target: 1.0, step: 0.0 });
 	}
 
 	/// stop_sound(handle), 0 all of them: dropped from the mix at once
 	pub fn stop(&mut self, handle: usize) {
 		self.sounds.retain(|sound| handle != 0 && sound.handle != handle);
+	}
+
+	/// fade_sound(handle, gain, seconds): the sound's gain ramps linearly to `gain` over the seconds it plays from now on,
+	/// sample by sample, so no click; 0 fades all of them
+	pub fn fade(&mut self, handle: usize, gain: f32, seconds: f64) {
+		let frames = (seconds * self.rate as f64).round().max(1.0) as f32;
+		for sound in self.sounds.iter_mut().filter(|sound| handle == 0 || sound.handle == handle) {
+			sound.target = gain;
+			sound.step = (gain - sound.gain) / frames;
+		}
 	}
 
 	/// Whether a sound is still to play or playing
@@ -67,13 +90,14 @@ impl Mixer {
 		let channels = self.channels as usize;
 		buffer.fill(0.0);
 		let frames = (buffer.len() / channels) as u64;
-		for sound in &self.sounds {
+		for sound in &mut self.sounds {
 			let sound_frames = (sound.samples.len() / channels) as u64;
 			let first = sound.start.max(self.frame);
 			let last = (sound.start + sound_frames).min(self.frame + frames);
 			for frame in first..last {
 				let (into, from) = (((frame - self.frame) as usize) * channels, ((frame - sound.start) as usize) * channels);
-				buffer[into..into + channels].iter_mut().zip(&sound.samples[from..from + channels]).for_each(|(out, sample)| *out += sample);
+				let gain = sound.next_gain();
+				buffer[into..into + channels].iter_mut().zip(&sound.samples[from..from + channels]).for_each(|(out, sample)| *out += sample * gain);
 			}
 		}
 		self.frame += frames;
@@ -147,19 +171,28 @@ mod output {
 		true
 	}
 
+	/// The running engine's mixer changed or read; None before the first sound or without an output stream
+	fn with_mixer<T>(action: impl FnOnce(&mut Mixer) -> T) -> Option<T> {
+		let engine = ENGINE.get()?.as_ref()?;
+		engine.mixer.lock().ok().map(|mut mixer| action(&mut mixer))
+	}
+
 	pub fn stop(handle: usize) {
-		if let Some(Ok(mut mixer)) = ENGINE.get().and_then(Option::as_ref).map(|engine| engine.mixer.lock()) {
-			mixer.stop(handle);
-		}
+		with_mixer(|mixer| mixer.stop(handle));
 	}
 
 	pub fn busy() -> bool {
-		ENGINE.get().and_then(Option::as_ref).is_some_and(|engine| engine.mixer.lock().is_ok_and(|mixer| mixer.busy()))
+		with_mixer(|mixer| mixer.busy()).unwrap_or(false)
+	}
+
+	/// fade_sound on the device, false without our own output (sounds the players play keep their gain)
+	pub fn fade(handle: usize, gain: f32, seconds: f64) -> bool {
+		with_mixer(|mixer| mixer.fade(handle, gain, seconds)).is_some()
 	}
 }
 
 #[cfg(target_os = "macos")]
-pub use output::{busy, play, stop};
+pub use output::{busy, fade, play, stop};
 
 /// Without our own output here: the players play every sound
 #[cfg(not(target_os = "macos"))]
@@ -172,5 +205,10 @@ pub fn stop(_: usize) {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn busy() -> bool {
+	false
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn fade(_: usize, _: f32, _: f64) -> bool {
 	false
 }
