@@ -109,6 +109,8 @@ mod test_site;
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_animation; // card site-build
 #[cfg(feature = "native")] // builds a site natively
+mod test_site_failure; // the dev overlay's message
+#[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
 mod test_sleep_run_limit; // card sleep-run-limit

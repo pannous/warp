@@ -202,7 +202,7 @@ pub fn exports(module: &[u8], name: &str) -> bool {
 pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 	// the reflection getters the JavaScript host reads values with
 	let module = crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
-		.map_err(|failure| format!("nothing to compile: {}", with_excerpt(code, message_of(&failure))))?;
+		.map_err(|failure| compile_failure(code, &failure))?;
 	if !exports(&module.bytes, crate::lowering::serve::PAGE_SUBMITTED) {
 		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
 	}
@@ -211,6 +211,16 @@ pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 }
 
 /// The text of an error, else the value written out
+/// Why `code` gave no module: its error with the excerpt, as the CLI says it; a program whose value is all it has
+/// (no error) has nothing to compile
+pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
+	let message = with_excerpt(code, message_of(failure));
+	match failure.drop_meta() {
+		Node::Error(_) => message,
+		_ => format!("nothing to compile: {message}"),
+	}
+}
+
 pub(crate) fn message_of(failure: &Node) -> String {
 	match failure.drop_meta() {
 		Node::Error(message) => match message.drop_meta() {

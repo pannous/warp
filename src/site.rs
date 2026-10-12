@@ -7,7 +7,7 @@
 
 use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
 pub(crate) use crate::host_parts::{
-	exports, host_scripts_of, imports_of, message_of, with_excerpt, GPU_WORDS, TASK_WORD_PREFIXES,
+	compile_failure, exports, host_scripts_of, imports_of, message_of, with_excerpt, GPU_WORDS, TASK_WORD_PREFIXES,
 };
 pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
 use crate::node::Node;
@@ -257,7 +257,7 @@ fn replies_script(requests: &[Node], values: &[Node]) -> String {
 fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, String> {
 	let compile = |build: &dyn Fn() -> Result<crate::pipeline::CompiledModule, Node>| {
 		let module = crate::pipeline::for_a_page(|| if dev { crate::pipeline::for_dev(build) } else { build() });
-		module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))
+		module.map_err(|value| compile_failure(code, &value))
 	};
 	let rendering = compile(&|| crate::pipeline::prerendering(|| crate::pipeline::compile(code)))?;
 	if !exports(&rendering.bytes, crate::page_html::PAGE_HTML) {
