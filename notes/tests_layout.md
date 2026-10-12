@@ -15,6 +15,11 @@ grouped into folders".
   by a test is dropped, the rest moves into the topic file. Assertions in regular test files stay where they are, even
   when duplicated. The test count drops only by probe tests that were duplicates; each one is named in its commit.
 - `#[cfg(feature = "native")]` stays on the `mod` line of a native-only file (now in the folder's mod.rs).
+- Network (card flaky-tests, 2026-10-12): no third-party hosts like httpbin.org, and no mocks. A test of a request
+  goes to a server we run: `common::serve(status, body)` (a fixed answer) or `common::echo_url()` (warp's own server
+  answering POST /post with {data, headers}); in the browser the test page's /__stub__ (test_in_browser.py) answers
+  both. Where a real public host is the point, it is pannous.com, and the test uses `is_online!` / `online_eval`:
+  retried once, logged as `RETRY`, only when no answer came (connection, DNS, timeout), never on a wrong answer.
 - Data files stay where they are: tests/fixtures/, tests/warp/ (paths in the tests are relative to the crate root).
 
 ## Folders
