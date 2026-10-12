@@ -3,6 +3,10 @@
 //! the runtime runs the handler at the program's check points (crates/warp-runtime/src/system_signals.rs) and, in
 //! `warp run`, after main while the timer lives. The duration is constant (`50 ms`, `5 seconds`, `1 min`).
 //! `on file "notes.txt" change {body}` likewise is `on·file·0() := {…}` and `signal_watch(0, "notes.txt")`.
+//! Frames (card frame-event): `on frame {body}` is the handler `on·every·N` started by `signal_frame(N, 16)`, which
+//! runs it each frame while the paint window shows and ends with it (once without a window). Natively, `on key {…}`
+//! (card native-keys) gets the keys pressed over the paint window: a frame handler reads each press
+//! (`system_value("key_pressed")`) and emits `key{key: "a"}` as the playground page does, arrows and Enter by name.
 //! `exit` and `exit()` as statements are `exit(0)` (P121: the host word ends the run with that code).
 //! Channels (src/channels.rs): `on message from "chat" {body}` (`on message {body}` for the channel "warp") is the timer
 //! handler `on·every·0() := {global …; while channel_pending(0) > 0 { event = channel_next(0); body }}`, started by
@@ -23,6 +27,36 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const EVERY_WORD: &str = "every";
+const FRAME_WORD: &str = "frame";
+/// A frame's milliseconds: 60 frames a second
+const FRAME_MILLISECONDS: i64 = 16;
+#[cfg(feature = "native")]
+const KEY_EVENT: &str = "key";
+/// Each key pressed over the paint window, as the page's KeyboardEvent.key names it: the character, or a key's name
+#[cfg(feature = "native")]
+const KEYS_TEMPLATE: &str = "on frame {
+	CODE = system_value(\"key_pressed\")
+	while CODE != 0 {
+		NAME = \"\" + chr(CODE)
+		NAMED
+		emit key{key: NAME}
+		CODE = system_value(\"key_pressed\")
+	}
+}";
+#[cfg(feature = "native")]
+const NAMED_KEY_TEMPLATE: &str = "if CODE == NUMBER { NAME = KEY_NAME }";
+/// The keys the page names (src/paint_window.rs key_code gives these codes)
+#[cfg(feature = "native")]
+const KEY_NAMES: [(i64, &str); 8] = [
+	(0xF700, "ArrowUp"),
+	(0xF701, "ArrowDown"),
+	(0xF702, "ArrowLeft"),
+	(0xF703, "ArrowRight"),
+	(13, "Enter"),
+	(27, "Escape"),
+	(8, "Backspace"),
+	(9, "Tab"),
+];
 const DAY_WORD: &str = "day";
 const AT_WORD: &str = "at";
 const WEEKDAY_WORD: &str = "weekday";
@@ -54,7 +88,46 @@ pub fn lower(program: Node) -> Node {
 		.filter(|verb| !defines(&program, verb))
 		.collect();
 	let program = broadcasts(program, &verbs);
-	lower_timers(program)
+	lower_timers(with_window_keys(program))
+}
+
+/// Natively, a program with `on key {…}` gets the paint window's key presses (KEYS_TEMPLATE); a page raises key itself
+#[cfg(feature = "native")]
+fn with_window_keys(program: Node) -> Node {
+	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
+	let listener = statements
+		.iter()
+		.position(|statement| event_listener(statement, KEY_EVENT).is_some());
+	let Some(listener) = listener else { return program };
+	if crate::pipeline::is_for_a_page() || crate::event_signals::serves_its_page(&statements) {
+		return program;
+	}
+	let mut bindings = std::collections::HashMap::from([
+		("CODE".to_string(), symbol("key·code")),
+		("NAME".to_string(), symbol("key·name")),
+	]);
+	let named: Vec<Node> = KEY_NAMES
+		.iter()
+		.map(|(code, key_name)| {
+			bindings.insert("NUMBER".to_string(), Node::int(*code));
+			bindings.insert("KEY_NAME".to_string(), Node::Text(key_name.to_string()));
+			crate::law::substitute(&crate::warp_parser::parse(NAMED_KEY_TEMPLATE), &bindings)
+		})
+		.collect();
+	bindings.insert(
+		"NAMED".to_string(),
+		Node::List(named, Bracket::None, Separator::Newline),
+	);
+	let reader = crate::law::substitute(&crate::warp_parser::parse(KEYS_TEMPLATE), &bindings);
+	// right after the listener: the program's last statement stays its value
+	statements.insert(listener + 1, reader.drop_meta().clone());
+	Node::List(statements, bracket, separator)
+}
+
+/// The browser compiler's programs are for a page, which raises key itself
+#[cfg(not(feature = "native"))]
+fn with_window_keys(program: Node) -> Node {
+	program
 }
 
 fn lower_timers(program: Node) -> Node {
@@ -64,6 +137,7 @@ fn lower_timers(program: Node) -> Node {
 			|| timer(statement).is_some()
 			|| file_watch(statement).is_some()
 			|| message_listener(statement).is_some()
+			|| event_listener(statement, FRAME_WORD).is_some()
 	}) {
 		return program;
 	}
@@ -88,6 +162,16 @@ fn lower_timers(program: Node) -> Node {
 			lowered.push(call(
 				crate::host::SIGNAL_EVERY,
 				vec![id, Node::int(CHANNEL_CHECK_MILLISECONDS)],
+			));
+			count += 1;
+			continue;
+		}
+		if let Some(body) = event_listener(&statement, FRAME_WORD) {
+			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
+			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
+			lowered.push(call(
+				crate::host::SIGNAL_FRAME,
+				vec![Node::int(count as i64), Node::int(FRAME_MILLISECONDS)],
 			));
 			count += 1;
 			continue;
@@ -266,6 +350,21 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 	match node {
 		Node::List(items, _, _) if sent(&items).is_some() => sent(&items).expect("checked"),
 		other => other.map_children(|child| broadcasts(child, verbs)),
+	}
+}
+
+/// `on frame {body}`, `on frame: body` (the event `name`): the body
+fn event_listener(statement: &Node, name: &str) -> Option<Node> {
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let (on, rest) = items.split_first()?;
+	if word(on) != ON_WORD {
+		return None;
+	}
+	match words_and_body(rest)? {
+		(words, body) if matches!(words.as_slice(), [only] if word(only) == name) => Some(body),
+		_ => None,
 	}
 }
 

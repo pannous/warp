@@ -18,13 +18,7 @@ brush = shader {
 	}
 }
 
-// the first paint opens the window; then until it closes (headless: no window, so the loop never starts)
-paint(brush, width, height)
-while window_open {
-	// TODO: on frame { }
-	paint(brush, width, height)
-	// TODO: feed width, height via Global variables above
-	// paint(brush)
-	sleep 16ms
-	// TODO: remove Artificial sleeps
+// each frame of the window, until it closes; the first paint opens it (headless: one frame, as a PNG)
+on frame {
+	paint(brush) // the size is width × height above, else the view's size
 }

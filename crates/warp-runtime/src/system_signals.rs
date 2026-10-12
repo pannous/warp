@@ -41,6 +41,11 @@ enum Trigger {
 	FileChange(PathBuf, Option<FileStamp>),
 	/// something awaited (a fetch's reply), described for "listening: …": the handler runs once, when `ready()`
 	Ready(String, Box<dyn FnMut() -> bool>),
+	/// the paint window shows (frames): the handler runs while it does and the timer ends as it closes; without a
+	/// window it runs once (`ran`), as a single paint would, so a headless run ends
+	WindowShows {
+		ran: bool,
+	},
 }
 
 impl Trigger {
@@ -57,6 +62,14 @@ impl Trigger {
 			Trigger::Ready(_, ready) => {
 				let holds = ready();
 				if holds {
+					*due = None;
+				}
+				holds
+			}
+			Trigger::WindowShows { ran } => {
+				let holds = crate::system_values::window_shows() || !*ran;
+				*ran = true;
+				if !holds {
 					*due = None;
 				}
 				holds
@@ -240,6 +253,16 @@ pub fn start_daily_timer(id: i64, minute_of_day: i64, weekdays: i64) {
 			once: false,
 		},
 		Trigger::Always,
+	);
+}
+
+/// `signal_frame(id, milliseconds)`: the handler on·every·id runs each frame (that many milliseconds) while the paint
+/// window shows, once without one
+pub fn start_frame_timer(id: i64, milliseconds: i64) {
+	add_timer(
+		format!("{TIMER_HANDLER_PREFIX}{id}"),
+		Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)),
+		Trigger::WindowShows { ran: false },
 	);
 }
 
@@ -498,18 +521,22 @@ pub fn stay_while_listening<T>(store: &mut Store<T>, instance: &Instance) -> Res
 	if !STAYING_ALLOWED.load(Ordering::SeqCst) || next_due().is_none() {
 		return Ok(());
 	}
+	// a window's frames say nothing: the window shows that the program goes on, and closing it ends the run
 	let listening: Vec<String> = TIMERS.with(|timers| {
 		timers
 			.borrow()
 			.iter()
-			.map(|timer| match &timer.trigger {
-				Trigger::FileChange(path, _) => format!("file {} change", path.display()),
-				Trigger::Ready(awaited, _) => awaited.clone(),
-				Trigger::Always => timer.repeat.spoken(),
+			.filter_map(|timer| match &timer.trigger {
+				Trigger::FileChange(path, _) => Some(format!("file {} change", path.display())),
+				Trigger::Ready(awaited, _) => Some(awaited.clone()),
+				Trigger::WindowShows { .. } => None,
+				Trigger::Always => Some(timer.repeat.spoken()),
 			})
 			.collect()
 	});
-	eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
+	if !listening.is_empty() {
+		eprintln!("listening: {} (ctrl-c to stop)", listening.join(", "));
+	}
 	while let Some(due) = next_due() {
 		interrupt::wait_until(due);
 		run_due_handlers(store, |store, name| instance.get_func(&mut *store, name))?;

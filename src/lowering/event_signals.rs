@@ -5,7 +5,8 @@
 //! of the name is its call. A raise whose name no handler listens to stays the exception (try catches it).
 //! Page events (phase 7): `on click {…}` and `on key {…}` are kept without a raise and get the wrapper
 //! `on·click·node([event])` (declarations::with_node_wrappers): the browser playground calls it when the page sees the
-//! event (web/playground/worker.js); natively nothing does, which a warning says. System events (`on interrupt`) are
+//! event (web/playground/worker.js); natively `on key` hears the paint window (lowering/system_signals.rs), the others
+//! nothing, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use super::nodes::{block, call, children_rewritten, if_then, key};
@@ -928,7 +929,7 @@ pub(crate) fn function_with_globals(
 
 /// A program serving (serve_routes, lowering/serve.rs) serves its page too: the page raises its events
 #[cfg(feature = "native")]
-fn serves_its_page(statements: &[Node]) -> bool {
+pub(crate) fn serves_its_page(statements: &[Node]) -> bool {
 	statements.iter().any(|statement| matches!(statement.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::host::SERVE_ROUTES)))
 }
 
