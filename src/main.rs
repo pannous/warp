@@ -398,6 +398,11 @@ fn run_command(args: &[String]) {
         if !only_run && warp::serve::serves(&source_of(path)) {
             serve_file(path, SERVE_PORT, "routes found; ");
         }
+        // a page shows in a window, as `warp app` shows it; piped or redirected it prints its HTML
+        if io::stdout().is_terminal() && warp::paint::shows_windows() && warp::serve::shows_page(&source_of(path)) {
+            show_in_webview(path, false);
+            return;
+        }
         diagnostic::show_lines_of(&source_of(path));
         let result = eval(path); // a file: its folder is in scope (D15)
         if !only_run && !matches!(result, Node::Error(_)) {
