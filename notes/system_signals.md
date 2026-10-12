@@ -166,6 +166,17 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   shifts nothing; a one-shot timer is dropped after it fired, so `warp run` ends then ("listening: at 9:00",
   "listening: every monday at 9:00"). Tests: tests/control/test_daily_timer.rs, test_time_of_day.rs.
   Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings.
+- Frames (card frame-event, user TODOs in samples/shader_brush.warp, 2026-10-12): `on frame {…}` is the handler
+  `on·every·N` started by `signal_frame(N, 16)` (Trigger::WindowShows): it runs every 16 ms while the paint window
+  shows and the timer ends as the window closes, so `warp run` ends with the window; without a window (headless) it
+  runs once, one paint = one PNG. "listening: …" leaves frames out. The page (host-timers.js) runs it every 16 ms until
+  the next run: its canvas always shows. Replaces `while window_open { …; sleep 16ms }`.
+- Native keys (card native-keys, user: "on key must listen to native signals"): natively `on key {…}` gets the keys
+  pressed over the paint window. system_values.rs queues each press (a key held that was not held before, from the
+  viewer's `input x y down key` lines) and `system_value("key_pressed")` pops one (0: none); lowering/system_signals.rs
+  adds a frame handler after the first `on key` that emits `key{key: …}` per press, named as the page's
+  KeyboardEvent.key: the character, ArrowUp/Down/Left/Right, Enter, Escape, Backspace, Tab (KEY_NAMES). Not for a page
+  or a program serving its page (the page raises key itself). Not yet: keys in a terminal, the `warp app` web view.
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
   `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
 - System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),

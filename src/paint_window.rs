@@ -67,7 +67,8 @@ fn follow_input(lines: impl BufRead) {
 	}
 }
 
-/// The code of a pressed key: its character's, an arrow's ARROW_CODES; None for the others
+/// The code of a pressed key: its character's, an arrow's ARROW_CODES, Enter, Escape, Backspace and Tab their control
+/// characters' (lowering/system_signals.rs KEY_NAMES names them); None for the others
 fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 	use winit::keyboard::{Key, NamedKey};
 	match key {
@@ -77,6 +78,10 @@ fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 		Key::Named(NamedKey::ArrowLeft) => Some(ARROW_CODES[2]),
 		Key::Named(NamedKey::ArrowRight) => Some(ARROW_CODES[3]),
 		Key::Named(NamedKey::Space) => Some(u32::from(' ')),
+		Key::Named(NamedKey::Enter) => Some(u32::from('\r')),
+		Key::Named(NamedKey::Escape) => Some(0x1B),
+		Key::Named(NamedKey::Backspace) => Some(0x08),
+		Key::Named(NamedKey::Tab) => Some(u32::from('\t')),
 		_ => None,
 	}
 }

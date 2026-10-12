@@ -9,12 +9,13 @@
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
-	BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES,
-	TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN,
+	BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE,
+	SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN,
 };
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 const NOTIFICATION_TITLE: &str = "warp";
@@ -35,6 +36,16 @@ pub fn tell_window_open(open: bool) {
 	WINDOW_SHOWN.store(open, Ordering::Relaxed);
 }
 
+pub fn window_shows() -> bool {
+	WINDOW_SHOWN.load(Ordering::Relaxed)
+}
+
+/// The keys pressed over the paint window not read yet (KEY_PRESSED), oldest first; a program that never reads them
+/// keeps the last KEYS_KEPT
+static KEY_PRESSES: Mutex<VecDeque<i64>> = Mutex::new(VecDeque::new());
+const KEYS_KEPT: usize = 64;
+const KEY_INPUT: usize = 3;
+
 /// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/paint.rs allow_windows)
 static DRAWING_ON_GPU: AtomicBool = AtomicBool::new(false);
 
@@ -49,6 +60,15 @@ pub fn window_input() -> [f32; 4] {
 }
 
 pub fn tell_window_input(input: [f32; 4]) {
+	// a press: a key held that was not held before (another key, or none)
+	let key = input[KEY_INPUT];
+	if key != 0.0 && key != window_input()[KEY_INPUT] {
+		let mut presses = KEY_PRESSES.lock().unwrap();
+		if presses.len() == KEYS_KEPT {
+			presses.pop_front();
+		}
+		presses.push_back(key as i64);
+	}
 	for (value, number) in WINDOW_INPUT.iter().zip(input) {
 		value.store(number.to_bits(), Ordering::Relaxed);
 	}
@@ -65,7 +85,10 @@ pub fn read(name: &str) -> Result<i64, String> {
 		return Ok(crate::system_signals::millisecond_of_day());
 	}
 	if name == WINDOW_OPEN {
-		return Ok(WINDOW_SHOWN.load(Ordering::Relaxed) as i64);
+		return Ok(window_shows() as i64);
+	}
+	if name == KEY_PRESSED {
+		return Ok(KEY_PRESSES.lock().unwrap().pop_front().unwrap_or(0));
 	}
 	if name == GPU_DRAWING {
 		return Ok(DRAWING_ON_GPU.load(Ordering::Relaxed) as i64);
