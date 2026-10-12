@@ -137,3 +137,37 @@ fn the_dev_server_watches_the_modules_used() {
 		"{error}"
 	);
 }
+
+// card dev-opens-browser: `warp dev` opens its page in the default browser when run from a terminal; piped, as here,
+// and under WARP_NO_WINDOW (tests, probes) it only prints the address
+#[test]
+#[cfg(feature = "native")]
+fn warp_dev_opens_no_browser_when_piped() {
+	use std::io::{BufRead, Read};
+	// a port no other test or program holds: the system's free one, released for warp dev to take
+	let port = std::net::TcpListener::bind(("127.0.0.1", 0))
+		.and_then(|listener| listener.local_addr())
+		.expect("a free port")
+		.port();
+	std::fs::create_dir_all(FOLDER).expect("scratch folder");
+	let program = std::path::Path::new(FOLDER).join("opened.warp");
+	std::fs::write(&program, "p{ \"hi\" }").expect("the program");
+	let mut dev = crate::common::warp_command()
+		.args(["dev", &program.to_string_lossy(), &port.to_string()])
+		.stdout(std::process::Stdio::piped())
+		.stderr(std::process::Stdio::piped())
+		.spawn()
+		.expect("warp dev");
+	let mut first_line = String::new();
+	std::io::BufReader::new(dev.stdout.take().expect("its output"))
+		.read_line(&mut first_line)
+		.expect("its first line");
+	let _ = dev.kill();
+	let _ = dev.wait();
+	let mut failure = String::new();
+	let _ = dev.stderr.take().expect("its errors").read_to_string(&mut failure);
+	assert!(
+		first_line.contains(&format!("http://localhost:{port}/")) && !first_line.contains("browser"),
+		"first line {first_line:?}, errors {failure:?}"
+	);
+}
