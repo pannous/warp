@@ -20,6 +20,7 @@ mod test_music_values; // card music-values
 mod test_paint;
 mod test_paint_lists;
 mod test_paint_shader; // P234
+mod test_paint_window_ends; // card exit-key
 mod test_plain_hints_when_piped;
 mod test_playground_samples;
 mod test_samples;

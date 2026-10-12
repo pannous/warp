@@ -1,7 +1,8 @@
 //! paint(pixels, width, height) in a terminal (card g_gGsg): the frames in a window, drawn through a wgpu surface (Metal
 //! on macOS). A window owns the main thread there, which the program runs on, so a viewer process does: the same
 //! binary as `warp paint-window`, reading frames from its stdin, [width u32][height u32][width×height RGBA bytes]. Each
-//! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed.
+//! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed, the
+//! program waiting for that (wait_until_closed). The program ending otherwise ends its stdin and so the viewer.
 //! `use draw` on the GPU sends shapes instead (src/gpu_canvas.rs): [SHAPES_MARK][width][height][count][count shapes],
 //! drawn over the canvas texture this process keeps, which the window then shows; no pixels cross.
 
@@ -198,7 +199,7 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 			.map_err(|failure| format!("paint: no viewer, the warp binary is unknown: {failure}"))?;
 		let mut command = Command::new(binary);
 		command.arg(COMMAND).stdin(Stdio::piped()).stdout(Stdio::piped());
-		// its own process group: the window outlives the program and the terminal's hangup when that closes
+		// its own process group: ctrl-c reaches the program, whose end closes the viewer's stdin and so the window
 		#[cfg(unix)]
 		std::os::unix::process::CommandExt::process_group(&mut command, 0);
 		let mut child = command
@@ -225,9 +226,26 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 	})
 }
 
-/// `warp paint-window`: the window showing the frames arriving on stdin, until it is closed
+/// A program that ended well leaves its window up until the user closes it (card exit-key): any other end closes it
+pub fn wait_until_closed() {
+	let viewer = VIEWER.lock().ok().and_then(|mut viewer| viewer.take());
+	if let Some(mut child) = viewer {
+		let _ = child.wait();
+	}
+}
+
+/// `warp paint-window`: the window showing the frames arriving on stdin, until it is closed or its program ends
 pub fn run(check: bool) -> Result<(), String> {
-	let event_loop = EventLoop::<Message>::with_user_event()
+	let mut builder = EventLoop::<Message>::with_user_event();
+	#[cfg(target_os = "macos")]
+	if std::env::var_os(crate::paint::NO_WINDOW_VARIABLE).is_some() {
+		use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+		// no Dock icon and no focus taken from the user's app (tests run beside them)
+		builder
+			.with_activation_policy(ActivationPolicy::Prohibited)
+			.with_activate_ignoring_other_apps(false);
+	}
+	let event_loop = builder
 		.build()
 		.map_err(|failure| format!("paint-window: no event loop: {failure}"))?;
 	let proxy = event_loop.create_proxy();
@@ -235,8 +253,12 @@ pub fn run(check: bool) -> Result<(), String> {
 		let mut input = std::io::stdin().lock();
 		while let Some(message) = read_message(&mut input) {
 			if proxy.send_event(message).is_err() {
-				break;
+				return;
 			}
+		}
+		// the program is gone (it ended, exit(), a failure, ctrl-c, a kill), so is its window; a check ends by itself
+		if !check {
+			std::process::exit(0);
 		}
 	});
 	let mut viewer = Viewer {
@@ -256,6 +278,8 @@ struct Viewer {
 	waiting: Vec<Message>,
 	failure: Option<String>,
 	check: bool,
+	/// The event loop runs: a window may open
+	resumed: bool,
 }
 
 /// The window and what draws into it
@@ -277,18 +301,16 @@ struct Screen {
 	key: u32,
 }
 
-impl ApplicationHandler<Message> for Viewer {
-	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-		if self.screen.is_some() {
+impl Viewer {
+	/// The window, opened for the first frame (or shapes) at its size: none opens before one arrives
+	fn open_for_waiting(&mut self, event_loop: &ActiveEventLoop) {
+		let Some(first) = self.waiting.first().filter(|_| self.resumed && self.screen.is_none()) else {
 			return;
-		}
-		let (width, height) = self
-			.waiting
-			.first()
-			.map_or((SHOWN_SIDE, SHOWN_SIDE), |message| match message {
-				Message::Frame(frame) => (frame.width, frame.height),
-				Message::Shapes(shapes) => (shapes.width, shapes.height),
-			});
+		};
+		let (width, height) = match first {
+			Message::Frame(frame) => (frame.width, frame.height),
+			Message::Shapes(shapes) => (shapes.width, shapes.height),
+		};
 		match Screen::open(event_loop, width, height, self.check) {
 			Ok(screen) => self.screen = Some(screen),
 			Err(failure) => {
@@ -300,12 +322,22 @@ impl ApplicationHandler<Message> for Viewer {
 			self.user_event(event_loop, message);
 		}
 	}
+}
 
-	fn user_event(&mut self, _: &ActiveEventLoop, message: Message) {
+impl ApplicationHandler<Message> for Viewer {
+	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+		self.resumed = true;
+		self.open_for_waiting(event_loop);
+	}
+
+	fn user_event(&mut self, event_loop: &ActiveEventLoop, message: Message) {
 		match (self.screen.as_mut(), message) {
 			(Some(screen), Message::Frame(frame)) => screen.take(frame),
 			(Some(screen), Message::Shapes(shapes)) => screen.draw_shapes(shapes),
-			(None, message) => self.waiting.push(message),
+			(None, message) => {
+				self.waiting.push(message);
+				self.open_for_waiting(event_loop);
+			}
 		}
 	}
 
