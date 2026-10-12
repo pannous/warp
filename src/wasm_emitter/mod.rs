@@ -1743,6 +1743,19 @@ impl WasmGcEmitter {
 				data: modules.as_bytes().into(),
 			});
 		}
+		let user_functions: Vec<&str> = (self.ctx.user_functions.iter())
+			.filter(|(_, definition)| definition.func_index.is_some())
+			.map(|(name, _)| name.as_str())
+			.collect();
+		if !user_functions.is_empty() {
+			self.module.section(&CustomSection {
+				name: crate::host::USER_FUNCTIONS_SECTION.into(),
+				data: user_functions
+					.join(crate::host::USER_FUNCTIONS_SEPARATOR)
+					.as_bytes()
+					.into(),
+			});
+		}
 		self.emit_names();
 		self.module.section(&self.names);
 

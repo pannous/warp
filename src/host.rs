@@ -113,6 +113,10 @@ pub const STD_IO: &str = "std_io";
 pub const STD_MODULES_SECTION: &str = "warp.std_modules";
 pub const STD_MODULES_SEPARATOR: &str = ",";
 pub const ANY_STD_MODULE: &str = "*";
+/// The custom section naming the program's own functions (`def`, lib/*.warp), joined by the separator: exported for tasks
+/// and other modules; a built site without tasks moves those one route calls into its route's module (route_split.rs)
+pub const USER_FUNCTIONS_SECTION: &str = "warp.user_functions";
+pub const USER_FUNCTIONS_SEPARATOR: &str = "\n";
 /// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
