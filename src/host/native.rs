@@ -590,28 +590,42 @@ fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtim
 	calling_back("table.select", |kept| crate::database::select(&arguments.children(), &mut |function, request| route_value(caller, function, request).map_err(&mut *kept)))
 }
 
-/// play_signal(f, seconds) (sound.rs play_signal): the program's f(t: float) called for each sample; its handle
+/// play_signal(f, seconds) (sound.rs play_signal): the program's f(t: float) called for each sample, in stereo a
+/// pair [left, right] of them; its handle
 fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
-	let ([function, seconds, rate], word) = (sound_arguments(arguments, "play_signal(f, seconds) needs a function and its seconds")?, "play_signal");
-	let signal = called_back(caller, &function, word, "of the time in seconds to a number, as hum(t) := sin(2 * pi * 440 * t)")?;
+	let ([functions, seconds, rate], word) = (sound_arguments(arguments, "play_signal(f, seconds) needs a function and its seconds")?, "play_signal");
+	let signals = channels_of(&functions, word)?.iter().map(|function| called_back(caller, function, word, "of the time in seconds to a number, as hum(t) := sin(2 * pi * 440 * t)")).collect::<wasmtime::Result<Vec<_>>>()?;
 	let (seconds, rate) = seconds_and_rate(&seconds, &rate)?;
-	let handle = calling_back(word, |kept| crate::sound::play_signal(seconds, rate, |time| signal.call(&mut *caller, time).map_err(&mut *kept)))?;
+	let handle = calling_back(word, |kept| crate::sound::play_signal(seconds, rate, signals.len() as u16, |channel, time| signals[channel].call(&mut *caller, time).map_err(&mut *kept)))?;
 	Ok(Node::int(handle as i64))
 }
 
 /// play_blocks(fill, seconds) (music_words.rs with_block_signals): the program's `fill·blocks(t: float)` called for
-/// each block, t its first sample's time, which fills the linear float array at `block` through fill; its handle
+/// each block, t its first sample's time, which fills the linear float arrays at `blocks` (one, or left and right)
+/// through fill; its handle
 fn played_blocks(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
-	let ([function, block, seconds, rate], word) = (sound_arguments(arguments, "play_blocks(fill, seconds) needs a function and its seconds")?, "play_blocks");
+	let ([function, blocks, seconds, rate], word) = (sound_arguments(arguments, "play_blocks(fill, seconds) needs a function and its seconds")?, "play_blocks");
 	let fill = called_back(caller, &function, word, "of a block of samples and its time, as hum(block, t) := for i in 1 to #block { block#i = … }")?;
 	let (seconds, rate) = seconds_and_rate(&seconds, &rate)?;
-	let block = f64::from(number_of(&block, &task_failure)?) as i64;
-	let size = linear_doubles(caller, block, &task_failure)?.len();
-	let handle = calling_back(word, |kept| crate::sound::play_blocks(seconds, rate, size, |first, _| {
+	let blocks = channels_of(&blocks, word)?.iter().map(|block| number_of(block, &task_failure).map(|address| f64::from(address) as i64)).collect::<wasmtime::Result<Vec<_>>>()?;
+	let size = linear_doubles(caller, blocks[0], &task_failure)?.len();
+	let handle = calling_back(word, |kept| crate::sound::play_blocks(seconds, rate, size, blocks.len() as u16, |first, _| {
 		fill.call(&mut *caller, first as f64 / rate as f64).map_err(&mut *kept)?;
-		linear_doubles(caller, block, &task_failure).map_err(&mut *kept)
+		blocks.iter().map(|&block| linear_doubles(caller, block, &task_failure).map_err(&mut *kept)).collect()
 	}))?;
 	Ok(Node::int(handle as i64))
+}
+
+/// A sound word's one value or stereo pair [left, right] of them
+fn channels_of(node: &Node, word: &str) -> wasmtime::Result<Vec<Node>> {
+	let channels = match node.drop_meta() {
+		Node::List(items, _, _) => items.clone(),
+		single => vec![single.clone()],
+	};
+	match channels.len() {
+		1 | 2 => Ok(channels),
+		count => Err(task_failure(format!("{word}: {count} channels; one, or a pair [left, right] for stereo"))),
+	}
 }
 
 fn sound_arguments<const COUNT: usize>(arguments: &Node, usage: &str) -> wasmtime::Result<[Node; COUNT]> {

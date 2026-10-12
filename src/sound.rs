@@ -399,16 +399,25 @@ pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<(), String> {
 	sounded(next_handle(), pcm(samples), rate, channels)
 }
 
-/// play_signal(f, seconds) (card real-time): the mono samples of f(t), t the sample's time in seconds, each computed when
-/// it is due, in blocks of SIGNAL_BLOCK (play_blocks). Its handle
-pub fn play_signal(seconds: f64, rate: u32, mut sample_at: impl FnMut(f64) -> Result<f64, String>) -> Result<usize, String> {
-	play_blocks(seconds, rate, SIGNAL_BLOCK, |first, count| (first..first + count).map(|index| sample_at(index as f64 / rate as f64)).collect())
+/// play_signal(f, seconds) (card real-time): the samples of f(t), t the sample's time in seconds, each computed when it
+/// is due, in blocks of SIGNAL_BLOCK (play_blocks); `sample_at(channel, t)` for each of the channels, left first. Its
+/// handle
+pub fn play_signal(seconds: f64, rate: u32, channels: u16, mut sample_at: impl FnMut(usize, f64) -> Result<f64, String>) -> Result<usize, String> {
+	play_blocks(seconds, rate, SIGNAL_BLOCK, channels, |first, count| {
+		let mut blocks = vec![Vec::with_capacity(count); channels as usize];
+		for index in first..first + count {
+			for (channel, block) in blocks.iter_mut().enumerate() {
+				block.push(sample_at(channel, index as f64 / rate as f64)?);
+			}
+		}
+		Ok(blocks)
+	})
 }
 
-/// play_blocks(fill, seconds) (sound layer 8, block-wise): the mono samples `fill(first, count)` gives, `count` of them
-/// from the sample `first` on, `block` at a time: on warp's own output each block queued SIGNAL_AHEAD before the
-/// device plays it (stop_sound ends it), else all of them as one sound. Its handle
-pub fn play_blocks(seconds: f64, rate: u32, block: usize, mut fill: impl FnMut(usize, usize) -> Result<Vec<f64>, String>) -> Result<usize, String> {
+/// play_blocks(fill, seconds) (sound layer 8, block-wise): the samples `fill(first, count)` gives, a block of each
+/// channel, `count` of them from the sample `first` on, `block` at a time: on warp's own output each block queued
+/// SIGNAL_AHEAD before the device plays it (stop_sound ends it), else all of them as one sound. Its handle
+pub fn play_blocks(seconds: f64, rate: u32, block: usize, channels: u16, mut fill: impl FnMut(usize, usize) -> Result<Vec<Vec<f64>>, String>) -> Result<usize, String> {
 	let total = (seconds.max(0.0) * rate as f64).round() as usize;
 	let handle = next_handle();
 	let stops = STOPS.load(Ordering::Relaxed);
@@ -422,13 +431,14 @@ pub fn play_blocks(seconds: f64, rate: u32, block: usize, mut fill: impl FnMut(u
 			break;
 		}
 		let count = block.min(total - first);
-		samples.extend(fill(first, count)?.into_iter().take(count).map(signal_pcm));
+		let blocks = fill(first, count)?;
+		samples.extend((0..count).flat_map(|index| blocks.iter().map(move |block| block.get(index).copied().unwrap_or(0.0))).map(signal_pcm));
 		if streamed {
-			sounded(handle, std::mem::take(&mut samples), rate, MONO)?;
+			sounded(handle, std::mem::take(&mut samples), rate, channels)?;
 		}
 	}
 	if !samples.is_empty() {
-		sounded(handle, samples, rate, MONO)?;
+		sounded(handle, samples, rate, channels)?;
 	}
 	Ok(handle)
 }

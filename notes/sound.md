@@ -177,8 +177,10 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    [fill·blocks, linear_address(fill·block), …]); the host (native.rs played_blocks) calls fill·blocks and reads the
    cells straight from memory. 20 s of a sine: 2.0 s against play_signal's 4.6 s (debug, compile included). Cells are
    f64 (linear arrays have no f32 yet); the host takes them as they are.
-   Still to build: the browser (an AudioWorklet running the module), stereo (a pair), input (a microphone as the
-   signal's argument).
+   Stereo built (undoable default): `play_signal([left, right], 2s)` calls left(t) then right(t) for each sample;
+   `play_blocks(fill, 2s)` with fill of three parameters `(left, right, t)` gets two blocks (fill·block, fill·right).
+   The host takes one value or a pair (native.rs channels_of) and interleaves the frames (sound.rs play_blocks).
+   Still to build: the browser (an AudioWorklet running the module), input (a microphone as the signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 

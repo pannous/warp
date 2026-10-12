@@ -76,3 +76,25 @@ fn a_block_function_is_called_once_a_block() {
 	let samples = rendered(BLOCK_SINE, "signal_block_calls", "calls", "5");
 	assert_eq!(samples.len(), (RATE * 0.1) as usize, "4 blocks of 512 samples and 157 of the fifth");
 }
+
+// stereo (sound layer 8): two functions of the time, left and right, or a block function of two blocks
+fn channel(samples: &[i16], index: usize) -> Vec<i16> {
+	samples.iter().skip(index).step_by(2).copied().collect()
+}
+
+fn assert_stereo(samples: &[i16]) {
+	assert_sine(&channel(samples, 0), 0.5, 441.0);
+	assert_sine(&channel(samples, 1), 0.25, 220.5);
+}
+
+#[test]
+fn a_pair_of_signal_functions_plays_in_stereo() {
+	let program = "left(t) := 0.5 * sin(2 * pi * 441 * t)\nright(t) := 0.25 * sin(2 * pi * 220.5 * t)\nplay_signal([left, right], 0.1)";
+	assert_stereo(&rendered(program, "signal_stereo", "rendered", "10"));
+}
+
+#[test]
+fn a_block_function_of_two_blocks_plays_in_stereo() {
+	let program = "hum(left, right, t) := for i in 1 to #left {\n  time = t + (i - 1) / sample_rate\n  left#i = 0.5 * sin(2 * pi * 441 * time)\n  right#i = 0.25 * sin(2 * pi * 220.5 * time)\n}\nplay_blocks(hum, 0.1)";
+	assert_stereo(&rendered(program, "signal_blocks_stereo", "rendered", "10"));
+}

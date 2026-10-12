@@ -18,7 +18,7 @@ use super::memoization::definition_parts;
 use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
 /// A note letter's semitone above C is its place here, from 0 (as lib/sound.warp's note(name))
@@ -41,11 +41,19 @@ const LIVE_BODY: &str = "live_body";
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
 const SIGNAL_WORD: &str = "play_signal";
 const FLOAT_TYPE: &str = "float";
-/// `play_blocks(fill, seconds)` → BLOCKS_CALL: the host (native.rs played_blocks) calls fill·blocks(t) for each block,
-/// which hands fill the linear float array fill·block of BLOCK_SAMPLES cells to fill (BLOCK_TEMPLATE)
+/// `play_blocks(fill, seconds)` → BLOCKS_CALLS: the host (native.rs played_blocks) calls fill·blocks(t) for each block,
+/// which hands fill the linear float array fill·block of BLOCK_SAMPLES cells to fill (BLOCK_TEMPLATES), in stereo
+/// (fill of three parameters: left, right, t) fill·block and fill·right; mono first, then stereo
 const BLOCKS_WORD: &str = "play_blocks";
-const BLOCKS_CALL: &str = "std_io(\"sound\", \"blocks\", [block_caller, linear_address(block_cells), si_amount(block_seconds), sample_rate])";
-const BLOCK_TEMPLATE: &str = "linear block_cells = float[block_samples]\nblock_caller(t: float) := { block_fill(block_cells, t); 0.0 as float }";
+const BLOCKS_CALLS: [&str; 2] = [
+	"std_io(\"sound\", \"blocks\", [block_caller, linear_address(block_cells), si_amount(block_seconds), sample_rate])",
+	"std_io(\"sound\", \"blocks\", [block_caller, [linear_address(block_cells), linear_address(block_right)], si_amount(block_seconds), sample_rate])",
+];
+const BLOCK_TEMPLATES: [&str; 2] = [
+	"linear block_cells = float[block_samples]\nblock_caller(t: float) := { block_fill(block_cells, t); 0.0 as float }",
+	"linear block_cells = float[block_samples]\nlinear block_right = float[block_samples]\nblock_caller(t: float) := { block_fill(block_cells, block_right, t); 0.0 as float }",
+];
+const STEREO_FILL_PARAMETERS: usize = 3;
 /// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
 pub const BLOCK_SAMPLES: usize = 512;
 
@@ -88,7 +96,12 @@ fn with_float_signals(program: Node) -> Node {
 		if let Node::List(items, _, _) = node.drop_meta() {
 			if let [word, signal, ..] = items.as_slice() {
 				if word.is_symbol(SIGNAL_WORD) {
-					signals.extend(signal.symbol_name().map(str::to_string));
+					// in stereo a pair [left, right]
+					let channels = match signal.drop_meta() {
+						Node::List(pair, _, _) => pair.clone(),
+						mono => vec![mono.clone()],
+					};
+					signals.extend(channels.iter().filter_map(|channel| channel.symbol_name().map(str::to_string)));
 				}
 			}
 		}
@@ -100,11 +113,12 @@ fn with_float_signals(program: Node) -> Node {
 /// and the function the host calls, before the program's statements
 fn with_block_signals(program: Node) -> Node {
 	let mut fills = Vec::new();
-	let program = with_block_calls(program, &mut fills);
+	let counts = parameter_counts(&program);
+	let program = with_block_calls(program, &counts, &mut fills);
 	if fills.is_empty() {
 		return program;
 	}
-	let declarations = fills.iter().flat_map(|fill| match block_template(BLOCK_TEMPLATE, fill, Node::Empty) {
+	let declarations = fills.iter().flat_map(|(fill, stereo)| match block_template(BLOCK_TEMPLATES[*stereo as usize], fill, Node::Empty) {
 		Node::List(statements, _, separator) if separator.separates_statements() => statements,
 		other => vec![other],
 	});
@@ -118,17 +132,30 @@ fn with_block_signals(program: Node) -> Node {
 /// The template's placeholders replaced by the names of the block-wise signal fill, played for `seconds`
 fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 	let part = |name: &str| Node::Symbol(format!("{fill}{}{name}", crate::analyzer::TEMPORARY_SEPARATOR));
-	let names = [("block_cells", part("block")), ("block_caller", part("blocks")), ("block_fill", Node::symbol(fill)), ("block_samples", crate::node::int(BLOCK_SAMPLES as i64)), ("block_seconds", seconds)];
+	let names = [("block_cells", part("block")), ("block_right", part("right")), ("block_caller", part("blocks")), ("block_fill", Node::symbol(fill)), ("block_samples", crate::node::int(BLOCK_SAMPLES as i64)), ("block_seconds", seconds)];
 	names.into_iter().fold(crate::warp_parser::parse(template), |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, &value))
 }
 
-fn with_block_calls(node: Node, fills: &mut Vec<String>) -> Node {
-	match node.map_children(|child| with_block_calls(child, fills)) {
+/// The functions the program defines and how many parameters each takes
+fn parameter_counts(program: &Node) -> HashMap<String, usize> {
+	let mut counts = HashMap::new();
+	program.visit(&mut |node| {
+		if let Some(Node::List(items, _, _)) = definition_parts(node).map(|(head, _, _)| head.drop_meta().clone()) {
+			counts.extend(items.first().and_then(Node::symbol_name).map(|name| (name.to_string(), items.len() - 1)));
+		}
+	});
+	counts
+}
+
+/// Each play_blocks call written out, its fill and whether it is in stereo in `fills`
+fn with_block_calls(node: Node, parameter_counts: &HashMap<String, usize>, fills: &mut Vec<(String, bool)>) -> Node {
+	match node.map_children(|child| with_block_calls(child, parameter_counts, fills)) {
 		Node::List(ref items, _, _) if let [word, fill, seconds] = items.as_slice() && word.is_symbol(BLOCKS_WORD) && let Some(name) = fill.symbol_name() => {
-			if !fills.iter().any(|known| known == name) {
-				fills.push(name.to_string());
+			let stereo = parameter_counts.get(name) == Some(&STEREO_FILL_PARAMETERS);
+			if !fills.iter().any(|(known, _)| known == name) {
+				fills.push((name.to_string(), stereo));
 			}
-			block_template(BLOCKS_CALL, name, seconds.clone())
+			block_template(BLOCKS_CALLS[stereo as usize], name, seconds.clone())
 		}
 		other => other,
 	}
