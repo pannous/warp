@@ -194,8 +194,13 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
      variable of `for s in xs {…}` over its parameter xs takes a list of signals; the variables of a list literal
      passed there (`watch_all([a, b])`, or `watched = [a, b]; watch_all(watched)`) become signals and the list holds
      the signals themselves (the one place a list keeps no copy).
-   - Open: escaping into an object field (objects copy values, so nothing there keeps the cell yet; card signal-field-escape); `on change p.age` inside a function on a parameter p (only plain names subscribe; card signal-param-field);
-     reflecting over listeners (g-3HmY).
+   - Signals in fields (branch signal-fields, tests/control/test_signal_fields.rs, samples/signal_fields.warp; cards
+     signal-param-field, signal-field-escape): a field signal is named by its path `p.age` in the same name sets.
+     `watch(p) := on change p.age {…}` subscribes to that field of its argument; the object literal assigned to a
+     variable passed there keeps a cell in the field (`map_of_entry` of a one-entry literal too), and a variable kept
+     in it (`person = {age: a}`) escapes, so `a = 5` and `person.age = 6` both reach the listener. The listener
+     `on change p.age {…}` arrives grouped `((on change) p.age) {…}`: `ungrouped` flattens leading groups recursively.
+   - Open: reflecting over listeners (g-3HmY); a field signal of an object built anywhere but a main-level literal.
 6. **Signals across tasks** (done): events raised in tasks reach `on` handlers of the starting thread (b8da08417:
    task_inside / signal_send, run at the program's next await, loop start or the end of the run;
    tests/control/test_task_signals.rs). Listeners on `shared` values (branch signals-shared, warp-3a;
