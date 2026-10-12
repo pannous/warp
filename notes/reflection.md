@@ -57,10 +57,14 @@ Warp notation text (parsed by the reader we already have), one map:
    typed parameters). An instance only the run time knows (`make().class`, `f(o) := o.fields`) gets a type test over
    the program's classes (Objects::dispatched); extension methods (`fun P.twice()`, `extension P {…}`) are listed in
    `methods` and `dir` (declarations::extension_methods, read before lower_c_functions turns them into functions).
-   Not yet: `.type` of a non-instance call result (`def make() { 3 }; make().type` is "no field type").
+   `.type` of any other value known only at run time (`def make() { 3 }; make().type`, card type-non) is the field
+   read's fallback (list_ops::FIELD_FALLBACKS, like an Error's `message`): no field or key `type` → node_type_name.
 3. Functions: `f.params`, `f.signature`. Done in reflection::lower: constants from the user function's definition;
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
-   is `(x) -> int`). Not yet: library and host words (`sqrt.signature`; card reflect-library-signatures).
+   is `(x) -> int`). Library words (`sqrt.signature`, `first.params`, `dir(sqrt)`, `help(upper)`) answer from
+   lowering/library_signatures.rs: a hand table names and types the operator, rounding and text/list words (result
+   `number` where it depends on the argument), a prelude word shows its lib/prelude.warp head, libm, text builtins and
+   runtime words get positional names (`(a:float, b:float) -> float`) from their tables. A program's own definition wins.
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
    `x.doc` done (meta_entries.rs; a function's comment survived no lowering before: declarations::lower_c_functions
    and nonlocal_cells rebuilt the definition without its Meta, now `Node::with_meta_of`). `x.unit` waits for quantities
@@ -68,8 +72,10 @@ Warp notation text (parsed by the reader we already have), one map:
    lib/fourty_two`) done: reflection::lower_module_words after modules::resolve, the sorted names from
    wasm_modules::exports. Components (`use wasm "x.wasm" as lib`, card reflection-components): `lib.exports` and `dir(lib)` natively from
    the compiled component (components::export_names, functions and resource types of it and its exported interfaces,
-   snake_case), reflection::lower_component_words right before foreign_modules. Not yet in the page (card reflect-page-meta): the compiler
-   there cannot read the component (components.js loads it by name at its first call).
+   snake_case), reflection::lower_component_words right before foreign_modules. In the page too (card
+   reflect-page-meta): wasm_modules::component_export_names reads them with wasmparser's validator (no wasmtime), the
+   compiler fetching the binary like an imported core module's (web::read_bytes); the validator was linked into the
+   browser build already, the optimized warp.wasm kept its size. Sample samples/component_reflection.warp.
 5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
@@ -80,7 +86,8 @@ Warp notation text (parsed by the reader we already have), one map:
    at compile time, the module's path is known then, so no host call: `adder.exports` are the module's own functions
    (not warp's runtime exports), `adder.add.params` and `.signature` come from the entry (Objects::module_function_word;
    wasm_modules::qualify leaves `m.f.word` of an exported function unqualified for it). The run-time host call stays
-   for `any`-typed values only. Not yet: the page reader (card reflect-page-meta).
+   for `any`-typed values only, in neither host yet. The page's compiler reads an imported module's entries the same way
+   (web::read_bytes fetches it; test_reflection_words a_warp_modules_classes passes in the browser suite).
    Done (card reflection-classes, on that entry): `m.P.fields`, `m.P.methods`, `dir(m.P)` of an imported module's class
    (Objects::module_member_word, which also answers `m.f.params`). The entries hold names as symbols (`[x y]`), a
    one-letter text reads back as a character; `classes` lists inherited fields first. wasm_emitter emit_names also

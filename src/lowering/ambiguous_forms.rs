@@ -221,7 +221,7 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
 }
 
 /// The word as written: `sqrt` for the parser's `√ø`
-fn written_word(word: &Node) -> Node {
+pub(crate) fn written_word(word: &Node) -> Node {
 	let spelling = operator_reference(word).and_then(|op| {
 		crate::warp_parser::PREFIX_OPERATOR_WORDS
 			.into_iter()

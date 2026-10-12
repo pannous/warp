@@ -58,8 +58,8 @@ matches warp's value semantics (index assignment already copies, aliases never c
   declarations::resolve_tasks decides (inferred kinds), src/tasks.rs runs. `await` binds like a unary minus.
 - Step 2 done (2026-10-04): stop/cancel/pause/resume through epoch interruption (util::task_engine, only for modules
   importing the task words, checked by wasmparser before compiling). Awaiting a stopped task is the error
-  `task f: task stopped`, but not yet catchable with `try` (card stopped-catchable): a host function cannot throw the `warp_error` tag, so the
-  wasm side would have to check a failure flag after task_await and call a runtime error function.
+  `task f: task stopped`, catchable with `try` since "Catchable" below (a568a26a9; test_threads
+  try_catches_the_failure_of_a_task).
 
 - Step 3 done (2026-10-04): numbers, texts, characters, lists and keys of them cross (tasks::TaskValue, rebuilt in
   each instance through its exported constructors new_int … new_list; read back with wasm_reader::node_in). Floats

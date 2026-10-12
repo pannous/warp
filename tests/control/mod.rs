@@ -84,6 +84,7 @@ mod test_if_value_kind;
 mod test_implicit_await;
 mod test_iteration_words;
 mod test_job_lists;
+mod test_library_signatures; // card reflect-library-signatures
 mod test_list_without; // people without team (card people-where)
 mod test_listener_removal;
 mod test_listener_removal_in_functions;
@@ -180,6 +181,7 @@ mod test_try_index_and_float;
 mod test_try_list_index;
 mod test_try_named_traps;
 mod test_try_stack_overflow;
+mod test_type_field_fallback; // card type-non
 mod test_type_word_filter_loops;
 mod test_uncharged_blocks;
 mod test_undo_history;
