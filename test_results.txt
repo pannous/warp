@@ -2045,6 +2045,9 @@ PASSED:
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
   ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
   ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
+  ✓ node::test_node_api::a_key_shows_its_parts
+  ✓ node::test_node_api::a_list_shows_its_bracket
+  ✓ node::test_node_api::nodes_are_built_from_parts
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -3478,6 +3481,7 @@ PASSED:
   ✓ types::test_class_forms_ported::a_swift_struct_with_a_mutating_method
   ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
   ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
+  ✓ types::test_class_forms_ported::ruby_endless_methods
   ✓ types::test_class_interfaces::a_class_method_satisfies_a_trait_operation
   ✓ types::test_class_interfaces::interfaces_as_other_languages_write_them
   ✓ types::test_class_json::a_named_instance_from_json_is_of_its_class
@@ -4393,6 +4397,7 @@ PASSED:
   ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_wagi::each_route_answers_as_wagi
+  ✓ web::test_warp_serve::a_program_of_routes_alone_has_no_page
   ✓ web::test_warp_serve::a_program_without_serve_is_served_with_its_server_functions_and_routes
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
   ✓ web::test_web_apis::notify_is_a_host_word
@@ -4839,4 +4844,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4834 passed, 0 failed, 4834 total tested
+10 ignored, 4839 passed, 0 failed, 4839 total tested
