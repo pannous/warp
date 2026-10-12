@@ -4291,10 +4291,13 @@ PASSED:
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
   ✓ web::test_css_transitions::css_keyframes_animate_an_element_and_its_leaving
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
+  ✓ web::test_database_site::a_built_site_keeps_database_values
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
   ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
+  ✓ web::test_dev_marks::a_failure_without_an_excerpt_is_its_text
+  ✓ web::test_dev_marks::the_overlay_marks_the_failing_word
   ✓ web::test_dev_server::a_dev_build_keeps_component_state
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
@@ -4335,6 +4338,10 @@ PASSED:
   ✓ web::test_headless_pages::a_missing_button_is_a_loud_error
   ✓ web::test_headless_pages::each_component_instance_counts_on_its_own
   ✓ web::test_headless_pages::typing_into_a_bound_field_sets_its_variable
+  ✓ web::test_host_parts_std::a_page_keeping_values_ships_no_sound
+  ✓ web::test_host_parts_std::a_page_playing_a_file_ships_the_sound_part
+  ✓ web::test_host_parts_std::a_page_with_a_table_ships_no_sound
+  ✓ web::test_host_parts_std::the_module_names_the_std_modules_it_calls
   ✓ web::test_host_parts::a_hello_world_page_ships_no_part_of_the_host
   ✓ web::test_host_parts::a_page_keeping_values_ships_the_store
   ✓ web::test_host_parts::a_page_painting_or_sounding_ships_the_media_part
@@ -4385,6 +4392,7 @@ PASSED:
   ✓ web::test_page_custom_events::a_handled_emit_stays_in_the_program
   ✓ web::test_page_custom_events::a_plain_program_s_unhandled_emit_does_nothing
   ✓ web::test_page_custom_events::an_unhandled_emit_reaches_the_page
+  ✓ web::test_page_server_data::a_page_leaves_the_seeding_of_server_data_to_the_server
   ✓ web::test_page_tests::a_failing_check_names_its_test_and_the_page
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
@@ -4942,4 +4950,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4937 passed, 0 failed, 4937 total tested
+10 ignored, 4945 passed, 0 failed, 4945 total tested

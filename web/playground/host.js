@@ -49,16 +49,16 @@ function errorInProgram(program, reason) {
 }
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
-// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
+// host-files.js, host-sound.js (needs host-files.js), host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
 // host-gpu.js (needs host-media.js), host-timers.js, host-random.js, host-media.js. A built site
-// ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
+// ships a part only when its module imports one of the part's words or calls one of its std modules (src/host_parts.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
 // name) an import module by its name (a .wasm path), else undefined; adapters, std modules for STD_ADAPTERS;
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
-const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
+const HOST_PART_FILES = ["host-files.js", "host-sound.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);

@@ -331,6 +331,9 @@ pub struct WasmGcEmitter {
 	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
 	writes_tags: bool,
 	type_errors: Vec<String>,
+	/// The std modules the program calls through std_pure / std_io (STD_MODULES_SECTION), ANY_STD_MODULE for a module
+	/// named at run time
+	std_modules: std::collections::BTreeSet<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<crate::meta::LineInfo>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
@@ -413,6 +416,7 @@ impl WasmGcEmitter {
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
 			writes_tags: false,
 			type_errors: Vec::new(),
+			std_modules: Default::default(),
 			source_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
@@ -1726,6 +1730,18 @@ impl WasmGcEmitter {
 			self.module.section(&CustomSection {
 				name: crate::wasm_modules::C_CALLS_SECTION.into(),
 				data: c_calls.as_bytes().into(),
+			});
+		}
+		if !self.std_modules.is_empty() {
+			let modules = self
+				.std_modules
+				.iter()
+				.cloned()
+				.collect::<Vec<_>>()
+				.join(crate::host::STD_MODULES_SEPARATOR);
+			self.module.section(&CustomSection {
+				name: crate::host::STD_MODULES_SECTION.into(),
+				data: modules.as_bytes().into(),
 			});
 		}
 		self.emit_names();
