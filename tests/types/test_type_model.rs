@@ -596,7 +596,6 @@ const CORPUS: &[&str] = &[
 const KNOWN_HOLES: &[(&str, &str)] = &[
 	("b: bool = no; b++; b", "bool-assign"),
 	("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"),
-	("class C{a:int}; class D{b:int}; class E{c:int}; s: C | D = C(1); s = E(2)", "class-field"),
 ];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
