@@ -66,6 +66,8 @@ TEXT_HOLE_SHOWN = "Counteraddclicked 3 times"
 COMPONENT_HOLE = "(a component instance's text changes alone)"  # card web-fine-components: component_state.rs hole_bindings
 COMPONENT_HOLE_CODE = 'def Tally(start) {\n\tn = start\n\tsection{ button{ on click { n += 1 } "add" } "clicked " + n + " times" }\n}\ndiv{ Tally(2) Tally(7) }'
 COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
+REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
+REPORT_CODE = 'print "reported"'
 FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
 FILE_KEPT_TEXT = "kept across a reload"
 WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
@@ -369,6 +371,23 @@ def text_hole_wrong(code=TEXT_HOLE_CODE, root="section", expected_text=TEXT_HOLE
 	return [f"{part}: {shown.get(part)!r}, expected {expected!r}" for part, expected in (("text", expected_text), ("kept", True)) if shown.get(part) != expected]
 
 
+def report_wrong(page_url):
+	"""?report turns the report button on in this browser and ?report=off off again; its issue holds the program"""
+	with_parameter = lambda parameter: f"{page_url}{'&' if '?' in page_url else '?'}{parameter}"
+	open_page(with_parameter("report"))
+	wait_for_isolation()
+	browser("eval", f"window.playground.setCode({json.dumps(REPORT_CODE)})")
+	shown = browser("eval", '!document.getElementById("report").hidden')
+	address = json.loads(browser("eval", "window.playground.reportAddress()") or '""')
+	open_page(with_parameter("report=off"))
+	wait_for_isolation()
+	hidden = browser("eval", 'document.getElementById("report").hidden')
+	wrong = [] if shown == "true" else [f"report button hidden after ?report: {shown}"]
+	wrong += [] if hidden == "true" else [f"report button shown after ?report=off: {hidden}"]
+	body = urllib.parse.parse_qs(urllib.parse.urlparse(address).query).get("body", [""])[0]
+	return wrong + ([] if REPORT_CODE in body else [f"report issue without the program: {address!r}"])
+
+
 def file_kept_wrong(page_url):
 	"""a file one run wrote is read by a run after the page reloaded: what differs"""
 	run_code(WRITE_FILE)
@@ -565,7 +584,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (REPORT, lambda: report_wrong(page_url)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
