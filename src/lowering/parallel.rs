@@ -52,21 +52,30 @@ pub(crate) fn parallel_map(node: &Node) -> Option<(Node, Node)> {
 
 /// `go xs.map(x => x * 0.5 + 1)` of a float kernel (linear_arrays.rs is_float_kernel): the map marked SPLIT_ATTRIBUTE,
 /// which picks linear memory for xs and splits on the host (shared_arrays.rs, card go-split-kernel); tasks copying
-/// slices of Nodes would cost a thousand times the kernel's work
+/// slices of Nodes would cost a thousand times the kernel's work. `go xs.map(x => sin(x))` of a heavy kernel is the
+/// plain map, which the GPU takes from a count (gpu_maps.rs automatic, card go-heavy-map), else the CPU's loop: tasks
+/// were fifty times slower than either
 pub(crate) fn kernel_map(list: &Node, function: &Node) -> Option<Node> {
 	let Node::Key(parameter, Op::FatArrow, body) = function.drop_meta() else {
 		return None;
 	};
-	let kernel = matches!(list.drop_meta(), Node::Symbol(_))
-		&& crate::wasm_emitter::linear_arrays::is_float_kernel(&parameter.name(), body);
-	kernel.then(|| {
-		let call = Node::List(
+	if !matches!(list.drop_meta(), Node::Symbol(_)) {
+		return None;
+	}
+	let map = key(
+		list.clone(),
+		Op::Dot,
+		Node::List(
 			vec![symbol(MAP_WORD), function.clone()],
 			Bracket::Round,
 			Separator::None,
-		);
-		key(list.clone(), Op::Dot, call).with_attribute(SPLIT_ATTRIBUTE, Node::True)
-	})
+		),
+	);
+	if crate::wasm_emitter::linear_arrays::is_float_kernel(&parameter.name(), body) {
+		Some(map.with_attribute(SPLIT_ATTRIBUTE, Node::True))
+	} else {
+		crate::gpu_maps::gpu_kernel(function).map(|_| map)
+	}
 }
 
 /// `@parallel` on a form parallel_map can't split into tasks (`@parallel square xs`): a warning (an error under strict)

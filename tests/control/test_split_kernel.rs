@@ -29,8 +29,8 @@ fn a_small_go_map_of_a_float_kernel_maps_on_one_thread() {
 }
 
 #[test]
-fn a_go_map_of_another_function_still_starts_tasks() {
-	let program = format!("n = 4\n{FILL}ys = go xs.map(x => sin(x) + x)\n#ys");
+fn a_go_map_of_a_user_call_still_starts_tasks() {
+	let program = format!("f(x) := x + 1\nn = 4\n{FILL}ys = go xs.map(x => f(x) * 2)\n#ys");
 	assert!(lowered(&program).contains("task_spawn_values"), "{}", lowered(&program));
 	is!(&program, 4);
 }
