@@ -59,6 +59,9 @@ pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
+/// Other languages' list types: warp's list holds any elements, unboxed numbers too, so `Vec<int>` is `list of int`
+const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"];
+const LIST_HEAD: &str = "list";
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
@@ -550,7 +553,20 @@ fn names_a_type(word: &str) -> bool {
 /// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
 fn type_application_name(name: &str, arguments: &str) -> String {
 	let arguments = arguments.replace('<', " of ").replace('>', "");
-	format!("{name} of {}", arguments.split_whitespace().collect::<Vec<_>>().join(" "))
+	format!("{} of {}", noted_list_type_head(name), arguments.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// The head of a list type: `Vec`, `vector`, `Array`… are list
+pub(crate) fn list_type_head(name: &str) -> &str {
+	if FOREIGN_LIST_HEADS.contains(&name) { LIST_HEAD } else { name }
+}
+
+/// list_type_head, with a note naming warp's word for a foreign one
+pub(crate) fn noted_list_type_head(name: &str) -> &str {
+	if FOREIGN_LIST_HEADS.contains(&name) {
+		crate::diagnostic::note_alias(name, LIST_HEAD);
+	}
+	list_type_head(name)
 }
 
 /// The sign of a superscript exponent: ⁺ is +1, ⁻ is -1

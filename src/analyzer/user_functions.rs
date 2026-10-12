@@ -1253,7 +1253,7 @@ pub(super) fn with_list_annotation<'a>(param: Param, items: &mut std::iter::Peek
 	};
 	let element = match next_word(items).as_deref() {
 		Some(LIST_WORD) => annotation,
-		Some(OF_WORD) if annotation == LIST_WORD => {
+		Some(OF_WORD) if crate::warp_parser::list_type_head(&annotation) == LIST_WORD => {
 			items.next();
 			match next_word(items) {
 				Some(element) => element,
