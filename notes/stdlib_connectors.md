@@ -130,12 +130,18 @@ step 3.
   arithmetic, `ws.reverse()` warp's method (foreign_modules does not forward operators of wasm values).
 - Resources (card wit-resources): a resource a component gives stays in it behind a handle
   `{$handle: 1, type: "counter", text: "counter#1", component: path}` (shared handle rules: ids, one table per
-  component, kept until the process ends). `r.counter(5)` / `r.Counter(5)` call `[constructor]counter`, `r.merged(a, b)`
+  component, kept until the process ends unless `c.drop()` runs the resource's destructor first: card component-drop; a
+  dropped handle is refused, "counter#1 was dropped"; a WIT method named drop stays that method). `r.counter(5)` / `r.Counter(5)` call `[constructor]counter`, `r.merged(a, b)`
   a `[static]counter.merged`, `c.increment(2)` the `[method]counter.increment` with the handle as self: a method call
   on a variable assigned a component's result (or on such a call) goes to the component unless it is a warp method
   (library words, list mutation, text builtins). Handles cross back as `own`/`borrow` arguments, also in lists;
   a handle of another resource type or component is refused.
-- Not yet: dropping a resource before the process ends (card component-drop), a component's exports as operators (card component-operators), components in the browser (host.js says it runs only in the native host; jco could transpile them),
+- Operators of handles (card component-operators): `a + b` of a variable holding a resource handle (or a call giving
+  one) is `a.add(b)`: add, sub, mul, div, mod, pow, lt, gt, le, ge, eq, ne. foreign_modules asks the component at compile
+  time which resource a call gives (components::result_kind), so a plain result (`n = r.fib(10); n * 2`) stays warp's
+  arithmetic; a missing method is the component's loud "a counter has no method mul". Native only for now (the browser
+  build reads no component at compile time).
+- Not yet: components in the browser (host.js says it runs only in the native host; jco could transpile them),
   `warp build --exe` (refused: foreign_call is a missing import; card exe-foreign). Capability: Ffi like the other foreign runtimes, though
   a component without preopened files is sandboxed: granting it to eval_untrusted is a later question.
 

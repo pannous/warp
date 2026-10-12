@@ -532,6 +532,8 @@ PASSED:
   ✓ control::test_system_values::the_mouse_is_the_pointer_over_the_paint_window
   ✓ control::test_system_values::window_open_is_no_without_a_window
   ✓ control::test_system_values::yes_no_values_read_the_machine
+  ✓ control::test_table_batched_keys::a_key_read_alone_is_the_one_instance_of_its_row
+  ✓ control::test_table_batched_keys::a_page_of_rows_reads_only_the_rows_its_keys_point_to
   ✓ control::test_table_comprehension::a_filtered_comprehension_over_a_table_reads_only_its_rows
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
   ✓ control::test_table_element_writes::an_element_field_change_is_written_to_its_row
@@ -542,6 +544,8 @@ PASSED:
   ✓ control::test_table_method_reads::a_method_filters_a_list
   ✓ control::test_table_method_reads::a_method_filters_the_table
   ✓ control::test_table_method_reads::a_method_reads_the_table
+  ✓ control::test_table_paging::a_slice_of_a_table_reads_only_its_rows
+  ✓ control::test_table_paging::a_sliced_row_is_the_one_instance_of_its_row
   ✓ control::test_table_query_loading::a_filter_reads_only_the_rows_it_keeps
   ✓ control::test_table_query_loading::a_filtered_row_is_the_one_instance_of_its_row
   ✓ control::test_table_remove::removing_a_row_before_the_table_loads
@@ -732,6 +736,11 @@ PASSED:
   ✓ ffi::header::tests::test_header_sig_to_ffi_sig
   ✓ ffi::header::tests::test_map_c_type_to_valtype
   ✓ ffi::header::tests::test_parse_header_file_math
+  ✓ ffi::test_component_drop::a_dropped_handle_is_refused
+  ✓ ffi::test_component_drop::dropping_a_handle_runs_the_destructor
+  ✓ ffi::test_component_operators::an_operator_without_its_method_is_loud
+  ✓ ffi::test_component_operators::operators_of_handles_call_their_methods
+  ✓ ffi::test_component_operators::plain_results_keep_warps_operators
   ✓ ffi::test_component_short_use::a_component_file_is_used_by_its_name
   ✓ ffi::test_component_short_use::a_component_is_used_as_an_alias
   ✓ ffi::test_component_short_use::an_alias_of_nothing_is_an_error
@@ -4213,6 +4222,7 @@ PASSED:
   ✓ web::test_async_data::a_failed_fetch_is_the_error
   ✓ web::test_async_data::on_change_sees_the_arrived_value
   ✓ web::test_async_data::the_parsed_json_arrives_later
+  ✓ web::test_browser_tables::a_big_browser_table_costs_the_same_per_row
   ✓ web::test_bundle_budget::a_hello_world_site_stays_within_its_budget
   ✓ web::test_bundle_budget::a_site_script_is_compacted
   ✓ web::test_bundle_budget::a_site_script_loses_its_trailing_comments
@@ -4889,4 +4899,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4884 passed, 0 failed, 4884 total tested
+10 ignored, 4894 passed, 0 failed, 4894 total tested

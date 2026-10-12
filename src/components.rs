@@ -38,7 +38,8 @@ struct Loaded {
 	functions: Vec<(String, ComponentExportIndex)>,
 	/// its resource types with their WIT names
 	kinds: Vec<(ResourceType, String)>,
-	held: Vec<ResourceAny>,
+	/// by handle id - 1; a dropped handle's slot is empty
+	held: Vec<Option<ResourceAny>>,
 }
 
 thread_local! {
@@ -55,6 +56,8 @@ const HANDLE_KEY: &str = "$handle";
 const COMPONENT_KEY: &str = "component";
 /// The import of a component that warp's host serves (serve_host_imports)
 const HOST_IMPORT: &str = "host";
+/// `c.drop()`: the resource's destructor runs now (a WIT method of that name stays the method)
+const DROP_METHOD: &str = "drop";
 
 fn engine() -> &'static Engine {
 	static ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -85,10 +88,25 @@ pub fn call_method(handle: &Value, member: &str, arguments: &[Value]) -> Result<
 		.and_then(Value::as_str)
 		.unwrap_or_default()
 		.to_string();
-	with_component(path, |loaded| {
-		let function = loaded.function(member, Some(&kind))?;
-		loaded.invoke(path, member, function, Some(handle), arguments)
+	with_component(path, |loaded| match loaded.function(member, Some(&kind)) {
+		Err(_) if member == DROP_METHOD && arguments.is_empty() => loaded.dropped(handle),
+		function => loaded.invoke(path, member, function?, Some(handle), arguments),
 	})
+}
+
+/// The resource `member` gives when called, a function of the component at `path` or a method of its resource `kind`:
+/// `counter` for `r.counter(5)` and `a.add(b)`; None for a plain value or a component that does not load
+pub fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<String> {
+	with_component(path, |loaded| {
+		let function = loaded.function(member, kind)?;
+		let results: Vec<Type> = function.ty(&loaded.store).results().collect();
+		Ok(match results.as_slice() {
+			[Type::Own(resource) | Type::Borrow(resource)] => kind_name(&loaded.kinds, resource),
+			_ => None,
+		})
+	})
+	.ok()
+	.flatten()
 }
 
 fn with_component<R>(path: &str, body: impl FnOnce(&mut Loaded) -> Result<R, String>) -> Result<R, String> {
@@ -261,6 +279,16 @@ impl Loaded {
 			.ok_or_else(|| format!("{member} is no function"))
 	}
 
+	/// Run the destructor of a handle's resource; its slot stays empty, so a later use is refused
+	fn dropped(&mut self, handle: &Value) -> Result<Value, String> {
+		let slot = held_slot(&self.held, handle)?;
+		let resource = self.held[slot].take().ok_or_else(|| dropped_error(handle))?;
+		resource
+			.resource_drop(&mut self.store)
+			.map_err(|failure| format!("{}: {failure:#}", handle_text(handle)))?;
+		Ok(Value::Null)
+	}
+
 	/// Call `function` with the receiver's resource first (a method) and the arguments as its WIT parameters want them
 	fn invoke(
 		&mut self,
@@ -331,7 +359,7 @@ fn names_match(exported: &str, member: &str) -> bool {
 /// ids never addresses, one table per runtime, kept until the process ends)
 struct Handles<'a> {
 	path: &'a str,
-	held: &'a mut Vec<ResourceAny>,
+	held: &'a mut Vec<Option<ResourceAny>>,
 	kinds: &'a [(ResourceType, String)],
 }
 
@@ -535,17 +563,11 @@ impl Handles<'_> {
 
 	/// The resource of a handle, of the WIT resource type the parameter wants
 	fn held_resource(&self, argument: &Value, wanted: &ResourceType) -> Result<ResourceAny, String> {
-		let id = argument
-			.get(HANDLE_KEY)
-			.and_then(Value::as_u64)
-			.ok_or_else(|| format!("{argument} is no handle of a resource"))?;
+		let slot = held_slot(self.held, argument)?;
 		if argument.get(COMPONENT_KEY).and_then(Value::as_str) != Some(self.path) {
 			return Err(format!("{argument} is a handle of another component"));
 		}
-		let resource = *self
-			.held
-			.get(id as usize - 1)
-			.ok_or_else(|| format!("no handle {id}"))?;
+		let resource = self.held[slot].ok_or_else(|| dropped_error(argument))?;
 		if resource.ty() != *wanted {
 			return Err(format!(
 				"{argument} is a {}, the parameter another resource",
@@ -556,17 +578,43 @@ impl Handles<'_> {
 	}
 
 	fn handle(&mut self, resource: ResourceAny) -> Value {
-		self.held.push(resource);
+		self.held.push(Some(resource));
 		let (id, kind) = (self.held.len(), self.kind_of(&resource));
 		serde_json::json!({ HANDLE_KEY: id, "type": kind, "text": format!("{kind}#{id}"), COMPONENT_KEY: self.path })
 	}
 
 	fn kind_of(&self, resource: &ResourceAny) -> String {
-		self.kinds
-			.iter()
-			.find(|(ty, _)| *ty == resource.ty())
-			.map_or_else(|| "resource".to_string(), |(_, name)| name.clone())
+		kind_name(self.kinds, &resource.ty()).unwrap_or_else(|| "resource".to_string())
 	}
+}
+
+/// The slot of a handle's resource among those its component handed out (empty once dropped)
+fn held_slot(held: &[Option<ResourceAny>], handle: &Value) -> Result<usize, String> {
+	let id = handle
+		.get(HANDLE_KEY)
+		.and_then(Value::as_u64)
+		.ok_or_else(|| format!("{handle} is no handle of a resource"))?;
+	(1..=held.len() as u64)
+		.contains(&id)
+		.then(|| id as usize - 1)
+		.ok_or_else(|| format!("no handle {id}"))
+}
+
+/// The WIT name of a resource type of a component
+fn kind_name(kinds: &[(ResourceType, String)], ty: &ResourceType) -> Option<String> {
+	kinds.iter().find(|(kind, _)| kind == ty).map(|(_, name)| name.clone())
+}
+
+fn handle_text(handle: &Value) -> String {
+	handle
+		.get("text")
+		.and_then(Value::as_str)
+		.unwrap_or("the handle")
+		.to_string()
+}
+
+fn dropped_error(handle: &Value) -> String {
+	format!("{} was dropped", handle_text(handle))
 }
 
 fn items(argument: &Value) -> Result<&Vec<Value>, String> {
