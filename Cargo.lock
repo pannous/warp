@@ -3413,6 +3413,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "objc2 0.6.5",
  "paste",
  "pollster",
  "regex",
