@@ -12,8 +12,9 @@ notes/open_decisions.md.
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
   are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
   position `or` stays the boolean or (warp-dispatch).
-- empty-field: a field of the class's own type is optional by itself (`class Tree{left: Tree; v:int}; Tree(ø, 3).v`
-  is 3: a required one could never be built); other fields stay strict (`P(ø).n` with `n: int` is an error).
+- empty-field (re-asked, strict): ø needs `?` everywhere, no exception for a class's own type. `left: Tree?` holds ø;
+  `class Tree{left: Tree; v:int}` is a compile error, "left can never be filled: every Tree needs a Tree first; fix:
+  left: Tree?".
 - number-converts (implied by rational-float and exact-decimals, not asked): `number` means any number and keeps an
   exact value (`x: number = 1/3` stays 1/3, card number-number); only `float` converts.
 - exe-foreign: an executable from `warp build` that uses python/js starts python3 or node from PATH when it runs and
