@@ -72,8 +72,10 @@ Warp notation text (parsed by the reader we already have), one map:
    lib/fourty_two`) done: reflection::lower_module_words after modules::resolve, the sorted names from
    wasm_modules::exports. Components (`use wasm "x.wasm" as lib`, card reflection-components): `lib.exports` and `dir(lib)` natively from
    the compiled component (components::export_names, functions and resource types of it and its exported interfaces,
-   snake_case), reflection::lower_component_words right before foreign_modules. Not yet in the page (card reflect-page-meta): the compiler
-   there cannot read the component (components.js loads it by name at its first call).
+   snake_case), reflection::lower_component_words right before foreign_modules. In the page too (card
+   reflect-page-meta): wasm_modules::component_export_names reads them with wasmparser's validator (no wasmtime), the
+   compiler fetching the binary like an imported core module's (web::read_bytes); the validator was linked into the
+   browser build already, the optimized warp.wasm kept its size. Sample samples/component_reflection.warp.
 5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
@@ -84,7 +86,8 @@ Warp notation text (parsed by the reader we already have), one map:
    at compile time, the module's path is known then, so no host call: `adder.exports` are the module's own functions
    (not warp's runtime exports), `adder.add.params` and `.signature` come from the entry (Objects::module_function_word;
    wasm_modules::qualify leaves `m.f.word` of an exported function unqualified for it). The run-time host call stays
-   for `any`-typed values only. Not yet: the page reader (card reflect-page-meta).
+   for `any`-typed values only, in neither host yet. The page's compiler reads an imported module's entries the same way
+   (web::read_bytes fetches it; test_reflection_words a_warp_modules_classes passes in the browser suite).
    Done (card reflection-classes, on that entry): `m.P.fields`, `m.P.methods`, `dir(m.P)` of an imported module's class
    (Objects::module_member_word, which also answers `m.f.params`). The entries hold names as symbols (`[x y]`), a
    one-letter text reads back as a character; `classes` lists inherited fields first. wasm_emitter emit_names also
