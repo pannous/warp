@@ -162,7 +162,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    browser and in a CoreAudio render callback natively: the same code both ways, which is where wasm-first warp beats
    other languages. Needs f32 arrays without boxing (today samples cross as a list of Ints), no allocation in the
    callback, 44.1/48 kHz stereo.
-   Native first step built (card real-time, samples/signal.warp, tests/programs/test_sound_signal.rs):
+   Native first step built (card real-time, samples/siren_sound.warp, tests/programs/test_sound_signal.rs):
    `play_signal(hum, 2s)` calls the program's `hum(t)` for every sample (t in seconds, at sample_rate), mono. The
    host word (host/native.rs played_signal) calls the export typed (f64) -> f64; music_words.rs makes the function
    of floats to a float (untyped parameters `: float`, body `as float`, so `hum(t) := 3.0` works too). On warp's own
@@ -174,7 +174,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    (`global level = 0.0`) is an exact ratio whose denominator gains about a bit a sample (the blow-up beyond that,
    unreduced ratios, is fixed: card exact-decimals), so floats stay the way for DSP state.
    About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
-   Block-wise built (samples/signal_blocks.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
+   Block-wise built (samples/stereo_sound.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
    a block, block a linear float array (notes/linear_arrays.md) of 512 cells to write, t its first sample's time.
    music_words.rs with_block_signals declares `linear fill·block = float[512]` and `fill·blocks(t: float)`, which
    calls fill with it (so fill's parameter is the linear array), and writes the call out as std_io("sound", "blocks",
