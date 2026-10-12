@@ -605,9 +605,17 @@ fn eval_program(node: Node) -> Node {
 
 	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
 	match emit_module(&node) {
-		Ok(module) => run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module }),
+		Ok(module) => checked_markup(run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module })),
 		Err(type_error) => type_error,
 	}
+}
+
+/// A run's value; markup it built is checked for accessibility as it came out (card web-a11y-runtime)
+fn checked_markup(result: Node) -> Node {
+	if crate::markup::is_markup(&result) {
+		crate::accessibility::check_rendered(&result);
+	}
+	result
 }
 
 /// The words of an exception (library_words lowers them to the call raise(X))

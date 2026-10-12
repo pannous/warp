@@ -19,6 +19,8 @@ const FULL_SCALE = 32767;
 // checked every SIGNAL_POLL_MS (src/sound.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
 const SIGNAL_POLL_MS = 10;
+// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound.rs PLAY_AHEAD)
+const PLAY_AHEAD_SECONDS = 0.5;
 // a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
@@ -552,8 +554,10 @@ function wavOf(samples, rate, channels = 1) {
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
-		// signal's blocks keep its first one's handle. The handle
+		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
+		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
+			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const sound = { samples, rate, channels };
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place });

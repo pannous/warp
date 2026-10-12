@@ -121,6 +121,10 @@ fn attributed_tag(item: Node, defined: &HashSet<String>) -> Node {
 /// grouped in their parentheses (a statement's `html(lang: "en")`)
 fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Node>)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
+	// `on submit { … }` on a line of its own is a handler (element_events.rs), not the tag `on{submit{…}}`
+	if crate::element_events::handler_at(items, 0).is_some() {
+		return None;
+	}
 	let (name, pairs) = items.split_first()?;
 	let pairs = match pairs {
 		[group] => match group.drop_meta() {

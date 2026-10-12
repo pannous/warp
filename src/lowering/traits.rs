@@ -49,6 +49,9 @@ const MISSING_FIELDS_WARNING: &str = "DATA lacks FIELDS of DECLARED";
 const MISSING_FIELDS_FIX: &str = "give FIELDS, or declare THEM optional (x?) or with a default in DECLARED";
 const EXTRA_FIELDS_WARNING: &str = "DATA has FIELDS, which DECLARED does not declare";
 const EXTRA_FIELDS_FIX: &str = "drop FIELDS, or declare THEM in DECLARED";
+/// A function named like a field of its parameter's class (NAME, CLASS, PARAMETER)
+const FIELD_METHOD_WARNING: &str = "CLASS has a field NAME and a method NAME(PARAMETER:CLASS): PARAMETER.NAME reads the field, PARAMETER.NAME() and NAME(PARAMETER) call the method";
+const FIELD_METHOD_FIX: &str = "rename the field or the method";
 pub const COMPARE: &str = "compare";
 /// T4: every value is Equatable by value; `equals` overrides it for a type
 pub const EQUATABLE: &str = "Equatable";
@@ -506,8 +509,11 @@ pub fn lower_conformances(node: Node) -> Node {
 		return node;
 	}
 	let traits = Traits::of(&node);
+	if let Err(error) = crate::diagnostic::report(&field_method_warnings(&node, &registry)) {
+		return error;
+	}
 	let generics = generic_functions(&node, &registry, &traits);
-	let node = conform(operation_calls(node, &traits, &generics), &registry, &traits, &generics);
+	let node = conform(operation_calls(node, &registry, &traits, &generics), &registry, &traits, &generics);
 	let node = match generics.is_empty() {
 		true => node,
 		false => match generic_calls(node, generics) {
@@ -523,11 +529,13 @@ pub fn lower_conformances(node: Node) -> Node {
 }
 
 /// `s.area()` of a declared trait's operation or of a generic function: the call `area(s)`, which picks the witness of
-/// s's type like any call of the operation (a class method `area(): number {…}` is the witness area·Square)
-fn operation_calls(node: Node, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {
+/// s's type like any call of the operation (a class method `area(): number {…}` is the witness area·Square); an uncalled
+/// `b.size` of a declared field reads the field
+fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {
 	let is_operation = |member: &Node| {
 		let name = crate::lowering::class_methods::leading_name(member);
-		traits.operation(&name).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name)) || generics.contains_key(&name)
+		let reads_field = matches!(member.drop_meta(), Node::Symbol(_)) && is_declared_field(registry, &name);
+		!reads_field && (traits.operation(&name).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name)) || generics.contains_key(&name))
 	};
 	match node {
 		Node::Key(receiver, Op::Dot, member) if is_operation(&member) => {
@@ -536,11 +544,33 @@ fn operation_calls(node: Node, traits: &Traits, generics: &HashMap<String, Gener
 				_ => vec![],
 			};
 			let name = Node::Symbol(crate::lowering::class_methods::leading_name(&member));
-			let arguments = std::iter::once(*receiver).chain(arguments).map(|argument| operation_calls(argument, traits, generics));
+			let arguments = std::iter::once(*receiver).chain(arguments).map(|argument| operation_calls(argument, registry, traits, generics));
 			Node::List(std::iter::once(name).chain(arguments).collect(), Bracket::Round, Separator::None)
 		}
-		other => other.map_children(|child| operation_calls(child, traits, generics)),
+		other => other.map_children(|child| operation_calls(child, registry, traits, generics)),
 	}
+}
+
+fn is_declared_field(registry: &TypeRegistry, name: &str) -> bool {
+	registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
+}
+
+/// A warning per definition `size(b:Box)` where Box has a field size: `b.size` and `b.size()` then mean different things
+fn field_method_warnings(node: &Node, registry: &TypeRegistry) -> Vec<Diagnostic> {
+	let mut warnings = vec![];
+	node.visit(&mut |child| {
+		let Node::Key(head, Op::Assign | Op::Define, _) = child else { return };
+		if let Some(items) = definition_head(head) {
+			let name = items[0].name();
+			for (parameter, class) in instance_parameters(head, registry) {
+				if registry.get_by_name(&class).is_some_and(|type_def| type_def.fields.iter().any(|field| field.name == name)) {
+					let fill = |template: &str| template.replace("NAME", &name).replace("CLASS", &class).replace("PARAMETER", &parameter);
+					warnings.push(Diagnostic::at(head, fill(FIELD_METHOD_WARNING)).fix(fill(FIELD_METHOD_FIX)));
+				}
+			}
+		}
+	});
+	warnings
 }
 
 fn conform(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {

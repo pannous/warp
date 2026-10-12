@@ -95,6 +95,7 @@ self.voiceAt = seconds => {
 	const origin = voice.origin ?? soundClock();
 	voice = { end: origin + seconds, seconds, origin };
 };
+self.insideAt = () => voicesBeforeAt.length > 0;
 self.voiceAtEnd = () => {
 	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
 };

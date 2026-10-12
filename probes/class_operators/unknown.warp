@@ -1,0 +1,13 @@
+class V { x:int; plus(o) := V(x + o.x); times(o) := V(x * o.x) }
+class W { y:int; plus(o) := W(y - o.y) }
+f(a, b) := a + b
+print(f(V(1), V(2)).x)
+print(f(W(5), W(2)).y)
+print(f(3, 4))
+print(f("a", "b"))
+t = 0
+for p in [V(2), V(3)] { t = t + (p * V(10)).x }
+print(t)
+g(a, b) := a * b
+print(g(V(2), V(3)).x)
+for q in [V(1), W(9)] { r = q + q; print(r) }
