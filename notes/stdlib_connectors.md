@@ -76,7 +76,7 @@ step 3.
   (`AttributeError: module 'math' has no attribute 'nope'`). The result is built with tasks::Builders like run_block's
   (host::VALUE_GIVING_WORDS: the module exports its constructors and exact builders).
 - Values: exact rationals cross as floats (`2.5` is 5/2 in warp), integers beyond 64 bits come back exact
-  (`{"$int": "digits"}`: `math.factorial(25)` → 15511210043330985984000000), booleans 1/0, None ø, dicts objects,
+  (`{"$int": "digits"}`: `math.factorial(25)` → 15511210043330985984000000), booleans yes/no (warp bools, card booleans-foreign), None ø, dicts objects,
   tuples/sets lists, numpy arrays via tolist(), anything else its repr text.
 - Capability: foreign_call is a host word linked like an FFI import, so it needs Ffi: eval grants it, eval_untrusted
   refuses it. eval_untrusted used to check only the parsed program, before lowering added calls of its own; its grant

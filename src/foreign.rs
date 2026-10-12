@@ -114,11 +114,11 @@ fn codepoint_of(entries: &serde_json::Map<String, Value>) -> Option<char> {
 	}
 }
 
-/// A JSON value as a Node: null ø, booleans 1/0, objects `{key:value …}`
+/// A JSON value as a Node: null ø, booleans yes/no, objects `{key:value …}`
 pub(crate) fn node_of(value: &Value) -> Node {
 	match value {
 		Value::Null => Node::Empty,
-		Value::Bool(truth) => Node::Number(Number::Int(i64::from(*truth))),
+		Value::Bool(truth) => Node::from(*truth),
 		Value::Number(number) => match number.as_i64() {
 			Some(integer) => Node::Number(Number::Int(integer)),
 			None => Node::Number(Number::Float(number.as_f64().unwrap_or(f64::NAN))),
