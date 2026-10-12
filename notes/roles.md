@@ -85,9 +85,12 @@ The only session that runs the full suite and the only one that pushes code to m
   origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
   Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Small changes on main (user, 2026-10-12, "new very important rule": "Agents can work on the main branch without
-  work tree if their changes are small or not conflicting with other work"): notes, docs, a sample, a one-file fix no
-  other session is touching go straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or
-  branch. There: never touch the user's uncommitted files (commit only your own paths: `git commit -- <paths>`), run
+  work tree if their changes are small or not conflicting with other work"; narrowed the same day after "maybe my new
+  rule is stupid if their changes block all the tests"): only changes that cannot break the build or a test, i.e.
+  nothing compiled: notes, docs, wiki, probes, scripts, samples, playground text, go straight onto main in the main
+  checkout /Users/me/dev/angles/warp, no worktree or branch. Anything in src/, crates/, tests/, Cargo.* or build.rs
+  keeps its worktree, however small: a half-done edit there breaks every build of the main checkout (the user's and
+  every session's working on main). There: never touch the user's uncommitted files (commit only your own paths: `git commit -- <paths>`), run
   the targeted tests through the queue, `git pull --rebase --autostash`, push, and tell the Integrator the commit and
   filters (its next full run is the check). Bigger or overlapping work keeps its worktree and branch.
   Moving on demand: a change that grows (more than a few files, many build/test rounds, or another session's files)
