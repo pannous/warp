@@ -7,6 +7,8 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- return-as (user, via warp-supervisor): return types are spelled `def f(x) as int or text`; `->` still works with
+  a hint and an "I meant" fix toward `as`; no `returns` keyword ("nah") (warp-dispatch).
 - union-or (user, via warp-supervisor): in types `or` is a synonym for `|`: `x: int or text`, `s: Circle or Square`
   are unions in fields, parameters, variables and return types; both spellings first-class, no hint. In value
   position `or` stays the boolean or (warp-dispatch).
