@@ -1,5 +1,5 @@
 //! Real threads for `go` (user decision P33, notes/threads.md): `go f(x)` runs f in a new instance of the same module on
-//! its own thread; `await job` joins it. Values are copied: the arguments go in, the result comes out (a TaskValue
+//! a fixed worker pool; `await job` waits for it. Values are copied: the arguments go in, the result comes out (a TaskValue
 //! between the threads, rebuilt in each instance through its exported constructors); the task never changes the
 //! caller's variables. The program calls the host words (declarations::resolve_tasks):
 //! `task_spawn(name, a0, a1, a2, a3)` / `task_await(id)` for functions of Ints, `task_spawn_values(name, [args])` /
@@ -11,8 +11,8 @@ use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_
 use crate::node::{Bracket, Node};
 use crate::wasm_reader::Imports;
 use anyhow::{anyhow, Result};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -20,6 +20,8 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 
 /// How often the engine's epoch ticks while tasks run: a stop or pause takes effect within about this long
 const EPOCH_TICK: Duration = Duration::from_millis(5);
+/// Tasks may block in sleep, channels and host calls, so one worker per core would leave cores idle.
+const TASK_WORKERS_PER_CORE: usize = 2;
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
 use crate::host::TASK_WORDS;
@@ -401,16 +403,110 @@ enum Captured {
 }
 
 enum Slot {
-	Running(JoinHandle<Result<TaskValue, String>>),
+	Queued,
+	Running,
 	Done(Result<TaskValue, String>),
+}
+
+struct TaskJob {
+	id: i64,
+	function: String,
+	arguments: Vec<TaskValue>,
+	captured: Vec<(String, Captured)>,
+	control: Arc<TaskControl>,
+	voice: crate::sound::Voice,
+}
+
+struct TaskPoolState {
+	jobs: Mutex<VecDeque<TaskJob>>,
+	ready: Condvar,
+	stopping: AtomicBool,
+}
+
+struct TaskPool {
+	state: Arc<TaskPoolState>,
+	workers: Mutex<Vec<JoinHandle<()>>>,
+}
+
+thread_local! {
+	static IN_TASK_WORKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The fixed number of native workers used by one program run.
+pub fn worker_count() -> usize {
+	std::thread::available_parallelism().map_or(1, |cores| cores.get() * TASK_WORKERS_PER_CORE)
+}
+
+impl TaskPool {
+	fn new() -> Self {
+		Self {
+			state: Arc::new(TaskPoolState { jobs: Mutex::new(VecDeque::new()), ready: Condvar::new(), stopping: AtomicBool::new(false) }),
+			workers: Mutex::new(Vec::new()),
+		}
+	}
+
+	fn start(&self, table: Weak<TaskTable>) -> Result<()> {
+		let mut workers = self.workers.lock().expect("task workers");
+		for number in 0..worker_count() {
+			let state = self.state.clone();
+			let table = table.clone();
+			let worker = std::thread::Builder::new().name(format!("warp-task-{number}")).spawn(move || {
+				IN_TASK_WORKER.with(|inside| inside.set(true));
+				while let Some(job) = TaskPool::next(&state, true) {
+					let Some(table) = table.upgrade() else { break };
+					table.run_job(job);
+				}
+			})?;
+			workers.push(worker);
+		}
+		Ok(())
+	}
+
+	fn submit(&self, job: TaskJob) {
+		self.state.jobs.lock().expect("task queue").push_back(job);
+		self.state.ready.notify_one();
+	}
+
+	fn help(&self) -> Option<TaskJob> {
+		TaskPool::next(&self.state, false)
+	}
+
+	fn next(state: &TaskPoolState, wait: bool) -> Option<TaskJob> {
+		let mut jobs = state.jobs.lock().expect("task queue");
+		loop {
+			if let Some(job) = jobs.pop_front() {
+				return Some(job);
+			}
+			if !wait || state.stopping.load(Ordering::Relaxed) {
+				return None;
+			}
+			jobs = state.ready.wait(jobs).expect("task queue");
+		}
+	}
+}
+
+impl Drop for TaskPool {
+	fn drop(&mut self) {
+		self.state.stopping.store(true, Ordering::Relaxed);
+		self.state.ready.notify_all();
+		let current = std::thread::current().id();
+		for worker in self.workers.get_mut().expect("task workers").drain(..) {
+			if worker.thread().id() != current {
+				let _ = worker.join();
+			}
+		}
+	}
 }
 
 /// The tasks of one program run, shared by every instance it starts
 pub struct TaskTable {
+	own: Weak<TaskTable>,
 	engine: Engine,
 	module: Module,
 	imports: Imports,
 	slots: Mutex<HashMap<i64, Slot>>,
+	finished: Condvar,
+	pool: TaskPool,
 	/// the tasks whose result or failure the program read (await, join): a failure nobody read ends the run (join_all)
 	taken: Mutex<std::collections::HashSet<i64>>,
 	/// raises inside tasks for the starting thread: the handler's node wrapper and the argument list (deliver)
@@ -426,10 +522,11 @@ pub struct TaskTable {
 
 /// Link task_spawn and task_await for `module`, sharing one table with every task it starts
 pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, imports: Imports, shared: Option<Arc<crate::shared::SharedArrays>>) -> Result<Arc<TaskTable>> {
-	let table = Arc::new(TaskTable {
-		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), signals: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), running: AtomicI64::new(0), shared, channels: Channels::default(),
+	let table = Arc::new_cyclic(|own| TaskTable {
+		own: own.clone(), engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), finished: Condvar::new(), pool: TaskPool::new(), taken: Mutex::default(), signals: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), running: AtomicI64::new(0), shared, channels: Channels::default(),
 	});
 	table.link_into(linker)?;
+	table.pool.start(Arc::downgrade(&table))?;
 	tick_while_running(Arc::downgrade(&table));
 	Ok(table)
 }
@@ -437,7 +534,7 @@ pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, im
 /// The epoch advances while the table lives, so tasks reach their checks (stop, pause)
 /// The machine's cores: a parallel let forks while fewer tasks run (task_forks)
 fn cores() -> i64 {
-	std::thread::available_parallelism().map_or(1, |cores| cores.get() as i64)
+	worker_count() as i64
 }
 
 fn tick_while_running(table: Weak<TaskTable>) {
@@ -578,7 +675,7 @@ impl TaskTable {
 	fn alone_in(self: &Arc<Self>, caller: &Caller<'_, HostState>) -> impl Fn() -> bool + use<> {
 		let table = self.clone();
 		let in_task = caller.data().in_task;
-		move || !in_task && table.slots.lock().expect("task table").values().all(|slot| !matches!(slot, Slot::Running(handle) if !handle.is_finished()))
+		move || !in_task && table.slots.lock().expect("task table").values().all(|slot| matches!(slot, Slot::Done(_)))
 	}
 
 	fn deliver_to(&self, caller: &mut Caller<'_, HostState>) -> Result<()> {
@@ -631,17 +728,26 @@ impl TaskTable {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
 		self.controls.lock().expect("task controls").insert(id, control.clone());
-		let table = self.clone();
 		let voice = crate::sound::voice(); // the task is a voice of its own, starting where this one stands
 		self.running.fetch_add(1, Ordering::Relaxed);
-		let handle = std::thread::spawn(move || {
-			crate::sound::join_voice(voice);
-			let result = table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {}: {}", task_name(&function), failure_message(failure)));
-			table.running.fetch_sub(1, Ordering::Relaxed);
-			result
-		});
-		self.slots.lock().expect("task table").insert(id, Slot::Running(handle));
+		self.slots.lock().expect("task table").insert(id, Slot::Queued);
+		self.pool.submit(TaskJob { id, function, arguments, captured, control, voice });
 		id
+	}
+
+	fn run_job(self: &Arc<Self>, job: TaskJob) {
+		if let Some(slot) = self.slots.lock().expect("task table").get_mut(&job.id) {
+			*slot = Slot::Running;
+		}
+		crate::sound::join_voice(job.voice);
+		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			self.run(&job.function, &job.arguments, &job.captured, job.control)
+				.map_err(|failure| format!("task {}: {}", task_name(&job.function), failure_message(failure)))
+		}))
+		.unwrap_or_else(|_| Err("the task panicked".to_string()));
+		self.running.fetch_sub(1, Ordering::Relaxed);
+		self.slots.lock().expect("task table").insert(job.id, Slot::Done(result));
+		self.finished.notify_all();
 	}
 
 	/// f(arguments) in a fresh instance of the module, with the same imports as the program
@@ -704,10 +810,6 @@ impl TaskTable {
 
 	/// Where the task is, without waiting for it: running, finished, failed, stopped or paused (host TASK_* codes)
 	fn status(&self, id: i64) -> i64 {
-		let finished = matches!(self.slots.lock().expect("task table").get(&id), Some(Slot::Running(handle)) if handle.is_finished());
-		if finished {
-			let _ = self.await_task(id); // joins it: the result is there
-		}
 		let paused = self.controls.lock().expect("task controls").get(&id).is_some_and(|control| *control.state.lock().expect("task control") == Control::Pause);
 		match self.slots.lock().expect("task table").get(&id) {
 			Some(Slot::Done(Ok(_))) => crate::host::TASK_FINISHED,
@@ -720,13 +822,25 @@ impl TaskTable {
 
 	/// The result of the task: joins it the first time, then remembers it
 	fn await_task(&self, id: i64) -> Result<TaskValue, String> {
-		let slot = self.slots.lock().expect("task table").remove(&id).ok_or_else(|| format!("no task {id}"))?;
-		let result = match slot {
-			Slot::Running(handle) => handle.join().unwrap_or_else(|_| Err("the task panicked".to_string())),
-			Slot::Done(result) => result,
-		};
-		self.slots.lock().expect("task table").insert(id, Slot::Done(result.clone()));
-		result
+		loop {
+			let mut slots = self.slots.lock().expect("task table");
+			match slots.get(&id) {
+				Some(Slot::Done(result)) => return result.clone(),
+				Some(Slot::Queued | Slot::Running) => {}
+				None => return Err(format!("no task {id}")),
+			}
+			drop(slots);
+			if IN_TASK_WORKER.with(std::cell::Cell::get) {
+				if let Some(job) = self.pool.help() {
+					self.own.upgrade().ok_or_else(|| "task pool ended".to_string())?.run_job(job);
+					continue;
+				}
+			}
+			slots = self.slots.lock().expect("task table");
+			if !matches!(slots.get(&id), Some(Slot::Done(_))) {
+				drop(self.finished.wait(slots).expect("task table"));
+			}
+		}
 	}
 
 	/// The result of the task, read by the program
