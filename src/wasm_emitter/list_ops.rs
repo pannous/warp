@@ -162,6 +162,11 @@ impl WasmGcEmitter {
 
 	/// The instructions forgetting the list cursor, before a list's links change in place
 	pub(super) fn forget_list_cursor(&self) -> Vec<Instruction<'static>> {
+		[self.forget_list_cursor_keeping_map_indexes(), self.forget_map_indexes()].concat()
+	}
+
+	/// The instructions forgetting the list cursor, in field_with and fields_grow, which keep the map indexes right
+	pub(super) fn forget_list_cursor_keeping_map_indexes(&self) -> Vec<Instruction<'static>> {
 		self.forget_cursor_parts(&[CursorPart::List, CursorPart::Counted, CursorPart::Extended])
 	}
 
@@ -1972,7 +1977,8 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(countdown), I::I64Const(1), I::I64Eq, I::BrIf(1)]);
 			s.emit_field(f, cell, 2);
 			Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(countdown), I::I64Const(1), I::I64Sub, I::LocalSet(countdown), I::Br(0), I::End, I::End]);
-			// it takes the value, in place
+			// it takes the value, in place: an entry replaced, so no map index holds the old one
+			Self::emit_list(f, &s.forget_map_indexes());
 			Self::emit_list(f, &[I::LocalGet(cell), I::LocalGet(value), I::StructSet { struct_type_index: node_type, field_index: 1 },
 				I::LocalGet(list), I::RefAsNonNull]);
 		});
@@ -2199,7 +2205,7 @@ impl WasmGcEmitter {
 
 	/// map_get(map: ref $Node, key: ref $Node) -> ref $Node: the value of the first `key:value` entry whose key equals `key`
 	pub(super) fn emit_map_get(&mut self) {
-		if !self.should_emit_function("map_get") && !self.should_emit_function("map_find") && !self.should_emit_function("field_with") {
+		if !self.uses_map_lookups() {
 			return;
 		}
 		let node = self.type_manager.node_type;
@@ -2255,9 +2261,11 @@ impl WasmGcEmitter {
 			s.call(f, VALUES_EQUAL);
 			Self::emit_list(f, &[I::Else, I::I32Const(0), I::End]);
 		});
-		let locals = vec![nullable_node_ref, nullable_node_ref, nullable_node_ref, ValType::I64];
+		self.emit_node_map_runtime();
+		self.emit_map_index();
+		let locals = vec![nullable_node_ref, nullable_node_ref, nullable_node_ref, ValType::I64, ValType::I32];
 		self.runtime_function("map_find", vec![node_ref, node_ref], vec![nullable_node_ref], locals, |s, f| {
-			let (cell, entry, tmp, kind) = (2, 3, 4, 5);
+			let (cell, entry, tmp, kind, indexed) = (2, 3, 4, 5, 6);
 			// return the value when the entry in local `entry` is a `key:value` whose key is the wanted one
 			let check_entry = |f: &mut Function| {
 				Self::emit_list(f, &[I::LocalGet(entry), I::RefAsNonNull, I::LocalGet(1)]);
@@ -2276,6 +2284,15 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And]);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+			// a map walked lately has an index
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, super::map_index::MAP_INDEX_ENTRY);
+			Self::emit_list(f, &[I::LocalSet(indexed), I::LocalSet(entry), I::LocalGet(indexed), I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(entry), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+			s.emit_field(f, entry, 2);
+			Self::emit_list(f, &[I::LocalTee(tmp), I::RefIsNull, I::If(BlockType::Result(nullable_node_ref))]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Else, I::LocalGet(tmp), I::End, I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell)]);
 			s.emit_cell_walk(f, cell, |f| {
 				s.emit_field(f, cell, 1);
