@@ -80,6 +80,8 @@ mod test_request_fields; // card g_mQ9U
 #[cfg(feature = "native")] // a site build and a server on a port
 mod test_route_data; // P221
 #[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_route_error_positions; // card runtime-errors
+#[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_route_header; // card web-route-header
 #[cfg(feature = "native")] // runs wasm-split
 mod test_route_helpers; // card web-split-helpers
