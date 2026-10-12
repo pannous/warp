@@ -18,7 +18,8 @@ brush = shader {
 	}
 }
 
-// until the window closes; headless (no window) the loop never starts
+// the first paint opens the window; then until it closes (headless: no window, so the loop never starts)
+paint(brush, width, height)
 while window_open {
 	paint(brush, width, height)
 	sleep 16ms
