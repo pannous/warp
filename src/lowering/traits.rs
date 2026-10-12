@@ -680,8 +680,7 @@ fn renamed_head(head: Node, witness: String) -> Node {
 }
 
 fn defined_functions(node: &Node) -> Vec<String> {
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, node);
+	let context = crate::analyzer::function_definitions(node);
 	context.user_functions.into_keys().collect()
 }
 
@@ -1597,8 +1596,7 @@ fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) 
 
 /// Every function's parameters with the declared type each one takes, for the functions that take any
 fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, Vec<(String, Option<String>)>> {
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, node);
+	let context = crate::analyzer::function_definitions(node);
 	let declared = |param: &crate::context::Param| param.annotation.as_ref().map(Node::name).filter(|type_name| registry.get_by_name(type_name).is_some());
 	let signature = |function: &crate::context::UserFunctionDef| function.params.iter().map(|param| (param.name.clone(), declared(param))).collect::<Vec<_>>();
 	context.user_functions.values().map(|function| (function.name.clone(), signature(function))).filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some())).collect()
@@ -1606,8 +1604,7 @@ fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, 
 
 /// Every function's parameters annotated `list of <trait>` (`xs: Comparable list`): their positions and traits
 fn trait_constraints(node: &Node, traits: &Traits) -> HashMap<String, Vec<(usize, String)>> {
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, node);
+	let context = crate::analyzer::function_definitions(node);
 	let constraint = |param: &crate::context::Param| param.annotation.as_ref()?.name().strip_prefix(LIST_OF_PREFIX).filter(|element| traits.is_trait(element)).map(str::to_string);
 	context.user_functions.values().map(|function| {
 		let constrained = function.params.iter().enumerate().filter_map(|(index, param)| Some((index, constraint(param)?))).collect::<Vec<_>>();

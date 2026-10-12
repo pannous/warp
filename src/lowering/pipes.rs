@@ -44,7 +44,7 @@ pub fn is_pipe_stage(node: &Node) -> bool {
 }
 
 pub fn lower(node: Node) -> Node {
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let mut variables = HashSet::new();
 	let mut spaced_functions = HashSet::new();
 	node.visit(&mut |part| match part {

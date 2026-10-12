@@ -739,8 +739,7 @@ fn rpc_route(definition: &Node) -> Option<Route> {
 
 /// The name and parameter count of the function a definition defines
 fn defined_function(definition: &Node) -> Option<(String, usize)> {
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, definition);
+	let context = crate::analyzer::function_definitions(definition);
 	context.user_functions.into_values().next().map(|function| (function.name, function.params.len()))
 }
 

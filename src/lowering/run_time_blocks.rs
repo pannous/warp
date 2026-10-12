@@ -149,8 +149,7 @@ fn assigned_name(statement: &Node) -> Option<String> {
 }
 
 fn defines_functions(statement: &Node) -> bool {
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, statement);
+	let context = crate::analyzer::function_definitions(statement);
 	!context.user_functions.is_empty() && crate::blocks::uncharged(statement).is_none()
 }
 

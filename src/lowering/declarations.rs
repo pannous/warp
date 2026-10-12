@@ -237,8 +237,7 @@ pub fn lower_tasks(node: Node) -> Node {
 		return node;
 	}
 	// `def hi: {…}`, `fun f(x) {…}` too
-	let mut context = crate::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_definitions(&node);
 	functions.extend(context.user_functions.into_keys());
 	// the functions a `go` starts: `once the download finishes` names the task by its function
 	node.visit(&mut |part| if let Node::List(items, _, _) = part {
