@@ -375,8 +375,12 @@ Each step is useful on its own and is what the next ones stand on.
   imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
   steps (started, poll, finished, ended, stopped). src/site.rs HOST_PARTS ships a part when the module imports one of
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
-  a part gives selects it. Coarse: std_pure ships the hashes for json too, std_io the files for `stored` values (the
-  std module's name is a runtime text; a custom section naming the std modules a program uses would refine it; card web-host-parts-std).
+  a part gives selects it. std modules (2026-10-12, card web-host-parts-std): the emitter names the std modules a
+  program calls through std_pure/std_io in the custom section warp.std_modules (`*` for one named at run time: every
+  part), host_parts.rs reads them as imports of that pseudo-module. host-sound.js (sound_samples, std sound and midi,
+  17.7 KB) is split from host-files.js (41.6 → 24.2 KB), so `stored` values ship no sound code (tests/web/test_host_parts_std.rs).
+  Still coarse: json ships the hashes (host-hashes.js, 5.5 KB) and tables stay in host-files.js: a tables part would
+  give no host word, which test_host_parts each_part_is_chosen_by_the_words_it_gives allows only for host-hashes.js.
 - Lazy loading per route (2026-10-07, src/route_split.rs, tests/web/test_route_modules.rs, browser probe
   probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
   functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
