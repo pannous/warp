@@ -1,3 +1,10 @@
+# JSON-to-Node cleanup
+
+- Pin the existing foreign-call conversion behavior with a focused test before changing production code.
+- Reuse one public-within-crate JSON conversion for foreign calls and headless event details.
+- Preserve object order, array grouping and separators, integer/float handling, booleans, nulls, and the codepoint sentinel.
+- Run the focused JSON and headless tests, formatting, clippy, and the wasm32 check.
+
 # Delete-list cleanup
 
 - Reproduce deletion of a list variable with a new focused probe test.

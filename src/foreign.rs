@@ -143,3 +143,34 @@ pub(crate) fn node_of(value: &Value) -> Node {
 		),
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn json_conversion_keeps_nested_values_and_node_layout() {
+		let value = serde_json::json!({
+			"items": [1, 1.25, null],
+			"enabled": true,
+		});
+		let expected = Node::List(
+			vec![
+				Node::key(
+					"items",
+					Node::List(
+						vec![Node::int(1), Node::from(1.25), Node::Empty],
+						Bracket::Square,
+						Separator::Space,
+					),
+				),
+				Node::key("enabled", Node::int(1)),
+			],
+			Bracket::Curly,
+			Separator::Space,
+		);
+
+		assert_eq!(node_of(&value), expected);
+		assert_eq!(node_of(&serde_json::json!({ CODEPOINT_KEY: "🦀" })), Node::Char('🦀'));
+	}
+}

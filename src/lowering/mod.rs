@@ -28,6 +28,7 @@ pub mod generators;
 pub mod getters;
 pub mod go_blocks;
 pub mod gpu_maps;
+pub mod index_positions;
 pub mod inlining;
 pub mod introspection;
 pub mod key_names;

@@ -1,0 +1,4 @@
+// card web-fine-text-nodes: paste into the playground and click add; only the text "clicked n times" changes (a text
+// hole, page·hole·0·text·2), the heading and the button stay the same elements
+n = 0
+div{ section{ h1{ "Counter" } button{ on click { n += 1 } "add" } "clicked " + n + " times" } }

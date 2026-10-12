@@ -338,14 +338,9 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 		let holes = crate::markup::holes(&shown)
 			.into_iter()
 			.map(|(path, element)| (hole_name(&path), element));
-		let text_holes = crate::markup::text_holes(&shown).into_iter().map(|hole| {
-			let name = format!(
-				"{}{NAME_JOINER}{TEXT_HOLE}{NAME_JOINER}{}",
-				hole_name(&hole.path),
-				hole.after
-			);
-			(name, hole.text)
-		});
+		let text_holes = crate::markup::text_holes(&shown)
+			.into_iter()
+			.map(|hole| (text_hole_name(&hole.path, hole.after), hole.text));
 		let bindings: Vec<Node> = holes
 			.chain(text_holes)
 			.map(|(name, part)| function_with_globals(&name, false, &[part], main_variables))
@@ -358,10 +353,15 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 }
 
 /// `page·hole·1·0`: the binding of the element at that path of the shown markup (worker.js reads the path back)
-fn hole_name(path: &[usize]) -> String {
+pub(crate) fn hole_name(path: &[usize]) -> String {
 	path.iter().fold(PAGE_HOLE.to_string(), |name, index| {
 		format!("{name}{NAME_JOINER}{index}")
 	})
+}
+
+/// `page·hole·1·text·2`: the binding of the text after 2 children of the element at that path (card web-fine-text-nodes)
+pub(crate) fn text_hole_name(path: &[usize], after: usize) -> String {
+	format!("{}{NAME_JOINER}{TEXT_HOLE}{NAME_JOINER}{after}", hole_name(path))
 }
 
 /// `if c then a else b`, `c ? a : b`, `a ?? b`: a choice whose parts only read (no call, no write), so reading it anew
