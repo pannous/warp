@@ -1,0 +1,3 @@
+// page facts on html{} go into its head (card html-meta)
+use markup
+print to_html(html{ lang: "en" title: "Shop" description: "Fresh fruit" meta: { author: "Ann" } body{ h1{ "Fruit" } } })
