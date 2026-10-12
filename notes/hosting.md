@@ -70,9 +70,16 @@ lambda's DNS moves to Cloudflare):
   `ticket:<ticket>` (10 minutes) and the playground polls `GET /ticket?ticket=`. After deploying it posts
   `POST /ticket?ticket=&program=<url>` (only *.workers.dev and *.lambda.pannous.com addresses) or `&error=`, and the
   login window, waiting on the same ticket, turns into the program's tab. Already logged in, the click opens a tab
-  at once ("deploying …") that goes to the program: only a click may open a window, so each deploy opens exactly one.
+  at once at the same deploy window: only a click may open a window, so each deploy opens exactly one.
+- The deploy window (card user-click; user: "they should give one the link or a redirect to the link"):
+  `GET /deploying?ticket=` shows the program's link as soon as the ticket holds it (`/deploy?…&ticket=` stores the
+  address before uploading; the playground posts it again, and native deploys only post it), and opens the program
+  once `GET /up?program=` says it answers: Cloudflare's "error code: 1042" means no Worker under that name yet, a new
+  *.lambda.pannous.com name fails until its certificate is issued. After a minute without an answer the window says
+  so and keeps the link. /up fetches Workers of our own account, which Cloudflare refuses (1042) unless the control
+  Worker has the compatibility flag `global_fetch_strictly_public`. Probe: probes/hosting/login_ticket.sh runs the
+  window's script in node (deploying_window.mjs).
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
-  Probe: probes/hosting/login_ticket.sh (wrangler dev + curl; the popup itself only in CI).
 - Clients: `warp deploy --hosted app.warp` (src/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
   scripts, src/web.rs worker_bundle → src/host_parts.rs).
