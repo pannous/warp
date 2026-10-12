@@ -50,3 +50,13 @@ fn a_site_with_transitions_carries_their_script() {
 	assert_eq!(with[with.len() - 3..], ["markup.js", "markup-transitions.js", "site.js"]);
 	assert!(!scripts("div{ p{ \"hello\" } }").contains(&"markup-transitions.js".to_string()));
 }
+
+// Keyframes are CSS's own (card web-keyframes, P188): `@keyframes` in the style sheet, `animation:` in the inline style
+// beside the transition; `leave:` is the animation the page plays before it removes the element
+#[test]
+fn css_keyframes_animate_an_element_and_its_leaving() {
+	let sheet = html_of("style{ \"@keyframes pop\": { from: { opacity: 0 } \"60%\": { transform: \"scale(1.15)\" } to: { opacity: 1 } } }");
+	assert!(sheet.contains("@keyframes pop { from { opacity: 0 } 60% { transform: scale(1.15) } to { opacity: 1 } }"), "{sheet}");
+	let item = html_of("li{ transition: transform 300ms animation: pop 400ms leave: pop 400ms reverse \"tea\" }");
+	assert_eq!(item, "<li style=\"transition: transform 300ms; animation: pop 400ms\" data-warp-leave=\"pop 400ms reverse\">tea</li>");
+}

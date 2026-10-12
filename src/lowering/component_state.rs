@@ -28,6 +28,9 @@ const INSTANCE: &str = "instance";
 const RENDER: &str = "page·markup";
 // the templates' placeholders are upper case: `instance` stays the field of the event
 const STATE_DECLARATION: &str = "global STATE = []";
+/// In a dev build the state lists live in the dev store, so a reload keeps each instance's state (card web-dev-instances)
+const DEV_STATE_DECLARATION: &str = "global STATE = std_io(\"store\", \"declare\", [NAME, [], STORE])";
+const DEV_STATE_SAVE: &str = "std_io(\"store\", \"save\", [NAME, STATE, STORE])";
 const COUNTER_DECLARATION: &str = "global COUNTER = 0";
 const COUNTED: &str = "COUNTER += 1";
 const KEYED: &str = "KEY = COUNTER";
@@ -258,6 +261,11 @@ fn filled(template: &str, names: &[(&str, &str)]) -> Node {
 	with(template, names.iter().map(|(placeholder, name)| (*placeholder, symbol(name))).collect())
 }
 
+/// `template` for the state list `list`, named in the dev store by its own name
+fn kept_in_dev(template: &str, list: &str) -> Node {
+	with(template, vec![("STATE", symbol(list)), ("NAME", Node::Text(list.to_string())), ("STORE", Node::Text(crate::stored_values::DEV_STORE.to_string()))])
+}
+
 fn with(template: &str, bindings: Vec<(&str, Node)>) -> Node {
 	let parsed = parse(template);
 	let bindings: HashMap<String, Node> = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
@@ -334,7 +342,8 @@ impl Component {
 
 	/// The main-level lists of the state, the instance counter and the instances of the render before
 	fn declarations(&self) -> Vec<Node> {
-		let lists = self.lists().into_iter().map(|list| filled(STATE_DECLARATION, &[("STATE", list)]));
+		let template = if crate::pipeline::is_for_dev() { DEV_STATE_DECLARATION } else { STATE_DECLARATION };
+		let lists = self.lists().into_iter().map(|list| kept_in_dev(template, list));
 		[filled(COUNTER_DECLARATION, &[("COUNTER", &self.counter)]), filled(SEEN_DECLARATION, &[("SEEN", &self.seen)])].into_iter().chain(lists).collect()
 	}
 
@@ -357,7 +366,8 @@ impl Component {
 		};
 		let truncations = self.lists().into_iter().map(|list| filled(TRUNCATED, &[("STATE", list), ("COUNTER", &self.counter)]));
 		let all_seen = self.keys.iter().map(|keys| filled(KEYED_SEEN, &[("SEEN", &self.seen), ("KEYS", keys)]));
-		all_seen.chain(cleaning).chain(truncations).chain([filled(SEEN_SET, &names)]).collect()
+		let dev_saves = self.lists().into_iter().filter(|_| crate::pipeline::is_for_dev()).map(|list| kept_in_dev(DEV_STATE_SAVE, list));
+		all_seen.chain(cleaning).chain(truncations).chain(dev_saves).chain([filled(SEEN_SET, &names)]).collect()
 	}
 
 	/// The body counting its instance, setting the state at the first render, reading the instance's entries
