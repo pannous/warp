@@ -1,5 +1,6 @@
-// pictures and sound in the page (a part of host.js, which says how parts work): the host words paint, text_coverage and
-// sound_samples (src/host.rs), with the int lists they cross in one call each; host-gpu.js builds its pixels with listOfInts
+// pictures in the page (a part of host.js, which says how parts work): the host words paint and text_coverage
+// (src/host.rs), with the int lists they cross in one call each; host-gpu.js builds its pixels with listOfInts and
+// host-files.js reads sound_samples with intsOfList
 
 // free memory for `byteCount` bytes above the program's text heap, which its next text may take again (src/host.rs
 // scratch, src/wasm_emitter/int_lists.rs); undefined without a text heap
@@ -71,17 +72,6 @@ addHostPart({
 				painted = Array.from(rendered);
 			}
 			hooks.paint(painted, Number(width), Number(height));
-		},
-		// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
-		// the page plays them with WebAudio
-		// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
-		// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
-		sound_samples: (samples, count, rate, channels) => {
-			const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-			const sound = { samples: values, rate: Number(rate), channels: Number(channels) };
-			const { place, at } = self.voiceSounded?.(values.length / sound.channels / sound.rate) ?? {};
-			(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
-			hooks.sound?.({ ...sound, at });
 		},
 	}),
 });

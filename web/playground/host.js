@@ -69,6 +69,19 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
 	const program = () => holder.exports;
+	// the host word sleep (src/host.rs): a page cannot block, so it busy-waits
+	holder.sleep = milliseconds => {
+		hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
+		const until = Date.now() + Number(milliseconds);
+		let check = Date.now() + SHARED_CHECK_MILLISECONDS;
+		while (Date.now() < until) {
+			if (Date.now() >= check) {
+				checkPoint();
+				check = Date.now() + SHARED_CHECK_MILLISECONDS;
+			}
+		}
+		checkPoint();
+	};
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
 		const bytes = new Uint8Array(program().memory.buffer);
@@ -101,19 +114,8 @@ function programImports(holder, hooks) {
 			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
-			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
-			sleep: milliseconds => {
-				hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
-				const until = Date.now() + Number(milliseconds);
-				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
-				while (Date.now() < until) {
-					if (Date.now() >= check) {
-						checkPoint();
-						check = Date.now() + SHARED_CHECK_MILLISECONDS;
-					}
-				}
-				checkPoint();
-			},
+			// the host words (src/host.rs)
+			sleep: holder.sleep,
 			clock: () => BigInt(Date.now()),
 			// seconds east of UTC in the browser's time zone at that instant: an instant's wall clock (wasm_emitter/times.rs)
 			local_offset: milliseconds => BigInt(-new Date(Number(milliseconds)).getTimezoneOffset() * 60),
@@ -252,7 +254,8 @@ function plainOfTree(tree) {
 			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
-		case Number(KIND_FUNCTION): return tree.warpFunction ? callableOf(tree.warpFunction) : null;
+		// its value the function's name (src/wasm_emitter/closures.rs), kept for a host word calling the export itself
+		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
 		default: return null;
 	}
 }

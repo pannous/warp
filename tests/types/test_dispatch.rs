@@ -112,3 +112,12 @@ fn every_positional_argument_dispatches_at_run_time() {
 	is!(&with(SPACE, program), "ships bump;ship hits rock;rock hits ship;");
 	is!(&with(MEETINGS, "def g(x, y) := meet(x, y); g(Dog(\"a\"), Animal(\"b\")) + g(Animal(\"a\"), Dog(\"b\"))"), "woofhi");
 }
+
+#[test]
+fn a_method_named_like_any_standard_function_keeps_it() {
+	is!("class P{x:int; def max():=x}; P(4).max() + [1,2].max() + max(3, 5)", 11);
+	is!("class Rope{s:text; def trim():=\"rope\"}; Rope(\"a\").trim() + \" a \".trim()", "ropea");
+	is!("class Coin{v:float; def round():=7}; Coin(1.5).round() + round(2.0)", 9);
+	is!("class Box{n:int; def int():=n}; Box(3).int() + \"42\".int()", 45);
+	is!("class C{x:int; def double():=x*2}; C(3).double() + 2.double()", 8);
+}

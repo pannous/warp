@@ -3023,6 +3023,7 @@ PASSED:
   ✓ programs::test_sound_effects::an_echo_sounds_where_the_dry_sound_was_silent
   ✓ programs::test_sound_effects::distortion_flattens_the_peaks_and_stays_in_range
   ✓ programs::test_sound_effects::effects_play_in_a_program
+  ✓ programs::test_sound_engine::a_signals_blocks_join_seamlessly_at_another_rate
   ✓ programs::test_sound_engine::a_sound_of_another_rate_keeps_its_length
   ✓ programs::test_sound_engine::a_sound_starts_at_its_frame_across_buffers
   ✓ programs::test_sound_engine::fade_ramps_a_playing_sound_sample_by_sample
@@ -3560,6 +3561,7 @@ PASSED:
   ✓ types::test_dispatch::a_call_with_more_arguments_is_the_same_call_either_way
   ✓ types::test_dispatch::a_method_for_a_class_keeps_the_library_function
   ✓ types::test_dispatch::a_method_in_a_class_body_is_a_method_of_the_generic_function
+  ✓ types::test_dispatch::a_method_named_like_any_standard_function_keeps_it
   ✓ types::test_dispatch::a_value_of_run_time_type_dispatches_at_run_time
   ✓ types::test_dispatch::an_untyped_definition_is_the_fallback
   ✓ types::test_dispatch::classes_sharing_a_library_named_method_keep_the_library_function
@@ -4800,4 +4802,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4795 passed, 0 failed, 4795 total tested
+10 ignored, 4797 passed, 0 failed, 4797 total tested

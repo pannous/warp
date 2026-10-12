@@ -907,7 +907,8 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 		}
 		_ => None,
 	};
-	// a type word is a method on anything but a number (`3.double()` stays the conversion), a list word on an instance
+	// a type word is a method on anything but a literal value (`3.double()`, `"42".int()` stay the conversion), a list
+	// word on an instance
 	let calls_method = |receiver: &Node, member: &Node| {
 		let name = match member.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|first| first.drop_meta().name()).unwrap_or_default(),
@@ -921,7 +922,7 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 				Node::Key(class, Op::None | Op::Colon, _) => methods.classes.contains(&class.drop_meta().name()),
 				_ => false,
 			},
-			false => !matches!(receiver.drop_meta(), Node::Number(_)),
+			false => !matches!(receiver.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _)),
 		}
 	};
 	let recurse = |child: Node| with_method_names(child, methods, in_class);

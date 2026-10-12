@@ -40,7 +40,7 @@ pub struct HostPart {
 pub const HOST_PARTS: [HostPart; 10] = [
 	HostPart {
 		script: ("host-files.js", script_text!("host-files.js")),
-		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
+		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", SOUND, STD_IO].contains(&name),
 		needs: &[],
 	},
 	HostPart { script: ("host-hashes.js", script_text!("host-hashes.js")), gives: |module, name| module == HOST_LIBRARY && name == STD_PURE, needs: &[] },
@@ -61,6 +61,7 @@ pub const HOST_PARTS: [HostPart; 10] = [
 	HostPart { script: ("host-gpu.js", script_text!("host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && (GPU_WORDS.contains(&name) || [PAINT, DRAW_SHAPE, DRAW_SHOW].contains(&name)), needs: &["host-tasks.js", "host-media.js"] },
 	HostPart { script: ("host-timers.js", script_text!("host-timers.js")), gives: |module, name| module == HOST_LIBRARY && [SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT].contains(&name), needs: &[] },
 	HostPart { script: ("host-random.js", script_text!("host-random.js")), gives: |module, name| module == HOST_LIBRARY && [RANDOM, RANDOM_BELOW, RANDOM_SEED].contains(&name), needs: &[] },
+	// sound_samples is a word of host-files.js, which reads its samples with host-media.js intsOfList
 	HostPart { script: ("host-media.js", script_text!("host-media.js")), gives: |module, name| module == HOST_LIBRARY && [PAINT, TEXT_COVERAGE, SOUND].contains(&name), needs: &[] },
 ];
 

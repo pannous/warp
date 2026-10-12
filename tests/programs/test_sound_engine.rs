@@ -76,3 +76,24 @@ fn fade_sound_takes_a_handle_of_the_run() {
 	assert_eq!(printed("h = play C4 for 5ms\nfade_sound(h, 0, 0.002)\n7"), "7");
 	assert!(printed("play C4 for 5ms\nfade_sound(9, 0)").contains("no sound 9 in this run"));
 }
+
+// card real-time: a signal's blocks (one handle, 512 samples at 44.1 kHz each) on a 48 kHz device join without a gap
+// or a jump: each block's start frame rounds on its own, a click 86 times a second when the blocks were mixed apart
+#[test]
+fn a_signals_blocks_join_seamlessly_at_another_rate() {
+	const SIGNAL_RATE: u32 = 44_100;
+	const DEVICE_RATE: u32 = 48_000;
+	const BLOCK: usize = 512;
+	const BLOCKS: usize = 8;
+	let sine = |index: usize| (f64::from(LOUD) * (2.0 * std::f64::consts::PI * 440.0 * index as f64 / f64::from(SIGNAL_RATE)).sin()) as i16;
+	let mut mixer = Mixer::new(DEVICE_RATE, 1);
+	for block in 0..BLOCKS {
+		let start = (block * BLOCK) as f64 * f64::from(DEVICE_RATE) / f64::from(SIGNAL_RATE);
+		let samples: Vec<i16> = (block * BLOCK..(block + 1) * BLOCK).map(sine).collect();
+		mixer.add(1, start.round() as u64, &samples, SIGNAL_RATE, 1);
+	}
+	let buffer = mixed(&mut mixer, (BLOCKS - 1) * BLOCK);
+	let largest_step = buffer.windows(2).map(|pair| (pair[1] - pair[0]).abs()).fold(0.0, f32::max);
+	let smooth_step = 2.0 * std::f32::consts::PI * 440.0 / DEVICE_RATE as f32 * HALF;
+	assert!(largest_step <= 1.1 * smooth_step, "a jump of {largest_step} between samples, a smooth sine steps at most {smooth_step}");
+}

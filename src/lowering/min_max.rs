@@ -21,6 +21,10 @@ pub const EMPTY_EXTREMUM_CALL: &str = "empty_extremum";
 pub const EMPTY_LIST_ERRORS: [(&str, &str); 3] =
 	[("min", "min_of_an_empty_list"), ("max", "max_of_an_empty_list"), ("reduce", "reduce_of_an_empty_list")];
 
+pub fn is_extremum(name: &str) -> bool {
+	EXTREMA.iter().any(|(extremum, _)| *extremum == name)
+}
+
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&EXTREMA.map(|(name, _)| name)) {
 		return node;
@@ -45,21 +49,8 @@ impl Lowering<'_> {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				self.extremum(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
-			// `xs.max()`: the call `max(xs)`, not the max of no values
-			Node::Key(receiver, Op::Dot, method) if self.extremum_method(&method).is_some() => {
-				let (name, arguments) = self.extremum_method(&method).expect("guarded");
-				self.expand(Node::List([vec![name, *receiver], arguments].concat(), Bracket::Round, Separator::None))
-			}
 			other => children_rewritten(other, |child| self.expand(child)),
 		}
-	}
-
-	/// `max()`, `max(k)` after a dot: the extremum word and its arguments
-	fn extremum_method(&self, method: &Node) -> Option<(Node, Vec<Node>)> {
-		let Node::List(items, Bracket::Round, _) = method.drop_meta() else { return None };
-		let (word, arguments) = items.split_first()?;
-		let is_extremum = matches!(word.drop_meta(), Node::Symbol(name) if self.builtins.iter().any(|(builtin, _)| builtin == name));
-		is_extremum.then(|| (word.clone(), arguments.to_vec()))
 	}
 
 	fn extremum(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
