@@ -22,8 +22,8 @@ notes/open_decisions.md.
 - web-outside-state: outside a component, its lowercase plural (`counters` for Counter) is the list of its instances
   in page order; `counters#1.count` reads one instance's state and `counters#1.count = 0` changes it (warp-markup). The long form
   `Counter.all` (or `Counter.instances` if `all` is taken) means the same and hints to use `counters`.
-- signal-samples: samples/signal.warp (siren, play_signal) and samples/signal_blocks.warp (stereo chord, play_blocks)
-  leave samples/ but are kept as examples under "Signals" on the wiki sound page (warp-sound).
+- signal-samples: the user renamed samples/signal.warp and samples/signal_blocks.warp to samples/siren_sound.warp and
+  samples/stereo_sound.warp (a6484f820); the "Signals" examples on the wiki sound page stay as documentation.
 - consistency (card #376, sub-card of #35 cleanup): an agent regularly checks the app against the documentation.
   Clear mismatches: fix the docs (small cases: the app); ambiguous ones go through the Interviewer to the user.
 - self-hosting (user, asked directly; plan notes/self_hosting.md, topic card self-hosted): it is for dogfooding,

@@ -14,6 +14,7 @@ QUEUE="$LOCK.queue"
 POLL_SECONDS=2
 TARGETED_NICENESS=10
 TARGETED_TEST_THREADS=4
+HOMEBREW_BIN=/opt/homebrew/bin
 # A run with a process using more memory than this is killed: on 2026-10-09 one test grew to 154 GB, swap ran out and
 # macOS took down the Claude app with every agent session. Per process, because parallel rustc jobs add up legitimately;
 # top's MEM counts compressed memory, ps's RSS doesn't.
@@ -28,6 +29,7 @@ export WARP_CRASH_CARDS=0
 # rustup's toolchain (nightly, with the wasm32 targets) goes ahead of Homebrew's rust formula, whose cargo and rustc
 # win in a PATH that lists /opt/homebrew/bin first (cron, Codex) and lack the wasm32 std (card homebrew-rustc)
 RUSTUP_BIN="$HOME/.cargo/bin"
+[ -d "$HOMEBREW_BIN" ] && export PATH="$HOMEBREW_BIN:$PATH"
 [ -x "$RUSTUP_BIN/rustup" ] && export PATH="$RUSTUP_BIN:$PATH"
 
 # `tests/queue.sh -- --lib x`: cargo's target selection written among the test binary's filters goes before the `--`,
