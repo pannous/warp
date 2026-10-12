@@ -288,7 +288,7 @@ pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 			_ => None,
 		}
 		.or_else(|| swift_closure(items))
-		.or_else(|| block_lambda(node).filter(|lambda| lambda.params.first().is_some_and(|param| param.starts_with(SHORTHAND_MARK)))),
+		.or_else(|| shorthand_block_lambda(node, items)),
 		_ => None,
 	}
 }
@@ -358,6 +358,14 @@ fn flatten_phrase(node: &Node, words: &mut Vec<Node>) {
 }
 
 /// `{it*it}`: a block that is no object; its parameter is `it` when the body uses it
+/// Swift's `{ $0 * 2 }`; a block without a `$` name is no lambda, and is not copied to find that out (closures::tail
+/// asks for every block)
+fn shorthand_block_lambda(node: &Node, items: &[Node]) -> Option<Lambda> {
+	let is_shorthand = |symbol: &str| symbol.starts_with(SHORTHAND_MARK);
+	items.iter().find_map(|item| symbol_outside_blocks(item, &is_shorthand))?;
+	block_lambda(node).filter(|lambda| lambda.params.first().is_some_and(|param| param.starts_with(SHORTHAND_MARK)))
+}
+
 fn block_lambda(node: &Node) -> Option<Lambda> {
 	let Node::List(items, Bracket::Curly, separator) = node.drop_meta() else { return None };
 	if items.is_empty() || items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) {
@@ -386,11 +394,15 @@ fn mentions_outside_blocks(node: &Node, name: &str) -> bool {
 }
 
 fn mention_outside_blocks<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
+	symbol_outside_blocks(node, &|symbol| symbol == name)
+}
+
+fn symbol_outside_blocks<'a>(node: &'a Node, wanted: &dyn Fn(&str) -> bool) -> Option<&'a Node> {
 	match node.drop_meta() {
-		Node::Symbol(symbol) if symbol == name => Some(node),
+		Node::Symbol(symbol) if wanted(symbol) => Some(node),
 		Node::Key(_, Op::FatArrow, _) | Node::List(_, Bracket::Curly, _) => None,
-		Node::Key(left, _, right) => mention_outside_blocks(left, name).or_else(|| mention_outside_blocks(right, name)),
-		Node::List(items, _, _) => items.iter().find_map(|item| mention_outside_blocks(item, name)),
+		Node::Key(left, _, right) => symbol_outside_blocks(left, wanted).or_else(|| symbol_outside_blocks(right, wanted)),
+		Node::List(items, _, _) => items.iter().find_map(|item| symbol_outside_blocks(item, wanted)),
 		_ => None,
 	}
 }
