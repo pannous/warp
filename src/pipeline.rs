@@ -747,8 +747,8 @@ fn checked_markup(result: Node) -> Node {
 	result
 }
 
-/// The words of an exception (library_words lowers them to the call raise(X))
-pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
+/// The words of an exception (library_words lowers them to the call raise(X)), unless the program defines one
+pub(crate) const RAISE_WORDS: [&str; 4] = ["raise", "throw", "fail", "panic"];
 
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
 /// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
@@ -953,7 +953,7 @@ pub fn cannot_hand_back(value: &Node) -> String {
 	)
 }
 
-/// The message of `error("…")`, or of `raise …`, which always fails the run
+/// The message of `error "…"`, or of `raise …`, which always fails the run
 pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Round, _)

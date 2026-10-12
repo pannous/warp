@@ -16,7 +16,7 @@ fn use_json_parses_and_writes_json() {
 	is!("use json; to_json([1, 2, 3])", "[1,2,3]");
 	is!(
 		"use json; to_json(parse_json(\"{\\\"a\\\": [true, null]}\"))",
-		"{\"a\":[1,null]}"
+		"{\"a\":[true,null]}"
 	);
 	is!("use json; to_json({a: [1, 2, 3]})", "{\"a\":[1,2,3]}");
 }

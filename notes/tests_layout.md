@@ -67,3 +67,9 @@ Not tests: tests/notes/ → notes/OLD/, tests/probes/probe_fib_parsing.rs conden
 - sweeps/ (tests-tidy-sweeps): pure move
 - welcoming/ (tests-tidy-welcoming): probe_footguns condensed into test_footguns.rs (the Solved catalog of notes/footguns.md)
 - leftovers (tests-tidy-leftovers): 15 flat files added meanwhile moved; probe_destructuring promoted to lists/test_unpacking.rs
+
+## Child-process tests
+A test running the warp binary (common::warp_command) reports a failed run whole: how it ended (`run.status`: an exit
+code, or the signal that killed it under load), its stdout and stderr, as tests/programs/test_sound_spectrum.rs
+run_report does. An assert printing only stderr hid why the visualizer run failed in a loaded gate (cards
+visualizer-test-exits, visualizer-test-flakes). An environment skip (no WebGPU adapter) stays separate from a failure.

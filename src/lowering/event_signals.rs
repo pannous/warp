@@ -45,7 +45,6 @@ pub(crate) const EMIT_WORDS: [&str; 2] = ["emit", "send"];
 pub(crate) const EMIT_ALIASES: [&str; 4] = ["fire", "trigger", "signal", "ask"];
 const EMIT_TOPIC: &str = "emit-word";
 const UNHANDLED_TOPIC: &str = "unhandled-emit";
-const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 /// `remove (listeners of alarm)#1 from listeners of alarm`: the place removed, evaluated once
 const REMOVED_PLACE: &str = "removed·listener";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
@@ -117,7 +116,7 @@ pub fn lower(program: Node) -> Node {
 		&statements,
 		&raised,
 		&variables,
-		&emitted_names(&program, &RAISE_WORDS.map(String::from)),
+		&emitted_names(&program, &crate::pipeline::RAISE_WORDS.map(String::from)),
 	) {
 		Ok(kept) => kept,
 		Err(error) => return error,

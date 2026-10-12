@@ -220,6 +220,10 @@ impl Builders {
 		match value {
 			TaskValue::Empty => self.call("new_empty", &[], store),
 			TaskValue::Int(n) => self.call("new_int", &[Val::I64(*n)], store),
+			// a module that has no bools (a page reading form JSON) takes a truth as the Int 1/0 its code reads
+			TaskValue::Bool(truth) if !self.functions.contains_key(crate::wasm_emitter::NEW_BOOL) => {
+				self.call("new_int", &[Val::I64(*truth as i64)], store)
+			}
 			TaskValue::Bool(truth) => self.call(crate::wasm_emitter::NEW_BOOL, &[Val::I64(*truth as i64)], store),
 			TaskValue::Float(x) => self.call("new_float", &[Val::F64(x.to_bits())], store),
 			TaskValue::Char(c) => self.call("new_codepoint", &[Val::I32(*c as i32)], store),
