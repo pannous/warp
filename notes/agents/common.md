@@ -12,6 +12,9 @@ guess (user 2026-10-10: show() without a canvas gets a default size, not an erro
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
+- Every spawned session is announced to warp-supervisor (user, 2026-10-12: "inform the supervisor every time we spawn a
+  session"): ~/dev/bin/claude-remote.sh (and start.sh through it) does it for spawns not made by the supervisor, the
+  Codex cron run at its start and end; other spawns send it name, folder and URL themselves (~/dev/bin/claude-relay.sh).
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
