@@ -15,6 +15,8 @@ mod test_class_components;
 mod test_completion_terse; // card completion-terse: the gray continuation is code only
 #[cfg(feature = "native")] // runs node
 mod test_completion_words; // cards code-completion-should, completion-must
+#[cfg(feature = "native")] // runs the module natively
+mod test_component_holes; // card web-fine-components
 mod test_components;
 mod test_css_transitions;
 #[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)

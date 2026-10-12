@@ -63,6 +63,9 @@ TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-
 TEXT_HOLE_CODE = 'n = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 } "add" } "clicked " + n + " times" } }'
 TEXT_HOLE_CLICKS = 3
 TEXT_HOLE_SHOWN = "Counteraddclicked 3 times"
+COMPONENT_HOLE = "(a component instance's text changes alone)"  # card web-fine-components: component_state.rs hole_bindings
+COMPONENT_HOLE_CODE = 'def Tally(start) {\n\tn = start\n\tsection{ button{ on click { n += 1 } "add" } "clicked " + n + " times" }\n}\ndiv{ Tally(2) Tally(7) }'
+COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
 FILE_KEPT_TEXT = "kept across a reload"
 WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
@@ -350,20 +353,20 @@ def run_code(code):
 	return json.loads(shown) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
 
 
-def text_hole_wrong():
-	"""a click changes the text after the button (playground.js showText), the elements around it stay"""
-	run_code(TEXT_HOLE_CODE)
+def text_hole_wrong(code=TEXT_HOLE_CODE, root="section", expected_text=TEXT_HOLE_SHOWN):
+	"""clicks on the last button change the text after it (playground.js showText), the elements around it stay"""
+	run_code(code)
 	shown = browser("eval", f"""(async () => {{
-		const section = document.getElementById("rendered").shadowRoot.querySelector("section");
-		const elements = [section, ...section.children];
+		const root = document.getElementById("rendered").shadowRoot.querySelector("{root}");
+		const elements = [root, ...root.querySelectorAll("*")];
 		for (let click = 0; click < {TEXT_HOLE_CLICKS}; click++) {{
-			section.querySelector("button").click();
+			[...root.querySelectorAll("button")].at(-1).click();
 			await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
 		}}
-		return JSON.stringify({{ text: section.textContent, kept: elements.every(element => element.isConnected) }});
+		return JSON.stringify({{ text: root.textContent, kept: elements.every(element => element.isConnected) }});
 	}})()""")
 	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"text": f"(page gave no answer: {shown or browser_complaint})"}
-	return [f"{part}: {shown.get(part)!r}, expected {expected!r}" for part, expected in (("text", TEXT_HOLE_SHOWN), ("kept", True)) if shown.get(part) != expected]
+	return [f"{part}: {shown.get(part)!r}, expected {expected!r}" for part, expected in (("text", expected_text), ("kept", True)) if shown.get(part) != expected]
 
 
 def file_kept_wrong(page_url):
@@ -562,7 +565,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

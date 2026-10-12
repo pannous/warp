@@ -30,6 +30,7 @@ function inTurn(work) {
 let live; // the run whose page events are handled (host.js runProgram), until the next run
 const PAGE_VALUE = "page·value";
 const PAGE_HOLE = "page·hole";
+const PAGE_HOLES = "page·holes"; // a page with components renders once, its holes are parts of that rendering (card web-fine-components)
 const PATH_JOINER = "·";
 const TEXT_HOLE = "text"; // page·hole·<path>·text·<n>: the text after n children of that element (card web-fine-text-nodes)
 // after a handler that patched holes, the value text waits this long for the next event before it is read whole
@@ -239,6 +240,8 @@ function shownOf(outcome) {
 function showHoles(holder) {
 	const holes = Object.keys(holder.exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER));
 	if (!holes.length) return false;
+	const rendering = holder.exports[PAGE_HOLES];
+	if (rendering && outcomeOf(holder, hooks, rendering).result === undefined) return false;
 	holder.holeHtml ??= new Map();
 	const patches = [];
 	for (const name of holes) {

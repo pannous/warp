@@ -14,11 +14,12 @@
 use super::nodes::{call, if_then, key, named_assignment};
 use super::words::ON_WORD;
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
+use crate::event_signals::{function_with_globals, hole_name, last_statement, text_hole_name};
 use crate::law::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const JOINER: char = '·';
 /// `data-warp-instance`: the attribute naming the instance of a component's element, read by playground.js
@@ -60,6 +61,20 @@ const KEYED_SEEN: &str = "SEEN = #KEYS";
 /// a keyed instance mounts when its key is new
 const FRESH_PLACEHOLDER: &str = "FRESH";
 const SHOWN: &str = "page·shown";
+/// a page with holes keeps its rendering, which they are read from (card web-fine-components)
+const SHOWN_DECLARATION: &str = "global SHOWN = ø";
+/// renders once before the playground reads the holes (worker.js showHoles)
+const PAGE_HOLES: &str = "page·holes";
+/// The readers of a rendering's holes: an element by its path, and the text after its n-th child element (lib/markup.warp)
+const ELEMENT_AT: &str = "page·element_at";
+const TEXT_AT: &str = "page·text_at";
+const HOLE_READERS: [(&str, &str); 2] = [
+	(ELEMENT_AT, "READER(value, path) := html_element_at(value, path)"),
+	(
+		TEXT_AT,
+		"READER(value, path, after) := html_text_at(value, path, after)",
+	),
+];
 const MOUNT: &str = "mount";
 const CLEANUP: &str = "cleanup";
 const SEEN: &str = "seen";
@@ -76,12 +91,10 @@ pub fn lower(program: Node) -> Node {
 		.into_iter()
 		.map(|statement| scoped_component(&statement).unwrap_or(statement))
 		.collect();
-	if !statements
-		.iter()
-		.any(|statement| has_element_handler(statement) || has_lifecycle(statement))
-	{
+	if !has_components(&statements) {
 		return Node::List(statements, bracket, separator);
 	}
+	let markups = markup_functions(&statements);
 	let keyed = keyed_components(&statements);
 	let mut declarations = vec![];
 	let mut components = vec![];
@@ -112,6 +125,10 @@ pub fn lower(program: Node) -> Node {
 		.map(|statement| with_state_lists(statement, &state_lists, &own_names))
 		.collect();
 	let shown = lowered.pop().expect("a program with a component has a last line");
+	let holes = hole_bindings(&shown, &markups);
+	if !holes.is_empty() {
+		declarations.push(filled(SHOWN_DECLARATION, &[("SHOWN", SHOWN)]));
+	}
 	let resets = components
 		.iter()
 		.map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
@@ -129,11 +146,93 @@ pub fn lower(program: Node) -> Node {
 			.into_iter()
 			.chain(cleanups)
 			.chain(lowered)
-			.chain([render, symbol(RENDER)])
+			.chain([render])
+			.chain(holes)
+			.chain([symbol(RENDER)])
 			.collect(),
 		bracket,
 		separator,
 	)
+}
+
+/// Do the statements define components keeping state, or with a lifecycle: the ones this pass lowers
+fn has_components(statements: &[Node]) -> bool {
+	statements
+		.iter()
+		.any(|statement| has_element_handler(statement) || has_lifecycle(statement))
+}
+
+/// The readers of the holes of a page with components (hole_bindings), for a program defining a function that shows
+/// markup: defined before modules::resolve, which keeps the definitions of lib/markup.warp they call (page_html.rs
+/// use_markup)
+pub(crate) fn hole_readers(statements: &[Node]) -> Vec<Node> {
+	if markup_functions(statements).is_empty() {
+		return vec![];
+	}
+	HOLE_READERS
+		.iter()
+		.map(|(name, template)| with(template, vec![("READER", symbol(name))]))
+		.collect()
+}
+
+/// The functions showing markup, by name with that markup as written: what a call of one shows
+fn markup_functions(statements: &[Node]) -> HashMap<String, Node> {
+	statements
+		.iter()
+		.filter_map(function_definition)
+		.filter_map(|(name, _, _, body)| {
+			let markup = last_statement(&body).into_owned();
+			crate::markup::is_markup(&markup).then_some((name, markup))
+		})
+		.collect()
+}
+
+/// The holes of the shown markup, looking through the components it calls (card web-fine-components): `page·holes`
+/// renders once, each hole is its part of that rendering, the instance's own state shown. Only a program rendering
+/// itself has them: the playground reads them
+fn hole_bindings(shown: &Node, markups: &HashMap<String, Node>) -> Vec<Node> {
+	if !crate::pipeline::renders_itself() {
+		return vec![];
+	}
+	let (elements, texts) = crate::markup::holes_through(shown, markups);
+	let globals = HashSet::from([SHOWN.to_string()]);
+	let bound = |name: String, part: Node| function_with_globals(&name, false, &[part], &globals);
+	let path_list = |path: &[usize]| Node::list(path.iter().map(|index| Node::int(*index as i64)).collect());
+	let element_holes = elements.into_iter().map(|(path, _)| {
+		bound(
+			hole_name(&path),
+			call(ELEMENT_AT, vec![symbol(SHOWN), path_list(&path)]),
+		)
+	});
+	let text_holes = texts.into_iter().map(|hole| {
+		let part = call(
+			TEXT_AT,
+			vec![symbol(SHOWN), path_list(&hole.path), Node::int(hole.after as i64)],
+		);
+		bound(text_hole_name(&hole.path, hole.after), part)
+	});
+	let holes: Vec<Node> = element_holes.chain(text_holes).collect();
+	if holes.is_empty() {
+		return holes;
+	}
+	let render = function_with_globals(PAGE_HOLES, false, &[symbol(RENDER)], &HashSet::new());
+	[render].into_iter().chain(holes).collect()
+}
+
+/// `def F(p) {…}`, `F(p) := …`: its name, its head `F(p)`, its operator and body
+fn function_definition(statement: &Node) -> Option<(String, Node, Op, Node)> {
+	let Node::Key(head, op @ (Op::Define | Op::Assign), body) =
+		crate::declarations::lower_c_functions(statement.clone())
+			.drop_meta()
+			.clone()
+	else {
+		return None;
+	};
+	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
+	let name = parts.first()?.symbol_name()?.to_string();
+	Some((name, *head, op, *body))
 }
 
 /// Outside its component (card web-outside-state): `counters`, Counter's lower-case plural, is its instances in page
@@ -256,18 +355,7 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 	if !has_element_handler(statement) && !has_lifecycle(statement) {
 		return None;
 	}
-	let Node::Key(head, Op::Define | Op::Assign, body) = crate::declarations::lower_c_functions(statement.clone())
-		.drop_meta()
-		.clone()
-	else {
-		return None;
-	};
-	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	if !matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
-		return None;
-	}
+	let (_, head, _, body) = function_definition(statement)?;
 	let statements = match body.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items.clone(),
 		single => vec![single.clone()],
@@ -285,7 +373,7 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 		.filter(|(name, _)| mentioned.contains(name))
 		.collect();
 	(!state.is_empty() || statements.iter().any(|statement| lifecycle(statement).is_some()))
-		.then_some((*head, statements, state))
+		.then_some((head, statements, state))
 }
 
 /// `def Card(t) = div{ style{ "h2": {…} } h2{t} }`: the definition with its root element naming the component
@@ -295,19 +383,9 @@ fn scoped_component(statement: &Node) -> Option<Node> {
 	if !has_sheet {
 		return None;
 	}
-	let Node::Key(head, op @ (Op::Define | Op::Assign), body) =
-		crate::declarations::lower_c_functions(statement.clone())
-			.drop_meta()
-			.clone()
-	else {
-		return None;
-	};
-	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	let name = parts.first()?.name();
+	let (name, head, op, body) = function_definition(statement)?;
 	let attribute = key(symbol(crate::markup::SCOPE_ATTRIBUTE), Op::Colon, Node::Text(name));
-	let body = match *body {
+	let body = match body {
 		Node::List(mut items, Bracket::Curly, separator) => {
 			let root = with_attribute(items.pop()?, attribute)?;
 			items.push(root);
@@ -315,7 +393,7 @@ fn scoped_component(statement: &Node) -> Option<Node> {
 		}
 		root => with_attribute(root, attribute)?,
 	};
-	Some(Node::Key(head, op, Box::new(body)))
+	Some(key(head, op, body))
 }
 
 /// The element with the attribute first among its items

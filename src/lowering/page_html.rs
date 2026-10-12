@@ -17,7 +17,8 @@ const TO_HTML: &str = "to_html";
 /// Words that start a statement, not a value to show
 const STATEMENT_WORDS: [&str; 3] = ["print", "puts", "return"];
 
-/// A page uses lib/markup.warp (modules.rs brings it implicitly) and exports page·html := to_html(page·value()) and page·render(event) := to_html(event),
+/// A page uses lib/markup.warp (modules.rs brings it implicitly) and exports page·html := to_html(page·value()) and
+/// page·render(event) := to_html(event), with components the readers of their holes (component_state.rs hole_readers),
 /// before modules::resolve joins the used modules (it keeps the std definitions the program names)
 pub fn use_markup(program: Node) -> Node {
 	if !crate::pipeline::renders_itself() {
@@ -34,6 +35,8 @@ pub fn use_markup(program: Node) -> Node {
 		statements.len().saturating_sub(1),
 		function_with_globals(PAGE_RENDER, true, &[any_value], &HashSet::new()),
 	);
+	let at = statements.len().saturating_sub(1);
+	statements.splice(at..at, crate::component_state::hole_readers(&statements));
 	Node::List(statements, bracket, separator)
 }
 
