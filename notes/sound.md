@@ -144,8 +144,10 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Stereo built (card stereo-pan, tests/programs/test_sound_pan.rs, tests/web/test_rendered_pan.rs): `pan` (-1 left,
    1 right, 0 mono) makes lib panned interleave left, right, the far side scaled by 1 - |pan|; sound_samples carries
    the channels (src/host.rs, 4th parameter), the WAV/AudioBuffer has them, render_sound mixes in stereo when any
-   sound is (mono on both sides alike), natively and in host-files.js mixed. Still open: voice stealing (a cap on
-   voices sounding at once; card sound-voice-stealing), which only matters for live playing (cards real-time / patterns-live). Still to build:
+   sound is (mono on both sides alike), natively and in host-files.js mixed. Voice stealing built (card
+   sound-voice-stealing, tests/programs/test_sound_engine.rs): at most 32 sounds sound at once (sound_engine.rs
+   MAX_VOICES, playground.js stealFor); one more steals the oldest sounding then, which fades out in 5 ms and leaves.
+   Live only: render_sound mixes every sound (a render has no device to keep up with). Still to build:
    Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps; card sound-gain-ramps), gain in dB,
    stereo pan, polyphony with voice stealing.

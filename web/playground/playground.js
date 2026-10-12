@@ -8,6 +8,9 @@ const HINTS_KEY = "warp-playground-hints"; // the hints checkbox, on by default 
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
+// the most sounds sounding at once and how fast a stolen one fades out (src/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
+const MAX_VOICES = 32;
+const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
@@ -320,7 +323,10 @@ function playSound({ samples, rate, channels, at, handle }) {
 	source.gainNode = audio.createGain(); // fade_sound ramps it
 	source.connect(source.gainNode).connect(audio.destination);
 	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
-	source.start(Math.max(audio.currentTime, at + clockOffset));
+	source.startsAt = Math.max(audio.currentTime, at + clockOffset);
+	source.endsAt = source.startsAt + buffer.duration;
+	stealFor(source.startsAt);
+	source.start(source.startsAt);
 	source.handle = handle;
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
@@ -367,6 +373,20 @@ function silenced(handle) {
 	playingFiles.filter(player => player.handle === handle).forEach(player => player.pause());
 	sounding = sounding.filter(source => source.handle !== handle);
 	playingFiles = playingFiles.filter(player => player.handle !== handle);
+}
+
+// room for one more sound sounding at that time (src/sound_engine.rs MAX_VOICES): the oldest of MAX_VOICES sounding then
+// fades out in STEAL_SECONDS and stops
+function stealFor(time) {
+	const playing = sounding.filter(source => !source.stolen && source.startsAt <= time && time < source.endsAt);
+	if (playing.length < MAX_VOICES) return;
+	const oldest = playing.reduce((first, source) => source.startsAt < first.startsAt ? source : first);
+	oldest.stolen = true;
+	const level = oldest.gainNode.gain;
+	const from = Math.max(audio.currentTime, time);
+	level.setValueAtTime(level.value, from);
+	level.linearRampToValueAtTime(0, from + STEAL_SECONDS);
+	oldest.stop(from + STEAL_SECONDS);
 }
 
 // fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`

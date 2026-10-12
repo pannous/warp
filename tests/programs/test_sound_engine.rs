@@ -97,3 +97,20 @@ fn a_signals_blocks_join_seamlessly_at_another_rate() {
 	let smooth_step = 2.0 * std::f32::consts::PI * 440.0 / DEVICE_RATE as f32 * HALF;
 	assert!(largest_step <= 1.1 * smooth_step, "a jump of {largest_step} between samples, a smooth sine steps at most {smooth_step}");
 }
+
+// card sound-voice-stealing: at most MAX_VOICES sounds sound at once; one more steals the oldest, which fades out in
+// STEAL_SECONDS (no click) and leaves the mix
+#[test]
+fn one_voice_over_the_cap_steals_the_oldest() {
+	use warp::sound_engine::MAX_VOICES;
+	const QUIET: i16 = 256;
+	let mut mixer = Mixer::new(RATE, 1);
+	for handle in 1..=MAX_VOICES + 1 {
+		mixer.add(handle, 0, &[QUIET; 300], RATE, 1);
+	}
+	let buffer = mixed(&mut mixer, 200);
+	let each = QUIET as f32 / 32_768.0;
+	assert!((buffer[199] - MAX_VOICES as f32 * each).abs() < 1e-4, "{} voices sound, not {}", buffer[199] / each, MAX_VOICES);
+	mixer.stop(1);
+	assert!((mixed(&mut mixer, 1)[0] - MAX_VOICES as f32 * each).abs() < 1e-4, "the stolen one is gone already");
+}
