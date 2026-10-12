@@ -179,10 +179,11 @@ impl WasmGcEmitter {
 	}
 
 	/// `collection_contains(m, key)` and `collection_position(m, key)` (`key in m`, `m has key`) of a hash table with a
-	/// name key: 1 when it holds the key, else 0; false for any other call
+	/// name key: yes/no (contains) or 1/0 (position) whether it holds the key; false for any other call
 	pub(super) fn emit_typed_map_membership(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, map, key] = items else { return false };
-		let is_membership = matches!(word.drop_meta(), Node::Symbol(word) if word == COLLECTION_CONTAINS || word == COLLECTION_POSITION);
+		let word = word.drop_meta().name();
+		let is_membership = word == COLLECTION_CONTAINS || word == COLLECTION_POSITION;
 		let Some(slot) = self.typed_map(map).filter(|_| is_membership && self.is_name_key(key)) else {
 			return false;
 		};
@@ -190,7 +191,14 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, key);
 		self.emit_call(func, NODE_MAP_LOOKUP);
 		Self::emit_list(func, &[I::RefIsNull, I::I32Eqz, I::I64ExtendI32U]);
-		self.emit_call(func, "new_int");
+		self.emit_call(
+			func,
+			if word == COLLECTION_CONTAINS {
+				super::NEW_BOOL
+			} else {
+				"new_int"
+			},
+		);
 		true
 	}
 
