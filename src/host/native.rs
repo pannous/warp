@@ -573,6 +573,7 @@ fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNod
 	let (module, member) = (module?.name(), member?.name());
 	let answer = match (module.as_str(), member.as_str()) {
 		("table", "select") => queried_rows(&mut caller, &arguments?)?,
+		("sound", "signal") => played_signal(&mut caller, &arguments?)?,
 		_ => match crate::std_adapters::call(&module, &member, &arguments?) {
 			Ok(answer) => answer,
 			// the program raises it (emit_ffi_result): `try` catches it, uncaught it ends the run with this reason
@@ -585,16 +586,34 @@ fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNod
 /// The ids a filter's query keeps (database.rs select), its warp_call calling the program's functions back; a function
 /// that fails fails the query with its own error (the trap, whose trap_detail says what went wrong)
 fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+	calling_back("table.select", |kept| crate::database::select(&arguments.children(), &mut |function, request| route_value(caller, function, request).map_err(&mut *kept)))
+}
+
+/// play_signal(f, seconds) (sound.rs play_signal): the program's f(t: float) called for each sample; its handle
+fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+	let [function, seconds, rate] = arguments.children().try_into().map_err(|_| task_failure("play_signal(f, seconds) needs a function and its seconds".into()))?;
+	let name = function.name();
+	let not_a_signal = || task_failure(format!("play_signal: {name} is no function of the time in seconds to a number, as hum(t) := sin(2 * pi * 440 * t)"));
+	let signal = caller.get_export(&name).and_then(Extern::into_func).ok_or_else(not_a_signal)?.typed::<f64, f64>(&*caller).map_err(|_| not_a_signal())?;
+	let [seconds, rate] = [seconds, rate].map(|number| number_of(&number, &task_failure).map(f64::from));
+	let (seconds, rate) = (seconds?, rate?.clamp(1.0, u32::MAX as f64) as u32);
+	let handle = calling_back("play_signal", |kept| crate::sound::play_signal(seconds, rate, |time| signal.call(&mut *caller, time).map_err(&mut *kept)))?;
+	Ok(Node::int(handle as i64))
+}
+
+/// What a host word computes calling the program back: a call that fails fails the word with its own error (the trap,
+/// whose trap_detail says what went wrong), any other failure is the word's
+fn calling_back<T>(word: &str, compute: impl FnOnce(&mut dyn FnMut(wasmtime::Error) -> String) -> Result<T, String>) -> wasmtime::Result<T> {
 	let mut trapped = None;
-	let rows = crate::database::select(&arguments.children(), &mut |function, request| route_value(caller, function, request).map_err(|trap| {
+	let computed = compute(&mut |trap| {
 		let problem = format!("{trap:#}");
 		trapped.get_or_insert(trap);
 		problem
-	}));
-	match (rows, trapped) {
-		(Ok(rows), _) => Ok(rows),
+	});
+	match (computed, trapped) {
+		(Ok(computed), _) => Ok(computed),
 		(Err(_), Some(trap)) => Err(trap),
-		(Err(problem), None) => Err(task_failure(format!("table.select: {problem}"))),
+		(Err(problem), None) => Err(task_failure(format!("{word}: {problem}"))),
 	}
 }
 

@@ -14,8 +14,9 @@
 //! Chord and scale kinds (card music-values): `chord(C4, major7)`, `scale(D4, dorian)` name their kind by a word the
 //! program does not define, the text that lib/sound.warp chord_intervals and scale_intervals know it by.
 
-use super::nodes::call;
-use crate::node::{Bracket, Node};
+use super::memoization::definition_parts;
+use super::nodes::{call, key};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -38,6 +39,8 @@ const LIVE_CYCLES: &str = "live_cycles";
 const LIVE_BODY: &str = "live_body";
 /// the words whose second argument is a kind: chord(root, kind), scale(root, kind)
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
+const SIGNAL_WORD: &str = "play_signal";
+const FLOAT_TYPE: &str = "float";
 
 /// Before the go blocks are lowered (pipeline.rs): `live_loop 4 { … }` becomes the `go { … }` it stands for
 pub fn lower_live_loops(program: Node) -> Node {
@@ -60,12 +63,40 @@ pub fn lower(program: Node) -> Node {
 		return program;
 	}
 	let defined = defined_names(&program);
+	let program = with_float_signals(program);
 	match with_music_words(program, &defined) {
 		Node::List(statements, bracket, separator) if separator.separates_statements() => Node::List(with_scheduled(statements, &defined), bracket, separator),
 		statement => match scheduled(&statement, &defined) {
 			Some(statements) => Node::List(statements, crate::node::Bracket::None, crate::node::Separator::Newline),
 			None => statement,
 		},
+	}
+}
+
+/// The functions `play_signal(hum, 2s)` plays are of floats to a float: an untyped parameter is the time in seconds the
+/// host calls them with for every sample (sound.rs play_signal), their value a float even where it is whole (`3.0`)
+fn with_float_signals(program: Node) -> Node {
+	let mut signals = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::List(items, _, _) = node.drop_meta() {
+			if let [word, signal, ..] = items.as_slice() {
+				if word.is_symbol(SIGNAL_WORD) {
+					signals.extend(signal.symbol_name().map(str::to_string));
+				}
+			}
+		}
+	});
+	if signals.is_empty() { program } else { with_float_parameters(program, &signals) }
+}
+
+fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {
+	let Some((head, body, rebuild)) = definition_parts(&node) else { return node.map_children(|child| with_float_parameters(child, functions)) };
+	match head.drop_meta() {
+		Node::List(items, bracket, separator) if items.first().and_then(Node::symbol_name).is_some_and(|name| functions.contains(name)) => {
+			let typed = items.iter().enumerate().map(|(index, item)| if index > 0 && item.symbol_name().is_some() { key(item.clone(), Op::Colon, Node::symbol(FLOAT_TYPE)) } else { item.clone() });
+			rebuild(Node::List(typed.collect(), bracket.clone(), separator.clone()), key(Node::List(vec![body], Bracket::Round, Separator::None), Op::As, Node::symbol(FLOAT_TYPE)))
+		}
+		_ => node,
 	}
 }
 
