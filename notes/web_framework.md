@@ -101,8 +101,19 @@ Each step is useful on its own and is what the next ones stand on.
   node only, and the element is no element hole. Only a sum starting with a literal text counts (a bare `n` may be
   markup); a text beside it (one DOM text node), a computed attribute, no child elements, or style/script/option/
   select/textarea keep the element hole. Browser check: test_in_browser.py TEXT_HOLE (CI).
-- Left: holes inside components (an instance's elements by instance); the root's own text holes (a computed part in
-  the root still means no holes); built sites (site.js) morph the whole page·html, holes are the playground's.
+- Done (card web-fine-components, 2026-10-12): holes inside components. A call of a function showing markup is that
+  markup's element (markup.rs holes_through), so a hole's path runs through the instance's root element
+  (`page·hole·2·1`: the second Counter's p). Its value cannot be the element as written (it reads the instance's
+  state), so component_state.rs binds each hole to its part of one rendering: `page·holes` renders once (page·markup,
+  kept in the global page·shown), each hole is `page·element_at(page·shown, path)` or `page·text_at(…, after)`
+  (lib/markup.warp html_element_at, html_text_at). worker.js calls page·holes before reading them. The readers are
+  defined by page_html.rs use_markup for a program defining a markup function, before modules::resolve keeps the
+  definitions they call. Only a program rendering itself gets them. Element handlers (`on click {…}`), still written in
+  a component's markup at that point, are neither children nor computed. Browser check: test_in_browser.py
+  COMPONENT_HOLE (CI).
+- Left: the root's own text holes (a computed part in the root still means no holes); a component call under a loop
+  or a choice stays inside its enclosing hole; built sites (site.js) morph the whole page·html, holes are the
+  playground's.
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left
