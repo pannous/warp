@@ -1,5 +1,6 @@
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_component_drop;
+mod test_component_exports_anywhere; // card reflect-page-meta
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_component_operators;
 #[cfg(feature = "native")] // wasmtime components: not in the browser build

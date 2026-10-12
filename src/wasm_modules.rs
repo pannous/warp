@@ -126,6 +126,64 @@ pub fn module_bytes(path: &str) -> Result<Vec<u8>, String> {
 	Err(format!("{path}: a module in WAT text needs the native build"))
 }
 
+/// The functions and resource types the component at `path` exports, also those of its exported interfaces, in warp's
+/// spelling (`stats_of` for `stats-of`), sorted; constructors and methods are its resources' own. Read with wasmparser's
+/// validator, so the page's compiler answers `lib.exports` too (card reflect-page-meta)
+pub fn component_export_names(path: &str) -> Result<Vec<String>, String> {
+	use wasmparser::component_types::{ComponentAnyTypeId, ComponentEntityType};
+	let bytes = module_bytes(path)?;
+	let failure = |failure: wasmparser::BinaryReaderError| format!("cannot load the component {path}: {failure}");
+	let types = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
+		.validate_all(&bytes)
+		.map_err(failure)?;
+	let types = types.as_ref();
+	let named = |name: &str, entity: &ComponentEntityType| {
+		let exported = matches!(
+			entity,
+			ComponentEntityType::Func(_)
+				| ComponentEntityType::Type {
+					created: ComponentAnyTypeId::Resource(_),
+					..
+				}
+		);
+		(exported && !name.starts_with('[')).then(|| name.replace('-', "_"))
+	};
+	let mut names = vec![];
+	for name in component_export_section_names(&bytes).map_err(failure)? {
+		match types.component_item_for_export(&name).map(|item| &item.ty) {
+			Some(ComponentEntityType::Instance(interface)) => names.extend(
+				types[*interface]
+					.exports
+					.iter()
+					.filter_map(|(inner, item)| named(inner, &item.ty)),
+			),
+			Some(entity) => names.extend(named(&name, entity)),
+			None => {}
+		}
+	}
+	names.sort();
+	Ok(names)
+}
+
+/// The names in the export sections of the outermost component, not those of the components and modules it nests
+fn component_export_section_names(bytes: &[u8]) -> Result<Vec<String>, wasmparser::BinaryReaderError> {
+	let mut names = vec![];
+	let mut depth = 0;
+	for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+		match payload? {
+			wasmparser::Payload::Version { .. } => depth += 1,
+			wasmparser::Payload::End(_) => depth -= 1,
+			wasmparser::Payload::ComponentExportSection(reader) if depth == 1 => {
+				for export in reader {
+					names.push(export?.name.name.to_string());
+				}
+			}
+			_ => {}
+		}
+	}
+	Ok(names)
+}
+
 /// The exports of the module at `path` the program can use, by name; read once per path and process
 pub fn exports(path: &str) -> &'static HashMap<String, Export> {
 	static READ: std::sync::Mutex<Vec<(String, &'static HashMap<String, Export>)>> = std::sync::Mutex::new(Vec::new());

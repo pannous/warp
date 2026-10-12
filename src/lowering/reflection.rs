@@ -448,23 +448,19 @@ pub fn lower_component_words(node: Node) -> Node {
 	)
 }
 
-#[cfg(feature = "native")]
 fn component_exports(node: &Node) -> HashMap<String, Vec<String>> {
 	crate::foreign_modules::component_modules(node)
 		.into_iter()
-		.filter_map(|(alias, path)| match crate::components::export_names(&path) {
-			Ok(names) => Some((alias, names)),
-			Err(failure) => {
-				eprintln!("[wasm] {failure}");
-				None
-			}
-		})
+		.filter_map(
+			|(alias, path)| match crate::wasm_modules::component_export_names(&path) {
+				Ok(names) => Some((alias, names)),
+				Err(failure) => {
+					eprintln!("[wasm] {failure}");
+					None
+				}
+			},
+		)
 		.collect()
-}
-
-#[cfg(not(feature = "native"))]
-fn component_exports(_node: &Node) -> HashMap<String, Vec<String>> {
-	HashMap::new()
 }
 
 /// `import lib/fourty_two`: the names fourty_two exports (wasm_modules.rs), sorted; not the setters derived for its globals.
