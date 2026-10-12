@@ -1,5 +1,5 @@
 // The result type as Python, Swift, TypeScript, Kotlin and Rust write it, before a block body: `-> int { … }`,
-// `: number { … }`, `-> int: body`; the result converts to it as `def f(x) as int = …` does (test_typed_returns)
+// `: number { … }`, `-> int: body`; the result converts to it, or is checked, as `def f(x) as int = …` (test_typed_returns)
 use crate::is;
 use warp::wasm_emitter::eval;
 
@@ -7,7 +7,7 @@ use warp::wasm_emitter::eval;
 fn an_arrow_result_type_before_a_block_body() {
 	is!("def f(x: int) -> int { x + 1 }; f(1)", 2); // Python with braces, Rust fn f(x: i32) -> i32 { x + 1 }
 	is!("func f(x: Int) -> Int { return x + 1 }; f(1)", 2); // Swift
-	is!("def half(x) -> int { x / 2 }; half(3)", 1); // the result converts
+	crate::common::fails_with("def half(x) -> int { x / 2 }; half(3)", "an int must be a whole number"); // checked, not truncated (card lossy-return)
 	is!("def half(x) -> float { x / 2 }; half(3)", 1.5);
 }
 
