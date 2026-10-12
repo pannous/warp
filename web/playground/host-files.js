@@ -15,6 +15,10 @@ const WAV_HEADER_BYTES = 44;
 // play of a signal (src/sound.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
+// played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
+// checked every SIGNAL_POLL_MS (src/sound.rs SIGNAL_AHEAD, SIGNAL_POLL)
+const SIGNAL_AHEAD_SECONDS = 0.1;
+const SIGNAL_POLL_MS = 10;
 // a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
@@ -473,19 +477,28 @@ function rollBack(file) {
 // the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
 // render): the samples interleaved and the channels
 // play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
-// samples from `first` on, computed all at once in the Worker and played as one sound; its handle. Paced to the speaker
-// (as natively) it would need an AudioWorklet running the program
+// samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
+// the signal's handle, computed when the voice holds less than SIGNAL_AHEAD_SECONDS, the wait a sleep (no runaway
+// time); else all of them at once, one sound. Its handle
 function playedSignal(holder, seconds, rate, channels, block, blockOf) {
 	const total = Math.round(Math.max(0, Number(seconds)) * rate);
-	const samples = [];
+	const paced = Boolean(self.pageSystemValues?.window_open);
+	let samples = [];
+	let handle;
+	const played = () => {
+		if (samples.length) handle = holder.sounded(samples, rate, channels, handle);
+		samples = [];
+	};
 	for (let first = 0; first < total; first += block) {
+		while (paced && (self.soundsQueued?.() ?? 0) > SIGNAL_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 		const count = Math.min(block, total - first);
 		const blocks = blockOf(first, count);
 		for (let index = 0; index < count; index++)
 			for (const cells of blocks) samples.push(Math.round(Math.max(-1, Math.min(1, Number(cells[index] ?? 0))) * FULL_SCALE) + SAMPLE_OFFSET);
+		if (paced) played();
 	}
-	holder.sounded(samples, rate, channels);
-	return self.lastSoundHandle?.() ?? 0;
+	played();
+	return handle ?? 0;
 }
 
 // a function the program gives a sound word, of a float to a float: its export, called directly (closure_apply, which

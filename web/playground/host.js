@@ -118,12 +118,27 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
 	const program = () => holder.exports;
-	// samples (amplitude + SAMPLE_OFFSET of host-files.js, stereo interleaved) queued on the voice, for the page and render_sound
-	holder.sounded = (samples, rate, channels) => {
+	// samples (amplitude + SAMPLE_OFFSET of host-files.js, stereo interleaved) queued on the voice, for the page and
+	// render_sound; a signal's blocks keep its first one's handle. The handle
+	holder.sounded = (samples, rate, channels, handle) => {
 		const sound = { samples, rate, channels };
 		const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
 		(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
-		hooks.sound?.({ ...sound, at });
+		hooks.sound?.({ ...sound, at, handle });
+		return handle ?? self.lastSoundHandle?.() ?? 0;
+	};
+	// the host word sleep (src/host.rs): a page cannot block, so it busy-waits
+	holder.sleep = milliseconds => {
+		hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
+		const until = Date.now() + Number(milliseconds);
+		let check = Date.now() + SHARED_CHECK_MILLISECONDS;
+		while (Date.now() < until) {
+			if (Date.now() >= check) {
+				checkPoint();
+				check = Date.now() + SHARED_CHECK_MILLISECONDS;
+			}
+		}
+		checkPoint();
 	};
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
@@ -157,19 +172,8 @@ function programImports(holder, hooks) {
 			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
-			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
-			sleep: milliseconds => {
-				hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
-				const until = Date.now() + Number(milliseconds);
-				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
-				while (Date.now() < until) {
-					if (Date.now() >= check) {
-						checkPoint();
-						check = Date.now() + SHARED_CHECK_MILLISECONDS;
-					}
-				}
-				checkPoint();
-			},
+			// the host words (src/host.rs)
+			sleep: holder.sleep,
 			clock: () => BigInt(Date.now()),
 			// seconds east of UTC in the browser's time zone at that instant: an instant's wall clock (wasm_emitter/times.rs)
 			local_offset: milliseconds => BigInt(-new Date(Number(milliseconds)).getTimezoneOffset() * 60),

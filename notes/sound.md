@@ -186,10 +186,12 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
    Browser first step built (tests/web/test_signal_sound.rs): host-files.js STD_ADAPTERS.sound.signal / blocks compute
    all samples at once in the program's Worker (the function as closure_apply's callable, blocks read from memory)
-   and play them as one sound (host.js holder.sounded), as natively headless. Not real time yet: a long signal is
-   computed before it starts, stop_sound cannot end its computation.
-   Still to build: pacing in the browser (an AudioWorklet running the module, or the Worker computing blocks ahead of
-   the page's clock), input (a microphone as the signal's argument).
+   and play them as one sound (host.js holder.sounded), as natively headless. Paced once the page was clicked or
+   typed in (window_open, so audible): the Worker computes a block when the voice holds less than 100 ms
+   (playedSignal, host-tasks.js soundsQueued), each block a sound of the signal's handle (stop_sound ends them all),
+   the wait a sleep without runaway time. Unclicked (CI) everything at once, one sound.
+   Still to build: an AudioWorklet running the module (glitch-free under a busy Worker), input (a microphone as the
+   signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 
