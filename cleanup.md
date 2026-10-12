@@ -1,5 +1,19 @@
 # Delete-list cleanup
 
+# Visualizer child-process exit cleanup
+
+## Scope
+
+- Reproduce the silent non-zero visualizer child exit with a focused regression before changing the helper.
+- Keep environment-only WebGPU skips distinct from failed child processes, and make every failure report status, stdout, and stderr.
+- Reuse one result-checking helper for both visualizer samples instead of adding per-test branches.
+
+## Verification
+
+- Run only the focused sound-spectrum/visualizer tests through `tests/queue.sh` before and after the change.
+- Preserve the existing frame-count and sound-output assertions while proving a non-zero child cannot be silently skipped.
+- Record the child-process testing rule under `notes/` and hand the branch and filter to the Integrator for the full gate.
+
 - Reproduce deletion of a list variable with a new focused probe test.
 - Reuse the existing mutation lowering and list helpers rather than adding a special runtime path.
 - Make deletion mutate the list variable consistently with list methods and preserve other delete forms.

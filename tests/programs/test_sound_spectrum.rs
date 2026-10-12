@@ -5,6 +5,11 @@ use crate::is;
 
 const SOUND: &str = "use sound\n";
 
+#[cfg(feature = "native")]
+fn run_report(run: &std::process::Output) -> String {
+	String::from_utf8_lossy(&run.stderr).into_owned()
+}
+
 #[test]
 fn a_tone_fills_its_own_band() {
 	is!(&format!("{SOUND}bars = spectrum(chord_samples([A4], 0.1, \"sine\"), 0.02, 8)\nbars[nearest_band(A4, 8)] == max(bars)"), true);
@@ -26,13 +31,21 @@ fn animates_while_it_plays(sample: &str) -> Option<()> {
 	if errors.contains("no WebGPU adapter") {
 		return None;
 	}
-	assert!(run.status.success(), "{errors}");
+	assert!(run.status.success(), "{}", run_report(&run));
 	assert!(errors.contains("sound "), "{errors}");
 	// the loop paints a frame per 40 ms of a 4 s song by the wall clock: a second frame shows it animates, however slow
 	// a frame gets under load (3 frames once failed in a full gate: card visualizer-test)
 	let painted = |output: &[u8]| String::from_utf8_lossy(output).matches("painted").count();
 	assert!(painted(&run.stderr).max(painted(&run.stdout)) >= 2, "{errors}");
 	Some(())
+}
+
+#[cfg(feature = "native")]
+#[test]
+fn a_nonzero_visualizer_child_report_names_its_exit_status() {
+	let run = crate::common::warp_command().args(["--no-ask", "eval", "raise \"visualizer probe\""]).output().unwrap();
+	assert!(!run.status.success());
+	assert!(run_report(&run).contains(&format!("status {}", run.status)));
 }
 
 #[cfg(feature = "native")]
