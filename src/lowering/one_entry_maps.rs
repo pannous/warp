@@ -13,7 +13,9 @@ use std::collections::{HashMap, HashSet};
 /// `map_of_entry(x)`: the lone entry x as the map of it, any other value itself (wasm_emitter list_ops.rs)
 pub const MAP_OF_ENTRY: &str = "map_of_entry";
 /// The methods changing a map in place, which a lone pair can't take
-const CHANGING_METHODS: [&str; 9] = ["pop", "remove", "delete", "add", "append", "push", "insert", "put", "set"];
+const CHANGING_METHODS: [&str; 9] = [
+	"pop", "remove", "delete", "add", "append", "push", "insert", "put", "set",
+];
 
 pub fn lower(node: Node) -> Node {
 	let functions = defined_functions(&node);
@@ -30,7 +32,11 @@ fn is_one_entry(node: &Node) -> bool {
 }
 
 fn as_map(node: Node) -> Node {
-	if is_one_entry(&node) { call(MAP_OF_ENTRY, vec![node]) } else { node }
+	if is_one_entry(&node) {
+		call(MAP_OF_ENTRY, vec![node])
+	} else {
+		node
+	}
 }
 
 /// The program's functions, each with whether its parameters take a map: an untyped `x` or `m:map` does, `p:photo`
@@ -63,7 +69,13 @@ fn map_arguments<'a>(node: &'a Node, functions: &Functions) -> Option<Vec<(&'a N
 	match node.drop_meta() {
 		Node::List(items, _, _) if items.len() > 1 => {
 			let takes = functions.get(items[0].symbol_name()?)?;
-			Some(items[1..].iter().enumerate().map(|(index, argument)| (argument, takes.get(index).copied().unwrap_or(false))).collect())
+			Some(
+				items[1..]
+					.iter()
+					.enumerate()
+					.map(|(index, argument)| (argument, takes.get(index).copied().unwrap_or(false)))
+					.collect(),
+			)
 		}
 		_ => None,
 	}
@@ -77,7 +89,9 @@ fn changing_receiver(node: &Node) -> Option<&str> {
 				Node::List(items, _, _) => items.first().and_then(Node::symbol_name),
 				other => other.symbol_name(),
 			};
-			method.filter(|method| CHANGING_METHODS.contains(method)).and(receiver.symbol_name())
+			method
+				.filter(|method| CHANGING_METHODS.contains(method))
+				.and(receiver.symbol_name())
 		}
 		Node::Key(receiver, Op::AddAssign, _) => receiver.symbol_name(),
 		_ => None,
@@ -90,22 +104,33 @@ fn changed_maps(program: &Node, functions: &Functions) -> HashSet<String> {
 	program.visit(&mut |node| {
 		changed.extend(changing_receiver(node).map(str::to_string));
 		let arguments = map_arguments(node, functions).unwrap_or_default();
-		changed.extend(arguments.into_iter().filter(|(_, takes)| *takes).filter_map(|(argument, _)| argument.symbol_name()).map(str::to_string));
+		changed.extend(
+			arguments
+				.into_iter()
+				.filter(|(_, takes)| *takes)
+				.filter_map(|(argument, _)| argument.symbol_name())
+				.map(str::to_string),
+		);
 	});
 	changed
 }
 
 fn upgraded(node: Node, functions: &Functions, changed: &HashSet<String>) -> Node {
-	let takes: Option<Vec<bool>> = map_arguments(&node, functions).map(|arguments| arguments.into_iter().map(|(_, takes)| takes).collect());
+	let takes: Option<Vec<bool>> =
+		map_arguments(&node, functions).map(|arguments| arguments.into_iter().map(|(_, takes)| takes).collect());
 	match node {
-		Node::Key(target, op @ (Op::Assign | Op::AddAssign), value) if target.symbol_name().is_some_and(|name| changed.contains(name)) => {
+		Node::Key(target, op @ (Op::Assign | Op::AddAssign), value)
+			if target.symbol_name().is_some_and(|name| changed.contains(name)) =>
+		{
 			key(*target, op, as_map(upgraded(*value, functions, changed)))
 		}
 		Node::List(items, bracket, separator) if takes.is_some() => {
 			let takes = takes.unwrap_or_default();
 			let mut items = items.into_iter().map(|item| upgraded(item, functions, changed));
 			let head = items.next().into_iter();
-			let arguments = items.zip(takes).map(|(argument, takes_map)| if takes_map { as_map(argument) } else { argument });
+			let arguments = items
+				.zip(takes)
+				.map(|(argument, takes_map)| if takes_map { as_map(argument) } else { argument });
 			Node::List(head.chain(arguments).collect(), bracket, separator)
 		}
 		other => other.map_children(|child| upgraded(child, functions, changed)),

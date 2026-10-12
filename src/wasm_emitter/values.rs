@@ -7,7 +7,11 @@ impl WasmGcEmitter {
 		if let Some(identity) = self.object_identity(node) {
 			return self.emit_object_identity(func, identity);
 		}
-		if let Some(product) = self.numeric_times(node).or_else(|| self.identity_as_equality(node)).or_else(|| crate::analyzer::spelled_number(node)) {
+		if let Some(product) = self
+			.numeric_times(node)
+			.or_else(|| self.identity_as_equality(node))
+			.or_else(|| crate::analyzer::spelled_number(node))
+		{
 			return self.emit_numeric_value(func, &product);
 		}
 		self.note_position(node);
@@ -17,7 +21,10 @@ impl WasmGcEmitter {
 		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
 			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
 		}
-		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_numeric_value) || self.emit_type_test_value(func, node) {
+		if self.emit_loop_jump(func, node)
+			|| self.emit_tuple_statement(func, node, Self::emit_numeric_value)
+			|| self.emit_type_test_value(func, node)
+		{
 			return;
 		}
 		let located = node;
@@ -71,11 +78,17 @@ impl WasmGcEmitter {
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => self.emit_numeric_assignment(func, located, left, right),
 			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
-			Node::Key(value, Op::As, target) if self.get_type(value) == Kind::Int && is_int_type_word(target) && !self.computes_at_run_time_kind(value) => {
+			Node::Key(value, Op::As, target)
+				if self.get_type(value) == Kind::Int
+					&& is_int_type_word(target)
+					&& !self.computes_at_run_time_kind(value) =>
+			{
 				self.emit_int_value_truncated(func, value)
 			}
 			// Increment/decrement: i++ or i--
-			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => self.emit_numeric_step(func, left, op, right),
+			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => {
+				self.emit_numeric_step(func, left, op, right)
+			}
 			// Compound assignment: x += y → x = x + y
 			Node::Key(left, op, right) if op.is_compound_assign() => {
 				self.emit_compound_assign(func, left, op, right, false);
@@ -93,7 +106,15 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::And, right) => {
 				// Truthy and: if left is 0, return 0; else return right
 				self.emit_numeric_value(func, left);
-				Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(ValType::I64)), I::I64Const(0), I::Else]);
+				Self::emit_list(
+					func,
+					&[
+						I::I64Eqz,
+						I::If(BlockType::Result(ValType::I64)),
+						I::I64Const(0),
+						I::Else,
+					],
+				);
 				self.emit_numeric_value(func, right);
 				func.instruction(&I::End);
 			}
@@ -109,12 +130,16 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if self.compares_structurally(op, left, right) => {
 				self.emit_structural_equality(func, left, op, right);
 			}
-			Node::Key(left, op, right) if self.orders_a_list(op, left, right) => self.emit_unordered_list_error(func, left, op, right),
+			Node::Key(left, op, right) if self.orders_a_list(op, left, right) => {
+				self.emit_unordered_list_error(func, left, op, right)
+			}
 			Node::Key(left, op, right) if *op == Op::Xor || op.is_comparison() => {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)
-			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => self.emit_numeric_prefix(func, located, op, right),
+			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
+				self.emit_numeric_prefix(func, located, op, right)
+			}
 			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
 			Node::Key(counted, Op::Dot, property) if self.counting_getter(property).is_some() => {
 				let counter = self.counting_getter(property).expect("guarded");
@@ -153,7 +178,9 @@ impl WasmGcEmitter {
 			// Variable lookup (local or global)
 			Node::Symbol(name) => self.emit_numeric_symbol(func, name),
 			// Statement sequence or function call
-			Node::List(items, bracket, separator) if !items.is_empty() => self.emit_numeric_list(func, node, items, bracket, separator),
+			Node::List(items, bracket, separator) if !items.is_empty() => {
+				self.emit_numeric_list(func, node, items, bracket, separator)
+			}
 			// While loop: emit loop and get numeric result
 			Node::Key(left, Op::Do, right) => {
 				self.emit_while_loop_value(func, left, right);
@@ -200,12 +227,18 @@ impl WasmGcEmitter {
 			}
 		}
 		let [word, argument] = items else { return false };
-		let Node::Symbol(fn_name) = word.drop_meta() else { return false }; // `count xs` without parentheses keeps its position
+		let Node::Symbol(fn_name) = word.drop_meta() else {
+			return false;
+		}; // `count xs` without parentheses keeps its position
 		if self.emit_shadowed_counting(func, fn_name, argument) {
 			return true;
 		}
 		// floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
-		if fn_name == "floor" && !self.ctx.ffi_imports.contains_key(fn_name) && !self.ctx.user_functions.contains_key(fn_name) && self.get_type(argument) == Kind::Int {
+		if fn_name == "floor"
+			&& !self.ctx.ffi_imports.contains_key(fn_name)
+			&& !self.ctx.user_functions.contains_key(fn_name)
+			&& self.get_type(argument) == Kind::Int
+		{
 			self.emit_numeric_value(func, argument);
 			if self.int_runtime() {
 				self.emit_call(func, "exact_floor");
@@ -213,7 +246,10 @@ impl WasmGcEmitter {
 			return true;
 		}
 		// floor, ceil and round of a float as the i64, without the Int node list_emitter builds for it as a value
-		if super::list_emitter::float_rounding(fn_name).is_some() && !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(argument).is_float() {
+		if super::list_emitter::float_rounding(fn_name).is_some()
+			&& !self.ctx.ffi_imports.contains_key(fn_name)
+			&& self.get_type(argument).is_float()
+		{
 			self.emit_rounded_to_i64(func, argument, fn_name);
 			return true;
 		}
@@ -242,7 +278,8 @@ impl WasmGcEmitter {
 			return;
 		}
 		// `return x` in a branch: the numeric path returns it (as the function's kind); the value after is never reached
-		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return")) {
+		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return"))
+		{
 			self.emit_numeric_value(func, node);
 			func.instruction(&I::F64ConvertI64S);
 			return;
@@ -367,31 +404,51 @@ impl WasmGcEmitter {
 				func.instruction(&I::F64Abs);
 			}
 			// `v as float` is v's f64; any other cast's exact value converted
-			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && matches!(self.get_type(value), Kind::Text | Kind::Empty) && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
+			Node::Key(value, Op::As, _)
+				if self.get_type(node).is_float()
+					&& matches!(self.get_type(value), Kind::Text | Kind::Empty)
+					&& !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
+			{
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
 			}
-			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) => {
+			Node::Key(value, Op::As, _)
+				if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
+			{
 				self.emit_float_value(func, value);
 			}
 			// `"1.5" as float`: the literal's cast as everywhere (a number, or loud for "x"), its f64
-			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && matches!(value.drop_meta(), Node::Text(_)) => self.emit_node_as_f64(func, node),
-			Node::Key(list, Op::Hash, index) if self.is_typed_list(list) => self.emit_typed_element_float(func, list, index),
+			Node::Key(value, Op::As, _)
+				if self.get_type(node).is_float() && matches!(value.drop_meta(), Node::Text(_)) =>
+			{
+				self.emit_node_as_f64(func, node)
+			}
+			Node::Key(list, Op::Hash, index) if self.is_typed_list(list) => {
+				self.emit_typed_element_float(func, list, index)
+			}
 			Node::Key(_, Op::As, _) => {
 				self.emit_numeric_value(func, node);
 				self.emit_int_to_f64(func, None);
 			}
 			// Variable lookup (local or global) - convert i64 to f64 if needed
 			Node::Symbol(name) => self.emit_float_symbol(func, name),
-			Node::List(items, bracket, separator) if !items.is_empty() => self.emit_float_list(func, items, bracket, separator),
+			Node::List(items, bracket, separator) if !items.is_empty() => {
+				self.emit_float_list(func, items, bracket, separator)
+			}
 			// a loop: run it, its count as the value (a float function leaves it by `return`)
 			Node::Key(_, Op::Do, _) => {
 				self.emit_numeric_value(func, node);
 				func.instruction(&I::F64ConvertI64S);
 			}
-			Node::Key(condition, Op::Question, then_else) => self.emit_ternary_raw(func, condition, then_else, ValType::F64, Self::emit_float_value),
-			Node::Key(if_then, Op::Else, else_expr) => self.emit_if_then_else_raw(func, if_then, Some(else_expr), ValType::F64, Self::emit_float_value),
-			Node::Key(_, Op::Then, _) => self.emit_if_then_else_raw(func, node, None, ValType::F64, Self::emit_float_value),
+			Node::Key(condition, Op::Question, then_else) => {
+				self.emit_ternary_raw(func, condition, then_else, ValType::F64, Self::emit_float_value)
+			}
+			Node::Key(if_then, Op::Else, else_expr) => {
+				self.emit_if_then_else_raw(func, if_then, Some(else_expr), ValType::F64, Self::emit_float_value)
+			}
+			Node::Key(_, Op::Then, _) => {
+				self.emit_if_then_else_raw(func, node, None, ValType::F64, Self::emit_float_value)
+			}
 			// an element or field read by name (`v.x` of an instance): a Node, an Int or a Float at run time
 			Node::Key(_, Op::Hash, _) => self.emit_node_as_f64(func, node),
 			other => self.emit_not_a_number(func, located, other),
@@ -401,8 +458,14 @@ impl WasmGcEmitter {
 	/// Emit a range as a list of integers
 	/// inclusive: true for .../ (0...3 = [0,1,2,3]), false for .. (0..3 = [0,1,2])
 	pub(super) fn emit_range(&mut self, func: &mut Function, start: &Node, end: &Node, inclusive: bool) {
-		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) = (start.drop_meta(), end.drop_meta()) else {
-			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) { end } else { start };
+		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) =
+			(start.drop_meta(), end.drop_meta())
+		else {
+			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) {
+				end
+			} else {
+				start
+			};
 			self.emit_malformed(func, bound, "a constant integer as range bound");
 			return;
 		};
@@ -430,13 +493,21 @@ impl WasmGcEmitter {
 				self.emit_literal(func, right);
 				self.emit_new_key(func, op);
 			}
-			Node::List(items, bracket, _) if !items.is_empty() => self.emit_list_structure_with(func, items, bracket, Self::emit_literal),
+			Node::List(items, bracket, _) if !items.is_empty() => {
+				self.emit_list_structure_with(func, items, bracket, Self::emit_literal)
+			}
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),
 			other => self.emit_node_instructions(func, other),
 		}
 	}
 
-	pub(super) fn emit_list_structure_with(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, emit: fn(&mut Self, &mut Function, &Node)) {
+	pub(super) fn emit_list_structure_with(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
 		let bracket_info = bracket_info(bracket);
 
 		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself

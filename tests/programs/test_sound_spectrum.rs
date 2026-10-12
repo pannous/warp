@@ -14,19 +14,31 @@ fn run_report(run: &std::process::Output) -> String {
 fn a_tone_fills_its_own_band() {
 	is!(&format!("{SOUND}bars = spectrum(chord_samples([A4], 0.1, \"sine\"), 0.02, 8)\nbars[nearest_band(A4, 8)] == max(bars)"), true);
 	is!(&format!("{SOUND}bars = spectrum(chord_samples([C3], 0.1, \"sine\"), 0.02, 8)\nbars[nearest_band(C3, 8)] == max(bars)"), true);
-	is!(&format!("{SOUND}count(spectrum(chord_samples([A4], 0.1, \"sine\"), 0.02, 12))"), 12);
+	is!(
+		&format!("{SOUND}count(spectrum(chord_samples([A4], 0.1, \"sine\"), 0.02, 12))"),
+		12
+	);
 }
 
 #[test]
 fn silence_and_the_end_are_empty() {
-	is!(&format!("{SOUND}max(spectrum([sample_offset for i in 0..2000], 0, 4)) == 0"), true);
-	is!(&format!("{SOUND}max(spectrum(chord_samples([A4], 0.1, \"sine\"), 5, 4)) == 0"), true);
+	is!(
+		&format!("{SOUND}max(spectrum([sample_offset for i in 0..2000], 0, 4)) == 0"),
+		true
+	);
+	is!(
+		&format!("{SOUND}max(spectrum(chord_samples([A4], 0.1, \"sine\"), 5, 4)) == 0"),
+		true
+	);
 }
 
 /// A visualizer sample's run: it plays its song and paints frame after frame; None without a WebGPU adapter
 #[cfg(feature = "native")]
 fn animates_while_it_plays(sample: &str) -> Option<()> {
-	let run = crate::common::warp_command().args(["--no-ask", "run", sample]).output().unwrap();
+	let run = crate::common::warp_command()
+		.args(["--no-ask", "run", sample])
+		.output()
+		.unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr);
 	if errors.contains("no WebGPU adapter") {
 		return None;
@@ -51,7 +63,8 @@ fn a_nonzero_visualizer_child_report_names_its_exit_status() {
 #[cfg(feature = "native")]
 #[test]
 fn the_visualizer_paints_while_it_plays() {
-	animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/visualizer.warp")).expect("the visualizer needs no GPU");
+	animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/visualizer.warp"))
+		.expect("the visualizer needs no GPU");
 }
 
 // the WebGPU visualizer: a raymarching fragment shader reads the spectrum through $levels each frame

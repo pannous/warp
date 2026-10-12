@@ -30,7 +30,9 @@ enum Jump {
 }
 
 fn jump_word(node: &Node) -> Option<(Jump, &str)> {
-	let Node::Symbol(name) = node.drop_meta() else { return None };
+	let Node::Symbol(name) = node.drop_meta() else {
+		return None;
+	};
 	let word = name.as_str();
 	if BREAK_WORDS.contains(&word) {
 		Some((Jump::Break, word))
@@ -55,10 +57,15 @@ pub(crate) fn split_step(body: &Node) -> (Node, Option<Node>) {
 	match body.drop_meta() {
 		Node::List(items, bracket, separator) if items.last().is_some_and(is_step) => {
 			let (step, statements) = items.split_last().expect("guarded");
-			(Node::List(statements.to_vec(), bracket.clone(), separator.clone()), Some(step.clone()))
+			(
+				Node::List(statements.to_vec(), bracket.clone(), separator.clone()),
+				Some(step.clone()),
+			)
 		}
 		// `{print x}` holds the words of its one statement: the body is the call `print x`, whose value is ø (P213)
-		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => (Node::List(words.clone(), Bracket::None, Separator::Space), None),
+		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => {
+			(Node::List(words.clone(), Bracket::None, Separator::Space), None)
+		}
 		_ => (body.clone(), None),
 	}
 }
@@ -91,7 +98,9 @@ pub(crate) fn open_frames(func: &Function) -> Vec<bool> {
 	use wasmparser::Operator::*;
 	let body = func.clone().into_raw_body();
 	let reader = wasmparser::FunctionBody::new(wasmparser::BinaryReader::new(&body, 0));
-	let Ok(mut operators) = reader.get_operators_reader() else { return vec![] };
+	let Ok(mut operators) = reader.get_operators_reader() else {
+		return vec![];
+	};
 	let mut open = vec![];
 	while !operators.eof() {
 		match operators.read() {
@@ -109,7 +118,10 @@ pub(crate) fn open_frames(func: &Function) -> Vec<bool> {
 
 impl WasmGcEmitter {
 	pub(crate) fn enter_loop(&mut self, break_frame: usize, continue_frame: usize) {
-		self.loop_labels.push(LoopLabels { break_frame, continue_frame });
+		self.loop_labels.push(LoopLabels {
+			break_frame,
+			continue_frame,
+		});
 	}
 
 	pub(crate) fn leave_loop(&mut self) {
@@ -117,13 +129,17 @@ impl WasmGcEmitter {
 	}
 
 	fn is_defined_name(&self, name: &str) -> bool {
-		self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name) || self.ctx.user_functions.contains_key(name)
+		self.scope.lookup(name).is_some()
+			|| self.ctx.user_globals.contains_key(name)
+			|| self.ctx.user_functions.contains_key(name)
 	}
 
 	/// Emit `break`/`continue` as a branch to the innermost loop; false if the node is no jump.
 	/// A jump outside any loop is a compile error, never silently a symbol.
 	pub(crate) fn emit_loop_jump(&mut self, func: &mut Function, node: &Node) -> bool {
-		let Some((jump, word)) = jump_word(node) else { return false };
+		let Some((jump, word)) = jump_word(node) else {
+			return false;
+		};
 		if self.is_defined_name(word) {
 			return false;
 		}
@@ -131,10 +147,17 @@ impl WasmGcEmitter {
 			if WORDS_ONLY_IN_LOOPS.contains(&word) {
 				return false;
 			}
-			self.emit_type_error(func, format!("`{word}` outside of a loop: it only leaves or skips a while/for loop body"));
+			self.emit_type_error(
+				func,
+				format!("`{word}` outside of a loop: it only leaves or skips a while/for loop body"),
+			);
 			return true;
 		};
-		let target = if jump == Jump::Break { labels.break_frame } else { labels.continue_frame };
+		let target = if jump == Jump::Break {
+			labels.break_frame
+		} else {
+			labels.continue_frame
+		};
 		let depth = open_control_frames(func) - target;
 		self.emit_leave_tries(func, target);
 		func.instruction(&I::Br(depth as u32));

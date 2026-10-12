@@ -5,7 +5,11 @@ const PROGRAM: &str = "server def greeting(name) { token = \"s3cret-token\"; \"h
 
 fn app_wasm(program: &str) -> Vec<u8> {
 	let files = warp::site::files(program, "rpc", false).expect("the page builds");
-	files.into_iter().find(|(name, _)| name == "app.wasm").expect("app.wasm").1
+	files
+		.into_iter()
+		.find(|(name, _)| name == "app.wasm")
+		.expect("app.wasm")
+		.1
 }
 
 fn contains(bytes: &[u8], text: &str) -> bool {
@@ -15,7 +19,10 @@ fn contains(bytes: &[u8], text: &str) -> bool {
 #[test]
 fn a_server_function_body_stays_out_of_the_page() {
 	let module = app_wasm(PROGRAM);
-	assert!(!contains(&module, SECRET), "the server function's body shipped in app.wasm");
+	assert!(
+		!contains(&module, SECRET),
+		"the server function's body shipped in app.wasm"
+	);
 	assert!(contains(&module, "/rpc/greeting"), "the page calls POST /rpc/greeting");
 }
 

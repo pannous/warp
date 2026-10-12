@@ -1,0 +1,3 @@
+// warp app probes/app_keys/exits.warp: any key ends the app with code 3 (card key-app); --check presses q itself
+on key { exit(3) }
+div{ p{ "press a key" } script{ "document.body.append('endApp:' + typeof self.endApp); setTimeout(() => document.dispatchEvent(new KeyboardEvent('keydown', {key: 'q'})), 100)" } }

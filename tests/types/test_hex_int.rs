@@ -1,8 +1,8 @@
 // card hex-printing (user, 2026-10-11): `255 as hex` is an int that behaves exactly like an int but shows as 0xFF; so
 // does a byte (`byte`, `u8`, `uint8`), a plain wasm integer otherwise. Only the shown text differs: arithmetic on it
 // gives a plain int
-use warp::wasm_emitter::eval;
 use crate::is;
+use warp::wasm_emitter::eval;
 
 fn shown(code: &str) -> String {
 	eval(code).serialize()

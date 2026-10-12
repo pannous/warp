@@ -1,0 +1,10 @@
+// card go-split-kernel: 10 split maps of 4M floats, 0.74 s (debug); without go 2.12 s
+n = 4000000 + random_below(1)
+xs = float[n]
+for i in 1 to n { xs#i = i * 1.0 }
+s = 0.0
+for round in 1 to 10 {
+	ys = go xs.map(x => sqrt(x) * 0.5 + 1)
+	s += ys#n
+}
+s

@@ -12,9 +12,9 @@
 //! layout, showing the inner route where it says `outlet` (the inner route's own function page·part·N); each inner route
 //! is a route of the page with the whole pattern, and the route itself follows them with an empty outlet.
 
+use super::nodes::call;
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::{symbol, text, Bracket, Node, Separator};
-use super::nodes::call;
 use std::collections::HashMap;
 
 const ROUTE_WORD: &str = "route";
@@ -64,18 +64,54 @@ pub fn lower(program: Node) -> Node {
 	let ends_with_route = statements.last().is_some_and(|last| route(last).is_some());
 	let main_variables = main_level_variables(&statements);
 	let mut parts: Vec<Part> = vec![];
-	let routes: Vec<Route> = statements.iter().filter_map(route).flat_map(|(pattern, body)| flattened(&pattern, &body, &mut parts)).collect();
+	let routes: Vec<Route> = statements
+		.iter()
+		.filter_map(route)
+		.flat_map(|(pattern, body)| flattened(&pattern, &body, &mut parts))
+		.collect();
 	let routed = call(PAGE_ROUTED, vec![]);
 	let outlet = HashMap::from([(OUTLET.to_string(), routed.clone())]);
-	let mut functions: Vec<Node> = parts.iter().map(|(name, pattern, body)| function_with_globals(name, false, &route_body(pattern, body), &main_variables)).collect();
-	functions.extend(routes.iter().enumerate().map(|(index, (pattern, body))| function_with_globals(&format!("{ROUTE_PREFIX}{index}"), false, &route_body(pattern, body), &main_variables)));
-	functions.push(function_with_globals(PAGE_ROUTES, false, &[patterns(&routes)], &main_variables));
-	functions.push(function_with_globals(PAGE_ROUTE_INDEX, false, &matching(&routes), &main_variables));
-	functions.push(function_with_globals(PAGE_ROUTED, false, &choice(&routes), &main_variables));
+	let mut functions: Vec<Node> = parts
+		.iter()
+		.map(|(name, pattern, body)| function_with_globals(name, false, &route_body(pattern, body), &main_variables))
+		.collect();
+	functions.extend(routes.iter().enumerate().map(|(index, (pattern, body))| {
+		function_with_globals(
+			&format!("{ROUTE_PREFIX}{index}"),
+			false,
+			&route_body(pattern, body),
+			&main_variables,
+		)
+	}));
+	functions.push(function_with_globals(
+		PAGE_ROUTES,
+		false,
+		&[patterns(&routes)],
+		&main_variables,
+	));
+	functions.push(function_with_globals(
+		PAGE_ROUTE_INDEX,
+		false,
+		&matching(&routes),
+		&main_variables,
+	));
+	functions.push(function_with_globals(
+		PAGE_ROUTED,
+		false,
+		&choice(&routes),
+		&main_variables,
+	));
 	// the functions stand where the first route stood, after the main-level data the routes read: a function reads a
 	// typed main-level list (`users: [User] = …`) from where it is defined (card typed-global-capture)
-	let first_route = statements.iter().position(|statement| route(statement).is_some()).unwrap_or_default();
-	let mut lowered: Vec<Node> = statements.iter().filter(|statement| route(statement).is_none()).map(|statement| crate::law::substitute(statement, &outlet)).collect();
+	let first_route = statements
+		.iter()
+		.position(|statement| route(statement).is_some())
+		.unwrap_or_default();
+	let mut lowered: Vec<Node> = statements
+		.iter()
+		.filter(|statement| route(statement).is_none())
+		.map(|statement| crate::law::substitute(statement, &outlet))
+		.collect();
 	lowered.splice(first_route..first_route, functions);
 	if ends_with_route {
 		lowered.push(routed);
@@ -98,9 +134,15 @@ pub(crate) fn pattern_text(pattern: &Node) -> String {
 
 /// `route "/users/:id" {…}`: the pattern ("/" parses as a character) and the block's items
 pub(crate) fn route(statement: &Node) -> Option<Route> {
-	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let [word, pattern, block] = items.as_slice() else { return None };
-	let Node::List(body, Bracket::Curly, _) = block.drop_meta() else { return None };
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let [word, pattern, block] = items.as_slice() else {
+		return None;
+	};
+	let Node::List(body, Bracket::Curly, _) = block.drop_meta() else {
+		return None;
+	};
 	if !matches!(pattern.drop_meta(), Node::Text(_) | Node::Char(_)) {
 		return None;
 	}
@@ -116,7 +158,12 @@ fn flattened(pattern: &str, body: &[Node], parts: &mut Vec<Part>) -> Vec<Route> 
 		return vec![(pattern.to_string(), body.to_vec())];
 	}
 	let layout: Vec<Node> = body.iter().filter(|item| route(item).is_none()).cloned().collect();
-	let shown_at_outlet = |shown: Node| layout.iter().map(|item| crate::law::substitute(item, &HashMap::from([(OUTLET.to_string(), shown.clone())]))).collect::<Vec<Node>>();
+	let shown_at_outlet = |shown: Node| {
+		layout
+			.iter()
+			.map(|item| crate::law::substitute(item, &HashMap::from([(OUTLET.to_string(), shown.clone())])))
+			.collect::<Vec<Node>>()
+	};
 	let mut routes = vec![];
 	for (inner_pattern, inner_body) in inner {
 		for (whole, items) in flattened(&joined(pattern, &inner_pattern), &inner_body, parts) {
@@ -133,7 +180,11 @@ fn flattened(pattern: &str, body: &[Node], parts: &mut Vec<Part>) -> Vec<Route> 
 fn joined(outer: &str, inner: &str) -> String {
 	let inner = inner.trim_start_matches(PATH_SEPARATOR);
 	let outer = outer.trim_end_matches(PATH_SEPARATOR);
-	if inner.is_empty() { format!("{outer}{PATH_SEPARATOR}") } else { format!("{outer}{PATH_SEPARATOR}{inner}") }
+	if inner.is_empty() {
+		format!("{outer}{PATH_SEPARATOR}")
+	} else {
+		format!("{outer}{PATH_SEPARATOR}{inner}")
+	}
 }
 
 /// A parameter of a pattern part: ":id:int" → id, its type int; ":id(\\d+)?" → id, its regular expression (a URLPattern
@@ -145,15 +196,26 @@ struct Parameter<'a> {
 }
 
 fn parameters(pattern: &str) -> impl Iterator<Item = Parameter<'_>> {
-	pattern.split(PATH_SEPARATOR).filter_map(|segment| segment.strip_prefix(PARAMETER_MARK)).map(|declared| {
-		let (declared, marked) = declared.strip_suffix(PART_MARKS).map_or((declared, false), |rest| (rest, true));
-		let (declared, group) = match declared.split_once(GROUP_START) {
-			Some((head, group)) => (head, group.strip_suffix(')')),
-			None => (declared, None),
-		};
-		let (name, kind) = declared.split_once(PARAMETER_MARK).map_or((declared, None), |(name, kind)| (name, Some(kind)));
-		Parameter { name, kind: kind.filter(|_| !marked && group.is_none()), group }
-	})
+	pattern
+		.split(PATH_SEPARATOR)
+		.filter_map(|segment| segment.strip_prefix(PARAMETER_MARK))
+		.map(|declared| {
+			let (declared, marked) = declared
+				.strip_suffix(PART_MARKS)
+				.map_or((declared, false), |rest| (rest, true));
+			let (declared, group) = match declared.split_once(GROUP_START) {
+				Some((head, group)) => (head, group.strip_suffix(')')),
+				None => (declared, None),
+			};
+			let (name, kind) = declared
+				.split_once(PARAMETER_MARK)
+				.map_or((declared, None), |(name, kind)| (name, Some(kind)));
+			Parameter {
+				name,
+				kind: kind.filter(|_| !marked && group.is_none()),
+				group,
+			}
+		})
 }
 
 /// Whether `path` matches `pattern`, as lib/router.warp route_matches, for a server choosing its route before any warp
@@ -162,9 +224,23 @@ pub fn path_matches(pattern: &str, path: &str) -> bool {
 	if pattern == ANY_PARTS {
 		return true;
 	}
-	let parts = |text: &'_ str| text.split(PATH_SEPARATOR).filter(|part| !part.is_empty()).map(str::to_string).collect::<Vec<String>>();
+	let parts = |text: &'_ str| {
+		text.split(PATH_SEPARATOR)
+			.filter(|part| !part.is_empty())
+			.map(str::to_string)
+			.collect::<Vec<String>>()
+	};
 	let (wanted, given) = (parts(pattern), parts(path));
-	let mark = wanted.last().and_then(|last| if last == ANY_PARTS { Some('*') } else { last.strip_prefix(PARAMETER_MARK)?.chars().last().filter(|end| PART_MARKS.contains(end)) });
+	let mark = wanted.last().and_then(|last| {
+		if last == ANY_PARTS {
+			Some('*')
+		} else {
+			last.strip_prefix(PARAMETER_MARK)?
+				.chars()
+				.last()
+				.filter(|end| PART_MARKS.contains(end))
+		}
+	});
 	let fixed = wanted.len() - usize::from(mark.is_some());
 	let counted = match mark {
 		None => given.len() == fixed,
@@ -172,10 +248,18 @@ pub fn path_matches(pattern: &str, path: &str) -> bool {
 		Some('+') => given.len() > fixed,
 		Some(_) => given.len() >= fixed,
 	};
-	counted && wanted.iter().zip(&given).take(fixed).all(|(part, segment)| match part.strip_prefix(PARAMETER_MARK) {
-		None => part == segment,
-		Some(_) => parameters(part).next().and_then(|parameter| parameter.kind).is_none_or(|kind| part_fits(kind, segment)),
-	})
+	counted
+		&& wanted
+			.iter()
+			.zip(&given)
+			.take(fixed)
+			.all(|(part, segment)| match part.strip_prefix(PARAMETER_MARK) {
+				None => part == segment,
+				Some(_) => parameters(part)
+					.next()
+					.and_then(|parameter| parameter.kind)
+					.is_none_or(|kind| part_fits(kind, segment)),
+			})
 }
 
 /// Whether a path part is a value of the type a parameter declares (lib/router.warp route_fits): digits, a float's
@@ -186,7 +270,11 @@ fn part_fits(kind: &str, segment: &str) -> bool {
 		"float" => 1,
 		_ => return true,
 	};
-	!segment.is_empty() && segment.chars().all(|character| character.is_ascii_digit() || character == '.') && segment.matches('.').count() <= dots
+	!segment.is_empty()
+		&& segment
+			.chars()
+			.all(|character| character.is_ascii_digit() || character == '.')
+		&& segment.matches('.').count() <= dots
 }
 
 /// What a pattern says wrong, loudly: a mark on a part before the last, a group without a name, a type no path part has
@@ -194,13 +282,27 @@ fn pattern_problem(pattern: &str) -> Option<String> {
 	let parts: Vec<&str> = pattern.split(PATH_SEPARATOR).filter(|part| !part.is_empty()).collect();
 	let marked = |part: &&str| *part == ANY_PARTS || (part.starts_with(PARAMETER_MARK) && part.ends_with(PART_MARKS));
 	if parts.iter().rev().skip(1).any(marked) {
-		return Some(format!("route \"{pattern}\": only the last part of a pattern may be optional (?) or repeated (*, +)"));
+		return Some(format!(
+			"route \"{pattern}\": only the last part of a pattern may be optional (?) or repeated (*, +)"
+		));
 	}
 	if parts.iter().any(|part| part.starts_with(GROUP_START)) {
-		return Some(format!("route \"{pattern}\": name the regular expression of a part, as :name(…)"));
+		return Some(format!(
+			"route \"{pattern}\": name the regular expression of a part, as :name(…)"
+		));
 	}
-	let wrong_type = parameters(pattern).find_map(|parameter| parameter.kind.filter(|kind| !PARAMETER_TYPES.contains(kind)).map(|kind| (parameter.name, kind)));
-	wrong_type.map(|(name, kind)| format!("route \"{pattern}\": :{name}:{kind} declares no type a path part has, write one of {}", PARAMETER_TYPES.join(", ")))
+	let wrong_type = parameters(pattern).find_map(|parameter| {
+		parameter
+			.kind
+			.filter(|kind| !PARAMETER_TYPES.contains(kind))
+			.map(|kind| (parameter.name, kind))
+	});
+	wrong_type.map(|(name, kind)| {
+		format!(
+			"route \"{pattern}\": :{name}:{kind} declares no type a path part has, write one of {}",
+			PARAMETER_TYPES.join(", ")
+		)
+	})
 }
 
 /// The route's block after a `let` for each parameter of its pattern, typed when the parameter declares its type
@@ -220,36 +322,85 @@ pub(crate) fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
 
 /// `["/", "/users/:id"]`
 fn patterns(routes: &[Route]) -> Node {
-	Node::List(routes.iter().map(|(pattern, _)| text(pattern)).collect(), Bracket::Square, Separator::Space)
+	Node::List(
+		routes.iter().map(|(pattern, _)| text(pattern)).collect(),
+		Bracket::Square,
+		Separator::Space,
+	)
 }
 
 /// The index of the first route whose pattern matches the path, else -1
 fn matching(routes: &[Route]) -> Vec<Node> {
-	let matches = routes.iter().enumerate().map(|(index, (pattern, _))| template(MATCH_TEMPLATE, [("pattern", text(pattern)), ("index", Node::int(index as i64)), ("groups_fit", groups_fit(pattern))]));
-	std::iter::once(crate::warp_parser::parse(PATH_TEMPLATE)).chain(matches).chain([crate::warp_parser::parse(NO_ROUTE)]).collect()
+	let matches = routes.iter().enumerate().map(|(index, (pattern, _))| {
+		template(
+			MATCH_TEMPLATE,
+			[
+				("pattern", text(pattern)),
+				("index", Node::int(index as i64)),
+				("groups_fit", groups_fit(pattern)),
+			],
+		)
+	});
+	std::iter::once(crate::warp_parser::parse(PATH_TEMPLATE))
+		.chain(matches)
+		.chain([crate::warp_parser::parse(NO_ROUTE)])
+		.collect()
 }
 
 /// Whether each parameter with a regular expression matches its part, as the URLPattern does: all of it
 fn groups_fit(pattern: &str) -> Node {
-	let fits: HashMap<String, Node> = parameters(pattern).filter_map(|parameter| parameter.group.map(|group| (parameter.name, group))).enumerate().map(|(index, (name, group))| {
-		let whole = format!("^(?:{group})$");
-		(format!("fit_{index}"), template(GROUP_TEMPLATE, [("pattern", text(pattern)), ("parameter_name", text(name)), ("expression", text(&whole))]))
-	}).collect();
+	let fits: HashMap<String, Node> = parameters(pattern)
+		.filter_map(|parameter| parameter.group.map(|group| (parameter.name, group)))
+		.enumerate()
+		.map(|(index, (name, group))| {
+			let whole = format!("^(?:{group})$");
+			(
+				format!("fit_{index}"),
+				template(
+					GROUP_TEMPLATE,
+					[
+						("pattern", text(pattern)),
+						("parameter_name", text(name)),
+						("expression", text(&whole)),
+					],
+				),
+			)
+		})
+		.collect();
 	if fits.is_empty() {
 		return Node::True;
 	}
-	let all = (0..fits.len()).map(|index| format!("fit_{index}")).collect::<Vec<_>>().join(" and ");
+	let all = (0..fits.len())
+		.map(|index| format!("fit_{index}"))
+		.collect::<Vec<_>>()
+		.join(" and ");
 	crate::law::substitute(&crate::warp_parser::parse(&all), &fits)
 }
 
 /// The value of the route page·route_index picks, else the not-found text
 fn choice(routes: &[Route]) -> Vec<Node> {
 	let index = template(INDEX_TEMPLATE, [("index_of_route", symbol(PAGE_ROUTE_INDEX))]);
-	let choices = (0..routes.len()).map(|index| template(CHOICE_TEMPLATE, [("index", Node::int(index as i64)), ("chosen", Node::Symbol(format!("{ROUTE_PREFIX}{index}")))]));
-	std::iter::once(index).chain(choices).chain([crate::warp_parser::parse(NOT_FOUND_TEMPLATE)]).collect()
+	let choices = (0..routes.len()).map(|index| {
+		template(
+			CHOICE_TEMPLATE,
+			[
+				("index", Node::int(index as i64)),
+				("chosen", Node::Symbol(format!("{ROUTE_PREFIX}{index}"))),
+			],
+		)
+	});
+	std::iter::once(index)
+		.chain(choices)
+		.chain([crate::warp_parser::parse(NOT_FOUND_TEMPLATE)])
+		.collect()
 }
 
 fn template<const N: usize>(code: &str, bindings: [(&str, Node); N]) -> Node {
-	crate::law::substitute(&crate::warp_parser::parse(code), &bindings.into_iter().map(|(name, value)| (name.to_string(), value)).collect())
+	crate::law::substitute(
+		&crate::warp_parser::parse(code),
+		&bindings
+			.into_iter()
+			.map(|(name, value)| (name.to_string(), value))
+			.collect(),
+	)
 }
-

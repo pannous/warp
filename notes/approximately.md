@@ -4,7 +4,7 @@
 
 | operands | alike when |
 |---|---|
-| two numbers | \|a-b\| ≤ tolerance·\|a\| or ≤ tolerance·\|b\| (tolerance 1e-9, or the program's `tolerance = …`, D8) |
+| two numbers | \|a-b\| ≤ tolerance·\|a\| or ≤ tolerance·\|b\| (tolerance 1e-9, or the program's `tolerance = …`, D8), or \|a-b\| ≤ 1e-12 near zero (approx-zero: `sin(3.141592653589793) ≈ 0`) |
 | a bool and anything | same truthiness: `yes ≈ 2`, `no ≈ ""` |
 | texts, characters | equal after text_fold: lower case, accents dropped (`"hí" ≈ "HI"`) |
 | lists, `{…}` objects, instances | same shape, entries ≈ entry by entry (objects in any order, like ==); nested too |

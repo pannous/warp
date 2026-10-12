@@ -1,7 +1,7 @@
 // The hex-word literal rule (`hex 1010` read as 0x1010) is retired (user-approved, 2026-10-11): `hex x` is the hex
 // constructor like `hex(x)` and `x as hex`, through the one call shape (analyzer::applied_word). Hex literals are 0x…
-use warp::wasm_emitter::eval;
 use crate::is;
+use warp::wasm_emitter::eval;
 
 fn shown(code: &str) -> String {
 	eval(code).serialize()

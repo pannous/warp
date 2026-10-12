@@ -40,10 +40,14 @@ pub const AUTOMATIC_NOTICE: &str = "ran on the GPU by itself (f32, imprecise by 
 /// The lambda's parameter as the kernel names it (the user's name could be a WGSL keyword)
 const KERNEL_ITEM: &str = "item";
 /// The math words WGSL has under the same name and meaning (warp's log is the natural logarithm, as WGSL's)
-const KERNEL_FUNCTIONS: [&str; 15] = ["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "sqrt", "abs", "floor", "ceil"];
+const KERNEL_FUNCTIONS: [&str; 15] = [
+	"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "sqrt", "abs", "floor", "ceil",
+];
 const KERNEL_FUNCTIONS_OF_TWO: [&str; 3] = ["min", "max", "atan2"];
 /// The math words that cost the CPU tens of nanoseconds an item, so a lambda with one is worth the GPU
-const HEAVY_FUNCTIONS: [&str; 12] = ["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "atan2"];
+const HEAVY_FUNCTIONS: [&str; 12] = [
+	"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "atan2",
+];
 /// The kernel's count of items: `data` holds them, then the program's numbers the lambda reads
 const KERNEL_COUNT: &str = "count";
 /// `x^k` for a whole k up to this is a product (pow of a negative base is NaN in WGSL, a number on the CPU)
@@ -52,7 +56,9 @@ const LARGEST_MULTIPLIED_POWER: i64 = 8;
 /// `xs.map(f) @gpu` or `@gpu xs.map(f)`: xs and f; a chain `xs.map(f).map(g)` is xs and g after f, one kernel
 pub(crate) fn gpu_map(value: &Node) -> Option<(Node, Node)> {
 	let marked = crate::parallel::is_annotated(value, GPU_ATTRIBUTE) || value.attribute(AUTOMATIC_ATTRIBUTE).is_some();
-	let (list, function) = (marked && !switched_off()).then(|| crate::parallel::map_call(value)).flatten()?;
+	let (list, function) = (marked && !switched_off())
+		.then(|| crate::parallel::map_call(value))
+		.flatten()?;
 	Some(fused(list, function))
 }
 
@@ -62,7 +68,11 @@ fn switched_off() -> bool {
 
 /// The minimum count for the GPU of a map with the flags `keeping`
 pub(crate) fn fewest_items(keeping: i64) -> i64 {
-	if keeping & AUTOMATIC != 0 { GPU_AUTO_MIN_COUNT } else { GPU_MAP_MIN_COUNT }
+	if keeping & AUTOMATIC != 0 {
+		GPU_AUTO_MIN_COUNT
+	} else {
+		GPU_MAP_MIN_COUNT
+	}
 }
 
 /// Every `ys = xs.map(f)` and `s = sum(xs.map(f))` (min, max) without @gpu, of a linear float array (`is_linear_floats`)
@@ -73,12 +83,15 @@ pub(crate) fn automatic(node: Node, is_linear_floats: &impl Fn(&Node) -> bool) -
 }
 
 fn automatic_in(node: Node, is_linear_floats: &impl Fn(&Node) -> bool, pinned: bool) -> Node {
-	let pinned = pinned || crate::parallel::is_annotated(&node, CPU_ATTRIBUTE) || node.attribute(CPU_ATTRIBUTE).is_some();
+	let pinned =
+		pinned || crate::parallel::is_annotated(&node, CPU_ATTRIBUTE) || node.attribute(CPU_ATTRIBUTE).is_some();
 	if pinned {
 		return node;
 	}
 	let marked = match node.drop_meta() {
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) => automatic_value(value, is_linear_floats),
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) => {
+			automatic_value(value, is_linear_floats)
+		}
 		_ => None,
 	};
 	if let Some(marked) = marked {
@@ -89,16 +102,29 @@ fn automatic_in(node: Node, is_linear_floats: &impl Fn(&Node) -> bool, pinned: b
 
 /// The map, or the reduction's map, marked AUTOMATIC_ATTRIBUTE, when it qualifies
 fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> Option<Node> {
-	let qualifies = |map: &Node| !crate::parallel::is_annotated(map, GPU_ATTRIBUTE) && !crate::parallel::is_annotated(map, CPU_ATTRIBUTE)
-		&& crate::parallel::map_call(map).map(|(list, function)| fused(list, function)).is_some_and(|(list, function)| is_linear_floats(&list) && gpu_kernel(&function).is_some());
+	let qualifies = |map: &Node| {
+		!crate::parallel::is_annotated(map, GPU_ATTRIBUTE)
+			&& !crate::parallel::is_annotated(map, CPU_ATTRIBUTE)
+			&& crate::parallel::map_call(map)
+				.map(|(list, function)| fused(list, function))
+				.is_some_and(|(list, function)| is_linear_floats(&list) && gpu_kernel(&function).is_some())
+	};
 	if qualifies(value) {
 		return Some(value.clone().with_attribute(AUTOMATIC_ATTRIBUTE, Node::True));
 	}
-	let Node::List(items, bracket, separator) = value.drop_meta() else { return None };
-	let [word, argument] = items.as_slice() else { return None };
-	REDUCTIONS.iter().find(|reduction| word.drop_meta().name() == reduction.word())?;
+	let Node::List(items, bracket, separator) = value.drop_meta() else {
+		return None;
+	};
+	let [word, argument] = items.as_slice() else {
+		return None;
+	};
+	REDUCTIONS
+		.iter()
+		.find(|reduction| word.drop_meta().name() == reduction.word())?;
 	let (map, wrapped) = match argument.drop_meta() {
-		Node::List(inner, crate::node::Bracket::Round, inner_separator) if inner.len() == 1 => (&inner[0], Some(inner_separator.clone())),
+		Node::List(inner, crate::node::Bracket::Round, inner_separator) if inner.len() == 1 => {
+			(&inner[0], Some(inner_separator.clone()))
+		}
 		_ => (argument, None),
 	};
 	if !qualifies(map) {
@@ -109,13 +135,20 @@ fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> O
 		Some(inner_separator) => Node::List(vec![marked], crate::node::Bracket::Round, inner_separator),
 		None => marked,
 	};
-	Some(Node::List(vec![word.clone(), argument], bracket.clone(), separator.clone()))
+	Some(Node::List(
+		vec![word.clone(), argument],
+		bracket.clone(),
+		separator.clone(),
+	))
 }
 
 /// The assignment with its value replaced
 fn with_value(statement: Node, value: Node) -> Node {
 	match statement {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_value(*node, value)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_value(*node, value)),
+			data,
+		},
 		Node::Key(target, op, _) => Node::Key(target, op, Box::new(value)),
 		other => other,
 	}
@@ -125,8 +158,12 @@ fn with_value(statement: Node, value: Node) -> Node {
 /// after f, one pass over xs without a list of f's results
 pub(crate) fn fused(mut list: Node, mut function: Node) -> (Node, Node) {
 	loop {
-		let Some((inner_list, inner_function)) = crate::parallel::map_call(&list) else { return (list, function) };
-		let Some(both) = composed(&inner_function, &function) else { return (list, function) };
+		let Some((inner_list, inner_function)) = crate::parallel::map_call(&list) else {
+			return (list, function);
+		};
+		let Some(both) = composed(&inner_function, &function) else {
+			return (list, function);
+		};
 		(list, function) = (inner_list, both);
 	}
 }
@@ -134,12 +171,22 @@ pub(crate) fn fused(mut list: Node, mut function: Node) -> (Node, Node) {
 /// `x => g_body` after `x => f_body`: `x => g_body` with g's parameter replaced by f's body (none when g reads a name
 /// f's parameter would capture)
 fn composed(first: &Node, then: &Node) -> Option<Node> {
-	let (Node::Key(parameter, Op::FatArrow, body), Node::Key(then_parameter, Op::FatArrow, then_body)) = (first.drop_meta(), then.drop_meta()) else { return None };
-	let (Node::Symbol(name), Node::Symbol(then_name)) = (parameter.drop_meta(), then_parameter.drop_meta()) else { return None };
+	let (Node::Key(parameter, Op::FatArrow, body), Node::Key(then_parameter, Op::FatArrow, then_body)) =
+		(first.drop_meta(), then.drop_meta())
+	else {
+		return None;
+	};
+	let (Node::Symbol(name), Node::Symbol(then_name)) = (parameter.drop_meta(), then_parameter.drop_meta()) else {
+		return None;
+	};
 	if name != then_name && crate::warp_parser::mentions(then_body, name) {
 		return None;
 	}
-	let grouped = Node::List(vec![body.as_ref().clone()], crate::node::Bracket::Round, crate::node::Separator::None);
+	let grouped = Node::List(
+		vec![body.as_ref().clone()],
+		crate::node::Bracket::Round,
+		crate::node::Separator::None,
+	);
 	let body = crate::library_words::substitute(then_body.as_ref().clone(), then_name, &grouped);
 	Some(Node::Key(parameter.clone(), Op::FatArrow, Box::new(body)))
 }
@@ -154,7 +201,14 @@ pub fn kept_on_gpu(node: Node) -> Node {
 
 fn kept_in(node: Node, program: &Node) -> Node {
 	let node = node.map_children(|child| kept_in(child, program));
-	let Node::List(mut statements, bracket, separator @ (crate::node::Separator::Semicolon | crate::node::Separator::Newline)) = node else { return node };
+	let Node::List(
+		mut statements,
+		bracket,
+		separator @ (crate::node::Separator::Semicolon | crate::node::Separator::Newline),
+	) = node
+	else {
+		return node;
+	};
 	let mut index = 0;
 	while index < statements.len() {
 		match folded_into_consumers(&statements, index, program) {
@@ -170,9 +224,14 @@ fn kept_in(node: Node, program: &Node) -> Node {
 /// ys's items and nothing else (no write, no call handing ys on)
 fn marked_kept(mut statements: Vec<Node>) -> Vec<Node> {
 	for index in 0..statements.len() {
-		let Some((name, value)) = gpu_assignment(&statements[index]) else { continue };
+		let Some((name, value)) = gpu_assignment(&statements[index]) else {
+			continue;
+		};
 		// a map of only arithmetic runs on the CPU and leaves no buffer on the GPU
-		if gpu_map(&value).and_then(|(_, function)| gpu_kernel(&function)).is_none() {
+		if gpu_map(&value)
+			.and_then(|(_, function)| gpu_kernel(&function))
+			.is_none()
+		{
 			continue;
 		}
 		let mut kept = false;
@@ -196,12 +255,15 @@ fn marked_kept(mut statements: Vec<Node>) -> Vec<Node> {
 
 /// `zs = ys.map(g) @gpu` or `s = sum(ys.map(g) @gpu)` of ys
 fn maps_on_gpu(statement: &Node, name: &str) -> bool {
-	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return false };
+	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
+		return false;
+	};
 	let map = match gpu_reduction(value) {
 		Some((_, map)) => map,
 		None => value.as_ref().clone(),
 	};
-	matches!(target.drop_meta(), Node::Symbol(_)) && gpu_map(&map).is_some_and(|(list, _)| matches!(list.drop_meta(), Node::Symbol(source) if source == name))
+	matches!(target.drop_meta(), Node::Symbol(_))
+		&& gpu_map(&map).is_some_and(|(list, _)| matches!(list.drop_meta(), Node::Symbol(source) if source == name))
 }
 
 /// Whether `node` uses `name` only for its items and count (`ys#i`, `#ys`, in text holes too)
@@ -224,7 +286,10 @@ fn reads_only_items(node: &Node, name: &str) -> bool {
 /// The assignment with `attribute` on its value
 fn with_attribute_on_value(statement: Node, attribute: &str) -> Node {
 	match statement {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_attribute_on_value(*node, attribute)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_attribute_on_value(*node, attribute)),
+			data,
+		},
 		Node::Key(target, op, value) => Node::Key(target, op, Box::new(value.with_attribute(attribute, Node::True))),
 		other => other,
 	}
@@ -232,7 +297,15 @@ fn with_attribute_on_value(statement: Node, attribute: &str) -> Node {
 
 /// The flags of an @gpu map's value for the host word: KEEP_RESULT, SOURCE_KEPT
 pub(crate) fn keeping(value: &Node) -> i64 {
-	[(KEEP_RESULT_ATTRIBUTE, KEEP_RESULT), (SOURCE_KEPT_ATTRIBUTE, SOURCE_KEPT), (AUTOMATIC_ATTRIBUTE, AUTOMATIC)].iter().filter(|(attribute, _)| value.attribute(attribute).is_some()).map(|(_, flag)| flag).sum()
+	[
+		(KEEP_RESULT_ATTRIBUTE, KEEP_RESULT),
+		(SOURCE_KEPT_ATTRIBUTE, SOURCE_KEPT),
+		(AUTOMATIC_ATTRIBUTE, AUTOMATIC),
+	]
+	.iter()
+	.filter(|(attribute, _)| value.attribute(attribute).is_some())
+	.map(|(_, flag)| flag)
+	.sum()
 }
 
 /// The statements with statement `index`, an @gpu map whose result only later @gpu maps read, folded into those
@@ -240,23 +313,42 @@ fn folded_into_consumers(statements: &[Node], index: usize, program: &Node) -> O
 	let (name, value) = gpu_assignment(&statements[index])?;
 	let later = &statements[index + 1..];
 	let mut read = vec![];
-	value.drop_meta().visit(&mut |part| if let Node::Symbol(symbol) = part { read.push(symbol.clone()) });
-	if later.iter().any(|statement| read.iter().any(|symbol| writes(statement, symbol))) {
+	value.drop_meta().visit(&mut |part| {
+		if let Node::Symbol(symbol) = part {
+			read.push(symbol.clone())
+		}
+	});
+	if later
+		.iter()
+		.any(|statement| read.iter().any(|symbol| writes(statement, symbol)))
+	{
 		return None;
 	}
 	let uses = uses_of(program, &name);
 	let bare = value.drop_meta().clone();
 	let mut consumers = 0;
-	let rewritten: Vec<Node> = later.iter().map(|statement| match gpu_assignment(statement) {
-		Some((_, consumer)) if crate::parallel::map_call(&consumer).is_some_and(|(list, _)| matches!(list.drop_meta(), Node::Symbol(source) if *source == name)) => {
-			consumers += 1;
-			crate::library_words::substitute(statement.clone(), &name, &bare)
-		}
-		_ => statement.clone(),
-	}).collect();
-	let all_fold = rewritten.iter().zip(later).filter(|(new, old)| new != old).all(|(new, _)| {
-		gpu_assignment(new).and_then(|(_, value)| gpu_map(&value)).is_some_and(|(list, _)| crate::parallel::map_call(&list).is_none())
-	});
+	let rewritten: Vec<Node> = later
+		.iter()
+		.map(|statement| match gpu_assignment(statement) {
+			Some((_, consumer))
+				if crate::parallel::map_call(&consumer)
+					.is_some_and(|(list, _)| matches!(list.drop_meta(), Node::Symbol(source) if *source == name)) =>
+			{
+				consumers += 1;
+				crate::library_words::substitute(statement.clone(), &name, &bare)
+			}
+			_ => statement.clone(),
+		})
+		.collect();
+	let all_fold = rewritten
+		.iter()
+		.zip(later)
+		.filter(|(new, old)| new != old)
+		.all(|(new, _)| {
+			gpu_assignment(new)
+				.and_then(|(_, value)| gpu_map(&value))
+				.is_some_and(|(list, _)| crate::parallel::map_call(&list).is_none())
+		});
 	(consumers > 0 && uses == consumers + 1 && all_fold).then(|| [&statements[..index], &rewritten[..]].concat())
 }
 
@@ -276,20 +368,27 @@ fn uses_of(node: &Node, name: &str) -> usize {
 
 /// `ys = xs.map(f) @gpu`: ys and the map
 fn gpu_assignment(statement: &Node) -> Option<(String, Node)> {
-	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return None };
-	let Node::Symbol(name) = target.drop_meta() else { return None };
+	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(name) = target.drop_meta() else {
+		return None;
+	};
 	gpu_map(value).map(|_| (name.clone(), value.as_ref().clone()))
 }
 
 /// Whether `node` assigns `name` or one of its items
 fn writes(node: &Node, name: &str) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| if let Node::Key(target, op, _) = part {
-		let assigned = match target.drop_meta() {
-			Node::Key(list, Op::Hash, _) => list.drop_meta(),
-			other => other,
-		};
-		found |= (*op == Op::Assign || op.is_compound_assign()) && matches!(assigned, Node::Symbol(symbol) if symbol == name);
+	node.visit(&mut |part| {
+		if let Node::Key(target, op, _) = part {
+			let assigned = match target.drop_meta() {
+				Node::Key(list, Op::Hash, _) => list.drop_meta(),
+				other => other,
+			};
+			found |= (*op == Op::Assign || op.is_compound_assign())
+				&& matches!(assigned, Node::Symbol(symbol) if symbol == name);
+		}
 	});
 	found
 }
@@ -345,9 +444,15 @@ impl Reduction {
 
 /// `sum(xs.map(f) @gpu)`, min, max: the reduction and the @gpu map
 pub(crate) fn gpu_reduction(value: &Node) -> Option<(Reduction, Node)> {
-	let Node::List(items, _, _) = value.drop_meta() else { return None };
-	let [word, argument] = items.as_slice() else { return None };
-	let reduction = REDUCTIONS.into_iter().find(|reduction| word.drop_meta().name() == reduction.word())?;
+	let Node::List(items, _, _) = value.drop_meta() else {
+		return None;
+	};
+	let [word, argument] = items.as_slice() else {
+		return None;
+	};
+	let reduction = REDUCTIONS
+		.into_iter()
+		.find(|reduction| word.drop_meta().name() == reduction.word())?;
 	let argument = match argument.drop_meta() {
 		Node::List(inner, crate::node::Bracket::Round, _) if inner.len() == 1 => &inner[0],
 		_ => argument,
@@ -360,11 +465,15 @@ const KERNEL_BINDING: &str = "@group(0) @binding(0) var<storage, read_write> dat
 impl Kernel {
 	/// The shader mapping every item of `data` in place
 	pub(crate) fn map_shader(&self) -> String {
-		format!("{KERNEL_BINDING}
+		format!(
+			"{KERNEL_BINDING}
 @compute @workgroup_size({WORKGROUP_SIZE}) fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
 	let {KERNEL_COUNT} = arrayLength(&data) - {}u;
 	if (id.x < {KERNEL_COUNT}) {{ let {KERNEL_ITEM} = data[id.x]; data[id.x] = {}; }}
-}}", self.outer.len(), self.computed)
+}}",
+			self.outer.len(),
+			self.computed
+		)
 	}
 
 	/// The shader reducing the mapped items of each workgroup in its shared memory, halving the active threads each
@@ -390,9 +499,17 @@ var<workgroup> partial: array<f32, {WORKGROUP_SIZE}>;
 
 /// The kernel mapping every item of `data` by the lambda `parameter => body`, if WGSL can compute it
 pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
-	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else { return None };
-	let Node::Symbol(parameter) = parameter.drop_meta() else { return None };
-	let mut translation = Translation { parameter, outer: vec![], heavy: false };
+	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else {
+		return None;
+	};
+	let Node::Symbol(parameter) = parameter.drop_meta() else {
+		return None;
+	};
+	let mut translation = Translation {
+		parameter,
+		outer: vec![],
+		heavy: false,
+	};
 	let computed = translation.expression(body)?;
 	let Translation { outer, heavy, .. } = translation;
 	Some(Kernel { computed, outer, heavy })
@@ -425,7 +542,9 @@ impl Translation<'_> {
 				});
 				Some(format!("data[{KERNEL_COUNT} + {index}u]"))
 			}
-			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => Some(float_literal(f64::from(*number))),
+			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => {
+				Some(float_literal(f64::from(*number)))
+			}
 			Node::Key(empty, op, operand) if matches!(empty.drop_meta(), Node::Empty) => match op {
 				Op::Neg => Some(format!("(-{})", self.expression(operand)?)),
 				Op::Sqrt => Some(format!("sqrt({})", self.expression(operand)?)),
@@ -433,13 +552,19 @@ impl Translation<'_> {
 				_ => None,
 			},
 			Node::Key(base, Op::Pow, exponent) => match exponent.drop_meta() {
-				Node::Number(crate::extensions::numbers::Number::Int(power)) if (1..=LARGEST_MULTIPLIED_POWER).contains(power) => {
+				Node::Number(crate::extensions::numbers::Number::Int(power))
+					if (1..=LARGEST_MULTIPLIED_POWER).contains(power) =>
+				{
 					let base = self.expression(base)?;
 					Some(format!("({})", vec![base; *power as usize].join(" * ")))
 				}
 				_ => {
 					self.heavy = true;
-					Some(format!("pow({}, {})", self.expression(base)?, self.expression(exponent)?))
+					Some(format!(
+						"pow({}, {})",
+						self.expression(base)?,
+						self.expression(exponent)?
+					))
 				}
 			},
 			Node::Key(left, op, right) => {
@@ -450,7 +575,11 @@ impl Translation<'_> {
 					Op::Div => "/",
 					_ => return None,
 				};
-				Some(format!("({} {symbol} {})", self.expression(left)?, self.expression(right)?))
+				Some(format!(
+					"({} {symbol} {})",
+					self.expression(left)?,
+					self.expression(right)?
+				))
 			}
 			Node::List(items, _, _) => match items.as_slice() {
 				[single] => self.expression(single),
@@ -464,12 +593,21 @@ impl Translation<'_> {
 						},
 						separate => separate,
 					};
-					let arity = if KERNEL_FUNCTIONS.contains(&name.as_str()) { 1 } else if KERNEL_FUNCTIONS_OF_TWO.contains(&name.as_str()) { 2 } else { 0 };
+					let arity = if KERNEL_FUNCTIONS.contains(&name.as_str()) {
+						1
+					} else if KERNEL_FUNCTIONS_OF_TWO.contains(&name.as_str()) {
+						2
+					} else {
+						0
+					};
 					if arity == 0 || arguments.len() != arity {
 						return None;
 					}
 					self.heavy |= HEAVY_FUNCTIONS.contains(&name.as_str());
-					let arguments = arguments.iter().map(|argument| self.expression(argument)).collect::<Option<Vec<_>>>()?;
+					let arguments = arguments
+						.iter()
+						.map(|argument| self.expression(argument))
+						.collect::<Option<Vec<_>>>()?;
 					Some(format!("{name}({})", arguments.join(", ")))
 				}
 				_ => None,
@@ -482,14 +620,22 @@ impl Translation<'_> {
 /// A WGSL f32 literal: always with a point or an exponent, so `2` is not an i32
 fn float_literal(number: f64) -> String {
 	let written = format!("{:?}", number as f32);
-	if written.contains(['.', 'e', 'E']) { written } else { format!("{written}.0") }
+	if written.contains(['.', 'e', 'E']) {
+		written
+	} else {
+		format!("{written}.0")
+	}
 }
 
 /// Every `@gpu` that shared_arrays will not lower to the GPU: a warning saying why it runs on the CPU (an error under
 /// strict)
 pub fn warn_unapplied(node: Node) -> Node {
 	if let Some(both) = both_gpu_and_cpu(&node) {
-		return crate::diagnostic::Diagnostic::at(&both, "@gpu and @cpu on the same map: keep one (@cpu: exact, on the CPU; @gpu: f32, on the GPU)").into_error();
+		return crate::diagnostic::Diagnostic::at(
+			&both,
+			"@gpu and @cpu on the same map: keep one (@cpu: exact, on the CPU; @gpu: f32, on the GPU)",
+		)
+		.into_error();
 	}
 	let mut warnings = vec![];
 	collect_unapplied(&node, &mut warnings);
@@ -513,19 +659,36 @@ fn both_gpu_and_cpu(node: &Node) -> Option<Node> {
 }
 
 fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::diagnostic::Diagnostic>) {
-	let warn = |warnings: &mut Vec<_>, reason: String| warnings.push(crate::diagnostic::Diagnostic::at(node, format!("{reason}, so this runs on the CPU")));
+	let warn = |warnings: &mut Vec<_>, reason: String| {
+		warnings.push(crate::diagnostic::Diagnostic::at(
+			node,
+			format!("{reason}, so this runs on the CPU"),
+		))
+	};
 	match node.drop_meta() {
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) && (gpu_map(value).is_some() || gpu_reduction(value).is_some()) => {
+		Node::Key(target, Op::Assign, value)
+			if matches!(target.drop_meta(), Node::Symbol(_))
+				&& (gpu_map(value).is_some() || gpu_reduction(value).is_some()) =>
+		{
 			let map = gpu_reduction(value).map_or(value.as_ref().clone(), |(_, map)| map);
 			if let Some(reason) = unapplied(&map) {
 				warn(warnings, reason);
 			}
 		}
 		_ if crate::parallel::annotated_here(node, GPU_ATTRIBUTE) => {
-			let assign = if crate::parallel::map_call(node).is_some() { "@gpu maps into a new array or reduces to a number: assign it" } else { "@gpu runs only a map" };
-			warn(warnings, format!("{assign}, `ys = xs.map(x => …) @gpu`, `s = sum(xs.map(x => …) @gpu)`"));
+			let assign = if crate::parallel::map_call(node).is_some() {
+				"@gpu maps into a new array or reduces to a number: assign it"
+			} else {
+				"@gpu runs only a map"
+			};
+			warn(
+				warnings,
+				format!("{assign}, `ys = xs.map(x => …) @gpu`, `s = sum(xs.map(x => …) @gpu)`"),
+			);
 		}
-		Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| collect_unapplied(part, warnings)),
+		Node::Key(left, _, right) => [left, right]
+			.into_iter()
+			.for_each(|part| collect_unapplied(part, warnings)),
 		Node::List(items, _, _) => items.iter().for_each(|item| collect_unapplied(item, warnings)),
 		_ => {}
 	}
@@ -535,7 +698,15 @@ fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::diagnostic::Diagnost
 fn unapplied(value: &Node) -> Option<String> {
 	let (_, lambda) = gpu_map(value)?;
 	if is_light(&lambda) {
-		return Some(format!("@gpu: the CPU maps `{}` faster: only arithmetic, ~1–5 ns an item (f64x2 lanes where it can), the GPU ~12", lambda.serialize().trim()));
+		return Some(format!(
+			"@gpu: the CPU maps `{}` faster: only arithmetic, ~1–5 ns an item (f64x2 lanes where it can), the GPU ~12",
+			lambda.serialize().trim()
+		));
 	}
-	kernel(&lambda).is_none().then(|| format!("@gpu: WGSL cannot compute `{}` (only + - * / ^ √ and math words of the item and numbers)", lambda.serialize().trim()))
+	kernel(&lambda).is_none().then(|| {
+		format!(
+			"@gpu: WGSL cannot compute `{}` (only + - * / ^ √ and math words of the item and numbers)",
+			lambda.serialize().trim()
+		)
+	})
 }

@@ -4,7 +4,11 @@ fn getter_warning(code: &str) -> String {
 	warp::diagnostic::take_warnings();
 	warp::wasm_emitter::eval(code);
 	let warnings = warp::diagnostic::take_warnings();
-	warnings.into_iter().map(|warning| warning.message).find(|message| message.contains("at every read")).unwrap_or_else(|| panic!("no getter warning for {code}"))
+	warnings
+		.into_iter()
+		.map(|warning| warning.message)
+		.find(|message| message.contains("at every read"))
+		.unwrap_or_else(|| panic!("no getter warning for {code}"))
 }
 
 #[test]

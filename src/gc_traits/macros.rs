@@ -5,13 +5,13 @@ use super::*;
 /// Trait for reading fields from GcObject with proper type dispatch
 /// (String uses get_string for ptr/len support, others use get)
 pub trait GcReadable: Sized {
-    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self>;
+	fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self>;
 }
 
 impl GcReadable for String {
-    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
-        gc_obj.get_string(idx)
-    }
+	fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+		gc_obj.get_string(idx)
+	}
 }
 
 /// Numbers and bools read through `get`

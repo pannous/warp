@@ -1,0 +1,8 @@
+// cost of part[i] on a text, char by char: quadratic if each index walks from the start (run with 2000/8000/16000)
+use file
+part = byte_slice(read("src/warp_parser/expressions.rs"), 0, 16000)
+spaces = 0
+i = 0
+n = part.length
+while i < n { if part[i] == ' ' { spaces = spaces + 1 }; i = i + 1 }
+spaces

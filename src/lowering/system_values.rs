@@ -12,14 +12,16 @@
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
-use super::words::ON_WORD;
 use super::nodes::{call, key};
+use super::words::ON_WORD;
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
 use std::collections::HashSet;
-use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, MOUSE_X, MOUSE_Y, SYSTEM_VALUE, SYSTEM_VALUES};
+use warp_runtime::host_words::{
+	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, MOUSE_X, MOUSE_Y, SYSTEM_VALUE, SYSTEM_VALUES,
+};
 
 /// The mark of a system value read between the two passes
 pub const SYSTEM_PREFIX: &str = "system·";
@@ -38,18 +40,30 @@ const TEXT_PLACEHOLDER: &str = "clipboard_text_written";
 
 pub fn name(program: Node) -> Node {
 	let bound = bound_names(&program);
-	let names: Vec<(&str, bool)> = SYSTEM_VALUES.into_iter().chain([(CLIPBOARD, false), (NOW_WORD, false)]).filter(|(name, _)| !bound.contains(*name)).collect();
+	let names: Vec<(&str, bool)> = SYSTEM_VALUES
+		.into_iter()
+		.chain([(CLIPBOARD, false), (NOW_WORD, false)])
+		.filter(|(name, _)| !bound.contains(*name))
+		.collect();
 	if names.is_empty() {
 		return program;
 	}
-	let program = if bound.contains(CLIPBOARD) { program } else { clipboard_listeners(program) };
+	let program = if bound.contains(CLIPBOARD) {
+		program
+	} else {
+		clipboard_listeners(program)
+	};
 	let marked = mark(program, &names);
 	if marked_names(&marked).is_empty() {
 		return marked;
 	}
 	let (statements, bracket, separator) = crate::variable_signals::main_statements(&marked);
-	let listens = |statement: &Node| LISTENER_WORDS.contains(&first_word(statement).as_str()) && !marked_names(statement).is_empty();
-	let Some(first_listener) = statements.iter().position(listens) else { return marked };
+	let listens = |statement: &Node| {
+		LISTENER_WORDS.contains(&first_word(statement).as_str()) && !marked_names(statement).is_empty()
+	};
+	let Some(first_listener) = statements.iter().position(listens) else {
+		return marked;
+	};
 	// right after the first listener: the program's last statement stays its value
 	let mut statements: Vec<Node> = statements.into_iter().map(with_percent_body).collect();
 	statements.insert(first_listener + 1, crate::warp_parser::parse(KEEP_LISTENING));
@@ -66,9 +80,11 @@ pub fn read(program: Node) -> Node {
 /// The system values the node reads, marked
 pub fn marked_names(node: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	node.visit(&mut |part| if let Node::Symbol(name) = part {
-		if name.starts_with(SYSTEM_PREFIX) {
-			names.insert(name.clone());
+	node.visit(&mut |part| {
+		if let Node::Symbol(name) = part {
+			if name.starts_with(SYSTEM_PREFIX) {
+				names.insert(name.clone());
+			}
 		}
 	});
 	names
@@ -84,8 +100,10 @@ fn first_word(statement: &Node) -> String {
 /// The names the program binds: assigned, defined, parameters of functions and lambdas
 pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	let mut bound = HashSet::new();
-	program.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _) = part {
-		bound.extend(crate::variable_signals::symbols(target));
+	program.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _) = part {
+			bound.extend(crate::variable_signals::symbols(target));
+		}
 	});
 	bound
 }
@@ -100,7 +118,11 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 	};
 	match node {
 		Node::Symbol(name) => marked(&name).unwrap_or(Node::Symbol(name)),
-		Node::Key(left, Op::Dot, right) if word(&left) == CLIPBOARD && names.iter().any(|(name, _)| *name == CLIPBOARD) && clipboard_method(&right).is_some() => {
+		Node::Key(left, Op::Dot, right)
+			if word(&left) == CLIPBOARD
+				&& names.iter().any(|(name, _)| *name == CLIPBOARD)
+				&& clipboard_method(&right).is_some() =>
+		{
 			let (method, arguments) = clipboard_method(&right).expect("a clipboard method");
 			match (method.as_str(), arguments.as_slice()) {
 				(CLIPBOARD_WRITE, [text]) => clipboard_write(mark(text.clone(), names)),
@@ -108,9 +130,17 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 			}
 		}
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) => {
-			let right = if op == Op::Dot { method_arguments_marked(*right, names) } else { mark(*right, names) };
+			let right = if op == Op::Dot {
+				method_arguments_marked(*right, names)
+			} else {
+				mark(*right, names)
+			};
 			// the target of a dot is read (`now.hour`), a key's name is not
-			let left = if op == Op::Dot { Box::new(mark(*left, names)) } else { left };
+			let left = if op == Op::Dot {
+				Box::new(mark(*left, names))
+			} else {
+				left
+			};
 			Node::Key(left, op, Box::new(right))
 		}
 		Node::List(items, bracket, separator) => {
@@ -120,7 +150,9 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 			while let Some(item) = items.next() {
 				// `not dark mode` and `x = not dark mode` arrive as `(not dark) mode`, `(x = not dark) mode`: the phrase's
 				// first word is the rightmost of the item before
-				let phrase = items.peek().and_then(|next| with_phrase(&item, &|first| marked(&format!("{} {}", word(first), word(next)))));
+				let phrase = items
+					.peek()
+					.and_then(|next| with_phrase(&item, &|first| marked(&format!("{} {}", word(first), word(next)))));
 				match phrase {
 					Some(phrase) => {
 						items.next();
@@ -145,9 +177,18 @@ fn method_arguments_marked(member: Node, names: &[(&str, bool)]) -> Node {
 		Node::List(items, bracket, separator) if items.len() > 1 => {
 			let mut items = items.into_iter();
 			let method = items.next().expect("a method name");
-			Node::List(std::iter::once(method).chain(items.map(|argument| mark(argument, names))).collect(), bracket, separator)
+			Node::List(
+				std::iter::once(method)
+					.chain(items.map(|argument| mark(argument, names)))
+					.collect(),
+				bracket,
+				separator,
+			)
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(method_arguments_marked(*node, names)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(method_arguments_marked(*node, names)),
+			data,
+		},
 		field => field,
 	}
 }
@@ -155,7 +196,9 @@ fn method_arguments_marked(member: Node, names: &[(&str, bool)]) -> Node {
 /// The item with its rightmost word (along the right operands of keys) replaced by the phrase it starts, if it starts one
 fn with_phrase(item: &Node, phrase: &dyn Fn(&Node) -> Option<Node>) -> Option<Node> {
 	match item.drop_meta() {
-		Node::Key(left, op, right) if !matches!(op, Op::Colon | Op::Dot) => with_phrase(right, phrase).map(|right| Node::Key(left.clone(), *op, Box::new(right))),
+		Node::Key(left, op, right) if !matches!(op, Op::Colon | Op::Dot) => {
+			with_phrase(right, phrase).map(|right| Node::Key(left.clone(), *op, Box::new(right)))
+		}
 		Node::Symbol(_) => phrase(item),
 		_ => None,
 	}
@@ -171,17 +214,28 @@ fn clipboard_listeners(node: Node) -> Node {
 				return Node::List(items, bracket, separator);
 			}
 			let listener = [symbol(ON_WORD), symbol(CHANGE_WORDS[0]), symbol(CLIPBOARD_COUNT)];
-			Node::List(listener.into_iter().chain(items.into_iter().skip(3)).collect(), bracket, separator)
+			Node::List(
+				listener.into_iter().chain(items.into_iter().skip(3)).collect(),
+				bracket,
+				separator,
+			)
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(clipboard_listeners(*node)), data },
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(clipboard_listeners(*node)),
+			data,
+		},
 		other => other,
 	}
 }
 
 /// `whenever battery < 20% {…}`, which arrives as `whenever battery < (20 % {…})`: `whenever battery < 20 {…}`
 fn with_percent_body(statement: Node) -> Node {
-	let Node::List(items, bracket, separator) = statement.drop_meta().clone() else { return statement };
-	let [listener, condition] = items.as_slice() else { return statement };
+	let Node::List(items, bracket, separator) = statement.drop_meta().clone() else {
+		return statement;
+	};
+	let [listener, condition] = items.as_slice() else {
+		return statement;
+	};
 	if !marked_names(condition).contains(&format!("{SYSTEM_PREFIX}{BATTERY}")) {
 		return statement;
 	}
@@ -192,7 +246,9 @@ fn with_percent_body(statement: Node) -> Node {
 }
 
 fn percent_body(condition: &Node) -> Option<(Node, Node)> {
-	let Node::Key(left, op, right) = condition.drop_meta() else { return None };
+	let Node::Key(left, op, right) = condition.drop_meta() else {
+		return None;
+	};
 	match right.drop_meta() {
 		Node::Key(percent, Op::Mod, body) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
 			Some((Node::Key(left.clone(), *op, percent.clone()), body.as_ref().clone()))
@@ -223,7 +279,9 @@ fn reading(node: Node) -> Node {
 
 /// `read()` or `write(text)` after `clipboard.`: the method and its arguments
 fn clipboard_method(call: &Node) -> Option<(String, Vec<Node>)> {
-	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else {
+		return None;
+	};
 	let (method, arguments) = items.split_first()?;
 	let method = word(method);
 	let arguments: Vec<Node> = match arguments {
@@ -238,6 +296,8 @@ fn clipboard_method(call: &Node) -> Option<(String, Vec<Node>)> {
 
 /// `std_io("clipboard", "write", [text])`
 fn clipboard_write(text: Node) -> Node {
-	let call = crate::warp_parser::parse(&format!("std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"));
+	let call = crate::warp_parser::parse(&format!(
+		"std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"
+	));
 	crate::law::substitute(&call, &[(TEXT_PLACEHOLDER.to_string(), text)].into_iter().collect())
 }

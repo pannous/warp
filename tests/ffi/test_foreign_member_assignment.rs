@@ -10,7 +10,10 @@ fn a_js_member_is_set() {
 
 #[test]
 fn a_member_of_a_call_result_is_set() {
-	is!("use js Map; m = Map(); m.set(\"k\", Map()); m.get(\"k\").answer = 3; m.get(\"k\").answer", 3);
+	is!(
+		"use js Map; m = Map(); m.set(\"k\", Map()); m.get(\"k\").answer = 3; m.get(\"k\").answer",
+		3
+	);
 }
 
 #[cfg(feature = "native")] // as tests/web/test_web.rs: the browser suite's Worker has no document
@@ -18,11 +21,17 @@ fn a_member_of_a_call_result_is_set() {
 fn a_page_element_member_assignment_compiles() {
 	let code = "use js document; document.getElementById(\"r\").innerHTML = \"x\"";
 	warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"));
-	crate::common::fails_with("use js document; document.getElementById(\"r\").innerHtml = \"x\"", "did you mean innerHTML");
+	crate::common::fails_with(
+		"use js document; document.getElementById(\"r\").innerHtml = \"x\"",
+		"did you mean innerHTML",
+	);
 }
 
 #[cfg(feature = "native")] // python3
 #[test]
 fn a_python_attribute_is_set() {
-	is!("use python \"types\"; n = types.SimpleNamespace(); n.answer = 4; n.answer", 4);
+	is!(
+		"use python \"types\"; n = types.SimpleNamespace(); n.answer = 4; n.answer",
+		4
+	);
 }

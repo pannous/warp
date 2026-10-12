@@ -22,10 +22,18 @@ fn serve_directory(directory: std::path::PathBuf) -> String {
 		let (server, directory) = (server.clone(), directory.clone());
 		std::thread::spawn(move || {
 			for request in server.incoming_requests() {
-				let name = request.url().trim_start_matches('/').split('?').next().unwrap_or_default().to_string();
+				let name = request
+					.url()
+					.trim_start_matches('/')
+					.split('?')
+					.next()
+					.unwrap_or_default()
+					.to_string();
 				let file = directory.join(if name.is_empty() { "index.html" } else { &name });
 				let _ = match std::fs::read(&file) {
-					Ok(bytes) => request.respond(tiny_http::Response::from_data(bytes).with_header(content_type(&name))),
+					Ok(bytes) => {
+						request.respond(tiny_http::Response::from_data(bytes).with_header(content_type(&name)))
+					}
 					Err(_) => request.respond(tiny_http::Response::empty(404)),
 				};
 			}
@@ -44,9 +52,10 @@ fn content_type(name: &str) -> tiny_http::Header {
 }
 
 /// The page of `code` opened headless, its button `button` clicked: the title the handler set
-fn title_after_clicking(name: &str, code: &str, button: &str) -> String {
+pub(super) fn title_after_clicking(name: &str, code: &str, button: &str) -> String {
 	let directory = scratch_directory(name);
-	warp::site::build(code, "dom", &directory).unwrap_or_else(|failure| panic!("the site of {name} is not built: {failure}"));
+	warp::site::build(code, "dom", &directory)
+		.unwrap_or_else(|failure| panic!("the site of {name} is not built: {failure}"));
 	title_on_page(name, directory, Some(button))
 }
 
@@ -56,11 +65,21 @@ fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>
 	let _one_browser = ONE_BROWSER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 	let url = serve_directory(directory.clone());
 	let session = format!("warp-dom-{name}-{}", std::process::id());
-	let run = |arguments: &[&str]| Command::new("agent-browser").env("AGENT_BROWSER_DEFAULT_TIMEOUT", ACTION_TIMEOUT_MS).args(["--session", &session]).args(arguments).output()
-		.expect("agent-browser runs (npm install -g agent-browser && agent-browser install)");
+	let run = |arguments: &[&str]| {
+		Command::new("agent-browser")
+			.env("AGENT_BROWSER_DEFAULT_TIMEOUT", ACTION_TIMEOUT_MS)
+			.args(["--session", &session])
+			.args(arguments)
+			.output()
+			.expect("agent-browser runs (npm install -g agent-browser && agent-browser install)")
+	};
 	let browser = |arguments: &[&str]| {
 		let output = run(arguments);
-		assert!(output.status.success(), "agent-browser {arguments:?}: {}", String::from_utf8_lossy(&output.stderr));
+		assert!(
+			output.status.success(),
+			"agent-browser {arguments:?}: {}",
+			String::from_utf8_lossy(&output.stderr)
+		);
 		String::from_utf8_lossy(&output.stdout).trim().to_string()
 	};
 	// the browser first, then the page: a fresh browser asked for a page at once at times stays on about:blank
@@ -71,7 +90,10 @@ fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>
 		let address = String::from_utf8_lossy(&run(&["eval", "location.href"]).stdout).to_string();
 		let arrived = output.status.success() && address.contains(&url);
 		if !arrived {
-			eprintln!("agent-browser open {url}, attempt {attempt} of {OPEN_ATTEMPTS}: at {address} {}", String::from_utf8_lossy(&output.stderr));
+			eprintln!(
+				"agent-browser open {url}, attempt {attempt} of {OPEN_ATTEMPTS}: at {address} {}",
+				String::from_utf8_lossy(&output.stderr)
+			);
 		}
 		arrived
 	});
@@ -80,7 +102,9 @@ fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>
 	if let Some(button) = button {
 		browser(&["find", "text", button, "click"]);
 	}
-	let waited = run(&["wait", "--fn", TITLE_SET, "--timeout", CLICK_WAIT_MS]).status.success();
+	let waited = run(&["wait", "--fn", TITLE_SET, "--timeout", CLICK_WAIT_MS])
+		.status
+		.success();
 	let title = browser(&["eval", "document.title"]);
 	let console = browser(&["console"]);
 	browser(&["close"]);
@@ -118,8 +142,16 @@ fn main_sets_the_title_of_the_page() {
 	let folder = scratch_directory("main");
 	std::fs::create_dir_all(&folder).expect("a folder");
 	let program = folder.join("dom.warp");
-	std::fs::write(&program, "use js document\ndocument.title = \"main ran\"\ndiv{ p{ \"shown\" } }").expect("written");
-	let built = crate::common::warp_command().args(["build", "--site"]).arg(&program).output().expect("warp runs");
+	std::fs::write(
+		&program,
+		"use js document\ndocument.title = \"main ran\"\ndiv{ p{ \"shown\" } }",
+	)
+	.expect("written");
+	let built = crate::common::warp_command()
+		.args(["build", "--site"])
+		.arg(&program)
+		.output()
+		.expect("warp runs");
 	let warned = String::from_utf8_lossy(&built.stderr);
 	assert!(built.status.success() && warned.contains("rendered there"), "{warned}");
 	assert_eq!(title_on_page("main", folder.join("dom-site"), None), "main ran");

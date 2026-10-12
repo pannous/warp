@@ -2,9 +2,9 @@
 //! system's libsqlite3 (loaded like any FFI library, ffi/link.rs): `std_io("table", member, …)` answered natively.
 //! A connection per file and thread; inline code's tables (database_tables::TABLES_FILE) live in memory per thread.
 
+use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node, Separator};
 use crate::Number;
-use crate::lowering::database_tables::OPTIONAL_MARK;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
@@ -60,7 +60,17 @@ struct Sqlite {
 	column_text: unsafe extern "C" fn(Handle, c_int) -> *const c_char,
 	finalize: unsafe extern "C" fn(Handle) -> c_int,
 	last_insert_rowid: unsafe extern "C" fn(Handle) -> i64,
-	create_function: unsafe extern "C" fn(Handle, *const c_char, c_int, c_int, *mut c_void, Option<SqlFunction>, Option<SqlFunction>, Option<unsafe extern "C" fn(Handle)>, Option<unsafe extern "C" fn(*mut c_void)>) -> c_int,
+	create_function: unsafe extern "C" fn(
+		Handle,
+		*const c_char,
+		c_int,
+		c_int,
+		*mut c_void,
+		Option<SqlFunction>,
+		Option<SqlFunction>,
+		Option<unsafe extern "C" fn(Handle)>,
+		Option<unsafe extern "C" fn(*mut c_void)>,
+	) -> c_int,
 	user_data: unsafe extern "C" fn(Handle) -> *mut c_void,
 	value_type: unsafe extern "C" fn(Handle) -> c_int,
 	value_int64: unsafe extern "C" fn(Handle) -> i64,
@@ -80,11 +90,13 @@ fn sqlite() -> Result<&'static Sqlite, String> {
 }
 
 fn load_sqlite() -> Result<Sqlite, String> {
-	let library = crate::ffi::get_or_load_library(SQLITE_LIBRARY).ok_or_else(|| format!("no lib{SQLITE_LIBRARY} found: database tables need SQLite"))?;
+	let library = crate::ffi::get_or_load_library(SQLITE_LIBRARY)
+		.ok_or_else(|| format!("no lib{SQLITE_LIBRARY} found: database tables need SQLite"))?;
 	macro_rules! function {
 		($name:literal) => {
 			// the library stays loaded for the process (ffi/link.rs keeps it), so its function pointers stay valid
-			*unsafe { library.get(concat!($name, "\0").as_bytes()) }.map_err(|problem| format!("{}: {problem}", $name))?
+			*unsafe { library.get(concat!($name, "\0").as_bytes()) }
+				.map_err(|problem| format!("{}: {problem}", $name))?
 		};
 	}
 	Ok(Sqlite {
@@ -134,7 +146,9 @@ pub fn rows_read() -> usize {
 /// position), count, insert
 /// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
-	let text = |node: &Node| crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()));
+	let text = |node: &Node| {
+		crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
+	};
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
 		("rows", [table, schema, file]) => {
@@ -143,19 +157,43 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		}
 		("page", [table, schema, file, start, size]) => {
 			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-			selected(connection(&text(file)?)?, &text(table)?, &columns, "", " LIMIT ? OFFSET ? - 1", &[size.clone(), start.clone()])
+			selected(
+				connection(&text(file)?)?,
+				&text(table)?,
+				&columns,
+				"",
+				" LIMIT ? OFFSET ? - 1",
+				&[size.clone(), start.clone()],
+			)
 		}
-		("migrate", [table, schema, file]) => migrated(connection(&text(file)?)?, &text(table)?, &schema.children()).map(|_| Node::Empty),
+		("migrate", [table, schema, file]) => {
+			migrated(connection(&text(file)?)?, &text(table)?, &schema.children()).map(|_| Node::Empty)
+		}
 		("count", [table, _schema, file]) => {
-			let counted = rows(connection(&text(file)?)?, &format!("SELECT COUNT(*) FROM {}", quote(&text(table)?)), &[])?;
+			let counted = rows(
+				connection(&text(file)?)?,
+				&format!("SELECT COUNT(*) FROM {}", quote(&text(table)?)),
+				&[],
+			)?;
 			Ok(counted.into_iter().flatten().next().unwrap_or(Node::int(0)))
 		}
 		("insert", [table, columns, values, file]) => {
-			let (table, columns) = (text(table)?, columns.children().iter().map(text).collect::<Result<Vec<_>, _>>()?);
+			let (table, columns) = (
+				text(table)?,
+				columns.children().iter().map(text).collect::<Result<Vec<_>, _>>()?,
+			);
 			let placeholders = vec!["?"; columns.len()].join(", ");
 			let database = connection(&text(file)?)?;
 			let quoted: Vec<String> = columns.iter().map(|column| quote(column)).collect();
-			rows(database, &format!("INSERT INTO {} ({}) VALUES ({placeholders})", quote(&table), quoted.join(", ")), &values.children())?;
+			rows(
+				database,
+				&format!(
+					"INSERT INTO {} ({}) VALUES ({placeholders})",
+					quote(&table),
+					quoted.join(", ")
+				),
+				&values.children(),
+			)?;
 			Ok(Node::int(unsafe { (sqlite()?.last_insert_rowid)(database) }))
 		}
 		("delete", [table, id, file]) => {
@@ -163,30 +201,52 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
 		}
 		("update", [table, id, column, value, file]) => {
-			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
+			let sql = format!(
+				"UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?",
+				quote(&text(table)?),
+				quote(&text(column)?)
+			);
 			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
 		}
-		(member, [file]) if transaction_statement(member).is_some() => {
-			rows(connection(&text(file)?)?, transaction_statement(member).expect("guarded"), &[]).map(|_| Node::Empty)
-		}
+		(member, [file]) if transaction_statement(member).is_some() => rows(
+			connection(&text(file)?)?,
+			transaction_statement(member).expect("guarded"),
+			&[],
+		)
+		.map(|_| Node::Empty),
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
 }
 
 fn transaction_statement(member: &str) -> Option<&'static str> {
-	TRANSACTION_STATEMENTS.iter().find(|(word, _)| *word == member).map(|(_, sql)| *sql)
+	TRANSACTION_STATEMENTS
+		.iter()
+		.find(|(word, _)| *word == member)
+		.map(|(_, sql)| *sql)
 }
 
 /// `std_io("table", "select", [table, schema, file, condition, parameters])`: the rows `[id, columns…]` the SQL
 /// condition keeps, in order; the condition's `warp_call('f', …)` calls the program's function f, registered for this
 /// query only
 pub fn select(arguments: &[Node], callback: &mut Callback) -> Result<Node, String> {
-	let [table, schema, file, condition, parameters] = arguments else { return Err(format!("select needs 5 arguments, got {}", arguments.len())) };
+	let [table, schema, file, condition, parameters] = arguments else {
+		return Err(format!("select needs 5 arguments, got {}", arguments.len()));
+	};
 	let database = connection(&file.drop_meta().name())?;
 	let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-	let mut call = WarpCall { callback, failure: None };
+	let mut call = WarpCall {
+		callback,
+		failure: None,
+	};
 	register_warp_call(database, Some((&mut call as *mut WarpCall).cast()))?;
-	let found = selected(database, &table.drop_meta().name(), &columns, &format!(" WHERE {}", condition.drop_meta().name()), "", &parameters.children());
+	let found = selected(
+		database,
+		&table.drop_meta().name(),
+		&columns,
+		&format!(" WHERE {}", condition.drop_meta().name()),
+		"",
+		&parameters.children(),
+	);
 	register_warp_call(database, None)?;
 	if let Some(failure) = call.failure {
 		return Err(failure);
@@ -205,7 +265,19 @@ fn register_warp_call(database: Handle, call: Option<*mut c_void>) -> Result<(),
 	let sqlite = sqlite()?;
 	let name = CString::new(WARP_CALL).map_err(|problem| problem.to_string())?;
 	let function = call.is_some().then_some(warp_call as SqlFunction);
-	let code = unsafe { (sqlite.create_function)(database, name.as_ptr(), -1, SQLITE_UTF8, call.unwrap_or(std::ptr::null_mut()), function, None, None, None) };
+	let code = unsafe {
+		(sqlite.create_function)(
+			database,
+			name.as_ptr(),
+			-1,
+			SQLITE_UTF8,
+			call.unwrap_or(std::ptr::null_mut()),
+			function,
+			None,
+			None,
+			None,
+		)
+	};
 	match code {
 		SQLITE_OK => Ok(()),
 		_ => Err(format!("{WARP_CALL}: {}", message(sqlite, database))),
@@ -216,9 +288,14 @@ fn register_warp_call(database: Handle, call: Option<*mut c_void>) -> Result<(),
 unsafe extern "C" fn warp_call(context: Handle, count: c_int, values: *mut Handle) {
 	let Ok(sqlite) = sqlite() else { return };
 	let call = unsafe { &mut *(sqlite.user_data)(context).cast::<WarpCall>() };
-	let arguments: Vec<Node> = (0..count as usize).map(|index| unsafe { value_of(sqlite, *values.add(index)) }).collect();
-	let Some((function, arguments)) = arguments.split_first() else { return };
-	let answer = (call.callback)(&function.name(), &list(arguments.to_vec())).and_then(|answer| unsafe { give(sqlite, context, &answer) });
+	let arguments: Vec<Node> = (0..count as usize)
+		.map(|index| unsafe { value_of(sqlite, *values.add(index)) })
+		.collect();
+	let Some((function, arguments)) = arguments.split_first() else {
+		return;
+	};
+	let answer = (call.callback)(&function.name(), &list(arguments.to_vec()))
+		.and_then(|answer| unsafe { give(sqlite, context, &answer) });
 	if let Err(failure) = answer {
 		let text = CString::new(failure.replace('\0', "")).unwrap_or_default();
 		unsafe { (sqlite.result_error)(context, text.as_ptr(), -1) };
@@ -231,7 +308,11 @@ unsafe fn value_of(sqlite: &Sqlite, value: Handle) -> Node {
 		match (sqlite.value_type)(value) {
 			SQLITE_INTEGER => Node::int((sqlite.value_int64)(value)),
 			SQLITE_FLOAT => Node::float((sqlite.value_double)(value)),
-			SQLITE_TEXT => Node::Text(CStr::from_ptr((sqlite.value_text)(value)).to_string_lossy().into_owned()),
+			SQLITE_TEXT => Node::Text(
+				CStr::from_ptr((sqlite.value_text)(value))
+					.to_string_lossy()
+					.into_owned(),
+			),
 			_ => Node::Empty,
 		}
 	}
@@ -250,7 +331,12 @@ unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), Str
 				let text = c_text(value)?;
 				(sqlite.result_text)(context, text.as_ptr(), -1, SQLITE_TRANSIENT)
 			}
-			other => return Err(format!("a filter's function gave {}, which a query cannot compare", other.serialize().trim())),
+			other => {
+				return Err(format!(
+					"a filter's function gave {}, which a query cannot compare",
+					other.serialize().trim()
+				))
+			}
 		}
 	}
 	Ok(())
@@ -267,9 +353,26 @@ fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 /// The table's rows `[id, columns…]` in id order, or only a page of them: its start position (counted from 1) and size
 /// The rows `[id, columns…]` of a table in order, those of `filter` (` WHERE …`) within `limit` (` LIMIT …`), whose
 /// parameters come in that order
-fn selected(database: Handle, table: &str, columns: &[(String, String, String)], filter: &str, limit: &str, parameters: &[Node]) -> Result<Node, String> {
-	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
-	let rows = rows(database, &format!("SELECT {} FROM {}{filter} ORDER BY {ID_COLUMN}{limit}", selected.join(", "), quote(table)), parameters)?;
+fn selected(
+	database: Handle,
+	table: &str,
+	columns: &[(String, String, String)],
+	filter: &str,
+	limit: &str,
+	parameters: &[Node],
+) -> Result<Node, String> {
+	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string())
+		.chain(columns.iter().map(|(name, _, _)| quote(name)))
+		.collect();
+	let rows = rows(
+		database,
+		&format!(
+			"SELECT {} FROM {}{filter} ORDER BY {ID_COLUMN}{limit}",
+			selected.join(", "),
+			quote(table)
+		),
+		parameters,
+	)?;
 	ROWS_READ.set(ROWS_READ.get() + rows.len());
 	Ok(list(rows.into_iter().map(list).collect()))
 }
@@ -277,40 +380,82 @@ fn selected(database: Handle, table: &str, columns: &[(String, String, String)],
 /// The table created or migrated to the class's fields; their columns
 fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(String, String, String)>, String> {
 	let columns = schema.iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-	let definitions: Vec<String> = columns.iter().map(|(name, column_type, _)| format!("{} {column_type}", quote(name))).collect();
+	let definitions: Vec<String> = columns
+		.iter()
+		.map(|(name, column_type, _)| format!("{} {column_type}", quote(name)))
+		.collect();
 	let quoted_table = quote(table);
-	rows(database, &format!("CREATE TABLE IF NOT EXISTS {quoted_table} ({ID_COLUMN} INTEGER PRIMARY KEY{})", definitions.iter().map(|definition| format!(", {definition}")).collect::<String>()), &[])?;
-	let has_column = |stored: &[(String, String)], name: &str| stored.iter().any(|(stored_name, _)| stored_name == name);
+	rows(
+		database,
+		&format!(
+			"CREATE TABLE IF NOT EXISTS {quoted_table} ({ID_COLUMN} INTEGER PRIMARY KEY{})",
+			definitions
+				.iter()
+				.map(|definition| format!(", {definition}"))
+				.collect::<String>()
+		),
+		&[],
+	)?;
+	let has_column =
+		|stored: &[(String, String)], name: &str| stored.iter().any(|(stored_name, _)| stored_name == name);
 	let before_renames = stored_columns(database, &quoted_table)?;
 	for (name, old_name) in schema.iter().filter_map(renamed_column) {
 		if has_column(&before_renames, &old_name) && !has_column(&before_renames, &name) {
-			rows(database, &format!("ALTER TABLE {quoted_table} RENAME COLUMN {} TO {}", quote(&old_name), quote(&name)), &[])?;
+			rows(
+				database,
+				&format!(
+					"ALTER TABLE {quoted_table} RENAME COLUMN {} TO {}",
+					quote(&old_name),
+					quote(&name)
+				),
+				&[],
+			)?;
 		}
 	}
 	let stored = stored_columns(database, &quoted_table)?;
 	for (name, column_type, default) in &columns {
 		match stored.iter().find(|(stored_name, _)| stored_name == name) {
-			None => { rows(database, &format!("ALTER TABLE {quoted_table} ADD COLUMN {} {column_type} DEFAULT {default}", quote(name)), &[])?; }
-			Some((_, stored_type)) if !stored_type.eq_ignore_ascii_case(column_type) => converted(database, table, name, stored_type, column_type)?,
+			None => {
+				rows(
+					database,
+					&format!(
+						"ALTER TABLE {quoted_table} ADD COLUMN {} {column_type} DEFAULT {default}",
+						quote(name)
+					),
+					&[],
+				)?;
+			}
+			Some((_, stored_type)) if !stored_type.eq_ignore_ascii_case(column_type) => {
+				converted(database, table, name, stored_type, column_type)?
+			}
 			Some(_) => {}
 		}
 	}
-	for (name, _) in stored.iter().filter(|(name, _)| name != ID_COLUMN && !columns.iter().any(|(column, _, _)| column == name)) {
-		crate::diagnostic::report_runtime_warning(&format!("the table {table} keeps its column {name}, which the class no longer has (its data is kept)"));
+	for (name, _) in stored
+		.iter()
+		.filter(|(name, _)| name != ID_COLUMN && !columns.iter().any(|(column, _, _)| column == name))
+	{
+		crate::diagnostic::report_runtime_warning(&format!(
+			"the table {table} keeps its column {name}, which the class no longer has (its data is kept)"
+		));
 	}
 	Ok(columns)
 }
 
 /// Each column's name and SQL type as the table holds them
 fn stored_columns(database: Handle, quoted_table: &str) -> Result<Vec<(String, String)>, String> {
-	Ok(rows(database, &format!("PRAGMA table_info({quoted_table})"), &[])?.into_iter()
-		.map(|row| (row[1].drop_meta().name(), row[2].drop_meta().name())).collect())
+	Ok(rows(database, &format!("PRAGMA table_info({quoted_table})"), &[])?
+		.into_iter()
+		.map(|row| (row[1].drop_meta().name(), row[2].drop_meta().name()))
+		.collect())
 }
 
 /// A field `[name, type, default, old name]` of a renamed column: the name and the old one
 fn renamed_column(field: &Node) -> Option<(String, String)> {
 	let parts = field.children();
-	let [name, _, _, old_name, ..] = parts.as_slice() else { return None };
+	let [name, _, _, old_name, ..] = parts.as_slice() else {
+		return None;
+	};
 	if matches!(old_name.drop_meta(), Node::Empty) {
 		return None; // a unit field's column, not renamed
 	}
@@ -321,7 +466,11 @@ fn renamed_column(field: &Node) -> Option<(String, String)> {
 /// column with the new type: SQLite's column affinity would turn the converted values back
 fn converted(database: Handle, table: &str, name: &str, stored_type: &str, column_type: &str) -> Result<(), String> {
 	let factor = conversion_factor(table, name, stored_type, column_type)?;
-	let (quoted_table, column, kept) = (quote(table), quote(name), quote(&format!("{name} before {column_type}")));
+	let (quoted_table, column, kept) = (
+		quote(table),
+		quote(name),
+		quote(&format!("{name} before {column_type}")),
+	);
 	let value = match factor == 1.0 {
 		true => format!("CAST({kept} AS {column_type})"),
 		false => format!("CAST({kept} AS REAL) * {factor:?}"),
@@ -333,12 +482,16 @@ fn converted(database: Handle, table: &str, name: &str, stored_type: &str, colum
 		format!("UPDATE {quoted_table} SET {column} = {value}"),
 		format!("ALTER TABLE {quoted_table} DROP COLUMN {kept}"),
 	];
-	let done = steps.iter().try_for_each(|statement| rows(database, statement, &[]).map(drop));
+	let done = steps
+		.iter()
+		.try_for_each(|statement| rows(database, statement, &[]).map(drop));
 	if done.is_err() {
 		rows(database, "ROLLBACK TO converted", &[])?;
 	}
 	rows(database, "RELEASE converted", &[])?;
-	done.map_err(|failure| format!("converting the column {table}.{name} from {stored_type} to {column_type} failed: {failure}"))
+	done.map_err(|failure| {
+		format!("converting the column {table}.{name} from {stored_type} to {column_type} failed: {failure}")
+	})
 }
 
 /// The factor a column's values take to the class's field type, or the loud error of a change losing data. A unit
@@ -348,18 +501,29 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 	let column = format!("the column {table}.{name} holds {stored_type}, the class's field is {column_type}");
 	let (stored_base, stored_unit) = split_unit(stored_type);
 	let (base, unit) = split_unit(column_type);
-	let widening = |sql_type: &str| LOSSLESS_ORDER.iter().position(|known| known.eq_ignore_ascii_case(sql_type));
+	let widening = |sql_type: &str| {
+		LOSSLESS_ORDER
+			.iter()
+			.position(|known| known.eq_ignore_ascii_case(sql_type))
+	};
 	let lossless = matches!((widening(stored_base), widening(base)), (Some(from), Some(to)) if from <= to);
-	let quantity = |unit: &str| crate::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"));
+	let quantity =
+		|unit: &str| crate::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"));
 	match (stored_unit, unit) {
 		(Some(stored_unit), Some(unit)) => {
 			let ((stored_quantity, _), (field_quantity, _)) = (quantity(stored_unit)?, quantity(unit)?);
 			match stored_quantity == field_quantity {
 				true => Ok(1.0),
-				false => Err(format!("{column}: {stored_quantity} and {field_quantity} are different quantities, so it is not converted")),
+				false => Err(format!(
+					"{column}: {stored_quantity} and {field_quantity} are different quantities, so it is not converted"
+				)),
 			}
 		}
-		(None, Some(unit)) if NUMBER_COLUMNS.iter().any(|number| number.eq_ignore_ascii_case(stored_base)) => {
+		(None, Some(unit))
+			if NUMBER_COLUMNS
+				.iter()
+				.any(|number| number.eq_ignore_ascii_case(stored_base)) =>
+		{
 			let (_, per_unit) = quantity(unit)?;
 			crate::diagnostic::report_runtime_warning(&format!("{column}: its plain numbers are read as {unit} (each × {per_unit} to the SI amount a unit field holds)"));
 			Ok(per_unit)
@@ -381,7 +545,9 @@ fn split_unit(column_type: &str) -> (&str, Option<&str>) {
 /// A field `[name, type, default]` as its column: name, SQL type, the SQL literal new rows of an added column take
 fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let parts = field.children();
-	let [name, field_type, default, ..] = parts.as_slice() else { return Err(format!("no field [name type default]: {}", field.serialize().trim())) };
+	let [name, field_type, default, ..] = parts.as_slice() else {
+		return Err(format!("no field [name type default]: {}", field.serialize().trim()));
+	};
 	let field_type = field_type.drop_meta().name();
 	// `email: text?`: a nullable column, its rows default to NULL (ø)
 	let optional = field_type.ends_with(OPTIONAL_MARK);
@@ -392,7 +558,11 @@ fn column_of(field: &Node) -> Result<(String, String, String), String> {
 		"" => String::new(),
 		// a unit field (`distance: km`) holds SI amounts; its column keeps the unit for migrations
 		unit if crate::units::static_units::unit_type(unit).is_some() => format!("{UNIT_COLUMN} {unit}"),
-		other => return Err(format!("a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)")),
+		other => {
+			return Err(format!(
+				"a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)"
+			))
+		}
 	};
 	let default = match (default.drop_meta(), split_unit(&column_type).0) {
 		(Node::Empty, _) if optional => "NULL".to_string(),
@@ -451,16 +621,24 @@ fn connection(file: &str) -> Result<Handle, String> {
 /// sample's file, so tests running one sample at once neither lock nor change each other's rows
 fn test_thread_copy(file: &str) -> Option<String> {
 	let file = std::path::Path::new(file);
-	let in_samples = file.parent().and_then(|folder| folder.file_name()).is_some_and(|folder| folder == SAMPLES_FOLDER);
+	let in_samples = file
+		.parent()
+		.and_then(|folder| folder.file_name())
+		.is_some_and(|folder| folder == SAMPLES_FOLDER);
 	let folder = std::env::var(TEST_TABLES).ok().filter(|_| in_samples)?;
-	let thread = std::thread::current().name().filter(|name| *name != "main")?.replace("::", ".");
+	let thread = std::thread::current()
+		.name()
+		.filter(|name| *name != "main")?
+		.replace("::", ".");
 	let folder = std::path::Path::new(&folder).join(thread);
 	std::fs::create_dir_all(&folder).ok()?;
 	Some(folder.join(file.file_name()?).to_string_lossy().into_owned())
 }
 
 fn message(sqlite: &Sqlite, database: Handle) -> String {
-	unsafe { CStr::from_ptr((sqlite.errmsg)(database)) }.to_string_lossy().into_owned()
+	unsafe { CStr::from_ptr((sqlite.errmsg)(database)) }
+		.to_string_lossy()
+		.into_owned()
 }
 
 /// The rows the statement gives, its parameters bound in order
@@ -522,12 +700,18 @@ fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Resul
 }
 
 fn row(sqlite: &Sqlite, statement: Handle) -> Vec<Node> {
-	(0..unsafe { (sqlite.column_count)(statement) }).map(|column| unsafe {
-		match (sqlite.column_type)(statement, column) {
-			SQLITE_INTEGER => Node::int((sqlite.column_int64)(statement, column)),
-			SQLITE_FLOAT => Node::float((sqlite.column_double)(statement, column)),
-			SQLITE_TEXT => Node::Text(CStr::from_ptr((sqlite.column_text)(statement, column)).to_string_lossy().into_owned()),
-			_ => Node::Empty,
-		}
-	}).collect()
+	(0..unsafe { (sqlite.column_count)(statement) })
+		.map(|column| unsafe {
+			match (sqlite.column_type)(statement, column) {
+				SQLITE_INTEGER => Node::int((sqlite.column_int64)(statement, column)),
+				SQLITE_FLOAT => Node::float((sqlite.column_double)(statement, column)),
+				SQLITE_TEXT => Node::Text(
+					CStr::from_ptr((sqlite.column_text)(statement, column))
+						.to_string_lossy()
+						.into_owned(),
+				),
+				_ => Node::Empty,
+			}
+		})
+		.collect()
 }

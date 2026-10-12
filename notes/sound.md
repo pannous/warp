@@ -114,8 +114,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    the voice's first sound (Voice origin), then the voice goes on where it stood. Exact to the sample in render_sound,
    which now counts from where the last render ended (so the silence before an `at` stays) and in the browser's
    WebAudio start(at); native live playback only to the millisecond (a sleeping thread per sound, then afplay).
-   Still to build: ramping a handle's gain (card sound-gain-ramps), and native live sample accuracy: both need our own output engine (cpal,
-   "Our own API" below) instead of one player process per sound (card native-engine).
+   Ramping a handle's gain is fade_sound (card sound-gain-ramps, "Native output built" below).
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
@@ -145,8 +144,10 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Stereo built (card stereo-pan, tests/programs/test_sound_pan.rs, tests/web/test_rendered_pan.rs): `pan` (-1 left,
    1 right, 0 mono) makes lib panned interleave left, right, the far side scaled by 1 - |pan|; sound_samples carries
    the channels (src/host.rs, 4th parameter), the WAV/AudioBuffer has them, render_sound mixes in stereo when any
-   sound is (mono on both sides alike), natively and in host-files.js mixed. Still open: voice stealing (a cap on
-   voices sounding at once; card sound-voice-stealing), which only matters for live playing (cards real-time / patterns-live). Still to build:
+   sound is (mono on both sides alike), natively and in host-files.js mixed. Voice stealing built (card
+   sound-voice-stealing, tests/programs/test_sound_engine.rs): at most 32 sounds sound at once (sound_engine.rs
+   MAX_VOICES, playground.js stealFor); one more steals the oldest sounding then, which fades out in 5 ms and leaves.
+   Live only: render_sound mixes every sound (a render has no device to keep up with). Still to build:
    Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps; card sound-gain-ramps), gain in dB,
    stereo pan, polyphony with voice stealing.
@@ -161,7 +162,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    browser and in a CoreAudio render callback natively: the same code both ways, which is where wasm-first warp beats
    other languages. Needs f32 arrays without boxing (today samples cross as a list of Ints), no allocation in the
    callback, 44.1/48 kHz stereo.
-   Native first step built (card real-time, samples/signal.warp, tests/programs/test_sound_signal.rs):
+   Native first step built (card real-time, samples/siren_sound.warp, tests/programs/test_sound_signal.rs):
    `play_signal(hum, 2s)` calls the program's `hum(t)` for every sample (t in seconds, at sample_rate), mono. The
    host word (host/native.rs played_signal) calls the export typed (f64) -> f64; music_words.rs makes the function
    of floats to a float (untyped parameters `: float`, body `as float`, so `hum(t) := 3.0` works too). On warp's own
@@ -170,9 +171,10 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    audio callback itself only mixes (no wasm, no allocation). Headless, or on afplay, it is one sound: render_sound
    and the tests read the same samples. The call blocks the program while it plays; `go { play_signal(…) }` plays it
    beside it. State between samples lives in globals declared `as float`: an exact decimal global
-   (`global level = 0.0`) grows with every sample and runs out of fuel within 220 samples.
+   (`global level = 0.0`) is an exact ratio whose denominator gains about a bit a sample (the blow-up beyond that,
+   unreduced ratios, is fixed: card exact-decimals), so floats stay the way for DSP state.
    About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
-   Block-wise built (samples/signal_blocks.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
+   Block-wise built (samples/stereo_sound.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
    a block, block a linear float array (notes/linear_arrays.md) of 512 cells to write, t its first sample's time.
    music_words.rs with_block_signals declares `linear fill·block = float[512]` and `fill·blocks(t: float)`, which
    calls fill with it (so fill's parameter is the linear array), and writes the call out as std_io("sound", "blocks",
@@ -185,7 +187,22 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    `play hum for 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
    one of the program's functions is play_signal of it (one parameter, or a pair [left, right] of such), play_blocks
    (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
-   Still to build: the browser (an AudioWorklet running the module), input (a microphone as the signal's argument).
+   Browser first step built (tests/web/test_signal_sound.rs): host-files.js STD_ADAPTERS.sound.signal / blocks compute
+   all samples at once in the program's Worker (the function as closure_apply's callable, blocks read from memory)
+   and play them as one sound (host.js holder.sounded), as natively headless. Paced once the page was clicked or
+   typed in (window_open, so audible): the Worker computes a block when the voice holds less than 100 ms
+   (playedSignal, host-tasks.js soundsQueued), each block a sound of the signal's handle (stop_sound ends them all),
+   the wait a sleep without runaway time. Unclicked (CI) everything at once, one sound.
+   Real-time playback (card real-time-playback, the user's `loop { go {melody…}; melody…; tempo *= 1.05 }`, kept in
+   probes/sound_experiments/voices.warp): heard, a voice's next sound waits until its queued sounds end within
+   PLAY_AHEAD (0.5 s; sound.rs paced, host-files.js holder.sounded), except in an `at`, which places its sounds itself.
+   Before, the loop computed minutes ahead, a new task thread a round, its exact tempo growing digits a round (card
+   exact-tempo-growth). In the browser a task's sounds still reach the page only when the program's Worker is back in
+   its event loop, so a paced endless loop with tasks hears the main voice only (a MessagePort per task Worker to the
+   page would fix it). Measured (release, probes/sound/voices_loop_timing.warp): a round computes in 15-60 ms for
+   0.4-2.2 s of sound, so pacing, not speed, was missing.
+   Still to build: an AudioWorklet running the module (glitch-free under a busy Worker), input (a microphone as the
+   signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 
@@ -253,6 +270,9 @@ to the sample and `at 2 beats` lands to the sample live, not only in render_soun
 `try_lock`, silence when a queueing sound holds the lock. `fade_sound(handle, gain, seconds)` (lib/sound.warp) ramps a
 playing sound's gain linearly, frame by frame, 0 = all handles. Fallbacks: no output device → afplay as before
 (fade_sound then fails loudly); not audible (WARP_NO_WINDOW, CI) → nothing plays, the WAVs are still collected for
-render_sound. Not yet: Linux/Windows output (cpal supports them; only the macOS dependency is declared), fade_sound in
-the browser (playground: a GainNode per sound with linearRampToValueAtTime), fades in render_sound, and DSP in the
-callback itself (card real-time builds on this Mixer).
+render_sound. fade_sound everywhere (card sound-gain-ramps, tests/programs/test_sound_fades.rs,
+tests/web/test_rendered_fades.rs): the browser ramps a GainNode per sound (playground.js faded), and render_sound
+applies the same ramps (sound.rs faded_gain, host-files.js fadedGain): each fade starts where the speaker stood on the
+caller's voice (its place minus what is still queued) and ramps from the gain it finds there. Not yet: Linux/Windows
+output (cpal supports them; only the macOS dependency is declared), LFOs (a gain following a function of the time),
+and DSP in the callback itself (card real-time builds on this Mixer).

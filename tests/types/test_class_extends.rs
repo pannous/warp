@@ -23,5 +23,8 @@ fn a_subclass_adds_fields() {
 
 #[test]
 fn a_subclass_instance_is_accepted_where_the_parent_is_wanted() {
-	is!(&format!("{ANIMALS}; greet(a:animal) := \"hello \" + a.name; greet(dog(\"Rex\"))"), "hello Rex");
+	is!(
+		&format!("{ANIMALS}; greet(a:animal) := \"hello \" + a.name; greet(dog(\"Rex\"))"),
+		"hello Rex"
+	);
 }

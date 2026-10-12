@@ -1,8 +1,8 @@
 // footgun-pi: `pi = 4; pi` gave 3.14159…: the parser read pi as π and the assignment was dropped. P130 (user: "loud
 // error, if it was declared constant before which it should be"): a named number is a declared constant, assigning it
 // is a compile error; a field named pi is the type's own field
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 const REFUSAL: &str = "is a constant";
 

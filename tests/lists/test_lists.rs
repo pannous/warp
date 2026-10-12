@@ -1,7 +1,7 @@
-use crate::{is, eq, skip};
+use crate::{eq, is, skip};
+use warp::node::strings;
 use warp::warp_parser::parse;
 use warp::*;
-use warp::node::strings;
 
 // Array size tests
 #[test]
@@ -57,10 +57,7 @@ fn test_array_operations() {
 	is!("pixel=[1 2 3];pixel.insert 4 at 0", ints(vec![4, 1, 2, 3]));
 	is!("pixel=[1 2 3];pixel.insert 4 at start", ints(vec![4, 1, 2, 3]));
 	is!("pixel=[1 2 3];pixel.insert 4 at head", ints(vec![4, 1, 2, 3]));
-	is!(
-		"pixels=[1 2 3];insert 4 at start of pixels",
-		ints(vec![4, 1, 2, 3])
-	);
+	is!("pixels=[1 2 3];insert 4 at start of pixels", ints(vec![4, 1, 2, 3]));
 	is!("pixel=[1 2 3];pixel - [3]", ints(vec![1, 2]));
 	is!("pixel=[1 2 3];pixel - 3", ints(vec![1, 2]));
 	is!("pixel=[1 2 3];remove [3] from pixel", ints(vec![1, 2]));
@@ -202,7 +199,7 @@ fn test_root_list_strings() {
 }
 
 #[test]
-	fn test_index() {
+fn test_index() {
 	let result = parse("[a b c]#2");
 	// eqs!(result, "[a  b  c]#2");
 	eq!(result.first().length(), 3); // (# [a b c] 2)

@@ -33,10 +33,34 @@ impl WasmGcEmitter {
 	/// Writes the text at (ptr, len) to stdout: the iovec {ptr, len} at address IOVEC_ADDRESS, then
 	/// `fd_write(STDOUT, iovs, 1, nwritten)`. Leaves fd_write's error code on the stack; false when fd_write is not imported.
 	fn emit_stdout_write(&self, func: &mut Function, str_ptr: u32, str_len: u32) -> bool {
-		Self::emit_list(func, &[I::I32Const(IOVEC_ADDRESS), I::I32Const(str_ptr as i32), I::I32Store(WORD)]);
-		Self::emit_list(func, &[I::I32Const(IOVEC_ADDRESS + 4), I::I32Const(str_len as i32), I::I32Store(WORD)]);
-		Self::emit_list(func, &[I::I32Const(STDOUT), I::I32Const(IOVEC_ADDRESS), I::I32Const(1), I::I32Const(NWRITTEN_ADDRESS)]);
-		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write") else { return false };
+		Self::emit_list(
+			func,
+			&[
+				I::I32Const(IOVEC_ADDRESS),
+				I::I32Const(str_ptr as i32),
+				I::I32Store(WORD),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::I32Const(IOVEC_ADDRESS + 4),
+				I::I32Const(str_len as i32),
+				I::I32Store(WORD),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::I32Const(STDOUT),
+				I::I32Const(IOVEC_ADDRESS),
+				I::I32Const(1),
+				I::I32Const(NWRITTEN_ADDRESS),
+			],
+		);
+		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write") else {
+			return false;
+		};
 		func.instruction(&I::Call(fd_write.call_index as u32));
 		true
 	}
@@ -88,14 +112,36 @@ impl WasmGcEmitter {
 	/// The print of the program's value an executable ends with (pipeline::prints_result): as emit_print, but a value
 	/// only known at run time shows nothing when it is ø, as `warp <file>` shows nothing then
 	pub(super) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
-		if !matches!(self.get_type(value), Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data) {
+		if !matches!(
+			self.get_type(value),
+			Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data
+		) {
 			return self.emit_print(func, value);
 		}
 		let held = self.emit_dynamic_text(func, value);
 		let node_type = self.type_manager.node_type;
-		let consumes_text = self.type_manager.function_type(vec![ValType::Ref(self.node_ref(false))], vec![]);
-		Self::emit_list(func, &[I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
-		Self::emit_list(func, &[I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
+		let consumes_text = self
+			.type_manager
+			.function_type(vec![ValType::Ref(self.node_ref(false))], vec![]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(held),
+				I::StructGet {
+					struct_type_index: node_type,
+					field_index: 0,
+				},
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(crate::type_kinds::KIND_MASK),
+				I::I64And,
+				I::I64Const(Kind::Empty as i64),
+				I::I64Eq,
+			],
+		);
 		Self::emit_list(func, &[I::If(BlockType::FunctionType(consumes_text)), I::Drop, I::Else]);
 		self.emit_call(func, PRINT_VALUE);
 		Self::emit_list(func, &[I::Drop, I::End]);
@@ -129,7 +175,10 @@ impl WasmGcEmitter {
 				}
 			}
 			kind => {
-				let reason = format!("{word} of {} has no runtime text yet", crate::analyzer::kind_with_article(kind));
+				let reason = format!(
+					"{word} of {} has no runtime text yet",
+					crate::analyzer::kind_with_article(kind)
+				);
 				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(value, reason).to_string());
 			}
 		}
@@ -149,27 +198,74 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(WASI_ENVIRONMENT) {
 			return;
 		}
-		let [Some(sizes_get), Some(environ_get)] = ENVIRON_IMPORTS.map(|name| self.ctx.func_registry.get(&format!("wasi_{name}")).map(|f| f.call_index as u32)) else { return };
+		let [Some(sizes_get), Some(environ_get)] = ENVIRON_IMPORTS.map(|name| {
+			self.ctx
+				.func_registry
+				.get(&format!("wasi_{name}"))
+				.map(|f| f.call_index as u32)
+		}) else {
+			return;
+		};
 		self.emit_text_heap_global();
 		let node_ref = ValType::Ref(self.node_ref(false));
-		self.runtime_function(WASI_ENVIRONMENT, vec![], vec![node_ref], vec![ValType::I32; 5], |s, f| {
-			let (count, bytes, table, size, address) = (0, 1, 2, 3, 4);
-			Self::emit_list(f, &[
-				I::I32Const(ENVIRON_COUNT_ADDRESS), I::I32Const(ENVIRON_BYTES_ADDRESS), I::Call(sizes_get), I::Drop,
-				I::I32Const(ENVIRON_COUNT_ADDRESS), I::I32Load(WORD), I::LocalSet(count),
-				I::I32Const(ENVIRON_BYTES_ADDRESS), I::I32Load(WORD), I::LocalSet(bytes),
-				I::LocalGet(count), I::I32Const(POINTER_BYTES), I::I32Mul, I::LocalSet(table),
-				I::LocalGet(table), I::LocalGet(bytes), I::I32Add, I::I32Const(POINTER_BYTES - 1), I::I32Add, I::LocalSet(size),
-			]);
-			s.emit_text_allocation(f, size, address);
-			// environ_get writes the pointer table at a pointer-aligned address
-			Self::emit_list(f, &[
-				I::LocalGet(address), I::I32Const(POINTER_BYTES - 1), I::I32Add, I::I32Const(-POINTER_BYTES), I::I32And, I::LocalSet(address),
-				I::LocalGet(address), I::LocalGet(address), I::LocalGet(table), I::I32Add, I::Call(environ_get), I::Drop,
-				I::LocalGet(address), I::LocalGet(table), I::I32Add, I::LocalGet(bytes),
-			]);
-			s.call(f, "new_text");
-		});
+		self.runtime_function(
+			WASI_ENVIRONMENT,
+			vec![],
+			vec![node_ref],
+			vec![ValType::I32; 5],
+			|s, f| {
+				let (count, bytes, table, size, address) = (0, 1, 2, 3, 4);
+				Self::emit_list(
+					f,
+					&[
+						I::I32Const(ENVIRON_COUNT_ADDRESS),
+						I::I32Const(ENVIRON_BYTES_ADDRESS),
+						I::Call(sizes_get),
+						I::Drop,
+						I::I32Const(ENVIRON_COUNT_ADDRESS),
+						I::I32Load(WORD),
+						I::LocalSet(count),
+						I::I32Const(ENVIRON_BYTES_ADDRESS),
+						I::I32Load(WORD),
+						I::LocalSet(bytes),
+						I::LocalGet(count),
+						I::I32Const(POINTER_BYTES),
+						I::I32Mul,
+						I::LocalSet(table),
+						I::LocalGet(table),
+						I::LocalGet(bytes),
+						I::I32Add,
+						I::I32Const(POINTER_BYTES - 1),
+						I::I32Add,
+						I::LocalSet(size),
+					],
+				);
+				s.emit_text_allocation(f, size, address);
+				// environ_get writes the pointer table at a pointer-aligned address
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(address),
+						I::I32Const(POINTER_BYTES - 1),
+						I::I32Add,
+						I::I32Const(-POINTER_BYTES),
+						I::I32And,
+						I::LocalSet(address),
+						I::LocalGet(address),
+						I::LocalGet(address),
+						I::LocalGet(table),
+						I::I32Add,
+						I::Call(environ_get),
+						I::Drop,
+						I::LocalGet(address),
+						I::LocalGet(table),
+						I::I32Add,
+						I::LocalGet(bytes),
+					],
+				);
+				s.call(f, "new_text");
+			},
+		);
 	}
 
 	/// print_value(x) and put_value(x): the text of x by list_join of the one-element list [x]; locals: text
@@ -179,7 +275,9 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_value_writer(&mut self, name: &'static str, ends_line: bool) {
-		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write").map(|f| f.call_index as u32) else { return };
+		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write").map(|f| f.call_index as u32) else {
+			return;
+		};
 		if !self.should_emit_function(name) {
 			return;
 		}
@@ -189,21 +287,29 @@ impl WasmGcEmitter {
 		let newline = self.allocate_string(PRINT_TERMINATOR);
 		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (value, text) = (0, 1);
-			let write = |f: &mut Function, push_address: &dyn Fn(&mut Function), push_length: &dyn Fn(&mut Function)| {
-				f.instruction(&I::I32Const(0));
-				push_address(f);
-				Self::emit_list(f, &[I::I32Store(WORD), I::I32Const(4)]);
-				push_length(f);
-				f.instruction(&I::I32Store(WORD));
-				for argument in [STDOUT, 0, 1, 8] {
-					f.instruction(&I::I32Const(argument));
-				}
-				Self::emit_list(f, &[I::Call(fd_write), I::Drop]);
-			};
+			let write =
+				|f: &mut Function, push_address: &dyn Fn(&mut Function), push_length: &dyn Fn(&mut Function)| {
+					f.instruction(&I::I32Const(0));
+					push_address(f);
+					Self::emit_list(f, &[I::I32Store(WORD), I::I32Const(4)]);
+					push_length(f);
+					f.instruction(&I::I32Store(WORD));
+					for argument in [STDOUT, 0, 1, 8] {
+						f.instruction(&I::I32Const(argument));
+					}
+					Self::emit_list(f, &[I::Call(fd_write), I::Drop]);
+				};
 			// [x] or [x, "\n"] joined: a printed line is one write, so lines of concurrent tasks do not interleave
 			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value)]);
 			if ends_line {
-				Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::I32Const(newline.0 as i32), I::I32Const(newline.1 as i32)]);
+				Self::emit_list(
+					f,
+					&[
+						I::I64Const(SQUARE_LIST_KIND),
+						I::I32Const(newline.0 as i32),
+						I::I32Const(newline.1 as i32),
+					],
+				);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 			} else {
@@ -213,7 +319,9 @@ impl WasmGcEmitter {
 			s.call(f, "new_text");
 			s.call(f, "list_join");
 			f.instruction(&I::LocalSet(text));
-			write(f, &|f| s.emit_text_field(f, text, 0), &|f| s.emit_text_field(f, text, 1));
+			write(f, &|f| s.emit_text_field(f, text, 0), &|f| {
+				s.emit_text_field(f, text, 1)
+			});
 			f.instruction(&I::LocalGet(value));
 		});
 	}

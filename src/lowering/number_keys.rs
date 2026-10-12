@@ -21,7 +21,13 @@ const KEY_TEXT: &str = "string";
 /// The declared types that make a variable a map (declarations.rs: dict is another language's word for map)
 const MAP_TYPE_WORDS: [&str; 2] = ["map", "dict"];
 /// The words `word(map, key, …)` that find an entry by its key
-const KEY_WORDS: [&str; 5] = [COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT, crate::analyzer::REMOVED_VALUE_CALL];
+const KEY_WORDS: [&str; 5] = [
+	COLLECTION_CONTAINS,
+	COLLECTION_POSITION,
+	MAP_GET_OR,
+	MAP_WITHOUT,
+	crate::analyzer::REMOVED_VALUE_CALL,
+];
 
 pub fn lower(node: Node) -> Node {
 	if !has_map_variable(&node) {
@@ -69,7 +75,10 @@ fn collect_map_variables(node: &Node, maps: &mut HashSet<String>) {
 		return;
 	}
 	maps.extend(map_assigned(node).map(str::to_string));
-	node.drop_meta().parts().into_iter().for_each(|part| collect_map_variables(part, maps));
+	node.drop_meta()
+		.parts()
+		.into_iter()
+		.for_each(|part| collect_map_variables(part, maps));
 }
 
 /// A function definition with its body rewritten for the maps it sees: those of the scope around it it doesn't
@@ -80,15 +89,22 @@ fn in_function_scope(node: &Node, maps: &HashSet<String>, rewrite: fn(Node, &Has
 	}
 	let (head, body, rebuild) = definition_parts(node)?;
 	let own = own_names(&head, &body);
-	let seen = maps.iter().filter(|name| !own.contains(*name)).cloned().chain(map_variables(&body)).collect();
+	let seen = maps
+		.iter()
+		.filter(|name| !own.contains(*name))
+		.cloned()
+		.chain(map_variables(&body))
+		.collect();
 	Some(rebuild(head, rewrite(body, &seen)))
 }
 
 /// The parameters of a definition `f(xs) := body` and the names its body assigns
 fn own_names(head: &Node, body: &Node) -> HashSet<String> {
 	let mut names: HashSet<String> = head.children().iter().skip(1).filter_map(parameter_name).collect();
-	body.visit(&mut |part| if let Node::Key(target, Op::Assign, _) = part {
-		names.extend(assigned_name(target).map(str::to_string));
+	body.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign, _) = part {
+			names.extend(assigned_name(target).map(str::to_string));
+		}
 	});
 	names
 }
@@ -103,7 +119,9 @@ fn assigned_name(target: &Node) -> Option<&str> {
 
 /// `{}` or `{1: 5, 2: 6}`: entries only, at least one keyed by a number
 fn is_number_keyed(value: &Node) -> bool {
-	let Node::List(items, Bracket::Curly, _) = value.drop_meta() else { return false };
+	let Node::List(items, Bracket::Curly, _) = value.drop_meta() else {
+		return false;
+	};
 	let entry_key = |item: &Node| match item.drop_meta() {
 		Node::Key(key, Op::Colon, _) => Some(key.drop_meta().clone()),
 		_ => None,
@@ -122,14 +140,21 @@ fn text_keyed(literal: Node) -> Node {
 			};
 			Node::List(items.into_iter().map(entry).collect(), Bracket::Curly, separator)
 		}
-		Node::Meta { data, node } => Node::Meta { data, node: Box::new(text_keyed(*node)) },
+		Node::Meta { data, node } => Node::Meta {
+			data,
+			node: Box::new(text_keyed(*node)),
+		},
 		other => other,
 	}
 }
 
 /// `map`, `dict`, `map<int, int>` (one symbol, `map of int, int`)
 fn is_map_type(declared: &Node) -> bool {
-	declared.name().split_whitespace().next().is_some_and(|word| MAP_TYPE_WORDS.contains(&word))
+	declared
+		.name()
+		.split_whitespace()
+		.next()
+		.is_some_and(|word| MAP_TYPE_WORDS.contains(&word))
 }
 
 fn is_map(node: &Node, maps: &HashSet<String>) -> bool {
@@ -147,13 +172,22 @@ fn keyed(node: Node, maps: &HashSet<String>) -> Node {
 				(None, Some(key)) => key_text(keyed(key.clone(), maps)),
 				(None, None) => return Node::Key(target, Op::Hash, Box::new(keyed(*index, maps))),
 			};
-			Node::Key(target, Op::Hash, Box::new(Node::Key(Box::new(key), Op::Add, Box::new(crate::node::int(1)))))
+			Node::Key(
+				target,
+				Op::Hash,
+				Box::new(Node::Key(Box::new(key), Op::Add, Box::new(crate::node::int(1)))),
+			)
 		}
 		// `d.remove(k)`, lowered by the analyzer after lower_key_words
 		Node::Key(target, Op::Dot, call) if is_map(&target, maps) => match call.drop_meta() {
-			Node::List(items, bracket, separator) if matches!(items.as_slice(), [method, _] if method.name() == crate::analyzer::REMOVE_METHOD) => {
+			Node::List(items, bracket, separator) if matches!(items.as_slice(), [method, _] if method.name() == crate::analyzer::REMOVE_METHOD) =>
+			{
 				let removed = vec![items[0].clone(), key_text(keyed(items[1].clone(), maps))];
-				Node::Key(target, Op::Dot, Box::new(Node::List(removed, bracket.clone(), separator.clone())))
+				Node::Key(
+					target,
+					Op::Dot,
+					Box::new(Node::List(removed, bracket.clone(), separator.clone())),
+				)
 			}
 			_ => Node::Key(target, Op::Dot, Box::new(keyed(*call, maps))),
 		},
@@ -193,7 +227,10 @@ fn key_text(key: Node) -> Node {
 fn written_index(index: &Node) -> Option<crate::extensions::numbers::Number> {
 	match index {
 		Node::Meta { data, node } => match data.as_ref() {
-			Node::Data(dada) => dada.downcast_ref::<WrittenIndex>().map(|WrittenIndex(number)| *number).or_else(|| written_index(node)),
+			Node::Data(dada) => dada
+				.downcast_ref::<WrittenIndex>()
+				.map(|WrittenIndex(number)| *number)
+				.or_else(|| written_index(node)),
 			_ => written_index(node),
 		},
 		_ => None,

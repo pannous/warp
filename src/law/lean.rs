@@ -15,7 +15,15 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 const LEAN_TIMEOUT: Duration = Duration::from_secs(120);
-pub const TACTICS: &[&str] = &["rfl", "decide", "ac_rfl", "grind", "simp", "exact warp_mul_self_nonneg _", "simp_all [Int.mul_pos]"];
+pub const TACTICS: &[&str] = &[
+	"rfl",
+	"decide",
+	"ac_rfl",
+	"grind",
+	"simp",
+	"exact warp_mul_self_nonneg _",
+	"simp_all [Int.mul_pos]",
+];
 /// The name of the i-th law proved before the one being proved, a lemma of its proof
 const LEMMA_PREFIX: &str = "warp_lemma_";
 const HEADER: &str = "import Std.Tactic.BVDecide\n\n\
@@ -83,27 +91,43 @@ fn term(node: &Node) -> Lean {
 		// Warp `%` is Euclidean (0 ≤ r < |b|) like Lean's Int.emod; `rem` is the truncated Int.tmod
 		Node::Key(left, Op::Mod, right) => Ok(format!("(Int.emod {} {})", term(left)?, term(right)?)),
 		Node::Key(left, Op::Rem, right) => Ok(format!("(Int.tmod {} {})", term(left)?, term(right)?)),
-		Node::Key(left, op, right) if arithmetic(*op).is_some() => {
-			Ok(format!("({} {} {})", term(left)?, arithmetic(*op).unwrap(), term(right)?))
-		}
+		Node::Key(left, op, right) if arithmetic(*op).is_some() => Ok(format!(
+			"({} {} {})",
+			term(left)?,
+			arithmetic(*op).unwrap(),
+			term(right)?
+		)),
 		Node::Key(base, Op::Pow, exponent) => match exponent.drop_meta() {
 			Node::Number(Number::Int(n)) if *n >= 0 => Ok(format!("({} ^ {})", term(base)?, n)),
 			_ => unsupported(node),
 		},
 		Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
-			Node::Key(yes, Op::Colon, no) => Ok(format!("(if {} then {} else {})", proposition(condition)?, term(yes)?, term(no)?)),
+			Node::Key(yes, Op::Colon, no) => Ok(format!(
+				"(if {} then {} else {})",
+				proposition(condition)?,
+				term(yes)?,
+				term(no)?
+			)),
 			_ => unsupported(node),
 		},
 		Node::Key(head, Op::Else, no) => match head.drop_meta() {
 			Node::Key(if_part, Op::Then, yes) => match if_part.drop_meta() {
-				Node::Key(empty, Op::If, condition) if is_empty(empty) => {
-					Ok(format!("(if {} then {} else {})", proposition(condition)?, term(yes)?, term(no)?))
-				}
+				Node::Key(empty, Op::If, condition) if is_empty(empty) => Ok(format!(
+					"(if {} then {} else {})",
+					proposition(condition)?,
+					term(yes)?,
+					term(no)?
+				)),
 				_ => unsupported(node),
 			},
 			_ => unsupported(node),
 		},
-		Node::Key(..) => Ok(format!("(if {} then {} else {})", proposition(node)?, integer(1), integer(0))),
+		Node::Key(..) => Ok(format!(
+			"(if {} then {} else {})",
+			proposition(node)?,
+			integer(1),
+			integer(0)
+		)),
 		Node::List(items, _, _) if items.len() == 1 => term(&items[0]),
 		Node::List(items, _, _) if !items.is_empty() => {
 			let parts: Result<Vec<String>, String> = items.iter().map(term).collect();
@@ -118,9 +142,12 @@ fn proposition(node: &Node) -> Lean {
 		Node::Key(left, op, right) if relation(*op, String::new(), String::new()).is_some() => {
 			Ok(relation(*op, term(left)?, term(right)?).unwrap())
 		}
-		Node::Key(left, op, right) if connective(*op).is_some() => {
-			Ok(format!("({}) {} ({})", proposition(left)?, connective(*op).unwrap(), proposition(right)?))
-		}
+		Node::Key(left, op, right) if connective(*op).is_some() => Ok(format!(
+			"({}) {} ({})",
+			proposition(left)?,
+			connective(*op).unwrap(),
+			proposition(right)?
+		)),
 		Node::Key(left, Op::Not, right) if is_empty(left) => Ok(format!("¬({})", proposition(right)?)),
 		Node::List(items, _, _) if items.len() == 1 => proposition(&items[0]),
 		Node::True => Ok("True".into()),
@@ -153,28 +180,61 @@ fn binders(variables: &[(String, Kind)]) -> Result<String, String> {
 /// A recursive function terminates by the sum of its parameters' sizes, which each call must lower (omega shows it
 /// from the branch's condition); Lean refuses one that does not, and the law stays Tested
 fn definition(function: &FunctionDefinition) -> Lean {
-	let header = format!("def {} {} : {} := {}\n", function.name, binders(&function.parameters)?, INTEGER, term(&function.body)?);
+	let header = format!(
+		"def {} {} : {} := {}\n",
+		function.name,
+		binders(&function.parameters)?,
+		INTEGER,
+		term(&function.body)?
+	);
 	if !calls_itself(function) {
 		return Ok(header);
 	}
-	let measure: Vec<String> = function.parameters.iter().map(|(name, _)| format!("{name}.toNat")).collect();
-	Ok(format!("{header}termination_by {}\ndecreasing_by all_goals omega\n", measure.join(" + ")))
+	let measure: Vec<String> = function
+		.parameters
+		.iter()
+		.map(|(name, _)| format!("{name}.toNat"))
+		.collect();
+	Ok(format!(
+		"{header}termination_by {}\ndecreasing_by all_goals omega\n",
+		measure.join(" + ")
+	))
 }
 
 fn theorem_name(law: &Law) -> String {
-	let name = law.name.as_deref().unwrap_or_else(|| if law.function.is_empty() { "warp" } else { &law.function });
-	let lean_name: String = name.chars().map(|character| if character.is_ascii_alphanumeric() || character == '_' { character } else { '_' }).collect();
+	let name = law
+		.name
+		.as_deref()
+		.unwrap_or_else(|| if law.function.is_empty() { "warp" } else { &law.function });
+	let lean_name: String = name
+		.chars()
+		.map(|character| {
+			if character.is_ascii_alphanumeric() || character == '_' {
+				character
+			} else {
+				'_'
+			}
+		})
+		.collect();
 	format!("{lean_name}_law")
 }
 
 /// Each alternative must close the goal: `simp` alone may merely rewrite it and "succeed".
 fn closing_alternatives(tactics: &[&str]) -> String {
-	tactics.iter().map(|tactic| format!("({}; done)", tactic)).collect::<Vec<_>>().join(" | ")
+	tactics
+		.iter()
+		.map(|tactic| format!("({}; done)", tactic))
+		.collect::<Vec<_>>()
+		.join(" | ")
 }
 
 fn called_names(node: &Node) -> Vec<String> {
 	let mut names = vec![];
-	node.visit(&mut |part| if let Some((name, _)) = super::call_parts(part) { names.push(name.to_string()) });
+	node.visit(&mut |part| {
+		if let Some((name, _)) = super::call_parts(part) {
+			names.push(name.to_string())
+		}
+	});
 	names
 }
 
@@ -192,14 +252,28 @@ fn reached<'a>(functions: &'a [FunctionDefinition], law: &Law) -> Vec<&'a str> {
 		}
 		seen.push(name);
 	}
-	functions.iter().map(|f| f.name.as_str()).filter(|name| seen.iter().any(|s| s == name)).collect()
+	functions
+		.iter()
+		.map(|f| f.name.as_str())
+		.filter(|name| seen.iter().any(|s| s == name))
+		.collect()
 }
 
 /// The induction over each recursive function the law calls with its variables: `fun_induction sum_to n`, the
 /// recursive call's value its hypothesis, every case closed knowing the reached functions' equations (grind) or the
 /// unfolded ones' (simp_all loops on a recursive equation), and the lemmas
-fn induction_alternatives(functions: &[FunctionDefinition], law: &Law, reached: &[&str], unfolded: &[&str], lemmas: &[String]) -> Vec<String> {
-	let recursive = |name: &str| functions.iter().any(|function| function.name == name && calls_itself(function));
+fn induction_alternatives(
+	functions: &[FunctionDefinition],
+	law: &Law,
+	reached: &[&str],
+	unfolded: &[&str],
+	lemmas: &[String],
+) -> Vec<String> {
+	let recursive = |name: &str| {
+		functions
+			.iter()
+			.any(|function| function.name == name && calls_itself(function))
+	};
 	let is_variable = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if law.variables.iter().any(|(variable, _)| variable == name));
 	let mut inductions: Vec<String> = vec![];
 	law.statement.visit(&mut |node| {
@@ -212,9 +286,19 @@ fn induction_alternatives(functions: &[FunctionDefinition], law: &Law, reached: 
 	});
 	inductions.dedup();
 	let lemmas: Vec<&str> = lemmas.iter().map(String::as_str).collect();
-	let (equations, simplifications) = ([reached, &lemmas].concat().join(", "), [unfolded, &lemmas].concat().join(", "));
-	let cases = closing_alternatives(&[&format!("grind [{equations}]"), &format!("simp_all [{simplifications}]"), "omega"]);
-	let mut alternatives: Vec<String> = inductions.iter().map(|induction| format!("({induction} <;> first | {cases})")).collect();
+	let (equations, simplifications) = (
+		[reached, &lemmas].concat().join(", "),
+		[unfolded, &lemmas].concat().join(", "),
+	);
+	let cases = closing_alternatives(&[
+		&format!("grind [{equations}]"),
+		&format!("simp_all [{simplifications}]"),
+		"omega",
+	]);
+	let mut alternatives: Vec<String> = inductions
+		.iter()
+		.map(|induction| format!("({induction} <;> first | {cases})"))
+		.collect();
 	if !alternatives.is_empty() {
 		alternatives.push(format!("(grind [{equations}]; done)"));
 	}
@@ -228,9 +312,19 @@ pub fn export(functions: &[FunctionDefinition], law: &Law, tactics: &[&str]) -> 
 
 /// The laws proved before, stated as lemmas whose proofs Lean checked in their own files (`sorry` here: a warning)
 fn lemma_theorems(lemmas: &[Law]) -> Result<(Vec<String>, String), String> {
-	let names: Vec<String> = (1..=lemmas.len()).map(|index| format!("{LEMMA_PREFIX}{index}")).collect();
-	let statements: Result<Vec<String>, String> = lemmas.iter().zip(&names)
-		.map(|(lemma, name)| Ok(format!("theorem {name} {} : {} := by sorry\n", binders(&lemma.variables)?, proposition(&lemma.statement)?)))
+	let names: Vec<String> = (1..=lemmas.len())
+		.map(|index| format!("{LEMMA_PREFIX}{index}"))
+		.collect();
+	let statements: Result<Vec<String>, String> = lemmas
+		.iter()
+		.zip(&names)
+		.map(|(lemma, name)| {
+			Ok(format!(
+				"theorem {name} {} : {} := by sorry\n",
+				binders(&lemma.variables)?,
+				proposition(&lemma.statement)?
+			))
+		})
 		.collect();
 	Ok((names, statements?.join("")))
 }
@@ -241,17 +335,38 @@ pub fn export_using(functions: &[FunctionDefinition], law: &Law, lemmas: &[Law],
 	let definitions: Result<Vec<String>, String> = functions.iter().map(definition).collect();
 	let (lemma_names, lemma_statements) = lemma_theorems(lemmas)?;
 	let names = reached(functions, law);
-	let unfolded: Vec<&str> = names.iter().copied().filter(|name| functions.iter().any(|function| function.name == *name && !calls_itself(function))).collect();
+	let unfolded: Vec<&str> = names
+		.iter()
+		.copied()
+		.filter(|name| {
+			functions
+				.iter()
+				.any(|function| function.name == *name && !calls_itself(function))
+		})
+		.collect();
 	let with_lemmas: Vec<String> = match lemma_names.is_empty() {
 		true => vec![],
-		false => vec![format!("grind [{}]", lemma_names.join(", ")), format!("simp_all [{}]", lemma_names.join(", "))],
+		false => vec![
+			format!("grind [{}]", lemma_names.join(", ")),
+			format!("simp_all [{}]", lemma_names.join(", ")),
+		],
 	};
-	let tactics: Vec<&str> = tactics.iter().copied().chain(with_lemmas.iter().map(String::as_str)).collect();
-	let (unfold, closers) = (format!("try simp only [{}]", unfolded.join(", ")), closing_alternatives(&tactics));
+	let tactics: Vec<&str> = tactics
+		.iter()
+		.copied()
+		.chain(with_lemmas.iter().map(String::as_str))
+		.collect();
+	let (unfold, closers) = (
+		format!("try simp only [{}]", unfolded.join(", ")),
+		closing_alternatives(&tactics),
+	);
 	let inductions = induction_alternatives(functions, law, &names, &unfolded, &lemma_names);
 	let proof = match inductions.is_empty() {
 		true => format!("{unfold}\n  all_goals first | {closers}"),
-		false => format!("first\n  | {}\n  | (({unfold}) <;> first | {closers})", inductions.join("\n  | ")),
+		false => format!(
+			"first\n  | {}\n  | (({unfold}) <;> first | {closers})",
+			inductions.join("\n  | ")
+		),
 	};
 	Ok(format!(
 		"{}{}{}\ntheorem {} {} : {} := by\n  {}\n",
@@ -274,7 +389,11 @@ fn expand_home(path: &str) -> PathBuf {
 
 pub(crate) fn lean_executable(name: &str) -> PathBuf {
 	let elan = expand_home(&format!("~/.elan/bin/{}", name));
-	if elan.exists() { elan } else { PathBuf::from(name) }
+	if elan.exists() {
+		elan
+	} else {
+		PathBuf::from(name)
+	}
 }
 
 pub(crate) fn run_with_timeout(mut command: Command) -> Result<String, String> {
@@ -292,7 +411,11 @@ pub(crate) fn run_with_timeout(mut command: Command) -> Result<String, String> {
 		std::thread::sleep(Duration::from_millis(50));
 	}
 	let output = child.wait_with_output().map_err(|e| e.to_string())?;
-	let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+	let text = format!(
+		"{}{}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr)
+	);
 	if output.status.success() && !text.lines().any(is_error_line) {
 		Ok(text)
 	} else {
@@ -306,7 +429,12 @@ fn is_error_line(line: &str) -> bool {
 }
 
 fn first_error(lean_output: &str) -> String {
-	lean_output.lines().find(|line| is_error_line(line)).unwrap_or("lean failed").trim().to_string()
+	lean_output
+		.lines()
+		.find(|line| is_error_line(line))
+		.unwrap_or("lean failed")
+		.trim()
+		.to_string()
 }
 
 fn check_file(file: &Path) -> Result<String, String> {
@@ -316,7 +444,11 @@ fn check_file(file: &Path) -> Result<String, String> {
 }
 
 fn verdict_of(record: &str) -> Verdict {
-	if record == PROVED { Verdict::Holds } else { Verdict::Unknown(record.to_string()) }
+	if record == PROVED {
+		Verdict::Holds
+	} else {
+		Verdict::Unknown(record.to_string())
+	}
 }
 
 fn cached(source: &str, attempt: impl FnOnce(&Path) -> Result<String, String>) -> Verdict {

@@ -1,12 +1,15 @@
 //! D3 (user, 2026-10-03): `[1 2 3]+4` asks append or add to each element, fallback Error;
 //! `.+` is element-wise, `xs + [4]` concatenates (like `[x]*n`, topic list-times)
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 use warp::node::ints;
 
 #[test]
 fn a_list_literal_plus_a_number_asks() {
-	fails_with("[1 2 3]+4", "append 4 or add it to each element? (too ambiguous to guess)");
+	fails_with(
+		"[1 2 3]+4",
+		"append 4 or add it to each element? (too ambiguous to guess)",
+	);
 	fails_with("[1 2 3]+4", "`[1 2 3] + [4]` for append");
 	fails_with("[1 2 3]+4", "`[1 2 3] .+ 4` for add to each element");
 	fails_with("4+[1 2 3]", "(too ambiguous to guess)");

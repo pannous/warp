@@ -52,8 +52,8 @@ step 3.
   capability: granted by `eval` and the CLI, refused to `eval_untrusted`.
 - A CLI mode granting Process and Sql too (`warp --allow all file.warp`, or `--allow process,sql`) is the missing piece
   for `exec`/`execute`. Queued as a question to warp-08.
-- AOT: `warp build --exe` keeps refusing programs with foreign imports, naming them (as for FFI libraries). The stub
-  could link `foreign_call` later (std::process only, no Cranelift).
+- AOT: `warp build --exe` runs `use python`/`use js` too (card exe-foreign, notes/aot.md): the stub starts python3 or
+  node from PATH; callbacks, components and C libraries stay refused.
 
 ## Recommendation
 1. **Python bridge now** (S, biggest reach per line of code): one host word `foreign_call(runtime, module, member,
@@ -81,8 +81,8 @@ step 3.
 - Capability: foreign_call is a host word linked like an FFI import, so it needs Ffi: eval grants it, eval_untrusted
   refuses it. eval_untrusted used to check only the parsed program, before lowering added calls of its own; its grant
   now also applies to the check after lowering (pipeline `GRANTED`).
-- AOT (warp-ec, 2026-10-05): `warp build --exe` names foreign_call as a missing import and refuses the program; the stub
-  could link it later (std::process only) but an exe silently needing python3 would surprise.
+- AOT (warp-ec, 2026-10-05): `warp build --exe` refused foreign_call; since card exe-foreign (2026-10-12) the stub links
+  it and a missing interpreter is named loudly.
 - Next: the C gaps (card ffi-gaps); handles (card foreign-handles).
 
 ## Step 2: `use js` (branch use-js)
@@ -130,12 +130,18 @@ step 3.
   arithmetic, `ws.reverse()` warp's method (foreign_modules does not forward operators of wasm values).
 - Resources (card wit-resources): a resource a component gives stays in it behind a handle
   `{$handle: 1, type: "counter", text: "counter#1", component: path}` (shared handle rules: ids, one table per
-  component, kept until the process ends). `r.counter(5)` / `r.Counter(5)` call `[constructor]counter`, `r.merged(a, b)`
+  component, kept until the process ends unless `c.drop()` runs the resource's destructor first: card component-drop; a
+  dropped handle is refused, "counter#1 was dropped"; a WIT method named drop stays that method). `r.counter(5)` / `r.Counter(5)` call `[constructor]counter`, `r.merged(a, b)`
   a `[static]counter.merged`, `c.increment(2)` the `[method]counter.increment` with the handle as self: a method call
   on a variable assigned a component's result (or on such a call) goes to the component unless it is a warp method
   (library words, list mutation, text builtins). Handles cross back as `own`/`borrow` arguments, also in lists;
   a handle of another resource type or component is refused.
-- Not yet: dropping a resource before the process ends (card component-drop), a component's exports as operators (card component-operators), components in the browser (host.js says it runs only in the native host; jco could transpile them),
+- Operators of handles (card component-operators): `a + b` of a variable holding a resource handle (or a call giving
+  one) is `a.add(b)`: add, sub, mul, div, mod, pow, lt, gt, le, ge, eq, ne. foreign_modules asks the component at compile
+  time which resource a call gives (components::result_kind), so a plain result (`n = r.fib(10); n * 2`) stays warp's
+  arithmetic; a missing method is the component's loud "a counter has no method mul". Native only for now (the browser
+  build reads no component at compile time).
+- Not yet: components in the browser (host.js says it runs only in the native host; jco could transpile them),
   `warp build --exe` (refused: foreign_call is a missing import; card exe-foreign). Capability: Ffi like the other foreign runtimes, though
   a component without preopened files is sandboxed: granting it to eval_untrusted is a later question.
 

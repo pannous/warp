@@ -3,7 +3,11 @@
 #[cfg(feature = "native")]
 fn printed(code: &str) -> String {
 	let output = crate::common::printed(code);
-	output.lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
+	output
+		.lines()
+		.filter(|line| !line.starts_with('»'))
+		.map(|line| format!("{line}\n"))
+		.collect()
 }
 
 #[test]
@@ -20,5 +24,8 @@ fn a_list_of_signals_kept_in_a_variable() {
 
 #[test]
 fn the_variables_of_the_list_keep_their_values() {
-	crate::is!("watch_all(xs) := for s in xs { on set s {print value} }\na = 1\nb = 2\nwatch_all([a, b])\na = a + 10\na * b", 22);
+	crate::is!(
+		"watch_all(xs) := for s in xs { on set s {print value} }\na = 1\nb = 2\nwatch_all([a, b])\na = a + 10\na * b",
+		22
+	);
 }

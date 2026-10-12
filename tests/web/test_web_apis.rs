@@ -12,4 +12,3 @@ fn notify_is_a_host_word() {
 	assert!(!notifies("notify(x) := x + 1; notify(2)"));
 	is!("notify(x) := x + 1; notify(2)", 3); // a program's own notify stays its own
 }
-

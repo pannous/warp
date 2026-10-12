@@ -1,7 +1,7 @@
 //! Method-style words: an unknown `.word` on a name is a loud error, the basic library words work as `x.word`, `word(x)` and `word x`
+use crate::common::fails_with;
 use crate::is;
 use warp::wasm_emitter::eval;
-use crate::common::fails_with;
 
 /// The printed result with double quotes, whichever quote the printer uses
 fn printed(code: &str) -> String {

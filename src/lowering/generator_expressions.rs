@@ -4,10 +4,10 @@
 //! Its parameters are the variables it reads, passed when it is made. An element of several words is no generator
 //! expression: `(upper w for w in words)` reads as the call `upper(w for w in words)` (comprehensions.rs).
 
+use super::nodes::{block, key, statement_list, symbol};
+use super::words::FOR_WORD;
 use crate::comprehensions::{bound_names, Comprehension};
 use crate::generators::NAME_SEPARATOR;
-use super::words::FOR_WORD;
-use super::nodes::{block, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::BTreeSet;
@@ -36,7 +36,11 @@ fn bound_variables(node: &Node) -> BTreeSet<String> {
 	let mut variables = BTreeSet::new();
 	node.visit(&mut |part| match part {
 		Node::Key(target, Op::Assign | Op::Define, _) => variables.extend(bound_names(target)),
-		Node::List(words, _, _) if words.first().is_some_and(|word| word.symbol_name().is_some_and(|name| name == FOR_WORD)) => {
+		Node::List(words, _, _)
+			if words
+				.first()
+				.is_some_and(|word| word.symbol_name().is_some_and(|name| name == FOR_WORD)) =>
+		{
 			variables.extend(words.get(1).and_then(Node::symbol_name).map(String::from));
 		}
 		_ => {}
@@ -46,12 +50,24 @@ fn bound_variables(node: &Node) -> BTreeSet<String> {
 
 fn expressions(node: Node, variables: &BTreeSet<String>, definitions: &mut Vec<Node>) -> Node {
 	let node = node.map_children(|child| expressions(child, variables, definitions));
-	let Node::List(items, Bracket::Round, Separator::None | Separator::Space) = node.drop_meta() else { return node };
-	let Some(comprehension) = Comprehension::of(items).filter(|comprehension| comprehension.at == 1) else { return node };
+	let Node::List(items, Bracket::Round, Separator::None | Separator::Space) = node.drop_meta() else {
+		return node;
+	};
+	let Some(comprehension) = Comprehension::of(items).filter(|comprehension| comprehension.at == 1) else {
+		return node;
+	};
 	let name = symbol(&[NAME, &(definitions.len() + 1).to_string()].join(NAME_SEPARATOR));
 	let free = free_variables(&comprehension, variables);
-	let head = Node::List([name.clone()].into_iter().chain(free.iter().cloned()).collect(), Bracket::Round, Separator::None);
-	definitions.push(key(head.clone(), Op::Define, block(vec![comprehension.yielding_loop()])));
+	let head = Node::List(
+		[name.clone()].into_iter().chain(free.iter().cloned()).collect(),
+		Bracket::Round,
+		Separator::None,
+	);
+	definitions.push(key(
+		head.clone(),
+		Op::Define,
+		block(vec![comprehension.yielding_loop()]),
+	));
 	head.with_meta_of(&node)
 }
 
@@ -59,7 +75,14 @@ fn expressions(node: Node, variables: &BTreeSet<String>, definitions: &mut Vec<N
 fn free_variables(comprehension: &Comprehension, variables: &BTreeSet<String>) -> Vec<Node> {
 	let mut read = BTreeSet::new();
 	for part in comprehension.parts() {
-		part.visit(&mut |inner| read.extend(inner.symbol_name().filter(|name| variables.contains(*name)).map(String::from)));
+		part.visit(&mut |inner| {
+			read.extend(
+				inner
+					.symbol_name()
+					.filter(|name| variables.contains(*name))
+					.map(String::from),
+			)
+		});
 	}
 	for own in comprehension.loop_variables() {
 		read.remove(&own);

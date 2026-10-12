@@ -1,0 +1,10 @@
+// card auto-linear-floats: a plain float array mapped by a numeric kernel picks linear memory by itself
+n = 1000000 + random_below(1)
+xs = float[n]
+for i in 1 to n { xs#i = i * 1.0 }
+s = 0.0
+for round in 1 to 20 {
+	ys = xs.map(x => x * 0.5 + 1)
+	s += ys#n
+}
+s

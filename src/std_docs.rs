@@ -34,8 +34,13 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 			comment.get_or_insert(text);
 			continue;
 		}
-		if let Some(signature) = signature(line).filter(|signature| defined.iter().any(|word| word == word_of(signature))) {
-			words.push(Word { signature, doc: comment.take() });
+		if let Some(signature) =
+			signature(line).filter(|signature| defined.iter().any(|word| word == word_of(signature)))
+		{
+			words.push(Word {
+				signature,
+				doc: comment.take(),
+			});
 		}
 		comment = None;
 	}
@@ -43,7 +48,9 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 }
 
 fn comment_text(line: &str) -> Option<String> {
-	line.trim_start().strip_prefix(COMMENT).map(|text| text.trim().to_string())
+	line.trim_start()
+		.strip_prefix(COMMENT)
+		.map(|text| text.trim().to_string())
 }
 
 /// A definition at the start of a line: `zip(a, b) := …` → `zip(a, b)`, `class Stack { …` → `class Stack`,
@@ -68,16 +75,34 @@ fn word_of(signature: &str) -> &str {
 	name.split(['(', ':', ' ']).next().unwrap_or(name)
 }
 
+/// A standard module word's head as its module writes it: `replace` of the prelude → `replace(t, old, new)`
+pub fn word_head(module: &str, word: &str) -> Option<String> {
+	module_index(module)
+		.1
+		.into_iter()
+		.map(|entry| entry.signature)
+		.find(|signature| word_of(signature) == word)
+}
+
 /// `warp help <module>`: the module, how to use it, and its words with their comment lines
 pub fn module_help(module: &str) -> Option<String> {
 	crate::modules::std_module_source(module)?;
 	let (summary, words) = module_index(module);
-	let width = words.iter().map(|word| word.signature.chars().count()).max().unwrap_or(0);
+	let width = words
+		.iter()
+		.map(|word| word.signature.chars().count())
+		.max()
+		.unwrap_or(0);
 	let lines = words.iter().map(|word| match &word.doc {
 		Some(doc) => format!("  {:width$}  {doc}", word.signature),
 		None => format!("  {}", word.signature),
 	});
-	Some(std::iter::once(format!("{module}: {summary}")).chain(lines).collect::<Vec<_>>().join("\n"))
+	Some(
+		std::iter::once(format!("{module}: {summary}"))
+			.chain(lines)
+			.collect::<Vec<_>>()
+			.join("\n"),
+	)
 }
 
 /// `warp help`: the modules there are
@@ -91,7 +116,13 @@ pub fn standard_library_markdown() -> String {
 	let mut page = vec![MARKDOWN_TITLE.to_string(), String::new(), MARKDOWN_INTRO.to_string()];
 	for module in crate::modules::std_module_names() {
 		let (summary, words) = module_index(module);
-		page.extend([String::new(), format!("## {module}"), String::new(), summary, String::new()]);
+		page.extend([
+			String::new(),
+			format!("## {module}"),
+			String::new(),
+			summary,
+			String::new(),
+		]);
 		page.extend(words.iter().map(|word| match &word.doc {
 			Some(doc) => format!("- `{}`: {doc}", word.signature),
 			None => format!("- `{}`", word.signature),

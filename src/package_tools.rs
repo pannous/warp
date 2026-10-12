@@ -54,7 +54,8 @@ impl ToolRun {
 pub fn run_package_tool(name: &str, arguments: &[&str]) -> Result<ToolRun, String> {
 	let directory = fetch_package(name)?;
 	let tool = package_tool(name)?;
-	run_wasi_command(&tool, name, arguments, &directory).map_err(|failure| format!("package {name}: {} failed: {failure:#}", tool.display()))
+	run_wasi_command(&tool, name, arguments, &directory)
+		.map_err(|failure| format!("package {name}: {} failed: {failure:#}", tool.display()))
 }
 
 /// The path of a package's prebuilt tool `<name>.wasm`, fetched or (last resort) built once
@@ -77,7 +78,10 @@ pub fn package_tool(name: &str) -> Result<PathBuf, String> {
 		}
 		match download_release_asset(name, version, &artifact) {
 			Ok(()) => return Ok(artifact),
-			Err(reason) => eprintln!("warning: package {name}: no prebuilt {} for {version}: {reason}", tool_file(name)),
+			Err(reason) => eprintln!(
+				"warning: package {name}: no prebuilt {} for {version}: {reason}",
+				tool_file(name)
+			),
 		}
 	}
 	build_from_source(name, &directory, &build, &artifact)?;
@@ -118,17 +122,31 @@ fn download_release_asset(name: &str, version: &Version, artifact: &Path) -> Res
 }
 
 fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
-	let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(DOWNLOAD_TIMEOUT)).build().into();
+	let agent: ureq::Agent = ureq::Agent::config_builder()
+		.timeout_global(Some(DOWNLOAD_TIMEOUT))
+		.build()
+		.into();
 	let mut response = agent.get(url).call().map_err(|failure| failure.to_string())?;
-	response.body_mut().with_config().limit(MAX_TOOL_BYTES).read_to_vec().map_err(|failure| failure.to_string())
+	response
+		.body_mut()
+		.with_config()
+		.limit(MAX_TOOL_BYTES)
+		.read_to_vec()
+		.map_err(|failure| failure.to_string())
 }
 
 /// Parallel processes each write their own staging file and rename it into place
 fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
 	let parent = path.parent().unwrap_or(Path::new("."));
 	std::fs::create_dir_all(parent).map_err(|failure| format!("{}: {failure}", parent.display()))?;
-	let staging = parent.join(format!(".{}.{}", path.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
-	std::fs::write(&staging, bytes).and_then(|()| std::fs::rename(&staging, path)).map_err(|failure| format!("{}: {failure}", path.display()))
+	let staging = parent.join(format!(
+		".{}.{}",
+		path.file_name().unwrap_or_default().to_string_lossy(),
+		std::process::id()
+	));
+	std::fs::write(&staging, bytes)
+		.and_then(|()| std::fs::rename(&staging, path))
+		.map_err(|failure| format!("{}: {failure}", path.display()))
 }
 
 /// The last resort: `cargo build --target wasm32-wasip1` of the package's binary `<name>`, with the package's own
@@ -136,12 +154,28 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
 fn build_from_source(name: &str, directory: &Path, build: &Path, artifact: &Path) -> Result<(), String> {
 	let manifest = directory.join("Cargo.toml");
 	if !manifest.is_file() {
-		return Err(format!("package {name} ships no {}, has no release asset of it and no Rust sources to build it from", tool_file(name)));
+		return Err(format!(
+			"package {name} ships no {}, has no release asset of it and no Rust sources to build it from",
+			tool_file(name)
+		));
 	}
 	let target = build.join("target");
-	eprintln!("warning: package {name}: building {} from its sources into {}", tool_file(name), target.display());
+	eprintln!(
+		"warning: package {name}: building {} from its sources into {}",
+		tool_file(name),
+		target.display()
+	);
 	let output = Command::new("cargo")
-		.args(["build", "--quiet", "--release", "--target", WASI_TARGET, "--bin", name, "--manifest-path"])
+		.args([
+			"build",
+			"--quiet",
+			"--release",
+			"--target",
+			WASI_TARGET,
+			"--bin",
+			name,
+			"--manifest-path",
+		])
 		.arg(&manifest)
 		.env("CARGO_TARGET_DIR", &target)
 		.output()
@@ -149,9 +183,15 @@ fn build_from_source(name: &str, directory: &Path, build: &Path, artifact: &Path
 	if !output.status.success() {
 		let errors = String::from_utf8_lossy(&output.stderr);
 		if errors.contains(MISSING_TARGET_SIGN) {
-			return Err(format!("package {name}: missing rust target {WASI_TARGET}; fix: rustup target add {WASI_TARGET}"));
+			return Err(format!(
+				"package {name}: missing rust target {WASI_TARGET}; fix: rustup target add {WASI_TARGET}"
+			));
 		}
-		return Err(format!("package {name}: building {} failed: {}", tool_file(name), errors.trim()));
+		return Err(format!(
+			"package {name}: building {} failed: {}",
+			tool_file(name),
+			errors.trim()
+		));
 	}
 	let built = target.join(WASI_TARGET).join("release").join(tool_file(name));
 	let bytes = std::fs::read(&built).map_err(|failure| format!("package {name}: {}: {failure}", built.display()))?;
@@ -162,20 +202,33 @@ fn build_from_source(name: &str, directory: &Path, build: &Path, artifact: &Path
 fn run_wasi_command(tool: &Path, name: &str, arguments: &[&str], directory: &Path) -> anyhow::Result<ToolRun> {
 	let engine = Engine::default();
 	let module = Module::from_file(&engine, tool)?;
-	let (stdout, stderr) = (MemoryOutputPipe::new(OUTPUT_CAPACITY), MemoryOutputPipe::new(OUTPUT_CAPACITY));
+	let (stdout, stderr) = (
+		MemoryOutputPipe::new(OUTPUT_CAPACITY),
+		MemoryOutputPipe::new(OUTPUT_CAPACITY),
+	);
 	let mut context = WasiCtxBuilder::new();
-	context.args(&[name]).args(arguments).stdout(stdout.clone()).stderr(stderr.clone());
+	context
+		.args(&[name])
+		.args(arguments)
+		.stdout(stdout.clone())
+		.stderr(stderr.clone());
 	context.preopened_dir(directory, ".", FsPerms::ReadWrite)?;
 	let mut store = Store::new(&engine, context.build_p1());
 	warp_runtime::engine::cap_memory(&mut store);
 	let mut linker: Linker<p1::WasiP1Ctx> = Linker::new(&engine);
 	p1::add_to_linker_sync(&mut linker, |context| context)?;
-	let start = linker.instantiate(&mut store, &module)?.get_typed_func::<(), ()>(&mut store, "_start")?;
+	let start = linker
+		.instantiate(&mut store, &module)?
+		.get_typed_func::<(), ()>(&mut store, "_start")?;
 	let status = match start.call(&mut store, ()) {
 		Ok(()) => 0,
 		Err(trap) => trap.downcast_ref::<I32Exit>().map(|exit| exit.0).ok_or(trap)?,
 	};
 	drop(store);
 	let text = |pipe: &MemoryOutputPipe| String::from_utf8_lossy(&pipe.contents()).into_owned();
-	Ok(ToolRun { status, stdout: text(&stdout), stderr: text(&stderr) })
+	Ok(ToolRun {
+		status,
+		stdout: text(&stdout),
+		stderr: text(&stderr),
+	})
 }

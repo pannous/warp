@@ -1,0 +1,6 @@
+// card map-inside: a map inside a loop body appends in place, as at top level
+xs = (1 to 20000).map(i => i * 1.0)
+for round in 1 to 1 {
+	ys = xs.map(x => x * 0.5 + 1)
+	print count ys
+}

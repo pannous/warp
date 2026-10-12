@@ -4,7 +4,11 @@
 // on the channel "warp", heard by `on "file system full" {…}`
 #[cfg(all(feature = "native", unix))]
 fn printed(code: &str) -> String {
-	crate::common::printed(code).lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
+	crate::common::printed(code)
+		.lines()
+		.filter(|line| !line.starts_with('»'))
+		.map(|line| format!("{line}\n"))
+		.collect()
 }
 
 #[test]
@@ -23,14 +27,20 @@ fn a_named_event_is_no_message_and_no_other_event() {
 #[test]
 #[cfg(all(feature = "native", unix))]
 fn send_to_is_broadcast_on() {
-	assert_eq!(printed("on message from \"test-send\" { print \"got \" + event }\nsend 21 to \"test-send\"\nsleep(200 ms)"), "got 21\n");
+	assert_eq!(
+		printed("on message from \"test-send\" { print \"got \" + event }\nsend 21 to \"test-send\"\nsleep(200 ms)"),
+		"got 21\n"
+	);
 	assert_eq!(printed("on alarm from \"test-send-named\" { print \"alarm \" + event.level }\nsend alarm{level: 3} to \"test-send-named\"\nsleep(200 ms)"), "alarm 3\n");
 }
 
 #[test]
 #[cfg(all(feature = "native", unix))]
 fn a_text_alone_sends_a_named_event_without_data() {
-	assert_eq!(printed("on \"test disk full\" { print \"full\" }\nsend \"test disk full\"\nsleep(200 ms)"), "full\n");
+	assert_eq!(
+		printed("on \"test disk full\" { print \"full\" }\nsend \"test disk full\"\nsleep(200 ms)"),
+		"full\n"
+	);
 }
 
 #[test]

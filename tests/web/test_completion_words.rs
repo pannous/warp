@@ -31,13 +31,16 @@ fn the_programs_own_words_come_first() {
 
 #[test]
 fn enter_after_a_whole_word_is_a_new_line() {
-	let whole = evaluated(r#"[isWholeWord(editor("print"), "print"), isWholeWord(editor("xs = 1\nxs"), "xs"), isWholeWord(editor("xs = 1\nx"), "x")]"#);
+	let whole = evaluated(
+		r#"[isWholeWord(editor("print"), "print"), isWholeWord(editor("xs = 1\nxs"), "xs"), isWholeWord(editor("xs = 1\nx"), "x")]"#,
+	);
 	assert_eq!(whole, serde_json::json!([true, true, false]));
 }
 
 #[test]
 fn claude_reads_the_whole_program_unless_it_is_too_long() {
 	assert_eq!(evaluated(r#"codeAround("use math\ndir(m", ")")"#), "use math\ndir(m‸)");
-	let cut = evaluated(r#"(code => [code.length, code.indexOf("‸")])(codeAround("a".repeat(30000), "b".repeat(30000)))"#);
+	let cut =
+		evaluated(r#"(code => [code.length, code.indexOf("‸")])(codeAround("a".repeat(30000), "b".repeat(30000)))"#);
 	assert_eq!(cut, serde_json::json!([MOST_CONTEXT_CHARACTERS, 15000])); // three quarters before the cursor
 }

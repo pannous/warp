@@ -8,108 +8,6 @@ const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itsel
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 
-// src/sound.rs: 16-bit mono PCM, samples offset by SAMPLE_OFFSET; a render without sounds has the default rate
-const SAMPLE_OFFSET = 32768;
-const DEFAULT_SAMPLE_RATE = 22050;
-const WAV_HEADER_BYTES = 44;
-
-// MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
-const MIDI_TICKS_PER_QUARTER = 480;
-const MIDI_MICROSECONDS_PER_QUARTER = 500000;
-const MIDI_TICKS_PER_SECOND = MIDI_TICKS_PER_QUARTER * 1e6 / MIDI_MICROSECONDS_PER_QUARTER;
-const MIDI_NOTE_ON = 0x90;
-const MIDI_NOTE_OFF = 0x80;
-const MIDI_FIELDS = 4; // start ms, key, length ms, velocity
-const midiTicks = milliseconds => Math.round(Math.max(0, milliseconds) * MIDI_TICKS_PER_SECOND / 1000);
-const midiVariableLength = value => {
-	const groups = [value & 0x7f];
-	for (value >>= 7; value > 0; value >>= 7) groups.push(value & 0x7f | 0x80);
-	return groups.reverse();
-};
-const midiChunk = (kind, body) => {
-	const bytes = new Uint8Array(8 + body.length);
-	const view = new DataView(bytes.buffer);
-	[...kind].forEach((letter, i) => bytes[i] = letter.charCodeAt(0));
-	view.setUint32(4, body.length);
-	bytes.set(body, 8);
-	return bytes;
-};
-function midiFileOf(flat) {
-	if (flat.length % MIDI_FIELDS) throw new Error(`notes come as [start, key, length, velocity] four numbers each, got ${flat.length} numbers`);
-	const events = [];
-	for (let i = 0; i < flat.length; i += MIDI_FIELDS) {
-		const [start, key, length, velocity] = flat.slice(i, i + MIDI_FIELDS);
-		if (key < 0 || key > 127) throw new Error(`MIDI keys are 0 to 127, got ${key}`);
-		const on = midiTicks(start);
-		events.push([on, 1, [MIDI_NOTE_ON, key, Math.min(127, Math.max(1, velocity))]], [Math.max(on, midiTicks(start + length)), 0, [MIDI_NOTE_OFF, key, 0]]);
-	}
-	events.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-	const track = [0, 0xff, 0x51, 3, MIDI_MICROSECONDS_PER_QUARTER >> 16 & 255, MIDI_MICROSECONDS_PER_QUARTER >> 8 & 255, MIDI_MICROSECONDS_PER_QUARTER & 255];
-	let now = 0;
-	for (const [tick, , message] of events) {
-		track.push(...midiVariableLength(tick - now), ...message);
-		now = tick;
-	}
-	track.push(0, 0xff, 0x2f, 0);
-	const header = new Uint8Array([0, 0, 0, 1, MIDI_TICKS_PER_QUARTER >> 8, MIDI_TICKS_PER_QUARTER & 255]);
-	return Uint8Array.from([...midiChunk("MThd", header), ...midiChunk("MTrk", track)]);
-}
-function midiNotesOf(bytes) {
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
-	const ascii = at => String.fromCharCode(...bytes.slice(at, at + 4));
-	if (ascii(0) !== "MThd") throw new Error("not a MIDI file (it does not start with MThd)");
-	const tracks = view.getUint16(10), division = view.getUint16(12);
-	if (division & 0x8000) throw new Error("MIDI files timed in SMPTE frames are not supported, only ticks per quarter note");
-	const tempi = [[0, MIDI_MICROSECONDS_PER_QUARTER]], messages = [];
-	let at = 8 + view.getUint32(4);
-	for (let t = 0; t < tracks; t++) {
-		const end = at + 8 + view.getUint32(at + 4), kind = ascii(at);
-		at += 8;
-		if (kind !== "MTrk") { at = end; continue; }
-		const ended = () => { throw new Error("the file ends inside an event"); };
-		const byte = () => at < end ? bytes[at++] : ended();
-		const length = () => { let value = 0; for (let i = 0; i < 4; i++) { const b = byte(); value = value << 7 | b & 0x7f; if (!(b & 0x80)) return value; } throw new Error("a delay is longer than four bytes"); };
-		let tick = 0, status = 0;
-		while (at < end) {
-			tick += length();
-			const first = byte();
-			if (first & 0x80) status = first; else at--;
-			if (status === 0xff) {
-				const type = byte(), size = length(), data = bytes.slice(at, at += size);
-				if (type === 0x51 && size === 3) tempi.push([tick, data[0] << 16 | data[1] << 8 | data[2]]);
-			} else if (status === 0xf0 || status === 0xf7) at += length();
-			else {
-				const kind = status & 0xf0, channel = status & 15, one = byte();
-				const two = kind === 0xc0 || kind === 0xd0 ? 0 : byte();
-				if (kind === MIDI_NOTE_ON) messages.push([tick, two > 0, channel, one, two]);
-				else if (kind === MIDI_NOTE_OFF) messages.push([tick, false, channel, one, 0]);
-			}
-		}
-		at = end;
-	}
-	tempi.sort((a, b) => a[0] - b[0]);
-	const milliseconds = tick => {
-		let seconds = 0, from = 0, tempo = MIDI_MICROSECONDS_PER_QUARTER;
-		for (const [when, next] of tempi) {
-			if (when >= tick) break;
-			seconds += (when - from) * tempo / 1e6 / division;
-			[from, tempo] = [when, next];
-		}
-		return Math.round((seconds + (tick - from) * tempo / 1e6 / division) * 1000);
-	};
-	messages.sort((a, b) => a[0] - b[0]);
-	const sounding = [], notes = [];
-	for (const [tick, on, channel, key, velocity] of messages) {
-		if (on) { sounding.push([tick, channel, key, velocity]); continue; }
-		const index = sounding.findIndex(([, c, k]) => c === channel && k === key);
-		if (index < 0) continue;
-		const [start, , , started] = sounding.splice(index, 1)[0];
-		notes.push([milliseconds(start), key, milliseconds(tick) - milliseconds(start), started]);
-	}
-	return notes.sort((a, b) => a[0] - b[0] || a[1] - b[1]).flat();
-}
-const wholeNumbers = list => Array.from(list, Number);
-
 // the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
@@ -270,7 +168,7 @@ const keptEntries = store => databaseObjects("readonly", store)
 // the console). A file written since (by a task) stays as written
 function loadKept() {
 	return databaseLoaded ??= Promise.all([
-		keptEntries(DATABASE.objects).then(entries => entries.forEach(([name, value]) => takeDatabaseValue(name, value)))
+		keptEntries(DATABASE.objects).then(entries => byRowId(entries).forEach(([name, value]) => takeDatabaseValue(name, value)))
 			.catch(failure => console.error("database values could not be read:", failure)),
 		keptEntries(DATABASE.files).then(entries => entries.forEach(([path, content]) => writtenFiles.has(path) || writtenFiles.set(path, content)))
 			.catch(failure => console.error("the files written before could not be read:", failure)),
@@ -308,16 +206,22 @@ function takeDatabaseValue(name, value) {
 	const row = name.match(ROW_KEY);
 	if (!row) {
 		const keptWhole = Array.isArray(value?.rows);
-		databaseValues[name] = name.startsWith(TABLE_PREFIX) && value ? { rows: databaseValues[name]?.rows ?? [], ...value, keptWhole } : value;
+		const rows = keptWhole ? [...value.rows].sort((first, second) => first[ID_COLUMN] - second[ID_COLUMN]) : databaseValues[name]?.rows ?? [];
+		databaseValues[name] = name.startsWith(TABLE_PREFIX) && value ? { ...value, rows, keptWhole } : value;
 		if (value === undefined) delete databaseValues[name];
 		return;
 	}
 	const [, table, id] = row;
 	const stored = databaseValues[table] ??= { types: {}, quantities: {}, rows: [] };
-	stored.rows = stored.rows.filter(kept => kept[ID_COLUMN] !== Number(id));
-	if (value !== undefined) stored.rows.push(value);
-	stored.rows.sort((first, second) => first[ID_COLUMN] - second[ID_COLUMN]);
+	const index = rowIndex(stored.rows, Number(id));
+	const replaced = stored.rows[index]?.[ID_COLUMN] === Number(id) ? 1 : 0;
+	if (value === undefined) stored.rows.splice(index, replaced); else stored.rows.splice(index, replaced, value);
 }
+
+// the kept entries with each table's rows in the order of their ids (IndexedDB gives keys as texts: #10 before #9), so
+// each row is appended
+const byRowId = entries => entries.map(entry => [entry, Number(entry[0].match(ROW_KEY)?.[2] ?? 0)])
+	.sort((first, second) => first[1] - second[1]).map(([entry]) => entry);
 
 // `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept in the database
 // store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types under the
@@ -378,7 +282,20 @@ function openTable(table, schema, file) {
 	return tableRows(table, schema, file);
 }
 
-const tableRows = (table, schema, file) => storedTable(file, table).rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+const rowCells = schema => row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])];
+const tableRows = (table, schema, file) => storedTable(file, table).rows.map(rowCells(schema));
+// `size` rows from the 1-based position `start`, without the others (a loop over a big table reads it page by page)
+const tablePage = (table, schema, file, start, size) => storedTable(file, table).rows.slice(start - 1, start - 1 + size).map(rowCells(schema));
+// a table's rows are in the order of their ids (inserted with the next id, told rows sorted in): the position of `id`,
+// or where it would go
+function rowIndex(rows, id) {
+	let [low, high] = [0, rows.length];
+	while (low < high) {
+		const middle = (low + high) >> 1;
+		if (rows[middle][ID_COLUMN] < id) low = middle + 1; else high = middle;
+	}
+	return low;
+}
 
 function migrateTable(table, schema, file) {
 	const stored = storedTable(file, table);
@@ -416,7 +333,7 @@ function renameColumn(stored, oldName, name) {
 
 function insertRow(table, columns, values, file) {
 	const stored = storedTable(file, table);
-	const id = Math.max(0, ...stored.rows.map(row => row[ID_COLUMN])) + 1;
+	const id = (stored.rows.at(-1)?.[ID_COLUMN] ?? 0) + 1;
 	const row = Object.fromEntries([[ID_COLUMN, id], ...columns.map((column, index) => [column, values[index]])]);
 	stored.rows.push(row);
 	databaseValues[tableKey(file, table)] = stored;
@@ -426,16 +343,18 @@ function insertRow(table, columns, values, file) {
 
 function deleteRow(table, id, file) {
 	const stored = storedTable(file, table);
-	stored.rows = stored.rows.filter(row => row[ID_COLUMN] !== id);
+	const index = rowIndex(stored.rows, id);
+	if (stored.rows[index]?.[ID_COLUMN] === id) stored.rows.splice(index, 1);
 	keep(rowKey(file, table, id), undefined, DATABASE_STORE);
 	return null;
 }
 
 function updateRow(table, id, column, value, file) {
 	const stored = storedTable(file, table);
-	const row = stored.rows.find(row => row[ID_COLUMN] === id);
-	if (row) row[column] = value;
-	if (row) keepRow(file, table, row);
+	const row = stored.rows[rowIndex(stored.rows, id)];
+	if (row?.[ID_COLUMN] !== id) return null;
+	row[column] = value;
+	keepRow(file, table, row);
 	return null;
 }
 
@@ -461,49 +380,6 @@ function rollBack(file) {
 	return null;
 }
 
-// a 16-bit mono PCM WAV of the offset samples (src/sound.rs wav)
-// the sounds mixed at their places on their voices (src/sound.rs render): a task's sound along with the program's; a
-// sound without a place (no voices where it ran) follows the one before. From where the run's last render ended, so
-// `at 1s beep()` keeps its second of silence
-// the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
-// render): the samples interleaved and the channels
-function mixed(sounds, rate, run) {
-	const channels = Math.max(1, ...sounds.map(sound => sound.channels ?? 1));
-	const framesOf = sound => sound.samples.length / (sound.channels ?? 1);
-	let end = run.renderedUntil ?? 0;
-	const starts = sounds.map(sound => {
-		const place = sound.place ?? end;
-		end = Math.max(end, place + framesOf(sound) / rate);
-		return place;
-	});
-	const first = Math.min(run.renderedUntil ?? 0, ...starts);
-	const offsets = starts.map(place => Math.round((place - first) * rate));
-	const amplitudes = new Float64Array(channels * Math.max(0, ...sounds.map((sound, i) => offsets[i] + framesOf(sound))));
-	sounds.forEach((sound, i) => {
-		const own = sound.channels ?? 1;
-		for (let frame = 0; frame < framesOf(sound); frame++)
-			for (let channel = 0; channel < channels; channel++)
-				amplitudes[(offsets[i] + frame) * channels + channel] += Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET;
-	});
-	run.renderedUntil = first + amplitudes.length / channels / rate;
-	return { samples: Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET), channels };
-}
-
-function wavOf(samples, rate, channels = 1) {
-	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
-	const view = new DataView(bytes.buffer);
-	const ascii = (at, word) => [...word].forEach((letter, i) => view.setUint8(at + i, letter.charCodeAt(0)));
-	ascii(0, "RIFF");
-	view.setUint32(4, bytes.length - 8, true);
-	ascii(8, "WAVEfmt ");
-	[[16, 16, 4], [20, 1, 2], [22, channels, 2], [24, rate, 4], [28, 2 * channels * rate, 4], [32, 2 * channels, 2], [34, 16, 2]]
-		.forEach(([at, value, size]) => size === 4 ? view.setUint32(at, value, true) : view.setUint16(at, value, true));
-	ascii(36, "data");
-	view.setUint32(40, 2 * samples.length, true);
-	samples.forEach((sample, i) => view.setInt16(WAV_HEADER_BYTES + 2 * i, Math.max(-32768, Math.min(32767, Number(sample) - SAMPLE_OFFSET)), true));
-	return bytes;
-}
-
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		const fetchUrl = (pointer, length, timeout) => {
@@ -511,6 +387,7 @@ addHostPart({
 			return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
 		};
 		return {
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 			fetch: (pointer, length) => fetchUrl(pointer, length),
 			fetch_within: (pointer, length, milliseconds) => fetchUrl(pointer, length, Number(milliseconds)),
 			// the file's bytes as they are, like src/host.rs read; a URL (a package's own files) is fetched
@@ -547,56 +424,10 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
-		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
-		// the Web MIDI access (playground.js sendMidi). A Worker cannot wait for the page's device list or its input
-		midi: {
-			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
-			read_file: path => midiNotesOf(readBytes(contentText(path))),
-			send: (port, message) => {
-				if (!self.sendMidi) return null; // a run without a page (tests, node) has no devices, silent as sound is
-				self.sendMidi(contentText(port), wholeNumbers(message));
-				return null;
-			},
-			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
-			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
-		},
-		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
-		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
-		sound: {
-			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
-			// that is not there fails as natively (card browser-play)
-			play_file: path => {
-				const name = contentText(path);
-				const written = writtenFiles.has(filePath(name));
-				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
-				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
-				return self.lastSoundHandle?.() ?? 0;
-			},
-			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
-			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
-			last: () => self.lastSoundHandle?.() ?? 0,
-			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
-			queued: () => self.soundsQueued?.() ?? 0,
-			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
-			at_end: () => { self.voiceAtEnd?.(); return null; },
-			wait: () => null,
-			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
-			// offers it for download
-			render(path) {
-				const sounds = this.holder.run.unrenderedSounds ?? [];
-				this.holder.run.unrenderedSounds = [];
-				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
-				const other = sounds.find(sound => sound.rate !== rate);
-				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
-				const { samples, channels } = mixed(sounds, rate, this.holder.run);
-				keepWritten(contentText(path), wavOf(samples, rate, channels));
-				return samples.length / channels / rate;
-			},
-		},
 	},
 });

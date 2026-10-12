@@ -68,6 +68,9 @@ const jsonOfJson5 = text => text.replace(JSON5_PARTS, jsonPart);
 const jsonOrJson5 = text => { try { return JSON.parse(text); } catch { return JSON.parse(jsonOfJson5(text)); } };
 
 addHostPart({
+	words: (holder, hooks, { program }) => ({
+		std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
+	}),
 	adapters: {
 		hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
 		json: { parse: jsonOrJson5, to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },

@@ -24,7 +24,10 @@ save bo";
 fn assert_reproducible(program: &str) {
 	let first = warp::pipeline::compile(program).expect("compiles").bytes;
 	for _ in 1..COMPILES {
-		assert!(warp::pipeline::compile(program).expect("compiles").bytes == first, "another compile of the same program gave other bytes:\n{program}");
+		assert!(
+			warp::pipeline::compile(program).expect("compiles").bytes == first,
+			"another compile of the same program gave other bytes:\n{program}"
+		);
 	}
 }
 

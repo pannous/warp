@@ -1,0 +1,6 @@
+xs: floats = [1/3]
+xs.add(1/3)
+print xs
+ns: numbers = [1/3]
+ns.add(1/3)
+print ns

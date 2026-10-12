@@ -23,11 +23,20 @@ pub const LINEAR_DOT: &str = "linear_dotf";
 pub const LINEAR_ADDRESS: &str = "linear_address";
 /// The registry names crate::wasm_emitter's ffi_func_index looks the words up by
 const FUNCTION_NAMES: [(&str, &str); 9] = [
-	(LINEAR_NEW, "ffi_linear_new"), (LINEAR_COUNT, "ffi_linear_count"),
-	("linear_get", "ffi_linear_get"), ("linear_set", "ffi_linear_set"), ("linear_add", "ffi_linear_add"),
-	("linear_getf", "ffi_linear_getf"), ("linear_setf", "ffi_linear_setf"), ("linear_addf", "ffi_linear_addf"),
+	(LINEAR_NEW, SPLIT_BLOCK_NEW),
+	(LINEAR_COUNT, "ffi_linear_count"),
+	("linear_get", "ffi_linear_get"),
+	("linear_set", "ffi_linear_set"),
+	("linear_add", "ffi_linear_add"),
+	("linear_getf", "ffi_linear_getf"),
+	("linear_setf", "ffi_linear_setf"),
+	("linear_addf", "ffi_linear_addf"),
 	(LINEAR_DOT, "ffi_linear_dotf"),
 ];
+
+/// The exported linear_new and kernel prefix the host calls to split a map (tasks.rs split_map)
+pub const SPLIT_BLOCK_NEW: &str = "ffi_linear_new";
+pub const SPLIT_KERNEL_PREFIX: &str = "ffi_";
 
 /// `ys = xs.map(x => x * 0.5 + 1)` over a linear float array: the kernel `linear_mapf·x·x*0.5+1`, its parameter and
 /// body in its name, a new block of the results computed two cells at a time with f64x2 (notes/simd.md)
@@ -35,49 +44,86 @@ pub const LINEAR_MAP_PREFIX: &str = "linear_mapf·";
 const KERNEL_NAME_SEPARATOR: char = '·';
 /// The operators of a float kernel, scalar and two lanes at a time
 const KERNEL_BINARY: [(Op, I<'static>, I<'static>); 4] = [
-	(Op::Add, I::F64Add, I::F64x2Add), (Op::Sub, I::F64Sub, I::F64x2Sub), (Op::Mul, I::F64Mul, I::F64x2Mul), (Op::Div, I::F64Div, I::F64x2Div),
+	(Op::Add, I::F64Add, I::F64x2Add),
+	(Op::Sub, I::F64Sub, I::F64x2Sub),
+	(Op::Mul, I::F64Mul, I::F64x2Mul),
+	(Op::Div, I::F64Div, I::F64x2Div),
 ];
 const KERNEL_PREFIX: [(Op, I<'static>, I<'static>); 3] = [
-	(Op::Neg, I::F64Neg, I::F64x2Neg), (Op::Sqrt, I::F64Sqrt, I::F64x2Sqrt), (Op::Abs, I::F64Abs, I::F64x2Abs),
+	(Op::Neg, I::F64Neg, I::F64x2Neg),
+	(Op::Sqrt, I::F64Sqrt, I::F64x2Sqrt),
+	(Op::Abs, I::F64Abs, I::F64x2Abs),
 ];
 /// A pair of cells
 const PAIR_BYTES: i32 = 16;
-const PAIR_ALIGNED: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
+const PAIR_ALIGNED: MemArg = MemArg {
+	offset: 0,
+	align: 3,
+	memory_index: 0,
+};
 
 /// Whether `body` is float arithmetic of the parameter and number literals, which a kernel computes lane by lane
 pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
-	match body.drop_meta() {
+	match ungrouped(body) {
 		Node::Symbol(name) => name == parameter,
 		Node::Number(number) => !matches!(number, crate::extensions::numbers::Number::Complex(..)),
-		Node::Key(left, op, right) if KERNEL_BINARY.iter().any(|(known, _, _)| known == op) => is_float_kernel(parameter, left) && is_float_kernel(parameter, right),
-		Node::Key(empty, op, operand) if matches!(empty.drop_meta(), Node::Empty) && KERNEL_PREFIX.iter().any(|(known, _, _)| known == op) => is_float_kernel(parameter, operand),
+		Node::Key(left, op, right) if KERNEL_BINARY.iter().any(|(known, _, _)| known == op) => {
+			is_float_kernel(parameter, left) && is_float_kernel(parameter, right)
+		}
+		Node::Key(empty, op, operand)
+			if matches!(empty.drop_meta(), Node::Empty) && KERNEL_PREFIX.iter().any(|(known, _, _)| known == op) =>
+		{
+			is_float_kernel(parameter, operand)
+		}
 		_ => false,
+	}
+}
+
+/// The body without the parentheses around it: `sqrt(x)` and `(x + 1) * 2` group a single operand
+fn ungrouped(body: &Node) -> &Node {
+	match body.drop_meta() {
+		Node::List(items, crate::node::Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),
+		bare => bare,
 	}
 }
 
 /// The kernel's name: its parameter and body after LINEAR_MAP_PREFIX
 pub fn kernel_name(parameter: &str, body: &Node) -> String {
-	format!("{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}", body.serialize().trim())
+	format!(
+		"{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}",
+		body.serialize().trim()
+	)
 }
 
 /// The parameter and body a kernel's name holds
 fn kernel_of(name: &str) -> Option<(String, Node)> {
-	let (parameter, body) = name.strip_prefix(LINEAR_MAP_PREFIX)?.split_once(KERNEL_NAME_SEPARATOR)?;
+	let (parameter, body) = name
+		.strip_prefix(LINEAR_MAP_PREFIX)?
+		.split_once(KERNEL_NAME_SEPARATOR)?;
 	Some((parameter.to_string(), crate::warp_parser::parse(body)))
 }
 
 /// The block's header (its count) and each cell are 8 bytes
 const CELL_BYTES: i64 = 8;
-const CELL: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
+const CELL: MemArg = MemArg {
+	offset: 0,
+	align: 3,
+	memory_index: 0,
+};
 
 /// name, parameters, results of the linear words
 pub fn linear_word_signatures() -> [(&'static str, Vec<ValType>, Vec<ValType>); 9] {
 	let [get, set, add] = LINEAR_INT_WORDS;
 	let [getf, setf, addf] = LINEAR_FLOAT_WORDS;
 	[
-		(LINEAR_NEW, vec![I64], vec![I64]), (LINEAR_COUNT, vec![I64], vec![I64]),
-		(get, vec![I64, I64], vec![I64]), (set, vec![I64, I64, I64], vec![I64]), (add, vec![I64, I64, I64], vec![I64]),
-		(getf, vec![I64, I64], vec![F64]), (setf, vec![I64, I64, F64], vec![F64]), (addf, vec![I64, I64, F64], vec![F64]),
+		(LINEAR_NEW, vec![I64], vec![I64]),
+		(LINEAR_COUNT, vec![I64], vec![I64]),
+		(get, vec![I64, I64], vec![I64]),
+		(set, vec![I64, I64, I64], vec![I64]),
+		(add, vec![I64, I64, I64], vec![I64]),
+		(getf, vec![I64, I64], vec![F64]),
+		(setf, vec![I64, I64, F64], vec![F64]),
+		(addf, vec![I64, I64, F64], vec![F64]),
 		(LINEAR_DOT, vec![I64, I64], vec![F64]),
 	]
 }
@@ -89,36 +135,71 @@ pub fn is_linear_word(name: &str) -> bool {
 impl WasmGcEmitter {
 	/// The linear words the program calls
 	pub(super) fn emit_linear_arrays(&mut self) {
-		let called: Vec<_> = linear_word_signatures().into_iter().filter(|(word, _, _)| self.ctx.ffi_imports.contains_key(*word)).collect();
+		let called: Vec<_> = linear_word_signatures()
+			.into_iter()
+			.filter(|(word, _, _)| self.ctx.ffi_imports.contains_key(*word))
+			.collect();
 		if called.is_empty() {
 			return;
 		}
-		let mut kernels: Vec<String> = self.ctx.ffi_imports.keys().filter(|name| name.starts_with(LINEAR_MAP_PREFIX)).cloned().collect();
+		let mut kernels: Vec<String> = self
+			.ctx
+			.ffi_imports
+			.keys()
+			.filter(|name| name.starts_with(LINEAR_MAP_PREFIX))
+			.cloned()
+			.collect();
 		kernels.sort();
+		// a `go` map splitting on the host calls the kernels and linear_new in instances of its own (tasks.rs split_map)
+		let splits = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPLIT_MAPF);
 		self.emit_text_heap_global();
 		for (word, params, results) in called {
-			let name = FUNCTION_NAMES.iter().find(|(known, _)| *known == word).expect("every linear word is named").1;
+			let name = FUNCTION_NAMES
+				.iter()
+				.find(|(known, _)| *known == word)
+				.expect("every linear word is named")
+				.1;
 			let float = results == [F64];
 			match word {
 				LINEAR_NEW => self.runtime_function(name, params, results, vec![I32, I32], |s, f| s.emit_linear_new(f)),
 				LINEAR_COUNT => self.runtime_function(name, params, results, vec![], |_, f| {
 					Self::emit_list(f, &[I::LocalGet(0), I::I32WrapI64, I::I64Load(CELL)]);
 				}),
-				LINEAR_DOT => self.runtime_function(name, params, results, vec![I32, I32, I32, V128, F64], |_, f| Self::emit_float_dot(f)),
-				_ if word == LINEAR_INT_WORDS[0] || word == LINEAR_FLOAT_WORDS[0] => self.runtime_function(name, params, results, vec![], |s, f| {
-					s.emit_linear_cell(f);
-					f.instruction(&if float { I::F64Load(CELL) } else { I::I64Load(CELL) });
+				LINEAR_DOT => self.runtime_function(name, params, results, vec![I32, I32, I32, V128, F64], |_, f| {
+					Self::emit_float_dot(f)
 				}),
+				_ if word == LINEAR_INT_WORDS[0] || word == LINEAR_FLOAT_WORDS[0] => {
+					self.runtime_function(name, params, results, vec![], |s, f| {
+						s.emit_linear_cell(f);
+						f.instruction(&if float { I::F64Load(CELL) } else { I::I64Load(CELL) });
+					})
+				}
 				_ => {
 					let adds = word == LINEAR_INT_WORDS[2] || word == LINEAR_FLOAT_WORDS[2];
-					self.runtime_function(name, params, results, vec![I32], |s, f| s.emit_linear_store(f, float, adds))
+					self.runtime_function(name, params, results, vec![I32], |s, f| {
+						s.emit_linear_store(f, float, adds)
+					})
 				}
 			};
 		}
 		for kernel in kernels {
-			let Some((parameter, body)) = kernel_of(&kernel) else { continue };
-			let name: &'static str = Box::leak(format!("ffi_{kernel}").into_boxed_str());
-			self.runtime_function(name, vec![I64], vec![I64], vec![I64, I32, I32, I32, F64, V128], |s, f| s.emit_float_map(f, &parameter, &body));
+			let Some((parameter, body)) = kernel_of(&kernel) else {
+				continue;
+			};
+			let name: &'static str = Box::leak(format!("{SPLIT_KERNEL_PREFIX}{kernel}").into_boxed_str());
+			self.runtime_function(
+				name,
+				vec![I64],
+				vec![I64],
+				vec![I64, I32, I32, I32, F64, V128],
+				|s, f| s.emit_float_map(f, &parameter, &body),
+			);
+			if splits {
+				self.export_runtime_function(name);
+			}
+		}
+		if splits {
+			self.export_runtime_function(SPLIT_BLOCK_NEW);
 		}
 	}
 
@@ -131,25 +212,86 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &count);
 		Self::emit_list(func, &[I::Call(new), I::LocalSet(result)]);
 		for (block, cursor) in [(source, reading), (result, writing)] {
-			Self::emit_list(func, &[I::LocalGet(block), I::I32WrapI64, I::I32Const(CELL_BYTES as i32), I::I32Add, I::LocalSet(cursor)]);
+			Self::emit_list(
+				func,
+				&[
+					I::LocalGet(block),
+					I::I32WrapI64,
+					I::I32Const(CELL_BYTES as i32),
+					I::I32Add,
+					I::LocalSet(cursor),
+				],
+			);
 		}
 		// the end of the whole pairs: reading + (count & -2) * 8
 		func.instruction(&I::LocalGet(reading));
 		Self::emit_list(func, &count);
-		Self::emit_list(func, &[I::I32WrapI64, I::I32Const(-2), I::I32And, I::I32Const(3), I::I32Shl, I::I32Add, I::LocalSet(pairs_end)]);
-		Self::emit_list(func, &[I::Block(wasm_encoder::BlockType::Empty), I::Loop(wasm_encoder::BlockType::Empty)]);
-		Self::emit_list(func, &[I::LocalGet(reading), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)]);
-		Self::emit_list(func, &[I::LocalGet(reading), I::V128Load(PAIR_ALIGNED), I::LocalSet(lanes), I::LocalGet(writing)]);
+		Self::emit_list(
+			func,
+			&[
+				I::I32WrapI64,
+				I::I32Const(-2),
+				I::I32And,
+				I::I32Const(3),
+				I::I32Shl,
+				I::I32Add,
+				I::LocalSet(pairs_end),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::Block(wasm_encoder::BlockType::Empty),
+				I::Loop(wasm_encoder::BlockType::Empty),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[I::LocalGet(reading), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(reading),
+				I::V128Load(PAIR_ALIGNED),
+				I::LocalSet(lanes),
+				I::LocalGet(writing),
+			],
+		);
 		emit_kernel(func, parameter, body, lanes, true);
 		func.instruction(&I::V128Store(PAIR_ALIGNED));
 		for cursor in [reading, writing] {
-			Self::emit_list(func, &[I::LocalGet(cursor), I::I32Const(PAIR_BYTES), I::I32Add, I::LocalSet(cursor)]);
+			Self::emit_list(
+				func,
+				&[
+					I::LocalGet(cursor),
+					I::I32Const(PAIR_BYTES),
+					I::I32Add,
+					I::LocalSet(cursor),
+				],
+			);
 		}
 		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
 		// an odd count: the last cell
 		Self::emit_list(func, &count);
-		Self::emit_list(func, &[I::I64Const(1), I::I64And, I::I32WrapI64, I::If(wasm_encoder::BlockType::Empty)]);
-		Self::emit_list(func, &[I::LocalGet(reading), I::F64Load(CELL), I::LocalSet(cell), I::LocalGet(writing)]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(1),
+				I::I64And,
+				I::I32WrapI64,
+				I::If(wasm_encoder::BlockType::Empty),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(reading),
+				I::F64Load(CELL),
+				I::LocalSet(cell),
+				I::LocalGet(writing),
+			],
+		);
 		emit_kernel(func, parameter, body, cell, false);
 		Self::emit_list(func, &[I::F64Store(CELL), I::End, I::LocalGet(result)]);
 	}
@@ -160,23 +302,104 @@ impl WasmGcEmitter {
 		let (left, right, reading_left, reading_right, pairs_end, lanes, sum) = (0, 1, 2, 3, 4, 5, 6);
 		let count = [I::LocalGet(left), I::I32WrapI64, I::I64Load(CELL)];
 		for (block, cursor) in [(left, reading_left), (right, reading_right)] {
-			Self::emit_list(func, &[I::LocalGet(block), I::I32WrapI64, I::I32Const(CELL_BYTES as i32), I::I32Add, I::LocalSet(cursor)]);
+			Self::emit_list(
+				func,
+				&[
+					I::LocalGet(block),
+					I::I32WrapI64,
+					I::I32Const(CELL_BYTES as i32),
+					I::I32Add,
+					I::LocalSet(cursor),
+				],
+			);
 		}
 		func.instruction(&I::LocalGet(reading_left));
 		Self::emit_list(func, &count);
-		Self::emit_list(func, &[I::I32WrapI64, I::I32Const(-2), I::I32And, I::I32Const(3), I::I32Shl, I::I32Add, I::LocalSet(pairs_end)]);
-		Self::emit_list(func, &[I::Block(wasm_encoder::BlockType::Empty), I::Loop(wasm_encoder::BlockType::Empty)]);
-		Self::emit_list(func, &[I::LocalGet(reading_left), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)]);
-		Self::emit_list(func, &[I::LocalGet(lanes), I::LocalGet(reading_left), I::V128Load(PAIR_ALIGNED), I::LocalGet(reading_right), I::V128Load(PAIR_ALIGNED), I::F64x2Mul, I::F64x2Add, I::LocalSet(lanes)]);
+		Self::emit_list(
+			func,
+			&[
+				I::I32WrapI64,
+				I::I32Const(-2),
+				I::I32And,
+				I::I32Const(3),
+				I::I32Shl,
+				I::I32Add,
+				I::LocalSet(pairs_end),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::Block(wasm_encoder::BlockType::Empty),
+				I::Loop(wasm_encoder::BlockType::Empty),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[I::LocalGet(reading_left), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(lanes),
+				I::LocalGet(reading_left),
+				I::V128Load(PAIR_ALIGNED),
+				I::LocalGet(reading_right),
+				I::V128Load(PAIR_ALIGNED),
+				I::F64x2Mul,
+				I::F64x2Add,
+				I::LocalSet(lanes),
+			],
+		);
 		for cursor in [reading_left, reading_right] {
-			Self::emit_list(func, &[I::LocalGet(cursor), I::I32Const(PAIR_BYTES), I::I32Add, I::LocalSet(cursor)]);
+			Self::emit_list(
+				func,
+				&[
+					I::LocalGet(cursor),
+					I::I32Const(PAIR_BYTES),
+					I::I32Add,
+					I::LocalSet(cursor),
+				],
+			);
 		}
 		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
-		Self::emit_list(func, &[I::LocalGet(lanes), I::F64x2ExtractLane(0), I::LocalGet(lanes), I::F64x2ExtractLane(1), I::F64Add, I::LocalSet(sum)]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(lanes),
+				I::F64x2ExtractLane(0),
+				I::LocalGet(lanes),
+				I::F64x2ExtractLane(1),
+				I::F64Add,
+				I::LocalSet(sum),
+			],
+		);
 		// an odd count: the last pair
 		Self::emit_list(func, &count);
-		Self::emit_list(func, &[I::I64Const(1), I::I64And, I::I32WrapI64, I::If(wasm_encoder::BlockType::Empty)]);
-		Self::emit_list(func, &[I::LocalGet(sum), I::LocalGet(reading_left), I::F64Load(CELL), I::LocalGet(reading_right), I::F64Load(CELL), I::F64Mul, I::F64Add, I::LocalSet(sum), I::End, I::LocalGet(sum)]);
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(1),
+				I::I64And,
+				I::I32WrapI64,
+				I::If(wasm_encoder::BlockType::Empty),
+			],
+		);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(sum),
+				I::LocalGet(reading_left),
+				I::F64Load(CELL),
+				I::LocalGet(reading_right),
+				I::F64Load(CELL),
+				I::F64Mul,
+				I::F64Add,
+				I::LocalSet(sum),
+				I::End,
+				I::LocalGet(sum),
+			],
+		);
 	}
 
 	/// linear_new(count) -> address: a zeroed block (fresh pages, never reused) with its count in the header
@@ -185,23 +408,61 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(0), I::I64Const(0), I::I64LtS]);
 		self.emit_fail_if(func, "index_out_of_range");
 		// header + cells + room to align the start to 8
-		Self::emit_list(func, &[
-			I::LocalGet(0), I::I64Const(CELL_BYTES), I::I64Mul, I::I64Const(2 * CELL_BYTES - 1), I::I64Add, I::I32WrapI64,
-			I::LocalSet(length),
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(0),
+				I::I64Const(CELL_BYTES),
+				I::I64Mul,
+				I::I64Const(2 * CELL_BYTES - 1),
+				I::I64Add,
+				I::I32WrapI64,
+				I::LocalSet(length),
+			],
+		);
 		self.emit_text_allocation(func, length, address);
-		Self::emit_list(func, &[
-			I::LocalGet(address), I::I32Const(CELL_BYTES as i32 - 1), I::I32Add, I::I32Const(-(CELL_BYTES as i32)), I::I32And,
-			I::LocalTee(address), I::LocalGet(0), I::I64Store(CELL),
-		]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(address),
+				I::I32Const(CELL_BYTES as i32 - 1),
+				I::I32Add,
+				I::I32Const(-(CELL_BYTES as i32)),
+				I::I32And,
+				I::LocalTee(address),
+				I::LocalGet(0),
+				I::I64Store(CELL),
+			],
+		);
 		Self::emit_list(func, &[I::LocalGet(address), I::I64ExtendI32U]);
 	}
 
 	/// The i32 address of cell `index` (param 1, from 1) of the block at param 0; index_out_of_range outside 1..count
 	fn emit_linear_cell(&self, func: &mut Function) {
-		Self::emit_list(func, &[I::LocalGet(1), I::I64Const(1), I::I64Sub, I::LocalGet(0), I::I32WrapI64, I::I64Load(CELL), I::I64GeU]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(1),
+				I::I64Const(1),
+				I::I64Sub,
+				I::LocalGet(0),
+				I::I32WrapI64,
+				I::I64Load(CELL),
+				I::I64GeU,
+			],
+		);
 		self.emit_fail_if(func, "index_out_of_range");
-		Self::emit_list(func, &[I::LocalGet(0), I::LocalGet(1), I::I64Const(CELL_BYTES), I::I64Mul, I::I64Add, I::I32WrapI64]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(0),
+				I::LocalGet(1),
+				I::I64Const(CELL_BYTES),
+				I::I64Mul,
+				I::I64Add,
+				I::I32WrapI64,
+			],
+		);
 	}
 
 	/// linear_set(address, index, value) -> value; linear_add(address, index, value) -> the cell's new value
@@ -225,15 +486,20 @@ impl WasmGcEmitter {
 /// The kernel's body on the parameter in local `value`: an f64, or two in f64x2 lanes
 fn emit_kernel(func: &mut Function, parameter: &str, body: &Node, value: u32, lanes: bool) {
 	let pick = |(_, scalar, vector): &(Op, I<'static>, I<'static>)| if lanes { vector.clone() } else { scalar.clone() };
-	match body.drop_meta() {
-		Node::Symbol(name) if name == parameter => { func.instruction(&I::LocalGet(value)); }
+	match ungrouped(body) {
+		Node::Symbol(name) if name == parameter => {
+			func.instruction(&I::LocalGet(value));
+		}
 		Node::Number(number) => {
 			func.instruction(&I::F64Const(f64::from(*number).into()));
 			if lanes {
 				func.instruction(&I::F64x2Splat);
 			}
 		}
-		Node::Key(empty, op, operand) if matches!(empty.drop_meta(), Node::Empty) && let Some(known) = KERNEL_PREFIX.iter().find(|(known, _, _)| known == op) => {
+		Node::Key(empty, op, operand)
+			if matches!(empty.drop_meta(), Node::Empty)
+				&& let Some(known) = KERNEL_PREFIX.iter().find(|(known, _, _)| known == op) =>
+		{
 			emit_kernel(func, parameter, operand, value, lanes);
 			func.instruction(&pick(known));
 		}

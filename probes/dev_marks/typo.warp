@@ -1,0 +1,4 @@
+// card web-dev-marks: `warp dev` on this page shows its error in the browser overlay with the line excerpt and the
+// caret under the misspelt name, as the playground marks it; fix `cuont` to `count` and the page shows
+count = 3
+div{ p{ "count " + cuont } }

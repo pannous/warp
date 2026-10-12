@@ -15,7 +15,12 @@ pub const CIRCLE: u32 = 2;
 /// kind u32, color u32 (0xAARRGGBB), four f32 coordinates: rect x y width height, circle x y radius
 pub const SHAPE_BYTES: usize = 24;
 /// The canvas before anything is drawn (lib/draw.warp paper, paint.rs PAPER)
-const PAPER: wgpu::Color = wgpu::Color { r: 250.0 / 255.0, g: 250.0 / 255.0, b: 250.0 / 255.0, a: 1.0 };
+const PAPER: wgpu::Color = wgpu::Color {
+	r: 250.0 / 255.0,
+	g: 250.0 / 255.0,
+	b: 250.0 / 255.0,
+	a: 1.0,
+};
 /// Bytes, mixed as bytes: CPU's mixed() mixes 0–255 channels, not light
 const CANVAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const LABEL: &str = "draw canvas";
@@ -80,52 +85,133 @@ pub struct Canvas {
 
 impl Canvas {
 	pub fn new(device: &wgpu::Device) -> Canvas {
-		let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(LABEL), source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
+		let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: Some(LABEL),
+			source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+		});
 		let attributes = wgpu::vertex_attr_array![0 => Uint32x2, 1 => Float32x4];
-		let shapes = wgpu::VertexBufferLayout { array_stride: SHAPE_BYTES as u64, step_mode: wgpu::VertexStepMode::Instance, attributes: &attributes };
-		let target = wgpu::ColorTargetState { format: CANVAS_FORMAT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL };
+		let shapes = wgpu::VertexBufferLayout {
+			array_stride: SHAPE_BYTES as u64,
+			step_mode: wgpu::VertexStepMode::Instance,
+			attributes: &attributes,
+		};
+		let target = wgpu::ColorTargetState {
+			format: CANVAS_FORMAT,
+			blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+			write_mask: wgpu::ColorWrites::ALL,
+		};
 		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some(LABEL),
 			layout: None,
-			vertex: wgpu::VertexState { module: &module, entry_point: Some("vertex"), compilation_options: Default::default(), buffers: &[Some(shapes)] },
-			fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some("fragment"), compilation_options: Default::default(), targets: &[Some(target)] }),
+			vertex: wgpu::VertexState {
+				module: &module,
+				entry_point: Some("vertex"),
+				compilation_options: Default::default(),
+				buffers: &[Some(shapes)],
+			},
+			fragment: Some(wgpu::FragmentState {
+				module: &module,
+				entry_point: Some("fragment"),
+				compilation_options: Default::default(),
+				targets: &[Some(target)],
+			}),
 			primitive: Default::default(),
 			depth_stencil: None,
 			multisample: Default::default(),
 			multiview_mask: None,
 			cache: None,
 		});
-		let size_buffer = device.create_buffer(&wgpu::BufferDescriptor { label: Some(LABEL), size: CANVAS_SIZE_BYTES, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+		let size_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+			label: Some(LABEL),
+			size: CANVAS_SIZE_BYTES,
+			usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+			mapped_at_creation: false,
+		});
 		let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: Some(LABEL),
 			layout: &pipeline.get_bind_group_layout(0),
-			entries: &[wgpu::BindGroupEntry { binding: 0, resource: size_buffer.as_entire_binding() }],
+			entries: &[wgpu::BindGroupEntry {
+				binding: 0,
+				resource: size_buffer.as_entire_binding(),
+			}],
 		});
-		Canvas { pipeline, size_buffer, bindings, texture: None }
+		Canvas {
+			pipeline,
+			size_buffer,
+			bindings,
+			texture: None,
+		}
 	}
 
 	/// The shapes drawn over the canvas, a new one of paper when the size changed; the encoder still to submit
-	pub fn draw(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32, shapes: &[u8]) -> wgpu::CommandEncoder {
-		let size = wgpu::Extent3d { width: width.max(1), height: height.max(1), depth_or_array_layers: 1 };
+	pub fn draw(
+		&mut self,
+		device: &wgpu::Device,
+		queue: &wgpu::Queue,
+		width: u32,
+		height: u32,
+		shapes: &[u8],
+	) -> wgpu::CommandEncoder {
+		let size = wgpu::Extent3d {
+			width: width.max(1),
+			height: height.max(1),
+			depth_or_array_layers: 1,
+		};
 		let fresh = self.texture.as_ref().is_none_or(|texture| texture.size() != size);
 		if fresh {
-			let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC;
+			let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+				| wgpu::TextureUsages::TEXTURE_BINDING
+				| wgpu::TextureUsages::COPY_SRC;
 			let view_formats = [CANVAS_FORMAT.add_srgb_suffix()];
-			self.texture = Some(device.create_texture(&wgpu::TextureDescriptor { label: Some(LABEL), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: CANVAS_FORMAT, usage, view_formats: &view_formats }));
+			self.texture = Some(device.create_texture(&wgpu::TextureDescriptor {
+				label: Some(LABEL),
+				size,
+				mip_level_count: 1,
+				sample_count: 1,
+				dimension: wgpu::TextureDimension::D2,
+				format: CANVAS_FORMAT,
+				usage,
+				view_formats: &view_formats,
+			}));
 			let sides = [size.width as f32, size.height as f32, 0.0, 0.0];
-			queue.write_buffer(&self.size_buffer, 0, &sides.iter().flat_map(|side| side.to_le_bytes()).collect::<Vec<u8>>());
+			queue.write_buffer(
+				&self.size_buffer,
+				0,
+				&sides.iter().flat_map(|side| side.to_le_bytes()).collect::<Vec<u8>>(),
+			);
 		}
 		let mut encoder = device.create_command_encoder(&Default::default());
 		let view = self.texture().create_view(&Default::default());
 		let count = (shapes.len() / SHAPE_BYTES) as u32;
 		let shape_buffer = (count > 0).then(|| {
-			let buffer = device.create_buffer(&wgpu::BufferDescriptor { label: Some(LABEL), size: shapes.len() as u64, usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+			let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+				label: Some(LABEL),
+				size: shapes.len() as u64,
+				usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+				mapped_at_creation: false,
+			});
 			queue.write_buffer(&buffer, 0, shapes);
 			buffer
 		});
-		let load = if fresh { wgpu::LoadOp::Clear(PAPER) } else { wgpu::LoadOp::Load };
-		let attachment = wgpu::RenderPassColorAttachment { view: &view, depth_slice: None, resolve_target: None, ops: wgpu::Operations { load, store: wgpu::StoreOp::Store } };
-		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some(LABEL), color_attachments: &[Some(attachment)], ..Default::default() });
+		let load = if fresh {
+			wgpu::LoadOp::Clear(PAPER)
+		} else {
+			wgpu::LoadOp::Load
+		};
+		let attachment = wgpu::RenderPassColorAttachment {
+			view: &view,
+			depth_slice: None,
+			resolve_target: None,
+			ops: wgpu::Operations {
+				load,
+				store: wgpu::StoreOp::Store,
+			},
+		};
+		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+			label: Some(LABEL),
+			color_attachments: &[Some(attachment)],
+			..Default::default()
+		});
 		if let Some(buffer) = &shape_buffer {
 			pass.set_pipeline(&self.pipeline);
 			pass.set_bind_group(0, &self.bindings, &[]);

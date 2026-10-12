@@ -1,0 +1,8 @@
+// card component-operators: a + b of a component's resource handles is a.add(b), a < b is a.lt(b)
+use wasm "../tests/fixtures/components/rust_demo.wasm" as r
+a = r.counter(2)
+b = r.counter(3)
+c = a + b
+print "a + b = ${c.value()}, a < b: ${a < b}, b < a: ${b < a}"
+n = r.fib(10)
+print "a plain result stays a number: ${n * 2}"

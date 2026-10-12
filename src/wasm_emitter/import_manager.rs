@@ -35,12 +35,7 @@ impl ImportManager {
 
 	/// Emit all imports based on configuration
 	/// Must be called before emit_gc_types() since type indices need to be correct
-	pub fn emit_imports(
-		&mut self,
-		config: &EmitterConfig,
-		type_manager: &mut TypeManager,
-		ctx: &mut Context,
-	) {
+	pub fn emit_imports(&mut self, config: &EmitterConfig, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// Host imports (fetch, run)
 		if config.emit_host_imports {
 			self.emit_host_imports(type_manager, ctx);
@@ -68,7 +63,8 @@ impl ImportManager {
 	/// Emit host function imports: fetch(url) -> string, run(wasm) -> i64
 	fn emit_host_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		// (ptr, len) -> (result_ptr, result_len): fetch's url and read's path; a negative length marks a failure reason
-		let fetch_type_idx = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I32, ValType::I32]);
+		let fetch_type_idx =
+			type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I32, ValType::I32]);
 		// (wasm_ptr, wasm_len) -> the result value
 		let run_type_idx = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I64]);
 		self.import_function(ctx, "host", "fetch", fetch_type_idx, "host_fetch");
@@ -88,10 +84,19 @@ impl ImportManager {
 	/// Emit WASI imports: fd_write(fd, iovs, iovs_len, nwritten) -> errno
 	fn emit_wasi_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		let fd_write_type_idx = type_manager.function_type(vec![ValType::I32; 4], vec![ValType::I32]);
-		self.import_function(ctx, "wasi_snapshot_preview1", "fd_write", fd_write_type_idx, "wasi_fd_write");
+		self.import_function(
+			ctx,
+			"wasi_snapshot_preview1",
+			"fd_write",
+			fd_write_type_idx,
+			"wasi_fd_write",
+		);
 		if ctx.required_functions.contains(super::wasi_emitter::WASI_ENVIRONMENT) {
 			let sizes_type = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I32]);
-			for (name, registered) in super::wasi_emitter::ENVIRON_IMPORTS.into_iter().zip(["wasi_environ_sizes_get", "wasi_environ_get"]) {
+			for (name, registered) in super::wasi_emitter::ENVIRON_IMPORTS
+				.into_iter()
+				.zip(["wasi_environ_sizes_get", "wasi_environ_get"])
+			{
 				self.import_function(ctx, "wasi_snapshot_preview1", name, sizes_type, registered);
 			}
 		}
@@ -104,7 +109,15 @@ impl ImportManager {
 			.iter()
 			// the linear words are the module's own functions (linear_arrays.rs)
 			.filter(|(_, sig)| sig.library != super::linear_arrays::LINEAR_LIBRARY)
-			.map(|(name, sig)| (name.clone(), sig.library.to_string(), sig.name, sig.params.clone(), sig.results.clone()))
+			.map(|(name, sig)| {
+				(
+					name.clone(),
+					sig.library.to_string(),
+					sig.name,
+					sig.params.clone(),
+					sig.results.clone(),
+				)
+			})
 			.collect();
 		imports.sort_by(|(a, ..), (b, ..)| a.cmp(b));
 
@@ -116,7 +129,14 @@ impl ImportManager {
 	}
 
 	/// Import `module.name` of type `type_idx`, known to the function registry as `registered_name`
-	fn import_function(&mut self, ctx: &mut Context, module: &str, name: &str, type_idx: u32, registered_name: &'static str) {
+	fn import_function(
+		&mut self,
+		ctx: &mut Context,
+		module: &str,
+		name: &str,
+		type_idx: u32,
+		registered_name: &'static str,
+	) {
 		self.imports.import(module, name, EntityType::Function(type_idx));
 		ctx.func_registry.register(FuncDef::host(registered_name));
 	}

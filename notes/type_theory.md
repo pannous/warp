@@ -48,8 +48,8 @@ program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (function
 
 Code: `Node` (src/node/mod.rs) carries all of this untyped; `Kind` (src/type_kinds.rs) is the run-time tag. W0 types
 are the static view: `bool` is BOOL_KIND (an Int marked above the kind bits, notes/bool_type.md), `exact` the
-decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's word `rational`), `number` the floats
-(Kind::Float: `sqrt(2)`, `x as float`; warp's words `float` and `number`), see Exact numbers and floats below. `never` is the type of `error(…)` (inference.rs
+decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's word `rational`), `float` the floats
+(Kind::Float: `sqrt(2)`, `x as float`), `number` either, kept as given (card number-keeps-exact), see Exact numbers and floats below. `never` is the type of `error(…)` (inference.rs
 `raises_error`: "an `error(…)` branch is the bottom kind", notes/error_branch_kind.md) and of the elements of `[]`.
 
 ## Subtyping (≤)
@@ -58,7 +58,7 @@ decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's wor
 | --- | --- | --- |
 | τ ≤ τ, never ≤ τ, τ ≤ any | reflexive, bottom, top (`any` = a Node, `value:any`) | — |
 | bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
-| int ≤ exact ≤ number | `x: rational = 2`, `x: float = 0.5` are accepted; `x: rational = sqrt(2)` is not | checks.rs `assignment_mismatch` (Float ← Int), user_functions.rs (a float where an exact is expected) |
+| int ≤ exact ≤ number, int ≤ float ≤ number | `x: rational = 2`, `x: float = 2` are accepted; `x: rational = sqrt(2)` is not | checks.rs `assignment_mismatch` (Float ← Int), user_functions.rs (a float where an exact is expected) |
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
 | ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
@@ -85,14 +85,17 @@ visible covariant alias that writes is a compile error (the compile-time half, w
 
 **Shared lists in W0 (Semantics.lean `Store.lists`).** A stored list is a cell of the store, `lref a t`, made by
 `share e t` from a list value whose items fit t (else "type mismatch") and typed `list t`. `push l v` (`xs.add(v)`)
-appends v to the cell if v fits t, else it is a run-time error, and `setAt l i v` (`xs#i = v`, `xs[i-1] = v`) replaces the i-th item the same way (an index outside the list is an error); list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
+appends v to the cell if v fits t, else it is a run-time error, and `setAt l i v` (`xs#i = v`, `xs[i-1] = v`) replaces the i-th item the same way (an index outside the list is an error); `insertAt l i v` (`xs.insert(v, at: i)`) puts v before the
+item i (from 0), at the end when i is no position in the list (warp appends for `at: 7` and `at: -1`), checked like
+`push`, giving xs; list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
 read the cell's items (`Store.items`). The store invariant `ListsOk` (each cell's items are a value whose type is
 below `list t`) is what each write keeps, and since `t ≤ τ` for every `list τ` alias, every read through it fits τ:
 covariance stays sound (preservation, progress and safety proved, no sorry). The exporter shares a list where a
 main-level list name takes it (`xs = [1]`, `xs: ints = …`, `xs = []`), tagged with the declared element type (`any`
 when undeclared: warp's undeclared lists take anything); `ys = xs` stores the same cell. Function locals' lists
-stay values (`xs = xs ++ [v]` in their cell). Not yet (card w0-list-writes): insert as a write, list identity for `===`
-beyond names. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
+stay values (`xs = xs ++ [v]` in their cell; their inserts are not exported yet). `xs === ys` compares the cells; warp
+compares a typed array's slots by reference (it boxed each side into a fresh Node before, card w0-list-writes), but a
+typed array against a call's result (`f(xs) === xs`) is still no. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
 lists `ys: numbers = xs; ys.add(2.5)` and `ys#1 = 2.5` as known value differences (W0: error, warp: adds it; card p215-user).
 
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.
@@ -281,8 +284,9 @@ for a whole number when they run. This is stricter than warp, never unsound, so 
 assigns only globals); `global y` inside a function, or bare at main level before `y = …`, only declares. The
 exporter collects every name declared `global` anywhere first. In warp a function's assignment to a name without
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
-(`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet (card w0-globals): `global float y = …`
-(the exporter does not read the type word yet), `global x; x` (read before any value).
+(`elaborateTyped`: the second pass infers functions seeing the first pass's names). `global float y = 2` declares y as `global y: float = 2` does (the
+parser had dropped the type word); `global x` read before any value is warp's unset 0 (`.var x 0`), unless the first
+statement naming x assigns it (card w0-globals).
 
 ## Lambdas
 
@@ -421,8 +425,26 @@ checker admits a cast when the value's static type is consistent with an alterna
 subtyping: `any` stands for anything, `list any` fits `list int`), so `x: int | text = 3; x = 2.5` and
 `f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter (src/law/type_model.rs) reads the
 union with the analyzer's `union_type_name` (a covered part dropped, ø made optional: `.opt` of the rest) and wraps main-level bindings,
-assignments and single-parameter call arguments. Not yet (card w0-unions): unions as fields or as one of several parameters, unions
-of classes (warp refuses them for now), `x as T?` (a conversion in warp: `"4" as int?` is 4; W0's cast only checks).
+assignments and call arguments. A union field (`size: int | text`) and one of several union parameters (a field of the
+arguments object `f·args`) are casts where an instance is made and where a field is written; W0 knows no object's class
+at `o.size = v`, so it casts only when every class with a field of that name declares it alike (card w0-unions). Warp
+checks a union field's literal when it is constructed and written (type_kinds keeps the union's name, its storage is a
+Node), and folding no longer inlines a variant with a declared parameter: `f(a: int, b: int) := a + b; f(1, 2.5)`
+folded to 3.5 unchecked. A union may name declared classes (card union-types): `s: Circle | Square` is the join of the
+classes (their common ancestor, `object` of unrelated ones), so W0 needs nothing new; warp lowers it like a union of
+builtin types (analyzer `union_of_types`, a class covers no builtin part: `Point | text` keeps both), holds it as a Node,
+and traits.rs `admit` refuses an instance like none of the classes. Class-typed places (card class-field): traits.rs
+`Dispatch` remembers `s: C = …` per definition scope (a function's `s = …` is its own local) and admits a later `s = v`,
+each constructor field (`instance_parts`) and a field write, which reaches dispatch as `b = field_with(b, "content", v)`;
+a class field may hold ø (tree leaves). The analyzer lowers unions inside class bodies too: `map_children` skips field
+declarations, so `content: Circle | Square` had registered as `any`. Every union part names a builtin type or a
+class (card undeclared-union): only a builtin part covers another, else `int | zork` collapsed to the unknown `zork`.
+`or` spells `|` everywhere (user 2026-10-12). A union result (card union-return, `def f(x) as int or text {…}`,
+`f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it, user 2026-10-12 return-as: `as` binds
+tighter than `or`, so declarations::as_union_result regroups `(f(x) as int) or text`) is checked, not converted: type_name_matching passes each returned value through the local
+`the result: int or text = v`, so a result gets the variable's checks. Not yet: a run-time check of a union
+variable (`x: int | text = f(2.5)` holds 2.5), `x is int` of a rational variable is yes (card int-accepts). Not yet: `x as T?` (a conversion in warp:
+`"4" as int?` is 4; W0's cast only checks).
 
 ## Implicit casts from `any`
 
@@ -515,8 +537,11 @@ number, it becomes a float (`(1/3) as float`); a text is parsed ("4" is 4, "a" t
 convert to a number type (`[1] as int`, a compile error in warp too). The exporter takes scalar targets (int, number,
 text, bool and their spellings); `x as Point`, `x as texts` and `x as int?` are other operations in warp and stay out.
 
-A declared result converts the body's value, as warp lowers it (lowering/declarations.rs: `body as T`), so the
-exporter wraps the body in `.conv`, returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
+A declared result converts the body's value only when nothing is lost (user 2026-10-12, card lossy-return): `-> text`,
+`-> float` convert as `body as T` and the exporter wraps the body in `.conv`; a whole-number type (`-> int`) and a
+union check it as a variable declared of the type is (type_name_matching `checked_result`, the local `the result`),
+`.cast` in W0: `def f() -> int { 2.5 }` is a compile error, `half(3)` of `-> int { x / 2 }` fails when it runs with
+"an int must be a whole number" (W0 refuses it statically: KNOWN_HOLES, card static-int). Returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
 `fun f(x: Int): Int`, `function f(x: number): number`, `def f(x) -> int: body`, `f(a, b): int := …`,
 `square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …` (`typed_definition` in
 src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all
@@ -561,27 +586,37 @@ or codepoint) replaces `= text` in `+` (`plus`), `*` (`repeatTy`) and `#`/`for` 
 codepoints, which the walk (`peel_codepoint`) and `#` give. A name given no annotation widens a codepoint to text
 (`widen`: `x = "a"; x = "bc"` is accepted, `x = "a"; x = 1` is "x was a Text"). The checker rejects, as warp does,
 `x: codepoint = "ab"`, `f(c: codepoint) := c; f("ab")` and `x: codepoint = 97`. The exporter maps the words
-`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet (card w0-conversions): `97 as codepoint` (W0 converts
-only by `fits`).
+`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). `97 as codepoint` converts a number to the character it numbers
+(`codepointOf`, an error for no Unicode scalar value); a text literal of other than one character is refused statically
+(`evidentMisconversion`), a text name converts when it runs (card w0-conversions). Warp gives `5 as codepoint` the
+digit '5' but `x = 5; x as codepoint` U+0005, and an invalid code point quietly '?' (card codepoint-digit).
 
 ## Exact numbers and floats
 Warp computes exactly until a float comes in: `0.1 + 0.2` is 0.3, `7/2` is 3.5, `1/3` stays 1/3, a whole result is an
 int again (`0.5 * 2` is 1, `6/2` is 3). W0 has the same values: `num q` a rational that is no int (Lean core `Rat`,
-typed `exact`), `flt bits` a float (Lean `Float` by its bits, typed `number`), and `exactValue` turns a whole rational
-into an `int`. `bool ≤ int ≤ exact ≤ number`, a fixed width below int. `arith` gives int for ints, exact for exact
-numbers, number when a float takes part; `/` widens its left side to exact (`7/2`), `^` to exact for a whole exponent
+typed `exact`), `flt bits` a float (Lean `Float` by its bits, typed `float`), and `exactValue` turns a whole rational
+into an `int`. `bool ≤ int ≤ exact ≤ number` and `int ≤ float ≤ number` (exact and float meet in int, join in number),
+a fixed width below int. `arith` gives int for ints, exact for exact numbers, float for ints and floats, number when a
+float meets an exact number; `/` widens its left side to exact (`7/2`), `^` to exact for a whole exponent
 (`2^-1` is 0.5) and to number for a fractional one (`2^0.5`, the only rational operation that leaves the rationals).
-`%` is Euclidean on rationals too (`7.5 % 2` is 1.5). `as float` (Ty `number`) makes a float, `as int` cuts toward
+`%` is Euclidean on rationals too (`7.5 % 2` is 1.5). `as float` (Ty `float`) makes a float, `as int` cuts toward
 zero. Printing follows warp's `Number` display: a terminating decimal (`3.5`, `0.0009765625`), else `n/d`; floats print
 `?` unless whole. The exporter reads a decimal literal warp keeps exact (`Number::is_exact_decimal`, through
 `decimal_fraction`) and a quotient as `exactValue (n / d)`, any other float literal as a float, and the type words
-`exact`, `rational`, `real` as `exact`, `float`, `number` as `number`. Soundness re-proved (one lemma,
+`exact`, `rational`, `real` as `exact`, `float` as `float`, `number` as `number`. Soundness re-proved (one lemma,
 `exactNumber_typed`: an operation on exact numbers gives an exact number, or a float only where the type says number).
 warp's analyzer sees a decimal and a float as one Kind (Float), so admits is compared on the decimal (`.exact`).
 Found: card rational-float (`x: rational = sqrt(2)`, `x: rational = 0.5 as float` fail with an internal WASM
 validation error rather than the compile error a parameter gets: `f(r: rational) := r; f(0.5 as float)`).
-Not yet (card w0-conversions): `as rational` (a cast, not a conversion, in W0), float display, `x: float = 1/3` converting (W0 keeps 1/3, of
-type number; warp converts to 0.333…, which the comparison skips as a float).
+Conversions (card w0-conversions): `as int`, `as number` and `as rational` read a text as warp's number_in_text
+does (`textNumber`: `12`, `-4.5`, `1/3`); `as rational` keeps an exact number and refuses a float when it runs (warp
+refuses it statically; W0's `number` is floats and exact numbers alike, so the corpus leaves it out). An exact number
+given to a float place (`x: float = 1/3`, a name already holding a float, a float parameter) is converted
+(`castDynamicValues` inserts `.conv v .float`), and the model prints floats as warp's float_text does (`floatText`).
+A `number` place keeps what it is given and `as number` converts only a text (`yes as number` is yes); a name given
+both a float and an exact number is a float place (`widenNumber`: `x = 1/3; x = 0.5 as float` holds 0.5, and a later
+`x = 1/3` 0.333…). Admits is compared with `Ty.admits`: `Ty.sub`, plus an exact number a float place converts
+(card number-keeps-exact; user: "`number` means any number, keeping whatever it holds; only `float` converts").
 
 ## Stored errors (errors as values)
 

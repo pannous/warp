@@ -47,7 +47,10 @@ impl WarpParser {
 			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
 			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
 			// `sqrt(2).round(2)`: the glued parentheses are the whole operand, the method applies to the result
-			let call_with_method = operator_word && self.parenthesis_length(chars).is_some_and(|length| self.peek_char(chars + length) == '.' && self.peek_char(chars + length + 1).is_alphabetic());
+			let call_with_method = operator_word
+				&& self.parenthesis_length(chars).is_some_and(|length| {
+					self.peek_char(chars + length) == '.' && self.peek_char(chars + length + 1).is_alphabetic()
+				});
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
@@ -98,7 +101,11 @@ impl WarpParser {
 			Node::Empty => vec![],
 			parameter => vec![parameter],
 		};
-		Some(Node::List([vec![Symbol(op.to_string())], parameters].concat(), Bracket::Round, Separator::None))
+		Some(Node::List(
+			[vec![Symbol(op.to_string())], parameters].concat(),
+			Bracket::Round,
+			Separator::None,
+		))
 	}
 
 	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
@@ -126,8 +133,12 @@ impl WarpParser {
 		if self.current_char().is_alphabetic() {
 			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
 		}
-		let blanks = (chars..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') {
+		let blanks = (chars..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
+		// a pattern's rest `Point{x, ..}` (lowering/switch.rs rest_pattern) also ends a block
+		let ends_rest = matches!(op, Op::Range | Op::To) && self.peek_char(chars + blanks) == '}';
+		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') && !ends_rest {
 			return None;
 		}
 		self.advance_by(chars);
@@ -144,27 +155,48 @@ impl WarpParser {
 		self.advance_by(AWAIT_KEYWORD.len());
 		let called = self.current_char() == '(';
 		self.skip_spaces();
-		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
+		let names_a_variable = self
+			.peek_operator()
+			.is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
 		if called || names_a_variable || matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0' | ')') {
 			self.rewind(before_keyword);
 			return None;
 		}
 		// `await all jobs` (P47): every task of a list
-		if self.matches_keyword(AWAIT_ALL_WORD) && self.peek_char(AWAIT_ALL_WORD.len()) == ' ' && (self.is_identifier_start(AWAIT_ALL_WORD.len() + 1) || matches!(self.peek_char(AWAIT_ALL_WORD.len() + 1), '[' | '(')) {
+		if self.matches_keyword(AWAIT_ALL_WORD)
+			&& self.peek_char(AWAIT_ALL_WORD.len()) == ' '
+			&& (self.is_identifier_start(AWAIT_ALL_WORD.len() + 1)
+				|| matches!(self.peek_char(AWAIT_ALL_WORD.len() + 1), '[' | '('))
+		{
 			self.advance_by(AWAIT_ALL_WORD.len());
 			self.skip_spaces();
 			let list = self.parse_expr(AWAIT_OPERAND_BP);
-			let all = Node::List(vec![Symbol(AWAIT_ALL_WORD.to_string()), list], Bracket::None, Separator::Space);
-			return Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), all], Bracket::None, Separator::Space));
+			let all = Node::List(
+				vec![Symbol(AWAIT_ALL_WORD.to_string()), list],
+				Bracket::None,
+				Separator::Space,
+			);
+			return Some(Node::List(
+				vec![Symbol(AWAIT_KEYWORD.to_string()), all],
+				Bracket::None,
+				Separator::Space,
+			));
 		}
 		let operand = self.parse_expr(AWAIT_OPERAND_BP);
-		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))
+		Some(Node::List(
+			vec![Symbol(AWAIT_KEYWORD.to_string()), operand],
+			Bracket::None,
+			Separator::Space,
+		))
 	}
 
 	/// `1 + emit ask`, `net * (1 + ask tax_rate)` (card price-net), `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
 	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
 	pub(super) fn try_parse_emit(&mut self) -> Option<Node> {
-		let keyword = EMIT_WORDS.into_iter().chain(EMIT_ALIASES).find(|keyword| self.matches_keyword(keyword))?;
+		let keyword = EMIT_WORDS
+			.into_iter()
+			.chain(EMIT_ALIASES)
+			.find(|keyword| self.matches_keyword(keyword))?;
 		let before_keyword = self.mark();
 		self.advance_by(keyword.len());
 		self.skip_spaces();
@@ -173,7 +205,8 @@ impl WarpParser {
 			return None;
 		}
 		let mut phrase = vec![Symbol(keyword.to_string())];
-		while self.is_identifier_start(0) || (phrase.len() > 1 && matches!(self.current_char(), '0'..='9' | '"' | '\'')) {
+		while self.is_identifier_start(0) || (phrase.len() > 1 && matches!(self.current_char(), '0'..='9' | '"' | '\''))
+		{
 			// `send alarm{} to "x"`: a word operator takes the whole phrase, as without this
 			if self.peek_operator().is_some() {
 				self.rewind(before_keyword);
@@ -193,7 +226,9 @@ impl WarpParser {
 		let before_keyword = self.mark();
 		self.advance_by(RETURN_KEYWORD.len());
 		self.skip_spaces();
-		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
+		let names_a_variable = self
+			.peek_operator()
+			.is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
 		// a bare `return` at the end of a statement returns ø: `if t == ø { return }`
 		let value = if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
 			Node::Empty
@@ -206,7 +241,11 @@ impl WarpParser {
 			let value = self.parse_expr(Op::Assign.binding_power().1);
 			self.continue_expr(value, 0)
 		};
-		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
+		Some(Node::List(
+			vec![Symbol(RETURN_KEYWORD.to_string()), value],
+			Bracket::None,
+			Separator::Space,
+		))
 	}
 
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
@@ -214,7 +253,11 @@ impl WarpParser {
 	pub(super) fn try_parse_data(&mut self) -> Option<Node> {
 		// `data = [4 2]; for x in data {…}`: a variable named data is read, not a prefix
 		let is_variable = self.variables.contains(DATA_KEYWORD);
-		if is_variable || self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
+		if is_variable
+			|| self.options.data_mode
+			|| !self.matches_keyword(DATA_KEYWORD)
+			|| self.peek_char(DATA_KEYWORD.len()) != ' '
+		{
 			return None;
 		}
 		let before_keyword = self.mark();
@@ -230,7 +273,11 @@ impl WarpParser {
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
 			_ => parsed,
 		};
-		Some(Node::List(vec![Symbol(DATA_KEYWORD.to_string()), data], Bracket::None, Separator::Space))
+		Some(Node::List(
+			vec![Symbol(DATA_KEYWORD.to_string()), data],
+			Bracket::None,
+			Separator::Space,
+		))
 	}
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
@@ -252,7 +299,11 @@ impl WarpParser {
 		if word_division || self.at_floor_division() {
 			let compound = !word_division && self.peek_char(2) == '=';
 			let op = if compound { Op::Assign } else { Op::Div };
-			return Some((SpecialInfix::FloorDivision { compound }, if compound || word_division { 3 } else { 2 }, op.binding_power()));
+			return Some((
+				SpecialInfix::FloorDivision { compound },
+				if compound || word_division { 3 } else { 2 },
+				op.binding_power(),
+			));
 		}
 		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
 		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
@@ -272,12 +323,16 @@ impl WarpParser {
 		// a unit word stays in the flat counting phrase: `number of chars in t`
 		let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
 		// `item is in basket` reads as `item in basket`
-		let membership = [IS_IN_PHRASE, IN_KEYWORD].into_iter().find(|word| self.matches_keyword(word));
+		let membership = [IS_IN_PHRASE, IN_KEYWORD]
+			.into_iter()
+			.find(|word| self.matches_keyword(word));
 		if let (Some(word), false) = (membership, counts_units) {
 			return Some((SpecialInfix::Membership(IN_KEYWORD), word.len(), Op::Eq.binding_power()));
 		}
 		// `xs contains x` binds like `x in xs`, in code only (data keeps the words as they are)
-		let containment = CONTAINMENT_WORDS.into_iter().find(|word| !self.options.data_mode && self.matches_keyword(word) && self.operand_after(word.len()));
+		let containment = CONTAINMENT_WORDS
+			.into_iter()
+			.find(|word| !self.options.data_mode && self.matches_keyword(word) && self.operand_after(word.len()));
 		containment.map(|word| (SpecialInfix::Membership(word), word.len(), Op::Eq.binding_power()))
 	}
 
@@ -308,14 +363,20 @@ impl WarpParser {
 
 			// a whole statement or assigned value, never an operand inside it: `ys = xs.map(f) @parallel` marks the map call
 			let whole_expression = min_bp <= Op::Assign.binding_power().1;
-			if let Some(annotated) = whole_expression.then(|| self.try_parse_trailing_attribute(&lhs)).flatten() {
+			if let Some(annotated) = whole_expression
+				.then(|| self.try_parse_trailing_attribute(&lhs))
+				.flatten()
+			{
 				lhs = annotated;
 				continue;
 			}
 
 			// Step 2: Suffix (led)
 			// P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
-			if let Some(updated) = self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp)) {
+			if let Some(updated) = self
+				.try_parse_user_suffix(&lhs, min_bp)
+				.or_else(|| self.try_parse_suffix(&lhs, min_bp))
+			{
 				lhs = updated;
 				continue;
 			}
@@ -328,7 +389,11 @@ impl WarpParser {
 			let parenthesized = matches!(lhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1);
 			if parenthesized && self.prev_char() == ')' && self.current_char() == '(' && self.peek_char(1) == ')' {
 				self.advance_by(2);
-				lhs = Node::List(vec![lhs, Node::List(vec![], Bracket::Round, Separator::None)], Bracket::None, Separator::Space);
+				lhs = Node::List(
+					vec![lhs, Node::List(vec![], Bracket::Round, Separator::None)],
+					Bracket::None,
+					Separator::Space,
+				);
 				continue;
 			}
 
@@ -338,11 +403,13 @@ impl WarpParser {
 				continue;
 			}
 
-			if let Some(updated) = self.try_parse_evaluate_bang(&lhs, min_bp)
+			if let Some(updated) = self
+				.try_parse_evaluate_bang(&lhs, min_bp)
 				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
 				.or_else(|| self.try_parse_nand(&lhs, min_bp))
-				.or_else(|| self.try_parse_elvis(&lhs, min_bp)) {
+				.or_else(|| self.try_parse_elvis(&lhs, min_bp))
+			{
 				lhs = updated;
 				continue;
 			}
@@ -353,7 +420,9 @@ impl WarpParser {
 			}
 			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
 			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
-				let Some(operand) = self.special_operand(width, binding, min_bp) else { break };
+				let Some(operand) = self.special_operand(width, binding, min_bp) else {
+					break;
+				};
 				lhs = infix.applied(lhs, operand);
 				previous_comparand = None;
 				continue;
@@ -379,12 +448,9 @@ impl WarpParser {
 					//   - In assignment (min_bp <= 60): allow ANY argument (including identifiers)
 					//   - In colon/comparison (min_bp > 60): only non-identifier args
 					//   This allows `fetch url` but prevents `a: b c d` from chaining
-					if let Some(updated) = self.try_parse_implicit_application(
-						&lhs,
-						min_bp,
-						ARGUMENT_BP,
-						MAX_BP_FOR_APPLICATION,
-					) {
+					if let Some(updated) =
+						self.try_parse_implicit_application(&lhs, min_bp, ARGUMENT_BP, MAX_BP_FOR_APPLICATION)
+					{
 						lhs = updated;
 						continue;
 					}
@@ -395,14 +461,16 @@ impl WarpParser {
 			let (l_bp, r_bp) = op.binding_power();
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
-			let ends_command = op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
+			let ends_command =
+				op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
 			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
 			// operator word (a variable `to`), starts the condition
-			let starts_operand = (matches!(op, Op::Hash | Op::Sub) && !self.peek_char(chars).is_whitespace()) || self.current_char().is_alphabetic();
+			let starts_operand = (matches!(op, Op::Hash | Op::Sub) && !self.peek_char(chars).is_whitespace())
+				|| self.current_char().is_alphabetic();
 			if starts_operand && ends_with_clause_word(&lhs) {
 				break;
 			}
@@ -429,13 +497,20 @@ impl WarpParser {
 			// Consume the operator
 			// a single `|` may pipe into a function (pipes.rs): its `or` hint waits for the operand
 			let may_pipe = chars == 1 && self.current_char() == '|' && !self.options.data_mode;
-			let written = if may_pipe { PIPE_GLYPH.to_string() } else { self.hint_operator(chars, false) };
+			let written = if may_pipe {
+				PIPE_GLYPH.to_string()
+			} else {
+				self.hint_operator(chars, false)
+			};
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			let glued_before = !self.prev_char().is_whitespace();
 			self.advance_by(chars);
 			// `f - 2` subtracts, `f -2` may pass -2 to f (SpacedMinus)
-			let spaced_minus = op == Op::Sub && !glued_before && self.current_char().is_whitespace() && matches!(lhs.drop_meta(), Node::Symbol(_));
+			let spaced_minus = op == Op::Sub
+				&& !glued_before
+				&& self.current_char().is_whitespace()
+				&& matches!(lhs.drop_meta(), Node::Symbol(_));
 			// `for:email "Email"`: the glued pair is for:email, the text the next item (card parser-tag)
 			let glued_pair = op == Op::Colon && glued_before && !self.current_char().is_whitespace();
 			let block_body = match op {
@@ -448,7 +523,9 @@ impl WarpParser {
 					self.skip_spaces();
 					Some(self.with_equals_comparing(false, |parser| parser.rest_of_statement()))
 				}
-				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => Some(self.parse_end_block(op == Op::Then)),
+				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => {
+					Some(self.parse_end_block(op == Op::Then))
+				}
 				Op::Do if self.closing_end_follows(&["do"]) => Some(error(AMBIGUOUS_END)), // `do a; if c then b end`
 				_ => None,
 			};
@@ -482,7 +559,12 @@ impl WarpParser {
 
 			if let Some(symbol) = bare_symbol {
 				if let Some(diagnostic) = logic_mixed_with_comparison(&lhs, symbol, &rhs) {
-					lhs = Diagnostic { line: op_line, column: op_column, ..diagnostic }.into_error();
+					lhs = Diagnostic {
+						line: op_line,
+						column: op_column,
+						..diagnostic
+					}
+					.into_error();
 					previous_comparand = None;
 					continue;
 				}
@@ -499,18 +581,35 @@ impl WarpParser {
 
 			if op == Op::Hash && !self.names_a_key(&rhs) {
 				crate::normalize::set_position_of(&lhs);
-				norm::index_operator(&crate::normalize::operand_text(&lhs), &crate::normalize::operand_text(&rhs), false);
+				norm::index_operator(
+					&crate::normalize::operand_text(&lhs),
+					&crate::normalize::operand_text(&rhs),
+					false,
+				);
 			}
 
 			if op.is_equality() && ungrouped_equality(&lhs) {
-				lhs = Diagnostic { line: op_line, column: op_column, ..chained_equality(&lhs, op, &rhs) }.into_error();
+				lhs = Diagnostic {
+					line: op_line,
+					column: op_column,
+					..chained_equality(&lhs, op, &rhs)
+				}
+				.into_error();
 				previous_comparand = None;
 				continue;
 			}
 
-			let rhs = if may_pipe { self.pipe_operand(rhs, op_line, op_column) } else { rhs };
+			let rhs = if may_pipe {
+				self.pipe_operand(rhs, op_line, op_column)
+			} else {
+				rhs
+			};
 			// a type word compares as its type on either side of == and != (`int != integer` is no)
-			let rhs = if op.is_equality() && written != IS_WORD { crate::type_tests::equality_operand(&lhs, rhs) } else { rhs };
+			let rhs = if op.is_equality() && written != IS_WORD {
+				crate::type_tests::equality_operand(&lhs, rhs)
+			} else {
+				rhs
+			};
 			if op.is_equality() && written != IS_WORD {
 				lhs = crate::type_tests::equality_operand(&rhs, lhs);
 			}
@@ -530,7 +629,11 @@ impl WarpParser {
 					continue;
 				}
 			}
-			let lhs_operand = if spaced_minus { lhs.with_meta_data(super::SpacedMinus) } else { lhs };
+			let lhs_operand = if spaced_minus {
+				lhs.with_meta_data(super::SpacedMinus)
+			} else {
+				lhs
+			};
 			lhs = combined(lhs_operand, op, &written, rhs.clone(), previous_comparand.take());
 			if op.is_ordering() {
 				previous_comparand = Some(rhs);
@@ -565,7 +668,12 @@ impl WarpParser {
 	/// assignment's weaker binding would end the branch at `s` and assign to the whole if. The value stops at `else`.
 	pub(super) fn branch_assignment(&mut self, target: Node, branch_bp: u8) -> Node {
 		self.skip_spaces();
-		let Some((assignment, chars)) = self.peek_operator().filter(|(op, _)| *op == Op::Assign || op.is_compound_assign()) else { return target };
+		let Some((assignment, chars)) = self
+			.peek_operator()
+			.filter(|(op, _)| *op == Op::Assign || op.is_compound_assign())
+		else {
+			return target;
+		};
 		self.advance_by(chars);
 		self.skip_whitespace();
 		let value = self.parse_expr(branch_bp);
@@ -577,7 +685,11 @@ impl WarpParser {
 		let inner = self.parse_expr(0);
 		self.skip_spaces();
 		if self.current_char() != '‖' {
-			return missing_closer("Missing closing ‖".into(), "‖", crate::fixits::end_of_line(&self.input, self.line_nr));
+			return missing_closer(
+				"Missing closing ‖".into(),
+				"‖",
+				crate::fixits::end_of_line(&self.input, self.line_nr),
+			);
 		}
 		self.advance();
 		self.finish_prefix(Op::Abs, inner)
@@ -656,7 +768,11 @@ impl WarpParser {
 			let outer = std::mem::replace(&mut self.stops_at_else, true);
 			let then_expr = self.parse_expr(0);
 			self.stops_at_else = outer;
-			let if_then = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))), Op::Then, Box::new(then_expr));
+			let if_then = Node::Key(
+				Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))),
+				Op::Then,
+				Box::new(then_expr),
+			);
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
 		}
 
@@ -666,12 +782,15 @@ impl WarpParser {
 	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
 	pub(super) fn continue_colon_body(&mut self, body: &Node) -> Node {
 		match body.drop_meta() {
-			_ if is_print_word(body) && self.braceless_argument_follows() => { // `if it%2: print it`, `if c: print ord x`
+			_ if is_print_word(body) && self.braceless_argument_follows() => {
+				// `if it%2: print it`, `if c: print ord x`
 				let first = self.expression_of_words();
 				self.print_call_from(first, Self::expression_of_words)
 			}
 			// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
-			Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' => {
+			Node::List(words, Bracket::None, Separator::Space)
+				if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' =>
+			{
 				self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
 			}
 			_ => self.continue_expr(body.clone(), 0),
@@ -685,17 +804,28 @@ impl WarpParser {
 			return None;
 		}
 		let mut length = 1;
-		while matches!(self.peek_char(length), ' ' | ',') || self.peek_char(length).is_alphanumeric() || self.peek_char(length) == '_' {
+		while matches!(self.peek_char(length), ' ' | ',')
+			|| self.peek_char(length).is_alphanumeric()
+			|| self.peek_char(length) == '_'
+		{
 			length += 1;
 		}
 		let written: String = (1..length).map(|offset| self.peek_char(offset)).collect();
-		let names: Vec<Node> = written.split([' ', ',']).filter(|name| !name.is_empty()).map(|name| Node::Symbol(name.to_string())).collect();
+		let names: Vec<Node> = written
+			.split([' ', ','])
+			.filter(|name| !name.is_empty())
+			.map(|name| Node::Symbol(name.to_string()))
+			.collect();
 		let mut body_start = length + 1;
 		while self.peek_char(body_start) == ' ' {
 			body_start += 1;
 		}
 		let first_name = 1 + written.len() - written.trim_start().len();
-		if self.peek_char(length) != '|' || names.is_empty() || !self.is_identifier_start(first_name) || BODY_ENDS.contains(&self.peek_char(body_start)) {
+		if self.peek_char(length) != '|'
+			|| names.is_empty()
+			|| !self.is_identifier_start(first_name)
+			|| BODY_ENDS.contains(&self.peek_char(body_start))
+		{
 			return None;
 		}
 		self.advance_by(body_start);
@@ -743,7 +873,9 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 		}
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
-		_ if op == Op::To && written.starts_with(DOWN_WORD) => call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))]),
+		_ if op == Op::To && written.starts_with(DOWN_WORD) => {
+			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
+		}
 		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
 	}
 }

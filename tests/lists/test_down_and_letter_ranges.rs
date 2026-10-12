@@ -1,8 +1,8 @@
 // Cards down-to-crash and natural-phrases: `10 down to 1` counts down (Kotlin's downTo, the counterpart of wiki/range.md
 // `upto`), letters make ranges of letters (Kotlin's 'a'..'e'), and a range from an undefined name is the error naming
 // it (it was the internal error "WASM validation failed")
-use crate::is;
 use crate::common::fails_with;
+use crate::is;
 
 #[test]
 fn down_to_counts_down() {

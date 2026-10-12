@@ -1,0 +1,8 @@
+// card component-drop: c.drop() runs a component resource's destructor now; the dropped handle is refused afterwards
+use wasm "../tests/fixtures/components/rust_demo.wasm" as r
+a = r.counter(1)
+b = r.counter(2)
+print "live counters: ${r.live()}"
+a.drop()
+print "after a.drop(): ${r.live()}, b is still ${b.value()}"
+a.value()

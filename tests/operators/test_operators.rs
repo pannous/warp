@@ -12,7 +12,6 @@ fn test_add_boxed_list_item() {
 	assert_eq!(ints![1, 2, 3], result);
 }
 
-
 #[test]
 #[ignore] // shall this ever work?
 fn test_add_pure_vec_data() {
@@ -33,7 +32,6 @@ fn test_add_pure_vec_data() {
 // 	assert_eq!(ints![1, 2, 3], result);
 // }
 
-
 #[test]
 fn test_add_list_item_explicit() {
 	let list = Node::list(vec![Node::int(1), Node::int(2)]);
@@ -41,10 +39,7 @@ fn test_add_list_item_explicit() {
 
 	// List + item should append
 	let result = list.add(num);
-	assert_eq!(
-		result,
-		Node::list(vec![Node::int(1), Node::int(2), Node::int(3)])
-	);
+	assert_eq!(result, Node::list(vec![Node::int(1), Node::int(2), Node::int(3)]));
 }
 
 #[test]
@@ -54,10 +49,7 @@ fn test_add_item_list() {
 
 	// item + List should prepend
 	let result = num.add(list);
-	assert_eq!(
-		result,
-		Node::list(vec![Node::int(0), Node::int(1), Node::int(2)])
-	);
+	assert_eq!(result, Node::list(vec![Node::int(0), Node::int(1), Node::int(2)]));
 }
 
 #[test]
