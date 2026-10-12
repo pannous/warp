@@ -589,11 +589,14 @@ function renderedRoot(host) {
 	return root;
 }
 
-// a form of the shown markup asks the program's own route (lowering/serve.rs page·submitted), as `warp serve` would:
-// its fields are the body of a POST, the query of a GET (src/web_server.rs request_node), not a request leaving here
+// a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
+// route (lowering/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
+// GET (src/web_server.rs request_node), not a request leaving here
 function submitForm(submitted) {
 	submitted.preventDefault();
 	const form = submitted.target;
+	const handled = elementEvent("submit", submitted, submitDetail(submitted));
+	if (handled) return sendPageEvent(handled.event, handled.detail);
 	const method = (form.getAttribute("method") ?? "get").toUpperCase();
 	const fields = Object.fromEntries(new FormData(form, submitted.submitter));
 	const path = new URL(form.getAttribute("action") ?? "", PROGRAM_ORIGIN + ($("address").value || "/")).pathname;

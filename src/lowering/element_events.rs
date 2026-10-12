@@ -88,6 +88,10 @@ pub(crate) fn with_element_items(node: Node, rewrite: impl FnOnce(Vec<Node>) -> 
 
 /// `on click {…}` at `index` of a tag's items, as a block reads it (`on`, then `click: {…}`) or as a statement does
 pub(crate) fn handler_at(items: &[Node], index: usize) -> Option<(String, Node, usize)> {
+	// `form{⏎ on submit { … }⏎ button{…} }`: a handler on a line of its own is that line's group
+	if let Node::List(line, Bracket::None, _) = items.get(index)?.drop_meta() {
+		return handler_at(line, 0).filter(|(_, _, length)| *length == line.len()).map(|(event, body, _)| (event, body, 1));
+	}
 	if !items.get(index)?.is_symbol(ON_WORD) {
 		return None;
 	}
