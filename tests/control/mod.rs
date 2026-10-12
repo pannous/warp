@@ -134,11 +134,13 @@ mod test_switch_value;
 mod test_system_signals;
 mod test_system_values;
 #[cfg(feature = "native")] // its one test counts the table rows read natively: not in the browser build
+mod test_table_batched_keys;
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
 mod test_table_key_filter; // card table-key-filter
 mod test_table_linear_lookups; // card orm-linear
 mod test_table_method_reads;
+mod test_table_paging;
 mod test_table_query_loading; // orm: a filter reads only its rows
 mod test_table_remove; // card table-remove
 mod test_table_transactions; // card orm step 5
