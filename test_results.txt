@@ -445,6 +445,9 @@ PASSED:
   ✓ control::test_shared_values::a_go_block_writes_a_shared_value
   ✓ control::test_shared_values::a_self_update_of_a_shared_value_is_atomic
   ✓ control::test_shared_values::a_shared_value_reads_writes_and_adds
+  ✓ control::test_signal_fields::a_function_subscribes_to_a_field_of_its_parameter
+  ✓ control::test_signal_fields::a_signal_kept_in_a_field_stays_a_signal
+  ✓ control::test_signal_fields::a_watched_field_keeps_its_value
   ✓ control::test_signal_in_loop::a_listener_checks_a_write_in_a_one_statement_loop
   ✓ control::test_signal_lists::a_function_subscribes_to_each_signal_of_a_list
   ✓ control::test_signal_lists::a_list_of_signals_kept_in_a_variable
@@ -1497,6 +1500,8 @@ PASSED:
   ✓ lists::test_aliased_changes::a_pop_is_seen_through_an_alias
   ✓ lists::test_append_words::test_every_append_word_appends_a_closure
   ✓ lists::test_append_words::test_every_append_word_appends_a_quantity
+  ✓ lists::test_auto_linear_floats::a_float_array_mapped_by_a_kernel_is_linear
+  ✓ lists::test_auto_linear_floats::a_float_array_mapped_otherwise_stays_a_list
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
@@ -4879,4 +4884,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4874 passed, 0 failed, 4874 total tested
+10 ignored, 4879 passed, 0 failed, 4879 total tested
