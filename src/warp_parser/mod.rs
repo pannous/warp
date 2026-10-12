@@ -1021,6 +1021,10 @@ fn typed_parameter(arguments: Node) -> Node {
 	match arguments.drop_meta() {
 		Node::List(items, _, Separator::Space) => match items.as_slice() {
 			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone())),
+			// `x of int`: the parameter x of type int
+			[name, of, type_word] if of.drop_meta().is_symbol(OF_WORD) && is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) && !is_type_word(name) => {
+				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
+			}
 			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
 			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => match name.drop_meta() {
 				Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
