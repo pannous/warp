@@ -1476,7 +1476,11 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-const RUNTIME_ERROR_FIXES: [(&str, &str); 5] = [
+const RUNTIME_ERROR_FIXES: [(&str, &str); 6] = [
+	(
+		super::casts::INVALID_CODE_POINT,
+		"a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF",
+	),
 	(
 		NOT_A_MAP,
 		"keys, values and entries are a map's; a list's positions are 1..count(xs)",
@@ -1514,7 +1518,7 @@ pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 /// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
 const NOT_A_MAP: &str = "not_a_map";
 
-pub const RUNTIME_ERRORS: [&str; 30] = [
+pub const RUNTIME_ERRORS: [&str; 31] = [
 	"index_out_of_range",
 	INDEX_NOT_INTEGRAL,
 	"invalid_number",
@@ -1545,6 +1549,7 @@ pub const RUNTIME_ERRORS: [&str; 30] = [
 	super::uncertain::NEGATIVE_UNCERTAINTY,
 	super::uncertain::INTERVAL_AND_GAUSSIAN,
 	NOT_A_MAP,
+	super::casts::INVALID_CODE_POINT,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)

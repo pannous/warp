@@ -34,6 +34,7 @@ mod test_class_mixins;
 mod test_class_operators;
 mod test_class_properties;
 mod test_class_witnesses;
+mod test_codepoint_digit; // card codepoint-digit
 mod test_collection_declarations;
 mod test_conformance_claims;
 mod test_construction_checks;
@@ -70,6 +71,7 @@ mod test_hex_word; // hex x is hex(x), literals are 0x…
 mod test_instance_arguments;
 mod test_instance_final_text; // card instance-final
 mod test_instance_size; // card size-instance
+mod test_int_accepts; // card int-accepts
 mod test_int_declaration_stays_whole;
 mod test_interface_signatures;
 mod test_is_declaration;
@@ -87,6 +89,7 @@ mod test_method_bodies; // card method-bodies
 mod test_method_result_text; // card instance-result
 mod test_mutating_methods;
 mod test_nested_type_calls; // text hex 255 is text(hex(255))
+mod test_number_converts; // card number-converts
 mod test_number_field; // card number-field
 mod test_optional_casts;
 mod test_optional_list_items;

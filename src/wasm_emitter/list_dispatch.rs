@@ -683,10 +683,15 @@ impl WasmGcEmitter {
 					}) {
 						declared_floats.insert(name.clone());
 					}
-					sources
-						.entry(name.clone())
-						.or_default()
-						.push(self.source_of(name, value));
+					// `xs: floats = [1/3, 2]`: the declared element type, its exact numbers converted (card number-converts)
+					let source = match self.source_of(name, value) {
+						Source::Literal(ElementType::Int) if declares_float_items(target) => {
+							declared_floats.insert(name.clone());
+							Source::Literal(ElementType::Float)
+						}
+						source => source,
+					};
+					sources.entry(name.clone()).or_default().push(source);
 					if super::list_sharing::changes_in_place(value) {
 						updated.insert(name.clone());
 						changed_in_place.insert(name.clone());
@@ -2309,4 +2314,9 @@ impl WasmGcEmitter {
 			],
 		);
 	}
+}
+
+/// `xs: floats`, `xs: [float]`: an assignment's target declared a list of floats (the type its Meta)
+fn declares_float_items(target: &Node) -> bool {
+	matches!(target, Node::Meta { data, .. } if crate::analyzer::declared_element_type(data).is_some_and(crate::type_tests::is_float_type_word))
 }

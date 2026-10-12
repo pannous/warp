@@ -571,6 +571,14 @@ impl WasmGcEmitter {
 			&& matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
 	}
 
+	/// `x is int` of a variable typed int that may hold a ratio: a spec covering the whole numbers but not the ratios
+	fn whole_only_at_run_time(&self, subject: &Node, spec: &str) -> bool {
+		self.int_runtime()
+			&& !matches!(subject.drop_meta(), Node::Number(_))
+			&& self.static_type_name(subject) == crate::Kind::Int.to_string()
+			&& names_whole_numbers_only(spec)
+	}
+
 	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
 	/// number of Int kind), a Key that may be an instance of a declared type
 	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
@@ -694,6 +702,15 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, subject);
 				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
+				if self.int_runtime() && names_whole_numbers_only(spec) {
+					// an Int node may hold a ratio (`f(2.5)` of an untyped parameter)
+					Self::emit_list(func, &[I::I32WrapI64, I::If(BlockType::Result(ValType::I64))]);
+					self.emit_node_instructions(func, subject);
+					func.instruction(&I::RefAsNonNull);
+					self.emit_call(func, "get_int_value");
+					self.call(func, "is_ratio");
+					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::Else, I::I64Const(0), I::End]);
+				}
 				// a map is a curly list at run time, no list (card inside-function)
 				if crate::type_tests::canonical_spec_word(spec) == crate::type_tests::LIST_WORD {
 					self.emit_node_instructions(func, subject);
@@ -713,6 +730,12 @@ impl WasmGcEmitter {
 					Separator::None,
 				);
 				self.emit_numeric_value(func, &instance_test);
+			}
+			// `x = 2.5; x is int`: an exact ratio is an Int at run time, only is_ratio tells it from a whole number
+			None if self.whole_only_at_run_time(subject, spec) => {
+				self.emit_numeric_value(func, subject);
+				self.call(func, "is_ratio");
+				Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U]);
 			}
 			None => {
 				let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
@@ -1447,4 +1470,11 @@ pub(super) fn float_rounding(name: &str) -> Option<Instruction<'static>> {
 		"round" => Some(Instruction::F64Nearest),
 		_ => None,
 	}
+}
+
+/// `int`, `i64`, `integer`: a type the whole numbers have but the exact ratios don't
+fn names_whole_numbers_only(spec: &str) -> bool {
+	let int = crate::Kind::Int.to_string();
+	crate::type_tests::type_matches(&int, spec)
+		&& !crate::type_tests::type_matches(crate::analyzer::RATIONAL_WORD, spec)
 }
