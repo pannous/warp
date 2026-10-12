@@ -113,6 +113,19 @@ fn every_positional_argument_dispatches_at_run_time() {
 	is!(&with(MEETINGS, "def g(x, y) := meet(x, y); g(Dog(\"a\"), Animal(\"b\")) + g(Animal(\"a\"), Dog(\"b\"))"), "woofhi");
 }
 
+const SIZED: &str = "class Box{size:int}; size(b:Box) := b.size * 10; b = Box(3); ";
+
+#[test]
+fn a_method_named_like_a_field_keeps_both_and_warns() {
+	is!(&with(SIZED, "b.size"), 3);
+	is!(&with(SIZED, "size(b)"), 30);
+	is!(&with(SIZED, "b.size()"), 30);
+	warp::diagnostic::take_warnings();
+	warp::wasm_emitter::eval(&with(SIZED, "b.size"));
+	let warnings = warp::diagnostic::take_warnings();
+	assert!(warnings.iter().any(|warning| warning.message.contains("Box has a field size and a method size")), "{warnings:?}");
+}
+
 #[test]
 fn a_method_named_like_any_standard_function_keeps_it() {
 	is!("class P{x:int; def max():=x}; P(4).max() + [1,2].max() + max(3, 5)", 11);
