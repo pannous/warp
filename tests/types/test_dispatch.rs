@@ -60,3 +60,20 @@ fn an_untyped_definition_is_the_fallback() {
 	is!("class Deck{n:int}; def sort(d:Deck):=d.n; def sort(x):=0; sort([2,1]) + sort(Deck(4))", 4);
 	is!("def sort(x):=0; sort([2,1])", 0);
 }
+
+#[test]
+fn a_method_in_a_class_body_is_a_method_of_the_generic_function() {
+	is!("class Deck{n:int; def sort():=n*2}; [3,1].sort()", warp::ints(vec![1, 3]));
+	is!("class Deck{n:int; def sort():=n*2}; d=Deck(4); sort(d)", 8);
+	is!("class Deck{n:int; def sort():=n*2}; def g(x):=x.sort(); g(Deck(5))", 10);
+	is!("class Deck{n:int; def sort():=n*2}; def g(x):=x.sort(); g([2,1])", warp::ints(vec![1, 2]));
+	is!("class Bag{items; def sum():=7}; Bag([1]).sum + sum([1,2])", 10);
+	is!("class Bag{items}; def sum(b:Bag):=7; sum(Bag([1])) + sum([1,2])", 10);
+}
+
+#[test]
+fn classes_sharing_a_library_named_method_keep_the_library_function() {
+	let classes = "class Bag{items; def sum():=7}; class Box{n:int; def sum():=n}; ";
+	is!(&with(classes, "Bag([1]).sum() + Box(5).sum() + sum([1,2])"), 15);
+	is!(&with(classes, "t=0; for b in [Bag([1]), Box(5)] { t += b.sum() }; t"), 12);
+}
