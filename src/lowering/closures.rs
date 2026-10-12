@@ -43,6 +43,11 @@ const CLOSURE_CALL_PREFIX: &str = "closure_call_";
 const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
+
+/// A function the compiler made of a lambda (`x => x + n`), no name the program wrote
+pub fn is_lambda_function(name: &str) -> bool {
+	name.starts_with(LIFTED_PREFIX) || name.starts_with(crate::function_values::LAMBDA_PREFIX)
+}
 const IMPLICIT_PARAMETER: &str = "it";
 
 pub fn closure_call_name(arity: usize) -> String {
@@ -629,6 +634,18 @@ impl Lifting {
 					self.function_value(value, bound)
 				};
 				Node::Key(target, op, Box::new(value))
+			}
+			// `h == &g`: the function itself, compared as a value (a bare `g` needs its arguments, P83)
+			Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
+				let mut compared = |side: Node| {
+					let side = self.walk(side, bound);
+					match referenced_function(&side) {
+						Some(_) => self.function_value(side, bound),
+						None => side,
+					}
+				};
+				let left = compared(*left);
+				key(left, op, compared(*right))
 			}
 			Node::Key(list, Op::Hash, index) if self.indexed_call(&list, &index).is_some() => {
 				let (position, arguments) = self.indexed_call(&list, &index).expect("guarded");

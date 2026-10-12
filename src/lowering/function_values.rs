@@ -392,6 +392,15 @@ fn replace_aliases(node: Node, found: &HashMap<String, String>) -> Node {
 		{
 			Node::Empty
 		}
+		// `h == k` of the alias k = &g: the function g itself, not its call
+		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
+			let compared = |side: Node| match side.drop_meta().symbol_name().and_then(|name| found.get(name)) {
+				Some(function) => crate::closures::function_reference(function.clone()),
+				None => replace_aliases(side, found),
+			};
+			let left = compared(*left);
+			key(left, op, compared(*right))
+		}
 		// `(h)`, as an earlier pass calls the defined name h: the function's name, a call of it only without parameters
 		Node::List(items, Bracket::Round, _)
 			if items.len() == 1 && items[0].symbol_name().is_some_and(|name| found.contains_key(name)) =>
