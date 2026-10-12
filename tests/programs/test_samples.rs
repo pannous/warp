@@ -128,8 +128,8 @@ fn test_snake() { is!("samples/snake.warp", 40); }
 #[test] // both quicksorts agree
 fn test_quicksort() { is!("samples/quicksort.warp", true); }
 
-#[test] // the glider moved by (2, 2) in 8 generations
-fn test_game_of_life() { is!("samples/game_of_life.warp", 2726); }
+#[test] // the glider moved by (4, 4) in 16 generations on 16×16
+fn test_game_of_life() { is!("samples/game_of_life.warp", 3736); }
 
 #[test] // three spheres on a floor, as shades of " .:-=+*#%@"
 fn test_raytracer() { is!("samples/raytracer.warp", 8230); }

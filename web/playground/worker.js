@@ -54,7 +54,7 @@ self.sendMidi = (port, message) => post({ type: "midi", port, message }); // hos
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
 // a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
 // task's sound comes relayed with its own voice's start
-self.playSamples = sound => post({ type: "sound", ...sound, handle: nextSoundHandle() });
+self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() }); // a signal's blocks share one
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),

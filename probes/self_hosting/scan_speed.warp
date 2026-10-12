@@ -1,0 +1,8 @@
+// lexer speed: count spaces in ~200 KB of text char by char
+use file
+src = read("src/warp_parser/expressions.rs")
+spaces = 0
+i = 0
+n = src.length
+while i < n { if src[i] == ' ' { spaces = spaces + 1 }; i = i + 1 }
+[n, spaces]

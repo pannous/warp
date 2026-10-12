@@ -514,8 +514,11 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	} else if kinds.contains(&Kind::Data) && kinds.iter().all(|kind| matches!(kind, Kind::Int | Kind::Float | Kind::Data)) {
 		// a number and a number of run-time kind (`xs#1 + rest`): a number decided at run time, not a text
 		Kind::Data
-	} else if [then_kind, else_kind].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
+	} else if kinds.iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)) {
 		Kind::Text
+	} else if kinds.iter().any(Kind::is_ref) {
+		// an instance or a map and a number (`if a is V then a.plus(b) else a + b`): a Node of its run-time kind
+		Kind::Data
 	} else if then_kind == Kind::Float || else_kind == Kind::Float {
 		Kind::Float
 	} else {

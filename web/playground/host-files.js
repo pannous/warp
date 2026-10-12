@@ -12,6 +12,17 @@ const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
+// play of a signal (src/sound.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
+const SIGNAL_BLOCK = 512;
+const FULL_SCALE = 32767;
+// played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
+// checked every SIGNAL_POLL_MS (src/sound.rs SIGNAL_AHEAD, SIGNAL_POLL)
+const SIGNAL_AHEAD_SECONDS = 0.1;
+const SIGNAL_POLL_MS = 10;
+// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound.rs PLAY_AHEAD)
+const PLAY_AHEAD_SECONDS = 0.5;
+// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
+const LINEAR_CELL_BYTES = 8;
 
 // MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
 const MIDI_TICKS_PER_QUARTER = 480;
@@ -467,6 +478,42 @@ function rollBack(file) {
 // `at 1s beep()` keeps its second of silence
 // the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
 // render): the samples interleaved and the channels
+// play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
+// samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
+// the signal's handle, computed when the voice holds less than SIGNAL_AHEAD_SECONDS, the wait a sleep (no runaway
+// time); else all of them at once, one sound. Its handle
+function playedSignal(holder, seconds, rate, channels, block, blockOf) {
+	const total = Math.round(Math.max(0, Number(seconds)) * rate);
+	const paced = Boolean(self.pageSystemValues?.window_open);
+	let samples = [];
+	let handle;
+	const played = () => {
+		if (samples.length) handle = holder.sounded(samples, rate, channels, handle);
+		samples = [];
+	};
+	for (let first = 0; first < total; first += block) {
+		while (paced && (self.soundsQueued?.() ?? 0) > SIGNAL_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
+		const count = Math.min(block, total - first);
+		const blocks = blockOf(first, count);
+		for (let index = 0; index < count; index++)
+			for (const cells of blocks) samples.push(Math.round(Math.max(-1, Math.min(1, Number(cells[index] ?? 0))) * FULL_SCALE) + SAMPLE_OFFSET);
+		if (paced) played();
+	}
+	played();
+	return handle ?? 0;
+}
+
+// a function the program gives a sound word, of a float to a float: its export, called directly (closure_apply, which
+// builds nodes for each call, only for a closure without one)
+const exportedOr = (program, callable) => program[callable.warpName] ?? callable;
+
+// the cells of the linear float array at `address` in the program's memory
+function linearDoubles(program, address) {
+	const view = new DataView(program.memory.buffer);
+	const count = Number(view.getBigInt64(address, true));
+	return Array.from({ length: count }, (_, index) => view.getFloat64(address + LINEAR_CELL_BYTES * (index + 1), true));
+}
+
 function mixed(sounds, rate, run) {
 	const channels = Math.max(1, ...sounds.map(sound => sound.channels ?? 1));
 	const framesOf = sound => sound.samples.length / (sound.channels ?? 1);
@@ -506,11 +553,28 @@ function wavOf(samples, rate, channels = 1) {
 
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
+		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
+		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
+		// (but in an `at`, which places its sounds itself). The handle
+		holder.sounded = (samples, rate, channels, handle) => {
+			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
+			const sound = { samples, rate, channels };
+			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+			(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
+			hooks.sound?.({ ...sound, at, handle });
+			return handle ?? self.lastSoundHandle?.() ?? 0;
+		};
 		const fetchUrl = (pointer, length, timeout) => {
 			const url = text(pointer, length);
 			return hostResult(program(), () => getSync(url, timeout), `fetch ${url}`);
 		};
 		return {
+			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
+			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
+			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
+			sound_samples: (samples, count, rate, channels) => {
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
+			},
 			fetch: (pointer, length) => fetchUrl(pointer, length),
 			fetch_within: (pointer, length, milliseconds) => fetchUrl(pointer, length, Number(milliseconds)),
 			// the file's bytes as they are, like src/host.rs read; a URL (a package's own files) is fetched
@@ -585,6 +649,26 @@ addHostPart({
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			wait: () => null,
+			// play hum for 2s: hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
+			signal(functions, seconds, rate) {
+				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));
+				return playedSignal(this.holder, seconds, Number(rate), signals.length, SIGNAL_BLOCK, (first, count) => {
+					const blocks = signals.map(() => []);
+					for (let index = first; index < first + count; index++) signals.forEach((signal, channel) => blocks[channel].push(signal(index / Number(rate))));
+					return blocks;
+				});
+			},
+			// play fill for 2s of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
+			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
+			blocks(caller, addresses, seconds, rate) {
+				const blocks = [addresses].flat().map(Number);
+				const program = this.holder.exports;
+				const fill = exportedOr(program, caller);
+				return playedSignal(this.holder, seconds, Number(rate), blocks.length, linearDoubles(program, blocks[0]).length, first => {
+					fill(first / Number(rate));
+					return blocks.map(address => linearDoubles(program, address));
+				});
+			},
 			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
 			// offers it for download
 			render(path) {

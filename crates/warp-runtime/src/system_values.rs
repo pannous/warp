@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN};
 
 const NOTIFICATION_TITLE: &str = "warp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
@@ -30,6 +30,13 @@ static WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
 pub fn tell_window_open(open: bool) {
 	WINDOW_SHOWN.store(open, Ordering::Relaxed);
+}
+
+/// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/paint.rs allow_windows)
+static DRAWING_ON_GPU: AtomicBool = AtomicBool::new(false);
+
+pub fn tell_gpu_drawing(on_gpu: bool) {
+	DRAWING_ON_GPU.store(on_gpu, Ordering::Relaxed);
 }
 
 pub fn window_input() -> [f32; 4] {
@@ -54,6 +61,9 @@ pub fn read(name: &str) -> Result<i64, String> {
 	}
 	if name == WINDOW_OPEN {
 		return Ok(WINDOW_SHOWN.load(Ordering::Relaxed) as i64);
+	}
+	if name == GPU_DRAWING {
+		return Ok(DRAWING_ON_GPU.load(Ordering::Relaxed) as i64);
 	}
 	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN].iter().position(|pointer| *pointer == name) {
 		return Ok(window_input()[at] as i64);

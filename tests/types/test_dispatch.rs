@@ -86,3 +86,51 @@ fn a_call_with_more_arguments_is_the_same_call_either_way() {
 	is!("class Deck{n:int; def take(k):=n - k}; def g(x, k) := x.take(k); g(Deck(9), 2) * 10 + count(g([1,2,3], 2))", 72);
 	is!("class sq{s:int}; class rc{w:int}; scale(a:sq, k):=a.s*k; scale(b:rc, k):=b.w+k; t=0; for x in [sq(2), rc(3)] { t = t*100 + x.scale(10) }; t", 2013);
 }
+
+const SPACE: &str = "class Ship{n:int}; class Rock{n:int}; collide(a:Ship, b:Rock) := \"ship hits rock\"; collide(a:Rock, b:Ship) := \"rock hits ship\"; collide(a:Ship, b:Ship) := \"ships bump\"; ";
+const MEETINGS: &str = "class Animal{name:text}; class Dog extends Animal{}; meet(a:Animal, b:Animal) := \"hi\"; meet(a:Dog, b:Animal) := \"woof\"; ";
+
+#[test]
+fn every_positional_argument_picks_the_method() {
+	is!(&with(SPACE, "collide(Ship(1), Rock(2))"), "ship hits rock");
+	is!(&with(SPACE, "collide(Rock(1), Ship(2))"), "rock hits ship");
+	is!(&with(SPACE, "Ship(1).collide(Ship(2))"), "ships bump");
+	is!("class Ship{n:int}; class Rock{n:int}; describe(k, s:Ship) := k + 1; describe(k, r:Rock) := k + 2; describe(10, Rock(1)) * 100 + describe(10, Ship(1))", 1211);
+}
+
+#[test]
+fn the_method_closest_at_every_position_wins() {
+	is!(&with(MEETINGS, "meet(Dog(\"a\"), Dog(\"b\"))"), "woof");
+	is!(&with(MEETINGS, "meet(Animal(\"a\"), Dog(\"b\"))"), "hi");
+	fails_with(&with(MEETINGS, "meet(a:Animal, b:Dog) := \"hey\"; meet(Dog(\"a\"), Dog(\"b\"))"), "ambiguous");
+	fails_with(&with(SPACE, "collide(Rock(1), Rock(2))"), "collide has no method for (Rock, Rock)");
+}
+
+#[test]
+fn every_positional_argument_dispatches_at_run_time() {
+	let program = "t = \"\"; for a in [Ship(1), Rock(1)] { for b in [Ship(2), Rock(2)] { if not (a is Rock and b is Rock) { t = t + collide(a, b) + \";\" } } }; t";
+	is!(&with(SPACE, program), "ships bump;ship hits rock;rock hits ship;");
+	is!(&with(MEETINGS, "def g(x, y) := meet(x, y); g(Dog(\"a\"), Animal(\"b\")) + g(Animal(\"a\"), Dog(\"b\"))"), "woofhi");
+}
+
+const SIZED: &str = "class Box{size:int}; size(b:Box) := b.size * 10; b = Box(3); ";
+
+#[test]
+fn a_method_named_like_a_field_keeps_both_and_warns() {
+	is!(&with(SIZED, "b.size"), 3);
+	is!(&with(SIZED, "size(b)"), 30);
+	is!(&with(SIZED, "b.size()"), 30);
+	warp::diagnostic::take_warnings();
+	warp::wasm_emitter::eval(&with(SIZED, "b.size"));
+	let warnings = warp::diagnostic::take_warnings();
+	assert!(warnings.iter().any(|warning| warning.message.contains("Box has a field size and a method size")), "{warnings:?}");
+}
+
+#[test]
+fn a_method_named_like_any_standard_function_keeps_it() {
+	is!("class P{x:int; def max():=x}; P(4).max() + [1,2].max() + max(3, 5)", 11);
+	is!("class Rope{s:text; def trim():=\"rope\"}; Rope(\"a\").trim() + \" a \".trim()", "ropea");
+	is!("class Coin{v:float; def round():=7}; Coin(1.5).round() + round(2.0)", 9);
+	is!("class Box{n:int; def int():=n}; Box(3).int() + \"42\".int()", 45);
+	is!("class C{x:int; def double():=x*2}; C(3).double() + 2.double()", 8);
+}

@@ -1,4 +1,8 @@
 # Cleanup (user card `cleanup`: major code cleanup and simplification)
+Roadmap card: cleanup (board topic; its sub-cards are the areas below and their leftovers, notes/roadmaps.md).
+Repo-wide leftovers: oversized files (cleanup-big-files), never-called functions over every area (cleanup-dead-scan),
+fmt/clippy drift (cargo-fmt, clippy-reports), probe-script proliferation (cleanup-probe-scripts), stale notes
+(cleanup-stale-notes).
 
 Behaviour-preserving only: shared helpers instead of duplication, dead code and stale comments out, flatter control
 flow, meaningful names, no test edits. One area per session, small themed branches through the Integrator.
@@ -47,7 +51,7 @@ cleanup-groups, cleanup-filter):
   `take_while_char`; infer_list_type: one head-word block (edition 2021: no let-chains, only if-let guards)
 
 Left (longest functions, candidates for splitting):
-- atoms.rs parse_symbol_with_suffix (~140 lines): still a keyword dispatch
+- (cleanup-long-functions) atoms.rs parse_symbol_with_suffix (~140 lines): still a keyword dispatch
 - atoms.rs parse_atom (~140) and parse_type_declaration_body (~120): long but flat now
 - declaration_lowering.rs lower_declarations_among (~110): a long but now flat rewrite dispatch
 - two `matches!` + `unreachable!("guarded")` arms stay where the arm moves the scrutinee the guard borrows
@@ -59,8 +63,6 @@ Outside this area: the private `is_word` / `symbol_name` / `is_symbol` copies ar
 cleanup-lowering; law/type_model.rs, modules.rs and time.rs in cleanup-word-copies, warp-functions); word_slices'
 `is_word(node, words)` takes a list of words and stays. The parameter_name copies (soft_keywords, named_arguments,
 go_blocks, parameter_shapes, law/type_model) stay: each has its own rules (which keys, recursion, String or Node).
-# Code cleanup (user card `cleanup`: "major code cleanup and simplification")
-Behaviour-preserving only: shared helpers for duplication, dead code and stale comments out, flatter code, no test edits.
 ## cleanup-host (warp-hosting): top-level src/*.rs, src/ffi/, src/gc_traits/
 How dead code was found: every `fn` name in the area counted across src, tests, crates and web
 (`grep -rwo`); a name seen only at its definition has no caller. `#[test]` functions inside src files and trait
@@ -102,22 +104,22 @@ Done:
   helpers, the linker) is src/host/native.rs, gated once at `mod native` and re-exported (`pub use native::*`)
 
 Left (bigger, needs care):
-- Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
+- (cleanup-ffi-headers) Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
   kind_to_valtype) and ffi/header.rs (`extract_function_signature`, multi-line declarations, C types → ValType via
   map_c_type_to_valtype, pointer classes). get_ffi_signatures uses the first, get_signatures_from_headers the second,
   and get_ffi_signature mixes both. One parser would change some mappings (Kind::Pointer is i64 there, a pointer is
   i32 here), so it needs its own card and tests of both tables first. tests/ffi pins ffi_parser's public API.
-- real.rs and time.rs are two small constant evaluators with their own Value types and the same Assign/Define arm;
+- (cleanup-const-evaluators) real.rs and time.rs are two small constant evaluators with their own Value types and the same Assign/Define arm;
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
 - src/extensions.rs is hard-linked with ~/dev/script/rust/extensions.rs (src/extensions.rs.hardlink is the
   hardlink-guard's marker): edit it only knowing it changes that file too.
-- Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
+- (cleanup-gc-object) Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
-- headless.rs node_of_json and foreign.rs node_of both turn JSON into Nodes; they differ in separator (None vs Space),
+- (cleanup-json-nodes) headless.rs node_of_json and foreign.rs node_of both turn JSON into Nodes; they differ in separator (None vs Space),
   arrays (ø vs list) and a non-integer number's fallback, so one replacing the other changes output.
-- ffi/link.rs: the generic wrapper could take most typed signatures if it passed f32 arguments right (it passes
+- (cleanup-ffi-f32) ffi/link.rs: the generic wrapper could take most typed signatures if it passed f32 arguments right (it passes
   f64s), which needs FFI tests for each signature first.
-- markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.
+- (cleanup-html-escape) markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.
 
 ## src/lowering/ (card cleanup-lowering, session warp-class)
 Shared node forms live in src/lowering/nodes.rs: `call(f, args)`, `key(a, op, b)`, `assign`, `statement_list`,
@@ -151,18 +153,18 @@ Done:
   `usize` makers of lazy_ranges, min_max, list_element_checks and variable_signals (`+= 1` then use) the same way
 
 Left (each changes behaviour or needs care):
-- Node::map_children also enters class bodies (Node::Type); children_rewritten does not. 45 tails folded by
+- (cleanup-rewrite-tails) Node::map_children also enters class bodies (Node::Type); children_rewritten does not. 45 tails folded by
   probes/cleanup/fold_rewrite_tails.py: the generic Meta arm and `other => other`, with Key and List each either
   generic (folded) or taken by an unguarded arm of their own. The ~20 left differ: no List or Key arm at all (folding
   would make them recurse), `?` inside (folding.rs), a Meta arm doing more than recursing — each a case-by-case look.
-- statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
+- (cleanup-statements-of) statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms
   match. The `for v in …` variable is one nodes::for_in_variable (run_time_blocks, signal_values with its five-word
   form, for_loop); library_words keeps its own (`for each v in` too, any word's name).
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
-- class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs
+- (cleanup-big-files) class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs
   (operators on instances, specialized calls), inheritance.rs (extends, mixins, super), other_languages.rs (impl, Go
   methods, Ruby .new, witness methods); further parts only if a cohesive group shows up (generic classes?).
   destructurings / positional_fields already share with_value_classes.
@@ -194,9 +196,9 @@ emitter-builders, emitter-equality, emitter-runs, emitter-deterministic, emitter
 - `probes/cleanup/duplicate_windows.py` lists repeated windows of normalised lines (the duplicates left to share)
 
 Left:
-- ~70 other hand-written `Block, Loop, <exit test>, BrIf(1), …, Br(0), End, End` loops: counters, byte walks and
+- (cleanup-emitter-loops) ~70 other hand-written `Block, Loop, <exit test>, BrIf(1), …, Br(0), End, End` loops: counters, byte walks and
   cell walks whose step differs from emit_cell_walk (RefAsNonNull before the rest field, a position bump after it,
   or the loop opened and closed by two closures as in library_ops.rs join and slice). A general
   `loop_until(f, exit, |f| body)` would save ~1 line per loop; each conversion checked with same_wasm.sh
-- user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
+- (cleanup-saved-state) user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
   computing the new values: one saved-state struct would halve it, but the order of the computations matters

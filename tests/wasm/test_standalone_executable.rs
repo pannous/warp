@@ -92,13 +92,14 @@ fn test_build_makes_an_executable_by_default() {
 }
 
 /// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs it and leaves the executable `hello`
+/// (since card executable-flag only with WARP_EXECUTABLE=1)
 #[test]
 fn test_running_a_file_leaves_its_executable() {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_run.warp");
 	std::fs::write(&source_path, "print \"hi\"\n6 * 7").unwrap();
 	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
 	let _ = std::fs::remove_file(&executable);
-	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg(&source_path).output().unwrap();
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).env("WARP_EXECUTABLE", "1").arg(&source_path).output().unwrap();
 	assert_eq!(text(&run.stdout), "hi\n42\n", "{}", text(&run.stderr));
 	let carried = std::process::Command::new(&executable).output().unwrap();
 	assert_eq!(text(&carried.stdout), "hi\n42\n", "{}", text(&carried.stderr));
@@ -112,7 +113,7 @@ fn test_running_without_a_stub_leaves_no_executable() {
 	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
 	let _ = std::fs::remove_file(&executable);
 	let missing_stub = PathBuf::from(OUTPUT_DIRECTORY).join("no_such_stub");
-	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", &missing_stub).arg(&source_path).output().unwrap();
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", &missing_stub).env("WARP_EXECUTABLE", "1").arg(&source_path).output().unwrap();
 	assert_eq!(text(&run.stdout), "42\n");
 	assert!(text(&run.stderr).contains("no executable"), "{}", text(&run.stderr));
 	assert!(!executable.exists());
@@ -124,7 +125,7 @@ fn test_running_without_a_stub_leaves_no_executable() {
 fn test_an_executable_the_runtime_cannot_carry_is_noted_once() {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_noted_once.warp");
 	std::fs::write(&source_path, "class P{n: int}\nstored ps: [P]\ncount(ps)").unwrap();
-	let run = || crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg(&source_path).output().unwrap();
+	let run = || crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).env("WARP_EXECUTABLE", "1").arg(&source_path).output().unwrap();
 	assert!(text(&run().stderr).contains("no executable"));
 	let again = run();
 	assert_eq!(text(&again.stdout), "0\n");
@@ -151,8 +152,33 @@ fn test_running_a_file_shows_its_hints_once() {
 	std::fs::write(&source_path, "x = 3\nx > 2 ? 1 : 0").unwrap();
 	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
 	let _ = std::fs::remove_file(&executable);
-	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg(&source_path).output().unwrap();
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).env("WARP_EXECUTABLE", "1").arg(&source_path).output().unwrap();
 	let stderr = text(&run.stderr);
 	assert_eq!(stderr.matches("hint").count(), 1, "{stderr}");
 	assert!(executable.exists(), "{stderr}");
+}
+
+/// card executable-flag (user 2026-10-12, replaces P103's default): a plain run leaves no executable
+#[test]
+fn test_plain_run_leaves_no_executable_by_default() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_plain_run.warp");
+	std::fs::write(&source_path, "6 * 7").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).env_remove("WARP_EXECUTABLE").arg(&source_path).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
+	assert!(!executable.exists());
+}
+
+/// card executable-flag: WARP_EXECUTABLE=1 makes a plain run leave the executable next to the file again
+#[test]
+fn test_plain_run_with_warp_executable_leaves_it() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_flagged_run.warp");
+	std::fs::write(&source_path, "6 * 7").unwrap();
+	let executable = source_path.with_extension(std::env::consts::EXE_EXTENSION);
+	let _ = std::fs::remove_file(&executable);
+	let run = crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).env("WARP_EXECUTABLE", "1").arg(&source_path).output().unwrap();
+	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
+	let carried = std::process::Command::new(&executable).output().unwrap();
+	assert_eq!(text(&carried.stdout), "42\n", "{}", text(&carried.stderr));
 }

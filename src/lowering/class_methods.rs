@@ -883,11 +883,14 @@ fn dispatched_by_class(receiver: &Node, member: Node, methods: &MethodNames, ren
 	let name = leading_name(&member);
 	let library_call = key(receiver.clone(), Op::Dot, member);
 	let method_call = key(receiver.clone(), Op::Dot, renamed_member);
-	methods.defined_by.iter().filter(|(method, _)| *method == name).fold(library_call, |otherwise, (_, class)| {
-		let bindings = [("RECEIVER", receiver.clone()), ("CLASS", Node::Symbol(class.clone())), ("METHOD", method_call.clone()), ("OTHERWISE", otherwise)];
-		let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-		crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
-	})
+	methods.defined_by.iter().filter(|(method, _)| *method == name).fold(library_call, |otherwise, (_, class)| by_class(receiver, class, method_call.clone(), otherwise))
+}
+
+/// `if receiver is class then method else otherwise`
+pub(crate) fn by_class(receiver: &Node, class: &str, method: Node, otherwise: Node) -> Node {
+	let bindings = [("RECEIVER", receiver.clone()), ("CLASS", Node::Symbol(class.to_string())), ("METHOD", method), ("OTHERWISE", otherwise)];
+	let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
+	crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
 }
 
 fn method_name(name: &str) -> String {
@@ -907,7 +910,8 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 		}
 		_ => None,
 	};
-	// a type word is a method on anything but a number (`3.double()` stays the conversion), a list word on an instance
+	// a type word is a method on anything but a literal value (`3.double()`, `"42".int()` stay the conversion), a list
+	// word on an instance
 	let calls_method = |receiver: &Node, member: &Node| {
 		let name = match member.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|first| first.drop_meta().name()).unwrap_or_default(),
@@ -921,7 +925,7 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 				Node::Key(class, Op::None | Op::Colon, _) => methods.classes.contains(&class.drop_meta().name()),
 				_ => false,
 			},
-			false => !matches!(receiver.drop_meta(), Node::Number(_)),
+			false => !matches!(receiver.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _)),
 		}
 	};
 	let recurse = |child: Node| with_method_names(child, methods, in_class);

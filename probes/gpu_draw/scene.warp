@@ -1,0 +1,11 @@
+// gpu-draw: one scene drawn by use draw; WARP_DRAW=cpu and WARP_DRAW=gpu must give the same PNG (compare.py)
+use draw
+canvas(64, 48)
+clear(white)
+rect(2.5, 3, 10, 7.5, red)
+circle(30, 20, 9.5, blue)
+circle(40.3, 25.7, 6, with_alpha(green, 0.5))
+dot(60, 40, black)
+line(0, 47, 63, 30, purple)
+rect(50, -5, 30, 12, with_alpha(orange, 0.25))
+show()

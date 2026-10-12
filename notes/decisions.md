@@ -7,6 +7,14 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- self-hosting (user, asked directly; plan notes/self_hosting.md, topic card self-hosted): it is for dogfooding,
+  independence from Rust and as a showcase. Scope: the parser first (lexer, parser, serializer), and later parts are
+  planned once it matches. Each warp part is a twin of its Rust part, checked by a differential test over every sample
+  before the Rust part goes. Language gaps found on the way (text indexing, Node API, byte buffer) are fixed in the
+  language, not worked around.
+- site-budget (user, via warp-supervisor): the hello-world site budget is raised modestly to today's size plus 2 KB,
+  not doubled (the 23 KB was the measured 21.9 KB plus headroom, nothing deeper). warp-bundle-size finds what grew
+  every program's app.wasm and host.js and lowers the budget again as bytes are won back (a ratchet).
 - no-executable-by-default (user, via warp-supervisor; replaces P103's default): a plain `warp file.warp` run no
   longer writes the standalone executable next to the file; WARP_EXECUTABLE=1 turns it back on, `warp build` still
   makes it (worker warp-executable-flag).

@@ -33,7 +33,8 @@ pub(super) fn operator_calls(node: Node) -> Node {
 	let instances = instance_classes(&node, &classes);
 	let returned = returned_classes(&node, &classes);
 	let no_parameters = std::collections::HashMap::new();
-	let operands = Operands { methods: &methods, instances: &instances, returned: &returned, parameters: &no_parameters };
+	let plain = plain_variables(&node);
+	let operands = Operands { methods: &methods, instances: &instances, returned: &returned, parameters: &no_parameters, plain: &plain };
 	let node = specialized_calls(node, &operands);
 	let parameters = parameter_classes(&argument_classes(&node, &operands));
 	with_operator_calls(node, &Operands { parameters: &parameters, ..operands }).0
@@ -213,6 +214,8 @@ pub(super) struct Operands<'a> {
 	returned: &'a std::collections::HashMap<String, String>,
 	/// parameter_classes
 	parameters: &'a std::collections::HashMap<String, Vec<Option<String>>>,
+	/// plain_variables: never an instance
+	plain: &'a std::collections::HashSet<String>,
 }
 
 /// The node with its operator calls, and the class of the instance it gives when it is one
@@ -236,6 +239,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
 			match class.as_ref().and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op)) {
 				Some((_, _, method)) => (method_call(left, method, right), class),
+				None if class.is_none() && may_hold_instance(&left, operands) => (dispatched_operator(left, op, right, operands), None),
 				None => (key(left, op, right), None),
 			}
 		}
@@ -282,6 +286,44 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 		}
 		other => (other.map_children(recurse), None),
 	}
+}
+
+/// A variable of no known class (`q` of `for q in [V(1), W(9)]`) may hold an instance whose class defines the operator
+fn may_hold_instance(operand: &Node, operands: &Operands) -> bool {
+	matches!(operand.drop_meta(), Node::Symbol(variable) if !operands.instances.contains_key(variable) && !operands.plain.contains(variable))
+}
+
+/// The variables that hold no instance: assigned a number or a text (`t = 0`), looping over a range or a list of them
+/// (`for i in 1..3`), a field of a type word (`x:int`)
+fn plain_variables(node: &Node) -> std::collections::HashSet<String> {
+	let is_plain_value = |value: &Node| match value.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
+		Node::Key(_, Op::Range | Op::To, _) => true,
+		Node::List(items, Bracket::Square, _) => items.iter().all(|item| matches!(item.drop_meta(), Node::Number(_) | Node::Text(_))),
+		_ => false,
+	};
+	let mut plain = std::collections::HashSet::new();
+	node.visit(&mut |part| match part {
+		Node::Key(target, Op::Assign | Op::Define, value) if is_plain_value(value) => plain.extend(target.drop_meta().symbol_name().map(String::from)),
+		Node::Type { body, .. } => {
+			let typed_by_word = |item: &&Node| crate::analyzer::type_word_kind(&field_type_name(item)).is_some();
+			plain.extend(class_items(body).iter().filter(typed_by_word).filter_map(field_name))
+		}
+		Node::List(items, _, _) if crate::lowering::nodes::for_in_variable(items).is_some() && items.get(3).is_some_and(is_plain_value) => {
+			plain.extend(crate::lowering::nodes::for_in_variable(items))
+		}
+		_ => {}
+	});
+	plain
+}
+
+/// `q + r` of a variable q of unknown class: `if q is V then q.plus(r) else …`, per class defining the operator, else
+/// the built-in operator
+fn dispatched_operator(left: Node, op: Op, right: Node, operands: &Operands) -> Node {
+	let defining = operands.methods.iter().filter(|(_, known, _)| *known == op);
+	defining.fold(key(left.clone(), op, right.clone()), |otherwise, (class, _, method)| {
+		super::by_class(&left, class, method_call(left.clone(), method, right.clone()), otherwise)
+	})
 }
 
 /// `receiver.method(argument)`; `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as
@@ -403,5 +445,5 @@ pub(super) fn is_call_of(call: &Node, method: &str) -> bool {
 /// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
 /// instance
 pub(crate) fn is_library_method(name: &str) -> bool {
-	crate::analyzer::is_list_mutating_method(name) || crate::library_words::is_library_word(name) || crate::analyzer::is_counting_property(name)
+	crate::analyzer::is_list_mutating_method(name) || crate::library_words::is_standard_function(name) || crate::analyzer::is_counting_property(name)
 }

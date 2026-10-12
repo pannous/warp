@@ -1,0 +1,2 @@
+#!/usr/bin/env warp
+stored a default 1;a++;print(storage)

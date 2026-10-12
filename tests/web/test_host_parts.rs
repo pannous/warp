@@ -69,3 +69,12 @@ fn the_sites_parts_are_the_playgrounds_parts() {
 fn a_page_with_routes_ships_the_routes_part() {
 	assert_eq!(part_files("route \"/\" { p{ \"home\" } }\nroute \"*\" { p{ \"no such page\" } }"), ["host-routes.js"]);
 }
+
+// card web-bundle-growth: paint, text_coverage and sound_samples with their int-list helpers live in host-media.js, so
+// a hello-world site sends none of them; a page that paints or sounds ships the part
+#[test]
+fn a_page_painting_or_sounding_ships_the_media_part() {
+	assert!(part_files("paint([1, 0, 1, 0], 2, 2)").contains(&"host-media.js"));
+	assert!(part_files("use sound\ntone(440, 0.1, \"sine\")\np{ \"played\" }").contains(&"host-media.js"));
+	assert!(!HOST_SCRIPT.contains("function textCoverage") && !HOST_SCRIPT.contains("sound_samples:"));
+}

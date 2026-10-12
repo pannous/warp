@@ -12,6 +12,9 @@ guess (user 2026-10-10: show() without a canvas gets a default size, not an erro
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
+- Every spawned session is announced to the user's Codex thread "Warp Boss" (user, 2026-10-12: inform the Codex Boss
+  every time we spawn a session): ~/dev/bin/claude-remote.sh (start.sh through it) and the Codex cron run (start and
+  end) do it; other spawns send name, folder and URL themselves with `~/dev/bin/codex-notify.sh "Warp Boss" "<text>"`.
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
@@ -89,6 +92,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
   warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
+  Every landing gets a try line (user 2026-10-12, after "real-time-playback is on main" came without one): whenever
+  any change of yours reaches main that the user can see, hear or run (a whole card, one step of it, a fix), you send
+  warp-interviewer a fresh try line for exactly that change, the same moment you learn it merged; "X is on main"
+  never goes out without its line. The Integrator's merge report names each user-visible branch, so its owner knows.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06), and
   cards related to your current task (user, 2026-10-12).

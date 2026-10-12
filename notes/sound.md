@@ -170,10 +170,38 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    audio callback itself only mixes (no wasm, no allocation). Headless, or on afplay, it is one sound: render_sound
    and the tests read the same samples. The call blocks the program while it plays; `go { play_signal(…) }` plays it
    beside it. State between samples lives in globals declared `as float`: an exact decimal global
-   (`global level = 0.0`) grows with every sample and runs out of fuel within 220 samples.
+   (`global level = 0.0`) is an exact ratio whose denominator gains about a bit a sample (the blow-up beyond that,
+   unreduced ratios, is fixed: card exact-decimals), so floats stay the way for DSP state.
    About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
-   Still to build: the browser (an AudioWorklet running the module), stereo (a pair), block-wise `process(block)` over
-   f32 arrays, input (a microphone as the signal's argument).
+   Block-wise built (samples/signal_blocks.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
+   a block, block a linear float array (notes/linear_arrays.md) of 512 cells to write, t its first sample's time.
+   music_words.rs with_block_signals declares `linear fill·block = float[512]` and `fill·blocks(t: float)`, which
+   calls fill with it (so fill's parameter is the linear array), and writes the call out as std_io("sound", "blocks",
+   [fill·blocks, linear_address(fill·block), …]); the host (native.rs played_blocks) calls fill·blocks and reads the
+   cells straight from memory. 20 s of a sine: 2.0 s against play_signal's 4.6 s (debug, compile included). Cells are
+   f64 (linear arrays have no f32 yet); the host takes them as they are.
+   Stereo built (undoable default): `play_signal([left, right], 2s)` calls left(t) then right(t) for each sample;
+   `play_blocks(fill, 2s)` with fill of three parameters `(left, right, t)` gets two blocks (fill·block, fill·right).
+   The host takes one value or a pair (native.rs channels_of) and interleaves the frames (sound.rs play_blocks).
+   `play hum for 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
+   one of the program's functions is play_signal of it (one parameter, or a pair [left, right] of such), play_blocks
+   (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
+   Browser first step built (tests/web/test_signal_sound.rs): host-files.js STD_ADAPTERS.sound.signal / blocks compute
+   all samples at once in the program's Worker (the function as closure_apply's callable, blocks read from memory)
+   and play them as one sound (host.js holder.sounded), as natively headless. Paced once the page was clicked or
+   typed in (window_open, so audible): the Worker computes a block when the voice holds less than 100 ms
+   (playedSignal, host-tasks.js soundsQueued), each block a sound of the signal's handle (stop_sound ends them all),
+   the wait a sleep without runaway time. Unclicked (CI) everything at once, one sound.
+   Real-time playback (card real-time-playback, the user's `loop { go {melody…}; melody…; tempo *= 1.05 }`, kept in
+   probes/sound_experiments/voices.warp): heard, a voice's next sound waits until its queued sounds end within
+   PLAY_AHEAD (0.5 s; sound.rs paced, host-files.js holder.sounded), except in an `at`, which places its sounds itself.
+   Before, the loop computed minutes ahead, a new task thread a round, its exact tempo growing digits a round (card
+   exact-tempo-growth). In the browser a task's sounds still reach the page only when the program's Worker is back in
+   its event loop, so a paced endless loop with tasks hears the main voice only (a MessagePort per task Worker to the
+   page would fix it). Measured (release, probes/sound/voices_loop_timing.warp): a round computes in 15-60 ms for
+   0.4-2.2 s of sound, so pacing, not speed, was missing.
+   Still to build: an AudioWorklet running the module (glitch-free under a busy Worker), input (a microphone as the
+   signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 
