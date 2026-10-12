@@ -12,7 +12,8 @@ use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK};
-use std::collections::HashSet;
+use crate::context::UserFunctionDef;
+use std::collections::{BTreeMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
@@ -126,7 +127,10 @@ impl WasmGcEmitter {
 		// a map is a reference (P200b): one used whole (`n = m`, `[m]`, an argument) is the one Node every holder shares
 		let mut used_whole = vec![];
 		super::struct_backend::used_whole(
-			&without_reads(super::struct_backend::without_final_variable(program)),
+			&without_reads(
+				super::struct_backend::without_final_variable(program),
+				&self.ctx.user_functions,
+			),
 			&Default::default(),
 			&mut used_whole,
 		);
@@ -1000,15 +1004,16 @@ fn is_empty_map(value: &Node) -> bool {
 }
 
 /// The program without the variables only read by a reading word or a comparison (`count(m)`, `m.count`, `m == n`):
-/// what is left of a variable is a use that may share it
-fn without_reads(node: Node) -> Node {
+/// what is left of a variable is a use that may share it. A user function named like a reading word (`def size(m)`)
+/// is no reading word: it may change the map (card user-defined-size)
+fn without_reads(node: Node, functions: &BTreeMap<String, UserFunctionDef>) -> Node {
 	let is_variable = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
-	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if super::reads_collection(word) || MAP_READING_WORDS.contains(&word.as_str()));
+	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !functions.contains_key(word) && (super::reads_collection(word) || MAP_READING_WORDS.contains(&word.as_str())));
 	let read = |node: Node| {
 		if is_variable(&node) {
 			Node::Empty
 		} else {
-			without_reads(node)
+			without_reads(node, functions)
 		}
 	};
 	match node {
@@ -1028,6 +1033,6 @@ fn without_reads(node: Node) -> Node {
 		Node::Key(object, Op::Dot, member) if is_reading_word(&member) => {
 			Node::Key(Box::new(read(*object)), Op::Dot, member)
 		}
-		other => other.map_children(without_reads),
+		other => other.map_children(|child| without_reads(child, functions)),
 	}
 }
