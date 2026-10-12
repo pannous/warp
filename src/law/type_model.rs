@@ -124,6 +124,7 @@ fn type_of_word(word: &str) -> Option<String> {
 				crate::analyzer::BOOL_TYPE => BOOL_TYPE,
 				"any" => ANY_TYPE,
 				exact if crate::type_tests::is_exact_fraction_type(exact) => EXACT_TYPE,
+				float if crate::type_tests::is_float_type_word(float) => ".float",
 				number if crate::type_tests::type_matches(number, "number") => ".number",
 				_ => return None,
 			}
@@ -2124,7 +2125,8 @@ fn ask_each<T>(
 	Ok(answers)
 }
 
-/// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
+/// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.admits` (its
+/// `Ty.sub`, plus an exact number a float place converts), for
 /// every builtin type word W0 has a type for and every W0 scalar value type: "word ← value type: warp admits / W0 sub"
 pub fn admits_disagreements() -> Result<Vec<String>, String> {
 	let words = crate::type_tests::builtin_type_words()
@@ -2134,7 +2136,7 @@ pub fn admits_disagreements() -> Result<Vec<String>, String> {
 		.collect();
 	let requests = pairs
 		.iter()
-		.map(|(word, value, _)| format!("Ty.sub ({value}) ({})", type_of_word(word).expect("a W0 type word")))
+		.map(|(word, value, _)| format!("Ty.admits ({value}) ({})", type_of_word(word).expect("a W0 type word")))
 		.collect();
 	let answers: Vec<bool> = ask_each("admits", requests, "pairs", |line| line.parse().ok())?;
 	Ok(pairs
