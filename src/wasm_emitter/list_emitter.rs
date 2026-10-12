@@ -239,11 +239,6 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// `{a:1}` is the map of one entry, not its lone entry `a:1` (card single-entry)
-		if *bracket == Bracket::Curly && matches!(items, [entry] if matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) {
-			self.emit_list_structure(func, items, bracket);
-			return;
-		}
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
 			if !self.emit_function_call(func, items, bracket, separator) && !self.emit_empty_print(func, items) && !self.emit_library_word_call(func, items, bracket, separator) && !self.reject_unresolved_call(func, items, bracket, separator) {
