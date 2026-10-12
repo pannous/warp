@@ -4,6 +4,7 @@ mod test_uniscript;
 mod test_web;
 mod test_markup_tags;
 mod test_markup_scripts;
+mod test_html_escape; // card cleanup-html-escape
 mod test_web_playground;
 #[cfg(feature = "native")] // runs node
 mod test_editor_shortcuts; // card keyboard-shortcuts
