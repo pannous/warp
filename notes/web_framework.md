@@ -558,7 +558,9 @@ Each step is useful on its own and is what the next ones stand on.
 - Browser (card dev-opens-browser): `warp dev` from a terminal opens its page in the default browser
   (dev_server::serve_and_open, `open` / `xdg-open` / `start`); piped, under WARP_NO_WINDOW or CI it only prints the
   address, and `dev_server::serve` (tests) never opens. Test warp_dev_opens_no_browser_when_piped.
-- Left: the playground editor's error marks in the overlay (card web-dev-marks).
+- Error marks (card web-dev-marks, 2026-10-12): dev.js devErrorPieces turns the failure's excerpt (`  2 | source` over
+  its carets) into the source line with the failing word underlined as playground.css .marked-error, the message on
+  hover (tests/web/test_dev_marks.rs runs it under node). Warnings of a good build are not shown.
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
 - Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of
