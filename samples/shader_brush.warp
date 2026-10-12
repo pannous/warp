@@ -20,7 +20,5 @@ brush = shader {
 
 // each frame of the window, until it closes; the first paint opens it (headless: one frame, as a PNG)
 on frame {
-	paint(brush, width, height)
-	// TODO: feed width, height via Global variables above
-	// paint(brush)
+	paint(brush) // the size is width × height above, else the view's size
 }

@@ -17,6 +17,9 @@ pub const VALUES: &str = "values";
 /// The words rendering a shader with a values map last: `paint(shader, width, height, values)`
 const RENDERING_WORDS: [&str; 2] = [crate::host::PAINT, warp_runtime::host_words::GPU_RENDER];
 const VALUES_INDEX: usize = 4;
+const SIZE_INDEX: usize = 2;
+/// The program's own size words, which paint(shader) takes before the view's size
+const SIZE_WORDS: [&str; 2] = ["width", "height"];
 /// Holes every shader has, filled by the host: the image's size in pixels, seconds since the first render, the renders
 /// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
 /// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
@@ -100,6 +103,7 @@ pub fn lower(program: Node) -> Node {
 			}
 		}
 	});
+	let program = with_sizes(program, &sizes(&variables));
 	if shaders.is_empty() && !mentions_holes(&program) {
 		return program;
 	}
@@ -114,6 +118,44 @@ pub fn lower(program: Node) -> Node {
 		.map(|(shader, holes)| (shader, passed(holes)))
 		.collect();
 	with_values(program, &shaders, &passed)
+}
+
+/// The width and height a paint without them takes: the program's `width` and `height`, else the view's size
+fn sizes(variables: &HashSet<String>) -> [Node; 2] {
+	let own = SIZE_WORDS.iter().all(|word| variables.contains(*word));
+	let words = match own {
+		true => SIZE_WORDS,
+		false => [
+			warp_runtime::host_words::VIEW_WIDTH,
+			warp_runtime::host_words::VIEW_HEIGHT,
+		],
+	};
+	words.map(|word| Node::Symbol(word.to_string()))
+}
+
+/// `paint(shader)` and `paint(shader, values)` as `paint(shader, width, height, values)`
+fn with_sizes(node: Node, sizes: &[Node; 2]) -> Node {
+	let node = node.map_children(|child| with_sizes(child, sizes));
+	let Node::List(items, bracket, separator) = node.drop_meta() else {
+		return node;
+	};
+	let rendering = renders(items);
+	let without_size = match items.len() {
+		2 => true,
+		3 => matches!(items[SIZE_INDEX].drop_meta(), Node::List(_, Bracket::Curly, _)),
+		_ => false,
+	};
+	if !rendering || !without_size {
+		return node;
+	}
+	let mut items = items.clone();
+	items.splice(SIZE_INDEX..SIZE_INDEX, sizes.iter().cloned());
+	Node::List(items, bracket.clone(), separator.clone()).with_meta_of(&node)
+}
+
+/// A call of paint or gpu_render: the word, then its arguments
+fn renders(items: &[Node]) -> bool {
+	matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if RENDERING_WORDS.contains(&word.as_str()))
 }
 
 fn holes_of(node: &Node) -> Option<Vec<String>> {
@@ -138,9 +180,7 @@ fn with_values(
 	let Node::List(items, bracket, separator) = node.drop_meta() else {
 		return node;
 	};
-	let rendering = items
-		.first()
-		.is_some_and(|word| RENDERING_WORDS.contains(&word.name().as_str()));
+	let rendering = renders(items);
 	let holes = items.get(1).filter(|_| rendering).and_then(|shader| {
 		holes_of(shader)
 			.map(passed)

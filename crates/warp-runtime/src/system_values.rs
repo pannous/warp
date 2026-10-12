@@ -60,8 +60,15 @@ pub fn window_input() -> [f32; 4] {
 }
 
 pub fn tell_window_input(input: [f32; 4]) {
+	tell_window_key(input[KEY_INPUT]);
+	for (value, number) in WINDOW_INPUT.iter().zip(input) {
+		value.store(number.to_bits(), Ordering::Relaxed);
+	}
+}
+
+/// The key held over the paint window alone, the pointer left as it is
+pub fn tell_window_key(key: f32) {
 	// a press: a key held that was not held before (another key, or none)
-	let key = input[KEY_INPUT];
 	if key != 0.0 && key != window_input()[KEY_INPUT] {
 		let mut presses = KEY_PRESSES.lock().unwrap();
 		if presses.len() == KEYS_KEPT {
@@ -69,9 +76,7 @@ pub fn tell_window_input(input: [f32; 4]) {
 		}
 		presses.push_back(key as i64);
 	}
-	for (value, number) in WINDOW_INPUT.iter().zip(input) {
-		value.store(number.to_bits(), Ordering::Relaxed);
-	}
+	WINDOW_INPUT[KEY_INPUT].store(key.to_bits(), Ordering::Relaxed);
 }
 
 thread_local! {

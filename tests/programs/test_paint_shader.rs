@@ -63,3 +63,29 @@ fn use_graphics_is_use_draw() {
 		true
 	);
 }
+
+// card paint-shader: paint(shader) without a size takes the program's width and height, else the view's size
+#[test]
+fn paint_of_a_shader_without_a_size_takes_width_and_height() {
+	if !has_gpu() {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_eq!(
+		painted_rows(
+			&format!("width = 2\nheight = 1\n{SHADER}paint(shader, {{blue: 1.0}})"),
+			"paint-global-size"
+		),
+		painted_rows(
+			&format!("{SHADER}paint(shader, 2, 1, {{blue: 1.0}})"),
+			"paint-given-size"
+		)
+	);
+	let plain = "shader = \"@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }\"\n";
+	assert_eq!(
+		painted_rows(&format!("{plain}paint(shader)"), "paint-view-size"),
+		painted_rows(
+			&format!("{plain}paint(shader, view_width, view_height)"),
+			"paint-view-given"
+		)
+	);
+}

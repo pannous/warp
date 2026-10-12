@@ -33,9 +33,8 @@ fn a_frame_handler_leaves_main_running() {
 // told here as the viewer's input lines tell them (src/paint_window.rs follow_input): a, released, the up arrow
 #[test]
 fn on_key_hears_the_paint_windows_keys() {
-	use warp_runtime::system_values::tell_window_input;
 	for key in ['a' as u32, 0, 0xF700, 0] {
-		tell_window_input([0.0, 0.0, 0.0, key as f32]);
+		warp_runtime::system_values::tell_window_key(key as f32);
 	}
 	crate::is!(
 		"keys = \"\"\non key { keys = keys + event.key + \" \" }\nsleep(100 ms)\nkeys",
