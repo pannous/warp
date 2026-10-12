@@ -108,6 +108,7 @@ mod test_print_empty; // card print-error
 mod test_print_empty_map;
 mod test_raise;
 mod test_reactive_ports;
+mod test_reflect_inferred; // card reflect-inferred
 mod test_reflection_words; // card reflection
 mod test_relational_arms;
 mod test_rest_patterns;

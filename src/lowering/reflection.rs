@@ -696,8 +696,6 @@ impl Objects {
 			.any(|name| name == word)
 	}
 
-	/// A subject whose class is known only at run time (`f(o) := o.fields`): a type test over the program's classes
-	/// picks the names, a class's own member of that name is read as written, anything else stays `written`
 	/// The class of the instance an expression holds, when known at compile time
 	fn known_class(&self, subject: &Node) -> Option<String> {
 		match self.shapes.as_ref()?.shape(subject)? {
@@ -706,17 +704,22 @@ impl Objects {
 		}
 	}
 
+	/// A subject whose class is known only at run time (`f(o) := o.fields`, `make().class`): a type test over the
+	/// program's classes picks the names (or the class for `class`/`type`), a class's own member of that name is read
+	/// as written, anything else stays `written`
 	fn dispatched(&self, subject: &Node, word: &str, written: Node) -> Option<Node> {
+		let names_class = CLASS_WORDS.contains(&word);
 		// a class without a layout lists nothing: whether the word lists names at all
-		if self.layouts.is_empty() || self.listed("", word).is_none() {
+		if self.layouts.is_empty() || (!names_class && self.listed("", word).is_none()) {
 			return None;
 		}
 		let mut classes: Vec<&String> = self.layouts.keys().collect();
 		classes.sort();
 		Some(classes.into_iter().rev().fold(written.clone(), |otherwise, class| {
-			let names = match self.has_member(class, word) {
-				true => written.clone(),
-				false => text_list(&self.listed(class, word).unwrap_or_default()),
+			let names = match (self.has_member(class, word), names_class) {
+				(true, _) => written.clone(),
+				(false, true) => call(crate::type_tests::TYPE_WORD, vec![subject.clone()]),
+				(false, false) => text_list(&self.listed(class, word).unwrap_or_default()),
 			};
 			type_dispatch(subject, class, names, otherwise)
 		}))

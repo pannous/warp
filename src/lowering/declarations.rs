@@ -2451,6 +2451,71 @@ fn renamed_it(node: Node, receiver: &Node) -> Node {
 	}
 }
 
+/// The (type, method) pairs of the extension methods a program defines, `fun P.twice() = …` and `extension P { func
+/// twice() … }`, read before lower_c_functions turns them into functions (reflection lists them among P's methods)
+pub(crate) fn extension_methods(node: &Node) -> Vec<(String, String)> {
+	let mut methods = vec![];
+	let is_function_keyword = |item: &Node| item.symbol_name().is_some_and(crate::operators::is_function_keyword);
+	node.visit(&mut |part| {
+		let Node::List(items, _, _) = part else {
+			return;
+		};
+		match items.as_slice() {
+			[keyword, definition, ..] if is_function_keyword(keyword) => {
+				methods.extend(receiver_and_method(definition));
+			}
+			[word, receiver_type, block] if word.is_symbol(EXTENSION_WORD) => {
+				let Some(receiver_type) = receiver_type.symbol_name() else {
+					return;
+				};
+				let definitions = match block.drop_meta() {
+					Node::List(items, Bracket::Curly, _) if items.first().is_some_and(is_function_keyword) => {
+						vec![block.drop_meta()]
+					}
+					Node::List(items, Bracket::Curly, _) => items.iter().map(Node::drop_meta).collect(),
+					_ => vec![],
+				};
+				for definition in definitions {
+					let Node::List(items, _, _) = definition else {
+						continue;
+					};
+					if let [keyword, head, ..] = items.as_slice() {
+						if let (true, Node::Symbol(method)) = (is_function_keyword(keyword), leftmost(head)) {
+							methods.push((receiver_type.to_string(), method.clone()));
+						}
+					}
+				}
+			}
+			_ => {}
+		}
+	});
+	methods
+}
+
+/// `P.twice` in the head of `fun P.twice() = …` (`def P.twice() {…}`, `fun P.twice(): int {…}`)
+fn receiver_and_method(definition: &Node) -> Option<(String, String)> {
+	match definition.drop_meta() {
+		Node::Key(receiver_type, Op::Dot, call) if matches!(receiver_type.drop_meta(), Node::Symbol(_)) => {
+			match leftmost(call) {
+				Node::Symbol(method) => Some((receiver_type.drop_meta().name(), method.clone())),
+				_ => None,
+			}
+		}
+		Node::Key(head, _, _) => receiver_and_method(head),
+		Node::List(items, _, _) => receiver_and_method(items.first()?),
+		_ => None,
+	}
+}
+
+/// The first word of a head: `twice` of `(twice ø) {…}`
+fn leftmost(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::Key(head, _, _) => leftmost(head),
+		Node::List(items, _, _) if !items.is_empty() => leftmost(&items[0]),
+		other => other,
+	}
+}
+
 /// Swift's `extension Int { func twice() -> Int { self * 2 } }`: each function of the block a method on the type, as
 /// `fun Int.twice()` defines it
 fn extension_block(items: &[Node]) -> Option<Node> {

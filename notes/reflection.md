@@ -54,8 +54,10 @@ Warp notation text (parsed by the reader we already have), one map:
 2. Compile-time objects: `x.class`, `x.fields` (+ aliases), `x.methods`, `dir(object|class|map)`. Done:
    `reflection::lower_objects`, a source pass right before class_methods::lower (class bodies still as written; the
    layout from class_methods::class_layouts, instances from instance_classes: constructions, `p:P` annotations and
-   typed parameters). Not yet (card reflect-inferred): instances only the analyzer infers (a call's result), `fun P.sum()` extension methods
-   in `methods`.
+   typed parameters). An instance only the run time knows (`make().class`, `f(o) := o.fields`) gets a type test over
+   the program's classes (Objects::dispatched); extension methods (`fun P.twice()`, `extension P {…}`) are listed in
+   `methods` and `dir` (declarations::extension_methods, read before lower_c_functions turns them into functions).
+   Not yet: `.type` of a non-instance call result (`def make() { 3 }; make().type` is "no field type").
 3. Functions: `f.params`, `f.signature`. Done in reflection::lower: constants from the user function's definition;
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
    is `(x) -> int`). Not yet: library and host words (`sqrt.signature`; card reflect-library-signatures).
