@@ -76,6 +76,9 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out
   again); `todo list Now` costs as much, while commands naming a card by its key cost ~1.
+  Never `gh project item-list` (200-530 points a call, and its slow pages trip GitHub's secondary limit, which locks
+  every session out with 502/504; gh refuses it now): read the board with `todo list [--json] [column]`, served from a
+  60 s machine-wide snapshot.
 - JSON5, not strict JSON, for anything people or agents write (user, 2026-10-10): new hand-written configs, probe
   commands and data files use JSON5 (or warp notation). Strict JSON stays only where a tool or protocol requires it
   (package.json, .claude settings, Lake manifest, WebDriver BiDi, machine-to-machine buffers).
