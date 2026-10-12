@@ -69,6 +69,12 @@ function morphElement(shown, wanted) {
 	morphChildren(shown, wanted, true);
 }
 
+// an `emit` no handler of the program receives (card page-custom-event, host.js dispatch_event): a CustomEvent of
+// its name on the page, the event's data as detail, for the page's own scripts (`document.addEventListener(name, …)`)
+function dispatchToPage({ name, detail }) {
+	document.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
 // an event inside shown markup, for the handler of the element it happened in (data-warp-click="1": click·1), with
 // its detail; in a component (data-warp-instance="2", element_events.rs) the detail names its instance
 function elementEvent(event, happened, detail) {

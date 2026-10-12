@@ -191,6 +191,7 @@ function startWorker(restarts = 0) {
 		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
+			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
 			if (data.type === "stage") return workerStage = data.stage;

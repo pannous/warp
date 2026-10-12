@@ -97,6 +97,9 @@ pub const CHANNEL_LISTEN: &str = "channel_listen";
 pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
+/// dispatch_event(name, detail): an emit no handler of a page's program receives, as a DOM CustomEvent on the page
+/// (card page-custom-event, lowering/event_signals.rs; host.js; natively the headless page keeps it)
+pub const DISPATCH_EVENT: &str = "dispatch_event";
 /// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/std_adapters.rs, host.js),
 /// called by the words of lib/<module>.warp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
@@ -160,7 +163,7 @@ pub const VALUE_GIVING_WORDS: [&str; 14] = [
 	STD_IO,
 	SERVE_ROUTES,
 ];
-pub const HOST_WORDS: [&str; 65] = [
+pub const HOST_WORDS: [&str; 66] = [
 	DRAW_SHAPE,
 	DRAW_SHOW,
 	GPU_COMPUTE,
@@ -178,6 +181,7 @@ pub const HOST_WORDS: [&str; 65] = [
 	CHANNEL_PENDING,
 	CHANNEL_NEXT,
 	CHANNEL_SEND,
+	DISPATCH_EVENT,
 	CLIPBOARD_TEXT,
 	NOTIFY,
 	PAGE_PATH,
@@ -229,7 +233,7 @@ pub const HOST_WORDS: [&str; 65] = [
 ];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 65] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 66] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[
@@ -253,6 +257,7 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 		(PAGE_PATH, vec![], vec![node]),
 		(NOTIFY, vec![node], vec![]),
 		(CHANNEL_SEND, vec![node, node], vec![]),
+		(DISPATCH_EVENT, vec![node, node], vec![]),
 		(GUARDED_CALL, vec![I32, node], vec![node]),
 		(PAINT, vec![node, I64, I64, node], vec![]),
 		(SOUND, vec![node, I64, I64, I64], vec![]),

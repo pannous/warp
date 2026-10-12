@@ -217,7 +217,12 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    handler takes `event` only when it reads it. The worker keeps the run (host.js runPageEvent), the page sends clicks
    on the output (`{x, y}`, a canvas pixel on a canvas) and keys typed there (`{key}`); the handler's prints and
    paintings appear, and the last line, when it is a name, is the output binding `page·value()` shown anew after each
-   handler (else the handler's value). An unhandled raise stays the exception (P110), no CustomEvent yet (card page-custom-event). Tour
+   handler (else the handler's value). An unhandled raise stays the exception (P110). An emit no handler receives, in a program compiled for a page or
+   rendering itself, is `dispatch_event(name, data)` (card page-custom-event, branch page-custom-event): host.js
+   dispatches it as `CustomEvent(name, {detail})` on the document (markup.js dispatchToPage; a Worker posts it to its
+   page), natively the headless Page keeps it (`Page::dispatched`; tests/web/test_page_custom_events.rs,
+   samples/page_custom_event.warp). A handler body inside an element stays code: markup_tags::handlers_kept keeps
+   `emit saved{id: 7}` from turning into the tag `emit{saved{…}}`. A plain program's unhandled emit does nothing (P202). Tour
    example `events`; tests/control/test_page_events.rs). `broadcast` / channel listeners: done natively (notes/system_signals.md, Channels); still open
    (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.
 
