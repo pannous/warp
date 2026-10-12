@@ -589,6 +589,10 @@ impl Lifting {
 	}
 
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
+		// `&g` wherever it stands: the function itself (a bare `g` needs its arguments, P83)
+		if referenced_function(&node).is_some() {
+			return self.function_value(node, bound);
+		}
 		if let Some(params) = definition_parameters(&node, &self.functions) {
 			let Node::Key(head, op, body) = node.drop_meta().clone() else {
 				unreachable!("a definition")
@@ -634,18 +638,6 @@ impl Lifting {
 					self.function_value(value, bound)
 				};
 				Node::Key(target, op, Box::new(value))
-			}
-			// `h == &g`: the function itself, compared as a value (a bare `g` needs its arguments, P83)
-			Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
-				let mut compared = |side: Node| {
-					let side = self.walk(side, bound);
-					match referenced_function(&side) {
-						Some(_) => self.function_value(side, bound),
-						None => side,
-					}
-				};
-				let left = compared(*left);
-				key(left, op, compared(*right))
 			}
 			Node::Key(list, Op::Hash, index) if self.indexed_call(&list, &index).is_some() => {
 				let (position, arguments) = self.indexed_call(&list, &index).expect("guarded");

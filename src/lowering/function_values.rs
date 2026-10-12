@@ -319,12 +319,13 @@ fn collect_function_uses(
 }
 
 /// `f = &double`, `f = function double` and the definition `f := double` name a function again: the aliases and what
-/// they name
+/// they name; `values` holds the aliases assigned with `=`, values that are the function itself
 fn aliases(
 	node: &Node,
 	functions: &HashSet<String>,
 	assigned: &mut HashMap<String, usize>,
 	found: &mut HashMap<String, String>,
+	values: &mut HashSet<String>,
 ) {
 	match node.drop_meta() {
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
@@ -349,16 +350,21 @@ fn aliases(
 					let named = found.get(&function).cloned().unwrap_or(function);
 					if functions.contains(&named) && named != name {
 						found.insert(name.to_string(), named);
+						if *op == Op::Assign {
+							values.insert(name.to_string());
+						}
 					}
 				}
 			}
-			aliases(value, functions, assigned, found);
+			aliases(value, functions, assigned, found, values);
 		}
 		Node::Key(left, _, right) => {
-			aliases(left, functions, assigned, found);
-			aliases(right, functions, assigned, found);
+			aliases(left, functions, assigned, found, values);
+			aliases(right, functions, assigned, found, values);
 		}
-		Node::List(items, _, _) => items.iter().for_each(|item| aliases(item, functions, assigned, found)),
+		Node::List(items, _, _) => items
+			.iter()
+			.for_each(|item| aliases(item, functions, assigned, found, values)),
 		_ => {}
 	}
 }
@@ -382,9 +388,17 @@ fn bare_name<'a>(value: &'a Node, op: &Op) -> Option<&'a str> {
 	}
 }
 
-/// The alias assignments become ø and every use of the alias is the function
-fn replace_aliases(node: Node, found: &HashMap<String, String>) -> Node {
+/// The alias assignments become ø and every use of the alias is the function: called by its name, otherwise the
+/// function itself when the alias was assigned with `=` (`print g` of `g = &f` prints f)
+fn replace_aliases(node: Node, found: &HashMap<String, String>, values: &HashSet<String>) -> Node {
+	let replaced = |node: Node| replace_aliases(node, found, values);
+	let called = |head: &Node| {
+		head.symbol_name()
+			.and_then(|name| found.get(name))
+			.map(|function| Node::Symbol(function.clone()))
+	};
 	match node {
+		Node::Symbol(name) if values.contains(&name) => crate::closures::function_reference(found[&name].clone()),
 		Node::Symbol(name) => Node::Symbol(found.get(&name).cloned().unwrap_or(name)),
 		Node::Key(target, op @ (Op::Assign | Op::Define), value)
 			if aliased_name(&target, &op).is_some_and(|name| found.contains_key(name))
@@ -392,36 +406,29 @@ fn replace_aliases(node: Node, found: &HashMap<String, String>) -> Node {
 		{
 			Node::Empty
 		}
-		// `h == k` of the alias k = &g: the function g itself, not its call
-		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
-			let compared = |side: Node| match side.drop_meta().symbol_name().and_then(|name| found.get(name)) {
-				Some(function) => crate::closures::function_reference(function.clone()),
-				None => replace_aliases(side, found),
-			};
-			let left = compared(*left);
-			key(left, op, compared(*right))
-		}
 		// `(h)`, as an earlier pass calls the defined name h: the function's name, a call of it only without parameters
-		Node::List(items, Bracket::Round, _)
-			if items.len() == 1 && items[0].symbol_name().is_some_and(|name| found.contains_key(name)) =>
-		{
-			items
-				.into_iter()
-				.next()
-				.map_or(Node::Empty, |item| replace_aliases(item, found))
+		Node::List(items, Bracket::Round, _) if items.len() == 1 && called(&items[0]).is_some() => {
+			called(&items[0]).expect("guarded")
 		}
 		// `h 4` of the alias h: the call of its function, which the earlier passes didn't know h for (card alias-chain)
-		Node::List(items, Bracket::None, Separator::Space)
-			if items.len() > 1 && items[0].symbol_name().is_some_and(|name| found.contains_key(name)) =>
-		{
-			let mut items = items.into_iter().map(|item| replace_aliases(item, found));
-			let function = items
-				.next()
-				.and_then(|function| function.symbol_name().map(String::from))
-				.unwrap_or_default();
-			call(&function, items.collect())
+		Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && called(&items[0]).is_some() => {
+			let function = called(&items[0]).and_then(|function| function.symbol_name().map(String::from));
+			call(
+				&function.expect("guarded"),
+				items.into_iter().skip(1).map(replaced).collect(),
+			)
 		}
-		other => children_rewritten(other, |child| replace_aliases(child, found)),
+		// `h(4)`, read `(h 4)`: the call of its function
+		Node::List(items, Bracket::Round, separator) if items.len() > 1 && called(&items[0]).is_some() => {
+			let head = called(&items[0]).expect("guarded");
+			let arguments = items.into_iter().skip(1).map(replaced);
+			Node::List(
+				std::iter::once(head).chain(arguments).collect(),
+				Bracket::Round,
+				separator,
+			)
+		}
+		other => children_rewritten(other, replaced),
 	}
 }
 
@@ -658,13 +665,20 @@ pub fn lower(program: Node) -> Node {
 	let functions: HashSet<String> = found.iter().map(|definition| definition.name.clone()).collect();
 	let mut assigned_count = HashMap::new();
 	let mut alias_of = HashMap::new();
-	aliases(&program, &functions, &mut assigned_count, &mut alias_of);
+	let mut alias_values = HashSet::new();
+	aliases(
+		&program,
+		&functions,
+		&mut assigned_count,
+		&mut alias_of,
+		&mut alias_values,
+	);
 	// an alias assigned once only
 	alias_of.retain(|name, _| assigned_count.get(name) == Some(&1));
 	let program = if alias_of.is_empty() {
 		program
 	} else {
-		replace_aliases(program, &alias_of)
+		replace_aliases(program, &alias_of, &alias_values)
 	};
 
 	let mut found = Vec::new();
