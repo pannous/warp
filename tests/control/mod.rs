@@ -180,6 +180,7 @@ mod test_try_index_and_float;
 mod test_try_list_index;
 mod test_try_named_traps;
 mod test_try_stack_overflow;
+mod test_type_field_fallback; // card type-non
 mod test_type_word_filter_loops;
 mod test_uncharged_blocks;
 mod test_undo_history;
