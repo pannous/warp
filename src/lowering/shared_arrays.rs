@@ -33,6 +33,9 @@ const LINEAR_TOPIC: &str = "linear-array";
 
 /// The cell of a shared value
 const VALUE_CELL: i64 = 1;
+/// The fewest cells a `go` map of a float kernel splits into slices on threads: an instance per slice costs about half a
+/// millisecond, the kernel about a nanosecond a cell
+const SPLIT_FEWEST: i64 = 1 << 18;
 
 /// What a shared name holds: an array of Ints or floats, or one value (P106)
 #[derive(Clone, Copy, PartialEq)]
@@ -529,7 +532,12 @@ impl Rewrite<'_> {
 						if shared(&target, &names).is_some()
 							&& let Some((array, kernel)) = float_map(&value, &names) =>
 					{
-						Node::Key(target, op, Box::new(builtin(&kernel, vec![array])))
+						let mapped = builtin(&kernel, vec![array.clone()]);
+						if value.attribute(crate::parallel::SPLIT_ATTRIBUTE).is_some() {
+							split_mapped(&target, &array, &kernel, mapped)
+						} else {
+							Node::Key(target, op, Box::new(mapped))
+						}
 					}
 					(Node::Symbol(_), Op::Assign)
 						if shared(&target, &names).is_some()
@@ -1009,6 +1017,28 @@ fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_map
 			("gpu_values", outer_values(&kernel)),
 		],
 	)
+}
+
+/// `ys = go xs.map(x => …)` of a float kernel: from SPLIT_FEWEST cells on the host maps slices of xs on threads
+/// (task_split_mapf), else, or where it gives 0, the kernel here
+fn split_mapped(target: &Node, array: &Node, kernel: &str, mapped: Node) -> Node {
+	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
+	let template = crate::warp_parser::parse(&format!(
+		"map_target = (map_split = (if {LINEAR_COUNT}(map_source) >= {SPLIT_FEWEST} then {}(map_kernel, map_source) else 0); if map_split == 0 then map_kernel_call else map_split)",
+		crate::host::TASK_SPLIT_MAPF
+	));
+	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
+	[
+		("map_target", target.clone()),
+		("map_source", array.clone()),
+		("map_split", Node::Symbol(format!("{}{separator}split", target.name()))),
+		("map_kernel", Node::Text(kernel.to_string())),
+		("map_kernel_call", mapped),
+	]
+	.into_iter()
+	.fold(template, |node, (placeholder, value)| {
+		crate::library_words::substitute(node, placeholder, &value)
+	})
 }
 
 /// `ys = linear_new(count(xs))`, then `mapped` (`map_loop` in it the CPU's loop writing each cell of ys from xs's)

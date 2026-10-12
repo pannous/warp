@@ -16,6 +16,7 @@ use crate::event_signals::{
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::assign;
+use crate::warp_parser::TRY_MARKER;
 use std::collections::BTreeMap;
 
 /// Generated function names join their parts with it
@@ -28,6 +29,8 @@ const PLUMBING_PREFIX: &str = "effect_handler_";
 /// `break value` in a handler body: its block ends with value
 const BREAK_WORD: &str = "break";
 const FINISHED_WORD: &str = "finished";
+/// The handlers a `try` or an aborting block noted as it started: `saved·ask·guard·n`
+const GUARD_WORD: &str = "guard";
 
 /// A block handler: its event, its number (unique in the program) and body
 struct Handler {
@@ -89,10 +92,60 @@ pub fn lower(program: Node) -> Node {
 		main.push(enter_function(handler, &main_variables));
 		main.push(handler_function(handler, &by_event, &verbs, &main_variables));
 	}
-	let statements = statements
+	let events: Vec<&String> = by_event.keys().collect();
+	let mut guards = 0;
+	let statements: Vec<Node> = statements
 		.into_iter()
-		.map(|statement| dispatched_emits(statement, &by_event, &verbs));
+		.map(|statement| dispatched_emits(statement, &by_event, &verbs))
+		.map(|statement| unwound(statement, &events, &mut guards))
+		.collect();
 	Node::List(main.into_iter().chain(statements).collect(), bracket, separator)
+}
+
+/// A block that a thrown error or another block's abort jumps out of never runs its leave: each `try` and each
+/// aborting block notes every event's active handler as it starts and puts them back once it caught the throw, before
+/// its fallback runs (notes/scoped_handlers.md step 1, leave on throw)
+fn unwound(node: Node, events: &[&String], guards: &mut usize) -> Node {
+	let node = node.map_children(|child| unwound(child, events, guards));
+	match node.drop_meta() {
+		Node::List(items, bracket, separator) if items.len() >= 3 && items[0].is_symbol(TRY_MARKER) => {
+			let (notes, restores) = active_handlers_kept(events, guards);
+			// the guarded expression keeps its shape, which later passes read (guarded_calls, within_or)
+			let mut items = items.clone();
+			items[2] = sequence([restores, statements_of(&items[2])].concat());
+			let guard = Node::List(items, bracket.clone(), separator.clone());
+			sequence([notes, vec![guard]].concat())
+		}
+		Node::Key(finished, Op::Assign, ran) if is_call_of(ran, crate::wasm_emitter::RAN_WITHOUT_ABORT) => {
+			let (notes, restores) = active_handlers_kept(events, guards);
+			sequence([notes, vec![node.clone()], restores, vec![finished.as_ref().clone()]].concat())
+		}
+		_ => node,
+	}
+}
+
+/// `saved·ask·guard·n = ask·active()` for each event, and `saved·ask·guard·n = ask·leave(saved·ask·guard·n)` putting
+/// it back: an assignment, as a statement leading a `catch e` fallback, where a bare call made the fallback no code
+/// block ("text + error")
+fn active_handlers_kept(events: &[&String], guards: &mut usize) -> (Vec<Node>, Vec<Node>) {
+	*guards += 1;
+	let saved = |event: &str| generated(&[SAVED_WORD, &event_word(event), GUARD_WORD, &guards.to_string()]);
+	let notes = events
+		.iter()
+		.map(|event| assign(&saved(event), call(&active_function(event), vec![])))
+		.collect();
+	let restores = events
+		.iter()
+		.map(|event| {
+			let restored = call(&leave_function(event), vec![Node::Symbol(saved(event))]);
+			assign(&saved(event), restored)
+		})
+		.collect();
+	(notes, restores)
+}
+
+fn is_call_of(node: &Node, function: &str) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|first| first.is_symbol(function)))
 }
 
 /// Does a block handler of the program answer the event (its dispatch function `ask·active` is defined)?

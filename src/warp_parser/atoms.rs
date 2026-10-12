@@ -213,12 +213,7 @@ impl WarpParser {
 		}
 
 		// Attach metadata
-		let node = node.with_meta_data(LineInfo {
-			line_nr,
-			column,
-			#[cfg(debug_assertions)]
-			line: self.current_line.clone(),
-		});
+		let node = node.with_meta_data(LineInfo::at(line_nr, column, || self.current_line.clone()));
 		if let Some(c) = comment {
 			node.with_comment(c)
 		} else {

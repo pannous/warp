@@ -547,8 +547,10 @@ Each step is useful on its own and is what the next ones stand on.
 - Modules (card web-dev-modules): the loader records the files a build used or included (modules::module_files), and
   dev_server.rs watches them beside the program. A module's parse failure names its file (` at greeting.warp:2:15`,
   diagnostic::located_in_file), so the overlay shows the module's line (host_parts::with_excerpt reads that file).
-  Left: a failure past parsing in a module's code (an unknown word) still names a bare line, read as the program's;
-  node positions carry no file. Probe: probes/dev/uses_module.warp with probes/dev/greeting_module.warp.
+  A failure past parsing in a module's code (an unknown word) names the file too (card module-error-file): the parser
+  marks a module's positions with its file (meta::parsing_file, LineInfo.file), the emitter's errors and Diagnostic
+  print `file:line:column` (meta::place_text), and names_position reads that as a position. Probes:
+  probes/dev/uses_module.warp with probes/dev/greeting_module.warp, probes/module_error_file/uses_broken.warp.
 - Browser (card dev-opens-browser): `warp dev` from a terminal opens its page in the default browser
   (dev_server::serve_and_open, `open` / `xdg-open` / `start`); piped, under WARP_NO_WINDOW or CI it only prints the
   address, and `dev_server::serve` (tests) never opens. Test warp_dev_opens_no_browser_when_piped.

@@ -36,6 +36,9 @@ LISTING_QUERY = "listing"
 STUB_PATH = "/__stub__"  # answers with the status and body its query names, after `delay` milliseconds: the fetch tests' HTTP stub (tests/common serve)
 CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup comes back
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
+# serve without the isolation headers, as GitHub Pages does, so the page isolates itself under coi-serviceworker.js
+# (card firefox-coi-worker: probes/firefox_start/starts.py follows those starts)
+UNISOLATED = os.environ.get("WARP_SERVE_UNISOLATED") == "1"
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CI_ONLY = "browser tests run in CI only: skipped here, Chrome is not started outside CI (dispatch the Playground workflow on your branch)"
@@ -191,8 +194,9 @@ def serve(binary, root=REPOSITORY):
 
 		def end_headers(self):
 			# cross-origin isolation: SharedArrayBuffer for tasks on Workers (host.js startTask)
-			self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-			self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+			if not UNISOLATED:
+				self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+				self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
 			super().end_headers()
 
 		def log_message(self, *_):

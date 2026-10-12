@@ -17,6 +17,8 @@ use crate::operators::Op;
 const PARALLEL_CHUNKS: i64 = 8;
 const GO_WORD: &str = "go";
 const PARALLEL_ATTRIBUTE: &str = "parallel";
+/// A `go` map of a float kernel, split on the host where its list is a linear float array (kernel_map)
+pub(crate) const SPLIT_ATTRIBUTE: &str = "split_kernel";
 /// The temporaries of a template: `parallel_part` becomes `parallel·part·3` for the third parallel map or loop
 const TEMPORARY_PREFIX: &str = "parallel_";
 const TEMPORARY_BASE: &str = "parallel";
@@ -46,6 +48,25 @@ pub(crate) fn parallel_map(node: &Node) -> Option<(Node, Node)> {
 	is_annotated(node, PARALLEL_ATTRIBUTE)
 		.then(|| map_call(node).or_else(|| all_call(node)))
 		.flatten()
+}
+
+/// `go xs.map(x => x * 0.5 + 1)` of a float kernel (linear_arrays.rs is_float_kernel): the map marked SPLIT_ATTRIBUTE,
+/// which picks linear memory for xs and splits on the host (shared_arrays.rs, card go-split-kernel); tasks copying
+/// slices of Nodes would cost a thousand times the kernel's work
+pub(crate) fn kernel_map(list: &Node, function: &Node) -> Option<Node> {
+	let Node::Key(parameter, Op::FatArrow, body) = function.drop_meta() else {
+		return None;
+	};
+	let kernel = matches!(list.drop_meta(), Node::Symbol(_))
+		&& crate::wasm_emitter::linear_arrays::is_float_kernel(&parameter.name(), body);
+	kernel.then(|| {
+		let call = Node::List(
+			vec![symbol(MAP_WORD), function.clone()],
+			Bracket::Round,
+			Separator::None,
+		);
+		key(list.clone(), Op::Dot, call).with_attribute(SPLIT_ATTRIBUTE, Node::True)
+	})
 }
 
 /// `@parallel` on a form parallel_map can't split into tasks (`@parallel square xs`): a warning (an error under strict)

@@ -52,7 +52,8 @@ What has to be decided or built first:
    and deep traps (#34) need the guarded-body host import first.
 3. **Handler bodies can't see the locals** of the function they're written in yet (effect_handlers.md limit); try's
    `else` can. Needed before try can be rewritten as a handler.
-4. **Unwinding.** An error escaping a block leaves the handler active today; the unified version needs leave-on-throw.
+4. **Unwinding.** Done (card on-error-abort): a catching `try` or aborting block puts every event's active handler
+   back (effect_handlers.md "Leave on throw").
 5. Cost: the handler path is globals plus calls; try is one wasm try block. Small `try` stays the cheaper lowering
    unless the handler lowering inlines a single literal handler.
 

@@ -76,6 +76,7 @@ mod test_glued_block_words; // card glued-loop
 mod test_go_blocks;
 mod test_go_statement; // card go-play
 mod test_handler_globals;
+mod test_handler_unwinding; // card on-error-abort
 mod test_help_word;
 mod test_if_call_condition;
 mod test_if_empty_branch;
@@ -127,6 +128,7 @@ mod test_signal_lists;
 mod test_signal_reflection;
 mod test_signal_values;
 mod test_soft_tests;
+mod test_split_kernel; // card go-split-kernel
 mod test_storage;
 mod test_store_values;
 mod test_stored_default; // card stored-visits

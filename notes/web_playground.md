@@ -212,7 +212,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   trickle_server.py [--stall] + progress.sh (warp.wasm at 400 KB/s, or stopping after 1 MB: the note at 30 s).
 - The hang caught (2026-10-09, verify run 37895933962, live site, Firefox): isolated and service-worker controlled, but
   playground.state() said worker "not started": worker.js never posted a single message, nothing in the console; the
-  run queued behind it. Root cause (a Worker spawned under coi-serviceworker in Firefox that never runs) still open (card firefox-coi-worker).
+  run queued behind it. Root cause: Firefox's nested `new Worker` (below, card tour-firefox-stall); coi-serviceworker is not part of it (card firefox-coi-worker).
   Now playground.js restarts a starting worker silent for STALLED_START_MS (60 s; every message restarts the clock, so a
   slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
   loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of
@@ -231,6 +231,11 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   asks {taskWorker: {id, url}}, gets a MessagePort to the new Worker, and asks {endTaskWorker: id} to stop one; the
   pool holds the ports. Both listeners are registered before the Worker's own onmessage and stop the message there.
   Measured (runs 38055959458 vs 38055971317, 150 fresh starts each): 0 stalls with the fix, 6 without.
+- Card firefox-coi-worker (2026-10-12): the hang of 2026-10-09 was suspected on coi-serviceworker. Run 38285339353
+  (branch coi-probe) followed 80 fresh Firefox starts served without the isolation headers (WARP_SERVE_UNISOLATED=1, as
+  GitHub Pages: each page reloads once under coi-serviceworker.js and comes back controlled and isolated) and 40 with
+  them: 0 stalls in either, ready in ~3.5 s vs ~2.8 s. No stall warning ("gave no sign for") in the 100 Pages runs
+  since the page-made task Workers either. Closed: the nested Worker was the cause.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
