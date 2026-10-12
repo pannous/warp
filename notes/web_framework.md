@@ -304,6 +304,11 @@ Each step is useful on its own and is what the next ones stand on.
   morphed markup; a new size replaces it) and shares the SharedArrayBuffer pointer for mouse_x/mouse_y/mouse_down.
   Checked natively by test_site a_painting_site_runs_in_a_worker_with_its_canvas; the page side has no browser test.
 
+- Page facts (card html-meta, default A, 2026-10-12): `html{ lang: "en" title: "Shop" description: "…" meta: { author:
+  "Ann" } body{…} }` puts `<title>` and `<meta name content>` into the head (lib/markup.warp html_is_page_fact,
+  html_page_fact), into the page's own `head{}` when it has one; a `meta{ charset: "utf-8" }` element stays an element
+  (html_meta_attributes). Test: tests/web/test_html_meta.rs; probe probes/html_meta/page_facts.warp.
+
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
 - `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.warp): each route is the function page·route·N,
   `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the

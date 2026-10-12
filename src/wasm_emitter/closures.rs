@@ -35,6 +35,11 @@ const CAPTURE_VALUE_PREFIX: &str = "·capture·";
 const CAPTURED_FIELD: u32 = 1;
 const NODE_DATA_FIELD: u32 = 1;
 const NODE_VALUE_FIELD: u32 = 2;
+/// A closure's kind carries the class of its target's written form above the kind bits, so == compares definitions
+/// (card runtime-function); class 0: one of too many to count, compared by name
+pub(super) const FUNCTION_CLASS_SHIFT: i64 = 8;
+const FUNCTION_CLASSES: usize = (1 << (crate::type_kinds::ELEMENT_MARK_SHIFT - FUNCTION_CLASS_SHIFT)) - 1;
+pub(super) const FUNCTION_CLASS_MASK: i64 = (FUNCTION_CLASSES as i64) << FUNCTION_CLASS_SHIFT;
 
 /// The types and entry functions of the closures in a module
 #[derive(Default, Clone)]
@@ -48,6 +53,8 @@ pub(super) struct ClosureTypes {
 	carriers: Option<(u32, u32)>,
 	/// closure_apply, for a program that calls foreign code
 	apply: Option<u32>,
+	/// The written forms of the closure targets (function_equality::written_form), class n at n - 1
+	written_forms: Vec<String>,
 }
 
 impl ClosureTypes {
@@ -76,6 +83,29 @@ impl ClosureTypes {
 impl WasmGcEmitter {
 	fn nullable_node(&self) -> ValType {
 		Ref(self.node_ref(true))
+	}
+
+	/// The kind of a closure of `target`: Function with the class of its written form
+	fn function_kind(&mut self, target: &str) -> i64 {
+		let class = self.ctx.user_functions.get(target).map_or(0, |function| {
+			let parameters: Vec<_> = function
+				.params
+				.iter()
+				.map(|param| (param.name.clone(), param.annotation.clone()))
+				.collect();
+			let form = crate::function_equality::written_form(target, &parameters, &function.body);
+			let forms = &mut self.closures.written_forms;
+			let index = forms.iter().position(|known| *known == form).unwrap_or_else(|| {
+				forms.push(form);
+				forms.len() - 1
+			});
+			if index < FUNCTION_CLASSES {
+				index + 1
+			} else {
+				0
+			}
+		});
+		((class as i64) << FUNCTION_CLASS_SHIFT) | Kind::Function as i64
 	}
 
 	fn closure_type(&mut self) -> u32 {
@@ -304,10 +334,10 @@ impl WasmGcEmitter {
 				s.emit_string_call(rebuild, &target, "new_symbol");
 				s.emit_call(rebuild, super::equality::VALUES_EQUAL);
 				rebuild.instruction(&I::If(BlockType::Empty));
-				s.emit_kind(rebuild, Kind::Function);
 				Self::emit_list(
 					rebuild,
 					&[
+						I::I64Const(s.function_kind(&target)),
 						I::RefFunc(entry),
 						I::LocalGet(1),
 						I::StructNew(closure),
@@ -729,8 +759,8 @@ impl WasmGcEmitter {
 			true => self.nested_captures_now(func, target),
 			false => captured.to_vec(),
 		};
-		self.emit_kind(func, Kind::Function);
-		func.instruction(&I::RefFunc(entry_function));
+		let kind = self.function_kind(target);
+		Self::emit_list(func, &[I::I64Const(kind), I::RefFunc(entry_function)]);
 		if captured.is_empty() {
 			self.emit_node_null(func);
 		} else {
@@ -742,5 +772,49 @@ impl WasmGcEmitter {
 		func.instruction(&I::StructNew(closure));
 		self.emit_string_call(func, target, "new_symbol");
 		func.instruction(&I::StructNew(self.type_manager.node_type));
+	}
+}
+
+impl WasmGcEmitter {
+	/// In values_equal, two closures of the same kind (so of the same class, Self::function_kind): equal when they
+	/// captured equal values; of class 0 only of the same function
+	pub(super) fn emit_closures_equal(&mut self, f: &mut Function, recurse: u32) {
+		let (node, closure) = (self.type_manager.node_type, self.closure_type());
+		let (left, right, left_kind) = (0, 1, 2);
+		Self::emit_list(
+			f,
+			&[
+				I::LocalGet(left_kind),
+				I::I64Const(crate::type_kinds::KIND_MASK),
+				I::I64And,
+				I::I64Const(Kind::Function as i64),
+				I::I64Eq,
+				I::If(BlockType::Empty),
+				I::LocalGet(left_kind),
+				I::I64Const(FUNCTION_CLASS_MASK),
+				I::I64And,
+				I::I64Eqz,
+				I::If(BlockType::Empty),
+			],
+		);
+		Self::field(f, left, node, NODE_VALUE_FIELD);
+		Self::field(f, right, node, NODE_VALUE_FIELD);
+		Self::emit_list(f, &[I::Call(recurse), I::I32Eqz]);
+		Self::return_if(f, 0);
+		f.instruction(&I::End);
+		for side in [left, right] {
+			Self::field(f, side, node, NODE_DATA_FIELD);
+			Self::emit_list(
+				f,
+				&[
+					I::RefCastNonNull(HeapType::Concrete(closure)),
+					I::StructGet {
+						struct_type_index: closure,
+						field_index: CAPTURED_FIELD,
+					},
+				],
+			);
+		}
+		Self::emit_list(f, &[I::Call(recurse), I::Return, I::End]);
 	}
 }

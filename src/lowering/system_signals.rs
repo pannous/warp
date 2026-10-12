@@ -38,9 +38,7 @@ const KEY_EVENT: &str = "key";
 const KEYS_TEMPLATE: &str = "on frame {
 	CODE = system_value(\"key_pressed\")
 	while CODE != 0 {
-		NAME = \"\" + chr(CODE)
-		NAMED
-		emit key{key: NAME}
+		emit key{key: NAMED}
 		CODE = system_value(\"key_pressed\")
 	}
 }";
@@ -53,11 +51,9 @@ const CLICKS_TEMPLATE: &str = "on frame {
 		emit click{x: system_value(\"click_x\"), y: system_value(\"click_y\")}
 	}
 }";
-#[cfg(feature = "native")]
-const NAMED_KEY_TEMPLATE: &str = "if CODE == NUMBER { NAME = KEY_NAME }";
-/// The keys the page names (src/paint_window.rs key_code gives these codes)
-#[cfg(feature = "native")]
-const KEY_NAMES: [(i64, &str); 8] = [
+/// The keys the page names (src/paint_window.rs key_code, canvas.js KEY_CODES give these codes); 0 is none
+const KEY_NAMES: [(i64, &str); 9] = [
+	(0, ""),
 	(0xF700, "ArrowUp"),
 	(0xF701, "ArrowDown"),
 	(0xF702, "ArrowLeft"),
@@ -128,23 +124,24 @@ fn with_window_events(program: Node) -> Node {
 
 #[cfg(feature = "native")]
 fn keys_reader() -> Node {
-	let mut bindings = std::collections::HashMap::from([
+	let bindings = std::collections::HashMap::from([
 		("CODE".to_string(), symbol("key·code")),
-		("NAME".to_string(), symbol("key·name")),
+		("NAMED".to_string(), key_named(symbol("key·code"))),
 	]);
-	let named: Vec<Node> = KEY_NAMES
-		.iter()
-		.map(|(code, key_name)| {
-			bindings.insert("NUMBER".to_string(), Node::int(*code));
-			bindings.insert("KEY_NAME".to_string(), Node::Text(key_name.to_string()));
-			crate::law::substitute(&crate::warp_parser::parse(NAMED_KEY_TEMPLATE), &bindings)
-		})
-		.collect();
-	bindings.insert(
-		"NAMED".to_string(),
-		Node::List(named, Bracket::None, Separator::Newline),
-	);
 	crate::law::substitute(&crate::warp_parser::parse(KEYS_TEMPLATE), &bindings)
+}
+
+/// The name of the key with that code, as the page's KeyboardEvent.key: a key's name (KEY_NAMES), else its character
+pub fn key_named(code: Node) -> Node {
+	let choices: String = KEY_NAMES
+		.iter()
+		.map(|(number, name)| format!("if CODE == {number} then \"{name}\" else "))
+		.collect();
+	let template = crate::warp_parser::parse(&format!("{choices}\"\" + chr(CODE)"));
+	crate::law::substitute(
+		&template,
+		&std::collections::HashMap::from([("CODE".to_string(), code)]),
+	)
 }
 
 #[cfg(feature = "native")]

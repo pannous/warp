@@ -701,8 +701,8 @@ fn response_header(mut caller: Caller<'_, HostState>, name: HostNode, value: Hos
 	Ok(())
 }
 
-/// What a failed route says to the client: the program's error message, read with the value the program left in
-/// trap_detail (as wasm_reader::with_trap_detail does for main); the whole trace goes to the server's log
+/// What a failed route says to the client: the program's error message, read with the values the program left in
+/// trap_detail and, for a runtime error, trap_position (as wasm_reader::with_trap_detail does for main); the whole trace goes to the server's log
 fn route_failure(
 	caller: &mut Caller<'_, HostState>,
 	path: &str,
@@ -717,6 +717,18 @@ fn route_failure(
 		let _ = global.set(&mut *caller, Val::AnyRef(None));
 	}
 	let failure = anyhow::Error::from(failure);
+	let raised = format!("{failure:?}").contains(crate::wasm_emitter::list_ops::RETURNED_ERROR);
+	// a runtime error names its statement; what the program raised is its own words to the client
+	let failure = match raised {
+		true => failure,
+		false => {
+			let position = caller
+				.get_export(crate::wasm_reader::TRAP_POSITION)
+				.and_then(Extern::into_global)
+				.map(|global| global.get(&mut *caller));
+			crate::wasm_reader::with_trap_position(failure, position)
+		}
+	};
 	let failure = match left {
 		Some(Val::AnyRef(Some(value))) => match given_node(caller, Some(value)) {
 			Ok(node) => failure.context(crate::wasm_reader::trap_detail_line(&node)),
@@ -727,10 +739,7 @@ fn route_failure(
 	let trace = format!("{failure:?}");
 	let message = crate::tasks::failure_message(failure);
 	eprintln!("{path} failed: {message}\n{trace}");
-	crate::web_server::RouteFailure {
-		message,
-		raised: trace.contains(crate::wasm_emitter::list_ops::RETURNED_ERROR),
-	}
+	crate::web_server::RouteFailure { message, raised }
 }
 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a

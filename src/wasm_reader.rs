@@ -459,15 +459,10 @@ pub(crate) fn with_trap_detail<T, R>(
 	instance: &Instance,
 ) -> Result<R> {
 	outcome.map_err(|failure| {
-		let mut failure = anyhow::Error::from(failure);
 		let position = instance
 			.get_global(&mut *store, TRAP_POSITION)
-			.and_then(|global| global.get(&mut *store).i32())
-			.map(i64::from)
-			.and_then(trap_position_line);
-		if let Some(position) = position {
-			failure = failure.context(position);
-		}
+			.map(|global| global.get(&mut *store));
+		let failure = with_trap_position(anyhow::Error::from(failure), position);
 		let detail = instance
 			.get_global(&mut *store, TRAP_DETAIL)
 			.map(|global| global.get(&mut *store));
@@ -479,6 +474,18 @@ pub(crate) fn with_trap_detail<T, R>(
 			None => failure,
 		}
 	})
+}
+
+/// A trapped run with the source position the program left in `trap_position` (its value) as the error's context
+pub(crate) fn with_trap_position(failure: anyhow::Error, position: Option<Val>) -> anyhow::Error {
+	match position
+		.and_then(|value| value.i32())
+		.map(i64::from)
+		.and_then(trap_position_line)
+	{
+		Some(line) => failure.context(line),
+		None => failure,
+	}
 }
 
 /// Convert a `main` result (primitive or GC Node struct) into a Node, for any store state

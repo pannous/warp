@@ -7,6 +7,21 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- html-meta (warp-markup): page facts are keys on html: `html{ title: "Shop" description: "Fresh fruit" meta:
+  {author: "Ann"} body{…} }` puts <title> and <meta name=… content=…> into the head (the page's own head{} if
+  present); `meta:title="test"` reads as `meta: {title: "test"}`. The <html title> tooltip reading is dropped.
+- build-links (warp-markup): `warp build page.warp` of a page program makes the executable `page` (runtime stub +
+  site) that opens the page in the system web view, no warp installed; `page --check` prints the page text. A
+  double-clickable macOS bundle may come later as `warp build --app`.
+- unknown-type (warp-semantics): an unknown declared variable type is always an error (`p: foo = 2.5` → "unknown
+  type foo of p", near type as fix), as for parameters; C-style code too. test_sinus changes `tdouble` → `double`
+  (user's OK).
+- Implied, not asked: static-int keeps refusing a constant call whose value misfits its declared int result at
+  compile time (`half(3)` → "gives 1.5"), earlier than the Lean model W0 (P203: annotations are promises the
+  compiler enforces); select-shorthand: a list inside select{} gives one option per item, a map item
+  `["a": "Apple"]` gives value + label (P188, no invented attribute).
+- Defaults kept (warp-semantics): JSON true/false from parse_json and the std adapters are yes/no
+  (`to_json(parse_json("[true]"))` → [true]); a bool stored into an int place is 1/0, an `any` place keeps the bool.
 - key-if (warp-markup): contextual key names. Inside `on key {…}` a bare `key` reads event.key (like bare fields
   read self, P115; a program variable `key` wins), and named keys compare as words: Escape/ESC, Enter/RETURN/ENTER,
   Tab, Space, Backspace, ArrowUp…/UP DOWN LEFT RIGHT, F1–F12: `on key { if key == ESC { exit } }`. Letters stay

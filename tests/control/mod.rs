@@ -76,9 +76,11 @@ mod test_function_body; // card g_X_3s
 mod test_function_dir; // card dir-function
 mod test_glued_block_words; // card glued-loop
 mod test_go_blocks;
+mod test_go_heavy_map; // card go-heavy-map
 mod test_go_statement; // card go-play
 mod test_handler_globals;
 mod test_handler_unwinding; // card on-error-abort
+mod test_held_key; // card held-key
 mod test_help_word;
 mod test_if_call_condition;
 mod test_if_empty_branch;
@@ -161,6 +163,7 @@ mod test_task_bools;
 mod test_task_char; // card task-char
 mod test_task_closures;
 mod test_task_dir;
+mod test_task_error_positions; // card runtime-errors
 mod test_task_exact;
 mod test_task_globals; // card error-undefined
 mod test_task_list_literal;

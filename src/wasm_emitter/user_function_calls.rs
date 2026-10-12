@@ -374,7 +374,14 @@ impl WasmGcEmitter {
 			.collect();
 
 		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
-		let saved_statement_position = self.statement_position.take();
+		// a one-expression body is its own statement: run as a task, no caller's statement names its line
+		let saved_statement_position = std::mem::replace(
+			&mut self.statement_position,
+			crate::diagnostic::line_info(&user_fn.body),
+		);
+		if !matches!(user_fn.body.drop_meta(), Node::List(..)) {
+			self.emit_trap_position(&mut func);
+		}
 		// Compile the function body - use node instructions for Node-returning functions
 		if self.struct_results.contains_key(name) {
 			self.emit_struct_result_body(&mut func, &user_fn.body);

@@ -47,6 +47,7 @@ mod test_host_parts; // the parts of host.js a site ships
 #[cfg(feature = "native")] // src/site.rs is native
 mod test_host_parts_std; // std_pure / std_io parts chosen by the std modules a program calls
 mod test_html_escape; // card cleanup-html-escape
+mod test_html_meta; // card html-meta
 #[cfg(feature = "native")] // lib/markup.warp against src/html.rs, natively
 mod test_html_render;
 mod test_i18n;
@@ -80,6 +81,8 @@ mod test_rendering_itself; // card playground-render
 mod test_request_fields; // card g_mQ9U
 #[cfg(feature = "native")] // a site build and a server on a port
 mod test_route_data; // P221
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_route_error_positions; // card runtime-errors
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_route_header; // card web-route-header
 #[cfg(feature = "native")] // runs wasm-split
