@@ -84,6 +84,7 @@ CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the sha
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card shader-brush: samples/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
 BRUSH = "(samples/shader_brush colors the paper under the pointer)"
+BRUSH_SAMPLE = "shader_brush"
 BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU takes far longer for its 1280×800
 BRUSH_POLL_MS = 250
 PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
@@ -375,8 +376,12 @@ def gpu_page_wrong():
 
 
 def brush_wrong():
-	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper"""
-	run_sample("shader_brush")
+	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper. Its
+	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
+	the sample then runs until stopped, so it is started, not waited for"""
+	if not firefox:  # Firefox has no WebGPU here: the sample's error is the skip below
+		browser("click", "#output")
+	browser("eval", f"void playground.chooseExample({json.dumps(BRUSH_SAMPLE)})")
 	shown = browser("eval", f"""(async () => {{
 		const pixel = (canvas, x, y) => {{
 			const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
