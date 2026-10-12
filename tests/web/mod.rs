@@ -66,6 +66,8 @@ mod test_rendering_itself; // card playground-render
 mod test_request_fields; // card g_mQ9U
 #[cfg(feature = "native")] // a site build and a server on a port
 mod test_route_data; // P221
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_route_header; // card web-route-header
 #[cfg(feature = "native")] // builds a site (src/site.rs)
 mod test_route_modules;
 #[cfg(feature = "native")] // a server on a port and its SQLite table
