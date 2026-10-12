@@ -47,7 +47,7 @@ mod test_sound_spectrum; // card winamp-like
 mod test_sound_synth; // card sound-pro
 mod test_sound_tempo; // card sound-pro
 mod test_sound_use; // card bizarre-global
-mod test_sound_voices; // card sound-pro
+pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves scope too
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
 mod test_warp_command; // card midi-out

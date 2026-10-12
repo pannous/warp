@@ -132,6 +132,20 @@ pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
 	}
 }
 
+/// The parameter names of every function the program defines: a variable of the same name in another function is
+/// another variable, whatever the whole-program analyses saw assigned to it (card two-signal-kinds)
+pub(crate) fn parameter_names(program: &Node) -> std::collections::HashSet<String> {
+	let mut names = std::collections::HashSet::new();
+	program.visit(&mut |part| {
+		if let Some((head, _, _)) = definition_parts(part) {
+			if let Node::List(items, _, _) = head.drop_meta() {
+				names.extend(items.iter().skip(1).filter_map(super::nodes::parameter_name));
+			}
+		}
+	});
+	names
+}
+
 /// `(f n)`: a name and its parameters, what `f(n) = body` assigns, unlike `x = body`
 /// Every definition of a memoized function with its body behind the cache
 fn rewritten(node: Node, memoized: &[String]) -> Node {
