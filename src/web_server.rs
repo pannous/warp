@@ -77,6 +77,7 @@ impl Route {
 				status: 200,
 				content_type: JSON_TYPE,
 				body: b"[]".to_vec(),
+				headers: vec![],
 			},
 			Node::Error(message) => self.failed(&message.to_string()),
 			_ => Answer::of(value),
@@ -117,11 +118,12 @@ impl Route {
 	}
 }
 
-/// What a route's function gave, as the HTTP answer: status, content type, body
+/// What a route's function gave, as the HTTP answer: status, content type, body and the headers the route set
 pub struct Answer {
 	pub status: u16,
 	pub content_type: &'static str,
 	pub body: Vec<u8>,
+	pub headers: Vec<(String, String)>,
 }
 
 impl Answer {
@@ -131,11 +133,13 @@ impl Answer {
 				status: 200,
 				content_type: TEXT_TYPE,
 				body: text.clone().into_bytes(),
+				headers: vec![],
 			},
 			Node::Char(character) => Answer {
 				status: 200,
 				content_type: TEXT_TYPE,
 				body: character.to_string().into_bytes(),
+				headers: vec![],
 			},
 			Node::Error(message) => Answer::failed(&message.to_string()),
 			other => Answer {
@@ -144,12 +148,33 @@ impl Answer {
 				body: crate::foreign::json_of(&without_classes(other))
 					.to_string()
 					.into_bytes(),
+				headers: vec![],
 			},
 		}
 	}
 
 	pub fn failed(message: &str) -> Answer {
 		answer_failing("", failure_status(message), message)
+	}
+
+	/// With the headers the route set (`header "name" "value"`); the CGI header Status (`status 418`) is the status
+	pub fn with_headers(self, headers: Vec<(String, String)>) -> Answer {
+		let (statuses, headers): (Vec<_>, Vec<_>) = headers
+			.into_iter()
+			.partition(|(name, _)| name.eq_ignore_ascii_case(crate::host::STATUS_HEADER));
+		let status = statuses.last().map(|(_, status)| status.trim().parse::<u16>());
+		match status {
+			Some(Err(_)) | Some(Ok(0..=99 | 600..)) => {
+				let given = statuses.last().map_or("", |(_, status)| status.as_str());
+				Answer::failed(&format!("status {given}: not an HTTP status (100 to 599)"))
+			}
+			Some(Ok(status)) => Answer {
+				status,
+				headers,
+				..self
+			},
+			None => Answer { headers, ..self },
+		}
 	}
 
 	/// A page with `message` shown at its top, as an alert: the first thing after <body>, else before the whole page
@@ -199,11 +224,13 @@ fn answer_failing(path: &str, status: u16, message: &str) -> Answer {
 			status,
 			content_type: JSON_TYPE,
 			body: serde_json::json!({ "error": message }).to_string().into_bytes(),
+			headers: vec![],
 		},
 		false => Answer {
 			status,
 			content_type: TEXT_TYPE,
 			body: message.as_bytes().to_vec(),
+			headers: vec![],
 		},
 	}
 }
@@ -322,9 +349,18 @@ pub fn serve(
 			true => tiny_http::Response::from_data(vec![])
 				.with_status_code(SEE_OTHER)
 				.with_header(tiny_http::Header::from_bytes("Location", back).expect("a valid header")),
-			false => tiny_http::Response::from_data(answered.body)
-				.with_status_code(answered.status)
-				.with_header(content_type),
+			false => answered.headers.iter().fold(
+				tiny_http::Response::from_data(answered.body)
+					.with_status_code(answered.status)
+					.with_header(content_type),
+				|response, (name, value)| match tiny_http::Header::from_bytes(name.as_bytes(), value.as_bytes()) {
+					Ok(header) => response.with_header(header),
+					Err(_) => {
+						eprintln!("{path}: header {name:?} {value:?} is no HTTP header, left out");
+						response
+					}
+				},
+			),
 		};
 		let _ = request.respond(response);
 		served += 1;
@@ -356,6 +392,7 @@ fn site_file(site: &ServedSite, method: &str, path: &str) -> Option<Answer> {
 			status,
 			content_type: crate::site::content_type(&name),
 			body,
+			headers: vec![],
 		},
 		Err(failure) => Answer::failed(&failure),
 	})

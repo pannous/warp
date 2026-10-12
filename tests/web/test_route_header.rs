@@ -40,7 +40,10 @@ fn a_route_sets_its_status_and_headers() {
 		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	}
-	assert_eq!(answer("/teapot"), (418, Some("brewed".into()), "short and stout".into()));
+	assert_eq!(
+		answer("/teapot"),
+		(418, Some("brewed".into()), "short and stout".into())
+	);
 	assert_eq!(answer("/plain"), (200, None, "fine".into()));
 	server.join().expect("the server thread");
 }

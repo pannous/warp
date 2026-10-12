@@ -78,6 +78,8 @@ pub struct HostState {
 	pub wasm_modules: std::collections::HashMap<String, wasmtime::Instance>,
 	/// The events the program dispatched to its page (dispatch_event): name and detail as warp text, for the headless page
 	pub dispatched: Vec<(String, String)>,
+	/// The headers the route being answered set (response_header), for its HTTP answer
+	pub answer_headers: Vec<(String, String)>,
 }
 
 impl Default for HostState {
@@ -100,6 +102,7 @@ impl HostState {
 			wasm_modules: Default::default(),
 			in_task: false,
 			dispatched: vec![],
+			answer_headers: vec![],
 		}
 	}
 
@@ -309,6 +312,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, STD_PURE, std_call)?;
 	linker.func_wrap(HOST_LIBRARY, STD_IO, std_call)?;
 	linker.func_wrap(HOST_LIBRARY, SERVE_ROUTES, serve_routes)?;
+	linker.func_wrap(HOST_LIBRARY, RESPONSE_HEADER, response_header)?;
 	linker.func_wrap(HOST_LIBRARY, FETCH_START, fetch_start)?;
 	linker.func_wrap(HOST_LIBRARY, FETCH_REPLY, fetch_reply)?;
 	crate::channels::forget_listeners(); // each run links anew, on its own thread
@@ -711,13 +715,27 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 	let port = u16::try_from(port).map_err(|_| task_failure(format!("serve {port}: no port number")))?;
 	let site = served_site(port);
 	serve(port, &routes, &site, |route, request| {
+		caller.data_mut().answer_headers.clear();
 		match route_value(&mut caller, &route.function, &request) {
-			Ok(value) => Ok(route.answer_of(&value)),
+			Ok(value) => Ok(route
+				.answer_of(&value)
+				.with_headers(std::mem::take(&mut caller.data_mut().answer_headers))),
 			Err(failure) => Err(route_failure(&mut caller, &route.path, failure)),
 		}
 	})
 	.map_err(task_failure)?;
 	built_in_program(&mut caller, &Node::Empty, SERVE_ROUTES)
+}
+
+/// `header "name" "value"` in a route's body: kept for the route's HTTP answer (serve_routes)
+fn response_header(mut caller: Caller<'_, HostState>, name: HostNode, value: HostNode) -> wasmtime::Result<()> {
+	let name = given_node(&mut caller, name)?.name();
+	let value = match given_node(&mut caller, value)? {
+		Node::Text(text) => text,
+		other => other.serialize(),
+	};
+	caller.data_mut().answer_headers.push((name, value));
+	Ok(())
 }
 
 /// What a failed route says to the client: the program's error message, read with the value the program left in
