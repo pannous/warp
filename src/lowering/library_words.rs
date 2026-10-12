@@ -267,8 +267,11 @@ pub fn lower(node: Node) -> Node {
 	let node = bind_read_data_objects(node);
 	let context = crate::analyzer::function_context(&node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
-	// `sum·point`, a class's own `sum` (traits.rs witness, an overload): the program defines `sum`, no library word
-	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).map(|(operation, _)| operation.to_string()).collect();
+	// `sum·1` (an arity overload), `sum·point` of a declared trait's operation: the program defines `sum`, no library
+	// word; a class's method `sum·Bag` of the generic function sum keeps the library's sum for other values
+	let traits = crate::traits::Traits::of(&node);
+	let replaces_word = |operation: &str, variant: &str| variant.parse::<usize>().is_ok() || traits.is_operation(operation);
+	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).filter(|(operation, variant)| replaces_word(operation, variant)).map(|(operation, _)| operation.to_string()).collect();
 	shadowed.extend(variants);
 	collect_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
