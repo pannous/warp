@@ -45,6 +45,9 @@ Each step is useful on its own and is what the next ones stand on.
   body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/serve.rs
   with_answer_headers makes them the host word response_header, `status` as the CGI header Status; natively
   web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/route_headers.warp).
+  A WAGI build (`warp build --wagi`, card wagi-build) has no host: there they are lib/wagi.warp wagi_header calls,
+  which globals collect for the CGI answer; a set Content-Type replaces the answer's own, a failing route answers 500
+  whatever status it set (tests/web/test_wagi_headers.rs, probes/hosting/wagi_routes.sh /teapot).
 - **Plain HTTP from the page**: `fetch "/api/users"` gives the parsed JSON as a warp value (arrays ↔ lists, objects ↔
   maps); a status of 400 or more is an Error value carrying the status and the body text.
 - **Typed RPC**: `server def users(min_age) {…}` in the same program. The server build exposes it as
