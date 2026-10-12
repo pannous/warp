@@ -45,6 +45,7 @@ pub fn lower(program: Node) -> Node {
 		modules: &modules,
 		values: HashMap::new(),
 		component_values: Default::default(),
+		component_handles: HashMap::new(),
 		web_idl_values: HashMap::new(),
 	}
 	.rewrite(program)
@@ -254,6 +255,8 @@ struct Foreign<'a> {
 	values: HashMap<String, String>,
 	/// variables assigned a component's result: plain values, or handles of its resources whose methods it runs
 	component_values: std::collections::HashSet<String>,
+	/// variables holding a handle of a component's resource: the component's path and the resource (`counter`)
+	component_handles: HashMap<String, (String, String)>,
 	/// variables assigned a JavaScript value WebIDL declares (`c = navigator.clipboard`): their interface
 	web_idl_values: HashMap<String, String>,
 }
@@ -266,19 +269,31 @@ fn foreign_runtime(node: &Node) -> Option<String> {
 
 /// `foreign_call(runtime, …)`, also in a group of one: its runtime
 fn called_runtime(node: &Node) -> Option<String> {
+	match foreign_call_items(node)?.get(1)?.drop_meta() {
+		Node::Text(runtime) => Some(runtime.clone()),
+		_ => None,
+	}
+}
+
+/// The items of `foreign_call(runtime, module, member, call, arguments)`, also in a group of one: `(a * 2)`
+fn foreign_call_items(node: &Node) -> Option<&[Node]> {
 	let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
 		return None;
 	};
 	match items.as_slice() {
-		// `(a * 2)`: the group of one
-		[grouped] => called_runtime(grouped),
-		[call, runtime, ..] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL) => {
-			match runtime.drop_meta() {
-				Node::Text(runtime) => Some(runtime.clone()),
-				_ => None,
-			}
+		[grouped] => foreign_call_items(grouped),
+		[call, ..] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL) => {
+			Some(items)
 		}
 		_ => None,
+	}
+}
+
+/// The method an operator of a component's resource calls: `a + b` is `a.add(b)`, `a / b` `a.div(b)`
+fn component_operator(op: &Op) -> Option<&'static str> {
+	match op {
+		Op::Div => Some("div"),
+		other => operator_member(other),
 	}
 }
 
@@ -298,6 +313,17 @@ fn is_warp_method(name: &str) -> bool {
 	crate::library_words::is_library_word(name)
 		|| crate::analyzer::is_list_mutating_method(name)
 		|| (1..=3).any(|arity| crate::wasm_emitter::text_builtins::text_builtin_kind(name, arity).is_some())
+}
+
+/// The resource a component's function or method gives (src/components.rs); the browser build reads no component
+#[cfg(feature = "native")]
+fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<String> {
+	crate::components::result_kind(path, member, kind)
+}
+
+#[cfg(not(feature = "native"))]
+fn result_kind(_path: &str, _member: &str, _kind: Option<&str>) -> Option<String> {
+	None
 }
 
 /// The module of operators every runtime offers (Python's operator plus len and list, the loops' own in JS)
@@ -402,6 +428,10 @@ impl Foreign<'_> {
 					self.rewrite(left.as_ref().clone()),
 					self.rewrite(right.as_ref().clone()),
 				);
+				if let (Some(_), Some(member)) = (self.component_handle(&left), component_operator(op)) {
+					let arguments = Node::List(vec![right], Bracket::Square, Separator::Space);
+					return Some(foreign_call(COMPONENT_RUNTIME, left, member, true, arguments));
+				}
 				let runtime = self.foreign_value(&left).or_else(|| self.foreign_value(&right))?;
 				Some(operator_call(
 					&runtime,
@@ -429,6 +459,31 @@ impl Foreign<'_> {
 			}
 			_ => None,
 		}
+	}
+
+	/// The component and resource of a handle: a variable holding one, or a call giving one (`r.counter(5)`, `a.add(b)`)
+	fn component_handle(&self, node: &Node) -> Option<(String, String)> {
+		if let Node::Symbol(name) = node.drop_meta() {
+			return self.component_handles.get(name).cloned();
+		}
+		let [_, runtime, module, member, ..] = foreign_call_items(node)? else {
+			return None;
+		};
+		let (Node::Text(runtime), Node::Text(member)) = (runtime.drop_meta(), member.drop_meta()) else {
+			return None;
+		};
+		if runtime != COMPONENT_RUNTIME {
+			return None;
+		}
+		let (path, kind) = match module.drop_meta() {
+			Node::Text(path) => (path.clone(), None),
+			receiver => {
+				let (path, kind) = self.component_handle(receiver)?;
+				(path, Some(kind))
+			}
+		};
+		let result = result_kind(&path, member, kind.as_deref())?;
+		Some((path, result))
 	}
 
 	/// A variable assigned a component's result, or a component's call itself
@@ -683,6 +738,10 @@ impl Foreign<'_> {
 					match called_runtime(&value).is_some_and(|runtime| runtime == COMPONENT_RUNTIME) {
 						true => self.component_values.insert(name.clone()),
 						false => self.component_values.remove(name),
+					};
+					match self.component_handle(&value) {
+						Some(handle) => self.component_handles.insert(name.clone(), handle),
+						None => self.component_handles.remove(name),
 					};
 				}
 				Node::Key(target, op, Box::new(value))

@@ -136,7 +136,12 @@ step 3.
   on a variable assigned a component's result (or on such a call) goes to the component unless it is a warp method
   (library words, list mutation, text builtins). Handles cross back as `own`/`borrow` arguments, also in lists;
   a handle of another resource type or component is refused.
-- Not yet: a component's exports as operators (card component-operators), components in the browser (host.js says it runs only in the native host; jco could transpile them),
+- Operators of handles (card component-operators): `a + b` of a variable holding a resource handle (or a call giving
+  one) is `a.add(b)`: add, sub, mul, div, mod, pow, lt, gt, le, ge, eq, ne. foreign_modules asks the component at compile
+  time which resource a call gives (components::result_kind), so a plain result (`n = r.fib(10); n * 2`) stays warp's
+  arithmetic; a missing method is the component's loud "a counter has no method mul". Native only for now (the browser
+  build reads no component at compile time).
+- Not yet: components in the browser (host.js says it runs only in the native host; jco could transpile them),
   `warp build --exe` (refused: foreign_call is a missing import; card exe-foreign). Capability: Ffi like the other foreign runtimes, though
   a component without preopened files is sandboxed: granting it to eval_untrusted is a later question.
 

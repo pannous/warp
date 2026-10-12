@@ -94,6 +94,21 @@ pub fn call_method(handle: &Value, member: &str, arguments: &[Value]) -> Result<
 	})
 }
 
+/// The resource `member` gives when called, a function of the component at `path` or a method of its resource `kind`:
+/// `counter` for `r.counter(5)` and `a.add(b)`; None for a plain value or a component that does not load
+pub fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<String> {
+	with_component(path, |loaded| {
+		let function = loaded.function(member, kind)?;
+		let results: Vec<Type> = function.ty(&loaded.store).results().collect();
+		Ok(match results.as_slice() {
+			[Type::Own(resource) | Type::Borrow(resource)] => kind_name(&loaded.kinds, resource),
+			_ => None,
+		})
+	})
+	.ok()
+	.flatten()
+}
+
 fn with_component<R>(path: &str, body: impl FnOnce(&mut Loaded) -> Result<R, String>) -> Result<R, String> {
 	LOADED.with_borrow_mut(|components| {
 		if !components.contains_key(path) {
@@ -569,10 +584,7 @@ impl Handles<'_> {
 	}
 
 	fn kind_of(&self, resource: &ResourceAny) -> String {
-		self.kinds
-			.iter()
-			.find(|(ty, _)| *ty == resource.ty())
-			.map_or_else(|| "resource".to_string(), |(_, name)| name.clone())
+		kind_name(self.kinds, &resource.ty()).unwrap_or_else(|| "resource".to_string())
 	}
 }
 
@@ -586,6 +598,11 @@ fn held_slot(held: &[Option<ResourceAny>], handle: &Value) -> Result<usize, Stri
 		.contains(&id)
 		.then(|| id as usize - 1)
 		.ok_or_else(|| format!("no handle {id}"))
+}
+
+/// The WIT name of a resource type of a component
+fn kind_name(kinds: &[(ResourceType, String)], ty: &ResourceType) -> Option<String> {
+	kinds.iter().find(|(kind, _)| kind == ty).map(|(_, name)| name.clone())
 }
 
 fn handle_text(handle: &Value) -> String {
