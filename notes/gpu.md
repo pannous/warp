@@ -236,6 +236,17 @@ paint_window::input), in the browser host-gpu.js builtinValues (pointer and key 
 time = seconds since the first render, frame = renders before, key = code point, arrows 0xF700–0xF703, 0 = none.
 Costs nothing for a shader that doesn't mention them.
 
+## $previous: a shader's own last frame (card shader-read, user wish 2026-10-12)
+`$previous(at)` is the color the shader left at pixel `at` (vec2f, clamped to the image) in its previous render of
+the same size, black before the first (another paper: `select(paper, $previous(at), $frame > 0)`): painting with
+memory (samples/shader_trails.warp). $last, $feedback, $before are not taken from programs; a value missing under
+them hints at $previous (shader_holes.rs PREVIOUS_WORDS, user's Interviewer: canonical word plus hints). Not a value but a
+function: BUILTIN_HOLES has "previous" so no values entry is made; the host rewrites `values.previous(` to
+`warp_previous(` and appends PREVIOUS_FRAME (texture_2d at @group(0) @binding(1), textureLoad). Each render draws
+into a new texture and keeps it per shader text (native gpu.rs PREVIOUS_FRAMES, ≤ PAINTERS_KEPT; browser host-gpu.js
+previousFrames); a canvas paint then copies it into the canvas texture (configured COPY_DST). Kept as 8 bits per
+channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
+
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
 - src/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
   `input x y down key` lines on stdout, which warp-runtime system_values.rs window_input keeps (system values and
