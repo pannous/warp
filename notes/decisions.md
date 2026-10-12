@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
+- key-if (warp-markup): contextual key names. Inside `on key {…}` a bare `key` reads event.key (like bare fields
+  read self, P115; a program variable `key` wins), and named keys compare as words: Escape/ESC, Enter/RETURN/ENTER,
+  Tab, Space, Backspace, ArrowUp…/UP DOWN LEFT RIGHT, F1–F12: `on key { if key == ESC { exit } }`. Letters stay
+  text (`key == "a"`); no `keys.` namespace. Today both were silently false (unbound symbols).
 - Soundness review (Interviewer, all of this file re-read 2026-10-12; each case verified on main 64ff51cf5):
   - approx-zero (reopens D8): `≈` gets an absolute floor near zero, |a-b| ≤ max(1e-9·max(|a|,|b|), 1e-12) (numpy
     allclose style); `sin(3.141592653589793) ≈ 0` and `1e-20 ≈ 0` are yes (were no); `tolerance = …` still overrides.
