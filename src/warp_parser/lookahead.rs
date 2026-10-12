@@ -554,6 +554,8 @@ impl WarpParser {
 		match (self.current_char(), self.peek_char(1)) {
 			('+', '+') => Some((Op::Inc, 2)),
 			('-', '-') => Some((Op::Dec, 2)),
+			// `width: 50% height: 10px`: in a style sheet a % glued to a number is a percentage (card web-styles-limits)
+			('%', _) if self.in_style_sheet && self.prev_char().is_ascii_digit() => Some((Op::Mod, 1)),
 			// `10%`, `10% + x`: a percent, no remainder, when no operand follows
 			('%', next) if next != '=' && self.expression_ends_after(1) => Some((Op::Mod, 1)),
 			// `ℯ⌟`: the natural log when no base follows

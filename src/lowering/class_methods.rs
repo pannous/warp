@@ -883,11 +883,14 @@ fn dispatched_by_class(receiver: &Node, member: Node, methods: &MethodNames, ren
 	let name = leading_name(&member);
 	let library_call = key(receiver.clone(), Op::Dot, member);
 	let method_call = key(receiver.clone(), Op::Dot, renamed_member);
-	methods.defined_by.iter().filter(|(method, _)| *method == name).fold(library_call, |otherwise, (_, class)| {
-		let bindings = [("RECEIVER", receiver.clone()), ("CLASS", Node::Symbol(class.clone())), ("METHOD", method_call.clone()), ("OTHERWISE", otherwise)];
-		let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-		crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
-	})
+	methods.defined_by.iter().filter(|(method, _)| *method == name).fold(library_call, |otherwise, (_, class)| by_class(receiver, class, method_call.clone(), otherwise))
+}
+
+/// `if receiver is class then method else otherwise`
+pub(crate) fn by_class(receiver: &Node, class: &str, method: Node, otherwise: Node) -> Node {
+	let bindings = [("RECEIVER", receiver.clone()), ("CLASS", Node::Symbol(class.to_string())), ("METHOD", method), ("OTHERWISE", otherwise)];
+	let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
+	crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
 }
 
 fn method_name(name: &str) -> String {
