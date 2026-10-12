@@ -79,6 +79,9 @@ lambda's DNS moves to Cloudflare):
   so and keeps the link. /up fetches Workers of our own account, which Cloudflare refuses (1042) unless the control
   Worker has the compatibility flag `global_fetch_strictly_public`. Probe: probes/hosting/login_ticket.sh runs the
   window's script in node (deploying_window.mjs).
+- Names of the account's own Workers (warp-hosting itself, warp-assistant) can't be claimed: `claim` refuses a name
+  whose warp-<name> Worker exists without an owner in NAMES (before 2026-10-12 a GitHub user could have overwritten
+  the control Worker by deploying the name `hosting`).
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
 - Clients: `warp deploy --hosted app.warp` (src/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the

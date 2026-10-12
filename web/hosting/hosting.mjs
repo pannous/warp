@@ -326,12 +326,21 @@ async function upload(env, request, { token, account, script, program }) {
 	return url;
 }
 
+// a Worker nobody claimed, as warp-hosting itself: the account's own, never a program's name
+async function scriptExists(env, script) {
+	const reply = await fetch(`${CLOUDFLARE_API}/accounts/${env.ACCOUNT_ID}/workers/scripts/${script}/settings`, { headers: { authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } });
+	if (reply.status === 404) return false;
+	if (!reply.ok) throw new Refusal(502, `Cloudflare workers/scripts: HTTP ${reply.status}`);
+	return true;
+}
+
 // a name belongs to the first GitHub user who deploys it; the caps keep spam within the free plan (notes/hosting.md
 // "Limits"), which never bills: past its daily requests the Workers answer errors until the next day
 async function claim(env, name, owner) {
 	const holder = await env.NAMES.get(name);
 	if (holder && holder !== String(owner.id)) throw new Refusal(409, `${name} belongs to someone else: choose another name`);
 	if (holder) return;
+	if (await scriptExists(env, SCRIPT_PREFIX + name)) throw new Refusal(409, `${name} is taken by this account's own Worker: choose another name`);
 	const keys = (await env.NAMES.list()).keys.filter(key => !key.name.startsWith(TICKET_PREFIX));
 	if (keys.length >= Number(env.MAX_PROGRAMS)) throw new Refusal(507, "warp-hosting is full for now: deploy to your own Cloudflare account");
 	const own = keys.filter(key => key.metadata?.owner === String(owner.id)).map(key => key.name);

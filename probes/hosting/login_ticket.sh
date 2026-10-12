@@ -46,4 +46,9 @@ check "deploying page names the failure" 'Not deployed: broken' "$(curl -s "$HOS
 check "live program is up" '"up":true' "$(curl -s "$HOSTING/up?program=https://warp-demo.pannous.workers.dev")"
 check "missing program is not up" '"up":false' "$(curl -s "$HOSTING/up?program=https://warp-nothing-here-zz.pannous.workers.dev")"
 check "foreign address not probed" 'no deployed program' "$(curl -s "$HOSTING/up?program=https://evil.example.com")"
+# the account's own Workers (warp-hosting itself, warp-assistant) are no program names to claim; the body is no valid
+# module, so even a failing guard uploads nothing
+not_wasm() { printf '\0asm\1\0\0\0garbage'; }
+check "own Worker's name refused" 'taken' "$(not_wasm | curl -s -X POST --data-binary @- -H "authorization: Bearer $(gh auth token)" "$HOSTING/deploy?name=hosting")"
+check "a free name passes the guard" 'CompileError' "$(not_wasm | curl -s -X POST --data-binary @- -H "authorization: Bearer $(gh auth token)" "$HOSTING/deploy?name=probe-free-$(date +%s)")"
 exit $failures
