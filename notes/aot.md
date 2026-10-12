@@ -72,8 +72,8 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
         warp-runtime, working on Value; warp keeps json_of/node_of and the component calls, so there is one bridge.
      3. The stub links foreign_call for python and js. Callbacks (closure_apply), components and C stay refused,
         loudly.
-     Open product question: an executable that silently needs python3 or node on PATH would surprise. The default
-     would be to run it and fail naming the missing interpreter.
+     Decided by the user (2026-10-12): the executable starts python3 or node from PATH and fails loudly naming the
+     missing interpreter ("cannot start python3; set WARP_PYTHON").
    - One copy of the run-time code: crates/warp-runtime holds the engine settings (`deterministic_config`,
      `fueled_config`), the fuel default, the host words without compiler (`link_host_words`, which warp's host.rs
      links too), fd_write and libm for any store state, and the trailer format. warp depends on it with the
