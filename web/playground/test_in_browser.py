@@ -378,7 +378,8 @@ def gpu_page_wrong():
 def brush_wrong():
 	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper. Its
 	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
-	the sample then runs until stopped, so it is started, not waited for"""
+	the sample then runs until stopped, so it is started, not waited for, and checked last (a check after it found
+	the page still busy with it)"""
 	if not firefox:  # Firefox has no WebGPU here: the sample's error is the skip below
 		browser("click", "#output")
 	browser("eval", f"void playground.chooseExample({json.dumps(BRUSH_SAMPLE)})")
@@ -515,7 +516,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (BRUSH, brush_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong)) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
