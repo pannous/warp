@@ -25,7 +25,8 @@ fn defined_functions(module: &[u8]) -> Vec<String> {
 							names.extend(
 								map.into_iter()
 									.map(|naming| naming.unwrap())
-									.filter_map(|naming| (naming.index >= imported).then(|| naming.name.to_string())),
+									.filter(|naming| naming.index >= imported)
+									.map(|naming| naming.name.to_string()),
 							);
 						}
 					}
