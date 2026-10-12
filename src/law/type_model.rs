@@ -1956,6 +1956,17 @@ impl Exporter {
 					}
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
+				(Node::Symbol(name), call)
+					if self.list_names.contains(name) && crate::analyzer::insert_arguments(call).is_some() =>
+				{
+					let (value, position) = crate::analyzer::insert_arguments(call).expect("guarded");
+					Ok(format!(
+						".insertAt (.glob {}) ({}) ({})",
+						quoted(name),
+						self.expression(position)?,
+						self.expression(value)?
+					))
+				}
 				(_, Node::Symbol(field)) if self.is_field(field) => {
 					Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field)))
 				}

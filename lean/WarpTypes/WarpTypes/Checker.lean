@@ -167,6 +167,11 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
       if listy tl && consub ti .number && consub tv (listElem tl) && !evidentMisfit v (listElem tl) || keyed tl ti then some tv
       else none
     | _, _, _ => none
+  | .insertAt l i v =>
+    match typeOf P Γ l, typeOf P Γ i, typeOf P Γ v with
+    | some tl, some ti, some tv =>
+      if listy tl && consub ti .int && consub tv (listElem tl) && !evidentMisfit v (listElem tl) then some tl else none
+    | _, _, _ => none
   | .get e f => (typeOf P Γ e).bind fun te => if strictRead P te f then some (P.readTy te f) else none
   | .set e f v =>
     match typeOf P Γ e, typeOf P Γ v with
@@ -339,6 +344,13 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
       simp only [typeOf, hl, hi, hv] at h <;> try cases h
     split at h
     · cases h; exact .setAt (ih1 hl) (ih2 hi) (ih3 hv)
+    · cases h
+  | insertAt l i v ih1 ih2 ih3 =>
+    intro Γ t h
+    cases hl : typeOf P Γ l <;> cases hi : typeOf P Γ i <;> cases hv : typeOf P Γ v <;>
+      simp only [typeOf, hl, hi, hv] at h <;> try cases h
+    split at h
+    · cases h; exact .insertAt (ih1 hl) (ih2 hi) (ih3 hv)
     · cases h
   | get e f ih =>
     intro Γ t h; simp only [typeOf, Option.bind_eq_some_iff] at h

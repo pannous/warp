@@ -85,14 +85,17 @@ visible covariant alias that writes is a compile error (the compile-time half, w
 
 **Shared lists in W0 (Semantics.lean `Store.lists`).** A stored list is a cell of the store, `lref a t`, made by
 `share e t` from a list value whose items fit t (else "type mismatch") and typed `list t`. `push l v` (`xs.add(v)`)
-appends v to the cell if v fits t, else it is a run-time error, and `setAt l i v` (`xs#i = v`, `xs[i-1] = v`) replaces the i-th item the same way (an index outside the list is an error); list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
+appends v to the cell if v fits t, else it is a run-time error, and `setAt l i v` (`xs#i = v`, `xs[i-1] = v`) replaces the i-th item the same way (an index outside the list is an error); `insertAt l i v` (`xs.insert(v, at: i)`) puts v before the
+item i (from 0), at the end when i is no position in the list (warp appends for `at: 7` and `at: -1`), checked like
+`push`, giving xs; list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
 read the cell's items (`Store.items`). The store invariant `ListsOk` (each cell's items are a value whose type is
 below `list t`) is what each write keeps, and since `t ≤ τ` for every `list τ` alias, every read through it fits τ:
 covariance stays sound (preservation, progress and safety proved, no sorry). The exporter shares a list where a
 main-level list name takes it (`xs = [1]`, `xs: ints = …`, `xs = []`), tagged with the declared element type (`any`
 when undeclared: warp's undeclared lists take anything); `ys = xs` stores the same cell. Function locals' lists
-stay values (`xs = xs ++ [v]` in their cell). Not yet (card w0-list-writes): insert as a write, list identity for `===`
-beyond names. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
+stay values (`xs = xs ++ [v]` in their cell; their inserts are not exported yet). `xs === ys` compares the cells; warp
+compares a typed array's slots by reference (it boxed each side into a fresh Node before, card w0-list-writes), but a
+typed array against a call's result (`f(xs) === xs`) is still no. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
 lists `ys: numbers = xs; ys.add(2.5)` and `ys#1 = 2.5` as known value differences (W0: error, warp: adds it; card p215-user).
 
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.

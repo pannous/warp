@@ -96,6 +96,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- the item is checked against the list's own element type when it runs -/
   | push {Γ l v tl tv} : HasType P Γ l tl → HasType P Γ v tv → HasType P Γ (.push l v) tl
   | setAt {Γ l i v tl ti tv} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ v tv → HasType P Γ (.setAt l i v) tv
+  | insertAt {Γ l i v tl ti tv} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ v tv →
+      HasType P Γ (.insertAt l i v) tl
   | new {Γ p} : HasType P Γ (.new p) (.cls p)
   /-- field access: the field type of the static class (or of an ancestor) -/
   | get {Γ e f te} : HasType P Γ e te → HasType P Γ (.get e f) (P.readTy te f)

@@ -419,6 +419,13 @@ const CORPUS: &[&str] = &[
 	"xs = [1]; xs.add(\"ab\"); xs",
 	"xs: ints = [1]; xs.add(2); xs",
 	"xs: ints = [1]; xs.add(\"ab\"); xs",
+	// `xs.insert(v, at: i)` puts v before item i (from 0), past the end at the end, checked like an add (card w0-list-writes)
+	"xs = [1, 2]; xs.insert(5, at: 0); xs",
+	"xs = [1, 2]; ys = xs; ys.insert(5, at: 1); xs",
+	"xs = [1]; xs.insert(5, at: 7); xs",
+	"xs = [1]; xs.insert(5, at: -1); xs",
+	"xs = [1]; xs.insert(\"ab\", at: 0); xs",
+	"xs: ints = [1]; xs.insert(\"ab\", at: 0); xs",
 	// `xs#i = v` writes into the shared list: checked against its element type and its length when it runs
 	"xs = [1, 2]; xs#1 = 5; xs",
 	"xs = [1]; ys = xs; ys#1 = 7; xs",

@@ -521,6 +521,21 @@ def setAtValues (P : Program) (μ : Store) : Expr → Expr → Expr → Expr × 
     | none => (.error "no field", μ)
   | _, _, _ => (.error "not a list", μ)
 
+/-- the list value xs with v before its n-th item (from 0), or at its end when it has no such item -/
+def insertItems : Expr → Int → Expr → Expr
+  | .cons h t, n, v => if n = 0 then .cons v (.cons h t) else .cons h (insertItems t (n - 1) v)
+  | _, _, v => .cons v .nil
+
+/-- `xs.insert(v, at: i)` of values: v joins the shared list at the int i if it fits the list's element type -/
+def insertAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
+  | .lref a t, i, v =>
+    match μ.listAt a t, asInt i with
+    | some items, some n =>
+      if fits v t then (.lref a t, μ.writeList a (insertItems items n v)) else (.error "type mismatch", μ)
+    | none, _ => (.error "dangling list", μ)
+    | _, none => (.error "not an int", μ)
+  | _, _, _ => (.error "not a list", μ)
+
 /-- the k ints from m: `[m, m+1, …]` -/
 def intList (m : Int) : Nat → Expr
   | 0 => .nil
@@ -564,6 +579,7 @@ inductive Frame where
   | share (t : Ty)
   | pushL (v : Expr) | pushR (l : Expr)
   | setAtL (i v : Expr) | setAtI (l v : Expr) | setAtR (l i : Expr)
+  | insertAtL (i v : Expr) | insertAtI (l v : Expr) | insertAtR (l i : Expr)
 
 namespace Frame
 
@@ -612,12 +628,16 @@ def plug : Frame → Expr → Expr
   | setAtL i v, e => .setAt e i v
   | setAtI l v, e => .setAt l e v
   | setAtR l i, e => .setAt l i e
+  | insertAtL i v, e => .insertAt e i v
+  | insertAtI l v, e => .insertAt l e v
+  | insertAtR l i, e => .insertAt l i e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
   | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _ | pushR h | setAtI h _
+  | insertAtI h _
   | forInLast _ h _ => h.isValue
-  | setAtR l i => l.isValue && i.isValue
+  | setAtR l i | insertAtR l i => l.isValue && i.isValue
   | _ => true
 
 end Frame
@@ -664,6 +684,8 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | push {l v μ} : l.isValue = true → v.isValue = true → Step P (.push l v, μ) (pushValues μ l v)
   | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
       Step P (.setAt l i v, μ) (setAtValues P μ l i v)
+  | insertAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
+      Step P (.insertAt l i v, μ) (insertAtValues μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | conv {v t μ} : v.isValue = true → Step P (.conv v t, μ) (convertValue μ v t, μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
