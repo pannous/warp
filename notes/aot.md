@@ -58,22 +58,21 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
      Decided by the user (P77): an executable shows its prints, then its value as `print` shows it (texts without
      quotes); exit code 0, 1 on a trap.
    - The stub provides print (WASI fd_write), libm ("m": Rust's f64 functions) and the host words sleep, random,
-     random_below, clock. A program importing anything else (fetch, read, run_block, tasks, FFI libraries) is refused
+     random_below, clock, and foreign_call (below). A program importing anything else (fetch, read, run_block, tasks,
+     FFI libraries) is refused
      at build time with the missing imports named. A plain run says so once per version of the file and of warp
      (~/.cache/warp/standalone_notes remembers the failure; card standalone-std-io): std_io (tables, json, regex,
      files) would need the Node reader in the stub.
-   - Foreign calls in an executable (card exe-foreign, plan of 2026-10-12, not built): `use python`/`use js` need
-     the same groundwork as std_io, so build that first, once:
-     1. warp-runtime gets a GC Node ⇄ serde_json::Value reader and builder: the reader is a port of
-        wasm_reader::struct_node/list_in/text_of, including Int payload handles (big ints, ratios); the builder goes
-        through the program's constructor exports, like tasks::Builders::build. When the program imports
-        foreign_call, stub_calls_export must also keep new_text, new_key, new_list … and the text heap global.
-     2. src/foreign.rs moves its child bridge (INTERPRETERS, both loop scripts, RUNNING/HELD, exchange/talk) into
-        warp-runtime, working on Value; warp keeps json_of/node_of and the component calls, so there is one bridge.
-     3. The stub links foreign_call for python and js. Callbacks (closure_apply), components and C stay refused,
-        loudly.
-     Decided by the user (2026-10-12): the executable starts python3 or node from PATH and fails loudly naming the
-     missing interpreter ("cannot start python3; set WARP_PYTHON").
+   - Foreign calls in an executable (card exe-foreign, done 2026-10-12): `use python`/`use js` work in an
+     executable. It starts python3 or node from PATH when it runs (user decision) and fails loudly naming a missing
+     interpreter ("cannot start python3 (…); set WARP_PYTHON to an interpreter"). One bridge for both:
+     warp-runtime/src/foreign.rs holds the children, loop scripts and callbacks on serde_json::Value; warp's
+     src/foreign.rs only turns Nodes into JSON and back and calls components. warp-runtime/src/gc_values.rs reads a
+     program's GC Node as JSON and builds JSON back through its constructor exports (new_text … exact_add);
+     stub_calls_export_with_foreign_calls keeps those exports when the program imports foreign_call.
+     `use python` no longer imports fetch, read, warn and run (wasm_emitter emit_host_imports only for those words).
+     Still refused in an executable, loudly: warp functions given as callbacks, components (`use wasm`), C libraries;
+     big integers and ratios cross to python as floats, as in warp. A text result prints unquoted, as executables do.
    - One copy of the run-time code: crates/warp-runtime holds the engine settings (`deterministic_config`,
      `fueled_config`), the fuel default, the host words without compiler (`link_host_words`, which warp's host.rs
      links too), fd_write and libm for any store state, and the trailer format. warp depends on it with the

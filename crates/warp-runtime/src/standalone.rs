@@ -5,7 +5,7 @@
 //! its program would end and runs what it carries.
 use crate::engine::{fueled_config, fueled_store};
 use crate::fuel::{fuel_from_environment, DEFAULT_FUEL};
-use crate::host_words::HANDLER_PREFIX;
+use crate::host_words::{FOREIGN_CALL, HANDLER_PREFIX};
 use crate::macho;
 use crate::system_signals::{NEW_EMPTY, NEW_INT};
 use std::fs::File;
@@ -31,6 +31,12 @@ pub fn stub_calls_export(name: &str) -> bool {
 	ENTRY_POINTS.contains(&name)
 		|| [MEMORY_EXPORT, NEW_EMPTY, NEW_INT].contains(&name)
 		|| name.starts_with(HANDLER_PREFIX)
+}
+
+/// The exports the stub looks up of a program calling python or js: those of every program, and what the answers are
+/// built with (gc_values.rs)
+pub fn stub_calls_export_with_foreign_calls(name: &str) -> bool {
+	stub_calls_export(name) || crate::gc_values::BUILDERS.contains(&name) || name == crate::gc_values::TEXT_HEAP
 }
 
 /// The engine an executable's machine code is compiled for (warp build) and run with (the stub): no address map, the
@@ -129,6 +135,13 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 	crate::host_words::link_host_words(&mut linker)?;
 	crate::output::link_output(&mut linker)?;
 	crate::libm::link_libm(&mut linker)?;
+	linker.func_wrap(
+		crate::host_words::HOST_LIBRARY,
+		FOREIGN_CALL,
+		|mut caller: wasmtime::Caller<'_, ()>, runtime, module, member, call, arguments| {
+			crate::gc_values::foreign_call(&mut caller, [runtime, module, member, call, arguments])
+		},
+	)?;
 	let mut store = fueled_store(&engine, (), fuel_from_environment().unwrap_or(DEFAULT_FUEL));
 	let instance = linker.instantiate(&mut store, &module)?;
 	let main = ENTRY_POINTS
@@ -157,7 +170,8 @@ pub fn provided_imports() -> impl Iterator<Item = (&'static str, &'static str)> 
 		.into_iter()
 		.map(|word| (crate::host_words::HOST_LIBRARY, word));
 	let libm = crate::libm::libm_names().map(|name| (crate::libm::LIBM, name));
-	host_words
-		.chain(libm)
-		.chain([(crate::output::WASI_LIBRARY, crate::output::FD_WRITE)])
+	host_words.chain(libm).chain([
+		(crate::output::WASI_LIBRARY, crate::output::FD_WRITE),
+		(crate::host_words::HOST_LIBRARY, FOREIGN_CALL),
+	])
 }

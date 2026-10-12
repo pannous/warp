@@ -4,6 +4,8 @@
 //! its compiler, the network or threads (host.rs); these need nothing.
 //! `signal_poll()` and `signal_every(id, ms)` serve the handlers of system signals (system_signals.rs).
 pub const HOST_LIBRARY: &str = "host";
+/// foreign_call(runtime, module, member, call, arguments): a module of another runtime (foreign.rs), Nodes in and out
+pub const FOREIGN_CALL: &str = "foreign_call";
 pub const SLEEP: &str = "sleep";
 pub const RANDOM: &str = "random";
 pub const RANDOM_BELOW: &str = "random_below";

@@ -1056,13 +1056,12 @@ impl WasmGcEmitter {
 		}
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
-		// another runtime's module is reached through the host word foreign_call
-		// warp's own host words imported like C (sleep, the task words) are Host too, for warp --sandbox, but need no
-		// host import module
+		// warp's own host words imported like C (sleep, the task words, foreign_call: another runtime's module) are
+		// Host too, for warp --sandbox, but need no fetch, read, warn or run: an executable has none (card exe-foreign)
 		let host_import_word = effects.externals.iter().any(|(name, external)| {
 			external.capability == Capability::Host && !self.ctx.ffi_imports.contains_key(name)
 		});
-		self.config.emit_host_imports |= host_import_word || effects.needs(Capability::Foreign);
+		self.config.emit_host_imports |= host_import_word;
 		// an ordering of ± values that overlap warns through the host (P224b)
 		self.config.emit_host_imports |= crate::uncertain::may_order_intervals(node);
 	}
@@ -1071,7 +1070,9 @@ impl WasmGcEmitter {
 	pub fn imports(&self, capability: crate::effects::Capability) -> bool {
 		use crate::effects::Capability::*;
 		match capability {
-			Host | Foreign => self.config.emit_host_imports,
+			Host | Foreign => {
+				self.config.emit_host_imports || self.ctx.ffi_imports.contains_key(crate::host::FOREIGN_CALL)
+			}
 			Wasi => self.config.emit_wasi_imports,
 			Ffi | Libm => self.config.emit_ffi_imports,
 			Sql | Process => false, // no host implements execute or exec yet: such a module fails to link, loudly
