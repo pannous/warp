@@ -15,12 +15,18 @@ fn rendered_samples(path: &str) -> Vec<i16> {
 /// The rendered samples of the signal `hum` the definition gives, played for a tenth of a second; in a process of its
 /// own, as render_sound takes the sounds of every run in the process (test_sound_render.rs)
 fn played(definition: &str, name: &str) -> Vec<i16> {
+	rendered(&format!("{definition}\nplay_signal(hum, 0.1)"), name, "rendered", "10")
+}
+
+/// The rendered samples of the program's sound, after which `last` (`rendered`: the rendered length in hundredths of a
+/// second) is `expected`
+fn rendered(program: &str, name: &str, last: &str, expected: &str) -> Vec<i16> {
 	std::fs::create_dir_all(FOLDER).expect("data folder");
 	let path = format!("{FOLDER}/{name}.wav");
-	let program = format!("use sound\n{definition}\nplay_signal(hum, 0.1)\nround(render_sound(\"{path}\") * 100)");
+	let program = format!("use sound\n{program}\nrendered = round(render_sound(\"{path}\") * 100)\n{last}");
 	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().expect("warp runs");
 	let printed = String::from_utf8_lossy(&run.stdout);
-	assert_eq!(printed.trim().trim_start_matches('»').trim(), "10","{}", String::from_utf8_lossy(&run.stderr));
+	assert_eq!(printed.trim().trim_start_matches('»').trim(), expected, "{}", String::from_utf8_lossy(&run.stderr));
 	rendered_samples(&path)
 }
 
@@ -54,4 +60,19 @@ fn a_signal_keeps_its_state_between_samples() {
 fn a_signal_louder_than_full_scale_is_clipped() {
 	let samples = played("hum(t: float) := 3.0", "signal_clipped");
 	assert!(samples.iter().all(|&sample| sample == i16::MAX), "{:?}", &samples[..4]);
+}
+
+// block-wise (sound layer 8): `play_blocks(fill, seconds)` hands fill a linear float array of a block's samples and the
+// block's time; fill writes every cell, one call per block instead of one per sample
+const BLOCK_SINE: &str = "global calls = 0\nhum(block, t) := {\n  calls = calls + 1\n  for i in 1 to #block { block#i = 0.5 * sin(2 * pi * 441 * (t + (i - 1) / sample_rate)) }\n}\nplay_blocks(hum, 0.1)";
+
+#[test]
+fn a_block_function_fills_the_samples_of_each_block() {
+	assert_sine(&rendered(BLOCK_SINE, "signal_blocks", "rendered", "10"), 0.5, 441.0);
+}
+
+#[test]
+fn a_block_function_is_called_once_a_block() {
+	let samples = rendered(BLOCK_SINE, "signal_block_calls", "calls", "5");
+	assert_eq!(samples.len(), (RATE * 0.1) as usize, "4 blocks of 512 samples and 157 of the fifth");
 }

@@ -170,8 +170,15 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    beside it. State between samples lives in globals declared `as float`: an exact decimal global
    (`global level = 0.0`) grows with every sample and runs out of fuel within 220 samples.
    About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
-   Still to build: the browser (an AudioWorklet running the module), stereo (a pair), block-wise `process(block)` over
-   f32 arrays, input (a microphone as the signal's argument).
+   Block-wise built (samples/signal_blocks.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
+   a block, block a linear float array (notes/linear_arrays.md) of 512 cells to write, t its first sample's time.
+   music_words.rs with_block_signals declares `linear fill·block = float[512]` and `fill·blocks(t: float)`, which
+   calls fill with it (so fill's parameter is the linear array), and writes the call out as std_io("sound", "blocks",
+   [fill·blocks, linear_address(fill·block), …]); the host (native.rs played_blocks) calls fill·blocks and reads the
+   cells straight from memory. 20 s of a sine: 2.0 s against play_signal's 4.6 s (debug, compile included). Cells are
+   f64 (linear arrays have no f32 yet); the host takes them as they are.
+   Still to build: the browser (an AudioWorklet running the module), stereo (a pair), input (a microphone as the
+   signal's argument).
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 

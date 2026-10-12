@@ -41,6 +41,13 @@ const LIVE_BODY: &str = "live_body";
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
 const SIGNAL_WORD: &str = "play_signal";
 const FLOAT_TYPE: &str = "float";
+/// `play_blocks(fill, seconds)` → BLOCKS_CALL: the host (native.rs played_blocks) calls fill·blocks(t) for each block,
+/// which hands fill the linear float array fill·block of BLOCK_SAMPLES cells to fill (BLOCK_TEMPLATE)
+const BLOCKS_WORD: &str = "play_blocks";
+const BLOCKS_CALL: &str = "std_io(\"sound\", \"blocks\", [block_caller, linear_address(block_cells), si_amount(block_seconds), sample_rate])";
+const BLOCK_TEMPLATE: &str = "linear block_cells = float[block_samples]\nblock_caller(t: float) := { block_fill(block_cells, t); 0.0 as float }";
+/// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
+pub const BLOCK_SAMPLES: usize = 512;
 
 /// Before the go blocks are lowered (pipeline.rs): `live_loop 4 { … }` becomes the `go { … }` it stands for
 pub fn lower_live_loops(program: Node) -> Node {
@@ -63,7 +70,7 @@ pub fn lower(program: Node) -> Node {
 		return program;
 	}
 	let defined = defined_names(&program);
-	let program = with_float_signals(program);
+	let program = with_block_signals(with_float_signals(program));
 	match with_music_words(program, &defined) {
 		Node::List(statements, bracket, separator) if separator.separates_statements() => Node::List(with_scheduled(statements, &defined), bracket, separator),
 		statement => match scheduled(&statement, &defined) {
@@ -87,6 +94,44 @@ fn with_float_signals(program: Node) -> Node {
 		}
 	});
 	if signals.is_empty() { program } else { with_float_parameters(program, &signals) }
+}
+
+/// The functions `play_blocks(fill, 2s)` plays fill a block of samples at a time (BLOCKS_WORD): each gets its block
+/// and the function the host calls, before the program's statements
+fn with_block_signals(program: Node) -> Node {
+	let mut fills = Vec::new();
+	let program = with_block_calls(program, &mut fills);
+	if fills.is_empty() {
+		return program;
+	}
+	let declarations = fills.iter().flat_map(|fill| match block_template(BLOCK_TEMPLATE, fill, Node::Empty) {
+		Node::List(statements, _, separator) if separator.separates_statements() => statements,
+		other => vec![other],
+	});
+	let (statements, bracket, separator) = match program {
+		Node::List(statements, bracket, separator) if separator.separates_statements() => (statements, bracket, separator),
+		statement => (vec![statement], Bracket::None, Separator::Newline),
+	};
+	Node::List(declarations.chain(statements).collect(), bracket, separator)
+}
+
+/// The template's placeholders replaced by the names of the block-wise signal fill, played for `seconds`
+fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
+	let part = |name: &str| Node::Symbol(format!("{fill}{}{name}", crate::analyzer::TEMPORARY_SEPARATOR));
+	let names = [("block_cells", part("block")), ("block_caller", part("blocks")), ("block_fill", Node::symbol(fill)), ("block_samples", crate::node::int(BLOCK_SAMPLES as i64)), ("block_seconds", seconds)];
+	names.into_iter().fold(crate::warp_parser::parse(template), |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, &value))
+}
+
+fn with_block_calls(node: Node, fills: &mut Vec<String>) -> Node {
+	match node.map_children(|child| with_block_calls(child, fills)) {
+		Node::List(ref items, _, _) if let [word, fill, seconds] = items.as_slice() && word.is_symbol(BLOCKS_WORD) && let Some(name) = fill.symbol_name() => {
+			if !fills.iter().any(|known| known == name) {
+				fills.push(name.to_string());
+			}
+			block_template(BLOCKS_CALL, name, seconds.clone())
+		}
+		other => other,
+	}
 }
 
 fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {

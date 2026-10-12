@@ -234,6 +234,9 @@ fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gai
 // a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t); play_signal(hum, 2s) calls
 // hum for every sample, t its time in seconds, a block ahead of the speaker; returns the handle when the last is queued
 play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
+// block-wise: hum(block, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi * 220 * (t + (i - 1) / sample_rate)) };
+// play_blocks(hum, 2s) calls hum once a block, block a linear float array of its samples, t the first one's time;
+// the compiler writes its call out (music_words.rs with_block_signals)
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])

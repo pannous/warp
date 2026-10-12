@@ -58,8 +58,7 @@ const EARLY_FAILURE: Duration = Duration::from_millis(300);
 const PLAYER_POLL: Duration = Duration::from_millis(50);
 /// The last characters of a failing player's error output that its report shows
 const FAILURE_TAIL: usize = 300;
-/// A signal's samples computed at once on warp's own output (play_signal): 23 ms at 22050 Hz
-const SIGNAL_BLOCK: usize = 512;
+const SIGNAL_BLOCK: usize = crate::music_words::BLOCK_SAMPLES;
 /// How far ahead of the speaker a signal is computed: its latency, and room for a slow block
 const SIGNAL_AHEAD: Duration = Duration::from_millis(100);
 const SIGNAL_POLL: Duration = Duration::from_millis(5);
@@ -401,22 +400,34 @@ pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<(), String> {
 }
 
 /// play_signal(f, seconds) (card real-time): the mono samples of f(t), t the sample's time in seconds, each computed when
-/// it is due: on warp's own output in blocks queued SIGNAL_AHEAD before the device plays them (stop_sound ends it),
-/// else all of them as one sound. Its handle
+/// it is due, in blocks of SIGNAL_BLOCK (play_blocks). Its handle
 pub fn play_signal(seconds: f64, rate: u32, mut sample_at: impl FnMut(f64) -> Result<f64, String>) -> Result<usize, String> {
+	play_blocks(seconds, rate, SIGNAL_BLOCK, |first, count| (first..first + count).map(|index| sample_at(index as f64 / rate as f64)).collect())
+}
+
+/// play_blocks(fill, seconds) (sound layer 8, block-wise): the mono samples `fill(first, count)` gives, `count` of them
+/// from the sample `first` on, `block` at a time: on warp's own output each block queued SIGNAL_AHEAD before the
+/// device plays it (stop_sound ends it), else all of them as one sound. Its handle
+pub fn play_blocks(seconds: f64, rate: u32, block: usize, mut fill: impl FnMut(usize, usize) -> Result<Vec<f64>, String>) -> Result<usize, String> {
 	let total = (seconds.max(0.0) * rate as f64).round() as usize;
 	let handle = next_handle();
 	let stops = STOPS.load(Ordering::Relaxed);
 	let streamed = crate::paint::shows_windows() && crate::sound_engine::available();
-	let block = if streamed { SIGNAL_BLOCK } else { total.max(1) };
-	for first in (0..total).step_by(block) {
+	let mut samples = Vec::new();
+	for first in (0..total).step_by(block.max(1)) {
 		while streamed && queued_seconds() > SIGNAL_AHEAD.as_secs_f64() {
 			std::thread::sleep(SIGNAL_POLL);
 		}
 		if stopped_since(handle, stops) {
 			break;
 		}
-		let samples = (first..(first + block).min(total)).map(|index| sample_at(index as f64 / rate as f64).map(signal_pcm)).collect::<Result<Vec<_>, _>>()?;
+		let count = block.min(total - first);
+		samples.extend(fill(first, count)?.into_iter().take(count).map(signal_pcm));
+		if streamed {
+			sounded(handle, std::mem::take(&mut samples), rate, MONO)?;
+		}
+	}
+	if !samples.is_empty() {
 		sounded(handle, samples, rate, MONO)?;
 	}
 	Ok(handle)
