@@ -522,4 +522,10 @@ Each step is useful on its own and is what the next ones stand on.
 - Focus on route change (card web-i18n): after a link or the back button shows another route, host-routes.js
   focusRoute moves the focus to the route's main heading (`main h1`, else `h1`), else `main`, else the page's root, made
   focusable with tabindex -1, so a screen reader reads the new page (probes/lazy_routes/check_in_browser.sh).
-- Not here: live regions for async content (card web-a11y-live). Markup built at run time (strings, computed tags) is not checked (card web-a11y-runtime).
+- Markup built at run time (card web-a11y-runtime): the markup a run hands back (pipeline checked_markup) goes through the
+  same rules; a computed tag comes back as a text (`("h" + level): title` as `"h2": …`) and is named like a tag as
+  written. Problems the markup as written already showed are not repeated; the others are runtime warnings
+  (`markup built at run time: h3 after h1 skips a heading level; fix: h2`), each once a run. Sample
+  samples/computed_tags.warp. Not checked: markup only a later page event builds (the playground renders it in its
+  module, headless Page re-renders through page·html).
+- Not here: live regions for async content (card web-a11y-live).

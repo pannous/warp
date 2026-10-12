@@ -59,3 +59,18 @@ fn head_attributes_count() {
 fn style_sheet_rules_are_no_elements() {
 	assert!(warnings_of("html{ lang:\"en\" style{\n\thtml { margin: 0 }\n\ta { color: red }\n\timg { width: 100% }\n} body{ \"x\" } }").is_empty());
 }
+
+// markup built at run time (a computed tag) is checked as the run hands it back, once; markup as written is checked
+// where it is written and not again (card web-a11y-runtime)
+#[test]
+fn markup_built_at_run_time_is_checked() {
+	let runtime_warnings_of = |code: &str| {
+		warp::diagnostic::take_runtime_warnings();
+		eval(code);
+		warp::diagnostic::take_runtime_warnings()
+	};
+	assert_eq!(runtime_warnings_of("tag = \"img\"\ndiv{ (tag): { src: \"a.png\" } (tag): { src: \"b.png\" } }"),
+		vec!["markup built at run time: img without alt: a screen reader reads its file name; fix: alt: \"what it shows\", or alt: \"\" for a decoration"]);
+	assert_eq!(runtime_warnings_of("div{ img{ src: \"a.png\" } }"), Vec::<String>::new(), "warned as written");
+	assert_eq!(runtime_warnings_of("tag = \"img\"\ndiv{ (tag): { src: \"a.png\" alt: \"an apple\" } }"), Vec::<String>::new());
+}
