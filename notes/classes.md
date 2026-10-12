@@ -348,7 +348,10 @@ Nested and constants (classes-39): a pattern is matched by matched_pattern into 
 tests (`p.x == 0`) and bindings with paths (`y = parts·from.start.y`): `_` matches anything, a name binds, a number or
 text is compared, `Point{x: 0, y}`, `Point(a, 0)`, `Line{start: Point{x, y}, end}` nest. The arm's guard is all tests
 joined with `and`; an assignment takes names only (a class in it no test, a constant leaves it as written).
-positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Still not built: rest patterns (card rest-patterns).
+positional_braces leaves an arm's pattern alone (no "prefer Point(x, y)" hint there). Rest patterns (card rest-patterns,
+tests/control/test_rest_patterns.rs): Rust's `Point{x, ..}` leaves the other fields out, `Point(x, ..)` takes the first
+fields before the `..` and the last ones after it; lists in switch.rs: `[first, ...rest]` (`*rest`, `rest...`) binds the
+rest as a slice, `[.., last]` counts from the end.
 
 ## Class components (classes-40, tests/web/test_class_components.rs; notes/web_framework.md step 4)
 A class with a `render()` method (aliases `view`, `template`, `build` with a note) is a component: its construction
