@@ -1,0 +1,4 @@
+// reading a data node's parts from warp (2026-10-12): p.x → 3 works; p.name, kind(p), p[0], c.name, symbol("x") fail
+p = data (x: 3)
+c = data f(1, 2)
+[p.x, p.name, kind(p), c[0], symbol("x")]

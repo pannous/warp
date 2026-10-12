@@ -1,0 +1,6 @@
+// is code data a parser can build and inspect? a key node, its parts, and a list of tokens
+tokens = []
+tokens = tokens + ["x"]
+tokens = tokens + [":"]
+tokens = tokens + ["3"]
+tokens.count

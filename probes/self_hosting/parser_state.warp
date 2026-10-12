@@ -1,0 +1,6 @@
+// can a parser keep its state in an object that methods mutate?
+class Scanner { text: text; pos: int }
+def next(s: Scanner) { s.pos = s.pos + 1; s.pos }
+s = Scanner{text: "abc", pos: 0}
+next(s); next(s)
+s.pos
