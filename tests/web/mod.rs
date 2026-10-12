@@ -47,6 +47,7 @@ mod test_host_parts; // the parts of host.js a site ships
 #[cfg(feature = "native")] // src/site.rs is native
 mod test_host_parts_std; // std_pure / std_io parts chosen by the std modules a program calls
 mod test_html_escape; // card cleanup-html-escape
+mod test_html_meta; // card html-meta
 #[cfg(feature = "native")] // lib/markup.warp against src/html.rs, natively
 mod test_html_render;
 mod test_i18n;
