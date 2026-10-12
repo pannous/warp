@@ -68,6 +68,8 @@ pub fn lower(program: Node) -> Node {
 	if components.is_empty() {
 		return Node::List(lowered, bracket, separator);
 	}
+	let state_lists: HashMap<(String, String), String> = components.iter().flat_map(Component::state_lists).collect();
+	lowered = lowered.into_iter().map(|statement| with_state_lists(statement, &state_lists)).collect();
 	let shown = lowered.pop().expect("a program with a component has a last line");
 	let resets = components.iter().map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
 	let rendered = crate::variable_signals::assign(SHOWN, shown);
@@ -76,6 +78,19 @@ pub fn lower(program: Node) -> Node {
 	let render = key(symbol(RENDER), Op::Define, Node::List(render_body, Bracket::Curly, Separator::Semicolon));
 	let cleanups = components.iter().filter_map(Component::cleanup_function);
 	Node::List(declarations.into_iter().chain(cleanups).chain(lowered).chain([render, symbol(RENDER)]).collect(), bracket, separator)
+}
+
+/// `Counter.count` outside Counter (card web-outside-state): the list of every instance's count, `Counter.count#1` the
+/// first's
+fn with_state_lists(node: Node, state_lists: &HashMap<(String, String), String>) -> Node {
+	let list = match node.drop_meta() {
+		Node::Key(component, Op::Dot, variable) => component.symbol_name().zip(variable.symbol_name()).and_then(|(component, variable)| state_lists.get(&(component.to_string(), variable.to_string()))),
+		_ => None,
+	};
+	match list {
+		Some(list) => Node::Symbol(list.clone()),
+		None => node.map_children(|child| with_state_lists(child, state_lists)),
+	}
 }
 
 /// `on mount {…}` or `on cleanup {…}` among a component's statements: the word and the body
@@ -204,6 +219,12 @@ impl Component {
 		let state = state.into_iter().map(|(variable, initial)| { let list = named(&variable); (variable, initial, list) }).collect();
 		let cleanups = statements.iter().filter_map(lifecycle).filter(|(word, _)| word == CLEANUP).map(|(_, body)| body).collect();
 		Component { counter: named(INSTANCES), key: named(INSTANCE), state, seen: named(SEEN), cleanup: named(CLEANUP), cleaned: named(CLEANED), cleanups }
+	}
+
+	/// (`Counter`, `count`) → `Counter·count` for each state variable
+	fn state_lists(&self) -> Vec<((String, String), String)> {
+		let component = self.counter.split(JOINER).next().unwrap_or_default().to_string();
+		self.state.iter().map(|(variable, _, list)| ((component.clone(), variable.clone()), list.clone())).collect()
 	}
 
 	/// The main-level lists of the state, the instance counter and the instances of the render before
