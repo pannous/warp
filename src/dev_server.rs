@@ -1,6 +1,6 @@
 //! `warp dev app.warp [port]` (card web-dev, notes/web_framework.md step 13): serves the program's site (src/site.rs)
 //! from memory, with dev.js in its page. The page asks /warp-dev/state for the build's version and failure; a request
-//! finding the file changed builds it anew first, so no watcher runs. A new version reloads the page, a failure shows as
+//! finding the file or a module it uses changed builds it anew first, so no watcher runs. A new version reloads the page, a failure shows as
 //! an overlay with its position, the source line and its fix (web/playground/dev.js), while the last good build serves on.
 
 use crate::site::SiteFile;
@@ -19,7 +19,8 @@ const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 struct DevSite {
 	program: PathBuf,
 	title: String,
-	modified: Option<SystemTime>,
+	/// the program's file and the module files its last build used (card web-dev-modules), each as it was then
+	watched: Vec<(PathBuf, Option<SystemTime>)>,
 	version: u64,
 	files: Vec<SiteFile>,
 	failure: Option<String>,
@@ -28,18 +29,19 @@ struct DevSite {
 impl DevSite {
 	fn new(program: &Path) -> DevSite {
 		let title = crate::site::program_stem(program);
-		DevSite { program: program.to_path_buf(), files: crate::site::dev_shell(&title), title, modified: None, version: 0, failure: None }
+		DevSite { program: program.to_path_buf(), files: crate::site::dev_shell(&title), title, watched: vec![], version: 0, failure: None }
 	}
 
-	/// Builds the program anew when its file changed since the last build
+	/// Builds the program anew when its file or a module it uses changed since the last build
 	fn refresh(&mut self) {
-		let modified = std::fs::metadata(&self.program).and_then(|metadata| metadata.modified()).ok();
-		if self.version > 0 && modified == self.modified {
+		if self.version > 0 && self.watched.iter().all(|(file, modified)| modified_time(file) == *modified) {
 			return;
 		}
-		self.modified = modified;
+		let program_modified = modified_time(&self.program);
 		self.version += 1;
 		let built = crate::site::read_program(&self.program).and_then(|code| crate::modules::with_program_file(&self.program, || crate::site::files(&code, &self.title, true)));
+		let modules = crate::modules::module_files().into_iter().map(|file| { let modified = modified_time(&file); (file, modified) });
+		self.watched = [(self.program.clone(), program_modified)].into_iter().chain(modules).collect();
 		match built {
 			Ok(files) => (self.files, self.failure) = (files, None),
 			Err(failure) => self.failure = Some(failure),
@@ -76,6 +78,10 @@ pub fn serve(program: &Path, port: u16) -> Result<(), String> {
 		}
 	}
 	Ok(())
+}
+
+fn modified_time(file: &Path) -> Option<SystemTime> {
+	std::fs::metadata(file).and_then(|metadata| metadata.modified()).ok()
 }
 
 fn answer(body: Vec<u8>, content_type: &str) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {

@@ -72,6 +72,8 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		None => Ok(program),
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
+	let files = loader.loaded.iter().chain(&loader.included).filter(|path| path.is_file()).cloned().collect();
+	MODULE_FILES.with(|modules| *modules.borrow_mut() = files);
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
 	MODULE_DEFINITIONS.with(|names| own_names.iter().for_each(|own| { names.borrow_mut().remove(own); })); // the program's own word wins
 	resolved.unwrap_or_else(|failure| failure)
@@ -418,6 +420,13 @@ thread_local! {
 	static EARLY_CLASS_MODULES: std::cell::RefCell<HashSet<PathBuf>> = std::cell::RefCell::new(HashSet::new());
 	/// The names a used module defines for the program being compiled: their bodies never see the program's variables
 	static MODULE_DEFINITIONS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+	/// The module files the last program resolved used or included: `warp dev` builds anew when one changes
+	static MODULE_FILES: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(vec![]) };
+}
+
+/// The files of the modules the last program compiled on this thread used or included (card web-dev-modules)
+pub fn module_files() -> Vec<PathBuf> {
+	MODULE_FILES.with(|files| files.borrow().clone())
 }
 
 /// Whether `name` is defined by a module the program uses (`use markup`'s html_element), not by the program
@@ -823,7 +832,7 @@ impl<'a> Loader<'a> {
 		}
 		let module = WarpParser::parse(source);
 		if let Some(failure) = module.first_error() {
-			return Err(failure.clone());
+			return Err(crate::diagnostic::located_in_file(failure, &path));
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use && EARLY_CLASS_MODULES.with(|modules| modules.borrow().contains(&path.canonicalize().unwrap_or_else(|_| path.clone())));

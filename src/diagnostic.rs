@@ -106,11 +106,48 @@ pub fn names_position(message: &str) -> bool {
 
 /// The position ` at line:column` that ends a message's description
 pub fn message_position(message: &str) -> Option<(usize, usize)> {
-	let description = message.split("; fix: ").next().unwrap_or(message);
-	let (_, place) = description.rsplit_once(" at ")?;
-	let (line, column) = place.split_once(':')?;
-	let number = |digits: &str| (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| digits.parse().ok()).flatten();
-	Some((number(line)?, number(column)?))
+	let (line, column) = described_place(message)?.split_once(':')?;
+	Some((position_number(line)?, position_number(column)?))
+}
+
+/// The last position ` at file:line:column` in the description of a module's failure (card web-dev-modules)
+pub fn message_file_position(message: &str) -> Option<(&str, usize, usize)> {
+	places(message).find_map(|(_, place)| {
+		let mut parts = place.rsplitn(3, ':');
+		let (column, line, file) = (parts.next()?, parts.next()?, parts.next()?);
+		Some((file, position_number(line)?, position_number(column)?))
+	})
+}
+
+/// A module's failure: its last position ` at line:column` becomes ` at file:line:column`, so it is not read as the
+/// program's
+pub fn located_in_file(failure: &Node, file: &std::path::Path) -> Node {
+	let Node::Error(message) = failure.drop_meta() else { return failure.clone() };
+	let Node::Text(text) = message.drop_meta() else { return failure.clone() };
+	let is_position = |place: &str| place.split_once(':').is_some_and(|(line, column)| position_number(line).is_some() && position_number(column).is_some());
+	let Some((at, _)) = places(text).find(|(_, place)| is_position(place)) else { return failure.clone() };
+	Node::Error(Box::new(Node::Text(format!("{}{}:{}", &text[..at], file.display(), &text[at..]))))
+}
+
+/// The words after each ` at ` of a message's description, the last first, with where each starts
+fn places(message: &str) -> impl Iterator<Item = (usize, &str)> {
+	let description = described(message);
+	description.rmatch_indices(" at ").map(move |(at, word)| {
+		let start = at + word.len();
+		(start, description[start..].split_whitespace().next().unwrap_or_default())
+	})
+}
+
+fn described(message: &str) -> &str {
+	message.split("; fix: ").next().unwrap_or(message)
+}
+
+fn described_place(message: &str) -> Option<&str> {
+	described(message).rsplit_once(" at ").map(|(_, place)| place)
+}
+
+fn position_number(digits: &str) -> Option<usize> {
+	(!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| digits.parse().ok()).flatten()
 }
 
 /// Where a failed program's error is: the position its message names (also for an error no diagnostic made)
