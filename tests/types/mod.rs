@@ -101,6 +101,7 @@ mod test_optional_list_items;
 mod test_optional_number_fields;
 mod test_param_named_like_global; // card param-named-like-global
 mod test_parameter_text; // card param-text
+mod test_passed_list_identity; // card xs-xs
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
 mod test_printable;

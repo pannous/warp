@@ -729,6 +729,15 @@ impl WasmGcEmitter {
 			}
 		});
 		program.visit(&mut |part| {
+			// `f(xs) === xs`: a typed array's Node is a fresh copy at every use, so a list compared by identity stays
+			// the one Node list (card xs-xs)
+			if let Node::Key(left, Op::Identical | Op::NotIdentical, right) = part {
+				for side in [left, right] {
+					if let Node::Symbol(name) = side.drop_meta() {
+						excluded.insert(name.clone());
+					}
+				}
+			}
 			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::RAN_WITHOUT_ERROR)) {
 				part.visit(&mut |inner| if let Node::Key(target, _, _) = inner {
 					if let Node::Symbol(name) = target.drop_meta() { excluded.insert(name.clone()); }
