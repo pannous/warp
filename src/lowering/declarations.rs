@@ -1209,7 +1209,8 @@ fn never_happens(located: &Node, message: &str) -> Node {
 /// P28 (user, 2026-10-05: "Zero value (Go)"): `real x;` declares x with the zero value of its type, `x:real = 0.0`.
 /// Only a fresh name: after `x = "5"`, `int x` is the conversion of x
 pub fn lower_bare_declarations(program: Node) -> Node {
-	let named: Vec<&str> = COLLECTION_DECLARATION_WORDS.iter().map(|(word, _)| *word).filter(|word| crate::soft_keywords::program_names(&program, word)).collect();
+	let names = crate::soft_keywords::names_given(&program);
+	let named: Vec<&str> = COLLECTION_DECLARATION_WORDS.iter().map(|(word, _)| *word).filter(|word| names.contains(*word)).collect();
 	let program = collection_declarations(program, &named);
 	// a program of only `int n` is one statement
 	match zero_declaration(&program, &std::collections::HashSet::new()) {

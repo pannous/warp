@@ -12,6 +12,7 @@ use crate::extensions::numbers::Number;
 use crate::library_words::SLICE;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use std::collections::HashSet;
 
 const FROM: &str = "from";
 const TO: &str = "to";
@@ -38,26 +39,27 @@ pub fn lower(program: Node) -> Node {
 	if !program.mentions_any(&[FROM, UP]) {
 		return program;
 	}
-	slices(program.clone(), &program)
+	let names = crate::soft_keywords::names_given(&program);
+	slices(program, &names)
 }
 
-fn slices(node: Node, program: &Node) -> Node {
+fn slices(node: Node, names: &HashSet<String>) -> Node {
 	let mut words = vec![];
 	match node.drop_meta() {
 		// `print(xs up to #3)`, `f(xs up to #3)`: the words inside a group or call
 		Node::List(items, bracket, _) if *bracket != Bracket::Square => items.iter().for_each(|item| flat_words(item, &mut words)),
 		_ => flat_words(&node, &mut words),
 	}
-	match word_slice(&words, program).or_else(|| sliced_argument(&words, program)) {
+	match word_slice(&words, names).or_else(|| sliced_argument(&words, names)) {
 		Some(slice) => slice,
-		None => node.map_children(|child| slices(child, program)),
+		None => node.map_children(|child| slices(child, names)),
 	}
 }
 
 /// `[f, xs, up, to, #3]`: the call of f on the slice
-fn sliced_argument(words: &[Node], program: &Node) -> Option<Node> {
+fn sliced_argument(words: &[Node], names: &HashSet<String>) -> Option<Node> {
 	let (callee @ Node::Symbol(_), argument) = words.split_first()? else { return None };
-	let slice = word_slice(argument, program)?;
+	let slice = word_slice(argument, names)?;
 	Some(Node::List(vec![callee.clone(), slice], Bracket::Round, Separator::None))
 }
 
@@ -80,9 +82,9 @@ fn flat_words(node: &Node, words: &mut Vec<Node>) {
 }
 
 /// `[xs, from, P, to, Q]`, `[xs, starting, from, P]`, `[xs, up, to, Q]`: the slice of xs, or the error of a bare number
-fn word_slice(words: &[Node], program: &Node) -> Option<Node> {
+fn word_slice(words: &[Node], names: &HashSet<String>) -> Option<Node> {
 	let (receiver, rest) = words.split_first()?;
-	if !is_sliceable(receiver, program) {
+	if !is_sliceable(receiver, names) {
 		return None;
 	}
 	let at = |index: usize, word: &str| rest.get(index).is_some_and(|node| is_word(node, &[word]));
@@ -119,9 +121,9 @@ fn word_slice(words: &[Node], program: &Node) -> Option<Node> {
 }
 
 /// A variable the program names or a list literal; a word of the language (`count from 1 to 10`) is no list
-fn is_sliceable(receiver: &Node, program: &Node) -> bool {
+fn is_sliceable(receiver: &Node, names: &HashSet<String>) -> bool {
 	match receiver.drop_meta() {
-		Node::Symbol(name) => crate::soft_keywords::program_names(program, name),
+		Node::Symbol(name) => names.contains(name),
 		Node::List(_, Bracket::Square, _) | Node::Text(_) => true,
 		_ => false,
 	}

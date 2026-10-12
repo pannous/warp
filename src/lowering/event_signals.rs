@@ -546,7 +546,8 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 
 /// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
 pub(crate) fn emit_verbs(program: &Node) -> Vec<String> {
-	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !crate::soft_keywords::program_names(program, verb)).map(|verb| verb.to_string()).collect()
+	let names = crate::soft_keywords::names_given(program);
+	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !names.contains(**verb)).map(|verb| verb.to_string()).collect()
 }
 
 /// `emit alarm`, `emit stop the machine{reason:"…"}`, `emit item 1` (or a `verbs` word): the name and the data (ø

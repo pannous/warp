@@ -98,3 +98,9 @@ analyzer::function_definitions; a full analyse_user_functions runs per changed p
 each), so a pass asking for one paid ~5–60 ms. Profile with probes/perf/xctrace_summary.py (unstripped build:
 CARGO_PROFILE_QUICK_RELEASE_STRIP=false; --callers <name> shows who pays). Left: module loading of std (~190 ms of
 samples), emit ~120 ms, Node clone/drop ~250 ms, the remaining full analyses (lambdas, closures, list_phrases).
+Then 0.51 → 0.43 (2026-10-12): word_slices asked soft_keywords::program_names (a walk of the whole program) at
+every node, and other passes once per word of their word lists (std module names, number words, emit verbs, sound
+words with called_names each); they now take names_given / called_names once. modules::defined borrows the
+statements (statements_of) instead of cloning the program. Then 0.38: closures::tail asks arrow_lambda of every
+block, which copied the block (block_lambda) and searched it for `$0`…`$9` to rule out a Swift closure; a block
+without a `$` name now returns at once (shorthand_block_lambda).

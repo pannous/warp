@@ -12,7 +12,8 @@ const NUMBER_WORDS: [(&str, i64); 28] = [
 ];
 
 pub fn lower(program: Node) -> Node {
-	let unnamed: Vec<(&str, i64)> = NUMBER_WORDS.into_iter().filter(|(word, _)| !crate::soft_keywords::program_names(&program, word)).collect();
+	let names = crate::soft_keywords::names_given(&program);
+	let unnamed: Vec<(&str, i64)> = NUMBER_WORDS.into_iter().filter(|(word, _)| !names.contains(*word)).collect();
 	if unnamed.is_empty() {
 		return program;
 	}

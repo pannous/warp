@@ -580,7 +580,8 @@ fn is_vector_call(node: &Node) -> bool {
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
 /// word itself, with a note (a program's own variable `text` keeps its methods)
 fn qualified_module_calls(node: Node) -> Node {
-	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !crate::soft_keywords::program_names(&node, module)).collect();
+	let names = crate::soft_keywords::names_given(&node);
+	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !names.contains(*module)).collect();
 	module_calls(node, &modules)
 }
 

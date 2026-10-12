@@ -61,7 +61,7 @@ pub fn resolve(program: Node) -> Node {
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	MODULE_DEFINITIONS.with(|names| names.borrow_mut().clear());
-	let own_names: Vec<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+	let own_names: Vec<String> = statements_of(&program).iter().filter_map(declared_name).collect();
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
 	loader.program_variables = program_variables(&program);
@@ -85,7 +85,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let mut program = with_type_module_uses(program);
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
-	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+	let own_names: HashSet<String> = statements_of(&program).iter().filter_map(declared_name).collect();
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) = (vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
 	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
@@ -214,7 +214,7 @@ fn with_type_module_uses(program: Node) -> Node {
 	let defined = own_functions(&program);
 	// `from list import zip` brings only zip: the module's other words stay out (test_from_import)
 	let imported = |statement: &Node| used_module(statement).or_else(|| imported_words(statement).map(|(used, _, _)| used));
-	let used: HashSet<String> = statements(program.clone()).iter().filter_map(imported).map(|used| used.name).collect();
+	let used: HashSet<String> = statements_of(&program).iter().filter_map(imported).map(|used| used.name).collect();
 	let type_modules = type_modules();
 	let is_module_name = |receiver: &Node| receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name));
 	let only_provider = |method: &String| match type_modules.iter().filter(|(_, words)| words.contains(method)).collect::<Vec<_>>().as_slice() {
@@ -357,7 +357,7 @@ fn with_library_words(names: HashSet<String>) -> HashSet<String> {
 
 /// The variables a program assigns at its top: `words = […]`, also declared global: `global hue = 0`, `global hue`
 fn program_variables(program: &Node) -> HashSet<String> {
-	statements(program.clone()).iter().filter_map(|statement| match statement.drop_meta() {
+	statements_of(program).iter().filter_map(|statement| match statement.drop_meta() {
 		Node::Key(variable, Op::Assign, _) => variable.drop_meta().symbol_name().map(String::from),
 		Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(GLOBAL_KEYWORD) => leftmost_symbol(declared),
 		_ => None,
@@ -761,7 +761,7 @@ impl<'a> Loader<'a> {
 		let mut mentioned = HashSet::new();
 		program.visit(&mut |node| if let Node::Symbol(name) = node { mentioned.insert(name.clone()); });
 		// a program's own `write(x, y)` wins
-		let own: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+		let own: HashSet<String> = statements_of(program).iter().filter_map(declared_name).collect();
 		for (module, words) in PRELUDE_WORDS {
 			let words: Vec<&str> = words.iter().copied().filter(|word| mentioned.contains(*word) && !own.contains(*word)).collect();
 			if !words.is_empty() {
@@ -1034,27 +1034,33 @@ type NeededBy = fn(&Node) -> bool;
 const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
-	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(&statements(program.clone())); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
+	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(statements_of(program)); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
 	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
-	(SOUND_MODULE, |program| SOUND_SETUP_FREE_WORDS.iter().any(|word| calls_undefined(program, word))),
+	(SOUND_MODULE, |program| first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()),
 	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
-	SOUND_WORDS.iter().any(|word| calls_undefined(program, word)) || statements(program.clone()).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
+	first_called_undefined(program, SOUND_WORDS).is_some() || statements_of(program).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
 }
 
 /// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)
 fn rare_sound_word(program: &Node) -> Option<&'static str> {
-	SOUND_WORDS.into_iter().find(|word| !SOUND_SETUP_FREE_WORDS.contains(word) && calls_undefined(program, word))
+	first_called_undefined(program, SOUND_WORDS.into_iter().filter(|word| !SOUND_SETUP_FREE_WORDS.contains(word)))
 }
 
 /// Whether the program calls `word` without defining it
 fn calls_undefined(program: &Node, word: &str) -> bool {
-	defined(program, word).is_none() && called_names(&statements(program.clone())).contains(word)
+	first_called_undefined(program, [word]).is_some()
+}
+
+/// The first of `words` the program calls without defining it
+fn first_called_undefined<'a>(program: &Node, words: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+	let called = called_names(statements_of(program));
+	words.into_iter().find(|word| called.contains(*word) && defined(program, word).is_none())
 }
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
 /// a note, when a used module defines that word
@@ -1596,7 +1602,17 @@ fn mentions_file_url(program: &Node) -> bool {
 
 /// The program's main-level definition of `name`
 fn defined(program: &Node, name: &str) -> Option<Node> {
-	statements(program.clone()).into_iter().find(|statement| declared_name(statement).as_deref() == Some(name))
+	statements_of(program).iter().find(|statement| declared_name(statement).as_deref() == Some(name)).cloned()
+}
+
+/// The statements of a module, borrowed (statements takes them)
+fn statements_of(module: &Node) -> &[Node] {
+	match module {
+		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items,
+		Node::Meta { node, .. } => statements_of(node),
+		Node::Empty => &[],
+		single => std::slice::from_ref(single),
+	}
 }
 
 fn statements(module: Node) -> Vec<Node> {
