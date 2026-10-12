@@ -5,7 +5,7 @@ use warp::site::{scripts_of, HOST_PARTS};
 const HOST_SCRIPT: &str = include_str!("../../web/playground/host.js");
 const PART_KEYS: [&str; 2] = ["words: ", "\n\t}"];
 
-fn part_files(code: &str) -> Vec<&'static str> {
+pub(super) fn part_files(code: &str) -> Vec<&'static str> {
 	let module = warp::pipeline::for_a_page(|| warp::pipeline::compile(code)).expect("compiled");
 	let scripts = scripts_of(&module.bytes, false).expect("the module's scripts");
 	scripts
