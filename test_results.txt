@@ -2788,6 +2788,8 @@ PASSED:
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
+  ✓ parser::test_as_prefixed_name::as_still_casts
+  ✓ parser::test_as_prefixed_name::def_of_an_as_prefixed_name
   ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ parser::test_attributes::attribute_names_may_be_kebab_case
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
@@ -5121,7 +5123,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ INCOMPLETE: 1 test binaries ended without a result (crashed or killed)
 
 SUMMARY:
-12 ignored, 5118 passed, 1 failed, 5119 total tested
+12 ignored, 5120 passed, 0 failed, 5120 total tested
