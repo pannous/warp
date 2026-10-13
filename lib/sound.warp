@@ -233,8 +233,8 @@ stop_sound(handle = 0) := std_io("sound", "stop", [handle])
 // fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. render_sound writes the fade too
 fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
 // a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t); play hum for 2s (or
-// play_signal(hum, 2s); play [left, right] for 2s in stereo) calls
-// hum for every sample, t its time in seconds, a block ahead of the speaker; returns the handle when the last is queued
+// play_signal(hum, 2s); play [left, right] for 2s in stereo) calls hum for every sample, t its time in seconds, a block
+// ahead of the speaker; returns the handle when the last is queued
 play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
 // block-wise: hum(block, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi * 220 * (t + (i - 1) / sample_rate)) };
 // play_blocks(hum, 2s) calls hum once a block, block a linear float array of its samples, t the first one's time;
