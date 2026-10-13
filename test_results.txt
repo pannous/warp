@@ -3192,6 +3192,7 @@ PASSED:
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
   ✓ programs::test_sound_synth::the_envelope_rises_decays_sustains_and_releases
+  ✓ programs::test_sound_tempo_float::a_growing_tempo_stays_a_float
   ✓ programs::test_sound_tempo::a_beat_is_a_share_of_a_minute
   ✓ programs::test_sound_tempo::notes_last_beats
   ✓ programs::test_sound_tempo::the_program_sets_the_modules_settings
@@ -5090,4 +5091,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5085 passed, 0 failed, 5085 total tested
+10 ignored, 5086 passed, 0 failed, 5086 total tested
