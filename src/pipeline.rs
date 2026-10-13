@@ -808,10 +808,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 			None => run_block_program(bound, program_of),
 		};
 	match result.drop_meta() {
-		Node::Error(message) => Err(format!(
-			"the block {written} failed: {}",
-			message.serialize().trim_matches('"')
-		)),
+		Node::Error(message) => Err(format!("the block {written} failed: {}", message.drop_meta())),
 		_ => Ok(result),
 	}
 }

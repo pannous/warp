@@ -1231,7 +1231,7 @@ fn task_name(function: &str) -> String {
 
 pub(crate) fn failure_message(failure: anyhow::Error) -> String {
 	match crate::wasm_emitter::failed_run(failure) {
-		crate::node::Node::Error(message) => message.serialize().trim_matches('"').to_string(),
+		crate::node::Node::Error(message) => message.drop_meta().to_string(),
 		other => other.serialize(),
 	}
 }
