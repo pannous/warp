@@ -387,11 +387,31 @@ fn marked_operand(word: &str) -> Node {
 
 /// `left == right` or `left != right`, a type word on either side by its canonical name
 fn comparison(left: Node, op: Op, right: Node, shadowed: &Names) -> Node {
+	hint_type_compared_with_text(&left, &op, &right);
+	hint_type_compared_with_text(&right, &op, &left);
 	key(
 		canonical_operand(expand(left, shadowed), shadowed),
 		op,
 		canonical_operand(expand(right, shadowed), shadowed),
 	)
+}
+
+/// `type(x) == "int"` is no: a type never equals a text, though it prints as one (decision type-equal), so the
+/// comparison hints the type word (card type-text-compare)
+fn hint_type_compared_with_text(type_value: &Node, op: &Op, other: &Node) {
+	let (Some(argument), Node::Text(word)) = (typed_argument(type_value), other.drop_meta()) else {
+		return;
+	};
+	if type_spec(&[word.as_str()], &Names::default()).is_none() {
+		return;
+	}
+	let typed = format!("{TYPE_WORD}({})", crate::normalize::operand_text(&argument));
+	crate::normalize::set_position_of(other);
+	crate::normalize::hint(
+		&format!("{typed} {op} \"{word}\""),
+		&format!("{typed} {op} {word}"),
+		"a type never equals a text; compare with the type word",
+	);
 }
 
 /// A marked side of == or != by the canonical name of its type; a variable of that name stays the variable

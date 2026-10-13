@@ -1,6 +1,7 @@
 mod node_values_test;
 mod test_comment_meta;
 mod test_empty_operands;
+mod test_float_node_text; // card writes-node
 mod test_index_serialization;
 mod test_list_separator; // card keep-list
 mod test_node;
