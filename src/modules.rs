@@ -856,7 +856,7 @@ fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 	let [keyword, names @ ..] = words.as_slice() else {
 		return None;
 	};
-	let plain_name = |name: &&Node| matches!(name.drop_meta(), Node::Symbol(word) if !crate::foreign_modules::FOREIGN_RUNTIMES.contains(&word.as_str()) && ![MINIMUM_KEYWORD, "as", "from"].contains(&word.as_str()) && !is_version_keyword(name));
+	let plain_name = |name: &&Node| matches!(name.drop_meta(), Node::Symbol(word) if !crate::foreign_modules::FOREIGN_RUNTIMES.contains(&word.as_str()) && !crate::foreign_modules::CRATE_RUNTIMES.contains(&word.as_str()) && ![MINIMUM_KEYWORD, "as", "from"].contains(&word.as_str()) && !is_version_keyword(name));
 	if names.len() < 2 || !names.iter().all(plain_name) {
 		return None;
 	}

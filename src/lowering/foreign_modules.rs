@@ -24,6 +24,8 @@ const SETTER_PREFIX: &str = "set ";
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
 const COMPONENT_EXTENSION: &str = ".wasm";
+/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/cargo_crates.rs)
+pub const CRATE_RUNTIMES: [&str; 2] = ["cargo", "crate"];
 /// The version after `\0asm` in a core module's header; a component's names another layer
 const CORE_MODULE_VERSION: [u8; 4] = [1, 0, 0, 0];
 /// The page's components by name, one per line: build.sh components writes it beside components/<name>.js
@@ -88,6 +90,9 @@ fn component_uses(node: Node) -> Node {
 /// The component of `use rust_demo.wasm`, as the text of its path, or its path `as` an alias; a `.wasm` file that is
 /// not there, or an aliased name nothing resolves, the error naming the components that are
 fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
+	if let [word, runtime, used] = items {
+		return crate_module(word, runtime, used);
+	}
 	let [word, used] = items else { return None };
 	if !matches!(word.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str())) {
 		return None;
@@ -112,6 +117,35 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 		Some(alias) => Node::Key(Box::new(Node::Text(path)), Op::As, alias.clone()),
 		None => Node::Text(path),
 	}))
+}
+
+/// `use cargo regex`, `use crate "regex" as re`: the component src/cargo_crates.rs builds of the crate, `as` the crate's
+/// name by default
+fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node, String>> {
+	if !word.is_symbol(USE_WORD) || !matches!(runtime.drop_meta(), Node::Symbol(runtime) if CRATE_RUNTIMES.contains(&runtime.as_str()))
+	{
+		return None;
+	}
+	let (named, alias) = match used.drop_meta() {
+		Node::Key(named, Op::As, alias) => (named.as_ref(), Some(alias.as_ref().clone())),
+		_ => (used, None),
+	};
+	let name = match named.drop_meta() {
+		Node::Symbol(name) | Node::Text(name) => name.clone(),
+		_ => return None,
+	};
+	let alias = alias.unwrap_or_else(|| symbol(&name.replace('-', "_")));
+	Some(crate_component(&name).map(|path| Node::Key(Box::new(Node::Text(path)), Op::As, Box::new(alias))))
+}
+
+#[cfg(feature = "native")]
+fn crate_component(name: &str) -> Result<String, String> {
+	crate::cargo_crates::component(name)
+}
+
+#[cfg(not(feature = "native"))]
+fn crate_component(name: &str) -> Result<String, String> {
+	Err(format!("use cargo {name} builds the crate with cargo: only the native warp can (card use-cargo-browser)"))
 }
 
 /// `rust_demo.wasm` as written, `rust_demo` where there is a component of that name: natively the file the loader finds,

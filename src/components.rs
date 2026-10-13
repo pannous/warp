@@ -212,6 +212,11 @@ fn serve_host_imports(linker: &mut Linker<ComponentState>, component: &Component
 			)
 		})?;
 	}
+	// stubbing defines each import under its exact name, shadowing the WASI version a newer one serves (a crate's std
+	// imports wasi:random/insecure-seed@0.2.6, wasmtime serves 0.2.12): only a component that does not link gets stubs
+	if linker.instantiate_pre(component).is_ok() {
+		return Ok(());
+	}
 	linker.define_unknown_imports_as_traps(component)
 }
 
@@ -219,6 +224,7 @@ impl Loaded {
 	/// The function `member` names: a method of the resource `kind` for a handle, else a function, a constructor or a
 	/// static function; WIT names are kebab-case, so `stats_of` finds `stats-of` and `Counter` `counter`
 	fn function(&mut self, member: &str, kind: Option<&str>) -> Result<Func, String> {
+		let static_new = format!("[static]{}.new", member.to_lowercase());
 		let found = self
 			.functions
 			.iter()
@@ -236,7 +242,9 @@ impl Loaded {
 						.is_some_and(|(_, function)| names_match(function, member)),
 					_ => false,
 				},
-			});
+			})
+			// `regex.Regex("a+")` of a resource without a constructor: its static `new` (a Rust crate's, src/cargo_crates.rs)
+			.or_else(|| self.functions.iter().find(|(name, _)| kind.is_none() && *name == static_new));
 		let Some((_, index)) = found else {
 			let known: Vec<&str> = self
 				.functions

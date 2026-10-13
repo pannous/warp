@@ -43,6 +43,8 @@ pub use lowering::{
 };
 pub mod accessibility;
 #[cfg(feature = "native")]
+pub mod cargo_crates;
+#[cfg(feature = "native")]
 pub mod channels;
 mod compile_time;
 #[cfg(feature = "native")]
