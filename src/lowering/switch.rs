@@ -11,9 +11,9 @@ use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{block, call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
+use crate::diagnostic::Diagnostic;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::diagnostic::Diagnostic;
 use crate::type_kinds::optional_field;
 use crate::warp_parser::subscript;
 use crate::words::COUNT_WORD;
@@ -684,11 +684,16 @@ fn unit_names(pattern: &Node, program: &Node, warnings: &mut Vec<Diagnostic>) {
 				.filter_map(map_field)
 				.filter(|(name, part)| part.symbol_name() != Some(name.as_str()));
 			for (_, part) in values {
-				let unit = part.symbol_name().and_then(|name| Some((name, crate::units::unit_long_name(name, program)?)));
+				let unit = part
+					.symbol_name()
+					.and_then(|name| Some((name, crate::units::unit_long_name(name, program)?)));
 				match unit {
 					Some((name, unit)) => warnings.push(
-						Diagnostic::at(part, format!("{name} is the unit {unit}: this compares; bind with ${name} or another name"))
-							.weak(),
+						Diagnostic::at(
+							part,
+							format!("{name} is the unit {unit}: this compares; bind with ${name} or another name"),
+						)
+						.weak(),
 					),
 					None => unit_names(part, program, warnings),
 				}
