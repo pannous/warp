@@ -12,7 +12,8 @@ const SITE_ROOT = "warp-root";
 const SITE_MODULE = "app.wasm";
 const PAGE_HTML = "page·html";
 const KEY_EVENT = "key";
-const SITE_EVENTS = { click: () => ({}), input: happened => inputDetail(happened.composedPath()[0]), ...self.FORM_EVENTS };
+const fieldDetail = happened => inputDetail(happened.composedPath()[0]);
+const SITE_EVENTS = { click: () => ({}), input: fieldDetail, ...Object.fromEntries(Object.keys(FIELD_EVENT_TYPES).map(event => [event, fieldDetail])), ...self.FORM_EVENTS };
 
 let site; // the program's run (host.js runProgram's holder)
 
@@ -70,7 +71,7 @@ async function hydrate() {
 // pressed anywhere but in a text field is the program's `on key` (card key-app: `warp app` shows a built site)
 function listenToElements(handle) {
 	for (const [event, detail] of Object.entries(SITE_EVENTS)) {
-		document.getElementById(SITE_ROOT).addEventListener(event, happened => handle(elementEvent(event, happened, detail(happened))));
+		document.getElementById(SITE_ROOT).addEventListener(FIELD_EVENT_TYPES[event] ?? event, happened => handle(elementEvent(event, happened, detail(happened))));
 	}
 	document.addEventListener("keydown", pressed => isTyping(pressed.target) || handle({ event: KEY_EVENT, detail: { key: pressed.key } }));
 }

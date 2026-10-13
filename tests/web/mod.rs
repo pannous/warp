@@ -37,6 +37,7 @@ mod test_editor_shortcuts; // card keyboard-shortcuts
 mod test_element_events;
 mod test_element_handler_quiet;
 mod test_expert_guide;
+mod test_field_events; // card click-key
 mod test_form_bindings;
 mod test_form_routes; // card g_mSEw
 mod test_glued_attribute_content; // card words-glue

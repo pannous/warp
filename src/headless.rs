@@ -22,6 +22,9 @@ const INSTANCE: &str = "instance";
 const CLICK: &str = "click";
 const INPUT: &str = "input";
 const SUBMIT: &str = "submit";
+const CHANGE: &str = "change";
+const FOCUS: &str = "focus";
+const BLUR: &str = "blur";
 /// the submitted form's named fields, as markup.js submitDetail hands them over
 const FIELDS: &str = "fields";
 /// Fields whose typed value reaches the handler as a number, as the page's valueAsNumber gives it (markup.js)
@@ -91,13 +94,22 @@ impl Page {
 
 	/// `text` typed into the form field found by its placeholder, name or id (`input{ bind: name }`)
 	pub fn type_into(&mut self, label: &str, text: &str) -> Result<(), String> {
-		self.fire(INPUT, label, |field| {
-			let value = match field.attribute("type") {
-				Some(kind) if NUMBER_FIELDS.contains(&kind) => number_typed(text),
-				_ => json!(text),
-			};
-			Map::from_iter([("value".to_string(), value), ("checked".to_string(), json!(false))])
-		})
+		self.fire(INPUT, label, |field| field_detail(field, text))
+	}
+
+	/// `text` committed in the form field found by its placeholder, name or id (`on change {…}`)
+	pub fn change(&mut self, label: &str, text: &str) -> Result<(), String> {
+		self.fire(CHANGE, label, |field| field_detail(field, text))
+	}
+
+	/// The form field found by its placeholder, name or id gets the focus (`on focus {…}`)
+	pub fn focus(&mut self, label: &str) -> Result<(), String> {
+		self.fire(FOCUS, label, |_| Map::new())
+	}
+
+	/// The form field found by its placeholder, name or id loses the focus (`on blur {…}`)
+	pub fn blur(&mut self, label: &str) -> Result<(), String> {
+		self.fire(BLUR, label, |_| Map::new())
 	}
 
 	/// The form showing `label` (its text, name or id) sent with `fields`, its named fields (`on submit { event.fields }`)
@@ -327,4 +339,13 @@ fn number_typed(text: &str) -> Value {
 		Ok(number) => json!(number),
 		Err(_) => Value::Null,
 	}
+}
+
+/// What a form field holds after `text`, as markup.js inputDetail hands it over: a number from a number or range field
+fn field_detail(field: &Element, text: &str) -> Map<String, Value> {
+	let value = match field.attribute("type") {
+		Some(kind) if NUMBER_FIELDS.contains(&kind) => number_typed(text),
+		_ => json!(text),
+	};
+	Map::from_iter([("value".to_string(), value), ("checked".to_string(), json!(false))])
 }

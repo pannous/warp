@@ -45,7 +45,7 @@ const REPORT_OFF = "off";
 const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
 const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
-const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
+const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound.rs SAMPLE_OFFSET)
 
@@ -625,6 +625,10 @@ function parsedHtml(html) {
 function renderedRoot(host) {
 	const root = host.attachShadow({ mode: "open" });
 	root.addEventListener("submit", submitForm);
+	// change is not composed either: it stays inside the shadow root
+	for (const [event, type] of Object.entries(FIELD_EVENT_TYPES)) {
+		root.addEventListener(type, happened => sendElementEvent(event, happened, inputDetail(happened.composedPath()[0])));
+	}
 	return root;
 }
 

@@ -7,7 +7,7 @@
 use super::element_events::{element_items, with_element_items};
 use super::nodes::key;
 use super::words::ON_WORD;
-use crate::event_signals::PAGE_EVENTS;
+use crate::event_signals::is_element_event;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -36,7 +36,7 @@ fn options_of(item: Node) -> Vec<Node> {
 			listed.iter().map(option).collect()
 		}
 		// not the words of a handler `on change {…}`
-		Node::Symbol(name) if name != ON_WORD && !PAGE_EVENTS.contains(&name.as_str()) => options_of_variable(name),
+		Node::Symbol(name) if name != ON_WORD && !is_element_event(name) => options_of_variable(name),
 		_ => vec![item],
 	}
 }
