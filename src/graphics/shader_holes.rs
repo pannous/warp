@@ -76,7 +76,7 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 
 /// The shader text of a block, marked with its holes
 pub fn shader_text(wgsl: &str) -> Node {
-	let (text, names) = written(wgsl);
+	let (text, names) = written(&with_arrow_result_types(wgsl));
 	match names.is_empty() {
 		true => Node::Text(text),
 		false => Node::Text(text).with_attribute(
@@ -88,6 +88,41 @@ pub fn shader_text(wgsl: &str) -> Node {
 			),
 		),
 	}
+}
+
+/// A function's result type as warp writes it, `fn level(band: f32) : f32`, as WGSL's `-> f32`
+fn with_arrow_result_types(wgsl: &str) -> String {
+	let mut text = String::new();
+	let mut rest = wgsl;
+	while let Some(at) = rest.find("fn ") {
+		let Some(parameters_end) = closing_parenthesis(&rest[at..]).map(|end| at + end + 1) else {
+			break;
+		};
+		text.push_str(&rest[..parameters_end]);
+		rest = &rest[parameters_end..];
+		let spaces = rest.len() - rest.trim_start().len();
+		if rest[spaces..].starts_with(':') && !rest[spaces..].starts_with("::") {
+			text.push_str(&rest[..spaces]);
+			text.push_str("->");
+			rest = &rest[spaces + 1..];
+		}
+	}
+	text + rest
+}
+
+/// The index of the `)` closing the first `(` in text
+fn closing_parenthesis(text: &str) -> Option<usize> {
+	let open = text.find('(')?;
+	let mut depth = 0;
+	for (index, ch) in text[open..].char_indices() {
+		match ch {
+			'(' => depth += 1,
+			')' if depth == 1 => return Some(open + index),
+			')' => depth -= 1,
+			_ => {}
+		}
+	}
+	None
 }
 
 pub fn lower(program: Node) -> Node {
