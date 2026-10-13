@@ -1,0 +1,5 @@
+// card self-parser-glued-units: a number glued to a name or `(` multiplies it; ordinals do not
+sleep(500ms)
+x = 2x + 3(4)
+d = 1.5km
+place = 1st

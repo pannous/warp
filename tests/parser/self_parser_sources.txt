@@ -992,3 +992,4 @@ samples/visualizer.warp
 samples/voices.warp
 samples/word_lengths.warp
 samples/worker.warp
+probes/self_hosting/parser/glued_units.warp
