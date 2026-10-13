@@ -12,7 +12,9 @@ pub const RETURN_WORD: &str = "return";
 pub const SUM_WORD: &str = "sum";
 
 /// `switch x {…}` / `match x {…}` (lowering/switch.rs)
-pub const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
+pub const SWITCH_WORDS: [&str; 2] = ["switch", MATCH_WORD];
+/// The match lowering passes write (nodes::matched)
+pub const MATCH_WORD: &str = "match";
 /// The parameter a lambda without one names: `it`
 pub const IMPLICIT_PARAMETER: &str = "it";
 /// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`

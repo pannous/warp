@@ -63,6 +63,7 @@ pub mod optional_casts;
 pub mod overloads;
 pub mod page_html;
 pub mod parallel;
+pub mod parameter_patterns;
 pub mod parameter_shapes;
 pub mod phrase_calls;
 pub mod phrase_words;
