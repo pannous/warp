@@ -917,9 +917,7 @@ fn is_linear_list(node: &Node, names: &HashMap<String, Shared>) -> bool {
 
 /// Whether a name of `names` occurs in node
 fn mentions_any(node: &Node, names: &HashMap<String, Shared>) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part.drop_meta(), Node::Symbol(name) if names.contains_key(name)));
-	found
+	node.mentions_where(|name| names.contains_key(name))
 }
 
 /// Whether the program has a `s = sum(xs.map(f) @gpu)` that may run on the GPU, of any list of floats

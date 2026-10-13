@@ -561,8 +561,18 @@ impl Node {
 	/// Whether one of `words` occurs as a symbol anywhere in the tree: a pass about these words has nothing to do
 	/// without one, and can skip working out the program's functions
 	pub fn mentions_any(&self, words: &[&str]) -> bool {
+		self.mentions_where(|name| words.contains(&name))
+	}
+
+	/// Whether the symbol `word` occurs anywhere in the tree (as `visit` walks it: class code, no texts)
+	pub fn mentions(&self, word: &str) -> bool {
+		self.mentions_where(|name| name == word)
+	}
+
+	/// Whether a symbol the predicate holds for occurs anywhere in the tree
+	pub fn mentions_where(&self, wanted: impl Fn(&str) -> bool) -> bool {
 		let mut found = false;
-		self.visit(&mut |node| found |= matches!(node, Symbol(name) if words.contains(&name.as_str())));
+		self.visit(&mut |node| found |= matches!(node, Symbol(name) if wanted(name)));
 		found
 	}
 

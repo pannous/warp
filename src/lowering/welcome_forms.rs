@@ -702,9 +702,11 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 
 /// `T`, `Vec<T>` (the parser's symbol `Vec of T`), `[T]` of a type parameter T
 fn mentions_type_parameter(kind: &Node, names: &[String]) -> bool {
-	let mut found = false;
-	kind.visit(&mut |node| found |= matches!(node, Node::Symbol(words) if words.split_whitespace().any(|word| names.iter().any(|name| name == word))));
-	found
+	kind.mentions_where(|words| {
+		words
+			.split_whitespace()
+			.any(|word| names.iter().any(|name| name == word))
+	})
 }
 
 /// `x: T`, `xs: Vec<T>` of a type parameter T
