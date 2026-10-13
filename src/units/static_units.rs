@@ -63,7 +63,7 @@ const MAP_WORD: &str = "map";
 /// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
 const ELEMENT_WORDS: [&str; 7] = ["sum", "max", "min", "first", "last", "mean", "average"];
 
-type Signature = Vec<(Dimension, i32)>;
+pub(super) type Signature = Vec<(Dimension, i32)>;
 type Fields = Vec<(String, Signature)>;
 
 /// The units of a program's final value: of the value itself, or of the fields of the object it is
@@ -114,54 +114,8 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 	if !super::needs_quantities(program) && classes.is_empty() {
 		return None;
 	}
-	// a unit a constructor argument is written in (`Run(1500 m)`) is stored in its field's unit, which shows it
-	let mut written = written_units(program);
-	for stored in unit_fields::stored_argument_units(program, &classes) {
-		if let Some(at) = written.iter().position(|unit| std::ptr::eq(*unit, stored)) {
-			written.remove(at);
-		}
-	}
-	let written = written
-		.into_iter()
-		.map(|unit| Factor { unit, power: 1 })
-		.chain(unit_fields::written_field_units(program))
-		.collect::<Vec<_>>();
-	let display = finest_units(&written);
-	let mut temperatures: Vec<&'static Unit> = vec![];
-	for factor in &written {
-		if factor.unit.dimension == Dimension::Temperature
-			&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
-		{
-			temperatures.push(factor.unit)
-		}
-	}
-	let mut definitions = HashMap::new();
-	program.visit(&mut |node| {
-		if let Some((name, definition)) = function_definition(node) {
-			definitions.insert((name, definition.parameters.len()), definition);
-		}
-	});
-	let mut inference = Inference {
-		variables: HashMap::new(),
-		globals: HashMap::new(),
-		lists: HashMap::new(),
-		objects: HashMap::new(),
-		classes,
-		instances: HashMap::new(),
-		class_lists: HashMap::new(),
-		result_fields: None,
-		definitions,
-		specialised: HashMap::new(),
-		in_progress: vec![],
-		numbered: 0,
-		new_definitions: vec![],
-		display: display.clone(),
-		temperatures,
-		returns: vec![],
-		at_top: true,
-		in_host_call: false,
-		started: HashMap::new(),
-	};
+	let mut inference = Inference::of(program, classes);
+	let display = inference.display.clone();
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
@@ -193,6 +147,79 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 		}
 		Err(Stop::Error(message)) => Some(Err(crate::node::error(&message))),
 		Err(Stop::Unsupported | Stop::Recursive) => None,
+	}
+}
+
+/// A constant expression of quantities, computed: its SI amount and signature (`2 s` is 2 of time, `90 min` 5400) or the
+/// truth of a comparison (`1 km > 500 m`); None for an expression that is no constant
+pub(super) fn constant(expression: &Node) -> Result<Option<(Node, Signature)>, String> {
+	if expression.mentions_where(|name| unit_named(name).is_none()) {
+		return Ok(None);
+	}
+	match Inference::of(expression, HashMap::new()).infer(expression.clone()) {
+		Ok((value, signature)) if matches!(value.drop_meta(), Node::Number(_) | Node::True | Node::False) => {
+			Ok(Some((value, signature)))
+		}
+		Err(Stop::Error(message)) => Err(message),
+		_ => Ok(None),
+	}
+}
+
+/// The units written in a program, once per mention, with the units of its classes' fields
+fn written_factors(program: &Node, classes: &HashMap<String, Fields>) -> Vec<Factor> {
+	// a unit a constructor argument is written in (`Run(1500 m)`) is stored in its field's unit, which shows it
+	let mut written = written_units(program);
+	for stored in unit_fields::stored_argument_units(program, classes) {
+		if let Some(at) = written.iter().position(|unit| std::ptr::eq(*unit, stored)) {
+			written.remove(at);
+		}
+	}
+	written
+		.into_iter()
+		.map(|unit| Factor { unit, power: 1 })
+		.chain(unit_fields::written_field_units(program))
+		.collect()
+}
+
+impl Inference {
+	/// The inference of a program: its written units show its quantities, its functions are specialised when called
+	fn of(program: &Node, classes: HashMap<String, Fields>) -> Inference {
+		let written = written_factors(program, &classes);
+		let mut temperatures: Vec<&'static Unit> = vec![];
+		for factor in &written {
+			if factor.unit.dimension == Dimension::Temperature
+				&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
+			{
+				temperatures.push(factor.unit)
+			}
+		}
+		let mut definitions = HashMap::new();
+		program.visit(&mut |node| {
+			if let Some((name, definition)) = function_definition(node) {
+				definitions.insert((name, definition.parameters.len()), definition);
+			}
+		});
+		Inference {
+			variables: HashMap::new(),
+			globals: HashMap::new(),
+			lists: HashMap::new(),
+			objects: HashMap::new(),
+			classes,
+			instances: HashMap::new(),
+			class_lists: HashMap::new(),
+			result_fields: None,
+			definitions,
+			specialised: HashMap::new(),
+			in_progress: vec![],
+			numbered: 0,
+			new_definitions: vec![],
+			display: finest_units(&written),
+			temperatures,
+			returns: vec![],
+			at_top: true,
+			in_host_call: false,
+			started: HashMap::new(),
+		}
 	}
 }
 
@@ -329,8 +356,9 @@ pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
 	uncertain.map_or(value, |amount| Node::data(super::UncertainQuantity::new(amount, units)))
 }
 
-fn exact_amount(value: &Node) -> Option<Rational> {
+pub(super) fn exact_amount(value: &Node) -> Option<Rational> {
 	match value.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => exact_amount(&items[0]),
 		Node::Number(Number::Int(n)) => Some(Rational::integer(*n)),
 		Node::Number(Number::Quotient(n, d)) => Some(Rational::new(BigInt::from(*n), BigInt::from(*d))),
 		// a written amount converts as the decimal it spells: 6.5km is 6500m, not 6499.999…m
@@ -630,15 +658,36 @@ fn quantity_text(quantity: Node, units: &[Factor], amount_text: &str) -> Option<
 /// `left op right`, computed when both are numbers: `5 km` is the literal 5000, a value and no computation (blocks.rs reads
 /// `dist: 5000` as data, `dist: 5*1000` as a block)
 fn folded(left: Node, op: Op, right: Node) -> Node {
+	// a sum or comparison of floats stays as the run computes it: 0.1 + 0.2 is no 3/10
+	let exact = |node: &Node| match node.drop_meta() {
+		Node::Number(Number::Float(_)) => None,
+		_ => exact_amount(node),
+	};
 	let amount = match (exact_amount(&left), exact_amount(&right), op) {
 		(Some(a), Some(b), Op::Mul) => Some(a.mul(&b)),
 		(Some(a), Some(b), Op::Div) => b.inverse().map(|inverse| a.mul(&inverse)),
-		_ => None,
+		_ => match (exact(&left), exact(&right)) {
+			(Some(a), Some(b)) if op == Op::Add => Some(a.add(&b)),
+			(Some(a), Some(b)) if op == Op::Sub => Some(a.add(&b.neg())),
+			(Some(a), Some(b)) if op.is_comparison() => return Node::from(holds(a.compare(&b), op)),
+			_ => None,
+		},
 	};
 	amount
 		.as_ref()
 		.and_then(number_node)
 		.unwrap_or_else(|| Node::Key(Box::new(left), op, Box::new(right)))
+}
+
+fn holds(order: std::cmp::Ordering, comparison: Op) -> bool {
+	match comparison {
+		Op::Eq => order.is_eq(),
+		Op::Ne => order.is_ne(),
+		Op::Lt => order.is_lt(),
+		Op::Gt => order.is_gt(),
+		Op::Le => order.is_le(),
+		_ => order.is_ge(),
+	}
 }
 
 /// `serialize()`, `add(q)`: the method word and arguments of a method call `object.method(…)`
@@ -787,7 +836,10 @@ impl Inference {
 			// `-3m`: the quantity keeps its units; `-20°C` counts from the zero of °C
 			Node::Key(nothing, Op::Neg, operand) if is_nothing(&nothing) => {
 				let (operand, signature) = self.infer(*operand)?;
-				let negated = Node::Key(nothing, Op::Neg, Box::new(operand));
+				let negated = match exact_amount(&operand) {
+					Some(amount) => number_node(&amount.neg()).ok_or(Stop::Unsupported)?,
+					None => Node::Key(nothing, Op::Neg, Box::new(operand)),
+				};
 				let twice_zero = self
 					.temperature_zero(&signature)
 					.add(&self.temperature_zero(&signature));
@@ -795,7 +847,7 @@ impl Inference {
 					true => Ok((negated, signature)),
 					false => {
 						let zero = number_node(&twice_zero).ok_or(Stop::Unsupported)?;
-						Ok((Node::Key(Box::new(zero), Op::Add, Box::new(negated)), signature))
+						Ok((folded(zero, Op::Add, negated), signature))
 					}
 				}
 			}
@@ -1152,11 +1204,7 @@ impl Inference {
 			)));
 		}
 		let undo = if op == Op::Add { Op::Sub } else { Op::Add };
-		Ok(Node::Key(
-			Box::new(computed),
-			undo,
-			Box::new(number_node(&zero).ok_or(Stop::Unsupported)?),
-		))
+		Ok(folded(computed, undo, number_node(&zero).ok_or(Stop::Unsupported)?))
 	}
 
 	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
