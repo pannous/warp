@@ -32,6 +32,20 @@ Merge requests' "docs:" lines come from warp-integrator; a "docs: none" on a use
 worker. Samples should run without hints: `for f in samples/*.warp; …grep -c '^hint'` (list in
 data/docs_sync/sample_hints.txt, card sample-hints).
 
+## Full wiki audit
+
+User, 2026-10-13: everything the docs mention that is not implemented gets a card, named on the page; conflicts and
+major corrections go to warp-interviewer, tiny fixes are made directly.
+- `probes/docs_sync/wiki_fences.py` runs every warp/wasp/untagged fence (data/docs_sync/fences.tsv); a fence that
+  fails alone is retried after the page's earlier fences. Sketches, other languages and error demos are ```` ```text ````
+  (or cpp, swift); `--show page.md:line` prints one fence with its run.
+- `--values` runs each `code // value` line and lists mismatches (data/docs_sync/values.tsv); most hits are prose
+  comments, not values.
+- `grep -n "not yet" wiki/*.md | grep -v "card "` lists the unimplemented notes without a card; the audit
+  (2026-10-13, wiki 0b4b33f and 4b2a2db) left none, apart from Footguns' detail limitations and hyperreals' prose.
+- Questions sent to warp-interviewer: «» quotes or group, bool.md numbers or bool type, constant binding or value,
+  `reduce` decrement or fold, truthiness `== false` (data/docs_sync/audit_questions.md).
+
 ## Not swept yet
 
 Everything up to the last swept commit is covered; the open gaps are cards (midi-receive-message, types-first-run, untyped-block-parameter, parse-error-try, param-map-pattern, param-pattern-local-warning, amp-compose).
