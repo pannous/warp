@@ -318,6 +318,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `fib(0) := 0; fib(n) := …`: a second definition of one shape is an error with a match as its fix
+	crate::lowering::definition_cases::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
 	crate::lowering::index_positions::mark_declarations,
 	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
