@@ -470,8 +470,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   hole (user's own edit). P234 `paint` takes a shader text and renders on the GPU; `use graphics` = `use draw`.
 
 ## Sound and graphics
-- shader-colon-result (2026-10-13, from a user edit in samples/gpu_visualizer.warp): a shader function may write its
-  result type warp's way, `fn level(band: f32) : f32`; shader blocks turn it into WGSL's `->`. Both forms work.
+- shader-untouched (2026-10-13, user: "I didn't mean to mess with the shader language"): WGSL in shader blocks stays
+  as written, the `$name` holes are the only change; the colon result-type rewrite (87d15829e) goes. A WGSL error
+  is reported as a warp error with the .warp file's line and column (card wgsl-error).
 - play-dispatch (2026-10-12): `play hum for 2s` dispatches on what hum is (signal, stereo pair, block function); no
   snake case words.
 - sound-at (default): `at 2 beats play C4` places sounds from the voice's first sound.
