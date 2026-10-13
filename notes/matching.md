@@ -115,4 +115,18 @@ The whole matched value (user): no `@`/`as` binding. In an arm the subject's nam
 subject, innermost match; a program variable named value wins) and `match name = expr { … }` (assigns, then matches;
 the name stays bound) give it.
 Open: pattern names warn as main-level shadows (card pattern-names).
-Probe: probes/matching/arms.warp; inventory with a fresh build: 35 of 48 before tuples, is and bare names.
+Probes: probes/matching/arms.warp, whole_value.warp; inventory with a fresh build: 35 of 48 before tuples, is and
+bare names.
+
+## Tree patterns (card tree-patterns, user 2026-10-13: "go beyond what Rust offers")
+Structural matching of whole trees, data (JSON-like maps and lists) and code alike. Design examples:
+probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
+1. map-patterns: deep partial map patterns `{status: 200, body: {user: {name}}}`, fields not named are ignored.
+2. Conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}` (reuses match-ranges, match-type-arms).
+3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
+4. Named patterns as values: `Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
+5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
+6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
+7. Code patterns: quoted code with holes, `` `$a + 0` => a ``; needs card parse-word (real Nodes of a source).
+Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
+stored or combined, and cannot match code (macros aside).

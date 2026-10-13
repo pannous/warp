@@ -330,8 +330,12 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::type_name_matching::lower_prefixed_declarations,
 	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
 	crate::lowering::test_blocks::lower,
+	// card plain-enum: `enum Coin { Penny, Dime }` is the sum type of its cases, `Coin.Dime` is Dime, before sum_variants
+	crate::lowering::plain_enums::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
 	crate::lowering::sum_variants::lower,
+	// card match-exhaustive: a match on a declared sum type or enum that misses a case, while its arms are as written
+	crate::lowering::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::late_binding::split_global_assignments,
 	// `xs from #2 to #4`, `xs up to second`: a slice by position (word_slices.rs), before a pass reads `to` as a range
@@ -540,7 +544,7 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 	SOURCE_PASSES[..resolved_at]
 		.iter()
 		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(module, |module, pass| pass(module))
+		.fold(crate::for_loop::headers::lower(module), |module, pass| pass(module))
 }
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
@@ -551,6 +555,8 @@ fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
 /// (a constant answer, an error, a denied capability).
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
+	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
+	let node = crate::for_loop::headers::lower(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());

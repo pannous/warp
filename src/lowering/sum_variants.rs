@@ -3,19 +3,55 @@
 //! P178: Rust's path `Shape::Circle(r)` of a variant is the variant `Circle(r)`, in a match its type test and binding.
 
 use super::nodes::key;
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::VARIANTS_MARK;
 use std::collections::HashMap;
 
 /// A sum type's variants: those without payload by name, the classes extending it
 #[derive(Default)]
-struct Variants {
+pub(crate) struct Variants {
 	bare: Vec<Node>,
 	classes: Vec<String>,
 }
 
+impl Variants {
+	/// The names of all variants, those with payload (classes) first, as declared
+	pub(crate) fn names(&self) -> Vec<String> {
+		let bare = self.bare.iter().map(|name| name.drop_meta().name());
+		self.classes.iter().cloned().chain(bare).collect()
+	}
+}
+
+/// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name
+/// (`red is Color`, P179), then the classes of the variants with payload
+pub(crate) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
+	let name = Node::Symbol(type_name).with_attribute(
+		VARIANTS_MARK,
+		Node::List(bare_variants, Bracket::None, Separator::Space),
+	);
+	let sum_type = Node::Type {
+		name: Box::new(name),
+		body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)),
+	};
+	Node::List(
+		[vec![sum_type], declarations].concat(),
+		Bracket::None,
+		Separator::Semicolon,
+	)
+}
+
 pub fn lower(program: Node) -> Node {
+	let sum_types = sum_types(&program);
+	if sum_types.is_empty() {
+		return program;
+	}
+	with_variant_tests(program, &sum_types)
+}
+
+/// The sum types the program declares by name, `enum Shape { Circle(r), Dot }` read as `type @variants(Dot) Shape`
+/// and the classes extending it
+pub(crate) fn sum_types(program: &Node) -> HashMap<String, Variants> {
 	let mut sum_types: HashMap<String, Variants> = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
@@ -25,7 +61,7 @@ pub fn lower(program: Node) -> Node {
 		}
 	});
 	if sum_types.is_empty() {
-		return program;
+		return sum_types;
 	}
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
@@ -37,7 +73,7 @@ pub fn lower(program: Node) -> Node {
 			}
 		}
 	});
-	with_variant_tests(program, &sum_types)
+	sum_types
 }
 
 /// `x is Color` → `x is Color or x == red or x == green`; a literal variant `red is Color` is true; `Shape::Circle(2)` →

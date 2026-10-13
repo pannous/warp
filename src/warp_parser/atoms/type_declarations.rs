@@ -420,7 +420,7 @@ impl WarpParser {
 				.take_while(|&offset| self.peek_char(offset).is_whitespace())
 				.count();
 			if self.peek_char(blanks) != '|' {
-				return sum_type(type_name, bare_variants, declarations);
+				return crate::lowering::sum_variants::sum_type(type_name, bare_variants, declarations);
 			}
 			self.advance_by(blanks + 1);
 		}
@@ -486,7 +486,7 @@ impl WarpParser {
 				}
 			}
 		}
-		sum_type(type_name, bare_variants, declarations)
+		crate::lowering::sum_variants::sum_type(type_name, bare_variants, declarations)
 	}
 
 	pub(super) fn variant_class(
@@ -596,25 +596,6 @@ pub(super) fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> boo
 	}
 }
 
-/// The items of a block or parameter list `{a; b}`, `(a, b)`; a block of one statement `{fun sum() = x}` is that one
-/// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name
-/// (`red is Color`, P179), then the classes of the variants with payload
-pub(super) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
-	let name = Symbol(type_name).with_attribute(
-		crate::words::VARIANTS_MARK,
-		Node::List(bare_variants, Bracket::None, Separator::Space),
-	);
-	let sum_type = Node::Type {
-		name: Box::new(name),
-		body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)),
-	};
-	Node::List(
-		[vec![sum_type], declarations].concat(),
-		Bracket::None,
-		Separator::Semicolon,
-	)
-}
-
 /// Swift's `case circle(radius: Double)`: the case without its keyword
 pub(super) fn without_case_keyword(case: &Node) -> Node {
 	match case.drop_meta() {
@@ -623,6 +604,7 @@ pub(super) fn without_case_keyword(case: &Node) -> Node {
 	}
 }
 
+/// The items of a block or parameter list `{a; b}`, `(a, b)`; a block of one statement `{fun sum() = x}` is that one
 pub(super) fn statements(block: Node) -> Vec<Node> {
 	match block {
 		Node::List(items, _, Separator::Colon | Separator::Semicolon | Separator::Newline) => items,

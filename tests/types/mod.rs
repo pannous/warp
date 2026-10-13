@@ -89,6 +89,7 @@ mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
+mod test_match_exhaustive; // card match-exhaustive
 mod test_match_static_variant;
 mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
@@ -106,6 +107,7 @@ mod test_parameter_text; // card param-text
 mod test_passed_list_identity; // card xs-xs
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
+mod test_plain_enum; // card plain-enum
 mod test_printable;
 mod test_real_references;
 mod test_real_text;
