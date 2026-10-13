@@ -1,7 +1,7 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
 
 use super::*;
-use crate::lowering::event_signals::{EMIT_ALIASES, EMIT_WORDS};
+use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
@@ -87,7 +87,7 @@ impl WarpParser {
 	/// unary plus
 	pub(super) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
 		let (op, chars) = self.peek_operator()?;
-		crate::lowering::class_methods::operator_method(op)?;
+		crate::operators::operator_method(op)?;
 		let mut offset = chars + self.parenthesis_length(chars)?;
 		while matches!(self.peek_char(offset), ' ' | '\t') {
 			offset += 1;

@@ -22,7 +22,7 @@ impl WasmGcEmitter {
 	/// `'7' as int` is 7; `'x' as int` is no number (invalid_number, which `try` catches), hinted toward `codepoint('x')`
 	pub(super) fn emit_character_cast(&mut self, func: &mut Function, character: char, target_type: &Node) {
 		if !character.is_ascii_digit() {
-			let (target, codepoint) = (target_type.name(), crate::library_words::CODEPOINT);
+			let (target, codepoint) = (target_type.name(), crate::words::CODEPOINT);
 			crate::normalize::hint(
 				&format!("'{character}' as {target}"),
 				&format!("{codepoint}('{character}') as {target}"),

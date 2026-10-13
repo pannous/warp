@@ -38,7 +38,7 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
 		super::wasi_emitter::WASI_ENVIRONMENT,
 		super::wasi_emitter::WASI_ENVIRONMENT,
 	),
-	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
+	(crate::words::MAP_KEYS, crate::words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
 	(
@@ -62,7 +62,7 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
 	("lower", "text_lower"),
 	("split", "text_split"),
 	("join", "list_join"),
-	(crate::library_words::SLICE, NODE_SLICE),
+	(crate::words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
 /// field_set_in_place(fields, name, value): an object's field set in place (field_with)

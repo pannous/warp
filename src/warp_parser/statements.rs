@@ -174,7 +174,7 @@ impl WarpParser {
 			let before_word = self.mark();
 			let word = self.parse_symbol().unwrap_or_default();
 			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str())
-				|| crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str())
+				|| crate::words::CONSTANT_KEYWORDS.contains(&word.as_str())
 				|| crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
@@ -312,8 +312,8 @@ impl WarpParser {
 		// (P46), a call `friend(…)` still constructs
 		let filtered = match variable.drop_meta() {
 			Symbol(name) if self.declared_types.contains(name) => {
-				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-				let test = call(crate::traits::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
+				let it = Symbol(crate::words::IMPLICIT_PARAMETER.to_string());
+				let test = call(crate::words::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
 				self.filtered_body(
@@ -437,7 +437,7 @@ impl WarpParser {
 			1 => parts.remove(0),
 			_ => Node::List(parts, Bracket::None, Separator::Space),
 		};
-		let mentions_it = crate::warp_parser::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER);
+		let mentions_it = crate::warp_parser::mentions(&condition, crate::words::IMPLICIT_PARAMETER);
 		// `(even number)`: an adjective and a type word
 		let condition = if mentions_it {
 			Some(condition)
@@ -476,7 +476,7 @@ impl WarpParser {
 			Ok(body) => body,
 			Err(error) => return Some(error),
 		};
-		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+		let it = Symbol(crate::words::IMPLICIT_PARAMETER.to_string());
 		Some(for_in_loop(it, iterable, body))
 	}
 
@@ -497,7 +497,7 @@ impl WarpParser {
 		let Symbol(type_name) = type_word.drop_meta() else {
 			return None;
 		};
-		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+		let it = Symbol(crate::words::IMPLICIT_PARAMETER.to_string());
 		let type_test = self.type_test(&it, type_name)?;
 		let parity = |op: Op| {
 			Node::Key(
@@ -518,9 +518,9 @@ impl WarpParser {
 	/// `value is T` for a loop filter: a declared type by its instances, a type word by its runtime kind; None for any other word
 	pub(super) fn type_test(&self, value: &Node, type_name: &str) -> Option<Node> {
 		let test = if self.declared_types.contains(type_name) {
-			crate::traits::INSTANCE_OF
+			crate::words::INSTANCE_OF
 		} else if crate::analyzer::type_word_kind(type_name).is_some() {
-			crate::type_tests::IS_TYPE
+			crate::words::IS_TYPE
 		} else {
 			return None;
 		};

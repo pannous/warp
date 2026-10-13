@@ -1,5 +1,6 @@
 //! Fields and keys: `x.name`, `m[key]` with a key known only at runtime, the map words
 use super::*;
+use crate::words::MAP_KEYS;
 
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
 pub const NO_FIELD_PREFIX: &str = "no_field_";
@@ -38,8 +39,7 @@ pub(super) const ENTRY_PART: i32 = 0;
 pub(super) const KEY_PART: i32 = 1;
 pub(super) const VALUE_PART: i32 = 2;
 use crate::library_words::{
-	COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_ENTRIES, MAP_GET_OR, MAP_KEYS, MAP_VALUES, MAP_WITHOUT,
-	MAP_WORD_FUNCTIONS,
+	COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_ENTRIES, MAP_GET_OR, MAP_VALUES, MAP_WITHOUT, MAP_WORD_FUNCTIONS,
 };
 use crate::one_entry_maps::MAP_OF_ENTRY;
 

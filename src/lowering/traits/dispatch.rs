@@ -1,5 +1,6 @@
 //! Static dispatch: `p < q` of known instances calls their witness, else a dispatcher per operation; values admitted to places of a declared type
 use super::*;
+use crate::words::INSTANCE_OF;
 
 /// `p < q` of known instances calls their `compare` witness, `p == q` their `equals` override, `area(s)` the `area` of
 /// the type of s; ordering, sorting or calling an operation of a type that does not conform is a compile error;
@@ -40,9 +41,6 @@ pub(super) fn is_field_update(name: &str, value: &Node) -> bool {
 		if word.name() == crate::library_words::FIELD_WITH && matches!(object.drop_meta(), Node::Symbol(target) if target == name)))
 }
 
-/// `instance_of(x, "square")`: 1 when x is an instance of the declared type, else 0 (the emitter reads the type name of
-/// the instance at run time)
-pub const INSTANCE_OF: &str = "instance_of";
 pub(super) const DISPATCH: &str = "dispatch";
 
 /// The program with a dispatcher per operation called on values of run-time type:
@@ -284,7 +282,7 @@ impl Dispatch {
 					return Some(key(found, Op::Ne, Node::int(0)));
 				}
 				// `x is Comparable` of a trait, `dog(…) is animal` of a type dog is like (class dog extends animal)
-				(crate::type_tests::IS_TYPE, [subject, spec]) => {
+				(crate::words::IS_TYPE, [subject, spec]) => {
 					let spec = spec.drop_meta().name();
 					let type_name = self.instance_type(subject)?;
 					let conforms = match self.traits.named(&spec) {

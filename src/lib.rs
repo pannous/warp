@@ -8,6 +8,8 @@ pub use extensions::numbers::*;
 pub use extensions::strings::*;
 pub use extensions::utils::*;
 pub mod util; // reexported for tests
+/// The words and marks the parser and the lowering passes share
+pub mod words;
 #[cfg(feature = "native")]
 pub use util::gc_engine;
 pub mod analysis_memo;

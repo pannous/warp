@@ -153,7 +153,7 @@ impl Exporter {
 	pub(super) fn for_loop(&mut self, variable: &Node, list: &Node, body: &Node) -> Lean {
 		let variable = match variable.drop_meta() {
 			Node::Symbol(name)
-				if name != crate::lambdas::IMPLICIT_PARAMETER
+				if name != crate::words::IMPLICIT_PARAMETER
 					&& type_of_word(name).is_none()
 					&& !self.names.contains_key(name)
 					&& !self.cells.contains(name) =>

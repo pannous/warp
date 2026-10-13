@@ -6,13 +6,13 @@
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use super::nodes::{call, children_rewritten, if_then, key, Counter};
-use super::words::COUNT_WORD;
-use crate::library_words::SLICE;
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::tuples::STARRED;
+use crate::words::COUNT_WORD;
+use crate::words::SLICE;
+use crate::words::STARRED;
+use crate::words::SWITCH_WORDS;
 
-pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const DEFAULT_KEYS: [&str; 2] = ["default", WILDCARD];
 /// In a pattern: any item, bound to no name
 const WILDCARD: &str = "_";
@@ -184,7 +184,7 @@ pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	match pattern.drop_meta() {
 		Node::List(items, Bracket::Square, _) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
+			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
 			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
 				tests.push(key(
 					call(COUNT_WORD, vec![path.clone()]),
@@ -225,7 +225,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 		}
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 		Node::Key(name, Op::Colon, value) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
+			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
 			tests.push(key(
 				call(TEXT_WORD, vec![item(&path, 1)]),
 				Op::Eq,

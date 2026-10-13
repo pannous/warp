@@ -6,7 +6,6 @@
 //! notes/closures.md describes the representation.
 
 use super::nodes::{call, children_rewritten, key, parameter_name};
-use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -14,6 +13,8 @@ use crate::library_words::collect_assigned_names;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
+use crate::words::IMPLICIT_PARAMETER;
+use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{HashMap, HashSet};
 
 pub const CLOSURE_NEW: &str = "closure_new";
@@ -48,7 +49,6 @@ const LIFTED_PREFIX: &str = "closure_lambda_";
 pub fn is_lambda_function(name: &str) -> bool {
 	name.starts_with(LIFTED_PREFIX) || name.starts_with(crate::function_values::LAMBDA_PREFIX)
 }
-const IMPLICIT_PARAMETER: &str = "it";
 
 pub fn closure_call_name(arity: usize) -> String {
 	format!("{CLOSURE_CALL_PREFIX}{arity}")

@@ -1,20 +1,11 @@
 //! The small node forms many lowering passes build and test: a call of a word, a word
 
-use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD};
 use std::cell::Cell;
 
-pub(crate) use crate::node::{int, symbol};
-
-/// `function(arguments…)`
-pub(crate) fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List(
-		[vec![symbol(function)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
-}
+pub(crate) use crate::node::{call, children_rewritten, int, symbol};
 
 pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))
@@ -156,25 +147,6 @@ pub(crate) fn spaced_statement(items: &[Node]) -> Option<(&Node, Vec<&str>, &Nod
 		.map(Node::symbol_name)
 		.collect::<Option<_>>()?;
 	Some((name, words, body))
-}
-
-/// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
-/// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone
-pub(crate) fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> Node {
-	match node {
-		Node::Key(left, op, right) => {
-			let left = rewrite(*left);
-			key(left, op, rewrite(*right))
-		}
-		Node::List(items, bracket, separator) => {
-			Node::List(items.into_iter().map(rewrite).collect(), bracket, separator)
-		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(rewrite(*node)),
-			data,
-		},
-		other => other,
-	}
 }
 
 /// A parameter as the parameters it stands for: a group `(a, b)` its items, ø none

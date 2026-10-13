@@ -165,7 +165,7 @@ impl WarpParser {
 			// `{a*a}!` evaluates the block on the spot
 			(None, Node::List(_, Bracket::Curly, _)) => lhs.clone(),
 			// `ø!`: P73 force → unwrap (direct call; marking Empty is stripped by is_nothing / run_time_blocks)
-			(None, Node::Empty) => call(crate::mutation::UNWRAP, vec![lhs.clone()]),
+			(None, Node::Empty) => call(crate::words::UNWRAP, vec![lhs.clone()]),
 			(None, _) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, _) => crate::mutation::marked(lhs.clone()),
 		})

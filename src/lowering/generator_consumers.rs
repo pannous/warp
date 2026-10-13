@@ -6,13 +6,13 @@
 //! A call inside a `while` condition stays as it is: computed once before the loop it would not change per test.
 
 use super::nodes::{assign, block, call, int, statement_list, symbol, Counter};
-use super::words::OF_WORD;
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
 use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, while_do};
+use crate::words::OF_WORD;
 use std::collections::{HashMap, HashSet};
 
 const TAKE_WORD: &str = "take";

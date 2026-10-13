@@ -36,7 +36,7 @@ const BUILTIN_CALLS: [&str; 27] = [
 	crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL,
 	crate::library_words::LIST_SUM,
-	crate::traits::INSTANCE_OF,
+	crate::words::INSTANCE_OF,
 	crate::analyzer::REMOVED_VALUE_CALL,
 	crate::analyzer::LIST_DROP_LAST,
 	crate::analyzer::LIST_BECOME,
@@ -116,7 +116,7 @@ impl WasmGcEmitter {
 			|| BUILTIN_CALLS.contains(&name)
 			|| super::cells::CELL_WORDS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
-			|| name == crate::type_tests::IS_TYPE
+			|| name == crate::words::IS_TYPE
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| super::text_builtins::is_text_builtin(name)
@@ -145,7 +145,7 @@ impl WasmGcEmitter {
 		if self.emit_typed_map_membership(func, items) {
 			return true;
 		}
-		if name == crate::library_words::SLICE {
+		if name == crate::words::SLICE {
 			for bound in items.iter().skip(2) {
 				self.emit_integral_index_check(func, bound); // `a[0:n/2]` like `a[n/2]`: an integer, with the `n//2` hint
 			}
@@ -395,7 +395,7 @@ impl WasmGcEmitter {
 
 		if let [word, instance, type_name] = items {
 			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
-				if name == crate::traits::INSTANCE_OF {
+				if name == crate::words::INSTANCE_OF {
 					self.emit_instance_of(func, instance, type_name);
 					self.emit_call(func, "new_int");
 					return;
@@ -659,7 +659,7 @@ impl WasmGcEmitter {
 		let Node::List(items, bracket, separator) = node.drop_meta() else {
 			return false;
 		};
-		if call_name(items, bracket, separator) != Some(crate::type_tests::IS_TYPE) {
+		if call_name(items, bracket, separator) != Some(crate::words::IS_TYPE) {
 			return false;
 		}
 		let [_, subject, spec] = items.as_slice() else {
@@ -732,7 +732,7 @@ impl WasmGcEmitter {
 			None if declared_type => {
 				let instance_test = Node::List(
 					vec![
-						Node::Symbol(crate::traits::INSTANCE_OF.to_string()),
+						Node::Symbol(crate::words::INSTANCE_OF.to_string()),
 						subject.clone(),
 						Node::Text(spec.clone()),
 					],

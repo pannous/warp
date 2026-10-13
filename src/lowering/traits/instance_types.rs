@@ -223,7 +223,7 @@ impl InstanceTypes {
 			}
 			// `q.to("km")` of an instance: what the method returns (card instance-result)
 			Node::Key(receiver, Op::Dot, call) if matches!(self.shape(receiver), Some(Shape::Instance(_))) => {
-				let method = crate::lowering::class_methods::leading_name(call);
+				let method = crate::node::leading_name(call);
 				self.results.get(&method).cloned().flatten()
 			}
 			// `c ? a : b`, `if c then a else b`: the shape both branches share
