@@ -85,8 +85,25 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 				key(test, Op::Or, equals)
 			})
 		}
+		// `Dot == x`: a variant is a value on either side, so it compares from the right, where an unbound name on the
+		// left would be taken for a definition written with `is` (P61); two variants compare by name
+		Node::Key(variant, Op::Eq, other) if is_bare_variant(&variant, sum_types) => {
+			let other = with_variant_tests(*other, sum_types);
+			match is_bare_variant(&other, sum_types) {
+				true if variant.drop_meta() == other.drop_meta() => Node::True,
+				true => Node::False,
+				false => Node::Key(Box::new(other), Op::Eq, variant),
+			}
+		}
 		other => other.map_children(|child| with_variant_tests(child, sum_types)),
 	}
+}
+
+fn is_bare_variant(node: &Node, sum_types: &HashMap<String, Variants>) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(_))
+		&& sum_types
+			.values()
+			.any(|variants| variants.bare.iter().any(|bare| bare.drop_meta() == node.drop_meta()))
 }
 
 /// `Shape::Circle(2)`, `Shape::Dot`: a variant of the sum type Shape, by its name or the head of its call
