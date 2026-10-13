@@ -51,3 +51,12 @@ fn other_languages_enums_are_plain_enums_too() {
 	is!("enum class Color { RED, GREEN }\nColor.GREEN is Color", true);
 	is!("enum color {red green blue}; color.blue as int", 2);
 }
+
+#[test]
+fn a_case_converts_to_its_index_or_position() {
+	// user: an enum's int is either an index (from 0, as C counts and `as int` gives) or a position (from 1, as `#` counts)
+	is!(&with_coin("Coin.Dime as index"), 2);
+	is!(&with_coin("Coin.Dime as position"), 3);
+	is!(&with_coin("cents(c: Coin) := c as position; cents(Coin.Penny)"), 1);
+	is!(&with_coin("xs = [10 20 30]; xs#(Coin.Dime as position)"), 30);
+}
