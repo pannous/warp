@@ -733,9 +733,11 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 				_ => module_calls(*call, modules),
 			}
 		}
-		// F#'s `List.map f xs`, `Seq.sum xs`: the word itself
+		// F#'s `List.map f xs`, `Seq.sum xs`: the word itself; `list.length` of a parameter `list` stays its field
 		Node::Key(module, Op::Dot, word)
-			if modules.iter().any(|name| module.is_symbol(name)) && matches!(word.drop_meta(), Node::Symbol(_)) =>
+			if modules.iter().any(|name| module.is_symbol(name))
+				&& ITERATION_MODULES.iter().any(|name| module.is_symbol(name))
+				&& matches!(word.drop_meta(), Node::Symbol(_)) =>
 		{
 			crate::normalize::hint(
 				&format!("{}.{}", module.name(), word.name()),
