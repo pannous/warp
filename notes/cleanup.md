@@ -111,6 +111,12 @@ Left (bigger, needs care):
   map_c_type_to_valtype, pointer classes). get_ffi_signatures uses the first, get_signatures_from_headers the second,
   and get_ffi_signature mixes both. One parser would change some mappings (Kind::Pointer is i64 there, a pointer is
   i32 here), so it needs its own card and tests of both tables first. tests/ffi pins ffi_parser's public API.
+  Measured 2026-10-13 on macOS (m, c, SDL2): ffi_parser's table has 514 functions, the header table 725; 309 differ
+  and 11 are only in the first. The differences: FILE* and other pointers i64 there, i32 here; char* results a number
+  there, a text (anyref) here; long double results anyref there, i32 here; a declaration with a trailing macro call
+  (`strtod(…) __DARWIN_ALIAS(strtod)`) misread here (card ffi-header), `char **` parameters dropped here. One parser
+  changes the signatures of hundreds of implicit calls (get_ffi_signature takes the ffi_parser table first), so it is
+  a behaviour change with decisions per difference, not a cleanup: parked in Later.
 - (cleanup-const-evaluators) real.rs and time.rs are two small constant evaluators with their own Value types and the same Assign/Define arm;
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
   Closed as not worth doing (2026-10-13): what they share is the `name = value` arm (4 lines) and the literals; a
