@@ -561,6 +561,14 @@ impl WasmGcEmitter {
 		};
 		match literal_truth {
 			Some(truth) => self.emit_node_instructions(func, &if truth { Node::True } else { Node::False }),
+			// a text known at run time: false when it spells a falsy word, as a literal's (card yes-print)
+			None if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+				use crate::lowering::nodes::call;
+				let falsy = FALSY_TEXTS.iter().map(|text| Node::Text(text.to_string())).collect();
+				let falsy = Node::List(falsy, Bracket::Square, Separator::Colon);
+				let spells_falsy = call(crate::library_words::COLLECTION_CONTAINS, vec![falsy, call("lower", vec![value.clone()])]);
+				self.emit_node_instructions(func, &Node::Key(Box::new(Node::Empty), Op::Not, Box::new(spells_falsy)));
+			}
 			None => {
 				self.emit_numeric_value(func, value);
 				self.emit_call(func, "new_bool");
