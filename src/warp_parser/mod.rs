@@ -908,7 +908,8 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 	if !spells_number {
 		return None;
 	}
-	match WarpParser::parse(text).drop_meta() {
+	// read as data: code marks `2.5e-2` `as float` (scientific_float), a text spells just the number
+	match parse_data(text).drop_meta() {
 		Node::Number(number) => Some(*number),
 		_ => None,
 	}

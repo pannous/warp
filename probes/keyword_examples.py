@@ -15,7 +15,7 @@ RESULT_MARK = "» "
 
 
 def result_of(code):
-	output = subprocess.run([WARP, "--no-ask", code], capture_output=True, text=True, timeout=60).stdout
+	output = subprocess.run([WARP, "--no-ask", code], stderr=subprocess.STDOUT, stdout=subprocess.PIPE, text=True, timeout=60).stdout
 	results = [line[len(RESULT_MARK):].strip() for line in output.splitlines() if line.startswith(RESULT_MARK)]
 	return results[-1] if results else output.strip()
 

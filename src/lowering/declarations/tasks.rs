@@ -764,7 +764,8 @@ impl Tasks<'_> {
 			block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
 		));
 		let waiting = key(key(Node::Empty, Op::While, winner_is(0)), Op::Do, block(checks));
-		let awaited_job = |job: &Node| self.value_of(&word(&job_of(job))).unwrap_or_else(|| job.clone());
+		// the race is the `await`: reading the winner waits as said, no warning (card await-warns)
+		let awaited_job = |job: &Node| awaited(self.value_of(&word(&job_of(job))).unwrap_or_else(|| job.clone()));
 		let (last, first) = listed.split_last().expect("not empty");
 		let result = first
 			.iter()

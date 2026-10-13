@@ -148,3 +148,15 @@ fn window_open_is_no_without_a_window() {
 		"» 7"
 	);
 }
+
+/// the timer that keeps a listening `warp run` alive is generated code: it is written as the hints want it, so no hint
+/// points at a line the program does not have (the tour's "system values" showed `prefer 1000ms over 1000 ms` at 1:14)
+#[test]
+fn listening_to_a_system_value_gives_no_hint_about_generated_code() {
+	let (_, hints) = warp::normalize::capture_hints(|| warp::pipeline::lower("on change online { print 1 }\n2"));
+	let shown: Vec<String> = hints
+		.iter()
+		.map(|hint| format!("{} {}", hint.position, hint.original))
+		.collect();
+	assert!(shown.is_empty(), "{shown:?}");
+}

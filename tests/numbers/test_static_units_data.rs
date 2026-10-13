@@ -51,7 +51,7 @@ fn test_a_whole_object_shows_its_units() {
 	// stage 7: the quantity fields come first in the text, the plain ones follow
 	assert_eq!(
 		shown("p = {name: \"a b\", dist: 2 m}; for i in 1..2 { p.dist += 1 m }; \"${p}\""),
-		"\"{dist:3m name:\"a b\"}\""
+		"\"{dist:3m name:\\\"a b\\\"}\""
 	);
 	assert_eq!(
 		shown("p = {dist: 0 km, t: 1 s}; for i in 1..3 { p.dist += 250 m }; text_form(p)"),

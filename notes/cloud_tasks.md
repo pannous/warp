@@ -52,8 +52,8 @@ test_sinus_warp_import should pass unedited.
 `float x = π` (and `x:float = √2`, `= 1/3`) is ALLOWED: a declared float target accepts an exact real with the precision
 loss (the one explicit exception to "no silent loss"). Shift operators `<<` `>>` on exact Ints (today `2 << 1` silently
 gives 0): implement them for Int, float operands → the float-in-exact-context error. Then a panic sweep: every remaining
-`panic!`/`unwrap()`/`expect()`/`todo!()` reachable from user programs in src/wasm_emitter, src/analyzer.rs,
-src/warp_parser.rs becomes an error value (keep genuine internal-invariant asserts); list what you kept and why.
+`panic!`/`unwrap()`/`expect()`/`todo!()` reachable from user programs in src/wasm_emitter, src/analyzer/,
+src/warp_parser/ becomes an error value (keep genuine internal-invariant asserts); list what you kept and why.
 
 ### C — test defects and cleanup (user: "don't care, cleanup!")
 Permitted test edits: test_sin → compare with a tolerance; test_named_data_sections → remove the `exit(0)` line;

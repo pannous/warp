@@ -57,8 +57,8 @@ written(view:any, with_attributes:any) := {
 	if is_empty(view) { return empty_text }
 	tag = kind(view)
 	if tag == "symbol" { return view#2 }
-	if tag == "text" { return quote + view#2 + quote }
-	if tag == "char" { return "'" + view#2 + "'" }
+	if tag == "text" { return quoted(view#2) }
+	if tag == "char" { return quoted_by("" + view#2, "'") }
 	if tag == "list" { return list_text(view) }
 	if tag == "key" { return key_text(view#2, view#3, view#4, view) }
 	if tag == "error" { return "Error(" + serialize(view#2) + ")" }
@@ -74,8 +74,21 @@ list_text(view:any) := {
 	bracket = view#2
 	separator = view#3
 	items = view[3:]
-	inside = if #items == 1 then serialize(items#1) else join([serialize(item) for item in items], joint(separator))
+	inside = if #items == 1 then item_text(items#1) else join([item_text(item) for item in items], joint(separator))
 	opening(bracket) + inside + closing(bracket)
+}
+
+// a list item: a character is quoted like a text, ["a" "bb"], and reads back as the character it is (P126)
+item_text(item:any) := if kind(bare(item)) == "char" then quoted("" + bare(item)#2) else serialize(item)
+// a text in quotes, a quote or \ in it escaped by a \ so it reads back, as the runtime prints it (P126)
+quoted(text:any) := quoted_by(text, quote)
+quoted_by(text:any, mark:any) := {
+	written = "" + mark
+	for c in text {
+		if c == mark or c == "\\" { written += "\\" }
+		written += c
+	}
+	written + mark
 }
 
 // items are joined by their separator and a space, unless the separator is one (a newline)

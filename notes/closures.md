@@ -35,7 +35,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 4. `lambdas::lower_strict`: an iteration word over a function known only at run time (`map xs f`, `reduce xs f`) calls
    the closure in its loop body (`closure_call_1(f, item)`).
 
-## Analysis (src/analyzer.rs)
+## Analysis (src/analyzer/)
 - `Kind::Function = 16`, a ref kind (stored as `ref $Node`); type words `function`, `closure` (`apply(f:function, x)`).
 - `closure_new(…)` infers Kind::Function; a parameter called through `closure_call_n` is used as a Function.
 - `closures::register_closure_calls` adds each `closure_call_n` as a user function: params (function, n × Data), body

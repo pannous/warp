@@ -4,7 +4,7 @@ use warp::wasm_emitter::eval;
 
 fn message_of(code: &str) -> String {
 	match eval(code) {
-		Node::Error(message) => message.drop_meta().serialize().trim_matches('"').to_string(),
+		Node::Error(message) => message.drop_meta().to_string(),
 		other => panic!("expected an error for {code}, got {other:?}"),
 	}
 }

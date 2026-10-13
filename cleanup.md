@@ -92,3 +92,10 @@
 - Parser: `diagnostic::first_located_error` in the pipeline. Runtime: the `trap_position` global. Guide in
   notes/error_positions.md.
 - Upgraded two exact-error pins (welcoming ask/slices) to include the new position.
+
+# Quoted list-text cleanup
+
+- Reproduce the self-hosted serializer's dynamically built quoted text inside a list before changing production code.
+- Reuse the existing `text_quoted` runtime path for literal and computed texts instead of adding another serializer.
+- Keep bare texts unquoted while ensuring container text reads back with quotes and backslashes escaped.
+- Run the focused text test before and after, then formatting, clippy, and the wasm32 check.

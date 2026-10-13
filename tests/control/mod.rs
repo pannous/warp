@@ -3,6 +3,7 @@ mod test_after;
 mod test_all_with_condition;
 mod test_async_ports;
 mod test_atomic_arrays;
+mod test_await_any_unwarned; // card await-warns
 mod test_await_any_values;
 mod test_await_any_variables;
 mod test_await_go;

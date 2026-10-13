@@ -103,7 +103,8 @@ Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
 - P126 (user): a text inside a container prints quoted (`P{x:1 name:"a"}`, `["a" "b"]`, `{a:"x"}`) in print,
   interpolation and string(); a text on its own still prints bare. list_text quotes text and character items;
   emit_dynamic_text passes a lone text or character through unquoted; `string([...])` of a literal list of numbers and
-  texts takes the same runtime text. A `"` inside such a text is not escaped yet.
+  texts takes the same runtime text. A `"` or `\\` inside such a text is escaped, including in computed texts,
+  and Node::serialize escapes them the same (list-text-quotes).
 
 ## Representation: GC structs (classes-4, wasm_emitter/struct_backend.rs)
 Generic form: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries (type_constructor.rs, the

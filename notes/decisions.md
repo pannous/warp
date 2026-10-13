@@ -6,6 +6,13 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-13 (user, to warp-supervisor)
+- matching-first: the matching roadmap (card matching-create) is the top priority, before any further self-hosting.
+- self-hosting-postponed: self-hosting is postponed until the language features it showed missing are implemented
+  cleanly (pattern matching on tree shapes, a `parse` word giving real Nodes, tagged unions, a text cursor, bytes and
+  bits, deep recursion, fast big literals; topic parser-features) and the Rust code has had a proper cleanup (topic
+  cleanup). What exists stays: lexer, serializer and parser twins with their differential tests on main.
+
 ## Decided 2026-10-13 (quiet hours: Interviewer or worker defaults, undoable; user may revisit)
 - held-key (warp-markup; Interviewer during quiet hours, undoable): `held_key` is the name of the key held now ("" for none); the key-name words of key-if compare against it too (`held_key == LEFT`, `held_key != ESC`), with the same "names nothing" warning.
 - go-heavy-map (warp-dispatch default): a `go` map of a heavy kernel runs as the plain map, so P240 applies: from 327680 items on the GPU (one-time f32 notice), below on the CPU. runtime-function: function values compare by their written definition (parameter names aside) and captured values: `make(1) == make(1)` yes, `make(1) == make(2)` no.
@@ -1363,7 +1370,7 @@ notes/open_decisions.md.
 
 ## Test defects (can't pass unedited)
 14b. DECIDED 2026-10-03 (minimal edits). test_wasm expectation defects (exact float compares 4.00001, 2.9999999999999996; `i=123.4;i` → 123; ø expected 0;
-    object truthiness; text+text concat) — list in A14 slice 1 report, notes/todo_sweep_task.md A14.
+    object truthiness; text+text concat) — list in the A14 slice 1 report (git history of notes/todo_sweep_task.md).
 14. RESOLVED (near! in tests/numbers/test_math.rs). `test_sin`: `eq!(sin(pi), 0.)` exact float compare — add tolerance or delete?
 14c. RESOLVED (line commented out). `test_named_data_sections` ends with `exit(0)` (tests/wasm/test_wasm.rs:1447): kills the whole test process silently. Remove the line?
 14d. CLOSED 2026-10-03 (correct for the Key model). `test_comments2` asserts `(y=0).length() == 3` (C++ model: a 3-item list); in Rust `y=0` is a Key whose length is its value's → 0. Change the expectation?

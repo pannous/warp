@@ -1,0 +1,4 @@
+// gap (card int-ampersand): on two ints `&` is the logical and, silently 127 here, and the hint says `and`, not bit_and
+// [127 127 38], wanted a hint toward bit_and(n, 127)
+leb(n) := { out = []; while n >= 128 { out += [(n & 127) | 128]; n = n >> 7 }; out += [n]; out }
+print(leb(624485))

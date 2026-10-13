@@ -432,6 +432,6 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 6. Keep the 20 hand-written libm/libc bindings in ffi.rs, or rely on the generic header-driven FFI only?
 7. `Node` operators (`+ - * /`, `IndexMut`): return `Node::Error` instead of panicking?
 8. CLAUDE.md: replace with a symlink to AGENTS.md, and may AGENTS.md's architecture section be rewritten from §1?
-9. Root clutter (`goo`, `conversation.md`, `node.wat`, `test.warp`, dangling `warp`/`warp` links, `build_debug.sh`,
-   `add_ignore_to_failing_tests.sh`, `nextest.sh`): delete or move to notes/OLD?
+9. DONE: root clutter moved to notes/OLD; the scripts, node.wat and test.wasp deleted there (cleanup-stale-notes,
+   2026-10-13). goo and conversation.md stay: the user's own texts.
 10. DONE (user: "can we gate it"): no split needed, the cdylib is gated to web/playground/build.sh.

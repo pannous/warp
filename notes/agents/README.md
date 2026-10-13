@@ -29,8 +29,8 @@ Spawned sessions get generated names (warp-6c …). Find them with ListAgents: t
 
 ## After an interruption
 Sessions in tmux survive the supervisor; check `tmux ls | grep warp-` and ListAgents before spawning duplicates.
-Open questions are queued in notes/open_decisions.md ("Pending questions"), the merge history in the board
-(notes/impl_*.md) and in `git log`. A role that died is simply started again with start.sh.
+Open questions are queued in notes/open_decisions.md ("Pending questions"), the cards on the board
+(`todo list`, GitHub project pannous/projects/1), the merge history in `git log`. A role that died is simply started again with start.sh.
 
 ## End of day
 Workers remove their worktrees after the merge; the Integrator deletes merged remote branches. Leftovers:
