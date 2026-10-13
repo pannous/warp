@@ -1,6 +1,7 @@
 //! Exhaustive matches (card match-exhaustive, user decision match-exhaustive): a match on a name declared of a sum type
 //! (`s: Shape` of `enum Shape { Circle(r), Dot }`, or of a plain enum `c: Coin`, plain_enums.rs) without a catch-all that misses a
-//! case is the compile error "match on Shape misses Dot". A subject of unknown type, or an arm this check cannot read
+//! case is the compile error "match on Shape misses Dot". A name only ever assigned cases of one type (`c = Dime`) is
+//! of that type too (card exhaustive-assigned). A subject of unknown type, or an arm this check cannot read
 //! (a guard, alternatives, a comparison), keeps the run-time error "no case for …".
 
 use super::sum_variants::sum_types;
@@ -25,7 +26,10 @@ pub fn check(program: Node) -> Node {
 	if cases.is_empty() {
 		return program;
 	}
-	let subjects = typed_subjects(&program, |type_name| cases.contains_key(type_name));
+	let mut subjects = typed_subjects(&program, |type_name| cases.contains_key(type_name));
+	for (name, type_name) in assigned_subjects(&program, &cases) {
+		subjects.entry(name).or_insert(type_name);
+	}
 	let mut problem = None;
 	program.visit(&mut |node| {
 		if problem.is_none() {
@@ -46,6 +50,31 @@ pub(crate) fn typed_subjects(program: &Node, is_type: impl Fn(&str) -> bool) -> 
 					if declared.as_ref() != Some(type_name) {
 						*declared = None;
 					}
+				}
+			}
+		}
+	});
+	subjects
+}
+
+/// The names assigned cases of one type, `c = Dime`, with that type; a name also assigned anything else has none
+fn assigned_subjects(program: &Node, cases: &HashMap<String, Vec<String>>) -> HashMap<String, Option<String>> {
+	let type_of_case = |case: &Node| {
+		let case = case.drop_meta().symbol_name()?;
+		let mut types = cases.iter().filter(|(_, names)| names.iter().any(|name| name == case));
+		match (types.next(), types.next()) {
+			(Some((type_name, _)), None) => Some(type_name.clone()),
+			_ => None,
+		}
+	};
+	let mut subjects: HashMap<String, Option<String>> = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(name, Op::Assign, value) = node {
+			if let Some(name) = name.drop_meta().symbol_name() {
+				let assigned = type_of_case(value);
+				let known = subjects.entry(name.to_string()).or_insert(assigned.clone());
+				if *known != assigned {
+					*known = None;
 				}
 			}
 		}
