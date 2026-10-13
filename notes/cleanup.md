@@ -255,6 +255,19 @@ Left (each changes behaviour or needs care):
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms
   match. The `for v in …` variable is one nodes::for_in_variable (run_time_blocks, signal_values with its five-word
   form, for_loop); library_words keeps its own (`for each v in` too, any word's name).
+- DONE (cleanup-definition-view) One view of a function definition: lowering/nodes.rs `function_head(statement)` →
+  `FunctionHead { head, name, written_parameters, form, result, body, written_body, block_bracket }`, forms
+  `Operator(:= | =)`, `Keyword(: | -> | := | =)`, `KeywordBlock` (`def f(x) {…}`), `KeywordSpaced` (`def (f x) {…}`);
+  `parameters()`, `plain_operator()`, `is_glued_head()`. Read through it: law/type_model/forms.rs, overloads,
+  nonlocal_cells, printable, generators, component_state, units/static_units, definition_cases, signal_values; each
+  keeps its own filter (which forms, result type allowed, glued head), so no site reads a form it did not read before.
+  Left on purpose: memoization `definition_parts` (type_tests) also takes `x := 3` and rebuilds the same form;
+  declarations.rs `function_definition` builds the Key form; law.rs `function_definition` goes through the analyzer;
+  lambdas / nested_functions / reflection `definition` build or print one. Narrowed (nonsense forms only): signal_values
+  no longer reads `def {f x}`, `def (f x) y {…}` (four words) or a head whose first item is not a word.
+  Candidates (forms rejected by accident, no test pins them): the Lean export skips `def f(x) := body`, untyped
+  `def f(x): body` and `def (f x) {…}`; three is_call_head functions mean different things (nodes: round + word,
+  traits: round + word without parameters, variable_signals: round only).
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
 - (cleanup-big-files) class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs
