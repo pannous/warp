@@ -1,6 +1,7 @@
 //! Static dispatch: `p < q` of known instances calls their witness, else a dispatcher per operation; values admitted to places of a declared type
 use super::*;
 use crate::words::INSTANCE_OF;
+use crate::Kind;
 
 /// `p < q` of known instances calls their `compare` witness, `p == q` their `equals` override, `area(s)` the `area` of
 /// the type of s; ordering, sorting or calling an operation of a type that does not conform is a compile error;
@@ -19,12 +20,18 @@ pub fn lower_dispatch(node: Node) -> Node {
 	let signatures = instance_signatures(&node, &types.registry);
 	let traits = Traits::of(&node);
 	let constraints = trait_constraints(&node, &traits);
+	let enums = crate::lowering::sum_variants::sum_types(&node)
+		.into_iter()
+		.filter(|(_, variants)| variants.is_plain())
+		.map(|(name, _)| name)
+		.collect();
 	let dispatch = Dispatch {
 		traits,
 		types,
 		witnesses,
 		signatures,
 		constraints,
+		enums,
 		likenesses,
 		missing: RefCell::new(None),
 		dispatched: RefCell::new(Default::default()),
@@ -135,6 +142,8 @@ pub(super) struct Dispatch {
 	signatures: HashMap<String, Vec<(String, Option<String>)>>,
 	/// Per function, the positions of its parameters `xs: Comparable list` and the trait their elements need
 	constraints: HashMap<String, Vec<(usize, String)>>,
+	/// The plain enums, `enum Coin { Penny, Dime }`: an int becomes one of their cases explicitly, `1 as Coin`
+	enums: std::collections::HashSet<String>,
 	/// The `image like photo` declarations
 	likenesses: Vec<Likeness>,
 	/// The first missing conformance: an error of the whole program, wherever it sits
@@ -364,7 +373,21 @@ impl Dispatch {
 				.any(|part| crate::analyzer::builtin_type_kind(part).is_some() && crate::analyzer::admits(part, *kind))
 		}) {
 			Some(kind) => {
-				Err(Diagnostic::at(value, format!("{got} ({})", crate::analyzer::kind_with_article(kind))).into_error())
+				let error = Diagnostic::at(value, format!("{got} ({})", crate::analyzer::kind_with_article(kind)));
+				Err(match kind == Kind::Int && self.enums.contains(declared) {
+					// decision enum-case B: the int is the index of a case, said explicitly
+					true => {
+						let written = value.serialize();
+						let case = format!("{written} as {declared}");
+						error.fix(format!("write {case}")).offer(
+							format!("the {declared} case at index {written}"),
+							written,
+							case,
+						)
+					}
+					false => error,
+				}
+				.into_error())
 			}
 			None => Ok(value.clone()),
 		}
