@@ -2,7 +2,7 @@
 //! the page as a DOM CustomEvent (its name, the data as `detail`), so the page's own script can listen to the program;
 //! a plain program's unhandled emit still does nothing (P202)
 #[cfg(feature = "native")]
-use warp::headless::Page;
+use warp::web::headless::Page;
 
 #[test]
 #[cfg(feature = "native")]

@@ -94,6 +94,7 @@ mod test_match_static_variant;
 mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
 mod test_method_result_text; // card instance-result
+mod test_multi_word_class; // card multi-word-class
 mod test_mutating_methods;
 mod test_nested_type_calls; // text hex 255 is text(hex(255))
 mod test_number_converts; // card number-converts

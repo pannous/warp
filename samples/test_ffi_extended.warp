@@ -9,7 +9,7 @@
 import strcmp from "c"
 
 // Compare equal strings
-strcmp("hello", "hello")  // Expected: 0
+test strcmp("hello", "hello")  ≈ 0
 
 // Compare different strings
 x = strcmp("abc", "xyz")
@@ -31,15 +31,15 @@ import cos from "m"
 import tan from "m"
 
 // Basic trig operations
-sin(0.0)         // Expected: 0.0
-cos(0.0)         // Expected: 1.0
-tan(0.0)         // Expected: 0.0
+test 0 == sin(0.0)        
+test 1 == cos(0.0)       
+test 0 == tan(0.0)       
 
 // Pythagorean identity: sin²(x) + cos²(x) = 1
 x = 0.5
 sin_x = sin(x)
 cos_x = cos(x)
-sin_x * sin_x + cos_x * cos_x  // Expected: 1.0
+test 1 == sin_x * sin_x + cos_x * cos_x  ≈ 1.0
 
 
 // ==============================================================================
@@ -52,14 +52,14 @@ import fmin from "m"
 import fmod from "m"
 
 // Absolute value for floats
-fabs(-3.14)  // Expected: 3.14
+test 3.14 ≈ fabs(-3.14)  ≈ 3.14
 
 // Maximum/minimum of two values
-fmax(3.5, 2.1)  // Expected: 3.5
-fmin(3.5, 2.1)  // Expected: 2.1
+test 3.5 ≈ fmax(3.5, 2.1)  ≈ 3.5
+test 2.1 ≈ fmin(3.5, 2.1)  ≈ 2.1
 
 // Floating-point modulo
-fmod(5.5, 2.0)  // Expected: 1.5
+test fmod(5.5, 2.0)  ≈ 1.5
 
 
 // ==============================================================================
@@ -70,17 +70,17 @@ import atoi from "c"
 import atof from "c"
 
 // String to integer
-atoi("42")      // Expected: 42
-atoi("-123")    // Expected: -123
+test atoi("42")      ≈ 42
+test atoi("-123")    ≈ -123
 
 // String to float
-atof("3.14159") // Expected: 3.14159
-atof("2.71828") // Expected: 2.71828
+test atof("3.14159") ≈ 3.14159
+test atof("2.71828") ≈ 2.71828
 
 // Combined: parse and calculate
 x = atoi("10")
 y = atoi("20")
-x + y  // Expected: 30
+test 30 == x + y  ≈ 30
 
 
 // ==============================================================================
@@ -131,7 +131,7 @@ quantity_str = "3"
 price = atof(price_str)
 quantity = atoi(quantity_str)
 total = price * quantity
-ceil(total)  // Expected: 60 (rounds up from 59.97)
+test ceil(total)  ≈ 60 (rounds up from 59.97)
 
 
 // Example 4: Mathematical pipeline
@@ -149,7 +149,7 @@ ceiled
 names = ["charlie", "alice", "bob"]
 
 // Compare first two names
-comparison = strcmp(names[0], names[1])  // "charlie" vs "alice"
+comparison = strcmp(names#1, names#2)  // "charlie" vs "alice"
 
 if comparison > 0 then
     "charlie comes after alice"
@@ -212,7 +212,7 @@ else if operator == "min" then
 else
     0.0
 
-result  // Expected: 19.8 for "+"
+test result  ≈ 19.8 
 
 
 // ==============================================================================

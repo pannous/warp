@@ -11,6 +11,10 @@ Cards int-list (this one), int-exact, float-calls, float-nodes, int-declaration,
 - 2026-09-30 `8bb316185`: decimal literals in a list are exact like everywhere else.
 - 2026-09-30 `943f0f8b4`: type names: `int` (also `2.0`), `rational` (exact fractions and decimals), `real` (π),
   `float` (approximations).
+- 2026-10-03 survey A5 (bab7a22b, 40ac69a3, 506e6b94 …): a float never becomes an exact Int implicitly. Only
+  `x as int` / `int(x)` truncates (`emit_truncating_cast`, range-checked: `float out of int range`); any other float in
+  an exact context is the error "… a float where an exact Int is expected"; mixed float/Int arithmetic and comparisons
+  compute in f64.
 - notes/typed_lists.md "Open": a list variable of exact ints becomes an `(array (mut i64))`; float arrays came second
   because few literal lists are float.
 

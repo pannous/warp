@@ -1,6 +1,7 @@
 mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
+mod test_big_literals; // card big-literals
 mod test_comment_hides_bracket;
 mod test_comments;
 mod test_dollar_names;

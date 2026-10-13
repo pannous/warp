@@ -34,6 +34,7 @@ mod test_constant_free_variables;
 mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
+mod test_deep_recursion;
 mod test_def_bool_result;
 mod test_def_forms;
 mod test_def_without_parameters;
@@ -130,6 +131,7 @@ mod test_property_words;
 mod test_python_higher_order;
 mod test_python_ruby_definitions;
 mod test_recursive_list_functions;
+mod test_render_as;
 mod test_return_type_dispatch;
 mod test_return_type_forms;
 mod test_returned_blocks;
@@ -164,4 +166,4 @@ mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
 mod test_whole_float_to_int_parameter;
-mod test_words_in_phrases; // card arctan-allow
+mod test_words_in_phrases; // card arctan-allow // card render-as

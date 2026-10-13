@@ -54,7 +54,7 @@ fn content_type(name: &str) -> tiny_http::Header {
 /// The page of `code` opened headless, its button `button` clicked: the title the handler set
 pub(super) fn title_after_clicking(name: &str, code: &str, button: &str) -> String {
 	let directory = scratch_directory(name);
-	warp::site::build(code, "dom", &directory)
+	warp::web::site::build(code, "dom", &directory)
 		.unwrap_or_else(|failure| panic!("the site of {name} is not built: {failure}"));
 	title_on_page(name, directory, Some(button))
 }

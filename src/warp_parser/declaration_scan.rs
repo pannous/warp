@@ -81,6 +81,11 @@ pub(super) fn is_operator_word(glyph: &[char]) -> bool {
 	glyph.first().is_some_and(|c| c.is_alphabetic())
 }
 
+/// `full-name`: plain names joined by hyphens
+fn is_kebab_name(word: &str) -> bool {
+	word.contains('-') && word.split('-').all(is_plain_name)
+}
+
 pub(super) fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
@@ -96,12 +101,68 @@ pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<Str
 		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
 		// `record = find(…)` declares nothing
 		.filter_map(|pair| {
-			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
+			let name: String = pair[1]
+				.chars()
+				.take_while(|ch| is_identifier_char(*ch) || *ch == '-')
+				.collect();
 			let rest = &pair[1][name.len()..];
 			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
 		})
-		.filter(|name| is_plain_name(name))
+		.filter(|name| is_plain_name(name) || is_kebab_name(name))
+		.chain(scan_multi_word_types(&source).iter().map(|words| words.join("-")))
 		.collect()
+}
+
+/// Words that stand between a type's name and its body, never part of the name: `class Dog extends Animal {`
+const WORDS_BEFORE_TYPE_BODY: [&str; 6] = [
+	EXTENDS_KEYWORD,
+	WITH_KEYWORD,
+	IMPLEMENTS_WORD,
+	GO_INTERFACE_WORD,
+	GC_WORD,
+	GO_STRUCT_WORD,
+];
+
+/// The type names of several words a source declares, by their words: `class full name {…}` declares `full name`, written
+/// `full-name` (card multi-word-class); only on one line, up to the body's `{`
+pub(super) fn scan_multi_word_types(source: &str) -> Vec<Vec<String>> {
+	let source = code_only(source);
+	let mut types: Vec<Vec<String>> = source.lines().flat_map(multi_word_types_in_line).collect();
+	// `full name` before `full`: the longest first
+	types.sort_by_key(|words| std::cmp::Reverse(words.len()));
+	types
+}
+
+fn multi_word_types_in_line(line: &str) -> Vec<Vec<String>> {
+	let words: Vec<&str> = line.split_whitespace().collect();
+	let is_name_word = |word: &str| is_plain_name(word) && !WORDS_BEFORE_TYPE_BODY.contains(&word);
+	let mut types = vec![];
+	for (at, keyword) in words.iter().enumerate() {
+		if !TYPE_DECLARATION_WORDS.contains(keyword) && *keyword != RECORD_WORD && *keyword != "type" {
+			continue;
+		}
+		let mut name = vec![];
+		for word in &words[at + 1..] {
+			let (word_part, glued_body) = match word.strip_suffix('{') {
+				Some(glued) => (glued, true),
+				None => (*word, false),
+			};
+			if *word == "{" || glued_body {
+				if !word_part.is_empty() && is_name_word(word_part) {
+					name.push(word_part.to_string());
+				}
+				if name.len() > 1 {
+					types.push(std::mem::take(&mut name));
+				}
+				break;
+			}
+			if !is_name_word(word) {
+				break;
+			}
+			name.push(word.to_string());
+		}
+	}
+	types
 }
 
 /// The source with its comments (`// …`, `/* … */`) and texts (`"…"`, `'…'`) blanked out

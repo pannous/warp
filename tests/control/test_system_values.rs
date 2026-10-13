@@ -120,11 +120,12 @@ fn the_mouse_is_a_system_value_of_the_page() {
 	);
 }
 
-// card native-system: natively the pointer over the paint window (src/paint_window.rs follow_input) in the painted
+// card native-system: natively the pointer over the paint window (src/graphics/paint_window.rs follow_input) in the painted
 // frame's pixels, as the page's canvas
 #[test]
 #[cfg(feature = "native")]
 fn the_mouse_is_the_pointer_over_the_paint_window() {
+	let _window = crate::common::window_input_held();
 	warp_runtime::system_values::tell_window_input([12.0, 7.0, 1.0, 0.0]);
 	is!("mouse_x * 100 + mouse_y", 1207);
 	is!("if mouse_down { 1 } else { 0 }", 1);

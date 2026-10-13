@@ -70,3 +70,15 @@ is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(par
 between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0:to - 1] }
 // the words in lines of at most width characters
 wrap(t, width) := { out = []; line = ""; for w in words(t) { if line == "" { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line != "" { out = out + [line] }; join(out, "\n") }
+// a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
+// then `c.peek()` is '1'; `at` counts the characters read (an index)
+class Cursor { source: text; at = 0
+  at_end() := at >= count(source)
+  peek() := source[at]
+  advance() := { taken = source[at]; at += 1; taken }
+  looking_at(part) := source[at : min(at + count(part), count(source))] == part
+  skip(part) := { if looking_at(part) { at += count(part); return true }; false }
+  take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
+  skip_while(ok) := count(take_while(ok))
+  rest() := source[at : count(source)]
+}

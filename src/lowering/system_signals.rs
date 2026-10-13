@@ -51,7 +51,7 @@ const CLICKS_TEMPLATE: &str = "on frame {
 		emit click{x: system_value(\"click_x\"), y: system_value(\"click_y\")}
 	}
 }";
-/// The keys the page names (src/paint_window.rs key_code, canvas.js KEY_CODES give these codes); 0 is none
+/// The keys the page names (src/graphics/paint_window.rs key_code, canvas.js KEY_CODES give these codes); 0 is none
 const KEY_NAMES: [(i64, &str); 9] = [
 	(0, ""),
 	(0xF700, "ArrowUp"),

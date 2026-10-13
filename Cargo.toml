@@ -72,16 +72,16 @@ num-bigint = { version = "0.4.8", features = ["serde"] }
 num-traits = "0.2"
 num-integer = "0.1"
 ureq = { version = "3.1.4", optional = true }
-# a channel named by a ws:// or wss:// address is a WebSocket (src/web_sockets.rs), TLS through the rustls ureq brings
+# a channel named by a ws:// or wss:// address is a WebSocket (src/web/web_sockets.rs), TLS through the rustls ureq brings
 tungstenite = { version = "0.30", optional = true, features = ["rustls-tls-webpki-roots"] }
-# gpu_compute natively (src/gpu.rs): WGSL compute shaders on Metal, Vulkan or DX12, as WebGPU runs them in the browser
+# gpu_compute natively (src/graphics/gpu.rs): WGSL compute shaders on Metal, Vulkan or DX12, as WebGPU runs them in the browser
 wgpu = { version = "30", optional = true, default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "dx12"] }
 pollster = { version = "0.4", optional = true } # wgpu answers with futures: block on them
-ab_glyph = { version = "0.2", optional = true } # label of use draw natively: text set in a system font (src/text_raster.rs)
-# paint() in a terminal shows its frames in a window (src/paint_window.rs), drawn through a wgpu surface (Metal on macOS)
+ab_glyph = { version = "0.2", optional = true } # label of use draw natively: text set in a system font (src/graphics/text_raster.rs)
+# paint() in a terminal shows its frames in a window (src/graphics/paint_window.rs), drawn through a wgpu surface (Metal on macOS)
 winit = { version = "0.30", optional = true, default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
 regex = { version = "1.12", optional = true }
-tiny_http = { version = "0.12", optional = true } # `serve 8080 { get "/" { … } }` natively (src/web_server.rs) # the stdlib module regex natively (src/std_adapters.rs); JS RegExp in the browser
+tiny_http = { version = "0.12", optional = true } # `serve 8080 { get "/" { … } }` natively (src/web/web_server.rs) # the stdlib module regex natively (src/std_adapters.rs); JS RegExp in the browser
 paste = "1.0"
 rustyline = { version = "18", optional = true }
 libloading = { version = "0.9", optional = true }  # Dynamic library loading for FFI (raylib, SDL2, etc.)
@@ -104,7 +104,7 @@ wasmtime-wasi = { version = "49.0.1", optional = true }
 wit-component = { version = "0.258", optional = true }
 wit-parser = { version = "0.258", optional = true }
 warp-runtime = { path = "crates/warp-runtime", version = "1.2.6", default-features = false } # without features: the names of the host words only
-flate2 = { version = "1.1", optional = true } # paint() writes a PNG natively (src/paint.rs); in the tree through wasmtime already
+flate2 = { version = "1.1", optional = true } # paint() writes a PNG natively (src/graphics/paint.rs); in the tree through wasmtime already
 crc32fast = { version = "1.5", optional = true } # the PNG chunk checksums
 sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already
 #wasmtime-runtime = "*" # Wasmtime runtime
@@ -124,10 +124,10 @@ sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (s
 #Good support for well-known custom sections, such as the "names" section and "reloc.WHATEVER" sections.
 # parity-wasm is INCOMPLETE: pub enum Type { Function(FunctionType),
 
-# the paint window's AppKit calls (src/paint_window.rs); the web view of `warp app` is warp-runtime's (webview feature)
+# the paint window's AppKit calls (src/graphics/paint_window.rs); the web view of `warp app` is warp-runtime's (webview feature)
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6", optional = true }
-# our own sound output (src/sound_engine.rs, card native-sound): sounds mixed sample-accurately in a CoreAudio callback
+# our own sound output (src/sound/sound_engine.rs, card native-sound): sounds mixed sample-accurately in a CoreAudio callback
 # instead of one afplay per sound; macOS only for now (Linux would link ALSA), elsewhere the players stay
 cpal = { version = "0.18", optional = true }
 

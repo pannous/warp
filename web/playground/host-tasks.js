@@ -4,9 +4,9 @@
 
 // the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
-const SOCKET_ADDRESS = /^wss?:\/\//; // src/web_sockets.rs SOCKET_SCHEMES
-const TEXT_REPLY_TYPE = "text/plain"; // src/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
-const SERVER_REPLIES_ID = "warp-replies"; // src/site.rs REPLIES_ID
+const SOCKET_ADDRESS = /^wss?:\/\//; // src/web/web_sockets.rs SOCKET_SCHEMES
+const TEXT_REPLY_TYPE = "text/plain"; // src/web/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
+const SERVER_REPLIES_ID = "warp-replies"; // src/web/site.rs REPLIES_ID
 const ROUTE_DATA_URL = "/rpc/route·data·"; // src/lowering/serve.rs RPC_PREFIX + ROUTE_DATA_PREFIX
 
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
@@ -75,7 +75,7 @@ function addTaskWorker(loaded) {
 	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
 }
 
-// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end on the clock the
+// a voice (card playground-go, natively src/sound/mod.rs Voice): when this Worker's queued sounds end on the clock the
 // page and every Worker share, the seconds of sound it made in all (its sounds' places for render_sound) and the
 // clock's time of place 0 (where `at 2 beats` counts from). A task's voice starts where its starter's stands
 let voice = {};
@@ -568,13 +568,13 @@ function taskTree(value) {
 	return value ?? { kind: "0", data: null, chain: [] };
 }
 
-// `users := fetch url` (src/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting. A Worker
+// `users := fetch url` (src/web/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting. A Worker
 // of the task pool fetches into shared memory, so a running main sees the reply at its check points (sleep, loop
 // starts: deliverFetches runs on·fetch·<id> there, as natively); else, and for a reply that comes after main returned,
 // the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before, going
 // to another page (navigate) the pending ones, a run that ended all.
 const FETCH_HANDLER_PREFIX = "on·fetch·";
-// the replies of the server calls of a page a server rendered for its path (src/site.rs replies_script): each answers
+// the replies of the server calls of a page a server rendered for its path (src/web/site.rs replies_script): each answers
 // the first fetch of its request, so the page starts showing what the server rendered (P221)
 const serverReplies = JSON.parse(globalThis.document?.getElementById(SERVER_REPLIES_ID)?.textContent ?? "[]");
 function serverReply(url, body) {
@@ -686,12 +686,12 @@ function deliverFetches(holder) {
 	}
 }
 
-// [value, error] as src/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
+// [value, error] as src/web/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
 function fetchReply(holder, id) {
 	const { reply, posted } = holder.fetches?.get(id) ?? {};
 	if (!reply) return [null, `fetch ${id} has no reply yet`];
 	if (reply.error) return [null, reply.error];
-	// a server function's reply (src/lowering/serve.rs) is a text as text/plain, JSON of any other value (src/web_server.rs)
+	// a server function's reply (src/lowering/serve.rs) is a text as text/plain, JSON of any other value (src/web/web_server.rs)
 	if (posted && reply.text) return [reply.body, null];
 	if (posted) try { return [JSON.parse(reply.body), null]; } catch (failure) { return [null, `the server's reply is no JSON: ${failure.message}`]; }
 	const structure = structureOf(reply.body);
@@ -699,7 +699,7 @@ function fetchReply(holder, id) {
 	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // warp convention (src/host.rs fetch)
 }
 
-// a JSON object or array of the text, undefined for any other text (src/web_server.rs value_of_body)
+// a JSON object or array of the text, undefined for any other text (src/web/web_server.rs value_of_body)
 function structureOf(text) {
 	try {
 		const value = JSON.parse(text);
@@ -708,7 +708,7 @@ function structureOf(text) {
 	return undefined;
 }
 
-// a channel named by a ws:// or wss:// address is a WebSocket (src/web_sockets.rs): one connection per address in a
+// a channel named by a ws:// or wss:// address is a WebSocket (src/web/web_sockets.rs): one connection per address in a
 // run, its listeners share what arrives; a message sent before it is open waits for it
 function webSocket(holder, hooks, address) {
 	const sockets = holder.sockets ??= new Map();

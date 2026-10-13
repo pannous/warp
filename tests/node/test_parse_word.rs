@@ -56,3 +56,31 @@ fn a_run_time_parse_failure_is_an_error_try_catches() {
 fn a_parsed_text_ending_in_warp_is_no_file() {
 	is!("t = \"a.warp\"; parse(t).op", ".");
 }
+
+// card data-meta: quoted code keeps where it was written and the comment before it
+#[test]
+fn quoted_code_knows_its_line_and_column() {
+	is!("x = data (n * 1); x.column", 11);
+	is!("y = 2\nx = data (n * 1); x.line", 2);
+	is!("x = data (n * 1); x.value.column", 15);
+	is!("x = parse(\"a; b + 1\"); y = x#2; y.column", 4);
+	is!("x = data (n * 1); x == data (n * 1)", true);
+}
+
+#[test]
+fn quoted_code_keeps_the_comment_before_it() {
+	is!("use comments\nx = data {\n  // the a\n  a: 1\n}\nx#1.comment", "the a");
+}
+
+// card name-quoted: a parenthesized element is read like the bare one
+#[test]
+fn a_parenthesized_element_of_quoted_code_has_its_parts() {
+	is!("x = data (a; b); (x#2).name", "b");
+	is!("x = {a: 1, b: 2}; (x#2).key", warp::parse("b"));
+	is!("x = [{a: 7}]; (x#1).a", 7);
+}
+
+#[test]
+fn a_constant_text_that_fails_to_parse_fails_where_try_catches() {
+	is!("try { parse(\"f(a, a\") } else \"bad\"", "bad");
+}

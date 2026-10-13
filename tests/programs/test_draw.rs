@@ -1,5 +1,5 @@
 // `use draw` (lib/draw.warp, card drawing-words): a canvas of colored pixels, shapes and colors as 0xAARRGGBB numbers,
-// shown by paint, which draws a value with an alpha byte in its color (src/paint.rs shade)
+// shown by paint, which draws a value with an alpha byte in its color (src/graphics/paint.rs shade)
 use crate::is;
 
 const DRAW: &str = "use draw\n";

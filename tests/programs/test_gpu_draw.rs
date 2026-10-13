@@ -1,9 +1,9 @@
 // card gpu-draw: `use draw` draws its shapes with a shader into a canvas texture that stays on the GPU
-// (src/gpu_canvas.rs); WARP_DRAW=gpu and WARP_DRAW=cpu paint the same picture, show() sends shapes, not pixels
+// (src/graphics/gpu_canvas.rs); WARP_DRAW=gpu and WARP_DRAW=cpu paint the same picture, show() sends shapes, not pixels
 #![cfg(feature = "native")]
 use super::test_paint_lists::painted_rows_by;
-use warp::paint::DRAW_VARIABLE;
-use warp::paint_window::{read_message, shapes_message, Message};
+use warp::graphics::paint::DRAW_VARIABLE;
+use warp::graphics::paint_window::{read_message, shapes_message, Message};
 
 const SCENE: &str = "use draw
 canvas(64, 48)
@@ -23,12 +23,12 @@ fn drawn_by(choice: &str) -> std::process::Command {
 }
 
 fn has_gpu() -> bool {
-	warp::gpu::with_device(|_, _| ()).is_ok()
+	warp::graphics::gpu::with_device(|_, _| ()).is_ok()
 }
 
 #[test]
 fn shapes_cross_to_the_paint_window_whole() {
-	let shapes: Vec<u8> = (0..2 * warp::gpu_canvas::SHAPE_BYTES as u8).collect();
+	let shapes: Vec<u8> = (0..2 * warp::graphics::gpu_canvas::SHAPE_BYTES as u8).collect();
 	let message = shapes_message(64, 48, &shapes);
 	match read_message(&mut message.as_slice()) {
 		Some(Message::Shapes(read)) => assert_eq!((read.width, read.height, read.shapes), (64, 48, shapes)),

@@ -1,7 +1,6 @@
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
-use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::call;
 use crate::node::Node::{Empty, Symbol};
@@ -534,6 +533,8 @@ const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
 /// `to greet p do …`: the word between a `to` definition's parameters and its body
 const DO_WORD: &str = "do";
+/// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
+const RESULT_TYPE_WORD: &str = "as";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = crate::words::SLICE;
@@ -978,6 +979,8 @@ pub struct WarpParser {
 	user_operators: Vec<UserOperator>,
 	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
 	declared_types: std::collections::HashSet<String>,
+	/// The words of the declared types of several words (`class full name {…}`), longest first: read as one name `full-name`
+	multi_word_types: Vec<Vec<String>>,
 	/// The parameters of each `to` phrase defined so far, to catch a second phrase that differs only by untyped nouns
 	phrase_definitions: std::collections::HashMap<String, Vec<Node>>,
 }
@@ -1075,14 +1078,15 @@ impl WarpParser {
 		} else {
 			Vec::new()
 		};
-		let declared_types = if options == ParserOptions::default() {
-			scan_declared_types(&input)
+		let (declared_types, multi_word_types) = if options == ParserOptions::default() {
+			(scan_declared_types(&input), scan_multi_word_types(&input))
 		} else {
 			Default::default()
 		};
 		WarpParser {
 			user_operators,
 			declared_types,
+			multi_word_types,
 			phrase_definitions: Default::default(),
 			input,
 			chars,
