@@ -16,8 +16,9 @@ use std::collections::HashMap;
 const ENUM_WORD: &str = "enum";
 /// Swift's `enum Direction { case north, south }`
 const CASE_WORD: &str = "case";
-/// The type of a case's index, `Coin.Dime as int`
-const INDEX_TYPE: &str = "int";
+/// The types a case converts to and the number each counts its first case as: `Coin.Dime as int` and `as index` its
+/// index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts; index_positions.rs)
+const COUNT_TYPES: [(&str, i64); 3] = [("int", 0), ("index", 0), ("position", 1)];
 const RAISE_WORD: &str = "raise";
 const MATCH_WORD: &str = "match";
 const OTHER_ARM: &str = "_";
@@ -126,27 +127,29 @@ fn is_implicit_owner(owner: &Node) -> bool {
 	matches!(owner.drop_meta(), Node::Empty) || owner.is_symbol(CASE_WORD)
 }
 
-/// `Coin.Dime as int` the case's index, `2 as Coin` the case at an index; other conversions as they are
+/// `Coin.Dime as int` the case's index, `as position` its position, `2 as Coin` the case at an index; other
+/// conversions as they are
 fn converted(value: Node, target: Node, enums: &Enums) -> Node {
 	let target_name = target.drop_meta().name();
 	if enums.cases.contains_key(&target_name) {
 		return case_at(value, &target_name, enums);
 	}
-	match enums.type_of(&value) {
-		Some(enum_name) if target_name == INDEX_TYPE => index_of(value, &enums.cases[enum_name]),
-		_ => key(value, Op::As, target),
+	let count_type = COUNT_TYPES.iter().find(|(count_type, _)| *count_type == target_name);
+	match enums.type_of(&value).zip(count_type) {
+		Some((enum_name, (_, first))) => counted(value, &enums.cases[enum_name], *first),
+		None => key(value, Op::As, target),
 	}
 }
 
-/// The index of a case: `2` of `Dime`, a match over the cases for a name of the enum type
-fn index_of(value: Node, cases: &[String]) -> Node {
-	if let Some(index) = cases.iter().position(|case| value.drop_meta().name() == *case) {
-		return Node::int(index as i64);
+/// The number of a case counting the first as `first`: `2` of `Dime` from 0, a match over the cases for a name of the
+/// enum type
+fn counted(value: Node, cases: &[String], first: i64) -> Node {
+	let numbered = cases.iter().zip(first..);
+	if let Some((_, number)) = numbered.clone().find(|(case, _)| value.drop_meta().name() == **case) {
+		return Node::int(number);
 	}
-	let arms = cases
-		.iter()
-		.enumerate()
-		.map(|(index, case)| key(Node::Symbol(case.clone()), Op::Colon, Node::int(index as i64)))
+	let arms = numbered
+		.map(|(case, number)| key(Node::Symbol(case.clone()), Op::Colon, Node::int(number)))
 		.collect();
 	matched(value, arms)
 }
