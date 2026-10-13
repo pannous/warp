@@ -1,7 +1,7 @@
 //! The loop headers the parser keeps as written, given their meaning first, before any other pass reads the loop:
 //! `for friend in xs` and `for int in xs` visit only the items of that type, `for (it>2) in xs` and
 //! `for (even number) in xs` only the items the condition holds for (each filter announced, P46); `for chars in text`
-//! walks the text by that unit, `for word in text` and `for line in text` by words and lines.
+//! walks the text by that unit, `for word in text`, `for line in text` and `for byte in text` by words, lines and bytes.
 
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{call, Bracket, Node, Separator};
@@ -17,6 +17,7 @@ const IN_WORD: &str = "in";
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
+const BYTE_WORD: &str = "byte";
 const WORD_UNIT: &str = "word";
 /// The loop variable names that walk a text by a unit other than the character, and the text between two units
 const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
@@ -114,6 +115,11 @@ impl Headers {
 			return Ok(for_in_loop(it, iterable, body));
 		}
 		let (variable, body) = match variable.drop_meta() {
+			// `for each byte in "Hello"` (typed iteration, wiki/Purpose.md): over a text the type word byte names the unit,
+			// the UTF-8 bytes, rather than filtering the characters (none is a byte)
+			Node::Symbol(name) if name == BYTE_WORD && self.is_text(&iterable) => {
+				return Ok(for_in_loop(variable, bytes_of(&iterable), body));
+			}
 			// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the
 			// item (P46), a call `friend(…)` still constructs
 			Node::Symbol(name) if self.declared_types.contains(name) => {
@@ -205,11 +211,7 @@ impl Headers {
 	/// `for word in text`, `for line in text` (wiki/plural.md): over a text the loop variable's name picks the unit, words
 	/// between runs of spaces or lines (as lib/text.warp's words and lines); any other name walks the characters
 	fn walked_text_units(&self, variable: &Node, iterable: Node) -> Node {
-		let is_text = match iterable.drop_meta() {
-			Node::Text(_) => true,
-			Node::Symbol(name) => self.text_variables.contains(name),
-			_ => false,
-		};
+		let is_text = self.is_text(&iterable);
 		let unit = variable
 			.drop_meta()
 			.symbol_name()
@@ -228,6 +230,15 @@ impl Headers {
 			Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))),
 		);
 		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
+	}
+
+	/// A text literal or a variable given a text
+	fn is_text(&self, iterable: &Node) -> bool {
+		match iterable.drop_meta() {
+			Node::Text(_) => true,
+			Node::Symbol(name) => self.text_variables.contains(name),
+			_ => false,
+		}
 	}
 }
 
@@ -362,25 +373,30 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 		return None;
 	}
 	let walked = if word == BYTES_WORD {
-		let offset = Node::Symbol("byte·offset".to_string());
-		let count = Node::Key(
-			Box::new(iterable.clone()),
-			Op::Dot,
-			Box::new(Node::Symbol(BYTES_WORD.to_string())),
-		);
-		let offsets = Node::Key(Box::new(Node::int(0)), Op::Range, Box::new(count));
-		let byte = Node::Key(
-			Box::new(offset.clone()),
-			Op::FatArrow,
-			Box::new(call("byte_at", vec![iterable.clone(), offset])),
-		);
-		Node::Key(
-			Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)),
-			Op::Dot,
-			Box::new(call("map", vec![byte])),
-		)
+		bytes_of(iterable)
 	} else {
 		call("chars", vec![iterable.clone()])
 	};
 	Some((Node::Symbol(IMPLICIT_PARAMETER.to_string()), walked))
+}
+
+/// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
+fn bytes_of(text: &Node) -> Node {
+	let offset = Node::Symbol("byte·offset".to_string());
+	let count = Node::Key(
+		Box::new(text.clone()),
+		Op::Dot,
+		Box::new(Node::Symbol(BYTES_WORD.to_string())),
+	);
+	let offsets = Node::Key(Box::new(Node::int(0)), Op::Range, Box::new(count));
+	let byte = Node::Key(
+		Box::new(offset.clone()),
+		Op::FatArrow,
+		Box::new(call("byte_at", vec![text.clone(), offset])),
+	);
+	Node::Key(
+		Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)),
+		Op::Dot,
+		Box::new(call("map", vec![byte])),
+	)
 }

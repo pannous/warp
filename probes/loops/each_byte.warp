@@ -1,0 +1,1 @@
+for each byte in "Hé": print byte
