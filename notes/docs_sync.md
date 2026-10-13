@@ -50,7 +50,10 @@ major corrections go to warp-interviewer, tiny fixes are made directly.
 
 Decided, not cut yet; the features still work, so the pages stay until the cut lands, then:
 - scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part).
-- type-name parameters `fib int i`: wiki/=.md:11, Bad.md:51, type.md:59 → `fib(i:int)`.
+- spaced type heads (card cleanup-drop-type-name-params, warp-cleanup) `fib int i`, `foo of int`, `square of a number`,
+  `combine number with number` → `fib(i:int) := …`: wiki/=.md:11, Bad.md:51, type.md:59, function.md:5 (list of
+  natural forms), inventions.md:42/96/137, Purpose.md:455, Features.md:60 (`++ of a number reference`).
+  polymorphism.md was rewritten ahead of the cut (wiki 5ec7480, the written form already works).
 - generators/yield: wiki/trait.md, zig.md (count_to), keyword.md's yield row if Ruby's block yield goes too.
 - compile-time lambdas, natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
   R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
