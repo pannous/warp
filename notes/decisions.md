@@ -241,7 +241,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P70c handlers and definitions created in a loop keep their own iteration's variable (JS `let`).
 - P72 no memoization syntax; the compiler decides.
 - P73 `x!` means force: a block runs, an optional unwraps, a plain value is itself. D2 (by position): `fn!` after a
-  method mutates in place (`x.upper!`), `{…}!` evaluates, await has its own word.
+  method mutates in place (`x.upper!`, `xs.sort!`), `{…}!` evaluates, await has its own word. P73's force applies
+  to `x!` on a value or block; a `!` after a method call stays D2's in-place mutation (Interviewer, 2026-10-13).
 - P69b a block arriving at run time is pure by default, run-time data tainted. P69c `warp compile` with run-time `!`
   warns and loads a shared compiler lazily.
 - data-stays-data (2026-10-13): "data should stay data unless an explicit hole like ${} is used": a bare word in data
