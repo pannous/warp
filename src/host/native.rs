@@ -375,10 +375,11 @@ fn paint(
 			match crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory).drop_meta() {
 				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
 				crate::node::Node::Text(shader) => {
-					let rgba = rendered(&mut caller, shader, width, height, shader_values, &gpu_failure(PAINT))?;
-					return crate::graphics::paint::paint_rgba(&rgba, size.0, size.1)
+					let failure = gpu_failure(PAINT);
+					let (width, height, values) = shader_request(&mut caller, width, height, shader_values, &failure)?;
+					return crate::graphics::paint::paint_shader(shader, width, height, &values)
 						.map(|_| ())
-						.map_err(task_failure);
+						.map_err(failure);
 				}
 				other => {
 					return Err(task_failure(format!(

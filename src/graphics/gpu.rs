@@ -427,6 +427,50 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 	let values = &with_builtin_values(shader, width, height, values);
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+	let (image, encoder) = drawn_image(device, shader, width, height, values, None)?;
+	checked_image_rgba(device, queue, encoder, &image, validation)
+}
+
+/// The values a paint window renders the shader with (card paint-keeps): the program's and the built-in ones it reads
+/// ($time, $mouse, …), once the shader compiles here; why not, before anything reaches the window
+pub fn checked_values(
+	shader: &str,
+	width: u32,
+	height: u32,
+	values: &[ShaderValue],
+) -> Result<Vec<ShaderValue>, String> {
+	let values = with_builtin_values(shader, width, height, values);
+	let Gpu { device, .. } = gpu()?;
+	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+	let prepared = prepared(device, shader, &values);
+	if let Some(invalid) = pollster::block_on(validation.pop()) {
+		return Err(essence(&invalid.to_string()));
+	}
+	prepared.map(|_| values)
+}
+
+/// The shader rendered with the values (checked_values) into a texture on `device` that stays there: what the paint
+/// window shows, viewed as `view_format` when it differs (the sRGB view of a surface)
+pub fn render_texture(
+	device: &wgpu::Device,
+	queue: &wgpu::Queue,
+	shader: &str,
+	width: u32,
+	height: u32,
+	values: &[ShaderValue],
+	view_format: Option<wgpu::TextureFormat>,
+) -> Result<wgpu::Texture, String> {
+	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+	let (image, encoder) = drawn_image(device, shader, width, height, values, view_format)?;
+	queue.submit([encoder.finish()]);
+	match pollster::block_on(validation.pop()) {
+		Some(invalid) => Err(essence(&invalid.to_string())),
+		None => Ok(image),
+	}
+}
+
+/// The shader with its values compiled into its painter, and the values' bytes
+fn prepared(device: &wgpu::Device, shader: &str, values: &[ShaderValue]) -> Result<(Painter, Vec<u8>), String> {
 	let (declarations, bytes) = uniform_layout(values)?;
 	let reads_previous = reads_value(shader, crate::graphics::shader_holes::PREVIOUS_HOLE);
 	let source = match reads_previous {
@@ -439,10 +483,27 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 		),
 		false => format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"),
 	};
-	let Painter {
-		pipeline,
-		bindings_layout,
-	} = painter(device, source, !bytes.is_empty(), reads_previous)?;
+	let painter = painter(device, source, !bytes.is_empty(), reads_previous)?;
+	Ok((painter, bytes))
+}
+
+/// The image the shader draws, and the encoder holding the drawing
+fn drawn_image(
+	device: &wgpu::Device,
+	shader: &str,
+	width: u32,
+	height: u32,
+	values: &[ShaderValue],
+	view_format: Option<wgpu::TextureFormat>,
+) -> Result<(wgpu::Texture, wgpu::CommandEncoder), String> {
+	let (
+		Painter {
+			pipeline,
+			bindings_layout,
+		},
+		bytes,
+	) = prepared(device, shader, values)?;
+	let reads_previous = reads_value(shader, crate::graphics::shader_holes::PREVIOUS_HOLE);
 	let size = wgpu::Extent3d {
 		width,
 		height,
@@ -450,10 +511,12 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 	};
 	let previous = reads_previous.then(|| previous_frame(device, shader, size));
 	let bindings = bindings_layout.map(|layout| bindings(device, &layout, &bytes, previous.as_ref()));
-	let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
-	if reads_previous {
-		usage |= wgpu::TextureUsages::TEXTURE_BINDING;
-	}
+	let usage =
+		wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING;
+	let view_formats: Vec<_> = view_format
+		.into_iter()
+		.filter(|format| *format != IMAGE_FORMAT)
+		.collect();
 	let image = device.create_texture(&wgpu::TextureDescriptor {
 		label: Some("gpu_render image"),
 		size,
@@ -462,7 +525,7 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 		dimension: wgpu::TextureDimension::D2,
 		format: IMAGE_FORMAT,
 		usage,
-		view_formats: &[],
+		view_formats: &view_formats,
 	});
 	if reads_previous {
 		keep_previous_frame(shader, image.clone());
@@ -487,7 +550,7 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 		}
 		pass.draw(0..TRIANGLE_CORNERS, 0..1);
 	}
-	checked_image_rgba(device, queue, encoder, &image, validation)
+	Ok((image, encoder))
 }
 
 /// The RGBA bytes of a 4-byte-per-pixel image, row by row, once the encoder's work on it is done
