@@ -2,8 +2,6 @@
 
 - The file is `Footguns.md` (capital F). The checkout is case-insensitive (`core.ignorecase=true`):
   `git add footguns.md` silently stages nothing for the untracked file; use the real name.
-- `probes/footguns/footguns.sh` rebuilds warp and evaluates every case in `probes/footguns/cases.warp`
-  (cases separated by `---` lines) into `probes/footguns/results.txt`. Rerun it after compiler changes and diff.
 - `tests/welcoming/test_footguns.rs`: passing tests = Solved entries; `#[ignore = "next"]` = NOT YET entries with a clear answer.
   When a NOT YET bug gets fixed, un-ignore its test and move the entry to Solved.
 - `warp eval` and `is!` use the same `wasm_emitter::eval`, so CLI output is representative.
@@ -24,12 +22,8 @@
   (`test_proof_model_matches_unbounded_int`). Explicit `as i64` proof terms remain future work.
 
 ## Inspiration notes ("Solved elsewhere")
-- Research agents write one file per topic group to `probes/footguns/inspiration/<group>.md` (brief: `BRIEF.md`),
-  never Footguns.md directly; `python3 probes/footguns/merge_inspiration.py` appends them under matching headings
-  (idempotent: entries that already have "Solved elsewhere:" are skipped). Diff for deleted lines after merging.
-- Group `injection-time-effects` was sent to the cloud session "footgun.md (cloud)" on 2026-09-26: delivery reported
-  success but the route is one-way and the session stayed idle (likely awaiting approval). Once it pushes
-  `probes/footguns/inspiration/injection-time-effects.md`, rerun the merge script.
+- The 2026-09 research rounds (one file per topic group, merged under "Solved elsewhere:" headings) are done; their
+  scripts went with the untracked probes on 2026-09-30.
 
 ## Work area "literals" (2026-09-27, 9682281d)
 - Fixed in `src/warp_parser/` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
