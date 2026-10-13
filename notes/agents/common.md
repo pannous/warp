@@ -99,6 +99,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   (package.json, .claude settings, Lake manifest, WebDriver BiDi, machine-to-machine buffers).
 - A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
+- Docs are part of done (user, 2026-10-13): a card that changes what users write or see (syntax, words, flags,
+  messages, defaults) updates the wiki page of that concept in the same task: a minimal example and one sentence
+  (notes/agents/common.md "Wiki" for pushing). Say "docs: <page>" or "docs: none (internal)" in the merge request.
+  warp-docs sweeps for what slipped through.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
   the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
   (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed

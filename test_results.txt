@@ -20,7 +20,6 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
-  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -350,18 +349,32 @@ PASSED:
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
+  ✓ control::test_match_alternatives_hint::a_mask_outside_an_arm_still_hints
+  ✓ control::test_match_alternatives_hint::arm_alternatives_get_no_hint
   ✓ control::test_match_alternatives::a_name_bound_in_an_alternative_is_an_error
   ✓ control::test_match_alternatives::alternatives_of_list_patterns
   ✓ control::test_match_alternatives::bar_and_or_are_alternatives
   ✓ control::test_match_alternatives::commas_are_alternatives
+  ✓ control::test_match_binding_arm::bare_name_arm_binds_the_subject
+  ✓ control::test_match_binding_arm::bare_name_unused_by_its_body_is_a_symbol_case
+  ✓ control::test_match_binding_arm::variable_arm_compares
+  ✓ control::test_match_else_line::else_arm_on_its_own_line
+  ✓ control::test_match_else_line::else_branch_on_its_own_line_stays
   ✓ control::test_match_guards_and_finally::a_guard_binds_and_tests
   ✓ control::test_match_guards_and_finally::an_assigned_match_takes_arrow_cases
   ✓ control::test_match_guards_and_finally::finally_runs_and_keeps_the_value
+  ✓ control::test_match_maps::is_with_a_map_pattern_binds_its_names
+  ✓ control::test_match_maps::map_arm_binds_a_field
+  ✓ control::test_match_maps::map_arm_ignores_fields_not_named
+  ✓ control::test_match_maps::map_arm_needs_its_fields
+  ✓ control::test_match_maps::map_arms_match_at_any_depth
   ✓ control::test_match_negative_subject::a_negative_subject_is_matched
   ✓ control::test_match_negative_subject::a_variable_named_match_still_subtracts
   ✓ control::test_match_other::a_variable_named_other_stays_a_variable
   ✓ control::test_match_other::else_catches_the_rest
   ✓ control::test_match_other::other_catches_the_rest
+  ✓ control::test_match_pattern_bindings::list_and_rest_pattern_names_shadow_main_variables
+  ✓ control::test_match_pattern_bindings::tuple_pattern_name_shadows_main_variable
   ✓ control::test_match_ranges::a_range_without_end
   ✓ control::test_match_ranges::an_exclusive_range
   ✓ control::test_match_ranges::an_inclusive_range
@@ -376,6 +389,10 @@ PASSED:
   ✓ control::test_match_type_arms::a_variable_named_like_a_type_stays_a_value
   ✓ control::test_match_type_arms::is_tests_a_type_union
   ✓ control::test_match_type_arms::types_and_values_as_alternatives
+  ✓ control::test_match_whole_value::a_variable_named_value_wins
+  ✓ control::test_match_whole_value::match_names_its_subject
+  ✓ control::test_match_whole_value::match_on_a_literal_in_a_body_or_an_arm
+  ✓ control::test_match_whole_value::value_is_the_matched_value
   ✓ control::test_mixed_range_bounds::a_range_from_a_letter_to_a_number_is_a_compile_error
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
@@ -2025,6 +2042,7 @@ PASSED:
   ✓ modules::test_std_collections::other_languages_method_names_are_the_collections_methods
   ✓ modules::test_std_collections::the_size_of_an_instance_through_len_and_count
   ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
+  ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
   ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
   ✓ modules::test_std_file_bytes::a_value_that_is_no_byte_is_refused
@@ -3949,6 +3967,7 @@ PASSED:
   ✓ types::test_parameter_text::a_typed_parameter_types_only_its_own_function
   ✓ types::test_passed_list_identity::test_list_through_a_function_is_the_same
   ✓ types::test_person_struct::test_person_struct_roundtrip
+  ✓ types::test_plain_enum::a_case_converts_to_its_index_or_position
   ✓ types::test_plain_enum::a_case_has_its_position
   ✓ types::test_plain_enum::a_case_is_its_own_value
   ✓ types::test_plain_enum::a_case_is_of_its_enum_type
@@ -4246,6 +4265,8 @@ PASSED:
   ✓ types::test_user_counting_word::test_user_size_changes_the_callers_map
   ✓ types::test_value_constructor::a_value_block_runs_at_every_construction
   ✓ types::test_value_constructor::a_value_constructor_takes_parameters
+  ✓ types::test_variant_equality::a_variant_compares_on_the_left
+  ✓ types::test_variant_equality::two_variants_compare_by_name
   ✓ types::test_variant_payloads::a_payload_free_variant_is_its_symbol_and_of_its_type
   ✓ types::test_variant_payloads::a_typed_variable_unwraps_a_single_payload
   ✓ types::test_variant_payloads::an_or_of_a_grouped_operation_keeps_its_right_side
@@ -4831,6 +4852,7 @@ PASSED:
   ✓ welcoming::test_fixits::codepoint_is_the_preferred_name
   ✓ welcoming::test_fixits::declared_type_mismatch_fixes
   ✓ welcoming::test_fixits::filter_loop_fixes
+  ✓ welcoming::test_fixits::int_for_enum_parameter_fix
   ✓ welcoming::test_fixits::kebab_key_fixes
   ✓ welcoming::test_fixits::list_operator_fixes
   ✓ welcoming::test_fixits::local_or_global_fixes
@@ -5063,6 +5085,11 @@ PASSED:
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
   ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
+  ✓ welcoming::test_warning_levels::capture_hints_still_returns_the_hints
+  ✓ welcoming::test_warning_levels::levels_are_ordered_and_named
+  ✓ welcoming::test_warning_levels::no_hints_hides_only_the_hints
+  ✓ welcoming::test_warning_levels::strict_fails_from_normal_and_the_rust_error_mode_on_every_warning
+  ✓ welcoming::test_warning_levels::the_cli_labels_levels_and_shows_from_its_threshold
   ✓ welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
   ✓ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
   ✓ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
@@ -5183,6 +5210,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
 
 SUMMARY:
-12 ignored, 5180 passed, 0 failed, 5180 total tested
+12 ignored, 5207 passed, 1 failed, 5208 total tested

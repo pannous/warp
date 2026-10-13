@@ -3,4 +3,6 @@ points = [[1, "a"], [2, "b"]]
 labels = match points { [[n, label]...] => label }
 head = match [0, [1, 2], [3, 4]] { [first, [a, b]...] => b }
 mixed = match [[1, 2], 3] { [[a, b]...] => "all pairs"; _ => "not all pairs" }
-[labels, head, mixed]
+order = {id: 7, items: [{sku: "a1", qty: 2}, {sku: "b2", qty: 1}]}
+skus = match order { {items: [{sku}...]} => sku }
+[labels, head, mixed, skus]

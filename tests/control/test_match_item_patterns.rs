@@ -35,3 +35,15 @@ fn literal_items_test_every_item() {
 fn item_pattern_in_is() {
 	is!("pairs = [[1, 2], [3, 4]]\nif pairs is [[a, b]...] then a#2 else 0", 3);
 }
+
+#[test]
+fn map_items_collect_their_fields() {
+	is!(
+		"order = {id: 7, items: [{sku: \"a1\", qty: 2}, {sku: \"b2\", qty: 1}]}\nskus = match order { {items: [{sku}...]} => sku }\nskus#2",
+		"b2"
+	);
+	is!(
+		"order = {items: [{sku: \"a1\"}, {qty: 1}]}\nmatch order { {items: [{sku}...]} => \"all\"; _ => \"missing\" }",
+		"missing"
+	);
+}
