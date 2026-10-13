@@ -317,6 +317,13 @@ impl WarpParser {
 		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
+	/// The `//` at the cursor is set apart from the code by a tab or two spaces: `x = 5  // 14`, a result written beside
+	/// it (card hint-comment-floordiv), never a spaced-out division
+	fn is_set_apart(&self) -> bool {
+		let before = &self.chars[..self.pos];
+		before.ends_with(&['\t']) || before.ends_with(&[' ', ' '])
+	}
+
 	/// The `//` at the cursor is followed by what a divisor could be: a number or short name (`// 2`, `// n`) or an
 	/// expression (`// n + 1`), not prose (`// property with value list`) nor a word (`// Hz`, `// peaks`)
 	fn comment_reads_like_divisor(&self) -> bool {
@@ -557,7 +564,7 @@ impl WarpParser {
 			}
 			// // line comment (but not :// URL scheme)
 			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
-				if self.follows_operand_on_its_line() && self.comment_reads_like_divisor() {
+				if self.follows_operand_on_its_line() && !self.is_set_apart() && self.comment_reads_like_divisor() {
 					self.set_hint_pos();
 					crate::diagnostic::educate_once(
 						SLASH_COMMENT_TOPIC,
