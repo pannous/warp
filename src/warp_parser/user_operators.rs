@@ -57,7 +57,9 @@ impl WarpParser {
 	/// `prefix|suffix|infix operator ⊕ := body` defines the function `operator_⊕`: its parameter is `it` (prefix, suffix) or `a b` (infix).
 	/// `operator ⊕ has precedence above +` is not supported.
 	pub(super) fn try_parse_operator_declaration(&mut self, word: &str) -> Option<Node> {
-		if self.options != ParserOptions::default() {
+		// the keyword first: reading the rest of the line for every word was quadratic on a long line (card big-literals)
+		let is_keyword = word == OPERATOR_WORD || OPERATOR_KINDS.iter().any(|(keyword, _)| *keyword == word);
+		if !is_keyword || self.options != ParserOptions::default() {
 			return None;
 		}
 		let rest: String = self.chars[self.pos..]

@@ -1,7 +1,6 @@
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
-use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::call;
 use crate::node::Node::{Empty, Symbol};

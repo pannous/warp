@@ -1,0 +1,7 @@
+// card parse-runtime: parse a text known only at run time; the code comes back as data
+t = "n * " + "1"
+code = parse(t)
+print code.op            // *
+print code == data (n * 1)  // yes
+// a text that fails to parse is an error try catches: bad
+print try { parse("f(a, a") } else "bad"

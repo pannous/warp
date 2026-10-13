@@ -16,6 +16,7 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
 | `count(xs.filter(…))`, 2 million | 0.83 s | 0.10 s | the typed list became 2 million nodes just to count |
 | map of 2 million keys, write and read | call stack exhausted | 2.7 s | cons-list map: quadratic, recursive copy |
 | `xs#i = i / n` into float[10^7] | 29 s, 2.1 GB | 0.08 s, 0.1 GB | an exact quotient allocated per item (card exact-div) |
+| 100 KB literal on one line, 2200 records (compile, debug) | 62 s, 1.3 GB | 8.6 s, 0.13 GB | each word read the rest of its line, each LineInfo kept the whole line, signal_values copied the tree per level (card big-literals) |
 
 - **GC collector**: wasmtime's DRC collector (warp's only enabled one) ran this program about 3× slower than the
   copying collector, which also collects cycles. Cargo.toml enables `gc-copying` and `Collector::Auto` picks it.
