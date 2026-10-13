@@ -5,10 +5,10 @@
 //! definitions with a typed parameter are left to overload resolution, which also tells them apart by the result type
 //! of their bodies (test_return_type_dispatch.rs).
 
-use super::nodes::is_call_head;
+use super::nodes::{function_head, is_call_head, DefinitionForm};
 use crate::diagnostic::{written_statement, Diagnostic};
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::{is_function_keyword, Op};
+use crate::operators::Op;
 
 /// The subject a fix matches on when no definition names its parameter
 const SUBJECT: &str = "n";
@@ -98,26 +98,19 @@ fn defined_twice(statements: &[Node]) -> Option<Node> {
 
 /// `f(x) := body`, `f(x) = body`, `fun f(x): body` and `def f(x) { body }`
 fn definition(statement: &Node) -> Option<Definition<'_>> {
-	let (head, body, grouped) = match statement.drop_meta() {
-		Node::Key(head, Op::Define | Op::Assign, body) => (head.as_ref(), body.as_ref(), false),
-		Node::List(items, _, _) if items.len() == 2 && is_function_keyword(&items[0].drop_meta().name()) => {
-			match items[1].drop_meta() {
-				Node::Key(head, Op::Colon | Op::Define, body) => (head.as_ref(), body.as_ref(), false),
-				Node::List(parts, Bracket::Round, _) if parts.len() == 2 => (&parts[0], &parts[1], true),
-				_ => return None,
-			}
+	let definition = function_head(statement).filter(|definition| is_call_head(definition.head))?;
+	let (body, grouped) = match definition.form {
+		DefinitionForm::Operator(_) | DefinitionForm::Keyword(Op::Define) if definition.result.is_none() => {
+			(definition.body, false)
 		}
+		DefinitionForm::Keyword(Op::Colon) => (definition.written_body, false),
+		DefinitionForm::KeywordBlock if definition.block_bracket == Some(&Bracket::Round) => (definition.body, true),
 		_ => return None,
 	};
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	if !is_call_head(head) {
-		return None;
-	}
 	Some(Definition {
-		name: items[0].name(),
-		parameters: items[1..]
+		name: definition.name.to_string(),
+		parameters: definition
+			.written_parameters
 			.iter()
 			.flat_map(|parameter| listed_parameters(parameter, grouped))
 			.collect(),

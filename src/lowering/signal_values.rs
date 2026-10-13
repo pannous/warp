@@ -14,11 +14,10 @@
 
 use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
 use crate::declarations::word;
+use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::{
-	assign, defines_function, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord,
-};
+use crate::variable_signals::{assign, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
 use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
 use std::collections::{HashMap, HashSet};
@@ -1207,35 +1206,23 @@ fn is_write(op: Op) -> bool {
 	op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
 }
 
-/// `f(a, b) := body`, `def f(a, b) {body}`
+/// `f(a, b) := body`, `def f(a, b) {body}`, `def (f a b) {body}`
 fn definition(node: &Node) -> Option<Definition> {
-	let (head, body) = match node.drop_meta() {
-		Node::Key(head, Op::Define, body) if is_call_head(head) => (head.as_ref().clone(), body.as_ref().clone()),
-		Node::List(items, _, _) if defines_function(items) => {
-			let parts = keyword_definition_parts(&items[1..]);
-			let (head, body) = (parts.first()?.clone(), parts.last()?.clone());
-			matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)).then_some(())?;
-			(head, body)
+	let definition = function_head(node)?;
+	let is_block = matches!(definition.body.drop_meta(), Node::List(_, Bracket::Curly, _));
+	let read = match definition.form {
+		DefinitionForm::Operator(Op::Define) => definition.result.is_none() && is_call_head(definition.head),
+		DefinitionForm::KeywordBlock => {
+			matches!(definition.block_bracket, Some(Bracket::None | Bracket::Round)) && is_block
 		}
-		_ => return None,
+		DefinitionForm::KeywordSpaced => is_block,
+		_ => false,
 	};
-	let Node::List(head_items, _, _) = head.drop_meta() else {
-		return None;
-	};
-	let name = word(head_items.first()?);
-	let params = head_items[1..].iter().flat_map(parameter_names).collect();
-	Some(Definition { name, params, body })
-}
-
-/// `def ((f (x)) {body})` arrives as one list after the keyword: its head and body
-fn keyword_definition_parts(rest: &[Node]) -> Vec<Node> {
-	match rest {
-		[only] => match only.drop_meta() {
-			Node::List(items, Bracket::None | Bracket::Round, _) if items.len() == 2 => items.clone(),
-			_ => rest.to_vec(),
-		},
-		_ => rest.to_vec(),
-	}
+	read.then(|| Definition {
+		name: definition.name.to_string(),
+		params: definition.written_parameters.iter().flat_map(parameter_names).collect(),
+		body: definition.body.clone(),
+	})
 }
 
 /// `x`, `(x, y)`, `ø`
