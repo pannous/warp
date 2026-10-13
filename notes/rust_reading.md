@@ -8,6 +8,11 @@ forms, each with its expected value (2026-10-13, branch hint-cards).
 `while`, closures `|a, b| a + b`, `3.7 as i32`, tuples `t.1`, shadowing `let x = x * 2`, `//` and `///` comments,
 generic functions `fn id<T>(x: T) -> T`, `const N: i32 = 10`.
 
+## Rule (user decision rust-forms-welcome, notes/decisions.md)
+warp may read Rust's own forms, generics `<T>` included, as long as each one has a nicer warp form of its own: the
+Rust form is an accepted alternative, the warp form stays canonical (the normalizer may hint it). Each gap card below
+names its warp form.
+
 ## Gaps, by how much Rust they unlock
 1. Return type after `->` (card rust-fn-arrow): `fn double(x: i32) -> i32 { … }` fails with "double is a type". This
    blocks almost every real function; `fn id<T>(x: T) -> T` works, so the plain `-> i32` reading is the issue.
@@ -21,6 +26,19 @@ generic functions `fn id<T>(x: T) -> T`, `const N: i32 = 10`.
    `sum::<i32>()` and `collect::<Vec<i32>>()` (the `<` opens a group that never closes).
 6. Option and control (card rust-option): `Some(v)`/`None`, `if let Some(v) = o`, `?`, `.unwrap()`, and `loop { … break }`.
 7. References (card rust-refs): `&x` and `*r` read as the value itself (`*r` stays the symbol).
+8. Generics `<T>` in fn and struct type parameters (card rust-generics).
+
+Warp forms the gaps map onto:
+| card | Rust | warp (canonical) |
+|---|---|---|
+| rust-fn-arrow | `fn double(x: i32) -> i32 { x * 2 }` | `double(x:int) := x * 2` |
+| rust-macros | `println!("{}", x)`, `format!("a={}", 1)`, `vec![1, 2, 3]` | `print "\(x)"`, `"a=\(1)"`, `[1 2 3]` |
+| rust-inclusive-range | `1..=5` | `1…5`, `1 to 5` |
+| rust-items | `struct P { x: i32 }`, `impl P { fn sum(&self) … }`, `impl T for S` | `class P { x:int; sum() := x + y }`, `class S {…} is T` |
+| rust-paths | `C::Red`, `String::from("hi")`, `HashMap::new()` | `C.Red`, `"hi"`, `{}` |
+| rust-option | `Some(v)`/`None`, `if let Some(v) = o`, `o.unwrap_or(0)` | the value / `ø`, `if o {…}`, `o ?? 0` |
+| rust-refs | `&x`, `*r` | `x` (values need no references) |
+| rust-generics | `fn id<T>(x: T) -> T`, `Vec<Person>` | untyped `id(x) := x`, the plural `persons` (wiki/array.md) |
 
 ## Shape
 Each gap is a parser or lowering alias of something warp has: no Rust mode, the same as the Python, Swift and Kotlin
