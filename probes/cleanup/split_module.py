@@ -43,11 +43,16 @@ def opened_impl(lines: list[str], start: int) -> str:
 def moved(lines: list[str], parent_parent: list[str], nested_parent: bool, in_trait=False) -> list[str]:
 	"""in_trait: the lines are inside a trait or a trait impl, whose items take no visibility"""
 	out = []
+	in_struct = False
 	for line in lines:
 		if re.match(r"^(pub(\([^)]*\))? )?(unsafe )?(impl\b.* for |trait )", line):
 			in_trait = True
+		elif re.match(r"^(pub(\([^)]*\))? )?struct .*\{$", line):
+			in_struct = True
 		elif line.startswith("}"):
-			in_trait = False
+			in_trait = in_struct = False
+		elif in_struct and re.match(r"^\t\w+:", line):
+			line = "\tpub(super) " + line[1:]  # the parent reads and sets the fields of its child's structs
 		item = ITEM.match(line)
 		if item and len(item.group(1)) <= 1 and not (in_trait and item.group(1)):
 			visibility = item.group(2)
