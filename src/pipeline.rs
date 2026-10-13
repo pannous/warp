@@ -427,8 +427,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `y certainly < x` is `certainly(y < x)` before class_methods compares the amounts of run-time quantities
 	crate::uncertain::lower_certainty,
 	// methods in a class body become functions over the class before any pass reads the body as fields
-	// `for x in c` of an object with next() (generators.rs) before class_methods lowers the next() calls
-	crate::lowering::generators::lower_iterators,
+	// `for x in c` of an object with next() (for_loop.rs) before class_methods lowers the next() calls
+	crate::lowering::for_loop::lower_iterators,
 	crate::lowering::class_methods::lower,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
 	crate::lowering::reflection::lower_component_words,
@@ -501,7 +501,6 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::number_words::lower,
 	crate::lowering::parameter_shapes::lower,
 	crate::lowering::ruby_blocks::lower,
-	crate::lowering::generators::lower,
 	crate::lowering::declarations::lower_sized_arrays,
 	crate::lowering::result_word::lower,
 	crate::lowering::picked_calls::lower,

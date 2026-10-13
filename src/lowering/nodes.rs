@@ -406,3 +406,13 @@ pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &
 	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
 	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
 }
+
+/// The statements of a template with its placeholders filled in
+pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
+	let filled = bindings
+		.iter()
+		.fold(crate::warp_parser::parse(text), |node, (placeholder, value)| {
+			crate::library_words::substitute(node, placeholder, value)
+		});
+	filled.drop_meta().sequence_statements().to_vec()
+}
