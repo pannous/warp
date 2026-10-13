@@ -81,8 +81,20 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 		.into_keys()
 		.collect();
 	let problems = problems(&elements, &defined);
-	WRITTEN_PROBLEMS
-		.with(|written| *written.borrow_mut() = problems.iter().map(|(_, message, _)| message.clone()).collect());
+	// `divv{ "hi" }` comes back from the run as the attribute `divv: "hi"`: said once, as the unknown tag it is
+	let rendered_as_attributes = elements.iter().flat_map(|element| {
+		element
+			.blocks
+			.iter()
+			.filter(|tag| is_unknown_tag(tag))
+			.map(|tag| no_attribute(tag, &element.tag))
+	});
+	let written: HashSet<String> = problems
+		.iter()
+		.map(|(_, message, _)| message.clone())
+		.chain(rendered_as_attributes)
+		.collect();
+	WRITTEN_PROBLEMS.with(|problems| *problems.borrow_mut() = written);
 	problems
 		.into_iter()
 		.map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix))
@@ -285,23 +297,18 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 			|| OWN_ATTRIBUTE_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
 		if !renders {
 			let fix = near(name, crate::markup::attribute_names().to_vec(), format!("data-{name}"));
-			mistakes.push((
-				element.node,
-				format!("{name} is no attribute of {}: it shows as text", element.tag),
-				fix,
-			));
+			mistakes.push((element.node, no_attribute(name, &element.tag), fix));
 		}
 	}
 	let events = || {
-		crate::event_signals::PAGE_EVENTS
-			.iter()
+		crate::event_signals::element_events()
 			.map(|event| event.to_string())
 			.collect::<Vec<_>>()
 	};
 	for event in element
 		.events
 		.iter()
-		.filter(|event| !crate::event_signals::PAGE_EVENTS.contains(&event.as_str()))
+		.filter(|event| !crate::event_signals::is_element_event(event))
 	{
 		let message = format!("{event} is no event of {}: the handler shows as text", element.tag);
 		mistakes.push((
@@ -355,10 +362,14 @@ fn is_unknown_tag(tag: &String) -> bool {
 		|| crate::markup::names_attribute(tag)
 		|| WARP_ELEMENT_WORDS.contains(&tag.as_str())
 		|| crate::transitions::ELEMENT_WORDS.contains(&tag.as_str())
-		|| crate::event_signals::PAGE_EVENTS.contains(&tag.as_str())
+		|| crate::event_signals::is_element_event(tag)
 		// a custom element of the page's own (`my-card{…}`) is named with a dash
 		|| tag.contains('-');
 	!known
+}
+
+fn no_attribute(name: &str, tag: &str) -> String {
+	format!("{name} is no attribute of {tag}: it shows as text")
 }
 
 fn is_handler(item: &Node) -> bool {

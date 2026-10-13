@@ -52,10 +52,16 @@ fn an_unknown_input_type_warns() {
 fn an_unknown_tag_among_markup_warns() {
 	warns("div{ divv{ \"hi\" } }", "divv is no element: it shows as text");
 	warns("ul{ lli{ \"x\" } }", "lli is no element: it shows as text");
+	// said once, as written: the run's markup holds it as the attribute divv: "hi"
+	warp::diagnostic::take_runtime_warnings();
 	let warned = warnings_of("div{ divv{ \"hi\" } }");
+	let at_run_time = warp::diagnostic::take_runtime_warnings();
 	assert!(
-		!warned.iter().any(|warning| warning.contains("no attribute")),
-		"{warned:?}"
+		!warned
+			.iter()
+			.chain(&at_run_time)
+			.any(|warning| warning.contains("no attribute")),
+		"{warned:?} {at_run_time:?}"
 	);
 }
 
