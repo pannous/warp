@@ -1,4 +1,6 @@
-// card enum-parameter-type: an enum names the type of its cases
+// card enum-parameter-type, plain-enum: an enum names the type of its cases, each case its own value
 enum Coin { Penny, Nickel, Dime }
-cents(c: Coin) := match c { Coin.Penny: 1; Coin.Nickel: 5; _: 10 }
-cents(Coin.Nickel) + cents(Coin.Dime)
+cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }
+print Coin.Dime
+print Coin.Dime as int
+cents(Coin.Nickel) + cents(2 as Coin)

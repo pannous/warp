@@ -12,6 +12,14 @@ pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))
 }
 
+/// The operands of `a or b or c` (`|` parses as or), else the node itself
+pub(crate) fn or_operands(node: &Node) -> Vec<Node> {
+	match node.drop_meta() {
+		Node::Key(left, Op::Or, right) => [or_operands(left), or_operands(right)].concat(),
+		_ => vec![node.clone()],
+	}
+}
+
 pub(crate) fn assign(target: Node, value: Node) -> Node {
 	key(target, Op::Assign, value)
 }
