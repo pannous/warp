@@ -217,6 +217,33 @@ impl Counter {
 	}
 }
 
+thread_local! {
+	/// The numbers of the temporaries a compile invents across passes (`race·0`, `item·0`)
+	static FRESH_NUMBERS: Counter = const { Counter::starting_at(0) };
+	/// How deep in compiles we are: a nested compile continues the numbers of the one around it, so their names never meet
+	static COMPILE_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+/// The next number for a temporary that has to differ from all others of the compile
+pub(crate) fn fresh_number() -> usize {
+	FRESH_NUMBERS.with(Counter::next_number)
+}
+
+/// Run a compile whose fresh numbers start from 0 when it is the outermost one, so a program lowers alike every time
+pub(crate) fn numbering_fresh_names<R>(compile: impl FnOnce() -> R) -> R {
+	struct Leave;
+	impl Drop for Leave {
+		fn drop(&mut self) {
+			COMPILE_DEPTH.with(|depth| depth.set(depth.get() - 1));
+		}
+	}
+	if COMPILE_DEPTH.with(|depth| depth.replace(depth.get() + 1)) == 0 {
+		FRESH_NUMBERS.with(|numbers| numbers.0.set(0));
+	}
+	let _leave = Leave;
+	compile()
+}
+
 /// `x = value`: the name and the value
 pub(crate) fn named_assignment(statement: &Node) -> Option<(String, Node)> {
 	match statement.drop_meta() {

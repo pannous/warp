@@ -600,7 +600,9 @@ fn run_passes(node: Node, passes: &[Pass]) -> Node {
 /// (a constant answer, an error, a denied capability).
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::lowering::blocks::unsealed;
-	lower_with_sealed_quotes(node).map(unsealed).map_err(unsealed)
+	crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node))
+		.map(unsealed)
+		.map_err(unsealed)
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {

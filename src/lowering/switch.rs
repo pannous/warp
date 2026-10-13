@@ -8,7 +8,7 @@
 use super::blocks::{quoted_data, DATA_WORD};
 use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
-use super::nodes::{block, call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
+use super::nodes::{block, call, children_rewritten, fresh_number, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::diagnostic::Diagnostic;
@@ -47,10 +47,6 @@ const HOLE_PREFIX: &str = "$";
 const OP_FIELD: &str = "op";
 const KEY_FIELD: &str = "key";
 const VALUE_FIELD: &str = "value";
-thread_local! {
-	/// Numbers the loops of item patterns apart: `item·0`, `held·0`
-	static ITEM_LOOPS: Counter = Counter::default();
-}
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -269,7 +265,7 @@ fn is_rest(part: &Node) -> bool {
 /// `[[n, s]...]`: a loop testing every item against the item pattern, appending the value of each name it binds to that
 /// name's list; the test holds when every item matched, the names are bound to the lists (card list-pattern)
 fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>, names: &Names) -> Node {
-	let number = ITEM_LOOPS.with(|loops| loops.next_number());
+	let number = fresh_number();
 	let temporary = |name: &str| Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}{number}"));
 	let (item, held) = (temporary(ITEM_WORD), temporary(HELD_WORD));
 	let Matched {

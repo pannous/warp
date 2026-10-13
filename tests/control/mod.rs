@@ -74,6 +74,7 @@ mod test_for_over_a_number;
 mod test_for_underscore;
 mod test_for_unit_words;
 mod test_frame_event; // card frame-event
+mod test_fresh_names; // card cleanup-fresh-names
 mod test_function_body; // card g_X_3s
 mod test_function_dir; // card dir-function
 mod test_glued_block_words; // card glued-loop

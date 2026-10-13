@@ -1,5 +1,6 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
+use crate::lowering::nodes::fresh_number;
 
 /// `go f(x)` starts a task, `await job` waits for it
 pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
@@ -44,10 +45,6 @@ pub(super) const TASK_RUNNING: i64 = 0;
 pub(super) const RAISE_WORD: &str = "raise";
 /// the event an `await … within` without `or` raises at its deadline: try catches it
 pub(super) const TIMEOUT_EVENT: &str = "timeout";
-thread_local! {
-	/// `await any` races so far, each with its own winner variable
-	pub(super) static RACES: Counter = const { Counter::starting_at(0) };
-}
 pub(super) const ADD_WORD: &str = "add";
 /// The parameter of the await map over a job list (resolve_tasks)
 pub(super) const AWAITED_JOB: &str = "awaited_job";
@@ -613,7 +610,7 @@ impl Tasks<'_> {
 			Node::List(parts, _, _) if word(&parts[0]) == TASK_VALUE => parts[1].clone(),
 			other => other.clone(),
 		};
-		let started = format!("{STARTED_PREFIX}{}", RACES.with(Counter::next_number));
+		let started = format!("{STARTED_PREFIX}{}", fresh_number());
 		let status = marker(crate::host::TASK_STATUS, vec![job_name.clone()]);
 		let runs = key(status, Op::Eq, crate::node::int(TASK_RUNNING));
 		let elapsed = key(
@@ -738,7 +735,7 @@ impl Tasks<'_> {
 			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
 			other => other.clone(),
 		};
-		let winner = format!("{RACE_PREFIX}{}", RACES.with(Counter::next_number));
+		let winner = format!("{RACE_PREFIX}{}", fresh_number());
 		let winner_is = |index: usize| key(Node::Symbol(winner.clone()), Op::Eq, crate::node::int(index as i64));
 		// `go 1+1` is computed right away, no task is started: it has ended (card await-hang)
 		let ended = |job: &Node| {
