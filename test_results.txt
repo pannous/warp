@@ -20,6 +20,7 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
+  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -349,8 +350,8 @@ PASSED:
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
-  ✓ control::test_match_alternatives_hint::a_mask_outside_an_arm_still_hints
   ✓ control::test_match_alternatives_hint::arm_alternatives_get_no_hint
+  ✓ control::test_match_alternatives_hint::outside_an_arm_only_a_bar_of_truth_values_hints
   ✓ control::test_match_alternatives::a_name_bound_in_an_alternative_is_an_error
   ✓ control::test_match_alternatives::alternatives_of_list_patterns
   ✓ control::test_match_alternatives::bar_and_or_are_alternatives
@@ -615,8 +616,6 @@ PASSED:
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
   ✓ control::test_table_element_writes::an_element_field_change_is_written_to_its_row
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
-  ✓ control::test_table_linear_lookups::a_loaded_table_filters_in_linear_time
-  ✓ control::test_table_linear_lookups::ten_thousand_rows_with_a_required_key_load_in_linear_time
   ✓ control::test_table_method_reads::a_field_named_like_a_table_stays_the_field
   ✓ control::test_table_method_reads::a_method_filters_a_list
   ✓ control::test_table_method_reads::a_method_filters_the_table
@@ -1417,6 +1416,9 @@ PASSED:
   ✓ functions::test_parameter_overloads::a_similarity_compares_the_phrase_calls_value
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
+  ✓ functions::test_parameter_patterns::a_class_parameter_names_its_fields
+  ✓ functions::test_parameter_patterns::a_list_parameter_names_its_items
+  ✓ functions::test_parameter_patterns::a_value_of_another_shape_is_an_error
   ✓ functions::test_parameter_retype::a_parameter_given_another_kind_in_its_body_holds_it
   ✓ functions::test_parameter_shapes::test_constructed_argument_is_checked
   ✓ functions::test_parameter_shapes::test_field_type_is_checked
@@ -2257,6 +2259,14 @@ PASSED:
   ✓ node::test_normalization::test_string_type_word_is_hinted_once_with_the_cast
   ✓ node::test_normalization::test_variable_definition
   ✓ node::test_normalization::test_variable_definition_let_style
+  ✓ node::test_parse_word::a_hole_is_a_symbol_of_the_parse
+  ✓ node::test_parse_word::a_parsed_text_ending_in_warp_is_no_file
+  ✓ node::test_parse_word::a_program_s_own_parse_wins
+  ✓ node::test_parse_word::a_run_time_parse_failure_is_an_error_try_catches
+  ✓ node::test_parse_word::parse_matches_like_data
+  ✓ node::test_parse_word::parse_of_a_constant_text_is_its_code_as_data
+  ✓ node::test_parse_word::parse_of_a_run_time_text_is_its_code_as_data
+  ✓ node::test_parse_word::quoted_code_in_parentheses_is_a_node
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ normalize::tests::test_hint_mode
@@ -2689,6 +2699,12 @@ PASSED:
   ✓ operators::test_bar_pipe::a_bar_after_a_braceless_call_pipes_its_result
   ✓ operators::test_bar_pipe::a_bar_before_a_function_pipes_the_value_into_it
   ✓ operators::test_bar_pipe::a_bar_between_values_stays_the_logical_or
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_combine_the_bits_of_whole_numbers
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_of_calls_and_operations
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_of_truth_values_are_logical
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_of_typed_and_inferred_ints
+  ✓ operators::test_bit_operators_on_ints::bits_as_a_condition_warn
+  ✓ operators::test_bit_operators_on_ints::double_and_word_forms_stay_logical_on_numbers
   ✓ operators::test_comma_next_to_comparison::a_comma_next_to_a_comparison_needs_parentheses
   ✓ operators::test_comma_next_to_comparison::a_parenthesized_comparison_beside_a_comma_is_fine
   ✓ operators::test_compound_assignment::a_list_variable_concatenates_with_plus_assign
@@ -3157,7 +3173,6 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
-  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -3269,7 +3284,6 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_nonzero_visualizer_child_report_names_its_exit_status
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
-  ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
@@ -5210,7 +5224,10 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
+  ✗ control::test_table_linear_lookups::a_loaded_table_filters_in_linear_time
+  ✗ control::test_table_linear_lookups::ten_thousand_rows_with_a_required_key_load_in_linear_time
+  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
+  ✗ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
 
 SUMMARY:
-12 ignored, 5207 passed, 1 failed, 5208 total tested
+12 ignored, 5221 passed, 4 failed, 5225 total tested
