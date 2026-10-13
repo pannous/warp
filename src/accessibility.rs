@@ -41,6 +41,43 @@ const NUMBER_ATTRIBUTES: [&str; 10] = [
 ];
 /// attributes whose value is an address
 const ADDRESS_ATTRIBUTES: [&str; 3] = ["href", "src", "action"];
+/// elements a p cannot hold: the browser ends the p before them
+const BLOCK_ELEMENTS: [&str; 27] = [
+	"address",
+	"article",
+	"aside",
+	"blockquote",
+	"details",
+	"div",
+	"dl",
+	"fieldset",
+	"figure",
+	"footer",
+	"form",
+	"h1",
+	"h2",
+	"h3",
+	"h4",
+	"h5",
+	"h6",
+	"header",
+	"hr",
+	"main",
+	"nav",
+	"ol",
+	"p",
+	"pre",
+	"section",
+	"table",
+	"ul",
+];
+const LISTS: [&str; 3] = ["ul", "ol", "menu"];
+const LIST_ITEMS: [&str; 3] = ["li", "script", "template"];
+const CELLS: [&str; 2] = ["td", "th"];
+const ROW: &str = "tr";
+const TABLE: &str = "table";
+const TABLE_PARTS: [&str; 5] = ["thead", "tbody", "tfoot", "caption", "colgroup"];
+const ROW_HOLDERS: [&str; 4] = ["table", "thead", "tbody", "tfoot"];
 const INPUT_TYPES: [&str; 22] = [
 	"button",
 	"checkbox",
@@ -77,7 +114,7 @@ type Problem<'a> = (&'a Node, String, String);
 /// The accessibility warnings of a program's markup
 pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 	let mut elements = vec![];
-	collect(program, false, &mut elements);
+	collect(program, false, None, &mut elements);
 	// a program without markup (the renderer, compiled on its own) leaves the written problems of the one it renders
 	if elements.is_empty() {
 		return vec![];
@@ -111,7 +148,7 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 pub fn check_rendered(markup: &Node) {
 	let markup = computed_tags_named(markup.clone());
 	let mut elements = vec![];
-	collect(&markup, false, &mut elements);
+	collect(&markup, false, None, &mut elements);
 	for (_, message, fix) in problems(&elements, &HashSet::new()) {
 		if !WRITTEN_PROBLEMS.with(|written| written.borrow().contains(&message)) {
 			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
@@ -143,6 +180,7 @@ fn problems<'a>(elements: &[Element<'a>], defined: &HashSet<String>) -> Vec<Prob
 		.collect();
 	problems.extend(elements.iter().flat_map(|element| markup_mistakes(element, defined)));
 	problems.extend(elements.iter().flat_map(value_mistakes));
+	problems.extend(elements.iter().filter_map(nesting_mistake));
 	problems.extend(skipped_headings(elements));
 	problems.extend(duplicate_ids(elements));
 	problems
@@ -155,6 +193,8 @@ struct Element<'a> {
 	attributes: Vec<(String, &'a Node)>,
 	has_content: bool,
 	inside_label: bool,
+	/// the element it is written in, none for markup on its own (a component's)
+	parent: Option<String>,
 	/// the events of its handlers (`on click {…}`)
 	events: Vec<String>,
 	/// the names of its items written as blocks (`divv{ "hi" }`, `my-card{…}`), no attributes
@@ -264,6 +304,31 @@ fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 			}
 		})
 		.collect()
+}
+
+/// An element where HTML does not let it be, which the browser moves or drops (card markup-content)
+fn nesting_mistake<'a>(element: &Element<'a>) -> Option<Problem<'a>> {
+	let parent = element.parent.as_deref()?;
+	let tag = element.tag.as_str();
+	let mistake = |reason: &str, fix: String| Some((element.node, format!("{tag} inside {parent}: {reason}"), fix));
+	match tag {
+		HTML => mistake(
+			"html is the page itself",
+			format!("drop html{{ … }} around the {parent}'s content"),
+		),
+		_ if parent == "p" && BLOCK_ELEMENTS.contains(&tag) => {
+			mistake("the browser ends the p before it", "make the p a div".into())
+		}
+		_ if LISTS.contains(&parent) && !LIST_ITEMS.contains(&tag) => {
+			mistake("a list holds li items", format!("li{{ {tag}{{ … }} }}"))
+		}
+		_ if CELLS.contains(&tag) && parent != ROW => mistake("it belongs in a tr", format!("tr{{ {tag}{{ … }} }}")),
+		ROW if !ROW_HOLDERS.contains(&parent) => mistake("it belongs in a table", "table{ tr{ … } }".into()),
+		_ if TABLE_PARTS.contains(&tag) && parent != TABLE => {
+			mistake("it belongs in a table", format!("table{{ {tag}{{ … }} }}"))
+		}
+		_ => None,
+	}
 }
 
 /// An element's items without its handlers (`on click {…}`, as a line of its own or as the items `on`, `click: {…}`),
@@ -435,7 +500,7 @@ fn says_something(item: &Node) -> bool {
 	}
 }
 
-fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>) {
+fn collect<'a>(node: &'a Node, inside_label: bool, parent: Option<&str>, found: &mut Vec<Element<'a>>) {
 	if let Some((tag, content, head_attributes)) = element_parts(node) {
 		let (items, events, handler_bodies) = without_handlers(content_items(content));
 		found.push(Element {
@@ -450,6 +515,7 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 				.iter()
 				.any(|item| written_attribute(item).is_none() && says_something(item)),
 			inside_label,
+			parent: parent.map(str::to_string),
 			events,
 			blocks: items.iter().filter_map(|item| block_name(item)).collect(),
 		});
@@ -457,26 +523,28 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 			return;
 		}
 		let inside_label = inside_label || tag == LABEL;
-		return items
+		items
 			.into_iter()
-			.chain(handler_bodies)
-			.for_each(|item| collect(item, inside_label, found));
+			.for_each(|item| collect(item, inside_label, Some(tag), found));
+		return handler_bodies
+			.into_iter()
+			.for_each(|body| collect(body, inside_label, None, found));
 	}
 	match node.drop_meta() {
-		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, found)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, parent, found)),
 		// the head of `add(a: i32) := …` holds parameters, the target of `a:V = …` a typed variable: not markup
-		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, inside_label, found),
+		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, inside_label, parent, found),
 		// `c ? then : else`: the colon parts the branches, it makes no element
 		Node::Key(condition, Op::Question, branches)
 			if let Node::Key(then, Op::Colon, otherwise) = branches.drop_meta() =>
 		{
 			[condition, then, otherwise]
 				.into_iter()
-				.for_each(|part| collect(part, inside_label, found));
+				.for_each(|part| collect(part, inside_label, parent, found));
 		}
 		Node::Key(left, _, right) => {
-			collect(left, inside_label, found);
-			collect(right, inside_label, found);
+			collect(left, inside_label, parent, found);
+			collect(right, inside_label, parent, found);
 		}
 		_ => {}
 	}
