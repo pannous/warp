@@ -495,20 +495,50 @@ impl WarpParser {
 	}
 
 	pub(super) fn consume_rest_of_line(&mut self) -> String {
-		let mut line_comment = String::new();
-		loop {
-			let ch = self.current_char();
-			if ch == '\0' {
-				break;
-			}
-			if ch == '\n' {
-				self.advance();
-				break;
-			}
-			line_comment.push(ch);
+		let line_comment = self.consume_to_line_end();
+		if self.current_char() == '\n' {
 			self.advance();
 		}
-		line_comment.trim().to_string()
+		line_comment
+	}
+
+	/// The rest of the line, trimmed; the newline stays
+	fn consume_to_line_end(&mut self) -> String {
+		let mut rest = String::new();
+		while !matches!(self.current_char(), '\n' | '\0') {
+			rest.push(self.current_char());
+			self.advance();
+		}
+		rest.trim().to_string()
+	}
+
+	/// A `// …` or `# …` comment ending the line the parser is on: it documents that line's last item, `a: 1 // c`
+	/// (card parse-word); the newline stays a separator
+	pub(super) fn take_trailing_comment(&mut self) -> Option<String> {
+		self.skip_spaces();
+		if !self.at_line_comment() {
+			return None;
+		}
+		self.educate_on_spaced_floor_division();
+		self.advance_by(if self.current_char() == '/' { 2 } else { 1 });
+		Some(self.consume_to_line_end()).filter(|text| !text.is_empty())
+	}
+
+	/// `a // b` after code reads like division: say once that it is a comment
+	fn educate_on_spaced_floor_division(&mut self) {
+		if self.current_char() == '/'
+			&& self.follows_operand_on_its_line()
+			&& !self.is_set_apart()
+			&& self.comment_reads_like_divisor()
+		{
+			self.set_hint_pos();
+			crate::diagnostic::educate_once(
+				SLASH_COMMENT_TOPIC,
+				"a // b",
+				"a//b",
+				"`// …` after code is a comment; floor division has no space after //: a //b",
+			);
+		}
 	}
 
 	/// `// note` or `# note` here: a comment to the end of the line, not floor division (`7//2`), a URL (`://`) or a
@@ -594,15 +624,7 @@ impl WarpParser {
 			}
 			// // line comment (but not :// URL scheme)
 			if c1 == '/' && self.at_line_comment() {
-				if self.follows_operand_on_its_line() && !self.is_set_apart() && self.comment_reads_like_divisor() {
-					self.set_hint_pos();
-					crate::diagnostic::educate_once(
-						SLASH_COMMENT_TOPIC,
-						"a // b",
-						"a//b",
-						"`// …` after code is a comment; floor division has no space after //: a //b",
-					);
-				}
+				self.educate_on_spaced_floor_division();
 				self.advance_by(2);
 				let text = self.consume_rest_of_line();
 				if !text.is_empty() {

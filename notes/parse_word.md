@@ -71,7 +71,10 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
   whose Meta layers carry a LineInfo or a comment through the runtime function node_at.
 - `n.line`, `n.column`, `n.comment` read through node_part (NODE_PARTS 6–8); a node without them has no such field.
 - Positions of `parse("…")` are in the parsed text (line 1 column 1 is its start).
-- Open: the parser keeps only the comment *before* a node (`// c` then `a: 1`); a trailing `a: 1 // c` is lost.
+- A comment ending a line documents that line's item (2026-10-13): `a: 1 // c` gives `(x#1).comment` "c"; before,
+  it became the leading comment of the next line. Scanner take_trailing_comment, called by the list item loop.
+  Open: `a: 1 # c` is still lost, the expression scanner (skip_spaces_and_inline_comments) drops `# …` mid-line.
+  Test tests/node/test_trailing_comment.rs.
 - Run-time `parse(t)` keeps positions too (2026-10-13): TaskValue::Positioned (from Node::written_at) is built by
   the program's exported node_at; in the browser tree_of adds `at: [line, column, comment]` and host.js buildValue
   calls node_at. A program mentioning parse_code emits node_at and $MetaNode. Test tests/node/test_parse_positions.rs.

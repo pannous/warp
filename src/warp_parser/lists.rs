@@ -230,6 +230,10 @@ impl WarpParser {
 			} else {
 				item
 			};
+			let item = match self.take_trailing_comment() {
+				Some(comment) => item.with_comment(comment),
+				None => item,
+			};
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 
