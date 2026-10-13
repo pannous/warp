@@ -540,7 +540,7 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 	SOURCE_PASSES[..resolved_at]
 		.iter()
 		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(module, |module, pass| pass(module))
+		.fold(crate::for_loop::headers::lower(module), |module, pass| pass(module))
 }
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
@@ -551,6 +551,8 @@ fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
 /// (a constant answer, an error, a denied capability).
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
+	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
+	let node = crate::for_loop::headers::lower(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
