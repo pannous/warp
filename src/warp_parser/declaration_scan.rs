@@ -244,12 +244,14 @@ fn used_std_modules(source: &str) -> Vec<&'static str> {
 	source
 		.lines()
 		.flat_map(|line| line.split(';'))
-		.filter_map(|statement| match statement.split_whitespace().collect::<Vec<_>>().as_slice() {
-			[keyword, module] if crate::modules::USE_KEYWORDS.contains(keyword) => {
-				crate::modules::std_module_source(module)
-			}
-			_ => None,
-		})
+		.filter_map(
+			|statement| match statement.split_whitespace().collect::<Vec<_>>().as_slice() {
+				[keyword, module] if crate::modules::USE_KEYWORDS.contains(keyword) => {
+					crate::modules::std_module_source(module)
+				}
+				_ => None,
+			},
+		)
 		.collect()
 }
 
