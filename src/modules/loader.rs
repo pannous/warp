@@ -336,7 +336,8 @@ impl<'a> Loader<'a> {
 	}
 
 	/// A registered package: fetched once, then its module `<name>.warp` if it has one; a package without is data.
-	/// A required version the default branch does not declare comes from the matching git tag.
+	/// A required version the default branch does not declare comes from the matching git tag. Its source, and what
+	/// it uses, gets no style hints: the user does not write it (card hints-fire)
 	pub(super) fn use_package(&mut self, name: &str, requirement: Option<&Requirement>) -> Result<Vec<Node>, Node> {
 		let mut directory = package_directory(name).map_err(|failure| error(&failure))?;
 		if let Some(requirement) = requirement {
@@ -346,7 +347,7 @@ impl<'a> Loader<'a> {
 			}
 		}
 		match package_module(&directory, name) {
-			Some(path) => self.load(Import::Use, name, path),
+			Some(path) => crate::normalize::without_hints(|| self.load(Import::Use, name, path)),
 			None => Ok(vec![]),
 		}
 	}
