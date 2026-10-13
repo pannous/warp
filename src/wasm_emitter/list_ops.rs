@@ -162,15 +162,7 @@ impl WasmGcEmitter {
 					ConstExpr::ref_null(HeapType::Concrete(node_type)),
 				),
 			};
-			self.globals.global(
-				GlobalType {
-					val_type,
-					mutable: true,
-					shared: false,
-				},
-				&initial,
-			);
-			self.next_global_idx += 1;
+			self.declare_global_of(val_type, initial);
 		}
 		// the read cursors after the first: list, cell, index each
 		for _ in 1..READ_CURSORS {
@@ -180,15 +172,7 @@ impl WasmGcEmitter {
 				} else {
 					ConstExpr::ref_null(HeapType::Concrete(node_type))
 				};
-				self.globals.global(
-					GlobalType {
-						val_type,
-						mutable: true,
-						shared: false,
-					},
-					&initial,
-				);
-				self.next_global_idx += 1;
+				self.declare_global_of(val_type, initial);
 			}
 		}
 	}
@@ -213,16 +197,7 @@ impl WasmGcEmitter {
 			} else {
 				ConstExpr::i32_const(-1)
 			};
-			self.globals.global(
-				GlobalType {
-					val_type,
-					mutable: true,
-					shared: false,
-				},
-				&initial,
-			);
-			self.extra_global_names.push((self.next_global_idx, name));
-			self.next_global_idx += 1;
+			self.declare_named_global(val_type, initial, name);
 		}
 	}
 

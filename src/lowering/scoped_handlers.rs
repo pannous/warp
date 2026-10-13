@@ -220,29 +220,26 @@ pub(crate) fn scoped_handler(node: &Node) -> Option<(String, Node, Node)> {
 	Some((words.join(" "), body.clone(), block.clone()))
 }
 
-/// `print "x " + on ask {…} in {…}` parses as `print ("x " + on) ask {…} in {…}`: the handler phrase back in the place
-/// of its `on`, a word of the phrase or the last operand of an operator (`"x " + (on ask {…} in {…})`)
+/// `print "x " + on ask {…} in {…}` parses as `print ("x " + on ask {…}) in {…}` (the call `on ask {…}` binds tighter
+/// than `+`, `in` is no argument): the handler phrase back in the place of its `on`, a word of the phrase or the last
+/// operand of an operator (`"x " + (on ask {…} in {…})`)
 fn operand_phrase(node: Node) -> Node {
 	let Node::List(items, _, Separator::Space) = node.drop_meta() else {
 		return node;
 	};
 	let items = phrase_words(items);
-	let starts_handler = |index: &usize| {
-		let rest = [&[symbol(ON_WORD)], &items[index + 1..]].concat();
-		scoped_handler(&Node::List(rest, Bracket::None, Separator::Space)).is_some()
+	let handler_from = |index: usize| {
+		let words_after_on = trailing_on_words(&items[index])?;
+		let phrase = [&[symbol(ON_WORD)], words_after_on.as_slice(), &items[index + 1..]].concat();
+		let phrase = Node::List(phrase, Bracket::None, Separator::Space);
+		scoped_handler(&phrase).map(|_| (index, phrase))
 	};
-	let Some(start) = (0..items.len())
-		.filter(|index| ends_with_on(&items[*index]))
-		.find(|index| *index > 0 || !is_on(&items[0]))
-		.filter(starts_handler)
+	let Some((start, phrase)) = (0..items.len())
+		.filter(|index| *index > 0 || !is_on(&items[0]))
+		.find_map(handler_from)
 	else {
 		return node;
 	};
-	let phrase = Node::List(
-		[&[symbol(ON_WORD)], &items[start + 1..]].concat(),
-		Bracket::None,
-		Separator::Space,
-	);
 	let head = &items[..start];
 	let placed = with_last_operand(items[start].clone(), phrase);
 	match head.is_empty() {
@@ -255,10 +252,15 @@ fn is_on(node: &Node) -> bool {
 	node.is_symbol(ON_WORD)
 }
 
-fn ends_with_on(node: &Node) -> bool {
+/// The words after the `on` that ends an operand: `a + on` has none, `a + on ask {…}` has `ask {…}`
+fn trailing_on_words(node: &Node) -> Option<Vec<Node>> {
 	match node.drop_meta() {
-		Node::Key(_, _, right) => ends_with_on(right),
-		other => is_on(other),
+		Node::Key(_, _, right) => trailing_on_words(right),
+		Node::List(inner, Bracket::None, Separator::Space) => match phrase_words(inner).split_first() {
+			Some((first, rest)) if is_on(first) => Some(rest.to_vec()),
+			_ => None,
+		},
+		other => is_on(other).then(Vec::new),
 	}
 }
 

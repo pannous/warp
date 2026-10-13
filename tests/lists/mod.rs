@@ -8,6 +8,7 @@ mod test_comprehension_beside_own_push; // card prefix-count-field
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
+mod test_counting_word_operands; // card count-xs
 mod test_counting_word_variables;
 mod test_counting_words;
 mod test_decimal_list_elements;

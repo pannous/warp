@@ -875,6 +875,12 @@ PASSED:
   ✓ ffi::header::tests::test_header_sig_to_ffi_sig
   ✓ ffi::header::tests::test_map_c_type_to_valtype
   ✓ ffi::header::tests::test_parse_header_file_math
+  ✓ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
+  ✓ ffi::test_cargo_crates::test_cargo_crate_free_functions
+  ✓ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource
+  ✓ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes
+  ✓ ffi::test_cargo_crates::test_cargo_crate_type_functions_fields_and_display
+  ✓ ffi::test_cargo_crates::test_cargo_crate_without_callable_functions_is_refused
   ✓ ffi::test_component_drop::a_dropped_handle_is_refused
   ✓ ffi::test_component_drop::dropping_a_handle_runs_the_destructor
   ✓ ffi::test_component_exports_anywhere::a_components_exports_in_every_host
@@ -1722,6 +1728,9 @@ PASSED:
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
+  ✓ lists::test_counting_word_operands::a_block_after_the_operand_is_the_body
+  ✓ lists::test_counting_word_operands::a_counting_word_takes_the_name_after_it
+  ✓ lists::test_counting_word_operands::a_variable_named_count_stays_a_variable
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
   ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
   ✓ lists::test_counting_words::test_every_counting_word_counts_a_list_of_quantities
@@ -2212,6 +2221,7 @@ PASSED:
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
   ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
   ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
+  ✓ modules::test_std_regex::a_match_prints_yes_or_no
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
   ✓ modules::test_std_shadowed_names::a_local_in_one_function_leaves_the_word_to_the_others
@@ -3282,6 +3292,7 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -3901,6 +3912,7 @@ PASSED:
   ✓ types::test_data_run_now::a_forced_now_is_a_time_value
   ✓ types::test_data_run_now::now_in_data_prints_as_a_date
   ✓ types::test_data_stays_data::a_bare_now_in_data_is_the_word
+  ✓ types::test_data_stays_data::now_forced_in_a_map_is_the_time
   ✓ types::test_data_stays_data::now_prints_as_written_and_now_forced_as_a_date
   ✓ types::test_data::an_object_mixing_commas_and_newlines_reads_its_fields
   ✓ types::test_data::an_object_of_rows_with_a_quoted_name_reads_its_fields
@@ -5368,7 +5380,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-13 ignored, 5365 passed, 1 failed, 5366 total tested
+13 ignored, 5377 passed, 0 failed, 5377 total tested

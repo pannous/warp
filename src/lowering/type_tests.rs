@@ -408,6 +408,18 @@ fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
 		.collect()
 }
 
+/// The words of `x is int` and of `x is a number`, whose `a number` parses as a call (application binds tighter than `is`)
+fn phrase_words(node: &Node) -> Option<Vec<&str>> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) => items
+			.iter()
+			.map(phrase_words)
+			.collect::<Option<Vec<_>>>()
+			.map(|words| words.concat()),
+		_ => symbol_words(std::slice::from_ref(node)),
+	}
+}
+
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
 const EQUALITY_OPERAND: &str = "equality operand";
 
@@ -513,8 +525,10 @@ pub fn is_equality_operand(node: &Node) -> bool {
 /// (foreign_modules.rs: `math.floor(2.5) is int` tests the result's kind, not `operator.eq(…, int)`)
 pub(crate) fn begins_type_test(right: &Node) -> bool {
 	!is_equality_operand(right)
-		&& matches!(right.drop_meta(), Node::Symbol(word)
-			if ARTICLES.contains(&word.as_str()) || type_spec(&[word], &Names::default()).is_some())
+		&& phrase_words(right).is_some_and(|words| {
+			words.first().is_some_and(|first| ARTICLES.contains(first))
+				|| type_spec(&words, &Names::default()).is_some()
+		})
 }
 
 /// `x is int`; `type(x) is int` tests x, as the type of x is what it names (card type-int)
@@ -548,7 +562,7 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			)
 		}
 		Node::Key(subject, Op::Eq, right) => {
-			match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
+			match phrase_words(&right).and_then(|words| type_spec(&words, shadowed)) {
 				// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
 				Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
 				_ => match union_test(&subject, &right, shadowed).or_else(|| is_pattern(&subject, &right, shadowed)) {

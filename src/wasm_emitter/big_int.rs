@@ -752,25 +752,11 @@ impl WasmGcEmitter {
 			nullable: true,
 			heap_type: HeapType::Concrete(self.type_manager.big_heap_type),
 		};
-		self.globals.global(
-			GlobalType {
-				val_type: Ref(heap),
-				mutable: true,
-				shared: false,
-			},
-			&ConstExpr::ref_null(HeapType::Concrete(self.type_manager.big_heap_type)),
+		self.int_heap_global = self.declare_global_of(
+			Ref(heap),
+			ConstExpr::ref_null(HeapType::Concrete(self.type_manager.big_heap_type)),
 		);
-		self.int_heap_global = self.next_global_idx;
-		self.globals.global(
-			GlobalType {
-				val_type: ValType::I32,
-				mutable: true,
-				shared: false,
-			},
-			&ConstExpr::i32_const(0),
-		);
-		self.int_count_global = self.next_global_idx + 1;
-		self.next_global_idx += 2;
+		self.int_count_global = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
 	}
 
 	/// Push the anyref payload for the Int in `local`
