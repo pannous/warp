@@ -131,6 +131,7 @@ impl WarpParser {
 				let escaped = self.current_char();
 				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
 				match escaped {
+					'\0' => continue, // `"\` ends the source: the loop reports the unterminated text
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
 						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
 						else {

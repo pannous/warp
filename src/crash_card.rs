@@ -20,6 +20,8 @@ const TITLE_CHARS: usize = 110;
 const BACKTRACE_CHARS: usize = 20_000;
 /// Backtrace sources of std and the dependencies, not of warp
 const FOREIGN_SOURCES: [&str; 3] = ["/rustc/", "/.cargo/", "/.rustup/"];
+/// The backtrace frame where the panic starts unwinding: the frames after it lead to the crash
+const UNWIND_FRAME: &str = "rust_begin_unwind";
 
 /// One card per run: a panic while panicking ("panic in a function that cannot unwind") tells nothing new
 static FILED: AtomicBool = AtomicBool::new(false);
@@ -112,10 +114,12 @@ fn current_branch(checkout: &Path) -> String {
 }
 
 /// The innermost frame in warp's own code, `name at src/file.rs:line`: a panic inside std (a failed print) names its
-/// caller, not the std line
-fn first_warp_frame(backtrace: &str) -> Option<String> {
+/// caller, not the std line. The frames above the unwind are the panic hooks (this file's, main.rs's closed-pipe
+/// hook), never the crash: card crash-closure was titled `{closure#0} at src/main.rs:171`
+pub fn first_warp_frame(backtrace: &str) -> Option<String> {
 	let lines: Vec<&str> = backtrace.lines().collect();
-	lines.iter().enumerate().find_map(|(index, line)| {
+	let crash_frames = lines.iter().rposition(|line| line.contains(UNWIND_FRAME)).unwrap_or(0);
+	lines.iter().enumerate().skip(crash_frames).find_map(|(index, line)| {
 		let (number, name) = line.trim().split_once(": ")?;
 		number.parse::<usize>().ok()?;
 		let source = lines.get(index + 1).and_then(|next| next.trim().strip_prefix("at "));
