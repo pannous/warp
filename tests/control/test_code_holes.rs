@@ -36,3 +36,9 @@ fn a_hole_matches_inside_a_call() {
 		true
 	);
 }
+
+#[test]
+fn an_indexed_copy_of_a_parameter_takes_code() {
+	is!("f(c) := { s = c; s#1 }\nf(data (n * 1)) == data n", true);
+	is!("f(c) := { s = c; s#1 }\nf([7, 8])", 7);
+}
