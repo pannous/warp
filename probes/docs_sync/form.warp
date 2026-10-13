@@ -1,0 +1,9 @@
+guests = []
+div{
+	form{
+		on submit { guests += [event.fields.name] }
+		input{ name: "name" aria-label: "name" }
+		button{ "Add" }
+	}
+	ul{ for guest in guests { li{ guest } } }
+}

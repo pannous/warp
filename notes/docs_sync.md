@@ -5,11 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **19f021863** (2026-10-13), checked with /Users/me/dev/bin/warp built from it.
+- main commit **264c844a4** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4), checked with
+  /Users/me/dev/bin/warp built from 19f021863 (no user-visible commits in between).
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 19f021863..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 19f021863 origin/main -- notes/decisions.md`).
+The next sweep starts with `git log --oneline 264c844a4..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 264c844a4 origin/main -- notes/decisions.md`).
 
 ## How
 
@@ -24,14 +25,13 @@ since (`git diff 19f021863 origin/main -- notes/decisions.md`).
    `web::test_expert_guide`); an "Examples:" line names only existing tour examples or samples.
 6. Style: an intro phrase, a minimal snippet, the explanation; one concept at a time.
 
-## Not swept yet (at 19f021863)
+## Standing keeper
 
-sound (voice pacing, fade_sound, play_signal/play_blocks, stereo, `use sound` for rare words, patterns and live
-loops, MIDI), generic functions and multiple dispatch, reflection (`.signature`, `.params`, `dir`, `help`), dates and
-time zones at run time, units (°, temperatures), python aliases (pop, clear, fromkeys, hex(…) casts), forms
-(`on submit`, event.fields), stored values (`stored x default v`, store words as maps), signals in object fields,
-table slices, `go xs.map`, runtime error positions, the bit_and and `type(x) == "int"` hints, let-mut, float exit
-status, W0 (prover pages), crontab/exec, `warp app`.
+warp-docs-sync stays on: when idle and main has user-visible commits past the last swept one, sweep them as above.
+Merge requests' "docs:" lines come from warp-integrator; a "docs: none" on a user-visible feature goes back to its
+worker. Samples should run without hints: `for f in samples/*.warp; …grep -c '^hint'` (list in
+data/docs_sync/sample_hints.txt, card sample-hints).
 
-Clash to settle: the planned `pattern Adult = {…}` keyword (card patterns-values) meets the sound module's `pattern`
-word ("pattern is in the standard module sound").
+## Not swept yet
+
+Everything up to the last swept commit is covered; the open gaps are cards (midi-receive-message, types-first-run, untyped-block-parameter).

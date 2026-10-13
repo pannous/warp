@@ -150,8 +150,8 @@ while time < seconds {
 	}
 	kick = max(kick * kick_fade, min(1.0, rise / full_kick))
 	tone += (loudest / bands - tone) * 0.1
-	bass = (levels[0] + levels[1] + levels[2] + levels[3]) / 4
-	treble = (levels[10] + levels[11] + levels[12] + levels[13]) / 4
+	bass = (levels#1 + levels#2 + levels#3 + levels#4) / 4
+	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)
 	sleep(frame_milliseconds)
 	time = (clock() - started) / 1000.0
