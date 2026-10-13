@@ -350,6 +350,8 @@ PASSED:
   ✓ control::test_match_guards_and_finally::a_guard_binds_and_tests
   ✓ control::test_match_guards_and_finally::an_assigned_match_takes_arrow_cases
   ✓ control::test_match_guards_and_finally::finally_runs_and_keeps_the_value
+  ✓ control::test_match_negative_subject::a_negative_subject_is_matched
+  ✓ control::test_match_negative_subject::a_variable_named_match_still_subtracts
   ✓ control::test_mixed_range_bounds::a_range_from_a_letter_to_a_number_is_a_compile_error
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
@@ -5139,4 +5141,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5134 passed, 0 failed, 5134 total tested
+12 ignored, 5136 passed, 0 failed, 5136 total tested
