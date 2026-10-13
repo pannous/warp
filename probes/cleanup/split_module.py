@@ -94,7 +94,7 @@ def main():
 	at = next(
 		index
 		for index, line in enumerate(lines)
-		if line and not line.startswith(("use ", "//", "#!", "\t", " ", "}", "pub use ", "pub(crate) use "))
+		if line.startswith("///") or line and not line.startswith(("use ", "//", "#!", "\t", " ", "}", "pub use ", "pub(crate) use "))
 	)
 	lines[at:at] = declarations + [""]
 	file.write_text("\n".join(lines))
