@@ -106,7 +106,8 @@ const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMEN
 const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
 const NO_HINTS_FLAG: &str = "--no-hints";
-/// Run the program with no C, shell or other runtime (Capability::GRANTED_SANDBOXED), as warp-lambda hosts programs
+/// Run the program with no C, shell or other runtime (Capability::GRANTED_SANDBOXED), writing files only in its state
+/// folder (src/sandbox.rs), as warp-lambda hosts programs
 const SANDBOX_FLAG: &str = "--sandbox";
 const HINTS_VARIABLE: &str = "WARP_HINTS";
 /// `--warnings=<level>`: print diagnostics from that level up (hint, weak, normal, severe); `--no-hints` is weak
@@ -139,6 +140,7 @@ fn main() {
 	match args.iter().position(|arg| arg == SANDBOX_FLAG) {
 		Some(flag) => {
 			args.remove(flag);
+			warp::sandbox::confine_process();
 			warp::pipeline::sandboxed(|| run_command(&args))
 		}
 		None => run_command(&args),
@@ -1175,7 +1177,7 @@ fn usage() {
 	println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
 	println!("  --warnings=<level>   Show diagnostics from hint (default), weak, normal or severe up");
 	println!("  --strict[=<level>]   Warnings from normal (or the level) up are errors, as `use strict`");
-	println!("  --sandbox            No C, shell or other runtime for the program (as hosted programs run)");
+	println!("  --sandbox            No C, shell or other runtime, files written only in the working folder (as hosted programs run)");
 	println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
 	println!(
 		"  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running"

@@ -1,0 +1,2 @@
+// card sandbox-exec: warp --sandbox probes/sandbox/exec.warp is refused: "capability denied: os.exec needs the process capability, which warp --sandbox does not grant"
+exec sh"echo SHELL-RAN"
