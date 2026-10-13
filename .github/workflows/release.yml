@@ -27,7 +27,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: create the release (once)
       env:
         GH_TOKEN: ${{ github.token }}
@@ -45,7 +45,7 @@ jobs:
         - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
     - uses: dtolnay/rust-toolchain@stable
