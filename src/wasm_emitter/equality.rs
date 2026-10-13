@@ -34,6 +34,8 @@ impl WasmGcEmitter {
 			}
 			// an indexed element is a Node of any kind: 'héllo'#2 is a codepoint
 			Node::Key(indexed, Op::Hash, _) => !matches!(indexed.drop_meta(), Node::Empty),
+			// `data n*1`: code as a Node, compared as written (`parse("n * 1") == data (n * 1)`)
+			Node::List(..) if crate::blocks::quoted_data(node).is_some() => true,
 			Node::Symbol(name) => {
 				let bound = self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name);
 				bound && self.get_type(node).is_ref()

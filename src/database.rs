@@ -147,7 +147,8 @@ pub fn rows_read() -> usize {
 /// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| {
-		crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
+		node.text_value()
+			.ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
 	};
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),

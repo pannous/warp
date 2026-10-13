@@ -5,21 +5,14 @@
 
 use crate::node::Node;
 
-/// The text a host word's argument holds: a one-character text arrives as a Char (`"n"` parses as 'n')
-pub(crate) fn text_value(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Text(text) => Some(text.clone()),
-		Node::Char(character) => Some(character.to_string()),
-		_ => None,
-	}
-}
-
 /// module.member applied to the arguments (a list node)
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
 	let arguments = arguments.as_items();
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
-	let text_of =
-		|node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
+	let text_of = |node: &Node| {
+		node.text_value()
+			.ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())))
+	};
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 	#[cfg(feature = "native")]
 	let number_of = |node: &Node| match node.drop_meta() {

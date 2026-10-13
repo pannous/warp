@@ -904,6 +904,7 @@ fn feature_of(module: &str, name: &str) -> String {
 		_ if name.starts_with("shared_") => "shared arrays",
 		"fetch_start" | "fetch_reply" => "async fetch",
 		"run_block" | "block·value" => "run-time blocks",
+		"parse_code" => "run-time parse",
 		"foreign_call" => "foreign calls",
 		_ => return format!("{module}.{name}"),
 	};
