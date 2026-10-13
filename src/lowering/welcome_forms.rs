@@ -1047,12 +1047,13 @@ fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 	))
 }
 
-/// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`
+/// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`.
+/// The parentheses are needed, as in JS: a bare `{a, b} => …` is a map pattern arm (card map-patterns)
 fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
-	let (items, separator) = match parameters.drop_meta() {
-		Node::List(items, Bracket::Round, separator) => (items.clone(), separator.clone()),
-		single => (vec![single.clone()], Separator::Colon),
+	let Node::List(items, Bracket::Round, separator) = parameters.drop_meta() else {
+		return None;
 	};
+	let (items, separator) = (items.clone(), separator.clone());
 	let mut fields = Vec::new();
 	let parameters: Vec<Node> = items
 		.into_iter()

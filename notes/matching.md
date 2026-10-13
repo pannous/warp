@@ -88,7 +88,7 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | parameter-patterns | `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := x + y` | undefined variable / unknown type |
 | match-exhaustive | `match c { Penny: 1 }` over `enum Coin { Penny, Dime }`, class arms over a known class set | only the run-time "no case"; aligned with tagged-unions (warp-dispatch, parser-features) |
 | enum-parameter-type | `f(c: Coin) := …` for `enum Coin` | "unknown type Coin of parameter c" |
-| map-patterns | `match {name: "Ann", age: 3} { {name: n} => n }` | no case |
+| map-patterns | `match {name: "Ann", age: 3} { {name: n} => n }` | done (step 1 of tree patterns, below) |
 | match-negative-subject | `match -3 { … }` | parsed as `match - 3` |
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | the parser takes one word after class |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
@@ -105,7 +105,11 @@ Design defaults sent to warp-interviewer (undoable, implemented as written until
 ## Tree patterns (card tree-patterns, user 2026-10-13: "go beyond what Rust offers")
 Structural matching of whole trees, data (JSON-like maps and lists) and code alike. Design examples:
 probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
-1. map-patterns: deep partial map patterns `{status: 200, body: {user: {name}}}`, fields not named are ignored.
+1. map-patterns (done): deep partial map patterns `{status: 200, body: {user: {name}}}`, fields not named are ignored.
+   In arms and `x is {…}` (with a name to bind). switch.rs pattern_tests: the value must be a map or a pair (a
+   one-field map is a pair), each named field there (`collection_contains`), read by subscript `path["name"]`.
+   A bare `{a, b} => …` is an arm now; the JS object-parameter lambda needs its parentheses, `({a, b}) => …`.
+   Tests: tests/control/test_match_maps.rs; probe probes/matching/map_patterns.warp.
 2. Conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}` (reuses match-ranges, match-type-arms).
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
 4. Named patterns as values: `Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
