@@ -1,0 +1,4 @@
+// card list-spread: a spread in a list literal splices the list in
+xs = [2, 3]
+print [1, ...xs, 4]
+print [*xs, *xs]

@@ -5,13 +5,13 @@
 WARP=${1:-warp}
 pass=0
 fail=0
-check() { # name, expected last line, code
+check() { # name, expected last line (or error:<text> for an error containing text), code
 	local got
 	local out
 	out=$(WARP_NO_WINDOW=1 WARP_HINTS=0 "$WARP" eval "$3" 2>&1)
 	got=$(echo "$out" | tail -1 | sed "s/^» //")
 	[[ "$got" == *"|"* ]] && got=$(echo "$out" | head -1)
-	if [ "$got" == "$2" ]; then
+	if [ "$got" == "$2" ] || [[ "$2" == error:* && "$got" == *Error\(*"${2#error:}"* ]]; then
 		pass=$((pass + 1))
 		echo "ok    $1"
 	else
@@ -47,7 +47,8 @@ check is-type-union 'yes' 'x = 3; x is (int or text)'
 check other-catch-all 0 'match 3 { 1 => 1; other => 0 }'
 check else-catch-all 0 'match 3 { 1 => 1; else => 0 }'
 check range-pattern '"teen"' 'match 15 { 13..19 => "teen"; _ => "other" }'
-check as-binding 3 'match [1, 2] { all @ [a, b] => #all + 1 }'
+# user decision: no @/as binding, the subject's name or the word value gives the whole value
+check as-binding "error:'@'" 'match [1, 2] { all @ [a, b] => #all + 1 }'
 check text-pattern '"hi bob"' 'match "bob" { "alice" => "hey"; name => "hi " + name }'
 check map-pattern '"Ann"' 'match {name: "Ann", age: 3} { {name: n} => n }'
 check nested-class-pattern 1 'class P{x:int; y:int}; class L{a:P; b:P}; match L(P(1,2), P(3,4)) { L{a: P{x, ..}, ..} => x }'
@@ -61,7 +62,7 @@ check type-arm-class '"circle"' 'class Circle{r:int}; class Square{s:int}; name(
 # enum / variant cases (wiki/matching.md "not yet: match on enum cases")
 check enum-cases 10 'enum Coin { Penny, Nickel, Dime, Quarter }; c = Dime; match c { Penny: 1; Nickel: 5; Dime: 10; Quarter: 25 }'
 check enum-scoped-cases 10 'enum Coin { Penny, Nickel, Dime, Quarter }; c = Coin::Dime; match c { Coin::Penny => 1; Coin::Dime => 10; _ => 0 }'
-check enum-exhaustive-missing 'error' 'enum Coin { Penny, Dime }; c = Dime; match c { Penny: 1 }'
+check enum-exhaustive-missing 'error:match on Coin misses Dime' 'enum Coin { Penny, Dime }; c = Dime; match c { Penny: 1 }'
 
 # test without arms: is / matches
 check is-pattern 'yes' 'xs = [1, 2]; xs is [_, 2]'
@@ -69,7 +70,8 @@ check if-match 2 'xs = [1, 2]; if xs is [a, b] then b else 0'
 check regex-match 'yes' '"abc" matches /a.c/'
 
 # definitions by cases (equations): fib 0 = 0; fib 1 = 1; fib n = …
-check equations-by-cases 55 'fib(0) := 0; fib(1) := 1; fib(n) := fib(n-1) + fib(n-2); fib(10)'
+# user decision: no joining by cases, the error's fix shows the match
+check equations-by-cases 'error:fib is defined twice' 'fib(0) := 0; fib(1) := 1; fib(n) := fib(n-1) + fib(n-2); fib(10)'
 check parameter-pattern 3 'add_pair([a, b]) := a + b; add_pair([1, 2])'
 check class-parameter-pattern 7 'class Point{x:int; y:int}; sum(Point{x, y}) := x + y; sum(Point(3, 4))'
 

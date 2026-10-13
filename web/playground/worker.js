@@ -19,6 +19,9 @@ self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same comp
 
 let compiler; // the compiler instance's exports
 let webEvaluate; // its web_evaluate, an async function where JSPI is (host-compiler.js awaitedEntry)
+// its web_worker_bundle, likewise: compiling may run code (warp_host.run, a Suspending import), and a Suspending import
+// called outside WebAssembly.promising throws "No matching WebAssembly.promising" (card compiler-crashed)
+let webWorkerBundle;
 // the messages use the compiler one after another: an evaluation whose program waits for a promise (host.js JSPI) holds
 // the compiler's memory until it ends
 let compilerTurn = Promise.resolve();
@@ -110,6 +113,7 @@ async function loadCompiler() {
 	const instance = await WebAssembly.instantiate(module, { warp_host: warpHost(() => compiler.memory, hooks, true) });
 	compiler = instance.exports;
 	webEvaluate = awaitedEntry(compiler.web_evaluate);
+	webWorkerBundle = awaitedEntry(compiler.web_worker_bundle);
 }
 
 function passText(text) {
@@ -188,10 +192,10 @@ function handleSubmit(request) {
 
 // the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web/mod.rs
 // worker_bundle), `{scripts, module}` or `{error}`
-function workerBundle(code) {
+async function workerBundle(code) {
 	const codeText = passText(code);
 	try {
-		const length = compiler.web_worker_bundle(...codeText);
+		const length = await webWorkerBundle(...codeText);
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
 		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, compiler.web_bundle_module(), report.module_length).slice();
 		compiler.web_free(...codeText);
@@ -286,7 +290,7 @@ async function handleMessage(data) {
 	if (data.submit) return handleSubmit(data.submit);
 	if (data.bundle !== undefined) { // the running program keeps running
 		if (!compiler) await loadCompiler();
-		return post({ type: "bundle", bundle: workerBundle(data.bundle) });
+		return post({ type: "bundle", bundle: await workerBundle(data.bundle) });
 	}
 	if (live) stopListening(live);
 	live = undefined;

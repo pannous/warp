@@ -46,9 +46,7 @@ pub(super) struct ErrorCatching {
 
 /// Does the program contain a `try` that catches runtime errors (decided before the runtime functions are emitted)
 pub(super) fn guards_errors(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if name == RAN_WITHOUT_ERROR));
-	found
+	node.mentions(RAN_WITHOUT_ERROR)
 }
 
 impl WasmGcEmitter {

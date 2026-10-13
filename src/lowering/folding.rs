@@ -130,11 +130,7 @@ fn defines_functions(body: &Node) -> bool {
 /// Is every use of `name` in `node` a read of its value: not a property (`m.k`), a key (`m#k`, `{k: 1}`), a target
 fn is_read_as_value_only(node: &Node, name: &str) -> bool {
 	let named = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == name);
-	let mentions = |node: &Node| {
-		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == name));
-		found
-	};
+	let mentions = |node: &Node| node.mentions(name);
 	match node {
 		Node::Meta { node, .. } => is_read_as_value_only(node, name),
 		// `c ? a : b`: both branches are values

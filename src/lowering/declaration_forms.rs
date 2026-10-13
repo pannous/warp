@@ -491,6 +491,10 @@ pub(crate) fn names_used_as_values(program: &Node) -> HashSet<String> {
 pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 	let variables = &names.variables;
 	let lower = |node| lower_declarations_among(node, names);
+	// `data (1..3)` stays the range as written, the Node the run-time `parse("1..3")` gives (card data-quote-lowered)
+	if crate::blocks::quoted_data(&node).is_some() {
+		return node;
+	}
 	let node = match crate::for_loop::lower(node) {
 		Ok(loop_as_while) => return lower(loop_as_while),
 		Err(node) => node,

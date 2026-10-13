@@ -4,7 +4,7 @@
 //! `y: outer·y` holds the cell itself, so inner's writes reach outer. A plain `y = 7` in inner is inner's own local,
 //! as in Python and warp.
 
-use super::{assigned_locals, cell_class, function_definition, mentions, parameter_name, result_type, statements};
+use super::{assigned_locals, cell_class, function_definition, parameter_word, result_type, statements};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -69,7 +69,7 @@ fn lift_from(
 		Bracket::Curly,
 		Separator::Semicolon,
 	);
-	let mut outer_names: Vec<String> = parameters.iter().map(|parameter| parameter_name(parameter)).collect();
+	let mut outer_names: Vec<String> = parameters.iter().map(|parameter| parameter_word(parameter)).collect();
 	let outer_cells = assigned_locals(&rest_body, globals);
 	outer_names.extend(
 		outer_cells
@@ -82,7 +82,7 @@ fn lift_from(
 		.iter()
 		.map(|definition| {
 			let (name, parameters, body) = function_definition(definition).expect("a function definition");
-			let own: Vec<String> = parameters.iter().map(|parameter| parameter_name(parameter)).collect();
+			let own: Vec<String> = parameters.iter().map(|parameter| parameter_word(parameter)).collect();
 			let references = nonlocal_names(body);
 			let locals: Vec<String> = assigned_locals(body, globals)
 				.into_iter()
@@ -90,7 +90,7 @@ fn lift_from(
 				.collect();
 			let captures = outer_names
 				.iter()
-				.filter(|name| !own.contains(name) && !locals.contains(name) && mentions(body, name))
+				.filter(|name| !own.contains(name) && !locals.contains(name) && body.mentions(name))
 				.cloned()
 				.collect();
 			Nested {
@@ -109,7 +109,7 @@ fn lift_from(
 		let mut changed = false;
 		for caller in 0..nested.len() {
 			for callee in 0..nested.len() {
-				if caller == callee || !mentions(&nested[caller].body, &nested[callee].name) {
+				if caller == callee || !nested[caller].body.mentions(&nested[callee].name) {
 					continue;
 				}
 				let (captures, references) = (nested[callee].captures.clone(), nested[callee].references.clone());
@@ -141,7 +141,7 @@ fn lift_from(
 			_ if function.references.contains(capture) => typed(capture, &cell_class(outer, capture)),
 			_ => parameters
 				.iter()
-				.find(|parameter| parameter_name(parameter) == *capture)
+				.find(|parameter| parameter_word(parameter) == *capture)
 				.map_or_else(
 					|| Node::Symbol(capture.clone()),
 					|parameter| parameter.drop_meta().clone(),

@@ -156,10 +156,19 @@ pub(crate) fn may_be_whole_number(node: &Node) -> bool {
 
 /// The name a parameter declares: `x`, `x:int`, `x=1`
 pub(crate) fn parameter_name(parameter: &Node) -> Option<String> {
+	parameter_head(parameter).symbol_name().map(String::from)
+}
+
+/// The word a parameter declares, also when it is no symbol
+pub(crate) fn parameter_word(parameter: &Node) -> String {
+	parameter_head(parameter).name()
+}
+
+/// `x` of `x`, `x:int`, `x:int=1`: the innermost left side
+fn parameter_head(parameter: &Node) -> &Node {
 	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
-		_ => None,
+		Node::Key(name, _, _) => parameter_head(name),
+		other => other,
 	}
 }
 

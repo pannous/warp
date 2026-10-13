@@ -368,6 +368,7 @@ fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
 	};
 	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == PLACEHOLDER || crate::warp_parser::mentions(body, word));
 	let is_free_name = !is_function_keyword(function)
+		&& !crate::analyzer::is_declaration_word(function) // `let x = p.x; let y = …` declares x
 		&& !crate::library_words::is_library_word(function)
 		&& crate::analyzer::type_word_kind(function).is_none();
 	let is_used_later = later

@@ -1,6 +1,8 @@
 //! Exhaustive matches (card match-exhaustive, user decision match-exhaustive): a match on a name declared of a sum type
 //! (`s: Shape` of `enum Shape { Circle(r), Dot }`, or of a plain enum `c: Coin`, plain_enums.rs) without a catch-all that misses a
-//! case is the compile error "match on Shape misses Dot". A subject of unknown type, or an arm this check cannot read
+//! case is the compile error "match on Shape misses Dot". A name only ever assigned cases of one type (`c = Dime`) is
+//! of that type too, and its match must hold the cases assigned to it (card exhaustive-assigned): `c = green` may skip
+//! blue, never green. A subject of unknown type, or an arm this check cannot read
 //! (a guard, alternatives, a comparison), keeps the run-time error "no case for …".
 
 use super::sum_variants::sum_types;
@@ -25,11 +27,21 @@ pub fn check(program: Node) -> Node {
 	if cases.is_empty() {
 		return program;
 	}
-	let subjects = typed_subjects(&program, |type_name| cases.contains_key(type_name));
+	let mut subjects = typed_subjects(&program, |type_name| cases.contains_key(type_name));
+	let mut held = HashMap::new();
+	for (name, assigned) in assigned_subjects(&program, &cases) {
+		if subjects.contains_key(&name) {
+			continue;
+		}
+		subjects.insert(name.clone(), assigned.as_ref().map(|(type_name, _)| type_name.clone()));
+		if let Some((_, assigned_cases)) = assigned {
+			held.insert(name, assigned_cases);
+		}
+	}
 	let mut problem = None;
 	program.visit(&mut |node| {
 		if problem.is_none() {
-			problem = incomplete(node, &cases, &subjects);
+			problem = incomplete(node, &cases, &subjects, &held);
 		}
 	});
 	problem.unwrap_or(program)
@@ -53,11 +65,46 @@ pub(crate) fn typed_subjects(program: &Node, is_type: impl Fn(&str) -> bool) -> 
 	subjects
 }
 
+/// The names assigned cases of one type, `c = Dime`, with that type and the cases assigned; a name also assigned
+/// anything else has none
+fn assigned_subjects(
+	program: &Node,
+	cases: &HashMap<String, Vec<String>>,
+) -> HashMap<String, Option<(String, Vec<String>)>> {
+	let type_of_case = |case: &Node| {
+		let case = case.drop_meta().symbol_name()?;
+		let mut types = cases.iter().filter(|(_, names)| names.iter().any(|name| name == case));
+		match (types.next(), types.next()) {
+			(Some((type_name, _)), None) => Some(type_name.clone()),
+			_ => None,
+		}
+	};
+	let mut subjects: HashMap<String, Option<(String, Vec<String>)>> = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(name, Op::Assign, value) = node {
+			if let Some(name) = name.drop_meta().symbol_name() {
+				let assigned = type_of_case(value);
+				let known = subjects
+					.entry(name.to_string())
+					.or_insert(assigned.clone().map(|type_name| (type_name, vec![])));
+				match (known.as_mut(), assigned) {
+					(Some((type_name, held)), Some(assigned)) if *type_name == assigned => {
+						held.push(value.drop_meta().name())
+					}
+					_ => *known = None,
+				}
+			}
+		}
+	});
+	subjects
+}
+
 /// The error of a match on a typed subject whose arms name some of its cases and no catch-all
 fn incomplete(
 	node: &Node,
 	cases: &HashMap<String, Vec<String>>,
 	subjects: &HashMap<String, Option<String>>,
+	held: &HashMap<String, Vec<String>>,
 ) -> Option<Node> {
 	let (word, subject, arms) = subject_and_arms(node)?;
 	let type_name = subjects.get(&subject)?.as_ref()?;
@@ -75,6 +122,7 @@ fn incomplete(
 	let missing: Vec<&str> = type_cases
 		.iter()
 		.filter(|case| !named.contains(case))
+		.filter(|case| held.get(&subject).is_none_or(|held| held.contains(case)))
 		.map(String::as_str)
 		.collect();
 	if missing.is_empty() {

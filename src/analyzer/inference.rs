@@ -380,7 +380,7 @@ pub(super) fn infer_list_type(
 			return Kind::List;
 		}
 		// `now`, `2024-02-29`: a time, a kind the node operations meet at run time (wasm_emitter/times.rs)
-		if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&name) {
+		if crate::time::TIME_CALLS.contains(&name) {
 			return Kind::Data;
 		}
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {

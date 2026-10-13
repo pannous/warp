@@ -7,6 +7,7 @@ pub mod gpu_canvas;
 pub mod paint;
 #[cfg(feature = "native")]
 pub mod paint_window;
+pub mod pixels;
 pub mod shader_holes;
 #[cfg(feature = "native")]
 pub mod text_raster;

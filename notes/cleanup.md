@@ -83,11 +83,67 @@ Not worth it (checked):
 - **Merging lowering passes.** About 150 walks, but each is a small, separately testable rewrite. Merging would couple their order, and warp-markup's experience is that such merges cost more than they save. The few passes that run twice (phrase_calls, reflection, getters) say why in pipeline.rs.
 - **children_rewritten vs Node::map_children.** The difference is documented: map_children also enters class bodies. cleanup-rewrite-tails (warp-markup) is folding the remaining hand-written tails.
 - **The emitter's repeated instruction runs.** 77 overlapping 8-line windows, mostly in list_runtime.rs, linear_arrays.rs, node_arithmetic.rs and big_int; same verdict as cleanup-emitter-loops.
-- Closed earlier: cleanup-const-evaluators, cleanup-gc-object, cleanup-emitter-loops. cleanup-ffi-headers stays parked in Later, since it changes behaviour.
+- Closed earlier: cleanup-const-evaluators, cleanup-gc-object, cleanup-emitter-loops. cleanup-ffi-headers done later the same day.
 
-After 1 and 2 (Later, cleanup-global-state): src keeps 69 thread-local statics (diagnostic.rs, web.rs, normalize.rs, std_adapters…).
-Some of them are compile context, which the twin would rather pass as a value. Take an inventory once the mode struct
-exists; it is the pattern to extend.
+## Global state (card cleanup-global-state, 2026-10-13)
+src has 66 thread-locals (`thread_local!`). Nearly all are private to their module behind accessor functions. They are
+kept as thread-locals: the passes stay `fn(Node) -> Node` (supervisor), and grouping them gives the twin one context
+object instead. How each one lives: **scoped** = `util::scoped` sets it for one run and restores it; **set** = written
+per compile and never reset; **sink** = filled during a compile and taken at its end; **pass** = set at the start of
+one pass and read only within it; **counter** = a fresh-name counter that is never reset.
+
+A. Compile context, to become one `CompileContext` beside `CompileMode` (card cleanup-compile-context)
+
+| static | module | lives | holds |
+|---|---|---|---|
+| COMPILE_MODE | pipeline | scoped | the nine compile flags (cleanup-compile-mode) |
+| GRANTED | pipeline | scoped | capabilities eval grants |
+| COMPONENT_FUNCTIONS | pipeline | scoped | a component world's imports and exports |
+| SERVING_PORT, SERVER_VALUES | pipeline | scoped | the port and values of a served page |
+| SOURCE | diagnostic | set | the source text, for excerpts; also read by generators, generator_consumers, fetch_signals |
+| WARNING_MODE | diagnostic | set / scoped | how warnings are reported |
+| COMMENTS_AS_META | diagnostic | scoped | strict pragma: comments kept as meta |
+| HINT_MODE, STYLE | normalize | set | hint mode, style preferences (STYLE is read by markup, accessibility, style_rules, transitions, glued_attributes) |
+| HINTS_MUTED | normalize | scoped | hints off for an inner compile |
+| HINT_POSITION | normalize | set | the node a hint points at |
+| PARSED_FILE | meta | scoped | the file being parsed, for positions |
+| PROGRAM_FILE, MODULE_FILES | modules | set | the program file and the module files it used |
+| SANDBOXED | sandbox | scoped | sandboxed eval (beside the process-wide PROCESS_SANDBOXED) |
+| SHADOWED_UNITS | units | scoped | unit names the program defines |
+| RESULT_UNITS | static_units | sink | the result's units, taken by the runner |
+| FLOAT_KERNELS | linear_arrays | set | kernel bodies from lowering to the emitter (cleanup-kernel-names) |
+| DECLARED_TYPES | named_arguments | pass | declared types, read by the same pass: a pass parameter |
+| BOOL_FUNCTIONS | analyzer/booleans | set | functions known to return a bool |
+| WRITTEN_PROBLEMS | accessibility | pass | accessibility problems the source states itself |
+
+B. Compile output, to become one `Diagnostics` sink taken once per compile (card cleanup-diagnostic-sink)
+
+| static | module | lives |
+|---|---|---|
+| COMPILE_WARNINGS, ERROR_DIAGNOSTICS, ASSUMPTIONS | diagnostic | sink (mem::take) |
+| SAID, SAID_HINTS, HINT_CAPTURES, NOTES_SHOWN | diagnostic | sink / set |
+| SHOWN_HINTS | normalize | sink (cleared) |
+| MODULE_DEFINITIONS, EARLY_CLASS_MODULES | modules | sink (cleared), also read by modules/loader |
+
+C. Fresh-name counters, never reset, so a name depends on what compiled before (card cleanup-fresh-names): RACES
+(declarations/tasks), ITEM_LOOPS (switch).
+
+D. Caches, kept: REMEMBERED_ANALYSES (analysis_memo), BLOCK_MODULES and COMPILED_BLOCKS (pipeline), LOADED
+(components), FETCHED (web).
+
+E. Run-time host state, kept (one per running instance): LISTENERS (channels), CONNECTIONS and ROWS_READ (database),
+BEFORE_AT and VOICE (sound), FETCHES and POSTED (web/fetches),
+CONNECTIONS and LISTENERS (web_sockets), ON_LISTENING and REQUEST_LIMIT (web_server), HOOK, MODULE, RENDERED and
+REPORT (web), BLOCK_VALUES and NATIVE_PAGE_PATH (host/native), PROGRAM_ARGUMENTS and UNFILED_STORES (std_adapters),
+IN_TASK_WORKER (tasks), CURRENT_RULES (calendar), FAMILY_LINKERS (wasm_reader), FUEL_OVERRIDE (util),
+RUNTIME_WARNINGS (diagnostic).
+
+F. User acknowledgements, kept (the user's got-it answers): ACKNOWLEDGED_TOPICS, ACKNOWLEDGEMENTS_FILE, ACKNOWLEDGER
+(diagnostic).
+
+Order: fresh-names (S), then compile-context (M), then diagnostic-sink (M). The `set` statics in A are the ones that
+leak from one compile into the next. Process-wide statics (`static`, OnceLock tables) are not in scope; the ffi
+tables belong to cleanup-ffi-headers.
 
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
@@ -177,17 +233,13 @@ Done:
   helpers, the linker) is src/host/native.rs, gated once at `mod native` and re-exported (`pub use native::*`)
 
 Left (bigger, needs care):
-- (cleanup-ffi-headers) Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
-  kind_to_valtype) and ffi/header.rs (`extract_function_signature`, multi-line declarations, C types → ValType via
-  map_c_type_to_valtype, pointer classes). get_ffi_signatures uses the first, get_signatures_from_headers the second,
-  and get_ffi_signature mixes both. One parser would change some mappings (Kind::Pointer is i64 there, a pointer is
-  i32 here), so it needs its own card and tests of both tables first. tests/ffi pins ffi_parser's public API.
-  Measured 2026-10-13 on macOS (m, c, SDL2): ffi_parser's table has 514 functions, the header table 725; 309 differ
-  and 11 are only in the first. The differences: FILE* and other pointers i64 there, i32 here; char* results a number
-  there, a text (anyref) here; long double results anyref there, i32 here; a declaration with a trailing macro call
-  (`strtod(…) __DARWIN_ALIAS(strtod)`) misread here (card ffi-header), `char **` parameters dropped here. One parser
-  changes the signatures of hundreds of implicit calls (get_ffi_signature takes the ffi_parser table first), so it is
-  a behaviour change with decisions per difference, not a cleanup: parked in Later.
+- DONE (cleanup-ffi-headers) One C header parser: ffi/header.rs (`extract_function_signature`, multi-line
+  declarations, pointer classes). ffi_parser.rs keeps its public API (parse_declaration, parse_header_file, header
+  search) as an adapter over it; its own parser and cached table are gone. get_ffi_signatures holds only what warp links
+  by hand (LIBC_SIGNATURES, libm f64, ln, host and linear words); every other C function is as its header declares it.
+  Defaults (supervisor-approved): pointers are handles (i32), not raw i64; `char *` is a text; `char **` parameters
+  are left out (`strtol("ff", 16)`); a long double function is refused by name ("sqrtl is a C function using long
+  double, which wasm has no type for"). No existing tests/ffi test changed value. Pins: tests/ffi/test_ffi_one_parser.rs.
 - (cleanup-const-evaluators) real.rs and time.rs are two small constant evaluators with their own Value types and the same Assign/Define arm;
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
   Closed as not worth doing (2026-10-13): what they share is the `name = value` arm (4 lines) and the literals; a

@@ -91,14 +91,16 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | match-binding-arm | `match "bob" { "alice" => …; name => "hi " + name }`, `all @ [a, b] =>` | a bare name is compared with an undefined variable; `@` unexpected |
 | match-type-arms | `match v { int => …; i: int => …; Circle => … }` | no case / undefined variable |
 | parameter-patterns | `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := x + y` | undefined variable / unknown type |
-| match-exhaustive | `match c { Penny: 1 }` over `enum Coin { Penny, Dime }`, class arms over a known class set | only the run-time "no case"; aligned with tagged-unions (warp-dispatch, parser-features) |
+| match-exhaustive | `match c { Penny: 1 }` over `enum Coin { Penny, Dime }`, class arms over a known class set | done: declared `c: Coin`, and `c = Dime` when every assignment of c is a case of one enum (exhaustive-assigned); other assigned values keep the run-time "no case" |
 | enum-parameter-type | `f(c: Coin) := …` for `enum Coin` | "unknown type Coin of parameter c" |
 | map-patterns | `match {name: "Ann", age: 3} { {name: n} => n }` | done (step 1 of tree patterns, below) |
 | match-negative-subject | `match -3 { … }` | parsed as `match - 3` |
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above |
+| matches-infix | `use regex; "abc" matches "a.c"` | done: lib/regex.warp declares `infix operator matches`; the parser scans the operators of used std modules too (declaration_scan.rs used_std_modules); gives 1/0 like `matches()` |
+| multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above; `n.first` read the library word first until field-before-library-word (a known instance's field wins) |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
 | render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
-| gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | "needs a value for parameter a" |
+| gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | done: a left-out `from _` takes the variable from, with a hint (phrase_calls.rs with_gaps_fed); a plain parameter's name feeds nothing (test_named_arguments) |
 
 Decisions (user, via warp-interviewer):
 - In a case key `1 | 2`, `1 or 2` and `1, 2` are alternatives; a computed comparison goes in a guard. Alternatives
@@ -124,8 +126,11 @@ Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `a
 becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
 Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
 (card sum-point).
-Open: pattern names warn as main-level shadows (card pattern-names).
 Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
+Class arms `Point{x, y} =>` bind with `let` too (class_methods/destructuring.rs bound_parts, card
+param-pattern-local-warning); that `let x = p.x; let y = …` once read as a Haskell definition named let
+(declarations.rs haskell_definition: a declaration word is never a function name). Map parameters `greet({name}) :=`
+take a `map·N` parameter like list ones (card param-map-pattern).
 `else =>` on its own line is the catch-all arm (card match-arm); `else:` on its own line in a switch still fails to
 parse (it clashes with Python's block colon).
 Item patterns (step 3, card list-pattern): `[[n, s]...]` in a list pattern's rest position matches when every item
@@ -156,7 +161,7 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    find done (src/lowering/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
    names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
-   Open: `found = [[…]] find P` parses as an assignment first (card found-find).
+   `found = [[…]] find P` walks the literal, as after a list variable (lists.rs with_applied_word, card found-find).
    replace done (same file, renamed tree_walks.rs): `tree replace P with Q` rebuilds lists (bracketed/separated keep the
    bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
    and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`

@@ -230,6 +230,10 @@ impl WarpParser {
 			} else {
 				item
 			};
+			let item = match self.take_trailing_comment() {
+				Some(comment) => item.with_comment(comment),
+				None => item,
+			};
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 
@@ -268,6 +272,10 @@ impl WarpParser {
 					let (previous, _) = items_with_seps.pop().expect("guarded");
 					with_trailing_block(previous, item)
 				}
+				Some((previous, Separator::Space)) if self.takes_assigned_list(previous, &item) => {
+					let (previous, _) = items_with_seps.pop().expect("guarded");
+					with_applied_word(previous, item)
+				}
 				_ => item,
 			};
 			match declarations_of_several_globals(&item) {
@@ -290,6 +298,24 @@ impl WarpParser {
 			None => list,
 		}
 	}
+	/// `found = [[1, 2]] find [1, x]`: the assignment of a list literal followed by a tree walk (with_applied_word)
+	fn takes_assigned_list(&self, previous: &Node, item: &Node) -> bool {
+		let Node::Key(_, Op::Assign, value) = previous.drop_meta() else {
+			return false;
+		};
+		let starts_walk = match item.drop_meta() {
+			Node::List(words, Bracket::None, _) => words.first().is_some_and(crate::lowering::tree_walks::is_walk_word),
+			word => crate::lowering::tree_walks::is_walk_word(word),
+		};
+		let is_list_literal = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Square, _));
+		match value.drop_meta() {
+			Node::List(items, Bracket::None, Separator::Space) => {
+				matches!(items.as_slice(), [list, word, ..] if is_list_literal(list) && crate::lowering::tree_walks::is_walk_word(word))
+			}
+			literal => is_list_literal(literal) && starts_walk,
+		}
+	}
+
 	/// The lines of a definition `def f(n)` indented below it by spaces, as `def f(n):` (by tabs the indentation rule of
 	/// parse_list_with_separators takes them); Ruby's `def f(n) … end` is read by its end
 	fn with_definition_block(&mut self, definition: Node) -> Node {
@@ -615,6 +641,32 @@ fn with_trailing_block(assignment: Node, block: Node) -> Node {
 			op,
 			Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)),
 		),
+		other => other,
+	}
+}
+
+/// `found = [[1, 2]] find [1, x]` is `found = ([[1, 2]] find [1, x])`, as after a list variable: the value is a list
+/// literal and a walk word follows, or it already took one and this is its argument
+fn with_applied_word(assignment: Node, item: Node) -> Node {
+	match assignment {
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_applied_word(*node, item)),
+			data,
+		},
+		Node::Key(target, op, value) => {
+			let applied = match *value {
+				Node::List(mut items, Bracket::None, Separator::Space) => {
+					items.push(item);
+					items
+				}
+				value => vec![value, item],
+			};
+			Node::Key(
+				target,
+				op,
+				Box::new(Node::List(applied, Bracket::None, Separator::Space)),
+			)
+		}
 		other => other,
 	}
 }

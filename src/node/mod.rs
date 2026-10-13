@@ -561,8 +561,18 @@ impl Node {
 	/// Whether one of `words` occurs as a symbol anywhere in the tree: a pass about these words has nothing to do
 	/// without one, and can skip working out the program's functions
 	pub fn mentions_any(&self, words: &[&str]) -> bool {
+		self.mentions_where(|name| words.contains(&name))
+	}
+
+	/// Whether the symbol `word` occurs anywhere in the tree (as `visit` walks it: class code, no texts)
+	pub fn mentions(&self, word: &str) -> bool {
+		self.mentions_where(|name| name == word)
+	}
+
+	/// Whether a symbol the predicate holds for occurs anywhere in the tree
+	pub fn mentions_where(&self, wanted: impl Fn(&str) -> bool) -> bool {
 		let mut found = false;
-		self.visit(&mut |node| found |= matches!(node, Symbol(name) if words.contains(&name.as_str())));
+		self.visit(&mut |node| found |= matches!(node, Symbol(name) if wanted(name)));
 		found
 	}
 
@@ -610,6 +620,27 @@ impl Node {
 			}
 			_ => None,
 		}
+	}
+
+	/// Where the Meta layers around this node say it was written: line and column (0 when unknown) and the comment
+	/// before it, or None when they say neither (card data-meta: `n.line`, `n.column`, `n.comment`)
+	pub fn written_at(&self) -> Option<(i64, i64, Option<String>)> {
+		let (mut position, mut comment) = (None, None);
+		let mut layer = self;
+		while let Meta { node: inner, data } = layer {
+			position = position.or_else(|| layer.get_lineinfo());
+			if let Key(word, _, text) = data.as_ref() {
+				if word.is_symbol("comment") {
+					comment = comment.or_else(|| text.text_value());
+				}
+			}
+			layer = inner;
+		}
+		if position.is_none() && comment.is_none() {
+			return None;
+		}
+		let (line, column) = position.map_or((0, 0), |at| (at.line_nr as i64, at.column as i64));
+		Some((line, column, comment))
 	}
 
 	// member functions taking self
