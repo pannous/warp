@@ -159,6 +159,10 @@ Left (each changes behaviour or needs care):
   probes/cleanup/fold_rewrite_tails.py: the generic Meta arm and `other => other`, with Key and List each either
   generic (folded) or taken by an unguarded arm of their own. The ~20 left differ: no List or Key arm at all (folding
   would make them recurse), `?` inside (folding.rs), a Meta arm doing more than recursing — each a case-by-case look.
+  Done (2026-10-13): 8 more folded by hand (real.rs, interpolation.rs, normalize.rs as_written, user_functions.rs
+  rename_nested_calls; and a Meta arm in front of `other.map_children` with the same rewrite, which is map_children's
+  own Meta arm: time.rs, comprehensions.rs, generator_consumers.rs, atoms.rs). The ~45 Meta arms left belong to
+  walks down one path (the statement under its comments, the leftmost operand), not to rewrites of every child.
 - (cleanup-statements-of) statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms

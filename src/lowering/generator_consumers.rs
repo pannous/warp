@@ -174,10 +174,6 @@ impl Consumers<'_> {
 				});
 				Node::List(items.collect(), bracket, separator)
 			}
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.hoisted(*node)),
-				data,
-			},
 			other => other.map_children(|child| self.hoisted(child)),
 		}
 	}

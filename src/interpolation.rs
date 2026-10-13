@@ -7,6 +7,7 @@
 //! Every other template becomes text building here: `"a \(x) b"` → `"a " + text_form(x) + " b"`.
 
 use crate::injection::{parts_with, Part};
+use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::text_builtins::TEXT_FORM;
@@ -78,18 +79,12 @@ pub fn lower(node: Node) -> Node {
 			Node::Text(template) => interpolated(template),
 			_ => *node,
 		},
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower(*node)),
-			data,
-		},
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		Node::Type { name, body } => Node::Type {
 			name,
 			body: Box::new(lower(*body)),
 		},
 		Node::Error(inner) => Node::Error(Box::new(lower(*inner))),
-		other => other,
+		other => children_rewritten(other, lower),
 	}
 }
 

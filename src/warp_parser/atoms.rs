@@ -1766,10 +1766,6 @@ fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
 fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node {
 	match head {
 		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => *name,
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(untyped_parameters(*node, is_parameter)),
-			data,
-		},
 		other => other.map_children(|child| untyped_parameters(child, is_parameter)),
 	}
 }
