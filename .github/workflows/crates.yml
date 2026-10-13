@@ -15,6 +15,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_NET_OFFLINE: false # .cargo/config.toml builds offline (local registry); the runner has none
   GENERATION: v3
   CRATES: strsim regex semver hex crc32fast slug urlencoding unicode-segmentation base64 md5 adler humantime
   WARP_BUILD_CRATES: 1
