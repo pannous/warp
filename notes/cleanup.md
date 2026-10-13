@@ -113,12 +113,21 @@ Left (bigger, needs care):
   i32 here), so it needs its own card and tests of both tables first. tests/ffi pins ffi_parser's public API.
 - (cleanup-const-evaluators) real.rs and time.rs are two small constant evaluators with their own Value types and the same Assign/Define arm;
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
+  Closed as not worth doing (2026-10-13): what they share is the `name = value` arm (4 lines) and the literals; a
+  generic skeleton (a trait over Value, error and the unknown-name case) costs more than that, and each Assign arm
+  also does its own thing (real.rs a declared `x: real`, time.rs getters `t := now`).
 - src/extensions.rs is hard-linked with ~/dev/script/rust/extensions.rs (src/extensions.rs.hardlink is the
   hardlink-guard's marker): edit it only knowing it changes that file too.
 - (cleanup-gc-object) Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
-- (cleanup-ffi-f32) ffi/link.rs: the generic wrapper could take most typed signatures if it passed f32 arguments right (it passes
-  f64s), which needs FFI tests for each signature first.
+  Closed as not worth doing (2026-10-13): they read different things. wasm_reader's is a Node view over a Val that may
+  be null (`value()` of the last cell) with kind/tag/text; gc_traits' is a typed reader of a non-null struct (field
+  names, FromVal/ToVal, set_field). Wrapping would share only the store and the field read (~10 lines) and give the
+  Node view a null case of its own.
+- done (cleanup-ffi-f32): ffi/link.rs has one wrapper for every C function of numbers and texts; the 21 typed
+  signatures (`link_typed!`, NativeArgument/NativeResult, the signature keys) are gone, since card ffi-mixed passes a
+  float in the low half of its register. tests/ffi/test_ffi_signatures.rs calls each signature but raylib's
+  window-only ones (InitWindow, DrawCircle, DrawRectangle, DrawText); a C bool result is read from its low byte.
 - (cleanup-html-escape) markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.
 
 ## src/lowering/ (card cleanup-lowering, session warp-class)
@@ -157,6 +166,10 @@ Left (each changes behaviour or needs care):
   probes/cleanup/fold_rewrite_tails.py: the generic Meta arm and `other => other`, with Key and List each either
   generic (folded) or taken by an unguarded arm of their own. The ~20 left differ: no List or Key arm at all (folding
   would make them recurse), `?` inside (folding.rs), a Meta arm doing more than recursing — each a case-by-case look.
+  Done (2026-10-13): 8 more folded by hand (real.rs, interpolation.rs, normalize.rs as_written, user_functions.rs
+  rename_nested_calls; and a Meta arm in front of `other.map_children` with the same rewrite, which is map_children's
+  own Meta arm: time.rs, comprehensions.rs, generator_consumers.rs, atoms.rs). The ~45 Meta arms left belong to
+  walks down one path (the statement under its comments, the leftmost operand), not to rewrites of every child.
 - (cleanup-statements-of) statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms
@@ -199,6 +212,9 @@ Left:
 - (cleanup-emitter-loops) ~70 other hand-written `Block, Loop, <exit test>, BrIf(1), …, Br(0), End, End` loops: counters, byte walks and
   cell walks whose step differs from emit_cell_walk (RefAsNonNull before the rest field, a position bump after it,
   or the loop opened and closed by two closures as in library_ops.rs join and slice). A general
-  `loop_until(f, exit, |f| body)` would save ~1 line per loop; each conversion checked with same_wasm.sh
+  `loop_until(f, exit, |f| body)` would save ~1 line per loop; each conversion checked with same_wasm.sh.
+  Closed as not worth doing (2026-10-13): most of the ~90 loops sit inside one flat instruction slice, often with an
+  inner loop or an exit two levels out (`BrIf(2)`, text_grapheme_back); a closure helper cuts each slice into before,
+  exit, body and after pieces, which costs as many lines as the Block/Loop/Br/End lines it saves and adds nesting
 - (cleanup-saved-state) user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
   computing the new values: one saved-state struct would halve it, but the order of the computations matters

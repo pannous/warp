@@ -231,10 +231,6 @@ fn fold_constants(node: Node) -> Node {
 			let number = |n: i64| Node::Number(Number::Int(n));
 			crate::lowering::nodes::call(TIME_IN_ZONE, vec![fold_constants(time), number(zone), number(choice)])
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(fold_constants(*node)),
-			data,
-		},
 		other => other.map_children(fold_constants),
 	}
 }

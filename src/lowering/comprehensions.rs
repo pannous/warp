@@ -159,10 +159,6 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 		}
 		// `it.age`, `name.reverse()`: what follows a dot is no variable
 		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(fields_of_it(*left, fields, variables)), Op::Dot, right),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(fields_of_it(*node, fields, variables)),
-			data,
-		},
 		other => other.map_children(|child| fields_of_it(child, fields, variables)),
 	}
 }

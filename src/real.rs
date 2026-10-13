@@ -152,16 +152,7 @@ fn with_real_type_arguments(node: Node, real_variables: &HashMap<String, Node>) 
 				separator,
 			)
 		}
-		Node::Key(left, op, right) => Node::Key(
-			Box::new(with_real_type_arguments(*left, real_variables)),
-			op,
-			Box::new(with_real_type_arguments(*right, real_variables)),
-		),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_real_type_arguments(*node, real_variables)),
-			data,
-		},
-		other => other,
+		other => children_rewritten(other, |child| with_real_type_arguments(child, real_variables)),
 	}
 }
 
