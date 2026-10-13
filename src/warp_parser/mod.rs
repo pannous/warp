@@ -561,8 +561,9 @@ const AND_KEYWORD: &str = "and";
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 /// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
 const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
-/// Words a condition follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm)
-const CLAUSE_WORDS: [&str; 1] = ["where"];
+/// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
+/// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
+const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
 /// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
 const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
 pub const ASSERT_MARKER: &str = "assert·else";
