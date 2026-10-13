@@ -49,3 +49,23 @@ fn a_page_binds_each_text_hole() {
 	let lowered = warp::pipeline::lower(code).expect("lowers").serialize();
 	assert!(lowered.contains("(page·hole·0·text·1):="), "{lowered}");
 }
+
+// card web-fine-rest: the root's own computed text is a text hole too, its other holes stay (the root itself none)
+#[test]
+fn the_roots_own_text_is_a_text_hole() {
+	let markup = "div{ h1{ \"Counter\" } \"clicked \" + n p{ m } }";
+	assert_eq!(
+		text_hole_places(markup),
+		vec![(vec![], 1, "\"clicked \"+n".to_string())]
+	);
+	assert_eq!(
+		holes(&parse(markup))
+			.into_iter()
+			.map(|(path, _)| path)
+			.collect::<Vec<_>>(),
+		vec![vec![1]]
+	);
+	let code = "n = 0\ndiv{ button{ on click { n += 1 } \"add\" } \"clicked \" + n }";
+	let lowered = warp::pipeline::lower(code).expect("lowers").serialize();
+	assert!(lowered.contains("(page·hole·text·1):="), "{lowered}");
+}

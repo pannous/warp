@@ -372,6 +372,39 @@ function renderedHtml(exports, value) {
 	}
 }
 
+const PAGE_HOLE = "page·hole"; // page·hole·<path>: an element of the shown markup holding computed parts (card web-fine-holes)
+const PAGE_HOLES = "page·holes"; // a page with components renders once, its holes are parts of that rendering (card web-fine-components)
+const PATH_JOINER = "·";
+const TEXT_HOLE = "text"; // page·hole·<path>·text·<n>: the text after n children of that element (card web-fine-text-nodes)
+
+// the holes of a page's markup (src/lowering/event_signals.rs hole_name): each binding's name and where it shows, its
+// element's path from the root and, for a text, the element's children before it
+function pageHoles(exports) {
+	return Object.keys(exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER)).map(name => {
+		const [element, after] = name.split(PATH_JOINER + TEXT_HOLE + PATH_JOINER);
+		const path = element.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number);
+		return { name, path, after: after === undefined ? undefined : Number(after) };
+	});
+}
+
+// a built site's holes anew after a handler (card web-fine-rest, as worker.js showHoles for the playground): markup.js
+// showPatch shows each; undefined when it has none or one fails, so the whole page·html shows (and its failure)
+function holePatches(exports) {
+	const holes = pageHoles(exports);
+	if (!holes.length) return undefined;
+	try {
+		exports[PAGE_HOLES]?.();
+		const patches = holes.map(({ name, path, after }) => {
+			const value = exports[name]();
+			if (after !== undefined) return { path, after, text: String(plainOfTree(readNode(exports, value))) };
+			return { path, html: renderedHtml(exports, value) };
+		});
+		return patches.every(patch => patch.text !== undefined || patch.html !== undefined) ? patches : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 // `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
 // main returns or `exit(code)` ends it, never after a failure
 function withExitHandler(holder, exports, call) {

@@ -121,6 +121,8 @@ mod test_site;
 mod test_site_animation; // card site-build
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_failure; // the dev overlay's message
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view
+mod test_site_holes;
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
@@ -151,4 +153,4 @@ mod test_webgpu;
 mod test_webgpu_ints;
 mod test_webgpu_named; // card web-apis-rest
 #[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
-mod test_webview; // card read-chron // card key-app
+mod test_webview; // card read-chron // card key-app // card web-fine-rest
