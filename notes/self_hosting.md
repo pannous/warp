@@ -31,8 +31,9 @@ Gaps (each a card below):
   ~300 a step, a far index ~41 a character (tests/text/test_ascii_index_costs.rs).
 - ~~Gaps found by the self-parser~~ fixed: a class literal field named like an element is no markup (class-literal),
   an untyped `code`/`block` parameter is a block only when the body runs it (parameter-named). probes/self_gaps/.
-  Open: character-text, `["x", b]` of a text b reads back `['x' " "]`; promoting "x" to a text changes the pinned
-  `['a' "bb" "ccc"]` of sort tests, so it waits for a user decision.
+  character-text (P126 follow-up): a character inside a list serializes as `"x"`, so `["x", b]` of a text b reads
+  back `["x" " "]` like the list written out; values stay characters (one-letter "x" parses as one), only the printing
+  changed (Node::item_text, lib/compiler/serializer.warp item_text).
 - ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/node_api.rs): `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still
