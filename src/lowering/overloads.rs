@@ -14,11 +14,14 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, witness_operation, InstanceTypes, Shape};
 use crate::type_kinds::{Kind, TypeRegistry};
+use crate::words::ANY_TYPE;
 use std::collections::{HashMap, HashSet};
 
 const TOPIC: &str = "return-type";
 /// `agent_as`: the companion of `agent` that takes the expected result type as its last argument
 const COMPANION_SUFFIX: &str = "_as";
+/// How well a value fits `any`: worse than every typed fit, so the untyped variant is the fallback
+const ANY_FIT: u32 = 100;
 
 /// The function f whose companion f_as is `name`
 pub fn companion_of(name: &str) -> Option<&str> {
@@ -456,8 +459,14 @@ fn lower_parameter_overloads(node: Node) -> Node {
 		.filter_map(|(name, variants)| {
 			let variants: Vec<Vec<String>> = variants
 				.into_iter()
-				.map(|types| types.into_iter().collect::<Option<_>>())
-				.collect::<Option<_>>()?;
+				.map(|types| {
+					types
+						.into_iter()
+						.map(|type_name| type_name.unwrap_or(ANY_TYPE.to_string()))
+						.collect()
+				})
+				.collect();
+			let typed = variants.iter().flatten().any(|type_name| type_name != ANY_TYPE);
 			let distinct = variants
 				.iter()
 				.enumerate()
@@ -466,8 +475,8 @@ fn lower_parameter_overloads(node: Node) -> Node {
 			let builtin = variants
 				.iter()
 				.flatten()
-				.all(|type_name| type_word_kind(type_name).is_some());
-			(distinct && builtin).then_some((name, variants))
+				.all(|type_name| type_name == ANY_TYPE || type_word_kind(type_name).is_some());
+			(distinct && builtin && typed).then_some((name, variants))
 		})
 		.collect();
 	if overloaded.is_empty() {
@@ -719,6 +728,9 @@ fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> 
 /// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float or any
 /// number to the wider `number`
 fn fit(kind: Kind, type_name: &str) -> Option<u32> {
+	if type_name == ANY_TYPE {
+		return Some(ANY_FIT);
+	}
 	if type_name == "number" {
 		return matches!(kind, Kind::Int | Kind::Float).then_some(1);
 	}

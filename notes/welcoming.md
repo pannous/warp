@@ -126,3 +126,13 @@ Control flow as other languages write it (samples/control_flow.warp, tests/contr
   Open (asked): number words (`one plus two`, then `three times four` multiplies like `3 times 4`).
 - a comparison without its left side is a relational pattern in a match arm (`> 100 => "big"`, C#), elsewhere the
   error "`> 100` compares nothing".
+
+## Warning levels (decisions warning-levels, hints-are-warnings, 2026-10-13; worker defaults, undoable)
+Shown from hint; `--no-hints` / `WARP_HINTS=0` show from weak; `--warnings=<level>` and the playground's "show … and
+up" select set it. `use strict` / `--strict` fail from normal, `--strict=<level>` from that level; Rust's
+`WarningMode::Error` fails on every warning, weak too. Hints never fail. HintMode::Once dedups every level.
+- Severe: a key name that names nothing, an event nothing emits, a signal that never fires, a task that never
+  happens, a variable updated in a parallel loop.
+- Weak: @parallel running in sequence, a GPU map running on the CPU, a std module shadowed, an event from the
+  playground page, run-time blocks needing the host.
+- Every other warning is normal; the CLI labels weak and severe ones `warning (weak):`.

@@ -27,6 +27,11 @@ const STATE_SECONDS = 10; // then the page's state, asked after such a timeout
 const QUIT_SECONDS = 30;
 const REPORTED_LEVELS = new Set(["error", "warn", "warning", "assert"]);
 const FAILED_STATUS = 400;
+// api.github.com answers 60 unauthenticated requests an hour per address, which a shared CI runner's address has often
+// used up (samples/live_region, card samples-fetches): with GITHUB_TOKEN set, its requests carry the token, added here
+// so the page never sees it
+const GITHUB_API = "api.github.com";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const freePort = () => new Promise(found => {
 	const server = createServer().listen(0, "127.0.0.1", () => {
@@ -59,6 +64,10 @@ const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages
 const events = {
 	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? entry.stackTrace?.callFrames?.[0]?.url : ""),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
+	"network.beforeRequestSent": ({ isBlocked, request }) => isBlocked && send("network.continueRequest", {
+		request: request.request,
+		headers: [...request.headers.filter(({ name }) => name.toLowerCase() !== "authorization"), { name: "Authorization", value: { type: "string", value: `Bearer ${GITHUB_TOKEN}` } }],
+	}),
 };
 socket.onclose = () => {
 	console.error(`firefox_driver.mjs: Firefox closed its WebDriver BiDi connection; ${pending.size} commands unanswered`);
@@ -79,6 +88,7 @@ const send = (method, params = {}) => new Promise(answered => {
 
 await send("session.new", { capabilities: {} });
 await send("session.subscribe", { events: Object.keys(events) });
+if (GITHUB_TOKEN) await send("network.addIntercept", { phases: ["beforeRequestSent"], urlPatterns: [{ type: "pattern", protocol: "https", hostname: GITHUB_API }] });
 const context = (await send("browsingContext.getTree", {})).result.contexts[0].context;
 
 // a BiDi remote value as plain JSON

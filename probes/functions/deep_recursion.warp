@@ -1,0 +1,3 @@
+# a million nested calls: the warp command gives wasm its 512 MB main stack (card deep-recursion)
+down(n) := if n == 0 then 0 else 1 + down(n - 1)
+down(1000000)

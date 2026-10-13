@@ -174,8 +174,8 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    parse-word, notes/parse_word.md). Backticks stay template text.
    code-holes done (switch.rs code_tests): `$a` binds the subtree, a repeated hole tests equality with the first, a key
    tests `is key` and its op, a list `is list` and its count; `$f($x)` is flattened like a quoted call `g x`. A match
-   in a function copies its subject: user_functions.rs now lets a parameter whose copy is kind-tested take any value
-   (else indexing the copy typed the parameter list, card alias-indexed-param). Tests tests/control/test_code_holes.rs,
-   probe probes/matching/code_holes.warp.
+   in a function copies its subject: indexing the copy guesses the parameter a list, and widen_parameters
+   (user_functions.rs) drops that guess when only keys (code) are passed (card alias-indexed-param). Tests
+   tests/control/test_code_holes.rs, probe probes/matching/code_holes.warp.
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).
