@@ -286,6 +286,12 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
      shader; the program's numbers it reads become `values` (uniforms, as for text shaders).
   3. `@gpu` on a function: every call from a heavy map or a paint function compiles it, and a function outside the
      subset is a warning that names the construct (an error under strict).
+- **Precision rule** (user via warp-supervisor, 2026-10-13): f64 is the default except in fast mode (card
+  switch-rebinds: `use fast` / `--fast`). An implicit choice of the GPU never turns f64 math into f32 silently. A
+  function goes to the GPU by itself only when its numbers are already f32, or in fast mode; `@gpu` and paint ask for
+  the GPU outright. Otherwise it runs on the CPU in f64, and the hint names `@gpu`. This conflicts with P240 for maps,
+  which switch heavy f64 maps to the GPU by themselves today; the question is with the Interviewer, and maps keep P240
+  until the user answers.
 - **Fallback.** As for maps:
   - not translatable: runs on the CPU as written, warned once
   - no adapter: the CPU, silently
