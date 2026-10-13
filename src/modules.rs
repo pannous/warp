@@ -368,7 +368,19 @@ fn called_words(program: &Node, is_module_name: &dyn Fn(&Node) -> bool) -> HashS
 	names
 }
 
+/// In a function, its parameters and variables are no calls of a module's words (a local `items` beside map.warp's
+/// items, lib/sound.warp)
 fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, names: &mut HashSet<String>) {
+	if let Some((head, body, _)) = crate::type_tests::function_definition(node) {
+		let mut called_inside = HashSet::new();
+		collect_called_words(&body, is_module_name, &mut called_inside);
+		let mut locals: HashSet<String> = crate::lowering::memoization::head_parameters(&head)
+			.into_iter()
+			.collect();
+		crate::library_words::collect_assigned_names(&body, &mut locals);
+		names.extend(called_inside.into_iter().filter(|name| !locals.contains(name)));
+		return;
+	}
 	let called = |call: &[Node]| call.first().and_then(Node::symbol_name).map(String::from);
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
