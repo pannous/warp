@@ -40,9 +40,9 @@ def separator(p, closer, newline) {
 	}
 	if c == ';' {
 		p.at = p.at + 1
-		return only_blanks_before_newline(p) ? "\n" : ";"
+		return if only_blanks_before_newline(p) then "\n" else ";"
 	}
-	newline ? "\n" : " "
+	if newline then "\n" else " "
 }
 
 def only_blanks_before_newline(p) {
@@ -64,23 +64,23 @@ def precedence(separator) {
 // [[item, separator], …] as one list: the loosest separator splits first, the groups between split by the tighter ones
 // Rust twin: lists.rs group_by_separators
 def grouped(pairs, bracket) {
-	if pairs.length == 0 { return bracket == "{" ? ["list", "{", ""] : ø }
-	if pairs.length == 1 and bracket == "" { return pairs[0][0] }
+	if pairs.length == 0 { return if bracket == "{" then ["list", "{", ""] else ø }
+	if pairs.length == 1 and bracket == "" { return pairs#1#1 }
 	loosest = -1
 	for pair in pairs {
-		level = precedence(pair[1])
+		level = precedence(pair#2)
 		if level < 255 and level > loosest { loosest = level }
 	}
-	if loosest < 0 { return listed(bracket, " ", [pair[0] for pair in pairs]) }
+	if loosest < 0 { return listed(bracket, " ", [pair#1 for pair in pairs]) }
 	split = ""
 	for pair in pairs {
-		if split == "" and precedence(pair[1]) == loosest { split = pair[1] }
+		if split == "" and precedence(pair#2) == loosest { split = pair#2 }
 	}
 	groups = []
 	group = []
 	for pair in pairs {
-		if precedence(pair[1]) == loosest {
-			group += [[pair[0], ""]]
+		if precedence(pair#2) == loosest {
+			group += [[pair#1, ""]]
 			groups += [group]
 			group = []
 		} else {
@@ -88,8 +88,8 @@ def grouped(pairs, bracket) {
 		}
 	}
 	if group.length > 0 { groups += [group] }
-	nodes = [group.length == 1 and group[0][1] == "" ? group[0][0] : grouped(group, "") for group in groups]
-	nodes.length == 1 and bracket == "" ? nodes[0] : listed(bracket, split, nodes)
+	nodes = [if group.length == 1 and group#1#2 == "" then group#1#1 else grouped(group, "") for group in groups]
+	if nodes.length == 1 and bracket == "" then nodes#1 else listed(bracket, split, nodes)
 }
 
 def listed(bracket, separator, nodes) := ["list", bracket, separator] + nodes
@@ -127,10 +127,10 @@ def expression(p, min_power) {
 		op = operator_at(p)
 		if op == "" { break }
 		powers = binding_powers(op)
-		if powers[0] < min_power { break }
+		if powers#1 < min_power { break }
 		p.at = p.at + op.length
 		skip_blanks(p)
-		left = ["key", op, left, expression(p, powers[1])]
+		left = ["key", op, left, expression(p, powers#2)]
 	}
 	left
 }
@@ -178,7 +178,7 @@ def atom(p) {
 	}
 	if c == '(' or c == '[' or c == '{' {
 		p.at = p.at + 1
-		return items(p, c == '(' ? ')' : c == '[' ? ']' : '}', c == '(' ? "(" : c == '[' ? "[" : "{")
+		return items(p, closing_of(c), "" + c)
 	}
 	p.at = p.at + 1
 	ø
@@ -191,5 +191,5 @@ def quoted(p) {
 	end = text_end(p.code, p.at + 1, quote, p.n)
 	content = p.code[p.at + 1 .. end - 1]
 	p.at = end
-	[content.length == 1 ? "char" : "text", content]
+	[if content.length == 1 then "char" else "text", content]
 }
