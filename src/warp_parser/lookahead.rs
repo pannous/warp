@@ -181,7 +181,7 @@ impl WarpParser {
 		if self.matches_keyword("then") {
 			return Some((Op::Then, 4));
 		}
-		if self.matches_keyword("else") {
+		if self.matches_keyword("else") && !self.else_arm_key() {
 			return Some((Op::Else, 4));
 		}
 
