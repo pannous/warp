@@ -144,13 +144,29 @@ pub fn differences(
 	for paths in paths.chunks(SOURCES_PER_PROGRAM) {
 		for (path, value) in paths.iter().zip(warp_values(part, word, paths)) {
 			let text = std::fs::read_to_string(path).unwrap();
-			let (warp_text, rust_text) = (value.serialize(), rust_twin(&text).serialize());
+			let (warp_text, rust_text) = (
+				as_compared(value).serialize(),
+				as_compared(rust_twin(&text)).serialize(),
+			);
 			if warp_text != rust_text {
 				differing.push((path.display().to_string(), warp_text, rust_text));
 			}
 		}
 	}
 	differing
+}
+
+/// A value with each one-character text as its character: warp compares `"a" == 'a'`, holds a literal `"a"` as the
+/// character and a one-character text passed on or cut at run time as a text (card character-text)
+fn as_compared(value: Node) -> Node {
+	match value {
+		Node::Text(text) if text.chars().count() == 1 => Node::Char(text.chars().next().expect("one character")),
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(as_compared).collect(), bracket, separator)
+		}
+		Node::Key(left, op, right) => Node::Key(Box::new(as_compared(*left)), op, Box::new(as_compared(*right))),
+		other => other,
+	}
 }
 
 /// `word(read(path))` for the sources, in one program
