@@ -2,6 +2,7 @@
 //! lib/compiler/ runs over every sample and probe next to its Rust twin, and the first file where the two differ fails
 //! the test with both texts around the first difference.
 use std::path::{Path, PathBuf};
+use warp::warp_parser::parse;
 use warp::wasm_emitter::eval;
 use warp::{Bracket, Node, Number, Separator};
 
@@ -70,7 +71,7 @@ pub fn node_view(node: &Node) -> Node {
 		Node::Data(data) => tagged(
 			"data",
 			[Node::text(
-				&warp::units::describe(data).unwrap_or_else(|| format!("{data:?}")),
+				&warp::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")),
 			)],
 		),
 		Node::Meta { node: inner, .. } => meta_view(node, inner),
@@ -115,7 +116,23 @@ pub fn differential(part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
 
 /// `differential` over the given sources only
 pub fn differential_on(paths: &[PathBuf], part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
-	let differing = differences(paths, part, word, rust_twin);
+	report(word, &differences(paths, part, word, rust_twin));
+}
+
+/// `word(view)` of lib/compiler/<part>.warp for the node view of every parsed source, against the Rust parse of the
+/// source serialized: the serializer twin
+pub fn view_differential(part: &str, word: &str) {
+	let view_of_source =
+		|_: &Path, text: &str| format!("json({})", warp_text_literal(&view_json(&node_view(&parse(text)))));
+	let serialized = |text: &str| Node::text(&parse(text).serialize());
+	report(
+		word,
+		&differences_with(&sources(), part, word, view_of_source, serialized),
+	);
+}
+
+/// Fails with the first difference and the names of the next sources that differ
+fn report(word: &str, differing: &[(String, String, String)]) {
 	let Some((path, warp_text, rust_text)) = differing.first() else {
 		return;
 	};
@@ -140,14 +157,31 @@ pub fn differences(
 	word: &str,
 	rust_twin: impl Fn(&str) -> Node,
 ) -> Vec<(String, String, String)> {
+	let read_source = |path: &Path, _: &str| format!("read(\"{}\")", path.display());
+	differences_with(paths, part, word, read_source, rust_twin)
+}
+
+/// The sources where `word(argument)` differs from the Rust twin, the argument written from the source's path and text
+fn differences_with(
+	paths: &[PathBuf],
+	part: &str,
+	word: &str,
+	argument: impl Fn(&Path, &str) -> String,
+	rust_twin: impl Fn(&str) -> Node,
+) -> Vec<(String, String, String)> {
 	let mut differing = vec![];
 	for paths in paths.chunks(SOURCES_PER_PROGRAM) {
-		for (path, value) in paths.iter().zip(warp_values(part, word, paths)) {
-			let text = std::fs::read_to_string(path).unwrap();
-			let (warp_text, rust_text) = (
-				as_compared(value).serialize(),
-				as_compared(rust_twin(&text)).serialize(),
-			);
+		let texts: Vec<String> = paths
+			.iter()
+			.map(|path| std::fs::read_to_string(path).unwrap())
+			.collect();
+		let arguments: Vec<String> = paths
+			.iter()
+			.zip(&texts)
+			.map(|(path, text)| argument(path, text))
+			.collect();
+		for ((path, text), value) in paths.iter().zip(&texts).zip(warp_values(part, word, &arguments)) {
+			let (warp_text, rust_text) = (as_compared(value).serialize(), as_compared(rust_twin(text)).serialize());
 			if warp_text != rust_text {
 				differing.push((path.display().to_string(), warp_text, rust_text));
 			}
@@ -169,14 +203,14 @@ fn as_compared(value: Node) -> Node {
 	}
 }
 
-/// `word(read(path))` for the sources, in one program; when it fails, each half alone, down to a single source that
+/// `word(argument)` for the arguments, in one program; when it fails, each half alone, down to a single argument that
 /// gives the warp error as its value (so it differs from the Rust twin instead of hiding the other sources)
-fn warp_values(part: &str, word: &str, paths: &[PathBuf]) -> Vec<Node> {
-	match warp_values_at_once(part, word, paths) {
+fn warp_values(part: &str, word: &str, arguments: &[String]) -> Vec<Node> {
+	match warp_values_at_once(part, word, arguments) {
 		Ok(values) => values,
-		Err(failure) if paths.len() == 1 => vec![Node::text(&format!("warp failed: {failure}"))],
+		Err(failure) if arguments.len() == 1 => vec![Node::text(&format!("warp failed: {failure}"))],
 		Err(_) => {
-			let (first, second) = paths.split_at(paths.len() / 2);
+			let (first, second) = arguments.split_at(arguments.len() / 2);
 			let mut values = warp_values(part, word, first);
 			values.extend(warp_values(part, word, second));
 			values
@@ -184,17 +218,54 @@ fn warp_values(part: &str, word: &str, paths: &[PathBuf]) -> Vec<Node> {
 	}
 }
 
-fn warp_values_at_once(part: &str, word: &str, paths: &[PathBuf]) -> Result<Vec<Node>, String> {
-	let quoted: Vec<String> = paths.iter().map(|path| format!("\"{}\"", path.display())).collect();
-	let program = format!(
-		"use \"{COMPILER_FOLDER}/{part}.warp\"\n[{word}(read(path)) for path in [{}]]",
-		quoted.join(", ")
-	);
+fn warp_values_at_once(part: &str, word: &str, arguments: &[String]) -> Result<Vec<Node>, String> {
+	let calls: Vec<String> = arguments.iter().map(|argument| format!("{word}({argument})")).collect();
+	let program = format!("use \"{COMPILER_FOLDER}/{part}.warp\"\n[{}]", calls.join(",\n"));
 	let result = eval(&program);
 	match result.drop_meta() {
-		Node::List(values, ..) if values.len() == paths.len() => Ok(values.clone()),
+		Node::List(values, ..) if values.len() == arguments.len() => Ok(values.clone()),
 		other => Err(other.serialize()),
 	}
+}
+
+/// A node view as JSON (ø is null): the warp twin reads it with `json(…)`, data the host parses, where the same view
+/// as a warp literal is code to compile (a 100 KB chunk of sources took 2.4 GB in a debug build)
+pub fn view_json(view: &Node) -> String {
+	match view {
+		Node::Text(text) => json_text(text),
+		Node::Char(character) => json_text(&character.to_string()),
+		Node::List(items, ..) => format!("[{}]", items.iter().map(view_json).collect::<Vec<_>>().join(", ")),
+		Node::Empty => "null".into(),
+		Node::True => "true".into(),
+		Node::False => "false".into(),
+		number => number.serialize(),
+	}
+}
+
+fn json_text(text: &str) -> String {
+	quoted(text, |character| {
+		character.is_control().then(|| format!("\\u{:04x}", character as u32))
+	})
+}
+
+/// A text as a warp text literal: `${…}` would be a hole
+fn warp_text_literal(text: &str) -> String {
+	quoted(text, |character| (character == '$').then(|| "\\$".into()))
+}
+
+/// The text in double quotes, its quotes, backslashes, newlines, tabs and returns escaped, other characters by `extra`
+fn quoted(text: &str, extra: impl Fn(char) -> Option<String>) -> String {
+	let escaped: String = text
+		.chars()
+		.map(|character| match character {
+			'"' | '\\' => format!("\\{character}"),
+			'\n' => "\\n".into(),
+			'\t' => "\\t".into(),
+			'\r' => "\\r".into(),
+			other => extra(other).unwrap_or_else(|| other.to_string()),
+		})
+		.collect();
+	format!("\"{escaped}\"")
 }
 
 /// The text around its first character that differs from the other text

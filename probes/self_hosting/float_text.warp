@@ -1,0 +1,5 @@
+use "lib/compiler/serializer.warp"
+print(number_text(2.7557313707070068e-6))
+print(number_text(-1.5e-3))
+print(number_text(-2e-7))
+print(number_text(3.25))

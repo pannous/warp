@@ -150,9 +150,4 @@ impl ImportManager {
 	pub fn import_count(&self) -> u32 {
 		self.next_func_idx
 	}
-
-	/// Check if imports section is empty
-	pub fn is_empty(&self) -> bool {
-		self.next_func_idx == 0
-	}
 }

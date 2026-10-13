@@ -1,0 +1,6 @@
+// card raylib-float: a float result of a C library beyond libc and libm (raylib) is a float in arithmetic
+// prints: yes, then 1.5
+import GetTime from 'raylib'
+import GetFrameTime from 'raylib'
+print GetTime() >= 0.0
+print GetFrameTime() + 1.5

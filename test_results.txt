@@ -15,6 +15,7 @@ PASSED:
   ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
   ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
+  ✓ control::test_async_ports::await_any_gives_the_first_to_finish
   ✓ control::test_async_ports::await_first_is_the_first_tasks_result
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
@@ -2805,6 +2806,8 @@ PASSED:
   ✓ parser::test_entity_table::latex_names_of_uniscript_1_0_4
   ✓ parser::test_entity_table::nicknames_of_uniscript_1_0_7
   ✓ parser::test_entity_table::the_entity_table_is_the_pinned_uniscript_index
+  ✓ parser::test_escaped_quote_slashes::entities_after_an_escaped_quote_stay_text
+  ✓ parser::test_escaped_quote_slashes::slashes_after_an_escaped_quote_are_text
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
   ✓ parser::test_glued_method_block::a_glued_block_starting_an_item_stays_data
   ✓ parser::test_glued_pair_value::a_glued_pair_ends_at_its_word
@@ -2927,6 +2930,8 @@ PASSED:
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
   ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
+  ✓ parser::test_self_serializer::a_view_is_json
+  ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -3190,7 +3195,6 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_nonzero_visualizer_child_report_names_its_exit_status
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
-  ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
@@ -3369,6 +3373,8 @@ PASSED:
   ✓ text::test_interpolation::single_quotes_stay_literal
   ✓ text::test_interpolation::swift_holes_interpolate_any_expression
   ✓ text::test_interpolation::the_normalizer_hints_the_swift_form
+  ✓ text::test_large_text_literals::a_text_literal_larger_than_a_page_fits
+  ✓ text::test_large_text_literals::text_literals_larger_than_a_page_together_fit
   ✓ text::test_library_unicode::reverse_works_on_text_by_code_points
   ✓ text::test_library_unicode::sort_orders_floats
   ✓ text::test_library_unicode::sort_orders_mixed_numbers
@@ -5093,7 +5099,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_async_ports::await_any_gives_the_first_to_finish
+  ✗ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
 
 SUMMARY:
-11 ignored, 5090 passed, 1 failed, 5091 total tested
+11 ignored, 5096 passed, 1 failed, 5097 total tested
