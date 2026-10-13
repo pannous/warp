@@ -339,9 +339,10 @@ impl<'a> Loader<'a> {
 	}
 
 	/// A registered package: fetched once, then its module `<name>.warp` if it has one; a package without is data.
-	/// A required version the default branch does not declare comes from the matching git tag. A program uses one
-	/// version of a package: a second `use` the loaded one satisfies brings nothing new, one asking for another version
-	/// is the error naming both (card use-version-twice).
+	/// A required version the default branch does not declare comes from the matching git tag. Its source, and what
+	/// it uses, gets no style hints: the user does not write it (card hints-fire). A program uses one version of a
+	/// package: a second `use` the loaded one satisfies brings nothing new, one asking for another version is the error
+	/// naming both (card use-version-twice).
 	pub(super) fn use_package(&mut self, name: &str, requirement: Option<&Requirement>) -> Result<Vec<Node>, Node> {
 		if let Some(loaded) = self.packages.get(name) {
 			return match (requirement, loaded) {
@@ -361,7 +362,7 @@ impl<'a> Loader<'a> {
 		let version = package_module(&directory, name).and_then(|path| module_version(&path));
 		self.packages.insert(name.to_string(), version);
 		match package_module(&directory, name) {
-			Some(path) => self.load(Import::Use, name, path),
+			Some(path) => crate::normalize::without_hints(|| self.load(Import::Use, name, path)),
 			None => Ok(vec![]),
 		}
 	}
