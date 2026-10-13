@@ -33,14 +33,19 @@ fn gather_nested_and_wait_group_forms() {
 	is!("bad() := [1]#5; try await go bad() else 0", 0);
 }
 
-// Promise.race, asyncio FIRST_COMPLETED: `await any [a, b]` is the result of the first task to finish
+// Promise.race, asyncio FIRST_COMPLETED: `await any [a, b]` is the result of the first task to finish.
+// slow() cannot finish before its gate opens, after the race: the order holds under any load, and an `await any` that
+// waited for every task would never end (card flaky-await-any, was 300 ms against 10 ms and a 250 ms bound)
 #[test]
 fn await_any_gives_the_first_to_finish() {
-	const RACERS: &str = "slow() := { sleep(300 ms); 10 }; quick() := { sleep(10 ms); 20 }; ";
-	is!(&format!("{RACERS}await any [go slow(), go quick()]"), 20);
+	const RACERS: &str = "gate = channel(); slow(g) := { g.receive(); 10 }; quick() := { sleep(10 ms); 20 }; ";
 	is!(
-		&format!("{RACERS}started = clock(); r = await any [go slow(), go quick()]; clock() - started < 250"),
-		true
+		&format!("{RACERS}r = await any [go slow(gate), go quick()]; gate.send(0); r"),
+		20
+	);
+	is!(
+		&format!("{RACERS}r = await any [go quick(), go slow(gate)]; gate.send(0); r"),
+		20
 	);
 }
 
