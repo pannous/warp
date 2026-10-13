@@ -433,9 +433,12 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		(WarningMode::Quiet, _) => Ok(()),
 		_ => {
+			// a step emitted twice (an if's condition) says its warning once
+			let said_before =
+				|warning: &Diagnostic| COMPILE_WARNINGS.with(|reported| reported.borrow().contains(warning));
 			let shown: Vec<Diagnostic> = warnings
 				.iter()
-				.filter(|warning| !warning.is_silenced())
+				.filter(|warning| !warning.is_silenced() && !said_before(warning))
 				.cloned()
 				.collect();
 			for warning in &shown {
