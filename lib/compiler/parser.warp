@@ -142,6 +142,10 @@ def continued(p, left, min_power) {
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
 			left = ["key", "#", left, one_based(index)]
+		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
+			p.at = p.at + 5
+			skip_spaces(p)
+			left = listed("", " ", [left, ["symbol", "times"], repeated(p)])
 		} else if floor_division_at(p).length > 0 {
 			written = floor_division_at(p)
 			powers = binding_powers("/")
@@ -173,6 +177,31 @@ def continued(p, left, min_power) {
 		}
 	}
 	left
+}
+
+// `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
+// Rust twin: suffixes.rs try_parse_control_suffix
+def times_binds(p, min_power) {
+	at = p.at + 5
+	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	c = peek(p.code, at, p.n)
+	value_follows = is_digit(c) or c == '"' or c == '\'' or is_name_start(c)
+	min_power <= TIMES_POWER or c == '[' or (value_follows and min_power <= 150)
+}
+
+TIMES_POWER = 50
+
+// What `n times` repeats: a block, `: body` as a block, a list or a value
+// Rust twin: suffixes.rs parse_times_loop
+def repeated(p) {
+	if is_at(p.code, p.at, ':', p.n) {
+		p.at = p.at + 1
+		skip_spaces(p)
+		body = expression(p, 0)
+		if is_block(body) { return body }
+		return listed("{", ";", [body])
+	}
+	atom(p)
 }
 
 // `7//2`, `x //= 2`, `7 div 2`: the floor division written at the parser's position, else ""; `x // note` is a comment

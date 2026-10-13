@@ -53,3 +53,6 @@ sqrt 16 + 1
 q = 7//2
 x //= 2
 r = 7 div 2
+3 times { a.push(true) }
+x = 100 times [0]
+n times: s += 2
