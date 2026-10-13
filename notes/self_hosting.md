@@ -78,7 +78,7 @@ number, yes, no or ø as itself, every other node a list tagged by its kind (["k
   prints is serialize again (Debug is serialize), so the twin needs no Rust-only text.
 - Found on the way, fixed in the language: an escaped quote in a text ended it for the `//` comment check
   (escaped-quote-slashes); text literals over 64 KiB trapped, the module's memory was one page whatever its texts
-  took (large-text-literals). `type(x) == "int"` is no while `type(x)` prints int (type-text-compare, open): the
+  took (large-text-literals). `type(x) == "int"` is no while `type(x)` prints int (type-text-compare: by decision type-equal, now with a hint toward `type(x) == int`): the
   twin uses `x is list`.
 - The entity pass (uniscript_entities::expand_entities) also ended a text at an escaped quote and turned `"\"\\:infinity"`
   into `"\∞`: text_or_comment_end now skips escapes (same card). A Data node without a unit description is written
