@@ -93,6 +93,11 @@ const CODEPOINT_TYPE: &str = "codepoint";
 const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
+	/// The word a list calls; a parameter named like a function or global is the parameter (`g(f, b) := [f, b]`)
+	pub(super) fn called_function<'a>(&self, items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+		called_word(items, bracket, separator).filter(|name| !self.scope.is_parameter(name))
+	}
+
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
 	/// A variable is not callable.
 	pub(super) fn resolves_call(&self, name: &str) -> bool {
@@ -176,7 +181,7 @@ impl WasmGcEmitter {
 		bracket: &Bracket,
 		separator: &Separator,
 	) -> bool {
-		let Some(fn_name) = called_word(items, bracket, separator) else {
+		let Some(fn_name) = self.called_function(items, bracket, separator) else {
 			return false;
 		};
 		// `(angle)` of a variable is its value

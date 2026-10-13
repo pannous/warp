@@ -321,7 +321,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// a call of a user or FFI function: `(f)` without arguments, `f(a, b…)`
-		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+		if let Some(fn_name) = self.called_function(items, bracket, separator) {
 			if self.ctx.user_functions.contains_key(fn_name) {
 				self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
 				return;
@@ -388,7 +388,7 @@ impl WasmGcEmitter {
 		if self.is_library_word_call(items, bracket, separator) {
 			return self.emit_node_as_f64(func, &Node::List(items.to_vec(), bracket.clone(), separator.clone()));
 		}
-		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+		if let Some(fn_name) = self.called_function(items, bracket, separator) {
 			if self.ctx.ffi_imports.contains_key(fn_name) {
 				self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
 				return;
