@@ -16,6 +16,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
+  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
