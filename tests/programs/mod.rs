@@ -50,6 +50,7 @@ mod test_sound_signal; // card real-time
 mod test_sound_spectrum; // card winamp-like
 mod test_sound_synth; // card sound-pro
 mod test_sound_tempo; // card sound-pro
+mod test_sound_tempo_float; // card exact-tempo-growth
 mod test_sound_use; // card bizarre-global
 pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves scope too
 mod test_sound_wavs; // card sound-wavs
