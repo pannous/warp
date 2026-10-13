@@ -201,6 +201,9 @@ Left:
 - (cleanup-emitter-loops) ~70 other hand-written `Block, Loop, <exit test>, BrIf(1), …, Br(0), End, End` loops: counters, byte walks and
   cell walks whose step differs from emit_cell_walk (RefAsNonNull before the rest field, a position bump after it,
   or the loop opened and closed by two closures as in library_ops.rs join and slice). A general
-  `loop_until(f, exit, |f| body)` would save ~1 line per loop; each conversion checked with same_wasm.sh
+  `loop_until(f, exit, |f| body)` would save ~1 line per loop; each conversion checked with same_wasm.sh.
+  Closed as not worth doing (2026-10-13): most of the ~90 loops sit inside one flat instruction slice, often with an
+  inner loop or an exit two levels out (`BrIf(2)`, text_grapheme_back); a closure helper cuts each slice into before,
+  exit, body and after pieces, which costs as many lines as the Block/Loop/Br/End lines it saves and adds nesting
 - (cleanup-saved-state) user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
   computing the new values: one saved-state struct would halve it, but the order of the computations matters
