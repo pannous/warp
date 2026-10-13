@@ -304,6 +304,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::interpolation::lower_program,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
+	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
+	crate::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::shader_holes::lower,
 	crate::analyzer::lower_inline_unions,

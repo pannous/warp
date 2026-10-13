@@ -1,6 +1,7 @@
 //! Lowering declarations and list forms: typed declarations, parameter copies, list mutation methods, typed arrays
 
 use super::*;
+use crate::broadcasting::{element_wise, EACH_ELEMENT};
 use crate::lowering::nodes::{call, children_rewritten};
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
@@ -1210,20 +1211,6 @@ pub(super) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 		Ok(_) => element_wise(list.clone(), Op::Add, number.clone()),
 		Err(error) => error,
 	})
-}
-
-/// The element name of the lambda an element-wise operator maps with: no warp program writes it
-pub const EACH_ELEMENT: &str = "each_element";
-
-/// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
-pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
-	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
-	let lambda = Node::Key(
-		element(),
-		Op::FatArrow,
-		Box::new(Node::Key(element(), op, Box::new(operand))),
-	);
-	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
 }
 
 /// `n times [x]`: the list of n copies of x (`zero_fill(n, x)`); `[x]*n` stays ambiguous (Python repeats, NumPy multiplies)

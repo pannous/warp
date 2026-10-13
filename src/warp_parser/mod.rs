@@ -109,14 +109,6 @@ const NONLOCAL_WORD: &str = "nonlocal";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
-/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [
-	('+', Op::Add),
-	('-', Op::Sub),
-	('*', Op::Mul),
-	('/', Op::Div),
-	('^', Op::Pow),
-];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
@@ -489,7 +481,12 @@ impl SpecialInfix {
 				);
 				lhs
 			}
-			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
+			// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+			SpecialInfix::ElementWise(op) => Node::List(
+				vec![lhs, Symbol(crate::operators::element_wise_word(op)), operand],
+				Bracket::None,
+				Separator::Space,
+			),
 			SpecialInfix::Membership(word) => Node::List(
 				vec![lhs, Symbol(word.to_string()), operand],
 				Bracket::None,

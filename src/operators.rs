@@ -40,6 +40,21 @@ pub fn glyph_operator(glyph: char) -> Option<(Op, &'static str)> {
 		.map(|(_, op, canonical)| (*op, *canonical))
 }
 
+/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
+pub const ELEMENT_WISE_OPERATORS: [Op; 5] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Pow];
+
+/// The word the parser keeps an element-wise operator as, `.*` of `*`
+pub fn element_wise_word(op: Op) -> String {
+	format!(".{}", op.as_str())
+}
+
+/// The operator an element-wise word applies to each element, `*` of `.*`
+pub fn element_wise_operator(word: &str) -> Option<Op> {
+	ELEMENT_WISE_OPERATORS
+		.into_iter()
+		.find(|op| element_wise_word(*op) == word)
+}
+
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
 pub const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
 	(Op::Add, &["plus", "add", "__add__"]),

@@ -834,7 +834,7 @@ fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: 
 				&& items[0].name() == DOT_WORD
 				&& items[1..].iter().any(|list| is_linear_list(list, names)) =>
 		{
-			let product = crate::analyzer::element_wise(items[1].clone(), Op::Mul, items[2].clone());
+			let product = crate::broadcasting::element_wise(items[1].clone(), Op::Mul, items[2].clone());
 			call(SUM_WORD, vec![product])
 		}
 		_ => node,
