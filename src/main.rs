@@ -428,10 +428,8 @@ fn run_command(args: &[String]) {
 		if flags.contains(&WAGI_FLAG) {
 			return write_wagi(&code, &target);
 		}
-		// a plain `warp build` writes both (card build-should), `--exe` only the executable
-		if !flags.contains(&EXE_FLAG) {
-			write_module(&code, &target, ahead_of_time);
-		}
+		// `warp build` writes both (card build-should), `--exe` too, `--wasm` and `--aot` only the module
+		write_module(&code, &target, ahead_of_time);
 		if standalone {
 			match write_standalone_executable(&code, &target) {
 				Ok(report) => println!("{report}"),

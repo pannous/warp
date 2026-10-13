@@ -39,7 +39,7 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
 3. **Standalone executable, `warp build <file>`** (implemented; P103: running a file leaves `<file>` next to it, `<file>.exe`
    on Windows, rebuilt only when the source is newer; since card executable-flag (user 2026-10-12) a plain run does so
    only with the environment variable `WARP_EXECUTABLE=1` (or true/yes/on), off by default; a program the runtime cannot carry gets a note; `warp build`/`compile`
-   make it and the module `<file>.wasm` (card build-should), `--exe` only the executable, `--wasm` only the module): the executable is a copy of the prebuilt stub
+   make it and the module `<file>.wasm` (card build-should), `--exe` too (accepted, redundant), `--wasm` only the module): the executable is a copy of the prebuilt stub
    `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`, `gc-copying`, `std`, no Cranelift) with the
    program's machine code appended (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16
    bytes and runs what it carries. The stub is found through `WARP_RUNTIME_STUB`, else `warp-runtime` next to `warp` (or next to
