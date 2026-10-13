@@ -15,7 +15,6 @@ PASSED:
   ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
   ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
-  ✓ control::test_async_ports::await_any_gives_the_first_to_finish
   ✓ control::test_async_ports::await_first_is_the_first_tasks_result
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
@@ -2926,6 +2925,8 @@ PASSED:
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
+  ✓ parser::test_self_lexer::texts_match_their_rust_twin
+  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -3469,6 +3470,7 @@ PASSED:
   ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
   ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ text::test_text_getters::text_getters_read_texts_and_errors
+  ✓ text::test_text_parameter_copy::a_text_field_passed_on_reads_characters
   ✓ text::test_text_parameter_copy::an_indexed_text_parameter_reads_characters
   ✓ text::test_text_plus_anything::a_text_joins_anything_in_its_text_form
   ✓ text::test_text_plus_anything::a_text_spelling_a_number_plus_a_number_warns
@@ -5091,6 +5093,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ control::test_async_ports::await_any_gives_the_first_to_finish
 
 SUMMARY:
-10 ignored, 5088 passed, 0 failed, 5088 total tested
+11 ignored, 5090 passed, 1 failed, 5091 total tested
