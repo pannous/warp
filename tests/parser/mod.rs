@@ -32,6 +32,8 @@ mod test_self_differential; // card self-differential
 mod test_self_lexer; // card self-lexer
 #[cfg(feature = "native")]
 mod test_self_parser; // card self-parser
+#[cfg(feature = "native")]
+mod test_self_serializer; // card self-serializer
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;

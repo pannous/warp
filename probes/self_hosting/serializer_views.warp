@@ -1,0 +1,17 @@
+// card self-serializer: the warp twin of Node::serialize on hand-made node views (lib/compiler/serializer.warp)
+use "lib/compiler/serializer.warp"
+[
+	serialize(3),
+	serialize(yes),
+	serialize(ø),
+	serialize(["text", "ab"]),
+	serialize(["key", ":", ["symbol", "a"], 1]),
+	serialize(["list", "[", ",", 1, 2, 3]),
+	serialize(["key", "-", ø, ["symbol", "x"]]),
+	serialize(["key", "=", ["symbol", "a"], ["key", "-", ø, ["symbol", "x"]]]),
+	serialize(["key", ":", ["symbol", "tee"], ["list", "{", "", ["key", ":", ["symbol", "a"], 1]]]),
+	serialize(["key", "as", 0.1, ["symbol", "float"]]),
+	serialize(["key", "++", ["symbol", "x"], ø]),
+	serialize(["attribute", "unit", ["symbol", "cm"], ["key", ":", ["symbol", "a"], 3]]),
+	serialize(["literal", "1.10", 1.1])
+]

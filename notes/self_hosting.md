@@ -65,3 +65,22 @@ Rules
   blanks before scanning declarations); lexer.warp `spans` matches it on every source. The tokens after it (numbers,
   names, groups) get their twin from the parse tree's positioned atoms.
 - A new gap found on the way becomes its own card in this topic (todo add … --topic self-hosted).
+
+## Serializer twin (card self-serializer)
+lib/compiler/serializer.warp `serialize(view)` writes a node as Node::serialize does (src/node/serialization.rs),
+tests/parser/test_self_serializer.rs. warp has no Node of its own for the parse of a source (no `parse` word, and
+`data` drops Meta), so both twins share a plain-data view (tests/common/twins.rs node_view, warp-dispatch's): a
+number, yes, no or ø as itself, every other node a list tagged by its kind (["key", op, left, right],
+["list", bracket, separator, items…], ["literal", source, node], ["attribute", name, value, node], …).
+- `view_differential(part, word)`: the view of every parsed source goes to warp as JSON text read by `json(…)`. The
+  same view as a warp literal is code to compile: a 100 KB chunk took 2.4 GB and 56 s in a debug build.
+- Rust's Display shows up where serialize writes a key's left side (`name: 1`, texts bare); everything else Display
+  prints is serialize again (Debug is serialize), so the twin needs no Rust-only text.
+- Found on the way, fixed in the language: an escaped quote in a text ended it for the `//` comment check
+  (escaped-quote-slashes); text literals over 64 KiB trapped, the module's memory was one page whatever its texts
+  took (large-text-literals). `type(x) == "int"` is no while `type(x)` prints int (type-text-compare, open): the
+  twin uses `x is list`.
+- The entity pass (uniscript_entities::expand_entities) also ended a text at an escaped quote and turned `"\"\\:infinity"`
+  into `"\∞`: text_or_comment_end now skips escapes (same card). A Data node without a unit description is written
+  `Data(…)`, so its view carries that text. warp writes small floats with an exponent (`"" + 2.5e-6` is `2.5e-6`),
+  Rust in plain decimal (0.0000025): the twin's `number_text` expands the exponent.
