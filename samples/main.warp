@@ -1,5 +1,4 @@
 #!/usr/bin/env warp
-#!/usr/bin/env warp
 #use lib
 puts "Hello main.warp"
 # print "Hello main.warp"
