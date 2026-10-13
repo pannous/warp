@@ -3,7 +3,7 @@
 //! P178: Rust's path `Shape::Circle(r)` of a variant is the variant `Circle(r)`, in a match its type test and binding.
 
 use super::nodes::key;
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::VARIANTS_MARK;
 use std::collections::HashMap;
@@ -21,6 +21,24 @@ impl Variants {
 		let bare = self.bare.iter().map(|name| name.drop_meta().name());
 		self.classes.iter().cloned().chain(bare).collect()
 	}
+}
+
+/// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name
+/// (`red is Color`, P179), then the classes of the variants with payload
+pub(crate) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
+	let name = Node::Symbol(type_name).with_attribute(
+		VARIANTS_MARK,
+		Node::List(bare_variants, Bracket::None, Separator::Space),
+	);
+	let sum_type = Node::Type {
+		name: Box::new(name),
+		body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)),
+	};
+	Node::List(
+		[vec![sum_type], declarations].concat(),
+		Bracket::None,
+		Separator::Semicolon,
+	)
 }
 
 pub fn lower(program: Node) -> Node {
