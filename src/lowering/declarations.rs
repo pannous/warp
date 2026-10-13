@@ -89,7 +89,7 @@ fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
 }
 
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
-fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
+pub(crate) fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let [word, name, cases] = items else { return None };
 	let is_enum = word.is_symbol(ENUM_WORD);
 	let Node::Symbol(name) = name.drop_meta() else {
