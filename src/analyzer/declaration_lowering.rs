@@ -158,13 +158,16 @@ impl TextValues {
 			Node::Key(left, Op::Add, right) => self.given_by(left) || self.given_by(right),
 			Node::Key(_, Op::Dot, field) => field.symbol_name().is_some_and(|name| self.fields.contains(name)),
 			Node::Key(_, Op::Hash, index) => match index.drop_meta() {
-				Node::Key(field, Op::Add, _) => matches!(field.drop_meta(), Node::Text(name) if self.fields.contains(name)),
+				Node::Key(field, Op::Add, _) => {
+					matches!(field.drop_meta(), Node::Text(name) if self.fields.contains(name))
+				}
 				_ => false,
 			},
 			Node::List(items, _, _) => match items.split_first() {
 				Some((head, arguments)) => head.symbol_name().is_some_and(|word| {
 					crate::library_words::result_kind(word) == Some(Kind::Text)
-						|| crate::wasm_emitter::text_builtins::text_builtin_kind(word, arguments.len()) == Some(Kind::Text)
+						|| crate::wasm_emitter::text_builtins::text_builtin_kind(word, arguments.len())
+							== Some(Kind::Text)
 				}),
 				None => false,
 			},

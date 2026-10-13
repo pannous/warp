@@ -39,5 +39,8 @@ fn an_indexed_text_parameter_reads_characters() {
 fn a_text_field_passed_on_reads_characters() {
 	let state = format!("class Scanner {{ code: text }}\ns = Scanner{{code: read(\"{SOURCE}\")}}\n");
 	is!(&program(&format!("{state}first_newline(s.code)")), first_newline());
-	is!(&program(&format!("{state}code = s.code\nthrough(code)")), first_newline());
+	is!(
+		&program(&format!("{state}code = s.code\nthrough(code)")),
+		first_newline()
+	);
 }
