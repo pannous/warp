@@ -663,6 +663,11 @@ def main():
 			print(f"    {failure['name']}")
 	if summary.get("memoryResets"):
 		print(f"\nWasm memory ran out {len(summary['memoryResets'])} times; all workers were replaced and these tests ran again: {', '.join(summary['memoryResets'])}")
+	if summary.get("timeoutRetries"):
+		retried = ", ".join(summary["timeoutRetries"])
+		print(f"\n{len(summary['timeoutRetries'])} tests timed out once and ran again on a fresh worker: {retried}")
+		if os.environ.get("GITHUB_ACTIONS"):
+			print(f"::warning title=A browser test timed out once (card find-why)::{retried}")
 	verdict = "FAILED" if summary["failed"] else "ok"
 	print(f"\ntest result: {verdict}. {summary['passed']} passed; {len(summary['failed'])} failed; {summary['ignored']} ignored; "
 		f"finished in {summary['seconds']:.2f}s (in the browser)")
