@@ -4,6 +4,7 @@ mod test_bare_operator_block;
 mod test_comment_hides_bracket;
 mod test_comments;
 mod test_dollar_names;
+mod test_element_wise_phrase; // card cleanup-parser-element-wise
 mod test_emoji_atoms;
 mod test_empty_argument;
 mod test_end_word;
