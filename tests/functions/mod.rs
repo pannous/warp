@@ -2,6 +2,7 @@ mod test_alias_definition;
 mod test_all_calls;
 mod test_analysis_memo;
 mod test_anonymous_application;
+mod test_any_result; // card def
 mod test_anonymous_function_forms;
 mod test_argument_kinds;
 mod test_argument_labels;
