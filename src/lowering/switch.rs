@@ -5,7 +5,7 @@
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
-use super::nodes::{call, children_rewritten, if_then, key, or_operands, Counter};
+use super::nodes::{call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
 use super::words::COUNT_WORD;
 use crate::library_words::SLICE;
@@ -184,10 +184,19 @@ pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 	}
 }
 
+/// `[a, b]` and the tuple `(a, b)` (card match-tuples) match by shape; a parenthesised single item `(x)` is a group
+fn is_list_pattern(pattern: &Node) -> bool {
+	match pattern.drop_meta() {
+		Node::List(_, Bracket::Square, _) => true,
+		Node::List(items, Bracket::Round, Separator::Colon) => items.len() > 1,
+		_ => false,
+	}
+}
+
 /// The tests the value at `path` passes when it matches `pattern`, and the assignments of the names the pattern binds
 fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	match pattern.drop_meta() {
-		Node::List(items, Bracket::Square, _) => {
+		Node::List(items, _, _) if is_list_pattern(pattern) => {
 			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
 			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
 				tests.push(key(
@@ -299,6 +308,32 @@ pub(crate) fn pattern_test(
 	Ok((joined(matches, Op::Or), vec![]))
 }
 
+/// `xs is [_, 2]` and `if xs is [a, b] then b` (card is-pattern): a list or tuple holding `_`, a rest or a name defined
+/// nowhere is a pattern, its names bound as the test holds; a list of known values stays a comparison
+pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Option<Node> {
+	if !is_list_pattern(pattern) || !has_open_part(pattern, names) {
+		return None;
+	}
+	let (mut tests, mut bindings) = (vec![], vec![]);
+	pattern_tests(pattern, subject.clone(), &mut tests, &mut bindings);
+	if !bindings.is_empty() {
+		tests.push(sequence([bindings, vec![Node::True]].concat()));
+	}
+	Some(joined(tests, Op::And))
+}
+
+/// `_`, a rest or a name not defined anywhere among the parts of a pattern: what a value never is
+fn has_open_part(pattern: &Node, names: &Names) -> bool {
+	if rest_pattern(pattern).is_some() {
+		return true;
+	}
+	match pattern.drop_meta() {
+		Node::List(items, _, _) if is_list_pattern(pattern) => items.iter().any(|part| has_open_part(part, names)),
+		Node::Symbol(name) => name == WILDCARD || !names.contains(name) && !is_type_word(pattern),
+		_ => false,
+	}
+}
+
 /// A list pattern tests its shape, a type word (`int`, `Circle`) the subject's type, `i: int` also binds it; any other
 /// key compares the subject, a guarded name binds it
 fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Names) -> (Vec<Node>, Vec<Node>) {
@@ -316,7 +351,7 @@ fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Name
 	if let Some(tests) = range_tests(subject, pattern) {
 		return (tests, vec![]);
 	}
-	if !guarded && !matches!(pattern.drop_meta(), Node::List(_, Bracket::Square, _)) {
+	if !guarded && !is_list_pattern(pattern) {
 		return (vec![key(subject.clone(), Op::Eq, pattern.clone())], vec![]);
 	}
 	let (mut tests, mut bindings) = (vec![], vec![]);

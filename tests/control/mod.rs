@@ -89,6 +89,7 @@ mod test_if_instance_branches; // card if-instance-branch
 mod test_if_then_assign;
 mod test_if_value_kind;
 mod test_implicit_await;
+mod test_is_pattern;
 mod test_iteration_words;
 mod test_job_lists;
 mod test_key_down; // card keyboard-state
@@ -108,6 +109,7 @@ mod test_match_guards_and_finally;
 mod test_match_negative_subject; // card match-negative-subject
 mod test_match_other;
 mod test_match_ranges;
+mod test_match_tuples;
 mod test_match_type_arms;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;

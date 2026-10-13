@@ -7,6 +7,7 @@
 
 use super::memoization::{definition_parts, Rebuild};
 use super::nodes::{call, children_rewritten, is_call_head, key, or_operands, parameter_name};
+use super::switch::is_pattern;
 use super::words::OF_WORD;
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
@@ -266,7 +267,7 @@ pub(crate) struct Names {
 }
 
 impl Names {
-	fn contains(&self, name: &str) -> bool {
+	pub(crate) fn contains(&self, name: &str) -> bool {
 		self.variables.contains(name)
 	}
 
@@ -544,8 +545,8 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 				// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
 				Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
-				_ => match union_test(&subject, &right, shadowed) {
-					Some(union) => expand(union, shadowed),
+				_ => match union_test(&subject, &right, shadowed).or_else(|| is_pattern(&subject, &right, shadowed)) {
+					Some(test) => expand(test, shadowed),
 					None => comparison(*subject, Op::Eq, *right, shadowed),
 				},
 			}
