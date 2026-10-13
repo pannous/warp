@@ -544,8 +544,12 @@ impl WarpParser {
 		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
 		// application binds tighter than the logical, comparison and additive operators: `1 + count xs` is
 		// `1 + count(xs)` for any name (card count-xs); a `:` operand keeps `a: b c d` apart, and an argument takes no
-		// call of its own: `on change s` is one call with two arguments
-		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp) && min_bp != argument_bp;
+		// call of its own: `on change s` is one call with two arguments; a loop header's last word is no call of its body
+		// (`for i in 1 to n body`), and a loop clause is no argument (`[x - y for x in xs]`)
+		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp)
+			&& min_bp != argument_bp
+			&& !self.in_for_header
+			&& !self.matches_keyword(crate::words::FOR_WORD);
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier =
