@@ -147,6 +147,9 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) => {
 			let right = if op == Op::Dot {
 				method_arguments_marked(*right, names)
+			} else if is_bare_word(&right) {
+				// data stays data: `{created: now}` keeps the word, `now!` reads the clock (decision data-stays-data)
+				*right
 			} else {
 				mark(*right, names)
 			};
@@ -315,4 +318,9 @@ fn clipboard_write(text: Node) -> Node {
 		"std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"
 	));
 	crate::law::substitute(&call, &[(TEXT_PLACEHOLDER.to_string(), text)].into_iter().collect())
+}
+
+/// A word alone as a field's value, not forced with `!`
+fn is_bare_word(value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::Symbol(_)) && crate::mutation::bang_target(value).is_none()
 }

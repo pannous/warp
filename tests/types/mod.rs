@@ -47,6 +47,7 @@ mod test_cycle_mark_depth; // card cycle-mark-depth
 mod test_cyclic_objects; // card orm: objects pointing to each other
 mod test_data;
 mod test_data_run_now; // card data-run-now
+mod test_data_stays_data; // card data-bare
 mod test_date_arithmetic_at_run_time; // card run-time-dates, stage B2
 mod test_dates_at_run_time; // card runtime-dates
 mod test_declaration_without_value;
