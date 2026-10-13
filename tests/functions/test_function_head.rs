@@ -50,6 +50,8 @@ fn the_keyword_forms() {
 		(DefinitionForm::Keyword(Op::Arrow), Some("int"))
 	);
 	assert_eq!(viewed("def f(x): int { x }").3.as_deref(), Some("int"));
+	let (_, parameters, form, _, _) = viewed("def (f x) { x }");
+	assert_eq!((parameters, form), (texts(&["x"]), DefinitionForm::KeywordSpaced));
 }
 
 #[test]

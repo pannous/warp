@@ -15,6 +15,7 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
+use crate::lowering::function_head;
 
 mod function_units;
 
@@ -465,17 +466,10 @@ struct Definition {
 }
 
 fn function_definition(node: &Node) -> Option<(String, Definition)> {
-	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else {
-		return None;
-	};
-	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
-		return None;
-	};
-	let (name, parameters) = items.split_first()?;
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
-	let parameters = parameters
+	let definition =
+		function_head(node).filter(|definition| definition.is_glued_head() && definition.plain_operator().is_some())?;
+	let parameters = definition
+		.written_parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
@@ -484,10 +478,10 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 		})
 		.collect::<Option<Vec<_>>>()?;
 	Some((
-		name.clone(),
+		definition.name.to_string(),
 		Definition {
 			parameters,
-			body: body.as_ref().clone(),
+			body: definition.body.clone(),
 		},
 	))
 }

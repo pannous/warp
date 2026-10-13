@@ -15,6 +15,7 @@ use super::nodes::{call, if_then, key, named_assignment};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::event_signals::{function_with_globals, hole_name, last_statement, text_hole_name};
 use crate::law::substitute;
+use crate::lowering::function_head;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
@@ -221,18 +222,15 @@ fn hole_bindings(shown: &Node, markups: &HashMap<String, Node>) -> Vec<Node> {
 
 /// `def F(p) {…}`, `F(p) := …`: its name, its head `F(p)`, its operator and body
 fn function_definition(statement: &Node) -> Option<(String, Node, Op, Node)> {
-	let Node::Key(head, op @ (Op::Define | Op::Assign), body) =
-		crate::declarations::lower_c_functions(statement.clone())
-			.drop_meta()
-			.clone()
-	else {
-		return None;
-	};
-	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	let name = parts.first()?.symbol_name()?.to_string();
-	Some((name, *head, op, *body))
+	let lowered = crate::declarations::lower_c_functions(statement.clone());
+	let definition = function_head(&lowered)?;
+	let op = definition.plain_operator()?;
+	Some((
+		definition.name.to_string(),
+		definition.head.clone(),
+		op,
+		definition.body.clone(),
+	))
 }
 
 /// Outside its component (card web-outside-state): `counters`, Counter's lower-case plural, is its instances in page

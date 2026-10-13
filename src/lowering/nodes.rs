@@ -224,10 +224,12 @@ pub enum DefinitionForm {
 	Keyword(Op),
 	/// `def f(x) { body }`: head and block side by side, the parameters grouped `(f (x))`
 	KeywordBlock,
+	/// `def (f x) { body }`: keyword, head and body as three words
+	KeywordSpaced,
 }
 
 /// One view of a function definition in any of its forms (DefinitionForm): what each pass takes apart
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct FunctionHead<'a> {
 	/// `(f x y)`
 	pub head: &'a Node,
@@ -240,6 +242,8 @@ pub struct FunctionHead<'a> {
 	pub body: &'a Node,
 	/// Everything after the operator: the body with a result type written before it (`int {…}` of `def f(x): int {…}`)
 	pub written_body: &'a Node,
+	/// The bracket around head and block of `def f(x) { body }`
+	pub block_bracket: Option<&'a Bracket>,
 }
 
 impl<'a> FunctionHead<'a> {
@@ -252,8 +256,17 @@ impl<'a> FunctionHead<'a> {
 		}
 	}
 
-	pub fn is_keyword_form(&self) -> bool {
-		!matches!(self.form, DefinitionForm::Operator(_))
+	/// `f(x) := body`, `f(x) = body` with a round head and no result type: its operator
+	pub fn plain_operator(&self) -> Option<Op> {
+		match self.form {
+			DefinitionForm::Operator(op) if self.result.is_none() && is_call_head(self.head) => Some(op),
+			_ => None,
+		}
+	}
+
+	/// `f(x)` written without a space before its parenthesis
+	pub fn is_glued_head(&self) -> bool {
+		matches!(self.head.drop_meta(), Node::List(_, _, Separator::None))
 	}
 }
 
@@ -265,8 +278,9 @@ pub fn function_head(statement: &Node) -> Option<FunctionHead<'_>> {
 			viewed(head, DefinitionForm::Operator(*op), result, body, body)
 		}
 		Node::List(items, _, _) => match items.as_slice() {
-			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => {
-				keyword_function_head(definition)
+			[keyword, definition] if is_function_word(keyword) => keyword_function_head(definition),
+			[keyword, head, body] if is_function_word(keyword) => {
+				viewed(head, DefinitionForm::KeywordSpaced, None, body, body)
 			}
 			_ => None,
 		},
@@ -274,10 +288,18 @@ pub fn function_head(statement: &Node) -> Option<FunctionHead<'_>> {
 	}
 }
 
+fn is_function_word(word: &Node) -> bool {
+	crate::operators::is_function_keyword(&word.drop_meta().name())
+}
+
 fn keyword_function_head(definition: &Node) -> Option<FunctionHead<'_>> {
 	match definition.drop_meta() {
-		Node::List(parts, _, _) if parts.len() == 2 => {
-			viewed(&parts[0], DefinitionForm::KeywordBlock, None, &parts[1], &parts[1])
+		Node::List(parts, bracket, _) if parts.len() == 2 => {
+			let definition = viewed(&parts[0], DefinitionForm::KeywordBlock, None, &parts[1], &parts[1])?;
+			Some(FunctionHead {
+				block_bracket: Some(bracket),
+				..definition
+			})
 		}
 		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
 			let (head, result) = typed_head(target);
@@ -310,6 +332,7 @@ fn viewed<'a>(
 		result,
 		body,
 		written_body,
+		block_bracket: None,
 	})
 }
 

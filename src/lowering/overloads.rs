@@ -6,10 +6,12 @@
 //! `x:int = agent_as("33/3", "int")` (card int-let, lib/agent.warp).
 
 use super::nodes::{
-	call, children_rewritten, in_block_as_written, is_assigned_data, is_words_call, key, with_parts_rewritten,
+	call, children_rewritten, in_block_as_written, is_assigned_data, is_call_head, is_words_call, key,
+	with_parts_rewritten,
 };
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
+use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, witness_operation, InstanceTypes, Shape};
@@ -36,26 +38,20 @@ struct Definition<'a> {
 }
 
 fn definition(node: &Node) -> Option<Definition<'_>> {
-	let Node::Key(target, Op::Assign | Op::Define, body) = node.drop_meta() else {
+	let definition = function_head(node)
+		.filter(|definition| matches!(definition.form, DefinitionForm::Operator(_)) && is_call_head(definition.head))?;
+	let written_result = match definition.result {
+		Some(result) => Some(result.drop_meta().symbol_name()?.to_string()),
+		None => None,
+	};
+	let Node::List(head, _, _) = definition.head.drop_meta() else {
 		return None;
 	};
-	let (head, written_result) = match target.drop_meta() {
-		Node::Key(head, Op::Colon | Op::As, result) => match result.drop_meta() {
-			Node::Symbol(result) => (head.drop_meta(), Some(result.clone())),
-			_ => return None,
-		},
-		head => (head, None),
-	};
-	match head {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			Some(Definition {
-				head: items,
-				written_result,
-				body,
-			})
-		}
-		_ => None,
-	}
+	Some(Definition {
+		head,
+		written_result,
+		body: definition.body,
+	})
 }
 
 pub fn lower(node: Node) -> Node {

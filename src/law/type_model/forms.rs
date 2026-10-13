@@ -332,18 +332,23 @@ fn typed_definition(statement: &Node) -> Option<FunctionHead<'_>> {
 					definition.result.is_none()
 						&& (definition.form == DefinitionForm::Operator(Op::Assign) || is_exported(definition))
 				})?;
-				return Some(FunctionHead { result: Some(result), ..definition });
+				return Some(FunctionHead {
+					result: Some(result),
+					..definition
+				});
 			}
 		}
 	}
 	function_head(statement).filter(is_exported)
 }
 
-/// `f(x) = body` is an assignment here, `def f(x) := body` and `def f(x): body` without a result type are not read yet
+/// `f(x) = body` is an assignment here; `def f(x) := body`, `def f(x): body` without a result type and
+/// `def (f x) {…}` are not read yet
 fn is_exported(definition: &FunctionHead) -> bool {
 	match definition.form {
 		DefinitionForm::Operator(op) => op == Op::Define,
 		DefinitionForm::KeywordBlock => true,
+		DefinitionForm::KeywordSpaced => false,
 		DefinitionForm::Keyword(op) => op != Op::Define && definition.result.is_some(),
 	}
 }
