@@ -25,6 +25,13 @@ is over 1500 lines now. The tool moves line ranges into `x/child.rs`:
 Ranges are 1-based and inclusive. Start each at the doc comment of its first item and end it at the closing brace
 of its last item: a range that stops one line short breaks the parse.
 
+Probe scripts and stale notes (cleanup-probe-scripts, cleanup-stale-notes; recurring, the passes so far):
+- 2026-10-13: the one-off agent tools of the shared-checkout era went (hunk selectors, unignore scripts, a bisect
+  step) with the finished per-topic fixer prompts in probes/algo. Every other probe script is still named by a test,
+  a note or a sibling probe.
+- 2026-10-13: removed notes/float_truncation_survey.md (A5 done: notes/number_literals.md history keeps the rule) and
+  notes/supervising_fixers.md (the 2026-10-02 fixer round; its rules live in notes/roles.md and notes/agents/).
+
 Behaviour-preserving only: shared helpers instead of duplication, dead code and stale comments out, flatter control
 flow, meaningful names, no test edits. One area per session, small themed branches through the Integrator.
 

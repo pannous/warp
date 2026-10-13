@@ -8,10 +8,10 @@ Decisions and directions from the user (2026-10-03). Runtime support for excepti
   wasm-opt gets `--enable-extended-const` (BINARYEN_FEATURES in src/wasm_optimizer.rs). The emitter does not use them
   yet: a global with an arithmetic initialiser (`global x = 2*21`) could be a constant expression instead of a store in main.
 
-## In progress (workers spawned 2026-10-03, branches of the same name)
+## Built (2026-10-03 rounds)
 - typed-lists: homogeneous Int/Float lists as GC arrays behind one list-operation dispatch layer (notes/typed_lists.md).
 - closures: first-class functions as a GC struct of a typed function reference plus captured values (notes/closures.md).
-- multi-value: real multi-value results instead of globals/scratch workarounds (notes/multi_value.md).
+- multi-value: real multi-value results in the runtime helpers and tuple returns (`return a, b`) (notes/multi_value.md).
 
 ## Not wanted: SIMD
 We are not interested in wasm SIMD (128-bit or relaxed). Vector work goes the direct vector/GPU path: list operations
