@@ -1193,19 +1193,31 @@ fn code_only(source: &str) -> String {
 	let chars: Vec<char> = source.chars().collect();
 	let mut code = String::with_capacity(source.len());
 	let mut at = 0;
+	for (start, end) in comment_and_text_spans(source) {
+		code.extend(&chars[at..start]);
+		code.push(' ');
+		at = end;
+	}
+	code.extend(&chars[at..]);
+	code
+}
+
+/// Where the comments and texts of a source start and end, in characters; the lexer's first pass (card self-lexer,
+/// lib/compiler/lexer.warp spans is its warp twin)
+pub fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
+	let chars: Vec<char> = source.chars().collect();
+	let mut spans = Vec::new();
+	let mut at = 0;
 	while at < chars.len() {
 		match text_or_comment_end(&chars, at) {
 			Some(end) => {
-				code.push(' ');
+				spans.push((at, end));
 				at = end;
 			}
-			None => {
-				code.push(chars[at]);
-				at += 1;
-			}
+			None => at += 1,
 		}
 	}
-	code
+	spans
 }
 
 /// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there

@@ -3,7 +3,7 @@
 //! the test with both texts around the first difference.
 use std::path::{Path, PathBuf};
 use warp::wasm_emitter::eval;
-use warp::Node;
+use warp::{Bracket, Node, Separator};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
@@ -33,6 +33,15 @@ fn collect_sources(folder: &Path, found: &mut Vec<PathBuf>) {
 			found.push(path);
 		}
 	}
+}
+
+/// A Rust twin's list as warp writes it: the empty list is ø
+pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
+	let items: Vec<Node> = items.collect();
+	if items.is_empty() {
+		return Node::Empty;
+	}
+	Node::List(items, Bracket::Square, Separator::None)
 }
 
 /// `word(read(path))` of lib/compiler/<part>.warp for every source, each written as the Rust twin's value of the same
