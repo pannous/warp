@@ -1,0 +1,21 @@
+f(x)
+f(x, y)
+f()
+m.has(1)
+g[1]
+g#1
+not x
+-x
+a - -b
+x++
+if a then b else c
+fun add(a, b) { a + b }
+while i < 3 { i = i + 1 }
+f x
+a and b or c
+a => b
+a ? b : c
+x += 1
+a..b
+graph#A#B
+f(x).y
