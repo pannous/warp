@@ -643,9 +643,6 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(node);
 	}
 	let node = crate::time::lower(node);
-	if let Some(answer) = crate::units::answer(&node) {
-		return Err(answer);
-	}
 	// quantities in loops and branches: SI amounts at run time, the units checked here (static units, stage 1)
 	let node = match crate::units::static_units::lower(&node) {
 		Some(lowered) => lowered?,
