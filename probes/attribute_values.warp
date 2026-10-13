@@ -1,0 +1,6 @@
+// card attribute-values: values of the wrong kind warn: a text for checked, a word for rows, a number for href
+div{
+	input{ type: "checkbox" aria-label: "a" checked: "no" }
+	textarea{ aria-label: "t" rows: "many" }
+	a{ href: 3 "go" }
+}

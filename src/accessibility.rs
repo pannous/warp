@@ -35,6 +35,12 @@ const TYPE: &str = "type";
 /// one lib/markup.warp writes as an attribute besides html_attributes
 const WARP_ELEMENT_WORDS: [&str; 2] = ["bind", "key"];
 const OWN_ATTRIBUTE_PREFIXES: [&str; 2] = ["data-", "aria-"];
+/// attributes whose value is a number (`rows: 3`, `cols: "40"` as a text of one)
+const NUMBER_ATTRIBUTES: [&str; 10] = [
+	"min", "max", "step", "rows", "cols", "colspan", "rowspan", "tabindex", "width", "height",
+];
+/// attributes whose value is an address
+const ADDRESS_ATTRIBUTES: [&str; 3] = ["href", "src", "action"];
 const INPUT_TYPES: [&str; 22] = [
 	"button",
 	"checkbox",
@@ -136,16 +142,17 @@ fn problems<'a>(elements: &[Element<'a>], defined: &HashSet<String>) -> Vec<Prob
 		.filter_map(|element| element_problem(element, &labeled_ids))
 		.collect();
 	problems.extend(elements.iter().flat_map(|element| markup_mistakes(element, defined)));
+	problems.extend(elements.iter().flat_map(value_mistakes));
 	problems.extend(skipped_headings(elements));
 	problems.extend(duplicate_ids(elements));
 	problems
 }
 
-/// An element as written: its tag, attributes with plain values, whether it says anything, whether a label holds it
+/// An element as written: its tag, attributes with their values as written, whether it says anything, whether a label holds it
 struct Element<'a> {
 	node: &'a Node,
 	tag: String,
-	attributes: Vec<(String, Option<String>)>,
+	attributes: Vec<(String, &'a Node)>,
 	has_content: bool,
 	inside_label: bool,
 	/// the events of its handlers (`on click {…}`)
@@ -163,7 +170,7 @@ impl Element<'_> {
 		self.attributes
 			.iter()
 			.find(|(attribute, _)| attribute == name)
-			.and_then(|(_, value)| value.clone())
+			.and_then(|(_, value)| plain_value(value))
 	}
 
 	fn is_named(&self) -> bool {
@@ -202,8 +209,8 @@ fn content_items(content: &Node) -> Vec<&Node> {
 	}
 }
 
-/// `alt: "x"`: an attribute, with its value when that is a text (a one-letter text is a Char), number or name
-fn attribute_parts(item: &Node) -> Option<(String, Option<String>)> {
+/// `alt: "x"`: an attribute and its value as written
+fn written_attribute(item: &Node) -> Option<(String, &Node)> {
 	let Node::Key(name, Op::Colon, value) = item.drop_meta() else {
 		return None;
 	};
@@ -213,13 +220,50 @@ fn attribute_parts(item: &Node) -> Option<(String, Option<String>)> {
 	if crate::markup::is_element_tag(name) {
 		return None;
 	}
-	let value = match value.drop_meta() {
+	Some((name.clone(), value.drop_meta()))
+}
+
+/// An attribute's value when that is a text (a one-letter text is a Char), number or name
+fn plain_value(value: &Node) -> Option<String> {
+	match value {
 		Node::Text(text) | Node::Symbol(text) => Some(text.clone()),
 		Node::Number(number) => Some(number.to_string()),
 		Node::Char(character) => Some(character.to_string()),
 		_ => None,
+	}
+}
+
+/// The attribute values of the wrong kind (card attribute-values): a text where yes or no belongs, a word where a
+/// number does, a number for an address
+fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
+	let text_of = |value: &Node| match value {
+		Node::Text(text) => Some(text.clone()),
+		Node::Char(character) => Some(character.to_string()),
+		_ => None,
 	};
-	Some((name.clone(), value))
+	element
+		.attributes
+		.iter()
+		.filter_map(|(name, value)| {
+			let mistake = |message: String, fix: String| Some((element.node, message, fix));
+			match (text_of(value), value) {
+				(Some(text), _) if crate::markup::is_boolean_attribute(name) => mistake(
+					format!("{name} takes yes or no: the text {text:?} leaves it out"),
+					format!("{name}: yes, or {name}: no"),
+				),
+				(Some(text), _)
+					if NUMBER_ATTRIBUTES.contains(&name.as_str()) && text.trim().parse::<f64>().is_err() =>
+				{
+					mistake(format!("{name} takes a number, not {text:?}"), format!("{name}: 3"))
+				}
+				(None, Node::Number(number)) if ADDRESS_ATTRIBUTES.contains(&name.as_str()) => mistake(
+					format!("{name} takes an address, not the number {number}"),
+					format!("{name}: \"/page\""),
+				),
+				_ => None,
+			}
+		})
+		.collect()
 }
 
 /// An element's items without its handlers (`on click {…}`, as a line of its own or as the items `on`, `click: {…}`),
@@ -381,10 +425,10 @@ fn says_something(item: &Node) -> bool {
 	match element_parts(item) {
 		Some((_, content, _)) => content_items(content)
 			.into_iter()
-			.any(|child| attribute_parts(child).is_none() && !is_handler(child) && says_something(child)),
+			.any(|child| written_attribute(child).is_none() && !is_handler(child) && says_something(child)),
 		None => {
 			!matches!(item.drop_meta(), Node::Empty)
-				&& attribute_parts(item).is_none()
+				&& written_attribute(item).is_none()
 				&& !is_handler(item)
 				&& !matches!(item.drop_meta(), Node::Text(text) if text.trim().is_empty())
 		}
@@ -400,11 +444,11 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 			attributes: head_attributes
 				.iter()
 				.chain(items.iter().copied())
-				.filter_map(attribute_parts)
+				.filter_map(written_attribute)
 				.collect(),
 			has_content: items
 				.iter()
-				.any(|item| attribute_parts(item).is_none() && says_something(item)),
+				.any(|item| written_attribute(item).is_none() && says_something(item)),
 			inside_label,
 			events,
 			blocks: items.iter().filter_map(|item| block_name(item)).collect(),
