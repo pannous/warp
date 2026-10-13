@@ -612,6 +612,27 @@ impl Node {
 		}
 	}
 
+	/// Where the Meta layers around this node say it was written: line and column (0 when unknown) and the comment
+	/// before it, or None when they say neither (card data-meta: `n.line`, `n.column`, `n.comment`)
+	pub fn written_at(&self) -> Option<(i64, i64, Option<String>)> {
+		let (mut position, mut comment) = (None, None);
+		let mut layer = self;
+		while let Meta { node: inner, data } = layer {
+			position = position.or_else(|| layer.get_lineinfo());
+			if let Key(word, _, text) = data.as_ref() {
+				if word.is_symbol("comment") {
+					comment = comment.or_else(|| text.text_value());
+				}
+			}
+			layer = inner;
+		}
+		if position.is_none() && comment.is_none() {
+			return None;
+		}
+		let (line, column) = position.map_or((0, 0), |at| (at.line_nr as i64, at.column as i64));
+		Some((line, column, comment))
+	}
+
 	// member functions taking self
 	/// The number of elements (P40: size counts elements, byte_size gives bytes): `len`
 	pub fn size(&self) -> usize {

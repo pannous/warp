@@ -191,6 +191,14 @@ const KIND_LIST = 8n;
 // the inverse of reader.js readNode for the values a task carries (src/tasks.rs TaskValue): built through the module's
 // constructors; a list from its cons cells, the first item in data, the next cells in the chain
 function buildValue(module, tree) {
+	// where it was written (src/web/mod.rs tree_of): kept by node_at, which only a module quoting or parsing code has
+	if (tree.at !== undefined) {
+		const { at: [line, column, comment], ...bare } = tree;
+		const node = buildValue(module, bare);
+		if (!module.node_at) return node;
+		const text = comment === null ? null : buildValue(module, { kind: "3", data: { text: comment }, chain: [] });
+		return module.node_at(node, BigInt(line), BigInt(column), text);
+	}
 	if (tree.closure !== undefined) {
 		const name = buildValue(module, { kind: "5", data: { text: tree.closure }, chain: [] });
 		return module.closure_rebuild(name, tree.captured === null ? null : buildValue(module, tree.captured));

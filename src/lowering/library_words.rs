@@ -568,6 +568,8 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
+			// `data (a.b)` stays the code as written, the Node the run-time `parse("a.b")` gives (card data-quote-lowered)
+			quoted if crate::blocks::quoted_data(&quoted).is_some() => quoted,
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].is_symbol(TRY_MARKER) => {
 				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
