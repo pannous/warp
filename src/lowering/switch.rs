@@ -339,7 +339,7 @@ pub(crate) fn is_map_pattern(pattern: &Node) -> bool {
 
 /// A field of a map pattern as its name and its pattern: `{name}` binds the field to its own name; `debug?: bool` is
 /// the optional field (card schemas)
-fn map_field(part: &Node) -> Option<(String, &Node)> {
+pub(crate) fn map_field(part: &Node) -> Option<(String, &Node)> {
 	if let Some(field) = optional_field(part) {
 		return map_field(field);
 	}
