@@ -74,9 +74,13 @@ list_text(view:any) := {
 	bracket = view#2
 	separator = view#3
 	items = view[3:]
-	inside = if #items == 1 then serialize(items#1) else join([serialize(item) for item in items], joint(separator))
+	inside = if #items == 1 then item_text(items#1) else join([item_text(item) for item in items], joint(separator))
 	opening(bracket) + inside + closing(bracket)
 }
+
+// a list item: a character is quoted like a text, ["a" "bb"], and reads back as the character it is (P126)
+item_text(item:any) := if kind(bare(item)) == "char" then quoted_char(bare(item)#2) else serialize(item)
+quoted_char(c:any) := if c == quote then quote + "\\" + c + quote else quote + c + quote
 
 // items are joined by their separator and a space, unless the separator is one (a newline)
 joint(separator:any) := if separator == "\n" or separator == " " or separator == "\t" then separator else separator + " "

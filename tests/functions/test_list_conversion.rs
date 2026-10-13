@@ -8,7 +8,7 @@ fn list_of_a_value() {
 		"[2 4 6]"
 	);
 	assert_eq!(eval("xs = [1, 2]; list(xs)").serialize(), "[1 2]");
-	assert_eq!(eval("list(\"ab\")").serialize(), "['a' 'b']");
+	assert_eq!(eval("list(\"ab\")").serialize(), "[\"a\" \"b\"]");
 }
 
 #[test]
