@@ -293,8 +293,8 @@ fn tree_of(node: &Node) -> Option<Value> {
 			let key_kind = (crate::operators::op_to_code(op) << KIND_BITS) | Kind::Key as i64;
 			json!({ "kind": key_kind.to_string(), "key": [tree_of(left)?, tree_of(right)?] })
 		}
-		Node::List(items, bracket, _) => {
-			let list_kind = (crate::wasm_emitter::bracket_info(bracket) << KIND_BITS) | Kind::List as i64;
+		Node::List(items, bracket, separator) => {
+			let list_kind = (crate::wasm_emitter::list_info(bracket, separator) << KIND_BITS) | Kind::List as i64;
 			json!({ "kind": list_kind.to_string(), "items": items.iter().map(tree_of).collect::<Option<Vec<_>>>()? })
 		}
 		_ => return None,
@@ -395,11 +395,17 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			crate::operators::code_to_op(info),
 			Box::new(value_node()),
 		),
-		tag if tag == Kind::Block as i64 => list_node(data.get("node").map(node_from_tree), value, Bracket::Curly),
+		tag if tag == Kind::Block as i64 => list_node(
+			data.get("node").map(node_from_tree),
+			value,
+			Bracket::Curly,
+			crate::wasm_emitter::separator_of_kind(kind),
+		),
 		tag if tag == Kind::List as i64 => list_node(
 			data.get("node").map(node_from_tree),
 			value,
 			crate::wasm_emitter::bracket_of_info(info),
+			crate::wasm_emitter::separator_of_kind(kind),
 		),
 		tag if tag == Kind::Data as i64 => {
 			let type_name = text();
@@ -424,14 +430,14 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 }
 
 /// A cons cell: its first item, then the items of the rest; no first item is the empty list's cell, a ø item is kept
-fn list_node(first: Option<Node>, rest: Option<Node>, bracket: Bracket) -> Node {
+fn list_node(first: Option<Node>, rest: Option<Node>, bracket: Bracket, separator: Separator) -> Node {
 	let mut items: Vec<Node> = first.into_iter().collect();
 	match rest {
 		Some(Node::List(rest_items, _, _)) => items.extend(rest_items),
 		Some(Node::Empty) | None => {}
 		Some(other) => items.push(other),
 	}
-	Node::List(items, bracket, Separator::None)
+	Node::List(items, bracket, separator)
 }
 
 /// A Float payload: `{"float": number}`, or a text for what JSON has no number for (`"NaN"`, `"Infinity"`, `"-0"`)
