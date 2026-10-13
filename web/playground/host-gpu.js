@@ -408,7 +408,7 @@ function gpuJob(word, job, transfer = [], Words = Float32Array) {
 
 // the one shared buffer every GPU job answers in, emptied for the next: the program waits for each answer, so one is
 // enough. A buffer per job (a frame each) reserved TASK_RESULT_LIMIT each, kept alive by the idle task Worker it went
-// to, and Safari ran out of memory after about 200 of them (card webgpu-safari, probes/safari_probe.py)
+// to, and Safari ran out of memory after about 200 of them (card webgpu-safari, notes/web_playground.md)
 let gpuShared;
 function gpuAnswers() {
 	gpuShared ??= new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
