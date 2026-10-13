@@ -191,7 +191,7 @@ fn markup_functions(statements: &[Node]) -> HashMap<String, Node> {
 /// renders once, each hole is its part of that rendering, the instance's own state shown. Only a program rendering
 /// itself has them: the playground reads them
 fn hole_bindings(shown: &Node, markups: &HashMap<String, Node>) -> Vec<Node> {
-	if !crate::pipeline::renders_itself() {
+	if !crate::pipeline::compile_mode().renders_itself() {
 		return vec![];
 	}
 	let (elements, texts) = crate::markup::holes_through(shown, markups);
@@ -596,7 +596,7 @@ impl Component {
 
 	/// The main-level lists of the state, the instance counter and the instances of the render before
 	fn declarations(&self) -> Vec<Node> {
-		let template = if crate::pipeline::is_for_dev() {
+		let template = if crate::pipeline::compile_mode().for_dev {
 			DEV_STATE_DECLARATION
 		} else {
 			STATE_DECLARATION
@@ -648,7 +648,7 @@ impl Component {
 		let dev_saves = self
 			.lists()
 			.into_iter()
-			.filter(|_| crate::pipeline::is_for_dev())
+			.filter(|_| crate::pipeline::compile_mode().for_dev)
 			.map(|list| kept_in_dev(DEV_STATE_SAVE, list));
 		all_seen
 			.chain(cleaning)

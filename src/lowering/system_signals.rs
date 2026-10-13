@@ -102,7 +102,7 @@ pub fn lower(program: Node) -> Node {
 #[cfg(feature = "native")]
 fn with_window_events(program: Node) -> Node {
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
-	if crate::pipeline::is_for_a_page() || crate::event_signals::serves_its_page(&statements) {
+	if crate::pipeline::compile_mode().for_a_page || crate::event_signals::serves_its_page(&statements) {
 		return program;
 	}
 	let mut listened = false;

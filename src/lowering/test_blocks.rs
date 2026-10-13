@@ -27,7 +27,7 @@ pub fn lower(program: Node) -> Node {
 	{
 		return program;
 	}
-	match crate::pipeline::is_for_tests() {
+	match crate::pipeline::compile_mode().for_tests {
 		true => sequence(
 			[
 				statements(&template(PROLOGUE)),

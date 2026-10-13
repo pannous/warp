@@ -620,10 +620,7 @@ pub fn program_file() -> Option<PathBuf> {
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
-	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));
-	let result = body();
-	PROGRAM_FILE.with(|current| *current.borrow_mut() = previous);
-	result
+	crate::util::scoped(&PROGRAM_FILE, Some(file.to_path_buf()), body)
 }
 
 fn folder_of(file: &Path) -> PathBuf {
@@ -709,7 +706,7 @@ type NeededBy = fn(&Node) -> bool;
 /// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
 const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
-	("markup", |_| crate::pipeline::renders_itself()),
+	("markup", |_| crate::pipeline::compile_mode().renders_itself()),
 	("router", |program| {
 		defined(program, crate::routes::PAGE_ROUTES).is_some() || {
 			let called = called_names(statements_of(program));
@@ -725,7 +722,7 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	(SOUND_MODULE, |program| {
 		first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()
 	}),
-	("wagi", |_| crate::pipeline::is_for_wagi()),
+	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
 ];
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)

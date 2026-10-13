@@ -55,10 +55,7 @@ pub const GENERATED_FILE: &str = "generated";
 
 /// `parse` with the positions it records marked as in `file`: a module's, so its failures name it
 pub fn parsing_file<T>(file: &str, parse: impl FnOnce() -> T) -> T {
-	let outer = PARSED_FILE.with(|parsed| parsed.replace(Some(file.to_string())));
-	let parsed = parse();
-	PARSED_FILE.with(|parsed_file| *parsed_file.borrow_mut() = outer);
-	parsed
+	crate::util::scoped(&PARSED_FILE, Some(file.to_string()), parse)
 }
 
 // Custom trait for cloneable Any types with equality support

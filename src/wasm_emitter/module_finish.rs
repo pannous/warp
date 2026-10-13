@@ -146,7 +146,7 @@ impl WasmGcEmitter {
 
 		// a user function's parameter names, for debuggers and wasm-tools; a page leaves them out for size, an importer
 		// reads them from warp.meta (wasm_modules.rs read_exports)
-		if !crate::pipeline::is_for_a_page() {
+		if !super::config::compile_mode().for_a_page {
 			let parameter_names = self
 				.ctx
 				.user_functions
