@@ -5,7 +5,7 @@
 //!   multi-value results, and a plain call `f()` gets them packed into the list `[a b]`
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
-use super::nodes::key;
+use super::nodes::children_rewritten;
 use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::STARRED;
@@ -22,14 +22,9 @@ pub fn unstarred(name: &str) -> &str {
 
 pub fn lower(node: Node) -> Node {
 	let lowered = match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower(*node)),
-			data,
-		},
 		Node::Key(left, Op::Assign, right) if bracketed_targets(&left).is_some() => {
 			regroup_bracketed_destructuring(&left, &lower(*right)).expect("guarded")
 		}
-		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::List(items, bracket, separator) => {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
 			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
@@ -58,7 +53,7 @@ pub fn lower(node: Node) -> Node {
 			};
 			regrouped.unwrap_or(Node::List(items, bracket, separator))
 		}
-		other => other,
+		other => children_rewritten(other, lower),
 	};
 	check_definition(&lowered).unwrap_or(lowered)
 }
