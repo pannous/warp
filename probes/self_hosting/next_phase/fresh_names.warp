@@ -1,0 +1,6 @@
+// lowering pass: fresh names like go·job·0 need a counter that survives calls (a main-level variable is changed as global)
+// go·job·0, go·job·1
+counter = 0
+fresh(prefix) := { global counter; name = prefix + "·" + counter; counter += 1; symbol(name) }
+print(fresh("go·job"))
+print(fresh("go·job"))

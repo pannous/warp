@@ -7,7 +7,7 @@ wiki/goals.md).
 
 Decided (user, 2026-10-12, notes/decisions.md "self-hosting"):
 - Purpose: dogfooding (the compiler in warp shows what the language lacks), independence from Rust, and a showcase.
-- Scope: the parser first (lexer, parser, serializer). The later parts get planned once that works (self-next-phase).
+- Scope: the parser first (lexer, parser, serializer). The later parts: section Next phase (self-next-phase).
 - Integration: twins, checked. Each warp part runs next to its Rust twin, and a differential test over every sample
   compares them. The Rust part goes only when its twin matches everywhere.
 - Language gaps: fixed in the language as cards of this topic, never worked around in the warp code.
@@ -60,7 +60,7 @@ Gaps (each a card below):
 | 6 | self-parser | Parser in warp producing the same Node as src/warp_parser | 2, 5 |
 | 7 | self-serializer | Node::serialize (text emitter) in warp | 2, 4 |
 | 8 | self-showcase | The warp-written parser as a sample (playground and guide): warp parses itself | 6 |
-| 9 | self-next-phase | Plan the next parts once the parser twin matches (lowering passes as plugins, emitter, bootstrap) | 6, 7 |
+| 9 | self-next-phase | Plan the next parts: passes, analyzer, emitter (section Next phase, steps 10–18) | 6, 7 |
 
 Rules
 - Each step lands with its differential test (step 4): same Node, same text as the Rust twin.
@@ -75,6 +75,51 @@ Rules
   blanks before scanning declarations); lexer.warp `spans` matches it on every source. The tokens after it (numbers,
   names, groups) get their twin from the parse tree's positioned atoms.
 - A new gap found on the way becomes its own card in this topic (todo add … --topic self-hosted).
+
+## Next phase: passes, analyzer, emitter (card self-next-phase, 2026-10-13)
+Order: the lowering passes first, then the analyzer, then the emitter. Each stage can start before the previous one
+is complete; only the bootstrap waits for all three.
+
+- Lowering passes first. src/pipeline.rs runs ~150 passes, each `fn(Node) -> Node`, in SOURCE_PASSES and
+  MEANING_PASSES (~50k lines in src/lowering). A pass is the smallest unit with a twin: one function, one input tree,
+  one output tree.
+  - They can be ported one at a time, early and self-contained passes first.
+  - Each twin can replace its Rust pass once it matches everywhere.
+  - They need no host Node. They take node_view data, the form parser.warp's `tree` writes (warp-dispatch's advice).
+    probes/self_hosting/next_phase/view_pass.warp rebuilds a view bottom-up.
+  - warp-dispatch is moving semantic rewrites out of the Rust parser into passes (times phrases), which shrinks the
+    parser twin and supplies easy passes.
+- The analyzer second (6.6k lines). Its result is the kind of each definition and value, not a tree. It needs
+  scopes: maps from names to kinds. text_key_map.warp works.
+- The emitter last (23k lines). It needs byte output and float bits (gaps below), and its twin compares run results,
+  not bytes: the Rust emitter's module layout is not a contract.
+
+| # | Card | Step | Differential check | Builds on |
+|---|------|------|--------------------|-----------|
+| 10 | twin-harness | Pass twin harness | `pass_differential(k, part, word)`: the Rust passes 0..k-1, the view as JSON to the warp word, compared with node_view after Rust pass k, every sample and probe | 4 |
+| 11 | times-phrases | First pass twins: number_words (80 lines), word_slices (210), times phrases (warp-dispatch's) | as 10 | 10 |
+| 12 | carries-line | node_view keeps line:column where a pass reports, so hints and errors are compared too | passes that hint compare their diagnostics | 10 |
+| 13 | parser-tree | Chained: parser.warp `tree`, then the warp passes in pipeline order | node_view after the same Rust passes, from the source text alone | 6, 11 |
+| 14 | inferred-kinds | Analyzer twin: the kind of each definition and top-level value, as text | the same text from src/analyzer | 10 |
+| 15 | emits-wasm | Emitter core in warp: ints, floats, functions, if, while | the warp-written module runs to the same value as Rust's, for every sample in that subset | 16, 17 |
+| 16 | path-list | write_bytes / read_bytes for binary files | gap |  |
+| 17 | f64-const | float_bits / bits_float: a float's IEEE bits as an int | gap |  |
+| 18 | two-ints | `n & 127` on ints is logical, silently; hint toward bit_and | gap, footgun |  |
+
+The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
+
+Probes (probes/self_hosting/next_phase/):
+- Work: text-key maps (text_key_map), Node API rewrites (node_rewrite), a pass over the view (view_pass), fresh
+  names with a `global` counter (fresh_names), LEB128 with `use math` bit_and/bit_or and `>>` (bit_ops), recursion
+  10000 deep (deep_recursion).
+- Gaps:
+  - no binary files (byte_output);
+  - no float bits (float_bits);
+  - `&`/`|` on ints are logical with an `and` hint (logical_and_on_ints);
+  - the call stack runs out between 10000 and 20000 frames. This is enough for parse trees, so it has no card yet.
+- Decided without the user (undoable): a pass twin takes node_view data, not a host Node. A `parse` word that gives
+  warp code real Nodes would need a host word and a GC reader. It becomes a card once a pass needs Meta that the view
+  cannot carry.
 
 ## Serializer twin (card self-serializer)
 lib/compiler/serializer.warp `serialize(view)` writes a node as Node::serialize does (src/node/serialization.rs),

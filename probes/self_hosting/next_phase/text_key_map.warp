@@ -1,0 +1,8 @@
+// analyzer: a scope maps names to types, updated as definitions are read
+// int, text, 2
+scope = {}
+scope["x"] = "int"
+scope["y"] = "text"
+print(scope["x"])
+print(scope["y"])
+print(#scope)

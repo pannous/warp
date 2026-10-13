@@ -2,7 +2,7 @@
 // 20
 gate = channel()
 slow(g) := { g.receive(); 10 }
-quick() := 20
+quick() := { sleep(10ms); 20 }
 r = await any [go slow(gate), go quick()]
 gate.send(0)
 print(r)

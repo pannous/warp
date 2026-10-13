@@ -1,0 +1,4 @@
+// any pass: recursion as deep as a long else-if chain or a nested list; 10000 works, 20000 exhausts the call stack
+// 10000
+depth(n) := if n == 0 then 0 else 1 + depth(n - 1)
+print(depth(10000))

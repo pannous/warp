@@ -1,0 +1,6 @@
+// lowering pass: a pass takes the program as a Node; warp code needs a parsed source as a Node
+// +, 1, 2
+n = parse("1 + 2")
+print(n.op)
+print(n.key)
+print(n.value)

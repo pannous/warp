@@ -1,0 +1,11 @@
+// lowering pass: rebuild a tree bottom-up, `x + 0` → `x`, with the Node API
+// (y)
+simplify(n) := {
+	if type(n) is key {
+		left = simplify(n.key); right = simplify(n.value)
+		if n.op == "+" and right == 0 { return left }
+		return key(left, n.op, right)
+	}
+	n
+}
+print(simplify(key(symbol("y"), "+", 0)))
