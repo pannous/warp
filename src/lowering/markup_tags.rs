@@ -4,9 +4,9 @@
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
 use super::nodes::key;
-use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::HashSet;
 
 const ALL_WORD: &str = "all";

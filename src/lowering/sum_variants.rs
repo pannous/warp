@@ -5,10 +5,8 @@
 use super::nodes::key;
 use crate::node::Node;
 use crate::operators::Op;
+use crate::words::VARIANTS_MARK;
 use std::collections::HashMap;
-
-/// The parser's attribute on a sum type's name: its variants without payload
-pub const VARIANTS_MARK: &str = "variants";
 
 /// A sum type's variants: those without payload by name, the classes extending it
 #[derive(Default)]

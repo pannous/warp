@@ -255,7 +255,7 @@ fn collect_function_uses(
 	};
 	match node.drop_meta() {
 		// `switch c {cases}` parses as [switch, (c {cases})]: the subject and its cases, no call of c
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::switch::SWITCH_WORDS.contains(&word.as_str())) => {
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::words::SWITCH_WORDS.contains(&word.as_str())) => {
 			for item in &items[1..] {
 				match item.drop_meta() {
 					Node::List(pair, _, _) if pair.len() == 2 => pair

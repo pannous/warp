@@ -19,13 +19,13 @@
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
 use super::nodes::call;
-use super::words::{FROM_WORD, ON_WORD};
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::extensions::numbers::Number;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FROM_WORD, ON_WORD};
 
 const EVERY_WORD: &str = "every";
 const FRAME_WORD: &str = "frame";

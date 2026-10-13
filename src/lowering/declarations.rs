@@ -6,9 +6,9 @@
 use super::nodes::{
 	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key, Counter,
 };
-use super::words::{ON_WORD, RETURN_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
+use crate::words::{ON_WORD, RETURN_WORD};
 
 mod tasks;
 pub use tasks::*;

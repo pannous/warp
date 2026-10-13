@@ -91,7 +91,7 @@ Batch 2 (branch classes-2):
   a default.
 - A field with a default (`x:int=1`, `k = 3`) is read from self in methods too (it gave the bare symbol before).
 - `p.items.add(v)` / `.insert(…)` of a field path update the field like `xs.add(v)` updates a variable
-  (declaration_lowering is_place); a method doing it changes its object, so a Stack's `push` works.
+  (declaration_forms is_place); a method doing it changes its object, so a Stack's `push` works.
 - Convention (P123 follow-up): new tests name classes with a capital, `Point{x:1 y:2}`.
 Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
 - key_emitter emit_default_key: an instance keeps its curly bracket info (it was turned into a `[…]` list, so the
@@ -153,7 +153,7 @@ object, so every holder sees it: aliases (`q = p; q.x = 7`), list items (`xs = [
 functions, for instances and maps alike. struct_backend.rs and map_backend.rs keep a variable on the struct or hash-table
 backend only while it is never used as a whole value (used_whole: `q = p`, `[p]`, print(p), an argument to a non-struct
 parameter make it the shared Node); field writes and a bare final `p` do not count. A map parameter becomes a hash-table
-copy (`m·map = m`, declaration_lowering.rs keys) only when the function never sets an entry of it. The old
+copy (`m·map = m`, declaration_forms.rs keys) only when the function never sets an entry of it. The old
 copy-in/copy-out pass (lowering/shared_instances.rs) is gone.
 Copies (P205/P207, runtime instance_copy(object, shallow)): `x.copy()` is deep (deep_copy with a memo of
 `original:copy` pairs, so a part held twice or a cycle is copied once; numbers, texts, closures and data are shared),
@@ -209,7 +209,7 @@ pair `[pop·value, self]`; `s.pop()` of a variable is `(pop·result = pop(s); s 
 (class_methods Change::GivingValue; a changing method ends in a value unless its last statement assigns or appends).
 A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `method·pop` like a type-word
 method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
-body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_lowering
+body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_forms
 popped_list takes any place, as add/insert did).
 
 Instances held as Nodes (classes-17): a field read by name of an instance that is no struct variable (`for p in ps

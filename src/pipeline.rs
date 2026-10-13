@@ -304,9 +304,11 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::interpolation::lower_program,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
+	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
+	crate::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::shader_holes::lower,
-	crate::analyzer::lower_inline_unions,
+	crate::declaration_forms::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
@@ -320,6 +322,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `fib(0) := 0; fib(n) := …`: a second definition of one shape is an error with a match as its fix
+	crate::lowering::definition_cases::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
 	crate::lowering::index_positions::mark_declarations,
 	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
@@ -407,7 +411,7 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::std_aliases::lower,
 	crate::class_methods::lower_json_classes,
 	crate::welcome_forms::lower,
-	crate::analyzer::lower_kebab_members,
+	crate::kebab_names::lower_kebab_members,
 	crate::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
@@ -481,7 +485,7 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::type_name_matching::lower,
 	crate::meta_entries::lower,
 	crate::versions::lower_versions,
-	crate::analyzer::lower_negated_calls,
+	crate::negated_calls::lower_negated_calls,
 	// `lo(a:number) := a.low; lo(5 ± 1)`: a number parameter of a program with ± values holds one (uncertain.rs)
 	crate::uncertain::lower_interval_parameters,
 ];
@@ -495,7 +499,7 @@ const MEANING_PASSES: &[fn(Node) -> Node] = &[
 	crate::traits::lower_declarations,
 	crate::type_tests::lower,
 	crate::ambiguous_forms::lower,
-	crate::analyzer::lower_list_times,
+	crate::declaration_forms::lower_list_times,
 	// before any pass reads a call's arity: `square square 2` nests, `f(a)` and `f(a, b)` become `f·1`, `f·2`
 	crate::broadcasting::lower_scalar_element_wise,
 	crate::broadcasting::lower_prefix_calls,
@@ -616,9 +620,11 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	crate::diagnostic::report(&crate::analyzer::lint(&node))?;
-	Ok(crate::analyzer::indexed_parameter_copies(crate::inlining::lower(
-		crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)),
-	)))
+	Ok(crate::declaration_forms::indexed_parameter_copies(
+		crate::inlining::lower(crate::declaration_forms::lower_declarations(
+			crate::kebab_names::resolve_data_scope(node),
+		)),
+	))
 }
 
 /// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value

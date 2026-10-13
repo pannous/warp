@@ -6,14 +6,16 @@
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
 use super::nodes::{call, children_rewritten, key, Counter};
-use super::words::SUM_WORD;
-use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
+use crate::analyzer::{call_name, counting_method};
 use crate::context::Context;
+use crate::declaration_forms::is_list_mutating_method;
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
+use crate::words::SUM_WORD;
+use crate::words::{CODEPOINT, MAP_KEYS, SLICE};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -24,7 +26,6 @@ pub use counts::*;
 
 /// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
 /// JavaScript's spellings too) and `m.get(k)`/`m.get(k, default)`. A key is found by its letters, quoted or not.
-pub const MAP_KEYS: &str = "map_keys";
 pub const MAP_VALUES: &str = "map_values";
 /// map_entries(xs): the `key:value` entries of a map as a list (a one-entry map `{a:1}` is the entry itself), else xs
 pub const MAP_ENTRIES: &str = "map_entries";
@@ -96,7 +97,7 @@ const SYNONYMS: [(&str, &[&str]); 30] = [
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
 	(DICT_WORD, &[]),
 	(FROMKEYS, &[]),
-	(crate::mutation::UNWRAP, &[]),
+	(crate::words::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
@@ -128,10 +129,6 @@ pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 /// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
 /// compiler it is `ord`, since `codepoint` is also a type word
 pub const ORD: &str = "ord";
-/// P74 (user, 2026-10-05): "make codepoint the default name": the spelling hints, fixes and docs use
-pub const CODEPOINT: &str = "codepoint";
-/// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
-pub const SLICE: &str = "slice";
 /// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
 /// `s.split` splits at spaces (left_out_argument)
 const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT, 1)];
@@ -180,7 +177,7 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(
-		crate::mutation::UNWRAP,
+		crate::words::UNWRAP,
 		1,
 		"if hidden_value == ø then error \"unwrapped ø\" else hidden_value",
 	),
@@ -202,7 +199,7 @@ const ARITY_VARIANTS: [(&str, usize, &str); 3] = [
 	("last", 2, "last_items"),
 ];
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
-/// and popped_rest, `x.clear()` to cleared (declaration_lowering removed_key, cleared_collection)
+/// and popped_rest, `x.clear()` to cleared (declaration_forms removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
 const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
 	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];

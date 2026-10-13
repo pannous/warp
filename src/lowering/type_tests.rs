@@ -7,14 +7,14 @@
 
 use super::memoization::{definition_parts, Rebuild};
 use super::nodes::{call, children_rewritten, is_call_head, key, parameter_name};
-use super::words::OF_WORD;
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::IS_TYPE;
+use crate::words::OF_WORD;
 use std::collections::HashSet;
 
-pub const IS_TYPE: &str = "is_type";
 /// `node_kind_in(node, mask)`: 1 when the run-time kind of node is in the bit mask of kinds (wasm_emitter list_ops.rs)
 pub const NODE_KIND_IN: &str = "node_kind_in";
 /// `node_type_name(node)`: `type(x)` of a value of unknown static type, its run-time type as a symbol (list_ops.rs)

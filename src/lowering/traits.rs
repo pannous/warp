@@ -7,13 +7,13 @@
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
 
 use super::nodes::{call, children_rewritten, if_then, if_then_else, key};
-use super::words::{FOR_WORD, IN_WORD};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_constructor::{instance_parts, Instance};
 use crate::type_kinds::TypeRegistry;
+use crate::words::{FOR_WORD, IN_WORD};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -620,7 +620,7 @@ fn with_conformance_tests(node: Node, names: &[String]) -> Node {
 		Node::Key(subject, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(name) if names.contains(name)) => {
 			let subject = with_conformance_tests(*subject, names);
 			call(
-				crate::type_tests::IS_TYPE,
+				crate::words::IS_TYPE,
 				vec![subject, Node::Text(right.drop_meta().name())],
 			)
 		}
@@ -670,7 +670,7 @@ pub fn lower_conformances(node: Node) -> Node {
 /// `b.size` of a declared field reads the field
 fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &HashMap<String, Generic>) -> Node {
 	let is_operation = |member: &Node| {
-		let name = crate::lowering::class_methods::leading_name(member);
+		let name = crate::node::leading_name(member);
 		let reads_field = matches!(member.drop_meta(), Node::Symbol(_)) && is_declared_field(registry, &name);
 		!reads_field
 			&& (traits
@@ -684,7 +684,7 @@ fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generic
 				Node::List(items, _, _) => items[1..].to_vec(),
 				_ => vec![],
 			};
-			let name = Node::Symbol(crate::lowering::class_methods::leading_name(&member));
+			let name = Node::Symbol(crate::node::leading_name(&member));
 			let arguments = std::iter::once(*receiver)
 				.chain(arguments)
 				.map(|argument| operation_calls(argument, registry, traits, generics));
@@ -771,7 +771,7 @@ fn is_call_head(head: &Node) -> bool {
 /// a head without parameters (`f := it.width`)
 pub fn untyped_parameters(head: &Node) -> Vec<String> {
 	if matches!(head.drop_meta(), Node::Symbol(_)) {
-		return vec![crate::lambdas::IMPLICIT_PARAMETER.to_string()];
+		return vec![crate::words::IMPLICIT_PARAMETER.to_string()];
 	}
 	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
 	let untyped = |parameter: &Node| match parameter.drop_meta() {
@@ -881,7 +881,7 @@ fn claim<'a>(node: &'a Node, traits: &'a Traits) -> Option<(&'a Node, &'a Trait)
 	let Node::List(items, bracket, separator) = node.drop_meta() else {
 		return None;
 	};
-	if call_name(items, bracket, separator) != Some(crate::type_tests::IS_TYPE) {
+	if call_name(items, bracket, separator) != Some(crate::words::IS_TYPE) {
 		return None;
 	}
 	let [_, declaration, spec] = items.as_slice() else {

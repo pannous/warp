@@ -1,5 +1,5 @@
 //! The array calling convention for lists (notes/typed_lists.md): a function that works on a list parameter through its
-//! array copy (`arr·list = arr`, analyzer::indexed_parameter_copies) takes that parameter as a `$NodeList` and copies it
+//! array copy (`arr·list = arr`, declaration_forms::indexed_parameter_copies) takes that parameter as a `$NodeList` and copies it
 //! with one array.copy, instead of a Node list the caller rebuilds and the callee converts back; a function whose every
 //! result is such an array, or a call of another such function, returns the `$NodeList` itself. Callers convert only
 //! where they need a Node: recursive list algorithms (quicksort_partitioned) stop converting at every call.

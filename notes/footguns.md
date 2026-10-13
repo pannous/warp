@@ -104,7 +104,7 @@
   (`x=ø; x+1` → Error, narrowed inside `if x {…}`), `a and b or c` lint (stderr warning + `analyzer::lint`), float and
   >32-bit conditions (`if 0.5`, `if 2^32` were falsy), parser now consumes `ø` in `parse_atom` (`if ø {…}` was garbage).
 - Mechanism: `src/diagnostic.rs` (`Diagnostic::at(node,…).fix(…)` → "msg at line:col; fix: …"), `analyzer::diagnose` runs
-  before emission in `eval_parsed`, `analyzer::lower_declarations` turns `x:T=v` into a typed local (type kept as Meta on x).
+  before emission in `eval_parsed`, `declaration_forms::lower_declarations` turns `x:T=v` into a typed local (type kept as Meta on x).
   Truthiness rides on the strings-equality agent's `emit_condition`/`is_truthy`; I added the float/i64 != 0 branch.
 - Decided: empty values falsy, uniformly (Footguns.md → Empty values, with alternatives).
 - Left open: `T?` syntax (`x:int?=ø` parse error) and locals first assigned `ø` panic in the emitter
@@ -394,7 +394,7 @@ test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_
 - Implemented: `number of X in t` for the text units `byte(s)`, `char(s)`, `codepoint(s)`, `grapheme(s)` (singular or
   plural, `count of`/`length of` too), and the unit views `#(byte in t)`, `#(t as bytes)`; on literals and variables.
   `number of chars in "héllo"` → 5, `number of graphemes in "👍🏽"` → 1, `number of bytes in "héllo"` → 6,
-  `number of codepoints in "👍🏽"` → 2. Lowered in `analyzer::lower_declarations` (`counting_phrase`, `unit_count`) onto
+  `number of codepoints in "👍🏽"` → 2. Lowered in `declaration_forms::lower_declarations` (`counting_phrase`, `unit_count`) onto
   the existing `t.bytes`/`t.chars`/`t.graphemes` methods; `number of pixels` keeps lowering to `count pixels`.
   The parser no longer takes `#(` at line start as a shell comment (`#x` already counted after a statement).
 - Decided: a `char` is a code point (as `x.chars`, the `char` type, Rust's `chars()`); the user-perceived character is a

@@ -3,11 +3,11 @@
 //! every later pass like written ones; `+=`, no `push`, which a program's own `push(st, x)` would answer. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
 use super::nodes::{children_rewritten, key, Counter};
-use super::words::{FOR_WORD, IN_WORD};
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::{HashMap, HashSet};
 
 const IF_WORD: &str = "if";
@@ -140,7 +140,7 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 	match condition {
 		Node::Symbol(name) if fields.contains(&name) => {
 			let field_of_it = key(
-				symbol(crate::lambdas::IMPLICIT_PARAMETER),
+				symbol(crate::words::IMPLICIT_PARAMETER),
 				Op::Dot,
 				Node::Symbol(name.clone()),
 			);
@@ -314,7 +314,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	let Node::Symbol(name) = variable.drop_meta() else {
 		return None;
 	};
-	let condition = substitute(condition.clone(), name, &symbol(crate::lambdas::IMPLICIT_PARAMETER));
+	let condition = substitute(condition.clone(), name, &symbol(crate::words::IMPLICIT_PARAMETER));
 	let filter = Node::List(
 		vec![sequence.clone(), where_word.clone(), condition],
 		Bracket::None,
@@ -348,10 +348,10 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 		return None;
 	};
 	let condition = phrase(rest);
-	if crate::lambdas::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER) {
+	if crate::lambdas::mentions(&condition, crate::words::IMPLICIT_PARAMETER) {
 		return None;
 	}
-	let condition = substitute(condition, name, &symbol(crate::lambdas::IMPLICIT_PARAMETER));
+	let condition = substitute(condition, name, &symbol(crate::words::IMPLICIT_PARAMETER));
 	let (Ok(found) | Err(found)) =
 		crate::database_tables::queried(sequence, &condition, &lists.variables, &mut lists.tables)?;
 	let clause = Node::List(
@@ -364,7 +364,7 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 
 /// `[it, (for it in xs if), condition]`, as the parser groups a comprehension
 fn where_comprehension(subject: &Node, condition: &Node) -> Node {
-	if !crate::lambdas::mentions(condition, crate::lambdas::IMPLICIT_PARAMETER) {
+	if !crate::lambdas::mentions(condition, crate::words::IMPLICIT_PARAMETER) {
 		let subject = subject.serialize();
 		let field_hint = field_condition(condition)
 			.map(|(field, written)| format!(", or {subject} where {written} for a field {field} of each element"))
@@ -376,7 +376,7 @@ fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 	}
 	// a name of its own: in a function of one parameter `it` is that parameter
 	let element = symbol(WHERE_ELEMENT);
-	let condition = substitute(condition.clone(), crate::lambdas::IMPLICIT_PARAMETER, &element);
+	let condition = substitute(condition.clone(), crate::words::IMPLICIT_PARAMETER, &element);
 	let word = |word: &str| symbol(word);
 	let clause = Node::List(
 		vec![
@@ -401,7 +401,7 @@ fn field_condition(condition: &Node) -> Option<(String, String)> {
 	let Node::Symbol(name) = field.drop_meta() else {
 		return None;
 	};
-	let it = symbol(crate::lambdas::IMPLICIT_PARAMETER);
+	let it = symbol(crate::words::IMPLICIT_PARAMETER);
 	let field_of_it = Node::Key(Box::new(it), Op::Dot, field.clone());
 	Some((
 		name.clone(),

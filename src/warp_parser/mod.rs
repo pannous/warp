@@ -2,8 +2,8 @@ use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::extensions::strings::StringExtensions;
-use crate::lowering::nodes::call;
 use crate::meta::LineInfo;
+use crate::node::call;
 use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
@@ -109,14 +109,6 @@ const NONLOCAL_WORD: &str = "nonlocal";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
-/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [
-	('+', Op::Add),
-	('-', Op::Sub),
-	('*', Op::Mul),
-	('/', Op::Div),
-	('^', Op::Pow),
-];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
@@ -489,7 +481,12 @@ impl SpecialInfix {
 				);
 				lhs
 			}
-			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
+			// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+			SpecialInfix::ElementWise(op) => Node::List(
+				vec![lhs, Symbol(crate::operators::element_wise_word(op)), operand],
+				Bracket::None,
+				Separator::Space,
+			),
 			SpecialInfix::Membership(word) => Node::List(
 				vec![lhs, Symbol(word.to_string()), operand],
 				Bracket::None,
@@ -618,7 +615,7 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 
 /// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
 fn iterates_keys(iterable: &Node) -> bool {
-	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::library_words::MAP_KEYS);
+	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::words::MAP_KEYS);
 	let is_keys_call = |call: &Node| {
 		is_keys_word(call)
 			|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word))
@@ -650,7 +647,7 @@ const TO_SENTENCE_WORD: &str = "To";
 const DO_WORD: &str = "do";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
-const SLICE_WORD: &str = crate::library_words::SLICE;
+const SLICE_WORD: &str = crate::words::SLICE;
 pub(crate) const TIMES_WORD: &str = "times";
 /// The call `n times text` is parsed to: the text repeated n times
 pub const TEXT_TIMES: &str = "times·text";
@@ -1118,8 +1115,8 @@ fn typed_parameter(arguments: Node) -> Node {
 			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
 			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => {
 				match name.drop_meta() {
-					Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
-					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::tuples::STARRED, name.name())),
+					Symbol(name) => Symbol(format!("{}{name}", crate::words::STARRED)),
+					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::words::STARRED, name.name())),
 					_ => arguments,
 				}
 			}
