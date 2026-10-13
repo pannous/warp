@@ -50,6 +50,12 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		("file", "write", [path, text]) => std::fs::write(text_of(path)?, content_of(text)?)
 			.map(|_| Node::Empty)
 			.map_err(|problem| failure(problem.to_string())),
+		("file", "write_bytes", [path, bytes]) => std::fs::write(text_of(path)?, bytes_of(bytes).map_err(failure)?)
+			.map(|_| Node::Empty)
+			.map_err(|problem| failure(problem.to_string())),
+		("file", "read_bytes", [path]) => std::fs::read(text_of(path)?)
+			.map(|bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte.into()))))
+			.map_err(|problem| failure(problem.to_string())),
 		("file", "append", [path, text]) => {
 			use std::io::Write;
 			let mut file = std::fs::OpenOptions::new()
@@ -344,11 +350,27 @@ fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 }
 
 fn texts(items: impl IntoIterator<Item = String>) -> Node {
+	list_of(items.into_iter().map(Node::Text))
+}
+
+fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
 	Node::List(
-		items.into_iter().map(Node::Text).collect(),
+		items.into_iter().collect(),
 		crate::node::Bracket::Square,
 		crate::node::Separator::Space,
 	)
+}
+
+/// The bytes a list of ints 0 to 255 stands for
+fn bytes_of(list: &Node) -> Result<Vec<u8>, String> {
+	list.as_items()
+		.iter()
+		.map(|item| match item.drop_meta() {
+			Node::Number(crate::extensions::numbers::Number::Int(value)) => u8::try_from(*value).ok(),
+			_ => None,
+		}
+		.ok_or_else(|| format!("{} is no byte (0 to 255)", item.serialize().trim())))
+		.collect()
 }
 
 /// The pattern, if both engines read it alike: Rust's regex has no look-around or backreferences, so JS RegExp may not
