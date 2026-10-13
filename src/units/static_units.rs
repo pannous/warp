@@ -85,12 +85,6 @@ enum Stop {
 	Recursive,
 }
 
-fn mentions_si_amount(program: &Node) -> bool {
-	let mut found = false;
-	program.visit(&mut |node| found |= matches!(node.drop_meta(), Node::Symbol(name) if name == SI_AMOUNT_WORD));
-	found
-}
-
 /// `si_amount(x)` is x once the units are checked: the calls output_form did not meet, or all of a program without units
 fn without_si_amounts(node: Node) -> Node {
 	match node.drop_meta() {
@@ -108,7 +102,7 @@ fn without_si_amounts(node: Node) -> Node {
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 	match super::shadowing(program, || lower_shadowed(program)) {
 		Some(lowered) => Some(lowered.map(without_si_amounts)),
-		None => mentions_si_amount(program).then(|| Ok(without_si_amounts(program.clone()))),
+		None => program.mentions(SI_AMOUNT_WORD).then(|| Ok(without_si_amounts(program.clone()))),
 	}
 }
 

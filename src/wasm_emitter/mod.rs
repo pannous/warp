@@ -1271,11 +1271,7 @@ pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 
 /// Is the first statement that mentions `name` its plain assignment `name = value` (value not reading name)
 fn first_mention_assigns(statements: &[Node], name: &str) -> bool {
-	let mentions = |node: &Node| {
-		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == name));
-		found
-	};
+	let mentions = |node: &Node| node.mentions(name);
 	match statements
 		.iter()
 		.find(|statement| mentions(statement))

@@ -255,9 +255,7 @@ fn has_bang(node: &Node) -> bool {
 }
 
 fn mentions_interpret(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == INTERPRET));
-	found
+	node.mentions(INTERPRET)
 }
 
 /// `interpret e` / `interpret(e)`: e; `interpret(data n+k)`: the phrase `data n+k`

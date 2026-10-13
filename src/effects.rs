@@ -842,11 +842,7 @@ fn main_level_globals(program: &Node) -> Vec<String> {
 
 /// Does a function body read one of `globals` that is not one of its parameters?
 fn reads_global(body: &Node, globals: &[String], parameters: &[&str]) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| {
-		found |= matches!(node, Node::Symbol(name) if globals.contains(name) && !parameters.contains(&name.as_str()))
-	});
-	found
+	body.mentions_where(|name| globals.iter().any(|global| global == name) && !parameters.contains(&name))
 }
 
 /// `while 0 {…}` / `while false {…}` never runs its body

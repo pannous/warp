@@ -353,12 +353,7 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	let Node::Symbol(word) = variable.drop_meta() else {
 		return None;
 	};
-	let mentioned = {
-		let mut found = false;
-		body.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == word));
-		found
-	};
-	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || mentioned {
+	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || body.mentions(word) {
 		return None;
 	}
 	let walked = if word == BYTES_WORD {
