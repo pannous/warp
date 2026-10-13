@@ -2,5 +2,5 @@
 // prints: y
 class Source { code: text }
 s = Source{code: "xyz"}
-def second(code) := code[1]
+def second(code) := code#2
 print second(s.code)
