@@ -6,7 +6,7 @@
 //! from shared values (P106); `await job or y` is `try await job else y`.
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
-use super::nodes::{call, key, Counter};
+use super::nodes::{call, key, parameter_word, Counter};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, RETURN_WORD};
@@ -94,7 +94,7 @@ impl GoBlocks {
 				let Node::List(items, _, _) = head.drop_meta() else {
 					unreachable!("guarded")
 				};
-				let parameters: Vec<String> = items[1..].iter().map(parameter_name).collect();
+				let parameters: Vec<String> = items[1..].iter().map(parameter_word).collect();
 				Node::Key(
 					head,
 					Op::Define,
@@ -104,8 +104,8 @@ impl GoBlocks {
 			// `x => …`, `(x, y) => …`
 			Node::Key(parameters, Op::FatArrow, body) => {
 				let names: Vec<String> = match parameters.drop_meta() {
-					Node::List(items, _, _) => items.iter().map(parameter_name).collect(),
-					single => vec![parameter_name(single)],
+					Node::List(items, _, _) => items.iter().map(parameter_word).collect(),
+					single => vec![parameter_word(single)],
 				};
 				Node::Key(
 					parameters,
@@ -308,12 +308,4 @@ fn read_symbols(node: &Node) -> Vec<String> {
 		}
 	});
 	symbols
-}
-
-/// `x`, `x: int`, `x = 1`: the parameter's name
-fn parameter_name(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(name, _, _) => name.drop_meta().name(),
-		other => other.name(),
-	}
 }

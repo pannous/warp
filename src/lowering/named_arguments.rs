@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::{children_rewritten, key, Counter};
+use super::nodes::{children_rewritten, key, parameter_word, Counter};
 use crate::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -93,7 +93,7 @@ fn maybe_parameters(parameters: Vec<Node>) -> Vec<Node> {
 					name = items.next(); // `maybe int x`
 				}
 				match name {
-					Some(name) => forms.push(optional(Node::Symbol(parameter_name(&name)))),
+					Some(name) => forms.push(optional(Node::Symbol(parameter_word(&name)))),
 					None => forms.push(item),
 				}
 			}
@@ -169,7 +169,7 @@ fn flag_arguments(node: Node, functions: &HashMap<String, Function>, bound: &Has
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if is_function_head(untyped_head(&head)) => {
 			let mut inner = bound.clone();
 			if let Node::List(items, _, _) = untyped_head(&head).drop_meta() {
-				inner.extend(items[1..].iter().map(parameter_name));
+				inner.extend(items[1..].iter().map(parameter_word));
 			}
 			Node::Key(head, op, Box::new(flag_arguments(*body, functions, &inner)))
 		}
@@ -211,7 +211,7 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 				Node::List(items, Bracket::Round, _)
 					if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
 				{
-					let parameters = items[1..].iter().map(parameter_name).collect();
+					let parameters = items[1..].iter().map(parameter_word).collect();
 					let defaults = items[1..].iter().map(parameter_default).collect();
 					functions.insert(
 						items[0].name(),
@@ -238,15 +238,6 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 		}
 	});
 	functions
-}
-
-/// `a`, `a:int`, `a=1`: the parameter's name
-/// `x`, `x: int`, `x = 1`, and a function-typed `f: (Int) -> Int`: the name
-fn parameter_name(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(name, _, _) => parameter_name(name),
-		other => other.name(),
-	}
 }
 
 /// `f(x)`: a name with its parameters
