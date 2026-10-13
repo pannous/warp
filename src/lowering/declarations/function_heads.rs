@@ -15,12 +15,12 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 	let (result_type, body) = match typed_body.drop_meta() {
 		Node::List(parts, _, Separator::Space)
 			if parts.len() == 2
-				&& is_type_word(&parts[0])
+				&& is_result_type(&parts[0])
 				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
 			(parts[0].clone(), parts[1].clone())
 		}
-		Node::Key(result_type, Op::Colon, body) if is_type_word(result_type) => {
+		Node::Key(result_type, Op::Colon, body) if is_result_type(result_type) => {
 			(result_type.as_ref().clone(), body.as_ref().clone())
 		}
 		union @ Node::Key(_, Op::Or, _) => {
@@ -31,6 +31,11 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		_ => return None,
 	};
 	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+}
+
+/// A built-in type, or `any`: a Node of whatever kind the paths return (`def f(w) as any`, card def)
+fn is_result_type(result_type: &Node) -> bool {
+	is_type_word(result_type) || result_type.is_symbol(crate::type_kinds::UNTYPED_FIELD)
 }
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`

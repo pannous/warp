@@ -58,7 +58,7 @@ struct BlockFunction {
 }
 
 /// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter; a parameter named `block` or
-/// `code` without a type is one too (`def repeats(n: int, block) := …`)
+/// `code` without a type is one too when the body runs it (`def repeats(n: int, block) := … block() …`), else a value
 fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else {
 		return None;
@@ -73,7 +73,10 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let parameters: Vec<(String, bool)> = parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(name) => Some((name.clone(), BLOCK_WORDS.contains(&name.as_str()))),
+			Node::Symbol(name) => Some((
+				name.clone(),
+				BLOCK_WORDS.contains(&name.as_str()) && runs_anywhere(body, name),
+			)),
 			Node::Key(name, Op::Colon, kind) => Some((
 				name.name(),
 				matches!(kind.drop_meta(), Node::Symbol(word) if BLOCK_WORDS.contains(&word.as_str())),
@@ -167,6 +170,13 @@ fn runs_parameter(node: &Node, parameter: &str) -> bool {
 		Node::List(items, Bracket::Round, Separator::None) => matches!(items.as_slice(), [only] if is_parameter(only)),
 		_ => bang_target(node).is_some_and(|(target, _)| is_parameter(&target)),
 	}
+}
+
+/// Whether the body runs the parameter somewhere (`block!`, `block()`)
+fn runs_anywhere(body: &Node, parameter: &str) -> bool {
+	let mut runs = false;
+	body.visit(&mut |node| runs |= runs_parameter(node, parameter));
+	runs
 }
 
 /// The arguments of a call to a function with these parameters: one each, or, when the last parameter is a block, the

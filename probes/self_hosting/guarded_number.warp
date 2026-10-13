@@ -1,0 +1,5 @@
+// card function-whose: a function testing its parameter's kind takes a list whole, no broadcasting.
+// Prints ["key" "-" ø ["symbol" "x"]] and -3
+def neg(x) { if x is number { return 0 - x }; ["key", "-", ø, x] }
+print(neg(["symbol", "x"]))
+print(neg(3))

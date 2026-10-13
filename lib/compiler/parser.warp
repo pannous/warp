@@ -2,12 +2,12 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 
-class Parser { code: text; n: int; at: int }
+class Parser { code: text; n: int; at: int; header: bool }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0}
+	p = Parser{code: source, n: source.length, at: 0, header: false}
 	items(p, ' ', "")
 }
 
@@ -22,9 +22,12 @@ def items(p, closer, bracket) {
 			p.at = p.at + 1
 			break
 		}
+		before = p.at
 		item = expression(p, 0)
 		newline = skip_blanks(p)
 		found += [[item, separator(p, closer, newline)]]
+		// a closer of another bracket: skipped, so the reading goes on
+		if p.at == before { p.at = p.at + 1 }
 	}
 	grouped(found, bracket)
 }
@@ -120,68 +123,466 @@ def skip_spaces(p) {
 
 // An expression of operators binding at least `min_power` on the left
 // Rust twin: expressions.rs parse_expr, continue_expr
-def expression(p, min_power) {
-	left = atom(p)
+def expression(p, min_power) := continued(p, prefixed(p), min_power)
+
+// `left` and the operators after it binding at least `min_power`
+// Rust twin: expressions.rs continue_expr
+def continued(p, left, min_power) {
 	while true {
 		skip_spaces(p)
-		op = operator_at(p)
-		if op == "" { break }
-		powers = binding_powers(op)
-		if powers#1 < min_power { break }
-		p.at = p.at + op.length
-		skip_blanks(p)
-		left = ["key", op, left, expression(p, powers#2)]
+		c = peek(p.code, p.at, p.n)
+		if (c == '+' or c == '-') and is_at(p.code, p.at + 1, c, p.n) and SUFFIX_POWER >= min_power {
+			op = p.code[p.at .. p.at + 2]
+			p.at = p.at + 2
+			left = ["key", op, left, ø]
+		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
+			p.at = p.at + 1
+			skip_blanks(p)
+			index = expression(p, 0)
+			skip_blanks(p)
+			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
+			left = ["key", "#", left, one_based(index)]
+		} else if membership_at(p).length > 0 and not counts_units(left) {
+			word = membership_at(p)
+			if 115 < min_power { break }
+			p.at = p.at + word.length
+			skip_blanks(p)
+			left = listed("", " ", [left, ["symbol", word.replace("is in", "in")], expression(p, 116)])
+		} else {
+			op = operator_at(p)
+			if op.length == 0 {
+				if not applies(p, left, min_power) { break }
+				left = listed("", " ", [left, expression(p, ARGUMENT_POWER)])
+				continue
+			}
+			powers = binding_powers(op#2)
+			if powers#1 < min_power { break }
+			p.at = p.at + op#1.length
+			skip_blanks(p)
+			left = ["key", op#2, left, expression(p, powers#2)]
+		}
 	}
 	left
 }
 
-// The operators parser.warp reads, longest first
-OPERATORS = [":=", "==", "!=", "<=", ">=", ":", "=", "+", "-", "*", "/", "%", "^", "<", ">", "."]
-
-def operator_at(p) {
-	for op in OPERATORS {
-		if starts_at(p.code, op, p.at) { return op }
+// `x in xs`, `xs contains x`: the membership word at the parser's position, else ""
+// Rust twin: expressions.rs special_infix
+def membership_at(p) {
+	for word in ["is in", "in"] {
+		if keyword_at(p, word) { return word }
+	}
+	for word in CONTAINMENT_WORDS {
+		if keyword_at(p, word) and operand_after(p, word.length) { return word }
 	}
 	""
 }
 
+CONTAINMENT_WORDS = ["contains", "has", "includes"]
+
+// A unit word stays in the flat counting phrase `number of chars in t`
+// Rust twin: counting.rs text_unit
+def counts_units(left) := left is list and left.length == 2 and left#1 == "symbol" and UNIT_WORDS.contains(left#2)
+
+UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "codepoint", "codepoints", "grapheme", "graphemes"]
+
+// An operand follows `width` characters on: blanks, then no end of the expression
+// Rust twin: scanning.rs operand_after
+def operand_after(p, width) {
+	at = p.at + width
+	if not (is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n)) { return false }
+	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	c = peek(p.code, at, p.n)
+	not (c == '\n' or c == '\r' or c == ')' or c == ']' or c == '}' or c == ';' or c == ',')
+}
+
+// `x = f y`: a name before an operand is called with it, as an assignment's value or with an argument that is no name
+// Rust twin: suffixes.rs try_parse_implicit_application
+def applies(p, left, min_power) {
+	if min_power == 0 or min_power > 151 { return false }
+	callable = left is list and left.length > 1 and (left#1 == "symbol" or (left#1 == "list" and left#2 == ""))
+	if not callable { return false }
+	c = peek(p.code, p.at, p.n)
+	if c == '{' and p.header { return false }
+	unnamed = is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{' or c == '-'
+	(min_power <= 60 or unnamed) and (unnamed or is_name_start(c))
+}
+
+// A braceless argument takes arithmetic and stops at ranges and comparisons: `f 3-1 > 5`
+ARGUMENT_POWER = 140
+
+// `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
+// Rust twin: warp_parser subscript
+def one_based(index) {
+	if index is number { return index + 1 }
+	["key", "+", index, 1]
+}
+
+// Below member access and indexing: `xs#1++`
+SUFFIX_POWER = 165
+// The left power of `#`, which a glued `[` indexes with
+INDEX_POWER = 170
+
+// The operators written with symbols, longest first, each with its canonical name
+// Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
+SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "=>"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
+// The operators written as words, each with its canonical name
+WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"]]
+
+// The operator at the parser's position as [written, canonical], else []
+// (each text read is a walk from its start, card text-costs: the character is read once and picks the candidates)
+def operator_at(p) {
+	c = peek(p.code, p.at, p.n)
+	if is_name_start(c) {
+		for op in WORD_OPERATORS {
+			if op#1[0] == c and keyword_at(p, op#1) { return op }
+		}
+		return []
+	}
+	if starts_at(p.code, "?:", p.at) or starts_at(p.code, "//", p.at) { return [] }
+	for op in SYMBOL_OPERATORS {
+		if op#1[0] == c and starts_at(p.code, op#1, p.at) { return op }
+	}
+	[]
+}
+
+// `word` at the parser's position as a whole word
+def keyword_at(p, word) := starts_at(p.code, word, p.at) and not (p.at + word.length < p.n and is_name_char(p.code[p.at + word.length]))
+
 // Left and right binding power of an operator
 // Rust twin: operators.rs Op::binding_power
 def binding_powers(op) {
-	if op == "." { return [180, 181] }
+	if op == "." or op == "?." { return [180, 181] }
+	if op == "::" { return [175, 176] }
+	if op == "#" { return [170, 182] }
 	if op == "^" { return [160, 159] }
-	if op == "*" or op == "/" or op == "%" { return [150, 151] }
-	if op == "+" or op == "-" { return [140, 141] }
+	if op == "*" or op == "/" or op == "%" or op == "rem" { return [150, 151] }
+	if op == "+" or op == "-" or op == "±" { return [140, 141] }
+	if op == "<<" or op == ">>" { return [135, 136] }
+	if op == ".." or op == "to" { return [130, 131] }
+	if op == "as" { return [125, 250] }
 	if op == "<" or op == ">" or op == "<=" or op == ">=" { return [120, 121] }
-	if op == "==" or op == "!=" { return [115, 116] }
+	if op == "==" or op == "!=" or op == "===" or op == "!==" or op == "≈" or op == "~" { return [115, 116] }
+	if op == "and" { return [100, 101] }
+	if op == "xor" { return [95, 96] }
+	if op == "or" { return [90, 91] }
+	if op == "??" { return [93, 92] }
+	if op == "?" { return [85, 79] }
+	if op == "then" { return [77, 76] }
+	if op == "else" { return [75, 74] }
+	if op == "do" { return [77, 10] }
 	if op == ":" { return [80, 81] }
+	if op == "->" { return [70, 69] }
+	if op == "=>" { return [70, 58] }
 	[60, 59]
+}
+
+// An expression's start: a prefix operator and its operand, else an atom
+// Rust twin: expressions.rs parse_expr (step 1), parse_prefix_operand, finish_prefix
+def prefixed(p) {
+	c = peek(p.code, p.at, p.n)
+	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
+	if keyword_at(p, "return") { return returned(p) }
+	for word in ["while", "if"] {
+		if keyword_at(p, word) {
+			p.at = p.at + word.length
+			skip_spaces(p)
+			return conditioned(word, expression(p, CONDITION_POWER), p)
+		}
+	}
+	if keyword_at(p, "for") { return looped(p) }
+	if keyword_at(p, "not") {
+		p.at = p.at + 3
+		skip_spaces(p)
+		return ["key", "not", ø, expression(p, 105)]
+	}
+	atom(p)
+}
+
+def prefixed_by_symbol(p, c) {
+	next = peek(p.code, p.at + 1, p.n)
+	if c == '-' and next != '>' and next != '-' {
+		p.at = p.at + 1
+		skip_spaces(p)
+		operand = expression(p, 155)
+		if operand is number { return 0 - operand }
+		return ["key", "-", ø, operand]
+	}
+	if c == '!' or c == '¬' {
+		p.at = p.at + 1
+		return ["key", "not", ø, expression(p, 105)]
+	}
+	if c == '#' and not is_blank(next) {
+		p.at = p.at + 1
+		return ["key", "#", ø, expression(p, INDEX_POWER - 1)]
+	}
+	if c == '√' {
+		p.at = p.at + 1
+		return ["key", "√", ø, expression(p, 162)]
+	}
+	atom(p)
+}
+
+// `return x`, `return` alone: ø; `return = 1` assigns a name
+// Rust twin: expressions.rs try_parse_return
+def returned(p) {
+	before = p.at
+	p.at = p.at + 6
+	skip_spaces(p)
+	op = operator_at(p)
+	if op.length > 0 and ASSIGNING.contains(op#2) {
+		p.at = before
+		return atom(p)
+	}
+	c = peek(p.code, p.at, p.n)
+	value = ø
+	if not (c == '}' or c == ';' or c == '\n' or c == '\r') { value = continued(p, expression(p, 59), 0) }
+	listed("", " ", [["symbol", "return"], value])
+}
+
+// The operators after which `return` names a variable
+ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
+
+// Binds a condition until `then` or `do`
+CONDITION_POWER = 78
+
+// `if c {…} else {…}` and `while c {…}`: the block after the condition is its branch or body
+// Rust twin: expressions.rs finish_if_prefix, finish_while_prefix
+def conditioned(word, condition, p) {
+	skip_spaces(p)
+	split = trailing_block(condition, word == "while")
+	body = ø
+	if split.length > 0 {
+		condition = split#1
+		body = split#2
+	} else {
+		if not is_at(p.code, p.at, '{', p.n) { return ["key", word, ø, condition] }
+		p.at = p.at + 1
+		body = items(p, '}', "{")
+	}
+	head = ["key", word, ø, condition]
+	if word == "while" { return ["key", "do", head, body] }
+	branches = ["key", "then", head, body]
+	skip_spaces(p)
+	if not keyword_at(p, "else") { return branches }
+	p.at = p.at + 4
+	skip_spaces(p)
+	["key", "else", branches, expression(p, 74)]
+}
+
+// `for x in xs {…}`: the loop variable, the iterable and the body
+// Rust twin: statements.rs try_parse_for_in, for_iterable_and_body_word
+def looped(p) {
+	before = p.at
+	p.at = p.at + 3
+	skip_spaces(p)
+	variable = loop_variable(p)
+	if variable != ø {
+		skip_spaces(p)
+		if keyword_at(p, "in") {
+			p.at = p.at + 2
+			skip_spaces(p)
+			outer = p.header
+			p.header = true
+			iterable = expression(p, 81)
+			p.header = outer
+			skip_spaces(p)
+			return listed("", " ", [["symbol", "for"], variable, ["symbol", "in"], iterable, atom(p)])
+		}
+	}
+	p.at = before
+	atom(p)
+}
+
+// A condition that took the block after it as an argument, `if x in xs {…}`: [the condition, the block], else []
+// Rust twin: warp_parser split_trailing_block
+def trailing_block(node, empty_is_block) {
+	if not (node is list and node.length > 2) { return [] }
+	if node#1 == "list" and node.length == 5 and (is_block(node#5) or (empty_is_block and node#5 == ø)) { return [node#4, node#5] }
+	if node#1 == "list" and node.length == 6 and node#5 == ["symbol", "in"] {
+		split = trailing_block(node#6, empty_is_block)
+		if split.length == 0 { return [] }
+		return [listed(node#2, node#3, [node#4, node#5, split#1]), split#2]
+	}
+	if node#1 == "key" and SPLIT_OPERATORS.contains(node#2) {
+		split = trailing_block(node#4, empty_is_block)
+		if split.length == 0 { return [] }
+		return [["key", node#2, node#3, split#1], split#2]
+	}
+	[]
+}
+
+def is_block(node) := node is list and node.length > 2 and node#1 == "list" and node#2 == "{"
+
+// The comparison, arithmetic, logical and prefix operators whose right operand may end in the branch
+SPLIT_OPERATORS = ["==", "!=", "===", "!==", "<", ">", "<=", ">=", "+", "-", "*", "/", "%", "rem", "^", "and", "or", "xor", "not", "√"]
+
+// `x`, `k, v` or `(k, v)`: the names a loop gives each item, else ø
+// Rust twin: statements.rs parse_loop_variable
+def loop_variable(p) {
+	bracket = ""
+	if is_at(p.code, p.at, '(', p.n) {
+		bracket = "("
+		p.at = p.at + 1
+	}
+	names = []
+	while true {
+		skip_spaces(p)
+		if not is_name_start(peek(p.code, p.at, p.n)) { return ø }
+		end = name_end(p.code, p.at, p.n)
+		names = names + [["symbol", p.code[p.at .. end]]]
+		p.at = end
+		skip_spaces(p)
+		if not is_at(p.code, p.at, ',', p.n) { break }
+		p.at = p.at + 1
+	}
+	if bracket == "(" {
+		if not is_at(p.code, p.at, ')', p.n) { return ø }
+		p.at = p.at + 1
+	}
+	if names.length == 1 { return names#1 }
+	listed(bracket, ",", names)
 }
 
 // A number, text, name or bracketed group
 // Rust twin: atoms.rs parse_atom, literals.rs read_number_value
 def atom(p) {
+	if p.at >= p.n { return ø }
 	c = p.code[p.at]
 	if is_digit(c) {
-		end = number_end(p.code, p.at, p.n)
-		written = p.code[p.at .. end]
-		p.at = end
-		if written.contains(".") { return float(written) }
+		if c == '0' and (is_at(p.code, p.at + 1, 'x', p.n) or is_at(p.code, p.at + 1, 'X', p.n)) {
+			p.at = p.at + 2
+			return radix_value(p, 16)
+		}
+		if c == '0' and (is_at(p.code, p.at + 1, 'b', p.n) or is_at(p.code, p.at + 1, 'B', p.n)) and p.at + 2 < p.n and digit_value(p.code[p.at + 2]) < 2 {
+			p.at = p.at + 2
+			return radix_value(p, 2)
+		}
+		written = decimal(p)
+		if written.contains(".") or written.contains("e-") or written.contains("E-") { return float(written) }
 		return int(written)
 	}
 	if c == '"' or c == '\'' { return quoted(p) }
-	if is_name_start(c) {
-		end = name_end(p.code, p.at, p.n)
-		name = p.code[p.at .. end]
-		p.at = end
-		return ["symbol", name]
-	}
+	if is_name_start(c) { return named(p) }
 	if c == '(' or c == '[' or c == '{' {
 		p.at = p.at + 1
-		return items(p, closing_of(c), "" + c)
+		outer = p.header
+		p.header = outer and c == '('
+		group = items(p, closing_of(c), "" + c)
+		p.header = outer
+		return group
+	}
+	if c == 'ø' or c == ')' or c == ']' or c == '}' or c == ';' {
+		if c == 'ø' { p.at = p.at + 1 }
+		return ø
 	}
 	p.at = p.at + 1
 	ø
+}
+
+// A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
+// Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call
+def named(p) {
+	end = name_end(p.code, p.at, p.n)
+	word = p.code[p.at .. end]
+	p.at = end
+	if TRUE_WORDS.contains(word.lower()) { return true }
+	if FALSE_WORDS.contains(word.lower()) { return false }
+	if EMPTY_WORDS.contains(word.lower()) { return ø }
+	name = ["symbol", word]
+	if is_at(p.code, p.at, '{', p.n) {
+		p.at = p.at + 1
+		return ["key", ":", name, items(p, '}', "{")]
+	}
+	if not is_at(p.code, p.at, '(', p.n) { return name }
+	p.at = p.at + 1
+	arguments = items(p, ')', "(")
+	skip_spaces(p)
+	if is_at(p.code, p.at, '{', p.n) and not p.header {
+		p.at = p.at + 1
+		body = items(p, '}', "{")
+		return listed("(", "", [listed("(", "", [name, arguments]), body])
+	}
+	listed("(", "", [name] + spread(arguments))
+}
+
+// The words for yes, no and ø
+// Rust twin: warp_parser check_constants
+TRUE_WORDS = ["true", "yes"]
+FALSE_WORDS = ["false", "no"]
+EMPTY_WORDS = ["null", "nul", "none", "nil", "nill", "nix", "nada", "nothing", "empty", "void"]
+
+// The items of an argument list: none for ø, the list's items, else the one argument
+def spread(arguments) {
+	if arguments == ø { return [] }
+	if arguments is list and arguments#1 == "list" { return arguments[3 .. arguments.length] }
+	[arguments]
+}
+
+// The digits of a number in `base` (`_` between binary digits), read
+// Rust twin: literals.rs read_number_value, its 0x and 0b branches
+def radix_value(p, base) {
+	value = 0
+	while p.at < p.n {
+		c = p.code[p.at]
+		if not (c == '_' and base == 2) {
+			digit = digit_value(c)
+			if digit >= base { return value }
+			value = value * base + digit
+		}
+		p.at = p.at + 1
+	}
+	value
+}
+
+// The value of a hex digit, 16 for any other character
+def digit_value(c) {
+	small = "0123456789abcdef"
+	capital = "0123456789ABCDEF"
+	i = 0
+	while i < 16 and small[i] != c and capital[i] != c { i = i + 1 }
+	i
+}
+
+// A decimal number as written, read: digits (`_` between them dropped), a fraction unless `..` or a name follows the
+// point, an exponent
+// Rust twin: literals.rs push_digits, read_number_value, parse_exponent
+def decimal(p) {
+	written = digits_read(p)
+	after_point = peek(p.code, p.at + 1, p.n)
+	if is_at(p.code, p.at, '.', p.n) and after_point != '.' and not is_name_start(after_point) {
+		p.at = p.at + 1
+		written = written + "." + digits_read(p)
+	}
+	e = peek(p.code, p.at, p.n)
+	sign = peek(p.code, p.at + 1, p.n)
+	signed = (sign == '+' or sign == '-') and is_digit(peek(p.code, p.at + 2, p.n))
+	if (e == 'e' or e == 'E') and (is_digit(sign) or signed) {
+		p.at = p.at + 1
+		if signed { p.at = p.at + 1 }
+		exponent = digits_read(p)
+		// 1e3 is the exact integer 1000, like the literal it abbreviates
+		if written.contains(".") or sign == '-' { return written + "e" + (if sign == '-' then "-" else "") + exponent }
+		zeros = int(exponent)
+		while zeros > 0 {
+			written = written + "0"
+			zeros = zeros - 1
+		}
+	}
+	written
+}
+
+def digits_read(p) {
+	written = ""
+	while p.at < p.n {
+		c = p.code[p.at]
+		if is_digit(c) {
+			written = written + c
+		} else if not (c == '_' and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n))) {
+			return written
+		}
+		p.at = p.at + 1
+	}
+	written
 }
 
 // A text in quotes, its backslash escapes read; one character is a codepoint

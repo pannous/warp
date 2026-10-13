@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// A text field passed to a function that indexes it in a loop reads its characters (was: "index out of range: 2 not
+// in 1…1", the copy a list parameter gets held the whole text as its one item)
+class Scanner { code: text }
+def first_space(letters) {
+	at = 0
+	while at < letters.length and letters[at] != ' ' { at = at + 1 }
+	at
+}
+def other(letters) := first_space(letters)
+s = Scanner{code: read("samples/hello.warp")}
+print first_space(s.code)
