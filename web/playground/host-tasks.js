@@ -27,6 +27,8 @@ const TASK_CHECK_MS = 100; // how often a run waiting for a task looks after its
 const TASK_WORKER = "task-worker.js";
 const TASK_WORKER_READY = "ready"; // a task Worker's first message: loaded
 const FETCH_DONE = "fetched"; // a task Worker's message after a fetch it made (startFetch)
+const INDEX_OUT_OF_RANGE = "index out of range"; // src/wasm_emitter list_ops runtime_error_message("index_out_of_range")
+const EMPTY_RANGE = "an empty list"; // src/wasm_emitter EMPTY_RANGE
 const POSITION_COLUMN_BITS = 12; // src/wasm_emitter COLUMN_BITS: trap_position is line << 12 | column
 const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its result into, grown as needed
 const TASK_RESULT_LIMIT = 1 << 28;
@@ -356,7 +358,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : portableInt(instance.exports, result), signals, sounds };
 	} catch (trap) {
 		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
-		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}${trapPosition(instance?.exports)}`, unstarted: !instance, signals: taskHolder.run.signals };
+		return { failure: `task ${taskName(name)}: ${taskFailure(instance?.exports, trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
 	}
 }
 
@@ -479,6 +481,26 @@ function raisedText(exports) {
 	if (!detail) return null;
 	const tree = readNode(exports, detail);
 	return tree.data?.text ?? tree.data?.node?.data?.text ?? null;
+}
+
+// what a task's trap means, as the compiler words a run's (src/wasm_emitter trap_error): the raised text, else the
+// runtime error with an index error's range, then where it happened; a task stopped at the program's end says only that
+function taskFailure(exports, trap, name) {
+	const raised = raisedText(exports);
+	const runtime = raised ?? trapMessage(trap, name);
+	if (runtime === TASK_STOPPED) return runtime;
+	const range = !raised && runtime === INDEX_OUT_OF_RANGE ? indexRange(exports) : "";
+	return `${runtime}${range}${trapPosition(exports)}`;
+}
+
+// ": 7 not in 1…3" of index_out_of_range_of's detail 7:3, the index asked for and the list's count (src/wasm_emitter
+// index_range_message)
+function indexRange(exports) {
+	const detail = exports?.[TRAP_DETAIL_EXPORT]?.value;
+	if (!detail) return "";
+	const [index, count] = [exports.reflect_data(detail), exports.reflect_value(detail)].map(side => side && readNode(exports, side).data?.int);
+	if (index === undefined || count === undefined) return "";
+	return `: ${index} not in ${count === "0" ? EMPTY_RANGE : `1…${count}`}`;
 }
 
 // " at line:column" of the statement the task trapped in (src/diagnostic.rs located_at), from its trap_position

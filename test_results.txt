@@ -1155,6 +1155,8 @@ PASSED:
   ✓ functions::test_function_aliases::test_a_function_argument_stays_bare
   ✓ functions::test_function_aliases::test_an_alias_names_the_function
   ✓ functions::test_function_keyword::function_defines_like_def
+  ✓ functions::test_function_ref_compare::a_function_value_compares_with_a_reference
+  ✓ functions::test_function_ref_compare::a_function_value_compares_with_an_alias
   ✓ functions::test_function_references::test_a_bare_name_needing_arguments_is_an_error_with_the_fix
   ✓ functions::test_function_references::test_a_body_returns_a_function_reference
   ✓ functions::test_function_references::test_a_function_reference_as_a_value_and_an_argument
@@ -1391,6 +1393,9 @@ PASSED:
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
   ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
+  ✓ functions::test_print_closure::print_shows_a_closure_as_written
+  ✓ functions::test_print_closure::print_shows_a_function_reference
+  ✓ functions::test_print_closure::print_shows_a_list_of_functions
   ✓ functions::test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ functions::test_property_access::test_dot_on_a_variable_and_nested
   ✓ functions::test_property_access::test_dot_on_an_object_literal
@@ -3813,6 +3818,7 @@ PASSED:
   ✓ types::test_map_type_tests::a_map_is_a_map
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
+  ✓ types::test_maybe_declaration::a_maybe_declaration_is_optional
   ✓ types::test_method_bodies::assignments_in_a_method
   ✓ types::test_method_bodies::bodies_agree_with_functions
   ✓ types::test_method_bodies::filters_and_comprehensions_in_a_method
@@ -4126,7 +4132,7 @@ PASSED:
   ✓ types::test_unknown_conversion::fixed_width_casts
   ✓ types::test_unknown_conversion::known_as_words_still_convert
   ✓ types::test_unknown_conversion::u8_and_uint8_are_byte
-  ✓ types::test_unknown_type::an_unknown_variable_type_warns
+  ✓ types::test_unknown_type::an_unknown_variable_type_is_an_error
   ✓ types::test_unknown_type::known_variable_types_stay_accepted
   ✓ types::test_upcast_fields::a_cast_or_a_match_reads_it
   ✓ types::test_upcast_fields::a_subclass_field_through_the_declared_parent_is_an_error
@@ -4144,6 +4150,8 @@ PASSED:
   ✓ types::test_widened_list_views::a_changed_parent_class_view_of_a_subclass_list_is_a_compile_error
   ✓ types::test_widened_list_views::a_changed_wider_view_of_a_declared_list_is_a_compile_error
   ✓ types::test_widened_list_views::a_reading_or_narrower_view_is_fine
+  ✓ wasm::test_build_emits_wasm::build_exe_or_wasm_writes_only_that
+  ✓ wasm::test_build_emits_wasm::build_writes_the_executable_and_the_module
   ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
   ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
@@ -4387,6 +4395,7 @@ PASSED:
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
   ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
+  ✓ web::test_element_handler_quiet::an_element_s_handler_draws_no_native_warning
   ✓ web::test_expert_guide::every_expert_snippet_prints_what_the_guide_shows
   ✓ web::test_expert_guide::every_expert_snippet_shows_its_value
   ✓ web::test_expert_guide::the_expert_guide_has_the_beginner_chapters
@@ -4916,6 +4925,8 @@ PASSED:
   ✓ welcoming::test_sleep_unit_shadow::a_unit_named_variable_keeps_other_durations
   ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
   ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
+  ✓ welcoming::test_strict_warning_statement::a_strict_warning_before_the_last_statement_stops_the_run
+  ✓ welcoming::test_strict_warning_statement::without_strict_the_warning_continues
   ✓ welcoming::test_style_dont_care::an_explicit_function_style_still_hints
   ✓ welcoming::test_style_dont_care::any_axis_can_stop_caring
   ✓ welcoming::test_style_dont_care::every_function_definition_form_compiles_without_a_hint_by_default
@@ -5049,4 +5060,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5044 passed, 0 failed, 5044 total tested
+10 ignored, 5055 passed, 0 failed, 5055 total tested

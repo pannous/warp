@@ -35,6 +35,7 @@ mod test_editor_mode; // card playground-editor
 #[cfg(feature = "native")] // runs node
 mod test_editor_shortcuts; // card keyboard-shortcuts
 mod test_element_events;
+#[cfg(feature = "native")] // the warning is the native run's
 mod test_element_handler_quiet;
 mod test_expert_guide;
 mod test_field_events; // card click-key
