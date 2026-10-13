@@ -898,14 +898,10 @@ pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	}
 	match call.drop_meta() {
 		Node::List(items, _, _) if matches!(items.as_slice(), [method] if method.is_symbol(POP_METHOD)) => {
-			let template = crate::warp_parser::parse(
-				&format!(
-				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"),
+			let template = format!(
+				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"
 			);
-			Some(crate::law::substitute(
-				&template,
-				&std::collections::HashMap::from([(POP_PLACE.to_string(), list.clone())]),
-			))
+			Some(super::nodes::filled(&template, [(POP_PLACE, list.clone())]))
 		}
 		_ => None,
 	}

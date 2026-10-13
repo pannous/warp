@@ -9,7 +9,7 @@
 //! nothing, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
-use super::nodes::{block, call, children_rewritten, if_then, key};
+use super::nodes::{block, call, children_rewritten, if_then, key, phrase_words};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -511,13 +511,11 @@ fn named_handler(statement: &Node) -> Option<(Option<String>, (String, Node, boo
 /// The value of `h = on alarm {…}` arrives nested, `on (alarm {…})`, `(on stop) (the (machine {…}))`: its words in
 /// one row
 fn flattened(node: &Node) -> Node {
-	fn words(node: &Node) -> Vec<Node> {
-		match node.drop_meta() {
-			Node::List(items, Bracket::None, Separator::Space) => items.iter().flat_map(words).collect(),
-			_ => vec![node.clone()],
-		}
-	}
-	Node::List(words(node), Bracket::None, Separator::Space)
+	Node::List(
+		phrase_words(std::slice::from_ref(node)),
+		Bracket::None,
+		Separator::Space,
+	)
 }
 
 /// A named handler runs while its flag `h_listening` holds: `remove h from listeners of alarm` clears it
@@ -992,10 +990,7 @@ pub(crate) fn last_statement(block: &Node) -> std::borrow::Cow<'_, Node> {
 
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
 pub(crate) fn global_declaration(name: &str) -> Node {
-	crate::law::substitute(
-		&parse(&format!("global {TEMPLATE_NAME}")),
-		&HashMap::from([(TEMPLATE_NAME.to_string(), symbol(name))]),
-	)
+	super::nodes::filled(&format!("global {TEMPLATE_NAME}"), [(TEMPLATE_NAME, symbol(name))])
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body

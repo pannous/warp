@@ -771,7 +771,7 @@ fn answered_dir(node: Node) -> Node {
 
 /// `if subject is class then names else otherwise`
 fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> Node {
-	substituted(
+	super::nodes::filled(
 		DISPATCH_TEMPLATE,
 		[
 			("RECEIVER", subject.clone()),
@@ -780,16 +780,6 @@ fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> N
 			("OTHERWISE", otherwise),
 		],
 	)
-}
-
-fn substituted<const N: usize>(template: &str, bindings: [(&str, Node); N]) -> Node {
-	let bindings = bindings
-		.into_iter()
-		.map(|(placeholder, node)| (placeholder.to_string(), node))
-		.collect();
-	crate::law::substitute(&crate::warp_parser::parse(template), &bindings)
-		.drop_meta()
-		.clone()
 }
 
 /// What `dir` lists of a value that is no instance of the program's classes: a map's keys, else its type's methods
@@ -802,7 +792,7 @@ fn dir_otherwise(subject: &Node) -> Node {
 		.fold(text_list(&[]), |otherwise, (module, words)| {
 			type_dispatch(subject, module, text_list(words), otherwise)
 		});
-	substituted(
+	super::nodes::filled(
 		DIR_OTHERWISE_TEMPLATE,
 		[("RECEIVER", subject.clone()), ("OTHERWISE", methods)],
 	)

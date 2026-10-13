@@ -20,7 +20,7 @@ use crate::operators::Op;
 use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
 use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// `signal·set(s, v)`: store v in the signal s, then call its listeners
 const SET_FUNCTION: &str = "signal·set";
@@ -104,10 +104,7 @@ pub fn poll_shared(program: Node) -> Node {
 			// the loop's start polls again: the running flag keeps that inner check out
 			let each_write = format!("if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}", crate::host::SHARED_WRITES);
 			let body = with_value(&body, &subject);
-			checks.push(crate::law::substitute(
-				crate::warp_parser::parse(&each_write).drop_meta(),
-				&HashMap::from([("BODY".to_string(), body)]),
-			));
+			checks.push(super::nodes::filled(&each_write, [("BODY", body)]));
 			lowered.push(
 				crate::warp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES))
 					.drop_meta()
@@ -1188,18 +1185,11 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 		(LISTENER_PLACEHOLDER, LISTENER_WORD),
 		(WITHOUT_PLACEHOLDER, WITHOUT_FUNCTION),
 	];
-	let bindings = names
-		.iter()
-		.map(|(placeholder, name)| (placeholder.to_string(), symbol(name)))
-		.chain(
-			nodes
-				.iter()
-				.map(|(placeholder, node)| (placeholder.to_string(), node.clone())),
-		)
-		.collect();
-	crate::law::substitute(&crate::warp_parser::parse(code), &bindings)
-		.drop_meta()
-		.clone()
+	let names = names.iter().map(|(placeholder, name)| (*placeholder, symbol(name)));
+	super::nodes::filled(
+		code,
+		names.chain(nodes.iter().map(|(placeholder, node)| (*placeholder, node.clone()))),
+	)
 }
 
 /// `f(a, b) := body`, `def f(a, b) {body}`, `def (f a b) {body}`

@@ -1,6 +1,6 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
-use crate::lowering::nodes::fresh_number;
+use crate::lowering::nodes::{fresh_number, phrase_words};
 
 /// `go f(x)` starts a task, `await job` waits for it
 pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
@@ -561,13 +561,7 @@ impl Tasks<'_> {
 		if word(marker_word) != crate::warp_parser::TRY_MARKER {
 			return None;
 		}
-		fn words(node: &Node) -> Vec<Node> {
-			match node.drop_meta() {
-				Node::List(inner, Bracket::None, _) => inner.iter().flat_map(words).collect(),
-				_ => vec![node.clone()],
-			}
-		}
-		self.within(&words(awaited), Some(fallback.clone()))
+		self.within(&phrase_words(std::slice::from_ref(awaited)), Some(fallback.clone()))
 	}
 
 	/// `await job within 100 ms or 0` (P154, asyncio.wait_for, Kotlin withTimeout): the job's result if it ends in
