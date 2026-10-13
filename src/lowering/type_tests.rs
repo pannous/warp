@@ -6,7 +6,8 @@
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
 use super::memoization::{definition_parts, Rebuild};
-use super::nodes::{call, children_rewritten, is_call_head, key, parameter_name};
+use super::nodes::{call, children_rewritten, is_call_head, key, or_operands, parameter_name};
+use super::switch::is_pattern;
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
@@ -258,7 +259,7 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 
 /// The variables in scope (a name of one is no type in a test) and the program's declared types (`class friend`: `x is friend`)
 #[derive(Default, Clone)]
-struct Names {
+pub(crate) struct Names {
 	variables: HashSet<String>,
 	types: HashSet<String>,
 	/// The loop variables anywhere in the program (`for char in s`): such a name compared with == is the variable
@@ -266,7 +267,7 @@ struct Names {
 }
 
 impl Names {
-	fn contains(&self, name: &str) -> bool {
+	pub(crate) fn contains(&self, name: &str) -> bool {
 		self.variables.contains(name)
 	}
 
@@ -308,25 +309,64 @@ fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
 }
 
 pub fn lower(node: Node) -> Node {
-	let context = crate::analyzer::function_definitions(&node);
+	let names = program_names(&node);
+	expand(node, &names)
+}
+
+/// The program's variables, functions and declared types
+pub(crate) fn program_names(node: &Node) -> Names {
+	let context = crate::analyzer::function_definitions(node);
 	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
-	collect_outer_assigned_names(&node, &mut variables);
+	collect_outer_assigned_names(node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();
-	crate::analyzer::collect_all_types(&mut registry, &node);
+	crate::analyzer::collect_all_types(&mut registry, node);
 	let types = registry
 		.types()
 		.iter()
 		.map(|definition| definition.name.clone())
 		.collect();
-	let loop_variables = super::for_loop::loop_variables(&node).into_iter().collect();
-	expand(
-		node,
-		&Names {
-			variables,
-			types,
-			loop_variables,
-		},
-	)
+	let loop_variables = super::for_loop::loop_variables(node).into_iter().collect();
+	Names {
+		variables,
+		types,
+		loop_variables,
+	}
+}
+
+/// `is_type(subject, spec)` when the word names a type (`int`, `ints`, `Circle`) and no variable
+pub(crate) fn type_test(subject: &Node, word: &Node, names: &Names) -> Option<Node> {
+	let Node::Symbol(word) = word.drop_meta() else {
+		return None;
+	};
+	type_spec(&[word.as_str()], names).map(|spec| is_type_call(subject.clone(), spec))
+}
+
+/// `x is (int or text)`: a type union, x is one of the types (`or` is also the type union, user); a value among them
+/// keeps the comparison
+fn union_test(subject: &Node, union: &Node, names: &Names) -> Option<Node> {
+	let types = union_operands(union);
+	if types.len() < 2 || is_equality_operand(union) {
+		return None;
+	}
+	let tests: Option<Vec<Node>> = types.iter().map(|word| type_test(subject, word, names)).collect();
+	tests?.into_iter().reduce(|all, test| key(all, Op::Or, test))
+}
+
+/// The operands of `(a or b or c)`
+fn union_operands(union: &Node) -> Vec<Node> {
+	match union.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => or_operands(&items[0]),
+		_ => or_operands(union),
+	}
+}
+
+/// `int or text` of only type words, compared with `==`, stays a value (user decision #30, as `x == int`)
+fn is_type_union(union: &Node) -> bool {
+	let types = union_operands(union);
+	types.len() > 1
+		&& types
+			.iter()
+			.all(|word| matches!(word.drop_meta(), Node::Symbol(name) if is_type_word(name)))
 }
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
@@ -374,13 +414,18 @@ pub fn equality_operand(subject: &Node, word: Node) -> Node {
 	match word.drop_meta() {
 		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => marked_operand(name),
 		Node::Empty if typed_argument(subject).is_some() => marked_operand(EMPTY_TYPE),
+		_ if is_type_union(&word) => marked(word),
 		_ => word,
 	}
 }
 
 fn marked_operand(word: &str) -> Node {
+	marked(Node::Symbol(word.to_string()))
+}
+
+fn marked(operand: Node) -> Node {
 	Node::Meta {
-		node: Box::new(Node::Symbol(word.to_string())),
+		node: Box::new(operand),
 		data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)),
 	}
 }
@@ -500,7 +545,10 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 				// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
 				Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
-				_ => comparison(*subject, Op::Eq, *right, shadowed),
+				_ => match union_test(&subject, &right, shadowed).or_else(|| is_pattern(&subject, &right, shadowed)) {
+					Some(test) => expand(test, shadowed),
+					None => comparison(*subject, Op::Eq, *right, shadowed),
+				},
 			}
 		}
 		Node::Key(left, Op::Ne, right) => comparison(*left, Op::Ne, *right, shadowed),
