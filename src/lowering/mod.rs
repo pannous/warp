@@ -12,6 +12,7 @@ pub mod component_worlds;
 pub mod comprehensions;
 pub mod database_tables;
 pub mod declarations;
+pub mod definition_cases;
 pub mod element_events;
 pub mod event_signals;
 pub mod fetch_signals;
