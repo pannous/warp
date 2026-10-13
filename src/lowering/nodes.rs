@@ -26,6 +26,27 @@ pub(crate) fn matched(subject: Node, arms: Vec<Node>) -> Node {
 	)
 }
 
+/// The code with each placeholder word as its node: `filled("f(X)", [("X", x)])`
+pub(crate) fn filled<'a>(code: &str, bindings: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
+	let bindings = bindings
+		.into_iter()
+		.map(|(placeholder, node)| (placeholder.to_string(), node))
+		.collect();
+	crate::law::substitute(crate::warp_parser::parse(code).drop_meta(), &bindings)
+}
+
+/// The words of a phrase, the groups the parser makes of it undone: `cheapest = items sorted by price` reads as
+/// `[[items, [sorted, by]], price]`
+pub(crate) fn phrase_words(items: &[Node]) -> Vec<Node> {
+	items
+		.iter()
+		.flat_map(|item| match item.drop_meta() {
+			Node::List(inner, Bracket::None, Separator::Space) => phrase_words(inner),
+			_ => vec![item.clone()],
+		})
+		.collect()
+}
+
 /// The operands of `a or b or c` (`|` parses as or, between whole numbers as the bit or), else the node itself
 pub(crate) fn or_operands(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
