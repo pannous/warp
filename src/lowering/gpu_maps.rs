@@ -791,7 +791,7 @@ impl Translation {
 	/// 0xAARRGGBB literal unpacked exactly; any other number ink, 0 or no paper (src/graphics/paint.rs pixel colors)
 	fn color(&mut self, node: &Node) -> Option<String> {
 		match node.drop_meta() {
-			Node::Number(number) if f64::from(*number) >= crate::graphics::paint::COLOR_FROM as f64 => {
+			Node::Number(number) if f64::from(*number) >= crate::graphics::pixels::COLOR_FROM as f64 => {
 				let packed = f64::from(*number) as u64;
 				let channel = |shift: u32| float_literal(((packed >> shift) & 0xFF) as f64 / 255.0);
 				Some(format!("vec4f({}, {}, {}, 1.0)", channel(16), channel(8), channel(0)))
@@ -816,7 +816,7 @@ impl Translation {
 				self.call(&items[0].name(), &called, &items[1..], true)
 			}
 			_ => {
-				let (ink, paper) = (gray(crate::graphics::paint::INK), gray(crate::graphics::paint::PAPER));
+				let (ink, paper) = (gray(crate::graphics::pixels::INK), gray(crate::graphics::pixels::PAPER));
 				Some(format!("select({ink}, {paper}, {} == 0.0)", self.expression(node)?))
 			}
 		}
@@ -1004,7 +1004,7 @@ fn gives_color_within(body: &Node, seen: &mut Vec<String>) -> bool {
 	let mut values = vec![];
 	returned_values(body, &mut values);
 	values.iter().any(|value| match value.drop_meta() {
-		Node::Number(number) => f64::from(*number) >= crate::graphics::paint::COLOR_FROM as f64,
+		Node::Number(number) => f64::from(*number) >= crate::graphics::pixels::COLOR_FROM as f64,
 		Node::List(items, _, _) if !items.is_empty() => {
 			let name = items[0].name();
 			name == RGB_WORD

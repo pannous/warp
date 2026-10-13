@@ -7,12 +7,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-/// The gray levels of a nonzero pixel and of a zero one, as the playground draws them
-pub const INK: u8 = 29;
-pub const PAPER: u8 = 250;
-/// A pixel value from here on carries an alpha byte, 0xAARRGGBB: it is that color (lib/draw.warp), any smaller nonzero
-/// value is ink (playground.js COLOR_FROM)
-pub const COLOR_FROM: u64 = 1 << 24;
+pub use super::pixels::{COLOR_FROM, INK, PAPER};
 const FILE_STEM: &str = "paint";
 const FOLDER: &str = "warp-paint";
 /// Set when tests or a headless machine must not see windows (tests/common warp_command, tests/queue.sh)
