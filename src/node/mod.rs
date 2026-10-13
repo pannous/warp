@@ -666,6 +666,15 @@ impl Node {
 		self.len() == 0 || self == &Empty
 	}
 
+	/// The text a value holds: a one-character text is a Char (`"n"` parses as 'n')
+	pub fn text_value(&self) -> Option<String> {
+		match self.drop_meta() {
+			Text(text) => Some(text.clone()),
+			Char(character) => Some(character.to_string()),
+			_ => None,
+		}
+	}
+
 	/// The first Error node in the tree, e.g. a parse diagnostic
 	pub fn first_error(&self) -> Option<&Node> {
 		match self {

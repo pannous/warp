@@ -16,6 +16,9 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
+/// The request key of a run-time parse (host-compiler.js parse_code): `{parse: text}`
+const PARSE_REQUEST: &str = "parse";
+
 thread_local! {
 	/// The HTML the last run rendered inside its own module (host.js outcomeOf by page·render): html_of shows it instead
 	/// of compiling the renderer as a program of its own (card playground-render)
@@ -251,9 +254,17 @@ pub fn worker_bundle(code: &str) -> (Value, Vec<u8>) {
 
 /// The page's run_block (host.js; src/host.rs natively): the block and what it sees as trees (`{block, names, values,
 /// definitions}`), its value as a tree back (`{"result": tree}`) or `{"error": message}`
+/// `{parse}`: the page's parse_code, the code of the text as a tree
 pub fn eval_block_report(request: &Value) -> Value {
 	let tree = |key: &str| request.get(key).map(node_from_tree).unwrap_or(Node::Empty);
-	match crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values"), &tree("definitions")) {
+	let outcome = match request.get(PARSE_REQUEST) {
+		Some(text) => node_from_tree(text)
+			.text_value()
+			.ok_or_else(|| format!("{}: needs a text", crate::host::PARSE_CODE))
+			.and_then(|source| crate::lowering::parse_word::code_of(&source)),
+		None => crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values"), &tree("definitions")),
+	};
+	match outcome {
 		Err(message) => json!({ "error": message }),
 		Ok(result) => match tree_of(&result) {
 			Some(tree) => json!({ "result": tree }),
