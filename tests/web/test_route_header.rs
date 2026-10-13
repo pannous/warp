@@ -32,7 +32,7 @@ fn answer(path: &str) -> (u16, Option<String>, String) {
 #[test]
 fn a_route_sets_its_status_and_headers() {
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(2);
+		warp::web::web_server::stop_after(2);
 		warp::wasm_emitter::eval(PROGRAM).serialize()
 	});
 	let started = std::time::Instant::now();

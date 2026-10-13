@@ -10,6 +10,9 @@
 //! starts where its starter stands: voices sound together. render_sound mixes the sounds since the last render as
 //! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
+pub mod midi;
+pub mod sound_engine;
+
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -145,7 +148,7 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 	let format = file_format(path)?;
 	probe(path, format)?;
 	let handle = next_handle();
-	if !crate::paint::shows_windows() {
+	if !crate::graphics::paint::shows_windows() {
 		eprintln!("sound file {format}: {path}");
 		return Ok(handle);
 	}
@@ -224,7 +227,7 @@ fn watched(child: Player, player: &str, queued: &Queued, label: &str) {
 /// stop_sound: the queued sounds dropped, the playing sounds and music files stopped
 pub fn stop() {
 	STOPS.fetch_add(1, Ordering::Relaxed);
-	crate::sound_engine::stop(0);
+	crate::sound::sound_engine::stop(0);
 	killed(|_| true);
 }
 
@@ -239,7 +242,7 @@ pub fn stop_one(handle: usize) -> Result<(), String> {
 	if let Ok(mut stopped) = STOPPED.lock() {
 		stopped.push(handle);
 	}
-	crate::sound_engine::stop(handle);
+	crate::sound::sound_engine::stop(handle);
 	killed(|playing| playing == handle);
 	Ok(())
 }
@@ -259,7 +262,7 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 		));
 	}
 	// headless nothing is heard: the render places the fade at the start, not wherever the program's slowness put it
-	let place = if crate::paint::shows_windows() {
+	let place = if crate::graphics::paint::shows_windows() {
 		voice().seconds - queued_seconds()
 	} else {
 		0.0
@@ -272,8 +275,8 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 			seconds,
 		});
 	}
-	let faded = crate::sound_engine::fade(handle, gain as f32, seconds);
-	if !faded && crate::paint::shows_windows() && last_handle() > 0 {
+	let faded = crate::sound::sound_engine::fade(handle, gain as f32, seconds);
+	if !faded && crate::graphics::paint::shows_windows() && last_handle() > 0 {
 		return Err("fade_sound: the sounds play by afplay here (no output stream of warp's own), which can't change a playing sound's gain".into());
 	}
 	Ok(())
@@ -308,7 +311,7 @@ pub fn queued_seconds() -> f64 {
 /// wait_sound, and the process's end: until the players and our output stream played what is queued (headless
 /// nothing is)
 pub fn wait() {
-	while PENDING.load(Ordering::Relaxed) > 0 || crate::sound_engine::busy() {
+	while PENDING.load(Ordering::Relaxed) > 0 || crate::sound::sound_engine::busy() {
 		std::thread::sleep(PLAYER_POLL);
 	}
 }
@@ -578,7 +581,7 @@ pub fn play_blocks(
 	let total = (seconds.max(0.0) * rate as f64).round() as usize;
 	let handle = next_handle();
 	let stops = STOPS.load(Ordering::Relaxed);
-	let streamed = crate::paint::shows_windows() && crate::sound_engine::available();
+	let streamed = crate::graphics::paint::shows_windows() && crate::sound::sound_engine::available();
 	let mut samples = Vec::new();
 	for first in (0..total).step_by(block.max(1)) {
 		if streamed {
@@ -619,13 +622,13 @@ pub fn paced(ahead: Duration) {
 /// The 16-bit samples queued as the sound of the handle; heard, once the voice is within PLAY_AHEAD of the speaker,
 /// except in an `at`, which places its sounds itself (an arrangement's later bars come before its earlier ones)
 fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result<(), String> {
-	let audible = crate::paint::shows_windows();
+	let audible = crate::graphics::paint::shows_windows();
 	if audible && BEFORE_AT.with(|before| before.borrow().is_empty()) {
 		paced(PLAY_AHEAD);
 	}
 	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
 	let (start, place) = scheduled(seconds);
-	if audible && crate::sound_engine::play(handle, start, &samples, rate, channels) {
+	if audible && crate::sound::sound_engine::play(handle, start, &samples, rate, channels) {
 		wait_at_exit();
 	} else {
 		let path = wav_file(&wav_of(&samples, rate, channels), handle)?;

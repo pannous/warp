@@ -4,8 +4,8 @@
 fun sieve(limit) {
     // warp: `[true] * n` is refused as ambiguous (repeat or multiply?); repeating a list is `(limit + 1) times [true]`
     is_prime = (limit + 1) times [true]
-    is_prime[0] = false
-    is_prime[1] = false
+    is_prime#1 = false
+    is_prime#2 = false
     for i in 2..limit {
         if i * i > limit { break }
         if is_prime[i] {

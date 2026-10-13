@@ -61,3 +61,13 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - pattern_tests needs only `type(n)` / `is_type n "key"`, `n.op`, `n.key`, `n.value`, `n#i`, `count n`: all exist.
 - Named patterns (branch matching, `pattern Name = …`) make `pattern Zero = data($a + 0)` work once holes are in.
 - warp-list-pattern takes code-holes after tree-find (step 5).
+
+## data-meta (done 2026-10-13)
+- `$Node` is a non-final WASM GC type; `$MetaNode` is its subtype with `line`, `column` (i64) and `comment`
+  (ref null $Node). Everything that reads fields 0–2 is unchanged, and `==` ignores the position.
+- Quoted code (`data …`, `parse("…")` folded at compile time) is emitted by emit_literal, which wraps every node
+  whose Meta layers carry a LineInfo or a comment through the runtime function node_at.
+- `n.line`, `n.column`, `n.comment` read through node_part (NODE_PARTS 6–8); a node without them has no such field.
+- Positions of `parse("…")` are in the parsed text (line 1 column 1 is its start).
+- Open: the parser keeps only the comment *before* a node (`// c` then `a: 1`); a trailing `a: 1 // c` is lost.
+  A run-time `parse(t)` gives no positions yet (built_in_program goes through TaskValue, which has no Meta).

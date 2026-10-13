@@ -1,5 +1,5 @@
 // card playground-drops: in the browser render_sound takes a task's sounds too, mixed at their places along with the
-// program's, as natively (src/sound.rs render; host-files.js mixed, host-tasks.js withTaskSounds). Browser only: in-process
+// program's, as natively (src/sound/mod.rs render; host-files.js mixed, host-tasks.js withTaskSounds). Browser only: in-process
 // native runs share the host's unrendered sounds (tests/programs/test_sound_voices.rs renders through the CLI)
 #![cfg(not(feature = "native"))]
 use crate::is;

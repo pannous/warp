@@ -4,8 +4,8 @@ use warp::markup::escaped;
 
 const FILES_THAT_ESCAPE: [(&str, &str); 3] = [
 	("src/markup.rs", include_str!("../../src/markup.rs")),
-	("src/site.rs", include_str!("../../src/site.rs")),
-	("src/web_server.rs", include_str!("../../src/web_server.rs")),
+	("src/web/site.rs", include_str!("../../src/web/site.rs")),
+	("src/web/web_server.rs", include_str!("../../src/web/web_server.rs")),
 ];
 
 #[test]

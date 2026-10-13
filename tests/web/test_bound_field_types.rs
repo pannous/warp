@@ -5,7 +5,7 @@
 const FORM: &str = "guests: int = 2\nbudget: float = 12.5\nform{ input{ bind: guests aria-label: \"guests\" } input{ bind: budget aria-label: \"budget\" } p{ \"\" + guests + \" guests, \" + budget + \" each\" } }";
 
 fn page_after(entries: &[(&str, &str)]) -> String {
-	let mut page = warp::headless::Page::render(FORM).expect("renders");
+	let mut page = warp::web::headless::Page::render(FORM).expect("renders");
 	for (field, text) in entries {
 		page.type_into(field, text).expect("a bound field handles input");
 	}

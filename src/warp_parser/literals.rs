@@ -49,7 +49,7 @@ impl WarpParser {
 		if node == Empty {
 			return node;
 		}
-		let node = node.with_meta_data(LineInfo::at(line_nr, column, || self.current_line.s()));
+		let node = node.with_meta_data(LineInfo::at(line_nr, column, &self.current_line));
 		// Attach preceding comment as metadata
 		if let Some(comment_text) = comment {
 			node.with_comment(comment_text)
@@ -267,7 +267,9 @@ impl WarpParser {
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);
-		Some(crate::shader_holes::shader_text(&without_common_indentation(&source)))
+		Some(crate::graphics::shader_holes::shader_text(&without_common_indentation(
+			&source,
+		)))
 	}
 
 	/// `\x1b` after the backslash: the character of the two hex digits, left at the second

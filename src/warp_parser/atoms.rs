@@ -214,7 +214,7 @@ impl WarpParser {
 		}
 
 		// Attach metadata
-		let node = node.with_meta_data(LineInfo::at(line_nr, column, || self.current_line.clone()));
+		let node = node.with_meta_data(LineInfo::at(line_nr, column, &self.current_line));
 		if let Some(c) = comment {
 			node.with_comment(c)
 		} else {
@@ -252,7 +252,8 @@ impl WarpParser {
 			if self.at_to_header_end() {
 				break;
 			}
-			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
+			let word = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten();
+			match word.map(|word| self.joined_type_name(word)) {
 				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
 				Some(word) if word == RESULT_TYPE_WORD && !parameters.is_empty() => {
 					result_type = self.phrase_result_type();
@@ -487,6 +488,7 @@ impl WarpParser {
 			return Node::Symbol(literal);
 		}
 		let symbol = or_return_error!(self.parse_symbol());
+		let symbol = self.joined_type_name(symbol);
 
 		if let Some(version) = self.version_operand(&symbol) {
 			return version;

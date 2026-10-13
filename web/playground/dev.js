@@ -1,4 +1,4 @@
-// The page of `warp dev app.warp` (src/dev_server.rs, card web-dev): asks the dev server for the build's version and
+// The page of `warp dev app.warp` (src/web/dev_server.rs, card web-dev): asks the dev server for the build's version and
 // failure; a new version reloads the page, a failure shows as an overlay (its position, the source line, its fix) over the
 // page, which runs on with the last good build until the program builds again.
 

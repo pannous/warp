@@ -878,7 +878,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 		escaping: HashSet::new(),
 	};
 	// the main level subscribes or reflects (`listeners of x`) too
-	without_definitions(program).visit(&mut |node| {
+	visit_main_level(program, &mut |node| {
 		let Node::List(items, _, _) = node else { return };
 		if items.len() >= 2 && [SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET].contains(&word(&items[0]).as_str()) {
 			found.escaping.insert(signal_name(&items[1]));
@@ -1027,7 +1027,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 				}
 			}
 		};
-		without_definitions(program).visit(&mut |node| passed(None, node));
+		visit_main_level(program, &mut |node| passed(None, node));
 		for definition in definitions {
 			definition.body.visit(&mut |node| passed(Some(definition), node));
 		}
@@ -1058,7 +1058,7 @@ fn named_items(list: &Node) -> Vec<String> {
 /// The main-level `xs = [a, b]` assignments: each variable and its list literal
 fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 	let mut lists = vec![];
-	without_definitions(program).visit(&mut |node| {
+	visit_main_level(program, &mut |node| {
 		if let Node::Key(target, Op::Assign, value) = node {
 			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (target.drop_meta(), value.drop_meta()) {
 				lists.push((name.clone(), value.as_ref().clone()));
@@ -1071,7 +1071,7 @@ fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 /// The main-level `x = {…}` assignments: each variable and its object literal
 fn main_object_literals(program: &Node) -> Vec<(String, Node)> {
 	let mut objects = vec![];
-	without_definitions(program).visit(&mut |node| {
+	visit_main_level(program, &mut |node| {
 		if let Node::Key(target, Op::Assign, value) = node {
 			if let (Node::Symbol(name), Some(literal)) = (target.drop_meta(), object_literal(value)) {
 				objects.push((name.clone(), literal.clone()));
@@ -1285,12 +1285,24 @@ fn collect_definitions(node: &Node, definitions: &mut Vec<Definition>) {
 	}
 }
 
-/// The program without its function definitions: what runs at the main level
-fn without_definitions(node: &Node) -> Node {
+/// Visit what runs at the main level: the program without its function definitions (no copy of it: a big literal
+/// copied at every level took gigabytes, card big-literals)
+fn visit_main_level<'a>(node: &'a Node, action: &mut dyn FnMut(&'a Node)) {
 	if definition(node).is_some() {
-		return Node::Empty;
+		return;
 	}
-	children_rewritten(node.clone(), |child| without_definitions(&child))
+	match node.drop_meta() {
+		Node::Key(left, _, right) => {
+			action(node.drop_meta());
+			visit_main_level(left, action);
+			visit_main_level(right, action);
+		}
+		Node::List(items, _, _) => {
+			action(node.drop_meta());
+			items.iter().for_each(|item| visit_main_level(item, action));
+		}
+		other => other.visit(action),
+	}
 }
 
 /// The names the main level assigns
@@ -1306,7 +1318,7 @@ fn main_variables(program: &Node) -> HashSet<String> {
 /// The names a function body assigns (its locals, unless declared global), not those of the functions nested in it
 fn assigned_names(body: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	without_definitions(body).visit(&mut |node| {
+	visit_main_level(body, &mut |node| {
 		if let Node::Key(target, op, _) = node {
 			if let (true, Node::Symbol(name)) = (is_write(*op), target.drop_meta()) {
 				names.insert(name.clone());

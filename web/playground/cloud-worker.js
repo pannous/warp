@@ -1,7 +1,7 @@
-// A warp program as a Cloudflare Worker (card cloud-deploy, src/deploy.rs): `warp deploy app.warp` bundles the host
+// A warp program as a Cloudflare Worker (card cloud-deploy, src/web/deploy.rs): `warp deploy app.warp` bundles the host
 // scripts the program needs (reader.js, host.js, its parts) with this module and the program's app.wasm. Each request
 // goes to the program's routes (`get "/" {…}`, lowering/serve.rs page·submitted) as {method, path, query, body, headers}; the
-// value answers as src/web_server.rs answers it: a text as text/plain, any other value as JSON; no route is 404, a
+// value answers as src/web/web_server.rs answers it: a text as text/plain, any other value as JSON; no route is 404, a
 // failure 500 with its message. The program's main runs once per isolate, so its variables live across requests.
 import compiledProgram from "./app.wasm";
 import programBytes from "./app.bin";
@@ -32,7 +32,7 @@ async function requestOf(request) {
 	return { method: request.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body, headers: headersOf(request.headers) };
 }
 
-// {"X-Warp": "yes"}: names as src/web_server.rs header_name gives them (the Fetch API lowercases them)
+// {"X-Warp": "yes"}: names as src/web/web_server.rs header_name gives them (the Fetch API lowercases them)
 const headersOf = headers => Object.fromEntries([...headers].map(([name, value]) => [name.split("-").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join("-"), value]));
 
 function answer(value, status = 200) {

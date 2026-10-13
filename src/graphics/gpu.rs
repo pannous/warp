@@ -428,12 +428,12 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let (declarations, bytes) = uniform_layout(values)?;
-	let reads_previous = reads_value(shader, crate::shader_holes::PREVIOUS_HOLE);
+	let reads_previous = reads_value(shader, crate::graphics::shader_holes::PREVIOUS_HOLE);
 	let source = match reads_previous {
 		true => format!(
 			"{}{FULL_IMAGE_VERTICES}{declarations}{PREVIOUS_FRAME}",
 			shader.replace(
-				&format!("{VALUES_NAME}.{}", crate::shader_holes::PREVIOUS_HOLE),
+				&format!("{VALUES_NAME}.{}", crate::graphics::shader_holes::PREVIOUS_HOLE),
 				PREVIOUS_FUNCTION
 			)
 		),
@@ -586,9 +586,9 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 	let frame = RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f32;
 	let size = [width as f32, height as f32];
 	let [mouse_x, mouse_y, mouse_down, key] = warp_runtime::system_values::window_input();
-	let filled = crate::shader_holes::BUILTIN_HOLES
+	let filled = crate::graphics::shader_holes::BUILTIN_HOLES
 		.into_iter()
-		.filter(|name| *name != crate::shader_holes::PREVIOUS_HOLE)
+		.filter(|name| *name != crate::graphics::shader_holes::PREVIOUS_HOLE)
 		.filter(|name| reads_value(shader, name) && !values.iter().any(|value| value.name == *name));
 	let builtins = filled.map(|name| ShaderValue {
 		name: name.to_string(),
@@ -610,7 +610,7 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 
 /// Whether the shader reads `values.name`
 fn reads_value(shader: &str, name: &str) -> bool {
-	let read = format!("{}.{name}", crate::shader_holes::VALUES);
+	let read = format!("{}.{name}", crate::graphics::shader_holes::VALUES);
 	shader
 		.match_indices(&read)
 		.any(|(at, _)| !shader[at + read.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'))

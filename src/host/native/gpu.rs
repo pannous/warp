@@ -1,7 +1,7 @@
 //! The GPU words natively through wgpu: gpu_compute, the @gpu maps and reductions over linear arrays, gpu_render and text_coverage
 use super::*;
 
-/// `gpu_compute(shader, numbers, workgroups)` through wgpu (src/gpu.rs): the floats the shader left
+/// `gpu_compute(shader, numbers, workgroups)` through wgpu (src/graphics/gpu.rs): the floats the shader left
 pub(super) fn gpu_compute(
 	mut caller: Caller<'_, HostState>,
 	shader: HostNode,
@@ -25,12 +25,12 @@ pub(super) fn gpu_compute(
 				))
 			})
 			.collect::<wasmtime::Result<Vec<_>>>()?;
-		let left = crate::gpu::compute_named(&shader, &arrays, workgroups).map_err(&failure)?;
+		let left = crate::graphics::gpu::compute_named(&shader, &arrays, workgroups).map_err(&failure)?;
 		let entries = left
 			.into_iter()
 			.map(|(name, element, numbers)| {
 				let item = |number: f64| {
-					Node::Number(if element == crate::gpu::Element::Float {
+					Node::Number(if element == crate::graphics::gpu::Element::Float {
 						Number::Float(number)
 					} else {
 						Number::Int(number as i64)
@@ -57,10 +57,10 @@ pub(super) fn gpu_compute(
 		.iter()
 		.map(|number| number_of(&number, &failure))
 		.collect::<wasmtime::Result<Vec<Number>>>()?;
-	let left: Vec<Node> = match crate::gpu::element_of(&shader) {
-		crate::gpu::Element::Float => {
+	let left: Vec<Node> = match crate::graphics::gpu::element_of(&shader) {
+		crate::graphics::gpu::Element::Float => {
 			let floats: Vec<f32> = numbers.iter().map(|&number| f64::from(number) as f32).collect();
-			crate::gpu::compute(&shader, &floats, workgroups)
+			crate::graphics::gpu::compute(&shader, &floats, workgroups)
 				.map_err(&failure)?
 				.into_iter()
 				.map(|float| Node::Number(Number::Float(float as f64)))
@@ -76,7 +76,7 @@ pub(super) fn gpu_compute(
 					))),
 				})
 				.collect::<wasmtime::Result<Vec<i64>>>()?;
-			crate::gpu::compute_ints(&shader, &ints, workgroups, element)
+			crate::graphics::gpu::compute_ints(&shader, &ints, workgroups, element)
 				.map_err(&failure)?
 				.into_iter()
 				.map(|int| Node::Number(Number::Int(int)))
@@ -127,7 +127,7 @@ pub(super) fn gpu_compute_linear(
 	let shader = given_shader(&mut caller, shader, &failure)?;
 	let floats = linear_floats(&mut caller, block, &failure)?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
-	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(&failure)?;
+	let left = crate::graphics::gpu::compute(&shader, &floats, workgroups).map_err(&failure)?;
 	write_linear_floats(&mut caller, block, &left, &failure)?;
 	Ok(block)
 }
@@ -197,7 +197,7 @@ pub(super) fn gpu_kernel_linear(
 	pub(super) static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 	let failure = gpu_failure(word);
 	let automatic = keeping & crate::gpu_maps::AUTOMATIC != 0;
-	if let Err(problem) = crate::gpu::available() {
+	if let Err(problem) = crate::graphics::gpu::available() {
 		// a map the compiler switched says nothing: the program did not ask for the GPU
 		if !automatic && !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
 			crate::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
@@ -206,7 +206,7 @@ pub(super) fn gpu_kernel_linear(
 	}
 	let shader = given_shader(&mut caller, shader, &failure)?;
 	let kept = (keeping & crate::gpu_maps::SOURCE_KEPT != 0)
-		.then(|| crate::gpu::kept_count(source))
+		.then(|| crate::graphics::gpu::kept_count(source))
 		.flatten();
 	let mut floats = if kept.is_some() {
 		vec![]
@@ -225,11 +225,11 @@ pub(super) fn gpu_kernel_linear(
 	if reduces {
 		floats.resize(floats.len() + workgroups as usize, 0.0);
 	}
-	let keeping = crate::gpu::Keeping {
+	let keeping = crate::graphics::gpu::Keeping {
 		source: kept.map(|_| source),
 		result: (keeping & crate::gpu_maps::KEEP_RESULT != 0).then_some((target, items)),
 	};
-	let left = crate::gpu::compute_kept(
+	let left = crate::graphics::gpu::compute_kept(
 		&shader,
 		&floats,
 		workgroups,
@@ -316,7 +316,7 @@ pub(super) fn write_linear_floats(
 	Ok(())
 }
 
-/// `gpu_render(shader, width, height)` through wgpu (src/gpu.rs): the pixels the fragment shader colored
+/// `gpu_render(shader, width, height)` through wgpu (src/graphics/gpu.rs): the pixels the fragment shader colored
 pub(super) fn gpu_render(
 	mut caller: Caller<'_, HostState>,
 	shader: HostNode,
@@ -327,7 +327,8 @@ pub(super) fn gpu_render(
 	let failure = gpu_failure(GPU_RENDER);
 	let shader = given_shader(&mut caller, shader, &failure)?;
 	let pixels: Vec<u32> =
-		crate::gpu::opaque_colors(&rendered(&mut caller, &shader, width, height, values, &failure)?).collect();
+		crate::graphics::gpu::opaque_colors(&rendered(&mut caller, &shader, width, height, values, &failure)?)
+			.collect();
 	if let Some(list) = list_of_ints(&mut caller, &pixels)? {
 		return Ok(list);
 	}
@@ -342,7 +343,7 @@ pub(super) fn gpu_render(
 	)
 }
 
-/// `text_coverage(words, size)` through a system font (src/text_raster.rs): [width, height, coverage row by row]
+/// `text_coverage(words, size)` through a system font (src/graphics/text_raster.rs): [width, height, coverage row by row]
 pub(super) fn text_coverage(
 	mut caller: Caller<'_, HostState>,
 	words: HostNode,
@@ -352,7 +353,7 @@ pub(super) fn text_coverage(
 		Node::Text(text) => text,
 		other => other.serialize(),
 	};
-	let covered = crate::text_raster::coverage(&words, size as f32)
+	let covered = crate::graphics::text_raster::coverage(&words, size as f32)
 		.map_err(|problem| task_failure(format!("{TEXT_COVERAGE}: {problem}")))?;
 	if let Some(list) = list_of_ints(&mut caller, &covered)? {
 		return Ok(list);
@@ -368,7 +369,7 @@ pub(super) fn text_coverage(
 	)
 }
 
-/// The pixels the fragment shader colors through wgpu (src/gpu.rs), 0xFFRRGGBB row by row
+/// The pixels the fragment shader colors through wgpu (src/graphics/gpu.rs), 0xFFRRGGBB row by row
 pub(super) fn rendered(
 	caller: &mut Caller<'_, HostState>,
 	shader: &str,
@@ -384,7 +385,7 @@ pub(super) fn rendered(
 			.filter(|&pixels| pixels > 0)
 			.ok_or_else(|| failure(format!("an image {width}×{height} pixels")))
 	};
-	crate::gpu::render_rgba(shader, side(width)?, side(height)?, &values).map_err(failure)
+	crate::graphics::gpu::render_rgba(shader, side(width)?, side(height)?, &values).map_err(failure)
 }
 
 /// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none
@@ -419,13 +420,13 @@ pub(super) fn gpu_failure(word: &'static str) -> impl Fn(String) -> wasmtime::Er
 }
 
 /// gpu_render's values (none when left out): each entry a number, a list of numbers or a list of vectors
-pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::gpu::ShaderValue>, String> {
+pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::graphics::gpu::ShaderValue>, String> {
 	let float = |name: &str, value: &Node| match value.drop_meta() {
 		Node::Number(number) => Ok(f64::from(*number) as f32),
 		other => Err(format!(
 			"values.{name} is a number or a list of numbers, got {}{}",
 			other.serialize(),
-			crate::shader_holes::missing_value_hint(name)
+			crate::graphics::shader_holes::missing_value_hint(name)
 		)),
 	};
 	// a map of one entry arrives as that key
@@ -457,24 +458,24 @@ pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::gpu::ShaderValue
 				let mut floats = vec![];
 				for item in &items {
 					let mut vector = floats_of(item)?;
-					if vector.len() > crate::gpu::VECTOR_FLOATS {
+					if vector.len() > crate::graphics::gpu::VECTOR_FLOATS {
 						return Err(format!(
 							"values.{name} is a list of vectors of up to four numbers, got {}",
 							item.serialize()
 						));
 					}
-					vector.resize(crate::gpu::VECTOR_FLOATS, 0.0);
+					vector.resize(crate::graphics::gpu::VECTOR_FLOATS, 0.0);
 					floats.extend(vector);
 				}
-				return Ok(crate::gpu::ShaderValue {
+				return Ok(crate::graphics::gpu::ShaderValue {
 					name,
 					floats,
 					array: true,
 				});
 			}
 			let floats = floats_of(value)?;
-			let array = floats.len() > crate::gpu::VECTOR_FLOATS;
-			Ok(crate::gpu::ShaderValue { name, floats, array })
+			let array = floats.len() > crate::graphics::gpu::VECTOR_FLOATS;
+			Ok(crate::graphics::gpu::ShaderValue { name, floats, array })
 		})
 		.collect()
 }

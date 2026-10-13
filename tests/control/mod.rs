@@ -108,6 +108,7 @@ mod test_many_tasks;
 mod test_match_alternatives;
 mod test_match_alternatives_hint;
 mod test_match_binding_arm;
+mod test_match_deep_conditions; // card deep-conditions
 mod test_match_else_line;
 mod test_match_guards_and_finally;
 mod test_match_item_patterns; // card list-pattern
@@ -197,6 +198,7 @@ mod test_times_count_once;
 mod test_top_level_block;
 mod test_trap_messages;
 mod test_tree_find; // card tree-find
+mod test_tree_replace; // card tree-replace
 mod test_try_braceless_call;
 mod test_try_catch_except;
 mod test_try_deep;

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 fn served(port: u16, requests: usize, code: &'static str) -> std::thread::JoinHandle<String> {
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(requests);
+		warp::web::web_server::stop_after(requests);
 		warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(code)).serialize()
 	});
 	let started = std::time::Instant::now();
@@ -56,7 +56,7 @@ fn a_program_of_routes_alone_has_no_page() {
 		"get \"/api\" { 1 }",
 		"get \"/api\" { 1 }\npost \"/echo\" { request.body }",
 	] {
-		let site = warp::site::served_files(routes, "routes");
+		let site = warp::web::site::served_files(routes, "routes");
 		assert!(matches!(site, Ok(None)), "{routes}: {:?}", site.err());
 	}
 }

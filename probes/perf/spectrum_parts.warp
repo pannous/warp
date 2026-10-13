@@ -1,0 +1,15 @@
+// card visualizer-speed: where one spectrum() call spends its time: the slice of the song, the Hann weights, the 16 bands
+use sound
+tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4] C5 G4 E4 [C3 E4 G4 C5]]
+song = melody_samples(tune, 0.25)
+print("song samples: " + count(song))
+t0 = clock()
+for frame in 1 to 60 { window = song[1000..1512] }
+t1 = clock()
+for frame in 1 to 60 { weighted = hann_weighted(window) }
+t2 = clock()
+for frame in 1 to 60 { heard = [band_level(weighted, band_frequency(i, 16)) for i in 0..16] }
+t3 = clock()
+print("slice ms: " + (t1 - t0) / 60.0)
+print("hann ms: " + (t2 - t1) / 60.0)
+print("bands ms: " + (t3 - t2) / 60.0)

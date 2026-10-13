@@ -1,7 +1,7 @@
 // The standard library module wagi (card fermyon-hosting, notes/hosting.md "Fermyon"): `warp build --wagi` makes a
 // program's routes answer one request the WAGI way (Spin's wagi executor, Akamai Functions): the request comes in the
 // environment (REQUEST_METHOD, PATH_INFO, QUERY_STRING), the answer goes CGI-style to stdout: headers, a blank line, the
-// body. A text answers as text, anything else as JSON, as `warp serve` answers (src/web_server.rs Answer::of).
+// body. A text answers as text, anything else as JSON, as `warp serve` answers (src/web/web_server.rs Answer::of).
 // A route's `status 418` and `header "name" "value"` (card wagi-build, lowering/serve.rs with_answer_headers) are
 // wagi_header calls: the answer carries them. Not yet: request bodies (stdin), percent-decoded query values.
 

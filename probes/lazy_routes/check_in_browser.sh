@@ -1,5 +1,5 @@
 #!/bin/bash
-# card web-bundle: a site split by route (src/route_split.rs) in a headless browser (agent-browser): the first page
+# card web-bundle: a site split by route (src/web/route_split.rs) in a headless browser (agent-browser): the first page
 # loads only its own route's module, a link loads the next route's module and shows it, the back button shows the
 # route again without loading it twice; after each route change the focus is on the route's heading, else the root. Usage: probes/lazy_routes/check_in_browser.sh [warp binary]
 [ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"; exit 0; }

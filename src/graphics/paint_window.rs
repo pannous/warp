@@ -3,7 +3,7 @@
 //! binary as `warp paint-window`, reading frames from its stdin, [width u32][height u32][width×height RGBA bytes]. Each
 //! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed, the
 //! program waiting for that (wait_until_closed). The program ending otherwise ends its stdin and so the viewer.
-//! `use draw` on the GPU sends shapes instead (src/gpu_canvas.rs): [SHAPES_MARK][width][height][count][count shapes],
+//! `use draw` on the GPU sends shapes instead (src/graphics/gpu_canvas.rs): [SHAPES_MARK][width][height][count][count shapes],
 //! drawn over the canvas texture this process keeps, which the window then shows; no pixels cross.
 
 use std::io::{BufRead, Read, Write};
@@ -114,7 +114,7 @@ pub enum Message {
 pub fn frame_bytes(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
 	let mut bytes = frame_header(width, height);
 	for &value in &pixels[..width * height] {
-		bytes.extend(crate::paint::shade(value));
+		bytes.extend(crate::graphics::paint::shade(value));
 		bytes.push(u8::MAX);
 	}
 	bytes
@@ -136,7 +136,7 @@ fn frame_header(width: usize, height: usize) -> Vec<u8> {
 
 /// The shapes drawn since the last show as one message for the viewer's stdin
 pub fn shapes_message(width: usize, height: usize, shapes: &[u8]) -> Vec<u8> {
-	let count = shapes.len() / crate::gpu_canvas::SHAPE_BYTES;
+	let count = shapes.len() / crate::graphics::gpu_canvas::SHAPE_BYTES;
 	let words = [SHAPES_MARK, width as u32, height as u32, count as u32];
 	words
 		.iter()
@@ -158,7 +158,7 @@ pub fn read_message(reader: &mut impl Read) -> Option<Message> {
 	let [first, second] = read_words(reader)?;
 	if first == SHAPES_MARK {
 		let [height, count] = read_words(reader)?;
-		let shapes = read_bytes(reader, count as usize * crate::gpu_canvas::SHAPE_BYTES)?;
+		let shapes = read_bytes(reader, count as usize * crate::graphics::gpu_canvas::SHAPE_BYTES)?;
 		return Some(Message::Shapes(Shapes {
 			width: second,
 			height,
@@ -238,7 +238,7 @@ pub fn wait_until_closed() {
 pub fn run(check: bool) -> Result<(), String> {
 	let mut builder = EventLoop::<Message>::with_user_event();
 	#[cfg(target_os = "macos")]
-	if std::env::var_os(crate::paint::NO_WINDOW_VARIABLE).is_some() {
+	if std::env::var_os(crate::graphics::paint::NO_WINDOW_VARIABLE).is_some() {
 		use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
 		// no Dock icon and no focus taken from the user's app (tests run beside them)
 		builder
@@ -294,7 +294,7 @@ struct Screen {
 	texture_format: wgpu::TextureFormat,
 	bindings: Option<wgpu::BindGroup>,
 	/// The canvas `use draw` keeps on the GPU, made by its first shapes
-	canvas: Option<crate::gpu_canvas::Canvas>,
+	canvas: Option<crate::graphics::gpu_canvas::Canvas>,
 	frame_size: (u32, u32),
 	pointer: (f64, f64),
 	button_down: bool,
@@ -540,7 +540,7 @@ impl Screen {
 	fn draw_shapes(&mut self, shapes: Shapes) {
 		let canvas = self
 			.canvas
-			.get_or_insert_with(|| crate::gpu_canvas::Canvas::new(&self.device));
+			.get_or_insert_with(|| crate::graphics::gpu_canvas::Canvas::new(&self.device));
 		let encoder = canvas.draw(&self.device, &self.queue, shapes.width, shapes.height, &shapes.shapes);
 		self.queue.submit([encoder.finish()]);
 		let view = canvas.texture().create_view(&wgpu::TextureViewDescriptor {

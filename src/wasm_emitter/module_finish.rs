@@ -177,6 +177,7 @@ impl WasmGcEmitter {
 			(tm.float_array_type, "FloatArray"),
 			(tm.float_list_type, "FloatList"),
 		];
+		types.extend(tm.meta_node_type.map(|index| (index, "MetaNode")));
 		types.extend(
 			self.ctx
 				.user_type_indices
@@ -233,6 +234,10 @@ impl WasmGcEmitter {
 			(tm.int_list_type, vec![(0, "length"), (1, "items")]),
 			(tm.float_list_type, vec![(0, "length"), (1, "items")]),
 		];
+		if let Some(meta_node_type) = tm.meta_node_type {
+			let meta_fields = [(3, "line"), (4, "column"), (5, "comment")];
+			fields.push((meta_node_type, fields[0].1.iter().copied().chain(meta_fields).collect()));
+		}
 		for type_def in self.ctx.type_registry.types() {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
 				fields.push((

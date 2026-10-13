@@ -3,6 +3,25 @@
 //! page runs the compiled module (`run_in_host`) and hands its result back as a JSON tree that its reader
 //! (web/playground/reader.js) walked through the module's reflection exports (wasm_emitter/reflection.rs).
 
+#[cfg(feature = "native")]
+pub mod deploy;
+#[cfg(feature = "native")]
+pub mod dev_server;
+#[cfg(feature = "native")]
+pub mod fetches;
+pub mod headless;
+pub mod page_tests;
+#[cfg(feature = "native")]
+pub mod route_split;
+#[cfg(feature = "native")]
+pub mod site;
+#[cfg(feature = "native")]
+pub mod web_server;
+#[cfg(feature = "native")]
+pub mod web_sockets;
+#[cfg(all(feature = "native", target_os = "macos"))]
+pub mod webview;
+
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
 use crate::fixits::{self, Fix};

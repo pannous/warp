@@ -1,6 +1,6 @@
 //! Async data (card web-async, notes/web_framework.md "Async data"): `users := fetch "/api/users"` at the main level
 //! is a value that arrives later. It starts as ø with `users.loading` true and `users.error` ø, the fetch goes on
-//! without the program waiting (fetch_start, src/fetches.rs natively, web/playground/host.js in the browser), and the
+//! without the program waiting (fetch_start, src/web/fetches.rs natively, web/playground/host.js in the browser), and the
 //! handler on·fetch·0 sets `users.loading` false, `users.error` and `users` (the parsed JSON, else the text) once the
 //! reply arrived, so `on change users {…}` and the page's markup see it. A URL reading main-level variables is fetched
 //! anew when one of them changes (`on change id {…}`). `users.loading` and `users.error` are the variables

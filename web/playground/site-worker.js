@@ -4,7 +4,7 @@
 // server's replies of a rendered page and each element event;
 // this worker answers with the page's markup anew (its export page·html, as site.js show() renders it) after main and
 // each path the page went to, with its holes anew (host.js holePatches, card web-fine-rest) after each handler and timer (a link or the back button: its route, its module loaded first).
-// Its scripts come as ?scripts=…, resolved against this file, the site's root (src/site.rs).
+// Its scripts come as ?scripts=…, resolved against this file, the site's root (src/web/site.rs).
 
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts").split(",");
 importScripts(...SITE_SCRIPTS);

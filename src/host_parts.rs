@@ -1,6 +1,6 @@
 //! Which of the playground's host scripts a module needs (card web-bundle): reader.js and host.js always, and the parts
-//! of host.js it imports words of (HOST_PARTS), with the parts they need. A built site (src/site.rs) and a Worker
-//! (src/deploy.rs) ship their texts; the playground's Deploy (src/web.rs web_worker_bundle) only names them for
+//! of host.js it imports words of (HOST_PARTS), with the parts they need. A built site (src/web/site.rs) and a Worker
+//! (src/web/deploy.rs) ship their texts; the playground's Deploy (src/web/mod.rs web_worker_bundle) only names them for
 //! warp-hosting, so the wasm32 compiler carries the names without the texts.
 
 use crate::host::{

@@ -28,7 +28,7 @@ pub fn eval(code: &str) -> Node {
 }
 
 fn eval_source(code: &str) -> Node {
-	if let Some(outcome) = crate::page_tests::answer(code) {
+	if let Some(outcome) = crate::web::page_tests::answer(code) {
 		return outcome;
 	}
 	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
@@ -322,7 +322,7 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
 	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
-	crate::shader_holes::lower,
+	crate::graphics::shader_holes::lower,
 	crate::lowering::declaration_forms::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
@@ -365,8 +365,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::serve::bind_path_parameters,
 	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
 	crate::lowering::named_patterns::lower,
-	// `tree find {type: "image", src}`: a recursive walker of its own (tree_find.rs), lowered like written code
-	crate::lowering::tree_find::lower,
+	// `tree find {type: "image", src}` and `tree replace p with q`: each a recursive walker of its own (tree_walks.rs)
+	crate::lowering::tree_walks::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::lowering::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)

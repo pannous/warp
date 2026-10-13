@@ -61,7 +61,7 @@ pub fn next(id: i64) -> Option<Node> {
 	let message = connected(&address, |connection| connection.received.pop_front())
 		.ok()
 		.flatten();
-	Some(message.map_or(Node::Empty, crate::web_server::value_of_body))
+	Some(message.map_or(Node::Empty, crate::web::web_server::value_of_body))
 }
 
 /// A text as it is, any other value as JSON

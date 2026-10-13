@@ -5,7 +5,7 @@
 //! definition. Not getters: `name := {…}` (a block or a list), `name := x => …` and `name := …it…` (functions), and a
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
-use super::nodes::{call, is_binding, key};
+use super::nodes::{call, children_rewritten, is_binding, key};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -56,10 +56,6 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 		&narrowed
 	};
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower_in(*node, active)),
-			data,
-		},
 		Node::Symbol(name) if is_active(active, &name) => call(&name, vec![]),
 		Node::List(
 			items,
@@ -97,7 +93,6 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 			};
 			key(lower_in(*left, active), Op::Dot, right)
 		}
-		Node::Key(left, op, right) => key(lower_in(*left, active), op, lower_in(*right, active)),
 		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) =>
 		{
 			let mut items = items.into_iter();
@@ -110,12 +105,7 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 				separator,
 			)
 		}
-		Node::List(items, bracket, separator) => Node::List(
-			items.into_iter().map(|item| lower_in(item, active)).collect(),
-			bracket,
-			separator,
-		),
-		other => other,
+		other => children_rewritten(other, |child| lower_in(child, active)),
 	}
 }
 

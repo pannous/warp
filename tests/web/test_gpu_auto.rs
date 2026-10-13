@@ -26,7 +26,7 @@ fn a_heavy_map_of_many_floats_runs_on_the_gpu_by_itself() {
 		"yes"
 	);
 	#[cfg(feature = "native")]
-	if warp::gpu::available().is_ok() {
+	if warp::graphics::gpu::available().is_ok() {
 		let notices = warp::diagnostic::take_runtime_warnings();
 		assert!(
 			notices
