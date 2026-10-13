@@ -2200,6 +2200,7 @@ PASSED:
   ✓ node::test_normalization::test_string_type_word_is_hinted_once_with_the_cast
   ✓ node::test_normalization::test_variable_definition
   ✓ node::test_normalization::test_variable_definition_let_style
+  ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_position
@@ -2973,6 +2974,8 @@ PASSED:
   ✓ parser::test_time_unit_keys::a_key_or_member_named_now_is_no_time
   ✓ parser::test_time_unit_keys::a_unit_word_after_a_number_is_still_a_unit
   ✓ parser::test_time_unit_keys::a_unit_word_before_a_colon_is_a_key
+  ✓ parser::test_times_phrase::times_parses_as_the_phrase_written
+  ✓ parser::test_times_phrase::times_phrases_still_mean_what_they_did
   ✓ parser::test_trailing_annotation::a_leading_annotation_still_marks_what_follows
   ✓ parser::test_trailing_annotation::a_trailing_annotation_marks_the_expression_before_it
   ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
@@ -5118,4 +5121,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5113 passed, 0 failed, 5113 total tested
+12 ignored, 5116 passed, 0 failed, 5116 total tested
