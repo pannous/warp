@@ -1,5 +1,5 @@
 // card web-bundle: a built site with routes keeps each route's own code in a module of its own, app-route-N.wasm, which
-// the page loads when it shows the route (src/route_split.rs, web/playground/site.js loadRouteModule); the main module
+// the page loads when it shows the route (src/web/route_split.rs, web/playground/site.js loadRouteModule); the main module
 // imports a placeholder for each moved function. In a browser: probes/lazy_routes/check_in_browser.sh
 use crate::common::WASM_SPLIT;
 use crate::requires;
@@ -9,7 +9,7 @@ const ROUTED: &str = "route \"/\" { h1{ \"Home\" } }\nroute \"/about\" { p{ \"Ab
 #[test]
 fn each_route_comes_in_a_module_of_its_own() {
 	requires!(WASM_SPLIT);
-	let files = warp::site::files(ROUTED, "routed", false).expect("the site is built");
+	let files = warp::web::site::files(ROUTED, "routed", false).expect("the site is built");
 	let names: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
 	assert!(
 		names.contains(&"app-route-0.wasm") && names.contains(&"app-route-1.wasm"),
@@ -44,7 +44,7 @@ fn each_route_comes_in_a_module_of_its_own() {
 #[test]
 fn a_dev_site_and_a_site_without_routes_ship_one_module() {
 	let modules = |code: &str, dev: bool| {
-		warp::site::files(code, "one", dev)
+		warp::web::site::files(code, "one", dev)
 			.unwrap()
 			.into_iter()
 			.filter(|(name, _)| name.ends_with(".wasm"))

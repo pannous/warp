@@ -10,7 +10,7 @@ const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostic.rs Level,
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
-// the most sounds sounding at once and how fast a stolen one fades out (src/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
+// the most sounds sounding at once and how fast a stolen one fades out (src/sound/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
 const MAX_VOICES = 32;
 const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
@@ -49,7 +49,7 @@ const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue addr
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
-const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound.rs SAMPLE_OFFSET)
+const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound/mod.rs SAMPLE_OFFSET)
 
 const $ = id => document.getElementById(id);
 
@@ -384,7 +384,7 @@ function silenced(handle) {
 	playingFiles = playingFiles.filter(player => player.handle !== handle);
 }
 
-// room for one more sound sounding at that time (src/sound_engine.rs MAX_VOICES): the oldest of MAX_VOICES sounding then
+// room for one more sound sounding at that time (src/sound/sound_engine.rs MAX_VOICES): the oldest of MAX_VOICES sounding then
 // fades out in STEAL_SECONDS and stops
 function stealFor(time) {
 	const playing = sounding.filter(source => !source.stolen && source.startsAt <= time && time < source.endsAt);
@@ -457,7 +457,7 @@ function finish(run, report) {
 	run.resolve(report);
 }
 
-// evaluate code in the worker: the report of src/web.rs evaluate plus `printed` [{text, stream}]. The worker runs one
+// evaluate code in the worker: the report of src/web/mod.rs evaluate plus `printed` [{text, stream}]. The worker runs one
 // program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several)
 function evaluate(code) {
 	const run = runs.then(() => runInWorker(code));
@@ -510,7 +510,7 @@ function diagnostic(kind, position, ...content) {
 
 const code = text => element("code", {}, text);
 
-// apply a fix's edits to the editor's text (UTF-16 ranges, src/web.rs fixes_json) and run the changed code
+// apply a fix's edits to the editor's text (UTF-16 ranges, src/web/mod.rs fixes_json) and run the changed code
 function applyFix(fix) {
 	// every edit of the fix, the last in the text first, so the earlier offsets stay valid
 	for (const edit of fix.edits) editor.replaceRange(edit.replacement, editor.posFromIndex(edit.start), editor.posFromIndex(edit.end));
@@ -592,7 +592,7 @@ function showReport(report) {
 
 let positionMarks = []; // the editor's underlines of the shown report
 
-// the word at each error and warning position underlined in the editor, its message on hover (src/web.rs error_at is
+// the word at each error and warning position underlined in the editor, its message on hover (src/web/mod.rs error_at is
 // the position of an error no diagnostic made); hints are not marked: their positions can lag behind (card hint-positions)
 function markPositions(report) {
 	positionMarks.forEach(mark => mark.clear());
@@ -634,7 +634,7 @@ function renderedRoot(host) {
 
 // a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
 // route (lowering/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
-// GET (src/web_server.rs request_node), not a request leaving here
+// GET (src/web/web_server.rs request_node), not a request leaving here
 function submitForm(submitted) {
 	submitted.preventDefault();
 	const form = submitted.target;

@@ -1,0 +1,2 @@
+area(width: int, height: int) := width * height
+print dir(area)

@@ -2,7 +2,7 @@
 // sample, `at` placed to the sample, stopped at once, its gain ramped while it plays (fade_sound). The Mixer is the
 // clockwork without a device, so these run silent
 #![cfg(feature = "native")]
-use warp::sound_engine::Mixer;
+use warp::sound::sound_engine::Mixer;
 
 const RATE: u32 = 100;
 const LOUD: i16 = 16384;
@@ -120,7 +120,7 @@ fn a_signals_blocks_join_seamlessly_at_another_rate() {
 // STEAL_SECONDS (no click) and leaves the mix
 #[test]
 fn one_voice_over_the_cap_steals_the_oldest() {
-	use warp::sound_engine::MAX_VOICES;
+	use warp::sound::sound_engine::MAX_VOICES;
 	const QUIET: i16 = 256;
 	let mut mixer = Mixer::new(RATE, 1);
 	for handle in 1..=MAX_VOICES + 1 {

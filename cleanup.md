@@ -99,3 +99,10 @@
 - Reuse the existing `text_quoted` runtime path for literal and computed texts instead of adding another serializer.
 - Keep bare texts unquoted while ensuring container text reads back with quotes and backslashes escaped.
 - Run the focused text test before and after, then formatting, clippy, and the wasm32 check.
+
+# Standard-library documentation association cleanup
+
+- Pin the reported markup and sound entries with a focused regression before changing the indexer.
+- Keep the documented contract that a word uses the comment line directly above its definition.
+- Reuse the existing single pending-comment slot; do not add module-specific exceptions or rewrite library comments.
+- Run the focused documentation tests, formatting, clippy, and the wasm32 check.

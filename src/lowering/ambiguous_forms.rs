@@ -1,7 +1,7 @@
 //! Asks about written forms the analyzer sees whole (notes/welcoming.md): unbracketed list assignments (D12)
 //! and suffix words mixed with infix arithmetic (D9); a trailing percent `10%` is read as `10/100` here too
 
-use super::nodes::{call, is_binding, key};
+use super::nodes::{call, children_rewritten, is_binding, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -138,15 +138,10 @@ impl SuffixWords {
 
 fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower_node(*node, functions)),
-			data,
-		},
 		// `10%`: a percent is a hundredth, `10/100`
 		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => {
 			key(lower_node(*left, functions), Op::Div, Node::int(PERCENT))
 		}
-		Node::Key(left, op, right) => key(lower_node(*left, functions), op, lower_node(*right, functions)),
 		Node::List(items, bracket, separator) => {
 			if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
 				return asked.map_or_else(|error| error, |chosen| lower_node(chosen, functions));
@@ -154,7 +149,7 @@ fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 			let items: Vec<Node> = items.into_iter().map(|item| lower_node(item, functions)).collect();
 			apply_suffix_words(items, functions, bracket, separator)
 		}
-		other => other,
+		other => children_rewritten(other, |child| lower_node(child, functions)),
 	}
 }
 

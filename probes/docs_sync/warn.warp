@@ -1,0 +1,3 @@
+x = 2 ** 3
+y = sqrt 16
+print x + y

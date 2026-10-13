@@ -234,6 +234,8 @@ impl WasmGcEmitter {
 			Op::Div => return self.emit_call(func, "exact_div"),
 			Op::Pow => return self.emit_call(func, "exact_pow"),
 			Op::Xor => return self.emit_call(func, "int_xor"),
+			Op::BitAnd => return self.emit_call(func, "int_and"),
+			Op::BitOr => return self.emit_call(func, "int_or"),
 			_ => {}
 		}
 		let (a, b, r) = (self.scratch(0), self.scratch(1), self.scratch(2));
@@ -392,6 +394,8 @@ impl WasmGcEmitter {
 			}
 			Op::Rem => func.instruction(&I::I64RemS),
 			Op::Xor => func.instruction(&I::I64Xor),
+			Op::BitAnd => func.instruction(&I::I64And),
+			Op::BitOr => func.instruction(&I::I64Or),
 			Op::Pow => {
 				self.emit_call(func, "i64_pow");
 				func

@@ -21,7 +21,7 @@ function instantiate(args, hooks, awaited = false) {
 }
 
 // blocks known only at run time compile with the test binary itself: it exports the page's compiler entry points
-// (src/web.rs web_eval_block), so the blocks run the code under test, with no warp.wasm to build
+// (src/web/mod.rs web_eval_block), so the blocks run the code under test, with no warp.wasm to build
 self.BLOCK_COMPILER = hooks => instantiate([], hooks).exports;
 
 // run the binary with libtest arguments: {code, output, trapped}

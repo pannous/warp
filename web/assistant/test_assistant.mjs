@@ -7,6 +7,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
+import { stopGroup, stopGroupOnExit } from "../process_groups.mjs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WORK = join(ROOT, "scratch/assistant_test");
@@ -44,6 +45,7 @@ writeFileSync(environment, `ANTHROPIC_API_KEY=${KEY}\nTURNSTILE_SECRET=${TURNSTI
 const site = spawn("python3", ["-m", "http.server", String(PLAYGROUND_PORT), "--bind", "127.0.0.1"], { cwd: PLAYGROUND, stdio: "ignore" });
 const worker = spawn("npx", ["wrangler", "dev", "--port", String(PORT), "--inspector-port", String(INSPECTOR_PORT), "--env-file", environment,
 	"--var", `PLAYGROUND_ORIGIN:${ORIGIN}`], { cwd: import.meta.dirname, stdio: ["ignore", "ignore", "inherit"], detached: true }); // its own group: workerd goes with it
+stopGroupOnExit(worker);
 
 try {
 	await waitFor(PROXY);
@@ -77,6 +79,6 @@ try {
 	console.log("assistant proxy: all checks passed");
 } finally {
 	rmSync(environment, { force: true });
-	process.kill(-worker.pid);
+	stopGroup(worker);
 	site.kill();
 }

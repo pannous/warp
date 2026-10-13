@@ -14,7 +14,7 @@ fn contains(bytes: &[u8], text: &str) -> bool {
 
 #[test]
 fn a_route_reading_a_table_ships_without_it() {
-	let files = warp::site::files(PROGRAM, "users", false).expect("the page builds");
+	let files = warp::web::site::files(PROGRAM, "users", false).expect("the page builds");
 	let file = |wanted: &str| {
 		files
 			.iter()
@@ -41,7 +41,7 @@ fn served(port: u16, folder: &str, requests: usize) -> std::thread::JoinHandle<S
 	});
 	std::fs::write(&program, PROGRAM).expect("the program file");
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(requests);
+		warp::web::web_server::stop_after(requests);
 		warp::modules::with_program_file(&program, || {
 			warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(PROGRAM))
 		})

@@ -1,5 +1,5 @@
 // card window-loop: `while window_open { … }` before any paint opened the window never ran (window_open was false until
-// the first frame). Reading window_open asks the warp binary's opener (src/paint.rs allow_windows) once to open the
+// the first frame). Reading window_open asks the warp binary's opener (src/graphics/paint.rs allow_windows) once to open the
 // window; headless there is no opener and the loop still never starts
 use std::sync::atomic::{AtomicUsize, Ordering};
 use warp_runtime::host_words::WINDOW_OPEN;

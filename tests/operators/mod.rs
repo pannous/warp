@@ -1,6 +1,7 @@
 mod test_add_to;
 mod test_approximately; // cards approximately, approximately-all
 mod test_bar_pipe;
+mod test_bit_operators_on_ints;
 mod test_comma_next_to_comparison; // P227
 mod test_compound_assignment;
 mod test_contains_infix;
@@ -14,6 +15,7 @@ mod test_less_than_compare;
 mod test_like;
 mod test_like_known_type_mismatch;
 mod test_logic_grouped_operands;
+mod test_logical_block_operand;
 mod test_logical_calls;
 mod test_logical_values_in_functions;
 mod test_minus_after_callable;

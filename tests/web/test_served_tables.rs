@@ -36,7 +36,7 @@ fn serving(
 	std::fs::write(&program, program_code).expect("the program file");
 	let served = program.clone();
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(requests);
+		warp::web::web_server::stop_after(requests);
 		warp::modules::with_program_file(&served, || {
 			warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(program_code))
 		})
@@ -71,7 +71,7 @@ fn an_empty_table_answers_an_empty_array() {
 #[test]
 fn a_get_reading_a_table_does_not_ship_it() {
 	let program = "class User{name: text}\nstored people: [User]\nget \"/api/all\" { people }\nroute \"/\" { p{ \"home\" } }\nroute \"/u/:id:int\" { h1{ people#id.name } }";
-	let files = warp::site::files(program, "people_app", false).expect("the page builds");
+	let files = warp::web::site::files(program, "people_app", false).expect("the page builds");
 	let module = &files.iter().find(|(name, _)| name == "app.wasm").expect("app.wasm").1;
 	assert!(
 		!module.windows("people".len()).any(|window| window == b"people"),

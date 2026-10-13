@@ -5,19 +5,19 @@ a = 3
 b = 7
 x = -2
 
-// Conditional expression (ternary)
-max = a > b ? a : b
-sign = x < 0 ? "negative" : x > 0 ? "positive" : "zero"
+// Conditional expression
+max = if a > b then a else b
+sign = if x < 0 then "negative" else if x > 0 then "positive" else "zero"
 print "max \(max), x is \(sign)"
 
 // If as expression
-compute_something() := "something"
-compute_other() := "other"
+compute_something = "something"
+compute_other = "other"
 condition = max > 5
 result = if condition {
-    compute_something()
+    compute_something
 } else {
-    compute_other()
+    compute_other
 }
 print "computed \(result)"
 

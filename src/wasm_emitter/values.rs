@@ -102,6 +102,9 @@ impl WasmGcEmitter {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			Node::Key(left, op, right) if op.is_shift() => self.emit_shift(func, left, op, right),
+			Node::Key(left, op, right) if let Some(logical) = self.logical_reading(left, op, right) => {
+				self.emit_numeric_value(func, &Node::Key(left.clone(), logical, right.clone()))
+			}
 			// Logical operators (and, or) use truthy semantics, xor uses bitwise
 			Node::Key(left, Op::And, right) => {
 				// Truthy and: if left is 0, return 0; else return right
@@ -133,7 +136,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if self.orders_a_list(op, left, right) => {
 				self.emit_unordered_list_error(func, left, op, right)
 			}
-			Node::Key(left, op, right) if *op == Op::Xor || op.is_comparison() => {
+			Node::Key(left, op, right) if *op == Op::Xor || op.is_bitwise() || op.is_comparison() => {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)

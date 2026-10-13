@@ -21,6 +21,11 @@ impl Variants {
 		let bare = self.bare.iter().map(|name| name.drop_meta().name());
 		self.classes.iter().cloned().chain(bare).collect()
 	}
+
+	/// No variant carries a payload: a plain enum, whose case at an index is `n as Coin` (plain_enums.rs)
+	pub(crate) fn is_plain(&self) -> bool {
+		self.classes.is_empty()
+	}
 }
 
 /// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name

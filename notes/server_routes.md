@@ -52,7 +52,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      starts from those values (pipeline::with_server_values), so hydration shows the same text and the ø check is
      satisfied. headless.rs prerenders too.
    - `x := fetch url ?? default` (lowering/fetch_signals.rs) is the general form: the default until the reply is in,
-     and in place of a failed one. A POSTed reply is JSON of any value, a number or a text too (src/fetches.rs,
+     and in place of a failed one. A POSTed reply is JSON of any value, a number or a text too (src/web/fetches.rs,
      host-tasks.js fetchReply); a GET reply stays as before (objects and arrays parsed, else the text).
    - Refused, loudly: an argument the page only knows inside a function (`def show(k) { p{ doubled(k) } }`). The page
      asks before its code runs, so it sends main-level values only. A synchronous call would need site-worker's

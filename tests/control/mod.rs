@@ -23,6 +23,7 @@ mod test_channels;
 mod test_charged_fields;
 mod test_check_assert;
 mod test_clipboard;
+mod test_code_holes; // card code-holes
 mod test_colon_handlers;
 mod test_condition_block;
 mod test_constant_listener;
@@ -105,16 +106,24 @@ mod test_loop_value_at_run_time;
 mod test_loops_in_functions;
 mod test_many_tasks;
 mod test_match_alternatives;
+mod test_match_alternatives_hint;
+mod test_match_binding_arm;
+mod test_match_deep_conditions; // card deep-conditions
+mod test_match_else_line;
 mod test_match_guards_and_finally;
+mod test_match_item_patterns; // card list-pattern
 mod test_match_maps; // card map-patterns
 mod test_match_negative_subject; // card match-negative-subject
 mod test_match_other;
+mod test_match_pattern_bindings; // card pattern-names
 mod test_match_ranges;
 mod test_match_tuples;
 mod test_match_type_arms;
+mod test_match_whole_value;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;
+mod test_named_patterns; // card patterns-values
 mod test_not_condition_block;
 mod test_object_blocks;
 mod test_object_functions;
@@ -188,6 +197,8 @@ mod test_time_of_day;
 mod test_times_count_once;
 mod test_top_level_block;
 mod test_trap_messages;
+mod test_tree_find; // card tree-find
+mod test_tree_replace; // card tree-replace
 mod test_try_braceless_call;
 mod test_try_catch_except;
 mod test_try_deep;

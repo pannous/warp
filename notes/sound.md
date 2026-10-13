@@ -22,14 +22,14 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 
 - The samples are made in warp (22050 Hz, 16-bit mono, 5 ms fade at both ends) and cross to the host word
   `sound_samples(samples, count, rate)` as whole numbers ≥ 0 (amplitude + 32768), read in one call by list_to_ints.
-- Natively (src/sound.rs) a WAV in `$TMPDIR/warp-sound/` (sound-<pid>.wav, sound-<pid>-2.wav …: one name per process, deleted once played; card sound-wavs) played by afplay/paplay/aplay to its end; under tests, CI and
+- Natively (src/sound/mod.rs) a WAV in `$TMPDIR/warp-sound/` (sound-<pid>.wav, sound-<pid>-2.wav …: one name per process, deleted once played; card sound-wavs) played by afplay/paplay/aplay to its end; under tests, CI and
   WARP_NO_WINDOW only the file and a `sound 0.50 s: <path>` line on stderr: tests stay silent.
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio, queued one
   after another; a new run silences what still plays (typing reruns the code). A browser starts audio only after a
   gesture: the run on page load stays silent, ▶ plays. A run without page hooks (tests) is silent.
 - Music files (card sound-library): `play "song.mp3"` / `play ./mozart.mp3` / `play_file(path)` play a wav, mp3, ogg, flac, aiff or m4a in
   the background (format by its first bytes; card play-mozart: `./` or `../` glued to the rest of an operand is a path
-  literal, the text `"./mozart.mp3"`, src/warp_parser lookahead.rs starts_path_literal; `xs ./ 2` still divides), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
+  literal, the text `"./mozart.mp3"`, src/warp_parser lookahead.rs starts_path_literal; `xs ./ 2` still divides), `stop_sound` stops them. Natively (src/sound/mod.rs play_file) the first
   player the system has for the format: afplay (no ogg), paplay (no mp3), ffplay, mpv; headless only the check and a
   `sound file <format>: <path>` line (tests/programs/test_sound_files.rs). In the playground an `<audio>` by its URL
   (host-files.js STD_ADAPTERS.sound → worker → playground.js playSoundFile); a new run stops it. Card sound-file-failure: the
@@ -57,7 +57,7 @@ exact-decimal list decision (warp-numbers) lands.
 ## MIDI (card midi-out, layer 7 started; samples/midi.warp, tests/programs/test_midi.rs)
 `write_midi(path, notes)` / `read_midi(path)`: Standard MIDI Files (format 0, 480 ticks a quarter at 120 bpm; reading takes
 formats 0 and 1, running status, tempo changes) of notes `[start s, pitch, length s, velocity]`; they cross to the host as
-flat whole numbers `[start ms, key, length ms, velocity …]` (src/midi.rs natively, host-files.js midiFileOf / midiNotesOf in
+flat whole numbers `[start ms, key, length ms, velocity …]` (src/sound/midi.rs natively, host-files.js midiFileOf / midiNotesOf in
 the browser, the same codec twice). `midi_on(pitch, velocity = 100, channel = 1)`, `midi_off`, `midi_send(status, d1, d2, port)`.
 Natively a message goes to `sendmidi` (brew install gbevin/tools/sendmidi; missing → a loud error naming it), headless only
 `midi out <port>: 90 3c 64` on stderr. Browser: Web MIDI on the page (playground.js sendMidi, first output or by name,
@@ -77,7 +77,7 @@ A loop variable named `note` inside lib/sound.warp breaks: `note` is the module'
 The words above are layer 1, the toy layer. Each layer below keeps the ones above working and lowers to them.
 
 1. Non-blocking, clocked playback. Built (step 1, 2026-10-10): `play` returns at once, its sound queued on the audio
-   clock behind the sounds before it (natively a player thread, src/sound.rs queued; the playground's WebAudio queue);
+   clock behind the sounds before it (natively a player thread, src/sound/mod.rs queued; the playground's WebAudio queue);
    `sound_queued()` the seconds still to sound, `wait_sound`, `stop_sound` drops the queue, the process's end waits.
    Its headless timing test measures around `wait_sound` inside the Warp program and uses a low sample rate for a
    30-second audio-clock duration. The clock case stays long without synthesis or child compilation dominating the
@@ -100,7 +100,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    amount is the item before the word, of an assignment its value (src/lowering/music_words.rs → lib beat_seconds,
    bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
    Voices built (step 5, 2026-10-10, samples/voices.warp): every task (`go { }`) is a voice. It forks its starter's
-   place in time (src/sound.rs Voice, joined in src/tasks.rs spawn), so a task's notes sound along with the
+   place in time (src/sound/mod.rs Voice, joined in src/tasks.rs spawn), so a task's notes sound along with the
    starter's instead of after them; each queued sound plays from its own sleeping thread (overlapping players, the OS
    mixes), and render_sound mixes the sounds at their logical places (tests/programs/test_sound_voices.rs).
    In the Playground too (card playground-go): each Worker keeps its voice's end on a clock the page and the Workers
@@ -261,7 +261,7 @@ tail); all off by default (no cost). The settings at the time of `play` are that
 own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
 and buses as values, shared buses between voices, compressor, EQ, effects on a running handle (card sound-pipe-graph).
 
-## Native output built (card native-sound, 2026-10-12, src/sound_engine.rs, tests/programs/test_sound_engine.rs)
+## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)
 On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`
 holds the sounds, each converted to the device's rate (linear interpolation) and channels, starting at its frame;
 the device callback calls `fill`, which mixes them, advances the frame and drops finished ones. `sound.rs scheduled()`

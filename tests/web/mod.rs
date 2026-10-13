@@ -49,9 +49,9 @@ mod test_gpu_auto; // card gpu-auto
 mod test_guide; // the language guide on the playground page
 mod test_guide_sections; // card guide-lists
 mod test_headless_pages;
-#[cfg(feature = "native")] // src/site.rs is native
+#[cfg(feature = "native")] // src/web/site.rs is native
 mod test_host_parts; // the parts of host.js a site ships
-#[cfg(feature = "native")] // src/site.rs is native
+#[cfg(feature = "native")] // src/web/site.rs is native
 mod test_host_parts_std; // std_pure / std_io parts chosen by the std modules a program calls
 mod test_html_escape; // card cleanup-html-escape
 mod test_html_meta; // card html-meta
@@ -95,13 +95,15 @@ mod test_route_error_positions; // card runtime-errors
 mod test_route_header; // card web-route-header
 #[cfg(feature = "native")] // runs wasm-split
 mod test_route_helpers; // card web-split-helpers
-#[cfg(feature = "native")] // builds a site (src/site.rs)
+#[cfg(feature = "native")] // builds a site (src/web/site.rs)
 mod test_route_modules;
 #[cfg(feature = "native")] // a server on a port and its SQLite table
 mod test_route_phrase_body; // card first-first
 #[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
 mod test_routes;
 mod test_safari_imports;
+#[cfg(feature = "native")] // runs the warp binary
+mod test_sandbox_refusals; // card sandbox-exec
 mod test_sandboxed_programs; // card ferron-hosting
 mod test_select_options; // card select-shorthand
 #[cfg(feature = "native")] // a server on a port, HTTP requests

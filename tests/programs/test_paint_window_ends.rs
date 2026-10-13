@@ -11,8 +11,8 @@ const PATIENCE: Duration = Duration::from_secs(20);
 #[test]
 fn the_paint_window_ends_when_its_program_does() {
 	let mut viewer = warp_command()
-		.arg(warp::paint_window::COMMAND)
-		.env(warp::paint::NO_WINDOW_VARIABLE, "1")
+		.arg(warp::graphics::paint_window::COMMAND)
+		.env(warp::graphics::paint::NO_WINDOW_VARIABLE, "1")
 		.stdin(Stdio::piped())
 		.stdout(Stdio::null())
 		.stderr(Stdio::null())
@@ -47,7 +47,9 @@ fn a_painting_without_a_window_never_waits() {
 			.stdout(Stdio::piped())
 			.stderr(Stdio::null());
 		if !no_window {
-			command.env_remove(warp::paint::NO_WINDOW_VARIABLE).env("CI", "1");
+			command
+				.env_remove(warp::graphics::paint::NO_WINDOW_VARIABLE)
+				.env("CI", "1");
 		}
 		let mut run = command.spawn().expect("warp runs");
 		let started = Instant::now();

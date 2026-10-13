@@ -1,0 +1,6 @@
+// card variant-left: a variant without payload compares from either side of ==
+enum Shape { Circle(r), Dot, Box }
+x = Box
+print Dot == x
+print Dot != x
+Dot == Dot

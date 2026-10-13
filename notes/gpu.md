@@ -4,7 +4,7 @@ Roadmap card: fast-numbers (board topic; its sub-cards are the steps and leftove
 
 User: list arithmetic on large number lists runs as WebGPU compute (wgpu natively, WebGPU in the playground) above a
 size threshold, on the CPU below it and without an adapter; tests compare GPU and CPU results. The GPU path reuses the
-gpu_compute / gpu_render plumbing (src/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
+gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
 
 ## Where the language stands (2026-10-08, measured on main)
 - `xs * 2` is an error by decision (D3: repeat or multiply?), `xs + ys` concatenates. Element-wise is the dotted form
@@ -214,7 +214,7 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
    Headless Chrome, samples/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
 
 ## Painting a shader every frame (samples/gpu_visualizer.warp, 2026-10-10)
-- src/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js
+- src/graphics/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js
   MOST_COMPILED): before, every paint compiled the pipeline anew, 10–20 ms for the raymarching sample on Metal plus
   driver work, now only the uniform's bind group is made per frame. Test: test_webgpu a_kept_shader_reads_each_frames_values.
 - Measured (debug build, M-series, WARP_NO_WINDOW): the raymarcher's draw + readback 9 ms at 640×360; a paint is
@@ -250,7 +250,7 @@ previousFrames); a canvas paint then copies it into the canvas texture (configur
 channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
 
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
-- src/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
+- src/graphics/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
   `input x y down key` lines on stdout, which warp-runtime system_values.rs window_input keeps (system values and
   shader built-ins both read it). $key holds only the last key pressed.
 - Default canvas: lib/draw.warp sizes it from system values view_width / view_height (the playground's output pane

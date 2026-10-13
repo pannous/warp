@@ -1,23 +1,23 @@
 // Sound and MIDI in the page (a part of host.js, which says how parts work; needs host-files.js, whose files it writes
 // and reads): the host word sound_samples and std's sound and midi modules (lib/sound.warp)
 
-// src/sound.rs: 16-bit mono PCM, samples offset by SAMPLE_OFFSET; a render without sounds has the default rate
+// src/sound/mod.rs: 16-bit mono PCM, samples offset by SAMPLE_OFFSET; a render without sounds has the default rate
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
-// play of a signal (src/sound.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
+// play of a signal (src/sound/mod.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
-// checked every SIGNAL_POLL_MS (src/sound.rs SIGNAL_AHEAD, SIGNAL_POLL)
+// checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
 const SIGNAL_POLL_MS = 10;
-// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound.rs PLAY_AHEAD)
+// heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound/mod.rs PLAY_AHEAD)
 const PLAY_AHEAD_SECONDS = 0.5;
 // a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
-// MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
+// MIDI (card midi-out, src/sound/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
 const MIDI_TICKS_PER_QUARTER = 480;
 const MIDI_MICROSECONDS_PER_QUARTER = 500000;
 const MIDI_TICKS_PER_SECOND = MIDI_TICKS_PER_QUARTER * 1e6 / MIDI_MICROSECONDS_PER_QUARTER;
@@ -114,11 +114,11 @@ function midiNotesOf(bytes) {
 }
 const wholeNumbers = list => Array.from(list, Number);
 
-// a 16-bit mono PCM WAV of the offset samples (src/sound.rs wav)
-// the sounds mixed at their places on their voices (src/sound.rs render): a task's sound along with the program's; a
+// a 16-bit mono PCM WAV of the offset samples (src/sound/mod.rs wav)
+// the sounds mixed at their places on their voices (src/sound/mod.rs render): a task's sound along with the program's; a
 // sound without a place (no voices where it ran) follows the one before. From where the run's last render ended, so
 // `at 1s beep()` keeps its second of silence
-// the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
+// the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound/mod.rs
 // render): the samples interleaved and the channels
 // play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
 // samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
@@ -183,7 +183,7 @@ function mixed(sounds, rate, run) {
 	return { samples: Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET), channels };
 }
 
-// the gain at the place after the fades (src/sound.rs faded_gain), in the order they were called: each ramps linearly
+// the gain at the place after the fades (src/sound/mod.rs faded_gain), in the order they were called: each ramps linearly
 // from the gain it finds there to its own
 function fadedGain(fades, place) {
 	const ramped = (fade, from, at) => from + (fade.gain - from) * (fade.seconds > 0 ? Math.min(1, Math.max(0, (at - fade.place) / fade.seconds)) : 1);
@@ -259,7 +259,7 @@ addHostPart({
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
-			// fade_sound(handle, gain, seconds) (src/sound.rs fade): the page ramps the playing sound, render_sound from where
+			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, render_sound from where
 			// the speaker stood on this voice
 			fade(handle, gain, seconds) {
 				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
@@ -296,7 +296,7 @@ addHostPart({
 					return blocks.map(address => linearDoubles(program, address));
 				});
 			},
-			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
+			// the run's sounds since its start or the last render, one WAV (src/sound/mod.rs render): its seconds; the page
 			// offers it for download
 			render(path) {
 				const sounds = this.holder.run.unrenderedSounds ?? [];
