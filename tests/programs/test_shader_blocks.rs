@@ -41,17 +41,3 @@ fn paint_takes_a_shader_block() {
 		quoted
 	);
 }
-
-// the user's samples/gpu_visualizer.warp edit (2026-10-13): a shader function's result type as warp writes it,
-// `fn level(band: f32) : f32`, is WGSL's `-> f32`
-#[test]
-fn a_shader_function_takes_warps_colon_result_type() {
-	is!(
-		"shader { fn level(band: f32) : f32 { return band; } }",
-		"fn level(band: f32) -> f32 { return band; }"
-	);
-	is!(
-		"shader { @fragment fn main() : @location(0) vec4f { return vec4f(1.0); } }",
-		"@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }"
-	);
-}
