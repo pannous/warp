@@ -1,5 +1,6 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
+use crate::lowering::{function_head, DefinitionForm, FunctionHead};
 
 pub(super) fn unsupported(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
@@ -307,78 +308,43 @@ pub(super) fn type_definitions(statement: &Node) -> Vec<&Node> {
 	}
 }
 
-/// `f(y)`, `f(y: int)`, `f(a, b)`, `two()`: a definition head, the name and the parameters
-pub(super) fn function_head(head: &Node) -> Option<(&str, Vec<&Node>)> {
-	let Node::List(items, _, _) = head.drop_meta() else {
-		return None;
-	};
-	let (Node::Symbol(name), parameters) = (items.first()?.drop_meta(), &items[1..]) else {
-		return None;
-	};
-	let parameters = match parameters {
-		[only] if only.is_nothing() => vec![],
-		[Node::List(grouped, Bracket::Round, _)] => grouped.iter().collect(),
-		parameters => parameters.iter().collect(),
-	};
-	Some((name.as_str(), parameters))
-}
-
 /// `f(a, b) := body` and `def f(a, b) { body }`: the name, the parameters and the body
 pub(super) fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
-	let (head, body, _) = typed_definition(statement)?;
-	function_head(head).map(|(name, parameters)| (name, parameters, body))
+	let definition = typed_definition(statement)?;
+	Some((definition.name, definition.parameters(), definition.body))
 }
 
 /// The declared result type of a function definition, `int` of `def f(x) -> int { … }`
 pub(super) fn result_type(statement: &Node) -> Option<&Node> {
-	typed_definition(statement).and_then(|(_, _, result)| result)
+	typed_definition(statement).and_then(|definition| definition.result)
 }
 
-pub(super) fn is_function_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))
-}
-
-/// A definition's head, body and declared result type (warp converts the result to it, lowering/declarations.rs):
-/// `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`, `def f(x) { body }`,
-/// `def f(x) -> int { body }`, `fun f(x): Int { body }`, `def f(x) -> int: body`, `def f(x) as int = body`
-pub(super) fn typed_definition(statement: &Node) -> Option<(&Node, &Node, Option<&Node>)> {
-	match statement.drop_meta() {
-		Node::Key(target, Op::Define, body) => Some(match target.drop_meta() {
-			Node::Key(head, Op::Colon | Op::As, result) if function_head(head).is_some() => {
-				(&**head, &**body, Some(&**result))
-			}
-			_ => (&**target, &**body, None),
-		}),
-		Node::List(items, _, _) if items.len() == 2 && is_function_keyword(&items[0]) => match items[1].drop_meta() {
-			Node::List(parts, _, _) if parts.len() == 2 => Some((&parts[0], &parts[1], None)),
-			Node::Key(head, Op::Arrow | Op::Colon, typed_body) => match typed_body.drop_meta() {
-				Node::List(parts, _, Separator::Space)
-					if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
-				{
-					Some((&**head, &parts[1], Some(&parts[0])))
-				}
-				Node::Key(result, Op::Colon, body) => Some((&**head, &**body, Some(&**result))),
-				_ => None,
-			},
-			Node::Key(target, Op::Assign, body) => match target.drop_meta() {
-				Node::Key(head, Op::Colon | Op::As, result) => Some((&**head, &**body, Some(&**result))),
-				_ => None,
-			},
-			_ => None,
-		},
-		// C style: the result type before the name
-		Node::List(items, _, _) if items.len() == 2 && type_of_word(&items[0].name()).is_some() => {
-			match items[1].drop_meta() {
-				Node::Key(head, Op::Assign, body) if function_head(head).is_some() => {
-					Some((&**head, &**body, Some(&items[0])))
-				}
-				_ => match typed_definition(&items[1])? {
-					(head, body, None) => Some((head, body, Some(&items[0]))),
-					_ => None,
-				},
+/// The definitions the export reads, with their declared result type (warp converts the result to it,
+/// lowering/declarations.rs): `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`,
+/// `def f(x) { body }`, `def f(x) -> int { body }`, `fun f(x): Int { body }`, `def f(x) -> int: body`,
+/// `def f(x) as int = body`
+fn typed_definition(statement: &Node) -> Option<FunctionHead<'_>> {
+	// C style: the result type before the name
+	if let Node::List(items, _, _) = statement.drop_meta() {
+		if let [result, definition] = items.as_slice() {
+			if type_of_word(&result.name()).is_some() {
+				let definition = function_head(definition).filter(|definition| {
+					definition.result.is_none()
+						&& (definition.form == DefinitionForm::Operator(Op::Assign) || is_exported(definition))
+				})?;
+				return Some(FunctionHead { result: Some(result), ..definition });
 			}
 		}
-		_ => None,
+	}
+	function_head(statement).filter(is_exported)
+}
+
+/// `f(x) = body` is an assignment here, `def f(x) := body` and `def f(x): body` without a result type are not read yet
+fn is_exported(definition: &FunctionHead) -> bool {
+	match definition.form {
+		DefinitionForm::Operator(op) => op == Op::Define,
+		DefinitionForm::KeywordBlock => true,
+		DefinitionForm::Keyword(op) => op != Op::Define && definition.result.is_some(),
 	}
 }
 
