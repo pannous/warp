@@ -115,6 +115,7 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
 4. Named patterns as values: `Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
 6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
-7. Code patterns: quoted code with holes, `` `$a + 0` => a ``; needs card parse-word (real Nodes of a source).
+7. Code patterns: quoted code with holes, `data($a + 0) => a`, matched against `parse("…")` or `data (…)` (card
+   parse-word, notes/parse_word.md; the holes are card code-holes). Backticks stay template text.
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).
