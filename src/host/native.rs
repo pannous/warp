@@ -1002,10 +1002,7 @@ const ROOT_PATH: &str = "/";
 
 /// Run `body` with the page at `path` (a page rendered for a request, src/site.rs)
 pub fn with_page_path<R>(path: &str, body: impl FnOnce() -> R) -> R {
-	let previous = NATIVE_PAGE_PATH.with(|current| current.replace(path.to_string()));
-	let result = body();
-	NATIVE_PAGE_PATH.with(|current| current.replace(previous));
-	result
+	crate::util::scoped(&NATIVE_PAGE_PATH, path.to_string(), body)
 }
 
 /// The value built in the program by its exported constructors

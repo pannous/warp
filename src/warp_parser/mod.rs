@@ -561,8 +561,9 @@ const AND_KEYWORD: &str = "and";
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 /// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
 const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
-/// Words a condition follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm)
-const CLAUSE_WORDS: [&str; 1] = ["where"];
+/// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
+/// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
+const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
 /// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
 const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
 pub const ASSERT_MARKER: &str = "assert·else";
@@ -1417,6 +1418,29 @@ fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
 }
 
 const COMPARISON_FIRST: &str = "the comparison first, as C";
+const BIT_WORDS: [(char, &str); 2] = [('&', "bit_and"), ('|', "bit_or")];
+
+/// A whole number beside `&` or `|` that no truth value is: a bit mask such as 127
+fn is_mask(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Number(Number::Int(n)) if *n != 0 && *n != 1)
+}
+
+/// `n & 127` is the logical and (decided, D6), 127 whenever n is truthy: beside a mask the hint names the bit word
+/// meant (card two-ints)
+fn bit_word_hint(lhs: &Node, symbol: char, rhs: &Node) {
+	let Some((_, word)) = BIT_WORDS.iter().find(|(glyph, _)| *glyph == symbol) else {
+		return;
+	};
+	let (left, right) = (lhs.serialize(), rhs.serialize());
+	crate::normalize::hint(
+		&format!("{left} {symbol} {right}"),
+		&format!("{word}({left}, {right})"),
+		&format!(
+			"`{symbol}` is the logical {}; {word} combines the bits (use math)",
+			if symbol == '&' { "and" } else { "or" }
+		),
+	);
+}
 
 /// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
 /// The word forms `and`/`or` read unambiguously and are not affected: `x==1 and y==2`.

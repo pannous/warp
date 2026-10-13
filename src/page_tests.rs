@@ -34,7 +34,7 @@ const STEP_WORDS: [&str; 4] = [RENDER_WORD, CLICK_WORD, FILL_WORD, CHECK_WORD];
 
 /// The outcome of the program's page tests, when it has any
 pub fn answer(code: &str) -> Option<Node> {
-	if !crate::pipeline::is_for_tests() || !code.contains(TEST_WORD) || !code.contains(RENDER_WORD) {
+	if !crate::pipeline::compile_mode().for_tests || !code.contains(TEST_WORD) || !code.contains(RENDER_WORD) {
 		return None;
 	}
 	let ranges = test_ranges(code);

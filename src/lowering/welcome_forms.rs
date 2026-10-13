@@ -361,7 +361,13 @@ fn split_at_in(value: &Node) -> (Node, Option<Node>) {
 
 /// `[match, subject, {k => v …}]`, or `[match, (subject {k => v …})]` as an assigned match parses: the cases as `k: v`,
 /// `_ => v` as `default: v`
-fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
+fn arrow_cases(items: Vec<Node>) -> Vec<Node> {
+	with_match_cases(items, colon_cases)
+}
+
+/// The items of a match, `[match, subject, cases]` or `[match, (subject cases)]`, with `convert` of its cases block;
+/// other items as they are
+pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> Node) -> Vec<Node> {
 	if !items
 		.first()
 		.is_some_and(|word| SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
@@ -369,12 +375,12 @@ fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
 		return items;
 	}
 	match items.len() {
-		3 => items[2] = colon_cases(&items[2]),
+		3 => items[2] = convert(&items[2]),
 		2 => {
 			if let Node::List(pair, bracket, separator) = items[1].drop_meta() {
 				if let [subject, cases] = pair.as_slice() {
 					items[1] = Node::List(
-						vec![subject.clone(), colon_cases(cases)],
+						vec![subject.clone(), convert(cases)],
 						bracket.clone(),
 						separator.clone(),
 					);

@@ -620,10 +620,7 @@ pub fn program_file() -> Option<PathBuf> {
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
-	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));
-	let result = body();
-	PROGRAM_FILE.with(|current| *current.borrow_mut() = previous);
-	result
+	crate::util::scoped(&PROGRAM_FILE, Some(file.to_path_buf()), body)
 }
 
 fn folder_of(file: &Path) -> PathBuf {
@@ -669,7 +666,10 @@ const PRELUDE_MODULE: &str = "prelude";
 /// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
 const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
-const PRELUDE_WORDS: [(&str, &[&str]); 2] = [("file", &["write", "exists"]), ("os", &["exec"])];
+const PRELUDE_WORDS: [(&str, &[&str]); 2] = [
+	("file", &["write", "exists", "write_bytes", "read_bytes"]),
+	("os", &["exec"]),
+];
 const FILE_URL_PREFIX: &str = "file://";
 /// lib/units.warp: quantities whose unit is known only at run time, `quantity("5 km")` (notes/units_runtime.md)
 const UNITS_MODULE: &str = "units";
@@ -709,7 +709,7 @@ type NeededBy = fn(&Node) -> bool;
 /// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
 const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
-	("markup", |_| crate::pipeline::renders_itself()),
+	("markup", |_| crate::pipeline::compile_mode().renders_itself()),
 	("router", |program| {
 		defined(program, crate::routes::PAGE_ROUTES).is_some() || {
 			let called = called_names(statements_of(program));
@@ -725,7 +725,7 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	(SOUND_MODULE, |program| {
 		first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()
 	}),
-	("wagi", |_| crate::pipeline::is_for_wagi()),
+	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
 ];
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)

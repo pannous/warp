@@ -105,6 +105,7 @@ mod test_loops_in_functions;
 mod test_many_tasks;
 mod test_match_alternatives;
 mod test_match_guards_and_finally;
+mod test_match_negative_subject; // card match-negative-subject
 mod test_match_other;
 mod test_match_ranges;
 mod test_match_type_arms;

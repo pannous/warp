@@ -109,7 +109,7 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_empty");
 	}
 
-	/// The print of the program's value an executable ends with (pipeline::prints_result): as emit_print, but a value
+	/// The print of the program's value an executable ends with (CompileMode::prints_result): as emit_print, but a value
 	/// only known at run time shows nothing when it is ø, as `warp <file>` shows nothing then
 	pub(super) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
 		if !matches!(

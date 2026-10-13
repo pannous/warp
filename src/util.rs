@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::thread::LocalKey;
 #[cfg(feature = "native")]
 use wasmtime::{Engine, Store};
 
@@ -8,6 +9,45 @@ pub use warp_runtime::fuel::{DEFAULT_FUEL, FUEL_VARIABLE};
 
 thread_local! {
 	static FUEL_OVERRIDE: Cell<Option<u64>> = const { Cell::new(None) };
+}
+
+/// A thread-local cell whose value can be swapped: `Cell` and `RefCell`
+pub trait Swappable<T> {
+	fn swap_value(&self, value: T) -> T;
+}
+
+impl<T> Swappable<T> for Cell<T> {
+	fn swap_value(&self, value: T) -> T {
+		self.replace(value)
+	}
+}
+
+impl<T> Swappable<T> for std::cell::RefCell<T> {
+	fn swap_value(&self, value: T) -> T {
+		self.replace(value)
+	}
+}
+
+/// `run` with the thread-local `key` holding `value`, then the value it held before, also when `run` panics
+pub fn scoped<C: Swappable<T>, T: 'static, R>(key: &'static LocalKey<C>, value: T, run: impl FnOnce() -> R) -> R {
+	struct Restore<C: Swappable<T> + 'static, T: 'static> {
+		key: &'static LocalKey<C>,
+		outer: Option<T>,
+	}
+	impl<C: Swappable<T>, T> Drop for Restore<C, T> {
+		fn drop(&mut self) {
+			if let Some(outer) = self.outer.take() {
+				// try_with: a thread's locals may already be gone when it unwinds at exit
+				let _ = self.key.try_with(|cell| cell.swap_value(outer));
+			}
+		}
+	}
+	let outer = key.with(|cell| cell.swap_value(value));
+	let _restore = Restore {
+		key,
+		outer: Some(outer),
+	};
+	run()
 }
 
 /// Fuel budget of the next runs on this thread: `with_fuel`, else `WARP_FUEL`, else `DEFAULT_FUEL`
@@ -25,10 +65,7 @@ pub fn set_fuel_budget(steps: u64) {
 
 /// Run `body` with a different fuel budget on this thread, then restore the previous one
 pub fn with_fuel<R>(steps: u64, body: impl FnOnce() -> R) -> R {
-	let previous = FUEL_OVERRIDE.with(|budget| budget.replace(Some(steps)));
-	let result = body();
-	FUEL_OVERRIDE.with(|budget| budget.set(previous));
-	result
+	scoped(&FUEL_OVERRIDE, Some(steps), body)
 }
 
 /// A store for a `gc_engine` with the current fuel budget

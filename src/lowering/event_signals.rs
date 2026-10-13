@@ -226,7 +226,7 @@ pub fn lower(program: Node) -> Node {
 		is_page_event(name)
 			&& !name.contains(ELEMENT_EVENT_JOINER)
 			&& !raised.contains(name)
-			&& !crate::pipeline::is_for_a_page()
+			&& !crate::pipeline::compile_mode().for_a_page
 			&& !serves_its_page(&statements)
 	}) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
@@ -1128,7 +1128,7 @@ fn emits_as_calls(
 				call(&handler_function_name(&name), arguments)
 			}
 			// card page-custom-event: in a page it reaches the page, as a CustomEvent of its name with the data as detail
-			None if crate::pipeline::renders_itself() && !block_handled.contains(&name) => {
+			None if crate::pipeline::compile_mode().renders_itself() && !block_handled.contains(&name) => {
 				call(crate::host::DISPATCH_EVENT, vec![Node::Text(name.clone()), data])
 			}
 			None => {

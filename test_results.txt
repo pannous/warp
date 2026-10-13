@@ -350,6 +350,8 @@ PASSED:
   ✓ control::test_match_guards_and_finally::a_guard_binds_and_tests
   ✓ control::test_match_guards_and_finally::an_assigned_match_takes_arrow_cases
   ✓ control::test_match_guards_and_finally::finally_runs_and_keeps_the_value
+  ✓ control::test_match_negative_subject::a_negative_subject_is_matched
+  ✓ control::test_match_negative_subject::a_variable_named_match_still_subtracts
   ✓ control::test_mixed_range_bounds::a_range_from_a_letter_to_a_number_is_a_compile_error
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
@@ -1995,6 +1997,9 @@ PASSED:
   ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
   ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
+  ✓ modules::test_std_file_bytes::a_value_that_is_no_byte_is_refused
+  ✓ modules::test_std_file_bytes::bytes_and_texts_are_the_same_file
+  ✓ modules::test_std_file_bytes::write_bytes_and_read_bytes_need_no_use
   ✓ modules::test_std_file_copy::a_copy_of_a_std_module_knows_the_foreign_names
   ✓ modules::test_std_file::a_file_url_loads_the_module_and_append_is_qualified
   ✓ modules::test_std_file::use_file_lists_a_folder
@@ -2173,6 +2178,7 @@ PASSED:
   ✓ node::test_node::test_mark_as_map
   ✓ node::test_node::test_remove
   ✓ node::test_node::test_remove2
+  ✓ node::test_normalization::a_mask_beside_and_or_hints_the_bit_word
   ✓ node::test_normalization::test_cast_constructor
   ✓ node::test_normalization::test_cast_style_constructor
   ✓ node::test_normalization::test_conditional
@@ -2275,6 +2281,8 @@ PASSED:
   ✓ numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
+  ✓ numbers::test_float_bits::bits_float_gives_the_float_of_ieee_bits
+  ✓ numbers::test_float_bits::float_bits_gives_the_ieee_bits_of_a_float
   ✓ numbers::test_float_exact_context::a_decimal_makes_float_arithmetic
   ✓ numbers::test_float_exact_context::a_rational_constant_of_exact_reals_in_a_runtime_program
   ✓ numbers::test_float_exact_context::a_variable_declared_real_keeps_the_exact_root
@@ -2788,6 +2796,8 @@ PASSED:
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
+  ✓ parser::test_as_prefixed_name::as_still_casts
+  ✓ parser::test_as_prefixed_name::def_of_an_as_prefixed_name
   ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ parser::test_attributes::attribute_names_may_be_kebab_case
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
@@ -3291,6 +3301,9 @@ PASSED:
   ✓ scope::test_parameter_shadowing::a_parameter_is_not_typed_by_another_functions_real_value
   ✓ scope::test_parameter_shadowing::a_parameter_may_walk_what_another_function_assigned_a_number
   ✓ scope::test_parameter_shadowing::a_signal_and_a_block_play_in_one_program
+  ✓ scope::test_parameter_shadows_function::a_function_parameter_is_still_called
+  ✓ scope::test_parameter_shadows_function::a_global_named_like_a_module_parameter_leaves_the_module_word_alone
+  ✓ scope::test_parameter_shadows_function::a_list_of_a_parameter_named_like_a_function_lists_it
   ✓ scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ scope::test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ scope::test_result_word::a_program_may_name_its_own_result
@@ -3999,6 +4012,10 @@ PASSED:
   ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
   ✓ types::test_tagged_objects::a_field_of_a_tagged_object_is_read_from_its_fields
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
+  ✓ types::test_tagged_unions::arrow_arms_bind_the_variant_data
+  ✓ types::test_tagged_unions::colon_arms_bind_the_variant_data_too
+  ✓ types::test_tagged_unions::variants_carry_their_data
+  ✓ types::test_tagged_unions::variants_may_hold_the_union_itself
   ✓ types::test_text_as_number::a_literal_text_as_number_is_its_number_in_a_variable_too
   ✓ types::test_text_as_number::a_run_time_text_as_number_is_its_number
   ✓ types::test_text_of_text::text_of_a_text_conversion_is_its_value
@@ -4923,6 +4940,7 @@ PASSED:
   ✓ welcoming::test_golf_words::a_bare_for_walks_a_method_chain
   ✓ welcoming::test_golf_words::a_char_loop_over_a_text_visits_every_char
   ✓ welcoming::test_golf_words::a_text_word_without_its_module_is_a_text_method
+  ✓ welcoming::test_golf_words::bit_words_take_the_bits_of_negative_numbers_too
   ✓ welcoming::test_golf_words::bits_of_whole_numbers
   ✓ welcoming::test_golf_words::chr_of_an_expression_is_a_function_result
   ✓ welcoming::test_golf_words::print_without_parentheses_in_an_operand_or_branch
@@ -5121,7 +5139,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ INCOMPLETE: 1 test binaries ended without a result (crashed or killed)
 
 SUMMARY:
-12 ignored, 5118 passed, 1 failed, 5119 total tested
+12 ignored, 5136 passed, 0 failed, 5136 total tested
