@@ -31,6 +31,7 @@ mod test_print_type_error;
 mod test_print_walk;
 mod test_put_runtime_values;
 mod test_quote_output;
+mod test_quoted_computed_container_text;
 mod test_quoted_container_texts;
 mod test_repeat_typed; // card repeat-int
 mod test_runtime_kind_texts;
