@@ -15,6 +15,15 @@ pub fn trap_detail_line(detail: &Node) -> String {
 	)
 }
 
+/// A detail written as a quoted text is the message it quotes, its escapes undone (`"a \"b\""` is a "b")
+fn unquoted(detail: &str) -> String {
+	let quoted = detail.len() > 1 && detail.starts_with('"') && detail.ends_with('"');
+	match quoted.then(|| crate::warp_parser::parse(detail).drop_meta().clone()) {
+		Some(message @ (Node::Text(_) | Node::Char(_))) => message.to_string(),
+		_ => detail.to_string(),
+	}
+}
+
 /// The value a trace's `trap detail: …` line carries, its line breaks back
 pub(super) fn trap_detail(trace: &str) -> Option<String> {
 	let line = trace.split_once(TRAP_DETAIL_PREFIX)?.1.lines().next()?;
@@ -145,7 +154,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.contains(list_ops::RETURNED_ERROR)
 		.then(|| trap_detail(trace))
 		.flatten()
-		.map(|detail| detail.trim_matches('"').to_string());
+		.map(|detail| unquoted(&detail));
 	let index_range = trace
 		.contains(list_ops::INDEX_OUT_OF_RANGE_OF)
 		.then(|| index_range_message(&trap_detail(trace)?))

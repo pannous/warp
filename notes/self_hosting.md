@@ -33,7 +33,10 @@ Gaps (each a card below):
   an untyped `code`/`block` parameter is a block only when the body runs it (parameter-named). probes/self_gaps/.
   character-text (P126 follow-up): a character inside a list serializes as `"x"`, so `["x", b]` of a text b reads
   back `["x" " "]` like the list written out; values stay characters (one-letter "x" parses as one), only the printing
-  changed (Node::item_text, lib/compiler/serializer.warp item_text).
+  changed (Node::item_text, lib/compiler/serializer.warp item_text). list-text-quotes: a `"` or `\` in a text is
+  escaped by a `\` (a lone character escapes `'` and `\`), the same in the runtime print (text_quoted),
+  Node::serialize and serializer.warp (`quoted`). Read a message's text with Display (`to_string()`), never
+  `serialize().trim_matches('"')`, which keeps the escapes.
 - ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/node_api.rs): `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still

@@ -464,7 +464,7 @@ fn run_command(args: &[String]) {
 		match result.drop_meta() {
 			Node::Text(summary) => println!("{summary}"),
 			Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => {
-				println!("{}", summary.drop_meta().serialize().trim_matches('"'))
+				println!("{}", summary.drop_meta())
 			}
 			other => show(other, ""),
 		}
