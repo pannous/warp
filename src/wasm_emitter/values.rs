@@ -487,12 +487,28 @@ impl WasmGcEmitter {
 		bracket: &Bracket,
 		separator: &Separator,
 	) {
+		let items = self.characters_beside_texts_as_texts(items);
 		self.emit_list_structure_with(
 			func,
-			items,
-			&items_info(items, bracket, separator),
+			&items,
+			&items_info(&items, bracket, separator),
 			Self::emit_node_instructions,
 		);
+	}
+
+	/// `["x", b]` of a text b: the one-character literal "x" (parsed as a character) is a text too, so the list reads
+	/// back as written out with texts (card character-text); a list of characters only keeps them
+	fn characters_beside_texts_as_texts(&self, items: &[Node]) -> Vec<Node> {
+		if !items.iter().any(|item| self.get_type(item) == Kind::Text) {
+			return items.to_vec();
+		}
+		items
+			.iter()
+			.map(|item| match item.drop_meta() {
+				Node::Char(character) => Node::Text(character.to_string()),
+				_ => item.clone(),
+			})
+			.collect()
 	}
 
 	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b

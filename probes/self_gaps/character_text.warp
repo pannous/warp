@@ -1,0 +1,5 @@
+// card character-text: a one-character literal beside a text in a list is a text, as the list written out
+// prints: ["x" " "], then text
+def wrap(b) := ["x", b]
+print wrap(" ")
+print type(wrap(" ")[0])
