@@ -52,7 +52,7 @@ def numbers(source) {
 	at = 0
 	n = source.length
 	while at < n {
-		end = span_end(source, at, n)
+		end = skipped_end(source, at, n)
 		if end == at and number_starts(source, at) {
 			found += [[line, column]]
 			end = number_end(source, at, n)
@@ -68,11 +68,131 @@ def numbers(source) {
 
 def is_name_char(c) := is_alphanumeric(c) or c == '_'
 
+def is_blank(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+
+// The end of what the parser skips at `at`, a comment as it reads one or a text, else `at`
+// Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_floor_division, at_hash_comment
+def skipped_end(source, at, n) {
+	c = source[at]
+	next = at + 1 < n ? source[at + 1] : '\n'
+	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') and not floor_division(source, at, n) {
+		return index_of(source, "\n", at, n)
+	}
+	if c == '#' and (at == 0 or is_blank(source[at - 1])) and hash_comment(source, at, n) {
+		return index_of(source, "\n", at, n)
+	}
+	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
+	if c == '/' and next == '#' { return after(source, "#/", at + 2, n) }
+	if c == '«' { return text_end(source, at + 1, '»', n) }
+	if c == '"' or c == '`' or c == '\'' and not possessive(source, at, n) { return text_end(source, at + 1, c, n) }
+	at
+}
+
+// After the text from `from` on that `closing` ends, a backslash escaping the character after it
+// Rust twin: warp_parser/literals.rs parse_string
+def text_end(source, from, closing, n) {
+	at = from
+	while at < n and source[at] != closing {
+		if source[at] == '\\' { at = at + 1 }
+		at = at + 1
+	}
+	at < n ? at + 1 : n
+}
+
+// `p's name`: the field p.name, no text
+def possessive(source, at, n) {
+	at > 0 and is_name_char(source[at - 1]) and is_at(source, at + 1, 's', n) and is_at(source, at + 2, ' ', n) and at + 3 < n and is_name_start(source[at + 3])
+}
+
+def is_name_start(c) := is_alpha(c) or c == '_'
+
+// `a//b`: a divisor glued to `//` after an operand on its line
+def floor_division(source, at, n) := at + 2 < n and not is_blank(source[at + 2]) and follows_operand(source, at)
+
+// Code that could be divided ends before `at` on its line: a name, a number, `)` or `]`
+def follows_operand(source, at) {
+	i = at - 1
+	while i >= 0 and source[i] != '\n' and is_blank(source[i]) { i = i - 1 }
+	i >= 0 and source[i] != '\n' and (is_name_char(source[i]) or source[i] == ')' or source[i] == ']')
+}
+
+// `# note`, `#!`, `##`, `#use lib`: a comment; `#s`, `#a-1`, `#f(x)` count
+def hash_comment(source, at, n) {
+	next = at + 1 < n ? source[at + 1] : '\n'
+	if is_blank(next) or next == '!' or next == '#' { return true }
+	word = ""
+	i = at + 1
+	while i < n and is_name_char(source[i]) { word += source[i]; i = i + 1 }
+	word == "use" or word == "require" or word == "import" or word == "include"
+}
+
 def number_starts(source, at) := is_digit(source[at]) and (at == 0 or not is_name_char(source[at - 1]))
 
 def number_end(source, at, n) {
+	date = date_length(source, at, n)
+	if date > 0 { return at + date }
 	while at < n and (is_name_char(source[at]) or source[at] == '.' and at + 1 < n and is_digit(source[at + 1])) {
+		if signed_exponent(source, at, n) { at = at + 1 }
 		at = at + 1
 	}
 	at
 }
+
+// Length of a date literal at `at` (RFC 3339 / 9557: `2024-01-31`, `2024-01-31T10:00:05.5Z`, `…+01:00[Europe/Berlin]`),
+// else 0. Rust twin: time/calendar.rs literal_len
+def date_length(source, at, n) {
+	if not (digits(source, at, 4, n) and is_at(source, at + 4, '-', n) and digits(source, at + 5, 2, n)) { return 0 }
+	if not (is_at(source, at + 7, '-', n) and digits(source, at + 8, 2, n)) { return 0 }
+	end = at + 10
+	if (is_at(source, end, 'T', n) or is_at(source, end, 't', n)) and clock_at(source, end + 1, n) {
+		end = end + 6
+		if is_at(source, end, ':', n) and digits(source, end + 1, 2, n) {
+			end = end + 3
+			if is_at(source, end, '.', n) and digits(source, end + 1, 1, n) {
+				end = end + 1
+				while end < n and is_digit(source[end]) { end = end + 1 }
+			}
+		}
+		if is_at(source, end, 'Z', n) or is_at(source, end, 'z', n) {
+			end = end + 1
+		} else if (is_at(source, end, '+', n) or is_at(source, end, '-', n)) and clock_at(source, end + 1, n) {
+			end = end + 6
+		}
+		end = after_zone_names(source, end, n)
+	}
+	if end < n and is_name_char(source[end]) { return 0 }
+	end - at
+}
+
+// `e-3` of `1e-3`, `E+5` at `at`
+def signed_exponent(source, at, n) {
+	(source[at] == 'e' or source[at] == 'E') and (is_at(source, at + 1, '-', n) or is_at(source, at + 1, '+', n)) and at + 2 < n and is_digit(source[at + 2])
+}
+
+// `hh:mm` at `at`
+def clock_at(source, at, n) := digits(source, at, 2, n) and is_at(source, at + 2, ':', n) and digits(source, at + 3, 2, n)
+
+// After the RFC 9557 suffixes at `at`: `[Europe/Berlin]`, `[_tzdata=warp-2026a]`
+def after_zone_names(source, at, n) {
+	end = at
+	while is_at(source, end, '[', n) {
+		close = index_of(source, "]", end + 1, n)
+		if close == n or close == end + 1 or not all_zone_chars(source, end + 1, close) { return end }
+		end = close + 1
+	}
+	end
+}
+
+def all_zone_chars(source, from, to) {
+	i = from
+	while i < to and (is_alphanumeric(source[i]) or "/_+-=.!".contains(source[i])) { i = i + 1 }
+	i == to
+}
+
+def digits(source, at, count, n) {
+	i = 0
+	while i < count and at + i < n and is_digit(source[at + i]) { i = i + 1 }
+	i == count
+}
+
+def is_at(source, at, c, n) := at < n and source[at] == c
