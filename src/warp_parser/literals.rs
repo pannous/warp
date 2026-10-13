@@ -59,6 +59,10 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_string(&mut self) -> Node {
+		self.reading_atom(AtomKind::Text, Self::read_text)
+	}
+
+	fn read_text(&mut self) -> Node {
 		let quote = self.current_char();
 		// «text» closes with », every other quote with itself
 		let closing = if quote == '«' { '»' } else { quote };

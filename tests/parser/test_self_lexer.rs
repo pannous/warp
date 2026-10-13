@@ -17,17 +17,25 @@ fn pair(first: usize, second: usize) -> Node {
 	warp_list([first, second].into_iter().map(|at| Node::from(at as i64)))
 }
 
-/// [[line, column], …] of the numbers the parser reads
-fn numbers(text: &str) -> Node {
-	let numbers = read_atoms(text)
+/// [[line, column], …] of the atoms of `kind` the parser reads, in source order
+fn positions(text: &str, kind: AtomKind) -> Node {
+	let mut found: Vec<(usize, usize)> = read_atoms(text)
 		.into_iter()
-		.filter(|atom| atom.kind == AtomKind::Number);
-	warp_list(numbers.map(|atom| pair(atom.line, atom.column)))
+		.filter(|atom| atom.kind == kind)
+		.map(|atom| (atom.line, atom.column))
+		.collect();
+	found.sort();
+	warp_list(found.into_iter().map(|(line, column)| pair(line, column)))
 }
 
 #[test]
 fn numbers_match_their_rust_twin() {
-	differential("lexer", "numbers", numbers);
+	differential("lexer", "numbers", |text| positions(text, AtomKind::Number));
+}
+
+#[test]
+fn texts_match_their_rust_twin() {
+	differential("lexer", "texts", |text| positions(text, AtomKind::Text));
 }
 
 #[test]
