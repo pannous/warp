@@ -4,9 +4,10 @@ use super::*;
 impl Exporter {
 	/// A function of one parameter as it is; of none, a function of `unit`; of several, a function of its
 	/// arguments object, whose fields the parameters read; a declared result converts the body's value (`body as int`)
-	pub(super) fn function(&mut self, name: &str, parameters: &[&Node], body: &Node, result: Option<&Node>) -> Lean {
+	pub(super) fn function(&mut self, definition: &crate::lowering::FunctionHead) -> Lean {
+		let (name, parameters, body) = (definition.name, definition.parameters(), definition.body);
 		let declared = format!("(some ({}))", self.functions[name]);
-		let (parameter, fields, parameter_type) = match parameters {
+		let (parameter, fields, parameter_type) = match parameters.as_slice() {
 			[parameter] => {
 				let inferred = parameter_type_word(parameter).is_none();
 				(
@@ -88,7 +89,7 @@ impl Exporter {
 					quoted(reference)
 				)
 			});
-		let body = match result {
+		let body = match definition.result {
 			Some(result) if crate::type_name_matching::is_checked_result(&result.name()) => {
 				self.checked_result(body, result)?
 			}

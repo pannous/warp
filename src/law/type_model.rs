@@ -456,18 +456,19 @@ impl Exporter {
 		// first: a lifted nested function's parameter `y: outer·y` holds outer's cell
 		let mut declared_cells = vec![];
 		for statement in &program {
-			let Some((name, parameters, body)) = function_definition(statement) else {
+			let Some(definition) = function_definition(statement) else {
 				continue;
 			};
-			for local in assigned_locals(body, &self.globals) {
-				let class = cell_class(name, &local);
+			for local in assigned_locals(definition.body, &self.globals) {
+				let class = cell_class(definition.name, &local);
 				self.classes.insert(
 					class.clone(),
 					(vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]),
 				);
 				declared_cells.push((
 					class.clone(),
-					parameters
+					definition
+						.parameters()
 						.iter()
 						.find(|parameter| parameter_word(parameter) == local)
 						.and_then(|parameter| parameter_type_word(parameter)),
@@ -485,9 +486,10 @@ impl Exporter {
 			));
 		}
 		for statement in &program {
-			let Some((name, parameters, _)) = function_definition(statement) else {
+			let Some(definition) = function_definition(statement) else {
 				continue;
 			};
+			let (name, parameters) = (definition.name, definition.parameters());
 			if self.functions.contains_key(name) {
 				return Err(format!("not in W0: overloads of {name}"));
 			}
@@ -578,10 +580,7 @@ impl Exporter {
 		}
 		match statement.drop_meta() {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
-			_ if function_definition(statement).is_some() => {
-				let (name, parameters, body) = function_definition(statement).expect("a function definition");
-				self.function(name, &parameters, body, result_type(statement))
-			}
+			_ if let Some(definition) = function_definition(statement) => self.function(&definition),
 			Node::Key(head, Op::Define, body) => match head.drop_meta() {
 				Node::Symbol(name) => {
 					self.names.insert(name.clone(), None);

@@ -309,22 +309,11 @@ pub(super) fn type_definitions(statement: &Node) -> Vec<&Node> {
 	}
 }
 
-/// `f(a, b) := body` and `def f(a, b) { body }`: the name, the parameters and the body
-pub(super) fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
-	let definition = typed_definition(statement)?;
-	Some((definition.name, definition.parameters(), definition.body))
-}
-
-/// The declared result type of a function definition, `int` of `def f(x) -> int { … }`
-pub(super) fn result_type(statement: &Node) -> Option<&Node> {
-	typed_definition(statement).and_then(|definition| definition.result)
-}
-
 /// The definitions the export reads, with their declared result type (warp converts the result to it,
 /// lowering/declarations.rs): `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`,
 /// `def f(x) { body }`, `def f(x) -> int { body }`, `fun f(x): Int { body }`, `def f(x) -> int: body`,
 /// `def f(x) as int = body`
-fn typed_definition(statement: &Node) -> Option<FunctionHead<'_>> {
+pub(super) fn function_definition(statement: &Node) -> Option<FunctionHead<'_>> {
 	// C style: the result type before the name
 	if let Node::List(items, _, _) = statement.drop_meta() {
 		if let [result, definition] = items.as_slice() {
@@ -379,12 +368,13 @@ pub(super) fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)>
 
 /// A function or lambda bound at main level: its name, parameters and body
 pub(super) fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>, &Node)> {
-	if let Some((name, parameters, body)) = function_definition(statement) {
-		return Some((
-			name,
-			parameters.iter().map(|parameter| parameter_word(parameter)).collect(),
-			body,
-		));
+	if let Some(definition) = function_definition(statement) {
+		let parameters = definition
+			.parameters()
+			.iter()
+			.map(|parameter| parameter_word(parameter))
+			.collect();
+		return Some((definition.name, parameters, definition.body));
 	}
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 		return None;
