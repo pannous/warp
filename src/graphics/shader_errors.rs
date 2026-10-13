@@ -5,13 +5,15 @@ use crate::graphics::shader_holes::written;
 use crate::node::Node;
 use crate::warp_parser::shader_blocks;
 
-/// `paint: 4:21: why`: the failing word, the line and column in the shader's text, and why
+/// `paint: 4:21: why` (in the browser `could not run the program: gpu_render: 4:21: why`): what failed, the line and
+/// column in the shader's text, and why
 fn shader_failure(message: &str) -> Option<(&str, usize, usize, &str)> {
-	let (word, rest) = message.split_once(": ")?;
-	let mut parts = rest.splitn(3, ':');
-	let line = parts.next()?.parse().ok()?;
-	let column = parts.next()?.parse().ok()?;
-	Some((word, line, column, parts.next()?.strip_prefix(' ')?))
+	message.match_indices(": ").find_map(|(at, _)| {
+		let mut parts = message[at + 2..].splitn(3, ':');
+		let line = parts.next()?.parse().ok()?;
+		let column = parts.next()?.parse().ok()?;
+		Some((&message[..at], line, column, parts.next()?.strip_prefix(' ')?))
+	})
 }
 
 /// The program's error with the shader's place as the program's own (`paint: why at 6:22`); unchanged when no single
@@ -23,12 +25,17 @@ pub fn relocated(result: Node, code: &str) -> Node {
 	let Node::Text(message) = reason.drop_meta() else {
 		return result;
 	};
-	match shader_failure(message).and_then(|(word, line, column, why)| {
-		place_in_program(code, line, column).map(|(line, column)| format!("{word}: {why} at {line}:{column}"))
-	}) {
+	match relocated_message(message, code) {
 		Some(message) => crate::node::error(&message),
 		None => result,
 	}
+}
+
+/// A failure's message with the shader's place as the program's own, if one block of `code` has it
+pub fn relocated_message(message: &str, code: &str) -> Option<String> {
+	let (failed, line, column, why) = shader_failure(message)?;
+	let (line, column) = place_in_program(code, line, column)?;
+	Some(format!("{failed}: {why} at {line}:{column}"))
 }
 
 /// Where the line and column of a shader's text are in `code`: in its one block with such a place

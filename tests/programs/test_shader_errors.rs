@@ -39,3 +39,16 @@ fn a_shader_error_after_a_hole_counts_the_hole_as_written() {
 		warp::graphics::shader_errors::place_in_program("x = 2\ns = shader {\n\t\tlet a = $x; let b = c\n\t}", 1, 27);
 	assert_eq!(place, Some((3, 23)));
 }
+
+#[test]
+fn a_shader_error_the_browser_wrapped_is_placed_too() {
+	let code = "s = shader {\n\tfn f() : f32 { return 1.0; }\n}";
+	assert_eq!(
+		warp::graphics::shader_errors::relocated_message(
+			"could not run the program: gpu_render: 1:8: expected '{' for function body",
+			code
+		)
+		.as_deref(),
+		Some("could not run the program: gpu_render: expected '{' for function body at 2:9")
+	);
+}
