@@ -12,6 +12,8 @@ const COMPILER_FOLDER: &str = "lib/compiler";
 const CONTEXT: usize = 40;
 /// Sources per evaluated program: each program's store is freed before the next, which keeps the test under 1 GB
 const SOURCES_PER_PROGRAM: usize = 64;
+/// Differing sources named after the first
+const LISTED: usize = 12;
 
 /// Every sample and probe source, sorted; a file that is not UTF-8 text is no source
 pub fn sources() -> Vec<PathBuf> {
@@ -45,22 +47,33 @@ pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
 }
 
 /// `word(read(path))` of lib/compiler/<part>.warp for every source, each written as the Rust twin's value of the same
-/// text is written
+/// text is written; fails with the first difference and the names of the next sources that differ
 pub fn differential(part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
+	let mut differing = vec![];
 	for paths in sources().chunks(SOURCES_PER_PROGRAM) {
 		for (path, value) in paths.iter().zip(warp_values(part, word, paths)) {
 			let text = std::fs::read_to_string(path).unwrap();
 			let (warp_text, rust_text) = (value.serialize(), rust_twin(&text).serialize());
 			if warp_text != rust_text {
-				panic!(
-					"{word} differs from its Rust twin on {}:\n  warp: …{}…\n  rust: …{}…",
-					path.display(),
-					around_difference(&warp_text, &rust_text),
-					around_difference(&rust_text, &warp_text)
-				);
+				differing.push((path.display().to_string(), warp_text, rust_text));
 			}
 		}
 	}
+	let Some((path, warp_text, rust_text)) = differing.first() else {
+		return;
+	};
+	let others: Vec<&str> = differing[1..]
+		.iter()
+		.take(LISTED)
+		.map(|(path, _, _)| path.as_str())
+		.collect();
+	panic!(
+		"{word} differs from its Rust twin on {} sources, first on {path}:\n  warp: …{}…\n  rust: …{}…\nnext: {}",
+		differing.len(),
+		around_difference(warp_text, rust_text),
+		around_difference(rust_text, warp_text),
+		others.join(" ")
+	);
 }
 
 /// `word(read(path))` for the sources, in one program
