@@ -311,6 +311,10 @@ def prefixed_by_symbol(p, c) {
 		p.at = p.at + 1
 		return ["key", "not", ø, expression(p, 105)]
 	}
+	if c == '#' and not is_blank(next) {
+		p.at = p.at + 1
+		return ["key", "#", ø, expression(p, INDEX_POWER - 1)]
+	}
 	if c == '√' {
 		p.at = p.at + 1
 		return ["key", "√", ø, expression(p, 162)]

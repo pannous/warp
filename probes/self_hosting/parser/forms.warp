@@ -43,3 +43,7 @@ y = 7 rem 2 + 1
 for (k, v) in m { s = s + k }
 for k, v in m { n = n + v }
 number of chars in "héllo"
+for i in 0 to (#t) { n += i }
+p = [#s]
+prev#(#b + 1)
+for j in 0...#b { prev.push(j) }
