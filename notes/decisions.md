@@ -75,6 +75,9 @@ notes/open_decisions.md.
   cleanly (pattern matching on tree shapes, a `parse` word giving real Nodes, tagged unions, a text cursor, bytes and
   bits, deep recursion, fast big literals; topic parser-features) and the Rust code has had a proper cleanup (topic
   cleanup). What exists stays: lexer, serializer and parser twins with their differential tests on main.
+- cleanup-only: until the big Rust cleanup (topic cleanup) is done, new tasks go out only from the cleanup roadmap;
+  other workers finish what they hold and fizzle out (not stopped), resuming after the cleanup. The Codex timer takes
+  only cleanup sub-cards. Urgent cards the user puts in Now still go out.
 - rust-forms-welcome: warp may read Rust's own forms (topic rust-reading), generics `<T>` included, as long as every
   one has a nicer warp form of its own; the Rust form is an accepted alternative, the warp form stays canonical.
 - warning-levels: diagnostics get levels hint < weak < normal < severe (no "strong"); errors stay separate.
