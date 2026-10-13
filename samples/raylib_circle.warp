@@ -12,4 +12,4 @@ MAROON=0xFF2E1990
 DrawText("Warp Raylib FFI Demo", 250, 20, 30, DARKGRAY)  
 DrawCircle(400, 300, 80.0, MAROON)  
 EndDrawing()
-sleep(500)
+sleep(500ms)

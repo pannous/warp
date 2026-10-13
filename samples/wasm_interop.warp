@@ -9,24 +9,24 @@ use text
 use memory
 
 // Export function for wasm
-export def add(a: i32, b: i32) -> i32 {
+export def add(a: i32, b: i32) as i32 {
     return a + b
 }
 
 // Export with explicit wasm type
-export def compute(x: f64, y: f64) -> f64 {
+export def compute(x: f64, y: f64) as f64 {
     return sqrt(x * x + y * y)
 }
 
 // Strings as bytes, the way they lie in linear memory: memory.copy(bytes, ptr) writes them, memory.slice(ptr, end) reads
-def read_string(bytes) -> string {
-    return string.from_utf8(bytes)
+def read_string(bytes) as string {
+    return from_utf8(bytes)
 }
 
-def round_trip(s: string) -> string {
+def round_trip(s: string) as string {
     bytes = s.to_utf8()
-    memory.copy(bytes, 60000)
-    return read_string(memory.slice(60000, 60000 + count(bytes)))
+    copy(bytes, 60000)
+    return read_string(slice(60000, 60000 + count(bytes)))
 }
 
 def write_string(s: string) {
@@ -49,7 +49,7 @@ tree = Node {
 }
 
 // Interface types (WIT)
-interface calculator {
+trait calculator {
     add: (i32, i32) -> i32
     sub: (i32, i32) -> i32
     mul: (i32, i32) -> i32

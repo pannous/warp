@@ -24,15 +24,15 @@ while i < node_count {
     visited.push(0)
     i = i + 1
 }
-dist[0] = 0
+dist#1 = 0
 
 done = false
-while !done {
+while not done {
     current = -1
     best = infinity
     i = 0
     while i < node_count {
-        if visited[i] == 0 && dist[i] < best {
+        if visited[i] == 0 and dist[i] < best {
             best = dist[i]
             current = i
         }
@@ -44,8 +44,8 @@ while !done {
         visited[current] = 1
         j = 0
         while j < graph[current].length {
-            neighbor = graph[current][j][0]
-            candidate = dist[current] + graph[current][j][1]
+            neighbor = graph#(current+1)#(j+1)#1
+            candidate = dist[current] + graph#(current+1)#(j+1)#2
             if candidate < dist[neighbor] {
                 dist[neighbor] = candidate
                 prev[neighbor] = current
