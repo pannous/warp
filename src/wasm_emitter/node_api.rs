@@ -63,6 +63,8 @@ pub const NODE_BUILTINS: [(&str, usize, Kind); 4] = [
 ];
 /// The opening brackets by their bracket info in a list's kind field (Curly 0, Square 1, Round 2, Less 3, None 5)
 const BRACKETS: [(&str, i64); 5] = [("{", 0), ("[", 1), ("(", 2), ("<", 3), ("", 5)];
+/// The bracket info of a round group `(…)`
+const ROUND_INFO: i64 = BRACKETS[2].1;
 const UNKNOWN_OPERATOR: &str = "unknown operator: ";
 const UNKNOWN_BRACKET: &str = "unknown bracket: ";
 const UNKNOWN_SEPARATOR: &str = "unknown separator: ";
@@ -163,6 +165,51 @@ impl WasmGcEmitter {
 						],
 					);
 					s.emit_meta_part(f, node, part);
+					// `(a * 2)` in quoted code: a group of one item has its item's key, value, op and name (card data-op)
+					Self::emit_list(
+						f,
+						&[
+							I::Loop(BlockType::Empty),
+							I::LocalGet(part),
+							I::I32Const(BRACKET_PART),
+							I::I32LtS,
+						],
+					);
+					Self::emit_list(f, &kind_of(node));
+					f.instruction(&I::LocalSet(kind));
+					Self::emit_list(f, &is_kind(kind, Kind::List));
+					Self::emit_list(
+						f,
+						&[
+							I::I32And,
+							I::LocalGet(kind),
+							I::I64Const(KIND_BITS),
+							I::I64ShrU,
+							I::I64Const(0xFF),
+							I::I64And,
+							I::I64Const(ROUND_INFO),
+							I::I64Eq,
+							I::I32And,
+							I::LocalGet(node),
+							I::StructGet {
+								struct_type_index: node_type,
+								field_index: 2,
+							},
+							I::RefIsNull,
+							I::I32And,
+							I::If(BlockType::Empty),
+							I::LocalGet(node),
+							I::StructGet {
+								struct_type_index: node_type,
+								field_index: 1,
+							},
+							I::RefCastNullable(HeapType::Concrete(node_type)),
+							I::LocalSet(node),
+							I::Br(1),
+							I::End,
+							I::End,
+						],
+					);
 					Self::emit_list(f, &kind_of(node));
 					Self::emit_list(
 						f,
