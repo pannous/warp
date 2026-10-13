@@ -1263,6 +1263,9 @@ notes/open_decisions.md.
   picks one canonical form. Single quotes stay literal. Open detail: `$` holes in sql/sh templates must keep working.
 - D6 pipe: "The pipe operator is just an operator that behaves differently with different types unified". So `|` is one
   operator dispatched on its operand types: truth values → logical or, a value and a function → pipe (`2|square|root`).
+  operator-shall (user 2026-10-13): `&` and `|` of two whole numbers combine the bits (`12 & 10` is 8, from any
+  expression: `n | f(4)`); `&&`, `||`, `and`, `or` stay logical on numbers (`12 and 10` is 10). As an if/while
+  condition the bits warn (user 2026-10-13: `if 8 & 4 {}` is false): `8 and 4` or `(8 & 4) != 0` say which.
 - D14 (SUPERSEDED 2026-10-12 by in-bool: yes/no) `x in list`: "The position one index would behave as a truth but maybe it's a foot gun let's try it with a
   warning". `3 in [1 2 3]` gives the position (truthy when found), with a warning. Caveat for implementation: a 0-based
   position makes the first element falsy, so the position must be 1-based (or found-at-0 still truthy).

@@ -151,8 +151,8 @@ fn test_list_type_hint_is_emitted_once_when_evaluated() {
 fn test_logical_operators() {
 	expect_hint("1 && 0", "&&", "and", "1:3");
 	expect_hint("1 || 0", "||", "or", "1:3");
-	expect_hint("1 & 1", "&", "and", "1:3");
-	expect_hint("1 | 0", "|", "or", "1:3");
+	expect_hint("yes & yes", "&", "and", "1:5"); // on ints `&` and `|` combine bits (card operator-shall)
+	expect_hint("yes | no", "|", "or", "1:5");
 	expect_hint("!1", "!", "not", "1:1");
 	for canonical in ["1 and 1", "1 or 0", "not 1"] {
 		expect_no_hint(canonical);
@@ -430,9 +430,9 @@ fn test_hints_are_off_when_the_mode_is_off() {
 /// hint names the bit word the writer meant, not `and`/`or`: `n & 127` is 127 whenever n is truthy
 #[test]
 fn a_mask_beside_and_or_hints_the_bit_word() {
-	expect_hint("n = 300; n & 127", "n & 127", "bit_and(n, 127)", "1:12");
-	expect_hint("n = 300; n | 128", "n | 128", "bit_or(n, 128)", "1:12");
-	expect_hint("n = 300; 127 & n", "127 & n", "bit_and(127, n)", "1:14");
-	expect_hint("1 & 1", "&", "and", "1:3");
-	expect_hint("x = 1; x | 0", "|", "or", "1:10");
+	// card operator-shall: `&` and `|` of whole numbers combine their bits, no bit word needed
+	for bitwise in ["n = 300; n & 127", "n = 300; n | 128", "n = 300; 127 & n", "1 & 1"] {
+		expect_no_hint(bitwise);
+	}
+	expect_hint("x = yes; x | no", "|", "or", "1:12");
 }

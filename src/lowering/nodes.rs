@@ -1,5 +1,6 @@
 //! The small node forms many lowering passes build and test: a call of a word, a word
 
+use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, IN_WORD, MATCH_WORD};
@@ -24,10 +25,10 @@ pub(crate) fn matched(subject: Node, arms: Vec<Node>) -> Node {
 	)
 }
 
-/// The operands of `a or b or c` (`|` parses as or), else the node itself
+/// The operands of `a or b or c` (`|` parses as or, between whole numbers as the bit or), else the node itself
 pub(crate) fn or_operands(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
-		Node::Key(left, Op::Or, right) => [or_operands(left), or_operands(right)].concat(),
+		Node::Key(left, Op::Or | Op::BitOr, right) => [or_operands(left), or_operands(right)].concat(),
 		_ => vec![node.clone()],
 	}
 }
@@ -138,6 +139,19 @@ pub(crate) fn is_function_keyword(node: &Node) -> bool {
 pub(crate) fn is_type_word(node: &Node) -> bool {
 	node.symbol_name()
 		.is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
+}
+
+/// An operand `&` and `|` may combine bit by bit (card operator-shall): a whole number, a name, a call or an
+/// arithmetic; a truth value, comparison, text, list, float or type is no whole number, where they are and/or
+pub(crate) fn may_be_whole_number(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Number(number) => matches!(number, Number::Int(_) | Number::BigInt(_)),
+		Node::Symbol(name) => !is_type_word(node) && !name.starts_with(char::is_uppercase),
+		Node::Key(_, op, _) => !(op.is_comparison() || op.is_logical() || *op == Op::Not),
+		// a call `f(4)`, never `[1 2]` or the type-headed `text { … }`
+		Node::List(items, bracket, _) => *bracket != Bracket::Square && items.first().is_none_or(may_be_whole_number),
+		_ => false,
+	}
 }
 
 /// The name a parameter declares: `x`, `x:int`, `x=1`

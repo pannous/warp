@@ -108,7 +108,7 @@ is complete; only the bootstrap waits for all three.
 | 15 | emits-wasm | Emitter core in warp: ints, floats, functions, if, while | the warp-written module runs to the same value as Rust's, for every sample in that subset | 16, 17 |
 | 16 | path-list | write_bytes / read_bytes for binary files | gap |  |
 | 17 | f64-const | float_bits / bits_float: a float's IEEE bits as an int | gap |  |
-| 18 | two-ints | `n & 127` on ints is logical, silently; hint toward bit_and | gap, footgun |  |
+| 18 | two-ints | `n & 127` on ints is logical, silently; hint toward bit_and | gap, footgun | fixed: bitwise (operator-shall) |
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
