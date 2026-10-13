@@ -78,6 +78,9 @@ def positions(source, kind) {
 		if end > at and kind == "text" and text_starts(source, at, n) { found += [[line, column]] }
 		if end == at and at < style_end { end = css_color_end(source, at, n) }
 		if end == at and number_starts(source, at) {
+			end = version_end(source, at, n)
+		}
+		if end == at and number_starts(source, at) {
 			if kind == "number" { found += [[line, column]] }
 			end = number_end(source, at, n)
 		}
@@ -250,6 +253,24 @@ def number_end(source, at, n) {
 		if signed_exponent(source, at, n) { at = at + 1 }
 		at = at + 1
 	}
+	at
+}
+
+// A version literal at `at`, digits with two dots or more (`1.2.3`), which the parser reads as no number: its end,
+// else `at`. Rust twin: versions.rs literal_len
+def version_end(source, at, n) {
+	end = digits_end(source, at, n)
+	dots = 0
+	while end + 1 < n and source[end] == '.' and is_digit(source[end + 1]) {
+		end = digits_end(source, end + 1, n)
+		dots = dots + 1
+	}
+	if dots < 2 or (end < n and is_name_char(source[end])) { return at }
+	end
+}
+
+def digits_end(source, at, n) {
+	while at < n and is_digit(source[at]) { at = at + 1 }
 	at
 }
 

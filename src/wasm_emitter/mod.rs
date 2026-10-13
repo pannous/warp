@@ -43,6 +43,7 @@ mod list_dispatch;
 mod list_emitter;
 pub(crate) mod list_sharing;
 mod node_api;
+pub use node_api::NODE_AT;
 mod similarity;
 mod text_rooms;
 mod text_unicode;
@@ -741,8 +742,9 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
-		// quoted code keeps its positions: node_at and $MetaNode only in a program that quotes (card data-meta)
-		if node.mentions_any(&list_emitter::QUOTE_WORDS) {
+		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes or parses
+		// (cards data-meta, parse-word)
+		if node.mentions_any(&list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(node_api::NODE_AT);
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
@@ -1271,11 +1273,7 @@ pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 
 /// Is the first statement that mentions `name` its plain assignment `name = value` (value not reading name)
 fn first_mention_assigns(statements: &[Node], name: &str) -> bool {
-	let mentions = |node: &Node| {
-		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == name));
-		found
-	};
+	let mentions = |node: &Node| node.mentions(name);
 	match statements
 		.iter()
 		.find(|statement| mentions(statement))

@@ -225,6 +225,10 @@ fn unwrapped(name: Node) -> Node {
 	if matches!(name.drop_meta(), Node::Empty) {
 		return call(UNWRAP, vec![name]);
 	}
+	// `now!`: the time the run reads where it stands (card data-run-now)
+	if crate::time::is_time_call(&name) {
+		return name;
+	}
 	if !is_name(&name) {
 		let written = crate::normalize::operand_text(&name);
 		return crate::node::error(&format!(

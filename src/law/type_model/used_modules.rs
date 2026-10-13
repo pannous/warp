@@ -2,7 +2,7 @@
 //! becomes the definitions of X the program calls, and the ones those call, as if the program had written them.
 //! Builtins that warp computes the way a warp definition would come along the same way when called.
 
-use super::{function_definition, mentions, statements};
+use super::{function_definition, statements};
 use crate::modules::{std_module_source, USE_KEYWORDS};
 use crate::node::{Bracket, Node, Separator};
 
@@ -97,7 +97,7 @@ fn needed_definitions(module: &Node, program: &[&Node]) -> Vec<Node> {
 	let mut callers: Vec<&Node> = program.to_vec();
 	while let Some(caller) = callers.pop() {
 		for (name, definition) in &definitions {
-			if !needed.contains(name) && !defines(program, name) && mentions(caller, name) {
+			if !needed.contains(name) && !defines(program, name) && caller.mentions(name) {
 				needed.push(name);
 				callers.push(definition);
 			}

@@ -218,7 +218,7 @@ impl Signals {
 						// what the write gave: the new value, also of `x--` (an increment is immediate, P55)
 						let value_after = target.as_ref().clone();
 						let mut parts = vec![node];
-						parts.extend(checks(listeners, &[name]));
+						parts.extend(checks(listeners, &[name]).into_iter().flat_map(inlined));
 						parts.push(value_after);
 						Node::List(parts, Bracket::Round, Separator::Semicolon)
 					}
@@ -904,6 +904,22 @@ fn checks(listeners: &[Listener], written: &[String]) -> Vec<Node> {
 		.filter(|listener| written.iter().any(|name| listener.watches(name)))
 		.map(Listener::check)
 		.collect()
+}
+
+/// A check's block as its statements, nested blocks too: in the sequence `(x--; …; x)` of a write inside an expression
+/// a block `{{print value}}` is an item, which makes the sequence a list (card on-set-value)
+fn inlined(check: Node) -> Vec<Node> {
+	match check.drop_meta() {
+		Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => {
+			statements.iter().cloned().flat_map(inlined).collect()
+		}
+		// `{print value}`: one statement, its words
+		Node::List(words, Bracket::Curly, separator) => match words.as_slice() {
+			[statement] => inlined(statement.clone()),
+			_ => vec![Node::List(words.clone(), Bracket::None, separator.clone())],
+		},
+		_ => vec![check],
+	}
 }
 
 /// The variable `x = …`, `x += …`, `x++`, `x--` writes; a field or item write `p.age = 2`, `xs#1 = 9` writes p, xs

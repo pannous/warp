@@ -1222,7 +1222,8 @@ impl WasmGcEmitter {
 		};
 		let known = self.scope.lookup(name).is_some()
 			|| self.ctx.user_globals.contains_key(name)
-			|| self.ctx.user_functions.contains_key(name);
+			|| self.ctx.user_functions.contains_key(name)
+			|| self.ctx.variant_names.contains(name);
 		(!known).then(|| name.clone())
 	}
 

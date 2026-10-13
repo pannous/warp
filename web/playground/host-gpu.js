@@ -390,17 +390,19 @@ function writeSharedWords(shared, words) {
 	Atomics.notify(header, 0);
 }
 
-// the program's side: hand the job to a task Worker and wait for the values it gives, raw words as `Words`
+// the program's side: hand the job to a task Worker and wait for the values it gives, raw words as `Words` (a copy:
+// the shared buffer takes the next answer)
 function gpuJob(word, job, transfer = [], Words = Float32Array) {
 	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
 	const worker = gpuTaskWorker();
 	if (!worker) throw new Error(`${word}: every task Worker is busy`);
-	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	Atomics.wait(header, 0, 0);
-	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]) } : readShared(shared);
+	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
+	returnAnswerBuffer(shared);
 	if (error) throw new Error(`${word}: ${error}`);
 	return values;
 }

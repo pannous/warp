@@ -299,7 +299,8 @@ pub(super) fn package_directory(name: &str) -> Result<PathBuf, String> {
 /// The version a module file declares with a top level `version 1.2.3`
 pub(super) fn module_version(path: &Path) -> Option<Version> {
 	let source = crate::web::read_text(&path.to_string_lossy())?;
-	declared_version(&statements(WarpParser::parse(&source)))
+	// reading the version is no reading of the module's code: its style gets no hints (card hints-fire)
+	crate::normalize::without_hints(|| declared_version(&statements(WarpParser::parse(&source))))
 }
 
 /// A local module a `use … version` names must declare a version the requirement allows

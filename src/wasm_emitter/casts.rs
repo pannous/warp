@@ -561,6 +561,17 @@ impl WasmGcEmitter {
 		};
 		match literal_truth {
 			Some(truth) => self.emit_node_instructions(func, &if truth { Node::True } else { Node::False }),
+			// a text known at run time: false when it spells a falsy word, as a literal's (card yes-print)
+			None if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+				use crate::lowering::nodes::call;
+				let falsy = FALSY_TEXTS.iter().map(|text| Node::Text(text.to_string())).collect();
+				let falsy = Node::List(falsy, Bracket::Square, Separator::Colon);
+				let spells_falsy = call(
+					crate::library_words::COLLECTION_CONTAINS,
+					vec![falsy, call("lower", vec![value.clone()])],
+				);
+				self.emit_node_instructions(func, &Node::Key(Box::new(Node::Empty), Op::Not, Box::new(spells_falsy)));
+			}
 			None => {
 				self.emit_numeric_value(func, value);
 				self.emit_call(func, "new_bool");
@@ -755,12 +766,14 @@ fn is_plain_data(node: &Node) -> bool {
 /// compute, not data that reads as written (card str-inline)
 fn computes_value(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= match part {
-		Node::Key(_, Op::Hash, _) => true,
-		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
-		// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
-		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&head.as_str())),
-		_ => false,
+	node.visit(&mut |part| {
+		found |= match part {
+			Node::Key(_, Op::Hash, _) => true,
+			Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
+			// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
+			Node::List(..) => crate::time::is_time_call(part),
+			_ => false,
+		}
 	});
 	found
 }

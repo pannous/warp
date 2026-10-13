@@ -9,6 +9,16 @@ const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
 const TEXT_TYPE_WORDS: [&str; 3] = ["text", "string", "str"];
 
 impl WarpParser {
+	/// The head of a definition, `f`, `f x` or `f(x)`, makes f a function the rest of the source calls
+	fn register_defined_function(&mut self, head: &Node) {
+		if let Some(name) = defined_function_name(head) {
+			if matches!(head.drop_meta(), Node::List(..)) {
+				self.functions_with_parameters.insert(name.clone());
+			}
+			self.functions.insert(name);
+		}
+	}
+
 	/// Pratt parser: parse expression with given minimum binding power
 	/// Handles prefix, infix, and suffix operators
 	pub(super) fn parse_expr(&mut self, min_bp: u8) -> Node {
@@ -516,13 +526,18 @@ impl WarpParser {
 				&& matches!(lhs.drop_meta(), Node::Symbol(_));
 			// `for:email "Email"`: the glued pair is for:email, the text the next item (card parser-tag)
 			let glued_pair = op == Op::Colon && glued_before && !self.current_char().is_whitespace();
+			// `def foo: …` defines foo by what follows, its body may call foo like the body of `foo := …`
+			let colon_defines = op == Op::Colon && heads_definition && !glued_pair && !self.result_type_follows();
+			if colon_defines {
+				self.register_defined_function(&lhs);
+			}
 			let block_body = match op {
 				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
 					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
 				}
 				// `def foo: hi=2*2` defines foo by the rest of the line, no `(foo: hi) = 2*2`; Scala's `def f(x: Int): Int = …`
 				// declares its result type
-				Op::Colon if heads_definition && !glued_pair && !self.result_type_follows() => {
+				Op::Colon if colon_defines => {
 					self.skip_spaces();
 					Some(self.with_equals_comparing(false, |parser| parser.rest_of_statement()))
 				}
@@ -536,12 +551,7 @@ impl WarpParser {
 				self.skip_whitespace();
 			}
 			if op == Op::Define {
-				if let Some(name) = defined_function_name(&lhs) {
-					if matches!(lhs.drop_meta(), Node::List(..)) {
-						self.functions_with_parameters.insert(name.clone());
-					}
-					self.functions.insert(name);
-				}
+				self.register_defined_function(&lhs);
 			}
 
 			// Parse right-hand side with appropriate binding power

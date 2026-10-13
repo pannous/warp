@@ -95,6 +95,8 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | enum-parameter-type | `f(c: Coin) := …` for `enum Coin` | "unknown type Coin of parameter c" |
 | map-patterns | `match {name: "Ann", age: 3} { {name: n} => n }` | done (step 1 of tree patterns, below) |
 | match-negative-subject | `match -3 { … }` | parsed as `match - 3` |
+| multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above |
+| matches-infix | `use regex; "abc" matches "a.c"` | done: lib/regex.warp declares `infix operator matches`; the parser scans the operators of used std modules too (declaration_scan.rs used_std_modules); gives 1/0 like `matches()` |
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above; `n.first` read the library word first until field-before-library-word (a known instance's field wins) |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
 | render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
@@ -159,7 +161,7 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    find done (src/lowering/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
    names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
-   Open: `found = [[…]] find P` parses as an assignment first (card found-find).
+   `found = [[…]] find P` walks the literal, as after a list variable (lists.rs with_applied_word, card found-find).
    replace done (same file, renamed tree_walks.rs): `tree replace P with Q` rebuilds lists (bracketed/separated keep the
    bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
    and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`

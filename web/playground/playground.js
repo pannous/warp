@@ -38,6 +38,8 @@ const STALLED_START_MS = 60_000;
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
+const PAINTING_MARGIN = 10, PAINTING_BORDERS = 2; // playground.css .painting: its margin above, its border on both sides
+const MIN_VIEW_HEIGHT = 160; // the view's height when the pane's text reaches the window's bottom
 const STDOUT = 1;
 const NOTIFICATION_TITLE = "warp";
 // card report-button: ?report turns the report button on in this browser, ?report=off off; only for who knows it
@@ -285,12 +287,15 @@ darkMode.addEventListener("change", tellSystemValues);
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 
-// view_width, view_height (use draw's default canvas): the room below the output pane's text, in CSS pixels; none while
-// the pane is folded away, so host.js's defaults stand
+// view_width, view_height (use draw's default canvas, paint(shader) without a size): the room below the output pane's
+// text, in CSS pixels: the pane's width, down to the window's bottom; none while the pane is folded away, so host.js's
+// defaults stand. Never measured from the paintings: the pane grows with them, so a view-sized painting made the next
+// view taller each frame, until Safari ran out of memory (card webgpu-safari)
 function viewSize() {
-	const pane = $("output").getBoundingClientRect(), painted = $("painted").getBoundingClientRect();
-	const width = Math.floor(painted.width), height = Math.floor(pane.bottom - painted.top);
-	return width > 0 && height > 0 ? { view_width: width, view_height: height } : {};
+	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
+	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
+	const room = innerHeight - Math.max(painted.top, 0) - parseFloat(style.paddingBottom) - PAINTING_MARGIN - PAINTING_BORDERS;
+	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
 // `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it

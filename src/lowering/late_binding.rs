@@ -461,9 +461,7 @@ fn symbols_read(node: &Node) -> HashSet<&str> {
 }
 
 fn reads_any(node: &Node, names: &dyn Fn(&str) -> bool) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if names(name)));
-	found
+	node.mentions_where(names)
 }
 
 /// `3*4` for the body, `clock()` for the call `(clock)`, as it was written

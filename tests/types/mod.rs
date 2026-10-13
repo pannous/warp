@@ -46,6 +46,8 @@ mod test_copies;
 mod test_cycle_mark_depth; // card cycle-mark-depth
 mod test_cyclic_objects; // card orm: objects pointing to each other
 mod test_data;
+mod test_data_run_now; // card data-run-now
+mod test_data_stays_data; // card data-bare
 mod test_date_arithmetic_at_run_time; // card run-time-dates, stage B2
 mod test_dates_at_run_time; // card runtime-dates
 mod test_declaration_without_value;
@@ -137,6 +139,7 @@ mod test_sum_types;
 mod test_symbolism_object; // card symbolism-object
 mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions
+mod test_text_as_bool; // card yes-print
 mod test_text_as_number; // card units-dynamic
 mod test_text_of_text; // text(text(5)) is "5"
 mod test_time_programs_run; // card run-time-dates, stage B4

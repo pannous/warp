@@ -18,14 +18,14 @@ impl Exporter {
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
 			parameters => (
 				arguments_class(name),
-				parameters.iter().map(|parameter| parameter_name(parameter)).collect(),
+				parameters.iter().map(|parameter| parameter_word(parameter)).collect(),
 				declared,
 			),
 		};
 		let references: Vec<String> = parameters
 			.iter()
 			.filter(|parameter| parameter_type_word(parameter).is_some_and(|word| self.cell_classes.contains(&word)))
-			.map(|parameter| parameter_name(parameter))
+			.map(|parameter| parameter_word(parameter))
 			.collect();
 		let cells: Vec<String> = assigned_locals(body, &self.globals)
 			.into_iter()
@@ -77,7 +77,7 @@ impl Exporter {
 			.fold(body, |body, reference| {
 				let cell = parameters
 					.iter()
-					.find(|parameter| parameter_name(parameter) == **reference)
+					.find(|parameter| parameter_word(parameter) == **reference)
 					.and_then(|parameter| parameter_type_word(parameter))
 					.expect("a cell parameter");
 				let path = lean_strings(&[cell]);

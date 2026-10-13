@@ -61,9 +61,7 @@ impl WasmGcEmitter {
 
 	/// Does the node read a variable or global (key names and other symbols of a data literal are not variables)
 	pub(super) fn mentions_variable(&self, node: &Node) -> bool {
-		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name)));
-		found
+		node.mentions_where(|name| self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name))
 	}
 
 	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a

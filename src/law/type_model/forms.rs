@@ -1,5 +1,6 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
+pub(super) use crate::lowering::nodes::parameter_word;
 
 pub(super) fn unsupported(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
@@ -410,7 +411,7 @@ pub(super) fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>
 	if let Some((name, parameters, body)) = function_definition(statement) {
 		return Some((
 			name,
-			parameters.iter().map(|parameter| parameter_name(parameter)).collect(),
+			parameters.iter().map(|parameter| parameter_word(parameter)).collect(),
 			body,
 		));
 	}
@@ -437,19 +438,13 @@ pub(super) fn unwrapped(node: &Node) -> &Node {
 pub(super) fn assigned_before_read(statements: &[&Node], name: &str) -> bool {
 	match statements
 		.iter()
-		.find(|statement| mentions(statement, name))
+		.find(|statement| statement.mentions(name))
 		.map(|statement| statement.drop_meta())
 	{
-		Some(Node::Key(target, Op::Assign, value)) => target.is_symbol(name) && !mentions(value, name),
+		Some(Node::Key(target, Op::Assign, value)) => target.is_symbol(name) && !value.mentions(name),
 		Some(_) => false,
 		None => true,
 	}
-}
-
-pub(super) fn mentions(node: &Node, name: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
-	found
 }
 
 /// Warp's late binding (src/lowering/late_binding.rs): a function or lambda reading a main-level name the program
@@ -467,11 +462,11 @@ pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<S
 			let Node::Symbol(changed) = target.drop_meta() else {
 				continue;
 			};
-			let read = mentions(body, changed) && !parameters.contains(changed) && !globals.contains(changed);
+			let read = body.mentions(changed) && !parameters.contains(changed) && !globals.contains(changed);
 			if (*op == Op::Assign || op.is_compound_assign())
 				&& read && statements[position + offset + 2..]
 				.iter()
-				.any(|call| mentions(call, name))
+				.any(|call| call.mentions(name))
 			{
 				return Some(format!("not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"));
 			}
@@ -536,14 +531,6 @@ pub(super) fn parameter_type_word(parameter: &Node) -> Option<String> {
 		Node::Key(_, Op::Colon, annotation) => Some(crate::lowering::class_methods::type_word(annotation)),
 		Node::Key(parameter, Op::Assign, _) => parameter_type_word(parameter),
 		_ => None,
-	}
-}
-
-/// `b`, `b: int`, `b=3` and `b: int = 3` all name the parameter b
-pub(super) fn parameter_name(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(parameter, Op::Colon | Op::Assign, _) => parameter_name(parameter),
-		parameter => parameter.name(),
 	}
 }
 
