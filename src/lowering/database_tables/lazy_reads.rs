@@ -6,8 +6,9 @@ pub(super) fn generated<'a>(code: &str, placeholders: impl IntoIterator<Item = (
 	let names = GENERATED_NAMES
 		.iter()
 		.map(|(written, name)| (written.to_string(), symbol(name)));
+	// generated after times_phrases ran: `n times "?, "` gets its meaning here
 	crate::law::substitute(
-		&parse(code),
+		&crate::lowering::times_phrases::lower(parse(code)),
 		&names
 			.chain(
 				placeholders
