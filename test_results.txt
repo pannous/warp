@@ -799,6 +799,7 @@ PASSED:
   ✓ ffi::test_download::download_fetches_like_fetch
   ✓ ffi::test_fetch_computed_url::fetch_of_a_parameter_and_a_concatenation
   ✓ ffi::test_fetch_computed_url::fetch_of_a_text_variable
+  ✓ ffi::test_ffi_float_results::a_raylib_float_result_is_a_float
   ✓ ffi::test_ffi_gaps::a_library_header_named_otherwise_is_found
   ✓ ffi::test_ffi_gaps::a_pointer_result_is_refused_loudly
   ✓ ffi::test_ffi_gaps::libc_character_classes_are_linked
@@ -812,6 +813,7 @@ PASSED:
   ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
   ✓ ffi::test_ffi_signatures::libc_signatures
   ✓ ffi::test_ffi_signatures::raylib_signatures_without_a_window
+  ✓ ffi::test_ffi_text_out_pointers::a_text_out_pointer_keeps_the_c_result
   ✓ ffi::test_ffi_text_results::a_c_string_result_is_a_text
   ✓ ffi::test_ffi_text_results::a_libc_function_without_use_c_says_how_to_import_it
   ✓ ffi::test_ffi_text_results::other_pointer_results_are_refused
@@ -5091,4 +5093,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5086 passed, 0 failed, 5086 total tested
+10 ignored, 5088 passed, 0 failed, 5088 total tested
