@@ -99,11 +99,34 @@ pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathB
 
 /// paint of a rendered shader (gpu::render_rgba): its RGBA bytes go to the window as they are
 pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
-	let pixels = || crate::gpu::opaque_colors(rgba).map(u64::from).collect::<Vec<_>>();
 	shown_or_written(
 		|| crate::paint_window::rgba_frame(rgba, width, height),
-		|| png_file(&pixels(), width, height),
+		|| rgba_png_file(rgba, width, height),
 	)
+}
+
+fn rgba_png_file(rgba: &[u8], width: usize, height: usize) -> Result<PathBuf, String> {
+	let pixels: Vec<u64> = crate::gpu::opaque_colors(rgba).map(u64::from).collect();
+	png_file(&pixels, width, height)
+}
+
+/// paint of a shader: in a window the window's process renders it (card paint-keeps), only the shader and its values
+/// cross; else its pixels as a PNG. A shader that does not compile fails here either way
+pub fn paint_shader(
+	shader: &str,
+	width: u32,
+	height: u32,
+	values: &[crate::gpu::ShaderValue],
+) -> Result<Option<PathBuf>, String> {
+	if WINDOWS.load(Ordering::Relaxed) {
+		let values = crate::gpu::checked_values(shader, width, height, values)?;
+		match crate::paint_window::show(&crate::paint_window::shader_message(width, height, shader, &values)) {
+			Ok(()) => return Ok(None),
+			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
+		}
+	}
+	let rgba = crate::gpu::render_rgba(shader, width, height, values)?;
+	rgba_png_file(&rgba, width as usize, height as usize).map(Some)
 }
 
 /// The frame in a window when windows are allowed, else (or without a window) the PNG written

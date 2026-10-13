@@ -377,6 +377,18 @@ pub(super) fn rendered(
 	values: HostNode,
 	failure: &impl Fn(String) -> wasmtime::Error,
 ) -> wasmtime::Result<Vec<u8>> {
+	let (width, height, values) = shader_request(caller, width, height, values, failure)?;
+	crate::gpu::render_rgba(shader, width, height, &values).map_err(failure)
+}
+
+/// A shader's image size and values as the program gave them, or why they are none
+pub(super) fn shader_request(
+	caller: &mut Caller<'_, HostState>,
+	width: i64,
+	height: i64,
+	values: HostNode,
+	failure: &impl Fn(String) -> wasmtime::Error,
+) -> wasmtime::Result<(u32, u32, Vec<crate::gpu::ShaderValue>)> {
 	let values = shader_values(&given_node(caller, values)?).map_err(failure)?;
 	let side = |pixels: i64| {
 		u32::try_from(pixels)
@@ -384,7 +396,7 @@ pub(super) fn rendered(
 			.filter(|&pixels| pixels > 0)
 			.ok_or_else(|| failure(format!("an image {width}×{height} pixels")))
 	};
-	crate::gpu::render_rgba(shader, side(width)?, side(height)?, &values).map_err(failure)
+	Ok((side(width)?, side(height)?, values))
 }
 
 /// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none

@@ -5,6 +5,9 @@
 //! program waiting for that (wait_until_closed). The program ending otherwise ends its stdin and so the viewer.
 //! `use draw` on the GPU sends shapes instead (src/gpu_canvas.rs): [SHAPES_MARK][width][height][count][count shapes],
 //! drawn over the canvas texture this process keeps, which the window then shows; no pixels cross.
+//! A shader painted in a window (card paint-keeps) sends itself and its values:
+//! [SHADER_MARK][width][height][shader bytes][value count][shader][values], each value [name bytes][float count][array
+//! 0 or 1][name][floats as f32]; this process renders it on its own GPU device, no frame of pixels crosses.
 
 use std::io::{BufRead, Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -28,6 +31,8 @@ const PIXEL_FOR_PIXEL_SIDE: u32 = 1024;
 const RGBA_BYTES: usize = 4;
 /// In a frame's width: shapes follow, not pixels
 const SHAPES_MARK: u32 = u32::MAX;
+/// In a frame's width: a shader and its values follow
+const SHADER_MARK: u32 = u32::MAX - 1;
 const WORD_BYTES: usize = 4;
 /// One triangle covering the window, sampling the frame as a texture, nearest pixel (no blur when scaled up)
 const SHADER: &str = "
@@ -103,11 +108,29 @@ pub struct Shapes {
 	pub shapes: Vec<u8>,
 }
 
+/// A shader for the viewer to render, with the values it reads (gpu::checked_values)
+pub struct ShaderFrame {
+	pub width: u32,
+	pub height: u32,
+	pub shader: String,
+	pub values: Vec<crate::gpu::ShaderValue>,
+}
+
 /// What the viewer reads from its stdin
-#[derive(Debug, PartialEq)]
 pub enum Message {
 	Frame(Frame),
 	Shapes(Shapes),
+	Shader(ShaderFrame),
+}
+
+impl Message {
+	fn size(&self) -> (u32, u32) {
+		match self {
+			Message::Frame(frame) => (frame.width, frame.height),
+			Message::Shapes(shapes) => (shapes.width, shapes.height),
+			Message::Shader(shader) => (shader.width, shader.height),
+		}
+	}
 }
 
 /// The pixels (paint's values, shaded as the PNG shades them) as one frame for the viewer's stdin
@@ -137,25 +160,74 @@ fn frame_header(width: usize, height: usize) -> Vec<u8> {
 /// The shapes drawn since the last show as one message for the viewer's stdin
 pub fn shapes_message(width: usize, height: usize, shapes: &[u8]) -> Vec<u8> {
 	let count = shapes.len() / crate::gpu_canvas::SHAPE_BYTES;
-	let words = [SHAPES_MARK, width as u32, height as u32, count as u32];
-	words
-		.iter()
-		.flat_map(|word| word.to_le_bytes())
-		.chain(shapes.iter().copied())
-		.collect()
+	let mut bytes = words_bytes(&[SHAPES_MARK, width as u32, height as u32, count as u32]);
+	bytes.extend(shapes);
+	bytes
 }
 
-/// The next frame, None at the end of the stream (or at shapes)
+/// The shader and its values as one message for the viewer's stdin
+pub fn shader_message(width: u32, height: u32, shader: &str, values: &[crate::gpu::ShaderValue]) -> Vec<u8> {
+	let mut bytes = words_bytes(&[SHADER_MARK, width, height, shader.len() as u32, values.len() as u32]);
+	bytes.extend(shader.as_bytes());
+	for value in values {
+		bytes.extend(words_bytes(&[
+			value.name.len() as u32,
+			value.floats.len() as u32,
+			u32::from(value.array),
+		]));
+		bytes.extend(value.name.as_bytes());
+		bytes.extend(value.floats.iter().flat_map(|float| float.to_le_bytes()));
+	}
+	bytes
+}
+
+fn words_bytes(words: &[u32]) -> Vec<u8> {
+	words.iter().flat_map(|word| word.to_le_bytes()).collect()
+}
+
+fn read_shader_frame(reader: &mut impl Read, width: u32) -> Option<ShaderFrame> {
+	let [height, shader_bytes, count] = read_words(reader)?;
+	let shader = String::from_utf8(read_bytes(reader, shader_bytes as usize)?).ok()?;
+	let values = (0..count)
+		.map(|_| {
+			let [name_bytes, floats, array] = read_words(reader)?;
+			let name = String::from_utf8(read_bytes(reader, name_bytes as usize)?).ok()?;
+			let floats = read_bytes(reader, floats as usize * WORD_BYTES)?;
+			let floats = floats
+				.as_chunks::<WORD_BYTES>()
+				.0
+				.iter()
+				.map(|bytes| f32::from_le_bytes(*bytes))
+				.collect();
+			Some(crate::gpu::ShaderValue {
+				name,
+				floats,
+				array: array != 0,
+			})
+		})
+		.collect::<Option<_>>()?;
+	Some(ShaderFrame {
+		width,
+		height,
+		shader,
+		values,
+	})
+}
+
+/// The next frame, None at the end of the stream (or at shapes or a shader)
 pub fn read_frame(reader: &mut impl Read) -> Option<Frame> {
 	match read_message(reader)? {
 		Message::Frame(frame) => Some(frame),
-		Message::Shapes(_) => None,
+		_ => None,
 	}
 }
 
 /// The next frame or shapes, None at the end of the stream
 pub fn read_message(reader: &mut impl Read) -> Option<Message> {
 	let [first, second] = read_words(reader)?;
+	if first == SHADER_MARK {
+		return read_shader_frame(reader, second).map(Message::Shader);
+	}
 	if first == SHAPES_MARK {
 		let [height, count] = read_words(reader)?;
 		let shapes = read_bytes(reader, count as usize * crate::gpu_canvas::SHAPE_BYTES)?;
@@ -295,6 +367,9 @@ struct Screen {
 	bindings: Option<wgpu::BindGroup>,
 	/// The canvas `use draw` keeps on the GPU, made by its first shapes
 	canvas: Option<crate::gpu_canvas::Canvas>,
+	/// The last shader frame to arrive, rendered at the next redraw: frames arriving faster than the window draws are
+	/// skipped, not queued, so the picture keeps up with the program (and its music)
+	newest_shader: Option<ShaderFrame>,
 	frame_size: (u32, u32),
 	pointer: (f64, f64),
 	button_down: bool,
@@ -307,10 +382,7 @@ impl Viewer {
 		let Some(first) = self.waiting.first().filter(|_| self.resumed && self.screen.is_none()) else {
 			return;
 		};
-		let (width, height) = match first {
-			Message::Frame(frame) => (frame.width, frame.height),
-			Message::Shapes(shapes) => (shapes.width, shapes.height),
-		};
+		let (width, height) = first.size();
 		match Screen::open(event_loop, width, height, self.check) {
 			Ok(screen) => self.screen = Some(screen),
 			Err(failure) => {
@@ -334,6 +406,10 @@ impl ApplicationHandler<Message> for Viewer {
 		match (self.screen.as_mut(), message) {
 			(Some(screen), Message::Frame(frame)) => screen.take(frame),
 			(Some(screen), Message::Shapes(shapes)) => screen.draw_shapes(shapes),
+			(Some(screen), Message::Shader(shader)) => {
+				screen.newest_shader = Some(shader);
+				screen.window.request_redraw();
+			}
 			(None, message) => {
 				self.waiting.push(message);
 				self.open_for_waiting(event_loop);
@@ -361,6 +437,9 @@ impl ApplicationHandler<Message> for Viewer {
 				}
 			}
 			WindowEvent::RedrawRequested => {
+				if let Some(shader) = screen.newest_shader.take() {
+					screen.render_shader(shader);
+				}
 				if let Some(center) = screen.draw(self.check) {
 					println!("center {center}");
 					event_loop.exit();
@@ -500,6 +579,7 @@ impl Screen {
 			texture_format,
 			bindings: None,
 			canvas: None,
+			newest_shader: None,
 			frame_size: (0, 0),
 			pointer: (0.0, 0.0),
 			button_down: false,
@@ -534,6 +614,7 @@ impl Screen {
 				.write_texture(texture.as_image_copy(), &frame.rgba, layout, size);
 		}
 		self.show_texture(&texture.create_view(&Default::default()), (frame.width, frame.height));
+		self.window.request_redraw();
 	}
 
 	/// The shapes drawn over the canvas on the GPU, which the window then shows
@@ -548,9 +629,32 @@ impl Screen {
 			..Default::default()
 		});
 		self.show_texture(&view, (shapes.width, shapes.height));
+		self.window.request_redraw();
 	}
 
-	/// The texture the next draw samples, `size` pixels
+	/// The shader rendered here into a texture the window then shows; a failure the shader shows only on this GPU
+	/// goes to stderr, the program's terminal
+	fn render_shader(&mut self, frame: ShaderFrame) {
+		let ShaderFrame {
+			width,
+			height,
+			shader,
+			values,
+		} = frame;
+		let format = Some(self.texture_format);
+		match crate::gpu::render_texture(&self.device, &self.queue, &shader, width, height, &values, format) {
+			Ok(image) => {
+				let view = image.create_view(&wgpu::TextureViewDescriptor {
+					format,
+					..Default::default()
+				});
+				self.show_texture(&view, (width, height));
+			}
+			Err(failure) => eprintln!("paint: {failure}"),
+		}
+	}
+
+	/// The texture the next draw samples, `size` pixels (the caller asks for that draw)
 	fn show_texture(&mut self, view: &wgpu::TextureView, size: (u32, u32)) {
 		self.bindings = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: Some(TITLE),
@@ -576,7 +680,6 @@ impl Screen {
 			self.tell_input();
 		}
 		self.frame_size = size;
-		self.window.request_redraw();
 	}
 
 	/// The input as the program's side takes it (follow_input)
