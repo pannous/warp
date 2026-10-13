@@ -18,7 +18,7 @@ const WRAPPERS: &str = "wrappers";
 /// outside the workspace members: the wrappers that did not build
 const FAILED: &str = "failed";
 /// raise when the generated wrappers change: the components of older generators stay unused
-const COMPONENTS: &str = "components-v1";
+const COMPONENTS: &str = "components-v3";
 const WORKSPACE_MANIFEST: &str = "[workspace]\nmembers = [\"wrappers/*\"]\nresolver = \"2\"\n\n[profile.release]\nopt-level = \"s\"\nstrip = true\n";
 const WIT_BINDGEN: &str = "0.46";
 const TARGET: &str = "wasm32-wasip2";
@@ -203,6 +203,11 @@ fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &
 	let package = format!("{WRAPPER_PREFIX}{name}");
 	let arguments = ["build", "--release", "--target", TARGET, "-p", &package, "--message-format", "json"];
 	for _ in 0..BUILD_ROUNDS {
+		if api.functions.is_empty() && api.resources.is_empty() {
+			return Err(format!(
+				"crate {name} has no public function warp can call: none takes and gives only texts, numbers, bools, bytes, lists, options, results or structs the crate constructs (generic and trait-based APIs need a wrapper written by hand)"
+			));
+		}
 		std::fs::create_dir_all(wrapper.join("wit")).map_err(|e| e.to_string())?;
 		write(&wrapper.join("wit/wrapper.wit"), &api.wit(name))?;
 		let (code, lines) = api.rust(name);
@@ -284,6 +289,8 @@ enum Receiver {
 	Shared,
 	Mutable,
 	Owned,
+	/// a public field read: `self.major`
+	Field,
 }
 
 #[derive(Clone)]
@@ -323,6 +330,9 @@ const PRIMITIVES: [(&str, &str); 12] = [
 	("f32", "f32"),
 	("f64", "f64"),
 ];
+/// a struct implementing Display gets the method to_string
+const DISPLAY_TRAIT: &str = "Display";
+const TO_STRING: &str = "to_string";
 const STRING_TRAITS: [&str; 5] = ["AsRef", "Borrow", "Into", "ToString", "Display"];
 
 fn last_segment(path: &str) -> &str {
@@ -684,14 +694,61 @@ impl<'a> Reader<'a> {
 	/// The public functions of a struct's inherent impls
 	fn methods(&self, name: &str, item: &Value) -> Vec<Function> {
 		let impls = item["inner"]["struct"]["impls"].as_array().into_iter().flatten();
-		impls
+		let mut methods: Vec<Function> = impls
 			.filter_map(|id| self.item(id))
 			.filter(|implementation| implementation["inner"]["impl"]["trait"].is_null())
 			.flat_map(|implementation| implementation["inner"]["impl"]["items"].as_array().into_iter().flatten())
 			.filter_map(|id| self.item(id))
 			.filter(|method| method["visibility"] == "public")
 			.filter_map(|method| self.function(method["name"].as_str()?, method, Some(name)))
+			.collect();
+		for (field, result) in self.fields(item, name) {
+			if !methods.iter().any(|method| method.name == field) {
+				methods.push(Function {
+					name: field,
+					parameters: vec![],
+					result: Some(result),
+					receiver: Some(Receiver::Field),
+				});
+			}
+		}
+		if self.implements(item, DISPLAY_TRAIT) && !methods.iter().any(|method| method.name == TO_STRING) {
+			methods.push(Function {
+				name: TO_STRING.into(),
+				parameters: vec![],
+				result: Some(Conversion::same("string", "String")),
+				receiver: Some(Receiver::Shared),
+			});
+		}
+		methods
+	}
+
+	/// The public fields of a struct whose values cross: each read by a method of its name (`v.major()`)
+	fn fields(&self, item: &Value, name: &str) -> Vec<(String, Conversion)> {
+		item["inner"]["struct"]["kind"]["plain"]["fields"]
+			.as_array()
+			.into_iter()
+			.flatten()
+			.filter_map(|id| self.item(id))
+			.filter(|field| field["visibility"] == "public")
+			.filter_map(|field| {
+				let result = self.result(field["inner"].get("struct_field")?, Some(name))?;
+				Some((kebab(field["name"].as_str()?).map(|_| field["name"].as_str())??.to_string(), result))
+			})
 			.collect()
+	}
+
+	fn implements(&self, item: &Value, trait_name: &str) -> bool {
+		item["inner"]["struct"]["impls"]
+			.as_array()
+			.into_iter()
+			.flatten()
+			.filter_map(|id| self.item(id))
+			.any(|implementation| {
+				implementation["inner"]["impl"]["trait"]["path"]
+					.as_str()
+					.is_some_and(|path| last_segment(path) == trait_name)
+			})
 	}
 
 	/// Does a function of the struct make one (`new` returning `Self`, `Result<Self, E>`, `Option<Self>`)?
@@ -851,10 +908,14 @@ impl Api {
 			(Some(Receiver::Mutable), _) => format!("self.0.borrow_mut().{}", function.name),
 			(Some(Receiver::Shared), _) => format!("self.0.borrow().{}", function.name),
 			(Some(Receiver::Owned), _) => format!("self.0.borrow().clone().{}", function.name),
+			(Some(Receiver::Field), _) => format!("self.0.borrow().{}.clone()", function.name),
 			(None, Some(resource)) => format!("::{}::{resource}::{}", self.crate_name, function.name),
 			(None, None) => format!("::{}::{}", self.crate_name, function.name),
 		};
-		let call = format!("{callee}({})", arguments.join(", "));
+		let call = match function.receiver {
+			Some(Receiver::Field) => callee,
+			_ => format!("{callee}({})", arguments.join(", ")),
+		};
 		let (returns, body) = match &function.result {
 			Some(result) => (format!(" -> {}", result.rust), result.of(&call)),
 			None => (String::new(), format!("{call};")),

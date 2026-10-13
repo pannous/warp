@@ -101,12 +101,32 @@ pub fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<Strin
 		let function = loaded.function(member, kind)?;
 		let results: Vec<Type> = function.ty(&loaded.store).results().collect();
 		Ok(match results.as_slice() {
-			[Type::Own(resource) | Type::Borrow(resource)] => kind_name(&loaded.kinds, resource),
+			[result] => resource_inside(result).and_then(|resource| kind_name(&loaded.kinds, &resource)),
 			_ => None,
 		})
 	})
 	.ok()
 	.flatten()
+}
+
+/// The resource a result type hands out: itself, or the ok value of a result or an option (their error raises,
+/// their ok value is the value)
+fn resource_inside(ty: &Type) -> Option<ResourceType> {
+	match ty {
+		Type::Own(resource) | Type::Borrow(resource) => Some(*resource),
+		Type::Result(result) => result.ok().as_ref().and_then(resource_inside),
+		Type::Option(option) => resource_inside(&option.ty()),
+		_ => None,
+	}
+}
+
+/// Has the resource `kind` of the component at `path` a method `member` with only its receiver (`v.major`)?
+pub fn takes_no_arguments(path: &str, member: &str, kind: &str) -> bool {
+	with_component(path, |loaded| {
+		let function = loaded.function(member, Some(kind))?;
+		Ok(function.ty(&loaded.store).params().len() == 1)
+	})
+	.unwrap_or(false)
 }
 
 fn with_component<R>(path: &str, body: impl FnOnce(&mut Loaded) -> Result<R, String>) -> Result<R, String> {
@@ -223,8 +243,13 @@ fn serve_host_imports(linker: &mut Linker<ComponentState>, component: &Component
 impl Loaded {
 	/// The function `member` names: a method of the resource `kind` for a handle, else a function, a constructor or a
 	/// static function; WIT names are kebab-case, so `stats_of` finds `stats-of` and `Counter` `counter`
+	/// `Version.parse` names the static function `parse` of the resource `version`, `RegexSet` the resource `regex-set`
 	fn function(&mut self, member: &str, kind: Option<&str>) -> Result<Func, String> {
-		let static_new = format!("[static]{}.new", member.to_lowercase());
+		let (owner, function) = match member.split_once('.') {
+			Some((owner, function)) => (Some(kebab_case(owner)), function),
+			None => (None, member),
+		};
+		let static_new = format!("[static]{}.new", kebab_case(member));
 		let found = self
 			.functions
 			.iter()
@@ -234,12 +259,13 @@ impl Loaded {
 					.and_then(|rest| rest.split_once('.'))
 					.is_some_and(|(resource, method)| resource == kind && names_match(method, member)),
 				(Some(_), None) => false,
-				(None, None) => names_match(name, member),
-				(None, Some(bracketed)) => match bracketed.split_once(']') {
-					Some(("constructor", resource)) => names_match(resource, &member.to_lowercase()),
-					Some(("static", function)) => function
-						.split_once('.')
-						.is_some_and(|(_, function)| names_match(function, member)),
+				(None, None) => owner.is_none() && names_match(name, member),
+				(None, Some(bracketed)) => match (bracketed.split_once(']'), &owner) {
+					(Some(("constructor", resource)), None) => resource == kebab_case(member),
+					(Some(("constructor", resource)), Some(owner)) => resource == owner && function == "new",
+					(Some(("static", function_of)), _) => function_of.split_once('.').is_some_and(|(resource, named)| {
+						owner.as_ref().is_none_or(|owner| owner == resource) && names_match(named, function)
+					}),
 					_ => false,
 				},
 			})
@@ -336,6 +362,20 @@ impl Loaded {
 	}
 }
 
+/// `RegexSet` → `regex-set`, `stats_of` → `stats-of`: a name as WIT writes it
+fn kebab_case(name: &str) -> String {
+	let mut kebab = String::new();
+	let mut after_lower = false;
+	for c in name.chars() {
+		if c.is_ascii_uppercase() && after_lower {
+			kebab.push('-');
+		}
+		after_lower = c.is_ascii_lowercase() || c.is_ascii_digit();
+		kebab.push(if c == '_' { '-' } else { c.to_ascii_lowercase() });
+	}
+	kebab
+}
+
 fn names_match(exported: &str, member: &str) -> bool {
 	exported == member || exported.replace('-', "_") == member
 }
@@ -389,6 +429,15 @@ impl Handles<'_> {
 					.as_str()
 					.ok_or_else(|| format!("{argument} is no text"))?
 					.to_string(),
+			),
+			// a text where bytes are wanted: its UTF-8 (`hex.encode("hi")`, `crc32fast.hash("abc")`)
+			Type::List(list) if matches!(list.ty(), Type::U8) && argument.is_string() => Val::List(
+				argument
+					.as_str()
+					.unwrap_or_default()
+					.bytes()
+					.map(Val::U8)
+					.collect(),
 			),
 			Type::List(list) => Val::List(
 				items(argument)?

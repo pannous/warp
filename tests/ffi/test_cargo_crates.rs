@@ -24,3 +24,24 @@ fn test_cargo_crate_errors_are_loud() {
 	fails_with("use cargo regex; regex.Regex(\"a(\")", "unclosed group");
 	fails_with("use cargo no_such_crate_xyz_warp; 1", "no_such_crate_xyz_warp");
 }
+
+#[test]
+fn test_cargo_crate_texts_pass_as_bytes() {
+	is!("use cargo hex; hex.encode(\"hi\")", "6869");
+	is!("use cargo crc32fast; crc32fast.hash(\"abc\")", 891568578);
+}
+
+#[test]
+fn test_cargo_crate_type_functions_fields_and_display() {
+	is!("use cargo semver; v = semver.Version.parse(\"1.2.3\"); v.minor + 1", 3);
+	is!("use cargo semver; semver.Version.parse(\"1.2.3\").to_string()", "1.2.3");
+	is!(
+		"use cargo semver; r = semver.VersionReq.parse(\">=1.2\"); r.matches(semver.Version.parse(\"1.3.0\"))",
+		true
+	);
+}
+
+#[test]
+fn test_cargo_crate_without_callable_functions_is_refused() {
+	fails_with("use cargo sha2; 1", "no public function warp can call");
+}

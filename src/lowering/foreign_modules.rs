@@ -323,6 +323,23 @@ fn foreign_call_items(node: &Node) -> Option<&[Node]> {
 	}
 }
 
+/// `semver.Version` read from a component (`foreign_call("wasm", path, "Version", 0, ø)`, capitalized like a type): its
+/// path and the type's name
+fn type_read(node: &Node) -> Option<(Node, String)> {
+	let [_, runtime, module, member, is_call, _] = foreign_call_items(node)? else {
+		return None;
+	};
+	let is_read = *is_call.drop_meta() == Node::int(0);
+	match (runtime.drop_meta(), member.drop_meta()) {
+		(Node::Text(runtime), Node::Text(member))
+			if runtime == COMPONENT_RUNTIME && is_read && member.starts_with(|c: char| c.is_ascii_uppercase()) =>
+		{
+			Some((module.clone(), member.clone()))
+		}
+		_ => None,
+	}
+}
+
 /// The method an operator of a component's resource calls: `a + b` is `a.add(b)`, `a / b` `a.div(b)`
 fn component_operator(op: &Op) -> Option<&'static str> {
 	match op {
@@ -358,6 +375,17 @@ fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<String> {
 #[cfg(not(feature = "native"))]
 fn result_kind(_path: &str, _member: &str, _kind: Option<&str>) -> Option<String> {
 	None
+}
+
+/// Does the resource `kind` of a component have the method `member` taking no arguments?
+#[cfg(feature = "native")]
+fn has_method(path: &str, kind: &str, member: &str) -> bool {
+	crate::components::takes_no_arguments(path, member, kind)
+}
+
+#[cfg(not(feature = "native"))]
+fn has_method(_path: &str, _kind: &str, _member: &str) -> bool {
+	false
 }
 
 /// The module of operators every runtime offers (Python's operator plus len and list, the loops' own in JS)
@@ -746,13 +774,21 @@ impl Foreign<'_> {
 					.cloned()
 					.map(|argument| self.rewrite(argument))
 					.collect();
-				return foreign_call(
-					COMPONENT_RUNTIME,
-					receiver,
-					&items[0].name(),
-					true,
-					Node::List(arguments, Bracket::Square, Separator::Space),
-				);
+				let arguments = Node::List(arguments, Bracket::Square, Separator::Space);
+				// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
+				return match type_read(&receiver) {
+					Some((path, resource)) => {
+						foreign_call(COMPONENT_RUNTIME, path, &format!("{resource}.{}", items[0].name()), true, arguments)
+					}
+					None => foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, arguments),
+				};
+			}
+			// `v.major` of a handle whose resource has a method `major` without arguments (a Rust struct's field)
+			if let (Node::Symbol(field), Some((path, kind))) = (member.drop_meta(), self.component_handle(&receiver)) {
+				if has_method(&path, &kind, field) {
+					let arguments = Node::List(vec![], Bracket::Square, Separator::Space);
+					return foreign_call(COMPONENT_RUNTIME, receiver, field, true, arguments);
+				}
 			}
 		}
 		match node {
