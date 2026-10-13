@@ -7,7 +7,7 @@
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
 use super::nodes::{call, key};
-use super::words::OF_WORD;
+use crate::words::OF_WORD;
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;

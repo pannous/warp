@@ -6,11 +6,9 @@ use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
+use crate::words::CONSTANT_KEYWORDS;
 use std::collections::{HashMap, HashSet};
 
-/// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
-/// Words that declare a name assignable once: `const x=5`, `final x=5`
-pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Statement words whose argument is never their property: `return count` is no `return.count`
 const PRINT_CALL: &str = "print";
 /// The error for a user function named like a type word; `{name}` is the word

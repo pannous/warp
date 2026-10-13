@@ -486,7 +486,7 @@ pub(super) fn infer_list_type(
 	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
 	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Colon {
 		if let Some(name) = head {
-			if name == crate::library_words::SLICE || name == "reverse" || name == "sort" {
+			if name == crate::words::SLICE || name == "reverse" || name == "sort" {
 				// a slice, reversal or sort of a text is a text, of a Node (known at runtime only) a Node, of anything else a list
 				return match infer_type(&items[1], scope) {
 					Kind::Text | Kind::Codepoint => Kind::Text,

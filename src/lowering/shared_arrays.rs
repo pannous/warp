@@ -14,9 +14,9 @@
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
 use super::nodes::{call, key};
-use super::words::{MAP_WORD, SUM_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `shared xs = int[n]` and its synonym `atomic` (P44)

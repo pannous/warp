@@ -12,13 +12,13 @@
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
 use super::nodes::{call, if_then, key, named_assignment};
-use super::words::ON_WORD;
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::event_signals::{function_with_globals, hole_name, last_statement, text_hole_name};
 use crate::law::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::words::ON_WORD;
 use std::collections::{HashMap, HashSet};
 
 const JOINER: char = '·';

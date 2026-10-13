@@ -1203,7 +1203,7 @@ impl Inference {
 		}
 		let (parameter, body) = match function.drop_meta() {
 			Node::Key(parameter, Op::FatArrow, body) => (parameter.drop_meta().name(), body.as_ref()),
-			body => (crate::lambdas::IMPLICIT_PARAMETER.to_string(), body),
+			body => (crate::words::IMPLICIT_PARAMETER.to_string(), body),
 		};
 		if let Some(class) = self.class_lists.get(&source_name).cloned() {
 			self.declare_instance(parameter, class);

@@ -5,9 +5,9 @@
 //! Values cross as JSON; the result is any Node.
 
 use super::nodes::{call, children_rewritten, key};
-use super::words::FOR_WORD;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::FOR_WORD;
 use std::collections::HashMap;
 use std::path::Path;
 

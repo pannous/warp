@@ -12,10 +12,10 @@
 //! `before test {…}` before it.
 
 use super::nodes::{block, call, children_rewritten, if_then, key, Counter};
-use super::words::{GLOBAL_WORD, ON_WORD};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{GLOBAL_WORD, ON_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ONCE_WORD: &str = "once";

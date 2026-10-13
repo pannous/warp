@@ -238,7 +238,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		crate::wasm_emitter::library_ops::LIST_SORTED_BY => &[crate::wasm_emitter::library_ops::LIST_SORTED_BY],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
-		crate::type_tests::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
+		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
 		crate::wasm_emitter::text_builtins::TEXT_FORM => &["list_join"],
 		FIELD_WITH => &[FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL],
 		INSTANCE_COPY => &[INSTANCE_COPY],

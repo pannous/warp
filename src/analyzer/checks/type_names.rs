@@ -67,7 +67,8 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			if let [call, _] = items.as_slice()
 				&& let Some(word) = map_word(call) =>
 		{
-			use crate::library_words::{MAP_ENTRIES, MAP_KEYS};
+			use crate::library_words::MAP_ENTRIES;
+			use crate::words::MAP_KEYS;
 			match word {
 				MAP_KEYS => format!("{LIST_OF_PREFIX}text"), // the keys of a map are read as texts
 				MAP_ENTRIES => list_type_name(&items[1], scope),
@@ -203,7 +204,8 @@ pub(in crate::analyzer) const OF_WORD: &str = "of";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
 pub(in crate::analyzer) fn map_word(call: &Node) -> Option<&'static str> {
-	use crate::library_words::{MAP_ENTRIES, MAP_KEYS, MAP_VALUES};
+	use crate::library_words::{MAP_ENTRIES, MAP_VALUES};
+	use crate::words::MAP_KEYS;
 	[MAP_KEYS, MAP_VALUES, MAP_ENTRIES]
 		.into_iter()
 		.find(|word| call.is_symbol(word))

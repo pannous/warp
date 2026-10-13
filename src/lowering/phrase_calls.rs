@@ -12,12 +12,8 @@ use super::nodes::{
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
+use crate::words::{PHRASE_MARK, SLOT};
 use std::collections::HashMap;
-
-/// The Meta key the parser puts on the head of a `to` phrase: its pattern as text, `_ to _`
-pub const PHRASE_MARK: &str = "phrase";
-/// A parameter slot in a pattern
-pub const SLOT: &str = "_";
 
 #[derive(Clone, Debug, PartialEq)]
 enum Part {

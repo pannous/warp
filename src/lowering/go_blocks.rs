@@ -7,9 +7,9 @@
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
 use super::nodes::{call, key, Counter};
-use super::words::{FOR_WORD, RETURN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, RETURN_WORD};
 
 const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";

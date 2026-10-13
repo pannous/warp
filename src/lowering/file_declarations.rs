@@ -4,10 +4,9 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::FILE_CLASS_MARK;
 
 const NAMESPACE_WORD: &str = "namespace";
-/// The parser's attribute on the name of a class declared `class Foo;`
-pub const FILE_CLASS_MARK: &str = "file_class";
 
 /// The class name without the parser's mark, which is its outermost attribute
 fn unmarked(name: Node) -> Node {

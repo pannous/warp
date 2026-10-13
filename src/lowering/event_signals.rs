@@ -10,13 +10,14 @@
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use super::nodes::{block, call, children_rewritten, if_then, key};
-use super::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
 use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
+use crate::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
+use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 use std::collections::{HashMap, HashSet};
 
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
@@ -37,12 +38,6 @@ const SUBSCRIBERS_SUFFIX: &str = "_listeners";
 const SUBSCRIBER_SUFFIX: &str = "_listener";
 const LOOP_WORDS: [&str; 4] = ["for", "while", "repeat", "loop"];
 const LOOP_SUBSCRIPTION_TOPIC: &str = "handler-in-loop";
-/// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
-/// without `to` is the same; `raise` and `throw` are errors only
-pub(crate) const EMIT_WORDS: [&str; 2] = ["emit", "send"];
-/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it);
-/// `ask` reads as asking a handler for a value: `net * (1 + ask tax_rate)` (card price-net)
-pub(crate) const EMIT_ALIASES: [&str; 4] = ["fire", "trigger", "signal", "ask"];
 const EMIT_TOPIC: &str = "emit-word";
 const UNHANDLED_TOPIC: &str = "unhandled-emit";
 /// `remove (listeners of alarm)#1 from listeners of alarm`: the place removed, evaluated once

@@ -40,6 +40,27 @@ pub fn glyph_operator(glyph: char) -> Option<(Op, &'static str)> {
 		.map(|(_, op, canonical)| (*op, *canonical))
 }
 
+/// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
+pub const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
+	(Op::Add, &["plus", "add", "__add__"]),
+	(Op::Sub, &["minus", "subtract", "__sub__"]),
+	(Op::Mul, &["times", "multiply", "__mul__"]),
+	(Op::Div, &["divide", "div", "__truediv__"]),
+	(Op::Mod, &["mod", "modulo", "__mod__"]),
+	(Op::Lt, &["less", "smaller", "__lt__"]),
+	(Op::Gt, &["more", "bigger", "__gt__"]),
+	(Op::Similar, &["approximately"]),
+	(Op::Rough, &["similar"]),
+];
+
+/// The method an operator on an instance calls, `plus` for `+`
+pub fn operator_method(op: Op) -> Option<&'static str> {
+	OPERATOR_METHODS
+		.iter()
+		.find(|(known, _)| *known == op)
+		.map(|(_, names)| names[0])
+}
+
 pub fn is_function_keyword(s: &str) -> bool {
 	FUNCTION_KEYWORDS.contains(&s)
 }

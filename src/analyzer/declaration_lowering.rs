@@ -304,7 +304,7 @@ pub fn looks_up_a_key(index: &Node, key_variables: &HashSet<String>) -> bool {
 /// The variables that hold a map's keys: `k` of a lowered `for k in keys(m)`, `k·items = map_keys(m)` … `k = k·items#i`,
 /// and `k = keys(m)#i`
 pub fn key_variables(body: &Node) -> HashSet<String> {
-	let is_keys_call = |value: &Node| matches!(value.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.name() == crate::library_words::MAP_KEYS));
+	let is_keys_call = |value: &Node| matches!(value.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.name() == crate::words::MAP_KEYS));
 	let mut key_lists = HashSet::new();
 	body.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign, value) = part {

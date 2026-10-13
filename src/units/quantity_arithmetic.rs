@@ -107,7 +107,7 @@ pub(super) fn with_unit(expression: &Node, unit: &Node) -> Node {
 
 /// `global x = 5m`: a main-level declaration functions write to
 pub(crate) fn is_global_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == crate::lowering::words::GLOBAL_WORD)
+	matches!(node.drop_meta(), Node::Symbol(word) if word == crate::words::GLOBAL_WORD)
 }
 
 pub(super) fn is_unit_word(node: &Node) -> bool {

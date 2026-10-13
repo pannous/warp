@@ -7,14 +7,14 @@
 //! `people.map(p => p.name)` (card people-map).
 
 use super::nodes::{call, children_rewritten, is_colon_pair, key, Counter};
-use super::words::{MAP_WORD, OF_WORD, SUM_WORD};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
-use crate::lambdas::IMPLICIT_PARAMETER;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
+use crate::words::IMPLICIT_PARAMETER;
+use crate::words::{MAP_WORD, OF_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
@@ -580,7 +580,7 @@ fn tests_kind_of(body: &Node, name: &str) -> bool {
 	let mut found = false;
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node.drop_meta() {
-			found |= matches!(items.as_slice(), [test, tested, _] if test.is_symbol(crate::type_tests::IS_TYPE) && tested.is_symbol(name));
+			found |= matches!(items.as_slice(), [test, tested, _] if test.is_symbol(crate::words::IS_TYPE) && tested.is_symbol(name));
 		}
 	});
 	found

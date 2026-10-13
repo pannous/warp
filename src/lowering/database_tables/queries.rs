@@ -189,7 +189,7 @@ impl Query<'_> {
 		let field = self
 			.field_of_it(left)
 			.filter(|field| self.table.reference(field).is_some())?;
-		if crate::lambdas::mentions(right, crate::lambdas::IMPLICIT_PARAMETER) {
+		if crate::lambdas::mentions(right, crate::words::IMPLICIT_PARAMETER) {
 			return None;
 		}
 		let id = generated(
@@ -205,7 +205,7 @@ impl Query<'_> {
 			return None;
 		};
 		let field = field.drop_meta();
-		(element.drop_meta().name() == crate::lambdas::IMPLICIT_PARAMETER && matches!(field, Node::Symbol(_)))
+		(element.drop_meta().name() == crate::words::IMPLICIT_PARAMETER && matches!(field, Node::Symbol(_)))
 			.then(|| field.name())
 	}
 
@@ -283,7 +283,7 @@ pub(super) fn with_arguments(node: Node, table: &Table, values: &[String], row_s
 	let argument = |index: usize| generated(&format!("{ARGUMENTS}#{index}"), []);
 	let columns = columns_of(table);
 	match node {
-		Node::Symbol(name) if name == crate::lambdas::IMPLICIT_PARAMETER => generated(
+		Node::Symbol(name) if name == crate::words::IMPLICIT_PARAMETER => generated(
 			&format!(
 				"{}({})",
 				table.class,
@@ -294,7 +294,7 @@ pub(super) fn with_arguments(node: Node, table: &Table, values: &[String], row_s
 		Node::Symbol(name) if values.contains(&name) => {
 			argument(row_size + 1 + values.iter().position(|value| *value == name).unwrap_or_default())
 		}
-		Node::Key(element, Op::Dot, field) if element.drop_meta().name() == crate::lambdas::IMPLICIT_PARAMETER => {
+		Node::Key(element, Op::Dot, field) if element.drop_meta().name() == crate::words::IMPLICIT_PARAMETER => {
 			match field.drop_meta().name() {
 				name if name == ID_FIELD => argument(1),
 				name if columns.contains(&name) => {

@@ -42,7 +42,7 @@ pub(super) const NODE_MAP_FUNCTIONS: [&str; 6] = [
 /// variable given to them stays a hash table
 const MAP_READING_WORDS: [&str; 5] = [
 	crate::analyzer::REMOVED_VALUE_CALL,
-	crate::library_words::MAP_KEYS,
+	crate::words::MAP_KEYS,
 	crate::library_words::MAP_VALUES,
 	COLLECTION_CONTAINS,
 	COLLECTION_POSITION,

@@ -469,7 +469,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 fn kind_tested(node: &Node) -> Option<&str> {
 	let Node::List(items, _, _) = node else { return None };
 	match items.as_slice() {
-		[word, tested, _] if word.is_symbol(crate::type_tests::IS_TYPE) => match tested.drop_meta() {
+		[word, tested, _] if word.is_symbol(crate::words::IS_TYPE) => match tested.drop_meta() {
 			Node::Symbol(name) => Some(name),
 			_ => None,
 		},
@@ -515,12 +515,10 @@ fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 	fn joined_name(node: &Node) -> Option<&str> {
 		match node {
 			Node::Symbol(name) => Some(name),
-			Node::List(items, _, _) if call_of(node, crate::library_words::SLICE) => {
-				match items.get(1).map(Node::drop_meta) {
-					Some(Node::Symbol(name)) => Some(name),
-					_ => None,
-				}
-			}
+			Node::List(items, _, _) if call_of(node, crate::words::SLICE) => match items.get(1).map(Node::drop_meta) {
+				Some(Node::Symbol(name)) => Some(name),
+				_ => None,
+			},
 			_ => None,
 		}
 	}
