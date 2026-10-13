@@ -1,8 +1,9 @@
 //! Definitions by cases (card definition-cases, user decision definition-cases): `fib(0) := 0; fib(n) := …` is not
 //! joined into one function. A second definition of the same shape in one block (same name, same parameter count, same
 //! parameter types) is the error "fib is defined twice", whose fix for cases is the one definition with a match; so is a
-//! literal where a parameter's name belongs (`f(0) := 1`). Overloads by parameter count or type stay
-//! (test_arity_overloads.rs).
+//! literal where a parameter's name belongs (`f(0) := 1`). Overloads by parameter count stay (test_arity_overloads.rs);
+//! definitions with a typed parameter are left to overload resolution, which also tells them apart by the result type
+//! of their bodies (test_return_type_dispatch.rs).
 
 use super::nodes::is_call_head;
 use crate::diagnostic::{written_statement, Diagnostic};
@@ -27,14 +28,15 @@ struct Definition<'a> {
 }
 
 impl Definition<'_> {
-	/// The parameter types, `int` of `x:int`, "" for an untyped name or a literal: what overloads differ by
-	fn shape(&self) -> (String, Vec<String>) {
-		let types = self
-			.parameters
+	/// The name and parameter count: what overloads of untyped definitions differ by
+	fn shape(&self) -> (&str, usize) {
+		(&self.name, self.parameters.len())
+	}
+
+	fn is_typed(&self) -> bool {
+		self.parameters
 			.iter()
-			.map(|parameter| parameter_type(parameter))
-			.collect();
-		(self.name.clone(), types)
+			.any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _)))
 	}
 
 	fn literal_parameter(&self) -> Option<&Node> {
@@ -64,7 +66,11 @@ fn first_problem(node: &Node) -> Option<Node> {
 /// The second definition of a shape among the statements of one block, as the error: definitions by cases are fixed by
 /// one definition with a match, other ones by another name
 fn defined_twice(statements: &[Node]) -> Option<Node> {
-	let definitions: Vec<Definition> = statements.iter().filter_map(definition).collect();
+	let definitions: Vec<Definition> = statements
+		.iter()
+		.filter_map(definition)
+		.filter(|definition| !definition.is_typed())
+		.collect();
 	let (_, later) = definitions.iter().enumerate().find(|(index, later)| {
 		definitions[..*index]
 			.iter()
@@ -127,14 +133,9 @@ fn listed_parameters(parameter: &Node, grouped: bool) -> Vec<&Node> {
 		Node::List(items, Bracket::Round, _) if grouped => {
 			items.iter().flat_map(|item| listed_parameters(item, false)).collect()
 		}
+		// `f()`: no parameter
+		Node::Empty => vec![],
 		_ => vec![parameter],
-	}
-}
-
-fn parameter_type(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(_, Op::Colon, kind) => kind.serialize(),
-		_ => String::new(),
 	}
 }
 
