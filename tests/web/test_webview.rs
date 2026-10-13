@@ -1,4 +1,4 @@
-//! `warp app page.warp`, `warp page.html` (card read-chron, src/webview.rs): the page in the system's web view;
+//! `warp app page.warp`, `warp page.html` (card read-chron, src/web/webview.rs): the page in the system's web view;
 //! `--check` loads it in a hidden window and prints its text, so these run without a window on the screen
 use std::path::PathBuf;
 

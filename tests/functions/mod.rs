@@ -34,6 +34,7 @@ mod test_constant_free_variables;
 mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
+mod test_deep_recursion;
 mod test_def_bool_result;
 mod test_def_forms;
 mod test_def_without_parameters;

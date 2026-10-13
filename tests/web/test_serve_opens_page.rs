@@ -15,8 +15,8 @@ fn heard(address: &str) {
 #[test]
 fn a_listening_server_hands_its_address_over_once() {
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(1);
-		warp::web_server::when_listening(heard);
+		warp::web::web_server::stop_after(1);
+		warp::web::web_server::when_listening(heard);
 		warp::wasm_emitter::eval(PROGRAM).serialize()
 	});
 	let started = std::time::Instant::now();

@@ -83,9 +83,9 @@ lambda's DNS moves to Cloudflare):
   whose warp-<name> Worker exists without an owner in NAMES (before 2026-10-12 a GitHub user could have overwritten
   the control Worker by deploying the name `hosting`).
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
-- Clients: `warp deploy --hosted app.warp` (src/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
+- Clients: `warp deploy --hosted app.warp` (src/web/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
-  scripts, src/web.rs worker_bundle → src/host_parts.rs).
+  scripts, src/web/mod.rs worker_bundle → src/host_parts.rs).
 - Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
   dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
 

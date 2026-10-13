@@ -420,7 +420,7 @@ fn finish_tasks<R>(
 	Ok((result, store, instance))
 }
 
-/// Run main, then call the parameterless export `name` (a page's page·html, src/site.rs): its value
+/// Run main, then call the parameterless export `name` (a page's page·html, src/web/site.rs): its value
 pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Result<Node> {
 	Ok(read_exports_after_main(bytes, imports, &[name])?.remove(0))
 }

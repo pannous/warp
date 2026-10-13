@@ -1,4 +1,4 @@
-//! The files of a site (`warp build --site`, src/site.rs in warp) and how a request path finds one, shared by warp's
+//! The files of a site (`warp build --site`, src/web/site.rs in warp) and how a request path finds one, shared by warp's
 //! servers and web view and by an app `warp build` made: the stub carrying a site packed (card build-links)
 use std::path::Path;
 

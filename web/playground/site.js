@@ -1,4 +1,4 @@
-// The loader of a page `warp build --site` made (src/site.rs, card web-ssr): index.html already shows the program's
+// The loader of a page `warp build --site` made (src/web/site.rs, card web-ssr): index.html already shows the program's
 // markup, rendered when the site was built. This runs app.wasm with the playground's host (host.js) and hydrates the
 // page: the DOM stays as it is, an event in an element runs that element's handler (markup.js elementEvent), timers run theirs (host.js startTimers), and what the
 // handler changed is shown by patching the holes of its markup (host.js holePatches, card web-fine-rest), else by morphing
@@ -6,7 +6,7 @@
 // at build time; notes/web_framework.md "Built sites"). Main runs once here as it ran at build time, so the component instances count alike.
 // A link to a page of the same site goes through the program's routes (History API): the address changes, the program
 // reads the new path (page_path) and the page morphs; the back button does the same (lowering/routes.rs).
-// Each route's own code may come in a module of its own (src/route_split.rs): the page loads the one of the route it
+// Each route's own code may come in a module of its own (src/web/route_split.rs): the page loads the one of the route it
 // shows before running it (host-routes.js loadRouteModule).
 
 const SITE_ROOT = "warp-root";
@@ -37,7 +37,7 @@ function showAfter(outcome, shown = showHoles) {
 		return console.error("warp:", outcome.failure ?? outcome.trap ?? outcome.error);
 	}
 	shown();
-	if (outcome.exited !== undefined) self.endApp?.(outcome.exited); // `exit` in `warp app` (src/webview.rs) closes it
+	if (outcome.exited !== undefined) self.endApp?.(outcome.exited); // `exit` in `warp app` (src/web/webview.rs) closes it
 }
 
 // the page's markup anew, morphed into the page

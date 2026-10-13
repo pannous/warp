@@ -1,5 +1,6 @@
 mod test_adopted_acknowledgements;
 mod test_advice_fixes; // card advise-fix
+mod test_aligned_comment; // card hint-comment-floordiv
 mod test_and_or_got_it; // card done-done
 mod test_braceless_call_argument;
 mod test_c_style;

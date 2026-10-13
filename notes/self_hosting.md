@@ -120,7 +120,10 @@ Probes (probes/self_hosting/next_phase/):
   - no binary files (byte_output);
   - no float bits (float_bits);
   - `&`/`|` on ints are logical with an `and` hint (logical_and_on_ints);
-  - the call stack runs out between 10000 and 20000 frames. This is enough for parse trees, so it has no card yet.
+  - the call stack ran out between 10000 and 20000 frames (wasmtime's 512 KiB default). Fixed (card deep-recursion):
+    the warp command on macOS links a 512 MB main stack (build.rs) and gives wasm all but 16 MB of it
+    (warp_runtime::engine::give_main_stack_to_wasm), about 5 million frames of `down(n)`. Linux takes `ulimit -s`;
+    test threads, tasks and standalone `warp build` binaries keep the default.
 - Decided without the user (undoable): a pass twin takes node_view data, not a host Node. A `parse` word that gives
   warp code real Nodes would need a host word and a GC reader. It becomes a card once a pass needs Meta that the view
   cannot carry.

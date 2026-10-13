@@ -2,7 +2,7 @@
 // Effect handlers: a function asks with `emit`, whoever calls it answers with `on … in {…}` (notes/effect_handlers.md)
 
 // price asks for the tax rate instead of knowing it
-price(net) := net * (1 + ask tax_rate)
+price(net) := net * (1 + emit tax_rate)
 
 // on event {}    // clear
 // on event {} in block  //  only listen to events in block

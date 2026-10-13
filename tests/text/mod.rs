@@ -49,6 +49,7 @@ mod test_text_building;
 mod test_text_bytes;
 mod test_text_casts;
 mod test_text_concat;
+mod test_text_cursor;
 mod test_text_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_text_getters;

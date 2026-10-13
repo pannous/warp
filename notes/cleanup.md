@@ -25,6 +25,13 @@ is over 1500 lines now. The tool moves line ranges into `x/child.rs`:
 Ranges are 1-based and inclusive. Start each at the doc comment of its first item and end it at the closing brace
 of its last item: a range that stops one line short breaks the parse.
 
+Probe scripts and stale notes (cleanup-probe-scripts, cleanup-stale-notes; recurring, the passes so far):
+- 2026-10-13: the one-off agent tools of the shared-checkout era went (hunk selectors, unignore scripts, a bisect
+  step) with the finished per-topic fixer prompts in probes/algo. Every other probe script is still named by a test,
+  a note or a sibling probe.
+- 2026-10-13: removed notes/float_truncation_survey.md (A5 done: notes/number_literals.md history keeps the rule) and
+  notes/supervising_fixers.md (the 2026-10-02 fixer round; its rules live in notes/roles.md and notes/agents/).
+
 Behaviour-preserving only: shared helpers instead of duplication, dead code and stale comments out, flatter control
 flow, meaningful names, no test edits. One area per session, small themed branches through the Integrator.
 
@@ -57,6 +64,20 @@ probes/cleanup/same_wasm.sh. Ranked by value per effort:
 | 7 | cleanup-pass-phases | SOURCE_PASSES (118) and MEANING_PASSES (31) as named phase slices (sugar, markup/web, declarations, signals, functions, dispatch) joined in the same order, each pass named one way: today pipeline.rs mixes `crate::serve::lower` (root re-exports from lib.rs) with `crate::lowering::index_positions::lower` | the order becomes readable; the twin's pipeline can copy the phases one at a time | S |
 | 8 | cleanup-src-folders | the 73 top-level src/*.rs grouped by area: web/ (web, web_server, web_sockets, webview, site, dev_server, deploy, route_split, page_tests, headless, fetches), graphics/ (paint, paint_window, gpu, gpu_canvas, text_raster, shader_holes), sound/ (sound, sound_engine, midi). Pure moves; the paths are updated with fastmod | src/ reads as a map of the project | S |
 | 9 | cleanup-kernel-names | linear_arrays writes a kernel's body into its function name and parses it back in the emitter (kernel_of; analyzer/imports.rs matches the prefix). Replace that with a side table keyed by name; also traps.rs's parse of a detail text | the emitter stops calling the parser | M |
+
+Done, all nine (warp-cleanup, 2026-10-13). What came out of them:
+- 4: the parser keeps `for int in xs`, `for (it>2) in xs`, `for chars in text` as written. lowering/for_loop/headers.rs
+  is the first pass of lower_for_emission and lower_module_source, and it re-derives what the parser used to know:
+  declared types (analyzer::declared_classes), functions (function_definitions), and text variables (post-order). One
+  visible change: a filter loop's got-it warning points at the loop header instead of the loop's end.
+- 7: SOURCE_PHASES = SUGAR, DECLARATION, MODULE (it starts with modules::resolve), SIGNAL and FUNCTION passes. A used
+  module's source runs MODULE_SOURCE_PHASES. Passes are named by their real path (`crate::lowering::serve::lower`); the
+  root re-exports remain for other callers.
+- 8: web/mod.rs is the browser compiler, the old web.rs; sound/mod.rs is the old sound.rs; graphics/ is new. The
+  include_str! paths in the moved files are one level deeper.
+- 9: linear_arrays::kernel_name records the kernel's parameter and body in the thread-local FLOAT_KERNELS (lowering and
+  emission share the compiling thread). A missing kernel panics instead of being skipped. traps.rs unquotes a detail
+  by undoing serialize's escapes.
 
 Not worth it (checked):
 - **Merging lowering passes.** About 150 walks, but each is a small, separately testable rewrite. Merging would couple their order, and warp-markup's experience is that such merges cost more than they save. The few passes that run twice (phrase_calls, reflection, getters) say why in pipeline.rs.

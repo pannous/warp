@@ -5,7 +5,7 @@
 
 use super::blocks::DATA_WORD;
 use crate::host::PARSE_CODE;
-use crate::node::{error, symbol, Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const PARSE_WORD: &str = "parse";
@@ -35,10 +35,10 @@ fn parsed(node: Node) -> Node {
 	let Some(argument) = parse_argument(&node).cloned() else {
 		return crate::node::children_rewritten(node, parsed);
 	};
-	match argument.text_value() {
+	// a text that fails to parse fails at run time, where `try` catches it
+	match argument.text_value().and_then(|source| code_of(&source).ok()) {
 		// grouped: a bare `data e` left of an operator is no value yet (`(data e) == x` is)
-		Some(source) => {
-			let code = code_of(&source).unwrap_or_else(|failure| error(&failure));
+		Some(code) => {
 			let data = Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space);
 			Node::List(vec![data], Bracket::Round, Separator::None)
 		}

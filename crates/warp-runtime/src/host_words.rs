@@ -52,7 +52,7 @@ pub const TIME_OF_DAY: &str = "time of day";
 /// the size a picture gets: the playground's output pane, natively the paint window's first size (system_values.rs)
 pub const VIEW_WIDTH: &str = "view_width";
 pub const VIEW_HEIGHT: &str = "view_height";
-/// Whether `use draw` draws on the GPU (src/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
+/// Whether `use draw` draws on the GPU (src/graphics/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
 pub const GPU_DRAWING: &str = "gpu_drawing";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
 /// (lowering/system_signals.rs); not a value a program names
@@ -92,7 +92,7 @@ pub const GPU_COMPUTE: &str = "gpu_compute";
 pub const GPU_RENDER: &str = "gpu_render";
 /// `text_coverage(words, size)`: the words set in a sans-serif font `size` pixels high (card paint-text, lib/draw.warp
 /// label): [width, height, then how much each pixel is covered, 0 to 255, row by row]; the browser's canvas 2D fillText
-/// in the playground, a system font through ab_glyph natively (src/text_raster.rs)
+/// in the playground, a system font through ab_glyph natively (src/graphics/text_raster.rs)
 pub const TEXT_COVERAGE: &str = "text_coverage";
 /// `gpu_compute(shader, xs, workgroups)` of a `linear xs = float[n]`: the shader runs over the cells of the block in linear
 /// memory, read and written in place without building a list (card gpu-vectors, notes/gpu.md); gives the block back
@@ -115,7 +115,7 @@ pub const INTERRUPT_HANDLER: &str = "on·interrupt";
 pub const EXIT_HANDLER: &str = "on·exit";
 /// `on·every·0`: the handler of the first `on every … {…}`
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
-/// `on·fetch·0`: the handler run when the reply of the first `users := fetch url` arrived (src/fetches.rs)
+/// `on·fetch·0`: the handler run when the reply of the first `users := fetch url` arrived (src/web/fetches.rs)
 pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";

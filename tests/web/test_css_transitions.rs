@@ -57,11 +57,11 @@ fn a_made_up_kind_is_css_with_a_hint() {
 // a built site carries markup-transitions.js, after markup.js, only when its elements have transitions: the hello-world
 // budget (test_bundle_budget) pays nothing for them
 #[test]
-#[cfg(feature = "native")] // src/site.rs is native
+#[cfg(feature = "native")] // src/web/site.rs is native
 fn a_site_with_transitions_carries_their_script() {
 	let scripts = |code: &str| {
 		let directory = crate::common::scratch_directory("transitions-site");
-		let site = warp::site::build(code, "list", &directory).expect("the site is built");
+		let site = warp::web::site::build(code, "list", &directory).expect("the site is built");
 		std::fs::remove_dir_all(directory).unwrap();
 		site.files
 	};

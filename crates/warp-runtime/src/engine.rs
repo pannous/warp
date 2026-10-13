@@ -3,6 +3,12 @@ use wasmtime::{Config, Engine, Store};
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
 /// frame of a deep recursion) at each of its many small growths
 const GC_HEAP_INITIAL_BYTES: u64 = 1 << 30;
+/// The main thread's stack kept for the host when wasm gets the rest (`give_main_stack_to_wasm`): the compiler and host
+/// words run below the wasm frames
+const HOST_STACK_BYTES: usize = 16 << 20;
+
+/// The wasm call stack of engines made from now on; 0 keeps wasmtime's default (512 KiB), safe on any thread
+static WASM_STACK_BYTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Engine settings every warp run shares: GC and typed function references. NaNs are canonicalized where they are
 /// observed (floats::canonical_nan, P119), not after every float operation, which doubled the cost of float loops.
@@ -18,7 +24,47 @@ pub fn deterministic_config() -> Config {
 	#[cfg(feature = "compiler")]
 	config.wasm_component_model(false);
 	config.concurrency_support(false);
+	let wasm_stack = WASM_STACK_BYTES.load(std::sync::atomic::Ordering::Relaxed);
+	if wasm_stack > 0 {
+		// wasmtime wants an async stack at least as large; warp makes no async calls, so none is allocated
+		config.async_stack_size(wasm_stack).max_wasm_stack(wasm_stack);
+	}
 	config
+}
+
+/// Called on the main thread before any engine is made: wasm runs on the main thread and may use its stack but
+/// HOST_STACK_BYTES, a million frames instead of about 15000 (card deep-recursion). Other threads (tests, tasks)
+/// keep the default, which fits their smaller stacks.
+pub fn give_main_stack_to_wasm() {
+	let wasm_stack = main_stack_bytes().saturating_sub(HOST_STACK_BYTES);
+	if wasm_stack > 512 << 10 {
+		WASM_STACK_BYTES.store(wasm_stack, std::sync::atomic::Ordering::Relaxed);
+	}
+}
+
+#[cfg(target_os = "macos")]
+fn main_stack_bytes() -> usize {
+	// SAFETY: asks about the calling thread only
+	unsafe { libc::pthread_get_stacksize_np(libc::pthread_self()) }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn main_stack_bytes() -> usize {
+	let mut limit = libc::rlimit {
+		rlim_cur: 0,
+		rlim_max: 0,
+	};
+	// SAFETY: fills the limit it is given
+	let known = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut limit) } == 0;
+	match known {
+		true if limit.rlim_cur != libc::RLIM_INFINITY => limit.rlim_cur as usize,
+		_ => 0,
+	}
+}
+
+#[cfg(not(unix))]
+fn main_stack_bytes() -> usize {
+	0
 }
 
 /// deterministic_config with fuel metering: the settings of warp's gc_engine

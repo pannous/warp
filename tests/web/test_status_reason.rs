@@ -11,7 +11,7 @@ const PROGRAM: &str = r#"serve 18456 {
 #[test]
 fn a_status_line_names_the_real_reason() {
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(1);
+		warp::web::web_server::stop_after(1);
 		warp::wasm_emitter::eval(PROGRAM).serialize()
 	});
 	let started = std::time::Instant::now();

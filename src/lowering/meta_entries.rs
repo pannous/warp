@@ -151,11 +151,7 @@ fn as_entries(node: Node) -> Node {
 			Bracket::Curly,
 			separator,
 		),
-		Node::List(items, bracket, separator) => {
-			Node::List(items.into_iter().map(as_entries).collect(), bracket, separator)
-		}
-		Node::Key(left, op, right) => key(as_entries(*left), op, as_entries(*right)),
-		other => other,
+		other => children_rewritten(other, as_entries),
 	}
 }
 

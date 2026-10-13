@@ -30,7 +30,7 @@ fn a_frame_handler_leaves_main_running() {
 
 // card native-keys (user: "on key must listen to native signals … in drawing apps, the operating system"): natively,
 // `on key {…}` hears the keys pressed over the paint window, named as the playground page names them. The presses are
-// told here as the viewer's input lines tell them (src/paint_window.rs follow_input): a, released, the up arrow
+// told here as the viewer's input lines tell them (src/graphics/paint_window.rs follow_input): a, released, the up arrow
 #[test]
 fn on_key_hears_the_paint_windows_keys() {
 	for key in ['a' as u32, 0, 0xF700, 0] {

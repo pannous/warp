@@ -4,7 +4,7 @@
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
 const SCHEME_MARK = "://"; // a URL without its scheme: withPageProtocol
-const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
+const PAGE_PREFIX = "page:"; // src/web/mod.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 

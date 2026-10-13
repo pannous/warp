@@ -35,7 +35,7 @@ fn answer(method: &str, path: &str, body: &str) -> (u16, String, String) {
 #[test]
 fn a_failing_route_answers_its_message() {
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(5);
+		warp::web::web_server::stop_after(5);
 		warp::wasm_emitter::eval(PROGRAM).serialize()
 	});
 	let started = std::time::Instant::now();

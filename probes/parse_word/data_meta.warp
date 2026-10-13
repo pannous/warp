@@ -1,0 +1,11 @@
+// card data-meta: quoted code knows where it was written and the comment before it
+use comments
+code = data (n * 1)
+print code.line          // 3
+print code.column        // 14
+print code.value.column  // 18
+settings = data {
+	// how many
+	count: 3
+}
+print settings#1.comment // how many

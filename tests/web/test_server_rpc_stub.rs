@@ -4,7 +4,7 @@ const SECRET: &str = "s3cret-token";
 const PROGRAM: &str = "server def greeting(name) { token = \"s3cret-token\"; \"hi \" + name + token#1 }\ng := greeting(\"Ann\")\np{ \"said: \" + (g ?? \"…\") }";
 
 fn app_wasm(program: &str) -> Vec<u8> {
-	let files = warp::site::files(program, "rpc", false).expect("the page builds");
+	let files = warp::web::site::files(program, "rpc", false).expect("the page builds");
 	files
 		.into_iter()
 		.find(|(name, _)| name == "app.wasm")

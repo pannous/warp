@@ -1,4 +1,4 @@
-// card midi-out: Standard MIDI Files written and read back by write_midi / read_midi (src/midi.rs, host-files.js in the
+// card midi-out: Standard MIDI Files written and read back by write_midi / read_midi (src/sound/midi.rs, host-files.js in the
 // playground), and live messages, which headless (tests, CI) print as `midi out <port>: 90 3c 64` instead of sounding
 #![cfg(feature = "native")]
 use crate::is;
