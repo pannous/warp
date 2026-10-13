@@ -224,6 +224,12 @@ pub fn pointer_kind(c_type: &str) -> Option<CPointer> {
 	}
 }
 
+/// An out-pointer whose filled-in pointer is the call's result, a handle: `sqlite3 **ppDb`; a `char **` (strtod's endptr)
+/// is not one, the C function's own result stays
+pub(crate) fn is_handle_out_pointer(c_type: &str) -> bool {
+	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char"
+}
+
 /// The C parameters a warp call passes: all but the out-pointers
 fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
 	param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
@@ -232,7 +238,7 @@ fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
 /// What a C function's result crosses as: a text, a handle (a pointer result or the first out-pointer), else None for
 /// its number
 pub(crate) fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
-	let has_out_pointer = hsig.param_types.iter().any(|t| pointer_kind(t) == Some(CPointer::Out));
+	let has_out_pointer = hsig.param_types.iter().any(|t| is_handle_out_pointer(t));
 	match pointer_kind(&hsig.return_type) {
 		Some(CPointer::Text) => Some(CPointer::Text),
 		Some(_) => Some(CPointer::Handle),
