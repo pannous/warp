@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **264c844a4** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4), checked with
-  /Users/me/dev/bin/warp built from 19f021863 (no user-visible commits in between).
+- main commit **17b6b455b** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4 and 17b6b455b), checked with
+  /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b, the gate's debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 264c844a4..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 264c844a4 origin/main -- notes/decisions.md`).
+The next sweep starts with `git log --oneline 17b6b455b..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 17b6b455b origin/main -- notes/decisions.md`).
 
 ## How
 
@@ -34,4 +34,4 @@ data/docs_sync/sample_hints.txt, card sample-hints).
 
 ## Not swept yet
 
-Everything up to the last swept commit is covered; the open gaps are cards (midi-receive-message, types-first-run, untyped-block-parameter).
+Everything up to the last swept commit is covered; the open gaps are cards (midi-receive-message, types-first-run, untyped-block-parameter, parse-error-try, param-map-pattern, param-pattern-local-warning, amp-compose).
