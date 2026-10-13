@@ -73,6 +73,16 @@ impl WarpParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
+	/// `else => …` at the cursor: the catch-all arm of a match on its own line, no else branch of the line before
+	pub(super) fn else_arm_key(&self) -> bool {
+		let after: String = self.chars[(self.pos + 4).min(self.chars.len())..]
+			.iter()
+			.skip_while(|ch| matches!(ch, ' ' | '\t'))
+			.take(2)
+			.collect();
+		after == "=>"
+	}
+
 	/// The cursor is in the key of a match arm: `=>` follows before the statement or block ends (`1 | 2 | 3 => …`)
 	pub(super) fn in_arm_key(&self) -> bool {
 		let rest = &self.chars[self.pos.min(self.chars.len())..];
