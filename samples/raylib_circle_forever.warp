@@ -33,7 +33,7 @@ while not WindowShouldClose() {
     DrawText("Warp Raylib FFI Demo", 250, 20, 30, 0xFF505050)  // DARKGRAY
     DrawCircle(400, 300, 80.0, 0xFF2E1990)  // MAROON
     EndDrawing()
-    sleep(500 ms)
+    sleep(500)
 }
 
 // Clean up
