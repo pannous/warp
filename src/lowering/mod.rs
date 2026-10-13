@@ -68,6 +68,7 @@ pub mod phrase_calls;
 pub mod phrase_words;
 pub mod picked_calls;
 pub mod pipes;
+pub mod plain_enums;
 pub mod printable;
 pub mod references;
 pub mod reflection;

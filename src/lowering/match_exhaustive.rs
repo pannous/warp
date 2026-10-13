@@ -1,9 +1,8 @@
 //! Exhaustive matches (card match-exhaustive, user decision match-exhaustive): a match on a name declared of a sum type
-//! (`s: Shape` of `enum Shape { Circle(r), Dot }`) or of a plain enum (`c: Coin`) without a catch-all that misses a
+//! (`s: Shape` of `enum Shape { Circle(r), Dot }`, or of a plain enum `c: Coin`, plain_enums.rs) without a catch-all that misses a
 //! case is the compile error "match on Shape misses Dot". A subject of unknown type, or an arm this check cannot read
 //! (a guard, alternatives, a comparison), keeps the run-time error "no case for …".
 
-use super::declarations::enum_cases;
 use super::sum_variants::sum_types;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
@@ -19,11 +18,14 @@ const CATCH_ALLS: [&str; 4] = ["_", "default", "other", "else"];
 const TYPE_TEST_WORD: &str = "is";
 
 pub fn check(program: Node) -> Node {
-	let cases = declared_cases(&program);
+	let cases: HashMap<String, Vec<String>> = sum_types(&program)
+		.into_iter()
+		.map(|(name, variants)| (name, variants.names()))
+		.collect();
 	if cases.is_empty() {
 		return program;
 	}
-	let subjects = typed_subjects(&program, &cases);
+	let subjects = typed_subjects(&program, |type_name| cases.contains_key(type_name));
 	let mut problem = None;
 	program.visit(&mut |node| {
 		if problem.is_none() {
@@ -33,51 +35,13 @@ pub fn check(program: Node) -> Node {
 	problem.unwrap_or(program)
 }
 
-/// The cases of a sum type or plain enum: a variant stands by its name (`Dot`), a plain enum's case is written with its
-/// type (`Coin.Dime`, declarations::enum_object)
-struct Cases {
-	names: Vec<String>,
-	qualified: bool,
-}
-
-impl Cases {
-	fn written(&self, type_name: &str, case: &str) -> String {
-		match self.qualified {
-			true => format!("{type_name}.{case}"),
-			false => case.to_string(),
-		}
-	}
-}
-
-/// The cases of each sum type and plain enum, by type name
-fn declared_cases(program: &Node) -> HashMap<String, Cases> {
-	let mut cases: HashMap<String, Cases> = sum_types(program)
-		.into_iter()
-		.map(|(name, variants)| {
-			(
-				name,
-				Cases {
-					names: variants.names(),
-					qualified: false,
-				},
-			)
-		})
-		.collect();
-	program.visit(&mut |node| {
-		if let Node::List(items, _, _) = node {
-			cases.extend(enum_cases(items).map(|(name, names)| (name, Cases { names, qualified: true })));
-		}
-	});
-	cases
-}
-
-/// The names declared of one of these types, `s: Shape`; a name declared of two types is left out
-fn typed_subjects(program: &Node, cases: &HashMap<String, Cases>) -> HashMap<String, Option<String>> {
+/// The names declared of a type `is_type` accepts, `s: Shape`, with their type; a name declared of two types has none
+pub(crate) fn typed_subjects(program: &Node, is_type: impl Fn(&str) -> bool) -> HashMap<String, Option<String>> {
 	let mut subjects: HashMap<String, Option<String>> = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::Key(name, Op::Colon, type_name) = node {
 			if let (Node::Symbol(name), Node::Symbol(type_name)) = (name.drop_meta(), type_name.drop_meta()) {
-				if cases.contains_key(type_name) {
+				if is_type(type_name) {
 					let declared = subjects.entry(name.clone()).or_insert(Some(type_name.clone()));
 					if declared.as_ref() != Some(type_name) {
 						*declared = None;
@@ -90,7 +54,11 @@ fn typed_subjects(program: &Node, cases: &HashMap<String, Cases>) -> HashMap<Str
 }
 
 /// The error of a match on a typed subject whose arms name some of its cases and no catch-all
-fn incomplete(node: &Node, cases: &HashMap<String, Cases>, subjects: &HashMap<String, Option<String>>) -> Option<Node> {
+fn incomplete(
+	node: &Node,
+	cases: &HashMap<String, Vec<String>>,
+	subjects: &HashMap<String, Option<String>>,
+) -> Option<Node> {
 	let (word, subject, arms) = subject_and_arms(node)?;
 	let type_name = subjects.get(&subject)?.as_ref()?;
 	let type_cases = &cases[type_name];
@@ -101,11 +69,10 @@ fn incomplete(node: &Node, cases: &HashMap<String, Cases>, subjects: &HashMap<St
 			_ => None,
 		})
 		.collect::<Option<_>>()?;
-	if !named.iter().all(|name| type_cases.names.contains(name)) {
+	if !named.iter().all(|name| type_cases.contains(name)) {
 		return None;
 	}
 	let missing: Vec<&str> = type_cases
-		.names
 		.iter()
 		.filter(|case| !named.contains(case))
 		.map(String::as_str)
@@ -113,10 +80,7 @@ fn incomplete(node: &Node, cases: &HashMap<String, Cases>, subjects: &HashMap<St
 	if missing.is_empty() {
 		return None;
 	}
-	let arms_to_add: Vec<String> = missing
-		.iter()
-		.map(|case| format!("{}: …", type_cases.written(type_name, case)))
-		.collect();
+	let arms_to_add: Vec<String> = missing.iter().map(|case| format!("{case}: …")).collect();
 	let message = format!("match on {type_name} misses {}", missing.join(", "));
 	let fix = format!("add {} or the catch-all _: …", arms_to_add.join("; "));
 	Some(Diagnostic::at(word, message).fix(fix).into_error())
