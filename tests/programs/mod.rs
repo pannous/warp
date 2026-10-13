@@ -31,6 +31,7 @@ mod test_samples;
 mod test_samples_run_cleanly;
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_builtins; // card shader-builtins
+mod test_shader_errors; // card wgsl-error
 mod test_shader_holes; // card shader-holes
 mod test_small_samples; // cards text-samples, error-examples
 mod test_sound;
