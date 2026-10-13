@@ -128,11 +128,14 @@ mod test_not_condition_block;
 mod test_object_blocks;
 mod test_object_functions;
 mod test_on_error_of_function;
+mod test_on_set_value; // card on-set-value
 mod test_page_events;
 mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;
+mod test_pattern_unit_name; // card pattern-unit-name
 mod test_print_empty; // card print-error
 mod test_print_empty_map;
+mod test_quoted_data_untouched; // card data-quote-lowered
 mod test_raise;
 mod test_reactive_ports;
 mod test_reflect_inferred; // card reflect-inferred
@@ -142,6 +145,7 @@ mod test_rest_patterns;
 mod test_run_tests; // card run-tests
 mod test_run_time_block_cache;
 mod test_run_time_blocks;
+mod test_schema_cast; // card loaded-config
 mod test_schemas; // card schemas
 mod test_scoped_handlers;
 mod test_shared_arrays;

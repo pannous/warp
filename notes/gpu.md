@@ -293,6 +293,11 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   computations stay exact in f64; mass work (a heavy map from GPU_AUTO_MIN_COUNT items) goes to the GPU in f32 by
   itself, with the one-time notice. The functions such a map calls go with it, in f32 under the same notice.
   `@gpu` and paint ask for the GPU outright; `@cpu` and WARP_GPU=off keep f64.
+  On the GPU itself precision doesn't matter (user 2026-10-13): every number is an f32, ints and `x as float`
+  included, with no effort spent on exactness. Colors are the one exception and stay exact: a packed 0xAARRGGBB int
+  in an f32 would garble its channels (alpha pushes it past 2^24). So a function giving rgb(…) (hsv and other callers
+  of rgb too) becomes a WGSL fn returning a vec4f, a packed color literal is unpacked at compile time, and any other
+  number a painted function gives is ink unless 0, as in paint(pixels, …).
 - **Fallback.** As for maps:
   - not translatable: runs on the CPU as written, warned once
   - no adapter: the CPU, silently
@@ -304,3 +309,12 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   3. Map kernels calling user functions.
   4. paint(f, …) of a warp function.
   5. Acceptance: samples/gpu_visualizer.warp's tunnel shader written in warp gives the same frame as the WGSL one.
+- **Progress.** Done 2026-10-13: steps 1–3 (gpu_maps.rs `Translation::function`, tests/web/test_gpu_functions.rs; 1M items of
+  a function with a loop of cos: 324 ms @cpu → 29 ms on the GPU). Step 4: `paint(f, width, height)` lowers to a
+  fragment shader of f (gpu_maps.rs `painted_functions`, tests/programs/test_paint_function.rs), the program's
+  numbers f reads as its values; f outside the subset, `@cpu` or WARP_GPU=off: f of each pixel on the CPU
+  (probes/gpu/paint_mandelbrot.warp, full HD, debug build: 18.4 s on the CPU → 1.6 s, mostly the PNG). Open: no
+  adapter falls back to the CPU only for maps, a painted function fails like a shader text (card paint-function).
+  Next, after the Rust cleanup (user decision cleanup-only, 2026-10-13): step 5, the tunnel shader of
+  samples/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
+  values (`levels`).

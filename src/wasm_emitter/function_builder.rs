@@ -5,7 +5,7 @@ use wasm_encoder::*;
 use Instruction as I;
 
 /// The runtime functions a page's scripts call (web/playground: host.js buildValue, guarded_call, reader.js readNode)
-const PAGE_HOST_CALLS: [&str; 12] = [
+const PAGE_HOST_CALLS: [&str; 13] = [
 	"new_empty",
 	"new_int",
 	"new_float",
@@ -18,6 +18,7 @@ const PAGE_HOST_CALLS: [&str; 12] = [
 	"error_of",
 	super::int_lists::INTS_TO_LIST,
 	super::int_lists::LIST_TO_INTS,
+	super::NODE_AT,
 ];
 
 impl WasmGcEmitter {

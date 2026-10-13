@@ -11,6 +11,7 @@ use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{block, call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
+use crate::diagnostic::Diagnostic;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::optional_field;
@@ -338,7 +339,7 @@ pub(crate) fn is_map_pattern(pattern: &Node) -> bool {
 
 /// A field of a map pattern as its name and its pattern: `{name}` binds the field to its own name; `debug?: bool` is
 /// the optional field (card schemas)
-fn map_field(part: &Node) -> Option<(String, &Node)> {
+pub(crate) fn map_field(part: &Node) -> Option<(String, &Node)> {
 	if let Some(field) = optional_field(part) {
 		return map_field(field);
 	}
@@ -655,6 +656,53 @@ pub(crate) fn pattern_test(
 	Ok((joined(matches, Op::Or), vec![]))
 }
 
+/// `x is {host: h}` compares host with the unit hour and binds nothing: a weak warning naming the way to bind, `$h`
+/// or another name (card pattern-unit-name)
+pub fn check_unit_names(program: Node) -> Node {
+	let mut warnings = vec![];
+	program.visit(&mut |node| {
+		if let Node::Key(_, Op::Eq, pattern) = node.drop_meta() {
+			unit_names(pattern, &program, &mut warnings);
+		}
+	});
+	match crate::diagnostic::report(&warnings) {
+		Err(error) => error,
+		Ok(()) => program,
+	}
+}
+
+/// The unit words that are field values of a map pattern, at any depth; a list item `[_, h]` binds h
+fn unit_names(pattern: &Node, program: &Node, warnings: &mut Vec<Diagnostic>) {
+	match pattern.drop_meta() {
+		Node::List(items, _, _) if is_list_pattern(pattern) => {
+			items.iter().for_each(|item| unit_names(item, program, warnings))
+		}
+		Node::List(fields, _, _) if is_map_pattern(pattern) => {
+			// a shorthand `{h}` binds the field h
+			let values = fields
+				.iter()
+				.filter_map(map_field)
+				.filter(|(name, part)| part.symbol_name() != Some(name.as_str()));
+			for (_, part) in values {
+				let unit = part
+					.symbol_name()
+					.and_then(|name| Some((name, crate::units::unit_long_name(name, program)?)));
+				match unit {
+					Some((name, unit)) => warnings.push(
+						Diagnostic::at(
+							part,
+							format!("{name} is the unit {unit}: this compares; bind with ${name} or another name"),
+						)
+						.weak(),
+					),
+					None => unit_names(part, program, warnings),
+				}
+			}
+		}
+		_ => {}
+	}
+}
+
 /// `xs is [_, 2]` and `if xs is [a, b] then b` (card is-pattern): a list or tuple holding `_`, a rest or a name defined
 /// nowhere is a pattern, its names bound as the test holds; a list of known values stays a comparison
 pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Option<Node> {
@@ -691,7 +739,7 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 
 /// A name a pattern binds is declared `let`: the arm's own local, never a change of a main-level variable of that name
 /// (card pattern-names)
-fn bind(name: Node, value: Node) -> Node {
+pub(crate) fn bind(name: Node, value: Node) -> Node {
 	Node::List(
 		vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)],
 		Bracket::None,

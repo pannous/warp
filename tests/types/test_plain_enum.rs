@@ -60,3 +60,11 @@ fn a_case_converts_to_its_index_or_position() {
 	is!(&with_coin("cents(c: Coin) := c as position; cents(Coin.Penny)"), 1);
 	is!(&with_coin("xs = [10 20 30]; xs#(Coin.Dime as position)"), 30);
 }
+
+// card enum-case-after-statement: a bare `Coin.Dime` statement keeps the later cases and type tests working
+#[test]
+fn case_statement_then_type_test() {
+	is!("enum Coin { Penny, Nickel, Dime }; Coin.Dime; Dime is Coin", true);
+	is!("enum Coin { Penny, Nickel, Dime }; Coin.Nickel; Dime is Coin", true);
+	is!("enum Coin { Penny, Nickel, Dime }; Coin.Nickel; 3 is int", true);
+}

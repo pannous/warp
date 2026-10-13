@@ -365,6 +365,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::serve::bind_path_parameters,
 	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
 	crate::lowering::named_patterns::lower,
+	// `x is {host: h}`: h is the unit hour, a weak warning while it is still the word (card pattern-unit-name)
+	crate::lowering::switch::check_unit_names,
 	// `tree find {type: "image", src}` and `tree replace p with q`: each a recursive walker of its own (tree_walks.rs)
 	crate::lowering::tree_walks::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
@@ -514,6 +516,8 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::run_time_blocks::warn_unresolved,
 	crate::lowering::run_time_blocks::lower_interpret,
 	crate::lowering::blocks::lower,
+	// again for the `data e` that parse_word and blocks made (lower_for_emission unseals them)
+	crate::lowering::blocks::seal_quoted,
 	crate::lowering::getters::lower,
 	crate::lowering::run_time_blocks::lower_run_time_bangs,
 	crate::lowering::mutation::warn_discarded,
@@ -595,9 +599,16 @@ fn run_passes(node: Node, passes: &[Pass]) -> Node {
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
 /// (a constant answer, an error, a denied capability).
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
+	use crate::lowering::blocks::unsealed;
+	lower_with_sealed_quotes(node).map(unsealed).map_err(unsealed)
+}
+
+fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
 	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
 	let node = crate::lowering::for_loop::headers::lower(node);
+	// `data e` as written: no sugar pass rewrites inside e
+	let node = crate::lowering::blocks::seal_quoted(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());

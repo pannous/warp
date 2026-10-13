@@ -352,6 +352,13 @@ pub fn dimension_and_factor(name: &str) -> Option<(String, i64)> {
 	unit_named(name).map(|unit| (format!("{:?}", unit.dimension), unit.factor))
 }
 
+/// `h` as its unit's long name `hour` (the unit word where it has none); none when `program` defines the word itself
+pub fn unit_long_name(name: &str, program: &Node) -> Option<&'static str> {
+	let unit = shadowing(program, || unit_named(name))?;
+	let long_name = LONG_NAMES.iter().find(|(_, short)| *short == unit.name);
+	Some(long_name.map_or(unit.name, |(long, _)| *long))
+}
+
 pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
@@ -745,12 +752,7 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					[single] => single.clone(),
 					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 				};
-				let names_shadowed = |node: &Node| {
-					let mut found = false;
-					node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if shadowed.contains(name)));
-					found
-				};
-				match milliseconds(&duration).filter(|_| !names_shadowed(&duration)) {
+				match milliseconds(&duration).filter(|_| !duration.mentions_where(|name| shadowed.contains(name))) {
 					Some(amount) => Node::List(
 						vec![items[0].clone(), Node::int(amount)],
 						Bracket::Round,
@@ -785,7 +787,7 @@ pub fn lower_quantity_comparisons(program: Node) -> Node {
 }
 
 fn quantity_comparisons_folded(program: Node) -> Node {
-	if !(needs_quantities(&program) || mentions_clock(&program)) {
+	if !(needs_quantities(&program) || program.mentions(TIME_WORD)) {
 		return program;
 	}
 	let bound = crate::system_values::bound_names(&program);
@@ -793,12 +795,6 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 	let clock = !bound.contains(TIME_WORD);
 	let folded = fold_comparisons(program, &constants, clock);
 	without_unread_constants(folded, &constants)
-}
-
-fn mentions_clock(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if name == TIME_WORD));
-	found
 }
 
 /// The main-level variables assigned a quantity once, and nowhere else: `x = 2 km`

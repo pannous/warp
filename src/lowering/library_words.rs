@@ -594,6 +594,8 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
+			// `data (a.b)` stays the code as written, the Node the run-time `parse("a.b")` gives (card data-quote-lowered)
+			quoted if crate::blocks::quoted_data(&quoted).is_some() => quoted,
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].is_symbol(TRY_MARKER) => {
 				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
@@ -1073,6 +1075,10 @@ impl Lowering {
 		}
 		// `x.chars` stays the count of characters; `chars x`, `chars(x)` and the call `x.chars()` are the list
 		let is_called = matches!(method.drop_meta(), Node::List(..));
+		// `n.first` of a person with a field first reads the field, not the library word first
+		if !is_called && self.instances.is_instance_field(receiver, name) {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if let Some(word) = self
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())

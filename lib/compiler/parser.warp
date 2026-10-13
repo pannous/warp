@@ -584,8 +584,8 @@ def atom(p) {
 			return radix_value(p, 2)
 		}
 		written = decimal(p)
-		if written.contains(".") or written.contains("e-") or written.contains("E-") { return float(written) }
-		return int(written)
+		amount = if written.contains(".") or written.contains("e-") or written.contains("E-") then float(written) else int(written)
+		return with_glued_factor(p, amount)
 	}
 	if c == '"' or c == '\'' { return quoted(p) }
 	if is_name_start(c) { return named(p) }
@@ -604,6 +604,18 @@ def atom(p) {
 	p.at = p.at + 1
 	ø
 }
+
+// `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
+// Rust twin: literals.rs with_juxtaposed_factor
+def with_glued_factor(p, amount) {
+	c = peek(p.code, p.at, p.n)
+	if not (is_name_start(c) or c == '(') or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
+		return amount
+	}
+	["key", "*", amount, atom(p)]
+}
+
+ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 
 // A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
 // Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call

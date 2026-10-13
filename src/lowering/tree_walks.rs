@@ -139,7 +139,7 @@ fn holds_walk_word(words: &[Node]) -> bool {
 	})
 }
 
-fn is_walk_word(word: &Node) -> bool {
+pub(crate) fn is_walk_word(word: &Node) -> bool {
 	word.is_symbol(FIND_WORD) || word.is_symbol(REPLACE_WORD)
 }
 

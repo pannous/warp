@@ -57,7 +57,7 @@ pub fn phrase_words(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) ->
 			&& more_in_slot
 			&& !ARTICLES.contains(&word)
 			&& !is_known_type(word)
-			&& !uses_name(body, word);
+			&& !body.mentions(word);
 	}
 	in_phrase
 }
@@ -90,7 +90,7 @@ pub fn parameter_slots(
 		let next = (!ends_slot(index + 1)).then(|| words[index + 1]);
 		if in_phrase[index] {
 			index += 1;
-		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !uses_name(body, word)) {
+		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !body.mentions(word)) {
 			let noun: Vec<&str> = (index + 1..words.len())
 				.take_while(|later| !ends_slot(*later) && !ARTICLES.contains(&words[*later]))
 				.map(|later| words[later])
@@ -131,7 +131,7 @@ pub fn parameter_slots(
 	}
 	if let [Node::Key(name, Op::Colon, type_name)] = parameters.as_slice() {
 		// `fibonacci number := … number … it …` uses both: the parameter keeps its name and `it` is the same value
-		if name == type_name && uses_it(&body) && !uses_name(&body, &name.name()) {
+		if name == type_name && uses_it(&body) && !body.mentions(&name.name()) {
 			parameters = vec![typed(IT, &type_name.name())];
 		}
 	}
@@ -192,14 +192,8 @@ fn numbered_type_reads(body: &Node, parameters: &[Node]) -> Node {
 	rewrite(body, &names)
 }
 
-fn uses_name(node: &Node, wanted: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if name == wanted));
-	found
-}
-
 pub fn uses_it(node: &Node) -> bool {
-	uses_name(node, IT)
+	node.mentions(IT)
 }
 
 /// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type

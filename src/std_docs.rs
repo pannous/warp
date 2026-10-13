@@ -8,9 +8,10 @@ const DEFINE: &str = ":=";
 const ASSIGN: char = '=';
 const CLASS: &str = "class ";
 const BLOCK_START: char = '{';
-/// The width lib/*.warp wraps its comments at: a comment line goes on in the next one when that line's first word
-/// would not have fit behind it
-const WRAP_WIDTH: usize = 120;
+/// lib/*.warp wraps its comments by hand, near 120 columns: a comment line at least this long that ends no sentence goes
+/// on in the next one; the stacked comments that are not one (`// attributes that are present or absent`) are short
+const WRAPPED_LINE_LENGTH: usize = 90;
+const SENTENCE_END: char = '.';
 const MARKDOWN_TITLE: &str = "# Standard library";
 const MARKDOWN_INTRO: &str = "Made by `warp help --markdown` from lib/*.warp: each module with its words, a word with the comment above it. A module comes with `use <module>`; the prelude needs none.";
 
@@ -36,7 +37,7 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 	let mut previous_comment_line: Option<&str> = None;
 	for line in lines {
 		if let Some(text) = comment_text(line) {
-			if !previous_comment_line.is_some_and(|previous| wraps_into(previous, &text)) {
+			if !previous_comment_line.is_some_and(is_wrapped) {
 				comment.clear();
 			}
 			comment.push(text);
@@ -63,10 +64,10 @@ fn comment_text(line: &str) -> Option<String> {
 		.map(|text| text.trim().to_string())
 }
 
-/// Whether a comment line was wrapped: the first word of the next one (`next`, its text) would not have fit behind it
-fn wraps_into(line: &str, next: &str) -> bool {
-	let first_word = next.split_whitespace().next().unwrap_or_default();
-	line.trim_end().chars().count() + 1 + first_word.chars().count() > WRAP_WIDTH
+/// Whether a comment line goes on in the next one: it is long and ends no sentence
+fn is_wrapped(line: &str) -> bool {
+	let line = line.trim_end();
+	line.chars().count() >= WRAPPED_LINE_LENGTH && !line.ends_with(SENTENCE_END)
 }
 
 /// A definition at the start of a line: `zip(a, b) := …` → `zip(a, b)`, `class Stack { …` → `class Stack`,

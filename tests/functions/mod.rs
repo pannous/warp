@@ -66,6 +66,7 @@ mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_values;
 mod test_functions;
+mod test_gap_feeding; // card gap-feeding
 mod test_generator_arguments;
 mod test_generators; // card generators-function
 mod test_getter_warning_text;
@@ -110,6 +111,7 @@ mod test_parameter_any;
 mod test_parameter_assignment;
 mod test_parameter_call_kinds;
 mod test_parameter_codepoint_calls;
+mod test_parameter_map_patterns; // cards param-map-pattern, param-pattern-local-warning
 mod test_parameter_overloads;
 mod test_parameter_patterns; // card parameter-patterns
 mod test_parameter_retype;

@@ -4,7 +4,7 @@
 //! `y: outer·y` holds the cell itself, so inner's writes reach outer. A plain `y = 7` in inner is inner's own local,
 //! as in Python and warp.
 
-use super::{assigned_locals, cell_class, function_definition, mentions, parameter_name, result_type, statements};
+use super::{assigned_locals, cell_class, function_definition, parameter_name, result_type, statements};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -90,7 +90,7 @@ fn lift_from(
 				.collect();
 			let captures = outer_names
 				.iter()
-				.filter(|name| !own.contains(name) && !locals.contains(name) && mentions(body, name))
+				.filter(|name| !own.contains(name) && !locals.contains(name) && body.mentions(name))
 				.cloned()
 				.collect();
 			Nested {
@@ -109,7 +109,7 @@ fn lift_from(
 		let mut changed = false;
 		for caller in 0..nested.len() {
 			for callee in 0..nested.len() {
-				if caller == callee || !mentions(&nested[caller].body, &nested[callee].name) {
+				if caller == callee || !nested[caller].body.mentions(&nested[callee].name) {
 					continue;
 				}
 				let (captures, references) = (nested[callee].captures.clone(), nested[callee].references.clone());

@@ -4,7 +4,7 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::versions::{declared_version, is_version_keyword, version_of, Requirement, Version, MINIMUM_KEYWORD};
 use crate::warp_parser::WarpParser;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;

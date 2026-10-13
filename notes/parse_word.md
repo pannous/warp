@@ -44,7 +44,9 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
   `try` catches. A method `x.parse(…)` is never rewritten. `parse_word::code_of` never reads a file, so
   `parse("a.warp")` is code.
 - Found on the way (card data-quote-lowered): later lowering passes rewrite inside quoted data, so `data (a.warp)`
-  has the op `#`, while the run-time parse keeps `.`.
+  has the op `#`, while the run-time parse keeps `.`. Fixed 2026-10-13: library_words (member access to `#`) and
+  declaration_forms (a literal range written out as its list) skip quoted data; tests/node/test_quote_as_written.rs
+  checks `data (S) == parse(t)` for a run-time t, so a pass that rewrites a quote again fails there.
 
 ## Agreed with warp-operator-shall (2026-10-13)
 - Operators stay Keys in data. `&`/`|` are decided at parse time (Op::BitAnd/BitOr for operands that may be ints,
@@ -69,5 +71,10 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
   whose Meta layers carry a LineInfo or a comment through the runtime function node_at.
 - `n.line`, `n.column`, `n.comment` read through node_part (NODE_PARTS 6–8); a node without them has no such field.
 - Positions of `parse("…")` are in the parsed text (line 1 column 1 is its start).
-- Open: the parser keeps only the comment *before* a node (`// c` then `a: 1`); a trailing `a: 1 // c` is lost.
-  A run-time `parse(t)` gives no positions yet (built_in_program goes through TaskValue, which has no Meta).
+- A comment ending a line documents that line's item (2026-10-13): `a: 1 // c` gives `(x#1).comment` "c"; before,
+  it became the leading comment of the next line. Scanner take_trailing_comment, called by the list item loop.
+  Open: `a: 1 # c` is still lost, the expression scanner (skip_spaces_and_inline_comments) drops `# …` mid-line.
+  Test tests/node/test_trailing_comment.rs.
+- Run-time `parse(t)` keeps positions too (2026-10-13): TaskValue::Positioned (from Node::written_at) is built by
+  the program's exported node_at; in the browser tree_of adds `at: [line, column, comment]` and host.js buildValue
+  calls node_at. A program mentioning parse_code emits node_at and $MetaNode. Test tests/node/test_parse_positions.rs.

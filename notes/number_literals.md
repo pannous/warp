@@ -18,17 +18,17 @@ Cards int-list (this one), int-exact, float-calls, float-nodes, int-declaration,
 - notes/typed_lists.md "Open": a list variable of exact ints becomes an `(array (mut i64))`; float arrays came second
   because few literal lists are float.
 
-- 2026-10-10 decision exact-default (notes/decisions.md): a decimal literal is an f64 float, reversing the exact
-  decimals and P196b; integer division stays exact. Fraction math was ~90% of finger paint's stroke time.
+- 2026-10-10 decision exact-decimals (notes/decisions.md, replacing exact-default the same day): decimal literals
+  are exact decimals (inline i64 mantissa + power-of-ten scale); floats only from float sources.
 
 Today:
 
 ```warp
-type(0.0)          # float
-type(1.5)          # float
+type(0.0)          # int
+type(1.5)          # rational
 type(3/2)          # rational
-type([0.0, 0.0])   # list of float
-0.1 + 0.2 ≈ 0.3    # yes; `==` on floats warns, fix: use ≈
+type([0.0, 0.0])   # list of int
+0.1 + 0.2 == 0.3   # yes; `==` warns only when a float is involved
 ```
 
 The rest of this note is the history of the exact decimals.

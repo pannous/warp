@@ -57,6 +57,8 @@ pub struct Context {
 	pub user_type_indices: HashMap<String, u32>,
 	pub type_registry: TypeRegistry,
 	pub user_globals: HashMap<String, (u32, Kind)>,
+	/// The variants without payload of the program's sum types (`enum Coin { Penny }`): bare words naming a value
+	pub variant_names: HashSet<String>,
 	/// The program's `global` declarations with kind and type, which every function body sees
 	pub declared_globals: HashMap<String, crate::local::Local>,
 	/// Declared kinds of the fields of the program's types, keyed by analyzer::field_kind_key (`.x` → Float)
@@ -131,6 +133,7 @@ impl Context {
 			user_type_indices: HashMap::new(),
 			type_registry: TypeRegistry::new(),
 			user_globals: HashMap::new(),
+			variant_names: HashSet::new(),
 			declared_globals: HashMap::new(),
 			field_kinds: HashMap::new(),
 			captures: HashMap::new(),

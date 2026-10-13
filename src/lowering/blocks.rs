@@ -110,7 +110,45 @@ fn prefixed<'a>(value: &'a Node, words: &[&str]) -> Option<&'a Node> {
 
 /// `data e`: e, the expression as written
 pub(crate) fn quoted_data(node: &Node) -> Option<&Node> {
-	prefixed(node, &[DATA_WORD])
+	let quoted = prefixed(node, &[DATA_WORD])?;
+	Some(sealed_code(quoted).unwrap_or(quoted))
+}
+
+/// Quoted code the later passes do not see into (card data-quote-lowered): `data a.b` keeps its `.`, as the run-time
+/// parse does; `unsealed` gives it back before analysis and emission
+#[derive(Clone, PartialEq)]
+struct QuotedCode(Node);
+
+fn sealed_code(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Data(data) => data.downcast_ref::<QuotedCode>().map(|QuotedCode(code)| code),
+		_ => None,
+	}
+}
+
+/// `data e` with e sealed
+pub(crate) fn quote(code: Node) -> Node {
+	let code = match sealed_code(&code) {
+		Some(_) => code,
+		None => Node::data(QuotedCode(code)),
+	};
+	Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)
+}
+
+/// Every `data e` sealed, so the passes after blocks leave e as written
+pub fn seal_quoted(node: Node) -> Node {
+	match prefixed(&node, &[DATA_WORD]) {
+		Some(code) => quote(code.clone()),
+		None => children_rewritten(node, seal_quoted),
+	}
+}
+
+/// Every sealed `data e` open again
+pub fn unsealed(node: Node) -> Node {
+	match sealed_code(&node) {
+		Some(code) => code.clone(),
+		None => children_rewritten(node, unsealed),
+	}
 }
 
 /// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,

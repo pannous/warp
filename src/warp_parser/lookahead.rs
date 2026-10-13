@@ -575,6 +575,8 @@ impl WarpParser {
 				.chain([&FINALLY_KEYWORD])
 				.any(|word| self.matches_keyword(word))
 				|| matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',')
+				// `try X else 7 // note`: the comment ends the phrase, the next line is not part of it
+				|| self.at_line_comment()
 			{
 				break;
 			}

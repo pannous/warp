@@ -157,6 +157,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Type { name, body } => {
 			ctx.required_functions.insert("new_type");
 			ctx.type_registry.register_from_node(node);
+			if let Some(Node::List(variants, _, _)) = name.attribute(crate::words::VARIANTS_MARK).map(Node::drop_meta) {
+				ctx.variant_names
+					.extend(variants.iter().map(|variant| variant.drop_meta().name()));
+			}
 			analyze_required_functions(ctx, name);
 			analyze_required_functions(ctx, body);
 		}

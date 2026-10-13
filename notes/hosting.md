@@ -139,3 +139,13 @@ State on 2026-10-12 (sent to the Interviewer as user steps):
 - Publishing the OAuth client needs the TXT record on the client URL's host. warp.pannous.com is a CNAME to GitHub
   Pages, so no TXT can go there: the client URL should be https://lambda.pannous.com (A record) with the TXT on
   `lambda`, then visibility Public in the dashboard. Our API token can't read or edit OAuth clients.
+
+## Decisions (moved from notes/decisions.md, 2026-10-09)
+- Each program is its own Cloudflare Worker uploaded by the hosting Worker. Q1 GitHub OAuth App for "Log in with
+  GitHub" (callback https://lambda.pannous.com/callback, proxied by pannous.com to warp-hosting.pannous.workers.dev);
+  Q2 a Cloudflare "Edit Cloudflare Workers" API token for uploads; Q3 free Workers plan (~90 programs, 100k
+  requests/day), Workers for Platforms only near the cap; Q4 programs at warp-<name>.pannous.workers.dev,
+  <name>.warp.pannous.com later; Q5 a private Cloudflare OAuth client for one's own account, others paste a scoped
+  token kept in their browser.
+- Fermyon / Akamai Functions: a live test of "☁ Deploy to Fermyon" needs the user's personal access token in .env as
+  akamai_functions_token (card fermyon-token); visitors paste their own token, kept in their browser.

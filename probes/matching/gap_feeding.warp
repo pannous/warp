@@ -1,0 +1,4 @@
+to integrate a function from a to b: b - a
+from = 1
+to = 3
+integrate sin

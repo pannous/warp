@@ -1,0 +1,2 @@
+paint(int[view_width * view_height], view_width, view_height)
+[view_width, view_height]

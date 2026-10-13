@@ -20,3 +20,9 @@ the wiki).
   they are at `!` and assigns only declared globals. Parked 2026-10-05 until run-time `!` is built.
 - P76: grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. Parked 2026-10-05: no grants exist yet.
+- P45 script mode: a mode where a variable may change kind (`x=[1]; x=5`); today that is a compile error "unless we
+  are in script mode, which is not defined yet". Not designed. Parked 2026-10-05.
+- Extended rationals: ±1/0 as exact infinities instead of the divide-by-zero error (footgun-divzero). Parked
+  2026-10-10.
+- #10 Polish notation for .wat/.wast (`(module a b)` as nodes, a ParserOptions mode): "Keep parked"; test_wast stays
+  ignored. Parked 2026-10-03.
