@@ -45,7 +45,7 @@ fn lowered(program: &str) -> String {
 
 /// The pixels as RGB triples: a grayscale PNG's levels repeated
 fn rgb_pixels(rows: &[u8], width: usize) -> Vec<[u8; 3]> {
-	let colored = rows.len() % (3 * width + 1) == 0 && rows.len() % (width + 1) != 0;
+	let colored = rows.len().is_multiple_of(3 * width + 1) && !rows.len().is_multiple_of(width + 1);
 	let row_bytes = if colored { 3 * width + 1 } else { width + 1 };
 	rows.chunks(row_bytes)
 		.flat_map(|row| match colored {
