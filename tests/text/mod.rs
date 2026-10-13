@@ -17,6 +17,7 @@ mod test_for_each_char;
 mod test_guillemet_strings;
 mod test_interpolated_source_forms;
 mod test_interpolation;
+mod test_large_text_literals; // card self-serializer
 mod test_library_unicode;
 mod test_map_text;
 mod test_nested_list_text;

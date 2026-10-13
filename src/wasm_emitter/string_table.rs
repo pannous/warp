@@ -105,4 +105,9 @@ impl StringTable {
 	pub fn data_section(&self) -> &DataSection {
 		&self.data_section
 	}
+
+	/// The bytes the texts take: the module's memory holds at least these
+	pub fn next_offset(&self) -> u32 {
+		self.next_offset
+	}
 }

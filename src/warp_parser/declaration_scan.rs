@@ -149,10 +149,23 @@ pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
 			(at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len())
 		}
 		('/', Some('*')) => skip_until(at + 2, &['*', '/']),
-		('"' | '\'', _) => skip_until(at + 1, &[c]),
+		('"' | '\'', _) => quoted_end(chars, at + 1, c),
 		_ => return None,
 	};
 	Some(after.max(at + 1))
+}
+
+/// The end of a quoted text from `from` on, past its closing quote: an escaped quote `\"` leaves it open
+fn quoted_end(chars: &[char], from: usize, quote: char) -> usize {
+	let mut at = from;
+	while at < chars.len() {
+		match chars[at] {
+			'\\' => at += 2,
+			c if c == quote => return at + 1,
+			_ => at += 1,
+		}
+	}
+	chars.len()
 }
 
 /// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)

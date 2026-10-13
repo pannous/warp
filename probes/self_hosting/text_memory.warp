@@ -1,0 +1,4 @@
+// texts built by + and join, many times over: does the heap grow with them? (found by card self-serializer: a chunk of
+// 55 serialized views trapped with "out of bounds memory access")
+piece(n:any) := if n == 0 then "x" else "(" + join([piece(n - 1), piece(n - 1)], ", ") + ")"
+[#piece(12) for round in 1 to 40]

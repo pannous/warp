@@ -7,6 +7,7 @@ mod test_emoji_atoms;
 mod test_empty_argument;
 mod test_end_word;
 mod test_entity_table;
+mod test_escaped_quote_slashes; // card self-serializer
 mod test_glued_method_block;
 mod test_glued_pair_value;
 mod test_glyph_aliases;
@@ -31,6 +32,8 @@ mod test_self_differential; // card self-differential
 mod test_self_lexer; // card self-lexer
 #[cfg(feature = "native")]
 mod test_self_parser; // card self-parser
+#[cfg(feature = "native")]
+mod test_self_serializer; // card self-serializer
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;

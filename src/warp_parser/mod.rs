@@ -919,9 +919,12 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
 	for (line_index, line) in input.lines().enumerate() {
 		let chars: Vec<char> = line.chars().collect();
-		let (mut depth, mut quote): (i32, Option<char>) = (0, None);
+		let (mut depth, mut quote, mut escaped): (i32, Option<char>, bool) = (0, None, false);
 		for (column, &c) in chars.iter().enumerate() {
 			match (quote, c) {
+				// `\"` inside a text leaves it open
+				(Some(_), _) if escaped => escaped = false,
+				(Some(_), '\\') => escaped = true,
 				(Some(open), _) if c == open => quote = None,
 				(Some(_), _) => {}
 				(None, '"' | '\'') => quote = Some(c),

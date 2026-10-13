@@ -20,8 +20,19 @@ def span_end(source, at, n) {
 	next = peek(source, at + 1, n)
 	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') { return index_of(source, "\n", at, n) }
 	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
-	if c == '"' or c == '\'' { return after(source, c, at + 1, n) }
+	if c == '"' or c == '\'' { return quoted_end(source, at + 1, c, n) }
 	at
+}
+
+// After the quote closing a text from `from` on: an escaped quote `\"` leaves it open
+// Rust twin: warp_parser quoted_end
+def quoted_end(source, from, quote, n) {
+	at = from
+	while at < n and source[at] != quote {
+		if source[at] == '\\' { at = at + 1 }
+		at = at + 1
+	}
+	if at < n then at + 1 else n
 }
 
 // Where `part` first starts in the source from `from` on, else the source's length

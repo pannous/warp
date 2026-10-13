@@ -28,6 +28,21 @@ impl WasmGcEmitter {
 		self.try_finish().unwrap_or_else(|message| panic!("{message}"))
 	}
 
+	/// The module's own memory, at least as many pages as its texts take
+	fn memory_section(&self) -> MemorySection {
+		let mut section = MemorySection::new();
+		if self.owns_memory {
+			let pages = (self.string_table.next_offset() as u64)
+				.div_ceil(PAGE_BYTES)
+				.max(MEMORY.minimum);
+			section.memory(MemoryType {
+				minimum: pages,
+				..MEMORY
+			});
+		}
+		section
+	}
+
 	/// The module bytes, or the validation failure as an error message
 	pub fn try_finish(mut self) -> Result<Vec<u8>, String> {
 		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
@@ -36,7 +51,7 @@ impl WasmGcEmitter {
 			self.module.section(self.import_manager.imports());
 		}
 		self.module.section(&self.functions);
-		self.module.section(&self.memory);
+		self.module.section(&self.memory_section());
 		if !self.tags.is_empty() {
 			self.module.section(&self.tags);
 		}
