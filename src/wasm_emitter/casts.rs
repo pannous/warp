@@ -566,7 +566,10 @@ impl WasmGcEmitter {
 				use crate::lowering::nodes::call;
 				let falsy = FALSY_TEXTS.iter().map(|text| Node::Text(text.to_string())).collect();
 				let falsy = Node::List(falsy, Bracket::Square, Separator::Colon);
-				let spells_falsy = call(crate::library_words::COLLECTION_CONTAINS, vec![falsy, call("lower", vec![value.clone()])]);
+				let spells_falsy = call(
+					crate::library_words::COLLECTION_CONTAINS,
+					vec![falsy, call("lower", vec![value.clone()])],
+				);
 				self.emit_node_instructions(func, &Node::Key(Box::new(Node::Empty), Op::Not, Box::new(spells_falsy)));
 			}
 			None => {
