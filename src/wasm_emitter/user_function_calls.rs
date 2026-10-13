@@ -272,16 +272,46 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Swaps in the state of the function to compile, gives the enclosing one's back to restore when it is done
+	fn swap_function_state(&mut self, state: FunctionState) -> FunctionState {
+		use std::mem::replace;
+		FunctionState {
+			compiling: replace(&mut self.compiling, state.compiling),
+			scope: replace(&mut self.scope, state.scope),
+			typed_lists: replace(&mut self.typed_lists, state.typed_lists),
+			typed_maps: replace(&mut self.typed_maps, state.typed_maps),
+			typed_structs: replace(&mut self.typed_structs, state.typed_structs),
+			bounded_counters: replace(&mut self.bounded_counters, state.bounded_counters),
+			int_scratch: replace(&mut self.int_scratch, state.int_scratch),
+			next_temp_local: replace(&mut self.next_temp_local, state.next_temp_local),
+			returns_node: replace(&mut self.returns_node, state.returns_node),
+			returns_float: replace(&mut self.returns_float, state.returns_float),
+			returns_list: replace(&mut self.returns_list, state.returns_list),
+			returned_tuple: replace(&mut self.returned_tuple, state.returned_tuple),
+			statement_position: replace(&mut self.statement_position, state.statement_position),
+			loop_labels: replace(&mut self.loop_labels, state.loop_labels),
+			loop_values: replace(&mut self.loop_values, state.loop_values),
+		}
+	}
+
 	/// Compile a user function's body (PASS 2)
 	pub(super) fn compile_user_function_body(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
 		let returns_node = user_fn.return_kind.is_ref(); // Text, Symbol, List, etc. return Node refs
-		let saved_compiling = self.compiling.replace(name.to_string());
-
-		// Create function scope with parameters
 		let function_scope = Scope::with_function_kinds(self.user_function_kinds())
 			.with_closure_targets(self.ctx.closure_variable_targets.clone());
-		let saved_scope = std::mem::replace(&mut self.scope, function_scope);
+		// the typed variables, scratch locals and loops of the body are set below, once its scope is known
+		let enclosing = self.swap_function_state(FunctionState {
+			compiling: Some(name.to_string()),
+			scope: function_scope,
+			returns_node,
+			returns_float: user_fn.return_kind.is_float(),
+			returns_list: self.returns_list_abi(name),
+			returned_tuple: user_fn.tuple_kinds.clone(),
+			// a one-expression body is its own statement: run as a task, no caller's statement names its line
+			statement_position: crate::diagnostic::line_info(&user_fn.body),
+			..FunctionState::default()
+		});
 		// declared globals are changed in place, never shadowed by a local of the same name
 		self.scope.globals = self.function_globals(name);
 		for (index, param) in user_fn.params.iter().enumerate() {
@@ -324,9 +354,8 @@ impl WasmGcEmitter {
 				},
 			);
 		}
-		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
-		let typed_maps = self.find_typed_maps(&user_fn.body);
-		let saved_typed_maps = std::mem::replace(&mut self.typed_maps, typed_maps);
+		self.typed_lists = typed_lists;
+		self.typed_maps = self.find_typed_maps(&user_fn.body);
 		let mut typed_structs = self.find_typed_structs(&user_fn.body);
 		typed_structs.extend(
 			user_fn
@@ -335,30 +364,21 @@ impl WasmGcEmitter {
 				.enumerate()
 				.filter_map(|(index, param)| Some((param.name.clone(), self.struct_parameter(name, index)?.clone()))),
 		);
-		let saved_typed_structs = std::mem::replace(&mut self.typed_structs, typed_structs);
-		let saved_bounded_counters = std::mem::replace(
-			&mut self.bounded_counters,
-			super::big_int::bounded_counters(&user_fn.body),
-		);
+		self.typed_structs = typed_structs;
+		self.bounded_counters = super::big_int::bounded_counters(&user_fn.body);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
 		let num_locals = self.scope.local_count();
-
-		let saved_scratch = std::mem::replace(&mut self.int_scratch, num_locals + temp_locals);
-		let saved_temp_local = std::mem::replace(&mut self.next_temp_local, num_locals);
-		let saved_returns_node = std::mem::replace(&mut self.returns_node, returns_node);
-		let saved_returns_float = std::mem::replace(&mut self.returns_float, user_fn.return_kind.is_float());
-		let returns_list = self.returns_list_abi(name);
-		let saved_returns_list = std::mem::replace(&mut self.returns_list, returns_list);
-		let saved_loop_labels = self.take_loop_labels();
+		self.int_scratch = num_locals + temp_locals;
+		self.next_temp_local = num_locals;
 		let mut locals = self.local_declarations(num_params as usize);
 		if temp_locals > 0 {
 			locals.push((temp_locals, ValType::I64));
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
-		let saved_loop_values = self.declare_loop_values(&mut locals, &user_fn.body);
+		self.declare_loop_values(&mut locals, &user_fn.body);
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
@@ -373,12 +393,6 @@ impl WasmGcEmitter {
 			})
 			.collect();
 
-		let saved_returned_tuple = std::mem::replace(&mut self.returned_tuple, user_fn.tuple_kinds.clone());
-		// a one-expression body is its own statement: run as a task, no caller's statement names its line
-		let saved_statement_position = std::mem::replace(
-			&mut self.statement_position,
-			crate::diagnostic::line_info(&user_fn.body),
-		);
 		if !matches!(user_fn.body.drop_meta(), Node::List(..)) {
 			self.emit_trap_position(&mut func);
 		}
@@ -415,22 +429,7 @@ impl WasmGcEmitter {
 		if !user_fn.tuple_kinds.is_empty() {
 			self.compile_tuple_packer(&user_fn.tuple_kinds);
 		}
-		self.returned_tuple = saved_returned_tuple;
-		self.statement_position = saved_statement_position;
-
-		self.scope = saved_scope;
-		self.int_scratch = saved_scratch;
-		self.next_temp_local = saved_temp_local;
-		self.loop_values = saved_loop_values;
-		self.returns_node = saved_returns_node;
-		self.returns_float = saved_returns_float;
-		self.returns_list = saved_returns_list;
-		self.restore_loop_labels(saved_loop_labels);
-		self.typed_lists = saved_typed_lists;
-		self.typed_maps = saved_typed_maps;
-		self.typed_structs = saved_typed_structs;
-		self.bounded_counters = saved_bounded_counters;
-		self.compiling = saved_compiling;
+		self.swap_function_state(enclosing);
 
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
 		self.exports.export(name, ExportKind::Func, func_idx);
@@ -712,4 +711,25 @@ fn statements_run(body: &Node) -> Node {
 		}
 		_ => body.clone(),
 	}
+}
+
+/// The emitter's state that belongs to the function being compiled. User functions have their own loops: a jump never
+/// crosses a function boundary
+#[derive(Default)]
+struct FunctionState {
+	compiling: Option<String>,
+	scope: Scope,
+	typed_lists: HashMap<String, list_dispatch::TypedList>,
+	typed_maps: std::collections::HashSet<String>,
+	typed_structs: HashMap<String, String>,
+	bounded_counters: std::collections::HashSet<String>,
+	int_scratch: u32,
+	next_temp_local: u32,
+	returns_node: bool,
+	returns_float: bool,
+	returns_list: bool,
+	returned_tuple: Vec<Kind>,
+	statement_position: Option<crate::meta::LineInfo>,
+	loop_labels: Vec<super::loop_control::LoopLabels>,
+	loop_values: super::control_flow::LoopValues,
 }

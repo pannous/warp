@@ -163,13 +163,4 @@ impl WasmGcEmitter {
 		func.instruction(&I::Br(depth as u32));
 		true
 	}
-
-	/// User functions have their own loops: a jump never crosses a function boundary
-	pub(crate) fn take_loop_labels(&mut self) -> Vec<LoopLabels> {
-		std::mem::take(&mut self.loop_labels)
-	}
-
-	pub(crate) fn restore_loop_labels(&mut self, labels: Vec<LoopLabels>) {
-		self.loop_labels = labels;
-	}
 }

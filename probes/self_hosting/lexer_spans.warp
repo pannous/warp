@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+// the lexer's first pass (card self-lexer): where comments and texts start and end, in characters
+use "lib/compiler/lexer.warp"
+spans("x = \"hi\" // note\ny = 'c' /* b */ + 1")

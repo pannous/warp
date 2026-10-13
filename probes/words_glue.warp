@@ -1,0 +1,2 @@
+// card words-glue: the value ends before the text after it: <label for="email">Email</label>
+label{ for: email "Email" }

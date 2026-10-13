@@ -2922,6 +2922,8 @@ PASSED:
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
+  ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
+  ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -3464,6 +3466,7 @@ PASSED:
   ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
   ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ text::test_text_getters::text_getters_read_texts_and_errors
+  ✓ text::test_text_parameter_copy::an_indexed_text_parameter_reads_characters
   ✓ text::test_text_plus_anything::a_text_joins_anything_in_its_text_form
   ✓ text::test_text_plus_anything::a_text_spelling_a_number_plus_a_number_warns
   ✓ text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value
@@ -4348,6 +4351,10 @@ PASSED:
   ✓ web::test_async_data::a_failed_fetch_is_the_error
   ✓ web::test_async_data::on_change_sees_the_arrived_value
   ✓ web::test_async_data::the_parsed_json_arrives_later
+  ✓ web::test_attribute_values::a_number_for_an_address_warns
+  ✓ web::test_attribute_values::a_text_for_a_boolean_attribute_warns
+  ✓ web::test_attribute_values::a_word_for_a_number_attribute_warns
+  ✓ web::test_attribute_values::values_of_the_right_kind_stay_quiet
   ✓ web::test_bound_field_types::a_bound_float_takes_any_number
   ✓ web::test_bound_field_types::a_bound_int_takes_whole_numbers_only
   ✓ web::test_browser_tables::a_big_browser_table_costs_the_same_per_row
@@ -4411,6 +4418,9 @@ PASSED:
   ✓ web::test_expert_guide::every_expert_snippet_prints_what_the_guide_shows
   ✓ web::test_expert_guide::every_expert_snippet_shows_its_value
   ✓ web::test_expert_guide::the_expert_guide_has_the_beginner_chapters
+  ✓ web::test_field_events::a_committed_value_reaches_on_change
+  ✓ web::test_field_events::a_field_event_is_no_markup_mistake
+  ✓ web::test_field_events::focus_and_blur_reach_their_handlers
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_field_is_validated_by_the_declared_type
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
@@ -4422,6 +4432,9 @@ PASSED:
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
   ✓ web::test_form_routes::a_form_route_inside_an_element
   ✓ web::test_form_routes::a_form_written_as_its_route
+  ✓ web::test_glued_attribute_content::a_bound_value_ends_before_a_text
+  ✓ web::test_glued_attribute_content::a_text_after_a_value_is_content
+  ✓ web::test_glued_attribute_content::a_text_value_ends_before_a_text
   ✓ web::test_gpu_auto::a_heavy_map_of_many_floats_runs_on_the_gpu_by_itself
   ✓ web::test_gpu_auto::a_map_below_the_count_or_of_only_arithmetic_stays_on_the_cpu
   ✓ web::test_gpu_auto::cpu_pins_a_map_its_block_or_its_function_to_the_cpu
@@ -4473,8 +4486,11 @@ PASSED:
   ✓ web::test_markup_mistakes::an_unknown_attribute_warns
   ✓ web::test_markup_mistakes::an_unknown_event_warns
   ✓ web::test_markup_mistakes::an_unknown_input_type_warns
+  ✓ web::test_markup_mistakes::an_unknown_tag_among_markup_warns
   ✓ web::test_markup_mistakes::content_of_a_void_element_warns
   ✓ web::test_markup_mistakes::right_markup_stays_quiet
+  ✓ web::test_markup_nesting::misplaced_elements_warn
+  ✓ web::test_markup_nesting::right_nesting_stays_quiet
   ✓ web::test_markup_renderer::a_style_sheet_inside_a_scoped_element_styles_only_its_elements
   ✓ web::test_markup_renderer::an_element_of_a_loop_keeps_its_attributes_beside_a_condition
   ✓ web::test_markup_renderer::the_renderer_keeps_its_locals_apart_from_the_programs_variables
@@ -5074,4 +5090,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5069 passed, 0 failed, 5069 total tested
+10 ignored, 5085 passed, 0 failed, 5085 total tested

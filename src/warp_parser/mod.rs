@@ -1060,6 +1060,9 @@ pub struct WarpParser {
 	pipe_takes_call: bool,
 	/// `N times` loops parsed so far, numbering their hidden counters
 	times_loops: usize,
+	/// The atoms read so far, in source order: the lexer's view of the source (read_atoms); a rewind forgets those read
+	/// after its mark
+	atoms: Vec<Atom>,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
@@ -1193,19 +1196,31 @@ fn code_only(source: &str) -> String {
 	let chars: Vec<char> = source.chars().collect();
 	let mut code = String::with_capacity(source.len());
 	let mut at = 0;
+	for (start, end) in comment_and_text_spans(source) {
+		code.extend(&chars[at..start]);
+		code.push(' ');
+		at = end;
+	}
+	code.extend(&chars[at..]);
+	code
+}
+
+/// Where the comments and texts of a source start and end, in characters; the lexer's first pass (card self-lexer,
+/// lib/compiler/lexer.warp spans is its warp twin)
+pub fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
+	let chars: Vec<char> = source.chars().collect();
+	let mut spans = Vec::new();
+	let mut at = 0;
 	while at < chars.len() {
 		match text_or_comment_end(&chars, at) {
 			Some(end) => {
-				code.push(' ');
+				spans.push((at, end));
 				at = end;
 			}
-			None => {
-				code.push(chars[at]);
-				at += 1;
-			}
+			None => at += 1,
 		}
 	}
-	code
+	spans
 }
 
 /// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
@@ -1451,6 +1466,7 @@ impl WarpParser {
 			in_style_sheet: false,
 			pipe_takes_call: false,
 			times_loops: 0,
+			atoms: vec![],
 			pending_comment: None,
 			after_function_keyword: false,
 			continues_definition_head: false,
@@ -1488,6 +1504,28 @@ impl WarpParser {
 			program
 		}
 	}
+}
+
+/// What the lexer reads (card self-lexer, lib/compiler/lexer.warp is its warp twin)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AtomKind {
+	Number,
+}
+
+/// An atom the parser read: where it starts (line and column from 1, a column per character) and what was written
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Atom {
+	pub kind: AtomKind,
+	pub line: usize,
+	pub column: usize,
+	pub written: String,
+}
+
+/// The atoms the parser reads in a source, in order, as code: the token stream of this scannerless parser
+pub fn read_atoms(source: &str) -> Vec<Atom> {
+	let mut parser = WarpParser::new_with_options(source.to_string(), ParserOptions::default());
+	parser.parse_list_with_separators(None, Bracket::None);
+	parser.atoms
 }
 
 /// The one element of `items`, moved out (cloning it copied a whole subtree, the whole program at the top)
