@@ -16,6 +16,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
+- cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
+  code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
+  request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
+- cleanup-may-drop-edge-cases (2026-10-13): in this cleanup a simplification may make edge-case tests fail. The
+  worker marks each `#[ignore = "cleanup-edge: <card>: <what no longer works>"]` (assertions untouched) and lists them
+  in its merge request; the Interviewer asks the user whether each edge case is worth the code it needed: yes → the
+  code comes back, no → the test is retired. Core behaviour (samples, the tour, common forms) must keep passing.
 - crash-fixes-first (2026-10-12): crash fixes merge with the highest priority (notes/roles.md).
 - small-changes-on-main (2026-10-12): small or non-conflicting changes may go on main without a worktree.
 - session-names (2026-10-12): a session is named for its current task, never a guessed area.
