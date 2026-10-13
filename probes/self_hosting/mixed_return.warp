@@ -1,0 +1,4 @@
+// card function-returning: a float on one path and an int on another make a float function. Prints 12 and 1.5
+def f(w) { if w.contains(".") { return float(w) }; int(w) }
+print(f("12"))
+print(f("1.5"))

@@ -26,7 +26,13 @@ Works:
 Gaps (each a card below):
 - ~~`text[i]` costs O(n)~~ fixed (self-text-index): text_grapheme_offset keeps two text cursors and steps back by the
   ASCII bytes before one, so a char-by-char scan with look-backs is linear (scan_speed.warp: 35 KB in 0.14 s, was out
-  of fuel; tests/text/test_scan_by_index.rs). It relies on runtime texts never changing in place.
+  of fuel; tests/text/test_scan_by_index.rs). It relies on runtime texts never changing in place. Each step still
+  cost ~800 fuel (text-costs): grapheme_end now returns at once for an ASCII character before an ASCII one (but \r),
+  ~300 a step, a far index ~41 a character (tests/text/test_ascii_index_costs.rs).
+- ~~Gaps found by the self-parser~~ fixed: a class literal field named like an element is no markup (class-literal),
+  an untyped `code`/`block` parameter is a block only when the body runs it (parameter-named). probes/self_gaps/.
+  Open: character-text, `["x", b]` of a text b reads back `['x' " "]`; promoting "x" to a text changes the pinned
+  `['a' "bb" "ccc"]` of sort tests, so it waits for a user decision.
 - ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/node_api.rs): `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still
@@ -78,9 +84,9 @@ number, yes, no or ø as itself, every other node a list tagged by its kind (["k
   prints is serialize again (Debug is serialize), so the twin needs no Rust-only text.
 - Found on the way, fixed in the language: an escaped quote in a text ended it for the `//` comment check
   (escaped-quote-slashes); text literals over 64 KiB trapped, the module's memory was one page whatever its texts
-  took (large-text-literals). `type(x) == "int"` is no while `type(x)` prints int (type-text-compare, open): the
+  took (large-text-literals). `type(x) == "int"` is no while `type(x)` prints int (type-text-compare: by decision type-equal, now with a hint toward `type(x) == int`): the
   twin uses `x is list`.
 - The entity pass (uniscript_entities::expand_entities) also ended a text at an escaped quote and turned `"\"\\:infinity"`
   into `"\∞`: text_or_comment_end now skips escapes (same card). A Data node without a unit description is written
-  `Data(…)`, so its view carries that text. warp writes small floats with an exponent (`"" + 2.5e-6` is `2.5e-6`),
-  Rust in plain decimal (0.0000025): the twin's `number_text` expands the exponent.
+  `Data(…)`, so its view carries that text. Small floats keep their exponent on both sides (`2.5e-6`, decision
+  float-text): Node's Display writes numbers as Number does (writes-node).

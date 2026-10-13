@@ -570,9 +570,20 @@ fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 		Node::Key(_, Op::Colon, type_node) => {
 			annotated_kind(type_node).is_some_and(|kind| SCALAR_KINDS.contains(&kind))
 		}
-		Node::Symbol(name) => is_arithmetic_operand(body, name),
+		Node::Symbol(name) => is_arithmetic_operand(body, name) && !tests_kind_of(body, name),
 		_ => false,
 	}
+}
+
+/// `x is number` (`is_type x "number"`): a function testing its parameter's kind takes every kind itself
+fn tests_kind_of(body: &Node, name: &str) -> bool {
+	let mut found = false;
+	body.visit(&mut |node| {
+		if let Node::List(items, _, _) = node.drop_meta() {
+			found |= matches!(items.as_slice(), [test, tested, _] if test.is_symbol(crate::type_tests::IS_TYPE) && tested.is_symbol(name));
+		}
+	});
+	found
 }
 
 fn is_arithmetic_operand(body: &Node, name: &str) -> bool {

@@ -1,0 +1,4 @@
+// card def: a result of any kind, spelled `as any` (`-> any` works too, with a hint). Prints 12 and 1
+def f(w) as any { if w == "1" { return 1 }; w }
+print(f("12"))
+print(f("1"))
