@@ -3440,6 +3440,7 @@ PASSED:
   ✓ scope::test_variable_kind_clash::a_function_body_is_checked_too
   ✓ scope::test_variable_kind_clash::a_variable_given_another_kind_is_a_compile_error
   ✓ scope::test_variable_kind_clash::kinds_that_mix_stay_allowed
+  ✓ sweeps::test_crash_card_location::crash_card_names_the_crashing_frame
   ✓ sweeps::test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value
   ✓ sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator
   ✓ sweeps::test_panic_sweep::test_float_function_result_in_exact_context_is_an_error
@@ -3449,6 +3450,7 @@ PASSED:
   ✓ sweeps::test_panic_sweep::test_non_constant_range_bound_is_a_list
   ✓ sweeps::test_panic_sweep::test_struct_field_of_an_unknown_type_is_an_error
   ✓ sweeps::test_panic_sweep::test_update_of_a_non_variable_is_an_error
+  ✓ sweeps::test_short_sources_never_panic::short_sources_never_panic
   ✓ sweeps::test_sweep_fixes::a_builtin_call_statement_runs_inside_a_loop_body
   ✓ sweeps::test_sweep_fixes::a_lone_false_is_zero
   ✓ sweeps::test_sweep_fixes::do_runs_an_add_to_phrase
@@ -5287,4 +5289,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5282 passed, 0 failed, 5282 total tested
+12 ignored, 5284 passed, 0 failed, 5284 total tested
