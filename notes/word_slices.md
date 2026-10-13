@@ -9,4 +9,4 @@ positions like `xs#1` (first = 1), both ends inclusive, lowered to the parser's 
 - The parser nests the words (`xs (to (# from 2) (# ø 4))`, `from#2` is one index); `flat_words` reads them flat.
   Inside a call (`print(xs up to #3)`, `f(xs up to #3)` = `[f, xs, (to up #3)]`) the argument words are sliced.
 - Not built: `xs to #2` as an alias of `up to`, it clashes with the range `1 to #xs`.
-- The pass runs before list_phrases (src/pipeline.rs SOURCE_PASSES).
+- The pass runs before list_phrases (src/pipeline.rs SOURCE_PHASES).
