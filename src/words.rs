@@ -15,6 +15,8 @@ pub const SUM_WORD: &str = "sum";
 pub const SWITCH_WORDS: [&str; 2] = ["switch", MATCH_WORD];
 /// The match lowering passes write (nodes::matched)
 pub const MATCH_WORD: &str = "match";
+/// The type every value is: `x: any`, `foo of any`, an untyped variant among typed ones
+pub const ANY_TYPE: &str = "any";
 /// The parameter a lambda without one names: `it`
 pub const IMPLICIT_PARAMETER: &str = "it";
 /// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
