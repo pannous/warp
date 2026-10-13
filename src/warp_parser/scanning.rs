@@ -9,6 +9,7 @@ pub(super) struct Mark {
 	line_nr: usize,
 	column: usize,
 	current_line: String,
+	atoms_read: usize,
 }
 
 impl WarpParser {
@@ -18,16 +19,34 @@ impl WarpParser {
 			line_nr: self.line_nr,
 			column: self.column,
 			current_line: self.current_line.clone(),
+			atoms_read: self.atoms.len(),
 		}
 	}
 
 	pub(super) fn rewind(&mut self, mark: Mark) {
+		let atoms_read;
 		Mark {
 			pos: self.pos,
 			line_nr: self.line_nr,
 			column: self.column,
 			current_line: self.current_line,
+			atoms_read,
 		} = mark;
+		self.atoms.truncate(atoms_read);
+	}
+
+	/// `read` (an atom's parser) with the atom it reads logged: kind, where it starts, the characters it took
+	pub(super) fn reading_atom<T>(&mut self, kind: AtomKind, read: impl FnOnce(&mut Self) -> T) -> T {
+		let (start, line, column) = (self.pos, self.line_nr, self.column);
+		let value = read(self);
+		let written = self.chars[start..self.pos].iter().collect();
+		self.atoms.push(Atom {
+			kind,
+			line,
+			column,
+			written,
+		});
+		value
 	}
 
 	/// The next `length` characters, consumed

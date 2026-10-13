@@ -49,6 +49,8 @@ mod test_text_concat;
 mod test_text_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_text_getters;
+#[cfg(feature = "native")] // reads a file
+mod test_text_parameter_copy; // card self-lexer
 mod test_text_plus_anything; // card print-oldest
 mod test_text_plus_float_call;
 mod test_text_plus_printable; // card print-oldest

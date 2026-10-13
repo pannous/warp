@@ -1,0 +1,3 @@
+#!/usr/bin/env warp
+use "lib/compiler/lexer.warp"
+print numbers("x = 1\nshader { let a = 2.0; /* } */ { 3 } }\ny = 4\nwgsl{5}\nmy_shader = 6")
