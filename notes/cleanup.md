@@ -117,8 +117,10 @@ Left (bigger, needs care):
   hardlink-guard's marker): edit it only knowing it changes that file too.
 - (cleanup-gc-object) Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
-- (cleanup-ffi-f32) ffi/link.rs: the generic wrapper could take most typed signatures if it passed f32 arguments right (it passes
-  f64s), which needs FFI tests for each signature first.
+- done (cleanup-ffi-f32): ffi/link.rs has one wrapper for every C function of numbers and texts; the 21 typed
+  signatures (`link_typed!`, NativeArgument/NativeResult, the signature keys) are gone, since card ffi-mixed passes a
+  float in the low half of its register. tests/ffi/test_ffi_signatures.rs calls each signature but raylib's
+  window-only ones (InitWindow, DrawCircle, DrawRectangle, DrawText); a C bool result is read from its low byte.
 - (cleanup-html-escape) markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.
 
 ## src/lowering/ (card cleanup-lowering, session warp-class)
