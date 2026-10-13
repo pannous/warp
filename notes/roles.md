@@ -17,7 +17,7 @@ warp-integrator). Session names can change; ListAgents shows the current ones.
 
 ## Supervisor
 High-level only: talks to the user, turns decisions into tasks (notes/open_decisions.md, the board
-notes/impl_2026-10-03.md), spawns and assigns workers, watches load. No merging, no test runs, no decision questions
+via ~/dev/bin/todo), spawns and assigns workers, watches load. No merging, no test runs, no decision questions
 to the user (those go to the Interviewer).
 
 ## Interviewer
