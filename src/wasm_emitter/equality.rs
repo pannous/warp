@@ -224,6 +224,9 @@ impl WasmGcEmitter {
 		)
 		.offer(format!("the logical {logical}"), &written, format!("{a} {logical} {b}"))
 		.offer("a test of the bits", &written, format!("({written}) != 0"));
+		if crate::diagnostic::warned_before(&warning) {
+			return;
+		}
 		if crate::diagnostic::report(std::slice::from_ref(&warning)).is_err() {
 			self.type_errors.push(self.located(warning.to_string()));
 		}

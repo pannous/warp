@@ -547,9 +547,7 @@ thread_local! {
 /// to stderr from the shown level up (show_from), and followed by its "got it?" when printed. Under HintMode::Once a
 /// diagnostic said before is not said again. Whether it was printed
 pub fn say(diagnostic: Diagnostic) -> bool {
-	// a step emitted twice (an if's condition) says its warning once
-	let warned_before = COMPILE_WARNINGS.with(|reported| reported.borrow().contains(&diagnostic));
-	if warned_before || crate::normalize::said_before(&diagnostic) {
+	if crate::normalize::said_before(&diagnostic) {
 		return false;
 	}
 	note_said();
@@ -613,6 +611,12 @@ fn print(diagnostic: &Diagnostic) {
 			}
 		}
 	}
+}
+
+/// Whether this warning was said on this thread since the last take_warnings: a step emitted twice (an if's
+/// condition) says its warning once
+pub fn warned_before(warning: &Diagnostic) -> bool {
+	COMPILE_WARNINGS.with(|reported| reported.borrow().contains(warning))
 }
 
 /// The compile-time warnings (every level but hints) said on this thread since the last call (a host without a
