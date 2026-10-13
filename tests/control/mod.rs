@@ -133,6 +133,7 @@ mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;
 mod test_print_empty; // card print-error
 mod test_print_empty_map;
+mod test_quoted_data_untouched; // card data-quote-lowered
 mod test_raise;
 mod test_reactive_ports;
 mod test_reflect_inferred; // card reflect-inferred
