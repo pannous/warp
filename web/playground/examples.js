@@ -232,7 +232,7 @@ div{ button{ "+1" on click { count += 1 } } button{ "reset" on click { count = 0
 done = false
 toggles = 0
 div{ style{ .done = "green" } button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
-	components: { value: 'div{div{button{data-warp-instance:1 data-warp-click:"1" \'+\'} p:"Apples: 1"} div{button{data-warp-instance:2 data-warp-click:"1" \'+\'} p:"Pears: 5"}}', clicks: ["+"], clicked: 'div{div{button{data-warp-instance:1 data-warp-click:"1" \'+\'} p:"Apples: 2"} div{button{data-warp-instance:2 data-warp-click:"1" \'+\'} p:"Pears: 5"}}', kept: true, code: `// a component is a function that returns markup; each keeps its own count
+	components: { value: 'div{div{button{data-warp-instance:1 data-warp-click:"1" "+"} p:"Apples: 1"} div{button{data-warp-instance:2 data-warp-click:"1" "+"} p:"Pears: 5"}}', clicks: ["+"], clicked: 'div{div{button{data-warp-instance:1 data-warp-click:"1" "+"} p:"Apples: 2"} div{button{data-warp-instance:2 data-warp-click:"1" "+"} p:"Pears: 5"}}', kept: true, code: `// a component is a function that returns markup; each keeps its own count
 def Counter(label, start) {
 	count = start
 	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }

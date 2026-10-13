@@ -2133,6 +2133,7 @@ PASSED:
   ✓ node::test_comment_meta::a_missing_field_is_named_from_any_browsers_trace
   ✓ node::test_comment_meta::comments_are_meta_information_only_under_use_comments
   ✓ node::test_comment_meta::the_comment_of_a_binding_is_its_meta
+  ✓ node::test_container_characters::a_character_in_a_container_serializes_with_double_quotes
   ✓ node::test_empty_operands::a_condition_keyword_is_written_without_its_empty_left
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
   ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
@@ -3418,6 +3419,8 @@ PASSED:
   ✓ text::test_quote_output::test_is_macro_round_trips_text
   ✓ text::test_quote_output::test_serialized_text_parses_back
   ✓ text::test_quote_output::test_texts_inside_lists_print_with_the_canonical_quote
+  ✓ text::test_quoted_computed_container_text::a_computed_quote_inside_a_list_text_is_escaped
+  ✓ text::test_quoted_computed_container_text::printing_a_computed_quote_inside_a_list_is_escaped
   ✓ text::test_quoted_container_texts::a_quote_inside_a_text_in_a_container_is_escaped
   ✓ text::test_quoted_container_texts::a_text_field_prints_quoted
   ✓ text::test_quoted_container_texts::a_text_in_a_list_prints_quoted
@@ -5112,4 +5115,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5107 passed, 0 failed, 5107 total tested
+12 ignored, 5110 passed, 0 failed, 5110 total tested
