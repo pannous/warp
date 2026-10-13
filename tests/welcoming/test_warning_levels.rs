@@ -7,7 +7,9 @@ use warp::wasm_emitter::eval;
 use warp::Node;
 
 const WEAK_WARNING: &str = "square(x) := x * x; xs = [1, 2, 3]; @parallel square xs";
+#[cfg(feature = "native")] // only the warp binary's runs read it
 const SEVERE_WARNING: &str = "n = 0\non key { if key == ESCAPEE { n += 1 } }\nn";
+#[cfg(feature = "native")]
 const NORMAL_WARNING: &str = "\"a\" + warning(\"careful\")";
 const HINTED: &str = "one plus two";
 
