@@ -45,3 +45,23 @@ fn a_similarity_compares_the_phrase_calls_value() {
 	is!(&format!("{COMBINE_WITH}check combine 1.1 with 2.2 ≈ 3.3; 7"), 7);
 	is!(&format!("{COMBINE_WITH}combine 2 with 3 ~ 6"), true);
 }
+
+// card untyped-variant-fallback: an untyped variant takes only what no typed variant fits
+#[test]
+fn an_untyped_variant_is_the_fallback() {
+	let variants = "foo(x:int) := x+x; foo(x:text) := x.length; foo(x) := 1; ";
+	is!(&format!("{variants}foo(\"abc\")"), 3);
+	is!(&format!("{variants}foo(2)"), 4);
+	is!(&format!("{variants}foo(2.5)"), 1);
+	is!("foo(x:int) := x+x; foo(x: any) := 1; foo('c') + foo(2)", 5);
+}
+
+// card of-any-variant: `foo of any` is the fallback variant, as wiki/polymorphism.md shows
+#[test]
+fn of_any_is_the_fallback_variant() {
+	is!(
+		"foo of int = it+it; foo of text = it.length; foo of any = 1; foo(\"abc\") + foo(2) + foo(2.5)",
+		8
+	);
+	is!("foo of any = 1; foo(3)", 1);
+}

@@ -363,7 +363,10 @@ impl GenericCalls {
 				.collect();
 			return match generic.method_for(&classes, &self.likenesses) {
 				Ok(Some(method)) => Some(witness_call(name, &generic.variant(method), arguments)),
-				Ok(None) if fallback => None,
+				Ok(None) if fallback => match self.number_for_library_method(name, &arguments, generic) {
+					Some(error) => self.fail(error),
+					None => None,
+				},
 				Ok(None) => self.fail(no_method(head, name, &classes, generic)),
 				Err((first, second)) => self.fail(ambiguous_method(head, name, &classes, generic, first, second)),
 			};
@@ -380,6 +383,33 @@ impl GenericCalls {
 				Some(witness_call(name, DISPATCH, arguments))
 			}
 		}
+	}
+
+	/// `sum(5)` of a program's `sum(p: Point)`: the library sum takes no number either, so the error names the
+	/// program's method (card sum-point)
+	fn number_for_library_method(&self, name: &str, arguments: &[Node], generic: &Generic) -> Option<Node> {
+		use crate::type_kinds::Kind;
+		let only_library = generic.library && generic.untyped_arities.is_empty();
+		if !only_library || !crate::library_words::takes_no_number(name) {
+			return None;
+		}
+		let (position, argument, kind) = generic.typed_positions().into_iter().find_map(|position| {
+			let argument = arguments.get(position)?;
+			let kind = self
+				.plain_kind(argument)
+				.filter(|kind| matches!(kind, Kind::Int | Kind::Float | Kind::Codepoint))?;
+			Some((position, argument, kind))
+		})?;
+		let (signature, _) = generic.methods.first()?;
+		let class = signature.get(position)?.as_ref()?;
+		let message = format!(
+			"{name} needs {} for parameter {}, got {} ({})",
+			crate::analyzer::with_article(class),
+			generic.parameters.get(position)?,
+			argument.serialize(),
+			crate::analyzer::kind_with_article(kind)
+		);
+		Some(Diagnostic::at(argument, message).into_error())
 	}
 
 	/// Per combination of classes at the typed positions (or no instance there), the method it calls: the combinations

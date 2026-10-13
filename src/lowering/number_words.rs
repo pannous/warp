@@ -51,6 +51,8 @@ pub fn lower(program: Node) -> Node {
 
 fn as_numbers(node: Node, words: &[(&str, i64)]) -> Node {
 	match node {
+		// `data [1 "two" three]`: a word in quoted data is the word (card hint-data-word)
+		quoted if crate::blocks::quoted_data(&quoted).is_some() => quoted,
 		Node::Symbol(word) => match words.iter().find(|(number_word, _)| *number_word == word) {
 			Some((_, number)) => {
 				crate::normalize::hint(&word, &number.to_string(), "a number is written in digits");

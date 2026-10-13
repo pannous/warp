@@ -9,7 +9,7 @@ use crate::words::VARIANTS_MARK;
 use std::collections::HashMap;
 
 /// A sum type's variants: those without payload by name, the classes extending it
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct Variants {
 	bare: Vec<Node>,
 	classes: Vec<String>,
@@ -47,9 +47,15 @@ pub(crate) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations
 }
 
 pub fn lower(program: Node) -> Node {
-	let sum_types = sum_types(&program);
+	let mut sum_types = sum_types(&program);
 	if sum_types.is_empty() {
 		return program;
+	}
+	// `type Paint = Color`: `c is Paint` tests the variants of Color too
+	for (alias, target) in super::type_aliases::resolved_aliases(&program) {
+		if let Some(variants) = sum_types.get(&target).cloned() {
+			sum_types.insert(alias, variants);
+		}
 	}
 	with_variant_tests(program, &sum_types)
 }

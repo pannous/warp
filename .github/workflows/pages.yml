@@ -171,6 +171,8 @@ jobs:
     - name: Install agent-browser (headless Chrome)
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The tour in headless Chrome
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (console_watch.mjs)
       run: python3 web/playground/test_in_browser.py --examples --site _site
 
   # the same in headless Firefox: the runner's own, driven by firefox_driver.mjs
@@ -188,6 +190,8 @@ jobs:
       # a failed first attempt runs again once, loudly (card tour-firefox-stall: an intermittent worker-start stall in
       # Firefox); a real bug fails both
       timeout-minutes: 25
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (firefox_driver.mjs)
       run: |
         set -o pipefail
         tour() { python3 web/playground/test_in_browser.py --examples --firefox --site _site 2>&1 | tee "$1"; }
@@ -218,11 +222,15 @@ jobs:
     - name: Install agent-browser
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The live playground shows the tour and its console stays clean
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/
     # the page is deployed by now: a Firefox failure here (the intermittent worker-start hang, card firefox-hello) is a
     # warning annotation on the run, not a failed run mailing the user (user 2026-10-09: "conditionally skip the tests")
     - name: The same in headless Firefox (a warning, not a failure)
       timeout-minutes: 15
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/ ||
           echo "::warning title=Firefox check of the live playground failed::see this step's log (card firefox-hello)"

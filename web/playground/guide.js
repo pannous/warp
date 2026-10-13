@@ -115,6 +115,7 @@ function renderGuide(markdown) {
 const renderedGuides = {}; // level → its rendered intro and chapters
 
 function chosenLevel() {
+	if (!document.querySelector(".guide-level")) return "beginner"; // the level switch is deactivated in index.html
 	const named = new URLSearchParams(location.search).get(LEVEL_PARAMETER);
 	return [named, stored(LEVEL_KEY)].find(level => level in renderedGuides) ?? "beginner";
 }

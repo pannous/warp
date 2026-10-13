@@ -5,6 +5,11 @@
 // A line is {level, text, url}; "ready" is printed once the browser's targets are attached.
 const REPORTED_LEVELS = new Set(["error", "warning", "assert"]);
 const FAILED_STATUS = 400;
+// api.github.com answers 60 unauthenticated requests an hour per address, which a shared CI runner's address has often
+// used up (samples/live_region, card samples-fetches): with GITHUB_TOKEN set, its requests carry the token, added here
+// so the page never sees it
+const GITHUB_API_REQUESTS = "https://api.github.com/*";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const socket = new WebSocket(process.argv[2]);
 let nextId = 1;
@@ -14,6 +19,7 @@ const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && console.
 // a page or worker's console, exceptions, browser log and requests; its own workers attach too
 function watch(sessionId) {
 	for (const domain of ["Runtime", "Log", "Network"]) send(`${domain}.enable`, {}, sessionId);
+	if (GITHUB_TOKEN) send("Fetch.enable", { patterns: [{ urlPattern: GITHUB_API_REQUESTS }] }, sessionId);
 	send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sessionId);
 }
 
@@ -28,6 +34,10 @@ const handlers = {
 	"Log.entryAdded": ({ entry }) => entry.source === "network" || report(entry.level, entry.text, entry.url),
 	"Network.responseReceived": ({ response }) =>
 		response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
+	"Fetch.requestPaused": ({ requestId, request }, sessionId) => send("Fetch.continueRequest", {
+		requestId,
+		headers: [...Object.entries(request.headers).filter(([name]) => name.toLowerCase() !== "authorization").map(([name, value]) => ({ name, value })), { name: "Authorization", value: `Bearer ${GITHUB_TOKEN}` }],
+	}, sessionId),
 };
 
 socket.onopen = () => {
@@ -36,7 +46,7 @@ socket.onopen = () => {
 	setTimeout(() => console.log("ready"), 500);
 };
 socket.onmessage = message => {
-	const { method, params } = JSON.parse(message.data);
-	handlers[method]?.(params);
+	const { method, params, sessionId } = JSON.parse(message.data);
+	handlers[method]?.(params, sessionId);
 };
 socket.onclose = () => process.exit(0);
