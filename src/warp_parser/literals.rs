@@ -59,6 +59,10 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_string(&mut self) -> Node {
+		self.reading_atom(AtomKind::Text, Self::read_text)
+	}
+
+	fn read_text(&mut self) -> Node {
 		let quote = self.current_char();
 		// «text» closes with », every other quote with itself
 		let closing = if quote == '«' { '»' } else { quote };
@@ -500,6 +504,10 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_number_value(&mut self) -> Node {
+		self.reading_atom(AtomKind::Number, Self::read_number_value)
+	}
+
+	fn read_number_value(&mut self) -> Node {
 		// RFC 3339 / RFC 9557 literal: 2024-01-31, 2024-01-31T10:00Z, 2024-01-31T10:00[Europe/Berlin]
 		// Not in data mode yet: the data path round-trips source text and has no date serialization
 		let literal_len = if self.options.data_mode {

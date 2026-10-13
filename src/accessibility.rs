@@ -35,6 +35,49 @@ const TYPE: &str = "type";
 /// one lib/markup.warp writes as an attribute besides html_attributes
 const WARP_ELEMENT_WORDS: [&str; 2] = ["bind", "key"];
 const OWN_ATTRIBUTE_PREFIXES: [&str; 2] = ["data-", "aria-"];
+/// attributes whose value is a number (`rows: 3`, `cols: "40"` as a text of one)
+const NUMBER_ATTRIBUTES: [&str; 10] = [
+	"min", "max", "step", "rows", "cols", "colspan", "rowspan", "tabindex", "width", "height",
+];
+/// attributes whose value is an address
+const ADDRESS_ATTRIBUTES: [&str; 3] = ["href", "src", "action"];
+/// elements a p cannot hold: the browser ends the p before them
+const BLOCK_ELEMENTS: [&str; 27] = [
+	"address",
+	"article",
+	"aside",
+	"blockquote",
+	"details",
+	"div",
+	"dl",
+	"fieldset",
+	"figure",
+	"footer",
+	"form",
+	"h1",
+	"h2",
+	"h3",
+	"h4",
+	"h5",
+	"h6",
+	"header",
+	"hr",
+	"main",
+	"nav",
+	"ol",
+	"p",
+	"pre",
+	"section",
+	"table",
+	"ul",
+];
+const LISTS: [&str; 3] = ["ul", "ol", "menu"];
+const LIST_ITEMS: [&str; 3] = ["li", "script", "template"];
+const CELLS: [&str; 2] = ["td", "th"];
+const ROW: &str = "tr";
+const TABLE: &str = "table";
+const TABLE_PARTS: [&str; 5] = ["thead", "tbody", "tfoot", "caption", "colgroup"];
+const ROW_HOLDERS: [&str; 4] = ["table", "thead", "tbody", "tfoot"];
 const INPUT_TYPES: [&str; 22] = [
 	"button",
 	"checkbox",
@@ -71,14 +114,30 @@ type Problem<'a> = (&'a Node, String, String);
 /// The accessibility warnings of a program's markup
 pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 	let mut elements = vec![];
-	collect(program, false, &mut elements);
+	collect(program, false, None, &mut elements);
 	// a program without markup (the renderer, compiled on its own) leaves the written problems of the one it renders
 	if elements.is_empty() {
 		return vec![];
 	}
-	let problems = problems(&elements);
-	WRITTEN_PROBLEMS
-		.with(|written| *written.borrow_mut() = problems.iter().map(|(_, message, _)| message.clone()).collect());
+	let defined: HashSet<String> = crate::analyzer::function_definitions(program)
+		.user_functions
+		.into_keys()
+		.collect();
+	let problems = problems(&elements, &defined);
+	// `divv{ "hi" }` comes back from the run as the attribute `divv: "hi"`: said once, as the unknown tag it is
+	let rendered_as_attributes = elements.iter().flat_map(|element| {
+		element
+			.blocks
+			.iter()
+			.filter(|tag| is_unknown_tag(tag))
+			.map(|tag| no_attribute(tag, &element.tag))
+	});
+	let written: HashSet<String> = problems
+		.iter()
+		.map(|(_, message, _)| message.clone())
+		.chain(rendered_as_attributes)
+		.collect();
+	WRITTEN_PROBLEMS.with(|problems| *problems.borrow_mut() = written);
 	problems
 		.into_iter()
 		.map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix))
@@ -89,8 +148,8 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 pub fn check_rendered(markup: &Node) {
 	let markup = computed_tags_named(markup.clone());
 	let mut elements = vec![];
-	collect(&markup, false, &mut elements);
-	for (_, message, fix) in problems(&elements) {
+	collect(&markup, false, None, &mut elements);
+	for (_, message, fix) in problems(&elements, &HashSet::new()) {
 		if !WRITTEN_PROBLEMS.with(|written| written.borrow().contains(&message)) {
 			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
 		}
@@ -108,7 +167,8 @@ fn computed_tags_named(node: Node) -> Node {
 	}
 }
 
-fn problems<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
+/// `defined`: the program's own names, whose `card{…}` is a component, no unknown tag
+fn problems<'a>(elements: &[Element<'a>], defined: &HashSet<String>) -> Vec<Problem<'a>> {
 	let labeled_ids: HashSet<String> = elements
 		.iter()
 		.filter(|element| element.tag == LABEL)
@@ -118,21 +178,27 @@ fn problems<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
 		.iter()
 		.filter_map(|element| element_problem(element, &labeled_ids))
 		.collect();
-	problems.extend(elements.iter().flat_map(markup_mistakes));
+	problems.extend(elements.iter().flat_map(|element| markup_mistakes(element, defined)));
+	problems.extend(elements.iter().flat_map(value_mistakes));
+	problems.extend(elements.iter().filter_map(nesting_mistake));
 	problems.extend(skipped_headings(elements));
 	problems.extend(duplicate_ids(elements));
 	problems
 }
 
-/// An element as written: its tag, attributes with plain values, whether it says anything, whether a label holds it
+/// An element as written: its tag, attributes with their values as written, whether it says anything, whether a label holds it
 struct Element<'a> {
 	node: &'a Node,
 	tag: String,
-	attributes: Vec<(String, Option<String>)>,
+	attributes: Vec<(String, &'a Node)>,
 	has_content: bool,
 	inside_label: bool,
+	/// the element it is written in, none for markup on its own (a component's)
+	parent: Option<String>,
 	/// the events of its handlers (`on click {…}`)
 	events: Vec<String>,
+	/// the names of its items written as blocks (`divv{ "hi" }`, `my-card{…}`), no attributes
+	blocks: Vec<String>,
 }
 
 impl Element<'_> {
@@ -144,7 +210,7 @@ impl Element<'_> {
 		self.attributes
 			.iter()
 			.find(|(attribute, _)| attribute == name)
-			.and_then(|(_, value)| value.clone())
+			.and_then(|(_, value)| plain_value(value))
 	}
 
 	fn is_named(&self) -> bool {
@@ -183,8 +249,8 @@ fn content_items(content: &Node) -> Vec<&Node> {
 	}
 }
 
-/// `alt: "x"`: an attribute, with its value when that is a text (a one-letter text is a Char), number or name
-fn attribute_parts(item: &Node) -> Option<(String, Option<String>)> {
+/// `alt: "x"`: an attribute and its value as written
+fn written_attribute(item: &Node) -> Option<(String, &Node)> {
 	let Node::Key(name, Op::Colon, value) = item.drop_meta() else {
 		return None;
 	};
@@ -194,13 +260,75 @@ fn attribute_parts(item: &Node) -> Option<(String, Option<String>)> {
 	if crate::markup::is_element_tag(name) {
 		return None;
 	}
-	let value = match value.drop_meta() {
+	Some((name.clone(), value.drop_meta()))
+}
+
+/// An attribute's value when that is a text (a one-letter text is a Char), number or name
+fn plain_value(value: &Node) -> Option<String> {
+	match value {
 		Node::Text(text) | Node::Symbol(text) => Some(text.clone()),
 		Node::Number(number) => Some(number.to_string()),
 		Node::Char(character) => Some(character.to_string()),
 		_ => None,
+	}
+}
+
+/// The attribute values of the wrong kind (card attribute-values): a text where yes or no belongs, a word where a
+/// number does, a number for an address
+fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
+	let text_of = |value: &Node| match value {
+		Node::Text(text) => Some(text.clone()),
+		Node::Char(character) => Some(character.to_string()),
+		_ => None,
 	};
-	Some((name.clone(), value))
+	element
+		.attributes
+		.iter()
+		.filter_map(|(name, value)| {
+			let mistake = |message: String, fix: String| Some((element.node, message, fix));
+			match (text_of(value), value) {
+				(Some(text), _) if crate::markup::is_boolean_attribute(name) => mistake(
+					format!("{name} takes yes or no: the text {text:?} leaves it out"),
+					format!("{name}: yes, or {name}: no"),
+				),
+				(Some(text), _)
+					if NUMBER_ATTRIBUTES.contains(&name.as_str()) && text.trim().parse::<f64>().is_err() =>
+				{
+					mistake(format!("{name} takes a number, not {text:?}"), format!("{name}: 3"))
+				}
+				(None, Node::Number(number)) if ADDRESS_ATTRIBUTES.contains(&name.as_str()) => mistake(
+					format!("{name} takes an address, not the number {number}"),
+					format!("{name}: \"/page\""),
+				),
+				_ => None,
+			}
+		})
+		.collect()
+}
+
+/// An element where HTML does not let it be, which the browser moves or drops (card markup-content)
+fn nesting_mistake<'a>(element: &Element<'a>) -> Option<Problem<'a>> {
+	let parent = element.parent.as_deref()?;
+	let tag = element.tag.as_str();
+	let mistake = |reason: &str, fix: String| Some((element.node, format!("{tag} inside {parent}: {reason}"), fix));
+	match tag {
+		HTML => mistake(
+			"html is the page itself",
+			format!("drop html{{ … }} around the {parent}'s content"),
+		),
+		_ if parent == "p" && BLOCK_ELEMENTS.contains(&tag) => {
+			mistake("the browser ends the p before it", "make the p a div".into())
+		}
+		_ if LISTS.contains(&parent) && !LIST_ITEMS.contains(&tag) => {
+			mistake("a list holds li items", format!("li{{ {tag}{{ … }} }}"))
+		}
+		_ if CELLS.contains(&tag) && parent != ROW => mistake("it belongs in a tr", format!("tr{{ {tag}{{ … }} }}")),
+		ROW if !ROW_HOLDERS.contains(&parent) => mistake("it belongs in a table", "table{ tr{ … } }".into()),
+		_ if TABLE_PARTS.contains(&tag) && parent != TABLE => {
+			mistake("it belongs in a table", format!("table{{ {tag}{{ … }} }}"))
+		}
+		_ => None,
+	}
 }
 
 /// An element's items without its handlers (`on click {…}`, as a line of its own or as the items `on`, `click: {…}`),
@@ -250,7 +378,7 @@ fn event_word(event: &Node) -> Option<String> {
 }
 
 /// The markup an element as written would render wrong, each with the near name as its fix
-fn markup_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
+fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<Problem<'a>> {
 	let near = |word: &str, names: Vec<String>, otherwise: String| {
 		crate::extensions::strings::near_miss(word, names).unwrap_or(otherwise)
 	};
@@ -259,30 +387,37 @@ fn markup_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 	if element.tag == STYLE {
 		return mistakes;
 	}
-	for (name, _) in &element.attributes {
+	for tag in element
+		.blocks
+		.iter()
+		.filter(|tag| is_unknown_tag(tag) && !defined.contains(*tag))
+	{
+		let fix = near(tag, crate::markup::element_names().to_vec(), "div".to_string());
+		mistakes.push((element.node, format!("{tag} is no element: it shows as text"), fix));
+	}
+	for (name, _) in element
+		.attributes
+		.iter()
+		.filter(|(name, _)| !element.blocks.contains(name))
+	{
 		let renders = crate::markup::names_attribute(name)
 			|| WARP_ELEMENT_WORDS.contains(&name.as_str())
 			|| crate::transitions::ELEMENT_WORDS.contains(&name.as_str())
 			|| OWN_ATTRIBUTE_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
 		if !renders {
 			let fix = near(name, crate::markup::attribute_names().to_vec(), format!("data-{name}"));
-			mistakes.push((
-				element.node,
-				format!("{name} is no attribute of {}: it shows as text", element.tag),
-				fix,
-			));
+			mistakes.push((element.node, no_attribute(name, &element.tag), fix));
 		}
 	}
 	let events = || {
-		crate::event_signals::PAGE_EVENTS
-			.iter()
+		crate::event_signals::element_events()
 			.map(|event| event.to_string())
 			.collect::<Vec<_>>()
 	};
 	for event in element
 		.events
 		.iter()
-		.filter(|event| !crate::event_signals::PAGE_EVENTS.contains(&event.as_str()))
+		.filter(|event| !crate::event_signals::is_element_event(event))
 	{
 		let message = format!("{event} is no event of {}: the handler shows as text", element.tag);
 		mistakes.push((
@@ -319,6 +454,33 @@ fn markup_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 	mistakes
 }
 
+/// `divv{ "hi" }`: the name of an item written as a block
+fn block_name(item: &Node) -> Option<String> {
+	match item.drop_meta() {
+		Node::Key(name, Op::Colon | Op::None, content) => match (name.drop_meta(), content.drop_meta()) {
+			(Node::Symbol(name), Node::List(_, Bracket::Curly, _)) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// A block's name no element, attribute nor warp word: `divv` of `divv{ "hi" }`
+fn is_unknown_tag(tag: &str) -> bool {
+	let known = crate::markup::is_element_tag(tag)
+		|| crate::markup::names_attribute(tag)
+		|| WARP_ELEMENT_WORDS.contains(&tag)
+		|| crate::transitions::ELEMENT_WORDS.contains(&tag)
+		|| crate::event_signals::is_element_event(tag)
+		// a custom element of the page's own (`my-card{…}`) is named with a dash
+		|| tag.contains('-');
+	!known
+}
+
+fn no_attribute(name: &str, tag: &str) -> String {
+	format!("{name} is no attribute of {tag}: it shows as text")
+}
+
 fn is_handler(item: &Node) -> bool {
 	matches!(item.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HANDLER_WORD))
 }
@@ -328,17 +490,17 @@ fn says_something(item: &Node) -> bool {
 	match element_parts(item) {
 		Some((_, content, _)) => content_items(content)
 			.into_iter()
-			.any(|child| attribute_parts(child).is_none() && !is_handler(child) && says_something(child)),
+			.any(|child| written_attribute(child).is_none() && !is_handler(child) && says_something(child)),
 		None => {
 			!matches!(item.drop_meta(), Node::Empty)
-				&& attribute_parts(item).is_none()
+				&& written_attribute(item).is_none()
 				&& !is_handler(item)
 				&& !matches!(item.drop_meta(), Node::Text(text) if text.trim().is_empty())
 		}
 	}
 }
 
-fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>) {
+fn collect<'a>(node: &'a Node, inside_label: bool, parent: Option<&str>, found: &mut Vec<Element<'a>>) {
 	if let Some((tag, content, head_attributes)) = element_parts(node) {
 		let (items, events, handler_bodies) = without_handlers(content_items(content));
 		found.push(Element {
@@ -347,38 +509,42 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 			attributes: head_attributes
 				.iter()
 				.chain(items.iter().copied())
-				.filter_map(attribute_parts)
+				.filter_map(written_attribute)
 				.collect(),
 			has_content: items
 				.iter()
-				.any(|item| attribute_parts(item).is_none() && says_something(item)),
+				.any(|item| written_attribute(item).is_none() && says_something(item)),
 			inside_label,
+			parent: parent.map(str::to_string),
 			events,
+			blocks: items.iter().filter_map(|item| block_name(item)).collect(),
 		});
 		if tag == STYLE {
 			return;
 		}
 		let inside_label = inside_label || tag == LABEL;
-		return items
+		items
 			.into_iter()
-			.chain(handler_bodies)
-			.for_each(|item| collect(item, inside_label, found));
+			.for_each(|item| collect(item, inside_label, Some(tag), found));
+		return handler_bodies
+			.into_iter()
+			.for_each(|body| collect(body, inside_label, None, found));
 	}
 	match node.drop_meta() {
-		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, found)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, parent, found)),
 		// the head of `add(a: i32) := …` holds parameters, the target of `a:V = …` a typed variable: not markup
-		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, inside_label, found),
+		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, inside_label, parent, found),
 		// `c ? then : else`: the colon parts the branches, it makes no element
 		Node::Key(condition, Op::Question, branches)
 			if let Node::Key(then, Op::Colon, otherwise) = branches.drop_meta() =>
 		{
 			[condition, then, otherwise]
 				.into_iter()
-				.for_each(|part| collect(part, inside_label, found));
+				.for_each(|part| collect(part, inside_label, parent, found));
 		}
 		Node::Key(left, _, right) => {
-			collect(left, inside_label, found);
-			collect(right, inside_label, found);
+			collect(left, inside_label, parent, found);
+			collect(right, inside_label, parent, found);
 		}
 		_ => {}
 	}

@@ -475,29 +475,7 @@ impl WarpParser {
 			);
 		}
 
-		// `def square (n) {…}` names its function like `def square(n) {…}`
-		let in_code = self.in_code();
-		let names_function = std::mem::replace(
-			&mut self.after_function_keyword,
-			is_function_keyword(&symbol) && in_code,
-		);
-		// C's `int boom () { -1 }` (wiki/type.md): a name, `()` and a block are a definition like `boom() {…}`
-		let spaced_definition = in_code && self.empty_parameters_and_block_follow();
-		if (names_function && self.parameters_follow_after_blanks()) || spaced_definition {
-			self.skip_spaces();
-		}
-		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing warp needs
-		// P157 (user): no generics in warp; the name carries the type parameters' names (GENERIC_MARK), welcome_forms.rs
-		// drops their annotations: `fn id<T>(x: T) -> T` is `def id(x)`
-		if let Some(length) = if names_function {
-			self.generic_parameters_length()
-		} else {
-			None
-		} {
-			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
-			self.advance_by(length);
-			self.generic_names = Some((symbol.clone(), type_parameter_names(&written)));
-		}
+		self.read_function_name_suffix(&symbol);
 
 		if let Some(reference) = self.function_reference_after(&symbol) {
 			return reference;
@@ -549,53 +527,7 @@ impl WarpParser {
 			return Symbol(format!("{symbol}?"));
 		}
 
-		// `To square a number: …` starts an English sentence with a capital
-		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD)
-			&& self.in_code()
-			&& self.word_starts_statement(symbol.len())
-		{
-			if let Some(definition) = self.try_parse_to_definition() {
-				return definition;
-			}
-		}
-
-		// Handle "global" keyword: global name = value
-		// `each x in xs: body` is `for each x in xs: body`
-		if symbol == "for" || (symbol == EACH_WORD && self.loop_variable_in_follows()) {
-			if let Some(loop_node) = self.try_parse_for_in() {
-				return loop_node;
-			}
-		}
-
-		if self.word_starts_statement(symbol.len()) {
-			if let Some(skipped) = self.skip_foreign_modifiers(&symbol) {
-				return skipped;
-			}
-		}
-
-		if symbol == "global" || symbol == "export" {
-			if let Some(declaration) = self.try_parse_global_declaration(&symbol) {
-				return declaration;
-			}
-		}
-
-		if symbol == NONLOCAL_WORD && self.word_starts_statement(symbol.len()) && self.name_after_blanks() {
-			return self.parse_nonlocal_declaration();
-		}
-
-		// Handle "class"/"struct"/"type" keyword: class Name { fields }
-		// But NOT type(x) which is a function call for type introspection
-		if self.options.wit_mode && self.current_char() == '<' {
-			return self.parse_type_application(symbol);
-		}
-		if !self.options.wit_mode && self.declares_type(&symbol) {
-			return self.parse_type_declaration();
-		}
-		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
-		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
-			return self.parse_enum_with_values();
-		}
-		if let Some(form) = self.foreign_form(&symbol) {
+		if let Some(form) = self.keyword_form(&symbol) {
 			return form;
 		}
 
@@ -611,6 +543,83 @@ impl WarpParser {
 			self.skip_blanks();
 		}
 		self.parse_glued_suffix(symbol)
+	}
+
+	/// The blanks and type parameters after a function's name: `def square (n) {…}` names its function like
+	/// `def square(n) {…}`
+	fn read_function_name_suffix(&mut self, symbol: &str) {
+		let in_code = self.in_code();
+		let names_function =
+			std::mem::replace(&mut self.after_function_keyword, is_function_keyword(symbol) && in_code);
+		// C's `int boom () { -1 }` (wiki/type.md): a name, `()` and a block are a definition like `boom() {…}`
+		let spaced_definition = in_code && self.empty_parameters_and_block_follow();
+		if (names_function && self.parameters_follow_after_blanks()) || spaced_definition {
+			self.skip_spaces();
+		}
+		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing warp needs
+		// P157 (user): no generics in warp; the name carries the type parameters' names (GENERIC_MARK), welcome_forms.rs
+		// drops their annotations: `fn id<T>(x: T) -> T` is `def id(x)`
+		if let Some(length) = if names_function {
+			self.generic_parameters_length()
+		} else {
+			None
+		} {
+			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
+			self.advance_by(length);
+			self.generic_names = Some((symbol.to_string(), type_parameter_names(&written)));
+		}
+	}
+
+	/// A form a keyword starts: `to square a number: …`, `for`, `global`, `nonlocal`, a type or enum declaration, another
+	/// language's way of writing a warp form
+	fn keyword_form(&mut self, symbol: &str) -> Option<Node> {
+		// `To square a number: …` starts an English sentence with a capital
+		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD)
+			&& self.in_code()
+			&& self.word_starts_statement(symbol.len())
+		{
+			if let Some(definition) = self.try_parse_to_definition() {
+				return Some(definition);
+			}
+		}
+
+		// Handle "global" keyword: global name = value
+		// `each x in xs: body` is `for each x in xs: body`
+		if symbol == "for" || (symbol == EACH_WORD && self.loop_variable_in_follows()) {
+			if let Some(loop_node) = self.try_parse_for_in() {
+				return Some(loop_node);
+			}
+		}
+
+		if self.word_starts_statement(symbol.len()) {
+			if let Some(skipped) = self.skip_foreign_modifiers(symbol) {
+				return Some(skipped);
+			}
+		}
+
+		if symbol == "global" || symbol == "export" {
+			if let Some(declaration) = self.try_parse_global_declaration(symbol) {
+				return Some(declaration);
+			}
+		}
+
+		if symbol == NONLOCAL_WORD && self.word_starts_statement(symbol.len()) && self.name_after_blanks() {
+			return Some(self.parse_nonlocal_declaration());
+		}
+
+		// Handle "class"/"struct"/"type" keyword: class Name { fields }
+		// But NOT type(x) which is a function call for type introspection
+		if self.options.wit_mode && self.current_char() == '<' {
+			return Some(self.parse_type_application(symbol.to_string()));
+		}
+		if !self.options.wit_mode && self.declares_type(symbol) {
+			return Some(self.parse_type_declaration());
+		}
+		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
+		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
+			return Some(self.parse_enum_with_values());
+		}
+		self.foreign_form(symbol)
 	}
 
 	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,

@@ -983,11 +983,9 @@ fn defined(program: &Node, name: &str) -> Option<Node> {
 
 /// The statements of a module, borrowed (statements takes them)
 fn statements_of(module: &Node) -> &[Node] {
-	match module {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items,
-		Node::Meta { node, .. } => statements_of(node),
+	match module.drop_meta() {
 		Node::Empty => &[],
-		single => std::slice::from_ref(single),
+		plain => plain.sequence_statements(),
 	}
 }
 

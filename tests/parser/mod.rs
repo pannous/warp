@@ -27,6 +27,10 @@ mod test_references;
 mod test_scheme_relative_url;
 #[cfg(feature = "native")]
 mod test_self_differential; // card self-differential
+#[cfg(feature = "native")]
+mod test_self_lexer; // card self-lexer
+#[cfg(feature = "native")]
+mod test_self_parser; // card self-parser
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;

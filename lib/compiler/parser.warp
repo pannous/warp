@@ -1,0 +1,195 @@
+// The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as node_view writes it
+// (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
+use "lib/compiler/lexer.warp"
+
+class Parser { code: text; n: int; at: int }
+
+// The tree of a source: one statement as itself, several as a list
+// Rust twin: WarpParser::parse
+def tree(source) {
+	p = Parser{code: source, n: source.length, at: 0}
+	items(p, ' ', "")
+}
+
+// The items up to `closer` (' ' for the end of the source), grouped by their separators
+// Rust twin: lists.rs parse_list_with_separators
+def items(p, closer, bracket) {
+	found = []
+	while true {
+		skip_blanks(p)
+		if p.at >= p.n { break }
+		if p.code[p.at] == closer {
+			p.at = p.at + 1
+			break
+		}
+		item = expression(p, 0)
+		newline = skip_blanks(p)
+		found += [[item, separator(p, closer, newline)]]
+	}
+	grouped(found, bracket)
+}
+
+// The separator after an item, consumed: "," ";" a newline, a blank, or "" before the closer
+// Rust twin: lists.rs parse_separator
+def separator(p, closer, newline) {
+	if p.at >= p.n or p.code[p.at] == closer { return "" }
+	c = p.code[p.at]
+	if c == ',' {
+		p.at = p.at + 1
+		return ","
+	}
+	if c == ';' {
+		p.at = p.at + 1
+		return if only_blanks_before_newline(p) then "\n" else ";"
+	}
+	if newline then "\n" else " "
+}
+
+def only_blanks_before_newline(p) {
+	i = p.at
+	while i < p.n and (p.code[i] == ' ' or p.code[i] == '\t') { i = i + 1 }
+	i >= p.n or p.code[i] == '\n'
+}
+
+// How loosely a separator groups: a blank tightest, a newline loosest, "" (the end) never
+def precedence(separator) {
+	if separator == " " { return 0 }
+	if separator == "," { return 2 }
+	if separator == ";" { return 3 }
+	if separator == "\t" { return 4 }
+	if separator == "\n" { return 5 }
+	255
+}
+
+// [[item, separator], …] as one list: the loosest separator splits first, the groups between split by the tighter ones
+// Rust twin: lists.rs group_by_separators
+def grouped(pairs, bracket) {
+	if pairs.length == 0 { return if bracket == "{" then ["list", "{", ""] else ø }
+	if pairs.length == 1 and bracket == "" { return pairs#1#1 }
+	loosest = -1
+	for pair in pairs {
+		level = precedence(pair#2)
+		if level < 255 and level > loosest { loosest = level }
+	}
+	if loosest < 0 { return listed(bracket, " ", [pair#1 for pair in pairs]) }
+	split = ""
+	for pair in pairs {
+		if split == "" and precedence(pair#2) == loosest { split = pair#2 }
+	}
+	groups = []
+	group = []
+	for pair in pairs {
+		if precedence(pair#2) == loosest {
+			group += [[pair#1, ""]]
+			groups += [group]
+			group = []
+		} else {
+			group += [pair]
+		}
+	}
+	if group.length > 0 { groups += [group] }
+	nodes = [if group.length == 1 and group#1#2 == "" then group#1#1 else grouped(group, "") for group in groups]
+	if nodes.length == 1 and bracket == "" then nodes#1 else listed(bracket, split, nodes)
+}
+
+def listed(bracket, separator, nodes) := ["list", bracket, separator] + nodes
+
+// Spaces, tabs, newlines and comments skipped; whether a newline was among them
+// Rust twin: scanning.rs skip_whitespace_and_comments
+def skip_blanks(p) {
+	newline = false
+	while p.at < p.n {
+		c = p.code[p.at]
+		if c == '\n' { newline = true }
+		if is_blank(c) {
+			p.at = p.at + 1
+		} else if c == '/' or c == '#' {
+			end = skipped_end(p.code, p.at, p.n)
+			if end == p.at { return newline }
+			p.at = end
+		} else {
+			return newline
+		}
+	}
+	newline
+}
+
+def skip_spaces(p) {
+	while p.at < p.n and (p.code[p.at] == ' ' or p.code[p.at] == '\t') { p.at = p.at + 1 }
+}
+
+// An expression of operators binding at least `min_power` on the left
+// Rust twin: expressions.rs parse_expr, continue_expr
+def expression(p, min_power) {
+	left = atom(p)
+	while true {
+		skip_spaces(p)
+		op = operator_at(p)
+		if op == "" { break }
+		powers = binding_powers(op)
+		if powers#1 < min_power { break }
+		p.at = p.at + op.length
+		skip_blanks(p)
+		left = ["key", op, left, expression(p, powers#2)]
+	}
+	left
+}
+
+// The operators parser.warp reads, longest first
+OPERATORS = [":=", "==", "!=", "<=", ">=", ":", "=", "+", "-", "*", "/", "%", "^", "<", ">", "."]
+
+def operator_at(p) {
+	for op in OPERATORS {
+		if starts_at(p.code, op, p.at) { return op }
+	}
+	""
+}
+
+// Left and right binding power of an operator
+// Rust twin: operators.rs Op::binding_power
+def binding_powers(op) {
+	if op == "." { return [180, 181] }
+	if op == "^" { return [160, 159] }
+	if op == "*" or op == "/" or op == "%" { return [150, 151] }
+	if op == "+" or op == "-" { return [140, 141] }
+	if op == "<" or op == ">" or op == "<=" or op == ">=" { return [120, 121] }
+	if op == "==" or op == "!=" { return [115, 116] }
+	if op == ":" { return [80, 81] }
+	[60, 59]
+}
+
+// A number, text, name or bracketed group
+// Rust twin: atoms.rs parse_atom, literals.rs read_number_value
+def atom(p) {
+	c = p.code[p.at]
+	if is_digit(c) {
+		end = number_end(p.code, p.at, p.n)
+		written = p.code[p.at .. end]
+		p.at = end
+		if written.contains(".") { return float(written) }
+		return int(written)
+	}
+	if c == '"' or c == '\'' { return quoted(p) }
+	if is_name_start(c) {
+		end = name_end(p.code, p.at, p.n)
+		name = p.code[p.at .. end]
+		p.at = end
+		return ["symbol", name]
+	}
+	if c == '(' or c == '[' or c == '{' {
+		p.at = p.at + 1
+		return items(p, closing_of(c), "" + c)
+	}
+	p.at = p.at + 1
+	ø
+}
+
+// A text in quotes, its backslash escapes read; one character is a codepoint
+// Rust twin: literals.rs read_text
+def quoted(p) {
+	quote = p.code[p.at]
+	end = text_end(p.code, p.at + 1, quote, p.n)
+	content = p.code[p.at + 1 .. end - 1]
+	p.at = end
+	[if content.length == 1 then "char" else "text", content]
+}

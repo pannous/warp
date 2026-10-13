@@ -74,7 +74,8 @@ cleanup-groups, cleanup-filter):
   `take_while_char`; infer_list_type: one head-word block (edition 2021: no let-chains, only if-let guards)
 
 Left (longest functions, candidates for splitting):
-- (cleanup-long-functions) atoms.rs parse_symbol_with_suffix (~140 lines): still a keyword dispatch
+- DONE (cleanup-long-functions) atoms.rs parse_symbol_with_suffix (~160 lines → ~80): the function-name suffix
+  (read_function_name_suffix) and the keyword forms (keyword_form) are their own functions, in the same order
 - atoms.rs parse_atom (~140) and parse_type_declaration_body (~120): long but flat now
 - declaration_lowering.rs lower_declarations_among (~110): a long but now flat rewrite dispatch
 - two `matches!` + `unreachable!("guarded")` arms stay where the arm moves the scrutinee the guard borrows
@@ -197,7 +198,10 @@ Left (each changes behaviour or needs care):
   rename_nested_calls; and a Meta arm in front of `other.map_children` with the same rewrite, which is map_children's
   own Meta arm: time.rs, comprehensions.rs, generator_consumers.rs, atoms.rs). The ~45 Meta arms left belong to
   walks down one path (the statement under its comments, the leftmost operand), not to rewrites of every child.
-- (cleanup-statements-of) statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
+- DONE (cleanup-statements-of) the plain copies (an unbracketed `;`/newline sequence, else the one node) are one
+  Node::sequence_statements: late_binding/folding, run_time_blocks, serve, generator_consumers, law/type_model,
+  modules. The ones below keep their own rules on purpose.
+- statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms
   match. The `for v in …` variable is one nodes::for_in_variable (run_time_blocks, signal_values with its five-word
@@ -243,5 +247,6 @@ Left:
   Closed as not worth doing (2026-10-13): most of the ~90 loops sit inside one flat instruction slice, often with an
   inner loop or an exit two levels out (`BrIf(2)`, text_grapheme_back); a closure helper cuts each slice into before,
   exit, body and after pieces, which costs as many lines as the Block/Loop/Br/End lines it saves and adds nesting
-- (cleanup-saved-state) user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
-  computing the new values: one saved-state struct would halve it, but the order of the computations matters
+- DONE (cleanup-saved-state) user_function_calls.rs compile_user_function_body: the ~15 per-function emitter fields are one
+  FunctionState, swapped in at the start (swap_function_state) and back at the end; the fields that need the body's
+  scope (typed variables, scratch locals, loop values) are set once it is known, as main does
