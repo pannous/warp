@@ -120,6 +120,15 @@ becomes a match on it, so another shape is the match's "no case" error and a non
 Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
 (card sum-point).
 Open: pattern names warn as main-level shadows (card pattern-names).
+Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
+`else =>` on its own line is the catch-all arm (card match-arm); `else:` on its own line in a switch still fails to
+parse (it clashes with Python's block colon).
+Item patterns (step 3, card list-pattern): `[[n, s]...]` in a list pattern's rest position matches when every item
+matches; each name binds the list of its values (switch::every_item_test, a while loop over the rest slice).
+Named patterns (step 4, card patterns-values, user: the keyword): `pattern Adult = {age: >= 18}`; `x is Adult`, arms
+`Adult =>`, `it is Adult and Admin`; names inside bind. A plain `Name = …` is a value; one whose right side only a
+pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/named_patterns.rs,
+substitutes the pattern before lower_where).
 Probes: probes/matching/arms.warp, whole_value.warp; inventory with a fresh build: 35 of 48 before tuples, is and
 bare names.
 
@@ -133,10 +142,20 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    Tests: tests/control/test_match_maps.rs; probe probes/matching/map_patterns.warp.
 2. Conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}` (reuses match-ranges, match-type-arms).
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
-4. Named patterns as values: `Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
+4. Named patterns as values: `pattern Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
+   find done (src/lowering/tree_find.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
+   generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
+   names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
+   Open: `tree replace p with q` (rebuilding maps at run time), `found = [[…]] find P` parses as an assignment first.
 6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
 7. Code patterns: quoted code with holes, `data($a + 0) => a`, matched against `parse("…")` or `data (…)` (card
    parse-word, notes/parse_word.md; the holes are card code-holes). Backticks stay template text.
+7. Code patterns: quoted code with holes, `data($a + 0) => a` (backticks stay template text, notes/parse_word.md).
+   code-holes done (switch.rs code_tests): `$a` binds the subtree, a repeated hole tests equality with the first, a key
+   tests `is key` and its op, a list `is list` and its count; `$f($x)` is flattened like a quoted call `g x`. A match
+   in a function copies its subject: user_functions.rs now lets a parameter whose copy is kind-tested take any value
+   (else indexing the copy typed the parameter list, card alias-indexed-param). Tests tests/control/test_code_holes.rs,
+   probe probes/matching/code_holes.warp. Next: tree-replace for data and code.
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).
