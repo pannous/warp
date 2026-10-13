@@ -357,3 +357,16 @@ System values `view_width`, `view_height`: playground.js viewSize tells the room
 pixels, retold on resize) with the other system values; host.js falls back to 640×480 (VIEW_DEFAULTS) on a page
 without a pane, as natively (warp-runtime system_values.rs NATIVE_VIEW). lib/draw.warp sizes its default canvas from
 them, so `use draw; show()` fills the pane. Test: tests/web/test_playground_paint.rs.
+The room is measured from the pane's width and the window's bottom, never from the paintings: measured around them
+(pane.bottom - painted.top) the pane grew with each view-sized painting, so each run (and each `on frame` frame) took a
+view ~40 px taller (card webgpu-safari; tour check VIEW_STEADY).
+
+## Safari (card webgpu-safari, 2026-10-13)
+No Safari on the Mac either: `test_in_browser.py --examples --safari …` drives it through safaridriver (classic
+WebDriver, no console) on a macos-26 runner, job tour-safari of pages.yml (beside the deploy). The runner's Safari 26
+has navigator.gpu but no adapter (a VM), so GPU samples end in their no-adapter error there.
+- A growable SharedArrayBuffer reserves its maxByteLength (TASK_RESULT_LIMIT, 256 MB). Posted to a task Worker that
+  stays idle it is never collected: after ~226 of them `new SharedArrayBuffer` throws "RangeError: Out of memory"
+  (measured on the runner). gpuJob made one per GPU job, a frame each, so samples/webgpu ended in
+  `wasm trap: Out of memory`; it now reuses one (gpuAnswers). startTask, fetch and askPage still make one per call
+  (card safari-shared-buffers). Tour check GPU_JOBS: 400 GPU jobs in one run.
