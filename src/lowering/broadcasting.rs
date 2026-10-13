@@ -633,7 +633,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::analyzer::appends(method, items.len() - 1)) {
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::declaration_forms::appends(method, items.len() - 1)) {
 					appended.insert(name.clone());
 				}
 			}
@@ -661,7 +661,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 						Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 						_ if is_range(value) => true,
 						_ if element_wise_parts(value).is_some() => true,
-						_ if crate::analyzer::typed_array_value(value, &variables).is_some() => true,
+						_ if crate::declaration_forms::typed_array_value(value, &variables).is_some() => true,
 						Node::Empty => appended.contains(name),
 						// `xs = xs + [i]`
 						Node::Key(left, Op::Add, right) => {

@@ -23,7 +23,7 @@ pub(super) const NODE_MAP_SET: &str = "node_map_set";
 pub(super) const NODE_MAP_LOOKUP: &str = "node_map_lookup";
 pub(super) const NODE_MAP_AS_NODE: &str = "node_map_as_node";
 pub(super) const NODE_MAP_OF: &str = "node_map_of";
-/// The hash-table copy of a map parameter, `m·map = m` (analyzer::indexed_parameter_copies)
+/// The hash-table copy of a map parameter, `m·map = m` (declaration_forms::indexed_parameter_copies)
 pub const MAP_COPY_SUFFIX: &str = "·map";
 const NODE_MAP_HASH: &str = "node_map_hash";
 const NODE_MAP_SLOT: &str = "node_map_slot";
@@ -41,7 +41,7 @@ pub(super) const NODE_MAP_FUNCTIONS: [&str; 6] = [
 /// Words that read a map without holding on to it, besides those reading any collection (reads_collection): a map
 /// variable given to them stays a hash table
 const MAP_READING_WORDS: [&str; 5] = [
-	crate::analyzer::REMOVED_VALUE_CALL,
+	crate::declaration_forms::REMOVED_VALUE_CALL,
 	crate::words::MAP_KEYS,
 	crate::library_words::MAP_VALUES,
 	COLLECTION_CONTAINS,
