@@ -28,7 +28,7 @@ tunnel = shader {
 	const TAU = 6.2831853;
 	const SPEED = 3.0;
 
-	fn level(band: f32) : f32 {
+	fn level(band: f32) -> f32 {
 		let index = (i32(band) % 16 + 16) % 16;
 		return $levels[index / 4][index % 4];
 	}
