@@ -72,6 +72,7 @@ PASSED:
   ✓ control::test_check_assert::a_failed_check_stops_the_program
   ✓ control::test_check_assert::check_passes_a_condition_that_holds
   ✓ control::test_check_assert::check_throws_when_the_condition_fails
+  ✓ control::test_check_holds::a_check_that_holds_goes_on
   ✓ control::test_clipboard::a_clipboard_listener_watches_the_change_count
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
   ✓ control::test_clipboard::the_change_count_is_read_without_the_content
@@ -5381,4 +5382,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5376 passed, 0 failed, 5376 total tested
+13 ignored, 5377 passed, 0 failed, 5377 total tested

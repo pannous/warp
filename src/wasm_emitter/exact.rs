@@ -1042,18 +1042,8 @@ impl WasmGcEmitter {
 					],
 				);
 				s.call(f, "int_quot");
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(value),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(address),
-						I::LocalGet(length),
-					],
-				);
-				s.call(f, "new_text");
+				Self::emit_list(f, &[I::LocalSet(value), I::Br(0), I::End, I::End]);
+				s.emit_new_text(f, address, length);
 			},
 		);
 
@@ -1431,16 +1421,8 @@ impl WasmGcEmitter {
 					I::End,
 				],
 			);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(prefix),
-					I::RefAsNonNull,
-					I::LocalGet(address),
-					I::LocalGet(length),
-				],
-			);
-			s.call(f, "new_text");
+			Self::emit_list(f, &[I::LocalGet(prefix), I::RefAsNonNull]);
+			s.emit_new_text(f, address, length);
 			concat(f);
 		});
 	}
