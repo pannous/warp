@@ -42,6 +42,25 @@ pub fn lower(node: Node) -> Node {
 	Variadic { signatures, parameters }.rewrite(node)
 }
 
+/// `[...xs, 4]`, `[*xs, 4]`: a list literal splicing a list in, `xs + [4]`. After switch.rs, whose patterns
+/// `[first, ...rest]` look the same.
+pub fn lower_list_spreads(node: Node) -> Node {
+	let node = children_rewritten(node, lower_list_spreads);
+	match node {
+		Node::List(items, Bracket::Square, separator) => {
+			if items
+				.iter()
+				.any(|item| matches!(item.drop_meta(), Node::Symbol(_)) && starred(item).is_some())
+			{
+				rest_list(&items)
+			} else {
+				Node::List(items, Bracket::Square, separator)
+			}
+		}
+		other => other,
+	}
+}
+
 /// `*xs`, `...xs` (parsed as `*xs`) and `xs...` (an open range of xs): the name xs; typed `*xs: int` (Python) and
 /// `xs: Int...` (Swift) too
 fn starred(node: &Node) -> Option<String> {

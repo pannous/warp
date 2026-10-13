@@ -560,6 +560,7 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::min_max::lower,
 	crate::lowering::declarations::lower,
 	crate::lowering::switch::lower,
+	crate::lowering::variadic::lower_list_spreads,
 	crate::lowering::phrase_words::lower,
 	crate::lowering::library_words::lower,
 	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
