@@ -3,7 +3,7 @@
 # code to. Built on its own (`cargo build --release -p warp-runtime`) it is wasmtime without Cranelift, about 1 MB.
 [package]
 name = "warp-runtime"
-version = "1.2.6"
+version = "1.2.6-integrate"
 edition = "2021"
 description = "Runs compiled Warp programs without the compiler: the stub of Warp's standalone executables"
 repository = "https://github.com/pannous/warp"
@@ -18,7 +18,7 @@ required-features = ["engine"]
 # (`cargo build --release -p warp-runtime --features webview --bin warp-page-runtime`) so plain executables stay small
 [[bin]]
 name = "warp-page-runtime"
-path = "src/main.rs"
+path = "src/page_main.rs"
 required-features = ["engine", "webview"]
 
 [features]
