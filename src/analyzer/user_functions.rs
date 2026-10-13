@@ -430,13 +430,6 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	{
 		indexed.insert(source.clone());
 	}
-	// `s = c; s is key`: the copy tested, the parameter takes any value too (the subject of a match, card code-holes)
-	while let Some((_, source)) = aliases
-		.iter()
-		.find(|(alias, source)| tested.contains(alias) && !tested.contains(source))
-	{
-		tested.insert(source.clone());
-	}
 	params
 		.into_iter()
 		.map(|param| {
@@ -726,7 +719,13 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		// int parameter refused at run time ("not an int"), so it takes the Node
 		let unknown = matches!(param.used_as, None | Some(Kind::List | Kind::Int));
 		let only_nodes_and_ints = kinds.iter().all(|kind| matches!(kind, Kind::Empty | Kind::Int));
-		if kinds.contains(&Kind::Empty) && only_nodes_and_ints && unknown && takes_passed_kind(param) {
+		// passed only keys (a pair, quoted code `data (n * 1)`) where indexing guessed a list: a Node, which `c#1`
+		// indexes as it is; a list parameter would wrap the key into a list of one (card alias-indexed-param)
+		let only_keys = kinds.iter().all(|kind| *kind == Kind::Key);
+		let keys_for_a_guessed_list = only_keys && param.used_as == Some(Kind::List);
+		if (kinds.contains(&Kind::Empty) && only_nodes_and_ints && unknown || keys_for_a_guessed_list)
+			&& takes_passed_kind(param)
+		{
 			param.used_as = Some(Kind::Empty);
 			changed = true;
 			continue;
