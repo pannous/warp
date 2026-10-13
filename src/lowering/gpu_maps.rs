@@ -57,6 +57,13 @@ const FUNCTION_PREFIX: &str = "warp_";
 const VARIABLE_PREFIX: &str = "v_";
 const PARAMETER_PREFIX: &str = "a_";
 const RETURN_WORD: &str = "return";
+/// paint(f, width, height) of a warp function f(x, y) (step 4 of card gpu-functions): f's colors and numbers
+const PAINT_WORD: &str = "paint";
+const RGB_WORD: &str = "rgb";
+/// The WGSL function of a warp function giving a color, a vec4f: colors stay exact (no 0xAARRGGBB in an f32)
+const COLOR_SUFFIX: &str = "_color";
+/// The uniforms of a painted shader (src/graphics/gpu.rs), the program's numbers its function reads
+const SHADER_VALUES: &str = "values";
 const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";
 /// `x^k` for a whole k up to this is a product (pow of a negative base is NaN in WGSL, a number on the CPU)
@@ -608,6 +615,10 @@ struct Translation {
 	translated: Vec<String>,
 	/// The functions being translated: a call of one of them is recursion, which WGSL forbids
 	in_progress: Vec<String>,
+	/// The program's numbers are a fragment shader's `values` (paint), not cells of the kernel's `data`
+	uniforms: bool,
+	/// The function being translated gives a color, a vec4f
+	color_result: bool,
 }
 
 impl Translation {
@@ -621,8 +632,13 @@ impl Translation {
 					self.outer.push(name.clone());
 					self.outer.len() - 1
 				});
-				Some(format!("data[{KERNEL_COUNT} + {index}u]"))
+				Some(match self.uniforms {
+					true => format!("{SHADER_VALUES}.{name}"),
+					false => format!("data[{KERNEL_COUNT} + {index}u]"),
+				})
 			}
+			// every number is an f32 on the GPU (user 2026-10-13: precision does not matter there)
+			Node::Key(value, Op::As, _) => self.expression(value),
 			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => {
 				Some(float_literal(f64::from(*number)))
 			}
@@ -666,6 +682,7 @@ impl Translation {
 					Op::Sub => "-",
 					Op::Mul => "*",
 					Op::Div => "/",
+					Op::Mod => "%",
 					_ => return None,
 				};
 				Some(format!(
@@ -679,26 +696,16 @@ impl Translation {
 				[function, arguments @ ..] => {
 					let name = function.name();
 					if let Some(called) = program_function(&name) {
-						return self.call(&name, &called, arguments);
+						return self.call(&name, &called, arguments, false);
 					}
-					let arguments = match arguments {
-						// `max(x, 1)`: the arguments as one list
-						[together] if KERNEL_FUNCTIONS_OF_TWO.contains(&name.as_str()) => match together.drop_meta() {
-							Node::List(pair, _, _) => pair.as_slice(),
-							_ => return None,
-						},
-						separate => separate,
-					};
 					let arity = if KERNEL_FUNCTIONS.contains(&name.as_str()) {
 						1
 					} else if KERNEL_FUNCTIONS_OF_TWO.contains(&name.as_str()) {
 						2
 					} else {
-						0
-					};
-					if arity == 0 || arguments.len() != arity {
 						return None;
-					}
+					};
+					let arguments = spread_arguments(arguments, arity)?;
 					self.heavy |= HEAVY_FUNCTIONS.contains(&name.as_str());
 					let arguments = self.expressions(arguments)?;
 					Some(format!("{name}({})", arguments.join(", ")))
@@ -749,32 +756,92 @@ impl Translation {
 	}
 
 	/// A call of the program's function `name`: translated once into a WGSL function; none for recursion
-	fn call(&mut self, name: &str, called: &ProgramFunction, arguments: &[Node]) -> Option<String> {
-		let arguments = match arguments {
-			// `f(a, b)`: the arguments as one list
-			[together] if called.parameters.len() > 1 => match together.drop_meta() {
-				Node::List(items, _, _) => items.as_slice(),
-				_ => return None,
-			},
-			separate => separate,
-		};
-		if arguments.len() != called.parameters.len() || self.in_progress.iter().any(|caller| caller == name) {
+	fn call(&mut self, name: &str, called: &ProgramFunction, arguments: &[Node], color: bool) -> Option<String> {
+		let arguments = spread_arguments(arguments, called.parameters.len())?;
+		let arguments = self.expressions(arguments)?;
+		self.call_translated(name, called, arguments, color)
+	}
+
+	/// A call of the program's function `name` with its arguments in WGSL
+	fn call_translated(
+		&mut self,
+		name: &str,
+		called: &ProgramFunction,
+		arguments: Vec<String>,
+		color: bool,
+	) -> Option<String> {
+		if self.in_progress.iter().any(|caller| caller == name) {
 			return None;
 		}
-		let arguments = self.expressions(arguments)?;
-		if !self.translated.iter().any(|done| done == name) {
+		let translated_name = match color {
+			true => format!("{FUNCTION_PREFIX}{name}{COLOR_SUFFIX}"),
+			false => format!("{FUNCTION_PREFIX}{name}"),
+		};
+		if !self.translated.contains(&translated_name) {
 			self.in_progress.push(name.to_string());
-			let function = self.function(name, called);
+			let function = self.function(&translated_name, called, color);
 			self.in_progress.pop();
 			self.functions.push(function?);
-			self.translated.push(name.to_string());
+			self.translated.push(translated_name.clone());
 		}
-		Some(format!("{FUNCTION_PREFIX}{name}({})", arguments.join(", ")))
+		Some(format!("{translated_name}({})", arguments.join(", ")))
+	}
+
+	/// What a color-giving function returns: rgb(r, g, b) and the functions giving one as a vec4f; a packed
+	/// 0xAARRGGBB literal unpacked exactly; any other number ink, 0 or no paper (src/graphics/paint.rs pixel colors)
+	fn color(&mut self, node: &Node) -> Option<String> {
+		match node.drop_meta() {
+			Node::Number(number) if f64::from(*number) >= crate::graphics::paint::COLOR_FROM as f64 => {
+				let packed = f64::from(*number) as u64;
+				let channel = |shift: u32| float_literal(((packed >> shift) & 0xFF) as f64 / 255.0);
+				Some(format!("vec4f({}, {}, {}, 1.0)", channel(16), channel(8), channel(0)))
+			}
+			Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
+				Node::Key(then, Op::Colon, otherwise) => self.selected_color(condition, then, otherwise),
+				_ => None,
+			},
+			Node::Key(if_then, Op::Else, otherwise) => {
+				let (condition, then) = if_then_parts(if_then)?;
+				self.selected_color(condition, then, otherwise)
+			}
+			Node::List(items, _, _) if items.len() == 1 => self.color(&items[0]),
+			Node::List(items, _, _) if !items.is_empty() && items[0].is_symbol(RGB_WORD) => {
+				let channels = self.expressions(spread_arguments(&items[1..], 3)?)?;
+				Some(format!("(vec4f({}, 255.0) / 255.0)", channels.join(", ")))
+			}
+			Node::List(items, _, _)
+				if !items.is_empty() && program_function(&items[0].name()).is_some_and(|f| gives_color(&f.body)) =>
+			{
+				let called = program_function(&items[0].name())?;
+				self.call(&items[0].name(), &called, &items[1..], true)
+			}
+			_ => {
+				let (ink, paper) = (gray(crate::graphics::paint::INK), gray(crate::graphics::paint::PAPER));
+				Some(format!("select({ink}, {paper}, {} == 0.0)", self.expression(node)?))
+			}
+		}
+	}
+
+	fn selected_color(&mut self, condition: &Node, then: &Node, otherwise: &Node) -> Option<String> {
+		let condition = self.condition(condition)?;
+		Some(format!(
+			"select({}, {}, {condition})",
+			self.color(otherwise)?,
+			self.color(then)?
+		))
+	}
+
+	/// A function's value as its WGSL function returns it: a color or a number
+	fn result(&mut self, node: &Node) -> Option<String> {
+		match self.color_result {
+			true => self.color(node),
+			false => self.expression(node),
+		}
 	}
 
 	/// The WGSL function of the program's function `name`: its parameters copied into variables, every variable it
 	/// assigns declared first, its statements, the last one's value returned
-	fn function(&mut self, name: &str, called: &ProgramFunction) -> Option<String> {
+	fn function(&mut self, translated_name: &str, called: &ProgramFunction, color: bool) -> Option<String> {
 		let mut variables = called.parameters.clone();
 		assigned_names(&called.body, &mut variables);
 		let declared: String = variables
@@ -787,10 +854,11 @@ impl Translation {
 		let caller = (
 			std::mem::take(&mut self.parameter),
 			std::mem::replace(&mut self.locals, variables),
+			std::mem::replace(&mut self.color_result, color),
 		);
 		let mut body = String::new();
 		let returned = self.returned(&called.body, &mut body);
-		(self.parameter, self.locals) = caller;
+		(self.parameter, self.locals, self.color_result) = caller;
 		returned?;
 		let parameters: Vec<String> = called
 			.parameters
@@ -798,8 +866,9 @@ impl Translation {
 			.map(|parameter| format!("{PARAMETER_PREFIX}{parameter}: f32"))
 			.collect();
 		Some(format!(
-			"fn {FUNCTION_PREFIX}{name}({}) -> f32 {{\n{declared}{body}}}",
-			parameters.join(", ")
+			"fn {translated_name}({}) -> {} {{\n{declared}{body}}}",
+			parameters.join(", "),
+			if color { "vec4f" } else { "f32" }
 		))
 	}
 
@@ -824,13 +893,13 @@ impl Translation {
 			}
 			Node::Key(target, op, _) if is_assignment(*op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
 				self.statement(node, out)?;
-				*out += &format!("return {VARIABLE_PREFIX}{};\n", target.name());
+				*out += &format!("return {};\n", self.result(target)?);
 				Some(())
 			}
 			_ if returned_value(node).is_some() => self.statement(node, out),
 			_ if is_statement_only(node) => None,
 			_ => {
-				*out += &format!("return {};\n", self.expression(node)?);
+				*out += &format!("return {};\n", self.result(node)?);
 				Some(())
 			}
 		}
@@ -844,7 +913,7 @@ impl Translation {
 				.try_for_each(|statement| self.statement(statement, out));
 		}
 		if let Some(value) = returned_value(node) {
-			*out += &format!("return {};\n", self.expression(value)?);
+			*out += &format!("return {};\n", self.result(value)?);
 			return Some(());
 		}
 		if let Some((variable, from, op, to, body)) = range_loop(node) {
@@ -905,6 +974,149 @@ impl Translation {
 			_ => self.expression(node).map(|_| ()),
 		}
 	}
+}
+
+/// A call's `count` arguments: `f(a, b)` gives them as one list
+fn spread_arguments(arguments: &[Node], count: usize) -> Option<&[Node]> {
+	let arguments = match arguments {
+		[together] if count > 1 => match together.drop_meta() {
+			Node::List(items, _, _) => items.as_slice(),
+			_ => return None,
+		},
+		separate => separate,
+	};
+	(arguments.len() == count).then_some(arguments)
+}
+
+/// A gray of the paper or ink shade as a WGSL color
+fn gray(shade: u8) -> String {
+	let level = float_literal(shade as f64 / 255.0);
+	format!("vec4f({level}, {level}, {level}, 1.0)")
+}
+
+/// Whether a function's body gives a color: a value it returns is rgb(…), a packed color literal or a call of a
+/// function giving one
+fn gives_color(body: &Node) -> bool {
+	gives_color_within(body, &mut vec![])
+}
+
+fn gives_color_within(body: &Node, seen: &mut Vec<String>) -> bool {
+	let mut values = vec![];
+	returned_values(body, &mut values);
+	values.iter().any(|value| match value.drop_meta() {
+		Node::Number(number) => f64::from(*number) >= crate::graphics::paint::COLOR_FROM as f64,
+		Node::List(items, _, _) if !items.is_empty() => {
+			let name = items[0].name();
+			name == RGB_WORD
+				|| (!seen.contains(&name) && {
+					seen.push(name.clone());
+					program_function(&name).is_some_and(|called| gives_color_within(&called.body, seen))
+				})
+		}
+		_ => false,
+	})
+}
+
+/// The values a body gives: its last statement's (each branch's), and every `return`'s
+fn returned_values<'a>(body: &'a Node, values: &mut Vec<&'a Node>) {
+	body.visit(&mut |part| {
+		if let Some(value) = returned_value(part) {
+			values.push(value);
+		}
+	});
+	last_values(body, values);
+}
+
+fn last_values<'a>(node: &'a Node, values: &mut Vec<&'a Node>) {
+	if let Some(statements) = block_statements(node) {
+		return statements.last().into_iter().for_each(|last| last_values(last, values));
+	}
+	match node.drop_meta() {
+		Node::Key(if_then, Op::Else, otherwise) => {
+			if let Some((_, then)) = if_then_parts(if_then) {
+				last_values(then, values);
+			}
+			last_values(otherwise, values);
+		}
+		Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
+			Node::Key(then, Op::Colon, otherwise) => {
+				last_values(then, values);
+				last_values(otherwise, values);
+			}
+			_ => values.push(node),
+		},
+		Node::List(items, _, _) if items.len() == 1 => last_values(&items[0], values),
+		_ => values.push(node),
+	}
+}
+
+/// Every `paint(f, width, height)` of a warp function f(x, y): a fragment shader of f where WGSL can compute it, the
+/// program's numbers it reads as the shader's values; otherwise f of every pixel on the CPU, row by row
+pub(crate) fn painted_functions(node: Node) -> Node {
+	if let Some(painted) = painted_function(&node) {
+		return painted;
+	}
+	node.map_children(painted_functions)
+}
+
+fn painted_function(node: &Node) -> Option<Node> {
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return None;
+	};
+	let [paint, arguments @ ..] = items.as_slice() else {
+		return None;
+	};
+	let on_cpu =
+		switched_off() || crate::parallel::is_annotated(node, CPU_ATTRIBUTE) || node.attribute(CPU_ATTRIBUTE).is_some();
+	if !paint.is_symbol(PAINT_WORD) {
+		return None;
+	}
+	let [function, width, height] = spread_arguments(arguments, 3)? else {
+		return None;
+	};
+	let name = function.drop_meta().name();
+	let painted = program_function(&name).filter(|called| called.parameters.len() == 2)?;
+	let (width, height) = (width.serialize(), height.serialize());
+	let lowered = match fragment_shader(&name, &painted).filter(|_| !on_cpu) {
+		Some((shader, outer)) => {
+			let entries: Vec<String> = outer.iter().map(|name| format!("{name}: {name}")).collect();
+			let values = match entries.is_empty() {
+				true => String::new(),
+				false => format!(", {{{}}}", entries.join(", ")),
+			};
+			format!(
+				"{PAINT_WORD}({}, {width}, {height}{values})",
+				Node::Text(shader).serialize()
+			)
+		}
+		None => format!(
+			"{PAINT_WORD}([{name}(i % ({width}), i//({width})) for i in 0..(({width}) * ({height}))], {width}, {height})"
+		),
+	};
+	match crate::warp_parser::parse(&lowered).drop_meta() {
+		Node::List(statements, crate::node::Bracket::None, _) if statements.len() == 1 => Some(statements[0].clone()),
+		single => Some(single.clone()),
+	}
+}
+
+/// The fragment shader painting each pixel the color of `function` at its column and row, and the program's numbers
+/// it reads; none where WGSL cannot compute the function
+fn fragment_shader(name: &str, function: &ProgramFunction) -> Option<(String, Vec<String>)> {
+	let mut translation = Translation {
+		uniforms: true,
+		..Translation::default()
+	};
+	let pixel = vec!["floor(at.x)".to_string(), "floor(at.y)".to_string()];
+	let painted = translation.call_translated(name, function, pixel, true)?;
+	let functions: String = translation
+		.functions
+		.iter()
+		.map(|function| format!("{function}\n"))
+		.collect();
+	let shader = format!(
+		"{functions}@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {{\n\treturn {painted};\n}}"
+	);
+	Some((shader, translation.outer))
 }
 
 /// The WGSL comparison of a warp operator
