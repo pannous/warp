@@ -112,6 +112,7 @@ mod test_match_other;
 mod test_match_ranges;
 mod test_match_tuples;
 mod test_match_type_arms;
+mod test_match_whole_value;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;

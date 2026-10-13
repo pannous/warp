@@ -271,6 +271,11 @@ impl Names {
 		self.variables.contains(name)
 	}
 
+	/// A variable or a loop variable of the program
+	pub(crate) fn is_variable(&self, name: &str) -> bool {
+		self.contains(name) || self.loop_variables.contains(name)
+	}
+
 	/// In the body of a function: also its parameters and the names it assigns, which no other function sees
 	fn within(&self, head: &Node, body: &Node) -> Names {
 		let mut inner = self.clone();

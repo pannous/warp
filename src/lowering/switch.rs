@@ -26,6 +26,8 @@ const SUBJECT_PREFIX: &str = "switch_subject_";
 pub const NO_CASE_CALL: &str = "switch_no_case";
 pub const NO_CASE_PREFIX: &str = "no_case_";
 const UNNAMED_SUBJECT: &str = "value";
+/// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
+const VALUE_WORD: &str = "value";
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -39,12 +41,26 @@ pub fn lower(node: Node) -> Node {
 	if words.is_empty() {
 		return node;
 	}
+	let names = program_names(&node);
+	let value_word_free = !names_variable(&node, &context, &names, VALUE_WORD);
 	Lowering {
 		words,
 		switches: Counter::default(),
-		names: program_names(&node),
+		names,
+		value_word_free,
 	}
 	.expand(node)
+}
+
+/// The program has a variable, parameter or loop variable of that name, in any function
+fn names_variable(node: &Node, context: &crate::context::Context, names: &Names, name: &str) -> bool {
+	let is_parameter = context
+		.user_functions
+		.values()
+		.any(|function| function.params.iter().any(|param| param.name == name));
+	let mut assigned = std::collections::HashSet::new();
+	crate::library_words::collect_assigned_names(node, &mut assigned);
+	names.is_variable(name) || is_parameter || assigned.contains(name)
 }
 
 struct Lowering<'a> {
@@ -52,6 +68,8 @@ struct Lowering<'a> {
 	switches: Counter,
 	/// The program's variables and declared types: a type word in a case tests the subject's type (`int => …`)
 	names: Names,
+	/// No variable, parameter or loop variable of the program is named value: in an arm it is the matched value
+	value_word_free: bool,
 }
 
 struct Case {
@@ -100,10 +118,20 @@ impl Lowering<'_> {
 		if !self.words.contains(&word.as_str()) {
 			return None;
 		}
-		let cases = cases_of(cases)?;
 		let number = self.switches.next_number();
 		let subject_name = format!("{SUBJECT_PREFIX}{number}");
 		let subject_value = Node::Symbol(subject_name.clone());
+		let cases = cases_of(cases)?;
+		let cases = match self.value_word_free {
+			true => cases
+				.into_iter()
+				.map(|case| Case {
+					key: as_subject(case.key, &subject_value),
+					body: as_subject(case.body, &subject_value),
+				})
+				.collect(),
+			false => cases,
+		};
 		let (default, cases): (Vec<Case>, Vec<Case>) = cases.into_iter().partition(|case| is_default(&case.key));
 		let miss = match default.into_iter().next() {
 			Some(default) => default.body,
@@ -116,6 +144,16 @@ impl Lowering<'_> {
 		});
 		let bind = key(subject_value, Op::Assign, subject.clone());
 		Some(Node::List(vec![bind, chain], Bracket::Round, Separator::Semicolon))
+	}
+}
+
+/// The word value in an arm as the subject; a field `x.value` and a key `{value: 1}` keep it
+fn as_subject(node: Node, subject: &Node) -> Node {
+	match node {
+		Node::Symbol(name) if name == VALUE_WORD => subject.clone(),
+		Node::Key(left, Op::Dot, right) => key(as_subject(*left, subject), Op::Dot, *right),
+		Node::Key(left, Op::Colon, right) => key(*left, Op::Colon, as_subject(*right, subject)),
+		other => children_rewritten(other, |child| as_subject(child, subject)),
 	}
 }
 
