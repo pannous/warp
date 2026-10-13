@@ -222,5 +222,6 @@ Left:
   Closed as not worth doing (2026-10-13): most of the ~90 loops sit inside one flat instruction slice, often with an
   inner loop or an exit two levels out (`BrIf(2)`, text_grapheme_back); a closure helper cuts each slice into before,
   exit, body and after pieces, which costs as many lines as the Block/Loop/Br/End lines it saves and adds nesting
-- (cleanup-saved-state) user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
-  computing the new values: one saved-state struct would halve it, but the order of the computations matters
+- DONE (cleanup-saved-state) user_function_calls.rs compile_user_function_body: the ~15 per-function emitter fields are one
+  FunctionState, swapped in at the start (swap_function_state) and back at the end; the fields that need the body's
+  scope (typed variables, scratch locals, loop values) are set once it is known, as main does
