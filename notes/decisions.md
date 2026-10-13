@@ -28,7 +28,9 @@ notes/open_decisions.md.
 - enum-int (user asked "for C backward compatibility, we might accept int as Coin (?)"; Interviewer default,
   undoable): C functions and struct fields typed with an enum convert to and from its int automatically (card
   enum-parameters); in warp code an int becomes a case only explicitly (`5 as Coin`), and `f(5)`'s error offers
-  the fix `f(5 as Coin)`. Enums with written values convert by value.
+  the fix `f(5 as Coin)`. Enums with written C-style values (`enum Flag { A = 1, B = 4 }`) are ON HOLD (user, via
+  warp-dispatch: WebAssembly's WIT has no such enums, and an FFI that needs them can work around it); card enum-coin
+  in Later, parked implementation on branch enum-coin eb50cbcb4; wiki/enum.md says "on hold".
 - match-type-union (user): in a case key `int or text` / `int | text` is the type test against the union (union-or),
   the same as `x is (int or text)`; values and types mix (`0 or text`).
 - match-other (user): `other` is a catch-all case key in a match, a synonym of `_` / `default` / `else`:
