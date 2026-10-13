@@ -4,7 +4,9 @@
 // might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
-const HINTS_KEY = "warp-playground-hints"; // the hints checkbox, on by default (card hints-toggle)
+const SHOWN_FROM_KEY = "warp-playground-shown-from"; // the least diagnostic level shown, hint by default (card warning-levels)
+const HINTS_KEY = "warp-playground-hints"; // the former hints checkbox: "off" now means showing from weak
+const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostic.rs Level, least first
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
@@ -499,8 +501,11 @@ function positionLink(position) {
 	return element("button", { className: "position", title: "go there", onclick: () => jumpTo(Number(line), Number(column)) }, position);
 }
 
+// a warning's label as the CLI prints it: "warning", or "warning (weak)" and "warning (severe)"
+const warningKind = level => !level || level === "normal" ? "warning" : `warning (${level})`;
+
 function diagnostic(kind, position, ...content) {
-	return element("li", { className: kind }, element("span", { className: "label" }, kind), position ? positionLink(position) : "", ...content);
+	return element("li", { className: kind.split(" ")[0] }, element("span", { className: "label" }, kind), position ? positionLink(position) : "", ...content);
 }
 
 const code = text => element("code", {}, text);
@@ -563,7 +568,8 @@ function showReport(report) {
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
 	showAddress(report.address);
-	const hints = $("hints").checked ? report.hints : [];
+	const isShown = level => LEVELS.indexOf(level ?? "normal") >= LEVELS.indexOf($("shown-from").value);
+	const hints = isShown("hint") ? report.hints : [];
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -571,11 +577,12 @@ function showReport(report) {
 		problem.fix ? element("span", { className: "fix" }, "fix: ", code(problem.fix)) : "", fixButtons(problem.fixes), extra);
 	const items = [
 		...(report.errors ?? []).map(error => shown("error", error)),
-		...report.warnings.map(warning => shown("warning", warning, inline.has(warning.topic) ? gotIt(warning.topic, warning.expression_key, warning.line) : "")),
-		...report.runtime_warnings.map(message => diagnostic("warning", "runtime", message)),
+		...report.warnings.filter(warning => isShown(warning.level)).map(warning => shown(warningKind(warning.level), warning,
+			inline.has(warning.topic) ? gotIt(warning.topic, warning.expression_key, warning.line) : "")),
+		...(isShown("normal") ? report.runtime_warnings : []).map(message => diagnostic("warning", "runtime", message)),
 		...hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
-		...notes.filter(topic => !inline.has(topic) && $("hints").checked).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
+		...notes.filter(topic => !inline.has(topic) && isShown("hint")).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
 	$("diagnostics").replaceChildren(...items);
 	markPositions(report);
@@ -924,9 +931,10 @@ function initialize() {
 	});
 	$("run").onclick = runPressed;
 	$("full-screen").onclick = toggleFullScreen;
-	$("hints").checked = stored(HINTS_KEY) !== "off";
-	$("hints").onchange = () => {
-		store(HINTS_KEY, $("hints").checked ? "on" : "off");
+	$("shown-from").value = stored(SHOWN_FROM_KEY) ?? (stored(HINTS_KEY) === "off" ? "weak" : "hint");
+	store(HINTS_KEY, null);
+	$("shown-from").onchange = () => {
+		store(SHOWN_FROM_KEY, $("shown-from").value);
 		runNow();
 	};
 	$("address").onkeydown = goToAddress;

@@ -1,5 +1,5 @@
 //! The lowering passes: each rewrites the program into forms the later passes and the emitter know (the order is
-//! `SOURCE_PASSES` and `MEANING_PASSES` in src/pipeline.rs). The crate root re-exports them (`crate::mutation`).
+//! `SOURCE_PHASES` and `MEANING_PASSES` in src/pipeline.rs). The crate root re-exports them (`crate::mutation`).
 
 pub mod ambiguous_forms;
 pub mod blocks;

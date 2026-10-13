@@ -46,6 +46,13 @@ notes/open_decisions.md.
 - hints-are-warnings (supervisor, from the user's worry, undoable): hints and warnings become one system, one
   Diagnostic with a level, one collector, printer and threshold; `--no-hints` and `use strict` become thresholds
   (card warning-levels).
+  Defaults (worker, undoable): shown from hint; `--no-hints` / `WARP_HINTS=0` show from weak; `--warnings=<level>`
+  sets it, as does the playground's "show … and up" select. `use strict` / `--strict` fail from normal,
+  `--strict=<level>` from that level; Rust's `WarningMode::Error` fails on every warning, weak too. Hints never fail.
+  HintMode::Once dedups every level. Severe: a key name that names nothing, an event nothing emits, a signal that
+  never fires, a task that never happens, a variable updated in a parallel loop. Weak: @parallel running in
+  sequence, a GPU map running on the CPU, a std module shadowed, an event from the playground page, run-time blocks
+  needing the host. Every other warning is normal; the CLI labels weak and severe ones `warning (weak):`.
 
 ## Decided 2026-10-13 (quiet hours: Interviewer or worker defaults, undoable; user may revisit)
 - held-key (warp-markup; Interviewer during quiet hours, undoable): `held_key` is the name of the key held now ("" for none); the key-name words of key-if compare against it too (`held_key == LEFT`, `held_key != ESC`), with the same "names nothing" warning.
