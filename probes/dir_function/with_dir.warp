@@ -1,0 +1,3 @@
+area(width: int, height: int) := width * height
+print "takes \(area.params)"
+print dir(area)

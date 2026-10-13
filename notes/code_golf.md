@@ -59,7 +59,7 @@ value). It is close on catalan, collatz, niven and leap-years.
   a print. `for …:{print a;a,b=b,a+b}` adds a line with b; ending with `ø` or `()` still echoes the loop's value; a
   text echoes quoted. Workarounds: `print (…).filter(f).join("\n")` or a last `print`. Kept by decision P236
   (card golf-echo).
-- `&` and `|` are logical (by decision); bits by word: `bit_and`, `bit_or`, `bit_count` (`use math`), `xor` is bitwise.
+- `&` and `|` combine the bits of whole numbers, logical on truth values (operator-shall); `xor` is bitwise; `bit_count` (`use math`).
 - Negative indexes don't wrap (by design: `last(xs)`).
 - `text` is a type name, so `for text in args` filters by type, with a warning.
 

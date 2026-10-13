@@ -1,0 +1,5 @@
+class contact{name:text; image:text}
+to assign a photo to a contact: contact.image = photo
+c = contact("Ann", "")
+assign "me.png" to c
+print c.image

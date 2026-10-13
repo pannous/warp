@@ -20,6 +20,7 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
+  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -74,6 +75,11 @@ PASSED:
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
   ✓ control::test_clipboard::the_change_count_is_read_without_the_content
   ✓ control::test_clipboard::writing_the_clipboard_is_the_std_word
+  ✓ control::test_code_holes::a_code_pattern_without_a_match_falls_through
+  ✓ control::test_code_holes::a_hole_binds_the_subtree
+  ✓ control::test_code_holes::a_hole_matches_inside_a_call
+  ✓ control::test_code_holes::a_repeated_hole_must_be_the_same_subtree
+  ✓ control::test_code_holes::is_tests_a_code_pattern
   ✓ control::test_colon_handlers::a_listener_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_condition_block::a_condition_still_ends_before_its_block
@@ -349,8 +355,8 @@ PASSED:
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
-  ✓ control::test_match_alternatives_hint::a_mask_outside_an_arm_still_hints
   ✓ control::test_match_alternatives_hint::arm_alternatives_get_no_hint
+  ✓ control::test_match_alternatives_hint::outside_an_arm_only_a_bar_of_truth_values_hints
   ✓ control::test_match_alternatives::a_name_bound_in_an_alternative_is_an_error
   ✓ control::test_match_alternatives::alternatives_of_list_patterns
   ✓ control::test_match_alternatives::bar_and_or_are_alternatives
@@ -363,6 +369,12 @@ PASSED:
   ✓ control::test_match_guards_and_finally::a_guard_binds_and_tests
   ✓ control::test_match_guards_and_finally::an_assigned_match_takes_arrow_cases
   ✓ control::test_match_guards_and_finally::finally_runs_and_keeps_the_value
+  ✓ control::test_match_item_patterns::every_item_binds_a_list
+  ✓ control::test_match_item_patterns::item_pattern_in_is
+  ✓ control::test_match_item_patterns::items_after_fixed_parts
+  ✓ control::test_match_item_patterns::literal_items_test_every_item
+  ✓ control::test_match_item_patterns::map_items_collect_their_fields
+  ✓ control::test_match_item_patterns::one_failing_item_misses_the_arm
   ✓ control::test_match_maps::is_with_a_map_pattern_binds_its_names
   ✓ control::test_match_maps::map_arm_binds_a_field
   ✓ control::test_match_maps::map_arm_ignores_fields_not_named
@@ -402,6 +414,14 @@ PASSED:
   ✓ control::test_named_broadcast::a_text_alone_sends_a_named_event_without_data
   ✓ control::test_named_broadcast::raise_stays_inside_the_program
   ✓ control::test_named_broadcast::send_to_is_broadcast_on
+  ✓ control::test_named_patterns::a_literal_list_stays_a_value
+  ✓ control::test_named_patterns::a_named_pattern_binds_its_names
+  ✓ control::test_named_patterns::a_pattern_assigned_without_the_keyword_is_an_error
+  ✓ control::test_named_patterns::a_pattern_without_open_parts_binds
+  ✓ control::test_named_patterns::an_arm_matches_a_named_pattern
+  ✓ control::test_named_patterns::is_tests_a_named_pattern
+  ✓ control::test_named_patterns::named_patterns_combine_with_and
+  ✓ control::test_named_patterns::the_word_pattern_stays_a_call_outside_a_definition
   ✓ control::test_not_condition_block::a_comparison_with_empty_in_a_group
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
@@ -697,6 +717,11 @@ PASSED:
   ✓ control::test_top_level_block::test_top_level_newlines_yield_the_last_item
   ✓ control::test_top_level_block::test_top_level_semicolons_yield_the_last_item
   ✓ control::test_trap_messages::integer_modulo_by_zero_names_the_division
+  ✓ control::test_tree_find::find_collects_a_name_at_any_depth
+  ✓ control::test_tree_find::find_matches_list_patterns_in_nested_lists
+  ✓ control::test_tree_find::find_takes_a_named_pattern
+  ✓ control::test_tree_find::find_without_names_gives_the_subtrees
+  ✓ control::test_tree_find::two_finds_walk_apart
   ✓ control::test_try_braceless_call::a_braceless_call_is_guarded
   ✓ control::test_try_catch_except::try_catch_is_try_else
   ✓ control::test_try_catch_except::try_except_is_try_else
@@ -1417,6 +1442,9 @@ PASSED:
   ✓ functions::test_parameter_overloads::a_similarity_compares_the_phrase_calls_value
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
+  ✓ functions::test_parameter_patterns::a_class_parameter_names_its_fields
+  ✓ functions::test_parameter_patterns::a_list_parameter_names_its_items
+  ✓ functions::test_parameter_patterns::a_value_of_another_shape_is_an_error
   ✓ functions::test_parameter_retype::a_parameter_given_another_kind_in_its_body_holds_it
   ✓ functions::test_parameter_shapes::test_constructed_argument_is_checked
   ✓ functions::test_parameter_shapes::test_field_type_is_checked
@@ -1486,6 +1514,9 @@ PASSED:
   ✓ functions::test_python_ruby_definitions::test_ruby_yield_calls_the_block
   ✓ functions::test_recursive_list_functions::a_recursive_maximum
   ✓ functions::test_recursive_list_functions::a_recursive_sum_over_slices
+  ✓ functions::test_render_as::a_phrase_names_its_result_after_as
+  ✓ functions::test_render_as::as_names_the_result_of_a_single_definition
+  ✓ functions::test_render_as::phrases_with_different_results_are_overloads
   ✓ functions::test_return_type_dispatch::test_a_picked_overload_warns_nothing
   ✓ functions::test_return_type_dispatch::test_a_single_definition_with_a_result_type
   ✓ functions::test_return_type_dispatch::test_a_typed_declaration_picks_the_overload
@@ -2257,6 +2288,14 @@ PASSED:
   ✓ node::test_normalization::test_string_type_word_is_hinted_once_with_the_cast
   ✓ node::test_normalization::test_variable_definition
   ✓ node::test_normalization::test_variable_definition_let_style
+  ✓ node::test_parse_word::a_hole_is_a_symbol_of_the_parse
+  ✓ node::test_parse_word::a_parsed_text_ending_in_warp_is_no_file
+  ✓ node::test_parse_word::a_program_s_own_parse_wins
+  ✓ node::test_parse_word::a_run_time_parse_failure_is_an_error_try_catches
+  ✓ node::test_parse_word::parse_matches_like_data
+  ✓ node::test_parse_word::parse_of_a_constant_text_is_its_code_as_data
+  ✓ node::test_parse_word::parse_of_a_run_time_text_is_its_code_as_data
+  ✓ node::test_parse_word::quoted_code_in_parentheses_is_a_node
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ normalize::tests::test_hint_mode
@@ -2689,6 +2728,12 @@ PASSED:
   ✓ operators::test_bar_pipe::a_bar_after_a_braceless_call_pipes_its_result
   ✓ operators::test_bar_pipe::a_bar_before_a_function_pipes_the_value_into_it
   ✓ operators::test_bar_pipe::a_bar_between_values_stays_the_logical_or
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_combine_the_bits_of_whole_numbers
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_of_calls_and_operations
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_of_truth_values_are_logical
+  ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_of_typed_and_inferred_ints
+  ✓ operators::test_bit_operators_on_ints::bits_as_a_condition_warn
+  ✓ operators::test_bit_operators_on_ints::double_and_word_forms_stay_logical_on_numbers
   ✓ operators::test_comma_next_to_comparison::a_comma_next_to_a_comparison_needs_parentheses
   ✓ operators::test_comma_next_to_comparison::a_parenthesized_comparison_beside_a_comma_is_fine
   ✓ operators::test_compound_assignment::a_list_variable_concatenates_with_plus_assign
@@ -4659,6 +4704,11 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
+  ✓ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
+  ✓ web::test_sandbox_refusals::a_sandboxed_program_starts_no_process_and_calls_no_c
+  ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_inside_its_state_folder
+  ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_nothing_outside_its_state_folder
+  ✓ web::test_sandbox_refusals::a_sandboxed_pure_program_still_runs
   ✓ web::test_sandboxed_programs::a_sandboxed_program_calls_no_c_and_no_other_runtime
   ✓ web::test_sandboxed_programs::a_sandboxed_program_keeps_the_host_words
   ✓ web::test_select_options::a_list_after_the_bound_variable_is_no_part_of_it
@@ -5210,7 +5260,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
 
 SUMMARY:
-12 ignored, 5207 passed, 1 failed, 5208 total tested
+12 ignored, 5257 passed, 0 failed, 5257 total tested

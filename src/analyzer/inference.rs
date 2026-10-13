@@ -230,16 +230,18 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an
 		// Int, a float operand refused in that exact context
-		Node::Key(left, Op::And | Op::Or, right) => match (infer_type(left, scope), infer_type(right, scope)) {
-			(left, right)
-				if [left, right]
-					.iter()
-					.any(|kind| kind.is_ref() || *kind == Kind::Codepoint) =>
-			{
-				branches_kind(left, right)
+		Node::Key(left, Op::And | Op::Or | Op::BitAnd | Op::BitOr, right) => {
+			match (infer_type(left, scope), infer_type(right, scope)) {
+				(left, right)
+					if [left, right]
+						.iter()
+						.any(|kind| kind.is_ref() || *kind == Kind::Codepoint) =>
+				{
+					branches_kind(left, right)
+				}
+				_ => Kind::Int,
 			}
-			_ => Kind::Int,
-		},
+		}
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64; of a value held as a Node maybe an interval, which it maps (a Node)

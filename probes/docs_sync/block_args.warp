@@ -1,0 +1,3 @@
+repeats(n: int, body: block) := { for i in 1...n { body! } }
+repeats 3 { print "Hello" }
+3 times { print "Hi" }

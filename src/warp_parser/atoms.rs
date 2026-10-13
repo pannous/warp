@@ -246,14 +246,21 @@ impl WarpParser {
 		let mut parameters = Vec::new();
 		// `to call person{name?, phone number} do …` (wiki/argument.md): the parameter's fields, glued to it
 		let mut shapes = Vec::new();
+		let mut result_type = None;
 		loop {
 			self.skip_spaces();
-			// `to square a number: …` or `to square a number { … }`
-			if (self.current_char() == ':' && self.peek_char(1) != '=') || self.current_char() == '{' {
+			if self.at_to_header_end() {
 				break;
 			}
 			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
 				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
+				Some(word) if word == RESULT_TYPE_WORD && !parameters.is_empty() => {
+					result_type = self.phrase_result_type();
+					if result_type.is_some() {
+						break;
+					}
+					parameters.push(word)
+				}
 				Some(parameter) => {
 					if self.current_char() == '{' {
 						shapes.push((parameter.clone(), self.parse_atom()));
@@ -323,7 +330,29 @@ impl WarpParser {
 				head
 			}
 		};
+		let head = match result_type {
+			Some(result_type) => Node::Key(Box::new(head), Op::As, Box::new(Symbol(result_type))),
+			None => head,
+		};
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	}
+
+	/// `to square a number: …` or `to square a number { … }`
+	fn at_to_header_end(&self) -> bool {
+		(self.current_char() == ':' && self.peek_char(1) != '=') || self.current_char() == '{'
+	}
+
+	/// The type after `as` when it ends the header: `to render text as pdf: …`
+	fn phrase_result_type(&mut self) -> Option<String> {
+		let after_as = self.mark();
+		self.skip_spaces();
+		let result_type = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten();
+		self.skip_spaces();
+		if result_type.is_some() && (self.at_to_header_end() || self.matches_keyword(DO_WORD)) {
+			return result_type;
+		}
+		self.rewind(after_as);
+		None
 	}
 
 	/// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns can only be told apart by types

@@ -430,6 +430,13 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	{
 		indexed.insert(source.clone());
 	}
+	// `s = c; s is key`: the copy tested, the parameter takes any value too (the subject of a match, card code-holes)
+	while let Some((_, source)) = aliases
+		.iter()
+		.find(|(alias, source)| tested.contains(alias) && !tested.contains(source))
+	{
+		tested.insert(source.clone());
+	}
 	params
 		.into_iter()
 		.map(|param| {

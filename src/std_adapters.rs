@@ -5,21 +5,14 @@
 
 use crate::node::Node;
 
-/// The text a host word's argument holds: a one-character text arrives as a Char (`"n"` parses as 'n')
-pub(crate) fn text_value(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Text(text) => Some(text.clone()),
-		Node::Char(character) => Some(character.to_string()),
-		_ => None,
-	}
-}
-
 /// module.member applied to the arguments (a list node)
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
 	let arguments = arguments.as_items();
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
-	let text_of =
-		|node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
+	let text_of = |node: &Node| {
+		node.text_value()
+			.ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())))
+	};
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 	#[cfg(feature = "native")]
 	let number_of = |node: &Node| match node.drop_meta() {
@@ -56,6 +49,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			.map_err(|problem| failure(problem.to_string())),
 		("file", "append", [path, text]) => {
 			use std::io::Write;
+			crate::sandbox::check_write(&text_of(path)?).map_err(failure)?;
 			let mut file = std::fs::OpenOptions::new()
 				.append(true)
 				.create(true)
@@ -302,6 +296,7 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 
 /// writes a file, creating its missing folders first
 fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
+	crate::sandbox::check_write(path)?;
 	let folder = std::path::Path::new(path)
 		.parent()
 		.filter(|folder| !folder.as_os_str().is_empty());
@@ -317,6 +312,7 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 		UNFILED_STORES.with(|stores| stores.borrow_mut().insert(store, values));
 		return Ok(());
 	}
+	crate::sandbox::check_write(file)?;
 	let text = serde_json::to_string_pretty(&values).map_err(|problem| problem.to_string())?;
 	std::fs::write(file, text).map_err(|problem| format!("{file}: {problem}"))
 }
@@ -328,6 +324,7 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 /// a command that fails is an error with what it printed to stderr
 #[cfg(feature = "native")]
 fn executed(command: &[String]) -> Result<String, String> {
+	crate::sandbox::check_process("os.exec")?;
 	let (program, arguments) = command.split_first().ok_or("needs a command")?;
 	let output = std::process::Command::new(program)
 		.args(arguments)

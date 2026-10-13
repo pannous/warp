@@ -273,6 +273,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GUARDED_CALL, guarded_call)?;
 	warp_runtime::host_words::link_host_words(linker)?;
 	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
+	linker.func_wrap(HOST_LIBRARY, PARSE_CODE, parse_code)?;
 	linker.func_wrap(HOST_LIBRARY, BLOCK_VALUE, block_value)?;
 	linker.func_wrap(HOST_LIBRARY, FOREIGN_CALL, foreign_call)?;
 	linker.func_wrap(HOST_LIBRARY, STD_PURE, std_call)?;
@@ -512,6 +513,21 @@ fn run_block(
 	let result = crate::pipeline::eval_block(block, &names, &values, &definitions).map_err(task_failure)?;
 	let value = TaskValue::of(&result).map_err(|_| task_failure(crate::pipeline::cannot_hand_back(&result)))?;
 	build_in_program(&mut caller, &value, &task_failure)
+}
+
+/// The host side of parse_code: the code of a text, or the parse failure the program's `try` catches
+fn parse_code(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result<HostNode> {
+	let text = given_node(&mut caller, text)?;
+	let Some(source) = text.text_value() else {
+		return error_in_program(
+			&mut caller,
+			&format!("{PARSE_CODE}: needs a text, got {}", text.serialize().trim()),
+		);
+	};
+	match crate::lowering::parse_word::code_of(&source) {
+		Ok(code) => built_in_program(&mut caller, &code, PARSE_CODE),
+		Err(failure) => error_in_program(&mut caller, &failure),
+	}
 }
 
 thread_local! {
