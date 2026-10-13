@@ -1,4 +1,4 @@
-//! paint in the playground's host (web/playground/host.js) under node, the same refusals as natively (src/paint.rs):
+//! paint in the playground's host (web/playground/host.js) under node, the same refusals as natively (src/graphics/paint.rs):
 //! card canvas-zero: show() of use draw before canvas() paints the default canvas, as natively (user 2026-10-10: defaults,
 //! no errors); card draw-default: the default canvas is the size of the page's output pane (system values view_width,
 //! view_height)

@@ -31,7 +31,7 @@ fn a_one_line_route_block_reading_a_table_is_one_statement() {
 	let program = folder.join("app.warp");
 	std::fs::write(&program, PROGRAM).expect("the program file");
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(2);
+		warp::web::web_server::stop_after(2);
 		warp::modules::with_program_file(&program, || {
 			warp::pipeline::serving_at(PORT, || warp::wasm_emitter::eval(PROGRAM))
 		})

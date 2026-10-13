@@ -25,8 +25,8 @@ fn the_dev_server_rebuilds_a_changed_program() {
 	std::fs::write(&program, "p{ \"one\" }").expect("the program");
 	let served = program.clone();
 	std::thread::spawn(move || {
-		warp::web_server::stop_after(6);
-		warp::dev_server::serve(&served, PORT)
+		warp::web::web_server::stop_after(6);
+		warp::web::dev_server::serve(&served, PORT)
 	});
 	let started = std::time::Instant::now();
 	while std::net::TcpStream::connect(("127.0.0.1", PORT)).is_err() {
@@ -81,7 +81,7 @@ fn a_dev_build_keeps_the_values_the_program_changed() {
 #[cfg(feature = "native")]
 fn a_dev_build_keeps_component_state() {
 	let code = "def DevTally(name) {\n\ttally = 0\n\tdiv{ button{ on click { tally += 1 } name } p{ name + \" \" + tally } }\n}\ndiv{ DevTally(\"a\") DevTally(\"b\") }";
-	let reload = || warp::pipeline::for_dev(|| warp::headless::Page::render(code)).expect("the page");
+	let reload = || warp::pipeline::for_dev(|| warp::web::headless::Page::render(code)).expect("the page");
 	let mut page = reload();
 	page.click("b").expect("clicked");
 	page.click("b").expect("clicked");
@@ -102,8 +102,8 @@ fn the_dev_server_watches_the_modules_used() {
 	std::fs::write(&module, "def greeting(){ \"one\" }").expect("the module");
 	std::fs::write(&program, "use dev_greeting\np{ greeting() }").expect("the program");
 	std::thread::spawn(move || {
-		warp::web_server::stop_after(5);
-		warp::dev_server::serve(&program, MODULES_PORT)
+		warp::web::web_server::stop_after(5);
+		warp::web::dev_server::serve(&program, MODULES_PORT)
 	});
 	let get = |path: &str| {
 		ureq::get(&format!("http://127.0.0.1:{MODULES_PORT}{path}"))

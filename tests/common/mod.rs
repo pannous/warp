@@ -41,7 +41,7 @@ pub const LEAN: Resource = Resource {
 	name: "the Lean toolchain (disabled in cloud sessions)",
 	available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true"),
 };
-/// binaryen's wasm-split, which splits a built site's module by route (src/route_split.rs)
+/// binaryen's wasm-split, which splits a built site's module by route (src/web/route_split.rs)
 #[cfg(feature = "native")]
 pub const WASM_SPLIT: Resource = Resource {
 	name: "binaryen's wasm-split",
@@ -403,8 +403,8 @@ pub fn warp_command() -> std::process::Command {
 	// hints chosen explicitly (card hints-toggle): the tests read them without the closing "hide hints with" line
 	let mut command = std::process::Command::new(binary);
 	command.env("WARP_HINTS", "1");
-	// a sample that paints writes PNGs here, no window (src/paint.rs)
-	command.env(warp::paint::NO_WINDOW_VARIABLE, "1");
+	// a sample that paints writes PNGs here, no window (src/graphics/paint.rs)
+	command.env(warp::graphics::paint::NO_WINDOW_VARIABLE, "1");
 	command
 }
 

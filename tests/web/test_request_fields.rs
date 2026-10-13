@@ -8,7 +8,7 @@ const FORM_TYPE: &str = "application/x-www-form-urlencoded";
 
 fn served(requests: usize) -> std::thread::JoinHandle<String> {
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(requests);
+		warp::web::web_server::stop_after(requests);
 		warp::pipeline::serving_at(PORT, || warp::wasm_emitter::eval(PROGRAM)).serialize()
 	});
 	let started = std::time::Instant::now();

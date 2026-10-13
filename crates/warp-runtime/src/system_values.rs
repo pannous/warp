@@ -27,11 +27,11 @@ const NATIVE_VIEW: (i64, i64) = (640, 480);
 /// Any public address: connecting a UDP socket only asks the routing table
 const INTERNET_ADDRESS: &str = "1.1.1.1:53";
 
-/// The last input over the paint window (src/paint_window.rs follow_input), each an f32's bits: pointer x, y in the
+/// The last input over the paint window (src/graphics/paint_window.rs follow_input), each an f32's bits: pointer x, y in the
 /// painted frame's pixels, a button down (1), the key held; all 0 before a window
 static WINDOW_INPUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 
-/// Whether the paint window shows: set as it gets its first frame, cleared when it closes (src/paint_window.rs)
+/// Whether the paint window shows: set as it gets its first frame, cleared when it closes (src/graphics/paint_window.rs)
 static WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
 pub fn tell_window_open(open: bool) {
@@ -42,7 +42,7 @@ pub fn window_shows() -> bool {
 	WINDOW_SHOWN.load(Ordering::Relaxed)
 }
 
-/// Opens the paint window before any frame: the warp binary's (src/paint.rs allow_windows), none headless
+/// Opens the paint window before any frame: the warp binary's (src/graphics/paint.rs allow_windows), none headless
 static WINDOW_OPENER: OnceLock<fn()> = OnceLock::new();
 /// Whether window_open asked the opener: once a run, so a window the user closed stays closed (card window-loop)
 static WINDOW_ASKED: AtomicBool = AtomicBool::new(false);
@@ -77,7 +77,7 @@ const BUTTON_INPUT: usize = 2;
 static CLICKS: Mutex<VecDeque<(f32, f32)>> = Mutex::new(VecDeque::new());
 static CLICK_READ: Mutex<(f32, f32)> = Mutex::new((0.0, 0.0));
 
-/// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/paint.rs allow_windows)
+/// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/graphics/paint.rs allow_windows)
 static DRAWING_ON_GPU: AtomicBool = AtomicBool::new(false);
 
 pub fn tell_gpu_drawing(on_gpu: bool) {

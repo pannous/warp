@@ -1,4 +1,4 @@
-// What a host gives the warp compiler built without the native feature (src/web.rs `page`): `warp_host` runs the modules
+// What a host gives the warp compiler built without the native feature (src/web/mod.rs `page`): `warp_host` runs the modules
 // it compiles. A compiled program's imports mirror what the CLI's wasmtime runner links (src/host.rs, WASI fd_write,
 // libm). Shared by the playground (worker.js), the browser test runner (test-worker.js) and built sites (site.js);
 // needs reader.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
@@ -110,7 +110,7 @@ function programImports(holder, hooks) {
 					return errorInProgram(module, "call stack exhausted");
 				}
 			},
-			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
+			// `serve 8080 {…}` (src/web/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// `header "name" "value"` in a route the page itself answers (a form without a server): no HTTP answer to carry it
 			response_header: () => {},
@@ -311,7 +311,7 @@ const JSPI = typeof WebAssembly.Suspending === "function" && typeof WebAssembly.
 // next(value), once value settles when it is a promise
 const whenSettled = (value, next) => value instanceof Promise ? value.then(next) : next(value);
 
-// run a compiled program: the outcome src/web.rs run_outcome reads
+// run a compiled program: the outcome src/web/mod.rs run_outcome reads
 function runProgram(bytes, hooks, awaited = false) {
 	const holder = instantiateProgram(bytes, hooks, undefined, awaited && JSPI);
 	return holder.failure ? holder : runMain(holder, hooks);
@@ -322,7 +322,7 @@ function runProgram(bytes, hooks, awaited = false) {
 // `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js);
 // `awaited`: main may wait for promises (JSPI)
 function instantiateProgram(bytes, hooks, compiled, awaited = false) {
-	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
+	// the runtime warnings go back to the compiler, which reports them (src/web/mod.rs); the page's path is the page's own
 	const holder = { warnings: [], pagePath: hooks.pagePath?.(), awaited };
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
@@ -354,14 +354,14 @@ function runMain(holder, hooks) {
 	});
 }
 
-// the last run that handles page events, for the compiler's warp_host.page_event (src/headless.rs in the browser tests)
+// the last run that handles page events, for the compiler's warp_host.page_event (src/web/headless.rs in the browser tests)
 let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
 const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
 
 // the HTML of a value by the program's own renderer (lib/markup.warp's to_html, exported as page·render by a program
 // holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
-// renders the value itself, src/web.rs html_of)
+// renders the value itself, src/web/mod.rs html_of)
 function renderedHtml(exports, value) {
 	const render = exports[PAGE_RENDER_EXPORT];
 	if (!render || value === null || typeof value !== "object") return undefined;
@@ -436,7 +436,7 @@ function withExitHandler(holder, exports, call) {
 	return result;
 }
 
-// the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
+// the outcome of a call into a run's instance (main, or a page event's handler), as src/web/mod.rs run_outcome reads it
 function outcomeOf(holder, hooks, call) {
 	const { warnings, exports } = holder;
 	const finished = result => {

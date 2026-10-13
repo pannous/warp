@@ -5,11 +5,11 @@ use math
 // natively 640×480 (user 2026-10-10: defaults, no errors)
 global canvas_width = view_width
 global canvas_height = view_height
-// natively in a window the shapes are drawn on the GPU (src/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels
+// natively in a window the shapes are drawn on the GPU (src/graphics/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels
 // here then, show() sends the shapes drawn since the last one
 global drawing_on_gpu = gpu_drawing
 global canvas_pixels = int[pixels_for(view_width, view_height)]
-// paper: the canvas before anything is drawn, as paint shows 0 (src/paint.rs PAPER)
+// paper: the canvas before anything is drawn, as paint shows 0 (src/graphics/paint.rs PAPER)
 paper = 0xFFFAFAFA
 black = 0xFF000000
 white = 0xFFFFFFFF
@@ -41,7 +41,7 @@ def hsv(h, s, v) {
 with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
 alpha_of(color) := color//16777216
 
-// what draw_shape's kind says (src/gpu_canvas.rs)
+// what draw_shape's kind says (src/graphics/gpu_canvas.rs)
 clear_shape = 0
 rect_shape = 1
 circle_shape = 2
@@ -113,7 +113,7 @@ def show() {
 
 // label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth
 // edges mixed with what is below (card paint-text): the host sets them, the playground with the browser's canvas,
-// natively a system font (src/text_raster.rs), so they look as text does on that system
+// natively a system font (src/graphics/text_raster.rs), so they look as text does on that system
 def label(x, y, words, color, size = 12) {
 	covered = text_coverage(words, size)
 	width = covered[0]

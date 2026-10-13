@@ -1,4 +1,4 @@
-// The page of a built site whose program runs in a Worker (card site-worker, src/site.rs): a module that starts tasks
+// The page of a built site whose program runs in a Worker (card site-worker, src/web/site.rs): a module that starts tasks
 // runs off the page's thread in site-worker.js, so a blocking `await` may wait and its tasks run together on the task
 // Workers. The page keeps the DOM: site.js calls startSiteWorker instead of hydrate, which sends the Worker the module,
 // the kept values, the path, the replies of a page a server rendered, each element event and each path a link or the back button goes to (host-routes.js
@@ -7,7 +7,7 @@
 // Relative URLs resolve against the site's root (the page's <base>).
 
 const WORKER_ATTRIBUTE = "data-warp-worker";
-const REPLIES_ELEMENT = "warp-replies"; // src/site.rs REPLIES_ID: the Worker answers its first fetches from them (host-tasks.js)
+const REPLIES_ELEMENT = "warp-replies"; // src/web/site.rs REPLIES_ID: the Worker answers its first fetches from them (host-tasks.js)
 
 // resolves once no reload for isolation is coming: a Worker started before would have its request aborted (Firefox:
 // NS_BINDING_ABORTED, card firefox-worker)
@@ -32,7 +32,7 @@ async function startSiteWorker() {
 		}
 		(data.patches ?? []).forEach(patch => showPatch(root, patch)); // card web-fine-rest
 		if (data.dispatch) dispatchToPage(data.dispatch); // card page-custom-event
-		if (data.exited !== undefined) self.endApp?.(data.exited); // `exit` in `warp app` (src/webview.rs) closes it
+		if (data.exited !== undefined) self.endApp?.(data.exited); // `exit` in `warp app` (src/web/webview.rs) closes it
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);
 		if (data.clipboard !== undefined) copyText(data.clipboard);
 		if (data.clipboardRead) pasteInto(data.clipboardRead);

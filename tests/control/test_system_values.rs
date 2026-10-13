@@ -120,7 +120,7 @@ fn the_mouse_is_a_system_value_of_the_page() {
 	);
 }
 
-// card native-system: natively the pointer over the paint window (src/paint_window.rs follow_input) in the painted
+// card native-system: natively the pointer over the paint window (src/graphics/paint_window.rs follow_input) in the painted
 // frame's pixels, as the page's canvas
 #[test]
 #[cfg(feature = "native")]

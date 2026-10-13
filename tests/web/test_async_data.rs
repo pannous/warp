@@ -1,6 +1,6 @@
 // card web-async: `users := fetch url` is a value that arrives later: ø with users.loading true until the reply is in,
 // then the parsed JSON (else the text) or users.error; `on change users {…}` sees it, and a URL reading a variable is
-// fetched anew when that changes (src/lowering/fetch_signals.rs, src/fetches.rs). The waits poll with sleep, whose
+// fetched anew when that changes (src/lowering/fetch_signals.rs, src/web/fetches.rs). The waits poll with sleep, whose
 // check points run the arrived handler.
 use crate::common::serve;
 

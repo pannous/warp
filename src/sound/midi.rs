@@ -210,7 +210,7 @@ pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 		return Err("a MIDI message has at least a status byte".into());
 	}
 	let hex = bytes.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>();
-	if !crate::paint::shows_windows() {
+	if !crate::graphics::paint::shows_windows() {
 		eprintln!("midi out {port}: {}", hex.join(" "));
 		return Ok(());
 	}

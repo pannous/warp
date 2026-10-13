@@ -1,5 +1,5 @@
 // card web-apis (WebGPU): gpu_compute(shader, numbers, workgroups) runs a WGSL compute shader over the numbers in the
-// browser (web/playground/host-gpu.js, on a task Worker) and natively (src/gpu.rs, wgpu) and gives back what it left
+// browser (web/playground/host-gpu.js, on a task Worker) and natively (src/graphics/gpu.rs, wgpu) and gives back what it left
 use warp::wasm_emitter::eval;
 use warp::Node;
 
@@ -70,7 +70,7 @@ fn a_fragment_shader_reads_the_values_given() {
 	assert_eq!(rendered.serialize(), format!("[{}]", 0xFFFFFF00u32));
 }
 
-// the shader compiles once and is kept (src/gpu.rs painter): each frame still binds its own values
+// the shader compiles once and is kept (src/graphics/gpu.rs painter): each frame still binds its own values
 #[test]
 fn a_kept_shader_reads_each_frames_values() {
 	let rendered = eval(&format!(

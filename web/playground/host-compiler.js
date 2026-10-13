@@ -41,7 +41,7 @@ function compilerFromUrl(hooks) {
 // a compiler entry point whose runs may wait for promises (warpHost `awaited`), as an async function where JSPI is
 const awaitedEntry = entry => JSPI ? WebAssembly.promising(entry) : entry;
 
-// the report of src/web.rs eval_block_report: {result: tree} or {error: message}
+// the report of src/web/mod.rs eval_block_report: {result: tree} or {error: message}
 function evalBlock(hooks, request) {
 	const compiler = blockCompiler(hooks);
 	const bytes = utf8.encode(request);

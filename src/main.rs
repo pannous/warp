@@ -21,7 +21,7 @@ const WASM_FLAG: &str = "--wasm";
 /// `warp help list`: a standard module's words; `warp help --markdown`: all of them as wiki/standard-library.md
 const HELP_PREFIX: &str = "help ";
 const HELP_MARKDOWN: &str = "help --markdown";
-/// `warp build --site app.warp`: the directory app-site/ a web server serves (src/site.rs, card web-ssr)
+/// `warp build --site app.warp`: the directory app-site/ a web server serves (src/web/site.rs, card web-ssr)
 const SITE_FLAG: &str = "--site";
 const SITE_SUFFIX: &str = "-site";
 /// The site of inline code
@@ -82,12 +82,12 @@ const STANDALONE_NOTES_CACHE: &str = ".cache/warp/standalone_notes";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
-/// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
+/// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/web/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
-/// `warp app page.warp`: the program's page in a window (src/webview.rs, card read-chron)
+/// `warp app page.warp`: the program's page in a window (src/web/webview.rs, card read-chron)
 const APP_COMMAND: &str = "app";
 const APP_CHECK: &str = "--check";
-/// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/deploy.rs)
+/// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/web/deploy.rs)
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
@@ -130,7 +130,7 @@ fn main() {
 	let mut args: Vec<String> = env::args().collect();
 	warp::crash_card::install();
 	end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
-	warp::paint::allow_windows();
+	warp::graphics::paint::allow_windows();
 	apply_flags(&mut args);
 	match args.iter().position(|arg| arg == SANDBOX_FLAG) {
 		Some(flag) => {
@@ -301,8 +301,8 @@ fn serve_file(path: &str, port: u16, reason: &str, open: bool) -> ! {
 	}
 	diagnostic::show_lines_of(&code);
 	if open && opens_browser() {
-		warp::web_server::when_listening(|address| {
-			warp::dev_server::open_in_browser(address);
+		warp::web::web_server::when_listening(|address| {
+			warp::web::dev_server::open_in_browser(address);
 		});
 	}
 	print_and_exit(warp::pipeline::serving_at(port, || eval(path)))
@@ -377,9 +377,11 @@ fn run_command(args: &[String]) {
 			}
 			Err(failure) => fail(failure),
 		}
-	} else if args[1] == warp::paint_window::COMMAND {
-		if let Err(failure) = warp::paint_window::run(args.get(2).is_some_and(|flag| flag == warp::paint_window::CHECK))
-		{
+	} else if args[1] == warp::graphics::paint_window::COMMAND {
+		if let Err(failure) = warp::graphics::paint_window::run(
+			args.get(2)
+				.is_some_and(|flag| flag == warp::graphics::paint_window::CHECK),
+		) {
 			fail(failure);
 		}
 	} else if args[1] == REGISTER_COMMAND {
@@ -390,7 +392,7 @@ fn run_command(args: &[String]) {
 			Err(failure) => fail(format!("warp serve: {failure}")),
 		}
 	} else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
-		use warp::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
+		use warp::web::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
 		let deployment = match args[2].as_str() {
 			DEV_FLAG => Deployment::Local,
 			DRY_RUN_FLAG => Deployment::DryRun,
@@ -402,16 +404,18 @@ fn run_command(args: &[String]) {
 				"warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp"
 			));
 		};
-		if let Err(failure) = warp::deploy::deploy(std::path::Path::new(program), deployment) {
+		if let Err(failure) = warp::web::deploy::deploy(std::path::Path::new(program), deployment) {
 			fail(format!("warp deploy: {failure}"));
 		}
 	} else if args[1] == DEV_COMMAND && args.len() >= 3 {
 		let port = args
 			.get(3)
-			.map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
+			.map_or(Ok(warp::web::dev_server::DEV_PORT), |port| port.parse::<u16>());
 		let served = port
 			.map_err(|_| format!("warp dev: the port is a number, not {}", args[3]))
-			.and_then(|port| warp::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser()));
+			.and_then(|port| {
+				warp::web::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser())
+			});
 		if let Err(failure) = served {
 			fail(failure);
 		}
@@ -511,7 +515,7 @@ fn run_command(args: &[String]) {
 		println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
-		warp::dev_server::open_in_browser("https://github.com/pannous/warp/");
+		warp::web::dev_server::open_in_browser("https://github.com/pannous/warp/");
 	} else if arg_string.starts_with("eval ") {
 		let code = arg_string.strip_prefix("eval ").unwrap_or("");
 		diagnostic::show_lines_of(code);
@@ -615,7 +619,7 @@ fn show_and_fail_on_error(result: &Node, mark: &str) {
 /// A program that ended well keeps its painted window up until the user closes it; exit() or a failure closes it
 fn ended_well(result: &Node) {
 	if !matches!(result.drop_meta(), Node::Error(_)) {
-		warp::paint_window::wait_until_closed();
+		warp::graphics::paint_window::wait_until_closed();
 	}
 }
 
@@ -808,7 +812,7 @@ fn write_web_view_app(code: &str, target: &str) -> Result<String, String> {
 		.file_stem()
 		.map(|stem| stem.to_string_lossy().into_owned())
 		.unwrap_or_default();
-	let site = warp::site::files(code, &title, false)?;
+	let site = warp::web::site::files(code, &title, false)?;
 	let (stub, runtime) = runtime_stub(&PAGE_STUB)?;
 	let executable = warp_runtime::standalone::with_site(&runtime, &site);
 	write_executable(&executable, &output)?;
@@ -911,7 +915,7 @@ fn write_wagi(code: &str, target: &str) {
 		Ok(module) => {
 			fs::write(&module_path, &module.bytes).expect("could not write the WAGI module");
 			let source = module_path.file_name().unwrap_or_default().to_string_lossy();
-			fs::write(&manifest_path, warp::deploy::spin_manifest(&name, &source))
+			fs::write(&manifest_path, warp::web::deploy::spin_manifest(&name, &source))
 				.expect("could not write the Spin manifest");
 			println!(
 				"wrote {} ({} bytes) and {}",
@@ -930,33 +934,33 @@ fn write_wagi(code: &str, target: &str) {
 /// A program ending in markup (`html{…}`, `div{…}`, card div-opens-app) run with a terminal for its output: shown in a
 /// window as `warp app` shows it; piped, redirected or under WARP_NO_WINDOW it prints its HTML
 fn shows_in_window(code: &str) -> bool {
-	io::stdout().is_terminal() && warp::paint::shows_windows() && warp::serve::shows_page(code)
+	io::stdout().is_terminal() && warp::graphics::paint::shows_windows() && warp::serve::shows_page(code)
 }
 
 /// `warp dev` and a served program run from a terminal open their page (cards dev-opens-browser, samples-serving); piped, under WARP_NO_WINDOW or CI it doesn't
 fn opens_browser() -> bool {
-	io::stdout().is_terminal() && warp::paint::shows_windows()
+	io::stdout().is_terminal() && warp::graphics::paint::shows_windows()
 }
 
 fn is_html_file(target: &str) -> bool {
 	target.ends_with(".html") || target.ends_with(".htm")
 }
 
-/// `warp page.html`, `warp app [--check] page.warp`: the page in a web view window (src/webview.rs); --check prints
+/// `warp page.html`, `warp app [--check] page.warp`: the page in a web view window (src/web/webview.rs); --check prints
 /// its text from a hidden window instead
 fn show_in_webview(target: &str, check: bool) {
-	if !check && !warp::paint::shows_windows() {
-		fail(format!("warp {APP_COMMAND}: no window under {} or CI; `warp {APP_COMMAND} {APP_CHECK} {target}` prints the page's text", warp::paint::NO_WINDOW_VARIABLE));
+	if !check && !warp::graphics::paint::shows_windows() {
+		fail(format!("warp {APP_COMMAND}: no window under {} or CI; `warp {APP_COMMAND} {APP_CHECK} {target}` prints the page's text", warp::graphics::paint::NO_WINDOW_VARIABLE));
 	}
 	#[cfg(target_os = "macos")]
 	let shown = if is_html_file(target) {
-		warp::webview::show_file(std::path::Path::new(target), check)
+		warp::web::webview::show_file(std::path::Path::new(target), check)
 	} else {
 		let title = std::path::Path::new(target)
 			.file_stem()
 			.filter(|_| file_exists(target))
 			.map_or(DEFAULT_SITE_NAME.into(), |stem| stem.to_string_lossy());
-		warp::webview::show_program(&source_of(target), &title, check)
+		warp::web::webview::show_program(&source_of(target), &title, check)
 	};
 	#[cfg(not(target_os = "macos"))]
 	let shown: Result<(), String> = Err(format!(
@@ -980,7 +984,7 @@ fn write_site(code: &str, target: &str) {
 			std::path::PathBuf::from(DEFAULT_SITE_NAME),
 		),
 	};
-	match warp::site::build(code, &name, &directory) {
+	match warp::web::site::build(code, &name, &directory) {
 		Ok(site) => println!(
 			"built the site {} ({})",
 			site.directory.display(),

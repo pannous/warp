@@ -54,7 +54,7 @@ function nextLive(node) {
 }
 
 // without transitions an element just comes and goes; markup-transitions.js, loaded after this script by pages whose
-// elements have a CSS transition (src/site.rs), replaces these four
+// elements have a CSS transition (src/web/site.rs), replaces these four
 function transitionPlaces() { return new Map(); }
 function enter() {}
 function leave(node) { node.remove(); }

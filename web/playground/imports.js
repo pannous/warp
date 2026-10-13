@@ -1,7 +1,7 @@
 // The {module, name, kind} of each import a module's bytes declare, read from its import section. Not
 // WebAssembly.Module.imports: Safari 27 throws "unable to produce import descriptors" for any module importing a
 // function with a GC reference (anyref, eqref) in its signature, as the task words do (card task-sample).
-// Shared by the playground's workers, the host parts that need it (src/site.rs prepends it to them) and the uniscript
+// Shared by the playground's workers, the host parts that need it (src/web/site.rs prepends it to them) and the uniscript
 // page (web/uniscript/build.sh copies it): one function declaration and nothing else, as a site with two such parts
 // declares it twice, which a top-level const could not
 function importDescriptors(bytes) {

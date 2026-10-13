@@ -30,7 +30,7 @@ pub const GPU_AUTO_MIN_COUNT: i64 = 10 * GPU_MAP_MIN_COUNT;
 const KEEP_RESULT_ATTRIBUTE: &str = "gpu_keep_result";
 const SOURCE_KEPT_ATTRIBUTE: &str = "gpu_source_kept";
 /// gpu_map_linear's and gpu_reduce_linear's last argument: keep the result's buffer on the GPU (under the target block's
-/// address), take the source's items from such a buffer (src/gpu.rs KEPT; uploaded from memory when none is kept)
+/// address), take the source's items from such a buffer (src/graphics/gpu.rs KEPT; uploaded from memory when none is kept)
 pub(crate) const KEEP_RESULT: i64 = 1;
 pub(crate) const SOURCE_KEPT: i64 = 2;
 /// The flag of a map the compiler switched to the GPU: no warning without an adapter, a notice when it ran there

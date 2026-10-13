@@ -7,7 +7,7 @@ const ROOT_PATH = "/"; // the page path before any navigation (page_path)
 const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path picks
 const ROUTE_INDEX_EXPORT = "page·route_index"; // the index of the route the path picks
 const PAGE_NAVIGATED_EXPORT = "page·navigated"; // sets the path the server data of a route is asked for (P221, lowering/serve.rs)
-const ROUTE_MODULE_PREFIX = "app-route-"; // src/route_split.rs: the module of route N is app-route-N.wasm
+const ROUTE_MODULE_PREFIX = "app-route-"; // src/web/route_split.rs: the module of route N is app-route-N.wasm
 const PLACEHOLDER_PREFIX = "placeholder."; // wasm-split's import module of the functions a route's module fills in
 // the site's files, as the page was loaded: a link followed from "/" changes the location, not the folder of the files
 const SITE_FILES = globalThis.document?.baseURI ?? globalThis.location?.href;
@@ -48,7 +48,7 @@ function focusRoute(root) {
 }
 
 const loadedRoutes = new Map(); // a route module's name → its loading
-// a built site split by route (src/route_split.rs): the module of the route the path picks, unless loaded already; it
+// a built site split by route (src/web/route_split.rs): the module of the route the path picks, unless loaded already; it
 // fills the program's table slots of that route's functions, instantiated with the program's exports as `primary`
 function loadRouteModule(holder) {
 	const name = ROUTE_MODULE_PREFIX + holder.exports[ROUTE_INDEX_EXPORT]?.();

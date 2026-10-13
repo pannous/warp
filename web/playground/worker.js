@@ -186,7 +186,7 @@ function handleSubmit(request) {
 	if (live) showHandled(live, runSubmitted(live, hooks, request));
 }
 
-// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web.rs
+// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web/mod.rs
 // worker_bundle), `{scripts, module}` or `{error}`
 function workerBundle(code) {
 	const codeText = passText(code);
@@ -221,7 +221,7 @@ function showHandled(holder, handled, timer = false) {
 	post({ type: "handled", value, html: page, error: failed });
 }
 
-// the value and HTML the compiler shows for a run outcome (src/web.rs shown)
+// the value and HTML the compiler shows for a run outcome (src/web/mod.rs shown)
 function shownOf(outcome) {
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);

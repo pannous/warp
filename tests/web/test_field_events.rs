@@ -1,6 +1,6 @@
 //! card click-key: besides click, key, input and submit an element handles change (a field's value committed), focus
 //! and blur: `input{ on change { saved = event.value } }`
-use warp::headless::Page;
+use warp::web::headless::Page;
 
 #[test]
 fn a_committed_value_reaches_on_change() {

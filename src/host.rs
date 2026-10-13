@@ -83,14 +83,14 @@ pub const RUN_BLOCK: &str = "run_block";
 pub const BLOCK_VALUE: &str = "block·value";
 pub use warp_runtime::host_words::FOREIGN_CALL;
 /// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
-/// browser playground (host.js); natively a PNG file (src/paint.rs)
+/// browser playground (host.js); natively a PNG file (src/graphics/paint.rs)
 pub const PAINT: &str = "paint";
-/// `use draw` on the GPU (src/gpu_canvas.rs, lib/draw.warp): draw_shape(kind, a, b, c, d, color) adds a shape,
+/// `use draw` on the GPU (src/graphics/gpu_canvas.rs, lib/draw.warp): draw_shape(kind, a, b, c, d, color) adds a shape,
 /// draw_show(width, height) shows the canvas with the shapes added since the last show
 pub const DRAW_SHAPE: &str = "draw_shape";
 pub const DRAW_SHOW: &str = "draw_show";
 /// sound_samples(samples, count, rate): 16-bit mono samples offset by 32768 (lib/sound.warp) played by the browser playground
-/// (host.js, WebAudio); natively a WAV file the system's player plays (src/sound.rs)
+/// (host.js, WebAudio); natively a WAV file the system's player plays (src/sound/mod.rs)
 pub const SOUND: &str = "sound_samples";
 /// The host words whose first argument is a list of ints, read in one call of the module's list_to_ints
 pub const INT_LIST_WORDS: [&str; 2] = [PAINT, SOUND];
@@ -116,14 +116,14 @@ pub const ANY_STD_MODULE: &str = "*";
 /// and other modules; a built site without tasks moves those one route calls into its route's module (route_split.rs)
 pub const USER_FUNCTIONS_SECTION: &str = "warp.user_functions";
 pub const USER_FUNCTIONS_SEPARATOR: &str = "\n";
-/// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
+/// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web/web_server.rs), blocks while
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// response_header(name, value): `header "name" "value"` in a route's body, `status 418` the CGI header Status
 /// (card web-route-header, lowering/serve.rs with_answer_headers): natively the route's HTTP answer carries it
 pub const RESPONSE_HEADER: &str = "response_header";
 pub const STATUS_HEADER: &str = "Status";
-/// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
+/// `users := fetch url` (src/web/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
 /// `users := fetch url` (lowering/fetch_signals.rs)
 pub const FETCH_WORD: &str = "fetch";
