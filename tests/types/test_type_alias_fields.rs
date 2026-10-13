@@ -44,3 +44,11 @@ fn is_tests_the_type_an_alias_names() {
 	);
 	is!("enum Color { red green }\ntype Paint = Color\nc = 3\nc is Paint", false);
 }
+
+/// card alias-is-literal: a literal is tested against the type an alias names, as a name holding it is
+#[test]
+fn a_literal_is_tested_against_the_type_an_alias_names() {
+	is!("type Age = int\n30 is Age", true);
+	is!("type Age = int\n\"a\" is Age", false);
+	is!("type Name = text\n\"a\" is a Name", true);
+}

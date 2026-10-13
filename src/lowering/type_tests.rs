@@ -485,7 +485,8 @@ pub const COMPARED_WITH: &str = "compared with";
 
 pub fn with_compared_text(subject: Node, written: &str) -> Node {
 	match subject.drop_meta() {
-		Node::Symbol(_) => Node::Meta {
+		// a literal too: `30 is Age` is a test type_aliases.rs resolves the alias of (card alias-is-literal)
+		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) => Node::Meta {
 			node: Box::new(subject),
 			data: Box::new(Node::key(COMPARED_WITH, text(written))),
 		},
