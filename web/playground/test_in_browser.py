@@ -68,6 +68,7 @@ COMPONENT_HOLE_CODE = 'def Tally(start) {\n\tn = start\n\tsection{ button{ on cl
 COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
 REPORT_CODE = 'print "reported"'
+REPORT_PRINTED = "reported"
 FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
 FILE_KEPT_TEXT = "kept across a reload"
 WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
@@ -376,17 +377,21 @@ def report_wrong(page_url):
 	with_parameter = lambda parameter: f"{page_url}{'&' if '?' in page_url else '?'}{parameter}"
 	open_page(with_parameter("report"))
 	wait_for_isolation()
-	browser("eval", f"window.playground.setCode({json.dumps(REPORT_CODE)})")
+	# running waits until the page's worker started its task Workers (host-tasks.js taskPoolReady): a page left before
+	# aborts their script loads, which Firefox logs as console errors (NS_BINDING_ABORTED for task-worker.js)
+	run_code(REPORT_CODE)
 	shown = browser("eval", '!document.getElementById("report").hidden')
 	address = json.loads(browser("eval", "window.playground.reportAddress()") or '""')
 	open_page(with_parameter("report=off"))
 	wait_for_isolation()
+	run_code(REPORT_CODE)
 	hidden = browser("eval", 'document.getElementById("report").hidden')
 	open_page(page_url)  # last: its reloads to other addresses come after the checks that reload the page themselves
 	wait_for_isolation()
 	wrong = [] if shown == "true" else [f"report button hidden after ?report: {shown}"]
 	wrong += [] if hidden == "true" else [f"report button shown after ?report=off: {hidden}"]
 	body = urllib.parse.parse_qs(urllib.parse.urlparse(address).query).get("body", [""])[0]
+	wrong += [] if REPORT_PRINTED in body.partition("Output:")[2] else [f"report issue without the program's output: {address!r}"]
 	return wrong + ([] if REPORT_CODE in body else [f"report issue without the program: {address!r}"])
 
 
