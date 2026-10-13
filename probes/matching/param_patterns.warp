@@ -1,0 +1,2 @@
+greet({name}) := "hi " + name
+greet({name: "Ann"})

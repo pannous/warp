@@ -614,7 +614,7 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 
 /// A name a pattern binds is declared `let`: the arm's own local, never a change of a main-level variable of that name
 /// (card pattern-names)
-fn bind(name: Node, value: Node) -> Node {
+pub(crate) fn bind(name: Node, value: Node) -> Node {
 	Node::List(
 		vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)],
 		Bracket::None,

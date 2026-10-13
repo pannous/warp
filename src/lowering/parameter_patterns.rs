@@ -1,15 +1,18 @@
 //! Patterns in parameters (card parameter-patterns): a parameter may be a pattern, as a match arm is.
 //! `add_pair([a, b]) := a + b` takes a list of two and names its items; `sum(Point{x, y}) := x + y` takes a Point and
-//! names its fields. Each pattern becomes a parameter of its own name, declared of the class for a class pattern, and
-//! the body a match on it: `sum(point·1: Point) := match point·1 { Point{x, y} => x + y }`. A value of another shape
-//! is the match's "no case" error.
+//! names its fields, `greet({name}) := "hi " + name` takes a map with a field name (card param-map-pattern). Each
+//! pattern becomes a parameter of its own name, declared of the class for a class pattern, and the body a match on it:
+//! `sum(point·1: Point) := match point·1 { Point{x, y} => x + y }`. A value of another shape is the match's "no case"
+//! error.
 
 use super::nodes::{is_call_head, key, matched};
+use super::switch::is_map_pattern;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 
 /// The name of a list pattern's parameter, numbered by its pattern
 const LIST_PARAMETER: &str = "list";
+const MAP_PARAMETER: &str = "map";
 const NUMBER_MARK: &str = "·";
 
 pub fn lower(node: Node) -> Node {
@@ -52,6 +55,7 @@ fn parameter_named(parameter: Node, patterns: &mut Vec<(String, Node)>) -> Node 
 			separator.clone(),
 		),
 		Node::List(_, Bracket::Square, _) => Node::Symbol(named(LIST_PARAMETER, parameter, patterns)),
+		_ if is_map_pattern(&parameter) => Node::Symbol(named(MAP_PARAMETER, parameter, patterns)),
 		Node::Key(class, Op::None, fields) if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
 			let class = class.drop_meta().clone();
 			let name = named(&class.name().to_lowercase(), parameter, patterns);
