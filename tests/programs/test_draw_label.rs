@@ -1,5 +1,5 @@
 // card paint-text: label(x, y, words, color, size) of `use draw` sets words in a real sans-serif font on the canvas paint
-// shows: the host word text_coverage, natively a system font (src/text_raster.rs), the browser's canvas in the playground
+// shows: the host word text_coverage, natively a system font (src/graphics/text_raster.rs), the browser's canvas in the playground
 use crate::is;
 
 const DRAW: &str = "use draw\n";

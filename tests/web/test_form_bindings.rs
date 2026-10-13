@@ -46,7 +46,7 @@ fn a_submitted_form_hands_its_fields_to_its_handler() {
 		"{}",
 		html_of(program)
 	);
-	let mut page = warp::headless::Page::render(program).expect("renders");
+	let mut page = warp::web::headless::Page::render(program).expect("renders");
 	page.submit("Save", serde_json::json!({ "name": "Ann", "age": 7 }))
 		.expect("a form handles submit");
 	assert!(page.text().ends_with("Ann is 7"), "{}", page.html());
@@ -68,11 +68,11 @@ fn a_handler_on_its_own_line_is_the_elements() {
 // a built site carries markup-forms.js, after markup.js, only when a form has `on submit`: the hello-world budget
 // (test_bundle_budget) pays nothing for it
 #[test]
-#[cfg(feature = "native")] // src/site.rs is native
+#[cfg(feature = "native")] // src/web/site.rs is native
 fn a_site_with_a_submit_handler_carries_the_forms_script() {
 	let scripts = |code: &str| {
 		let directory = crate::common::scratch_directory("forms-site");
-		let site = warp::site::build(code, "form", &directory).expect("the site is built");
+		let site = warp::web::site::build(code, "form", &directory).expect("the site is built");
 		std::fs::remove_dir_all(directory).unwrap();
 		site.files
 	};
@@ -124,7 +124,7 @@ fn a_c_style_declared_variable_is_bound() {
 		"{}",
 		html_of(code)
 	);
-	let mut page = warp::headless::Page::render(code).expect("the page");
+	let mut page = warp::web::headless::Page::render(code).expect("the page");
 	page.type_into("age", "31").expect("typed");
 	page.click("More").expect("clicked");
 	assert!(page.text().ends_with("31/1"), "{}", page.html());

@@ -1,15 +1,18 @@
 //! The standard library's index (card std-module-docs, notes/stdlib.md §8 "Discoverability"), read from lib/*.warp:
-//! a module's leading comment says what it is, the comment line right above a definition what that word does.
-//! `warp help list` prints one module, `warp help --markdown` the page wiki/standard-library.md, so docs never drift
-//! from lib/.
+//! a module's leading comment says what it is, the comment right above a definition (its wrapped lines joined) what
+//! that word does. `warp help list` prints one module, `warp help --markdown` the page wiki/standard-library.md, so
+//! docs never drift from lib/.
 
 const COMMENT: &str = "//";
 const DEFINE: &str = ":=";
 const ASSIGN: char = '=';
 const CLASS: &str = "class ";
 const BLOCK_START: char = '{';
+/// The width lib/*.warp wraps its comments at: a comment line goes on in the next one when that line's first word
+/// would not have fit behind it
+const WRAP_WIDTH: usize = 120;
 const MARKDOWN_TITLE: &str = "# Standard library";
-const MARKDOWN_INTRO: &str = "Made by `warp help --markdown` from lib/*.warp: each module with its words, a word with the comment line above it. A module comes with `use <module>`; the prelude needs none.";
+const MARKDOWN_INTRO: &str = "Made by `warp help --markdown` from lib/*.warp: each module with its words, a word with the comment above it. A module comes with `use <module>`; the prelude needs none.";
 
 /// A word of a module: how it is written (`zip(a, b)`, `class Stack`) and its comment line, if any
 struct Word {
@@ -28,10 +31,16 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 		lines.next();
 	}
 	let mut words = vec![];
-	let mut comment: Option<String> = None;
+	// the comment right above, the lines of its paragraph
+	let mut comment: Vec<String> = vec![];
+	let mut previous_comment_line: Option<&str> = None;
 	for line in lines {
 		if let Some(text) = comment_text(line) {
-			comment = Some(text);
+			if !previous_comment_line.is_some_and(|previous| wraps_into(previous, &text)) {
+				comment.clear();
+			}
+			comment.push(text);
+			previous_comment_line = Some(line);
 			continue;
 		}
 		if let Some(signature) =
@@ -39,10 +48,11 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 		{
 			words.push(Word {
 				signature,
-				doc: comment.take(),
+				doc: (!comment.is_empty()).then(|| comment.join(" ")),
 			});
 		}
-		comment = None;
+		comment.clear();
+		previous_comment_line = None;
 	}
 	(summary.join(" "), words)
 }
@@ -51,6 +61,12 @@ fn comment_text(line: &str) -> Option<String> {
 	line.trim_start()
 		.strip_prefix(COMMENT)
 		.map(|text| text.trim().to_string())
+}
+
+/// Whether a comment line was wrapped: the first word of the next one (`next`, its text) would not have fit behind it
+fn wraps_into(line: &str, next: &str) -> bool {
+	let first_word = next.split_whitespace().next().unwrap_or_default();
+	line.trim_end().chars().count() + 1 + first_word.chars().count() > WRAP_WIDTH
 }
 
 /// A definition at the start of a line: `zip(a, b) := …` → `zip(a, b)`, `class Stack { …` → `class Stack`,

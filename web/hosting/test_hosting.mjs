@@ -11,6 +11,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
 import { deployedByPlayground } from "./playground_driver.mjs";
+import { stopGroup, stopGroupOnExit } from "../process_groups.mjs";
 if (!process.env.CI) {
 	console.log("browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)");
 	process.exit(0);
@@ -53,12 +54,13 @@ async function startHosting() {
 	writeFileSync(envFile, `SESSION_SECRET=${crypto.randomUUID()}\nCLOUDFLARE_API_TOKEN=${cloudflareToken()}\n`);
 	const log = openSync(join(WORK, "wrangler.log"), "w");
 	const dev = spawn("wrangler", ["dev", "--port", String(PORT), "--inspector-port", String(INSPECTOR_PORT), "--env-file", envFile],
-		{ cwd: import.meta.dirname, stdio: ["ignore", log, log] });
+		{ cwd: import.meta.dirname, stdio: ["ignore", log, log], detached: true }); // its own group: esbuild and workerd go with it
+	stopGroupOnExit(dev);
 	for (let i = 0; i < 60; i++) {
 		if (await fetch(HOSTING).then(reply => reply.ok, () => false)) return dev;
 		await sleep(1000);
 	}
-	dev.kill();
+	stopGroup(dev);
 	throw new Error(`wrangler dev did not start: ${join(WORK, "wrangler.log")}`);
 }
 
@@ -102,5 +104,5 @@ try {
 	}
 	console.log("hosting test passed");
 } finally {
-	dev.kill();
+	stopGroup(dev);
 }

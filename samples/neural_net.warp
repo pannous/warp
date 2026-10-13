@@ -24,7 +24,7 @@ def forward(input) {
 
     output_sum = output_bias
     for j in 0..4 :
-        output_sum = output_sum + hidden[j] * output_weights[j][0]
+        output_sum = output_sum + hidden[j] * output_weights#(j+1)#1
     return hidden, sigmoid(output_sum)
 }
 
@@ -37,10 +37,10 @@ def train(input, target, learning_rate) {
 
     hidden_errors = []
     for j in 0..4 :
-        hidden_errors.push(output_delta * output_weights[j][0])
+        hidden_errors.push(output_delta * output_weights#(j+1)#1)
     
     for j in 0..4 :
-        output_weights[j][0] = output_weights[j][0] + learning_rate * output_delta * hidden[j]
+        output_weights#(j+1)#1 = output_weights#(j+1)#1 + learning_rate * output_delta * hidden[j]
     
     output_bias = output_bias + learning_rate * output_delta
 

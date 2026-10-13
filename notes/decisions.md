@@ -7,6 +7,22 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- gpu-f32 (warp-perf, user: "Math is exact by default, except when doing lots of computation. GPU should be F32 too
+  by default. With a little warning. It's only applied for mass calculations, anyways."): P240 stands, a heavy float
+  map (327,680+ items) runs on the GPU in f32 by itself with a one-time notice; the GPU functions (card
+  gpu-functions) run in f32 by default with the same small warning. Replaces the relayed "f64 default except fast
+  mode" rule for mass computation; small computations stay exact.
+- guillemets (warp-docs-sync wiki audit, user: "data as quasi text"): «…» quotes its content as unevaluated warp
+  data, a quasi-quote ("Data is Code and Code is Data"): `«1 2»` is the parsed node, printing as written and equal
+  to its text form where a text is expected; `«x + 1»` is the expression as data, not its value. (Interviewer's
+  reading of a short answer, undoable.)
+- const-deep (warp-docs-sync, user): `const` is deep, like `let`: no reassigning, no changing inside; `var` is the
+  changeable one. constant.md's binding/value split is dropped.
+- Implied, not asked (warp-docs-sync wiki audit): bool.md and truthiness.md are rewritten to the bool type
+  (decisions bool-type, #39): ø + 1 stays an error, empty values are falsy in conditions, only 0 equals false.
+  `reduce` stays the fold (#25/#36); decrement is `decrease x [by n]` (word-choice rule).
+- amp-compose (implied by D6): `&` of two functions composes in reading order, `square & print 2` prints 4 (wiki/&.md);
+  `∘` is an alias.
 - let-parallel (warp-docs-sync, user): the parallel let is written only without `let`: `a b = f(x) g(y)`;
   `let a b = …` is always a function definition (`let twice x = x * 2`). No let form of the parallel let.
 - pattern-keyword (warp-list-pattern, card patterns-values, user): named patterns are defined only with the keyword
@@ -28,7 +44,9 @@ notes/open_decisions.md.
 - enum-int (user asked "for C backward compatibility, we might accept int as Coin (?)"; Interviewer default,
   undoable): C functions and struct fields typed with an enum convert to and from its int automatically (card
   enum-parameters); in warp code an int becomes a case only explicitly (`5 as Coin`), and `f(5)`'s error offers
-  the fix `f(5 as Coin)`. Enums with written values convert by value.
+  the fix `f(5 as Coin)`. Enums with written C-style values (`enum Flag { A = 1, B = 4 }`) are ON HOLD (user, via
+  warp-dispatch: WebAssembly's WIT has no such enums, and an FFI that needs them can work around it); card enum-coin
+  in Later, parked implementation on branch enum-coin eb50cbcb4; wiki/enum.md says "on hold".
 - match-type-union (user): in a case key `int or text` / `int | text` is the type test against the union (union-or),
   the same as `x is (int or text)`; values and types mix (`0 or text`).
 - match-other (user): `other` is a catch-all case key in a match, a synonym of `_` / `default` / `else`:
@@ -303,7 +321,7 @@ notes/open_decisions.md.
 - P235b amended (the user's own edit of samples/webgpu.warp, `let uv = at.xy / $size;`; Integrator, card
   shader-holes for warp-web): `$name` in a shader block is an explicit hole, as in sql templates: the compiler
   passes that warp value as `values.name` and builds the values map itself. Bare WGSL names still never capture
-  warp variables. `$` never occurs in WGSL, so no clash; the uniform layout exists (src/gpu.rs uniform_layout).
+  warp variables. `$` never occurs in WGSL, so no clash; the uniform layout exists (src/graphics/gpu.rs uniform_layout).
   Defaults: the name is resolved where the block is written, the value read at each paint call.
 - Hosting login callback (warp-hosting): NOT as recommended: GitHub's callback stays https://lambda.pannous.com/callback;
   the pannous.com server proxies lambda.pannous.com → warp-hosting.pannous.workers.dev (Ferron block + certbot cert,
@@ -1265,6 +1283,9 @@ notes/open_decisions.md.
   picks one canonical form. Single quotes stay literal. Open detail: `$` holes in sql/sh templates must keep working.
 - D6 pipe: "The pipe operator is just an operator that behaves differently with different types unified". So `|` is one
   operator dispatched on its operand types: truth values → logical or, a value and a function → pipe (`2|square|root`).
+  operator-shall (user 2026-10-13): `&` and `|` of two whole numbers combine the bits (`12 & 10` is 8, from any
+  expression: `n | f(4)`); `&&`, `||`, `and`, `or` stay logical on numbers (`12 and 10` is 10). As an if/while
+  condition the bits warn (user 2026-10-13: `if 8 & 4 {}` is false): `8 and 4` or `(8 & 4) != 0` say which.
 - D14 (SUPERSEDED 2026-10-12 by in-bool: yes/no) `x in list`: "The position one index would behave as a truth but maybe it's a foot gun let's try it with a
   warning". `3 in [1 2 3]` gives the position (truthy when found), with a warning. Caveat for implementation: a 0-based
   position makes the first element falsy, so the position must be 1-based (or found-at-0 still truthy).

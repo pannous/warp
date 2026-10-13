@@ -1,0 +1,26 @@
+// The text cursor of lib/text.warp (card text-cursor): a reading position in a text for scanners and parsers
+use crate::is;
+
+#[test]
+fn a_cursor_reads_a_text_by_character_classes() {
+	is!("c = Cursor(\"ab12 cd\"); c.take_while(is_letter)", "ab");
+	is!("c = Cursor(\"ab12 cd\"); c.take_while(is_letter); c.peek()", '1');
+	is!(
+		"c = Cursor(\"ab12 cd\"); c.skip_while(is_alpha); c.take_while(is_digit)",
+		"12"
+	);
+	is!(
+		"c = Cursor(\"ab cd\"); c.advance(); c.advance(); c.skip(\" \") and c.looking_at(\"cd\")",
+		true
+	);
+	is!("c = Cursor(\"ab cd\"); c.skip(\"ab \"); c.rest()", "cd");
+	is!("c = Cursor(\"ab\"); c.advance(); c.advance(); c.at_end()", true);
+	is!("c = Cursor(\" \\t\\nx\"); c.skip_while(is_space)", 3);
+}
+
+#[test]
+fn space_tests_a_character() {
+	is!("is_space(' ')", true);
+	is!("is_whitespace('\\n')", true);
+	is!("isspace('x')", false);
+}

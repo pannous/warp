@@ -8,7 +8,9 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - The Node API (self-node-api, src/wasm_emitter/node_api.rs) reads and builds Nodes: `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket`, `type(n)`, `n#i`, `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`.
 - A hole is a plain symbol: `data ($a + 0)` has the key `$a`, a symbol. The parser needs no change for holes.
-- No `parse` word: `parse("n * 1")` is "undefined function: parse".
+- `parse("n * 1")` of a constant text folds to `(data n*1)` (src/lowering/parse_word.rs, step parse-const). A grouped
+  `(data …)` reads like a variable holding data: `.op`/`.key`, either side of `==` (library_words.rs may_hold_object,
+  equality.rs is_structured_value).
 - Backticks are template text (`Hello ${name}`, with a hint toward double quotes). So `` `n * 1` `` is the text
   "n * 1". The design example's backtick code patterns would collide with that.
 - Meta (line:column, comments) is dropped when a Node is emitted, so a data value has no positions.
@@ -36,8 +38,13 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - parse-const: `parse("…")` with a constant text folds to the data Node; test: equal to `data (…)`.
 - code-holes (pattern sessions): `$a` binds in match arms and `is`; block 8 of tree_patterns.warp passes.
 - data-meta: Meta kept in data Nodes, `n.line` / `n.column` / `n.comment`, ignored by `==`.
-- parse-runtime: a run-time text goes through a host word (native and host.js), as run_block does; test: the
-  parse of a read text equals `data (…)`.
+- parse-runtime (done, branch parse-runtime): `parse(t)` of any other text is the host word `parse_code(t)`
+  (src/host.rs). Natively it is the Rust parser (host/native.rs); in the browser, run_block's compiler instance
+  answers a `{parse: text}` request (web.rs eval_block_report, host-compiler.js). A parse failure is an Error that
+  `try` catches. A method `x.parse(…)` is never rewritten. `parse_word::code_of` never reads a file, so
+  `parse("a.warp")` is code.
+- Found on the way (card data-quote-lowered): later lowering passes rewrite inside quoted data, so `data (a.warp)`
+  has the op `#`, while the run-time parse keeps `.`.
 
 ## Agreed with warp-operator-shall (2026-10-13)
 - Operators stay Keys in data. `&`/`|` are decided at parse time (Op::BitAnd/BitOr for operands that may be ints,
@@ -47,3 +54,20 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
   And/Or.
 - In a code pattern, `$a | $b` is the written operator, not arm alternatives (or_operands splits Or and BitOr in case
   keys): alternatives are split only outside `data(…)`.
+
+## Agreed with warp-list-pattern (2026-10-13)
+- `data(…)` is the quote in pattern position (backticks stay template text).
+- `$name` is a hole; a repeated `$x` must be equal (as `$1` reads elsewhere).
+- pattern_tests needs only `type(n)` / `is_type n "key"`, `n.op`, `n.key`, `n.value`, `n#i`, `count n`: all exist.
+- Named patterns (branch matching, `pattern Name = …`) make `pattern Zero = data($a + 0)` work once holes are in.
+- warp-list-pattern takes code-holes after tree-find (step 5).
+
+## data-meta (done 2026-10-13)
+- `$Node` is a non-final WASM GC type; `$MetaNode` is its subtype with `line`, `column` (i64) and `comment`
+  (ref null $Node). Everything that reads fields 0–2 is unchanged, and `==` ignores the position.
+- Quoted code (`data …`, `parse("…")` folded at compile time) is emitted by emit_literal, which wraps every node
+  whose Meta layers carry a LineInfo or a comment through the runtime function node_at.
+- `n.line`, `n.column`, `n.comment` read through node_part (NODE_PARTS 6–8); a node without them has no such field.
+- Positions of `parse("…")` are in the parsed text (line 1 column 1 is its start).
+- Open: the parser keeps only the comment *before* a node (`// c` then `a: 1`); a trailing `a: 1 // c` is lost.
+  A run-time `parse(t)` gives no positions yet (built_in_program goes through TaskValue, which has no Meta).

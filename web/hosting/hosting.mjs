@@ -3,7 +3,7 @@
 // Users log in with GitHub and deploy a program's module, which becomes the Worker warp-<name> in our Cloudflare
 // account, at https://warp-<name>.pannous.workers.dev. "Deploy to my own account" does the same upload with the
 // user's own Cloudflare token, through here, as api.cloudflare.com allows no browser (CORS) calls.
-// The program's Worker is the one `warp deploy` builds (src/deploy.rs): the host scripts its module needs, then
+// The program's Worker is the one `warp deploy` builds (src/web/deploy.rs): the host scripts its module needs, then
 // cloud-worker.js, composed here from our own copies, so a deploy carries no JavaScript of its own.
 import readerScript from "../playground/reader.js";
 import hostScript from "../playground/host.js";
@@ -23,7 +23,7 @@ import randomScript from "../playground/host-random.js";
 import mediaScript from "../playground/host-media.js";
 import cloudWorkerScript from "../playground/cloud-worker.js";
 
-// the host scripts by the names src/site.rs host_scripts_of gives them (HOST_SCRIPTS, HOST_PARTS)
+// the host scripts by the names src/web/site.rs host_scripts_of gives them (HOST_SCRIPTS, HOST_PARTS)
 const HOST_SCRIPTS = {
 	"reader.js": readerScript,
 	"host.js": hostScript,
@@ -305,7 +305,7 @@ function checkedScripts(names) {
 	return [...ALWAYS_SCRIPTS, ...asked];
 }
 
-// the program's Worker as src/deploy.rs worker_files makes it: worker.js, app.wasm compiled, app.bin as bytes
+// the program's Worker as src/web/deploy.rs worker_files makes it: worker.js, app.wasm compiled, app.bin as bytes
 function scriptForm({ wasm, scripts }) {
 	const worker = [...scripts.map(name => HOST_SCRIPTS[name]), cloudWorkerScript].join("");
 	const form = new FormData();

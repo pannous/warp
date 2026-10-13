@@ -78,19 +78,22 @@ pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared
 /// values, definitions) compiles the block with the names bound to the values the program had where it ran it and the
 /// program's function definitions, runs it, and gives its value
 pub const RUN_BLOCK: &str = "run_block";
+/// parse_code(text): the code a text known only at run time holds, as data (card parse-runtime, lowering/parse_word.rs):
+/// natively the Rust parser, in the browser run_block's compiler instance (host-compiler.js)
+pub const PARSE_CODE: &str = "parse_code";
 /// block·value(index): the number a block run at run time reads, of the values its run_block call passed
 /// (pipeline::eval_block): the block is compiled as a function of them, the same module for other values
 pub const BLOCK_VALUE: &str = "block·value";
 pub use warp_runtime::host_words::FOREIGN_CALL;
 /// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the
-/// browser playground (host.js); natively a PNG file (src/paint.rs)
+/// browser playground (host.js); natively a PNG file (src/graphics/paint.rs)
 pub const PAINT: &str = "paint";
-/// `use draw` on the GPU (src/gpu_canvas.rs, lib/draw.warp): draw_shape(kind, a, b, c, d, color) adds a shape,
+/// `use draw` on the GPU (src/graphics/gpu_canvas.rs, lib/draw.warp): draw_shape(kind, a, b, c, d, color) adds a shape,
 /// draw_show(width, height) shows the canvas with the shapes added since the last show
 pub const DRAW_SHAPE: &str = "draw_shape";
 pub const DRAW_SHOW: &str = "draw_show";
 /// sound_samples(samples, count, rate): 16-bit mono samples offset by 32768 (lib/sound.warp) played by the browser playground
-/// (host.js, WebAudio); natively a WAV file the system's player plays (src/sound.rs)
+/// (host.js, WebAudio); natively a WAV file the system's player plays (src/sound/mod.rs)
 pub const SOUND: &str = "sound_samples";
 /// The host words whose first argument is a list of ints, read in one call of the module's list_to_ints
 pub const INT_LIST_WORDS: [&str; 2] = [PAINT, SOUND];
@@ -116,21 +119,21 @@ pub const ANY_STD_MODULE: &str = "*";
 /// and other modules; a built site without tasks moves those one route calls into its route's module (route_split.rs)
 pub const USER_FUNCTIONS_SECTION: &str = "warp.user_functions";
 pub const USER_FUNCTIONS_SEPARATOR: &str = "\n";
-/// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
+/// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web/web_server.rs), blocks while
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// response_header(name, value): `header "name" "value"` in a route's body, `status 418` the CGI header Status
 /// (card web-route-header, lowering/serve.rs with_answer_headers): natively the route's HTTP answer carries it
 pub const RESPONSE_HEADER: &str = "response_header";
 pub const STATUS_HEADER: &str = "Status";
-/// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
+/// `users := fetch url` (src/web/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
 /// `users := fetch url` (lowering/fetch_signals.rs)
 pub const FETCH_WORD: &str = "fetch";
 pub const FETCH_START: &str = "fetch_start";
 pub const FETCH_REPLY: &str = "fetch_reply";
 /// The host words whose result is any Node, its kind decided at run time (held like a map value)
-pub const ANY_VALUE_WORDS: [&str; 4] = [FETCH_REPLY, FOREIGN_CALL, STD_PURE, STD_IO];
+pub const ANY_VALUE_WORDS: [&str; 5] = [FETCH_REPLY, FOREIGN_CALL, STD_PURE, STD_IO, PARSE_CODE];
 /// Channels inside one run (P155, notes/channels.md, tasks.rs Channels), Go's unbuffered channel: channel_new() → id,
 /// channel_put(id, value) waits until a receiver took it, channel_take(id) waits for a value (ø once closed and empty),
 /// channel_more(id) waits until a value is offered (1) or the channel is closed (0), channel_close(id)
@@ -164,12 +167,13 @@ pub const TASK_WORDS: [&str; 18] = [
 	CHANNEL_WORDS[4],
 ];
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 14] = [
+pub const VALUE_GIVING_WORDS: [&str; 15] = [
 	GPU_COMPUTE,
 	GPU_RENDER,
 	TEXT_COVERAGE,
 	FETCH_REPLY,
 	RUN_BLOCK,
+	PARSE_CODE,
 	FOREIGN_CALL,
 	BLOCK_VALUE,
 	CHANNEL_NEXT,
@@ -183,7 +187,7 @@ pub const VALUE_GIVING_WORDS: [&str; 14] = [
 use wasm_encoder::ValType::{F64, I32, I64};
 const NODE: wasm_encoder::ValType = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 /// name, parameters, results of each host word
-pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 69] = [
+pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 70] = [
 	(DRAW_SHAPE, &[I64, F64, F64, F64, F64, I64], &[]),
 	(DRAW_SHOW, &[I64, I64], &[]),
 	(GPU_COMPUTE, &[NODE, NODE, I64], &[NODE]),
@@ -210,6 +214,7 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(PAINT, &[NODE, I64, I64, NODE], &[]),
 	(SOUND, &[NODE, I64, I64, I64], &[]),
 	(RUN_BLOCK, &[NODE, NODE, NODE, NODE], &[NODE]),
+	(PARSE_CODE, &[NODE], &[NODE]),
 	(BLOCK_VALUE, &[I64], &[NODE]),
 	(FOREIGN_CALL, &[NODE, NODE, NODE, NODE, NODE], &[NODE]),
 	(SLEEP, &[I64], &[]),

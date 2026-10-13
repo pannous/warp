@@ -1,6 +1,6 @@
 // card sample-accurate: `at 2 beats play C4`, `at 1s { … }` places a statement's sounds at that time on the voice,
 // counted from its first sound, and the voice then goes on where it stood; render_sound mixes them there to the sample
-// and keeps the silence before (src/lowering/music_words.rs → lib/sound.warp sound_at, sound_at_end; src/sound.rs at)
+// and keeps the silence before (src/lowering/music_words.rs → lib/sound.warp sound_at, sound_at_end; src/sound/mod.rs at)
 #![cfg(feature = "native")]
 use super::test_sound_voices::rendered;
 

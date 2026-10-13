@@ -2,8 +2,8 @@
 // window, which renders them on its own GPU device; no frame of pixels crosses (the 8 MB readback and pipe of
 // samples/gpu_visualizer.warp). No window opens here
 #![cfg(feature = "native")]
-use warp::gpu::ShaderValue;
-use warp::paint_window::{read_message, shader_message, Message};
+use warp::graphics::gpu::ShaderValue;
+use warp::graphics::paint_window::{read_message, shader_message, Message};
 
 const SHADER: &str = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 	return vec4f(at.x / values.width, values.tone, values.levels[1].y, 1.0);
@@ -47,9 +47,9 @@ fn a_shader_frame_crosses_to_the_paint_window_whole_and_small() {
 
 #[test]
 fn the_paint_window_renders_what_paint_renders() {
-	let Ok(rendered) = warp::gpu::with_device(|device, queue| {
-		let texture = warp::gpu::render_texture(device, queue, SHADER, 64, 48, &values(), None)?;
-		warp::gpu::image_rgba(
+	let Ok(rendered) = warp::graphics::gpu::with_device(|device, queue| {
+		let texture = warp::graphics::gpu::render_texture(device, queue, SHADER, 64, 48, &values(), None)?;
+		warp::graphics::gpu::image_rgba(
 			device,
 			queue,
 			device.create_command_encoder(&Default::default()),
@@ -58,16 +58,16 @@ fn the_paint_window_renders_what_paint_renders() {
 	}) else {
 		return eprintln!("no GPU here");
 	};
-	let read_back = warp::gpu::render_rgba(SHADER, 64, 48, &values()).expect("the shader renders");
+	let read_back = warp::graphics::gpu::render_rgba(SHADER, 64, 48, &values()).expect("the shader renders");
 	assert_eq!(rendered.expect("the shader renders in a texture"), read_back);
 }
 
 #[test]
 fn a_shader_that_does_not_compile_fails_before_it_reaches_the_window() {
-	if warp::gpu::with_device(|_, _| ()).is_err() {
+	if warp::graphics::gpu::with_device(|_, _| ()).is_err() {
 		return eprintln!("no GPU here");
 	}
-	let problem = warp::gpu::checked_values("@fragment fn main( {", 64, 48, &[]).err();
+	let problem = warp::graphics::gpu::checked_values("@fragment fn main( {", 64, 48, &[]).err();
 	assert!(
 		problem.is_some_and(|problem| problem.contains("expected")),
 		"it compiled"

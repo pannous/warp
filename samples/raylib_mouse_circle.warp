@@ -9,7 +9,7 @@ SetTargetFPS(60)
 
 needsClear = 1
 
-while(!WindowShouldClose()){
+while not WindowShouldClose() {
     mouseX = GetMouseX()
     mouseY = GetMouseY()
 

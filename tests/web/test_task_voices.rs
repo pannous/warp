@@ -1,4 +1,4 @@
-// card playground-go: a task (`go { }`) is a voice, natively (src/sound.rs Voice) and in the browser (host-tasks.js
+// card playground-go: a task (`go { }`) is a voice, natively (src/sound/mod.rs Voice) and in the browser (host-tasks.js
 // voicePlaced): its sounds start where its starter's voice stands and sound along with the starter's later ones,
 // instead of queueing behind them. sound_queued() is the asking voice's; a busy machine only lowers it (the clock goes
 // on, a cold start of the task takes seconds), so each test leaves seconds of room between the two outcomes

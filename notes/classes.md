@@ -383,7 +383,7 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
   `Coin.Dime` is `Dime`, `Dime is Coin`; `Coin.Dime as int` its index 2 (counting from 0, as C does; warp's
   positions `x in xs`, `c#1` are 1-based), `as index` the same, `as position` 3 (spec: wiki/enum.md); `2 as Coin` and `Coin(2)` the case, "9 is no Coin case" past the cases;
   `f(1)` for `f(c: Coin)` is a type error offering `f(1 as Coin)` (card coin-errors, test_fixits). Enums with
-  written values (`Penny = 1`) are not read yet (card enum-coin). A match on a declared enum or sum type that misses
+  written values (`Penny = 1`) are on hold (user: WIT enums carry no values, FFI can work around it; branch enum-coin). A match on a declared enum or sum type that misses
   a case does not compile (match_exhaustive.rs).
 - Open: a match on a subject statically known as a bare variant (`s = Dot; match s {Circle(r) => r*r …}`) types the
   dead arm and fails (card match-static); inside a function it works.

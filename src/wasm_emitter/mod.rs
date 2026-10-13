@@ -453,7 +453,8 @@ impl WasmGcEmitter {
 
 	/// Emit core GC types (String, Node, i64box, f64box)
 	fn emit_gc_types(&mut self) {
-		self.type_manager.emit_gc_types();
+		self.type_manager
+			.emit_gc_types(self.should_emit_function(node_api::NODE_AT));
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -564,7 +565,9 @@ impl WasmGcEmitter {
 				!matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
 			}
 			Node::Key(_left, op, _right) if op.is_shift() || op.is_comparison() => true,
-			Node::Key(left, op, right) if op.is_logical() => self.is_numeric(left) && self.is_numeric(right),
+			Node::Key(left, op, right) if op.is_logical() || op.is_bitwise() => {
+				self.is_numeric(left) && self.is_numeric(right)
+			}
 			// `not x` is always 1 or 0
 			Node::Key(left, Op::Not, _) if matches!(left.drop_meta(), Node::Empty) => true,
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
@@ -640,7 +643,7 @@ impl WasmGcEmitter {
 		self.import_manager
 			.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
 		self.next_func_idx = self.import_manager.import_count();
-		self.type_manager.emit_gc_types();
+		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
 		self.emit_instance_types();
@@ -738,6 +741,10 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
+		// quoted code keeps its positions: node_at and $MetaNode only in a program that quotes (card data-meta)
+		if node.mentions_any(&list_emitter::QUOTE_WORDS) {
+			self.ctx.required_functions.insert(node_api::NODE_AT);
+		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
 		}

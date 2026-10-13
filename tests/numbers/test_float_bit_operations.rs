@@ -12,6 +12,6 @@ fn test_logical_and_bit_operators_on_a_float_are_refused_loudly() {
 
 #[test]
 fn test_logical_and_bit_operators_on_ints_still_work() {
-	is!("12 & 10", 10);
+	is!("12 & 10", 8); // bitwise on ints (card operator-shall, user 2026-10-13)
 	is!("12 xor 10", 6);
 }

@@ -22,7 +22,7 @@ fn get(path: &str) -> String {
 #[test]
 fn serve_answers_routes() {
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(4);
+		warp::web::web_server::stop_after(4);
 		let value = warp::wasm_emitter::eval(PROGRAM);
 		(value.first_error().is_none(), value.serialize())
 	});
@@ -53,7 +53,7 @@ fn serve_answers_routes() {
 fn a_server_function_is_called_over_http() {
 	const RPC_PORT: u16 = 18432;
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(2);
+		warp::web::web_server::stop_after(2);
 		let value = warp::wasm_emitter::eval("server def add(a, b) { a + b }\nserver greet(name) := \"hi \" + name\nserve 18432 { get \"/\" { \"ok\" } }");
 		(value.first_error().is_none(), value.serialize())
 	});
@@ -82,7 +82,7 @@ fn a_server_function_is_called_over_http() {
 fn a_program_serves_its_own_page() {
 	const PAGE_PORT: u16 = 18433;
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(4);
+		warp::web::web_server::stop_after(4);
 		let value = warp::wasm_emitter::eval("tests/fixtures/served_page.warp");
 		(value.first_error().is_none(), value.serialize())
 	});
@@ -152,7 +152,7 @@ fn a_served_page_s_events_draw_no_warning() {
 fn a_served_page_with_routes_answers_every_path() {
 	const ROUTES_PORT: u16 = 18441;
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(4);
+		warp::web::web_server::stop_after(4);
 		let value = warp::wasm_emitter::eval("tests/fixtures/served_routes.warp");
 		(value.first_error().is_none(), value.serialize())
 	});

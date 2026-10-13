@@ -34,3 +34,11 @@ fn a_function_updating_a_main_list_asks_for_global() {
 		"declare it `global names`",
 	);
 }
+
+#[test]
+fn a_library_word_is_a_function_value_of_a_user_function() {
+	is!("f(ok) := ok('a'); f(is_letter)", true);
+	is!("f(ok) := ok('a'); f(is_digit)", false);
+	is!("twice(g, x) := g(g(x)); twice(upper, \"hi\")", "HI");
+	is!("apply(g, a, b) := g(a, b); apply(join, [\"a\", \"b\"], \"-\")", "a-b");
+}

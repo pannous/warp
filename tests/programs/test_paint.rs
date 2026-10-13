@@ -64,14 +64,14 @@ fn paint_writes_colors_as_a_truecolor_png() {
 	assert_eq!(rows, [0, 255, 128, 0, 250, 250, 250, 29, 29, 29]);
 }
 
-// card g_gGsg: in a terminal paint sends each frame to the window of `warp paint-window` (src/paint_window.rs) over its
+// card g_gGsg: in a terminal paint sends each frame to the window of `warp paint-window` (src/graphics/paint_window.rs) over its
 // stdin, as [width u32][height u32][RGBA bytes] shaded as the PNG is; the viewer reads back the same frames (the window
 // itself: probes/paint_window.sh, not here, where no window may open)
 #[test]
 fn paint_frames_for_the_window_read_back_as_sent() {
-	use warp::paint_window::{frame_bytes, read_frame, Frame};
-	let paper = warp::paint::PAPER;
-	let ink = warp::paint::INK;
+	use warp::graphics::paint_window::{frame_bytes, read_frame, Frame};
+	let paper = warp::graphics::paint::PAPER;
+	let ink = warp::graphics::paint::INK;
 	let mut stream = [frame_bytes(&[0, 1, 0xFF12_C863], 3, 1), frame_bytes(&[1], 1, 1)].concat();
 	let mut reader = std::io::Cursor::new(&mut stream);
 	assert_eq!(
@@ -95,7 +95,7 @@ fn paint_frames_for_the_window_read_back_as_sent() {
 
 // card shader-brush: macOS sends mouse moves only to the key window, and the paint window started from a terminal is
 // not it, so samples/shader_brush.warp's glow never followed the hovering pointer; the viewer's view gets a tracking
-// area active always (src/paint_window.rs track_pointer_always). Checked on a view of no window: none opens here
+// area active always (src/graphics/paint_window.rs track_pointer_always). Checked on a view of no window: none opens here
 #[test]
 #[cfg(all(feature = "native", target_os = "macos"))]
 fn the_paint_window_hears_the_pointer_unfocused() {
@@ -103,14 +103,14 @@ fn the_paint_window_hears_the_pointer_unfocused() {
 	// SAFETY: a fresh NSView and AppKit's own getters on it
 	unsafe {
 		let view: *mut AnyObject = msg_send![class!(NSView), new];
-		warp::paint_window::track_pointer_always(&*view);
+		warp::graphics::paint_window::track_pointer_always(&*view);
 		let areas: *mut AnyObject = msg_send![&*view, trackingAreas];
 		let count: usize = msg_send![&*areas, count];
 		assert_eq!(count, 1);
 		let area: *mut AnyObject = msg_send![&*areas, firstObject];
 		let options: usize = msg_send![&*area, options];
 		assert_ne!(
-			options & warp::paint_window::TRACKING_ACTIVE_ALWAYS,
+			options & warp::graphics::paint_window::TRACKING_ACTIVE_ALWAYS,
 			0,
 			"options {options:#x}"
 		);

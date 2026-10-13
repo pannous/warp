@@ -63,7 +63,7 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 30] = [
+const SYNONYMS: [(&str, &[&str]); 31] = [
 	(crate::wasm_emitter::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
@@ -93,6 +93,7 @@ const SYNONYMS: [(&str, &[&str]); 30] = [
 	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
+	("is_space", &["is_whitespace", "isspace"]),
 	("nearest", &[]),
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
 	(DICT_WORD, &[]),
@@ -1085,7 +1086,16 @@ impl Lowering {
 		}
 		// a variable of unknown value (`o` of `for o in people.filter(…)`), or an element of one (`xs[1]`), may hold an
 		// object: its field is looked up at run time
-		let variable = match receiver.drop_meta() {
+		// a parenthesized receiver is what it holds: `(x#2).name` is `x#2.name` (card name-quoted); `f()` stays a call
+		let inner = match receiver.drop_meta() {
+			Node::List(items, Bracket::Round, _)
+				if items.len() == 1 && !matches!(items[0].drop_meta(), Node::Symbol(_)) =>
+			{
+				items[0].drop_meta()
+			}
+			other => other,
+		};
+		let variable = match inner {
 			Node::Key(list, Op::Hash, _) => list.drop_meta(),
 			other => other,
 		};
@@ -1093,17 +1103,17 @@ impl Lowering {
 			Node::Symbol(variable) => {
 				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
 			}
-			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call), or a parenthesized object `({a:1}).a`
+			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call)
 			Node::List(items, Bracket::Round, Separator::None)
 				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
 			{
 				true
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => {
-				matches!(items[0].drop_meta(), Node::List(_, Bracket::Curly, _))
-			}
+			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
+			Node::List(_, Bracket::Curly, _) => true,
+			_ if crate::blocks::quoted_data(variable).is_some() => true,
 			// an element of a computed list: `users.filter(…)#1.name`
-			_ => matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
+			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		};
 		if may_hold_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));

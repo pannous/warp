@@ -46,7 +46,7 @@ in its module and moves into the prelude only by decision.
 ## 4. Existing words and their module (probed on functions 6b84b42da, 2026-10-07)
 Works today: math `abs sqrt floor ceil round min max pow log sin cos tan ln exp root`; list `len count size range sum
 any all filter map fold reduce each first last reverse sort contains index_of slice copy`; text `upper lower trim
-strip split join replace starts_with ends_with chars ord chr is_digit is_alpha is_alphanumeric codepoint`; map `keys
+strip split join replace starts_with ends_with chars ord chr is_digit is_alpha is_alphanumeric is_space codepoint`; map `keys
 values entries get has contains without`; conversion `int text float list type as`; time `clock now sleep`, durations;
 random `random random_below`; io `read`; net `fetch`; os `exit`; signals `every daily at whenever on emit send`.
 Sources: src/lowering/library_words.rs (SYNONYMS, RUNTIME_WORDS, EXPANDED_WORDS), src/wasm_emitter/library_ops.rs
@@ -112,7 +112,7 @@ Next:
    the way: a slice of a Node is a Node (capitalize(w) for the elements of words(t) was 'text + list'); a
    comprehension's list is a `let` local (one in a module and one in the program asked "new local or main-level?").
    math: round_to factorial is_prime lerp; list: scan take_while drop_while argmax argmin (from 0, like xs[i]; 1-based like index_of asked at warp-e9);
-   map: entries; text: is_blank; random: seed(n) (host word random_seed: xorshift64* natively and in host.js, per run).
+   map: entries; text: is_blank, class Cursor (at_end peek advance looking_at skip take_while skip_while rest; slices copy); random: seed(n) (host word random_seed: xorshift64* natively and in host.js, per run).
    math: is_even is_odd digits choose mod_pow; list: pairwise split_at cartesian mode variance stdev; text: is_upper
    is_lower remove_prefix remove_suffix count_of is_palindrome; map: get_or; time: is_leap_year days_in_month. Fixed on
    the way: a lambda reading the loop variable given to a function (mode's count_by(xs, y => y == x)) was specialised

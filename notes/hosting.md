@@ -83,9 +83,9 @@ lambda's DNS moves to Cloudflare):
   whose warp-<name> Worker exists without an owner in NAMES (before 2026-10-12 a GitHub user could have overwritten
   the control Worker by deploying the name `hosting`).
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
-- Clients: `warp deploy --hosted app.warp` (src/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
+- Clients: `warp deploy --hosted app.warp` (src/web/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
-  scripts, src/web.rs worker_bundle → src/host_parts.rs).
+  scripts, src/web/mod.rs worker_bundle → src/host_parts.rs).
 - Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
   dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
 
@@ -99,7 +99,12 @@ lambda's DNS moves to Cloudflare):
   warp-lambda@*.service), install.sh (over ssh, optional Linux binary:
   `cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.39 --bin warp`).
 - Sandboxed (user, 2026-10-09): `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
-  runtimes: "capability denied" at deploy). The unit: DynamicUser, own state folder
+  runtimes: "capability denied" at deploy). The rule at run time (src/sandbox.rs, cards sandbox-exec and
+  sandbox-hosted, 2026-10-13): no process (os.exec behind `exec sh"…"`, which std_io hid from the capability check;
+  sound players, the MIDI sender), loud "capability denied … warp --sandbox"; files are written only inside the state
+  folder (systemd's STATE_DIRECTORY, else the working directory): file.write/write_bytes/append, stored values,
+  SQLite files, midi.write_file, sound.render, the path resolved, `..` and symbolic links refused; fetch and net reach
+  the network (the unit's IPAddressDeny keeps it off the server itself). The unit: DynamicUser, own state folder
   /var/lib/warp-lambda-data/<name> (wiped by `systemctl clean` on remove), the source read-only, ProtectSystem=strict,
   192 MB, half a core, 64 tasks. Network: the program listens on 127.0.0.2; IPAddressDeny of localhost, private
   ranges and the server's own IP with only 127.0.0.2 allowed, so it reaches the internet but not the ssh gateway

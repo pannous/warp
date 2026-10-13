@@ -5,11 +5,15 @@
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
+use super::blocks::{quoted_data, DATA_WORD};
+use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
-use super::nodes::{call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
+use super::nodes::{block, call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
+use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::optional_field;
 use crate::warp_parser::subscript;
 use crate::words::COUNT_WORD;
 use crate::words::MAP_WORD;
@@ -19,9 +23,11 @@ use crate::words::SWITCH_WORDS;
 
 const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
 /// In a pattern: any item, bound to no name
-const WILDCARD: &str = "_";
+pub(crate) const WILDCARD: &str = "_";
 const LIST_SPEC: &str = "list";
 const PAIR_SPEC: &str = "pair";
+const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
+const KEY_SPEC: &str = "key";
 const TEXT_WORD: &str = "str";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
@@ -32,6 +38,18 @@ const UNNAMED_SUBJECT: &str = "value";
 /// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
 const VALUE_WORD: &str = "value";
 const LET_WORD: &str = "let";
+const ITEM_WORD: &str = "item";
+const HELD_WORD: &str = "held";
+/// `$a` in a code pattern `data($a + 0)`: a hole that binds the subtree there (card code-holes)
+const HOLE_PREFIX: &str = "$";
+/// The parts of a key a code pattern reads (wasm_emitter/node_api.rs)
+const OP_FIELD: &str = "op";
+const KEY_FIELD: &str = "key";
+const VALUE_FIELD: &str = "value";
+thread_local! {
+	/// Numbers the loops of item patterns apart: `item·0`, `held·0`
+	static ITEM_LOOPS: Counter = Counter::default();
+}
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -163,7 +181,7 @@ fn as_subject(node: Node, subject: &Node) -> Node {
 
 /// The word, subject and case block of a switch as the parser groups them: the items [switch, subject, {cases}],
 /// the pair [(switch subject), {cases}], or, when the block juxtaposes with a variable subject, [switch, (subject {cases})]
-fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
+pub(crate) fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
 	match items {
 		[head, subject, cases] => Some((head, subject, cases)),
 		[pair, cases] if matches!(pair.drop_meta(), Node::List(words, _, _) if words.len() == 2) => {
@@ -178,6 +196,11 @@ fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
 		},
 		_ => None,
 	}
+}
+
+/// `match`, `switch`: a word that opens a switch
+pub(crate) fn is_switch_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::Symbol(word) if SWITCH_WORDS.contains(&word.as_str()))
 }
 
 /// The leftmost operand of an operator chain
@@ -226,9 +249,82 @@ pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 	}
 }
 
+/// An item pattern `[a, b]...` (also `{sku}...`) in a list pattern's rest position: every item of the rest matches it
+fn item_pattern(part: &Node) -> Option<&Node> {
+	match part.drop_meta() {
+		Node::Key(each, Op::Range | Op::To, end)
+			if matches!(end.drop_meta(), Node::Empty) && matches!(each.drop_meta(), Node::List(..)) =>
+		{
+			Some(each)
+		}
+		_ => None,
+	}
+}
+
+fn is_rest(part: &Node) -> bool {
+	rest_pattern(part).is_some() || item_pattern(part).is_some()
+}
+
+/// `[[n, s]...]`: a loop testing every item against the item pattern, appending the value of each name it binds to that
+/// name's list; the test holds when every item matched, the names are bound to the lists (card list-pattern)
+fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>, names: &Names) -> Node {
+	let number = ITEM_LOOPS.with(|loops| loops.next_number());
+	let temporary = |name: &str| Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}{number}"));
+	let (item, held) = (temporary(ITEM_WORD), temporary(HELD_WORD));
+	let Matched {
+		tests: item_tests,
+		bindings: item_bindings,
+		..
+	} = Matched::of(each, item.clone(), names);
+	let mut statements = vec![key(held.clone(), Op::Assign, Node::True)];
+	let mut appends = vec![];
+	for (name, value) in item_bindings.iter().filter_map(bound) {
+		let list = temporary(&name.name());
+		statements.push(key(list.clone(), Op::Assign, Node::Empty));
+		appends.push(key(
+			list.clone(),
+			Op::AddAssign,
+			Node::List(vec![value.clone()], Bracket::Square, Separator::None),
+		));
+		bindings.push(bind(name.clone(), list));
+	}
+	let missed = key(held.clone(), Op::Assign, Node::False);
+	let verdict = match appends.is_empty() {
+		true => if_then(key(Node::Empty, Op::Not, joined(item_tests, Op::And)), missed),
+		false => key(if_then(joined(item_tests, Op::And), block(appends)), Op::Else, missed),
+	};
+	statements.push(walking_loop(&item, items, vec![verdict]));
+	statements.push(held);
+	sequence(statements)
+}
+
+/// The names a pattern binds, in order
+pub(crate) fn bound_names(pattern: &Node) -> Vec<Node> {
+	Matched::of(pattern, Node::Empty, &Names::default())
+		.bindings
+		.iter()
+		.filter_map(bound)
+		.map(|(name, _)| name.clone())
+		.collect()
+}
+
+/// The name and value of a binding `let name = value`
+fn bound(binding: &Node) -> Option<(&Node, &Node)> {
+	match binding.drop_meta() {
+		Node::List(parts, _, _) => match parts.as_slice() {
+			[_, declaration] => match declaration.drop_meta() {
+				Node::Key(name, Op::Assign, value) => Some((name.as_ref(), value.as_ref())),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 /// `{name: n, body: {user}}` matches a map partially (card map-patterns): only fields, each a name, `name: pattern`
 /// or an unnamed rest `..`
-fn is_map_pattern(pattern: &Node) -> bool {
+pub(crate) fn is_map_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
 		Node::List(fields, Bracket::Curly, _) => {
 			!fields.is_empty()
@@ -240,8 +336,12 @@ fn is_map_pattern(pattern: &Node) -> bool {
 	}
 }
 
-/// A field of a map pattern as its name and its pattern: `{name}` binds the field to its own name
+/// A field of a map pattern as its name and its pattern: `{name}` binds the field to its own name; `debug?: bool` is
+/// the optional field (card schemas)
 fn map_field(part: &Node) -> Option<(String, &Node)> {
+	if let Some(field) = optional_field(part) {
+		return map_field(field);
+	}
 	match part.drop_meta() {
 		Node::Symbol(name) if rest_pattern(part).is_none() => Some((name.clone(), part)),
 		Node::Key(name, Op::Colon, pattern) if matches!(name.drop_meta(), Node::Symbol(_) | Node::Text(_)) => {
@@ -252,7 +352,7 @@ fn map_field(part: &Node) -> Option<(String, &Node)> {
 }
 
 /// `[a, b]` and the tuple `(a, b)` (card match-tuples) match by shape; a parenthesised single item `(x)` is a group
-fn is_list_pattern(pattern: &Node) -> bool {
+pub(crate) fn is_list_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
 		Node::List(_, Bracket::Square, _) => true,
 		Node::List(items, Bracket::Round, Separator::Colon) => items.len() > 1,
@@ -260,83 +360,243 @@ fn is_list_pattern(pattern: &Node) -> bool {
 	}
 }
 
-/// The tests the value at `path` passes when it matches `pattern`, and the assignments of the names the pattern binds
-fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
-	match pattern.drop_meta() {
-		Node::List(items, _, _) if is_list_pattern(pattern) => {
-			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
-			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
-				tests.push(key(
-					call(COUNT_WORD, vec![path.clone()]),
-					Op::Eq,
-					Node::int(items.len() as i64),
-				));
-				for (index, part) in items.iter().enumerate() {
-					pattern_tests(part, item(&path, index + 1), tests, bindings);
+/// What a pattern asks of the value it matches: the tests it passes, and the assignments of the names it binds
+struct Matched<'a> {
+	names: &'a Names,
+	tests: Vec<Node>,
+	bindings: Vec<Node>,
+}
+
+impl<'a> Matched<'a> {
+	fn of(pattern: &Node, path: Node, names: &'a Names) -> Self {
+		let mut matched = Matched {
+			names,
+			tests: vec![],
+			bindings: vec![],
+		};
+		matched.pattern(pattern, path);
+		matched
+	}
+
+	/// The tests and bindings of `pattern` matching the value at `path`; at any depth a part takes what a whole arm
+	/// takes (card deep-conditions)
+	fn pattern(&mut self, pattern: &Node, path: Node) {
+		if let Some(code) = code_pattern(pattern) {
+			return code_tests(&code, path, &mut self.tests, &mut self.bindings);
+		}
+		if let Some(test) = condition(&path, pattern, self.names) {
+			self.tests.push(test);
+			return;
+		}
+		match pattern.drop_meta() {
+			Node::List(items, _, _) if is_list_pattern(pattern) => self.items(items, path),
+			// fields not named are ignored, the named ones must be there
+			Node::List(fields, _, _) if is_map_pattern(pattern) => {
+				// a map of one field is a pair
+				let is = |spec| call(crate::words::IS_TYPE, vec![path.clone(), text(spec)]);
+				self.tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_SPEC)));
+				for field_part in fields {
+					let Some((name, part)) = map_field(field_part) else {
+						continue;
+					};
+					let present = call(COLLECTION_CONTAINS, vec![path.clone(), Node::Text(name.clone())]);
+					let field = subscript(path.clone(), Node::Text(name.clone()));
+					if optional_field(field_part).is_some() {
+						// missing, or there and matching
+						let Matched { tests, bindings, .. } = Matched::of(part, field, self.names);
+						let missing = key(Node::Empty, Op::Not, present);
+						self.tests.push(key(missing, Op::Or, joined(tests, Op::And)));
+						self.bindings.extend(bindings);
+						continue;
+					}
+					self.tests.push(present);
+					match part.drop_meta() {
+						Node::Symbol(shorthand) if *shorthand == name => self.bind(part, field), // `{text}` too
+						_ => self.pattern(part, field),
+					}
 				}
-				return;
-			};
-			// `[first, ...middle, last]`: the items before the rest count from the start, those after it from the end
-			let fixed = items.len() - 1;
-			let after = fixed - rest_index;
-			let count = call(COUNT_WORD, vec![path.clone()]);
-			tests.push(key(count.clone(), Op::Ge, Node::int(fixed as i64)));
-			let from_end = |distance: usize| match distance {
-				0 => count.clone(),
-				_ => key(count.clone(), Op::Sub, Node::int(distance as i64)),
-			};
+			}
+			// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
+			Node::Key(name, Op::Colon, value) => {
+				self.tests
+					.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
+				self.tests.push(key(
+					call(TEXT_WORD, vec![item(&path, 1)]),
+					Op::Eq,
+					Node::Text(name.name()),
+				));
+				self.pattern(value, item(&path, 2));
+			}
+			Node::Symbol(name) if name == WILDCARD => {}
+			Node::Symbol(_) => self.bind(pattern, path),
+			literal => self.tests.push(key(path, Op::Eq, literal.clone())),
+		}
+	}
+
+	fn bind(&mut self, name: &Node, path: Node) {
+		self.bindings.push(bind(name.drop_meta().clone(), path));
+	}
+
+	/// `[a, b]` by count and position; `[first, ...middle, last]`: the items before the rest count from the start,
+	/// those after it from the end
+	fn items(&mut self, items: &[Node], path: Node) {
+		self.tests
+			.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
+		let count = call(COUNT_WORD, vec![path.clone()]);
+		let Some(rest_index) = items.iter().position(is_rest) else {
+			self.tests.push(key(count, Op::Eq, Node::int(items.len() as i64)));
 			for (index, part) in items.iter().enumerate() {
-				match index.cmp(&rest_index) {
-					std::cmp::Ordering::Less => pattern_tests(part, item(&path, index + 1), tests, bindings),
-					std::cmp::Ordering::Greater => pattern_tests(
-						part,
-						key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)),
-						tests,
-						bindings,
-					),
-					std::cmp::Ordering::Equal => {
-						if let Some(Some(name)) = rest_pattern(part) {
-							let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
-							bindings.push(bind(Node::Symbol(name), rest));
-						}
+				self.pattern(part, item(&path, index + 1));
+			}
+			return;
+		};
+		let fixed = items.len() - 1;
+		let after = fixed - rest_index;
+		self.tests.push(key(count.clone(), Op::Ge, Node::int(fixed as i64)));
+		let from_end = |distance: usize| match distance {
+			0 => count.clone(),
+			_ => key(count.clone(), Op::Sub, Node::int(distance as i64)),
+		};
+		for (index, part) in items.iter().enumerate() {
+			match index.cmp(&rest_index) {
+				std::cmp::Ordering::Less => self.pattern(part, item(&path, index + 1)),
+				std::cmp::Ordering::Greater => {
+					self.pattern(part, key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)))
+				}
+				std::cmp::Ordering::Equal => {
+					let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
+					if let Some(each) = item_pattern(part) {
+						let test = every_item_test(each, rest, &mut self.bindings, self.names);
+						self.tests.push(test);
+					} else if let Some(Some(name)) = rest_pattern(part) {
+						self.bind(&Node::Symbol(name), rest);
 					}
 				}
 			}
 		}
-		// fields not named are ignored, the named ones must be there
-		Node::List(fields, _, _) if is_map_pattern(pattern) => {
-			// a map of one field is a pair
-			let is = |spec| call(crate::words::IS_TYPE, vec![path.clone(), text(spec)]);
-			tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_SPEC)));
-			for (name, part) in fields.iter().filter_map(map_field) {
-				tests.push(call(COLLECTION_CONTAINS, vec![path.clone(), Node::Text(name.clone())]));
-				pattern_tests(part, subscript(path.clone(), Node::Text(name)), tests, bindings);
+	}
+}
+
+/// A test of the value at `path` that binds nothing: a comparison `>= 18`, a type word (`int`, `Circle`), a range
+/// `13 to 17` or alternatives `1 | 2`
+fn condition(path: &Node, pattern: &Node, names: &Names) -> Option<Node> {
+	if let Node::Key(empty, op, bound) = pattern.drop_meta() {
+		if matches!(empty.drop_meta(), Node::Empty) && op.is_ordering() {
+			return Some(key(path.clone(), *op, bound.as_ref().clone()));
+		}
+	}
+	if let Some(test) = type_test(path, pattern, names) {
+		return Some(test);
+	}
+	if let Some(tests) = range_tests(path, pattern) {
+		return Some(joined(tests, Op::And));
+	}
+	let alternatives = or_operands(pattern);
+	if alternatives.len() < 2 {
+		return None;
+	}
+	let tests = alternatives.iter().map(|alternative| {
+		let matched = Matched::of(alternative, path.clone(), names);
+		match matched.bindings.is_empty() {
+			true => joined(matched.tests, Op::And),
+			false => error(ALTERNATIVES_BIND_NO_NAMES),
+		}
+	});
+	Some(joined(tests.collect(), Op::Or))
+}
+
+/// `data($a + 0)`: quoted code holding a hole
+pub(crate) fn code_pattern(pattern: &Node) -> Option<Node> {
+	let code = match pattern.drop_meta() {
+		// `data $f ($x)`: the words after data
+		Node::List(words, Bracket::None, Separator::Space) if words.len() > 2 && words[0].is_symbol(DATA_WORD) => {
+			Node::List(words[1..].to_vec(), Bracket::None, Separator::Space)
+		}
+		_ => quoted_data(pattern)?.clone(),
+	};
+	has_hole(&code).then_some(code)
+}
+
+fn hole_name(part: &Node) -> Option<&str> {
+	part.drop_meta()
+		.symbol_name()?
+		.strip_prefix(HOLE_PREFIX)
+		.filter(|name| !name.is_empty())
+}
+
+fn has_hole(code: &Node) -> bool {
+	match code.drop_meta() {
+		Node::Key(left, _, right) => has_hole(left) || has_hole(right),
+		Node::List(items, _, _) => items.iter().any(has_hole),
+		part => hole_name(part).is_some(),
+	}
+}
+
+/// The code at `path` has the shape of the quoted code: a hole binds the subtree there, a repeated hole must be the same
+/// subtree, a key has the same operator and a list the same length, parts without holes are equal as data
+fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
+	if let Some(name) = hole_name(code) {
+		let name = Node::Symbol(name.to_string());
+		match bindings
+			.iter()
+			.filter_map(bound)
+			.find(|(bound_name, _)| **bound_name == name)
+		{
+			Some((_, earlier)) => tests.push(key(path, Op::Eq, earlier.clone())),
+			None => bindings.push(bind(name, path)),
+		}
+		return;
+	}
+	match code.drop_meta() {
+		Node::Key(left, op, right) if has_hole(code) => {
+			let part = |field: &str| key(path.clone(), Op::Dot, Node::Symbol(field.to_string()));
+			tests.push(type_named(&path, KEY_SPEC));
+			tests.push(key(part(OP_FIELD), Op::Eq, text(op.as_str())));
+			code_tests(left, part(KEY_FIELD), tests, bindings);
+			code_tests(right, part(VALUE_FIELD), tests, bindings);
+		}
+		Node::List(items, _, _) if has_hole(code) => {
+			let items = called_hole_items(items);
+			tests.push(type_named(&path, LIST_SPEC));
+			tests.push(key(
+				call(COUNT_WORD, vec![path.clone()]),
+				Op::Eq,
+				Node::int(items.len() as i64),
+			));
+			for (index, part) in items.iter().enumerate() {
+				code_tests(part, item(&path, index + 1), tests, bindings);
 			}
 		}
-		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
-		Node::Key(name, Op::Colon, value) => {
-			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
-			tests.push(key(
-				call(TEXT_WORD, vec![item(&path, 1)]),
-				Op::Eq,
-				Node::Text(name.name()),
-			));
-			pattern_tests(value, item(&path, 2), tests, bindings);
-		}
-		Node::Symbol(name) if name == WILDCARD => {}
-		Node::Symbol(_) => bindings.push(bind(pattern.drop_meta().clone(), path)),
-		literal => tests.push(key(path, Op::Eq, literal.clone())),
+		_ => tests.push(key(
+			path,
+			Op::Eq,
+			Node::List(
+				vec![Node::Symbol(DATA_WORD.to_string()), code.clone()],
+				Bracket::None,
+				Separator::Space,
+			),
+		)),
 	}
+}
+
+/// `$f($x, $y)` reads as the hole `$f` and the group `($x, $y)`, where a call `g(x, y)` of a name quotes as `g x y`
+fn called_hole_items(items: &[Node]) -> Vec<Node> {
+	match items {
+		[head, arguments] if hole_name(head).is_some() => match arguments.drop_meta() {
+			Node::List(arguments, Bracket::Round, _) => [vec![head.clone()], arguments.clone()].concat(),
+			_ => items.to_vec(),
+		},
+		_ => items.to_vec(),
+	}
+}
+
+fn type_named(path: &Node, type_word: &str) -> Node {
+	call(crate::words::IS_TYPE, vec![path.clone(), text(type_word)])
 }
 
 /// A case as its test and its body: a list key is a structural pattern whose names are bound before the body runs; a
 /// guard `n if n < 0` binds n to the subject and holds when its condition does
 fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
-	if let Node::Key(empty, op, bound) = case.key.drop_meta() {
-		if matches!(empty.drop_meta(), Node::Empty) && op.is_ordering() {
-			return (key(subject.clone(), *op, bound.as_ref().clone()), case.body); // `> 100 =>` compares the subject
-		}
-	}
 	let (pattern, guard) = split_guard(&case.key);
 	let binds = guard.is_some() || is_binding_name(&pattern, &case.body, names);
 	let (test, bindings) = match pattern_test(subject, &pattern, binds, names) {
@@ -388,7 +648,7 @@ pub(crate) fn pattern_test(
 	for alternative in &alternatives {
 		let (tests, bindings) = alternative_tests(subject, alternative, guarded, names);
 		if !bindings.is_empty() {
-			return Err("alternatives bind no names: write one case per pattern, or `_` for an item");
+			return Err(ALTERNATIVES_BIND_NO_NAMES);
 		}
 		matches.push(joined(tests, Op::And));
 	}
@@ -398,28 +658,32 @@ pub(crate) fn pattern_test(
 /// `xs is [_, 2]` and `if xs is [a, b] then b` (card is-pattern): a list or tuple holding `_`, a rest or a name defined
 /// nowhere is a pattern, its names bound as the test holds; a list of known values stays a comparison
 pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Option<Node> {
-	if !(is_list_pattern(pattern) || is_map_pattern(pattern)) || !has_open_part(pattern, names) {
+	let is_structural = (is_list_pattern(pattern) || is_map_pattern(pattern)) && has_open_part(pattern, names);
+	if !is_structural && code_pattern(pattern).is_none() {
 		return None;
 	}
-	let (mut tests, mut bindings) = (vec![], vec![]);
-	pattern_tests(pattern, subject.clone(), &mut tests, &mut bindings);
+	let Matched {
+		mut tests, bindings, ..
+	} = Matched::of(pattern, subject.clone(), names);
 	if !bindings.is_empty() {
 		tests.push(sequence([bindings, vec![Node::True]].concat()));
 	}
 	Some(joined(tests, Op::And))
 }
 
-/// `_`, a rest or a name not defined anywhere among the parts of a pattern: what a value never is
+/// `_`, a rest, a comparison `>= 18` or a name not defined anywhere among the parts of a pattern: what a value never is
 fn has_open_part(pattern: &Node, names: &Names) -> bool {
-	if rest_pattern(pattern).is_some() {
+	if is_rest(pattern) {
 		return true;
 	}
 	match pattern.drop_meta() {
+		Node::Key(empty, op, _) => matches!(empty.drop_meta(), Node::Empty) && op.is_ordering(),
 		Node::List(items, _, _) if is_list_pattern(pattern) => items.iter().any(|part| has_open_part(part, names)),
-		Node::List(fields, _, _) if is_map_pattern(pattern) => fields
-			.iter()
-			.filter_map(map_field)
-			.any(|(_, part)| has_open_part(part, names)),
+		// a schema `{port: int, debug?: bool}`: no map holds a type or an optional field
+		Node::List(fields, _, _) if is_map_pattern(pattern) => fields.iter().any(|part| {
+			optional_field(part).is_some()
+				|| map_field(part).is_some_and(|(_, part)| is_type_word(part) || has_open_part(part, names))
+		}),
 		Node::Symbol(name) => name == WILDCARD || !names.contains(name) && !is_type_word(pattern),
 		_ => false,
 	}
@@ -443,18 +707,14 @@ fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Name
 			return (vec![test], vec![bind(name.drop_meta().clone(), subject.clone())]);
 		}
 	}
-	if let Some(test) = type_test(subject, pattern, names) {
+	if let Some(test) = condition(subject, pattern, names) {
 		return (vec![test], vec![]);
 	}
-	if let Some(tests) = range_tests(subject, pattern) {
-		return (tests, vec![]);
-	}
-	if !guarded && !is_list_pattern(pattern) && !is_map_pattern(pattern) {
+	if !guarded && !is_list_pattern(pattern) && !is_map_pattern(pattern) && code_pattern(pattern).is_none() {
 		return (vec![key(subject.clone(), Op::Eq, pattern.clone())], vec![]);
 	}
-	let (mut tests, mut bindings) = (vec![], vec![]);
-	pattern_tests(pattern, subject.clone(), &mut tests, &mut bindings);
-	(tests, bindings)
+	let matched = Matched::of(pattern, subject.clone(), names);
+	(matched.tests, matched.bindings)
 }
 
 /// `13 to 19` (also `13...19`) includes its end, `13..20` excludes it, `65..` has none: the subject between the bounds

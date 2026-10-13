@@ -42,12 +42,13 @@ page replace {type: "image", src} with {type: "image", src, alt: ""}
 Config = {port: int, host: text, debug?: bool}
 if json(read "config.json") is Config then "ok" else "bad config"
 
-# 8. Code is a tree too: quoted code patterns with holes (needs card parse-word for real Nodes)
+# 8. Code is a tree too: quoted code patterns with holes, quoted as data(…) (backticks are template text;
+# notes/parse_word.md). A hole $a binds the subtree, a repeated hole must be equal; in a result, data(…) fills the holes
 simplify(code) := match code {
-	`$a + 0` => a
-	`$a * 1` => a
-	`$f($x, $x)` => `twice $f $x`
+	data($a + 0) => a
+	data($a * 1) => a
+	data($f($x, $x)) => data(twice $f $x)
 	_ => code
 }
-simplify(`n * 1`)
-# `n`
+simplify(parse("n * 1"))
+# n

@@ -1,9 +1,9 @@
 //! `serve 8080 { get "/api/users" { users } post "/echo" { request.body } }` (card web-server): each route becomes the
 //! function `route·N(request:any) := body` and the statement the host call `serve_routes(8080, [["GET",
-//! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web_server.rs natively; the playground says
+//! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web/web_server.rs natively; the playground says
 //! loudly that it cannot serve). `server def f(a, b) {…}` (typed RPC, notes/web_framework.md "Server and page") is f,
 //! and also the route POST /rpc/f calling it with the request's JSON array of arguments. A program file whose last line
-//! shows a page serves that page too, at / (src/site.rs); its page build leaves the serving out and asks the server
+//! shows a page serves that page too, at / (src/web/site.rs); its page build leaves the serving out and asks the server
 //! for a server function's value (without_serving).
 
 use super::nodes::{call, key};

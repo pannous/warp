@@ -24,3 +24,18 @@ fn words_use_the_comment_line_directly_above_their_definition() {
 		markdown_entry(&page, SOUND_QUEUED)
 	);
 }
+
+// card help-markdown-comment-lines: a comment wrapped over several lines (the next word would not fit in 120 columns)
+// is one doc; a shorter line ends its comment, so an unrelated comment above stays out
+#[test]
+fn a_wrapped_comment_is_the_whole_doc_of_its_word() {
+	let page = standard_library_markdown();
+	let exec = markdown_entry(&page, "exec(command:any)");
+	assert!(exec.contains("`exec sh \"crontab -l\"`"), "{exec}");
+	assert!(exec.ends_with("natively only, the browser runs no processes"), "{exec}");
+	let queued = markdown_entry(&page, SOUND_QUEUED);
+	assert!(queued.contains(": play returns at once"), "{queued}");
+	assert!(!queued.contains("music_words.rs"), "{queued}");
+	let meta = markdown_entry(&page, META_ATTRIBUTES);
+	assert!(!meta.contains("CSS properties"), "{meta}");
+}

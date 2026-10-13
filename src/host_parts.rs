@@ -1,12 +1,12 @@
 //! Which of the playground's host scripts a module needs (card web-bundle): reader.js and host.js always, and the parts
-//! of host.js it imports words of (HOST_PARTS), with the parts they need. A built site (src/site.rs) and a Worker
-//! (src/deploy.rs) ship their texts; the playground's Deploy (src/web.rs web_worker_bundle) only names them for
+//! of host.js it imports words of (HOST_PARTS), with the parts they need. A built site (src/web/site.rs) and a Worker
+//! (src/web/deploy.rs) ship their texts; the playground's Deploy (src/web/mod.rs web_worker_bundle) only names them for
 //! warp-hosting, so the wasm32 compiler carries the names without the texts.
 
 use crate::host::{
 	ANY_STD_MODULE, CLIPBOARD_TEXT, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE,
-	GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, RUN_BLOCK,
-	SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR, STD_PURE, TEXT_COVERAGE,
+	GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, PARSE_CODE,
+	RUN_BLOCK, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR, STD_PURE, TEXT_COVERAGE,
 };
 use crate::node::Node;
 use warp_runtime::host_words::{
@@ -91,7 +91,7 @@ pub const HOST_PARTS: [HostPart; 11] = [
 	},
 	HostPart {
 		script: ("host-compiler.js", script_text!("exact.js", "host-compiler.js")),
-		gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK,
+		gives: |module, name| module == HOST_LIBRARY && [RUN_BLOCK, PARSE_CODE].contains(&name),
 		needs: &["host-files.js"],
 	},
 	HostPart {

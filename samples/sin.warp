@@ -17,4 +17,4 @@ float sine(float x){
   r = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
   return x + z*x*(S1 + z*r)
 }
-round(sine(1.0) * 1000000) // 841471
+round(sine(1.0) * 1000000)  // 841471

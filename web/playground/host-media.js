@@ -15,7 +15,7 @@ function scratch(program, byteCount) {
 }
 
 // [width, height, then how much each pixel is covered from 0 to 255, row by row] of the words set in a sans-serif font
-// `size` pixels per em on one line, as src/text_raster.rs does natively: an OffscreenCanvas works in the run's Worker too
+// `size` pixels per em on one line, as src/graphics/text_raster.rs does natively: an OffscreenCanvas works in the run's Worker too
 const TEXT_FONT = "sans-serif";
 function textCoverage(words, size) {
 	const font = `${size}px ${TEXT_FONT}`;

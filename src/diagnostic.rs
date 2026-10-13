@@ -613,6 +613,12 @@ fn print(diagnostic: &Diagnostic) {
 	}
 }
 
+/// Whether this warning was said on this thread since the last take_warnings: a step emitted twice (an if's
+/// condition) says its warning once
+pub fn warned_before(warning: &Diagnostic) -> bool {
+	COMPILE_WARNINGS.with(|reported| reported.borrow().contains(warning))
+}
+
 /// The compile-time warnings (every level but hints) said on this thread since the last call (a host without a
 /// terminal shows them)
 pub fn take_warnings() -> Vec<Diagnostic> {

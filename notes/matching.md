@@ -40,8 +40,13 @@ implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by th
    another module's names unless imported. Otherwise the head noun (last word) decides: `phone number` is typed
    number, `bar name` is typed name. A multi-word parameter is referred to in the body by its head noun when that is
    unique in the signature (`first name`, `last name` both need the full phrase, which needs multi-word identifiers:
-   out of scope, an error "use one-word parameter names here" until then). Not implemented yet: matching declared
-   multi-word classes, because `class full name {…}` cannot be declared yet (the parser takes one word after `class`).
+   out of scope, an error "use one-word parameter names here" until then).
+   Declared multi-word classes (card multi-word-class): `class full name {…}` declares the kebab name `full-name`, and the
+   parser reads the spaced words `full name` as that one name wherever they stand in the same source (declaration_scan
+   scan_multi_word_types, lists.rs joined_type_name), so `full name{given:"Ann"}` constructs one, `to greet a full name:`
+   types its slot and names its parameter `full-name`, used in the body as `full name.given`. Only classes declared in
+   the source join, so `full name` stays two words elsewhere (wiki/matching.md's "undesired matching from other contexts").
+   Not yet: referring to the parameter by its head noun alone (`name.given`). Probe: probes/matching/multi_word_class.warp.
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
 8. Calls with the phrase's prepositions (P52, user): `add 1 to 2`, `square of 4`, `move 1 from 2 to 3`
@@ -90,9 +95,9 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | enum-parameter-type | `f(c: Coin) := …` for `enum Coin` | "unknown type Coin of parameter c" |
 | map-patterns | `match {name: "Ann", age: 3} { {name: n} => n }` | done (step 1 of tree patterns, below) |
 | match-negative-subject | `match -3 { … }` | parsed as `match - 3` |
-| multi-word-class | `class full name { first; last }` (D5 rule 4) | the parser takes one word after class |
+| multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
-| render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | silently `int` |
+| render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
 | gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | "needs a value for parameter a" |
 
 Decisions (user, via warp-interviewer):
@@ -114,7 +119,21 @@ with `_`, a rest or a name defined nowhere is a pattern, else `is` compares), an
 The whole matched value (user): no `@`/`as` binding. In an arm the subject's name (`match xs`), the word `value` (any
 subject, innermost match; a program variable named value wins) and `match name = expr { … }` (assigns, then matches;
 the name stays bound) give it.
+Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `add_pair([a, b]) := a + b`,
+`total(Point{x, y}) := x + y`. Each pattern parameter gets a numbered name (`list·1`, `point·1: Point`), and the body
+becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
+Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
+(card sum-point).
 Open: pattern names warn as main-level shadows (card pattern-names).
+Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
+`else =>` on its own line is the catch-all arm (card match-arm); `else:` on its own line in a switch still fails to
+parse (it clashes with Python's block colon).
+Item patterns (step 3, card list-pattern): `[[n, s]...]` in a list pattern's rest position matches when every item
+matches; each name binds the list of its values (switch::every_item_test, a while loop over the rest slice).
+Named patterns (step 4, card patterns-values, user: the keyword): `pattern Adult = {age: >= 18}`; `x is Adult`, arms
+`Adult =>`, `it is Adult and Admin`; names inside bind. A plain `Name = …` is a value; one whose right side only a
+pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/named_patterns.rs,
+substitutes the pattern before lower_where).
 Probes: probes/matching/arms.warp, whole_value.warp; inventory with a fresh build: 35 of 48 before tuples, is and
 bare names.
 
@@ -126,11 +145,34 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    one-field map is a pair), each named field there (`collection_contains`), read by subscript `path["name"]`.
    A bare `{a, b} => …` is an arm now; the JS object-parameter lambda needs its parentheses, `({a, b}) => …`.
    Tests: tests/control/test_match_maps.rs; probe probes/matching/map_patterns.warp.
-2. Conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}` (reuses match-ranges, match-type-arms).
+2. deep-conditions (done): conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}`, `{code: 301 | 302}`,
+   in lists too (`[> 3, text]`). switch.rs `condition` is the one test that binds nothing (comparison, type word,
+   range, alternatives), used by a whole arm and by every part (`Matched::pattern`); a comparison makes `x is {…}` a
+   pattern. A shorthand field `{text}` binds, never tests the type. Tests: tests/control/test_match_deep_conditions.rs;
+   probe probes/matching/deep_conditions.warp.
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
-4. Named patterns as values: `Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
+4. Named patterns as values: `pattern Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
-6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
-7. Code patterns: quoted code with holes, `` `$a + 0` => a ``; needs card parse-word (real Nodes of a source).
+   find done (src/lowering/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
+   generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
+   names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
+   Open: `found = [[…]] find P` parses as an assignment first (card found-find).
+   replace done (same file, renamed tree_walks.rs): `tree replace P with Q` rebuilds lists (bracketed/separated keep the
+   bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
+   and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`
+   as a group: `flattened` splices them. Tests tests/control/test_tree_replace.rs, probe probes/matching/tree_replace.warp.
+6. Schemas: `json(text) is Config` with `pattern Config = {port: int, host: text, debug?: bool}`. Done (card schemas):
+   a map pattern whose field is a type word or optional is a pattern for `is` (switch.rs has_open_part; in list
+   patterns type words still compare as values). `debug?: bool` parses as the elvis `debug ? debug : bool`, recognised
+   by type_kinds.rs optional_field (shared with type bodies): missing, or there and matching. Fields not named are
+   allowed, as in every map pattern. Note `{port: p, host: h}` compares host with the unit h (3600), no binding.
+   Tests tests/control/test_schemas.rs, probe probes/matching/schemas.warp.
+7. Code patterns: quoted code with holes, `data($a + 0) => a`, matched against `parse("…")` or `data (…)` (card
+   parse-word, notes/parse_word.md). Backticks stay template text.
+   code-holes done (switch.rs code_tests): `$a` binds the subtree, a repeated hole tests equality with the first, a key
+   tests `is key` and its op, a list `is list` and its count; `$f($x)` is flattened like a quoted call `g x`. A match
+   in a function copies its subject: user_functions.rs now lets a parameter whose copy is kind-tested take any value
+   (else indexing the copy typed the parameter list, card alias-indexed-param). Tests tests/control/test_code_holes.rs,
+   probe probes/matching/code_holes.warp.
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).

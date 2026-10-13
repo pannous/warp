@@ -28,7 +28,7 @@ pub fn eval(code: &str) -> Node {
 }
 
 fn eval_source(code: &str) -> Node {
-	if let Some(outcome) = crate::page_tests::answer(code) {
+	if let Some(outcome) = crate::web::page_tests::answer(code) {
 		return outcome;
 	}
 	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
@@ -113,7 +113,9 @@ thread_local! {
 
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
-	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, run)
+	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, || {
+		crate::sandbox::confined(run)
+	})
 }
 
 /// `run` with the program granted only `granted`
@@ -320,7 +322,7 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
 	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
-	crate::shader_holes::lower,
+	crate::graphics::shader_holes::lower,
 	crate::lowering::declaration_forms::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
@@ -335,6 +337,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::lowering::soft_keywords::lower,
+	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
+	crate::lowering::parameter_patterns::lower,
 	// `fib(0) := 0; fib(n) := …`: a second definition of one shape is an error with a match as its fix
 	crate::lowering::definition_cases::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
@@ -359,6 +363,10 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::serve::with_default_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
 	crate::lowering::serve::bind_path_parameters,
+	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
+	crate::lowering::named_patterns::lower,
+	// `tree find {type: "image", src}` and `tree replace p with q`: each a recursive walker of its own (tree_walks.rs)
+	crate::lowering::tree_walks::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::lowering::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
@@ -501,6 +509,8 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::comprehensions::lower,
 	crate::lowering::library_words::lower_function_methods,
 	crate::lowering::tuples::lower,
+	// `parse("n * 1")` of a constant text is `data (n * 1)` (card parse-word), before blocks.rs reads data
+	crate::lowering::parse_word::lower,
 	crate::lowering::run_time_blocks::warn_unresolved,
 	crate::lowering::run_time_blocks::lower_interpret,
 	crate::lowering::blocks::lower,
@@ -643,10 +653,14 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
-		return Err(crate::node::error(&format!(
-			"capability denied: {name} needs the {} capability, which eval does not grant",
-			capability.name()
-		)));
+		return Err(crate::node::error(&if crate::sandbox::is_sandboxed() {
+			crate::sandbox::denial(&name, capability.name())
+		} else {
+			format!(
+				"capability denied: {name} needs the {} capability, which eval does not grant",
+				capability.name()
+			)
+		}));
 	}
 	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
 		without_constraints(node),
