@@ -31,7 +31,13 @@ Gaps (each a card below):
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still
   missing: a list's separator (`,` `;` newline) is not kept in the wasm Node at all → self-node-separator
-- Bytes grow by copying (`bytes = bytes + [b]`, lib/memory.warp). → self-byte-buffer
+- ~~Bytes grow by copying~~ fixed (self-byte-buffer): lists already grew in amortised O(1) (int lists since
+  3f7e212a1, `xs += [x]`, `xs.add(x)`), one text too (it grows in place at the heap top). Texts built in turn
+  (`w += "x"; v += "y"`, a lexer's token and its output) were quadratic and passed the 2 GB memory cap at 100k appends.
+  Now text_append, the concat of a variable's text, gives a copied text of 64+ bytes as much room again behind it and
+  remembers 8 rooms (src/wasm_emitter/text_rooms.rs); text_concat of other texts stays small (a program without
+  building pays nothing, quicksort's executable stays under its size limit). probes/self_hosting/text_builders.warp:
+  400k appends to each of two texts in 70 ms; tests/text/test_text_builders.rs.
 
 ## Steps
 | # | Card | Step | Builds on |

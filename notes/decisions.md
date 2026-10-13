@@ -6,6 +6,13 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-13 (quiet hours: Interviewer or worker defaults, undoable; user may revisit)
+- held-key (warp-markup; Interviewer during quiet hours, undoable): `held_key` is the name of the key held now ("" for none); the key-name words of key-if compare against it too (`held_key == LEFT`, `held_key != ESC`), with the same "names nothing" warning.
+- go-heavy-map (warp-dispatch default): a `go` map of a heavy kernel runs as the plain map, so P240 applies: from 327680 items on the GPU (one-time f32 notice), below on the CPU. runtime-function: function values compare by their written definition (parameter names aside) and captured values: `make(1) == make(1)` yes, `make(1) == make(2)` no.
+- build-should (user's card "warp build should also emit WebAssembly"; Interviewer during quiet hours, undoable): `warp build x.warp` writes the executable as P102/build-links say AND x.wasm beside it; `--wasm` only the module; `--exe` accepted. (c879a0a98 had made .wasm the default instead; sent back to warp-dispatch.)
+- unknown-tag (warp-semantics; Interviewer during quiet hours, undoable): an unknown element in markup (`div{ divv{"hi"} }`) is a warning with the near name as fix, like hreff/on clik, not an error like unknown-type: `divv{…}` is also valid tagged data. Custom elements with a dash and the program's own components are not flagged.
+- print-closure (warp-dispatch default): a closure prints as written (`x => x+n`), `&f` and an alias `g = &f` print the function's name.
+
 ## Decided 2026-10-12 (user; via warp-supervisor or the Interviewer)
 - html-meta (warp-markup): page facts are keys on html: `html{ title: "Shop" description: "Fresh fruit" meta:
   {author: "Ann"} body{…} }` puts <title> and <meta name=… content=…> into the head (the page's own head{} if

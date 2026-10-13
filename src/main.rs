@@ -14,8 +14,8 @@ const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 const AOT_FLAG: &str = "--aot";
 /// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs the program and leaves the standalone
 /// executable `hello` next to it (`hello.exe` on Windows), the warp-runtime stub with the program's machine code appended.
-/// `warp build <file>` / `warp compile <file>` (not in the help any more) only make it; `--exe` still says so, `--wasm`
-/// (and `--aot`) write the module instead
+/// `warp build <file>` / `warp compile <file>` (not in the help any more) only make it, and the module <file>.wasm
+/// (card build-should); `--exe` only the executable, `--wasm` (and `--aot`) only the module
 const EXE_FLAG: &str = "--exe";
 const WASM_FLAG: &str = "--wasm";
 /// `warp help list`: a standard module's words; `warp help --markdown`: all of them as wiki/standard-library.md
@@ -428,23 +428,15 @@ fn run_command(args: &[String]) {
 		if flags.contains(&WAGI_FLAG) {
 			return write_wagi(&code, &target);
 		}
+		// a plain `warp build` writes both (card build-should), `--exe` only the executable
+		if !flags.contains(&EXE_FLAG) {
+			write_module(&code, &target, ahead_of_time);
+		}
 		if standalone {
 			match write_standalone_executable(&code, &target) {
 				Ok(report) => println!("{report}"),
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
-			return;
-		}
-		match warp::pipeline::for_any_host(|| wasm_emitter::compile(&code)) {
-			Ok(module) => {
-				let output_path = compiled_output_path(&target);
-				fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
-				println!("compiled {} bytes to {}", module.bytes.len(), output_path);
-				if ahead_of_time {
-					write_machine_code(&module.bytes, &output_path);
-				}
-			}
-			Err(final_value) => fail(format!("nothing to compile: {}", final_value.serialize())),
 		}
 	} else if let Some(path) = test_file(args) {
 		// P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
@@ -639,6 +631,22 @@ fn source_of(target: &str) -> String {
 }
 
 /// `dir/program.warp` compiles to `dir/program.wasm`; inline code compiles to `out.wasm`
+/// `warp build`: the WebAssembly module next to the program file (out.wasm for inline code), with `--aot` its machine
+/// code too
+fn write_module(code: &str, target: &str, ahead_of_time: bool) {
+	match warp::pipeline::for_any_host(|| wasm_emitter::compile(code)) {
+		Ok(module) => {
+			let output_path = compiled_output_path(target);
+			fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
+			println!("compiled {} bytes to {}", module.bytes.len(), output_path);
+			if ahead_of_time {
+				write_machine_code(&module.bytes, &output_path);
+			}
+		}
+		Err(final_value) => fail(format!("nothing to compile: {}", final_value.serialize())),
+	}
+}
+
 fn compiled_output_path(target: &str) -> String {
 	if file_exists(target) {
 		std::path::Path::new(target)

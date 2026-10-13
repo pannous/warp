@@ -540,6 +540,7 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 pub fn diagnose(program: &Node) -> Option<Node> {
 	check_type_word_functions(program)
 		.or_else(|| check_parameter_annotations(program))
+		.or_else(|| check_variable_annotations(program))
 		.or_else(|| check_union_fields(program))
 		.or_else(|| {
 			check_declared_types(
@@ -717,7 +718,6 @@ pub fn lint(program: &Node) -> Vec<Diagnostic> {
 	let mut warnings = vec![];
 	lint_into(program, &mut warnings);
 	warnings.extend(kebab_ambiguities(program));
-	warnings.extend(unknown_variable_types(program));
 	program.visit(&mut |node| {
 		if let Node::Key(_, Op::Define, body) = node {
 			if uses_it_outside_loops(body) {
@@ -1663,16 +1663,18 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 		})
 }
 
-/// A variable's declared type naming no type (`p: foo = 2.5`) is a warning, no longer silent (card unknown-type); the
-/// program runs as if undeclared: C code may name types of headers it never reads (`let z : tdouble = x*x`)
-pub(super) fn unknown_variable_types(program: &Node) -> Vec<Diagnostic> {
+/// A variable's declared type must be known too: `p: foo = 2.5` names no type (card unknown-type)
+pub(super) fn check_variable_annotations(program: &Node) -> Option<Diagnostic> {
 	let known_types = KnownTypes::of(program);
-	let mut unknown = vec![];
+	let mut unknown = None;
 	program.visit(&mut |node| {
+		if unknown.is_some() {
+			return;
+		}
 		if let Node::Key(target, Op::Assign, _) = node.drop_meta() {
 			if let Node::Key(name, Op::Colon, annotation) = target.drop_meta() {
 				if let Some(name) = name.symbol_name() {
-					unknown.extend(known_types.unknown_annotation(annotation, name, name));
+					unknown = known_types.unknown_annotation(annotation, name, name);
 				}
 			}
 		}

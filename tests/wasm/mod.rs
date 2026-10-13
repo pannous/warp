@@ -1,4 +1,6 @@
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_build_emits_wasm; // card build-should
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_compile_only;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_compiled_module_cache;

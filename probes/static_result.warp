@@ -1,0 +1,3 @@
+// card static-int: a constant call whose value misfits its declared result is refused when compiled
+def half(x) -> int { x / 2 }
+half(3)

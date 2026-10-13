@@ -34,6 +34,7 @@ mod list_emitter;
 pub(crate) mod list_sharing;
 mod node_api;
 mod similarity;
+mod text_rooms;
 mod text_unicode;
 mod time_arithmetic;
 pub(crate) mod time_zones;
@@ -354,6 +355,7 @@ pub struct WasmGcEmitter {
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
+	text_room_globals: Option<u32>, // the first global of the rooms texts grow into (text_rooms.rs)
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
@@ -445,6 +447,7 @@ impl WasmGcEmitter {
 			returned_tuple: vec![],
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
+			text_room_globals: None,
 			discovered_needs: Default::default(),
 			inherited_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
@@ -819,6 +822,7 @@ impl WasmGcEmitter {
 		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
+		self.require_function_text(); // before the similarity's: function_text needs values_equal
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
@@ -1190,6 +1194,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
 					   // Emit list and string operation functions
+		self.emit_function_text(); // before the list ops: a function value joins as its text
 		self.emit_list_ops();
 		self.emit_linear_arrays();
 		self.emit_cells();

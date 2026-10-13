@@ -1589,7 +1589,8 @@ impl Lowering {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) {
 					head.clone()
 				} else {
-					symbol(word)
+					// the written spelling's position: `warn "x"` errs where warn is
+					symbol(word).with_meta_of(head)
 				};
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
 			}

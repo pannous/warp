@@ -206,9 +206,12 @@ pub fn lower(program: Node) -> Node {
 		.into_iter()
 		.map(|(index, name, body)| (index + flags.len(), name, body))
 		.collect();
+	// an element's handler (`input·1`, written or made by `bind:`) goes with the markup it shows: only the program's own
+	// `on submit {…}` waits in vain
 	#[cfg(feature = "native")]
 	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| {
 		is_page_event(name)
+			&& !name.contains(ELEMENT_EVENT_JOINER)
 			&& !raised.contains(name)
 			&& !crate::pipeline::is_for_a_page()
 			&& !serves_its_page(&statements)

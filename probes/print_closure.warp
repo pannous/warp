@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+// cards print-closure, print-function-ref: a function value prints as its name or as written
+make(n) := x => x + n
+f(x) := x + 1
+print make(1)
+print [&f, x => x * 2]
+g = &f
+print &f, g
