@@ -654,9 +654,6 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 			)
 		}));
 	}
-	if let Some(denial) = crate::sandbox::first_refused(effects.externals.keys()) {
-		return Err(crate::node::error(&denial));
-	}
 	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
 		without_constraints(node),
 	)?)?;

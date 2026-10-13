@@ -225,7 +225,7 @@ fn fetch_into_memory(caller: &mut Caller<'_, HostState>, url_ptr: i32, url_len: 
 	let (text, failed) = match read_string_from_memory(&memory, &*caller, url_ptr as u32, url_len as u32) {
 		Ok(url) => {
 			trace!("host.fetch: fetching {} (timeout {:?})", url, timeout);
-			match crate::sandbox::check_host_word("fetch").and_then(|()| fetch(&url, timeout)) {
+			match fetch(&url, timeout) {
 				Ok(body) => (body, false),
 				Err(reason) => (reason, true),
 			}
@@ -964,7 +964,6 @@ fn request_of(request: &Node) -> crate::fetches::Request {
 /// `users := fetch url` starts the fetch (src/fetches.rs)
 fn fetch_start(mut caller: Caller<'_, HostState>, id: i64, url: HostNode) -> wasmtime::Result<()> {
 	let request = given_node(&mut caller, url)?;
-	crate::sandbox::check_host_word(FETCH_START).map_err(wasmtime::Error::msg)?;
 	crate::fetches::start(id, request_of(&request), FETCH_TIMEOUT);
 	Ok(())
 }

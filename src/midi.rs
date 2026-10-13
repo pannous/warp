@@ -219,6 +219,7 @@ pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 	} else {
 		port.to_string()
 	};
+	crate::sandbox::check_process("midi.send")?;
 	let status = Command::new(SENDER)
 		.args(["dev", &port, "hex"])
 		.args(&hex)
@@ -232,6 +233,7 @@ pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 
 /// The names of the MIDI outputs the system has
 pub fn outputs() -> Result<Vec<String>, String> {
+	crate::sandbox::check_process("midi.outputs")?;
 	let listed = Command::new(SENDER)
 		.arg("list")
 		.output()

@@ -1,46 +1,14 @@
-//! `warp --sandbox` (card sandbox-exec): a sandboxed program starts no process, writes no file and reaches no network.
-//! The capability check in pipeline.rs sees only the words a program calls directly (Capability is also where a word
-//! is imported from, so fetch stays Host): the words below are refused by name, at compile time where they show
-//! (`fetch`) and at run time where a library word hides them (`exec sh"…"` is os.exec through std_io).
+//! `warp --sandbox` (cards sandbox-exec, sandbox-hosted; notes/hosting.md): a sandboxed program starts no process and
+//! writes files only inside its state folder; it reaches the network. The capability check in pipeline.rs sees only
+//! the words a program calls directly (`exec sh"…"` is os.exec through std_io, a Host word), so the places that start
+//! a process or write a file ask here themselves, and refuse loudly.
 use std::cell::Cell;
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 const FLAG: &str = "warp --sandbox";
-
-/// What a refused word reaches outside the program
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reach {
-	Process,
-	FileWrite,
-	Network,
-}
-
-impl Reach {
-	pub fn name(self) -> &'static str {
-		match self {
-			Reach::Process => "process",
-			Reach::FileWrite => "file-write",
-			Reach::Network => "network",
-		}
-	}
-}
-
-/// The host words a sandboxed program may not call
-const REFUSED_HOST_WORDS: [(&str, Reach); 3] = [
-	(crate::host::FETCH_START, Reach::Network),
-	("fetch", Reach::Network),
-	("fetch_within", Reach::Network),
-];
-/// The standard library's adapter words (src/std_adapters.rs) a sandboxed program may not call; `*` is every member
-const REFUSED_STD_WORDS: [(&str, &str, Reach); 7] = [
-	("os", "exec", Reach::Process),
-	("file", "write", Reach::FileWrite),
-	("file", "write_bytes", Reach::FileWrite),
-	("file", "append", Reach::FileWrite),
-	("midi", "write_file", Reach::FileWrite),
-	("sound", "render", Reach::FileWrite),
-	("net", "*", Reach::Network),
-];
+/// systemd's StateDirectory= (web/hosting/server/warp-lambda@.service); without it the working directory
+const STATE_FOLDER_VARIABLE: &str = "STATE_DIRECTORY";
 
 thread_local! {
 	static SANDBOXED: Cell<bool> = const { Cell::new(false) };
@@ -67,35 +35,59 @@ pub fn denial(word: &str, capability: &str) -> String {
 	format!("capability denied: {word} needs the {capability} capability, which {FLAG} does not grant")
 }
 
-/// The refusal of host word `word` when sandboxed
-pub fn check_host_word(word: &str) -> Result<(), String> {
-	refuse(word, refused_host_word(word))
-}
-
-/// The refusal of the adapter word `module.member` when sandboxed
-pub fn check_std_word(module: &str, member: &str) -> Result<(), String> {
-	let reach = REFUSED_STD_WORDS
-		.iter()
-		.find(|(refused, word, _)| *refused == module && (*word == member || *word == "*"))
-		.map(|(_, _, reach)| *reach);
-	refuse(&format!("{module}.{member}"), reach)
-}
-
-/// The first refused host word of `words` (a program's externals), when sandboxed
-pub fn first_refused<'a>(words: impl IntoIterator<Item = &'a String>) -> Option<String> {
-	words.into_iter().find_map(|word| check_host_word(word).err())
-}
-
-fn refused_host_word(word: &str) -> Option<Reach> {
-	REFUSED_HOST_WORDS
-		.iter()
-		.find(|(refused, _)| *refused == word)
-		.map(|(_, reach)| *reach)
-}
-
-fn refuse(word: &str, reach: Option<Reach>) -> Result<(), String> {
-	match reach {
-		Some(reach) if is_sandboxed() => Err(denial(word, reach.name())),
-		_ => Ok(()),
+/// The refusal of `word` starting a process (os.exec, a sound player, the MIDI sender) when sandboxed
+pub fn check_process(word: &str) -> Result<(), String> {
+	match is_sandboxed() {
+		true => Err(denial(word, "process")),
+		false => Ok(()),
 	}
+}
+
+/// The refusal of writing `path` when sandboxed and the path leaves the state folder: through `..`, a symbolic link
+/// or an outside folder
+pub fn check_write(path: &str) -> Result<(), String> {
+	if !is_sandboxed() {
+		return Ok(());
+	}
+	let folder = state_folder()?;
+	let refusal = |why: &str| {
+		Err(format!(
+			"capability denied: writing {path} {why}: {FLAG} grants the file-write capability only inside the state folder {}",
+			folder.display()
+		))
+	};
+	let written = Path::new(path);
+	if written.components().any(|part| part == Component::ParentDir) {
+		return refusal("through ..");
+	}
+	let here = std::env::current_dir().map_err(|problem| problem.to_string())?;
+	let absolute = here.join(written);
+	if absolute
+		.ancestors()
+		.take_while(|ancestor| ancestor.starts_with(&here) && *ancestor != here)
+		.any(|ancestor| ancestor.symlink_metadata().is_ok_and(|kept| kept.is_symlink()))
+	{
+		return refusal("through a symbolic link");
+	}
+	let existing = absolute
+		.ancestors()
+		.find(|ancestor| ancestor.exists())
+		.unwrap_or(&absolute);
+	let missing = absolute.strip_prefix(existing).unwrap_or(Path::new(""));
+	let resolved = existing
+		.canonicalize()
+		.map_err(|problem| problem.to_string())?
+		.join(missing);
+	match resolved.starts_with(&folder) {
+		true => Ok(()),
+		false => refusal("outside it"),
+	}
+}
+
+/// The folder a sandboxed program writes in, resolved
+fn state_folder() -> Result<PathBuf, String> {
+	let folder = std::env::var_os(STATE_FOLDER_VARIABLE).map_or_else(std::env::current_dir, |folder| Ok(folder.into()));
+	folder
+		.and_then(|folder| folder.canonicalize())
+		.map_err(|problem| format!("no state folder: {problem}"))
 }
