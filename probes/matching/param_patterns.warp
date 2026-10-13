@@ -1,2 +1,5 @@
 greet({name}) := "hi " + name
-greet({name: "Ann"})
+class Point { x: int; y: int }
+total(Point{x, y}) := x + y
+x = 10
+[greet({name: "Ann"}), total(Point{x: 3, y: 4}) + x]

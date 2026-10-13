@@ -93,7 +93,7 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | the parser takes one word after class |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
 | render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
-| gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | "needs a value for parameter a" |
+| gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | done: a left-out `from _` takes the variable from, with a hint (phrase_calls.rs with_gaps_fed); a plain parameter's name feeds nothing (test_named_arguments) |
 
 Decisions (user, via warp-interviewer):
 - In a case key `1 | 2`, `1 or 2` and `1, 2` are alternatives; a computed comparison goes in a guard. Alternatives
@@ -119,8 +119,11 @@ Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `a
 becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
 Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
 (card sum-point).
-Open: pattern names warn as main-level shadows (card pattern-names).
 Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
+Class arms `Point{x, y} =>` bind with `let` too (class_methods/destructuring.rs bound_parts, card
+param-pattern-local-warning); that `let x = p.x; let y = …` once read as a Haskell definition named let
+(declarations.rs haskell_definition: a declaration word is never a function name). Map parameters `greet({name}) :=`
+take a `map·N` parameter like list ones (card param-map-pattern).
 `else =>` on its own line is the catch-all arm (card match-arm); `else:` on its own line in a switch still fails to
 parse (it clashes with Python's block colon).
 Item patterns (step 3, card list-pattern): `[[n, s]...]` in a list pattern's rest position matches when every item

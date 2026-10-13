@@ -65,6 +65,7 @@ mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_values;
 mod test_functions;
+mod test_gap_feeding; // card gap-feeding
 mod test_generator_arguments;
 mod test_generators; // card generators-function
 mod test_getter_warning_text;
