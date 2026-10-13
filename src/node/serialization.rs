@@ -6,6 +6,23 @@ use super::*;
 pub const YES: &str = "yes";
 pub const NO: &str = "no";
 
+/// A text in quotes, a quote or `\` in it escaped by a `\` so it reads back, as the runtime prints it (P126)
+fn quoted(text: &str) -> String {
+	quoted_by(text, crate::normalize::text_quote())
+}
+
+fn quoted_by(text: &str, quote: char) -> String {
+	let mut written = String::from(quote);
+	for c in text.chars() {
+		if c == quote || c == '\\' {
+			written.push('\\');
+		}
+		written.push(c);
+	}
+	written.push(quote);
+	written
+}
+
 impl Node {
 	/// An operator in front of its one operand, ø on the left in the tree (`#x`, `-x`)
 	pub(super) fn is_prefix_form(&self) -> bool {
@@ -19,11 +36,7 @@ impl Node {
 	/// A list item: a character is quoted like a text, `["a" "bb"]`, and reads back as the character it is (P126)
 	fn item_text(&self) -> String {
 		match self.drop_meta() {
-			Char(c) => {
-				let quote = crate::normalize::text_quote();
-				let escape = if *c == quote { "\\" } else { "" };
-				format!("{quote}{escape}{c}{quote}")
-			}
+			Char(c) => quoted(&c.to_string()),
 			_ => self.serialize(),
 		}
 	}
@@ -84,11 +97,8 @@ impl Node {
 		match self {
 			Symbol(s) => s.clone(),
 			Node::Number(n) => format!("{}", n),
-			Text(t) => {
-				let quote = crate::normalize::text_quote();
-				format!("{quote}{t}{quote}")
-			}
-			Char(c) => format!("'{}'", c),
+			Text(t) => quoted(t),
+			Char(c) => quoted_by(&c.to_string(), '\''),
 			List(nodes, bracket, separator) => {
 				let close = bracket.closing();
 				if nodes.is_empty() {
