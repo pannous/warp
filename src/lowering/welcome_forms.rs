@@ -8,12 +8,13 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, key};
-use super::words::IN_WORD;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::GENERIC_MARK;
+use crate::words::IN_WORD;
 use std::collections::HashSet;
 
-use crate::switch::SWITCH_WORDS;
+use crate::words::SWITCH_WORDS;
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_KEYWORD: &str = "loop";
@@ -25,8 +26,6 @@ const LET_WORD: &str = "let";
 const MUTABLE_MODIFIERS: [&str; 2] = ["mut", "mutable"];
 const VAR_WORD: &str = "var";
 const DESTRUCTURED_OBJECT: &str = "object·";
-/// The Meta key the parser puts on the name of a function written with type parameters `fn id<T>(…)`: their names
-pub const GENERIC_MARK: &str = "generic";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
 /// Swift's and C's case label `case .north:` in a switch
@@ -361,7 +360,13 @@ fn split_at_in(value: &Node) -> (Node, Option<Node>) {
 
 /// `[match, subject, {k => v …}]`, or `[match, (subject {k => v …})]` as an assigned match parses: the cases as `k: v`,
 /// `_ => v` as `default: v`
-fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
+fn arrow_cases(items: Vec<Node>) -> Vec<Node> {
+	with_match_cases(items, colon_cases)
+}
+
+/// The items of a match, `[match, subject, cases]` or `[match, (subject cases)]`, with `convert` of its cases block;
+/// other items as they are
+pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> Node) -> Vec<Node> {
 	if !items
 		.first()
 		.is_some_and(|word| SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
@@ -369,12 +374,12 @@ fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
 		return items;
 	}
 	match items.len() {
-		3 => items[2] = colon_cases(&items[2]),
+		3 => items[2] = convert(&items[2]),
 		2 => {
 			if let Node::List(pair, bracket, separator) = items[1].drop_meta() {
 				if let [subject, cases] = pair.as_slice() {
 					items[1] = Node::List(
-						vec![subject.clone(), colon_cases(cases)],
+						vec![subject.clone(), convert(cases)],
 						bracket.clone(),
 						separator.clone(),
 					);
@@ -1058,7 +1063,7 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 		Node::List(items, Bracket::Round, _) => items.clone(),
 		single => vec![single.clone()],
 	};
-	let is_starred = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word.starts_with(crate::tuples::STARRED) && word.len() > 1);
+	let is_starred = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word.starts_with(crate::words::STARRED) && word.len() > 1);
 	if !matches!(name.drop_meta(), Node::Symbol(_)) || !parameters.iter().any(is_starred) {
 		return None;
 	}
@@ -1098,7 +1103,7 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	node.visit(&mut |part| match part {
 		Node::Key(head, Op::Define, _) => {
-			names.insert(crate::lowering::class_methods::leading_name(head));
+			names.insert(crate::node::leading_name(head));
 		}
 		Node::List(words, _, _)
 			if words.first().is_some_and(
@@ -1109,7 +1114,7 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 				Some(Node::List(_, Bracket::Round, _)) if words.len() > 2 => words.get(2),
 				_ => words.get(1),
 			};
-			names.extend(name.map(crate::lowering::class_methods::leading_name));
+			names.extend(name.map(crate::node::leading_name));
 		}
 		_ => {}
 	});

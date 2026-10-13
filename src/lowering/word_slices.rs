@@ -9,9 +9,9 @@
 use super::nodes::{call, key, symbol};
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
-use crate::library_words::SLICE;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::SLICE;
 use std::collections::HashSet;
 
 const FROM: &str = "from";

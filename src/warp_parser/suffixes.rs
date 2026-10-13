@@ -165,7 +165,7 @@ impl WarpParser {
 			// `{a*a}!` evaluates the block on the spot
 			(None, Node::List(_, Bracket::Curly, _)) => lhs.clone(),
 			// `ø!`: P73 force → unwrap (direct call; marking Empty is stripped by is_nothing / run_time_blocks)
-			(None, Node::Empty) => call(crate::mutation::UNWRAP, vec![lhs.clone()]),
+			(None, Node::Empty) => call(crate::words::UNWRAP, vec![lhs.clone()]),
 			(None, _) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, _) => crate::mutation::marked(lhs.clone()),
 		})
@@ -448,7 +448,7 @@ impl WarpParser {
 		}
 		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
 		let names_a_type =
-			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
+			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::declaration_forms::zero_list(Empty, word).is_some());
 		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(

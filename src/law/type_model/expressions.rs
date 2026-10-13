@@ -153,7 +153,7 @@ impl Exporter {
 	pub(super) fn for_loop(&mut self, variable: &Node, list: &Node, body: &Node) -> Lean {
 		let variable = match variable.drop_meta() {
 			Node::Symbol(name)
-				if name != crate::lambdas::IMPLICIT_PARAMETER
+				if name != crate::words::IMPLICIT_PARAMETER
 					&& type_of_word(name).is_none()
 					&& !self.names.contains_key(name)
 					&& !self.cells.contains(name) =>
@@ -559,7 +559,7 @@ impl Exporter {
 				(Node::Symbol(name), Node::List(items, _, _))
 					if items.len() == 2
 						&& self.cell_lists.contains(name)
-						&& crate::analyzer::appends(&items[0].drop_meta().name(), 1) =>
+						&& crate::declaration_forms::appends(&items[0].drop_meta().name(), 1) =>
 				{
 					let item = self.expression(&items[1])?;
 					Ok(format!(
@@ -570,7 +570,7 @@ impl Exporter {
 					))
 				}
 				(Node::Symbol(name), Node::List(items, _, _))
-					if items.len() == 2 && crate::analyzer::appends(&items[0].drop_meta().name(), 1) =>
+					if items.len() == 2 && crate::declaration_forms::appends(&items[0].drop_meta().name(), 1) =>
 				{
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
@@ -579,9 +579,9 @@ impl Exporter {
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
 				(Node::Symbol(name), call)
-					if self.list_names.contains(name) && crate::analyzer::insert_arguments(call).is_some() =>
+					if self.list_names.contains(name) && crate::declaration_forms::insert_arguments(call).is_some() =>
 				{
-					let (value, position) = crate::analyzer::insert_arguments(call).expect("guarded");
+					let (value, position) = crate::declaration_forms::insert_arguments(call).expect("guarded");
 					Ok(format!(
 						".insertAt (.glob {}) ({}) ({})",
 						quoted(name),

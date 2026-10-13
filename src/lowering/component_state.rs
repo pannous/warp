@@ -12,13 +12,13 @@
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
 use super::nodes::{call, if_then, key, named_assignment};
-use super::words::ON_WORD;
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::event_signals::{function_with_globals, hole_name, last_statement, text_hole_name};
 use crate::law::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::words::ON_WORD;
 use std::collections::{HashMap, HashSet};
 
 const JOINER: char = '·';
@@ -191,7 +191,7 @@ fn markup_functions(statements: &[Node]) -> HashMap<String, Node> {
 /// renders once, each hole is its part of that rendering, the instance's own state shown. Only a program rendering
 /// itself has them: the playground reads them
 fn hole_bindings(shown: &Node, markups: &HashMap<String, Node>) -> Vec<Node> {
-	if !crate::pipeline::renders_itself() {
+	if !crate::pipeline::compile_mode().renders_itself() {
 		return vec![];
 	}
 	let (elements, texts) = crate::markup::holes_through(shown, markups);
@@ -596,7 +596,7 @@ impl Component {
 
 	/// The main-level lists of the state, the instance counter and the instances of the render before
 	fn declarations(&self) -> Vec<Node> {
-		let template = if crate::pipeline::is_for_dev() {
+		let template = if crate::pipeline::compile_mode().for_dev {
 			DEV_STATE_DECLARATION
 		} else {
 			STATE_DECLARATION
@@ -648,7 +648,7 @@ impl Component {
 		let dev_saves = self
 			.lists()
 			.into_iter()
-			.filter(|_| crate::pipeline::is_for_dev())
+			.filter(|_| crate::pipeline::compile_mode().for_dev)
 			.map(|list| kept_in_dev(DEV_STATE_SAVE, list));
 		all_seen
 			.chain(cleaning)

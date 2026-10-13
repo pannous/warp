@@ -7,7 +7,7 @@
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
 use super::nodes::{call, key};
-use super::words::OF_WORD;
+use crate::words::OF_WORD;
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
@@ -844,7 +844,7 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 fn is_field_place(place: &Node, op: &Op, rest: &Node) -> bool {
 	let mutates = match op {
 		Op::Dot => {
-			matches!(rest.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| crate::analyzer::is_list_mutating_method(&word.drop_meta().name())))
+			matches!(rest.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| crate::declaration_forms::is_list_mutating_method(&word.drop_meta().name())))
 		}
 		_ => *op == Op::Assign || op.is_compound_assign(),
 	};

@@ -47,8 +47,12 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				without_class_tags(crate::foreign::json_of(value), &classes).to_string(),
 			))
 		}
-		("file", "write", [path, text]) => std::fs::write(text_of(path)?, content_of(text)?)
-			.map(|_| Node::Empty)
+		("file", "write", [path, text]) => write_file(&text_of(path)?, content_of(text)?).map_err(failure),
+		("file", "write_bytes", [path, bytes]) => {
+			write_file(&text_of(path)?, bytes_of(bytes).map_err(failure)?).map_err(failure)
+		}
+		("file", "read_bytes", [path]) => std::fs::read(text_of(path)?)
+			.map(|bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte.into()))))
 			.map_err(|problem| failure(problem.to_string())),
 		("file", "append", [path, text]) => {
 			use std::io::Write;
@@ -214,9 +218,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		#[cfg(feature = "native")]
 		("midi", "write_file", [path, notes]) => {
 			let encoded = crate::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
-			std::fs::write(text_of(path)?, encoded)
-				.map(|_| Node::Empty)
-				.map_err(|problem| failure(problem.to_string()))
+			write_file(&text_of(path)?, encoded).map_err(failure)
 		}
 		#[cfg(feature = "native")]
 		("midi", "read_file", [path]) => {
@@ -298,6 +300,18 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 	}
 }
 
+/// writes a file, creating its missing folders first
+fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
+	let folder = std::path::Path::new(path)
+		.parent()
+		.filter(|folder| !folder.as_os_str().is_empty());
+	folder
+		.map_or(Ok(()), std::fs::create_dir_all)
+		.and_then(|_| std::fs::write(path, contents))
+		.map(|_| Node::Empty)
+		.map_err(|problem| format!("{path}: {problem}"))
+}
+
 fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 	if let Some(store) = unfiled_store(file) {
 		UNFILED_STORES.with(|stores| stores.borrow_mut().insert(store, values));
@@ -344,11 +358,29 @@ fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 }
 
 fn texts(items: impl IntoIterator<Item = String>) -> Node {
+	list_of(items.into_iter().map(Node::Text))
+}
+
+fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
 	Node::List(
-		items.into_iter().map(Node::Text).collect(),
+		items.into_iter().collect(),
 		crate::node::Bracket::Square,
 		crate::node::Separator::Space,
 	)
+}
+
+/// The bytes a list of ints 0 to 255 stands for
+fn bytes_of(list: &Node) -> Result<Vec<u8>, String> {
+	list.as_items()
+		.iter()
+		.map(|item| {
+			match item.drop_meta() {
+				Node::Number(crate::extensions::numbers::Number::Int(value)) => u8::try_from(*value).ok(),
+				_ => None,
+			}
+			.ok_or_else(|| format!("{} is no byte (0 to 255)", item.serialize().trim()))
+		})
+		.collect()
 }
 
 /// The pattern, if both engines read it alike: Rust's regex has no look-around or backreferences, so JS RegExp may not

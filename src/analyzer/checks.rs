@@ -1,7 +1,6 @@
 //! Analysis and its diagnostics: analyze, type errors, function collection, lints and the checks of calls, nulls and declarations
 
 use super::*;
-use crate::lowering::nodes::children_rewritten;
 
 mod type_names;
 pub use type_names::*;

@@ -8,9 +8,9 @@
 
 use super::go_blocks::AWAIT_WORD;
 use super::nodes::key;
-use super::words::{FOR_WORD, IN_WORD, MAP_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD, MAP_WORD};
 
 /// How many slices a parallel map or loop splits its items into: tasks are threads with an instance each, so never one
 /// per item; a later backend (SIMD, GPU) may choose its own split

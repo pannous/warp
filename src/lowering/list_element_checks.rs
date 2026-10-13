@@ -9,8 +9,9 @@
 use super::nodes::{assign, key, Counter};
 use crate::analyzer::{
 	added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list,
-	insert_position, inserted_item, list_element_type, of_type_declaration,
+	inserted_item, list_element_type,
 };
+use crate::declaration_forms::{insert_position, of_type_declaration};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -82,7 +83,7 @@ impl ElementChecks {
 	fn lower(&mut self, node: Node) -> Node {
 		match node {
 			// `names: list of text = f()` still arrives as the items `names:list`, `of`, `text=f()`: normalized to
-			// `names:"list of text"=f()` here (as declaration_lowering would later), else type_tests reads the `text` of a
+			// `names:"list of text"=f()` here (as declaration_forms would later), else type_tests reads the `text` of a
 			// check `v is text` as the variable this form seems to assign
 			Node::List(items, bracket, separator) => match of_type_declaration(&items, &bracket, &separator) {
 				Some(normalized) => self.lower(normalized),

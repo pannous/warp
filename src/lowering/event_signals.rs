@@ -10,13 +10,14 @@
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use super::nodes::{block, call, children_rewritten, if_then, key};
-use super::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
 use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
+use crate::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
+use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 use std::collections::{HashMap, HashSet};
 
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
@@ -37,12 +38,6 @@ const SUBSCRIBERS_SUFFIX: &str = "_listeners";
 const SUBSCRIBER_SUFFIX: &str = "_listener";
 const LOOP_WORDS: [&str; 4] = ["for", "while", "repeat", "loop"];
 const LOOP_SUBSCRIPTION_TOPIC: &str = "handler-in-loop";
-/// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
-/// without `to` is the same; `raise` and `throw` are errors only
-pub(crate) const EMIT_WORDS: [&str; 2] = ["emit", "send"];
-/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it);
-/// `ask` reads as asking a handler for a value: `net * (1 + ask tax_rate)` (card price-net)
-pub(crate) const EMIT_ALIASES: [&str; 4] = ["fire", "trigger", "signal", "ask"];
 const EMIT_TOPIC: &str = "emit-word";
 const UNHANDLED_TOPIC: &str = "unhandled-emit";
 /// `remove (listeners of alarm)#1 from listeners of alarm`: the place removed, evaluated once
@@ -226,7 +221,7 @@ pub fn lower(program: Node) -> Node {
 		is_page_event(name)
 			&& !name.contains(ELEMENT_EVENT_JOINER)
 			&& !raised.contains(name)
-			&& !crate::pipeline::is_for_a_page()
+			&& !crate::pipeline::compile_mode().for_a_page
 			&& !serves_its_page(&statements)
 	}) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
@@ -1013,7 +1008,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 				changes |= crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			Node::Key(target, Op::Dot, call) => {
-				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))));
+				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::declaration_forms::is_list_mutating_method(&word(method))));
 				changes |= mutating && crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			_ => {}
@@ -1129,7 +1124,7 @@ fn emits_as_calls(
 				call(&handler_function_name(&name), arguments)
 			}
 			// card page-custom-event: in a page it reaches the page, as a CustomEvent of its name with the data as detail
-			None if crate::pipeline::renders_itself() && !block_handled.contains(&name) => {
+			None if crate::pipeline::compile_mode().renders_itself() && !block_handled.contains(&name) => {
 				call(crate::host::DISPATCH_EVENT, vec![Node::Text(name.clone()), data])
 			}
 			None => {

@@ -8,11 +8,10 @@ use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::UNWRAP;
 
 /// Meta key on a name written `x!`
 const MUTATED_MARK: &str = "mutated";
-/// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
-pub const UNWRAP: &str = "unwrap";
 const DELETE_WORD: &str = "delete";
 const POP_WORD: &str = "pop";
 

@@ -6,9 +6,9 @@
 
 use super::nodes::{call, key, symbol};
 use crate::context::Context;
-use crate::library_words::SLICE;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::SLICE;
 
 const KEEP: (&str, &str) = ("keep", "only");
 const SORT: (&str, &str) = ("sort", "by");
@@ -81,7 +81,7 @@ fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
 
 /// The key of `sort by it.age` as `it => it.age`, of `sort by size` as key names it
 fn sort_key(written: &Node, context: &Context) -> Option<Node> {
-	let it = crate::lambdas::IMPLICIT_PARAMETER;
+	let it = crate::words::IMPLICIT_PARAMETER;
 	match crate::lambdas::mentions(written, it) {
 		true => Some(key(symbol(it), Op::Arrow, written.clone())),
 		false => key_function(written, context),
@@ -209,7 +209,7 @@ fn condition(argument: &Node, context: &Context) -> Option<Node> {
 	context
 		.user_functions
 		.contains_key(name)
-		.then(|| call(name, vec![symbol(crate::lambdas::IMPLICIT_PARAMETER)]))
+		.then(|| call(name, vec![symbol(crate::words::IMPLICIT_PARAMETER)]))
 }
 
 /// The key `sort by <argument>` names: `element => f(element)` of a function, else `element => element.field`

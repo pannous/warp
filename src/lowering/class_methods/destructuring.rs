@@ -112,6 +112,10 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 			let target = Node::List(names, Bracket::Round, Separator::Colon);
 			recurse(Node::Key(Box::new(target), Op::Assign, value))
 		}
+		Node::List(items, bracket, separator) if is_match(&items) => {
+			let items = crate::welcome_forms::with_match_cases(items, |cases| class_arms_as_arrows(cases, fields));
+			Node::List(items, bracket, separator).map_children(recurse)
+		}
 		Node::Key(pattern, Op::FatArrow, body) if is_class_pattern(&pattern, fields) => {
 			let mut matched = Matched::default();
 			if matched_pattern(&pattern, &subject, fields, &mut matched).is_none() {
@@ -133,6 +137,26 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 		}
 		other => other.map_children(recurse),
 	}
+}
+
+fn is_match(items: &[Node]) -> bool {
+	items
+		.first()
+		.is_some_and(|word| crate::words::SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
+}
+
+/// `Circle(r): body` in a match's cases is the arm `Circle(r) => body`: outside a match, `f(x): body` defines f
+fn class_arms_as_arrows(cases: &Node, fields: &ClassFields) -> Node {
+	let Node::List(arms, Bracket::Curly, separator) = cases.drop_meta() else {
+		return cases.clone();
+	};
+	let arms = arms.iter().map(|arm| match arm.drop_meta() {
+		Node::Key(pattern, Op::Colon, body) if is_class_pattern(pattern, fields) => {
+			Node::Key(pattern.clone(), Op::FatArrow, body.clone())
+		}
+		_ => arm.clone(),
+	});
+	Node::List(arms.collect(), Bracket::Curly, separator.clone())
 }
 
 /// What a pattern asks of its subject: class tests (`p is Point`), value tests (`p.x == 0`) and the variables it

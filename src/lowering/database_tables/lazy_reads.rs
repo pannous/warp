@@ -73,7 +73,7 @@ pub(super) fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own:
 		}
 		// `people#(11..20)`, `people[10:20]` (the parser's `slice(people, 10, 20)`; an open bound is ø)
 		Node::List(parts, Bracket::Round, _)
-			if parts.len() == 4 && parts[0].is_symbol(crate::library_words::SLICE) && table_of(&parts[1]).is_some() =>
+			if parts.len() == 4 && parts[0].is_symbol(crate::words::SLICE) && table_of(&parts[1]).is_some() =>
 		{
 			let variable = table_of(&parts[1]).unwrap_or_default();
 			let bound = |bound: &Node, open: Node| match bound.drop_meta() {

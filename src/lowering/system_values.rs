@@ -13,11 +13,11 @@
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
 use super::nodes::{call, key};
-use super::words::ON_WORD;
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
+use crate::words::ON_WORD;
 use std::collections::HashSet;
 use warp_runtime::host_words::{
 	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, HELD_KEY, KEY_CODE_HELD, MOUSE_X, MOUSE_Y, SYSTEM_VALUE,

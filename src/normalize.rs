@@ -38,10 +38,7 @@ thread_local! {
 
 /// Run `action` without hints on this thread: a stage that repeats work already hinted (the emitter's rerun) says nothing twice
 pub fn without_hints<T>(action: impl FnOnce() -> T) -> T {
-	let muted = HINTS_MUTED.with(|cell| cell.replace(true));
-	let result = action();
-	HINTS_MUTED.with(|cell| cell.set(muted));
-	result
+	crate::util::scoped(&HINTS_MUTED, true, action)
 }
 
 /// A hint as tests and hosts read it: a view of a Diagnostic of level Hint (see `capture_hints`)

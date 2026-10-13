@@ -12,7 +12,7 @@ use super::nodes::{children_rewritten, key, parameter_name};
 use crate::analyzer::call_name;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::tuples::STARRED;
+use crate::words::STARRED;
 use std::collections::{HashMap, HashSet};
 
 /// A function's fixed parameters, whether a rest parameter follows them, and whether a keyword parameter `**kw` ends them

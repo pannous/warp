@@ -51,7 +51,7 @@ pub fn lower(program: Node) -> Node {
 	};
 	let stores = crate::warp_parser::mentions(&program, STORED_WORD)
 		&& !crate::soft_keywords::program_names(&program, STORED_WORD);
-	let dev = crate::pipeline::is_for_dev();
+	let dev = crate::pipeline::compile_mode().for_dev;
 	if !stores && !dev {
 		return program;
 	}

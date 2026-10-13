@@ -58,6 +58,7 @@ mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
 mod test_empty_type_aliases;
 mod test_enum_cases;
+mod test_enum_parameter_type;
 mod test_enums_ported;
 mod test_extension_methods;
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
@@ -130,6 +131,7 @@ mod test_struct_types;
 mod test_sum_types;
 mod test_symbolism_object; // card symbolism-object
 mod test_tagged_objects;
+mod test_tagged_unions; // card tagged-unions
 mod test_text_as_number; // card units-dynamic
 mod test_text_of_text; // text(text(5)) is "5"
 mod test_time_programs_run; // card run-time-dates, stage B4

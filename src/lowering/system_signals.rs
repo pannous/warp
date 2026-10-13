@@ -19,13 +19,13 @@
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
 use super::nodes::call;
-use super::words::{FROM_WORD, ON_WORD};
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::extensions::numbers::Number;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FROM_WORD, ON_WORD};
 
 const EVERY_WORD: &str = "every";
 const FRAME_WORD: &str = "frame";
@@ -102,7 +102,7 @@ pub fn lower(program: Node) -> Node {
 #[cfg(feature = "native")]
 fn with_window_events(program: Node) -> Node {
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
-	if crate::pipeline::is_for_a_page() || crate::event_signals::serves_its_page(&statements) {
+	if crate::pipeline::compile_mode().for_a_page || crate::event_signals::serves_its_page(&statements) {
 		return program;
 	}
 	let mut listened = false;

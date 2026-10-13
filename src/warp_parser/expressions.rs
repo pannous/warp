@@ -1,7 +1,7 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
 
 use super::*;
-use crate::lowering::event_signals::{EMIT_ALIASES, EMIT_WORDS};
+use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
@@ -87,7 +87,7 @@ impl WarpParser {
 	/// unary plus
 	pub(super) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
 		let (op, chars) = self.peek_operator()?;
-		crate::lowering::class_methods::operator_method(op)?;
+		crate::operators::operator_method(op)?;
 		let mut offset = chars + self.parenthesis_length(chars)?;
 		while matches!(self.peek_char(offset), ' ' | '\t') {
 			offset += 1;
@@ -495,10 +495,12 @@ impl WarpParser {
 			}
 
 			// Consume the operator
-			// a single `|` may pipe into a function (pipes.rs): its `or` hint waits for the operand
+			// a single `|` may pipe into a function (pipes.rs), a single `&` or `|` may mask bits (bit_word_hint): their
+			// `and`/`or` hint waits for the operands
 			let may_pipe = chars == 1 && self.current_char() == '|' && !self.options.data_mode;
-			let written = if may_pipe {
-				PIPE_GLYPH.to_string()
+			let deferred_hint = may_pipe || (chars == 1 && self.current_char() == '&');
+			let written = if deferred_hint {
+				self.current_char().to_string()
 			} else {
 				self.hint_operator(chars, false)
 			};
@@ -599,10 +601,20 @@ impl WarpParser {
 				continue;
 			}
 
-			let rhs = if may_pipe {
-				self.pipe_operand(rhs, op_line, op_column)
-			} else {
-				rhs
+			let rhs = match bare_symbol.filter(|_| deferred_hint) {
+				Some(_) if may_pipe && crate::pipes::may_be_stage(&rhs) => self.pipe_operand(rhs, op_line, op_column),
+				Some(symbol) if is_mask(&lhs) || is_mask(&rhs) => {
+					set_hint_position(op_line, op_column);
+					bit_word_hint(&lhs, symbol, &rhs);
+					rhs
+				}
+				Some(_) if may_pipe => self.pipe_operand(rhs, op_line, op_column),
+				Some(symbol) => {
+					set_hint_position(op_line, op_column);
+					norm::operator(&symbol.to_string(), false);
+					rhs
+				}
+				None => rhs,
 			};
 			// a type word compares as its type on either side of == and != (`int != integer` is no)
 			let rhs = if op.is_equality() && written != IS_WORD {

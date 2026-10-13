@@ -1091,6 +1091,11 @@ impl Scope {
 			.or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
 	}
 
+	/// A parameter here: it shadows a function of its name (`g(f, b) := [f, b]` lists f)
+	pub fn is_parameter(&self, name: &str) -> bool {
+		self.lookup(name).is_some_and(|local| local.is_param)
+	}
+
 	/// Look up a variable by name, checking parent scopes
 	pub fn lookup(&self, name: &str) -> Option<&Local> {
 		self.locals
