@@ -720,7 +720,7 @@ impl Signals {
 					Box::new(self.fields_kept(*value, &fields, signals, main)),
 				)
 			}
-			Node::Key(target, op, value) if is_write(op) && signals.contains(&signal_name(&target)) => {
+			Node::Key(target, op, value) if op.is_write() && signals.contains(&signal_name(&target)) => {
 				let name = signal_name(&target);
 				let value = match op {
 					Op::Assign => self.rewrite(*value, signals, main),
@@ -1203,10 +1203,6 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 		.clone()
 }
 
-fn is_write(op: Op) -> bool {
-	op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
-}
-
 /// `f(a, b) := body`, `def f(a, b) {body}`
 fn definition(node: &Node) -> Option<Definition> {
 	let (head, body) = match node.drop_meta() {
@@ -1320,7 +1316,7 @@ fn assigned_names(body: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	visit_main_level(body, &mut |node| {
 		if let Node::Key(target, op, _) = node {
-			if let (true, Node::Symbol(name)) = (is_write(*op), target.drop_meta()) {
+			if let (true, Node::Symbol(name)) = (op.is_write(), target.drop_meta()) {
 				names.insert(name.clone());
 			}
 		}

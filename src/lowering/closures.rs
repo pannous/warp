@@ -863,15 +863,7 @@ impl Lifting {
 
 /// The names a body assigns, `angle = 0.5`: its local variables, never a function of the same name
 fn assigned_variables(body: &Node) -> HashSet<String> {
-	let mut assigned = HashSet::new();
-	body.visit(&mut |node| {
-		if let Node::Key(target, Op::Assign, _) = node {
-			if let Node::Symbol(name) = target.drop_meta() {
-				assigned.insert(name.clone());
-			}
-		}
-	});
-	assigned
+	body.assigned_names(|op| *op == Op::Assign)
 }
 
 /// The names a body declares `global n`: the closure reads and changes the program's own n

@@ -73,13 +73,7 @@ pub fn lower(program: Node) -> Node {
 }
 
 fn assigned_names(program: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	program.visit(&mut |part| {
-		if let Node::Key(name, Op::Assign, _) = part {
-			names.extend(name.symbol_name().map(String::from));
-		}
-	});
-	names
+	program.assigned_names(|op| *op == Op::Assign)
 }
 
 /// Patterns with a preposition: from the parser's mark on a `to` phrase and from spaced definitions `name words… = body`

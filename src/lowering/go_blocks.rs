@@ -286,15 +286,7 @@ fn defines_go(node: &Node) -> bool {
 }
 
 fn assigned_variables(node: &Node) -> Vec<String> {
-	let mut names = vec![];
-	node.visit(&mut |part| {
-		if let Node::Key(target, Op::Assign | Op::Define, _) = part {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.push(name.clone());
-			}
-		}
-	});
-	names
+	node.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
 }
 
 /// The symbols of a block in their first order, each once
