@@ -31,8 +31,9 @@ pub(crate) fn names_a_function(name: &str) -> bool {
 		&& !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 
+/// A known type word of a head: `fib int i`, `foo of any`
 fn is_type_word(word: &str) -> bool {
-	type_word_kind(word).is_some()
+	type_word_kind(word).is_some() || word == crate::words::ANY_TYPE
 }
 
 fn typed(name: &str, type_name: &str) -> Node {
