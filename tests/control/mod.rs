@@ -142,6 +142,7 @@ mod test_rest_patterns;
 mod test_run_tests; // card run-tests
 mod test_run_time_block_cache;
 mod test_run_time_blocks;
+mod test_schemas; // card schemas
 mod test_scoped_handlers;
 mod test_shared_arrays;
 mod test_shared_signals;

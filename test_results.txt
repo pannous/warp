@@ -20,7 +20,6 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
-  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -521,6 +520,10 @@ PASSED:
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
   ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
   ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
+  ✓ control::test_schemas::a_map_of_types_tests_the_field_types
+  ✓ control::test_schemas::an_arm_matches_a_schema
+  ✓ control::test_schemas::an_optional_field_may_be_missing
+  ✓ control::test_schemas::parsed_json_is_tested_against_a_schema
   ✓ control::test_scoped_handlers::a_block_handler_answers_emits_in_the_block
   ✓ control::test_scoped_handlers::a_block_handler_answers_the_functions_the_block_calls
   ✓ control::test_scoped_handlers::a_handler_emitting_its_own_event_reaches_the_next_handler_out
@@ -2085,6 +2088,7 @@ PASSED:
   ✓ modules::test_std_collections::other_languages_method_names_are_the_collections_methods
   ✓ modules::test_std_collections::the_size_of_an_instance_through_len_and_count
   ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
+  ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
   ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
@@ -2914,7 +2918,6 @@ PASSED:
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ parser::test_bare_operator_block::a_bare_operator_block_names_the_fix
   ✓ parser::test_bare_operator_block::operators_with_operands_in_blocks_still_work
-  ✓ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
   ✓ parser::test_comments::test_block_comments
@@ -3220,7 +3223,6 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
-  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -5287,6 +5289,9 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
+  ✗ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
+  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-12 ignored, 5284 passed, 0 failed, 5284 total tested
+12 ignored, 5286 passed, 3 failed, 5289 total tested
