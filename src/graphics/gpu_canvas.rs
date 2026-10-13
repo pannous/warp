@@ -1,6 +1,6 @@
 //! `use draw` on the GPU (card gpu-draw): clear, dot, rect and circle of lib/draw.warp become shapes, 24 bytes each,
 //! which a shader draws into a canvas texture that stays on the GPU; show() sends only the shapes drawn since the last
-//! show, never the pixels. In a window the paint-window process owns the texture (src/paint_window.rs); headless
+//! show, never the pixels. In a window the paint-window process owns the texture (src/graphics/paint_window.rs); headless
 //! (WARP_DRAW=gpu without a window) an offscreen one here, read back for paint's PNG. The CPU draw of lib/draw.warp
 //! stays for headless runs and the playground; the system value gpu_drawing tells lib/draw.warp which one runs.
 //! A shape covers the pixels whose centers the CPU draw would color, so both give the same picture: a circle the
@@ -233,15 +233,15 @@ static OFFSCREEN: Mutex<Option<Canvas>> = Mutex::new(None);
 /// show() of `use draw` on the GPU: the new shapes to the paint window, or headless drawn here and painted as RGBA
 pub fn show(width: usize, height: usize) -> Result<Option<std::path::PathBuf>, String> {
 	let shapes = take_shapes();
-	if crate::paint::shows_windows() {
-		crate::paint_window::show(&crate::paint_window::shapes_message(width, height, &shapes))?;
+	if crate::graphics::paint::shows_windows() {
+		crate::graphics::paint_window::show(&crate::graphics::paint_window::shapes_message(width, height, &shapes))?;
 		return Ok(None);
 	}
-	let rgba = crate::gpu::with_device(|device, queue| {
+	let rgba = crate::graphics::gpu::with_device(|device, queue| {
 		let mut offscreen = OFFSCREEN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 		let canvas = offscreen.get_or_insert_with(|| Canvas::new(device));
 		let encoder = canvas.draw(device, queue, width as u32, height as u32, &shapes);
-		crate::gpu::image_rgba(device, queue, encoder, canvas.texture())
+		crate::graphics::gpu::image_rgba(device, queue, encoder, canvas.texture())
 	})??;
-	crate::paint::paint_rgba(&rgba, width, height)
+	crate::graphics::paint::paint_rgba(&rgba, width, height)
 }

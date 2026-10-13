@@ -27,7 +27,7 @@ fn serving(program: &'static str, folder: &str, port: u16, requests: usize) -> s
 	let file = folder.join("app.warp");
 	std::fs::write(&file, program).expect("the program file");
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(requests);
+		warp::web::web_server::stop_after(requests);
 		warp::modules::with_program_file(&file, || {
 			warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(program))
 		})

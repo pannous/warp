@@ -1,0 +1,19 @@
+// card visualizer-speed: the CPU part of one samples/gpu_visualizer.warp frame without paint: spectrum and the band loop
+use sound
+bands = 16
+tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4] C5 G4 E4 [C3 E4 G4 C5]]
+song = melody_samples(tune, 0.25)
+levels = [0.0 as float for band in 0..bands]
+peaks = [0.02 as float for band in 0..bands]
+t0 = clock()
+for frame in 1 to 60 { heard = spectrum(song, frame * 0.016, bands) }
+t1 = clock()
+for frame in 1 to 60 {
+	for band in 0..bands {
+		peaks[band] = max(0.02, max(0.5, peaks[band] * 0.995))
+		levels[band] = max(0.5 / peaks[band], levels[band] * 0.8)
+	}
+}
+t2 = clock()
+print("spectrum ms per frame: " + (t1 - t0) / 60)
+print("band loop ms per frame: " + (t2 - t1) / 60)

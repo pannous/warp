@@ -1,10 +1,10 @@
 //! `$name` in a shader block (card shader-holes, P235b amended 2026-10-09): an explicit hole, as in sql templates.
-//! The parser writes it as WGSL's `values.name` (the uniform the values map becomes, src/gpu.rs uniform_layout) and
+//! The parser writes it as WGSL's `values.name` (the uniform the values map becomes, src/graphics/gpu.rs uniform_layout) and
 //! marks the shader's text with the names; this pass gives every paint or gpu_render of that shader the entries
 //! `name: name` in its values map, so the warp variable is read at each call. A map written out keeps its own entry
 //! of a name. Bare WGSL names still never capture warp variables.
 //! The built-in holes (card shader-builtins) $width, $height, $size, $time, $frame, $mouse, $mouse_down and $key get no entry unless the program
-//! has a variable of that name: the host fills them at each render (src/gpu.rs builtin_values, host-gpu.js).
+//! has a variable of that name: the host fills them at each render (src/graphics/gpu.rs builtin_values, host-gpu.js).
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 /// The attribute of a shader text listing its holes' names
 pub const HOLES_ATTRIBUTE: &str = "shader_holes";
-/// The WGSL name of the values map (src/gpu.rs, host-gpu.js)
+/// The WGSL name of the values map (src/graphics/gpu.rs, host-gpu.js)
 pub const VALUES: &str = "values";
 /// The words rendering a shader with a values map last: `paint(shader, width, height, values)`
 const RENDERING_WORDS: [&str; 2] = [crate::host::PAINT, warp_runtime::host_words::GPU_RENDER];
@@ -23,7 +23,7 @@ const SIZE_WORDS: [&str; 2] = ["width", "height"];
 /// Holes every shader has, filled by the host: the image's size in pixels, seconds since the first render, the renders
 /// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
 /// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
-/// and `$previous(at)`, the shader's own previous frame at a pixel (src/gpu.rs PREVIOUS_FRAME)
+/// and `$previous(at)`, the shader's own previous frame at a pixel (src/graphics/gpu.rs PREVIOUS_FRAME)
 pub const BUILTIN_HOLES: [&str; 9] = [
 	"width",
 	"height",

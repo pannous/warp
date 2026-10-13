@@ -34,7 +34,7 @@ fn a_missing_row_is_not_found() {
 	});
 	std::fs::write(&program, PROGRAM).expect("the program file");
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(2);
+		warp::web::web_server::stop_after(2);
 		warp::modules::with_program_file(&program, || {
 			warp::pipeline::serving_at(PORT, || warp::wasm_emitter::eval(PROGRAM))
 		})

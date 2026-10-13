@@ -1,6 +1,6 @@
-//! Headless component tests (card web-testing, src/headless.rs): render a program whose value is markup, click a
+//! Headless component tests (card web-testing, src/web/headless.rs): render a program whose value is markup, click a
 //! button by its text, check what the page shows, natively without a browser
-use warp::headless::Page;
+use warp::web::headless::Page;
 
 const COUNTER: &str = "count = 0\ndiv{ button{ on click { count += 1 } \"Add\" } p{ \"clicked \" + count } }";
 

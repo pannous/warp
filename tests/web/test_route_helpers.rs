@@ -1,5 +1,5 @@
 // card web-split-helpers: a built site's function only one route calls moves into that route's module with the route
-// (src/route_split.rs), unless a task may call it by name in a fresh instance (web/playground/host-tasks.js)
+// (src/web/route_split.rs), unless a task may call it by name in a fresh instance (web/playground/host-tasks.js)
 use crate::common::WASM_SPLIT;
 use crate::requires;
 
@@ -39,7 +39,7 @@ fn defined_functions(module: &[u8]) -> Vec<String> {
 }
 
 fn site_functions(code: &str, module: &str) -> Vec<String> {
-	let files = warp::site::files(code, "routes", false).expect("the site is built");
+	let files = warp::web::site::files(code, "routes", false).expect("the site is built");
 	let (_, bytes) = files.iter().find(|(name, _)| name == module).unwrap_or_else(|| {
 		panic!(
 			"no {module} among {:?}",

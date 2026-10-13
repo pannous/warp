@@ -67,7 +67,7 @@ User decisions from that round:
 - "Got it" is the educate_once machinery, shared by Ask warnings and educating notes (`educate_once(topic, written,
   preferred, reason)`): `trait Acknowledger` (`has_acknowledged` for a host's own list, `acknowledge` asked once per run
   after the warning or note), `set_acknowledger` / `with_acknowledger`; `TerminalAcknowledger` (`got it? [y …]`),
-  `Acknowledging(topics)` for tests, the playground's page list (src/web.rs `PageAcknowledger`, report `notes`).
+  `Acknowledging(topics)` for tests, the playground's page list (src/web/mod.rs `PageAcknowledger`, report `notes`).
   Remembered as `ack:<topic> = acknowledged` in `.warp-acknowledged` (CLI, working directory). Non-interactive runs
   just show the warning, never block; `--no-ask` never prompts.
 - Scope (user, 2026-10-05): the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"

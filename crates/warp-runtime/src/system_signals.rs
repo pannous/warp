@@ -6,7 +6,7 @@
 //! ignores ctrl-c never makes a program unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
 //! declared. `on file "notes.txt" change {…}` is `on·file·0`, started by `signal_watch(0, "notes.txt")`: a timer of
 //! FILE_CHECK_PERIOD that fires only when the file's modification time or size changed (it appeared, was written, or went).
-//! `users := fetch url` runs on·fetch·0 once the reply arrived (await_ready, src/fetches.rs).
+//! `users := fetch url` runs on·fetch·0 once the reply arrived (await_ready, src/web/fetches.rs).
 //! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
 use crate::host_words::{EXIT_HANDLER, FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
 use std::cell::{Cell, RefCell};
@@ -183,7 +183,7 @@ thread_local! {
 	static FIRST_FRAME_ENDS_RUN: Cell<bool> = const { Cell::new(false) };
 }
 
-/// The run of `warp build --site`'s prerender (src/site.rs, card site-build): an animation's first frame or sleep ends
+/// The run of `warp build --site`'s prerender (src/web/site.rs, card site-build): an animation's first frame or sleep ends
 /// main as `exit` does, so the page is read as it stands then, and an endless loop builds too
 pub fn until_first_frame<T>(run: impl FnOnce() -> T) -> T {
 	FIRST_FRAME_ENDS_RUN.set(true);

@@ -20,7 +20,7 @@ fn served_from(
 	requests: usize,
 ) -> std::thread::JoinHandle<String> {
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(requests);
+		warp::web::web_server::stop_after(requests);
 		let serving = || warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(code));
 		match file {
 			Some(file) => warp::modules::with_program_file(&file, serving),

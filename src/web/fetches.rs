@@ -77,7 +77,7 @@ pub fn reply(id: i64) -> Node {
 	};
 	let (value, error) = match reply {
 		Ok(body) if POSTED.with(|posted| posted.borrow().contains(&id)) => (value_of_json(body), Node::Empty),
-		Ok(body) => (crate::web_server::value_of_body(body), Node::Empty),
+		Ok(body) => (crate::web::web_server::value_of_body(body), Node::Empty),
 		Err(failure) => (Node::Empty, Node::Text(failure)),
 	};
 	Node::List(vec![value, error], Bracket::Square, Separator::Colon)

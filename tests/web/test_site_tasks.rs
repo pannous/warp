@@ -5,7 +5,7 @@ use crate::common::scratch_directory;
 #[test]
 fn a_site_renders_what_its_tasks_computed() {
 	let directory = scratch_directory("tasks-site");
-	warp::site::build(
+	warp::web::site::build(
 		"twice(x) := x * 2\nanswer = await go twice(21)\np{ \"answer \" + answer }",
 		"tasks",
 		&directory,

@@ -1,6 +1,6 @@
 // card native-window: natively `on click {…}` hears the clicks over the paint window, event {x, y} in the painted
 // frame's pixels, as the playground page raises click on its canvas. The clicks are told here as the viewer's input
-// lines tell them (src/paint_window.rs follow_input): released, pressed at 30, 40, released; the key held stays
+// lines tell them (src/graphics/paint_window.rs follow_input): released, pressed at 30, 40, released; the key held stays
 use warp_runtime::system_values::{tell_window_input, window_input};
 
 #[test]

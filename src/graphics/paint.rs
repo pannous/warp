@@ -1,6 +1,6 @@
 //! paint(pixels, width, height) natively (card native-paint): the pixels as a PNG in the system's temporary
 //! folder (warp-paint/paint.png, then paint-2.png … within one run; the next run overwrites them, so no project folder
-//! collects images), named on stderr; run by `warp` itself a window shows them instead (src/paint_window.rs), also
+//! collects images), named on stderr; run by `warp` itself a window shows them instead (src/graphics/paint_window.rs), also
 //! from an editor's build or a pipe; never in tests (WARP_NO_WINDOW, CI, or warp used as a library). The playground draws the same pixels on a canvas (web/playground/playground.js showPaintings).
 
 use std::io::Write;
@@ -18,7 +18,7 @@ const FOLDER: &str = "warp-paint";
 /// Set when tests or a headless machine must not see windows (tests/common warp_command, tests/queue.sh)
 pub const NO_WINDOW_VARIABLE: &str = "WARP_NO_WINDOW";
 const CI_VARIABLE: &str = "CI";
-/// `WARP_DRAW=gpu` or `cpu` picks how `use draw` draws (src/gpu_canvas.rs); without it, on the GPU when a window shows
+/// `WARP_DRAW=gpu` or `cpu` picks how `use draw` draws (src/graphics/gpu_canvas.rs); without it, on the GPU when a window shows
 pub const DRAW_VARIABLE: &str = "WARP_DRAW";
 const DRAW_CHOICES: [&str; 2] = ["gpu", "cpu"];
 /// Whether paint shows a window: only the warp binary turns it on (allow_windows); a library caller writes PNGs
@@ -69,12 +69,14 @@ fn open_blank_window() {
 	let (width, height) = warp_runtime::system_values::native_view();
 	let (width, height) = (width as usize, height as usize);
 	let paper = vec![0; width * height];
-	if let Err(failure) = crate::paint_window::show(&crate::paint_window::frame_bytes(&paper, width, height)) {
+	if let Err(failure) =
+		crate::graphics::paint_window::show(&crate::graphics::paint_window::frame_bytes(&paper, width, height))
+	{
 		eprintln!("window_open: {failure}");
 	}
 }
 
-/// Whether the warp binary may reach the user's screen and speakers: paint's windows, sound's player (src/sound.rs)
+/// Whether the warp binary may reach the user's screen and speakers: paint's windows, sound's player (src/sound/mod.rs)
 pub fn shows_windows() -> bool {
 	WINDOWS.load(Ordering::Relaxed)
 }
@@ -92,16 +94,20 @@ pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathB
 		));
 	}
 	shown_or_written(
-		|| crate::paint_window::frame_bytes(pixels, width, height),
+		|| crate::graphics::paint_window::frame_bytes(pixels, width, height),
 		|| png_file(pixels, width, height),
 	)
 }
 
 /// paint of a rendered shader (gpu::render_rgba): its RGBA bytes go to the window as they are
 pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
-	let pixels = || crate::gpu::opaque_colors(rgba).map(u64::from).collect::<Vec<_>>();
+	let pixels = || {
+		crate::graphics::gpu::opaque_colors(rgba)
+			.map(u64::from)
+			.collect::<Vec<_>>()
+	};
 	shown_or_written(
-		|| crate::paint_window::rgba_frame(rgba, width, height),
+		|| crate::graphics::paint_window::rgba_frame(rgba, width, height),
 		|| png_file(&pixels(), width, height),
 	)
 }
@@ -112,7 +118,7 @@ fn shown_or_written(
 	write: impl FnOnce() -> Result<PathBuf, String>,
 ) -> Result<Option<PathBuf>, String> {
 	if WINDOWS.load(Ordering::Relaxed) {
-		match crate::paint_window::show(&frame()) {
+		match crate::graphics::paint_window::show(&frame()) {
 			Ok(()) => return Ok(None),
 			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
 		}

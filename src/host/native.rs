@@ -302,7 +302,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 		HOST_LIBRARY,
 		DRAW_SHAPE,
 		|kind: i64, a: f64, b: f64, c: f64, d: f64, color: i64| {
-			crate::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32)
+			crate::graphics::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32)
 		},
 	)?;
 	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
@@ -357,7 +357,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	Ok(())
 }
 
-/// paint(pixels, width, height) natively: the pixels as a PNG (src/paint.rs); paint(shader, width, height, values)
+/// paint(pixels, width, height) natively: the pixels as a PNG (src/graphics/paint.rs); paint(shader, width, height, values)
 /// renders the WGSL fragment shader first, as gpu_render does (P234)
 fn paint(
 	mut caller: Caller<'_, HostState>,
@@ -376,7 +376,7 @@ fn paint(
 				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
 				crate::node::Node::Text(shader) => {
 					let rgba = rendered(&mut caller, shader, width, height, shader_values, &gpu_failure(PAINT))?;
-					return crate::paint::paint_rgba(&rgba, size.0, size.1)
+					return crate::graphics::paint::paint_rgba(&rgba, size.0, size.1)
 						.map(|_| ())
 						.map_err(task_failure);
 				}
@@ -389,20 +389,20 @@ fn paint(
 			}
 		}
 	};
-	crate::paint::paint(&values, size.0, size.1)
+	crate::graphics::paint::paint(&values, size.0, size.1)
 		.map(|_| ())
 		.map_err(task_failure)
 }
 
-/// show() of `use draw` on the GPU (src/gpu_canvas.rs)
+/// show() of `use draw` on the GPU (src/graphics/gpu_canvas.rs)
 fn draw_show(width: i64, height: i64) -> wasmtime::Result<()> {
 	warp_runtime::system_signals::end_at_first_frame()?;
-	crate::gpu_canvas::show(width.max(0) as usize, height.max(0) as usize)
+	crate::graphics::gpu_canvas::show(width.max(0) as usize, height.max(0) as usize)
 		.map(|_| ())
 		.map_err(task_failure)
 }
 
-/// sound_samples(samples, count, rate) natively: a WAV file, played unless headless (src/sound.rs)
+/// sound_samples(samples, count, rate) natively: a WAV file, played unless headless (src/sound/mod.rs)
 fn sound(
 	mut caller: Caller<'_, HostState>,
 	samples: HostNode,
@@ -690,9 +690,9 @@ fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<w
 
 type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
 
-/// serve_routes(port, routes): HTTP on the port, each request answered by its route's function (src/web_server.rs)
+/// serve_routes(port, routes): HTTP on the port, each request answered by its route's function (src/web/web_server.rs)
 fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) -> wasmtime::Result<HostNode> {
-	use crate::web_server::{routes_of, serve};
+	use crate::web::web_server::{routes_of, serve};
 	let routes = routes_of(&given_node(&mut caller, routes)?);
 	let port = u16::try_from(port).map_err(|_| task_failure(format!("serve {port}: no port number")))?;
 	let site = served_site(port);
@@ -726,7 +726,7 @@ fn route_failure(
 	caller: &mut Caller<'_, HostState>,
 	path: &str,
 	failure: wasmtime::Error,
-) -> crate::web_server::RouteFailure {
+) -> crate::web::web_server::RouteFailure {
 	let detail = caller
 		.get_export(crate::wasm_reader::TRAP_DETAIL)
 		.and_then(Extern::into_global);
@@ -758,19 +758,19 @@ fn route_failure(
 	let trace = format!("{failure:?}");
 	let message = crate::tasks::failure_message(failure);
 	eprintln!("{path} failed: {message}\n{trace}");
-	crate::web_server::RouteFailure { message, raised }
+	crate::web::web_server::RouteFailure { message, raised }
 }
 
-/// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a
+/// The site of the program file being run, which a program whose last line shows a page serves at / (src/web/site.rs); a
 /// page that fails to build is said, and the routes are served without it
-fn served_site(port: u16) -> crate::site::ServedSite {
+fn served_site(port: u16) -> crate::web::site::ServedSite {
 	let Some(file) = crate::modules::program_file() else {
 		return Default::default();
 	};
-	let title = crate::site::program_stem(&file);
+	let title = crate::web::site::program_stem(&file);
 	let rendered = std::fs::read_to_string(&file)
 		.map_err(|failure| failure.to_string())
-		.and_then(|code| crate::site::served_files(&code, &title));
+		.and_then(|code| crate::web::site::served_files(&code, &title));
 	rendered
 		.unwrap_or_else(|failure| {
 			eprintln!("warning: serve {port} serves no page: {failure}");
@@ -968,7 +968,7 @@ fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode)
 }
 
 /// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/serve.rs)
-fn request_of(request: &Node) -> crate::fetches::Request {
+fn request_of(request: &Node) -> crate::web::fetches::Request {
 	match request.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 => {
 			(items[0].name(), Some(crate::foreign::json_of(&items[1]).to_string()))
@@ -977,21 +977,21 @@ fn request_of(request: &Node) -> crate::fetches::Request {
 	}
 }
 
-/// `users := fetch url` starts the fetch (src/fetches.rs)
+/// `users := fetch url` starts the fetch (src/web/fetches.rs)
 fn fetch_start(mut caller: Caller<'_, HostState>, id: i64, url: HostNode) -> wasmtime::Result<()> {
 	let request = given_node(&mut caller, url)?;
-	crate::fetches::start(id, request_of(&request), FETCH_TIMEOUT);
+	crate::web::fetches::start(id, request_of(&request), FETCH_TIMEOUT);
 	Ok(())
 }
 
-/// [value, error] of the fetch's reply (src/fetches.rs)
+/// [value, error] of the fetch's reply (src/web/fetches.rs)
 fn fetch_reply(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
-	built_in_program(&mut caller, &crate::fetches::reply(id), "fetch")
+	built_in_program(&mut caller, &crate::web::fetches::reply(id), "fetch")
 }
 
 /// The oldest message the listener got, as the value it was sent as (ø when none waits)
 fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
-	let message = crate::web_sockets::next(id).unwrap_or_else(|| {
+	let message = crate::web::web_sockets::next(id).unwrap_or_else(|| {
 		crate::channels::next(id)
 			.map(|text| crate::warp_parser::parse(&text).drop_meta().clone())
 			.unwrap_or(Node::Empty)
@@ -1016,7 +1016,7 @@ thread_local! {
 }
 const ROOT_PATH: &str = "/";
 
-/// Run `body` with the page at `path` (a page rendered for a request, src/site.rs)
+/// Run `body` with the page at `path` (a page rendered for a request, src/web/site.rs)
 pub fn with_page_path<R>(path: &str, body: impl FnOnce() -> R) -> R {
 	crate::util::scoped(&NATIVE_PAGE_PATH, path.to_string(), body)
 }
@@ -1047,8 +1047,8 @@ fn built_in_program(caller: &mut Caller<'_, HostState>, value: &Node, word: &str
 fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: HostNode) -> wasmtime::Result<()> {
 	let channel = given_node(&mut caller, channel)?;
 	let message = given_node(&mut caller, message)?;
-	if crate::web_sockets::is_socket_address(&channel.name()) {
-		return crate::web_sockets::send(&channel.name(), &message).map_err(task_failure);
+	if crate::web::web_sockets::is_socket_address(&channel.name()) {
+		return crate::web::web_sockets::send(&channel.name(), &message).map_err(task_failure);
 	}
 	crate::channels::send(&channel.name(), message.serialize().trim()).map_err(task_failure)
 }

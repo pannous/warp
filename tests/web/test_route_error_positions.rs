@@ -7,7 +7,7 @@ const PROGRAM: &str = "serve 18661 {\n\tget \"/index\" { [1 2]#5 }\n}";
 #[test]
 fn a_failing_route_names_its_statement() {
 	let server = std::thread::spawn(|| {
-		warp::web_server::stop_after(1);
+		warp::web::web_server::stop_after(1);
 		warp::wasm_emitter::eval(PROGRAM).serialize()
 	});
 	let started = std::time::Instant::now();
