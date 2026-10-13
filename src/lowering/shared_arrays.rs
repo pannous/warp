@@ -899,8 +899,7 @@ fn linear_dot(left: Node, right: Node) -> Node {
 	let template = format!("({}; {LINEAR_DOT}(LEFT, RIGHT))", crate::broadcasting::PAIRED_COUNT)
 		.replace("LEFT", "dot_left")
 		.replace("RIGHT", "dot_right");
-	let bindings = HashMap::from([("dot_left".to_string(), left), ("dot_right".to_string(), right)]);
-	crate::law::substitute(&crate::warp_parser::parse(&template), &bindings)
+	super::nodes::filled(&template, [("dot_left", left), ("dot_right", right)])
 }
 
 /// A linear array, or an element-wise expression of one: `ys`, `(ys .* 2)`

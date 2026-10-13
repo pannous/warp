@@ -803,21 +803,86 @@ fn closing_brace(chars: &[char]) -> Option<usize> {
 
 /// The lines without the indentation all non-blank ones share, without the blank lines around them
 fn without_common_indentation(source: &str) -> String {
-	let lines: Vec<&str> = source.trim_matches(|ch| ch == '\n' || ch == '\r').lines().collect();
-	let indentation = |line: &&str| line.len() - line.trim_start().len();
-	let common = lines
-		.iter()
-		.filter(|line| !line.trim().is_empty())
-		.map(indentation)
-		.min()
-		.unwrap_or(0);
-	lines
-		.iter()
-		.map(|line| line.get(common..).unwrap_or("").trim_end())
+	dedented_lines(source)
+		.into_iter()
+		.map(|line| line.text)
 		.collect::<Vec<_>>()
 		.join("\n")
-		.trim()
-		.to_string()
+}
+
+/// A line of a shader block's text: which line of the block it is (0: the one of its `{`), how many characters before
+/// it the text dropped, and the text
+pub struct DedentedLine {
+	pub line: usize,
+	pub dropped: usize,
+	pub text: String,
+}
+
+/// The lines of `source` without the indentation all non-blank ones share, without the blank lines around them, and
+/// the first without any
+fn dedented_lines(source: &str) -> Vec<DedentedLine> {
+	let lines: Vec<&str> = source.lines().collect();
+	let is_blank = |line: &&str| line.trim().is_empty();
+	let common = lines
+		.iter()
+		.filter(|line| !is_blank(line))
+		.map(|line| line.len() - line.trim_start().len())
+		.min()
+		.unwrap_or(0);
+	let first = lines.iter().position(|line| !is_blank(line)).unwrap_or(lines.len());
+	let end = lines
+		.iter()
+		.rposition(|line| !is_blank(line))
+		.map_or(first, |last| last + 1);
+	let mut kept: Vec<DedentedLine> = (first..end)
+		.map(|line| DedentedLine {
+			line,
+			dropped: common,
+			text: lines[line].get(common..).unwrap_or("").trim_end().to_string(),
+		})
+		.collect();
+	if let Some(opening) = kept.first_mut() {
+		let text = opening.text.trim_start().to_string();
+		opening.dropped += opening.text.chars().count() - text.chars().count();
+		opening.text = text;
+	}
+	kept
+}
+
+/// Each `shader { … }` (or `wgsl { … }`) block of `code`: the line and column right after its `{`, and its text's lines
+pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
+	let chars: Vec<char> = code.chars().collect();
+	let is_name_part = |at: usize| chars.get(at).is_some_and(|ch| ch.is_alphanumeric() || *ch == '_');
+	let mut blocks = vec![];
+	let mut at = 0;
+	while at < chars.len() {
+		let word = SHADER_WORDS.iter().find(|word| {
+			!is_name_part(at.wrapping_sub(1)) && chars[at..].starts_with(&word.chars().collect::<Vec<_>>())
+		});
+		let Some(word) = word.filter(|word| !is_name_part(at + word.len())) else {
+			at += 1;
+			continue;
+		};
+		let mut open = at + word.len();
+		while matches!(chars.get(open), Some(' ' | '\t')) {
+			open += 1;
+		}
+		let start = open + 1;
+		let Some(length) = (chars.get(open) == Some(&'{'))
+			.then(|| closing_brace(&chars[start..]))
+			.flatten()
+		else {
+			at = open;
+			continue;
+		};
+		let before = &chars[..start];
+		let line = 1 + before.iter().filter(|&&ch| ch == '\n').count();
+		let column = 1 + before.iter().rev().take_while(|&&ch| ch != '\n').count();
+		let source: String = chars[start..start + length].iter().collect();
+		blocks.push(((line, column), dedented_lines(&source)));
+		at = start + length;
+	}
+	blocks
 }
 
 /// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an

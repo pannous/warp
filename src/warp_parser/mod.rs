@@ -35,6 +35,7 @@ mod atoms;
 mod expressions;
 mod lists;
 mod literals;
+pub use literals::shader_blocks;
 mod statements;
 mod suffixes;
 use unicode_normalization::UnicodeNormalization;

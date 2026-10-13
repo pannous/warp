@@ -696,17 +696,9 @@ impl WasmGcEmitter {
 		];
 
 		for (name, tag) in tags {
-			self.globals.global(
-				GlobalType {
-					val_type: ValType::I64,
-					mutable: false,
-					shared: false,
-				},
-				&ConstExpr::i64_const(tag as i64),
-			);
-			self.exports.export(name, ExportKind::Global, self.next_global_idx);
-			self.ctx.kind_global_indices.insert(tag, self.next_global_idx);
-			self.next_global_idx += 1;
+			let global = self.declare_constant_global(ValType::I64, ConstExpr::i64_const(tag as i64));
+			self.exports.export(name, ExportKind::Global, global);
+			self.ctx.kind_global_indices.insert(tag, global);
 		}
 	}
 

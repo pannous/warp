@@ -9,19 +9,19 @@
 //! nothing, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
+use super::listeners;
 use super::nodes::{block, call, children_rewritten, if_then, key};
-use crate::declarations::{handler_parts, word};
+use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
 use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
-use crate::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
+use crate::words::{COUNT_WORD, FROM_WORD, OF_WORD, ONCE_WORD, ON_WORD};
 use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 use std::collections::{HashMap, HashSet};
 
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
-const ONCE_WORD: &str = "once";
 /// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
 const FIRED_PREFIX: &str = "once_fired_";
 /// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
@@ -430,7 +430,7 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 	let mut subscribed: Vec<String> = vec![];
 	let statements: Vec<Node> = statements
 		.into_iter()
-		.map(|statement| match handler(&statement) {
+		.map(|statement| match named_handler(&statement) {
 			Some(_) => statement,
 			None => statement.map_children(|child| subscriptions(child, raised, &mut subscribed, false)),
 		})
@@ -500,24 +500,16 @@ fn subscribers_name(event: &str) -> String {
 
 /// `h = on alarm {body}` (Node's emitter.on returning a handle, P128): the handler and the name it can be removed by
 fn named_handler(statement: &Node) -> Option<(Option<String>, (String, Node, bool))> {
-	match statement.drop_meta() {
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) => {
-			handler(&flattened(value)).map(|parts| (Some(word(target)), parts))
-		}
-		_ => handler(statement).map(|parts| (None, parts)),
+	let listener = listeners::read_named(statement, &[ON_WORD, ONCE_WORD])?;
+	let words = listener.words();
+	if words
+		.first()
+		.is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str()))
+	{
+		return None;
 	}
-}
-
-/// The value of `h = on alarm {…}` arrives nested, `on (alarm {…})`, `(on stop) (the (machine {…}))`: its words in
-/// one row
-fn flattened(node: &Node) -> Node {
-	fn words(node: &Node) -> Vec<Node> {
-		match node.drop_meta() {
-			Node::List(items, Bracket::None, Separator::Space) => items.iter().flat_map(words).collect(),
-			_ => vec![node.clone()],
-		}
-	}
-	Node::List(words(node), Bracket::None, Separator::Space)
+	let once = listener.keyword == ONCE_WORD;
+	Some((listener.name, (event_name(words.iter())?, listener.body, once)))
 }
 
 /// A named handler runs while its flag `h_listening` holds: `remove h from listeners of alarm` clears it
@@ -799,28 +791,7 @@ fn bound_names(program: &Node) -> HashSet<String> {
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`, `once alarm {body}`: the event's name, the body
 /// and whether it runs once
 fn handler(statement: &Node) -> Option<(String, Node, bool)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (on, rest) = items.split_first()?;
-	let (last, words) = rest.split_last()?;
-	let once = word(on) == ONCE_WORD;
-	if !(once || word(on) == ON_WORD)
-		|| words
-			.first()
-			.is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str()))
-	{
-		return None;
-	}
-	let (last_word, body) = match last.drop_meta() {
-		Node::List(_, Bracket::Curly, _) if !words.is_empty() => (None, last.clone()),
-		_ => {
-			let (event, body) = handler_parts(last)?;
-			(Some(event), body)
-		}
-	};
-	let name = event_name(words.iter().chain(last_word.as_ref()))?;
-	Some((name, body, once))
+	named_handler(statement).and_then(|(name, parts)| name.is_none().then_some(parts))
 }
 
 /// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
@@ -859,7 +830,7 @@ pub(crate) fn emitted(node: &Node, verbs: &[String]) -> Option<(String, Node)> {
 }
 
 /// The words of an event, joined by spaces; None unless all are plain words
-fn event_name<'a>(words: impl Iterator<Item = &'a Node>) -> Option<String> {
+pub(crate) fn event_name<'a>(words: impl Iterator<Item = &'a Node>) -> Option<String> {
 	let words: Vec<String> = words.map(word).collect();
 	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
 }
@@ -992,10 +963,7 @@ pub(crate) fn last_statement(block: &Node) -> std::borrow::Cow<'_, Node> {
 
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
 pub(crate) fn global_declaration(name: &str) -> Node {
-	crate::law::substitute(
-		&parse(&format!("global {TEMPLATE_NAME}")),
-		&HashMap::from([(TEMPLATE_NAME.to_string(), symbol(name))]),
-	)
+	super::nodes::filled(&format!("global {TEMPLATE_NAME}"), [(TEMPLATE_NAME, symbol(name))])
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body

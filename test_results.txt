@@ -875,6 +875,13 @@ PASSED:
   ✓ ffi::header::tests::test_header_sig_to_ffi_sig
   ✓ ffi::header::tests::test_map_c_type_to_valtype
   ✓ ffi::header::tests::test_parse_header_file_math
+  ✓ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
+  ✓ ffi::test_cargo_crates::test_cargo_crate_free_functions
+  ✓ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
+  ✓ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource
+  ✓ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes
+  ✓ ffi::test_cargo_crates::test_cargo_crate_type_functions_fields_and_display
+  ✓ ffi::test_cargo_crates::test_cargo_crate_without_callable_functions_is_refused
   ✓ ffi::test_component_drop::a_dropped_handle_is_refused
   ✓ ffi::test_component_drop::dropping_a_handle_runs_the_destructor
   ✓ ffi::test_component_exports_anywhere::a_components_exports_in_every_host
@@ -1722,6 +1729,9 @@ PASSED:
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
+  ✓ lists::test_counting_word_operands::a_block_after_the_operand_is_the_body
+  ✓ lists::test_counting_word_operands::a_counting_word_takes_the_name_after_it
+  ✓ lists::test_counting_word_operands::a_variable_named_count_stays_a_variable
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
   ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
   ✓ lists::test_counting_words::test_every_counting_word_counts_a_list_of_quantities
@@ -2212,6 +2222,7 @@ PASSED:
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
   ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
   ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
+  ✓ modules::test_std_regex::a_match_prints_yes_or_no
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
   ✓ modules::test_std_shadowed_names::a_local_in_one_function_leaves_the_word_to_the_others
@@ -2587,7 +2598,6 @@ PASSED:
   ✓ numbers::test_plus_minus_print::certainly_and_possibly_compare_the_whole_interval
   ✓ numbers::test_plus_minus_print::the_parts_of_an_interval
   ✓ numbers::test_plus_minus_units::a_plain_spread_counts_in_the_value_unit
-  ✓ numbers::test_plus_minus_units::a_spread_of_another_dimension_fails
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
   ✓ numbers::test_plus_minus_units::compile_time_tolerances_stay_at_compile_time
@@ -2615,7 +2625,6 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
-  ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
   ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
@@ -2765,12 +2774,9 @@ PASSED:
   ✓ numbers::test_units_compare::mixed_dimensions_are_a_loud_dimension_error
   ✓ numbers::test_units_compare::quantities_compare_in_the_finer_unit
   ✓ numbers::test_units_compare::scalar_division_keeps_the_unit_and_same_dimension_division_is_a_number
-  ✓ numbers::test_units_followup::test_descending_range_is_an_error
   ✓ numbers::test_units_followup::test_negative_tolerance_is_an_error
   ✓ numbers::test_units_followup::test_plus_minus_ascii_spelling
-  ✓ numbers::test_units_followup::test_range_with_a_unit
   ✓ numbers::test_units_followup::test_single_quantity_keeps_its_unit
-  ✓ numbers::test_units_followup::test_tolerance_in_a_unit
   ✓ numbers::test_units_followup::test_unit_sum_serializes_in_the_smallest_unit
   ✓ numbers::test_units_followup::test_value_with_tolerance_prints_back
   ✓ numbers::test_units_nospace::test_constant_quantities_show_glued_and_read_back
@@ -3282,6 +3288,7 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -3322,6 +3329,9 @@ PASSED:
   ✓ programs::test_shader_builtins::a_word_for_the_previous_frame_hints_at_previous
   ✓ programs::test_shader_builtins::builtin_holes_are_left_to_the_host
   ✓ programs::test_shader_builtins::the_host_fills_the_builtin_holes
+  ✓ programs::test_shader_errors::a_shader_error_after_a_hole_counts_the_hole_as_written
+  ✓ programs::test_shader_errors::a_shader_error_the_browser_wrapped_is_placed_too
+  ✓ programs::test_shader_errors::a_wgsl_error_names_its_place_in_the_program
   ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
   ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
   ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
@@ -3901,6 +3911,7 @@ PASSED:
   ✓ types::test_data_run_now::a_forced_now_is_a_time_value
   ✓ types::test_data_run_now::now_in_data_prints_as_a_date
   ✓ types::test_data_stays_data::a_bare_now_in_data_is_the_word
+  ✓ types::test_data_stays_data::now_forced_in_a_map_is_the_time
   ✓ types::test_data_stays_data::now_prints_as_written_and_now_forced_as_a_date
   ✓ types::test_data::an_object_mixing_commas_and_newlines_reads_its_fields
   ✓ types::test_data::an_object_of_rows_with_a_quoted_name_reads_its_fields
@@ -5368,7 +5379,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-13 ignored, 5365 passed, 1 failed, 5366 total tested
+13 ignored, 5376 passed, 0 failed, 5376 total tested

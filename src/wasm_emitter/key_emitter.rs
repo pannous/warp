@@ -143,8 +143,6 @@ impl WasmGcEmitter {
 			|| matches!(op, Op::Inc | Op::Dec)
 		{
 			self.emit_arithmetic(func, left, op, right);
-		} else if *op == Op::Square || *op == Op::Cube {
-			self.emit_power_op(func, left, *op);
 		} else if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) {
 			self.emit_prefix_op(func, right, op);
 		} else if *op == Op::Question {
@@ -184,32 +182,6 @@ impl WasmGcEmitter {
 			);
 		} else {
 			self.emit_default_key(func, left, right, op);
-		}
-	}
-
-	/// Emit suffix power operators: x², x³
-	fn emit_power_op(&mut self, func: &mut Function, left: &Node, op: Op) {
-		let use_float = self.get_type(left).is_float();
-		if use_float {
-			self.emit_float_value(func, left);
-			self.emit_float_value(func, left);
-			func.instruction(&I::F64Mul);
-			if op == Op::Cube {
-				self.emit_float_value(func, left);
-				func.instruction(&I::F64Mul);
-			}
-			self.emit_call(func, "new_float");
-		} else {
-			let range = self.int_range(left);
-			self.emit_numeric_value(func, left);
-			self.emit_numeric_value(func, left);
-			self.emit_int_op(func, &Op::Mul, range, range);
-			if op == Op::Cube {
-				self.emit_numeric_value(func, left);
-				let squared = self.int_range(&Node::Key(Box::new(left.clone()), Op::Mul, Box::new(left.clone())));
-				self.emit_int_op(func, &Op::Mul, squared, range);
-			}
-			self.emit_call(func, "new_int");
 		}
 	}
 

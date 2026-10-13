@@ -251,6 +251,16 @@ into a new texture and keeps it per shader text (native gpu.rs PREVIOUS_FRAMES, 
 previousFrames); a canvas paint then copies it into the canvas texture (configured COPY_DST). Kept as 8 bits per
 channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
 
+## WGSL errors at their place in the program (card wgsl-error, user 2026-10-13)
+WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). Both hosts report a
+shader that does not compile as `<word>: line:column: why` in the shader's text (native gpu.rs compile_errors, browser
+host-gpu.js checkedModule, `gpu_paint: …` there). pipeline::eval_source passes the failed program through
+shader_errors::relocated: it finds the program's shader blocks again in the source (warp_parser shader_blocks, the
+same dedent as the block's text: lines dropped around it, characters dropped before each line) and, when exactly one
+block has that place, says `<word>: why at line:column` in the program, which the CLI and the playground underline.
+Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
+GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
+
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
 - src/graphics/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
   `input x y down key` lines on stdout, which warp-runtime system_values.rs window_input keeps (system values and

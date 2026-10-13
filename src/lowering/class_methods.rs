@@ -575,13 +575,7 @@ pub(crate) fn by_class(receiver: &Node, class: &str, method: Node, otherwise: No
 		("METHOD", method),
 		("OTHERWISE", otherwise),
 	];
-	let bindings = bindings
-		.into_iter()
-		.map(|(placeholder, node)| (placeholder.to_string(), node))
-		.collect();
-	crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings)
-		.drop_meta()
-		.clone()
+	super::nodes::filled(DISPATCH_TEMPLATE, bindings)
 }
 
 fn method_name(name: &str) -> String {

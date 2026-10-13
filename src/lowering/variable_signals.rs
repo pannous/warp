@@ -11,15 +11,14 @@
 //! `after tested: print "ok"` (or `after test`) runs after every later statement that calls the function test,
 //! `before test {…}` before it.
 
+use super::listeners;
 use super::nodes::{block, call, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{GLOBAL_WORD, ON_WORD};
+use crate::words::{GLOBAL_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::{HashMap, HashSet};
 
-const ONCE_WORD: &str = "once";
-const WHENEVER_WORD: &str = "whenever";
 const SET_WORD: &str = "set";
 const CHANGE_WORD: &str = "change";
 const AFTER_WORD: &str = "after";
@@ -567,28 +566,17 @@ pub(crate) enum ListenerWord {
 /// `once cond {body}`, `whenever cond : body`, `on set x {body}`, `on change x {body}`: the word, the condition or the
 /// variable, and the body
 pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let items = &ungrouped(items);
-	let keyword = word(items.first()?);
-	if keyword == ON_WORD {
-		let listener_word = match word(items.get(1)?).as_str() {
-			SET_WORD => ListenerWord::Set,
-			CHANGE_WORD => ListenerWord::Change,
+	let listener = listeners::read(statement, &[ON_WORD, ONCE_WORD, WHENEVER_WORD])?;
+	let (listener_word, subject) = match listener.keyword.as_str() {
+		ONCE_WORD => (ListenerWord::Once, listener.trigger),
+		WHENEVER_WORD => (ListenerWord::Whenever, listener.trigger),
+		_ => match listeners::leading_word(&listener.trigger)? {
+			(word, variable) if word.is_symbol(SET_WORD) => (ListenerWord::Set, variable),
+			(word, variable) if word.is_symbol(CHANGE_WORD) => (ListenerWord::Change, variable),
 			_ => return None,
-		};
-		let (variable, body) = subject_and_body(&items[2..])?;
-		return Some((listener_word, variable, body));
-	}
-	let listener_word = match keyword.as_str() {
-		ONCE_WORD => ListenerWord::Once,
-		WHENEVER_WORD => ListenerWord::Whenever,
-		_ => return None,
+		},
 	};
-	let (condition, body) =
-		subject_and_body(&items[1..]).or_else(|| trailing_block(items.get(1)?).filter(|_| items.len() == 2))?;
-	Some((listener_word, condition, body))
+	Some((listener_word, without_empty_argument(&subject), listener.body))
 }
 
 /// `on change b + c {…}` (Vue's watch(() => b + c)) watches the expression as a `:=` value of its own:
@@ -621,35 +609,13 @@ fn with_watched_expressions(node: Node, count: &Counter) -> Node {
 }
 
 /// `on change b + c {body}`, arriving as `on change (b + (c {body}))`: the word set or change, the expression and the
-/// body. A path (`p.age`) and `x: body` are no expressions
+/// body. A path (`p.age`) is no expression
 fn watched_expression(statement: &Node) -> Option<(Node, Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let [on, listener_word, subject] = ungrouped(items).try_into().ok()?;
-	let watches = word(&on) == ON_WORD && [SET_WORD, CHANGE_WORD].contains(&word(&listener_word).as_str());
-	let expression = matches!(subject.drop_meta(), Node::Key(_, op, _) if !matches!(op, Op::Colon | Op::Dot));
-	if !(watches && expression) {
-		return None;
-	}
-	let (expression, body) = trailing_block(&subject)?;
-	Some((listener_word, expression, body))
-}
-
-/// `f(s) := on change s {…}` arrives grouped as `(on change) (s {…})`: its parts in one row
-fn ungrouped(items: &[Node]) -> Vec<Node> {
-	let is_group = |item: &Node| matches!(item.drop_meta(), Node::List(_, Bracket::None, _));
-	if !items.first().is_some_and(is_group) {
-		return items.to_vec();
-	}
-	// `on change p.age {…}` arrives nested a level deeper: `((on change) p.age) {…}`
-	items
-		.iter()
-		.flat_map(|item| match item.drop_meta() {
-			Node::List(parts, Bracket::None, _) => ungrouped(parts),
-			_ => vec![item.clone()],
-		})
-		.collect()
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	let (listener_word, expression) = listeners::leading_word(&listener.trigger)?;
+	let watches = [SET_WORD, CHANGE_WORD].contains(&word(&listener_word).as_str());
+	let is_expression = matches!(expression.drop_meta(), Node::Key(_, op, _) if !matches!(op, Op::Colon | Op::Dot));
+	(watches && is_expression).then_some((listener_word, expression, listener.body))
 }
 
 /// `after tested: body`, `before test {body}`: the word and what follows it
@@ -841,21 +807,6 @@ pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 			_ => unreachable!("guarded"),
 		},
 		[handler] => handler_parts(handler),
-		_ => None,
-	}
-}
-
-/// `a == b {body}` arrives as `a == (b {body})`: the condition and the body
-fn trailing_block(condition: &Node) -> Option<(Node, Node)> {
-	match condition.drop_meta() {
-		Node::Key(left, op, right) => {
-			trailing_block(right).map(|(right, body)| (Node::Key(left.clone(), *op, Box::new(right)), body))
-		}
-		Node::List(items, Bracket::None | Bracket::Round, _)
-			if items.len() == 2 && matches!(items[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
-		{
-			Some((without_empty_argument(&items[0]), items[1].clone()))
-		}
 		_ => None,
 	}
 }

@@ -1,0 +1,2 @@
+use cargo markdown
+markdown.to_html("# Hi *there*")

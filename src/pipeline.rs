@@ -35,7 +35,8 @@ fn eval_source(code: &str) -> Node {
 	match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
-			explain_runtime_error(eval_parsed(program, code), exclusive_range)
+			let result = crate::graphics::shader_errors::relocated(eval_parsed(program, code), code);
+			explain_runtime_error(result, exclusive_range)
 		}
 		Err(violation) => violation,
 	}

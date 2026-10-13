@@ -18,10 +18,11 @@
 //! listener of that sub-channel; `send "file system full"` alone is that named event on "warp" without data, heard by
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
+use super::listeners;
 use super::nodes::call;
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
-use crate::event_signals::{function_with_globals, main_level_variables};
+use crate::event_signals::{event_name, function_with_globals, main_level_variables};
 use crate::extensions::numbers::Number;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -124,11 +125,10 @@ fn with_window_events(program: Node) -> Node {
 
 #[cfg(feature = "native")]
 fn keys_reader() -> Node {
-	let bindings = std::collections::HashMap::from([
-		("CODE".to_string(), symbol("key·code")),
-		("NAMED".to_string(), key_named(symbol("key·code"))),
-	]);
-	crate::law::substitute(&crate::warp_parser::parse(KEYS_TEMPLATE), &bindings)
+	super::nodes::filled(
+		KEYS_TEMPLATE,
+		[("CODE", symbol("key·code")), ("NAMED", key_named(symbol("key·code")))],
+	)
 }
 
 /// The name of the key with that code, as the page's KeyboardEvent.key: a key's name (KEY_NAMES), else its character
@@ -137,11 +137,7 @@ pub fn key_named(code: Node) -> Node {
 		.iter()
 		.map(|(number, name)| format!("if CODE == {number} then \"{name}\" else "))
 		.collect();
-	let template = crate::warp_parser::parse(&format!("{choices}\"\" + chr(CODE)"));
-	crate::law::substitute(
-		&template,
-		&std::collections::HashMap::from([("CODE".to_string(), code)]),
-	)
+	super::nodes::filled(&format!("{choices}\"\" + chr(CODE)"), [("CODE", code)])
 }
 
 #[cfg(feature = "native")]
@@ -173,10 +169,7 @@ fn lower_timers(program: Node) -> Node {
 		if let Some((channel, body)) = message_listener(&statement) {
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			let id = Node::int(count as i64);
-			let messages = crate::law::substitute(
-				&crate::warp_parser::parse(MESSAGES_TEMPLATE),
-				&std::collections::HashMap::from([("ID".to_string(), id.clone()), ("BODY".to_string(), body)]),
-			);
+			let messages = super::nodes::filled(MESSAGES_TEMPLATE, [("ID", id.clone()), ("BODY", body)]);
 			lowered.push(function_with_globals(
 				&handler,
 				false,
@@ -273,14 +266,8 @@ fn lower_timers(program: Node) -> Node {
 /// `on message {body}`, `on message from "chat" {body}`, and named events from other programs:
 /// `on stop the machine from "chat" {body}`, `on "file system full" {body}`: the channel (a text) and the body
 fn message_listener(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (on, rest) = items.split_first()?;
-	if word(on) != ON_WORD {
-		return None;
-	}
-	let (words, body) = words_and_body(rest)?;
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	let words = listener.words();
 	let (name, channel) = match words.as_slice() {
 		[name @ .., from, channel] if word(from) == FROM_WORD && !name.is_empty() => (name, text(channel)?),
 		name => (name, DEFAULT_CHANNEL.to_string()),
@@ -289,10 +276,10 @@ fn message_listener(statement: &Node) -> Option<(Node, Node)> {
 	let channel = match name {
 		[message] if word(message) == MESSAGE_WORD => channel,
 		[event] if text(event).is_some() => event_channel(&channel, &text(event)?),
-		words if from_written => event_channel(&channel, &event_name(words)?),
+		words if from_written => event_channel(&channel, &event_name(words.iter())?),
 		_ => return None,
 	};
-	Some((Node::Text(channel), body))
+	Some((Node::Text(channel), listener.body))
 }
 
 fn text(node: &Node) -> Option<String> {
@@ -300,12 +287,6 @@ fn text(node: &Node) -> Option<String> {
 		Node::Text(text) => Some(text.clone()),
 		_ => None,
 	}
-}
-
-/// The words of an event joined by spaces; None unless all are plain words
-fn event_name(words: &[Node]) -> Option<String> {
-	let words: Vec<String> = words.iter().map(word).collect();
-	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
 }
 
 /// The channel of a named event: its own sub-channel, so a listener hears only that event
@@ -326,7 +307,7 @@ fn named_event(value: &[Node]) -> Option<(String, Node)> {
 	if words.is_empty() && data.is_none() {
 		return None;
 	}
-	let name = event_name(&[words, &[last_word]].concat())?;
+	let name = event_name(words.iter().chain([&last_word]))?;
 	Some((name, data.unwrap_or(Node::Empty)))
 }
 
@@ -359,13 +340,7 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 		let channel = channel.unwrap_or(DEFAULT_CHANNEL.to_string());
 		let (channel, value) = match named {
 			Some((name, data)) => (event_channel(&channel, &name), data),
-			None => (
-				channel,
-				match value.as_slice() {
-					[single] => single.clone(),
-					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-				},
-			),
+			None => (channel, listeners::row(value)),
 		};
 		Some(call(
 			crate::host::CHANNEL_SEND,
@@ -380,83 +355,39 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 
 /// `on frame {body}`, `on frame: body` (the event `name`): the body
 fn event_listener(statement: &Node, name: &str) -> Option<Node> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (on, rest) = items.split_first()?;
-	if word(on) != ON_WORD {
-		return None;
-	}
-	match words_and_body(rest)? {
-		(words, body) if matches!(words.as_slice(), [only] if word(only) == name) => Some(body),
-		_ => None,
-	}
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	listener.trigger.is_symbol(name).then_some(listener.body)
 }
 
 /// `on file "notes.txt" change {body}`: the path (a text) and the body
 fn file_watch(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let [on, file, path, change, body] = items.as_slice() else {
-		return None;
-	};
-	let watched = word(on) == ON_WORD && word(file) == FILE_WORD && CHANGE_WORDS.contains(&word(change).as_str());
-	let path_is_text = matches!(path.drop_meta(), Node::Text(_));
-	(watched && path_is_text && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
-		.then(|| (path.clone(), body.clone()))
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	match listener.words().as_slice() {
+		[file, path, change]
+			if word(file) == FILE_WORD && text(path).is_some() && CHANGE_WORDS.contains(&word(change).as_str()) =>
+		{
+			Some((path.clone(), listener.body))
+		}
+		_ => None,
+	}
 }
 
 /// `on every 50 ms {body}`, `on every 5 seconds: body`: the duration and the body
 fn timer(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let [on, every, rest @ ..] = items.as_slice() else {
-		return None;
-	};
-	if word(on) != ON_WORD || word(every) != EVERY_WORD {
-		return None;
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	match listener.words().as_slice() {
+		[every, duration @ ..] if word(every) == EVERY_WORD && !duration.is_empty() => {
+			Some((listeners::row(duration.to_vec()), listener.body))
+		}
+		_ => None,
 	}
-	let (words, body) = words_and_body(rest)?;
-	let duration = match words.as_slice() {
-		[] => return None,
-		[single] => single.clone(),
-		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-	};
-	Some((duration, body))
-}
-
-/// The words before the body of `… {body}` or `…: body`, and the body
-fn words_and_body(rest: &[Node]) -> Option<(Vec<Node>, Node)> {
-	let (last, words) = rest.split_last()?;
-	if matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _)) {
-		return Some((words.to_vec(), last.clone()));
-	}
-	// `on every 5 seconds: print n` arrives as `on every (5 seconds: print) n`: the words after the colon are the body's
-	let colon = rest
-		.iter()
-		.position(|item| crate::declarations::handler_parts(item).is_some())?;
-	let (end, body) = crate::declarations::handler_parts(&rest[colon])?;
-	let body = match &rest[colon + 1..] {
-		[] => body,
-		after => Node::List([vec![body], after.to_vec()].concat(), Bracket::None, Separator::Space),
-	};
-	Some((rest[..colon].iter().cloned().chain([end]).collect(), body))
 }
 
 /// `at 9:00 {body}`, `at 9pm: body`: the minute of the day (None for a time that is no time of day) and the body;
 /// None for any other use of `at`
 fn one_shot(statement: &Node) -> Option<(Option<i64>, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (at, rest) = items.split_first()?;
-	if word(at) != AT_WORD {
-		return None;
-	}
-	let (words, body) = words_and_body(rest)?;
-	Some((minute_of_day(&words)?, body))
+	let listener = listeners::read(statement, &[AT_WORD])?;
+	Some((minute_of_day(&listener.words())?, listener.body))
 }
 
 fn no_time_of_day(statement: &Node, form: &str) -> Node {
