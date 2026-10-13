@@ -2922,6 +2922,8 @@ PASSED:
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
+  ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
+  ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -3464,6 +3466,7 @@ PASSED:
   ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
   ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ text::test_text_getters::text_getters_read_texts_and_errors
+  ✓ text::test_text_parameter_copy::an_indexed_text_parameter_reads_characters
   ✓ text::test_text_plus_anything::a_text_joins_anything_in_its_text_form
   ✓ text::test_text_plus_anything::a_text_spelling_a_number_plus_a_number_warns
   ✓ text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value
@@ -5087,4 +5090,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5082 passed, 0 failed, 5082 total tested
+10 ignored, 5085 passed, 0 failed, 5085 total tested
