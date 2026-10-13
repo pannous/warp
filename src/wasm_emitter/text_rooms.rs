@@ -25,21 +25,15 @@ const END: MemArg = MemArg { offset: 4, ..USED };
 impl WasmGcEmitter {
 	/// The globals of the rooms: the table's address (0 before the first room), then the next room to give a new text
 	fn text_room_globals(&mut self) -> (u32, u32) {
-		if self.text_room_globals.is_none() {
-			self.text_room_globals = Some(self.next_global_idx);
-			for _ in 0..2 {
-				self.globals.global(
-					GlobalType {
-						val_type: ValType::I32,
-						mutable: true,
-						shared: false,
-					},
-					&ConstExpr::i32_const(0),
-				);
-				self.next_global_idx += 1;
+		let table = match self.text_room_globals {
+			Some(table) => table,
+			None => {
+				let table = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
+				self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
+				self.text_room_globals = Some(table);
+				table
 			}
-		}
-		let table = self.text_room_globals.unwrap_or_default();
+		};
 		(table, table + 1)
 	}
 

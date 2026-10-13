@@ -547,18 +547,8 @@ impl WasmGcEmitter {
 			nullable: true,
 			heap_type: HeapType::Concrete(array),
 		});
-		let new_global = |emitter: &mut Self| {
-			emitter.globals.global(
-				GlobalType {
-					val_type: array_ref,
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::ref_null(HeapType::Concrete(array)),
-			);
-			emitter.next_global_idx += 1;
-			emitter.next_global_idx - 1
-		};
+		let new_global =
+			|emitter: &mut Self| emitter.declare_global_of(array_ref, ConstExpr::ref_null(HeapType::Concrete(array)));
 		let (values, known) = match self.memo_caches.get(id) {
 			Some(globals) => *globals,
 			None => {
