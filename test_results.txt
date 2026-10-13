@@ -1685,6 +1685,7 @@ PASSED:
   ✓ functions::test_variadic::a_list_spreads_into_fixed_parameters
   ✓ functions::test_variadic::a_rest_parameter_collects_the_remaining_arguments
   ✓ functions::test_variadic::a_rest_parameter_may_be_empty
+  ✓ functions::test_variadic::a_spread_in_a_list_literal_splices_its_items
   ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_variadic::kotlin_vararg_and_csharp_params
   ✓ functions::test_variadic::spreading_into_a_function_parameter
@@ -2209,6 +2210,8 @@ PASSED:
   ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
+  ✓ modules::test_std_shadowed_names::a_local_in_one_function_leaves_the_word_to_the_others
+  ✓ modules::test_std_shadowed_names::a_local_named_like_a_function_is_indexed_not_called
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_module_word_is_the_local
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_program_function_is_the_local
   ✓ modules::test_std_time::date_arithmetic
@@ -4276,6 +4279,7 @@ PASSED:
   ✓ types::test_traits::test_two_user_types_each_have_their_own_compare
   ✓ types::test_tuple_values::a_tuple_with_a_variable_is_assigned_whole
   ✓ types::test_tuple_values::tuples_compare_element_by_element
+  ✓ types::test_type_alias_fields::a_literal_is_tested_against_the_type_an_alias_names
   ✓ types::test_type_alias_fields::alias_as_field_type
   ✓ types::test_type_alias_fields::alias_as_optional_field_and_parameter
   ✓ types::test_type_alias_fields::is_tests_the_type_an_alias_names
@@ -5363,4 +5367,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5358 passed, 0 failed, 5358 total tested
+13 ignored, 5362 passed, 0 failed, 5362 total tested
