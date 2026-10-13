@@ -7,6 +7,17 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- guillemets (warp-docs-sync wiki audit, user: "data as quasi text"): «…» quotes its content as unevaluated warp
+  data, a quasi-quote ("Data is Code and Code is Data"): `«1 2»` is the parsed node, printing as written and equal
+  to its text form where a text is expected; `«x + 1»` is the expression as data, not its value. (Interviewer's
+  reading of a short answer, undoable.)
+- const-deep (warp-docs-sync, user): `const` is deep, like `let`: no reassigning, no changing inside; `var` is the
+  changeable one. constant.md's binding/value split is dropped.
+- Implied, not asked (warp-docs-sync wiki audit): bool.md and truthiness.md are rewritten to the bool type
+  (decisions bool-type, #39): ø + 1 stays an error, empty values are falsy in conditions, only 0 equals false.
+  `reduce` stays the fold (#25/#36); decrement is `decrease x [by n]` (word-choice rule).
+- amp-compose (implied by D6): `&` of two functions composes in reading order, `square & print 2` prints 4 (wiki/&.md);
+  `∘` is an alias.
 - let-parallel (warp-docs-sync, user): the parallel let is written only without `let`: `a b = f(x) g(y)`;
   `let a b = …` is always a function definition (`let twice x = x * 2`). No let form of the parallel let.
 - pattern-keyword (warp-list-pattern, card patterns-values, user): named patterns are defined only with the keyword
