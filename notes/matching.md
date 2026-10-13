@@ -92,7 +92,7 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | match-negative-subject | `match -3 { … }` | parsed as `match - 3` |
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | the parser takes one word after class |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
-| render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | silently `int` |
+| render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
 | gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | "needs a value for parameter a" |
 
 Decisions (user, via warp-interviewer):
