@@ -172,6 +172,7 @@ impl WasmGcEmitter {
 			(tm.i64_box_type, "i64box"),
 			(tm.f64_box_type, "f64box"),
 			(tm.node_type, "Node"),
+			(tm.meta_node_type, "MetaNode"),
 			(tm.int_array_type, "IntArray"),
 			(tm.int_list_type, "IntList"),
 			(tm.float_array_type, "FloatArray"),
@@ -227,6 +228,17 @@ impl WasmGcEmitter {
 
 		let mut fields: Vec<(u32, Vec<(u32, &str)>)> = vec![
 			(tm.node_type, vec![(0, "kind"), (1, "data"), (2, "value")]),
+			(
+				tm.meta_node_type,
+				vec![
+					(0, "kind"),
+					(1, "data"),
+					(2, "value"),
+					(3, "line"),
+					(4, "column"),
+					(5, "comment"),
+				],
+			),
 			(tm.string_type, vec![(0, "ptr"), (1, "len")]),
 			(tm.i64_box_type, vec![(0, "value")]),
 			(tm.f64_box_type, vec![(0, "value")]),

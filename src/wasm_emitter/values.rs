@@ -510,6 +510,23 @@ impl WasmGcEmitter {
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),
 			other => self.emit_node_instructions(func, other),
 		}
+		self.emit_written_at(func, node);
+	}
+
+	/// A quoted node keeps where it was written and its comment: `n.line`, `n.column`, `n.comment` (card data-meta)
+	fn emit_written_at(&mut self, func: &mut Function, node: &Node) {
+		let (position, comment) = written_at(node);
+		if position.is_none() && comment.is_none() {
+			return;
+		}
+		let (line, column) = position.map_or((0, 0), |at| (at.line_nr as i64, at.column as i64));
+		func.instruction(&I::I64Const(line));
+		func.instruction(&I::I64Const(column));
+		match comment {
+			Some(comment) => self.emit_node_instructions(func, &Node::Text(comment)),
+			None => self.emit_node_null(func),
+		}
+		self.emit_call(func, super::node_api::NODE_AT);
 	}
 
 	pub(super) fn emit_list_structure_with(
@@ -541,6 +558,22 @@ impl WasmGcEmitter {
 pub(super) fn is_int_type_word(target: &Node) -> bool {
 	let word = target.drop_meta().name().to_lowercase();
 	crate::type_tests::canonical_spec_word(&word) == "int" && !super::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
+}
+
+/// The position and comment the Meta layers around a node carry
+fn written_at(node: &Node) -> (Option<crate::meta::LineInfo>, Option<String>) {
+	let (mut position, mut comment) = (None, None);
+	let mut layer = node;
+	while let Node::Meta { node: inner, data } = layer {
+		position = position.or_else(|| layer.get_lineinfo());
+		if let Node::Key(word, _, text) = data.as_ref() {
+			if word.is_symbol("comment") {
+				comment = comment.or_else(|| text.text_value());
+			}
+		}
+		layer = inner;
+	}
+	(position, comment)
 }
 
 /// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)

@@ -23,6 +23,11 @@ pub struct TypeManager {
 	/// Type index for $Node struct
 	pub node_type: u32,
 
+	/// $MetaNode, a $Node with its source position and comment (card data-meta): (sub $Node (struct kind data value
+	/// (field $line i64) (field $column i64) (field $comment (ref null $Node)))). Whatever reads a $Node reads it as
+	/// one, so `==` and every operation ignore the extra fields; only `n.line`, `n.column`, `n.comment` read them
+	pub meta_node_type: u32,
+
 	/// $Limbs = (array (mut i32)): BigInt magnitude, little-endian base 2^32
 	pub limbs_type: u32,
 
@@ -82,6 +87,7 @@ impl TypeManager {
 			i64_box_type: 0,
 			f64_box_type: 0,
 			node_type: 0,
+			meta_node_type: 0,
 			limbs_type: 0,
 			big_int_type: 0,
 			big_heap_type: 0,
@@ -120,7 +126,7 @@ impl TypeManager {
 			heap_type: any_heap_type(),
 		};
 
-		self.types.ty().struct_(vec![
+		let node_fields = vec![
 			FieldType {
 				element_type: Val(ValType::I64),
 				mutable: true, // mutable for a new field grown in place: objects are references (P200b)
@@ -133,7 +139,9 @@ impl TypeManager {
 				element_type: Val(Ref(node_ref)),
 				mutable: true, // mutable for a field set in place: instances are references (P200)
 			}, // value
-		]);
+		];
+		// open: $MetaNode extends it
+		self.types.ty().subtype(&struct_subtype(node_fields.clone(), None));
 		self.node_type = node_type_idx;
 
 		// Type 2: $i64box = (struct (field i64)) for boxed integers
@@ -157,6 +165,29 @@ impl TypeManager {
 		(self.float_array_type, self.float_list_type) = self.emit_growable_list_types(ValType::F64, None);
 		self.emit_node_list_types();
 		self.emit_node_map_type();
+		self.emit_meta_node_type(node_fields, node_ref);
+	}
+
+	fn emit_meta_node_type(&mut self, node_fields: Vec<FieldType>, node_ref: RefType) {
+		let immutable = |element_type| FieldType {
+			element_type,
+			mutable: false,
+		};
+		let fields = [
+			node_fields,
+			vec![
+				immutable(Val(ValType::I64)),  // line
+				immutable(Val(ValType::I64)),  // column
+				immutable(Val(Ref(node_ref))), // comment: a Text, or null
+			],
+		]
+		.concat();
+		self.types.ty().subtype(&SubType {
+			is_final: true,
+			..struct_subtype(fields, Some(self.node_type))
+		});
+		self.meta_node_type = self.next_type_idx;
+		self.next_type_idx += 1;
 	}
 
 	fn emit_node_map_type(&mut self) {
@@ -381,4 +412,20 @@ pub(super) fn string_fields() -> Vec<FieldType> {
 		};
 		2
 	]
+}
+
+/// A struct type that other types may extend (or, with a supertype, one that extends it)
+fn struct_subtype(fields: Vec<FieldType>, supertype_idx: Option<u32>) -> SubType {
+	SubType {
+		is_final: false,
+		supertype_idx,
+		composite_type: CompositeType {
+			inner: CompositeInnerType::Struct(StructType {
+				fields: fields.into_boxed_slice(),
+			}),
+			shared: false,
+			descriptor: None,
+			describes: None,
+		},
+	}
 }
