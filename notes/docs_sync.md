@@ -5,11 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **19f021863** (2026-10-13), checked with /Users/me/dev/bin/warp built from it.
+- main commit **48e5f3b27** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27), checked with
+  /Users/me/dev/bin/warp built from 19f021863 (no user-visible commits in between).
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 19f021863..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 19f021863 origin/main -- notes/decisions.md`).
+The next sweep starts with `git log --oneline 48e5f3b27..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 48e5f3b27 origin/main -- notes/decisions.md`).
 
 ## How
 
@@ -24,14 +25,8 @@ since (`git diff 19f021863 origin/main -- notes/decisions.md`).
    `web::test_expert_guide`); an "Examples:" line names only existing tour examples or samples.
 6. Style: an intro phrase, a minimal snippet, the explanation; one concept at a time.
 
-## Not swept yet (at 19f021863)
+## Not swept yet
 
-sound (voice pacing, fade_sound, play_signal/play_blocks, stereo, `use sound` for rare words, patterns and live
-loops, MIDI), generic functions and multiple dispatch, reflection (`.signature`, `.params`, `dir`, `help`), dates and
-time zones at run time, units (°, temperatures), python aliases (pop, clear, fromkeys, hex(…) casts), forms
-(`on submit`, event.fields), stored values (`stored x default v`, store words as maps), signals in object fields,
-table slices, `go xs.map`, runtime error positions, the bit_and and `type(x) == "int"` hints, let-mut, float exit
-status, W0 (prover pages), crontab/exec, `warp app`.
-
-Clash to settle: the planned `pattern Adult = {…}` keyword (card patterns-values) meets the sound module's `pattern`
-word ("pattern is in the standard module sound").
+Swept by docs-sync-2: dispatch, units, time, error positions, hints, forms, sound, reflection, Python words, stored,
+signals in fields, slices, tasks, exit status, exec, warp app, recursive laws. Left: `warp types` / W0 (wiki has no
+page; first run builds the Lean model for minutes), crontab sample, visualizer, MIDI input, `warp verify` page.
