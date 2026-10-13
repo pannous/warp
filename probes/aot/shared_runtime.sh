@@ -32,8 +32,7 @@ debug = "line-tables-only"
 incremental = false
 TOML
 
-# Reuse the workspace lock / registry; stay offline like the rest of the tree.
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+# Reuse the workspace lock / registry and the shared target-dir (~/.cargo/config.toml); stay offline like the rest of the tree.
 export WARP_SCRATCH="$ROOT/scratch"
 (cd "$SCRATCH" && cargo run --offline -q)
 echo "ok shared_runtime"
