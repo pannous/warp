@@ -86,6 +86,12 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 }
 
 pub fn lower(node: Node) -> Node {
+	// a kernel may call the program's functions (card gpu-functions)
+	let program = node.clone();
+	crate::gpu_maps::with_program_functions(&program, || lower_knowing_functions(node))
+}
+
+fn lower_knowing_functions(node: Node) -> Node {
 	let node = crate::gpu_maps::kept_on_gpu(node);
 	// the first array the program itself declares linear, before the compiler picks any
 	let mut first_linear: Option<(Node, String, Element)> = None;

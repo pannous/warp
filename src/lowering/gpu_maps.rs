@@ -48,8 +48,17 @@ const KERNEL_FUNCTIONS_OF_TWO: [&str; 3] = ["min", "max", "atan2"];
 const HEAVY_FUNCTIONS: [&str; 12] = [
 	"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "atan2",
 ];
-/// The kernel's count of items: `data` holds them, then the program's numbers the lambda reads
+/// The kernel's count of items: `data` holds them, then the program's numbers the lambda reads; a private variable,
+/// which the program's functions the kernel calls read too
 const KERNEL_COUNT: &str = "count";
+/// The WGSL names of a program's function (card gpu-functions) and of its parameters and variables: prefixed, so a
+/// warp name can be a WGSL keyword
+const FUNCTION_PREFIX: &str = "warp_";
+const VARIABLE_PREFIX: &str = "v_";
+const PARAMETER_PREFIX: &str = "a_";
+const RETURN_WORD: &str = "return";
+const FOR_WORD: &str = "for";
+const IN_WORD: &str = "in";
 /// `x^k` for a whole k up to this is a product (pow of a negative base is NaN in WGSL, a number on the CPU)
 const LARGEST_MULTIPLIED_POWER: i64 = 8;
 
@@ -399,6 +408,8 @@ pub(crate) struct Kernel {
 	computed: String,
 	pub outer: Vec<String>,
 	heavy: bool,
+	/// The program's functions it calls, in WGSL
+	functions: String,
 }
 
 /// The words reducing an @gpu map to one number: `s = sum(xs.map(x => …) @gpu)`
@@ -460,7 +471,8 @@ pub(crate) fn gpu_reduction(value: &Node) -> Option<(Reduction, Node)> {
 	gpu_map(argument).map(|_| (reduction, argument.clone()))
 }
 
-const KERNEL_BINDING: &str = "@group(0) @binding(0) var<storage, read_write> data: array<f32>;";
+const KERNEL_BINDING: &str = "@group(0) @binding(0) var<storage, read_write> data: array<f32>;
+var<private> count: u32;";
 
 impl Kernel {
 	/// The shader mapping every item of `data` in place
@@ -468,11 +480,12 @@ impl Kernel {
 		format!(
 			"{KERNEL_BINDING}
 @compute @workgroup_size({WORKGROUP_SIZE}) fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
-	let {KERNEL_COUNT} = arrayLength(&data) - {}u;
+	{KERNEL_COUNT} = arrayLength(&data) - {}u;
 	if (id.x < {KERNEL_COUNT}) {{ let {KERNEL_ITEM} = data[id.x]; data[id.x] = {}; }}
-}}",
+}}{}",
 			self.outer.len(),
-			self.computed
+			self.computed,
+			self.functions
 		)
 	}
 
@@ -483,7 +496,7 @@ impl Kernel {
 		format!("{KERNEL_BINDING}
 var<workgroup> partial: array<f32, {WORKGROUP_SIZE}>;
 @compute @workgroup_size({WORKGROUP_SIZE}) fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_id) local: vec3<u32>, @builtin(workgroup_id) group: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {{
-	let {KERNEL_COUNT} = arrayLength(&data) - {outer}u - groups.x;
+	{KERNEL_COUNT} = arrayLength(&data) - {outer}u - groups.x;
 	var mapped = {};
 	if (id.x < {KERNEL_COUNT}) {{ let {KERNEL_ITEM} = data[id.x]; mapped = {}; }}
 	partial[local.x] = mapped;
@@ -493,7 +506,7 @@ var<workgroup> partial: array<f32, {WORKGROUP_SIZE}>;
 		workgroupBarrier();
 	}}
 	if (local.x == 0u) {{ data[{KERNEL_COUNT} + {outer}u + group.x] = partial[0]; }}
-}}", reduction.identity(), self.computed, WORKGROUP_SIZE / 2, reduction.combined("partial[local.x]", "partial[local.x + step]"))
+}}{}", reduction.identity(), self.computed, WORKGROUP_SIZE / 2, reduction.combined("partial[local.x]", "partial[local.x + step]"), self.functions)
 	}
 }
 
@@ -506,13 +519,22 @@ pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
 		return None;
 	};
 	let mut translation = Translation {
-		parameter,
-		outer: vec![],
-		heavy: false,
+		parameter: parameter.clone(),
+		..Translation::default()
 	};
 	let computed = translation.expression(body)?;
-	let Translation { outer, heavy, .. } = translation;
-	Some(Kernel { computed, outer, heavy })
+	let Translation {
+		outer,
+		heavy,
+		functions,
+		..
+	} = translation;
+	Some(Kernel {
+		computed,
+		outer,
+		heavy,
+		functions: functions.into_iter().map(|function| format!("\n{function}")).collect(),
+	})
 }
 
 /// The kernel of a lambda worth the GPU: one of only arithmetic is faster on the CPU at any count
@@ -524,17 +546,70 @@ fn is_light(lambda: &Node) -> bool {
 	kernel(lambda).is_some_and(|kernel| !kernel.heavy)
 }
 
-struct Translation<'a> {
-	parameter: &'a str,
-	outer: Vec<String>,
-	heavy: bool,
+/// A program's function a kernel may call: its parameters and body
+#[derive(Clone)]
+struct ProgramFunction {
+	parameters: Vec<String>,
+	body: Node,
 }
 
-impl Translation<'_> {
+thread_local! {
+	/// The functions of the program being lowered, by name (card gpu-functions)
+	static PROGRAM_FUNCTIONS: std::cell::RefCell<std::collections::HashMap<String, ProgramFunction>> =
+		Default::default();
+}
+
+/// `run` knowing the functions `program` defines, so a kernel may call them
+pub(crate) fn with_program_functions<T>(program: &Node, run: impl FnOnce() -> T) -> T {
+	let statements = match program.drop_meta() {
+		Node::List(items, _, _) => items.as_slice(),
+		single => std::slice::from_ref(single),
+	};
+	let functions = statements
+		.iter()
+		.filter_map(crate::law::function_definition)
+		.map(|definition| {
+			let parameters = definition.parameters.into_iter().map(|(name, _)| name).collect();
+			(
+				definition.name,
+				ProgramFunction {
+					parameters,
+					body: definition.body,
+				},
+			)
+		})
+		.collect();
+	let before = PROGRAM_FUNCTIONS.with(|known| known.replace(functions));
+	let result = run();
+	PROGRAM_FUNCTIONS.with(|known| known.replace(before));
+	result
+}
+
+fn program_function(name: &str) -> Option<ProgramFunction> {
+	PROGRAM_FUNCTIONS.with(|known| known.borrow().get(name).cloned())
+}
+
+#[derive(Default)]
+struct Translation {
+	/// The lambda's parameter, the kernel's item; none inside a function
+	parameter: String,
+	outer: Vec<String>,
+	heavy: bool,
+	/// The parameters and variables of the function being translated, WGSL variables
+	locals: Vec<String>,
+	/// The program's functions translated so far, in WGSL, callees first
+	functions: Vec<String>,
+	translated: Vec<String>,
+	/// The functions being translated: a call of one of them is recursion, which WGSL forbids
+	in_progress: Vec<String>,
+}
+
+impl Translation {
 	/// `body` in WGSL f32 arithmetic of the parameter, number literals and the program's numbers
 	fn expression(&mut self, body: &Node) -> Option<String> {
 		match body.drop_meta() {
-			Node::Symbol(name) if name == self.parameter => Some(KERNEL_ITEM.to_string()),
+			Node::Symbol(name) if self.locals.contains(name) => Some(format!("{VARIABLE_PREFIX}{name}")),
+			Node::Symbol(name) if *name == self.parameter => Some(KERNEL_ITEM.to_string()),
 			Node::Symbol(name) => {
 				let index = self.outer.iter().position(|known| known == name).unwrap_or_else(|| {
 					self.outer.push(name.clone());
@@ -549,6 +624,7 @@ impl Translation<'_> {
 				Op::Neg => Some(format!("(-{})", self.expression(operand)?)),
 				Op::Sqrt => Some(format!("sqrt({})", self.expression(operand)?)),
 				Op::Abs => Some(format!("abs({})", self.expression(operand)?)),
+				Op::Not => Some(format!("select(0.0, 1.0, !{})", self.condition(operand)?)),
 				_ => None,
 			},
 			Node::Key(base, Op::Pow, exponent) => match exponent.drop_meta() {
@@ -567,6 +643,17 @@ impl Translation<'_> {
 					))
 				}
 			},
+			Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
+				Node::Key(then, Op::Colon, otherwise) => self.selected(condition, then, otherwise),
+				_ => None,
+			},
+			Node::Key(if_then, Op::Else, otherwise) => {
+				let (condition, then) = if_then_parts(if_then)?;
+				self.selected(condition, then, otherwise)
+			}
+			Node::Key(_, op, _) if comparison(*op).is_some() || matches!(op, Op::And | Op::Or) => {
+				Some(format!("select(0.0, 1.0, {})", self.condition(body)?))
+			}
 			Node::Key(left, op, right) => {
 				let symbol = match op {
 					Op::Add => "+",
@@ -585,6 +672,9 @@ impl Translation<'_> {
 				[single] => self.expression(single),
 				[function, arguments @ ..] => {
 					let name = function.name();
+					if let Some(called) = program_function(&name) {
+						return self.call(&name, &called, arguments);
+					}
 					let arguments = match arguments {
 						// `max(x, 1)`: the arguments as one list
 						[together] if KERNEL_FUNCTIONS_OF_TWO.contains(&name.as_str()) => match together.drop_meta() {
@@ -604,10 +694,7 @@ impl Translation<'_> {
 						return None;
 					}
 					self.heavy |= HEAVY_FUNCTIONS.contains(&name.as_str());
-					let arguments = arguments
-						.iter()
-						.map(|argument| self.expression(argument))
-						.collect::<Option<Vec<_>>>()?;
+					let arguments = self.expressions(arguments)?;
 					Some(format!("{name}({})", arguments.join(", ")))
 				}
 				_ => None,
@@ -615,6 +702,298 @@ impl Translation<'_> {
 			_ => None,
 		}
 	}
+
+	fn expressions(&mut self, nodes: &[Node]) -> Option<Vec<String>> {
+		nodes.iter().map(|node| self.expression(node)).collect()
+	}
+
+	/// `condition ? then : otherwise` in an expression
+	fn selected(&mut self, condition: &Node, then: &Node, otherwise: &Node) -> Option<String> {
+		let condition = self.condition(condition)?;
+		Some(format!(
+			"select({}, {}, {condition})",
+			self.expression(otherwise)?,
+			self.expression(then)?
+		))
+	}
+
+	/// A condition as a WGSL bool: comparisons, and, or, not; a number is true unless 0
+	fn condition(&mut self, node: &Node) -> Option<String> {
+		match node.drop_meta() {
+			Node::Key(empty, Op::Not, operand) if matches!(empty.drop_meta(), Node::Empty) => {
+				Some(format!("!{}", self.condition(operand)?))
+			}
+			Node::Key(left, op @ (Op::And | Op::Or), right) => {
+				let symbol = if *op == Op::And { "&&" } else { "||" };
+				Some(format!(
+					"({} {symbol} {})",
+					self.condition(left)?,
+					self.condition(right)?
+				))
+			}
+			Node::Key(left, op, right) if comparison(*op).is_some() => Some(format!(
+				"({} {} {})",
+				self.expression(left)?,
+				comparison(*op)?,
+				self.expression(right)?
+			)),
+			Node::List(items, _, _) if items.len() == 1 => self.condition(&items[0]),
+			_ => Some(format!("({} != 0.0)", self.expression(node)?)),
+		}
+	}
+
+	/// A call of the program's function `name`: translated once into a WGSL function; none for recursion
+	fn call(&mut self, name: &str, called: &ProgramFunction, arguments: &[Node]) -> Option<String> {
+		let arguments = match arguments {
+			// `f(a, b)`: the arguments as one list
+			[together] if called.parameters.len() > 1 => match together.drop_meta() {
+				Node::List(items, _, _) => items.as_slice(),
+				_ => return None,
+			},
+			separate => separate,
+		};
+		if arguments.len() != called.parameters.len() || self.in_progress.iter().any(|caller| caller == name) {
+			return None;
+		}
+		let arguments = self.expressions(arguments)?;
+		if !self.translated.iter().any(|done| done == name) {
+			self.in_progress.push(name.to_string());
+			let function = self.function(name, called);
+			self.in_progress.pop();
+			self.functions.push(function?);
+			self.translated.push(name.to_string());
+		}
+		Some(format!("{FUNCTION_PREFIX}{name}({})", arguments.join(", ")))
+	}
+
+	/// The WGSL function of the program's function `name`: its parameters copied into variables, every variable it
+	/// assigns declared first, its statements, the last one's value returned
+	fn function(&mut self, name: &str, called: &ProgramFunction) -> Option<String> {
+		let mut variables = called.parameters.clone();
+		assigned_names(&called.body, &mut variables);
+		let declared: String = variables
+			.iter()
+			.map(|variable| match called.parameters.contains(variable) {
+				true => format!("\tvar {VARIABLE_PREFIX}{variable} = {PARAMETER_PREFIX}{variable};\n"),
+				false => format!("\tvar {VARIABLE_PREFIX}{variable}: f32 = 0.0;\n"),
+			})
+			.collect();
+		let caller = (
+			std::mem::take(&mut self.parameter),
+			std::mem::replace(&mut self.locals, variables),
+		);
+		let mut body = String::new();
+		let returned = self.returned(&called.body, &mut body);
+		(self.parameter, self.locals) = caller;
+		returned?;
+		let parameters: Vec<String> = called
+			.parameters
+			.iter()
+			.map(|parameter| format!("{PARAMETER_PREFIX}{parameter}: f32"))
+			.collect();
+		Some(format!(
+			"fn {FUNCTION_PREFIX}{name}({}) -> f32 {{\n{declared}{body}}}",
+			parameters.join(", ")
+		))
+	}
+
+	/// The statements of a function's body into `out`, every path ending in a return of its last value
+	fn returned(&mut self, node: &Node, out: &mut String) -> Option<()> {
+		if let Some(statements) = block_statements(node) {
+			let (last, before) = statements.split_last()?;
+			for statement in before {
+				self.statement(statement, out)?;
+			}
+			return self.returned(last, out);
+		}
+		match node.drop_meta() {
+			Node::Key(if_then, Op::Else, otherwise) => {
+				let (condition, then) = if_then_parts(if_then)?;
+				*out += &format!("if {} {{\n", self.condition(condition)?);
+				self.returned(then, out)?;
+				*out += "} else {\n";
+				self.returned(otherwise, out)?;
+				*out += "}\n";
+				Some(())
+			}
+			Node::Key(target, op, _) if is_assignment(*op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
+				self.statement(node, out)?;
+				*out += &format!("return {VARIABLE_PREFIX}{};\n", target.name());
+				Some(())
+			}
+			_ if returned_value(node).is_some() => self.statement(node, out),
+			_ if is_statement_only(node) => None,
+			_ => {
+				*out += &format!("return {};\n", self.expression(node)?);
+				Some(())
+			}
+		}
+	}
+
+	/// One statement of a function in WGSL into `out`: an assignment, if, while, `for i in a..b`, return, a block
+	fn statement(&mut self, node: &Node, out: &mut String) -> Option<()> {
+		if let Some(statements) = block_statements(node) {
+			return statements
+				.iter()
+				.try_for_each(|statement| self.statement(statement, out));
+		}
+		if let Some(value) = returned_value(node) {
+			*out += &format!("return {};\n", self.expression(value)?);
+			return Some(());
+		}
+		if let Some((variable, from, op, to, body)) = range_loop(node) {
+			self.heavy = true;
+			let (variable, from, to) = (
+				format!("{VARIABLE_PREFIX}{variable}"),
+				self.expression(from)?,
+				self.expression(to)?,
+			);
+			let below = if op == Op::To { "<=" } else { "<" };
+			*out += &format!("for ({variable} = {from}; {variable} {below} {to}; {variable} = {variable} + 1.0) {{\n");
+			self.statement(body, out)?;
+			*out += "}\n";
+			return Some(());
+		}
+		match node.drop_meta() {
+			Node::Key(target, op, value) if is_assignment(*op) => {
+				let Node::Symbol(name) = target.drop_meta() else {
+					return None;
+				};
+				let value = match op {
+					Op::Assign | Op::Define => self.expression(value)?,
+					compound => self.expression(&Node::Key(target.clone(), compound.base_op(), value.clone()))?,
+				};
+				*out += &format!("{VARIABLE_PREFIX}{name} = {value};\n");
+				Some(())
+			}
+			Node::Key(if_then, Op::Else, otherwise) => {
+				let (condition, then) = if_then_parts(if_then)?;
+				*out += &format!("if {} {{\n", self.condition(condition)?);
+				self.statement(then, out)?;
+				*out += "} else {\n";
+				self.statement(otherwise, out)?;
+				*out += "}\n";
+				Some(())
+			}
+			Node::Key(_, Op::Then, _) => {
+				let (condition, then) = if_then_parts(node)?;
+				*out += &format!("if {} {{\n", self.condition(condition)?);
+				self.statement(then, out)?;
+				*out += "}\n";
+				Some(())
+			}
+			Node::Key(condition, Op::Do, body) => {
+				let Node::Key(empty, Op::While, condition) = condition.drop_meta() else {
+					return None;
+				};
+				if !matches!(empty.drop_meta(), Node::Empty) {
+					return None;
+				}
+				self.heavy = true;
+				*out += &format!("while {} {{\n", self.condition(condition)?);
+				self.statement(body, out)?;
+				*out += "}\n";
+				Some(())
+			}
+			// a value nothing uses: checked, then dropped
+			_ => self.expression(node).map(|_| ()),
+		}
+	}
+}
+
+/// The WGSL comparison of a warp operator
+fn comparison(op: Op) -> Option<&'static str> {
+	Some(match op {
+		Op::Lt => "<",
+		Op::Gt => ">",
+		Op::Le => "<=",
+		Op::Ge => ">=",
+		Op::Eq => "==",
+		Op::Ne => "!=",
+		_ => return None,
+	})
+}
+
+fn is_assignment(op: Op) -> bool {
+	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
+}
+
+/// `if c then t` (`if c { t }`): c and t
+fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
+	let Node::Key(condition, Op::Then, then) = node.drop_meta() else {
+		return None;
+	};
+	match condition.drop_meta() {
+		Node::Key(empty, Op::If, condition) if matches!(empty.drop_meta(), Node::Empty) => Some((condition, then)),
+		_ => None,
+	}
+}
+
+/// The statements of a block: `{ … }`, or lines and `;` without brackets
+fn block_statements(node: &Node) -> Option<&[Node]> {
+	match node.drop_meta() {
+		Node::List(items, crate::node::Bracket::Curly, _) => Some(items.as_slice()),
+		Node::List(
+			items,
+			crate::node::Bracket::None,
+			crate::node::Separator::Semicolon | crate::node::Separator::Newline,
+		) => Some(items.as_slice()),
+		_ => None,
+	}
+}
+
+/// `return v`: v
+fn returned_value(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(RETURN_WORD) => Some(&items[1]),
+		_ => None,
+	}
+}
+
+/// `for i in a..b { … }` (`a to b` includes b): i, a, the range operator, b and the body
+fn range_loop(node: &Node) -> Option<(String, &Node, Op, &Node, &Node)> {
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return None;
+	};
+	let [for_word, variable, in_word, range, body] = items.as_slice() else {
+		return None;
+	};
+	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
+		return None;
+	}
+	let Node::Symbol(variable) = variable.drop_meta() else {
+		return None;
+	};
+	match range.drop_meta() {
+		Node::Key(from, op @ (Op::Range | Op::To), to) => Some((variable.clone(), from, *op, to, body)),
+		_ => None,
+	}
+}
+
+/// A loop or `if` without else: no value to return, so a map calling a function ending in one stays on the CPU
+fn is_statement_only(node: &Node) -> bool {
+	range_loop(node).is_some() || matches!(node.drop_meta(), Node::Key(_, Op::Then | Op::Do, _))
+}
+
+/// Every name a function body assigns or loops over, once, after `names`
+fn assigned_names(node: &Node, names: &mut Vec<String>) {
+	let mut add = |name: String| {
+		if !names.contains(&name) {
+			names.push(name);
+		}
+	};
+	node.visit(&mut |part| match part.drop_meta() {
+		Node::Key(target, op, _) if is_assignment(*op) => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				add(name.clone());
+			}
+		}
+		_ => {
+			if let Some((variable, ..)) = range_loop(part) {
+				add(variable);
+			}
+		}
+	});
 }
 
 /// A WGSL f32 literal: always with a point or an exponent, so `2` is not an i32
