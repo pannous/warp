@@ -727,6 +727,11 @@ PASSED:
   ✓ control::test_tree_find::find_takes_a_named_pattern
   ✓ control::test_tree_find::find_without_names_gives_the_subtrees
   ✓ control::test_tree_find::two_finds_walk_apart
+  ✓ control::test_tree_replace::replace_keeps_what_does_not_match
+  ✓ control::test_tree_replace::replace_rewrites_list_matches_at_any_depth
+  ✓ control::test_tree_replace::replace_rewrites_maps_inside_lists
+  ✓ control::test_tree_replace::replace_simplifies_code_children_first
+  ✓ control::test_tree_replace::replace_takes_a_named_pattern
   ✓ control::test_try_braceless_call::a_braceless_call_is_guarded
   ✓ control::test_try_catch_except::try_catch_is_try_else
   ✓ control::test_try_catch_except::try_except_is_try_else
@@ -1166,6 +1171,7 @@ PASSED:
   ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
+  ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_bool_result::every_definition_form_returns_a_comparison_as_bool
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
@@ -1342,6 +1348,7 @@ PASSED:
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
   ✓ functions::test_library_word_values::a_function_updating_a_main_list_asks_for_global
+  ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_a_user_function
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_map_and_filter
   ✓ functions::test_library_word_values::an_uncalled_function_updating_its_list_parameter_compiles
   ✓ functions::test_library_word_values::print_in_a_block_prints_the_one_expression
@@ -2293,7 +2300,9 @@ PASSED:
   ✓ node::test_normalization::test_string_type_word_is_hinted_once_with_the_cast
   ✓ node::test_normalization::test_variable_definition
   ✓ node::test_normalization::test_variable_definition_let_style
+  ✓ node::test_parse_word::a_constant_text_that_fails_to_parse_fails_where_try_catches
   ✓ node::test_parse_word::a_hole_is_a_symbol_of_the_parse
+  ✓ node::test_parse_word::a_parenthesized_element_of_quoted_code_has_its_parts
   ✓ node::test_parse_word::a_parsed_text_ending_in_warp_is_no_file
   ✓ node::test_parse_word::a_program_s_own_parse_wins
   ✓ node::test_parse_word::a_run_time_parse_failure_is_an_error_try_catches
@@ -2301,6 +2310,8 @@ PASSED:
   ✓ node::test_parse_word::parse_of_a_constant_text_is_its_code_as_data
   ✓ node::test_parse_word::parse_of_a_run_time_text_is_its_code_as_data
   ✓ node::test_parse_word::quoted_code_in_parentheses_is_a_node
+  ✓ node::test_parse_word::quoted_code_keeps_the_comment_before_it
+  ✓ node::test_parse_word::quoted_code_knows_its_line_and_column
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ normalize::tests::test_hint_mode
@@ -2784,6 +2795,7 @@ PASSED:
   ✓ operators::test_logic_grouped_operands::a_grouped_comparison_is_the_left_operand_of_and
   ✓ operators::test_logic_grouped_operands::a_negation_is_the_left_operand_of_and_and_or
   ✓ operators::test_logic_grouped_operands::the_logic_table_of_negations
+  ✓ operators::test_logical_block_operand::a_block_left_of_and_runs
   ✓ operators::test_logical_calls::test_call_operand_is_evaluated_once
   ✓ operators::test_logical_calls::test_call_operand_of_and_or
   ✓ operators::test_logical_calls::test_node_operand_of_and_or
@@ -2902,6 +2914,7 @@ PASSED:
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ parser::test_bare_operator_block::a_bare_operator_block_names_the_fix
   ✓ parser::test_bare_operator_block::operators_with_operands_in_blocks_still_work
+  ✓ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
   ✓ parser::test_comments::test_block_comments
@@ -3601,6 +3614,8 @@ PASSED:
   ✓ text::test_text_concat::text_plus_number_stays_an_error
   ✓ text::test_text_concat::text_variables_and_compound_assignment
   ✓ text::test_text_concat::texts_concatenate_with_plus
+  ✓ text::test_text_cursor::a_cursor_reads_a_text_by_character_classes
+  ✓ text::test_text_cursor::space_tests_a_character
   ✓ text::test_text_functions::a_block_with_an_if_statement_is_code_not_data
   ✓ text::test_text_functions::an_if_with_text_branches_makes_a_text_function
   ✓ text::test_text_functions::error_makes_an_error_value_of_a_text
@@ -4865,6 +4880,7 @@ PASSED:
   ✓ welcoming::test_advice_fixes::a_block_assignment_offers_global_at_main
   ✓ welcoming::test_advice_fixes::advice_without_a_replacement_offers_no_fix
   ✓ welcoming::test_advice_fixes::then_after_a_comparison_offers_the_pipe
+  ✓ welcoming::test_aligned_comment::an_aligned_comment_gets_no_division_note
   ✓ welcoming::test_and_or_got_it::a_truthy_literal_in_the_middle_needs_no_warning
   ✓ welcoming::test_and_or_got_it::the_and_or_warning_stays_away_once_acknowledged
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
@@ -5271,4 +5287,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5266 passed, 0 failed, 5266 total tested
+12 ignored, 5282 passed, 0 failed, 5282 total tested
