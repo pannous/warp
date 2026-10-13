@@ -318,10 +318,25 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn declare_global_of(&mut self, val_type: ValType, init_expr: ConstExpr) -> u32 {
+		self.add_global(val_type, true, init_expr)
+	}
+
+	/// A mutable global listed under `name` in the name section
+	pub(super) fn declare_named_global(&mut self, val_type: ValType, init_expr: ConstExpr, name: String) -> u32 {
+		let index = self.declare_global_of(val_type, init_expr);
+		self.extra_global_names.push((index, name));
+		index
+	}
+
+	pub(super) fn declare_constant_global(&mut self, val_type: ValType, init_expr: ConstExpr) -> u32 {
+		self.add_global(val_type, false, init_expr)
+	}
+
+	fn add_global(&mut self, val_type: ValType, mutable: bool, init_expr: ConstExpr) -> u32 {
 		self.globals.global(
 			GlobalType {
 				val_type,
-				mutable: true,
+				mutable,
 				shared: false,
 			},
 			&init_expr,
