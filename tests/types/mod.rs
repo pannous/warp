@@ -139,6 +139,7 @@ mod test_sum_types;
 mod test_symbolism_object; // card symbolism-object
 mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions
+mod test_text_as_bool; // card yes-print
 mod test_text_as_number; // card units-dynamic
 mod test_text_of_text; // text(text(5)) is "5"
 mod test_time_programs_run; // card run-time-dates, stage B4
