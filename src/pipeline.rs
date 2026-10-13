@@ -514,7 +514,7 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::run_time_blocks::warn_unresolved,
 	crate::lowering::run_time_blocks::lower_interpret,
 	crate::lowering::blocks::lower,
-	// `data e` as written from here on: no later pass rewrites inside e (lower_for_emission unseals it)
+	// again for the `data e` that parse_word and blocks made (lower_for_emission unseals them)
 	crate::lowering::blocks::seal_quoted,
 	crate::lowering::getters::lower,
 	crate::lowering::run_time_blocks::lower_run_time_bangs,
@@ -604,6 +604,8 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
 	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
 	let node = crate::lowering::for_loop::headers::lower(node);
+	// `data e` as written: no sugar pass rewrites inside e
+	let node = crate::lowering::blocks::seal_quoted(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
