@@ -118,10 +118,7 @@ pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
 
 /// `run` with the program granted only `granted`
 fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
-	let before = GRANTED.with(|current| current.replace(granted));
-	let result = run();
-	GRANTED.with(|current| current.set(before));
-	result
+	crate::util::scoped(&GRANTED, granted, run)
 }
 
 thread_local! {
@@ -150,10 +147,7 @@ thread_local! {
 
 /// `run` with `flag` set on this thread
 fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run: impl FnOnce() -> T) -> T {
-	let before = flag.with(|set| set.replace(true));
-	let result = run();
-	flag.with(|set| set.set(before));
-	result
+	crate::util::scoped(flag, true, run)
 }
 
 thread_local! {
@@ -164,10 +158,7 @@ thread_local! {
 /// `run` compiling a program as a component exporting and importing `functions`: the emitter adds the canonical-ABI
 /// adapters of the exports and imports the imports from the core modules the world names
 pub fn for_a_component<T>(functions: crate::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
-	let before = COMPONENT_FUNCTIONS.with(|current| current.replace(functions));
-	let result = run();
-	COMPONENT_FUNCTIONS.with(|current| *current.borrow_mut() = before);
-	result
+	crate::util::scoped(&COMPONENT_FUNCTIONS, functions, run)
 }
 
 /// The functions the component being compiled exports, none for a program
@@ -232,19 +223,13 @@ pub fn is_prerendering() -> bool {
 
 /// `run` compiling the shipped page, whose calls of server functions start as `values`
 pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
-	let before = SERVER_VALUES.with(|current| current.replace(values));
-	let result = run();
-	SERVER_VALUES.with(|current| current.replace(before));
-	result
+	crate::util::scoped(&SERVER_VALUES, values, run)
 }
 
 /// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
 /// and its page, without a `serve PORT {…}` statement
 pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
-	let before = SERVING_PORT.with(|current| current.replace(Some(port)));
-	let result = run();
-	SERVING_PORT.with(|current| current.set(before));
-	result
+	crate::util::scoped(&SERVING_PORT, Some(port), run)
 }
 
 pub fn serving_port() -> Option<u16> {

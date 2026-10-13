@@ -217,10 +217,7 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 
 /// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
 fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
-	let outer = SHADOWED_UNITS.with(|shadowed| shadowed.replace(defined_unit_names(program)));
-	let result = run();
-	SHADOWED_UNITS.with(|shadowed| *shadowed.borrow_mut() = outer);
-	result
+	crate::util::scoped(&SHADOWED_UNITS, defined_unit_names(program), run)
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`

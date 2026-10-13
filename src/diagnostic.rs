@@ -396,10 +396,7 @@ pub fn warning_mode() -> WarningMode {
 
 /// Run `body` in another warning mode, then restore the previous one
 pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
-	let previous = WARNING_MODE.with(|current| current.replace(mode));
-	let result = body();
-	set_warning_mode(previous);
-	result
+	crate::util::scoped(&WARNING_MODE, mode, body)
 }
 
 /// Run `body` saying nothing (no warnings, hints or "got it?"): the compile of the executable a run leaves repeats the
@@ -739,16 +736,14 @@ pub fn set_acknowledger(acknowledger: Option<std::rc::Rc<dyn Acknowledger>>) {
 
 /// Run `body` with another acknowledger and fresh acknowledgement and note memory, then restore all three
 pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: impl FnOnce() -> R) -> R {
-	let previous = ACKNOWLEDGER.with(|current| current.replace(Some(std::rc::Rc::new(acknowledger))));
-	let acknowledged = ACKNOWLEDGED_TOPICS.with(|topics| std::mem::take(&mut *topics.borrow_mut()));
-	let file = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow_mut().take());
-	let shown = NOTES_SHOWN.with(|notes| std::mem::take(&mut *notes.borrow_mut()));
-	let result = body();
-	ACKNOWLEDGER.with(|current| *current.borrow_mut() = previous);
-	ACKNOWLEDGED_TOPICS.with(|topics| *topics.borrow_mut() = acknowledged);
-	ACKNOWLEDGEMENTS_FILE.with(|current| *current.borrow_mut() = file);
-	NOTES_SHOWN.with(|notes| *notes.borrow_mut() = shown);
-	result
+	use crate::util::scoped;
+	scoped(&ACKNOWLEDGER, Some(std::rc::Rc::new(acknowledger)), || {
+		scoped(&ACKNOWLEDGED_TOPICS, Default::default(), || {
+			scoped(&ACKNOWLEDGEMENTS_FILE, None, || {
+				scoped(&NOTES_SHOWN, Default::default(), body)
+			})
+		})
+	})
 }
 
 /// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
@@ -950,13 +945,10 @@ pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 /// says `use comments`
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
-	let previous = COMMENTS_AS_META.with(|flag| flag.replace(comments));
-	let result = match without_strict_pragma(program) {
+	crate::util::scoped(&COMMENTS_AS_META, comments, || match without_strict_pragma(program) {
 		(program, true) => with_warning_mode(WarningMode::Error, || body(program)),
 		(program, false) => body(program),
-	};
-	COMMENTS_AS_META.with(|flag| flag.set(previous));
-	result
+	})
 }
 
 thread_local! {

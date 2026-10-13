@@ -620,10 +620,7 @@ pub fn program_file() -> Option<PathBuf> {
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
-	let previous = PROGRAM_FILE.with(|current| current.replace(Some(file.to_path_buf())));
-	let result = body();
-	PROGRAM_FILE.with(|current| *current.borrow_mut() = previous);
-	result
+	crate::util::scoped(&PROGRAM_FILE, Some(file.to_path_buf()), body)
 }
 
 fn folder_of(file: &Path) -> PathBuf {
