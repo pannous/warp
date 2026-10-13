@@ -71,3 +71,11 @@ fn quoted_code_knows_its_line_and_column() {
 fn quoted_code_keeps_the_comment_before_it() {
 	is!("use comments\nx = data {\n  // the a\n  a: 1\n}\nx#1.comment", "the a");
 }
+
+// card name-quoted: a parenthesized element is read like the bare one
+#[test]
+fn a_parenthesized_element_of_quoted_code_has_its_parts() {
+	is!("x = data (a; b); (x#2).name", "b");
+	is!("x = {a: 1, b: 2}; (x#2).key", warp::parse("b"));
+	is!("x = [{a: 7}]; (x#1).a", 7);
+}
