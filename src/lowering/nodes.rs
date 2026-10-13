@@ -252,6 +252,152 @@ pub(crate) fn named_assignment(statement: &Node) -> Option<(String, Node)> {
 	}
 }
 
+/// How a function definition is written
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DefinitionForm {
+	/// `f(x) := body`, `f(x) = body`, `f(x): int := body`: Define or Assign
+	Operator(Op),
+	/// `def f(x): body`, `def f(x) := body`, `def f(x) -> int {…}`, `def f(x): int = body`: the operator after the head
+	Keyword(Op),
+	/// `def f(x) { body }`: head and block side by side, the parameters grouped `(f (x))`
+	KeywordBlock,
+	/// `def (f x) { body }`: keyword, head and body as three words
+	KeywordSpaced,
+}
+
+/// One view of a function definition in any of its forms (DefinitionForm): what each pass takes apart
+#[derive(Clone)]
+pub struct FunctionHead<'a> {
+	/// `(f x y)`
+	pub head: &'a Node,
+	pub name: &'a str,
+	/// What follows the name in the head, as written: `x y` of `(f x y)`, `(x, y)` of `def f(x, y) {…}`
+	pub written_parameters: &'a [Node],
+	pub form: DefinitionForm,
+	/// `int` of `f(x): int := …`, `def f(x) -> int {…}`, `def f(x): int: …`
+	pub result: Option<&'a Node>,
+	pub body: &'a Node,
+	/// Everything after the operator: the body with a result type written before it (`int {…}` of `def f(x): int {…}`)
+	pub written_body: &'a Node,
+	/// The bracket around head and block of `def f(x) { body }`
+	pub block_bracket: Option<&'a Bracket>,
+}
+
+impl<'a> FunctionHead<'a> {
+	/// The parameters: none for `f()`, the grouped ones of `def f(x, y) {…}`
+	pub fn parameters(&self) -> Vec<&'a Node> {
+		match self.written_parameters {
+			[only] if only.is_nothing() => vec![],
+			[Node::List(grouped, Bracket::Round, _)] => grouped.iter().collect(),
+			parameters => parameters.iter().collect(),
+		}
+	}
+
+	/// `f(x) := body`, `f(x) = body` with a round head and no result type: its operator
+	pub fn plain_operator(&self) -> Option<Op> {
+		match self.form {
+			DefinitionForm::Operator(op) if self.result.is_none() && is_call_head(self.head) => Some(op),
+			_ => None,
+		}
+	}
+
+	/// `f(x)` written without a space before its parenthesis
+	pub fn is_glued_head(&self) -> bool {
+		matches!(self.head.drop_meta(), Node::List(_, _, Separator::None))
+	}
+}
+
+/// `f(x) := body` and the other forms of a function definition (DefinitionForm), whose head is a word and what follows it
+pub fn function_head(statement: &Node) -> Option<FunctionHead<'_>> {
+	match statement.drop_meta() {
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
+			let (head, result) = typed_head(target);
+			viewed(head, DefinitionForm::Operator(*op), result, body, body)
+		}
+		Node::List(items, _, _) => match items.as_slice() {
+			[keyword, definition] if is_function_word(keyword) => keyword_function_head(definition),
+			[keyword, head, body] if is_function_word(keyword) => {
+				viewed(head, DefinitionForm::KeywordSpaced, None, body, body)
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn is_function_word(word: &Node) -> bool {
+	crate::operators::is_function_keyword(&word.drop_meta().name())
+}
+
+fn keyword_function_head(definition: &Node) -> Option<FunctionHead<'_>> {
+	match definition.drop_meta() {
+		Node::List(parts, bracket, _) if parts.len() == 2 => {
+			let definition = viewed(&parts[0], DefinitionForm::KeywordBlock, None, &parts[1], &parts[1])?;
+			Some(FunctionHead {
+				block_bracket: Some(bracket),
+				..definition
+			})
+		}
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
+			let (head, result) = typed_head(target);
+			viewed(head, DefinitionForm::Keyword(*op), result, body, body)
+		}
+		Node::Key(head, op @ (Op::Colon | Op::Arrow), written_body) => {
+			let (result, body) = result_and_body(written_body);
+			viewed(head, DefinitionForm::Keyword(*op), result, body, written_body)
+		}
+		_ => None,
+	}
+}
+
+fn viewed<'a>(
+	head: &'a Node,
+	form: DefinitionForm,
+	result: Option<&'a Node>,
+	body: &'a Node,
+	written_body: &'a Node,
+) -> Option<FunctionHead<'a>> {
+	let Node::List(items, _, _) = head.drop_meta() else {
+		return None;
+	};
+	let (name, written_parameters) = items.split_first()?;
+	Some(FunctionHead {
+		head,
+		name: name.drop_meta().symbol_name()?,
+		written_parameters,
+		form,
+		result,
+		body,
+		written_body,
+		block_bracket: None,
+	})
+}
+
+/// `(f x): int`, `(f x) as int`: the head and its result type
+fn typed_head(target: &Node) -> (&Node, Option<&Node>) {
+	match target.drop_meta() {
+		Node::Key(head, Op::Colon | Op::As, result) if is_word_head(head) => (head, Some(result)),
+		_ => (target, None),
+	}
+}
+
+fn is_word_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|name| matches!(name.drop_meta(), Node::Symbol(_))))
+}
+
+/// `int {…}` or `int: body` after `def f(x):` or `->`: the result type and the body; anything else is the body
+fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
+	match written_body.drop_meta() {
+		Node::List(parts, _, Separator::Space)
+			if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			(Some(&parts[0]), &parts[1])
+		}
+		Node::Key(result, Op::Colon, body) => (Some(result), body),
+		_ => (None, written_body),
+	}
+}
+
 /// The function a list calls: `f(a, b)`, or spaced `f a b`
 pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
 	let Node::Symbol(name) = items.first()?.drop_meta() else {

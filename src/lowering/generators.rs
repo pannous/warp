@@ -12,6 +12,7 @@
 use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol, Counter};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
+use crate::lowering::function_head;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::ruby_blocks::{arguments, contains_yield, is_yield, yielded};
@@ -99,19 +100,13 @@ fn run_once(mut body: Vec<Node>) -> Node {
 
 /// `name(params) := body` of a body that yields: its name, parameters and body
 fn definition(node: &Node) -> Option<(String, Vec<String>, &Node)> {
-	let Node::Key(head, Op::Define, body) = node.drop_meta() else {
-		return None;
-	};
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	let (name, parameters) = items.split_first()?;
-	let parameters = parameters
+	let definition = function_head(node).filter(|definition| definition.plain_operator() == Some(Op::Define))?;
+	let parameters = definition
+		.written_parameters
 		.iter()
 		.map(|parameter| parameter.symbol_name().map(String::from))
 		.collect::<Option<Vec<_>>>()?;
-	let name = name.symbol_name()?.to_string();
-	contains_yield(body).then(|| (name, parameters, body.as_ref()))
+	contains_yield(definition.body).then(|| (definition.name.to_string(), parameters, definition.body))
 }
 
 pub(crate) fn generators(node: &Node) -> HashMap<String, Generator> {
