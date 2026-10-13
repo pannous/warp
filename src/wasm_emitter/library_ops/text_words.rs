@@ -385,16 +385,7 @@ impl WasmGcEmitter {
 					],
 				);
 				write(f, I32Const(QUOTE_BYTE));
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(destination),
-						I::LocalGet(out),
-						I::LocalGet(destination),
-						I::I32Sub,
-					],
-				);
-				s.call(f, "new_text");
+				s.emit_new_text_to(f, destination, out);
 			},
 		);
 	}
@@ -816,16 +807,7 @@ impl WasmGcEmitter {
 				],
 			);
 			end_loop(f);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 }

@@ -690,16 +690,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::End, I::End]);
 			}
 			f.instruction(&I::End);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 

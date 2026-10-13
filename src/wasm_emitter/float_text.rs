@@ -278,16 +278,7 @@ impl WasmGcEmitter {
 			s.call(f, "int_to_decimal");
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(position), I::End]);
 
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 
