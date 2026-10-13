@@ -14,7 +14,7 @@ use crate::words::GENERIC_MARK;
 use crate::words::IN_WORD;
 use std::collections::HashSet;
 
-use crate::words::SWITCH_WORDS;
+use crate::words::{MATCH_WORD, SWITCH_WORDS};
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_KEYWORD: &str = "loop";
@@ -30,13 +30,16 @@ const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
 /// Swift's and C's case label `case .north:` in a switch
 const CASE_WORD: &str = "case";
-/// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain
+/// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain; `when` means on, whenever, if or match by its
+/// shape, and every shape warns the same (user, 2026-10-13)
 const WHEN_KEYWORD: &str = "when";
+const WHEN_TOPIC: &str = "when";
+const WHEN_REASON: &str = "when is on, whenever, if or match by its shape; write the one meant";
 const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
 const ON_WORD: &str = "on";
 const WHENEVER_WORD: &str = "whenever";
-const WHEN_CONDITION_TOPIC: &str = "when-condition";
+const IF_WORD: &str = "if";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
@@ -477,8 +480,9 @@ fn colon_case(case: &Node) -> Node {
 		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => {
 			words[1].clone()
 		}
-		Node::Key(pattern, Op::FatArrow, body) => {
-			let pattern = if pattern.is_symbol(WILDCARD) {
+		// Kotlin's arms `1 -> a; else -> b` too
+		Node::Key(pattern, Op::FatArrow | Op::Arrow, body) => {
+			let pattern = if pattern.is_symbol(WILDCARD) || pattern.is_symbol(ELSE_WORD) {
 				symbol(DEFAULT_CASE)
 			} else {
 				pattern.as_ref().clone()
@@ -515,6 +519,7 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let arms: Vec<(Vec<Node>, Node)> = arms.iter().map(when_arm).collect::<Option<_>>()?;
+	when_meant(&items[0], if subject.is_some() { MATCH_WORD } else { IF_WORD });
 	let condition = |pattern: Node| match (&subject, pattern) {
 		(_, pattern) if pattern.is_symbol(ELSE_WORD) => Node::True,
 		(Some(subject), pattern) => key(subject.clone(), Op::Eq, pattern),
@@ -565,16 +570,14 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	} else {
 		WHENEVER_WORD
 	};
-	if listener == WHENEVER_WORD {
-		crate::normalize::set_position_of(word);
-		crate::diagnostic::educate_once(
-			WHEN_CONDITION_TOPIC,
-			WHEN_KEYWORD,
-			WHENEVER_WORD,
-			"it reacts to every later write that makes the condition true; write if for a one-time check now",
-		);
-	}
+	when_meant(word, listener);
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
+}
+
+/// The one warning of every `when`, its fix the word this shape means
+fn when_meant(word: &Node, meant: &str) {
+	crate::normalize::set_position_of(word);
+	crate::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`

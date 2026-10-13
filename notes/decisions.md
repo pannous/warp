@@ -37,8 +37,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lambdas (through the normal parameter path), JS destructured parameters, Ruby lambda/proc/blocks/to_s, C# LINQ,
   C++ `auto x`; foreign names are cheap aliases of existing words, not lowering code. Drop OCaml let-in and `fun`,
   Elixir `def …, do:`, C++ `[](…){…}` lambdas. The R/PHP forms move to warp files loaded with `use R` / `use PHP`.
-  Kotlin `when x { 1 -> … }` is an alias of `match x { 1 => … }` (`->` ≈ `=>` in arms) with a warning, since `when`
-  means other things too. `case` is an optional word before any match arm (`case 1: …`).
+  Kotlin `when x { 1 -> … }` works, and `match` takes `->` arms and `else` too. `case` is an optional word before any match arm (`case 1: …`).
 - real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
   type next to the exact ratios; then it goes.
 - watched-cells (2026-10-13): watched variables use the run-time cell, except main-level variables no function
@@ -372,7 +371,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   under `try` are caught. failed-raised (2026-10-10): a raised error stops the program; bare `try X` turns it into
   the value (`r failed`). try-finally: `try X finally Z` runs Z, X's value or Error is the result.
 - P55 a while loop's value is its last body value. P213 a loop ending in `print` gives ø; loops stay expressions.
-- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `->` arms a Kotlin switch.
+- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`,
+  `when {cond -> …}` = an if chain; all four give the same one warning naming the word meant (user, 2026-10-13: the
+  shapes are not unambiguous).
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √`
   are accepted and normalized.
