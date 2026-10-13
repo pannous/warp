@@ -37,3 +37,17 @@ fn a_value_that_is_no_byte_is_refused() {
 	common::fails_with(&format!("write_bytes(\"{path}\", [1, 256])"), "256 is no byte");
 	common::fails_with(&format!("write_bytes(\"{path}\", [-1])"), "-1 is no byte");
 }
+
+#[test]
+fn writing_creates_missing_folders() {
+	let folder = format!("{FOLDER}/created");
+	let _ = std::fs::remove_dir_all(&folder);
+	is!(
+		&format!("write_bytes(\"{folder}/a/b.bin\", [1, 2]); read_bytes(\"{folder}/a/b.bin\")"),
+		parse("[1 2]")
+	);
+	is!(
+		&format!("write(\"{folder}/c/d.txt\", \"hi\"); read(\"{folder}/c/d.txt\")"),
+		"hi"
+	);
+}
