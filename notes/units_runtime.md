@@ -1,9 +1,13 @@
 # Quantities at run time: survey and proposal
 
-## Today (src/units.rs)
-`units::answer` evaluates a program of numbers, units and variables at compile time with exact rational amounts
-(`1 km/h + 1 m/s` → 23/18 m/s). A program it cannot evaluate takes the normal path, where a unit word is an ordinary
-symbol, so it fails as `undefined variable: km` (with the hint "quantities compute only in constant expressions so far").
+## Today (src/units/static_units.rs, card cleanup-units-answer 2026-10-13)
+Every program with quantities takes one path: static_units checks the unit signatures at compile time and runs the
+amounts as exact SI numbers (`1 km/h + 1 m/s` → 23/18 m/s). The compile-time interpreter `units::answer` is gone.
+Temperatures run as kelvin from absolute zero: `40°C` is 313.15, shown back as 40°C; a sum or negation of temperatures
+counts one zero (`20°C + 5°C` is 25°C), a sum of °C and °F fails ("one unit only"). `q^2` with a written whole power
+works like `q²`. Still compile-time (units.rs evaluate_in): constant sleep durations, comparisons folded in branches and
+the clock, and tolerances/ranges with units; the tolerance/range cases that only the interpreter's answer covered are
+ignored as `cleanup-edge: cleanup-units-answer` (user decision cleanup-may-drop-edge-cases).
 
 ## Survey (branch runtime-units-survey, tests/numbers/test_units_at_run_time.rs): every case fails loudly, none drops a unit
 | written | today |
