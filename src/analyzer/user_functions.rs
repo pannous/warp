@@ -8,8 +8,6 @@ pub(crate) use definitions::*;
 
 /// The type word of a value that is an int or a float
 const NUMBER_TYPE: &str = "number";
-/// The printing words, which `print #xs` and `print -1` call like a function of the program (card print-people)
-const PRINT_WORDS: [&str; 2] = ["print", "puts"];
 
 /// Kind of a value known before running the program
 pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
@@ -745,7 +743,7 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 /// The user functions a list calls and their arguments: `f(a, b)`, and a task start that runs f in another instance with
 /// them: `task·go(f, a, b)` (lower_tasks), `task_spawn("f", a, b)`, and `task_spawn_values("f·node", [a, b])`, which
 /// calls the wrapper f·node with the list and through it f with the items (resolve_tasks)
-pub(super) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
+pub(crate) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 	let Some(Node::Symbol(head)) = items.first().map(Node::drop_meta) else {
 		return vec![];
 	};
@@ -867,23 +865,6 @@ fn declared_globals_in(mut scope: Scope, program: &Node) -> HashMap<String, Loca
 	scope.globals
 }
 
-/// `f -x` with a callable `f` is the call `f(-x)`, and `print #xs` is `print(#xs)` (card print-people): a user function,
-/// a real function, print, a rounding word (`floor -2.5`), a type (`int -3`, `hex -1`) or a library word of one value, as the math words
-/// take `abs -2`. A minus written apart, `f - 2`, subtracts, as `abs - 2` does (warp_parser::SpacedMinus). A built-in name
-/// that the program also binds as a variable or parameter (`exp-1`) stays a subtraction.
-pub fn lower_negated_calls(node: Node) -> Node {
-	let mut ctx = Context::new();
-	extract_user_functions_inner(&mut ctx, &node);
-	let mut bound: HashSet<String> = ctx
-		.user_functions
-		.values()
-		.flat_map(|function| function.params.iter().map(|param| param.name.clone()))
-		.collect();
-	crate::library_words::collect_assigned_names(&node, &mut bound);
-	bound.extend(crate::soft_keywords::names_given(&node)); // fields and lambda parameters too: `size -1` of a field size
-	negate_calls(node, &ctx.user_functions, &bound)
-}
-
 /// The functions a word can apply: the program's functions that take arguments and the built-in real functions
 pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	let mut ctx = Context::new();
@@ -896,59 +877,6 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	user_functions
 		.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string()))
 		.collect()
-}
-
-pub(super) fn negate_calls(
-	node: Node,
-	functions: &std::collections::BTreeMap<String, UserFunctionDef>,
-	bound: &HashSet<String>,
-) -> Node {
-	// `int[100]` is the subscript `int#101` of a typed array: a type or library word takes no count
-	let is_function = |operand: &Node, op: Op| match operand.drop_meta() {
-		Node::Symbol(name) if functions.contains_key(name) => {
-			functions.get(name).is_some_and(|function| !function.params.is_empty())
-		}
-		Node::Symbol(name) if op == Op::Hash => {
-			(crate::real::FUNCTIONS.contains(&name.as_str()) || PRINT_WORDS.contains(&name.as_str()))
-				&& !bound.contains(name)
-		}
-		Node::Symbol(name) => is_builtin_callable(name) && !bound.contains(name),
-		_ => false,
-	};
-	match node {
-		Node::Key(function, op @ (Op::Sub | Op::Hash), argument)
-			if is_function(&function, op) && !(op == Op::Sub && is_spaced_minus(&function)) =>
-		{
-			let prefix = if op == Op::Sub { Op::Neg } else { Op::Hash };
-			let argument = Node::Key(
-				Box::new(Node::Empty),
-				prefix,
-				Box::new(negate_calls(*argument, functions, bound)),
-			);
-			Node::List(vec![*function, argument], Bracket::Round, Separator::None)
-		}
-		other => children_rewritten(other, |child| negate_calls(child, functions, bound)),
-	}
-}
-
-/// A built-in word that applies to the value after it: a real function, print, a rounding word, a type, a library word of one value
-fn is_builtin_callable(name: &str) -> bool {
-	crate::real::FUNCTIONS.contains(&name)
-		|| PRINT_WORDS.contains(&name)
-		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
-		|| super::is_type_call_word(name)
-		|| crate::library_words::is_operand_word(name)
-}
-
-/// The name before a minus written apart (warp_parser::SpacedMinus)
-fn is_spaced_minus(operand: &Node) -> bool {
-	match operand {
-		Node::Meta { node, data } => {
-			matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<crate::warp_parser::SpacedMinus>().is_some())
-				|| is_spaced_minus(node)
-		}
-		_ => false,
-	}
 }
 
 /// A lifted lambda is never called by name (closures.rs): its captured values take the kinds of the variables captured (a
@@ -1094,7 +1022,7 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 		}
 		Node::Empty => Some(Kind::List),
 		// `"" + n`, `"#" + x + y`: a concatenation with a text is a text
-		Node::Key(_, Op::Add, _) if super::declaration_lowering::is_text(argument) => Some(Kind::Text),
+		Node::Key(_, Op::Add, _) if crate::lowering::declaration_forms::is_text(argument) => Some(Kind::Text),
 		// `1.5 as float`, `x as float`: the kind the conversion names
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => {
 			Some(Kind::Float)

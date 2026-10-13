@@ -2,7 +2,7 @@
 use super::*;
 
 /// The name before a minus written apart, `f - 2`: the subtraction, where `f -2` applies a callable f to -2, as the
-/// math words do (`abs - 2`, `abs -2`; analyzer::lower_negated_calls)
+/// math words do (`abs - 2`, `abs -2`; negated_calls::lower_negated_calls)
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpacedMinus;
 

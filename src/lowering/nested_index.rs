@@ -73,7 +73,7 @@ fn changed_place(node: &Node) -> Option<&Node> {
 	let changes_list = *op == Op::Dot
 		&& items
 			.first()
-			.is_some_and(|method| crate::analyzer::is_list_mutating_method(&method.name()));
+			.is_some_and(|method| crate::declaration_forms::is_list_mutating_method(&method.name()));
 	changes_list.then_some(target)
 }
 

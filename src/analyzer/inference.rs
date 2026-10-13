@@ -508,7 +508,7 @@ pub(super) fn infer_list_type(
 				// a list, or a text when it sorts a text's characters
 				return Kind::Empty;
 			}
-			if name == crate::analyzer::LIST_BECOME || name == crate::one_entry_maps::MAP_OF_ENTRY {
+			if name == crate::declaration_forms::LIST_BECOME || name == crate::one_entry_maps::MAP_OF_ENTRY {
 				// the place itself, changed; the map of `{a:1}` a node as the pair is
 				return infer_type(&items[1], scope);
 			}

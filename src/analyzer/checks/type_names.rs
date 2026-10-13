@@ -188,7 +188,7 @@ pub(super) const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
 pub(in crate::analyzer) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(in crate::analyzer) const NODE_LIST_TYPE: &str = "list of node";
-pub(in crate::analyzer) const LIST_WORD: &str = "list";
+pub(crate) const LIST_WORD: &str = "list";
 /// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
 pub const TEMPORARY_SEPARATOR: &str = "·";
 
@@ -197,7 +197,7 @@ pub const TEMPORARY_SEPARATOR: &str = "·";
 pub fn is_compiler_temporary(name: &str) -> bool {
 	name.contains(TEMPORARY_SEPARATOR)
 }
-pub(in crate::analyzer) const LIST_OF_PREFIX: &str = "list of ";
+pub(crate) const LIST_OF_PREFIX: &str = "list of ";
 /// The type words of a bool, held as an Int (builtin_type_kind)
 pub(super) const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
 pub(in crate::analyzer) const OF_WORD: &str = "of";
@@ -213,7 +213,7 @@ pub(in crate::analyzer) fn map_word(call: &Node) -> Option<&'static str> {
 
 pub(in crate::analyzer) const INT_WORD: &str = "int";
 pub(crate) const RATIONAL_WORD: &str = "rational";
-pub(in crate::analyzer) const FLOAT_WORD: &str = "float";
+pub(crate) const FLOAT_WORD: &str = "float";
 pub(in crate::analyzer) const NUMBER_WORD: &str = "number";
 /// Irrational constants are `real`, although the underlying representation may still be exact or float: the type name is
 /// the contract, the representation may change

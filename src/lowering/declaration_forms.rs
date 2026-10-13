@@ -1,7 +1,13 @@
 //! Lowering declarations and list forms: typed declarations, parameter copies, list mutation methods, typed arrays
 
-use super::*;
+use crate::analyzer::*;
+use crate::broadcasting::{element_wise, EACH_ELEMENT};
+use crate::extensions::numbers::Number;
 use crate::lowering::nodes::{call, children_rewritten};
+use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
+use crate::type_kinds::Kind;
+use std::collections::{HashMap, HashSet};
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
@@ -25,7 +31,7 @@ pub fn indexed_parameter_copies(node: Node) -> Node {
 	parameter_copies(node, &maps, &texts)
 }
 
-pub(super) fn parameter_copies(
+pub(crate) fn parameter_copies(
 	node: Node,
 	maps: &HashMap<(String, usize), bool>,
 	texts: &HashSet<(String, usize)>,
@@ -65,7 +71,7 @@ pub(super) fn parameter_copies(
 /// The parameters some call passes a text: a text or character literal, a variable only ever given texts, a word giving
 /// a text, or a parameter of the calling function that is one of these in turn. They keep the generic way: an array
 /// copy would hold the text as its one item, and `source[i]` read the whole text (card self-lexer)
-pub(super) fn text_parameters(program: &Node) -> HashSet<(String, usize)> {
+pub(crate) fn text_parameters(program: &Node) -> HashSet<(String, usize)> {
 	let mut calls = TextCalls {
 		texts: TextValues::of(program),
 		found: HashSet::new(),
@@ -205,7 +211,7 @@ fn text_fields(program: &Node) -> HashSet<String> {
 /// The parameters every call passes a map: a map literal of name keys, or a variable only ever assigned one. Only those
 /// may become hash tables; a list or an instance given there keeps the generic way. The flag: every call passes a
 /// literal, a new map no one else holds
-pub(super) fn map_parameters(program: &Node) -> HashMap<(String, usize), bool> {
+pub(crate) fn map_parameters(program: &Node) -> HashMap<(String, usize), bool> {
 	let is_map_literal = |value: &Node| {
 		matches!(value.drop_meta(), Node::List(items, Bracket::Curly, _) if items.iter().all(|item|
 		matches!(item.drop_meta(), Node::Key(key, Op::Colon, _) if matches!(key.drop_meta(), Node::Symbol(key) | Node::Text(key) if !key.starts_with(crate::node::ATTRIBUTE_MARK)))))
@@ -241,7 +247,7 @@ pub(super) fn map_parameters(program: &Node) -> HashMap<(String, usize), bool> {
 }
 
 /// Every list of the program but a definition's head `(f a b) := …`, which names parameters and calls nothing
-pub(super) fn calls_outside_heads<'a>(node: &'a Node, action: &mut dyn FnMut(&'a [Node])) {
+pub(crate) fn calls_outside_heads<'a>(node: &'a Node, action: &mut dyn FnMut(&'a [Node])) {
 	match node.drop_meta() {
 		Node::Key(head, Op::Define | Op::Assign, body)
 			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
@@ -260,9 +266,9 @@ pub(super) fn calls_outside_heads<'a>(node: &'a Node, action: &mut dyn FnMut(&'a
 	}
 }
 
-pub(super) const LIST_COPY_SUFFIX: &str = "·list";
+pub(crate) const LIST_COPY_SUFFIX: &str = "·list";
 
-pub(super) fn parameter_symbol(parameter: &Node) -> Option<String> {
+pub(crate) fn parameter_symbol(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, _) => name.symbol_name(),
 		other => other.symbol_name(),
@@ -272,7 +278,7 @@ pub(super) fn parameter_symbol(parameter: &Node) -> Option<String> {
 
 /// Does the body index (`xs#i`) or count (`#xs`) the variable in a loop, not by a text key: once is cheaper as a walk
 /// than a conversion
-pub(super) fn indexes(body: &Node, name: &str) -> bool {
+pub(crate) fn indexes(body: &Node, name: &str) -> bool {
 	let key_variables = key_variables(body);
 	let mut found = false;
 	let mut loops = vec![];
@@ -327,7 +333,7 @@ pub fn key_variables(body: &Node) -> HashSet<String> {
 }
 
 /// Is the variable assigned a call's result inside a loop (`arr = swap(arr, i, j)`, a conversion per iteration)
-pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
+pub(crate) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 	let mut found = false;
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
 		part.visit(&mut |inner| if let Node::Key(target, Op::Assign, value) = inner {
@@ -340,7 +346,7 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 
 /// Does the body set an entry of the map parameter (`m[k] = v`) or look one up in a loop, by a text key. A map is a
 /// reference (P200b): a set entry must reach the caller's map, so a table copy only when every call passes a new one
-pub(super) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
+pub(crate) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
 	let is_name = |part: &Node| part.is_symbol(name);
 	let key_variables = key_variables(body);
 	let by_key = |index: &Node| looks_up_a_key(index, &key_variables);
@@ -364,17 +370,17 @@ pub(super) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
 }
 
 /// `field_with(m, "k", v)` of the variable m with a text key: the lowered `m["k"] = v`
-pub(super) fn field_update(value: &Node, name: &str) -> bool {
+pub(crate) fn field_update(value: &Node, name: &str) -> bool {
 	matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, map, key, _]
 		if word.name() == crate::library_words::FIELD_WITH && map.is_symbol(name) && is_text(key)))
 }
 
 /// An index by a text key: `m["k"]`, `m["k\(i)"]` (arriving as `"k" + text_form(i)`), not a position
-pub(super) fn is_text_key(index: &Node) -> bool {
+pub(crate) fn is_text_key(index: &Node) -> bool {
 	is_text(crate::warp_parser::subscript_key(index).unwrap_or(index))
 }
 
-pub(super) fn is_text(node: &Node) -> bool {
+pub(crate) fn is_text(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Text(_) | Node::Char(_) => true,
 		Node::Key(left, Op::Add, right) => is_text(left) || is_text(right),
@@ -383,7 +389,7 @@ pub(super) fn is_text(node: &Node) -> bool {
 }
 
 /// Is the variable itself assigned in the body (`m = …`, `m += …`), other than by setting an entry
-pub(super) fn assigns(body: &Node, name: &str) -> bool {
+pub(crate) fn assigns(body: &Node, name: &str) -> bool {
 	let mut found = false;
 	body.visit(&mut |part| {
 		if let Node::Key(target, op, value) = part {
@@ -395,7 +401,7 @@ pub(super) fn assigns(body: &Node, name: &str) -> bool {
 }
 
 /// `name·list = name` (or another copy suffix) first, then the body with every `name` read as the copy
-pub(super) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
+pub(crate) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 	let copy = format!("{name}{suffix}");
 	let renamed = rename_symbol(body, name, &copy);
 	let start = Node::Key(
@@ -416,7 +422,7 @@ pub(super) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 	}
 }
 
-pub(super) fn rename_symbol(node: Node, from: &str, to: &str) -> Node {
+pub(crate) fn rename_symbol(node: Node, from: &str, to: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
 		other => children_rewritten(other, |child| rename_symbol(child, from, to)),
@@ -425,7 +431,7 @@ pub(super) fn rename_symbol(node: Node, from: &str, to: &str) -> Node {
 
 /// The names of a program: `variables` it assigns (`return count` returns the variable, it is no `return.count`), and
 /// every word it uses as a value or binds (a parameter, a loop variable): `chars[i]` then indexes, `int[3]` makes zeros
-pub(super) struct Names {
+pub(crate) struct Names {
 	variables: HashSet<String>,
 	values: HashSet<String>,
 	/// Variables only ever given a text: `add "c" to x` appends to the text
@@ -433,7 +439,7 @@ pub(super) struct Names {
 }
 
 /// Variables whose every assigned value is a text literal or an update of the variable itself (`x = x + "c"`)
-pub(super) fn text_variables(program: &Node) -> HashSet<String> {
+pub(crate) fn text_variables(program: &Node) -> HashSet<String> {
 	variables_only_given(program, |value| matches!(value, Node::Text(_) | Node::Char(_)))
 }
 
@@ -456,7 +462,7 @@ fn variables_only_given(program: &Node, wanted: impl Fn(&Node) -> bool) -> HashS
 
 /// Words that stand as values somewhere: not as the head of a call, a type annotation (`x:int`, `as int`) or the
 /// element type of `int[3]`
-pub(super) fn names_used_as_values(program: &Node) -> HashSet<String> {
+pub(crate) fn names_used_as_values(program: &Node) -> HashSet<String> {
 	fn visit(node: &Node, names: &mut HashSet<String>) {
 		match node.drop_meta() {
 			Node::Symbol(name) => {
@@ -482,7 +488,7 @@ pub(super) fn names_used_as_values(program: &Node) -> HashSet<String> {
 	names
 }
 
-pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
+pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 	let variables = &names.variables;
 	let lower = |node| lower_declarations_among(node, names);
 	let node = match crate::for_loop::lower(node) {
@@ -781,7 +787,7 @@ fn maybe_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separat
 }
 
 /// `{a:1 b:2}(key)`: applying an object to a key looks it up, like `{a:1 b:2}[key]`
-pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
+pub(crate) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 	let [object, argument] = items else { return None };
 	let is_object = matches!(object.drop_meta(), Node::List(entries, Bracket::Curly, _)
 		if !entries.is_empty() && entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))));
@@ -797,7 +803,7 @@ const MAYBE_WORD: &str = "maybe";
 
 /// Methods that append one element: `x.add(v)` is `x += [v]`, in place
 const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
-pub(super) const POP_METHOD: &str = "pop";
+pub(crate) const POP_METHOD: &str = "pop";
 /// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place (wasm_emitter list_ops emit_list_drop_last)
 pub const LIST_DROP_LAST: &str = "list_drop_last";
 /// Pseudo-call `list_become(xs, ys)`: xs takes the items of the fresh list ys in place, so every holder of xs sees them
@@ -817,7 +823,7 @@ const POPPED_REST_CALL: &str = "popped_rest";
 /// Python's `xs.clear()` and `m.clear()`: the variable becomes lib/prelude.warp's `cleared(x)`, the empty list or map
 const CLEAR_METHOD: &str = "clear";
 const CLEARED_CALL: &str = "cleared";
-pub(super) const POP_TEMPORARY: &str = "pop_tmp";
+pub(crate) const POP_TEMPORARY: &str = "pop_tmp";
 pub(crate) const INSERT_METHOD: &str = "insert";
 
 /// Pseudo-call `list_insert_at(list, position, value)`: the list with value inserted at the 0-based position
@@ -865,7 +871,7 @@ fn is_place(node: &Node) -> bool {
 }
 
 /// The element of `x.add(v)` when x is a variable or a field of one
-pub(super) fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
+pub(crate) fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
 	if !is_place(list) {
 		return None;
 	}
@@ -882,7 +888,7 @@ pub(super) fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a No
 
 /// `xs.pop()` when xs is a variable or a field of one (`s.items`): the last item, removed from xs in place, so every
 /// holder of the list sees it (Python's list.pop(), P200b)
-pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
+pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	if !is_place(list) {
 		return None;
 	}
@@ -904,7 +910,7 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 /// `m.remove(k)` when m is a variable: the value of k, its entry removed from m (P35 default, Python's dict.pop); of a
 /// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL). `delete` is the
 /// familiar alias for `remove`; `x.pop(k)` is Python's pop of a key or a 0-based position (POPPED_ITEM_CALL).
-pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
+pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else {
 		return None;
 	};
@@ -981,7 +987,7 @@ fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
 
 /// `xs.insert(a, b)` when xs is a variable. Warp writes `insert(value, position)`, Python `insert(position, value)`:
 /// the order is never guessed (wiki/Footguns.md "Guessing intent"), `at:` or the kinds decide
-pub(super) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
+pub(crate) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
 	if !is_place(list) {
 		return None;
 	}
@@ -1024,14 +1030,14 @@ pub(crate) fn insert_position(argument: &Node) -> Option<&Node> {
 }
 
 /// The arguments of `xs.insert(…)`: `insert(x, at: i)` names the position, `insert(a, b)` leaves the order to the kinds
-pub(super) enum Inserted {
+pub(crate) enum Inserted {
 	At(Node, Node),
 	EitherOrder(Node, Node),
 }
 
 /// `xs = list_insert_at(xs, position, value)`, or `insert_in_either_order(xs, a, b)` that the emitter resolves by the
 /// kinds of a and b: the one Int is the position, two Ints are ambiguous (Python and warp order differ)
-pub(super) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
+pub(crate) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 	let (pseudo_call, first, second) = match inserted_element(&list, call).expect("guarded") {
 		Inserted::At(position, value) => (INSERT_AT_CALL, position, value),
 		Inserted::EitherOrder(first, second) => (INSERT_EITHER_CALL, first, second),
@@ -1050,12 +1056,12 @@ pub(super) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 }
 
 /// `xs.add(v)`, `xs.insert(i, v)`: an update of the list variable that ø (the empty list) allows
-pub(super) fn updates_list(list: &Node, call: &Node) -> bool {
+pub(crate) fn updates_list(list: &Node, call: &Node) -> bool {
 	appended_element(list, call).is_some() || inserted_element(list, call).is_some()
 }
 
 /// The zero value of an element type word (`int`, `ints`, `float`, `text` …)
-pub(super) fn zero_element(type_word: &str) -> Option<Node> {
+pub(crate) fn zero_element(type_word: &str) -> Option<Node> {
 	let element = plural_element_type(type_word).unwrap_or(type_word);
 	Some(match type_word_kind(element)? {
 		Kind::Int => Node::int(0),
@@ -1113,9 +1119,9 @@ pub fn lower_list_times(node: Node) -> Node {
 	}
 }
 
-pub(super) const LIST_TIMES_TOPIC: &str = "list-times";
+pub(crate) const LIST_TIMES_TOPIC: &str = "list-times";
 
-pub(super) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
+pub(crate) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Mul, right) = key.drop_meta() else {
 		return None;
 	};
@@ -1164,15 +1170,15 @@ pub(super) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	})
 }
 
-pub(super) const LIST_PLUS_TOPIC: &str = "list-plus";
+pub(crate) const LIST_PLUS_TOPIC: &str = "list-plus";
 
-pub(super) fn is_list_literal(side: &Node) -> bool {
+pub(crate) fn is_list_literal(side: &Node) -> bool {
 	matches!(side.drop_meta(), Node::List(_, Bracket::Square, _))
 }
 
 /// `[1 2 3]+4` and `4+[1 2 3]` with a list literal and a number: append (prepend) or add to each element?
 /// Unanswered it is an error naming `[1 2 3] + [4]` and `[1 2 3] .+ 4`
-pub(super) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
+pub(crate) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Add, right) = key.drop_meta() else {
 		return None;
 	};
@@ -1210,20 +1216,6 @@ pub(super) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 		Ok(_) => element_wise(list.clone(), Op::Add, number.clone()),
 		Err(error) => error,
 	})
-}
-
-/// The element name of the lambda an element-wise operator maps with: no warp program writes it
-pub const EACH_ELEMENT: &str = "each_element";
-
-/// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
-pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
-	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
-	let lambda = Node::Key(
-		element(),
-		Op::FatArrow,
-		Box::new(Node::Key(element(), op, Box::new(operand))),
-	);
-	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
 }
 
 /// `n times [x]`: the list of n copies of x (`zero_fill(n, x)`); `[x]*n` stays ambiguous (Python repeats, NumPy multiplies)
@@ -1267,7 +1259,7 @@ pub(crate) fn typed_array_value(value: &Node, variables: &HashSet<String>) -> Op
 }
 
 /// The type `[number]`: `list of number` for one element type word
-pub(super) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
+pub(crate) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
 	let word = bracketed_element(type_node)?;
 	type_word_kind(word)?;
 	Some(Node::Symbol(format!("list of {word}")))
@@ -1290,7 +1282,7 @@ fn declared_bracketed_list_type(type_node: &Node) -> Option<Node> {
 }
 
 /// `x:int[100]` as the variable and its zero-filled list
-pub(super) fn typed_array_declaration(node: &Node, variables: &HashSet<String>) -> Option<(Node, Node)> {
+pub(crate) fn typed_array_declaration(node: &Node, variables: &HashSet<String>) -> Option<(Node, Node)> {
 	let Node::Key(name, Op::Colon, type_node) = node.drop_meta() else {
 		return None;
 	};
@@ -1299,7 +1291,7 @@ pub(super) fn typed_array_declaration(node: &Node, variables: &HashSet<String>) 
 }
 
 /// `x : 100` followed by the element type `int`: the declaration `x = [0 … 0]`
-pub(super) fn counted_array_declaration(declared_count: &Node, type_word: &Node) -> Option<Node> {
+pub(crate) fn counted_array_declaration(declared_count: &Node, type_word: &Node) -> Option<Node> {
 	let Node::Key(name, Op::Colon, count) = declared_count.drop_meta() else {
 		return None;
 	};
@@ -1314,12 +1306,12 @@ pub(super) fn counted_array_declaration(declared_count: &Node, type_word: &Node)
 }
 
 /// Two neighbouring statements that together form one declaration
-pub(super) fn paired_declaration(first: &Node, second: &Node) -> Option<Node> {
+pub(crate) fn paired_declaration(first: &Node, second: &Node) -> Option<Node> {
 	prefixed_declaration(first, second).or_else(|| counted_array_declaration(first, second))
 }
 
 /// The type a lowered declaration `x:T = v` attached to its target x
-pub(super) fn declared_type(target: &Node) -> Option<&Node> {
+pub(crate) fn declared_type(target: &Node) -> Option<&Node> {
 	match target {
 		Node::Meta { data, .. } if matches!(data.as_ref(), Node::Symbol(_)) => Some(data),
 		_ => None,
@@ -1327,12 +1319,12 @@ pub(super) fn declared_type(target: &Node) -> Option<&Node> {
 }
 
 /// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (type_tests BUILTIN_TYPES)
-pub(super) fn is_declaration_type(node: &Node) -> bool {
+pub(crate) fn is_declaration_type(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name).is_some() || plural_element_type(name).is_some())
 }
 
 /// `(fast x)` as the target of `fast x=v`: the type and the name
-pub(super) fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
+pub(crate) fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
 	match target.drop_meta() {
 		Node::List(items, bracket, _)
 			if *bracket != Bracket::Round
@@ -1347,7 +1339,7 @@ pub(super) fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
 }
 
 /// The statement pair `fast`, `x=v` as the declaration `x:fast=v`
-pub(super) fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node> {
+pub(crate) fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node> {
 	match next.drop_meta() {
 		Node::Key(name, op @ (Op::Assign | Op::Define), value)
 			if is_declaration_type(type_name) && matches!(name.drop_meta(), Node::Symbol(_)) =>

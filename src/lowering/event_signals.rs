@@ -1007,7 +1007,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 				changes |= crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			Node::Key(target, Op::Dot, call) => {
-				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))));
+				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::declaration_forms::is_list_mutating_method(&word(method))));
 				changes |= mutating && crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			_ => {}

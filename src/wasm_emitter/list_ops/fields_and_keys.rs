@@ -92,7 +92,7 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_generic_indexed_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		match self.map_key(index) {
-			Some(key) => match crate::analyzer::constant_field_name(&key) {
+			Some(key) => match crate::declaration_forms::constant_field_name(&key) {
 				// the value of the entry, else of the meta entry `@name`, or the runtime error naming the missing field
 				Some(name) => {
 					let node_ref = Ref(self.node_ref(false));
@@ -1273,7 +1273,7 @@ impl WasmGcEmitter {
 		// removed_value(collection, key): what `collection.remove(key)` gives, of a map the key's value (ø if absent), of
 		// a list the list itself, which map_without then changes (the static kinds don't tell a map from a list)
 		self.runtime_function(
-			crate::analyzer::REMOVED_VALUE_CALL,
+			crate::declaration_forms::REMOVED_VALUE_CALL,
 			vec![node_ref, node_ref],
 			vec![node_ref],
 			vec![],

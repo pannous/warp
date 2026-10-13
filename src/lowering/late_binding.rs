@@ -14,10 +14,9 @@
 //! needs no code of its own: the declaration only lifts the check and is dropped here. Writing y from inner waits.
 
 use super::nodes::children_rewritten;
-use crate::analyzer::{
-	captured_variables, collect_variables, declare_global, find_assignments, is_list_mutating_method, param_kind, Scope,
-};
+use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
+use crate::declaration_forms::is_list_mutating_method;
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::effects::EffectReport;
 use crate::node::{Bracket, Node, Separator};

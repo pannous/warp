@@ -4,7 +4,7 @@
 //! `filter` and the other iteration words already loop over a range's bounds (for_loop.rs, lambdas.rs). A range passed
 //! to a function that only reads its parameter so is passed as its bounds: `f(1..n)` calls `f·range·0(1, n)`, a copy of
 //! f whose parameter is the range of its two new parameters. Any other use (printing, returning, changing it) keeps the
-//! variable a list, collected once (declaration_lowering.rs). A function whose value is a range of its parameters
+//! variable a list, collected once (declaration_forms.rs). A function whose value is a range of its parameters
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
 use super::nodes::{call, key, Counter};

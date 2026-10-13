@@ -118,7 +118,6 @@ pub(crate) fn is_statement_block(node: &Node) -> bool {
 mod booleans;
 mod checks;
 mod counting;
-mod declaration_lowering;
 mod imports;
 mod inference;
 mod upcast_fields;
@@ -129,7 +128,8 @@ mod list_views;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;
-pub use declaration_lowering::*;
+// the declaration and list forms the checks and the inference know (lowering/declaration_forms.rs)
+use crate::lowering::declaration_forms::*;
 pub(crate) use imports::signature_kind;
 pub use imports::*;
 pub use inference::*;

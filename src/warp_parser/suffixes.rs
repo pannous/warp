@@ -448,7 +448,7 @@ impl WarpParser {
 		}
 		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
 		let names_a_type =
-			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
+			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::declaration_forms::zero_list(Empty, word).is_some());
 		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(

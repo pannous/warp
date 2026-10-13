@@ -633,7 +633,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::analyzer::appends(method, items.len() - 1)) {
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::declaration_forms::appends(method, items.len() - 1)) {
 					appended.insert(name.clone());
 				}
 			}
@@ -661,7 +661,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 						Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 						_ if is_range(value) => true,
 						_ if element_wise_parts(value).is_some() => true,
-						_ if crate::analyzer::typed_array_value(value, &variables).is_some() => true,
+						_ if crate::declaration_forms::typed_array_value(value, &variables).is_some() => true,
 						Node::Empty => appended.contains(name),
 						// `xs = xs + [i]`
 						Node::Key(left, Op::Add, right) => {
@@ -980,7 +980,7 @@ impl Broadcast {
 
 	/// `xs * ys` of two lists, as `dot(xs, ys)`: `sum(xs .* ys)` (card g_n8GI)
 	fn inner_product(&self, left: Node, right: Node) -> Node {
-		let sum = [symbol(SUM_WORD), crate::analyzer::element_wise(left, Op::Mul, right)];
+		let sum = [symbol(SUM_WORD), element_wise(left, Op::Mul, right)];
 		self.fused_sum(&sum, &Bracket::Round).unwrap_or_else(|| {
 			Node::List(
 				vec![sum[0].clone(), self.rewrite(sum[1].clone())],
@@ -1105,6 +1105,36 @@ pub(crate) fn named_by(unique: String) -> impl Fn(&str) -> String {
 	}
 }
 
+/// The element name of the lambda an element-wise operator maps with: no warp program writes it
+pub const EACH_ELEMENT: &str = "each_element";
+
+/// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
+pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
+	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
+	let lambda = Node::Key(
+		element(),
+		Op::FatArrow,
+		Box::new(Node::Key(element(), op, Box::new(operand))),
+	);
+	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
+}
+
+/// `xs .* 2` as the parser keeps it, the phrase [xs .* 2]: the operator applied to each element (element_wise)
+pub fn lower_element_wise_operators(node: Node) -> Node {
+	let node = node.map_children(lower_element_wise_operators);
+	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {
+		return node;
+	};
+	match items.as_slice() {
+		[list, word, operand]
+			if let Some(op) = word.symbol_name().and_then(crate::operators::element_wise_operator) =>
+		{
+			element_wise(list.clone(), op, operand.clone()).with_meta_of(&node)
+		}
+		_ => node,
+	}
+}
+
 pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 	let Node::Key(receiver, Op::Dot, call) = node.drop_meta() else {
 		return None;
@@ -1119,8 +1149,7 @@ pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 	let Node::Key(left, op, operand) = body.drop_meta() else {
 		return None;
 	};
-	let is_element =
-		|node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == crate::analyzer::EACH_ELEMENT);
+	let is_element = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == EACH_ELEMENT);
 	(word.name() == MAP_WORD && is_element(element) && is_element(left))
 		.then(|| (receiver.as_ref().clone(), *op, operand.as_ref().clone()))
 }
