@@ -74,7 +74,7 @@ def grouped(pairs, bracket) {
 		level = precedence(pair#2)
 		if level < 255 and level > loosest { loosest = level }
 	}
-	if loosest < 0 { return listed(bracket, " ", [pair#1 for pair in pairs]) }
+	if loosest < 0 { return phrase(bracket, [pair#1 for pair in pairs]) }
 	split = ""
 	for pair in pairs {
 		if split == "" and precedence(pair#2) == loosest { split = pair#2 }
@@ -92,10 +92,17 @@ def grouped(pairs, bracket) {
 	}
 	if group.length > 0 { groups += [group] }
 	nodes = [if group.length == 1 and group#1#2 == "" then group#1#1 else grouped(group, "") for group in groups]
-	if nodes.length == 1 and bracket == "" then nodes#1 else listed(bracket, split, nodes)
+	if nodes.length == 1 and bracket == "" { return nodes#1 }
+	if split == " " then phrase(bracket, nodes) else listed(bracket, split, nodes)
 }
 
 def listed(bracket, separator, nodes) := ["list", bracket, separator] + nodes
+
+// Words side by side; `print ord c` prints the rest of the line as one value. Rust twin: mod.rs grouped_list
+def phrase(bracket, nodes) {
+	if bracket != "" or nodes.length < 3 or nodes#1 != ["symbol", "print"] { return listed(bracket, " ", nodes) }
+	listed("", " ", [nodes#1, listed("", " ", nodes[1:])])
+}
 
 // Spaces, tabs, newlines and comments skipped; whether a newline was among them
 // Rust twin: scanning.rs skip_whitespace_and_comments
@@ -124,6 +131,15 @@ def skip_spaces(p) {
 // An expression of operators binding at least `min_power` on the left
 // Rust twin: expressions.rs parse_expr, continue_expr
 def expression(p, min_power) := continued(p, prefixed(p), min_power)
+
+// The head of `if`, `while` or `for`: a `{` after it opens the body, so `f(x) {` calls f rather than defining it
+def header_expression(p, min_power) {
+	outer = p.header
+	p.header = true
+	head = expression(p, min_power)
+	p.header = outer
+	head
+}
 
 // `left` and the operators after it binding at least `min_power`
 // Rust twin: expressions.rs continue_expr
@@ -281,7 +297,7 @@ INDEX_POWER = 170
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
 SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "=>"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
 // The operators written as words, each with its canonical name
-WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"]]
+WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"], ["upto", ".."]]
 
 // The operator at the parser's position as [written, canonical], else []
 // (each text read is a walk from its start, card text-costs: the character is read once and picks the candidates)
@@ -341,7 +357,7 @@ def prefixed(p) {
 		if keyword_at(p, word) {
 			p.at = p.at + word.length
 			skip_spaces(p)
-			return conditioned(word, expression(p, CONDITION_POWER), p)
+			return conditioned(word, header_expression(p, CONDITION_POWER), p)
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
@@ -464,12 +480,9 @@ def looped(p) {
 		if keyword_at(p, "in") {
 			p.at = p.at + 2
 			skip_spaces(p)
-			outer = p.header
-			p.header = true
-			iterable = expression(p, 81)
-			p.header = outer
+			iterable = header_expression(p, 81)
 			skip_spaces(p)
-			return listed("", " ", [["symbol", "for"], variable, ["symbol", "in"], iterable, atom(p)])
+			return listed("", " ", [["symbol", "for"], variable, ["symbol", "in"], iterable, loop_body(p)])
 		}
 	}
 	p.at = before
@@ -498,6 +511,36 @@ def is_block(node) := node is list and node.length > 2 and node#1 == "list" and 
 
 // The comparison, arithmetic, logical and prefix operators whose right operand may end in the branch
 SPLIT_OPERATORS = ["==", "!=", "===", "!==", "<", ">", "<=", ">=", "+", "-", "*", "/", "%", "rem", "^", "and", "or", "xor", "not", "√"]
+
+// A loop's body: `{…}`, `: words`, `do words`
+// Rust twin: statements.rs for_iterable_and_body_word, colon_body
+def loop_body(p) {
+	width = 0
+	if is_at(p.code, p.at, ':', p.n) { width = 1 }
+	if keyword_at(p, "do") { width = 2 }
+	if width == 0 { return atom(p) }
+	p.at = p.at + width
+	skip_spaces(p)
+	statement_words(p)
+}
+
+// The words up to the end of the statement, one expression: `print ord c` of `for c in s: print ord c`
+// Rust twin: statements.rs rest_of_statement, words_binding
+def statement_words(p) {
+	said = []
+	while true {
+		said = said + [expression(p, 0)]
+		skip_spaces(p)
+		if keyword_at(p, "else") or not starts_atom(p) { break }
+	}
+	if said.length == 1 { return said#1 }
+	phrase("", said)
+}
+
+def starts_atom(p) {
+	c = peek(p.code, p.at, p.n)
+	is_name_start(c) or is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{'
+}
 
 // `x`, `k, v` or `(k, v)`: the names a loop gives each item, else ø
 // Rust twin: statements.rs parse_loop_variable
