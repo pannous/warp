@@ -364,6 +364,11 @@ PASSED:
   ✓ control::test_match_binding_arm::bare_name_arm_binds_the_subject
   ✓ control::test_match_binding_arm::bare_name_unused_by_its_body_is_a_symbol_case
   ✓ control::test_match_binding_arm::variable_arm_compares
+  ✓ control::test_match_deep_conditions::alternatives_inside_maps
+  ✓ control::test_match_deep_conditions::comparisons_and_types_inside_maps
+  ✓ control::test_match_deep_conditions::conditions_inside_lists
+  ✓ control::test_match_deep_conditions::is_with_a_condition_inside_a_map
+  ✓ control::test_match_deep_conditions::nested_alternatives_bind_no_names
   ✓ control::test_match_else_line::else_arm_on_its_own_line
   ✓ control::test_match_else_line::else_branch_on_its_own_line_stays
   ✓ control::test_match_guards_and_finally::a_guard_binds_and_tests
@@ -3981,6 +3986,10 @@ PASSED:
   ✓ types::test_method_bodies::phrases_in_a_method
   ✓ types::test_method_bodies::units_in_a_method
   ✓ types::test_method_result_text::an_interpolated_method_result_uses_its_text
+  ✓ types::test_multi_word_class::a_class_of_several_words_is_its_kebab_name
+  ✓ types::test_multi_word_class::a_kebab_class_constructs
+  ✓ types::test_multi_word_class::a_phrase_slot_matches_the_class_as_a_whole
+  ✓ types::test_multi_word_class::the_words_stay_apart_without_the_class
   ✓ types::test_mutating_methods::a_block_method_changes_its_object_and_gives_a_value
   ✓ types::test_mutating_methods::a_method_changes_its_object_and_gives_a_value
   ✓ types::test_mutating_methods::a_method_changing_a_field_updates_the_variable
@@ -5262,4 +5271,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5257 passed, 0 failed, 5257 total tested
+12 ignored, 5266 passed, 0 failed, 5266 total tested
