@@ -121,7 +121,7 @@ fn download_release_asset(name: &str, version: &Version, artifact: &Path) -> Res
 	Err(failures.join("; "))
 }
 
-fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
 	let agent: ureq::Agent = ureq::Agent::config_builder()
 		.timeout_global(Some(DOWNLOAD_TIMEOUT))
 		.build()
@@ -136,7 +136,7 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Parallel processes each write their own staging file and rename it into place
-fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
 	let parent = path.parent().unwrap_or(Path::new("."));
 	std::fs::create_dir_all(parent).map_err(|failure| format!("{}: {failure}", parent.display()))?;
 	let staging = parent.join(format!(

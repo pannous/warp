@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **c65c6a241** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1 and c65c6a241), checked with
+- main commit **66dd216a9** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73 and 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change)), checked with
   /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline c65c6a241..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff c65c6a241 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
+The next sweep starts with `git log --oneline 66dd216a9..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 66dd216a9 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
 
 ## How
 
@@ -45,6 +45,16 @@ major corrections go to warp-interviewer, tiny fixes are made directly.
   (2026-10-13, wiki 0b4b33f and 4b2a2db) left none, apart from Footguns' detail limitations and hyperreals' prose.
 - Questions sent to warp-interviewer: «» quotes or group, bool.md numbers or bool type, constant binding or value,
   `reduce` decrement or fold, truthiness `== false` (data/docs_sync/audit_questions.md).
+
+## Pending cuts (decision cleanup-cuts, foreign-spellings, 2026-10-13)
+
+Decided, not cut yet; the features still work, so the pages stay until the cut lands, then:
+- scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part).
+- type-name parameters `fib int i`: wiki/=.md:11, Bad.md:51, type.md:59 → `fib(i:int)`.
+- generators/yield: wiki/trait.md, zig.md (count_to), keyword.md's yield row if Ruby's block yield goes too.
+- compile-time lambdas, natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
+  R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
+- reflection dot words → `a of b` ≡ `b.a`; traits as a thin alias of classes; ORM only `stored people: [Person]`.
 
 ## Not swept yet
 

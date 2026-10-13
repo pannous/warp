@@ -8,6 +8,8 @@ pub const IN_WORD: &str = "in";
 pub const MAP_WORD: &str = "map";
 pub const OF_WORD: &str = "of";
 pub const ON_WORD: &str = "on";
+pub const ONCE_WORD: &str = "once";
+pub const WHENEVER_WORD: &str = "whenever";
 pub const RETURN_WORD: &str = "return";
 pub const SUM_WORD: &str = "sum";
 

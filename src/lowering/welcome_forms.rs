@@ -11,6 +11,7 @@ use super::nodes::{call, children_rewritten, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
+use crate::words::{ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
 use crate::words::{MATCH_WORD, SWITCH_WORDS};
@@ -36,8 +37,6 @@ const WHEN_TOPIC: &str = "when";
 const WHEN_REASON: &str = "when is on, whenever, if or match by its shape; write the one meant";
 const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
-const ON_WORD: &str = "on";
-const WHENEVER_WORD: &str = "whenever";
 const IF_WORD: &str = "if";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
@@ -416,8 +415,7 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		(Some(subject), pattern) => key(subject.clone(), Op::Eq, pattern),
 		(None, pattern) => pattern,
 	};
-	let chain = arms
-		.into_iter()
+	arms.into_iter()
 		.rev()
 		.fold(None, |otherwise: Option<Node>, (patterns, value)| {
 			let condition = patterns
@@ -430,17 +428,8 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 				("VALUE", forms(value)),
 				("OTHERWISE", otherwise.unwrap_or(Node::Empty)),
 			];
-			let bindings = bindings
-				.into_iter()
-				.map(|(placeholder, node)| (placeholder.to_string(), node))
-				.collect();
-			Some(
-				crate::law::substitute(&crate::warp_parser::parse(template), &bindings)
-					.drop_meta()
-					.clone(),
-			)
-		});
-	chain
+			Some(super::nodes::filled(template, bindings))
+		})
 }
 
 /// `when click {…}` is `on click {…}`, `when x > 3 {…}` is `whenever x > 3 {…}` (card signals-shape, user 2026-10-08):

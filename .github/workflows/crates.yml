@@ -1,0 +1,58 @@
+# .github/workflows/crates.yml
+name: Crates
+
+# Prebuilt components for `use cargo <crate>` (src/cargo_crates.rs, notes/cargo_crates.md): builds warp, lets it build
+# every crate of CRATES as a component and uploads each as the asset <crate>.<version>.wasm of the prerelease
+# crates-<generation> (GENERATION matches src/cargo_crates.rs). warp downloads those, checked against the SHA-256
+# GitHub publishes, before building a crate itself. Add a crate: append it to CRATES.
+on:
+  push:
+    branches: [ main ]
+    paths: [ .github/workflows/crates.yml, src/cargo_crates.rs ]
+  schedule:
+  - cron: "17 4 * * 1" # weekly: new crate versions
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_OFFLINE: false # .cargo/config.toml builds offline (local registry); the runner has none
+  GENERATION: v3
+  CRATES: strsim regex semver hex crc32fast slug urlencoding unicode-segmentation base64 md5 adler humantime
+  WARP_BUILD_CRATES: 1
+  WARP_NO_WINDOW: 1
+
+permissions:
+  contents: write
+
+jobs:
+  crates:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-wasip2
+    - name: build warp
+      run: cargo build --release --locked --bin warp
+    - name: build the crates
+      run: |
+        failed=""
+        for crate in $CRATES; do
+          echo "use cargo $crate" > use.warp
+          target/release/warp use.warp || failed="$failed $crate"
+        done
+        [ -z "$failed" ] || echo "::warning::not built:$failed"
+    - name: upload
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE: crates-${{ env.GENERATION }}
+      run: |
+        gh release view "$RELEASE" >/dev/null 2>&1 || gh release create "$RELEASE" --prerelease --latest=false \
+          --title "use cargo: prebuilt crate components ($GENERATION)" \
+          --notes "WebAssembly components of crates.io crates for warp's \`use cargo <crate>\`, built by .github/workflows/crates.yml"
+        mkdir -p assets
+        for wasm in ~/.cache/warp/crates/components-$GENERATION/*.wasm; do
+          file=$(basename "$wasm")
+          cp "$wasm" "assets/${file/@/.}"
+        done
+        gh release upload "$RELEASE" assets/*.wasm --clobber

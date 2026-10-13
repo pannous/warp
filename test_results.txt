@@ -877,6 +877,7 @@ PASSED:
   ✓ ffi::header::tests::test_parse_header_file_math
   ✓ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
   ✓ ffi::test_cargo_crates::test_cargo_crate_free_functions
+  ✓ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
   ✓ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource
   ✓ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes
   ✓ ffi::test_cargo_crates::test_cargo_crate_type_functions_fields_and_display
@@ -2597,7 +2598,6 @@ PASSED:
   ✓ numbers::test_plus_minus_print::certainly_and_possibly_compare_the_whole_interval
   ✓ numbers::test_plus_minus_print::the_parts_of_an_interval
   ✓ numbers::test_plus_minus_units::a_plain_spread_counts_in_the_value_unit
-  ✓ numbers::test_plus_minus_units::a_spread_of_another_dimension_fails
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
   ✓ numbers::test_plus_minus_units::compile_time_tolerances_stay_at_compile_time
@@ -2625,7 +2625,6 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
-  ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
   ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
@@ -2775,12 +2774,9 @@ PASSED:
   ✓ numbers::test_units_compare::mixed_dimensions_are_a_loud_dimension_error
   ✓ numbers::test_units_compare::quantities_compare_in_the_finer_unit
   ✓ numbers::test_units_compare::scalar_division_keeps_the_unit_and_same_dimension_division_is_a_number
-  ✓ numbers::test_units_followup::test_descending_range_is_an_error
   ✓ numbers::test_units_followup::test_negative_tolerance_is_an_error
   ✓ numbers::test_units_followup::test_plus_minus_ascii_spelling
-  ✓ numbers::test_units_followup::test_range_with_a_unit
   ✓ numbers::test_units_followup::test_single_quantity_keeps_its_unit
-  ✓ numbers::test_units_followup::test_tolerance_in_a_unit
   ✓ numbers::test_units_followup::test_unit_sum_serializes_in_the_smallest_unit
   ✓ numbers::test_units_followup::test_value_with_tolerance_prints_back
   ✓ numbers::test_units_nospace::test_constant_quantities_show_glued_and_read_back
@@ -3333,6 +3329,9 @@ PASSED:
   ✓ programs::test_shader_builtins::a_word_for_the_previous_frame_hints_at_previous
   ✓ programs::test_shader_builtins::builtin_holes_are_left_to_the_host
   ✓ programs::test_shader_builtins::the_host_fills_the_builtin_holes
+  ✓ programs::test_shader_errors::a_shader_error_after_a_hole_counts_the_hole_as_written
+  ✓ programs::test_shader_errors::a_shader_error_the_browser_wrapped_is_placed_too
+  ✓ programs::test_shader_errors::a_wgsl_error_names_its_place_in_the_program
   ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
   ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
   ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
@@ -5382,4 +5381,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5377 passed, 0 failed, 5377 total tested
+13 ignored, 5376 passed, 0 failed, 5376 total tested

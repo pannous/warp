@@ -315,7 +315,7 @@ pub(crate) fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
 			None => format!("let {name} = {PARAMETER_CALL}"),
 			Some(kind) => format!("let {name}:{kind} = {SEGMENT_CALL} as {kind}"),
 		};
-		template(&value, [("pattern", text(pattern)), ("parameter_name", text(name))])
+		super::nodes::filled(&value, [("pattern", text(pattern)), ("parameter_name", text(name))])
 	});
 	bindings.chain(body.iter().cloned()).collect()
 }
@@ -332,7 +332,7 @@ fn patterns(routes: &[Route]) -> Node {
 /// The index of the first route whose pattern matches the path, else -1
 fn matching(routes: &[Route]) -> Vec<Node> {
 	let matches = routes.iter().enumerate().map(|(index, (pattern, _))| {
-		template(
+		super::nodes::filled(
 			MATCH_TEMPLATE,
 			[
 				("pattern", text(pattern)),
@@ -356,7 +356,7 @@ fn groups_fit(pattern: &str) -> Node {
 			let whole = format!("^(?:{group})$");
 			(
 				format!("fit_{index}"),
-				template(
+				super::nodes::filled(
 					GROUP_TEMPLATE,
 					[
 						("pattern", text(pattern)),
@@ -379,9 +379,9 @@ fn groups_fit(pattern: &str) -> Node {
 
 /// The value of the route page·route_index picks, else the not-found text
 fn choice(routes: &[Route]) -> Vec<Node> {
-	let index = template(INDEX_TEMPLATE, [("index_of_route", symbol(PAGE_ROUTE_INDEX))]);
+	let index = super::nodes::filled(INDEX_TEMPLATE, [("index_of_route", symbol(PAGE_ROUTE_INDEX))]);
 	let choices = (0..routes.len()).map(|index| {
-		template(
+		super::nodes::filled(
 			CHOICE_TEMPLATE,
 			[
 				("index", Node::int(index as i64)),
@@ -393,14 +393,4 @@ fn choice(routes: &[Route]) -> Vec<Node> {
 		.chain(choices)
 		.chain([crate::warp_parser::parse(NOT_FOUND_TEMPLATE)])
 		.collect()
-}
-
-fn template<const N: usize>(code: &str, bindings: [(&str, Node); N]) -> Node {
-	crate::law::substitute(
-		&crate::warp_parser::parse(code),
-		&bindings
-			.into_iter()
-			.map(|(name, value)| (name.to_string(), value))
-			.collect(),
-	)
 }

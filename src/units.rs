@@ -5,7 +5,7 @@
 //! A quantity is an amount times units to powers: `6 m²`, `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
 //! Anything else (floats, variables, functions) takes the normal path, where a unit word is an ordinary symbol.
 
-use crate::compile_time::{answer_of, fail, Stop};
+use crate::compile_time::{fail, Stop};
 use crate::extensions::numbers::Number;
 use crate::meta::DataValue;
 use crate::node::{error, Bracket, Node, Separator};
@@ -242,7 +242,7 @@ pub fn lower_unit_words(program: Node) -> Node {
 
 /// `60 mi/h as km/h` parses `(60 mi/h as km)/h`: the unit after `as` regrouped whole, as after `in`, when it is one
 fn with_whole_conversion_units(node: Node) -> Node {
-	let node = match node.map_children(with_whole_conversion_units) {
+	let node = match with_written_amount(node.map_children(with_whole_conversion_units)) {
 		Node::Key(conversion, op @ (Op::Div | Op::Mul), rest) => match conversion.drop_meta() {
 			Node::Key(quantity, Op::As, unit)
 				if unit_expression(&Node::Key(unit.clone(), op, rest.clone())).is_some() =>
@@ -254,6 +254,37 @@ fn with_whole_conversion_units(node: Node) -> Node {
 		other => other,
 	};
 	with_converted_last_operand(node)
+}
+
+/// A quantity as it may be written, in the form `amount unit` the units passes read: `1 mile` is `1 mi`,
+/// `3km+10m == 3010 meters` gives the unit to the last amount, `(23/18)m/s` (a fraction amount, as one shows) is
+/// `(23/18) * (m/s)`, and `6 m² as cm²` (parsed `(6 m² as cm)²`) converts to cm²
+fn with_written_amount(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => {
+			let (amount, unit) = (&items[0], &items[1]);
+			let short_name = target_unit(unit).map(|unit| Node::Symbol(unit.name.to_string()));
+			match (amount.drop_meta(), short_name) {
+				(Node::Key(..), Some(short_name)) => with_unit(amount, &short_name),
+				(_, Some(short_name)) => Node::List(vec![amount.clone(), short_name], Bracket::None, Separator::Space),
+				(Node::List(_, Bracket::Round, _), None) if unit_expression(unit).is_some() => Node::Key(
+					Box::new(amount.clone()),
+					Op::Mul,
+					Box::new(Node::List(vec![unit.clone()], Bracket::Round, Separator::None)),
+				),
+				_ => Node::List(items, Bracket::None, Separator::Space),
+			}
+		}
+		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing)
+			if matches!(nothing.drop_meta(), Node::Empty) && powered_conversion(&conversion, op).is_some() =>
+		{
+			let Node::Key(quantity, Op::As, unit) = conversion.drop_meta().clone() else {
+				unreachable!("a powered conversion is an `as`")
+			};
+			Node::Key(quantity, Op::As, Box::new(Node::Key(unit, op, nothing)))
+		}
+		other => other,
+	}
 }
 
 /// `"a: " + x as km` parses `("a: " + x) as km`: a text has no unit to convert, so `as` takes the operand after the
@@ -715,26 +746,6 @@ const TOLERANCE_ARITHMETIC: &str = "arithmetic on a value with tolerance or a ra
 const WHOLE_TOLERANCE: &str = "a tolerance counts whole numbers";
 const PLAIN_TOLERANCE: &str = "a tolerance applies to numbers and plain quantities";
 const RUN_TIME_TOLERANCE_ERRORS: [&str; 3] = [TOLERANCE_ARITHMETIC, WHOLE_TOLERANCE, PLAIN_TOLERANCE];
-
-/// The value of a program that uses units, None for any other program
-pub fn answer(program: &Node) -> Option<Node> {
-	shadowing(program, || answer_shadowed(program))
-}
-
-fn answer_shadowed(program: &Node) -> Option<Node> {
-	if !needs_quantities(program) {
-		return None;
-	}
-	answer_of(evaluate(program), |value| match value {
-		Value::Number(n) => Node::int(n),
-		Value::Bool(truth) => Node::from(truth),
-		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
-		Value::Quantity(quantity) if quantity.factors.is_empty() => quotient_node(&quantity.amount),
-		Value::Quantity(quantity) => Node::data(quantity),
-		Value::Tolerance(tolerance) => Node::data(tolerance),
-		Value::Range(range) => Node::data(range),
-	})
-}
 
 /// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
 /// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)

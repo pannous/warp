@@ -12,6 +12,7 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
+use super::listeners;
 use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
 use crate::declarations::word;
 use crate::lowering::{function_head, DefinitionForm};
@@ -19,8 +20,8 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
-use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
-use std::collections::{HashMap, HashSet};
+use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
+use std::collections::HashSet;
 
 /// `signal·set(s, v)`: store v in the signal s, then call its listeners
 const SET_FUNCTION: &str = "signal·set";
@@ -104,10 +105,7 @@ pub fn poll_shared(program: Node) -> Node {
 			// the loop's start polls again: the running flag keeps that inner check out
 			let each_write = format!("if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}", crate::host::SHARED_WRITES);
 			let body = with_value(&body, &subject);
-			checks.push(crate::law::substitute(
-				crate::warp_parser::parse(&each_write).drop_meta(),
-				&HashMap::from([("BODY".to_string(), body)]),
-			));
+			checks.push(super::nodes::filled(&each_write, [("BODY", body)]));
 			lowered.push(
 				crate::warp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES))
 					.drop_meta()
@@ -235,25 +233,10 @@ pub fn subscribe(program: Node) -> Node {
 /// `alarm = on change t {…}`, `alarm = whenever t > 30 {…}` (which arrives as `(alarm = (whenever t) > 30) {…}`): the
 /// name and the listener
 fn named_listener(statement: &Node) -> Option<(String, Node)> {
-	if let Node::Key(name, Op::Assign, listener) = statement.drop_meta() {
-		let Node::Symbol(name) = name.drop_meta() else {
-			return None;
-		};
-		return listener_parts(listener).map(|_| (name.clone(), listener.as_ref().clone()));
-	}
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let [head, body] = items.as_slice() else { return None };
-	let Node::Key(name, Op::Assign, condition) = head.drop_meta() else {
-		return None;
-	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
-	let (keyword, condition) = without_leading_word(condition)?;
-	let listener = Node::List(vec![keyword, condition, body.clone()], Bracket::None, Separator::Space);
-	listener_parts(&listener).map(|_| (name.clone(), listener))
+	let listener = listeners::read_named(statement, &[ON_WORD, ONCE_WORD, WHENEVER_WORD])?;
+	let unnamed = listener.unnamed();
+	listener_parts(&unnamed)?;
+	Some((listener.name?, unnamed))
 }
 
 /// `watch(s) := whenever s > 5 {…}` arrives as `(watch(s) := (whenever s) > 5) {…}`, its block a statement of its own:
@@ -267,10 +250,11 @@ fn with_function_listeners(node: Node) -> Node {
 	let Node::Key(function, Op::Define, value) = head.drop_meta() else {
 		return node;
 	};
-	let Some((keyword, condition)) = without_leading_word(value) else {
-		return node;
-	};
-	let listener = Node::List(vec![keyword, condition, body.clone()], Bracket::None, Separator::Space);
+	let listener = Node::List(
+		vec![value.as_ref().clone(), body.clone()],
+		Bracket::None,
+		Separator::Space,
+	);
 	if listener_parts(&listener).is_none() {
 		return node;
 	}
@@ -279,24 +263,6 @@ fn with_function_listeners(node: Node) -> Node {
 		Op::Define,
 		Box::new(Node::List(vec![listener], Bracket::Curly, Separator::Semicolon)),
 	)
-}
-
-/// `(whenever t) > 30` → `whenever`, `t > 30`: the word the leftmost operand starts with, and the rest
-fn without_leading_word(node: &Node) -> Option<(Node, Node)> {
-	match node.drop_meta() {
-		Node::Key(left, op, right) => {
-			without_leading_word(left).map(|(keyword, left)| (keyword, Node::Key(Box::new(left), *op, right.clone())))
-		}
-		Node::List(items, Bracket::None, separator) if items.len() >= 2 => {
-			let rest = if items.len() == 2 {
-				items[1].clone()
-			} else {
-				Node::List(items[1..].to_vec(), Bracket::None, separator.clone())
-			};
-			Some((items[0].clone(), rest))
-		}
-		_ => None,
-	}
 }
 
 /// The variables a listener watches: `on set x` and `on change x` the one, `whenever` and `once` those of the condition
@@ -1188,18 +1154,11 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 		(LISTENER_PLACEHOLDER, LISTENER_WORD),
 		(WITHOUT_PLACEHOLDER, WITHOUT_FUNCTION),
 	];
-	let bindings = names
-		.iter()
-		.map(|(placeholder, name)| (placeholder.to_string(), symbol(name)))
-		.chain(
-			nodes
-				.iter()
-				.map(|(placeholder, node)| (placeholder.to_string(), node.clone())),
-		)
-		.collect();
-	crate::law::substitute(&crate::warp_parser::parse(code), &bindings)
-		.drop_meta()
-		.clone()
+	let names = names.iter().map(|(placeholder, name)| (*placeholder, symbol(name)));
+	super::nodes::filled(
+		code,
+		names.chain(nodes.iter().map(|(placeholder, node)| (*placeholder, node.clone()))),
+	)
 }
 
 /// `f(a, b) := body`, `def f(a, b) {body}`, `def (f a b) {body}`

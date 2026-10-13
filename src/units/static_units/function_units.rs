@@ -387,11 +387,14 @@ impl Inference {
 			Node::Text(_) | Node::Char(_) => false,
 			_ => true,
 		};
-		let is_amount_and_unit = items.len() == 2
-			&& bracket == Bracket::None
-			&& separator == Separator::Space
-			&& is_amount(&items[0])
-			&& matches!(items[1].drop_meta(), Node::Symbol(name) if unit_named(name).is_some() && !self.variables.contains_key(name));
+		if let ([amount, unit], Bracket::None, Separator::Space) = (items.as_slice(), &bracket, &separator) {
+			if let Some(unit) = self.unit_word(unit).filter(|_| is_amount(amount)) {
+				let outer = std::mem::replace(&mut self.at_top, false);
+				let inferred = self.amount_in(amount.clone(), unit);
+				self.at_top = outer;
+				return inferred;
+			}
+		}
 		let is_host_call = bracket == Bracket::Round
 			&& matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HOST_CALL);
 		// `(r.distance)`, `(a + b)`: parentheses around one expression group it (a lone word `(f)` may be a call)
@@ -435,11 +438,6 @@ impl Inference {
 			let (item, signature) = inferred?;
 			lowered.push(item);
 			signatures.push(signature);
-		}
-		if is_amount_and_unit {
-			let signature = combined(&signatures[0], &signatures[1], 1);
-			let product = Node::Key(Box::new(lowered[0].clone()), Op::Mul, Box::new(lowered[1].clone()));
-			return Ok((product, signature));
 		}
 		let in_host_call = std::mem::replace(&mut self.in_host_call, outer_host_call);
 		let signature = if statements || grouping {
