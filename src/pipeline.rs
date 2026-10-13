@@ -300,6 +300,8 @@ pub struct CompiledModule {
 const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
+	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
+	crate::lowering::times_phrases::lower,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::shader_holes::lower,
 	crate::analyzer::lower_inline_unions,

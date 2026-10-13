@@ -384,49 +384,30 @@ impl WarpParser {
 		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after)
 	}
 
+	/// `n times {body}`, `n times: body`, `n times [x]`, `n times "ab"`: the phrase [n times operand] as written, which
+	/// lowering/times_phrases.rs makes a loop, a filled list or a repeated text
 	pub(super) fn parse_times_loop(&mut self, count: Node) -> Node {
 		self.skip_spaces();
-		let body = match self.current_char() {
-			'{' => self.parse_atom(),
+		let operand = match self.current_char() {
+			'{' | '[' => self.parse_atom(),
 			':' => {
 				self.advance();
-				self.with_equals_comparing(false, |parser| parser.parse_expr(0))
+				super::statements::as_block(self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
 			}
-			'[' => {
-				let list = self.parse_atom();
-				return crate::analyzer::filled_list(count, &list)
-					.unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
-			}
-			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
-			// `3 times 4`: numbers multiply (list_emitter.rs emit_text_times)
 			quote_or_letter
 				if matches!(quote_or_letter, '"' | '\'')
 					|| self.is_identifier_start(0)
 					|| quote_or_letter.is_ascii_digit() =>
 			{
-				return call(TEXT_TIMES, vec![count, self.parse_atom()])
+				self.parse_atom()
 			}
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
-		self.times_loops += 1;
-		let counter = Symbol(format!("{TIMES_WORD}·{}", self.times_loops));
-		// the count is evaluated once, before the first round (user decision #22): the body may change what it reads
-		let (count_binding, count) = match count.drop_meta() {
-			Node::Number(_) => (None, count),
-			_ => {
-				let held = Symbol(format!("{TIMES_WORD}·count·{}", self.times_loops));
-				(
-					Some(Node::Key(Box::new(held.clone()), Op::Assign, Box::new(count))),
-					held,
-				)
-			}
-		};
-		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		let rounds = for_in_loop(counter, zero_to_count, body);
-		match count_binding {
-			Some(binding) => Node::List(vec![binding, rounds], Bracket::Round, Separator::Semicolon),
-			None => rounds,
-		}
+		Node::List(
+			vec![count, Symbol(TIMES_WORD.to_string()), operand],
+			Bracket::None,
+			Separator::Space,
+		)
 	}
 
 	pub(super) fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
