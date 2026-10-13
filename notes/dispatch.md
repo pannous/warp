@@ -16,6 +16,8 @@ render(t):pdf  := pdf("%PDF " + t)      // the result type written after the hea
 render(t):docx := docx("<w:t>" + t)
 ```
 The result type is the written one, else the type of the instance the body constructs (`render(t) := pdf(…)`).
+The English phrase names it after a final `as` (card render-as): `to render text as pdf: …` is `render(text) as pdf := …`
+(warp_parser atoms.rs to_result_type); an `as` followed by more words stays a parameter word.
 Definitions of one name whose result types are not all known stay what they were (the last one wins).
 
 ## The expected type of a call
@@ -26,6 +28,8 @@ Definitions of one name whose result types are not all known stay what they were
 | `save(render "x")` with `save(d:docx)` | docx (the parameter's declared type) |
 | anything else                   | none          |
 
+A function defined once with a known result type takes `render "x" as pdf` and `(render "x") as pdf` as naming that
+result, not as converting (only the spaced call: `square(2.7 as int)` still converts its argument).
 A call with an expected type that one overload returns calls it (`render·pdf("x")`; the `as pdf` is then redundant and
 dropped). Otherwise the first-declared overload is taken with the got-it warning (diagnostic::ask, Fallback::Warning,
 topic `return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: render "x" as pdf`.
