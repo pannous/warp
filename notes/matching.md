@@ -161,8 +161,6 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
    and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`
    as a group: `flattened` splices them. Tests tests/control/test_tree_replace.rs, probe probes/matching/tree_replace.warp.
-6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
-   Open: `tree replace p with q` (rebuilding maps at run time), `found = [[…]] find P` parses as an assignment first.
 6. Schemas: `json(text) is Config` with `pattern Config = {port: int, host: text, debug?: bool}`. Done (card schemas):
    a map pattern whose field is a type word or optional is a pattern for `is` (switch.rs has_open_part; in list
    patterns type words still compare as values). `debug?: bool` parses as the elvis `debug ? debug : bool`, recognised
