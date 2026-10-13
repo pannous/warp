@@ -121,6 +121,14 @@ macro_rules! requires {
 	};
 }
 
+/// The paint window's input is one per process (warp_runtime::system_values): a test that tells it holds this until it
+/// has read back what it told, so no other test's pointer or click comes between
+#[cfg(feature = "native")]
+pub fn window_input_held() -> std::sync::MutexGuard<'static, ()> {
+	static WINDOW_INPUT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+	WINDOW_INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Written to the stderr handle itself: libtest captures `eprintln!` of passing tests, which would hide the skip
 pub fn announce_skip(resource: &str, test_module: &str) {
 	use std::io::Write;

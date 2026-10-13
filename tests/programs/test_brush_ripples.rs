@@ -5,6 +5,7 @@ use warp_runtime::system_values::{tell_window_input, window_input};
 
 #[test]
 fn a_click_starts_the_brushs_ripple_where_it_was() {
+	let _window = crate::common::window_input_held();
 	let key = window_input()[3];
 	for [x, y, down] in [[0.0, 0.0, 0.0], [300.0, 200.0, 1.0], [300.0, 200.0, 0.0]] {
 		tell_window_input([x, y, down, key]);
