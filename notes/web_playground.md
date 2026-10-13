@@ -183,6 +183,10 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   site's startSiteWorker waits the same way (site-thread.js siteStarts). Probe: probes/firefox_worker/slow_server.py
   (no isolation headers, worker.js 1.5 s late, `-v` logs each request): before, worker.js was asked ahead of the
   reload; after, behind it, 12 of 12 Firefox page loads clean.
+- The same error from the tour itself (card firefox-tour, 7 failed deploys on 2026-10-13): the ?report check left
+  each page 0.6 s after it opened, while the program's worker still had its task Workers loading one after another
+  (host-tasks.js prepareTaskPool); Firefox logged the aborted task-worker.js loads. A check that leaves a page runs
+  a program on it first: a run waits for the worker and its task pool (taskPoolReady).
 - Gate: `test_in_browser.py --examples [--site D | --url U]` runs the tour and every sample and fails on any console
   error/warning/failed request of the page and its Workers. agent-browser's `console`/`network` see only the page, so
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's
