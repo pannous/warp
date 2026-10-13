@@ -38,6 +38,10 @@ const PAGE_TYPE: &str = "text/html";
 const SEE_OTHER: u16 = 303;
 const HOME: &str = "/";
 const PATH_SEPARATOR: char = '/';
+/// Reason phrases tiny_http lacks: it answers these "Unknown" (card status-reason); any other code it lacks goes out
+/// without a reason, which HTTP allows
+const REASONS_TINY_HTTP_LACKS: [(u16, &str); 3] = [(103, "Early Hints"), (418, "I'm a teapot"), (425, "Too Early")];
+const UNKNOWN_REASON: &str = "Unknown";
 
 thread_local! {
 	/// How many requests this thread's next serve answers before it returns: 0 serves on (tests stop it so)
@@ -374,7 +378,7 @@ pub fn serve(
 				},
 			),
 		};
-		let _ = request.respond(response);
+		respond(request, response);
 		served += 1;
 		if limit > 0 && served >= limit {
 			break;
@@ -526,4 +530,30 @@ fn entry_value<'map>(map: &'map Node, key: &str) -> Option<&'map Node> {
 		Node::Key(name, _, value) if name.name() == key => Some(value.as_ref()),
 		_ => None,
 	})
+}
+
+/// Send the answer; a status tiny_http knows no reason for is written by hand with its real reason phrase
+fn respond(request: tiny_http::Request, response: tiny_http::Response<std::io::Cursor<Vec<u8>>>) {
+	use std::io::Write;
+	let status = response.status_code();
+	if status.default_reason_phrase() != UNKNOWN_REASON {
+		let _ = request.respond(response);
+		return;
+	}
+	let reason = REASONS_TINY_HTTP_LACKS
+		.iter()
+		.find(|(code, _)| *code == status.0)
+		.map_or("", |(_, reason)| reason);
+	let version = request.http_version().clone();
+	let mut head = format!("HTTP/{}.{} {} {reason}\r\n", version.0, version.1, status.0);
+	for header in response.headers() {
+		head += &format!("{}: {}\r\n", header.field, header.value);
+	}
+	let body = response.into_reader().into_inner();
+	head += &format!("Content-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+	let mut writer = request.into_writer();
+	let _ = writer
+		.write_all(head.as_bytes())
+		.and_then(|_| writer.write_all(&body))
+		.and_then(|_| writer.flush());
 }
