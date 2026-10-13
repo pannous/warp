@@ -8,7 +8,7 @@
 use super::nodes::{call, children_rewritten, if_then, key, Counter};
 use super::words::COUNT_WORD;
 use crate::library_words::SLICE;
-use crate::node::{text, Bracket, Node, Separator};
+use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::tuples::STARRED;
 
@@ -248,6 +248,10 @@ fn case_test(subject: &Node, case: Case) -> (Node, Node) {
 		}
 	}
 	let (pattern, guard) = split_guard(&case.key);
+	let alternatives = alternatives_of(&pattern);
+	if alternatives.len() > 1 {
+		return alternatives_test(subject, &alternatives, guard, case.body);
+	}
 	if guard.is_none() && !matches!(pattern.drop_meta(), Node::List(_, Bracket::Square, _)) {
 		return (key(subject.clone(), Op::Eq, case.key), case.body);
 	}
@@ -256,16 +260,53 @@ fn case_test(subject: &Node, case: Case) -> (Node, Node) {
 	if let Some(guard) = guard {
 		tests.push(sequence([bindings.clone(), vec![guard]].concat()));
 	}
-	let test = tests
-		.into_iter()
-		.reduce(|all, test| key(all, Op::And, test))
-		.unwrap_or(Node::True);
+	let test = joined(tests, Op::And);
 	let body = if bindings.is_empty() {
 		case.body
 	} else {
 		sequence([bindings, vec![case.body]].concat())
 	};
 	(test, body)
+}
+
+/// A case key is a pattern, so `1 | 2` and `1 or 2` (both parsed as or) are its alternatives, never the logical value;
+/// a computed comparison goes in a guard (user, matching roadmap)
+fn alternatives_of(pattern: &Node) -> Vec<Node> {
+	match pattern.drop_meta() {
+		Node::Key(left, Op::Or, right) => [alternatives_of(left), alternatives_of(right)].concat(),
+		_ => vec![pattern.clone()],
+	}
+}
+
+/// The case matches when one alternative does; a list alternative tests its shape, any other compares the subject
+fn alternatives_test(subject: &Node, alternatives: &[Node], guard: Option<Node>, body: Node) -> (Node, Node) {
+	let mut matches = vec![];
+	for alternative in alternatives {
+		if !matches!(alternative.drop_meta(), Node::List(_, Bracket::Square, _)) {
+			matches.push(key(subject.clone(), Op::Eq, alternative.clone()));
+			continue;
+		}
+		let (mut tests, mut bindings) = (vec![], vec![]);
+		pattern_tests(alternative, subject.clone(), &mut tests, &mut bindings);
+		if !bindings.is_empty() {
+			let message = "alternatives bind no names: write one case per pattern, or `_` for an item";
+			return (error(message), body);
+		}
+		matches.push(joined(tests, Op::And));
+	}
+	let test = joined(matches, Op::Or);
+	match guard {
+		Some(guard) => (key(test, Op::And, guard), body),
+		None => (test, body),
+	}
+}
+
+/// The tests joined by `and` (true without any) or by `or`
+fn joined(tests: Vec<Node>, op: Op) -> Node {
+	tests
+		.into_iter()
+		.reduce(|all, test| key(all, op, test))
+		.unwrap_or(Node::True)
 }
 
 /// `n if n < 0` (parsed as `if n < 0 then n`): the pattern n and the guard `n < 0`; any other key has no guard
@@ -321,7 +362,30 @@ fn cases_of(block: &Node) -> Option<Vec<Case>> {
 		}
 		_ => return None,
 	};
-	items.iter().map(case_of).collect()
+	// `1, 2 => …` parses as the items 1 and `2 => …`: the plain items before a case are its alternatives
+	let mut cases = vec![];
+	let mut alternatives: Vec<Node> = vec![];
+	for item in items.iter().flat_map(comma_items) {
+		match case_of(&item) {
+			Some(case) => {
+				let key = alternatives
+					.drain(..)
+					.rev()
+					.fold(case.key, |later, earlier| key(earlier, Op::Or, later));
+				cases.push(Case { key, body: case.body });
+			}
+			None => alternatives.push(item),
+		}
+	}
+	alternatives.is_empty().then_some(cases)
+}
+
+/// The items of a comma list inside a case block, else the item itself
+fn comma_items(item: &Node) -> Vec<Node> {
+	match item.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Colon) => items.clone(),
+		_ => vec![item.clone()],
+	}
 }
 
 /// `1: 10` is a Colon key; `1: x=5` parses as `(1:x)=5`, so the colon is found down the left spine of the assignment

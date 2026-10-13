@@ -390,20 +390,44 @@ fn colon_cases(block: &Node) -> Node {
 	let Node::List(cases, Bracket::Curly, separator) = block.drop_meta() else {
 		return block.clone();
 	};
-	let cases = cases.iter().map(|case| match case.drop_meta() {
-		// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
-		Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if word.is_symbol(CASE_WORD)) => {
-			let Node::Key(_, _, member) = label.drop_meta() else { unreachable!("guarded") };
-			Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())), Op::Colon, body.clone())
+	Node::List(
+		cases.iter().map(colon_case).collect(),
+		Bracket::Curly,
+		separator.clone(),
+	)
+}
+
+fn colon_case(case: &Node) -> Node {
+	match case.drop_meta() {
+		// `1, 2 => …`: the alternatives and the case
+		Node::List(items, Bracket::None, Separator::Colon) => {
+			Node::List(items.iter().map(colon_case).collect(), Bracket::None, Separator::Colon)
 		}
-		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => words[1].clone(),
+		// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
+		Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if word.is_symbol(CASE_WORD)) =>
+		{
+			let Node::Key(_, _, member) = label.drop_meta() else {
+				unreachable!("guarded")
+			};
+			Node::Key(
+				Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())),
+				Op::Colon,
+				body.clone(),
+			)
+		}
+		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => {
+			words[1].clone()
+		}
 		Node::Key(pattern, Op::FatArrow, body) => {
-			let pattern = if pattern.is_symbol(WILDCARD) { symbol(DEFAULT_CASE) } else { pattern.as_ref().clone() };
+			let pattern = if pattern.is_symbol(WILDCARD) {
+				symbol(DEFAULT_CASE)
+			} else {
+				pattern.as_ref().clone()
+			};
 			Node::Key(Box::new(pattern), Op::Colon, body.clone())
 		}
 		_ => case.clone(),
-	});
-	Node::List(cases.collect(), Bracket::Curly, separator.clone())
+	}
 }
 
 /// Kotlin's `when (x) { 1, 2 -> a; is Circle -> b; else -> c }` (or `when { x > 0 -> a … }` without a subject): the

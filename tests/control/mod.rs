@@ -103,6 +103,7 @@ mod test_loop_value;
 mod test_loop_value_at_run_time;
 mod test_loops_in_functions;
 mod test_many_tasks;
+mod test_match_alternatives;
 mod test_match_guards_and_finally;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
