@@ -1,8 +1,8 @@
-//! Matching by type name (D5, notes/matching.md): known type words in a definition head name typed parameters.
-//! `fib int i = …` → `fib(i:int) := …`, `fibonacci number = …` → `fibonacci(number:number) := …`,
-//! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
+//! Matching by type name (D5, notes/matching.md): known type words in the `to` phrase `to square a number:` name typed
+//! parameters (`parameter_slots`). The spaced head `fib int i = …` is gone (decision cleanup-cuts): `fib(i:int) := …`.
+//! Also declared result types (`square(x) -> int`) and C-style declarations (`int age = 30`).
 
-use super::nodes::{call, is_block, is_call_head, key, spaced_statement};
+use super::nodes::{is_block, is_call_head, key};
 use crate::analyzer::type_word_kind;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -194,27 +194,6 @@ fn numbered_type_reads(body: &Node, parameters: &[Node]) -> Node {
 
 pub fn uses_it(node: &Node) -> bool {
 	node.mentions(IT)
-}
-
-/// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
-/// word; None for `f x = …` without one, which keeps its old meaning (each word a parameter)
-pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node>, Node), String>> {
-	words
-		.iter()
-		.any(|word| is_type_word(word))
-		.then(|| parameter_slots(words, body, &is_type_word))
-}
-
-/// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
-fn spaced_definition(items: &[Node]) -> Option<Node> {
-	let (name, words, body) = spaced_statement(items)?;
-	let name = name.symbol_name().filter(|name| names_a_function(name))?;
-	let (parameters, body) = match spaced_parameters(&words, body)? {
-		Ok(slots) => slots,
-		Err(message) => return Some(crate::node::error(&message)),
-	};
-	let head = call(name, parameters);
-	Some(key(head, Op::Define, body))
 }
 
 /// A function head `name(params)`, as a call
@@ -428,9 +407,6 @@ pub fn lower(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [type_name, definition] if typed_return(type_name, definition).is_some()) => {
 			typed_return(&items[0], &items[1]).expect("guarded")
-		}
-		Node::List(items, Bracket::None, Separator::Space) if spaced_definition(&items).is_some() => {
-			spaced_definition(&items).expect("guarded")
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta {

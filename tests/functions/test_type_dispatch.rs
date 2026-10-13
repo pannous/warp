@@ -6,6 +6,7 @@ use crate::is;
 const FOO: &str = "foo of int = it+it; foo of float = it/2.0; ";
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `foo of int = …` no longer defines foo(it:int)"]
 fn test_type_name_variants_dispatch_by_argument() {
 	is!(&format!("{FOO}foo 3"), 6);
 	is!(&format!("{FOO}foo 3.0"), 1.5);
@@ -15,6 +16,7 @@ fn test_type_name_variants_dispatch_by_argument() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `fib int i = …` no longer defines fib(i:int)"]
 fn test_typed_parameter_variants_dispatch_by_argument() {
 	is!("foo(x:int):=x+x; foo(x:text):=x+\"!\"; foo 3", 6);
 	is!("foo(x:int):=x+x; foo(x:text):=x+\"!\"; foo \"a\"", "a!");
