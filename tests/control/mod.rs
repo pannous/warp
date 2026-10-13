@@ -149,6 +149,7 @@ mod test_shared_signals;
 mod test_shared_values;
 mod test_signal_fields;
 mod test_signal_in_loop;
+mod test_on_set_value; // card on-set-value
 mod test_signal_lists;
 mod test_signal_reflection;
 mod test_signal_values;
