@@ -1,0 +1,6 @@
+first = [view_width, view_height]
+3 times {
+	paint(int[view_width * view_height], view_width, view_height)
+	sleep 100ms
+}
+[first, [view_width, view_height]]
