@@ -49,7 +49,7 @@ const ADAPTER_NEEDS: [&str; 5] = [
 
 /// Does the program compile as a component crossing the boundary: exporting or importing a function
 fn crosses_the_boundary() -> bool {
-	!crate::pipeline::component_exports().is_empty() || !crate::pipeline::component_imports().is_empty()
+	!super::config::component_exports().is_empty() || !super::config::component_imports().is_empty()
 }
 
 /// The runtime functions a component's adapters and import calls need, when it has any
@@ -61,7 +61,7 @@ pub(super) fn add_dependencies(required: &mut std::collections::HashSet<&'static
 
 /// The function the component being compiled imports under `name` (`host.time`)
 fn imported(name: &str) -> Option<Signature> {
-	crate::pipeline::component_imports()
+	super::config::component_imports()
 		.into_iter()
 		.find(|(interface, function)| import_name(interface, &function.name) == name)
 		.map(|(_, function)| function)
@@ -83,7 +83,7 @@ pub(crate) fn imported_kind(name: &str) -> Option<Kind> {
 /// length, a text result a return area whose address is the last parameter
 pub(crate) fn imported_signatures() -> Vec<(String, FfiSignature)> {
 	let leaked = |name: &str| -> &'static str { Box::leak(name.to_string().into_boxed_str()) };
-	crate::pipeline::component_imports()
+	super::config::component_imports()
 		.into_iter()
 		.map(|(interface, function)| {
 			let mut params = vec![];
@@ -124,7 +124,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_text_heap_global();
 		self.emit_component_realloc();
-		for (interface, function) in crate::pipeline::component_exports() {
+		for (interface, function) in super::config::component_exports() {
 			if let Err(failure) = self.emit_adapter(&interface, &function) {
 				self.type_errors.push(failure);
 			}

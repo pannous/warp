@@ -425,3 +425,14 @@ fn test_hints_are_off_when_the_mode_is_off() {
 	set_hint_mode(HintMode::Always);
 	assert_eq!(hints, vec![]);
 }
+
+/// card two-ints: `&` and `|` stay the logical and/or (decided, D6), but beside a whole-number mask (not 0 or 1) the
+/// hint names the bit word the writer meant, not `and`/`or`: `n & 127` is 127 whenever n is truthy
+#[test]
+fn a_mask_beside_and_or_hints_the_bit_word() {
+	expect_hint("n = 300; n & 127", "n & 127", "bit_and(n, 127)", "1:12");
+	expect_hint("n = 300; n | 128", "n | 128", "bit_or(n, 128)", "1:12");
+	expect_hint("n = 300; 127 & n", "127 & n", "bit_and(127, n)", "1:14");
+	expect_hint("1 & 1", "&", "and", "1:3");
+	expect_hint("x = 1; x | 0", "|", "or", "1:10");
+}

@@ -241,7 +241,7 @@ pub struct WasmGcEmitter {
 	names: NameSection,
 	/// main's index, named in the name section (a trap's backtrace shows `main`, not `<wasm function N>`)
 	main_index: Option<u32>,
-	/// the address of the items of `print(value)` that ends main when the pipeline added it (pipeline::prints_result)
+	/// the address of the items of `print(value)` that ends main when the pipeline added it (CompileMode::prints_result)
 	result_print: usize,
 	/// the module declares its own memory (not imported), sized by its texts when the module is finished
 	owns_memory: bool,
@@ -961,7 +961,7 @@ impl WasmGcEmitter {
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
-		self.result_print = if crate::pipeline::prints_result() {
+		self.result_print = if config::compile_mode().prints_result {
 			last_statement_items(node)
 		} else {
 			0
@@ -1017,7 +1017,7 @@ impl WasmGcEmitter {
 		self.exports.export("main", ExportKind::Func, self.next_func_idx);
 		self.main_index = Some(self.next_func_idx);
 		self.next_func_idx += 1;
-		if crate::pipeline::is_for_wagi() {
+		if config::compile_mode().for_wagi {
 			self.emit_wagi_start();
 		}
 	}

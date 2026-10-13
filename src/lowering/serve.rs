@@ -70,7 +70,7 @@ type Route = (String, Node, Node);
 
 pub fn lower(program: Node) -> Node {
 	let program = with_route_data(program);
-	if crate::pipeline::is_for_a_page() {
+	if crate::pipeline::compile_mode().for_a_page {
 		return without_serving(program);
 	}
 	let port = crate::pipeline::serving_port();
@@ -168,7 +168,7 @@ fn is_serving_statement(statement: &Node) -> bool {
 /// each function the route calling it, `square(n) := n*n` answering /square/3 with 9 (an untyped path parameter is a
 /// number when it is digits, lib/router.warp). A program of functions only lists their routes at /
 pub fn with_default_routes(program: Node) -> Node {
-	if !crate::pipeline::is_for_hosting() {
+	if !crate::pipeline::compile_mode().for_hosting {
 		return program;
 	}
 	let (mut statements, separator) = match program.drop_meta() {
@@ -327,7 +327,7 @@ fn with_route_data(program: Node) -> Node {
 		.unwrap_or(lowered.len());
 	lowered.splice(first_route..first_route, data_functions);
 	// the shipped page asks the server, so the server data's definitions stay on the server
-	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
+	if crate::pipeline::compile_mode().for_a_page && !crate::pipeline::compile_mode().prerendering {
 		lowered.retain(|statement| !changes_server_data_only(statement, &reads_server_data));
 		let page_reads = |name: &String| {
 			lowered
@@ -723,7 +723,7 @@ fn with_local_routes(program: Node) -> Node {
 		"{PAGE_SUBMITTED}(request:any) := {{\n{}\n{unanswered}\n}}",
 		answers.join("\n")
 	)));
-	if crate::pipeline::is_for_wagi() {
+	if crate::pipeline::compile_mode().for_wagi {
 		statements.push(parse_named(WAGI_ANSWER));
 	}
 	// where the first route stands: a page route written last stays the program's value
@@ -741,7 +741,7 @@ fn route_function(name: &str, body: Node) -> Node {
 /// In a route's body `header "name" "value"` and `status 418` are response_header calls, which the route's HTTP answer
 /// carries (card web-route-header; `status` is the CGI header Status); `header{…}` stays the markup tag
 fn with_answer_headers(node: Node) -> Node {
-	let setter = match crate::pipeline::is_for_wagi() {
+	let setter = match crate::pipeline::compile_mode().for_wagi {
 		true => WAGI_HEADER,
 		false => crate::host::RESPONSE_HEADER,
 	};
@@ -796,7 +796,7 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 		.collect();
 	let calls = server_calls(&page_code, servers);
 	// a page calling no server function needs none of them, prerendered or not
-	let prerendering = crate::pipeline::is_prerendering() && !calls.is_empty();
+	let prerendering = crate::pipeline::compile_mode().prerendering && !calls.is_empty();
 	let main_variables = crate::event_signals::main_level_variables(&page_code);
 	let functions: HashSet<String> = statements
 		.iter()

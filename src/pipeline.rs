@@ -118,42 +118,86 @@ pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
 
 /// `run` with the program granted only `granted`
 fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
-	let before = GRANTED.with(|current| current.replace(granted));
-	let result = run();
-	GRANTED.with(|current| current.set(before));
-	result
+	crate::util::scoped(&GRANTED, granted, run)
+}
+
+/// What the program compiled on this thread is compiled for: set by the `for_*` wrappers around a compile, read by the
+/// lowering passes and (through wasm_emitter/config.rs) the emitter
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CompileMode {
+	/// for a page (`warp build --site`), where page events happen
+	pub for_a_page: bool,
+	/// for `warp dev`, whose page keeps the program's state across reloads
+	pub for_dev: bool,
+	/// a program that renders its own markup (rendering_itself)
+	pub rendering_itself: bool,
+	/// for WAGI (`warp build --wagi`): its routes answer the one request in its environment
+	pub for_wagi: bool,
+	/// the program ends in the print of its value that compile_printing_result added: that print shows nothing for ø (a
+	/// loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's own prints ø
+	pub prints_result: bool,
+	/// the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
+	pub prerendering: bool,
+	/// a module for any host (`warp compile --wasm`): a browser's host reads its values too
+	pub for_any_host: bool,
+	/// hosted (`warp deploy`): a program without routes gets them (lowering/serve.rs with_default_routes)
+	pub for_hosting: bool,
+	/// it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
+	pub for_tests: bool,
+}
+
+impl CompileMode {
+	/// a plain run: none of the flags
+	pub const PLAIN: CompileMode = CompileMode {
+		for_a_page: false,
+		for_dev: false,
+		rendering_itself: false,
+		for_wagi: false,
+		prints_result: false,
+		prerendering: false,
+		for_any_host: false,
+		for_hosting: false,
+		for_tests: false,
+	};
+
+	/// Whether the program exports its renderer: a page's, or one rendering itself
+	pub fn renders_itself(&self) -> bool {
+		self.for_a_page || self.rendering_itself
+	}
 }
 
 thread_local! {
-	/// whether the program compiled on this thread is for a page (`warp build --site`), where page events happen
-	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
-	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it is for WAGI (`warp build --wagi`): its routes answer the one request in its environment
-	static FOR_WAGI: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether the program compiled now ends in the print of its value that compile_printing_result added
-	static PRINTS_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
-	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	static COMPILE_MODE: std::cell::Cell<CompileMode> = const { std::cell::Cell::new(CompileMode::PLAIN) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
 	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
 	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
-	/// whether it is a module for any host (`warp compile --wasm`): a browser's host reads its values too
-	static FOR_ANY_HOST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it is hosted (`warp deploy`): a program without routes gets them (lowering/serve.rs with_default_routes)
-	static FOR_HOSTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
-	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// `run` with `flag` set on this thread
-fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run: impl FnOnce() -> T) -> T {
-	let before = flag.with(|set| set.replace(true));
-	let result = run();
-	flag.with(|set| set.set(before));
-	result
+/// What the program compiled now is compiled for
+pub fn compile_mode() -> CompileMode {
+	COMPILE_MODE.with(std::cell::Cell::get)
+}
+
+fn set_mode_flag(flag: fn(&mut CompileMode) -> &mut bool, value: bool) -> bool {
+	COMPILE_MODE.with(|current| {
+		let mut mode = current.get();
+		let before = std::mem::replace(flag(&mut mode), value);
+		current.set(mode);
+		before
+	})
+}
+
+/// `run` with one flag of the compile mode set, then that flag as it was (the others keep what `run` set)
+fn with_flag<T>(flag: fn(&mut CompileMode) -> &mut bool, run: impl FnOnce() -> T) -> T {
+	struct Restore(fn(&mut CompileMode) -> &mut bool, bool);
+	impl Drop for Restore {
+		fn drop(&mut self) {
+			set_mode_flag(self.0, self.1);
+		}
+	}
+	let _restore = Restore(flag, set_mode_flag(flag, true));
+	run()
 }
 
 thread_local! {
@@ -164,10 +208,7 @@ thread_local! {
 /// `run` compiling a program as a component exporting and importing `functions`: the emitter adds the canonical-ABI
 /// adapters of the exports and imports the imports from the core modules the world names
 pub fn for_a_component<T>(functions: crate::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
-	let before = COMPONENT_FUNCTIONS.with(|current| current.replace(functions));
-	let result = run();
-	COMPONENT_FUNCTIONS.with(|current| *current.borrow_mut() = before);
-	result
+	crate::util::scoped(&COMPONENT_FUNCTIONS, functions, run)
 }
 
 /// The functions the component being compiled exports, none for a program
@@ -180,71 +221,45 @@ pub fn component_imports() -> Vec<(String, crate::component_worlds::Signature)> 
 	COMPONENT_FUNCTIONS.with(|current| current.borrow().imports.clone())
 }
 
-/// `run` compiling a program for a page: its page event handlers are expected, not warned about
+/// `run` compiling a program for a page: its page event handlers are expected, not warned about; it exports the
+/// reflection getters the page's host reads values with
 pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_A_PAGE, run)
+	with_flag(|mode| &mut mode.for_a_page, run)
 }
 
 /// `run` compiling a program for WAGI (Spin, Akamai Functions): lowering/serve.rs ends it in the answer of its routes
 /// to the request (lib/wagi.warp), and it exports `_start`
 pub fn for_wagi<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_WAGI, run)
-}
-
-pub fn is_for_wagi() -> bool {
-	FOR_WAGI.with(|wagi| wagi.get())
-}
-
-/// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
-pub fn is_for_a_page() -> bool {
-	FOR_A_PAGE.with(|page| page.get())
+	with_flag(|mode| &mut mode.for_wagi, run)
 }
 
 /// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
 /// field access (the browser) reads values with, so a browser program importing it copies values in and out
 pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_ANY_HOST, run)
-}
-
-pub fn is_for_any_host() -> bool {
-	FOR_ANY_HOST.with(|any| any.get())
+	with_flag(|mode| &mut mode.for_any_host, run)
 }
 
 /// `run` compiling a hosted program (`warp deploy`): without routes of its own, its value is the page at / and each of
 /// its functions a route
 pub fn for_hosting<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_HOSTING, run)
-}
-
-pub fn is_for_hosting() -> bool {
-	FOR_HOSTING.with(|hosting| hosting.get())
+	with_flag(|mode| &mut mode.for_hosting, run)
 }
 
 /// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
 /// first HTML, rendered at build time
 pub fn prerendering<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&PRERENDERING, run)
-}
-
-pub fn is_prerendering() -> bool {
-	PRERENDERING.with(|prerendering| prerendering.get())
+	with_flag(|mode| &mut mode.prerendering, run)
 }
 
 /// `run` compiling the shipped page, whose calls of server functions start as `values`
 pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
-	let before = SERVER_VALUES.with(|current| current.replace(values));
-	let result = run();
-	SERVER_VALUES.with(|current| current.replace(before));
-	result
+	crate::util::scoped(&SERVER_VALUES, values, run)
 }
 
 /// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
 /// and its page, without a `serve PORT {…}` statement
 pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
-	let before = SERVING_PORT.with(|current| current.replace(Some(port)));
-	let result = run();
-	SERVING_PORT.with(|current| current.set(before));
-	result
+	crate::util::scoped(&SERVING_PORT, Some(port), run)
 }
 
 pub fn serving_port() -> Option<u16> {
@@ -259,30 +274,17 @@ pub fn server_value(index: usize) -> Node {
 /// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
 /// and page·render as a page does (lowering/page_html.rs); nothing else of a page changes (it may still serve)
 pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&RENDERS_ITSELF, run)
-}
-
-/// Whether the program compiled now exports its renderer: a page's, or one rendering itself
-pub fn renders_itself() -> bool {
-	is_for_a_page() || RENDERS_ITSELF.with(|renders| renders.get())
+	with_flag(|mode| &mut mode.rendering_itself, run)
 }
 
 /// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
 pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_DEV, run)
-}
-
-pub fn is_for_dev() -> bool {
-	FOR_DEV.with(|dev| dev.get())
+	with_flag(|mode| &mut mode.for_dev, run)
 }
 
 /// `run` a program under `warp test`: its `test` lines and blocks run, its value is their summary (P209, P210)
 pub fn for_tests<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_TESTS, run)
-}
-
-pub fn is_for_tests() -> bool {
-	FOR_TESTS.with(|tests| tests.get())
+	with_flag(|mode| &mut mode.for_tests, run)
 }
 
 /// A compiled program and the host capabilities its imports need.
@@ -635,18 +637,11 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 /// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
-	PRINTS_RESULT.with(|prints| prints.set(false));
+	set_mode_flag(|mode| &mut mode.prints_result, false);
 	// the routes first: a program ending with a route prints the page its path shows, not the route statement
 	let compiled = compile_program(code, |program| printing_result(crate::routes::lower(program)));
-	PRINTS_RESULT.with(|prints| prints.set(false));
+	set_mode_flag(|mode| &mut mode.prints_result, false);
 	compiled
-}
-
-/// Whether the program compiled now ends in the print of its value that compile_printing_result added: that print
-/// shows nothing for ø (a loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's
-/// own prints ø
-pub fn prints_result() -> bool {
-	PRINTS_RESULT.with(|prints| prints.get())
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
@@ -686,7 +681,7 @@ fn printing_result(program: Node) -> Node {
 			statement
 		}
 		value => {
-			PRINTS_RESULT.with(|prints| prints.set(true));
+			set_mode_flag(|mode| &mut mode.prints_result, true);
 			crate::warp_parser::print_call([value])
 		}
 	}

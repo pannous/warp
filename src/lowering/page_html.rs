@@ -21,7 +21,7 @@ const STATEMENT_WORDS: [&str; 3] = ["print", "puts", "return"];
 /// page·render(event) := to_html(event), with components the readers of their holes (component_state.rs hole_readers),
 /// before modules::resolve joins the used modules (it keeps the std definitions the program names)
 pub fn use_markup(program: Node) -> Node {
-	if !crate::pipeline::renders_itself() {
+	if !crate::pipeline::compile_mode().renders_itself() {
 		return program;
 	}
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
@@ -43,7 +43,7 @@ pub fn use_markup(program: Node) -> Node {
 /// page·value is the output binding event_signals made, else the last line when that is a value; without one the page
 /// shows nothing and page·html goes again
 pub fn lower(program: Node) -> Node {
-	if !crate::pipeline::renders_itself() {
+	if !crate::pipeline::compile_mode().renders_itself() {
 		return program;
 	}
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);

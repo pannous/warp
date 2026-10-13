@@ -1,0 +1,5 @@
+// card f64-const: the IEEE 754 bits of a float and back, what `f64.const` needs
+bits := float_bits(-0.5)
+print bits              // -4620693217682128896
+print bits >> 52        // sign and exponent
+print bits_float(bits)  // -0.5
