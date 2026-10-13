@@ -33,3 +33,10 @@ fn overloads_by_type_and_count_stay() {
 fn the_match_the_fix_names_works() {
 	is!("fib(n) := match n { 0: 0; 1: 1; _: fib(n-1) + fib(n-2) }; fib(10)", 55);
 }
+
+#[test]
+fn definitions_without_parameters_have_no_literal() {
+	is!("make() := 3; make()", 3);
+	is!("def outer() { 4 }; outer()", 4);
+	is!("fun g(): 2; g()", 2);
+}
