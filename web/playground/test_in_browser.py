@@ -112,6 +112,8 @@ SHADER_ERROR_CODE = """broken = shader {
 }
 paint(broken, 8, 8)"""
 SHADER_ERROR_PLACE = "at 5:22"
+# the console lines a check makes on purpose: Chrome logs the broken shader's WGSL error itself
+EXPECTED_CONSOLE = {SHADER_ERROR: "Error while parsing WGSL"}
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
@@ -687,7 +689,8 @@ def check_examples(names, page_url=None, site=None):
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
 	def verdict(name, wrong):
-		wrong += [f"console {message}" for message in console.take()]
+		expected = EXPECTED_CONSOLE.get(name)
+		wrong += [f"console {message}" for message in console.take() if not (expected and expected in message)]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
