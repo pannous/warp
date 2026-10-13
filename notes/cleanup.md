@@ -294,6 +294,11 @@ Done:
 - the `Cell<usize>` counters of 15 passes (get then set, set then get, replace) → `nodes::Counter` with
   `next_number()`; a pass counting from 1 starts it `Counter::starting_at(1)`, so every name stays as it was; then the
   `usize` makers of lazy_ranges, min_max, list_element_checks and variable_signals (`+= 1` then use) the same way
+- (card cleanup-phrase-words) the parser's groups of a phrase undone (5 copies: list_phrases, scoped_handlers,
+  event_signals, tasks, transitions) → `nodes::phrase_words`; code with placeholders (`parse` then `law::substitute`
+  over a HashMap built by hand, 20 sites and 6 local helpers) → `nodes::filled(code, [("X", x)])`. Net −107 lines.
+  Not folded: word_slices::flat_words and phrase_calls::spaced_words (they also split `to` / alphabetic operators),
+  library_words::instantiate_template (names its temporaries apart), test_blocks::template (parses as a generated file)
 
 Left (each changes behaviour or needs care):
 - (cleanup-rewrite-tails) Node::map_children also enters class bodies (Node::Type); children_rewritten does not. 45 tails folded by
@@ -331,6 +336,39 @@ Left (each changes behaviour or needs care):
   (operators on instances, specialized calls), inheritance.rs (extends, mixins, super), other_languages.rs (impl, Go
   methods, Ruby .new, witness methods); further parts only if a cohesive group shows up (generic classes?).
   destructurings / positional_fields already share with_value_classes.
+
+### The signal family: one design (card cleanup-signal-family, design only, 2026-10-13)
+Nine passes implement "run this body when something happens", about 6.0k lines: event_signals (1161: `on stop {…}`,
+`raise`/`emit`, page events), variable_signals (971: `on change x`, `on set x`, `once`/`whenever`, `after f`),
+signal_values (1321: listeners that outlive a function, cells, shared polling), system_signals (597: timers, files,
+frames, keys, channel messages), scoped_handlers (422: `on ask {…} in {…}`), component_state (765), fetch_signals (194),
+stored_values (280), element_events (286). Each repeats three things:
+1. Reading the listener. Each pass has its own reader of `on <trigger> <body>`, ~430 lines in 32 functions
+   (event_signals::handler/named_handler/listed_events, variable_signals::listener_parts/subject_and_body/
+   trailing_block/ungrouped, signal_values::named_listener/without_leading_word, system_signals::timer/file_watch/
+   message_listener/event_listener/words_and_body/one_shot, scoped_handlers::scoped_handler/operand_phrase/…). Most of
+   their length undoes the groups the parser made of the phrase (`(on stop) (the (machine {…}))`).
+   Design: one reader `listeners::read(statement) -> Option<Listener { word: On|Once|Whenever|Before|After, name:
+   Option<String> /* h = on … */, trigger: Vec<Node> /* flat words */, body: Node, scope: Option<Node> /* in {…} */ }>`
+   in a new src/lowering/listeners.rs, and each pass asks it and matches on the trigger words. Estimate −300 lines,
+   low risk (behaviour kept; the forms each reader accepts are the union, a few odd spellings may start or stop
+   matching → cleanup-edge ignores).
+2. Calling the handler. Host-triggered events each have their own registration: `signal_every(id, ms)`,
+   `signal_watch(id, file)`, `signal_frame(id, ms)`, `channel_listen(id, name)`, page events through
+   `on·click·node`, system events by name. Design: every handler is `on·<event>·<id>` made by
+   event_signals::function_with_globals (already shared by 10 passes) and registered by ONE host word
+   `signal_listen(kind, id, argument)`; the runtime keeps one table. Estimate −150 in src/, −100 in
+   crates/warp-runtime, medium risk (the playground worker.js has to follow).
+3. Change listeners twice. variable_signals inserts a check after every write of a watched variable (static);
+   signal_values turns escaping variables into cells with listener closures (runtime). Design: drop the static
+   path, every watched variable becomes a cell; `once`/`whenever` become cell listeners on the variables their
+   condition reads (the derived `:=` case already works this way). Estimate −600 to −800 lines (most of
+   variable_signals' write tracking: written_variable, statement_write, checks, inlined, the `while x-->0`
+   expression rewrite, P111's signal·check functions). Cost: every read of a watched variable is `cell_get(x)`; a
+   watched loop counter gets slower. Decision for the user (Interviewer) before building: lines vs speed of watched
+   variables.
+Order: 1, then 2, then 3 after the decision. Together about −1.2k lines of the 6.0k; the rest is real behaviour
+(effects, polling across tasks, components) that no merge removes.
 
 ## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)
 
