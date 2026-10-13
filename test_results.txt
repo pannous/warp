@@ -20,6 +20,7 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
+  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -555,6 +556,7 @@ PASSED:
   ✓ control::test_system_values::a_program_keeps_its_own_names
   ✓ control::test_system_values::a_system_value_is_a_host_reading
   ✓ control::test_system_values::dark_mode_is_the_appearance_of_macos
+  ✓ control::test_system_values::listening_to_a_system_value_gives_no_hint_about_generated_code
   ✓ control::test_system_values::method_arguments_read_system_values
   ✓ control::test_system_values::not_dark_mode_is_the_opposite_reading
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
@@ -2200,6 +2202,7 @@ PASSED:
   ✓ node::test_normalization::test_string_type_word_is_hinted_once_with_the_cast
   ✓ node::test_normalization::test_variable_definition
   ✓ node::test_normalization::test_variable_definition_let_style
+  ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_position
@@ -2785,6 +2788,8 @@ PASSED:
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
+  ✓ parser::test_as_prefixed_name::as_still_casts
+  ✓ parser::test_as_prefixed_name::def_of_an_as_prefixed_name
   ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ parser::test_attributes::attribute_names_may_be_kebab_case
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
@@ -2973,6 +2978,8 @@ PASSED:
   ✓ parser::test_time_unit_keys::a_key_or_member_named_now_is_no_time
   ✓ parser::test_time_unit_keys::a_unit_word_after_a_number_is_still_a_unit
   ✓ parser::test_time_unit_keys::a_unit_word_before_a_colon_is_a_key
+  ✓ parser::test_times_phrase::times_parses_as_the_phrase_written
+  ✓ parser::test_times_phrase::times_phrases_still_mean_what_they_did
   ✓ parser::test_trailing_annotation::a_leading_annotation_still_marks_what_follows
   ✓ parser::test_trailing_annotation::a_trailing_annotation_marks_the_expression_before_it
   ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
@@ -5118,4 +5125,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5113 passed, 0 failed, 5113 total tested
+12 ignored, 5120 passed, 0 failed, 5120 total tested

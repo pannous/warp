@@ -1,0 +1,5 @@
+// gap (card float-bits): f64.const needs a float's IEEE bits as an int; the arithmetic shift of a negative int works
+// 4609434218613702656 (bits of 1.5), -1
+use math
+print(float_bits(1.5))
+print(-128 >> 7)

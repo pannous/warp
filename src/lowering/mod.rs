@@ -84,6 +84,7 @@ pub mod switch;
 pub mod system_signals;
 pub mod system_values;
 pub mod test_blocks;
+pub mod times_phrases;
 pub mod traits;
 pub mod transitions;
 pub mod tuples;

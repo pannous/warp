@@ -210,7 +210,7 @@ impl WarpParser {
 
 		// 2-char operators
 		match (c1, c2) {
-			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
+			('a', 's') if !is_identifier_char(c3) => return Some((Op::As, 2)),
 			('?', '?') => return Some((Op::Coalesce, 2)),
 			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
 			(':', '=') => return Some((Op::Define, 2)),

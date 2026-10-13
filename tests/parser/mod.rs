@@ -1,3 +1,4 @@
+mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
 mod test_comment_hides_bracket;
@@ -46,6 +47,7 @@ mod test_superscript_signs;
 mod test_surface_syntax;
 mod test_symbol_hyphen;
 mod test_time_unit_keys;
+mod test_times_phrase; // card self-parser
 mod test_trailing_annotation;
 mod test_unary_plus;
 mod test_uniscript_entities;

@@ -650,7 +650,7 @@ const DO_WORD: &str = "do";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = crate::library_words::SLICE;
-const TIMES_WORD: &str = "times";
+pub(crate) const TIMES_WORD: &str = "times";
 /// The call `n times text` is parsed to: the text repeated n times
 pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
@@ -976,7 +976,7 @@ fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column
 
 /// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
 /// `for variable in iterable body`, the loop for_loop.rs lowers
-pub(super) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
+pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
 	Node::List(
 		vec![
 			Symbol("for".to_string()),
@@ -1068,8 +1068,6 @@ pub struct WarpParser {
 	in_style_sheet: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
 	pipe_takes_call: bool,
-	/// `N times` loops parsed so far, numbering their hidden counters
-	times_loops: usize,
 	/// The atoms read so far, in source order: the lexer's view of the source (read_atoms); a rewind forgets those read
 	/// after its mark
 	atoms: Vec<Atom>,
@@ -1230,7 +1228,6 @@ impl WarpParser {
 			tag_block: false,
 			in_style_sheet: false,
 			pipe_takes_call: false,
-			times_loops: 0,
 			atoms: vec![],
 			pending_comment: None,
 			after_function_keyword: false,
