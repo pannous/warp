@@ -252,7 +252,8 @@ impl WarpParser {
 			if (self.current_char() == ':' && self.peek_char(1) != '=') || self.current_char() == '{' {
 				break;
 			}
-			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
+			let word = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten();
+			match word.map(|word| self.joined_type_name(word)) {
 				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
 				Some(parameter) => {
 					if self.current_char() == '{' {
@@ -458,6 +459,7 @@ impl WarpParser {
 			return Node::Symbol(literal);
 		}
 		let symbol = or_return_error!(self.parse_symbol());
+		let symbol = self.joined_type_name(symbol);
 
 		if let Some(version) = self.version_operand(&symbol) {
 			return version;
