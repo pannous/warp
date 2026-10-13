@@ -7,7 +7,7 @@
 //! parallel while cores are free. notes/go_blocks.md
 
 use super::go_blocks::AWAIT_WORD;
-use super::nodes::key;
+use super::nodes::{is_call_head, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, IN_WORD, MAP_WORD};
@@ -223,13 +223,8 @@ pub(crate) fn parallel_let(items: &[Node], bracket: &Bracket, separator: &Separa
 		.cloned()
 		.collect();
 	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
-	(names.len() >= 2 && names.len() == values.len() && names.iter().all(is_name) && values.iter().all(is_call))
+	(names.len() >= 2 && names.len() == values.len() && names.iter().all(is_name) && values.iter().all(is_call_head))
 		.then_some((names, values))
-}
-
-/// `f(x)`: a call by name
-fn is_call(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
 }
 
 /// Each call but the last in a task, the last one here, then the tasks awaited, while task_forks() finds a core free;

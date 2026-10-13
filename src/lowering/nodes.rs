@@ -1,5 +1,6 @@
 //! The small node forms many lowering passes build and test: a call of a word, a word
 
+use crate::analyzer::call_name;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -213,4 +214,13 @@ pub(crate) fn named_assignment(statement: &Node) -> Option<(String, Node)> {
 		Node::Key(name, Op::Assign, value) => Some((name.symbol_name()?.to_string(), value.as_ref().clone())),
 		_ => None,
 	}
+}
+
+/// The function a list calls: `f(a, b)`, or spaced `f a b`
+pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	let Node::Symbol(name) = items.first()?.drop_meta() else {
+		return None;
+	};
+	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
+	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
 }
