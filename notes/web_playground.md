@@ -368,5 +368,7 @@ has navigator.gpu but no adapter (a VM), so GPU samples end in their no-adapter 
 - A growable SharedArrayBuffer reserves its maxByteLength (TASK_RESULT_LIMIT, 256 MB). Posted to a task Worker that
   stays idle it is never collected: after ~226 of them `new SharedArrayBuffer` throws "RangeError: Out of memory"
   (measured on the runner). gpuJob made one per GPU job, a frame each, so samples/webgpu ended in
-  `wasm trap: Out of memory`; it now reuses one (gpuAnswers). startTask, fetch and askPage still make one per call
-  (card safari-shared-buffers). Tour check GPU_JOBS: 400 GPU jobs in one run.
+  `wasm trap: Out of memory`. Every answer buffer (task, fetch, askPage, GPU job) now comes from a free list
+  (host-tasks.js takeAnswerBuffer) and goes back once its answer is read (cards webgpu-safari, safari-shared-buffers).
+  Tour checks GPU_JOBS (400 GPU jobs in one run) and MANY_TASKS (400 tasks) guard the paths; the runner's Safari
+  without an adapter never reproduced the out-of-memory itself.

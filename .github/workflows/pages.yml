@@ -216,7 +216,7 @@ jobs:
     - name: Allow remote automation
       run: sudo safaridriver --enable
     - name: The painting checks in Safari
-      run: python3 web/playground/test_in_browser.py --examples --safari --site _site webgpu shader_trails "(the view's size stays as paintings of that size are shown)" "(many GPU jobs in one run)" "(named GPU arrays, a shader painted into the page's canvas)"
+      run: python3 web/playground/test_in_browser.py --examples --safari --site _site webgpu shader_trails "(the view's size stays as paintings of that size are shown)" "(many GPU jobs in one run)" "(many tasks in one run)" async "(named GPU arrays, a shader painted into the page's canvas)"
 
   # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
   # tours, green, instead of a failed deploy mailing a failed run
