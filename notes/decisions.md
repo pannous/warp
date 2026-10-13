@@ -11,7 +11,7 @@ notes/open_decisions.md.
 - self-hosting-postponed: self-hosting is postponed until the language features it showed missing are implemented
   cleanly (pattern matching on tree shapes, a `parse` word giving real Nodes, tagged unions, a text cursor, bytes and
   bits, deep recursion, fast big literals; topic parser-features) and the Rust code has had a proper cleanup (topic
-  rust-cleanup). What exists stays: lexer, serializer and parser twins with their differential tests on main.
+  cleanup). What exists stays: lexer, serializer and parser twins with their differential tests on main.
 
 ## Decided 2026-10-13 (quiet hours: Interviewer or worker defaults, undoable; user may revisit)
 - held-key (warp-markup; Interviewer during quiet hours, undoable): `held_key` is the name of the key held now ("" for none); the key-name words of key-if compare against it too (`held_key == LEFT`, `held_key != ESC`), with the same "names nothing" warning.
