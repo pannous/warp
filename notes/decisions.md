@@ -28,14 +28,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   handlers `on … in {…}`. Keep return-type overloads, tuple returns ("multi return is definitely desired"), list
   element checks, instance destructuring, object-shaped parameters, dispatch by class. Rebuild small: traits as a
   thin alias of classes with default methods ("I don't see how that ever took 1900 lines"); ORM keeps only
-  `stored people: [Person]`; `shared` for any variable, not only arrays; one rule `a of b` ≡ `b.a` replaces the
+  `stored people: [Person]`; shared int arrays stay as built, with a note that `shared` for any atomic variable is
+  the general form for later; one rule `a of b` ≡ `b.a` replaces the
   reflection dot words; Ruby blocks via the block type and trailing lambdas. Natural phrases parked (tests ignored,
   maybe re-implemented via preposition parameters). Discussion card: all methods on classes as dispatch.
 - foreign-spellings (2026-10-13): keep Rust `<T>`/`let mut`, Enum.map/List.map/Seq.sum, Python lambda, variadic
   lambdas (through the normal parameter path), JS destructured parameters, Ruby lambda/proc/blocks/to_s, C# LINQ,
   C++ `auto x`; foreign names are cheap aliases of existing words, not lowering code. Drop OCaml let-in and `fun`,
-  Elixir `def …, do:`, C++ `[](…){…}` lambdas, Kotlin `when … ->`. The R/PHP forms move to warp files loaded with
-  `use R` / `use PHP`.
+  Elixir `def …, do:`, C++ `[](…){…}` lambdas. The R/PHP forms move to warp files loaded with `use R` / `use PHP`.
+  Kotlin `when x { 1 -> … }` is an alias of `match x { 1 => … }` (`->` ≈ `=>` in arms) with a warning, since `when`
+  means other things too. `case` is an optional word before any match arm (`case 1: …`).
 - real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
   type next to the exact ratios; then it goes.
 - watched-cells (2026-10-13): watched variables use the run-time cell, except main-level variables no function
