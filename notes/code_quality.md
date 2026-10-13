@@ -384,8 +384,10 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   ships test helpers and `extensions` depends on the whole compiler. Move them to tests/common/mod.rs.
 - probes/: 3.2 MB, mostly the fixer prompt templates and per-topic snippet dirs from 2026-10-02 (algo 2.2 MB, ask,
   break, elements, listexpr, listparams, maps, parse, print, slices, globals, …). Once those topics are merged, keep the
-  `.warp` snippets that became tests' inputs and delete the rest; `stage_own_hunks.py`, `unignore.py`,
-  `commit_unignored.py`, `bisect_step.sh` are one-off agent tools (move to ~/dev/bin if reused).
+  `.warp` snippets that became tests' inputs and delete the rest. Done 2026-10-13 (card cleanup-probe-scripts): the
+  one-off agent tools (`stage_own_hunks.py`, `unignore.py`, `commit_unignored.py`, `bisect_step.sh`, parse's hunk
+  selector) and the finished per-topic fixer prompts in probes/algo are gone; the templates fixer_prompt.md and
+  worker_prompt.md stay.
 
 ## 7. Build hygiene
 
