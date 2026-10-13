@@ -9,7 +9,7 @@
 //! in an element its inline CSS animation like a transition. What CSS lacks is a removal that waits: `leave: pop 400ms
 //! reverse` is the animation the page plays before it removes the element (attribute `data-warp-leave`).
 
-use super::nodes::key;
+use super::nodes::{key, phrase_words};
 use crate::element_events::with_element_items;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -117,12 +117,12 @@ fn with_line_words(items: Vec<Node>) -> Vec<Node> {
 fn css_words_of(item: &Node) -> Option<(&'static str, Vec<Node>)> {
 	let css_word = |name: &Node| CSS_WORDS.iter().copied().find(|word| name.is_symbol(word));
 	match item.drop_meta() {
-		Node::Key(name, Op::Colon, value) => Some((css_word(name)?, words_of(value.as_ref().clone()))),
+		Node::Key(name, Op::Colon, value) => Some((css_word(name)?, phrase_words(std::slice::from_ref(value)))),
 		Node::List(items, Bracket::None, _) => match items.split_first().map(|(first, rest)| (first.drop_meta(), rest))
 		{
 			Some((Node::Key(name, Op::Colon, value), rest)) => Some((
 				css_word(name)?,
-				words_of(value.as_ref().clone())
+				phrase_words(std::slice::from_ref(value))
 					.into_iter()
 					.chain(rest.iter().cloned())
 					.collect(),
@@ -144,14 +144,6 @@ fn spec_and_children(words: Vec<Node>) -> (String, Vec<Node>) {
 	let spec_length = words.iter().take_while(|word| spec_word(word).is_some()).count();
 	let spec: Vec<String> = words[..spec_length].iter().filter_map(spec_word).collect();
 	(spec.join(" "), words[spec_length..].to_vec())
-}
-
-/// The words of a value: `fade 200ms "a"` may arrive as unbracketed lists within each other
-fn words_of(value: Node) -> Vec<Node> {
-	match value.drop_meta() {
-		Node::List(items, Bracket::None, _) => items.iter().cloned().flat_map(words_of).collect(),
-		_ => vec![value],
-	}
 }
 
 fn is_timing_word(item: &Node) -> bool {

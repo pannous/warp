@@ -8,7 +8,7 @@
 //! `break value` in a handler body aborts (step 3): the handler stores value in `effect_handler_aborted_ask_i` and
 //! throws to its block, which runs under `ran_without_abort(i, {…})` and then has that value.
 
-use super::nodes::{call, if_then_else, key};
+use super::nodes::{call, if_then_else, key, phrase_words};
 use crate::event_signals::{
 	emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of,
 };
@@ -268,17 +268,6 @@ fn with_last_operand(node: Node, phrase: Node) -> Node {
 		Node::Key(left, op, right) => Node::Key(left.clone(), *op, Box::new(with_last_operand(*right.clone(), phrase))),
 		_ => phrase,
 	}
-}
-
-/// The words of a phrase, the groups the parser makes of it (`on (ask {…}) in {…}`, `on ask ({…} in {…})`) undone
-fn phrase_words(items: &[Node]) -> Vec<Node> {
-	items
-		.iter()
-		.flat_map(|item| match item.drop_meta() {
-			Node::List(inner, Bracket::None, Separator::Space) => phrase_words(inner),
-			_ => vec![item.clone()],
-		})
-		.collect()
 }
 
 /// `emit ask{…}`: `if ask·active() == 1 then ask·handler·1({…}) else … else emit ask{…}`

@@ -124,11 +124,10 @@ fn with_window_events(program: Node) -> Node {
 
 #[cfg(feature = "native")]
 fn keys_reader() -> Node {
-	let bindings = std::collections::HashMap::from([
-		("CODE".to_string(), symbol("key·code")),
-		("NAMED".to_string(), key_named(symbol("key·code"))),
-	]);
-	crate::law::substitute(&crate::warp_parser::parse(KEYS_TEMPLATE), &bindings)
+	super::nodes::filled(
+		KEYS_TEMPLATE,
+		[("CODE", symbol("key·code")), ("NAMED", key_named(symbol("key·code")))],
+	)
 }
 
 /// The name of the key with that code, as the page's KeyboardEvent.key: a key's name (KEY_NAMES), else its character
@@ -137,11 +136,7 @@ pub fn key_named(code: Node) -> Node {
 		.iter()
 		.map(|(number, name)| format!("if CODE == {number} then \"{name}\" else "))
 		.collect();
-	let template = crate::warp_parser::parse(&format!("{choices}\"\" + chr(CODE)"));
-	crate::law::substitute(
-		&template,
-		&std::collections::HashMap::from([("CODE".to_string(), code)]),
-	)
+	super::nodes::filled(&format!("{choices}\"\" + chr(CODE)"), [("CODE", code)])
 }
 
 #[cfg(feature = "native")]
@@ -173,10 +168,7 @@ fn lower_timers(program: Node) -> Node {
 		if let Some((channel, body)) = message_listener(&statement) {
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			let id = Node::int(count as i64);
-			let messages = crate::law::substitute(
-				&crate::warp_parser::parse(MESSAGES_TEMPLATE),
-				&std::collections::HashMap::from([("ID".to_string(), id.clone()), ("BODY".to_string(), body)]),
-			);
+			let messages = super::nodes::filled(MESSAGES_TEMPLATE, [("ID", id.clone()), ("BODY", body)]);
 			lowered.push(function_with_globals(
 				&handler,
 				false,

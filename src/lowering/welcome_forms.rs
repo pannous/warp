@@ -520,8 +520,7 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		(Some(subject), pattern) => key(subject.clone(), Op::Eq, pattern),
 		(None, pattern) => pattern,
 	};
-	let chain = arms
-		.into_iter()
+	arms.into_iter()
 		.rev()
 		.fold(None, |otherwise: Option<Node>, (patterns, value)| {
 			let condition = patterns
@@ -534,17 +533,8 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 				("VALUE", forms(value)),
 				("OTHERWISE", otherwise.unwrap_or(Node::Empty)),
 			];
-			let bindings = bindings
-				.into_iter()
-				.map(|(placeholder, node)| (placeholder.to_string(), node))
-				.collect();
-			Some(
-				crate::law::substitute(&crate::warp_parser::parse(template), &bindings)
-					.drop_meta()
-					.clone(),
-			)
-		});
-	chain
+			Some(super::nodes::filled(template, bindings))
+		})
 }
 
 /// `when click {…}` is `on click {…}`, `when x > 3 {…}` is `whenever x > 3 {…}` (card signals-shape, user 2026-10-08):
