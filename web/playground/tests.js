@@ -1,6 +1,8 @@
 // The browser test page: lists the tests of the binary (?wasm=, default tests.wasm; ?args= a JSON list of libtest
 // filters, `--include-ignored` / `--ignored` included; ?shard=i/n every n-th of them from the i-th, for CI's matrix), runs them on a few workers (test-worker.js) and publishes
-// window.testSummary for the cargo runner (test_in_browser.py). A test that runs too long is stopped and its worker replaced.
+// window.testSummary for the cargo runner (test_in_browser.py). A test that runs too long is stopped and its worker
+// replaced, then runs once more on the fresh one: CI's runners stalled random tests that passed on a rerun (card
+// find-why); a second timeout fails it, naming the stage it was stuck in. A crashed worker fails its test at once.
 
 const TEST_TIMEOUT_MS = 120000;
 // a worker is replaced after this many tests: the Wasm memories of its instances (the test binary's, the programs',
@@ -58,11 +60,13 @@ function showFailure(result) {
 const OUT_OF_WASM_MEMORY = /Cannot allocate Wasm memory/;
 const runners = new Set(); // the busy runners, each replacing its worker on `replace`
 const memoryResets = []; // the tests that ran out of Wasm memory and ran again on fresh workers
+const timeoutRetries = []; // the tests that timed out once, each with the stage it was stuck in, and ran again
+const COMPILING = "waiting for the test binary to compile"; // a fresh worker's stage; test-worker.js reports the others
 
 // one worker running tests from the shared queue until it is empty
 function runner(queue, total) {
 	return new Promise(resolve => {
-		let worker, current, timer, testsOnWorker;
+		let worker, current, timer, testsOnWorker, stage;
 		const record = result => {
 			clearTimeout(timer);
 			if (OUT_OF_WASM_MEMORY.test(result.output) && !current.retried) {
@@ -79,17 +83,35 @@ function runner(queue, total) {
 		};
 		const start = () => {
 			testsOnWorker = 0;
+			stage = COMPILING;
 			worker = serveTaskWorkers(new Worker("test-worker.js"));
-			worker.onmessage = ({ data }) => data.type === "result" && record(data);
+			worker.onmessage = ({ data }) => {
+				if (data.type === "stage") stage = data.stage;
+				if (data.type === "result") record(data);
+			};
+			// a crash (out of memory, a failed import) would otherwise look like a hang until the timeout
+			worker.onerror = event => {
+				if (!running.has(current?.name)) return;
+				const failure = `the test's worker crashed while ${stage}: ${event.message ?? "no message"}`;
+				worker.terminate();
+				start();
+				record({ name: current.name, passed: false, output: failure });
+			};
 			worker.postMessage({ type: "compile", url: wasmUrl });
 		};
 		const send = () => {
 			testsOnWorker++;
 			clearTimeout(timer);
 			timer = setTimeout(() => {
+				const stuck = stage;
 				worker.terminate(); // a test that does not stop blocks its worker: replace it
 				start();
-				record({ name: current.name, passed: false, timedOut: true, output: `stopped after ${TEST_TIMEOUT_MS / 1000} s` });
+				if (!current.timedOut) {
+					current.timedOut = true;
+					timeoutRetries.push(`${current.name} (stuck while ${stuck})`);
+					return send();
+				}
+				record({ name: current.name, passed: false, timedOut: true, output: `stopped after ${TEST_TIMEOUT_MS / 1000} s twice, the second time while ${stuck}` });
 			}, TEST_TIMEOUT_MS);
 			running.add(current.name);
 			showProgress(total); // a page stuck in this test names it (card browser-suite)
@@ -137,6 +159,7 @@ async function main() {
 		total: selected.length,
 		seconds: (performance.now() - started) / 1000,
 		memoryResets,
+		timeoutRetries,
 	};
 	$("progress").textContent += `, ${ignored} ignored, ${window.testSummary.seconds.toFixed(1)} s`;
 	report(window.testSummary);

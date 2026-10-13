@@ -111,9 +111,14 @@ Each step is useful on its own and is what the next ones stand on.
   definitions they call. Only a program rendering itself gets them. Element handlers (`on click {…}`), still written in
   a component's markup at that point, are neither children nor computed. Browser check: test_in_browser.py
   COMPONENT_HOLE (CI).
-- Left: the root's own text holes (a computed part in the root still means no holes); a component call under a loop
-  or a choice stays inside its enclosing hole; built sites (site.js) morph the whole page·html, holes are the
-  playground's.
+- Done (card web-fine-rest, 2026-10-13): the root's own computed texts are text holes (`page·hole·text·<n>`, path
+  empty; only a root that is an element hole still means none). Built sites patch holes too: host.js pageHoles /
+  holePatches read them (worker.js shares pageHoles), markup.js showPatch / showText show them (playground.js,
+  site.js, site-thread.js); after main and a route change the whole page·html still morphs. Checks:
+  tests/web/test_site_holes.rs (warp app's web view counts whole morphs of #warp-root: 0), test_text_holes.rs.
+- Left (card component-calls): a component call under a loop or a choice stays inside its enclosing element hole;
+  its instances' paths depend on the loop's count at run time, so their holes would have to be listed at run time
+  (from page·shown) instead of bound by the lowering.
 - Not yet: an `input`'s value property (setAttribute does not change what the user typed): web-bind.
 
 ## Step 4 (web-components), what is done and what is left

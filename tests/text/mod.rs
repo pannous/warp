@@ -41,6 +41,7 @@ mod test_str_computed; // card str-inline
 mod test_string;
 mod test_terminal_escapes;
 mod test_text_as_float;
+mod test_text_builders; // card self-byte-buffer
 mod test_text_building;
 mod test_text_bytes;
 mod test_text_casts;

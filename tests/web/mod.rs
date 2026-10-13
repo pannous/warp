@@ -9,6 +9,8 @@ mod test_async_data; // the browser: a task Worker fetches into shared memory, r
 mod test_bound_field_types; // card guest-type
 #[cfg(feature = "native")] // runs node
 mod test_browser_tables; // card orm-browser-stores
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
+mod test_built_app; // card build-links
 #[cfg(feature = "native")] // builds a site natively
 mod test_bundle_budget;
 mod test_class_components;
@@ -121,6 +123,8 @@ mod test_site;
 mod test_site_animation; // card site-build
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_failure; // the dev overlay's message
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view
+mod test_site_holes;
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
@@ -151,4 +155,4 @@ mod test_webgpu;
 mod test_webgpu_ints;
 mod test_webgpu_named; // card web-apis-rest
 #[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
-mod test_webview; // card read-chron // card key-app
+mod test_webview; // card read-chron // card key-app // card web-fine-rest

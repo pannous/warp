@@ -27,11 +27,10 @@ async function startSiteWorker() {
 	const worker = serveTaskWorkers(new Worker(`site-worker.js?scripts=${root.getAttribute(WORKER_ATTRIBUTE)}`)); // task-workers.js
 	worker.onmessage = ({ data }) => {
 		if (data.html !== undefined) {
-			const template = document.createElement("template");
-			template.innerHTML = data.html;
-			morphChildren(root, template.content);
+			morphChildren(root, parsedHtml(data.html));
 			if (data.navigated) focusRoute(root);
 		}
+		(data.patches ?? []).forEach(patch => showPatch(root, patch)); // card web-fine-rest
 		if (data.dispatch) dispatchToPage(data.dispatch); // card page-custom-event
 		if (data.exited !== undefined) self.endApp?.(data.exited); // `exit` in `warp app` (src/webview.rs) closes it
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);

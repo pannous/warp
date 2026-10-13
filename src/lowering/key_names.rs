@@ -2,6 +2,7 @@
 //! key words name keys as the page's KeyboardEvent.key does (natively lowering/system_signals.rs KEY_NAMES), so
 //! `on key { if key == ESC { exit } }` reads as written. A program's own variable (`key`, `UP`) stays its own. A
 //! comparison with a word that names nothing (`key == ESCAPEE`, `key == q`) never holds, which a warning says.
+//! The key words compare with `held_key` anywhere too (card held-key): `held_key == LEFT` is `held_key == "ArrowLeft"`.
 
 use super::nodes::key;
 use crate::diagnostic::Diagnostic;
@@ -9,6 +10,7 @@ use crate::event_signals::{main_level_variables, EVENT_WORD};
 use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
+use warp_runtime::host_words::HELD_KEY;
 
 const HANDLER_WORDS: [&str; 2] = ["on", "once"];
 const KEY_EVENT: &str = "key";
@@ -49,6 +51,49 @@ pub fn lower(program: Node) -> Node {
 	}
 }
 
+/// `held_key == LEFT`, `ESC != held_key`: before system_values reads `held_key`
+pub fn lower_held_comparisons(program: Node) -> Node {
+	let (statements, _, _) = crate::variable_signals::main_statements(&program);
+	let mut warnings = vec![];
+	let named = held_comparisons(program, &main_level_variables(&statements), &mut warnings);
+	match crate::diagnostic::report(&warnings) {
+		Ok(()) => named,
+		Err(error) => error,
+	}
+}
+
+fn held_comparisons(node: Node, own: &HashSet<String>, warnings: &mut Vec<Diagnostic>) -> Node {
+	match node.drop_meta() {
+		Node::Key(left, op @ (Op::Eq | Op::Ne), right) if left.is_symbol(HELD_KEY) || right.is_symbol(HELD_KEY) => {
+			let [left, right] = [left, right].map(|side| held_compared(side, own, warnings));
+			key(left, *op, right)
+		}
+		_ => node.map_children(|child| held_comparisons(child, own, warnings)),
+	}
+}
+
+/// A side of a comparison with `held_key`: a key word becomes its name; a capitalized word naming nothing (`LEFTT`) warns,
+/// a lowercase one stays for the undefined-variable error
+fn held_compared(side: &Node, own: &HashSet<String>, warnings: &mut Vec<Diagnostic>) -> Node {
+	match side.symbol_name() {
+		Some(word) if word == HELD_KEY || own.contains(word) => side.clone(),
+		Some(word) => match key_name(word) {
+			Some(name) => Node::Text(name),
+			None => {
+				if word.chars().all(|letter| !letter.is_lowercase()) {
+					warnings.push(names_nothing_warning(side, HELD_KEY, word));
+				}
+				side.clone()
+			}
+		},
+		None => side.clone(),
+	}
+}
+
+fn names_nothing_warning(side: &Node, compared: &str, word: &str) -> Diagnostic {
+	Diagnostic::at(side, format!("{compared}: {word} names nothing, so the comparison never holds; write a key name (ESC, ENTER, UP, F1 …) or a text such as \"{word}\""))
+}
+
 fn with_key_names(node: Node, own: &HashSet<String>, warnings: &mut Vec<Diagnostic>) -> Node {
 	match key_handler_body(&node) {
 		Some(index) => {
@@ -85,7 +130,7 @@ fn unbound_comparisons(body: &Node, known: &HashSet<String>, warnings: &mut Vec<
 	if let Node::Key(left, Op::Eq | Op::Ne, right) = body {
 		for side in [left, right] {
 			if let Some(word) = side.symbol_name().filter(|word| names_nothing(word, known)) {
-				warnings.push(Diagnostic::at(side, format!("on key: {word} names nothing, so the comparison never holds; write a key name (ESC, ENTER, UP, F1 …) or a text such as \"{word}\"")));
+				warnings.push(names_nothing_warning(side, "on key", word));
 			}
 		}
 	}

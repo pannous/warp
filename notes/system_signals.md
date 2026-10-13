@@ -190,7 +190,9 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
 - Keyboard state (card keyboard-state): `key_down` is the system value whether a key is held now (natively the paint
   window's held key, in the playground canvas.js trackKey's), for loops as mouse_down: `if key_down { clear(white) }`.
 - Held key (card held-key): `held_key` names the key held now as `on key` names a press ("a", "ArrowUp", "Enter",
-  "" for none), for loops that steer: `if held_key == "ArrowLeft" { x -= 1 }`. It reads the system value
+  "" for none), for loops that steer: `if held_key == LEFT { x -= 1 }`. The key words compare with it anywhere as in
+  `on key` (lowering/key_names.rs lower_held_comparisons, before system_values; a capitalized word naming nothing
+  warns, interviewer decision 2026-10-12), texts such as "ArrowLeft" work too. It reads the system value
   `key code held` once into `held·code` and names it by system_signals.rs key_named, which the native `on key` reader
   shares (KEY_NAMES); the playground's canvas.js KEY_CODES gives Enter, Escape, Backspace and Tab their codes too.
   Test: tests/control/test_held_key.rs; probe probes/held_key/steer.warp.

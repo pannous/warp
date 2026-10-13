@@ -557,203 +557,16 @@ fn link_single_function(
 
 	let wasm_results: Vec<ValType> = c_type_to_wasm_valtype(&sig.return_type).into_iter().collect();
 
-	let func_type = FuncType::new(engine, wasm_params.clone(), wasm_results.clone());
-
-	// Generate signature key for dispatch (e.g., "III_I" for 3 ints returning int)
-	let sig_key = generate_signature_key(&param_types, ret_type);
-
-	// Create the wasmtime function wrapper using macro-generated dispatchers
+	let func_type = FuncType::new(engine, wasm_params, wasm_results);
 	create_ffi_wrapper(
 		linker,
 		lib_name,
 		&func_name,
 		func_type,
 		func_ptr,
-		&sig_key,
 		&param_types,
 		ret_type,
 	)
-}
-
-/// Generate a signature key string for dispatch
-#[cfg(feature = "native")]
-fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
-	let mut key = String::new();
-	for p in params {
-		key.push(match p {
-			ParamType::I32 => 'I',
-			ParamType::I64 => 'L',
-			ParamType::F32 => 'F',
-			ParamType::F64 => 'D',
-			ParamType::Ptr => 'P',
-			ParamType::Handle => 'H',
-			ParamType::Out => 'O',
-		});
-	}
-	key.push('_');
-	key.push(match ret {
-		RetType::Void => 'V',
-		RetType::I32 => 'I',
-		RetType::I64 => 'L',
-		RetType::F32 => 'F',
-		RetType::F64 => 'D',
-		RetType::Bool => 'B',
-	});
-	key
-}
-
-/// A C argument from its wasm value: a pointer is an offset into the caller's memory, a double's NaN canonical
-#[cfg(feature = "native")]
-trait NativeArgument {
-	fn of(caller: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self;
-}
-
-#[cfg(feature = "native")]
-impl NativeArgument for i32 {
-	fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
-		value.unwrap_i32()
-	}
-}
-
-#[cfg(feature = "native")]
-impl NativeArgument for f32 {
-	fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
-		value.unwrap_f32()
-	}
-}
-
-#[cfg(feature = "native")]
-impl NativeArgument for f64 {
-	fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
-		warp_runtime::floats::canonical_nan(value.unwrap_f64())
-	}
-}
-
-#[cfg(feature = "native")]
-impl NativeArgument for *const u8 {
-	fn of(caller: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
-		get_memory_ptr(caller, value.unwrap_i32() as usize)
-	}
-}
-
-/// A C result as the wasm function's result, none of void
-#[cfg(feature = "native")]
-trait NativeResult {
-	fn value(self) -> Option<Val>;
-}
-
-#[cfg(feature = "native")]
-impl NativeResult for () {
-	fn value(self) -> Option<Val> {
-		None
-	}
-}
-
-#[cfg(feature = "native")]
-impl NativeResult for i32 {
-	fn value(self) -> Option<Val> {
-		Some(Val::I32(self))
-	}
-}
-
-#[cfg(feature = "native")]
-impl NativeResult for f32 {
-	fn value(self) -> Option<Val> {
-		Some(Val::F32(self.to_bits()))
-	}
-}
-
-#[cfg(feature = "native")]
-impl NativeResult for f64 {
-	fn value(self) -> Option<Val> {
-		Some(Val::F64(self.to_bits()))
-	}
-}
-
-/// A C bool returned as an int: 1 for any non-zero
-#[cfg(feature = "native")]
-#[repr(transparent)]
-struct CBool(i32);
-
-#[cfg(feature = "native")]
-impl NativeResult for CBool {
-	fn value(self) -> Option<Val> {
-		Some(Val::I32(i32::from(self.0 != 0)))
-	}
-}
-
-/// Link the library function called through a typed C function pointer: `link_typed!(…, (i32, f32) -> i32)`
-#[cfg(feature = "native")]
-macro_rules! link_typed {
-    ($linker:expr, $lib_name:expr, $func_name:expr, $func_type:expr, $func_ptr:expr, ($($argument:ty),*) $(-> $result:ty)?) => {
-        link_native($linker, $lib_name, $func_name, $func_type, move |#[allow(unused_mut, unused_variables)] mut caller, params, results| {
-            let f: extern "C" fn($($argument),*) $(-> $result)? = unsafe { std::mem::transmute($func_ptr) };
-            #[allow(unused_mut, unused_variables)] // a function without parameters reads no values
-            let mut values = params.iter();
-            let result = f($(<$argument as NativeArgument>::of(&mut caller, values.next().expect("a value per parameter"))),*);
-            if let Some(value) = NativeResult::value(result) {
-                results[0] = value;
-            }
-            Ok(())
-        })
-    };
-}
-
-/// Create FFI wrapper with typed function pointer call: the common patterns of raylib, SDL, libm, by signature key
-#[cfg(feature = "native")]
-#[allow(clippy::too_many_arguments)]
-fn create_ffi_wrapper(
-	linker: &mut Linker<FfiState>,
-	lib_name: &str,
-	func_name: &str,
-	func_type: FuncType,
-	func_ptr: usize,
-	sig_key: &str,
-	param_types: &[ParamType],
-	ret_type: RetType,
-) -> Result<()> {
-	match sig_key {
-		"_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, ()),
-		"_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> i32), // WindowShouldClose, GetMouseX
-		"_B" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> CBool),
-		"_F" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> f32),
-		"_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> f64),
-		"I_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32)), // SetTargetFPS
-		"I_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32) -> i32), // IsKeyPressed
-		"I_B" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32) -> CBool),
-		"II_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32)),
-		"II_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32) -> i32),
-		"IIP_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, *const u8)), // InitWindow with title
-		"IIFI_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, f32, i32)), // DrawCircle: x, y, radius, color
-		"IIIII_V" => link_typed!(
-			linker,
-			lib_name,
-			func_name,
-			func_type,
-			func_ptr,
-			(i32, i32, i32, i32, i32)
-		), // DrawRectangle: x, y, w, h, color
-		"PIII_V" => link_typed!(
-			linker,
-			lib_name,
-			func_name,
-			func_type,
-			func_ptr,
-			(*const u8, i32, i32, i32)
-		), // DrawText: text, x, y, fontSize
-		"PIIII_V" => link_typed!(
-			linker,
-			lib_name,
-			func_name,
-			func_type,
-			func_ptr,
-			(*const u8, i32, i32, i32, i32)
-		), // DrawText with color
-		"F_F" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f32) -> f32),
-		"D_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f64) -> f64),
-		"DD_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f64, f64) -> f64),
-		_ => create_generic_ffi_wrapper(linker, lib_name, func_name, func_type, func_ptr, param_types, ret_type),
-	}
 }
 
 /// Link all dynamic libraries required by a WASM module's imports
@@ -827,9 +640,10 @@ fn link_native(
 	Ok(())
 }
 
-/// Generic FFI wrapper for uncommon signatures - uses dynamic argument handling
+/// The wrapper of a C function of numbers and texts: its arguments go in the integer and float registers by the C
+/// calling convention (call_native_function), whatever the signature
 #[cfg(feature = "native")]
-fn create_generic_ffi_wrapper(
+fn create_ffi_wrapper(
 	linker: &mut Linker<FfiState>,
 	lib_name: &str,
 	func_name: &str,
@@ -1041,7 +855,7 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
 		RetType::I64 => Val::I64(returned as i64),
 		RetType::F32 => Val::F32(returned as u32), // the low half of the float register
 		RetType::F64 => Val::F64(returned),
-		RetType::Bool => Val::I32(if returned != 0 { 1 } else { 0 }),
+		RetType::Bool => Val::I32(i32::from(returned as u8 != 0)), // a C bool is its register's low byte
 	}
 }
 

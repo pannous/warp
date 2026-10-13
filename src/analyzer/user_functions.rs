@@ -1630,15 +1630,6 @@ pub(super) fn rename_nested_calls(node: Node, renames: &HashMap<String, String>)
 	}
 	match node {
 		Node::Symbol(name) if renames.contains_key(&name) => Node::Symbol(renames[&name].clone()),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(rename_nested_calls(*node, renames)),
-			data,
-		},
-		Node::Key(left, op, right) => Node::Key(
-			Box::new(rename_nested_calls(*left, renames)),
-			op,
-			Box::new(rename_nested_calls(*right, renames)),
-		),
 		Node::List(items, bracket, separator) => {
 			let mut items: Vec<Node> = items
 				.into_iter()
@@ -1653,7 +1644,7 @@ pub(super) fn rename_nested_calls(node: Node, renames: &HashMap<String, String>)
 			}
 			Node::List(items, bracket, separator)
 		}
-		other => other,
+		other => children_rewritten(other, |child| rename_nested_calls(child, renames)),
 	}
 }
 

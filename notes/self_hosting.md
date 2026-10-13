@@ -31,7 +31,13 @@ Gaps (each a card below):
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still
   missing: a list's separator (`,` `;` newline) is not kept in the wasm Node at all → self-node-separator
-- Bytes grow by copying (`bytes = bytes + [b]`, lib/memory.warp). → self-byte-buffer
+- ~~Bytes grow by copying~~ fixed (self-byte-buffer): lists already grew in amortised O(1) (int lists since
+  3f7e212a1, `xs += [x]`, `xs.add(x)`), one text too (it grows in place at the heap top). Texts built in turn
+  (`w += "x"; v += "y"`, a lexer's token and its output) were quadratic and passed the 2 GB memory cap at 100k appends.
+  Now text_append, the concat of a variable's text, gives a copied text of 64+ bytes as much room again behind it and
+  remembers 8 rooms (src/wasm_emitter/text_rooms.rs); text_concat of other texts stays small (a program without
+  building pays nothing, quicksort's executable stays under its size limit). probes/self_hosting/text_builders.warp:
+  400k appends to each of two texts in 70 ms; tests/text/test_text_builders.rs.
 
 ## Steps
 | # | Card | Step | Builds on |
@@ -48,4 +54,9 @@ Gaps (each a card below):
 
 Rules
 - Each step lands with its differential test (step 4): same Node, same text as the Rust twin.
+  The harness (self-differential, tests/common/twins.rs): `differential(part, word, rust_twin)` runs
+  `word(read(path))` of lib/compiler/<part>.warp for every sample and probe in one program (~1300 sources, a few
+  seconds) and fails on the first source whose serialized value differs from `rust_twin(text)`, with both texts around
+  the first difference. First twin: lib/compiler/positions.warp `line_widths` (columns per char, as
+  warp_parser/scanning.rs counts them), tests/parser/test_self_differential.rs.
 - A new gap found on the way becomes its own card in this topic (todo add … --topic self-hosted).
