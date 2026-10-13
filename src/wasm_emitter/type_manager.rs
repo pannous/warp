@@ -370,25 +370,6 @@ impl TypeManager {
 	pub fn types_mut(&mut self) -> &mut TypeSection {
 		&mut self.types
 	}
-
-	/// Get the current type count (for creating new type indices)
-	pub fn len(&self) -> u32 {
-		self.types.len()
-	}
-
-	pub fn is_empty(&self) -> bool {
-		self.len() == 0
-	}
-
-	/// Get the next type index
-	pub fn next_type_idx(&self) -> u32 {
-		self.next_type_idx
-	}
-
-	/// Get mutable access to user type indices (for compatibility)
-	pub fn user_type_indices_mut(&mut self) -> &mut HashMap<String, u32> {
-		&mut self.user_type_indices
-	}
 }
 
 /// The fields of $String: ptr and len of its bytes in linear memory

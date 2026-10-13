@@ -105,14 +105,4 @@ impl StringTable {
 	pub fn data_section(&self) -> &DataSection {
 		&self.data_section
 	}
-
-	/// Get the current data offset (for tracking memory usage)
-	pub fn next_offset(&self) -> u32 {
-		self.next_offset
-	}
-
-	/// Get a reference to the underlying table
-	pub fn table(&self) -> &HashMap<String, u32> {
-		&self.table
-	}
 }
