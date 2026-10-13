@@ -138,6 +138,10 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
 4. Named patterns as values: `pattern Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
+   find done (src/lowering/tree_find.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
+   generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
+   names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
+   Open: `tree replace p with q` (rebuilding maps at run time), `found = [[…]] find P` parses as an assignment first.
 6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
 7. Code patterns: quoted code with holes, `` `$a + 0` => a ``; needs card parse-word (real Nodes of a source).
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be

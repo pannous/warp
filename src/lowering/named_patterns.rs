@@ -6,6 +6,7 @@
 
 use super::nodes::{children_rewritten, key};
 use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, rest_pattern, split_switch, WILDCARD};
+use super::tree_find::FIND_WORD;
 use crate::diagnostic::Diagnostic;
 use crate::node::Node;
 use crate::operators::Op;
@@ -113,10 +114,23 @@ fn substituted(node: Node, patterns: &Patterns) -> Node {
 				let items = items.into_iter().map(|item| with_case_keys(item, patterns)).collect();
 				Node::List(items, bracket, separator)
 			}
-			_ => Node::List(items, bracket, separator),
+			_ => Node::List(with_found_patterns(items, patterns), bracket, separator),
 		},
 		other => other,
 	}
+}
+
+/// `page find Image`: the pattern after the word find
+fn with_found_patterns(items: Vec<Node>, patterns: &Patterns) -> Vec<Node> {
+	let mut after_find = false;
+	items
+		.into_iter()
+		.map(|item| {
+			let item = if after_find { resolved(item, patterns) } else { item };
+			after_find = item.is_symbol(FIND_WORD);
+			item
+		})
+		.collect()
 }
 
 /// The subject of the first test of `x is A and B`

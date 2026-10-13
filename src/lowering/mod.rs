@@ -94,6 +94,7 @@ pub mod test_blocks;
 pub mod times_phrases;
 pub mod traits;
 pub mod transitions;
+pub mod tree_find;
 pub mod tuples;
 pub mod type_aliases;
 pub mod type_constructor;

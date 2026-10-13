@@ -285,6 +285,17 @@ fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>) -> Node {
 	sequence(statements)
 }
 
+/// The names a pattern binds, in order
+pub(crate) fn bound_names(pattern: &Node) -> Vec<Node> {
+	let (mut tests, mut bindings) = (vec![], vec![]);
+	pattern_tests(pattern, Node::Empty, &mut tests, &mut bindings);
+	bindings
+		.iter()
+		.filter_map(bound)
+		.map(|(name, _)| name.clone())
+		.collect()
+}
+
 /// The name and value of a binding `let name = value`
 fn bound(binding: &Node) -> Option<(&Node, &Node)> {
 	match binding.drop_meta() {
