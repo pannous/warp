@@ -113,7 +113,9 @@ thread_local! {
 
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
-	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, run)
+	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, || {
+		crate::sandbox::confined(run)
+	})
 }
 
 /// `run` with the program granted only `granted`
@@ -643,10 +645,17 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
-		return Err(crate::node::error(&format!(
-			"capability denied: {name} needs the {} capability, which eval does not grant",
-			capability.name()
-		)));
+		return Err(crate::node::error(&if crate::sandbox::is_sandboxed() {
+			crate::sandbox::denial(&name, capability.name())
+		} else {
+			format!(
+				"capability denied: {name} needs the {} capability, which eval does not grant",
+				capability.name()
+			)
+		}));
+	}
+	if let Some(denial) = crate::sandbox::first_refused(effects.externals.keys()) {
+		return Err(crate::node::error(&denial));
 	}
 	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
 		without_constraints(node),

@@ -16,6 +16,7 @@ pub(crate) fn text_value(node: &Node) -> Option<String> {
 
 /// module.member applied to the arguments (a list node)
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
+	crate::sandbox::check_std_word(module, member)?;
 	let arguments = arguments.as_items();
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
 	let text_of =

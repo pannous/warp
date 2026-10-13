@@ -99,7 +99,11 @@ lambda's DNS moves to Cloudflare):
   warp-lambda@*.service), install.sh (over ssh, optional Linux binary:
   `cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.39 --bin warp`).
 - Sandboxed (user, 2026-10-09): `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
-  runtimes: "capability denied" at deploy). The unit: DynamicUser, own state folder
+  runtimes: "capability denied" at deploy). Since card sandbox-exec (2026-10-13, supervisor: urgent security) it
+  also refuses every word that starts a process (`exec sh"…"`), writes a file (file.write/write_bytes/append,
+  midi.write_file, sound.render) or reaches the network (fetch, net.*), by name in src/sandbox.rs: at compile time
+  where the word shows, at run time where a library word hides it (std_io), "capability denied: … which
+  warp --sandbox does not grant". serve, stored values and SQLite stay. The unit: DynamicUser, own state folder
   /var/lib/warp-lambda-data/<name> (wiped by `systemctl clean` on remove), the source read-only, ProtectSystem=strict,
   192 MB, half a core, 64 tasks. Network: the program listens on 127.0.0.2; IPAddressDeny of localhost, private
   ranges and the server's own IP with only 127.0.0.2 allowed, so it reaches the internet but not the ssh gateway
