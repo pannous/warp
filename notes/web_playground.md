@@ -152,6 +152,13 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   once in a fresh instance. The pool is made by worker.js / test-worker.js at start (prepareTaskPool): a Worker made
   while a program runs would never start. test_in_browser.py sends COOP/COEP; index.html registers
   coi-serviceworker.js, which adds them on GitHub Pages (one reload, guarded by sessionStorage "isolating").
+- With every Worker of the pool busy, a task used to run inline in the program's isolate, where a channel's sender can
+  never meet its receiver: `ch.send waits forever` (card primer-channel-flake: the primer's channel snippet once in
+  ~100 CI runs, when the pool was short; tests/control/test_channels.rs a_sender_queued_behind_busy_tasks_is_received
+  makes it certain with 6 sleeping tasks). Now it is queued, as natively behind the fixed thread pool (src/tasks.rs):
+  startQueuedTasks moves queued tasks onto Workers whose tasks are done (released before their record is read) at
+  every wait for a task or channel, check point and loop start. Inline remains in a task (its Worker has no pool), in
+  a run without Workers, and when the run holds no Worker that could free.
 - card coi-headless (2026-10-08): the reload does happen, on warp.pannous.com and a plain local server, in a fresh
   profile of headless Chrome (agent-browser) and of WebKit 26 (Playwright, probes/webkit_samples.mjs, 3 of 3). Without
   isolation (service worker blocked: ISOLATED=no in that probe, a private window) tasks take turns: `tasks` prints out

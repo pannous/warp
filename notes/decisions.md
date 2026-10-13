@@ -7,6 +7,13 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- data-stays-data (warp-operator-shall, user: "data should stay data unless an explicit hole like ${} is used";
+  implied by wiki-full-evaluation and D2): in data a bare word stays a symbol, `friends{peter created:now}` prints
+  `created:now`; only `!` (`now!`, `{…}!`) and `${…}` holes evaluate. Today's evaluation of a bare `now` is a bug.
+  Which further levels of data evaluation exist stays open until a concrete case.
+- schema-as (user: "loaded as Config should work"): `x as Config` for a named pattern or schema gives x when it fits,
+  converting field by field where `as` converts ("80" → 80 for an int field), otherwise an error naming the field;
+  `x is Config` stays the strict test.
 - gpu-f32 (warp-perf, user: "Math is exact by default, except when doing lots of computation. GPU should be F32 too
   by default. With a little warning. It's only applied for mass calculations, anyways."): P240 stands, a heavy float
   map (327,680+ items) runs on the GPU in f32 by itself with a one-time notice; the GPU functions (card
@@ -68,6 +75,8 @@ notes/open_decisions.md.
   cleanly (pattern matching on tree shapes, a `parse` word giving real Nodes, tagged unions, a text cursor, bytes and
   bits, deep recursion, fast big literals; topic parser-features) and the Rust code has had a proper cleanup (topic
   cleanup). What exists stays: lexer, serializer and parser twins with their differential tests on main.
+- rust-forms-welcome: warp may read Rust's own forms (topic rust-reading), generics `<T>` included, as long as every
+  one has a nicer warp form of its own; the Rust form is an accepted alternative, the warp form stays canonical.
 - warning-levels: diagnostics get levels hint < weak < normal < severe (no "strong"); errors stay separate.
 - hints-are-warnings (supervisor, from the user's worry, undoable): hints and warnings become one system, one
   Diagnostic with a level, one collector, printer and threshold; `--no-hints` and `use strict` become thresholds

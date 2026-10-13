@@ -20,6 +20,7 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
+  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -62,6 +63,7 @@ PASSED:
   ✓ control::test_cell_truth::not_of_a_cell_value
   ✓ control::test_channels::a_channel_passed_to_a_function
   ✓ control::test_channels::a_machine_channel_has_the_same_words
+  ✓ control::test_channels::a_sender_queued_behind_busy_tasks_is_received
   ✓ control::test_channels::a_value_sent_in_a_task_is_received
   ✓ control::test_channels::closed_channels_and_tasks_left_waiting
   ✓ control::test_channels::for_over_a_channel_receives_until_it_is_closed
@@ -78,6 +80,7 @@ PASSED:
   ✓ control::test_code_holes::a_hole_binds_the_subtree
   ✓ control::test_code_holes::a_hole_matches_inside_a_call
   ✓ control::test_code_holes::a_repeated_hole_must_be_the_same_subtree
+  ✓ control::test_code_holes::an_indexed_copy_of_a_parameter_takes_code
   ✓ control::test_code_holes::is_tests_a_code_pattern
   ✓ control::test_colon_handlers::a_listener_body_after_a_colon_is_the_rest_of_the_line
   ✓ control::test_colon_handlers::a_timer_body_after_a_colon_is_the_rest_of_the_line
@@ -1426,6 +1429,7 @@ PASSED:
   ✓ functions::test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
   ✓ functions::test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
   ✓ functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
+  ✓ functions::test_object_arguments::a_typed_library_word_names_its_parameter_for_a_number
   ✓ functions::test_object_arguments::an_instance_of_another_class_is_a_type_error
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
@@ -1457,6 +1461,8 @@ PASSED:
   ✓ functions::test_parameter_overloads::a_similarity_compares_the_phrase_calls_value
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
+  ✓ functions::test_parameter_overloads::an_untyped_variant_is_the_fallback
+  ✓ functions::test_parameter_overloads::of_any_is_the_fallback_variant
   ✓ functions::test_parameter_patterns::a_class_parameter_names_its_fields
   ✓ functions::test_parameter_patterns::a_list_parameter_names_its_items
   ✓ functions::test_parameter_patterns::a_value_of_another_shape_is_an_error
@@ -2348,6 +2354,7 @@ PASSED:
   ✓ numbers::test_compound_accumulator::a_compound_accumulator_takes_floats_of_unknown_origin
   ✓ numbers::test_counting_units::count_unit_of_text
   ✓ numbers::test_counting_units::size_of_text_in_unit
+  ✓ numbers::test_data_number_words::a_number_word_in_quoted_data_stays_a_word
   ✓ numbers::test_decimal_units::a_decimal_amount_of_a_unit_is_exact
   ✓ numbers::test_decimal_units::sleep_takes_a_decimal_duration
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_accepts_exact_reals
@@ -2918,6 +2925,7 @@ PASSED:
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ parser::test_bare_operator_block::a_bare_operator_block_names_the_fix
   ✓ parser::test_bare_operator_block::operators_with_operands_in_blocks_still_work
+  ✓ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
   ✓ parser::test_comments::test_block_comments
@@ -4212,6 +4220,7 @@ PASSED:
   ✓ types::test_tuple_values::tuples_compare_element_by_element
   ✓ types::test_type_alias_fields::alias_as_field_type
   ✓ types::test_type_alias_fields::alias_as_optional_field_and_parameter
+  ✓ types::test_type_alias_fields::is_tests_the_type_an_alias_names
   ✓ types::test_type_alias_fields::types_sample_runs
   ✓ types::test_type_calls::a_function_of_the_program_keeps_its_name
   ✓ types::test_type_calls::a_function_of_the_program_keeps_its_name_braceless
@@ -5136,6 +5145,7 @@ PASSED:
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_open_range_slices::a_slice_from_the_start
   ✓ welcoming::test_open_range_slices::a_slice_to_the_end
+  ✓ welcoming::test_own_definition_hint::the_program_s_own_parse_json_gets_no_note
   ✓ welcoming::test_parser_runtime_positions::an_index_after_a_call_names_the_caller_line
   ✓ welcoming::test_parser_runtime_positions::an_index_in_a_function_names_its_line
   ✓ welcoming::test_parser_runtime_positions::an_index_out_of_range_names_its_line
@@ -5289,9 +5299,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
-  ✗ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-12 ignored, 5286 passed, 3 failed, 5289 total tested
+12 ignored, 5296 passed, 1 failed, 5297 total tested

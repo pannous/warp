@@ -48,3 +48,14 @@ fn closed_channels_and_tasks_left_waiting() {
 	crate::common::fails_with("ch = channel(); ch.close(); ch.close()", "close of a closed channel");
 	is!("ch = channel(); go { ch.send(1) }; 5", 5);
 }
+
+// more tasks than Workers (the playground's pool holds 4): the sender waits its turn like natively queued tasks, and
+// the receiver meets it; run inline it could never answer (card primer-channel-flake)
+#[test]
+fn a_sender_queued_behind_busy_tasks_is_received() {
+	is!(
+		"for k in 1 to 6 { go { sleep(300 ms) } }; ch = channel(); go { ch.send(5) }; ch.receive()",
+		5
+	);
+	is!("jobs = []; for k in 1 to 6 { jobs.add(go { sleep(100 ms); k }) }; ch = channel(); go { for k in 1 to 3 { ch.send(k) }; ch.close() }; received = 0; for v in ch { received += v }; [sum(await all jobs), received]", warp::ints(vec![21, 6]));
+}

@@ -115,6 +115,7 @@ function renderGuide(markdown) {
 const renderedGuides = {}; // level → its rendered intro and chapters
 
 function chosenLevel() {
+	if (!document.querySelector(".guide-level")) return "beginner"; // the level switch is deactivated in index.html
 	const named = new URLSearchParams(location.search).get(LEVEL_PARAMETER);
 	return [named, stored(LEVEL_KEY)].find(level => level in renderedGuides) ?? "beginner";
 }
@@ -122,7 +123,7 @@ function chosenLevel() {
 // shows the guide of that level, with the chapter open in the other one
 function showLevel(level) {
 	const open = document.querySelector(".guide-chapter[open]")?.id;
-	$("guide-chapters")?.replaceChildren(...renderedGuides[level]); // index.html may deactivate the chapters
+	$("guide-chapters").replaceChildren(...renderedGuides[level]);
 	for (const button of document.querySelectorAll(".guide-level button")) button.setAttribute("aria-pressed", button.value === level);
 	store(LEVEL_KEY, level);
 	if (open) document.getElementById(open).open = true;
@@ -179,7 +180,7 @@ async function startGuide() {
 		// the beginner guide first: its Examples lines group the example menu
 		for (const [level, file] of Object.entries(GUIDE_FILES)) renderedGuides[level] = renderGuide(await (await fetch(file)).text());
 	} catch (error) {
-		if ($("guide-chapters")) $("guide-chapters").textContent = `the guide did not load: ${error.message}`;
+		$("guide-chapters").textContent = `the guide did not load: ${error.message}`;
 		return;
 	}
 	for (const button of document.querySelectorAll(".guide-level button")) button.onclick = () => showLevel(button.value);
