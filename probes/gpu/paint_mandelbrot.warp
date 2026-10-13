@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // card gpu-functions step 4: the Mandelbrot set as paint(f, width, height) of a warp function; a fragment shader on
 // the GPU, pixel by pixel on the CPU with WARP_GPU=off (samples/mandelbrot_canvas.warp loops over the pixels itself)
 width = 1920
