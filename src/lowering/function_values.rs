@@ -7,7 +7,8 @@
 use super::nodes::{call, children_rewritten, key, parameter_name};
 use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
-use crate::library_words::substitute;
+use crate::library_words::{arity, canonical_spelling, is_standard_function, substitute};
+use crate::modules::prelude_word_arity;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -19,6 +20,8 @@ const PARTIAL_HOLE: &str = "_";
 pub(crate) const LAMBDA_PREFIX: &str = "lambda_value_";
 /// Words whose last argument is a function
 pub(crate) const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
+/// `argument·1`: a parameter of the function a library word given as a function becomes; no name the user writes
+const LIBRARY_WORD_PARAMETER: &str = "argument·";
 /// Words between two values that make a spaced list no call of its first item: `p in xs`
 const INFIX_WORDS: [&str; 6] = ["in", "is", "of", "and", "or", "as"];
 
@@ -456,7 +459,9 @@ impl Specialising {
 			_ => {
 				self.counter += 1;
 				let name = format!("{LAMBDA_PREFIX}{}", self.counter);
-				let definition = lambda_definition(&name, argument)?;
+				let definition = self
+					.library_word_lambda(&name, argument)
+					.or_else(|| lambda_definition(&name, argument))?;
 				let parsed = Definition::from(&definition)?;
 				let free = free_variables(&parsed);
 				if free.iter().any(|variable| self.variables.contains(variable)) {
@@ -467,6 +472,22 @@ impl Specialising {
 				Some(name)
 			}
 		}
+	}
+
+	/// A library word given as a function (`f(is_letter)`, `twice(upper, t)`) is a function calling it with as many
+	/// parameters as the word takes: `lambda_value_1(argument·1) := is_letter(argument·1)`
+	fn library_word_lambda(&self, name: &str, argument: &Node) -> Option<Node> {
+		let Node::Symbol(word) = argument.drop_meta() else {
+			return None;
+		};
+		let known = is_standard_function(word) || prelude_word_arity(word).is_some();
+		if !known || self.variables.contains(word) {
+			return None;
+		}
+		let parameters: Vec<Node> = (1..=arity(canonical_spelling(word)))
+			.map(|index| Node::Symbol(format!("{LIBRARY_WORD_PARAMETER}{index}")))
+			.collect();
+		Some(key(call(name, parameters.clone()), Op::Define, call(word, parameters)))
 	}
 
 	fn rewrite(&mut self, node: Node) -> Node {
