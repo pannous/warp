@@ -63,7 +63,7 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 30] = [
+const SYNONYMS: [(&str, &[&str]); 31] = [
 	(crate::wasm_emitter::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
@@ -93,6 +93,7 @@ const SYNONYMS: [(&str, &[&str]); 30] = [
 	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
+	("is_space", &["is_whitespace", "isspace"]),
 	("nearest", &[]),
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
 	(DICT_WORD, &[]),

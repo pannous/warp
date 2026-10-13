@@ -15,6 +15,7 @@ mod test_less_than_compare;
 mod test_like;
 mod test_like_known_type_mismatch;
 mod test_logic_grouped_operands;
+mod test_logical_block_operand;
 mod test_logical_calls;
 mod test_logical_values_in_functions;
 mod test_minus_after_callable;

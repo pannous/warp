@@ -4,6 +4,9 @@
 use std::process::Command;
 
 const DETACHED_HEAD: &str = "HEAD";
+/// The main thread's stack of the warp binary on macOS (Linux takes `ulimit -s`): wasm runs on it and gets all but
+/// a host part (warp_runtime::engine::give_main_stack_to_wasm), for deep recursion (card deep-recursion)
+const MAIN_STACK_BYTES: u64 = 512 << 20; // ld: at most 512 MB on arm64
 
 fn git(arguments: &[&str]) -> Option<String> {
 	let output = Command::new("git")
@@ -16,6 +19,9 @@ fn git(arguments: &[&str]) -> Option<String> {
 
 fn main() {
 	println!("cargo:rerun-if-changed=build.rs");
+	if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+		println!("cargo:rustc-link-arg-bin=warp=-Wl,-stack_size,{MAIN_STACK_BYTES:#x}");
+	}
 	// logs/HEAD grows on every commit, checkout and reset, also of a worktree (its own git dir)
 	// (a missing file would rerun this on every build)
 	if let Some(head_log) =
