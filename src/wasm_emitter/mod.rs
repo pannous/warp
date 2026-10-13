@@ -34,6 +34,7 @@ mod list_emitter;
 pub(crate) mod list_sharing;
 mod node_api;
 mod similarity;
+mod text_rooms;
 mod text_unicode;
 mod time_arithmetic;
 pub(crate) mod time_zones;
@@ -354,6 +355,7 @@ pub struct WasmGcEmitter {
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
+	text_room_globals: Option<u32>, // the first global of the rooms texts grow into (text_rooms.rs)
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
@@ -445,6 +447,7 @@ impl WasmGcEmitter {
 			returned_tuple: vec![],
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
+			text_room_globals: None,
 			discovered_needs: Default::default(),
 			inherited_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),

@@ -13,6 +13,8 @@ use Instruction as I;
 use ValType::Ref;
 
 pub const TEXT_CONCAT: &str = "text_concat";
+/// text_concat for a text held in a variable, which may be built up (`t += x`): it grows into rooms (text_rooms.rs)
+pub const TEXT_APPEND: &str = "text_append";
 pub const TEXT_OF: &str = "text_of";
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
@@ -308,6 +310,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	let calls_text_of = [
 		crate::wasm_emitter::VALUES_EQUAL,
 		TEXT_CONCAT,
+		TEXT_APPEND,
 		BYTE_AT,
 		BYTE_SLICE,
 		TEXT_TRIM,
@@ -591,7 +594,8 @@ impl WasmGcEmitter {
 	pub(super) fn emit_text_concat(&mut self, func: &mut Function, left: &Node, right: &Node) {
 		self.emit_concatenated(func, left);
 		self.emit_concatenated(func, right);
-		self.emit_call(func, TEXT_CONCAT);
+		let builds_a_variable = matches!(left.drop_meta(), Node::Symbol(_));
+		self.emit_call(func, if builds_a_variable { TEXT_APPEND } else { TEXT_CONCAT });
 	}
 
 	/// A value whose kind is known only at run time (a map value, arithmetic of an any value, a stored error), not ø itself
@@ -1142,123 +1146,8 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// text_concat(left, right): a fresh text, left's bytes then right's; an Error operand is the result, errors propagate
-		if self.should_emit_function(TEXT_CONCAT) {
-			self.emit_text_heap_global();
-			let (left_length, right_length, length, copy) = (2, 3, 4, 5);
-			self.runtime_function(
-				TEXT_CONCAT,
-				vec![node_ref, node_ref],
-				vec![node_ref],
-				vec![int; 4],
-				|s, f| {
-					for side in 0..2 {
-						s.emit_field(f, side, 0);
-						Self::emit_list(
-							f,
-							&[
-								I::I64Const(Kind::Error as i64),
-								I::I64Eq,
-								I::If(BlockType::Empty),
-								I::LocalGet(side),
-								I::Return,
-								I::End,
-							],
-						);
-					}
-					for side in 0..2 {
-						f.instruction(&I::LocalGet(side));
-						s.call(f, TEXT_OF);
-						f.instruction(&I::LocalSet(side));
-					}
-					s.emit_text_field(f, 0, 1);
-					f.instruction(&I::LocalTee(left_length));
-					s.emit_text_field(f, 1, 1);
-					Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
-					let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-					let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
-					// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
-					// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
-					// bytes) already follows left: nothing to copy
-					s.emit_text_field(f, 0, 0);
-					Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(f, &[I::I32Eq]);
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(right_length),
-							I::I32Add,
-							I::GlobalGet(heap),
-							I::I32Eq,
-							I::I32And,
-							I::LocalGet(left_length),
-							I::I32Const(0),
-							I::I32Ne,
-							I::I32And,
-						],
-					);
-					Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(copy),
-							I::LocalGet(left_length),
-							I::I32Add,
-							I::GlobalGet(heap),
-							I::I32Eq,
-							I::LocalGet(left_length),
-							I::I32Const(0),
-							I::I32Ne,
-							I::I32And,
-						],
-					);
-					f.instruction(&I::If(BlockType::Empty));
-					s.emit_memory_room(f, heap, right_length);
-					f.instruction(&I::GlobalGet(heap));
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(right_length),
-							copy_bytes.clone(),
-							I::GlobalGet(heap),
-							I::LocalGet(right_length),
-							I::I32Add,
-							I::GlobalSet(heap),
-						],
-					);
-					f.instruction(&I::Else);
-					s.emit_text_allocation(f, length, copy);
-					f.instruction(&I::LocalGet(copy));
-					s.emit_text_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(left_length),
-							copy_bytes.clone(),
-							I::LocalGet(copy),
-							I::LocalGet(left_length),
-							I::I32Add,
-						],
-					);
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(right_length),
-							copy_bytes,
-							I::End,
-							I::End,
-							I::LocalGet(copy),
-							I::LocalGet(length),
-						],
-					);
-					s.call(f, "new_text");
-				},
-			);
-		}
+		self.emit_text_joiner(TEXT_CONCAT, false);
+		self.emit_text_joiner(TEXT_APPEND, true);
 
 		// read_text(path): the file's bytes as text, or an Error node with the reason
 		if self.should_emit_function(READ_TEXT) {
@@ -1282,5 +1171,121 @@ impl WasmGcEmitter {
 				});
 			}
 		}
+	}
+
+	/// text_concat(left, right): a fresh text, left's bytes then right's; an Error operand is the result, errors
+	/// propagate. text_append, called for a variable's text, also grows texts into rooms (text_rooms.rs)
+	fn emit_text_joiner(&mut self, name: &'static str, grows_in_rooms: bool) {
+		if !self.should_emit_function(name) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let int = ValType::I32;
+		self.emit_text_heap_global();
+		let (left_length, right_length, length, copy, room) = (2, 3, 4, 5, 6);
+		self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![int; 5], |s, f| {
+			for side in 0..2 {
+				s.emit_field(f, side, 0);
+				Self::emit_list(
+					f,
+					&[
+						I::I64Const(Kind::Error as i64),
+						I::I64Eq,
+						I::If(BlockType::Empty),
+						I::LocalGet(side),
+						I::Return,
+						I::End,
+					],
+				);
+			}
+			for side in 0..2 {
+				f.instruction(&I::LocalGet(side));
+				s.call(f, TEXT_OF);
+				f.instruction(&I::LocalSet(side));
+			}
+			s.emit_text_field(f, 0, 1);
+			f.instruction(&I::LocalTee(left_length));
+			s.emit_text_field(f, 1, 1);
+			Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
+			let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+			let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
+			// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
+			// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
+			// bytes) already follows left: nothing to copy
+			s.emit_text_field(f, 0, 0);
+			Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(f, &[I::I32Eq]);
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(right_length),
+					I::I32Add,
+					I::GlobalGet(heap),
+					I::I32Eq,
+					I::I32And,
+					I::LocalGet(left_length),
+					I::I32Const(0),
+					I::I32Ne,
+					I::I32And,
+				],
+			);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(copy),
+					I::LocalGet(left_length),
+					I::I32Add,
+					I::GlobalGet(heap),
+					I::I32Eq,
+					I::LocalGet(left_length),
+					I::I32Const(0),
+					I::I32Ne,
+					I::I32And,
+				],
+			);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_memory_room(f, heap, right_length);
+			f.instruction(&I::GlobalGet(heap));
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(right_length),
+					copy_bytes.clone(),
+					I::GlobalGet(heap),
+					I::LocalGet(right_length),
+					I::I32Add,
+					I::GlobalSet(heap),
+				],
+			);
+			// a left text ending where its room is used up grows there (text_rooms.rs); else both are copied
+			Self::emit_list(f, &[I::Else, I::Block(BlockType::Empty)]);
+			if grows_in_rooms {
+				s.emit_grow_in_room(f, copy, left_length, right_length, room, 0);
+			}
+			s.emit_text_allocation(f, length, copy);
+			f.instruction(&I::LocalGet(copy));
+			s.emit_text_field(f, 0, 0);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(left_length),
+					copy_bytes.clone(),
+					I::LocalGet(copy),
+					I::LocalGet(left_length),
+					I::I32Add,
+				],
+			);
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes]);
+			if grows_in_rooms {
+				s.emit_room_behind(f, copy, length, room);
+			}
+			Self::emit_list(f, &[I::End, I::End, I::End, I::LocalGet(copy), I::LocalGet(length)]);
+			s.call(f, "new_text");
+		});
 	}
 }
