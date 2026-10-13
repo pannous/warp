@@ -225,7 +225,7 @@ fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usi
 	}
 	// a numeric kernel maps a linear array as one loop into a new block (f64x2 lanes where it can)
 	if let Some((_, lambda)) = map_parts(part).filter(|(array, _)| is_name(array)) {
-		let kernel = usize::from(crate::gpu_maps::kernel(lambda).is_some());
+		let kernel = usize::from(crate::gpu_maps::linear_kernel(lambda).is_some());
 		return (kernel, kernel);
 	}
 	let single = match part.drop_meta() {
@@ -810,7 +810,7 @@ fn map_parts(value: &Node) -> Option<(&Node, &Node)> {
 fn numeric_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node)> {
 	let (array, lambda) = map_parts(value)?;
 	let (array, lambda) = crate::gpu_maps::fused(array.clone(), lambda.clone());
-	(is_linear_floats(&array, names) && crate::gpu_maps::kernel(&lambda).is_some()).then_some((array, lambda))
+	(is_linear_floats(&array, names) && crate::gpu_maps::linear_kernel(&lambda).is_some()).then_some((array, lambda))
 }
 
 fn is_linear_floats(array: &Node, names: &HashMap<String, Shared>) -> bool {

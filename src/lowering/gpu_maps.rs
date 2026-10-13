@@ -537,6 +537,12 @@ pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
 	})
 }
 
+/// The kernel of a lambda the CPU maps as one loop over linear memory: without calls of the program's functions, which
+/// go to the GPU only (card gpu-functions), the CPU calling them on a list as before
+pub(crate) fn linear_kernel(lambda: &Node) -> Option<Kernel> {
+	kernel(lambda).filter(|kernel| kernel.functions.is_empty())
+}
+
 /// The kernel of a lambda worth the GPU: one of only arithmetic is faster on the CPU at any count
 pub(crate) fn gpu_kernel(lambda: &Node) -> Option<Kernel> {
 	kernel(lambda).filter(|kernel| kernel.heavy)
