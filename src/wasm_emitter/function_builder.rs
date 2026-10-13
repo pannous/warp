@@ -97,6 +97,24 @@ impl WasmGcEmitter {
 		}
 	}
 
+	pub(super) fn emit_new_text(&self, func: &mut Function, address: u32, length: u32) {
+		Self::emit_list(func, &[I::LocalGet(address), I::LocalGet(length)]);
+		self.call(func, "new_text");
+	}
+
+	pub(super) fn emit_new_text_to(&self, func: &mut Function, address: u32, position: u32) {
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(address),
+				I::LocalGet(position),
+				I::LocalGet(address),
+				I::I32Sub,
+			],
+		);
+		self.call(func, "new_text");
+	}
+
 	/// `while condition { body }`: `condition` leaves an i32, `body` leaves nothing
 	pub(super) fn emit_while(func: &mut Function, condition: &[Instruction], body: &[Instruction]) {
 		Self::emit_list(func, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
