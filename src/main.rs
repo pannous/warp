@@ -136,6 +136,7 @@ fn main() {
 	warp::crash_card::install();
 	end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
 	warp::paint::allow_windows();
+	warp_runtime::engine::give_main_stack_to_wasm();
 	apply_flags(&mut args);
 	match args.iter().position(|arg| arg == SANDBOX_FLAG) {
 		Some(flag) => {
