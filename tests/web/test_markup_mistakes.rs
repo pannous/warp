@@ -88,3 +88,18 @@ fn right_markup_stays_quiet() {
 		assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
 	}
 }
+
+/// card class-literal: the fields of a class literal are no elements, even named like one (`source`, `title`, `label`)
+#[test]
+fn a_class_literal_field_named_like_an_element_is_no_markup() {
+	let code = "class Parser { source: text }\np = Parser{source: \"ab\"}\np.source";
+	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
+	crate::is!(code, "ab");
+	let nested = "class Page { title: text }\nPage{title: \"T\"}.title";
+	assert_eq!(warnings_of(nested), Vec::<String>::new(), "{nested}");
+	// a field's value is still markup
+	warns(
+		"class Page { body: any }\npage = Page{body: img{ alt: \"a\" \"text inside\" }}",
+		"img takes no content: it is dropped",
+	);
+}

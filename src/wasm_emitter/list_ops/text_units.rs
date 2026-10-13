@@ -80,6 +80,41 @@ impl WasmGcEmitter {
 		// grapheme_end(pointer, end): past the grapheme cluster starting at pointer, like strings::grapheme_clusters
 		self.runtime_function("grapheme_end", vec![int, int], vec![int], vec![int; 3], |s, f| {
 			let (previous, next, unpaired) = (2, 3, 4);
+			// fast path (card text-costs): an ASCII character but \r before an ASCII one or the end is a whole grapheme
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(0),
+					I::I32Load8U(BYTE),
+					I::LocalTee(previous),
+					I32Const(0x80),
+					I::I32LtU,
+					I::LocalGet(previous),
+					I32Const('\r' as i32),
+					I::I32Ne,
+					I::I32And,
+					I::If(BlockType::Empty),
+					I::LocalGet(0),
+					I32Const(1),
+					I::I32Add,
+					I::LocalTee(next),
+					I::LocalGet(1),
+					I::I32GeU,
+					I::If(BlockType::Empty),
+					I::LocalGet(next),
+					I::Return,
+					I::End,
+					I::LocalGet(next),
+					I::I32Load8U(BYTE),
+					I32Const(0x80),
+					I::I32LtU,
+					I::If(BlockType::Empty),
+					I::LocalGet(next),
+					I::Return,
+					I::End,
+					I::End,
+				],
+			);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "utf8_decode");
 			Self::emit_list(f, &[I::LocalSet(previous), I::LocalGet(0), I::LocalGet(1)]);
