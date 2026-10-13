@@ -52,3 +52,12 @@ fn a_pattern_without_open_parts_binds() {
 fn a_pattern_assigned_without_the_keyword_is_an_error() {
 	fails_with("Pair = [_, _]\n[1, 2] is Pair", "pattern Pair = …");
 }
+
+#[test]
+fn the_word_pattern_stays_a_call_outside_a_definition() {
+	// lib/sound.warp's `pattern "c e g"` is a call of the word; only `pattern Name = …` defines a pattern
+	is!(
+		"to pattern text: count(text)\npattern Pair = [_, _]\npattern(\"abc\") + count([[1, 2], [3]] where it is Pair)",
+		4
+	);
+}

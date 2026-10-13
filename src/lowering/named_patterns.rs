@@ -5,7 +5,7 @@
 //! always a value; one whose right side can only be a pattern (`Pair = [_, _]`) is the error whose fix is the keyword.
 
 use super::nodes::{children_rewritten, key};
-use super::switch::{is_switch_head, rest_pattern, split_switch, WILDCARD};
+use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, rest_pattern, split_switch, WILDCARD};
 use crate::diagnostic::Diagnostic;
 use crate::node::Node;
 use crate::operators::Op;
@@ -70,20 +70,26 @@ fn pattern_without_keyword(statement: &Node) -> Option<Node> {
 	}
 }
 
-/// A pattern no value could be: it holds `_`, an unnamed rest `..` or an item pattern
+/// A list or map literal no value could be: among its items (at any depth of nested list and map literals) a `_`, an
+/// unnamed rest `..` or an item pattern. A `_` elsewhere stays what it is, an argument placeholder in `add(1, _)`.
 fn is_open(pattern: &Node) -> bool {
+	(is_list_pattern(pattern) || is_map_pattern(pattern)) && literal_items(pattern).iter().any(is_open_part)
+}
+
+fn is_open_part(part: &Node) -> bool {
 	// a named rest `...xs` may be a spread of the list xs
-	if rest_pattern(pattern) == Some(None) {
-		return true;
-	}
-	match pattern.drop_meta() {
-		Node::Symbol(name) => name == WILDCARD,
-		Node::List(items, _, _) => items.iter().any(is_open),
-		Node::Key(left, Op::Range | Op::To, end) if matches!(end.drop_meta(), Node::Empty) => {
-			matches!(left.drop_meta(), Node::List(..))
-		}
-		Node::Key(_, Op::Colon, value) => is_open(value),
-		_ => false,
+	rest_pattern(part) == Some(None)
+		|| part.is_symbol(WILDCARD)
+		|| matches!(part.drop_meta(), Node::Key(each, Op::Range | Op::To, end)
+			if matches!(end.drop_meta(), Node::Empty) && matches!(each.drop_meta(), Node::List(..)))
+		|| matches!(part.drop_meta(), Node::Key(_, Op::Colon, value) if is_open_part(value))
+		|| is_open(part)
+}
+
+fn literal_items(literal: &Node) -> &[Node] {
+	match literal.drop_meta() {
+		Node::List(items, _, _) => items,
+		_ => &[],
 	}
 }
 

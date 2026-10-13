@@ -301,7 +301,7 @@ fn bound(binding: &Node) -> Option<(&Node, &Node)> {
 
 /// `{name: n, body: {user}}` matches a map partially (card map-patterns): only fields, each a name, `name: pattern`
 /// or an unnamed rest `..`
-fn is_map_pattern(pattern: &Node) -> bool {
+pub(crate) fn is_map_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
 		Node::List(fields, Bracket::Curly, _) => {
 			!fields.is_empty()
@@ -325,7 +325,7 @@ fn map_field(part: &Node) -> Option<(String, &Node)> {
 }
 
 /// `[a, b]` and the tuple `(a, b)` (card match-tuples) match by shape; a parenthesised single item `(x)` is a group
-fn is_list_pattern(pattern: &Node) -> bool {
+pub(crate) fn is_list_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
 		Node::List(_, Bracket::Square, _) => true,
 		Node::List(items, Bracket::Round, Separator::Colon) => items.len() > 1,
