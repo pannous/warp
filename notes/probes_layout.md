@@ -10,8 +10,16 @@ cargo homes, private index files; `data/` logs, results, patches, dumps; build o
   `.git/hooks/pre-commit` runs it too, for humans.
 - Templates `probes/algo/fixer_prompt.md` / `worker_prompt.md` use `scratch/<tag>.index`, `scratch/<tag>-export`, `data/<tag>/`.
 
-Migration: everything in probes/ that was not a source moved to scratch/ (repo copies, index files, binaries, copies of
-src/tests files) or data/ (logs, results, patches, renders); nothing deleted. The fixer exports still in probes
-(`*-export`, `*-work`, in use on 2026-10-02) stay ignored via `probes/*-export/`, `probes/*-work/` until their owners
-move them. Their topic snippet dirs (break elements listexpr listparams maps parse rangeblock sugar ask) were left for
-the owners' branches to commit, avoiding add/add conflicts.
+Migration (2026-10-02): non-sources in probes/ moved to scratch/ or data/.
+
+## Reusable checks (kept by cleanup-probe-scripts, 2026-10-13)
+One-off scripts go once their finding is in a note or a test; these stay because they re-check something:
+- docs against main: `probes/keyword_examples.py` (wiki/keyword.md results), `probes/primer_check.py` (primer fences)
+- queue guards: `probes/queue_memory_cap.sh`, `probes/test_queue_time_limit.sh`; hooks: `probes/write_hook/check_hook.sh`
+- terminal (pty): `probes/console_ctrl_c.py`, `probes/hints_dismissed/answer_got_it.py <answer> warp prog.warp`
+- builds and packages: `probes/aot/build_exe.sh`, `probes/binary_packages/run_tool.sh`
+- speed: `probes/perf/sample_times.py` (slowest samples)
+- playground: `probes/todo_app/in_playground.sh` (needs a browser: CI only, notes/ci.md)
+- self-hosting: `probes/self_hosting/parser/compare_forms.sh`; uniscript: `probes/uniscript_fonts_test.py`,
+  `probes/entities_index/names.py`
+- code cleanup: probes/cleanup/ (notes/cleanup.md)

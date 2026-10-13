@@ -2,8 +2,6 @@
 
 - The file is `Footguns.md` (capital F). The checkout is case-insensitive (`core.ignorecase=true`):
   `git add footguns.md` silently stages nothing for the untracked file; use the real name.
-- `probes/footguns/footguns.sh` rebuilds warp and evaluates every case in `probes/footguns/cases.warp`
-  (cases separated by `---` lines) into `probes/footguns/results.txt`. Rerun it after compiler changes and diff.
 - `tests/welcoming/test_footguns.rs`: passing tests = Solved entries; `#[ignore = "next"]` = NOT YET entries with a clear answer.
   When a NOT YET bug gets fixed, un-ignore its test and move the entry to Solved.
 - `warp eval` and `is!` use the same `wasm_emitter::eval`, so CLI output is representative.
@@ -24,15 +22,11 @@
   (`test_proof_model_matches_unbounded_int`). Explicit `as i64` proof terms remain future work.
 
 ## Inspiration notes ("Solved elsewhere")
-- Research agents write one file per topic group to `probes/footguns/inspiration/<group>.md` (brief: `BRIEF.md`),
-  never Footguns.md directly; `python3 probes/footguns/merge_inspiration.py` appends them under matching headings
-  (idempotent: entries that already have "Solved elsewhere:" are skipped). Diff for deleted lines after merging.
-- Group `injection-time-effects` was sent to the cloud session "footgun.md (cloud)" on 2026-09-26: delivery reported
-  success but the route is one-way and the session stayed idle (likely awaiting approval). Once it pushes
-  `probes/footguns/inspiration/injection-time-effects.md`, rerun the merge script.
+- The 2026-09 research rounds (one file per topic group, merged under "Solved elsewhere:" headings) are done; their
+  scripts went with the untracked probes on 2026-09-30.
 
 ## Work area "literals" (2026-09-27, 9682281d)
-- Fixed in `src/warp_parser.rs` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
+- Fixed in `src/warp_parser/` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
   mantissa with `.` or negative exponent → Float; `_` accepted only between two digits; `.5`/`-.5` start a number
   (`number_starts_at`), a space before `.5` makes it a new list item instead of `Op::Dot`.
 - `‖x‖`: the closing bar used to be re-read as a new prefix Abs with an empty operand ("Unexpected character"); now
@@ -169,7 +163,7 @@
 - Left open: no WASM runtime representation of dates (functions/loops over dates are an explicit "not supported yet" error);
   `now` is the compiler's clock and is not an effect yet; no historical or southern-hemisphere zone rules; the parse-only
   data path (`data_mode`) does not lex dates or durations yet (it round-trips source text and has no date serialization).
-- Noticed: `Node == bool` ignores `Node::True`/`Node::False` (`PartialEq<bool>` in src/node.rs has no arm for them), so
+- Noticed: `Node == bool` ignores `Node::True`/`Node::False` (`PartialEq<bool>` in src/node/ has no arm for them), so
   `is!(…, true)` only works for Int 1/0 results; the time evaluator returns Int 1/0 like the rest of eval.
 
 ## Work area "number decisions" (2026-09-28)
@@ -205,7 +199,7 @@
 ## Work area "syntax decisions" (2026-09-28)
 - Decided and fixed: `&`/`|` vs comparison. `&`/`|` stay logical and/or (wiki/&.md); the parser turns a single-char `&`/`|`
   next to an ungrouped comparison into an error value with both groupings as fix-it (`logic_mixed_with_comparison` in
-  src/warp_parser.rs). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
+  src/warp_parser/). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
 - Decided and fixed: braceless calls. The argument takes arithmetic and stops at ranges/comparisons (ARGUMENT_BP 140), in operand
   position and, for functions of the implicit `it`, at statement level: `1 + f 3-1` → 21, `f 3-1 > 15` → true. This matches the
   legacy wasp tests (`3 + id 3+3` → 9, test_wasm.rs, ignored). A braceless call inside a braceless argument is rejected by

@@ -22,7 +22,7 @@ You are one cloud session working on ONE task below (named in your prompt). A su
 Unspaced number next to a symbol or `(` multiplies: `x=3;2x` → 6, `2π`, `3(4)` → 12, `⅓x`. Julia grouping: `1/2x` = `1/(2x)`,
 `3x²` = `3·x²` (postfix binds to the symbol). Ordinal suffixes (`1st 2nd 3rd 4th`) are not products. `2e` = `2*e`, `2i` = `2*i`
 (only if `i`/`e` resolve; otherwise the normal undefined-variable error). Data mode (`parse_data`) never multiplies.
-Survey with details: the A10 report in notes/todo_sweep_task.md and wiki/number.md, wiki/unit.md, wiki/ambiguity.md.
+Survey with details: wiki/number.md, wiki/unit.md, wiki/ambiguity.md.
 Then units: `1 m + 1km` → `1001 m`, `3km+10m` → `3010 m` (unit values as identifiers, so `3km` = `3*km`); a SPACED
 `2 km` multiplies only when `km` is a known unit (else it stays the list `[2 km]`). `1950 ± 50` (a value with tolerance),
 `1900 - 2000 AD` (a range with a unit). Un-ignore test_implicit_multiplication, test_units, test_hyphen_units if they pass
