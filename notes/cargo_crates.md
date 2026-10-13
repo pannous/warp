@@ -39,9 +39,22 @@ into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is 
   version that wasmtime serves (std imports wasi:random/insecure-seed@0.2.6, wasmtime-wasi serves 0.2.12). Now a
   component that links gets no stubs (components::serve_host_imports).
 
+## Prebuilt downloads (card use-cargo-downloads)
+- Order: the newest cached component, else the newest hosted one, else the local build. Hosted = the assets
+  `<crate>.<version>.wasm` of the prerelease `crates-v3` (generation = GENERATION in src/cargo_crates.rs), listed by the
+  release API (`api.github.com/repos/pannous/warp/releases/tags/crates-v3`); a download must match the asset's
+  `digest` (SHA-256 GitHub computes) and lands in the cache as `<crate>@<version>.wasm` (no .wit: the interface is in
+  the component, `wasm-tools component wit` prints it). Any failure says why and falls back to the local build.
+- `WARP_BUILD_CRATES=1` never downloads (the workflow itself).
+- .github/workflows/crates.yml builds the crates of its CRATES list and uploads them (`gh release upload --clobber`):
+  on pushes to main that touch it or src/cargo_crates.rs, weekly, by dispatch. Add a crate there.
+- Release assets, not ghcr: a new ghcr package starts private and only the web UI makes it public (no API).
+- A hosted version may trail crates.io until the weekly run; a raised GENERATION needs one workflow run before
+  downloads work again (until then everyone builds locally).
+
 ## Offline, timing
-- A cached component of the crate is used without cargo, the newest version first. Otherwise every cargo command runs
-  `--offline` first (the local registry) and then with the network.
+- A cached component of the crate is used without cargo or network, the newest version first. Otherwise every cargo
+  command runs `--offline` first (the local registry) and then with the network.
 - First build: strsim ~10 s, regex ~60 s (rustdoc and the wasm32 release build). After that it loads at once.
 - cargo missing: "use cargo needs cargo (https://rustup.rs)"; target missing: "rustup target add wasm32-wasip2".
 
