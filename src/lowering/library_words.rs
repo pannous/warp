@@ -752,7 +752,7 @@ impl Lowering {
 			.iter()
 			.find(|(level, ..)| *level == op)
 			.expect("a similarity operator");
-		let tolerance = if self.shadows(*variable) { variable } else { default };
+		let tolerance = if self.shadows(variable) { variable } else { default };
 		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
@@ -798,7 +798,7 @@ impl Lowering {
 	}
 
 	fn library_word(&self, name: &str) -> Option<&'static str> {
-		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(*word))
+		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(word))
 	}
 
 	/// The library word a call of `name` with that many arguments (receiver included) means
