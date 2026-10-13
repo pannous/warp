@@ -30,6 +30,7 @@ PASSED:
   ✓ control::test_block_assigns_outer::the_declared_and_returned_forms_change_it
   ✓ control::test_block_parameter_calls::a_block_parameter_takes_a_trailing_block_without_parentheses
   ✓ control::test_block_parameter_calls::a_parameter_named_block_is_a_block_parameter_and_runs_with_parentheses
+  ✓ control::test_block_parameter_calls::a_parameter_named_code_the_body_never_runs_is_a_value
   ✓ control::test_block_parameter_calls::a_trailing_block_parameter_takes_the_rest_of_the_call
   ✓ control::test_block_parameters::test_a_bang_known_only_at_run_time_is_loud
   ✓ control::test_block_parameters::test_a_prefix_takes_the_rest_of_its_group
@@ -3330,6 +3331,7 @@ PASSED:
   ✓ sweeps::test_todo::test_utf8_char_indexing
   ✓ text::test_add_to_text::test_add_to_a_list_still_appends
   ✓ text::test_add_to_text::test_add_to_a_text
+  ✓ text::test_ascii_index_costs::ascii_text_indexes_by_the_byte
   ✓ text::test_backtick_templates::a_backtick_template_interpolates
   ✓ text::test_backtick_templates::a_backtick_text_is_text
   ✓ text::test_backtick_templates::an_unclosed_backtick_says_so
@@ -4495,6 +4497,7 @@ PASSED:
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
   ✓ web::test_markup_lines::a_line_of_attributes_renders_as_attributes
   ✓ web::test_markup_lines::an_aria_attribute_renders
+  ✓ web::test_markup_mistakes::a_class_literal_field_named_like_an_element_is_no_markup
   ✓ web::test_markup_mistakes::an_unknown_attribute_warns
   ✓ web::test_markup_mistakes::an_unknown_event_warns
   ✓ web::test_markup_mistakes::an_unknown_input_type_warns
@@ -5102,4 +5105,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5097 passed, 0 failed, 5097 total tested
+12 ignored, 5100 passed, 0 failed, 5100 total tested
