@@ -262,3 +262,38 @@ channel, so small fades round: subtract a step (≥ 1/255) rather than multiply 
   to $TMPDIR/warp-paint, shared by every session (filter frames by size and mtime). A headless 1080p animation is
   bound by PNG writing; the window path isn't. A shader built-in is skipped when the program assigns a variable of
   that name (gpu_visualizer keeps its own `time`, the song's clock). `sleep 16ms` takes a unit on its number.
+
+## Warp functions on the GPU (card gpu-functions, plan 2026-10-13)
+Step (a), card paint-keeps: a shader painted in a window renders in the paint-window process; per frame only the
+shader text and its values cross (~6 KB, not an 8 MB readback), and the window draws the newest frame. Step (b), this
+plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), a map's helper functions) runs there too.
+
+- **The subset that compiles.** It's the kernel translation of gpu_maps.rs (`Translation::expression`), widened from
+  one lambda expression to a function body:
+  - numbers in f32 (P240: imprecise by design), i32 for ints; vectors of 2–4 numbers as vec2f…vec4f
+  - local variables, `if`/`else`, `for i in a..b`, `while`
+  - the math words (sin cos tan sqrt exp log pow atan2 min max abs floor fract round clamp)
+  - calls of other functions in the subset, each emitted as its own WGSL `fn`
+  - Refused, with the reason named: texts, lists of variable length, maps, closures, allocation, host words,
+    exceptions, recursion (WGSL has none).
+- **Types.** A parameter's type comes from the call site that sends it to the GPU: an f32 item, a program number, a
+  pixel coordinate. One WGSL function is made per signature (shares the specialization with card untyped-parameters).
+- **Which functions go to the GPU.**
+  1. A map kernel may call user functions. Today its lambda may only use operators and math words.
+     `xs.map(x => shade(x))` translates shade() and its callees; the threshold rule stays (heavy kernels auto
+     from GPU_AUTO_MIN_COUNT, `@gpu` forces).
+  2. `paint(f, width, height)` with a warp function `f(x, y) -> color` instead of a WGSL text: f becomes the fragment
+     shader; the program's numbers it reads become `values` (uniforms, as for text shaders).
+  3. `@gpu` on a function: every call from a heavy map or a paint function compiles it, and a function outside the
+     subset is a warning that names the construct (an error under strict).
+- **Fallback.** As for maps:
+  - not translatable: runs on the CPU as written, warned once
+  - no adapter: the CPU, silently
+  - `@cpu` / WARP_GPU=off: the CPU in f64
+  - the browser runs the same WGSL through host-gpu.js
+- **Steps**, each with its test under tests/wasm/ or tests/programs/:
+  1. Translate statements: let, assignment, if, for over a range, return.
+  2. Calls of user functions, with a callee closure and a recursion check.
+  3. Map kernels calling user functions.
+  4. paint(f, …) of a warp function.
+  5. Acceptance: samples/gpu_visualizer.warp's tunnel shader written in warp gives the same frame as the WGSL one.
