@@ -19,9 +19,11 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 2. `parse(text)`:
    - With a constant text, it folds at compile time to the same Node `data (…)` would give, using the Rust parser, so
      `parse("$a + 0")` == `data ($a + 0)`.
-   - With a run-time text, it calls lib/compiler/parser.warp's `tree` (self-parser), turned into a Node with the
-     builders. It needs no host word and runs in the browser too. Its differences from the Rust parser are those of
-     the parser twin, which tests/parser/test_self_differential.rs already tracks.
+   - With a run-time text, it is a host word like `interpret`'s run_block. src/host/native.rs already reads guest
+     Nodes (wasm_reader::node_in) and builds them in the program (build_in_program), and web/playground/host.js
+     loads warp.wasm for run_block. So it runs the Rust parser itself, with no parser-twin differences. The
+     self-parser (lib/compiler/parser.warp) stays a differential twin; notes/self_hosting.md's "needs a host word
+     and a GC reader" is out of date, since both exist.
 3. Positions: data keeps Meta. Kind::Meta (10) is emitted as a wrapper with `data` = the node and `value` = a map
    {line, column, comment}. The Node API looks through it (`n.op` of a wrapped key is its op), and `n.line`,
    `n.column` and `n.comment` read it. `==` and matching ignore Meta.
@@ -34,5 +36,5 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - parse-const: `parse("…")` with a constant text folds to the data Node; test: equal to `data (…)`.
 - code-holes (pattern sessions): `$a` binds in match arms and `is`; block 8 of tree_patterns.warp passes.
 - data-meta: Meta kept in data Nodes, `n.line` / `n.column` / `n.comment`, ignored by `==`.
-- parse-runtime: a run-time text goes through parser.warp `tree`; test: the parse equals `data (…)` for the
-  samples the twin covers.
+- parse-runtime: a run-time text goes through a host word (native and host.js), as run_block does; test: the
+  parse of a read text equals `data (…)`.
