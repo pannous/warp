@@ -10,6 +10,8 @@ const SOURCE_EXTENSION: &str = "warp";
 const COMPILER_FOLDER: &str = "lib/compiler";
 /// Characters shown on each side of the first difference
 const CONTEXT: usize = 40;
+/// Sources per evaluated program: each program's store is freed before the next, which keeps the test under 1 GB
+const SOURCES_PER_PROGRAM: usize = 64;
 
 /// Every sample and probe source, sorted; a file that is not UTF-8 text is no source
 pub fn sources() -> Vec<PathBuf> {
@@ -33,10 +35,27 @@ fn collect_sources(folder: &Path, found: &mut Vec<PathBuf>) {
 	}
 }
 
-/// `word(read(path))` of lib/compiler/<part>.warp for every source in one program, each written as the Rust twin's
-/// value of the same text is written
+/// `word(read(path))` of lib/compiler/<part>.warp for every source, each written as the Rust twin's value of the same
+/// text is written
 pub fn differential(part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
-	let paths = sources();
+	for paths in sources().chunks(SOURCES_PER_PROGRAM) {
+		for (path, value) in paths.iter().zip(warp_values(part, word, paths)) {
+			let text = std::fs::read_to_string(path).unwrap();
+			let (warp_text, rust_text) = (value.serialize(), rust_twin(&text).serialize());
+			if warp_text != rust_text {
+				panic!(
+					"{word} differs from its Rust twin on {}:\n  warp: …{}…\n  rust: …{}…",
+					path.display(),
+					around_difference(&warp_text, &rust_text),
+					around_difference(&rust_text, &warp_text)
+				);
+			}
+		}
+	}
+}
+
+/// `word(read(path))` for the sources, in one program
+fn warp_values(part: &str, word: &str, paths: &[PathBuf]) -> Vec<Node> {
 	let quoted: Vec<String> = paths.iter().map(|path| format!("\"{}\"", path.display())).collect();
 	let program = format!(
 		"use \"{COMPILER_FOLDER}/{part}.warp\"\n[{word}(read(path)) for path in [{}]]",
@@ -51,18 +70,7 @@ pub fn differential(part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
 		paths.len(),
 		"the warp twin {word} gave a value for each source"
 	);
-	for (path, value) in paths.iter().zip(&values) {
-		let text = std::fs::read_to_string(path).unwrap();
-		let (warp_text, rust_text) = (value.serialize(), rust_twin(&text).serialize());
-		if warp_text != rust_text {
-			panic!(
-				"{word} differs from its Rust twin on {}:\n  warp: …{}…\n  rust: …{}…",
-				path.display(),
-				around_difference(&warp_text, &rust_text),
-				around_difference(&rust_text, &warp_text)
-			);
-		}
-	}
+	values
 }
 
 /// The text around its first character that differs from the other text
