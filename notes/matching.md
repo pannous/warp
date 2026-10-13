@@ -153,18 +153,21 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
 4. Named patterns as values: `pattern Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
-   find done (src/lowering/tree_find.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
+   find done (src/lowering/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
    names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
-   Open: `tree replace p with q` (rebuilding maps at run time), `found = [[…]] find P` parses as an assignment first.
+   Open: `found = [[…]] find P` parses as an assignment first (card found-find).
+   replace done (same file, renamed tree_walks.rs): `tree replace P with Q` rebuilds lists (bracketed/separated keep the
+   bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
+   and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`
+   as a group: `flattened` splices them. Tests tests/control/test_tree_replace.rs, probe probes/matching/tree_replace.warp.
 6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
 7. Code patterns: quoted code with holes, `data($a + 0) => a`, matched against `parse("…")` or `data (…)` (card
-   parse-word, notes/parse_word.md; the holes are card code-holes). Backticks stay template text.
-7. Code patterns: quoted code with holes, `data($a + 0) => a` (backticks stay template text, notes/parse_word.md).
+   parse-word, notes/parse_word.md). Backticks stay template text.
    code-holes done (switch.rs code_tests): `$a` binds the subtree, a repeated hole tests equality with the first, a key
    tests `is key` and its op, a list `is list` and its count; `$f($x)` is flattened like a quoted call `g x`. A match
    in a function copies its subject: user_functions.rs now lets a parameter whose copy is kind-tested take any value
    (else indexing the copy typed the parameter list, card alias-indexed-param). Tests tests/control/test_code_holes.rs,
-   probe probes/matching/code_holes.warp. Next: tree-replace for data and code.
+   probe probes/matching/code_holes.warp.
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).

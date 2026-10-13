@@ -6,9 +6,9 @@
 
 use super::nodes::{children_rewritten, key};
 use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, rest_pattern, split_switch, WILDCARD};
-use super::tree_find::FIND_WORD;
+use super::tree_walks::{FIND_WORD, REPLACE_WORD};
 use crate::diagnostic::Diagnostic;
-use crate::node::Node;
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashMap;
 
@@ -120,17 +120,25 @@ fn substituted(node: Node, patterns: &Patterns) -> Node {
 	}
 }
 
-/// `page find Image`: the pattern after the word find
+/// `page find Image`, `xs replace Pair with …`: the pattern after the word find or replace
 fn with_found_patterns(items: Vec<Node>, patterns: &Patterns) -> Vec<Node> {
-	let mut after_find = false;
+	let mut after_walk = false;
 	items
 		.into_iter()
 		.map(|item| {
-			let item = if after_find { resolved(item, patterns) } else { item };
-			after_find = item.is_symbol(FIND_WORD);
+			let item = if after_walk { resolved(item, patterns) } else { item };
+			after_walk = ends_with_walk_word(&item);
 			item
 		})
 		.collect()
+}
+
+/// `find`, or the nested words `[xs, replace]` of `xs replace Pair with …` in a function body
+fn ends_with_walk_word(item: &Node) -> bool {
+	match item.drop_meta() {
+		Node::List(words, Bracket::None, _) => words.last().is_some_and(ends_with_walk_word),
+		word => word.is_symbol(FIND_WORD) || word.is_symbol(REPLACE_WORD),
+	}
 }
 
 /// The subject of the first test of `x is A and B`
