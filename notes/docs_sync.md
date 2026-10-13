@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **9d84077f6** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9 and 9d84077f6), checked with
+- main commit **6915e892b** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6 and 6915e892b), checked with
   /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 9d84077f6..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 9d84077f6 origin/main -- notes/decisions.md`).
+The next sweep starts with `git log --oneline 6915e892b..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 6915e892b origin/main -- notes/decisions.md`).
 
 ## How
 

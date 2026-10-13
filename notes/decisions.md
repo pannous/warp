@@ -7,6 +7,11 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- gpu-f32 (warp-perf, user: "Math is exact by default, except when doing lots of computation. GPU should be F32 too
+  by default. With a little warning. It's only applied for mass calculations, anyways."): P240 stands, a heavy float
+  map (327,680+ items) runs on the GPU in f32 by itself with a one-time notice; the GPU functions (card
+  gpu-functions) run in f32 by default with the same small warning. Replaces the relayed "f64 default except fast
+  mode" rule for mass computation; small computations stay exact.
 - guillemets (warp-docs-sync wiki audit, user: "data as quasi text"): «…» quotes its content as unevaluated warp
   data, a quasi-quote ("Data is Code and Code is Data"): `«1 2»` is the parsed node, printing as written and equal
   to its text form where a text is expected; `«x + 1»` is the expression as data, not its value. (Interviewer's
