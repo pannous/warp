@@ -53,6 +53,9 @@ fn closed_channels_and_tasks_left_waiting() {
 // the receiver meets it; run inline it could never answer (card primer-channel-flake)
 #[test]
 fn a_sender_queued_behind_busy_tasks_is_received() {
-	is!("for k in 1 to 6 { go { sleep(300) } }; ch = channel(); go { ch.send(5) }; ch.receive()", 5);
-	is!("jobs = []; for k in 1 to 6 { jobs.add(go { sleep(100); k }) }; ch = channel(); go { for k in 1 to 3 { ch.send(k) }; ch.close() }; received = 0; for v in ch { received += v }; [sum(await all jobs), received]", warp::ints(vec![21, 6]));
+	is!(
+		"for k in 1 to 6 { go { sleep(300 ms) } }; ch = channel(); go { ch.send(5) }; ch.receive()",
+		5
+	);
+	is!("jobs = []; for k in 1 to 6 { jobs.add(go { sleep(100 ms); k }) }; ch = channel(); go { for k in 1 to 3 { ch.send(k) }; ch.close() }; received = 0; for v in ch { received += v }; [sum(await all jobs), received]", warp::ints(vec![21, 6]));
 }
