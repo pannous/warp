@@ -95,9 +95,24 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | silently `int` |
 | gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | "needs a value for parameter a" |
 
-Design defaults sent to warp-interviewer (undoable, implemented as written until answered):
-- In a case key `1 | 2`, `1 or 2` and `1, 2` all mean alternatives (Rust's `|`); `|` stays logical elsewhere.
-- Definitions by cases: definitions whose parameters are literals or patterns join one function; a call tries the
-  most specific first (literal before pattern before plain name), like dispatch, whatever the written order.
-- Exhaustiveness: a match over a subject of known enum or sealed class set without `_`/`default` that misses a case
-  is a compile error naming the missing cases; an unknown subject type keeps the run-time "no case".
+Decisions (user, via warp-interviewer):
+- In a case key `1 | 2`, `1 or 2` and `1, 2` are alternatives; a computed comparison goes in a guard. Alternatives
+  bind no names.
+- `int | text` / `int or text` in a case key is a type union, as is `x is (int or text)`; mixed `0 or text` means
+  the value 0 or any text.
+- `other` (like `_`, `default`, `else`) is a catch-all case key; a variable named other stays a variable.
+- Definitions by cases `fib(0) := 0; fib(n) := …` are the error "fib is defined twice", whose fix shows a match.
+- Exhaustiveness: a match over a known enum or sealed set that misses a case is the compile error "match on Coin
+  misses Dime"; an unknown subject type keeps the run-time "no case".
+
+Done on branch matching (warp-semantics), all in src/lowering/switch.rs, one entry `pattern_test` shared with
+parameter patterns: alternatives, type arms (`int =>`, `i: int =>`, `Circle =>`), ranges (`13 to 19` inclusive,
+`13..20` exclusive, open `65..`), `other`/`else` catch-alls, tuple arms `(1, t)` (a round comma list matches by
+shape like `[1, t]`), `xs is [_, 2]` and `if xs is [a, b] then b` (switch::is_pattern, called from type_tests: a list
+with `_`, a rest or a name defined nowhere is a pattern, else `is` compares), and bare-name arms `name => "hi " + name`
+(bind when the body uses the name; unused, `red: "fire"` stays the symbol case; a variable compares).
+The whole matched value (user): no `@`/`as` binding. In an arm the subject's name (`match xs`), the word `value` (any
+subject, innermost match; a program variable named value wins) and `match name = expr { … }` (assigns, then matches;
+the name stays bound) give it.
+Open: pattern names warn as main-level shadows (card pattern-names).
+Probe: probes/matching/arms.warp; inventory with a fresh build: 35 of 48 before tuples, is and bare names.

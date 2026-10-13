@@ -261,7 +261,8 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 		}
 	}
 	let (pattern, guard) = split_guard(&case.key);
-	let (test, bindings) = match pattern_test(subject, &pattern, guard.is_some(), names) {
+	let binds = guard.is_some() || is_binding_name(&pattern, &case.body, names);
+	let (test, bindings) = match pattern_test(subject, &pattern, binds, names) {
 		Ok(matched) => matched,
 		Err(message) => return (error(message), case.body),
 	};
@@ -281,6 +282,15 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 		sequence([bindings, vec![case.body]].concat())
 	};
 	(test, body)
+}
+
+/// `name => "hi " + name`: a name defined nowhere that its body uses binds the subject (card match-binding-arm); unused,
+/// `red: "fire"` is the symbol red
+fn is_binding_name(pattern: &Node, body: &Node, names: &Names) -> bool {
+	match pattern.drop_meta() {
+		Node::Symbol(name) => !names.contains(name) && !is_type_word(pattern) && body.mentions_any(&[name.as_str()]),
+		_ => false,
+	}
 }
 
 /// The test the subject passes when it matches the pattern of a case, and the names the pattern binds. A case key is a
