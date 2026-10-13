@@ -67,7 +67,7 @@ pub(super) fn parameter_copies(
 /// copy would hold the text as its one item, and `source[i]` read the whole text (card self-lexer)
 pub(super) fn text_parameters(program: &Node) -> HashSet<(String, usize)> {
 	let mut calls = TextCalls {
-		holders: text_holders(program),
+		texts: TextValues::of(program),
 		found: HashSet::new(),
 		passed_on: vec![],
 	};
@@ -85,7 +85,7 @@ pub(super) fn text_parameters(program: &Node) -> HashSet<(String, usize)> {
 }
 
 struct TextCalls {
-	holders: HashSet<String>,
+	texts: TextValues,
 	/// (function, parameter position) some call passes a text
 	found: HashSet<(String, usize)>,
 	/// (function, parameter position) given a parameter of the calling function: (caller, its parameter position)
@@ -117,7 +117,7 @@ impl TextCalls {
 						});
 						match parameter {
 							Some(from) => self.passed_on.push(((function.clone(), index), from)),
-							None if gives_text(argument, &self.holders) => {
+							None if self.texts.given_by(argument) => {
 								self.found.insert((function.clone(), index));
 							}
 							None => {}
@@ -131,26 +131,75 @@ impl TextCalls {
 	}
 }
 
-/// A text or character literal, a variable of `holders`, a word giving a text (`read(path)`) or a text joined to it
-fn gives_text(value: &Node, holders: &HashSet<String>) -> bool {
-	match value.drop_meta() {
-		Node::Text(_) | Node::Char(_) => true,
-		Node::Symbol(name) => holders.contains(name),
-		Node::Key(left, Op::Add, right) => gives_text(left, holders) || gives_text(right, holders),
-		Node::List(items, _, _) => match items.split_first() {
-			Some((head, arguments)) => head.symbol_name().is_some_and(|word| {
-				crate::library_words::result_kind(word) == Some(Kind::Text)
-					|| crate::wasm_emitter::text_builtins::text_builtin_kind(word, arguments.len()) == Some(Kind::Text)
-			}),
-			None => false,
-		},
-		_ => false,
+/// What gives a text where a function is called: the variables only ever given texts, the fields declared text
+struct TextValues {
+	holders: HashSet<String>,
+	fields: HashSet<String>,
+}
+
+impl TextValues {
+	fn of(program: &Node) -> Self {
+		let no_holders = TextValues {
+			holders: HashSet::new(),
+			fields: text_fields(program),
+		};
+		TextValues {
+			holders: variables_only_given(program, |value| no_holders.given_by(value)),
+			fields: no_holders.fields,
+		}
+	}
+
+	/// A text or character literal, a variable of `holders`, a word giving a text (`read(path)`), a text joined to it, or
+	/// a field declared text (`p.code`, which reads `p#("code"+1)` by now)
+	fn given_by(&self, value: &Node) -> bool {
+		match value.drop_meta() {
+			Node::Text(_) | Node::Char(_) => true,
+			Node::Symbol(name) => self.holders.contains(name),
+			Node::Key(left, Op::Add, right) => self.given_by(left) || self.given_by(right),
+			Node::Key(_, Op::Dot, field) => field.symbol_name().is_some_and(|name| self.fields.contains(name)),
+			Node::Key(_, Op::Hash, index) => match index.drop_meta() {
+				Node::Key(field, Op::Add, _) => {
+					matches!(field.drop_meta(), Node::Text(name) if self.fields.contains(name))
+				}
+				_ => false,
+			},
+			Node::List(items, _, _) => match items.split_first() {
+				Some((head, arguments)) => head.symbol_name().is_some_and(|word| {
+					crate::library_words::result_kind(word) == Some(Kind::Text)
+						|| crate::wasm_emitter::text_builtins::text_builtin_kind(word, arguments.len())
+							== Some(Kind::Text)
+				}),
+				None => false,
+			},
+			_ => false,
+		}
 	}
 }
 
-/// Variables only ever given texts: a text literal, a word giving a text, an update of the variable itself
-fn text_holders(program: &Node) -> HashSet<String> {
-	variables_only_given(program, |value| gives_text(value, &HashSet::new()))
+/// The fields some class declares text: `class Scanner { code: text }`
+fn text_fields(program: &Node) -> HashSet<String> {
+	let mut fields = HashSet::new();
+	program.visit(&mut |part| {
+		let Node::Type { body, .. } = part else { return };
+		let items = match body.drop_meta() {
+			Node::List(items, _, _) => items.as_slice(),
+			field => std::slice::from_ref(field),
+		};
+		for item in items {
+			if let Node::Key(field, Op::Colon, field_type) = item.drop_meta() {
+				let type_name = match field_type.drop_meta() {
+					Node::Type { name, .. } => name.symbol_name(),
+					other => other.symbol_name(),
+				};
+				if let (Some(field), Some(type_name)) = (field.symbol_name(), type_name) {
+					if crate::analyzer::type_word_kind(type_name) == Some(Kind::Text) {
+						fields.insert(field.to_string());
+					}
+				}
+			}
+		}
+	});
+	fields
 }
 
 /// The parameters every call passes a map: a map literal of name keys, or a variable only ever assigned one. Only those

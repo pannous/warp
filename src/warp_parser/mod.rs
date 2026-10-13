@@ -1510,6 +1510,7 @@ impl WarpParser {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AtomKind {
 	Number,
+	Text,
 }
 
 /// An atom the parser read: where it starts (line and column from 1, a column per character) and what was written
