@@ -38,8 +38,13 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - parse-const: `parse("…")` with a constant text folds to the data Node; test: equal to `data (…)`.
 - code-holes (pattern sessions): `$a` binds in match arms and `is`; block 8 of tree_patterns.warp passes.
 - data-meta: Meta kept in data Nodes, `n.line` / `n.column` / `n.comment`, ignored by `==`.
-- parse-runtime: a run-time text goes through a host word (native and host.js), as run_block does; test: the
-  parse of a read text equals `data (…)`.
+- parse-runtime (done, branch parse-runtime): `parse(t)` of any other text is the host word `parse_code(t)`
+  (src/host.rs). Natively it is the Rust parser (host/native.rs); in the browser, run_block's compiler instance
+  answers a `{parse: text}` request (web.rs eval_block_report, host-compiler.js). A parse failure is an Error that
+  `try` catches. A method `x.parse(…)` is never rewritten. `parse_word::code_of` never reads a file, so
+  `parse("a.warp")` is code.
+- Found on the way (card data-quote-lowered): later lowering passes rewrite inside quoted data, so `data (a.warp)`
+  has the op `#`, while the run-time parse keeps `.`.
 
 ## Agreed with warp-operator-shall (2026-10-13)
 - Operators stay Keys in data. `&`/`|` are decided at parse time (Op::BitAnd/BitOr for operands that may be ints,
