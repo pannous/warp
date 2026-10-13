@@ -12,10 +12,10 @@ pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))
 }
 
-/// The operands of `a or b or c` (`|` parses as or), else the node itself
+/// The operands of `a or b or c` (`|` parses as or, between whole numbers as the bit or), else the node itself
 pub(crate) fn or_operands(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
-		Node::Key(left, Op::Or, right) => [or_operands(left), or_operands(right)].concat(),
+		Node::Key(left, Op::Or | Op::BitOr, right) => [or_operands(left), or_operands(right)].concat(),
 		_ => vec![node.clone()],
 	}
 }
