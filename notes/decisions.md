@@ -7,6 +7,8 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- let-parallel (warp-docs-sync, user): the parallel let is written only without `let`: `a b = f(x) g(y)`;
+  `let a b = …` is always a function definition (`let twice x = x * 2`). No let form of the parallel let.
 - pattern-keyword (warp-list-pattern, card patterns-values, user): named patterns are defined only with the keyword
   `pattern Adult = {age: >= 18}`, then `x is Adult`, `people where it is Adult`, arms `Adult => …`. A plain
   `Name = …` is always a value (no inference from `_`, `>=`, `..`); one whose right side can only be a pattern is an
