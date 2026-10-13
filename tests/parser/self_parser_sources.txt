@@ -266,6 +266,7 @@ probes/algo/life/range_count.warp
 probes/algo/life/range_global_in_fun.warp
 probes/algo/life/range_python.warp
 probes/algo/life/range_to.warp
+probes/algo/life/range_var_colon.warp
 probes/algo/life/range_var_nested.warp
 probes/algo/life/range_var_paren.warp
 probes/algo/life/range_var_swift.warp
@@ -497,6 +498,8 @@ probes/algo/sorting/60_global_arg_newline.warp
 probes/algo/sorting/61_typed_param.warp
 probes/algo/sorting/62_paren_call_list_var.warp
 probes/algo/sorting/63_dotdot_var_parens_end.warp
+probes/algo/sorting/64_dotdot_var_colon.warp
+probes/algo/sorting/65_dotdot_var_do.warp
 probes/algo/sorting/66_dotdot_expr_end.warp
 probes/algo/sorting/67_add_index_toplevel.warp
 probes/algo/sorting/68_add_index_toplevel_val.warp
@@ -533,6 +536,7 @@ probes/app_keys/coded_exit_handler.warp
 probes/app_keys/exits.warp
 probes/arctan_allow/trig.warp
 probes/arctan_allow/uses_trig.warp
+probes/ask/kotlin_range_forms.warp
 probes/ask/kotlin_range.warp
 probes/bool_xs/any_all.warp
 probes/break/01_while_break.warp
@@ -597,6 +601,7 @@ probes/generators/hand_inlined.warp
 probes/generators/objects.warp
 probes/generators/objects2.warp
 probes/generators/send.warp
+probes/generators/zip_take.warp
 probes/global_list/local_alias.warp
 probes/globals/10_undeclared_mutation.warp
 probes/globals/11_undeclared_assign.warp
@@ -637,6 +642,7 @@ probes/key_names/esc_exits.warp
 probes/key_names/esc_word.warp
 probes/key_names/event_key.warp
 probes/key_names/unbound_word.warp
+probes/large_text_literal.warp
 probes/law_overflow.warp
 probes/laws/sum_to.warp
 probes/lazy_routes/three_routes.warp
@@ -691,6 +697,7 @@ probes/listparams/34.warp
 probes/loops/repeats.warp
 probes/lossy_return.warp
 probes/map_filter_linear.warp
+probes/map_inside_loop.warp
 probes/maps/01_quoted_list_value.warp
 probes/maps/02_var_key.warp
 probes/maps/03_var_key_nested.warp
@@ -807,9 +814,13 @@ probes/samples/q2.warp
 probes/samples/u.warp
 probes/scalar_float_write.warp
 probes/select_options.warp
+probes/self_gaps/text_costs.warp
+probes/self_hosting/any_result.warp
 probes/self_hosting/char_scan.warp
 probes/self_hosting/enum_match.warp
+probes/self_hosting/guarded_number.warp
 probes/self_hosting/index_cost.warp
+probes/self_hosting/list_separator.warp
 probes/self_hosting/make_node.warp
 probes/self_hosting/node_values.warp
 probes/self_hosting/parser/data_core.warp
@@ -894,8 +905,10 @@ samples/filled_circle.warp
 samples/filters.warp
 samples/find_text.warp
 samples/fizzbuzz.warp
+samples/golf/pascals-triangle.short.warp
 samples/golf/quine.short.warp
 samples/golf/quine.warp
+samples/golf/sierpiński-triangle.short.warp
 samples/gpu_arrays.warp
 samples/hello_div.warp
 samples/hello.warp
@@ -914,8 +927,10 @@ samples/mandelbrot_canvas.warp
 samples/mandelbrot.warp
 samples/midi.warp
 samples/modules.warp
+samples/netbase.warp
 samples/paint_text.warp
 samples/palindrome.warp
+samples/parallel_let.warp
 samples/patterns.warp
 samples/power.warp
 samples/primes.warp
