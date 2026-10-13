@@ -154,6 +154,9 @@ fn window_open_is_no_without_a_window() {
 #[test]
 fn listening_to_a_system_value_gives_no_hint_about_generated_code() {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::pipeline::lower("on change online { print 1 }\n2"));
-	let shown: Vec<String> = hints.iter().map(|hint| format!("{} {}", hint.position, hint.original)).collect();
+	let shown: Vec<String> = hints
+		.iter()
+		.map(|hint| format!("{} {}", hint.position, hint.original))
+		.collect();
 	assert!(shown.is_empty(), "{shown:?}");
 }
