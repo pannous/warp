@@ -81,7 +81,9 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 		.map(|(_, version, asset)| (version, asset))
 		.ok_or_else(|| format!("{name} is not hosted"))?;
 	let url = asset["browser_download_url"].as_str().unwrap_or_default();
-	let expected = asset["digest"].as_str().and_then(|digest| digest.strip_prefix(SHA256_PREFIX));
+	let expected = asset["digest"]
+		.as_str()
+		.and_then(|digest| digest.strip_prefix(SHA256_PREFIX));
 	let bytes = download_bytes(url)?;
 	let actual = hex_digest(&bytes);
 	if expected != Some(actual.as_str()) {
@@ -95,7 +97,10 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 
 fn hex_digest(bytes: &[u8]) -> String {
 	use sha2::Digest;
-	sha2::Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
+	sha2::Sha256::digest(bytes)
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect()
 }
 
 /// A wrapper that failed leaves the workspace (an unresolvable dependency would break every other wrapper's build),
@@ -145,7 +150,9 @@ fn build(name: &str) -> Result<PathBuf, String> {
 	let version = resolved_version(&metadata, name)?;
 	let target = PathBuf::from(metadata["target_directory"].as_str().unwrap_or("target"));
 	write_manifest(&wrapper, name, &format!("={version}"))?;
-	eprintln!("use cargo {name}: building crate {name} {version} as a component, once (~/{CACHE}/components-{GENERATION})");
+	eprintln!(
+		"use cargo {name}: building crate {name} {version} as a component, once (~/{CACHE}/components-{GENERATION})"
+	);
 	let package = format!("{name}@{version}");
 	cargo(
 		&wrapper,
@@ -168,7 +175,10 @@ fn build(name: &str) -> Result<PathBuf, String> {
 	let mut api = Api::of(&doc, &rust_name(name));
 	let wasm = compile_dropping_refused(&wrapper, name, &mut api, &target)?;
 	let built = components().join(format!("{name}@{version}.wasm"));
-	write_atomically(&built, &std::fs::read(&wasm).map_err(|e| format!("{}: {e}", wasm.display()))?)?;
+	write_atomically(
+		&built,
+		&std::fs::read(&wasm).map_err(|e| format!("{}: {e}", wasm.display()))?,
+	)?;
 	write(&built.with_extension("wit"), &api.wit(name))?;
 	Ok(built)
 }

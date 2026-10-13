@@ -55,7 +55,10 @@ fn test_cargo_crate_without_callable_functions_is_refused() {
 fn test_cargo_crate_prebuilt_download() {
 	let directory = std::path::PathBuf::from(format!("scratch/crate-downloads-{}", std::process::id()));
 	let wasm = warp::cargo_crates::download("strsim", &directory).unwrap();
-	let program = format!("use wasm \"{}\" as strsim; strsim.levenshtein(\"kitten\", \"sitting\")", wasm.display());
+	let program = format!(
+		"use wasm \"{}\" as strsim; strsim.levenshtein(\"kitten\", \"sitting\")",
+		wasm.display()
+	);
 	is!(&program, 3);
 	std::fs::remove_dir_all(&directory).unwrap();
 	assert!(warp::cargo_crates::download("no_such_crate_xyz_warp", &directory)
