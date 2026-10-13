@@ -40,6 +40,34 @@ seven listed ones; the copy, draining and result-kind lists name one spelling ea
 library_words::canonical_spelling. Still listed by hand: their members (properties no other table records),
 broadcasting SCALAR_LIBRARY_WORDS, checks ORDER_WORDS.
 
+## Before self-hosting: the plan (card cleanup-plan, 2026-10-13)
+The user wants a proper Rust cleanup before self-hosting resumes (notes/decisions.md "self-hosting-postponed"). The
+measure is how hard the code is to follow, and how hard it is to write its warp twin. Each step below is one card under
+cleanup, a mergeable unit with no behaviour change. Emitter-touching steps are checked with
+probes/cleanup/same_wasm.sh. Ranked by value per effort:
+
+| # | card | what | why it matters | effort |
+|---|------|------|----------------|--------|
+| 1 | cleanup-scoped-state | one `scoped(&KEY, value, run)` helper for the 12 replace → run → restore triples (pipeline.rs GRANTED, COMPONENT_FUNCTIONS, SERVER_VALUES, SERVING_PORT, with_flag; diagnostic.rs ×3, util, units, modules, meta, host/native) | one idiom instead of twelve copies | S |
+| 2 | cleanup-compile-mode | the 9 bool statics in pipeline.rs (FOR_A_PAGE, FOR_DEV, RENDERS_ITSELF, FOR_WAGI, PRINTS_RESULT, PRERENDERING, FOR_ANY_HOST, FOR_HOSTING, FOR_TESTS) and their for_x/is_x pairs as one `CompileMode` struct in one thread-local. The emitter reads it only through wasm_emitter/config.rs, not via `pipeline::is_for_*` in function_builder, mod.rs, module_finish and component_adapters | a twin passes one mode value; the emitter stops reaching into the pipeline | S–M |
+| 3 | cleanup-parser-words | the parser imports from lowering and analyzer: SWITCH_WORDS, EMIT_WORDS/ALIASES, ON_WORD, IMPLICIT_PARAMETER, FILE_CLASS_MARK, VARIANTS_MARK, leading_name, operator_method, `call`, children_rewritten. Move these words and node helpers into leaf modules (lowering/words.rs → src/words.rs, node helpers to node/), so the parser depends only on node, words and the type registry | the parser is the first thing self-hosting rewrites; its dependencies are what the twin has to carry along | S |
+| 4 | cleanup-parser-for-loops | the for-loop desugarings out of the parser (statements.rs + mod.rs unit_iteration, type_filter_header): type-filtered `for int in xs` (and the FilterLoop meta the list emitter downcasts), `for chars in text` (byte_at/map/chars), walked_text_units, `for … where`. The parser emits plain `for v in iter body`; lowering/for_loop.rs does the rest | the biggest semantic rewrite left in the parser (warp-dispatch moved `times` already) | M |
+| 5 | cleanup-parser-element-wise | `xs .* 2` is built into a map lambda in the parser (mod.rs SpecialInfix::ElementWise → analyzer::element_wise); keep the operator node and lower it in broadcasting.rs | same as 4, small | S |
+| 6 | cleanup-analyzer-lowering | analyzer/declaration_lowering.rs (1393 lines) and the analyzer's lower_* passes (lower_inline_unions, lower_list_times, lower_negated_calls, lower_kebab_members) move to lowering/; the analyzer keeps analysis | "analyzer" today means both; one place for passes | S–M |
+| 7 | cleanup-pass-phases | SOURCE_PASSES (118) and MEANING_PASSES (31) as named phase slices (sugar, markup/web, declarations, signals, functions, dispatch) joined in the same order, each pass named one way: today pipeline.rs mixes `crate::serve::lower` (root re-exports from lib.rs) with `crate::lowering::index_positions::lower` | the order becomes readable; the twin's pipeline can copy the phases one at a time | S |
+| 8 | cleanup-src-folders | the 73 top-level src/*.rs grouped by area: web/ (web, web_server, web_sockets, webview, site, dev_server, deploy, route_split, page_tests, headless, fetches), graphics/ (paint, paint_window, gpu, gpu_canvas, text_raster, shader_holes), sound/ (sound, sound_engine, midi). Pure moves; the paths are updated with fastmod | src/ reads as a map of the project | S |
+| 9 | cleanup-kernel-names | linear_arrays writes a kernel's body into its function name and parses it back in the emitter (kernel_of; analyzer/imports.rs matches the prefix). Replace that with a side table keyed by name; also traps.rs's parse of a detail text | the emitter stops calling the parser | M |
+
+Not worth it (checked):
+- **Merging lowering passes.** About 150 walks, but each is a small, separately testable rewrite. Merging would couple their order, and warp-markup's experience is that such merges cost more than they save. The few passes that run twice (phrase_calls, reflection, getters) say why in pipeline.rs.
+- **children_rewritten vs Node::map_children.** The difference is documented: map_children also enters class bodies. cleanup-rewrite-tails (warp-markup) is folding the remaining hand-written tails.
+- **The emitter's repeated instruction runs.** 77 overlapping 8-line windows, mostly in list_runtime.rs, linear_arrays.rs, node_arithmetic.rs and big_int; same verdict as cleanup-emitter-loops.
+- Closed earlier: cleanup-const-evaluators, cleanup-gc-object, cleanup-emitter-loops. cleanup-ffi-headers stays parked in Later, since it changes behaviour.
+
+After 1 and 2 (Later, cleanup-global-state): src keeps 69 thread-local statics (diagnostic.rs, web.rs, normalize.rs, std_adapters…).
+Some of them are compile context, which the twin would rather pass as a value. Take an inventory once the mode struct
+exists; it is the pattern to extend.
+
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
 Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards, cleanup-lookahead, cleanup-atoms, cleanup-errors,
