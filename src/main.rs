@@ -1187,6 +1187,8 @@ fn usage() {
 		"  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running"
 	);
 	println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
+	println!("  warp build <file.warp>  The standalone executable <file> and <file>.wasm (--exe: only the executable, --wasm: only the module)");
+	println!("  warp {APP_COMMAND} <file.warp>    Show the program's page in a window of its own (macOS web view; {APP_CHECK}: print its text)");
 	println!("  warp test            Run tests");
 	println!("  warp docs            Open documentation");
 	println!("  warp version         Show version");
