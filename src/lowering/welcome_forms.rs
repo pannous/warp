@@ -11,7 +11,7 @@ use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, 
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
-use crate::words::IN_WORD;
+use crate::words::{IN_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
 use crate::words::SWITCH_WORDS;
@@ -34,8 +34,6 @@ const CASE_WORD: &str = "case";
 const WHEN_KEYWORD: &str = "when";
 const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
-const ON_WORD: &str = "on";
-const WHENEVER_WORD: &str = "whenever";
 const WHEN_CONDITION_TOPIC: &str = "when-condition";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
