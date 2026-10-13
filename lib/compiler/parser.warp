@@ -142,6 +142,16 @@ def continued(p, left, min_power) {
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
 			left = ["key", "#", left, one_based(index)]
+		} else if floor_division_at(p).length > 0 {
+			written = floor_division_at(p)
+			powers = binding_powers("/")
+			if written == "//=" { powers = binding_powers("=") }
+			if powers#1 < min_power { break }
+			p.at = p.at + written.length
+			skip_blanks(p)
+			quotient = listed("(", "", [["symbol", "floor_quotient"], left, expression(p, powers#2)])
+			if written == "//=" { quotient = ["key", "=", left, quotient] }
+			left = quotient
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			word = membership_at(p)
 			if 115 < min_power { break }
@@ -163,6 +173,22 @@ def continued(p, left, min_power) {
 		}
 	}
 	left
+}
+
+// `7//2`, `x //= 2`, `7 div 2`: the floor division written at the parser's position, else ""; `x // note` is a comment
+// Rust twin: expressions.rs special_infix, scanning.rs at_floor_division
+def floor_division_at(p) {
+	if keyword_at(p, "div") and not opens_block(p, 3) { return "div" }
+	if not starts_at(p.code, "//", p.at) or is_blank(peek(p.code, p.at + 2, p.n)) { return "" }
+	if is_at(p.code, p.at + 2, '=', p.n) { return "//=" }
+	"//"
+}
+
+// A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
+def opens_block(p, width) {
+	at = p.at + width
+	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	is_at(p.code, at, '{', p.n)
 }
 
 // `x in xs`, `xs contains x`: the membership word at the parser's position, else ""
@@ -290,12 +316,40 @@ def prefixed(p) {
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
+	for word in PREFIX_WORDS {
+		if keyword_at(p, word#1) { return word_prefixed(p, word) }
+	}
 	if keyword_at(p, "not") {
 		p.at = p.at + 3
 		skip_spaces(p)
 		return ["key", "not", ø, expression(p, 105)]
 	}
 	atom(p)
+}
+
+// `abs x`, `sqrt(2)`: the operator word and its operand; `f = abs` alone is the operator itself
+// Rust twin: expressions.rs parse_expr (prefix words), lookahead.rs expression_ends_after
+def word_prefixed(p, word) {
+	p.at = p.at + word#1.length
+	if expression_ends(p) { return ["key", word#2, ø, ø] }
+	skip_spaces(p)
+	["key", word#2, ø, expression(p, PREFIX_POWER)]
+}
+
+// The prefix operators written as words, each with its canonical name
+// Rust twin: lookahead.rs PREFIX_OPERATOR_WORDS
+PREFIX_WORDS = [["sqrt", "√"], ["cbrt", "∛"], ["abs", "‖"], ["norm", "‖"]]
+PREFIX_POWER = 162
+
+// No operand follows the parser's position: the end of a line or group, or an infix operator set apart by blanks
+// Rust twin: lookahead.rs expression_ends_after, operand_follows
+def expression_ends(p) {
+	at = p.at
+	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	c = peek(p.code, at, p.n)
+	if c == '\n' or c == '\r' or c == '>' or c == ')' or c == ']' or c == '}' or c == ',' or c == ';' or c == '=' or at >= p.n { return true }
+	if c == '.' and is_name_start(peek(p.code, at + 1, p.n)) { return true }
+	at > p.at and (c == '+' or c == '-' or c == '*' or c == '/' or c == '<') and is_blank(peek(p.code, at + 1, p.n))
 }
 
 def prefixed_by_symbol(p, c) {
@@ -317,7 +371,7 @@ def prefixed_by_symbol(p, c) {
 	}
 	if c == '√' {
 		p.at = p.at + 1
-		return ["key", "√", ø, expression(p, 162)]
+		return ["key", "√", ø, expression(p, PREFIX_POWER)]
 	}
 	atom(p)
 }
