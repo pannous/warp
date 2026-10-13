@@ -15,23 +15,24 @@ pub struct LineInfo {
 	pub file: Option<String>,
 }
 
+/// How much of its source line a position keeps in debug builds
+#[cfg(debug_assertions)]
+const DEBUG_LINE_LENGTH: usize = 80;
+
 thread_local! {
 	static PARSED_FILE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 impl LineInfo {
 	/// A position the parser records, in the module file being parsed (parsing_file) if any
-	/// (`line` gives the source line, kept in debug builds only)
-	pub fn at(
-		line_nr: usize,
-		column: usize,
-		#[cfg_attr(not(debug_assertions), allow(unused))] line: impl FnOnce() -> String,
-	) -> Self {
+	/// (the start of the source `line`, kept in debug builds only: a whole long line in every node made a 30 KB literal
+	/// take gigabytes, card big-literals)
+	pub fn at(line_nr: usize, column: usize, #[cfg_attr(not(debug_assertions), allow(unused))] line: &str) -> Self {
 		LineInfo {
 			line_nr,
 			column,
 			#[cfg(debug_assertions)]
-			line: line(),
+			line: line.chars().take(DEBUG_LINE_LENGTH).collect(),
 			file: PARSED_FILE.with(|file| file.borrow().clone()),
 		}
 	}
