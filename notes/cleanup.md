@@ -351,3 +351,21 @@ Left:
 - DONE (cleanup-saved-state) user_function_calls.rs compile_user_function_body: the ~15 per-function emitter fields are one
   FunctionState, swapped in at the start (swap_function_state) and back at the end; the fields that need the body's
   scope (typed variables, scratch locals, loop values) are set once it is known, as main does
+
+## Coverage survey (warp-cleanup, 2026-10-13, at 5899b83d1)
+
+What the test suite (which runs every sample too) never executes, by `cargo llvm-cov`: one queued run in a detached
+worktree, `WARP_TEST_TIME_LIMIT=2400 tests/queue.sh cargo llvm-cov --offline --no-report --tests --no-fail-fast`,
+then `cargo llvm-cov report --json` and `--lcov` into data/cleanup/, ranked by
+`probes/cleanup/coverage_ranking.py <json> <lcov> <checkout>` (data/cleanup/coverage.txt). The executable-building
+tests (wasm::test_executable_*, test_build_emits_wasm, runtime stub) fail under instrumentation; nothing else does.
+
+- 6673 of the executable src lines never run: 534 functions never called (2454 lines), 4219 lines of untaken branches.
+  The suite is thorough, so coverage alone frees a few hundred lines, not thousands.
+- Most unexecuted code is I/O no test drives on purpose: main.rs CLI commands (418), the paint window (408), deploy,
+  sound, package downloads, crash cards. Not dead.
+- The real clusters, filed as cleanup cards: unrun emitter branches (key_emitter emit_power_op, values
+  emit_float_value, list_emitter emit_floor_quotient, wasi emit_result_print), unused math (real.rs, reals.rs,
+  numbers.rs), components.rs value_of/json_of, time.rs, gpu_maps.rs, node/ comparison and indexing, gc_traits'
+  name resolver and wasm_reader's string readers (tested by test_gc_name_registry, so not removable without it).
+- Bigger deletions have to come from generalizing what does run: near-twin lowering passes and runtime emitters.
