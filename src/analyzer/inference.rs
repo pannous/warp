@@ -412,7 +412,7 @@ pub(super) fn infer_list_type(
 				};
 			}
 		}
-		if let Some(kind) = scope.function_kind(name) {
+		if let Some(kind) = scope.function_kind(name).filter(|_| !scope.is_parameter(name)) {
 			return kind;
 		}
 		if name == crate::closures::CLOSURE_NEW {

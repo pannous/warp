@@ -84,7 +84,7 @@ impl WasmGcEmitter {
 	/// Exports the emitted runtime function `name` for the host; a page's host (web/playground) calls only some, and
 	/// the others are left to tree shaking (web::test_bundle_budget)
 	pub(super) fn export_runtime_function(&mut self, name: &'static str) {
-		if !crate::pipeline::is_for_a_page() || PAGE_HOST_CALLS.contains(&name) {
+		if !super::config::compile_mode().for_a_page || PAGE_HOST_CALLS.contains(&name) {
 			let index = self.func_index(name);
 			self.exports.export(name, ExportKind::Func, index);
 		}

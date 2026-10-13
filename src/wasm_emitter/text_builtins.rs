@@ -41,6 +41,9 @@ const TEXT_TRIM: &str = "text_trim";
 pub const TEXT_ROUGH_TRIM: &str = "text_rough_trim";
 /// `chr(n)`: the character of a code point, the inverse of `ord(c)`
 const CHR: &str = "chr";
+/// `float_bits(x)`: the IEEE 754 bits of a float as an Int, `bits_float(n)` the float of them (an `f64.const` to emit)
+pub const FLOAT_BITS: &str = "float_bits";
+pub const BITS_FLOAT: &str = "bits_float";
 /// `starts_with(text, prefix)`, `ends_with(text, suffix)`: 1 or 0
 const STARTS_WITH: &str = "starts_with";
 const ENDS_WITH: &str = "ends_with";
@@ -74,7 +77,7 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 25] = [
 	(MEMORY_BYTE, 1, Kind::Int),
 	(MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int),
@@ -93,6 +96,8 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(STARTS_WITH, 2, Kind::Int),
 	(ENDS_WITH, 2, Kind::Int),
 	(CHR, 1, Kind::Codepoint),
+	(FLOAT_BITS, 1, Kind::Int),
+	(BITS_FLOAT, 1, Kind::Float),
 	(crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
 	(RAN_WITHOUT_ABORT, 2, Kind::Int),
 	(ABORT_TO, 1, Kind::Int),
@@ -391,6 +396,7 @@ impl WasmGcEmitter {
 				| ABORT_TO
 				| STARTS_WITH
 				| ENDS_WITH
+				| FLOAT_BITS
 				| crate::memoization::MEMO_KNOWN
 				| crate::memoization::MEMO_VALUE
 				| crate::memoization::MEMO_STORE
@@ -416,6 +422,10 @@ impl WasmGcEmitter {
 				func.instruction(&I::I32WrapI64);
 				self.emit_call(func, "new_codepoint");
 			}
+			(BITS_FLOAT, [_]) => {
+				self.emit_float_builtin(func, name, arguments);
+				self.emit_call(func, "new_float");
+			}
 			_ if super::node_api::NODE_BUILTINS
 				.iter()
 				.any(|(builtin, arity, _)| *builtin == name && *arity == arguments.len()) =>
@@ -435,8 +445,25 @@ impl WasmGcEmitter {
 	}
 
 	/// `byte_at(text, offset)` and `is_error(x)` as raw i64
+	/// `bits_float(n)` as raw f64
+	pub(super) fn emit_float_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
+		match (name, arguments) {
+			(BITS_FLOAT, [bits]) => {
+				self.emit_numeric_value(func, bits);
+				self.emit_int_to_machine(func);
+				func.instruction(&I::F64ReinterpretI64);
+			}
+			_ => unreachable!("{name} with {} arguments is no float builtin", arguments.len()),
+		}
+	}
+
 	pub(super) fn emit_integer_text_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
 		match (name, arguments) {
+			(FLOAT_BITS, [value]) => {
+				self.emit_float_value(func, value);
+				func.instruction(&I::I64ReinterpretF64);
+				self.emit_int_from_machine(func);
+			}
 			(BYTE_AT, [text, offset]) => {
 				self.emit_text_argument(func, text);
 				self.emit_numeric_value(func, offset);

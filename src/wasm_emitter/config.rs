@@ -1,5 +1,8 @@
 //! Configuration for WASM GC emitter
 
+/// The emitter reads what the program is compiled for and the component's functions only from here
+pub use crate::pipeline::{compile_mode, component_exports, component_imports};
+
 /// Configuration for the WASM GC emitter
 #[derive(Debug, Clone)]
 pub struct EmitterConfig {
@@ -22,13 +25,11 @@ impl Default for EmitterConfig {
 	fn default() -> Self {
 		Self {
 			emit_all_functions: true,
-			emit_kind_globals: !crate::pipeline::is_for_a_page(), // a page's host reads kinds from get_kind, not these
+			emit_kind_globals: !compile_mode().for_a_page, // a page's host reads kinds from get_kind, not these
 			emit_host_imports: false,
 			emit_wasi_imports: false,
 			emit_ffi_imports: false,
-			emit_reflection: cfg!(not(feature = "native"))
-				|| crate::pipeline::is_for_a_page()
-				|| crate::pipeline::is_for_any_host(),
+			emit_reflection: cfg!(not(feature = "native")) || compile_mode().for_a_page || compile_mode().for_any_host,
 		}
 	}
 }
