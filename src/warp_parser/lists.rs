@@ -36,6 +36,49 @@ impl WarpParser {
 		}
 	}
 
+	/// `full name` of a declared `class full name {…}` is the one name `full-name`, any other word itself
+	pub(super) fn joined_type_name(&mut self, word: String) -> String {
+		let found = self.multi_word_types.iter().find_map(|words| {
+			(words[0] == word)
+				.then(|| self.words_ahead_length(&words[1..]))
+				.flatten()
+				.map(|length| (words.join("-"), length))
+		});
+		match found {
+			Some((name, length)) => {
+				self.advance_by(length);
+				name
+			}
+			None => word,
+		}
+	}
+
+	/// The length of the blanks and `words` right ahead, each a whole word: ` name` of `full name`
+	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
+		let mut offset = 0;
+		for word in words {
+			let blanks = (offset..)
+				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
+				.count() - offset;
+			if blanks == 0 {
+				return None;
+			}
+			offset += blanks;
+			if !word
+				.chars()
+				.enumerate()
+				.all(|(index, ch)| self.peek_char(offset + index) == ch)
+			{
+				return None;
+			}
+			offset += word.chars().count();
+			if is_identifier_char(self.peek_char(offset)) || self.peek_char(offset) == '-' {
+				return None;
+			}
+		}
+		Some(offset)
+	}
+
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
 	/// Length of the `<int>`, `<list<int>>`, `<text, int>`, `<int(int)>` directly at the cursor when everything inside is a type word;
 	/// `a<b`, `a<<b` and `a<b>c` are not type applications

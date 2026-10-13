@@ -40,8 +40,13 @@ implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by th
    another module's names unless imported. Otherwise the head noun (last word) decides: `phone number` is typed
    number, `bar name` is typed name. A multi-word parameter is referred to in the body by its head noun when that is
    unique in the signature (`first name`, `last name` both need the full phrase, which needs multi-word identifiers:
-   out of scope, an error "use one-word parameter names here" until then). Not implemented yet: matching declared
-   multi-word classes, because `class full name {…}` cannot be declared yet (the parser takes one word after `class`).
+   out of scope, an error "use one-word parameter names here" until then).
+   Declared multi-word classes (card multi-word-class): `class full name {…}` declares the kebab name `full-name`, and the
+   parser reads the spaced words `full name` as that one name wherever they stand in the same source (declaration_scan
+   scan_multi_word_types, lists.rs joined_type_name), so `full name{given:"Ann"}` constructs one, `to greet a full name:`
+   types its slot and names its parameter `full-name`, used in the body as `full name.given`. Only classes declared in
+   the source join, so `full name` stays two words elsewhere (wiki/matching.md's "undesired matching from other contexts").
+   Not yet: referring to the parameter by its head noun alone (`name.given`). Probe: probes/matching/multi_word_class.warp.
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
 8. Calls with the phrase's prepositions (P52, user): `add 1 to 2`, `square of 4`, `move 1 from 2 to 3`
@@ -90,7 +95,7 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | enum-parameter-type | `f(c: Coin) := …` for `enum Coin` | "unknown type Coin of parameter c" |
 | map-patterns | `match {name: "Ann", age: 3} { {name: n} => n }` | done (step 1 of tree patterns, below) |
 | match-negative-subject | `match -3 { … }` | parsed as `match - 3` |
-| multi-word-class | `class full name { first; last }` (D5 rule 4) | the parser takes one word after class |
+| multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
 | render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
 | gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | "needs a value for parameter a" |

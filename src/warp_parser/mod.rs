@@ -980,6 +980,8 @@ pub struct WarpParser {
 	user_operators: Vec<UserOperator>,
 	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
 	declared_types: std::collections::HashSet<String>,
+	/// The words of the declared types of several words (`class full name {…}`), longest first: read as one name `full-name`
+	multi_word_types: Vec<Vec<String>>,
 	/// The parameters of each `to` phrase defined so far, to catch a second phrase that differs only by untyped nouns
 	phrase_definitions: std::collections::HashMap<String, Vec<Node>>,
 }
@@ -1077,14 +1079,15 @@ impl WarpParser {
 		} else {
 			Vec::new()
 		};
-		let declared_types = if options == ParserOptions::default() {
-			scan_declared_types(&input)
+		let (declared_types, multi_word_types) = if options == ParserOptions::default() {
+			(scan_declared_types(&input), scan_multi_word_types(&input))
 		} else {
 			Default::default()
 		};
 		WarpParser {
 			user_operators,
 			declared_types,
+			multi_word_types,
 			phrase_definitions: Default::default(),
 			input,
 			chars,
