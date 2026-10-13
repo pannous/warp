@@ -128,6 +128,7 @@ mod test_not_condition_block;
 mod test_object_blocks;
 mod test_object_functions;
 mod test_on_error_of_function;
+mod test_on_set_value; // card on-set-value
 mod test_page_events;
 mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;
