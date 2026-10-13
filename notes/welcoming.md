@@ -75,7 +75,7 @@ User decisions from that round:
   expression; educate_once by its written text); "all" the topic. A `// got it` comment on a line silences the
   warnings and notes of that line (diagnostic::silenced_by_comment). The playground still acknowledges whole topics.
 - Users: `a upto b` (topic `upto`) and the for-header bound `0..n-1` (topic `kotlin-range`, Kotlin's `..` is inclusive),
-  both default exclusive, fallback Warning (src/warp_parser.rs `range_reading`); `local-or-global` (src/analyzer.rs
+  both default exclusive, fallback Warning (src/warp_parser/ `range_reading`); `local-or-global` (src/analyzer/
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
   `1 -1` (default the list `[1 -1]`). Error fallback: `list-times` `[x]*n`, `insert-order`, `list-plus` `[1 2 3]+4`,
   `bare-list` `a=1 2 3`, `suffix-precedence` `1+2 squared`. Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+`

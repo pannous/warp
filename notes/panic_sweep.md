@@ -1,7 +1,7 @@
 # Panic sweep (task F)
 
 Rule: a program a user can write never panics the compiler. `panic!`/`unwrap()`/`expect()`/`unreachable!()` in
-src/wasm_emitter, src/analyzer.rs and src/warp_parser.rs became error values (`emit_type_error`, `emit_malformed`,
+src/wasm_emitter, src/analyzer/ and src/warp_parser/ became error values (`emit_type_error`, `emit_malformed`,
 `emit_undefined_variable`, `WasmGcEmitter::type_error`, `TypeManager::type_errors`), tests in tests/sweeps/test_panic_sweep.rs.
 
 ## Converted
