@@ -391,29 +391,20 @@ function writeSharedWords(shared, words) {
 }
 
 // the program's side: hand the job to a task Worker and wait for the values it gives, raw words as `Words` (a copy:
-// the shared buffer takes the next job's answer)
+// the shared buffer takes the next answer)
 function gpuJob(word, job, transfer = [], Words = Float32Array) {
 	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
 	const worker = gpuTaskWorker();
 	if (!worker) throw new Error(`${word}: every task Worker is busy`);
-	const shared = gpuAnswers();
+	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	Atomics.wait(header, 0, 0);
 	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
+	returnAnswerBuffer(shared);
 	if (error) throw new Error(`${word}: ${error}`);
 	return values;
-}
-
-// the one shared buffer every GPU job answers in, emptied for the next: the program waits for each answer, so one is
-// enough. A buffer per job (a frame each) reserved TASK_RESULT_LIMIT each, kept alive by the idle task Worker it went
-// to, and Safari ran out of memory after about 200 of them (card webgpu-safari, notes/web_playground.md)
-let gpuShared;
-function gpuAnswers() {
-	gpuShared ??= new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
-	Atomics.store(new Int32Array(gpuShared, 0, 2), 0, 0);
-	return gpuShared;
 }
 
 // the task Worker of the last GPU job, which keeps its buffers; else (busy with a task) another, which does from now on

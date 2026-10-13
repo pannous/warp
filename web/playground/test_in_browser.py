@@ -117,6 +117,13 @@ GPU_JOBS_CODE = """shader = "@group(0) @binding(0) var<storage, read_write> xs: 
 400 times { try gpu_compute(shader, [1], 1) else 0 }
 gpu_compute(shader, [1], 1)"""
 GPU_JOBS_NEVER = "Out of memory"
+# card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
+MANY_TASKS = "(many tasks in one run)"
+MANY_TASKS_CODE = """twice(x) := x * 2
+total = 0
+for i in 1 to 400 { total += await go twice(i) }
+total"""
+MANY_TASKS_SHOWN = "160400"
 # card shader-brush: samples/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
 BRUSH = "(samples/shader_brush colors the paper under the pointer)"
 BRUSH_SAMPLE = "shader_brush"
@@ -526,6 +533,12 @@ def gpu_jobs_wrong():
 	return [f"after 400 GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
 
 
+def many_tasks_wrong():
+	"""400 tasks awaited one after the other give their sum"""
+	shown = run_code(MANY_TASKS_CODE)
+	return [] if shown == MANY_TASKS_SHOWN else [f"after 400 tasks: {shown!r}, expected {MANY_TASKS_SHOWN}"]
+
+
 def brush_wrong():
 	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper. Its
 	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
@@ -667,7 +680,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

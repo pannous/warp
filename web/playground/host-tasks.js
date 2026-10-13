@@ -324,7 +324,7 @@ function startTask(holder, hooks, name, ints, values) {
 	const id = BigInt(run.tasks.size + 1);
 	const captured = capturedValues(holder.exports);
 	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels)));
-	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	const shared = takeAnswerBuffer();
 	const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)); // a queued task's too: `pause job` holds before it starts
 	const message = { module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice } };
 	const task = { name, shared, control, inline, message };
@@ -334,6 +334,7 @@ function startTask(holder, hooks, name, ints, values) {
 		run.queued = (run.queued ?? 0) + 1;
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
+		returnAnswerBuffer(shared);
 		run.tasks.set(id, inline());
 		return id;
 	}
@@ -406,6 +407,7 @@ function finishedTask(run, hooks, id) {
 	const task = run.tasks.get(id);
 	if (!task.worker) return queuedSignals(run, task);
 	let record = withTaskSounds(run, readShared(task.shared));
+	returnAnswerBuffer(task.shared);
 	if (record.output) hooks.print(record.output, 1);
 	record.files?.forEach(([path, content]) => self.keepWritten?.(path, content.bytes ? Uint8Array.from(content.bytes) : content));
 	releaseWorker(task); // free for the next task
@@ -649,7 +651,7 @@ function startFetch(holder, hooks, id, request) {
 	if (rendered) return void queueMicrotask(() => arrive({ body: rendered.body, text: rendered.text }));
 	if (taskPool.length === 0) return void fetchReplyOf(url, body).then(reply => arrive(reply.error ? failed(reply.error) : reply));
 	const worker = taskPool.pop();
-	started.shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	started.shared = takeAnswerBuffer();
 	started.failed = failed;
 	// the Worker is free once it wrote the reply: taken at a check point or here, whichever comes first
 	started.release = () => {
@@ -695,13 +697,26 @@ function writeShared(shared, record) {
 function askPage(what, ask) {
 	if (!ask) throw new Error(`${what}: this page has no way to answer its Worker`);
 	if (!self.crossOriginIsolated) throw new Error(`${what}: the page is not cross-origin isolated, so its Worker cannot wait for it`);
-	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	const shared = takeAnswerBuffer();
 	ask(shared);
 	if (Atomics.wait(new Int32Array(shared, 0, 2), 0, 0, PAGE_ANSWER_MS) === "timed-out") throw new Error(`${what}: the page did not answer in ${PAGE_ANSWER_MS / 1000} s`);
 	const { error, ...answer } = readShared(shared);
+	returnAnswerBuffer(shared);
 	if (error) throw new Error(`${what}: ${error}`);
 	return answer;
 }
+
+// The shared buffers Workers answer in (a task's record, a fetch's reply, the page's or a GPU job's answer), each
+// handed back once its answer is read and emptied for the next: a growable one reserves TASK_RESULT_LIMIT, and Safari
+// ran out of memory with ~200 alive (cards webgpu-safari, safari-shared-buffers; notes/web_playground.md). One whose
+// writer may still come (a timed-out question, a stopped run's task) is never handed back
+const freeAnswerBuffers = [];
+function takeAnswerBuffer() {
+	const shared = freeAnswerBuffers.pop() ?? new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	Atomics.store(new Int32Array(shared, 0, 2), 0, 0);
+	return shared;
+}
+const returnAnswerBuffer = shared => void freeAnswerBuffers.push(shared);
 
 // the record a task Worker wrote into a shared buffer (writeShared), undefined while none is there yet
 function readShared(shared) {
@@ -712,8 +727,10 @@ function readShared(shared) {
 
 // the reply a task Worker wrote into the fetch's shared buffer, once: undefined while none is there or it was taken
 function sharedFetchReply(started) {
-	const answer = started.reply ? undefined : readShared(started.shared);
+	const answer = started.reply || !started.shared ? undefined : readShared(started.shared);
 	if (!answer) return undefined;
+	returnAnswerBuffer(started.shared);
+	started.shared = undefined;
 	return answer.error ? started.failed(answer.error) : answer;
 }
 
