@@ -83,9 +83,46 @@ def skipped_end(source, at, n) {
 	}
 	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
 	if c == '/' and next == '#' { return after(source, "#/", at + 2, n) }
+	brace = shader_brace(source, at, n)
+	if brace > at { return block_end(source, brace + 1, n) }
 	if c == '«' { return text_end(source, at + 1, '»', n) }
 	if c == '"' or c == '`' or c == '\'' and not possessive(source, at, n) { return text_end(source, at + 1, c, n) }
 	at
+}
+
+// `shader {` or `wgsl {` at `at`: the index of its brace, else `at`
+// Rust twin: warp_parser/literals.rs parse_shader_block
+def shader_brace(source, at, n) {
+	if at > 0 and is_name_char(source[at - 1]) { return at }
+	for word in ["shader", "wgsl"] {
+		if starts_at(source, word, at) {
+			brace = at + word.length
+			if brace < n and is_name_char(source[brace]) { return at }
+			while brace < n and (source[brace] == ' ' or source[brace] == '\t') { brace = brace + 1 }
+			return is_at(source, brace, '{', n) ? brace : at
+		}
+	}
+	at
+}
+
+// After the `}` closing the block from `from` on, WGSL comments not counting
+// Rust twin: warp_parser/literals.rs closing_brace
+def block_end(source, from, n) {
+	at = from
+	depth = 1
+	while at < n {
+		c = source[at]
+		next = at + 1 < n ? source[at + 1] : '\n'
+		if c == '/' and next == '/' { at = index_of(source, "\n", at, n) }
+		else if c == '/' and next == '*' { at = after(source, "*/", at + 2, n) - 1 }
+		else if c == '{' { depth = depth + 1 }
+		else if c == '}' {
+			depth = depth - 1
+			if depth == 0 { return at + 1 }
+		}
+		at = at + 1
+	}
+	n
 }
 
 // After the text from `from` on that `closing` ends, a backslash escaping the character after it
