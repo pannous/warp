@@ -30,6 +30,7 @@ mod test_std_args; // card std-args
 mod test_std_collections;
 #[cfg(feature = "native")] // reads lib/, tests/ and src/: not in the browser build
 mod test_std_coverage; // card std-word
+mod test_std_docs_comment_association; // card help-markdown
 #[cfg(feature = "native")] // runs a process: not in the browser
 mod test_std_exec;
 mod test_std_file;

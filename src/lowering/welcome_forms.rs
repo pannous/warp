@@ -105,7 +105,7 @@ pub fn lower(node: Node) -> Node {
 	} else {
 		r_vectors(node)
 	};
-	let node = qualified_module_calls(module_aliases(node));
+	let node = qualified_module_calls(module_aliases(named_switch_subjects(node)));
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -364,13 +364,67 @@ fn arrow_cases(items: Vec<Node>) -> Vec<Node> {
 	with_match_cases(items, colon_cases)
 }
 
-/// The items of a match, `[match, subject, cases]` or `[match, (subject cases)]`, with `convert` of its cases block;
-/// other items as they are
+fn is_switch_word(word: &Node) -> bool {
+	SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch))
+}
+
+/// `match alle = f(3) {…}` names its subject (user, card match-binding-arm) but parses as `match (alle = (f(3) {…}))`,
+/// after `r =` as `r = ((match alle) = (f(3) {…}))`: as `match (alle = f(3)) {…}`, the assignment the subject
+fn named_switch_subjects(node: Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let mut result: Vec<Node> = Vec::with_capacity(items.len() + 1);
+			for item in items.into_iter().map(named_switch_subjects) {
+				match named_subject(&item).filter(|_| result.last().is_some_and(is_switch_word)) {
+					Some((subject, cases)) => result.extend([subject, cases]),
+					None => result.push(item),
+				}
+			}
+			Node::List(result, bracket, separator)
+		}
+		Node::Key(left, Op::Assign, right) => match left.drop_meta() {
+			Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0]) => {
+				named_switch_subjects(Node::List(
+					vec![words[0].clone(), key(words[1].clone(), Op::Assign, *right)],
+					Bracket::None,
+					Separator::Space,
+				))
+			}
+			_ => key(named_switch_subjects(*left), Op::Assign, named_switch_subjects(*right)),
+		},
+		other => children_rewritten(other, named_switch_subjects),
+	}
+}
+
+/// `alle = (f(3) {cases})`: the assignment `alle = f(3)` and the case block
+fn named_subject(item: &Node) -> Option<(Node, Node)> {
+	let Node::Key(name, Op::Assign, value) = item.drop_meta() else {
+		return None;
+	};
+	let Node::List(parts, bracket, separator) = value.drop_meta() else {
+		return None;
+	};
+	let (cases, expression) = parts.split_last()?;
+	if !matches!(name.drop_meta(), Node::Symbol(_)) || !super::nodes::is_block(cases) || expression.is_empty() {
+		return None;
+	}
+	let expression = match expression {
+		[single] => single.clone(),
+		many => Node::List(many.to_vec(), bracket.clone(), separator.clone()),
+	};
+	Some((key(name.as_ref().clone(), Op::Assign, expression), cases.clone()))
+}
+
+/// The items of a match, `[match, subject, cases]`, `[match, (subject cases)]` or, as a body or an arm parses it,
+/// `[(match subject), cases]`, with `convert` of its cases block; other items as they are
 pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> Node) -> Vec<Node> {
-	if !items
-		.first()
-		.is_some_and(|word| SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
-	{
+	if let [head, cases] = items.as_slice() {
+		if matches!(head.drop_meta(), Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0])) {
+			items[1] = convert(cases);
+			return items;
+		}
+	}
+	if !items.first().is_some_and(is_switch_word) {
 		return items;
 	}
 	match items.len() {
@@ -1047,12 +1101,13 @@ fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 	))
 }
 
-/// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`
+/// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`.
+/// The parentheses are needed, as in JS: a bare `{a, b} => …` is a map pattern arm (card map-patterns)
 fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
-	let (items, separator) = match parameters.drop_meta() {
-		Node::List(items, Bracket::Round, separator) => (items.clone(), separator.clone()),
-		single => (vec![single.clone()], Separator::Colon),
+	let Node::List(items, Bracket::Round, separator) = parameters.drop_meta() else {
+		return None;
 	};
+	let (items, separator) = (items.clone(), separator.clone());
 	let mut fields = Vec::new();
 	let parameters: Vec<Node> = items
 		.into_iter()

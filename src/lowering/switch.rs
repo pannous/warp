@@ -5,11 +5,14 @@
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
+use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::warp_parser::subscript;
 use crate::words::COUNT_WORD;
+use crate::words::MAP_WORD;
 use crate::words::SLICE;
 use crate::words::STARRED;
 use crate::words::SWITCH_WORDS;
@@ -26,6 +29,9 @@ const SUBJECT_PREFIX: &str = "switch_subject_";
 pub const NO_CASE_CALL: &str = "switch_no_case";
 pub const NO_CASE_PREFIX: &str = "no_case_";
 const UNNAMED_SUBJECT: &str = "value";
+/// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
+const VALUE_WORD: &str = "value";
+const LET_WORD: &str = "let";
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -39,12 +45,26 @@ pub fn lower(node: Node) -> Node {
 	if words.is_empty() {
 		return node;
 	}
+	let names = program_names(&node);
+	let value_word_free = !names_variable(&node, &context, &names, VALUE_WORD);
 	Lowering {
 		words,
 		switches: Counter::default(),
-		names: program_names(&node),
+		names,
+		value_word_free,
 	}
 	.expand(node)
+}
+
+/// The program has a variable, parameter or loop variable of that name, in any function
+fn names_variable(node: &Node, context: &crate::context::Context, names: &Names, name: &str) -> bool {
+	let is_parameter = context
+		.user_functions
+		.values()
+		.any(|function| function.params.iter().any(|param| param.name == name));
+	let mut assigned = std::collections::HashSet::new();
+	crate::library_words::collect_assigned_names(node, &mut assigned);
+	names.is_variable(name) || is_parameter || assigned.contains(name)
 }
 
 struct Lowering<'a> {
@@ -52,6 +72,8 @@ struct Lowering<'a> {
 	switches: Counter,
 	/// The program's variables and declared types: a type word in a case tests the subject's type (`int => …`)
 	names: Names,
+	/// No variable, parameter or loop variable of the program is named value: in an arm it is the matched value
+	value_word_free: bool,
 }
 
 struct Case {
@@ -100,10 +122,20 @@ impl Lowering<'_> {
 		if !self.words.contains(&word.as_str()) {
 			return None;
 		}
-		let cases = cases_of(cases)?;
 		let number = self.switches.next_number();
 		let subject_name = format!("{SUBJECT_PREFIX}{number}");
 		let subject_value = Node::Symbol(subject_name.clone());
+		let cases = cases_of(cases)?;
+		let cases = match self.value_word_free {
+			true => cases
+				.into_iter()
+				.map(|case| Case {
+					key: as_subject(case.key, &subject_value),
+					body: as_subject(case.body, &subject_value),
+				})
+				.collect(),
+			false => cases,
+		};
 		let (default, cases): (Vec<Case>, Vec<Case>) = cases.into_iter().partition(|case| is_default(&case.key));
 		let miss = match default.into_iter().next() {
 			Some(default) => default.body,
@@ -116,6 +148,16 @@ impl Lowering<'_> {
 		});
 		let bind = key(subject_value, Op::Assign, subject.clone());
 		Some(Node::List(vec![bind, chain], Bracket::Round, Separator::Semicolon))
+	}
+}
+
+/// The word value in an arm as the subject; a field `x.value` and a key `{value: 1}` keep it
+fn as_subject(node: Node, subject: &Node) -> Node {
+	match node {
+		Node::Symbol(name) if name == VALUE_WORD => subject.clone(),
+		Node::Key(left, Op::Dot, right) => key(as_subject(*left, subject), Op::Dot, *right),
+		Node::Key(left, Op::Colon, right) => key(*left, Op::Colon, as_subject(*right, subject)),
+		other => children_rewritten(other, |child| as_subject(child, subject)),
 	}
 }
 
@@ -184,6 +226,31 @@ pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 	}
 }
 
+/// `{name: n, body: {user}}` matches a map partially (card map-patterns): only fields, each a name, `name: pattern`
+/// or an unnamed rest `..`
+fn is_map_pattern(pattern: &Node) -> bool {
+	match pattern.drop_meta() {
+		Node::List(fields, Bracket::Curly, _) => {
+			!fields.is_empty()
+				&& fields
+					.iter()
+					.all(|part| map_field(part).is_some() || rest_pattern(part) == Some(None))
+		}
+		_ => false,
+	}
+}
+
+/// A field of a map pattern as its name and its pattern: `{name}` binds the field to its own name
+fn map_field(part: &Node) -> Option<(String, &Node)> {
+	match part.drop_meta() {
+		Node::Symbol(name) if rest_pattern(part).is_none() => Some((name.clone(), part)),
+		Node::Key(name, Op::Colon, pattern) if matches!(name.drop_meta(), Node::Symbol(_) | Node::Text(_)) => {
+			Some((name.name(), pattern))
+		}
+		_ => None,
+	}
+}
+
 /// `[a, b]` and the tuple `(a, b)` (card match-tuples) match by shape; a parenthesised single item `(x)` is a group
 fn is_list_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
@@ -230,10 +297,20 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 					std::cmp::Ordering::Equal => {
 						if let Some(Some(name)) = rest_pattern(part) {
 							let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
-							bindings.push(key(Node::Symbol(name), Op::Assign, rest));
+							bindings.push(bind(Node::Symbol(name), rest));
 						}
 					}
 				}
+			}
+		}
+		// fields not named are ignored, the named ones must be there
+		Node::List(fields, _, _) if is_map_pattern(pattern) => {
+			// a map of one field is a pair
+			let is = |spec| call(crate::words::IS_TYPE, vec![path.clone(), text(spec)]);
+			tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_SPEC)));
+			for (name, part) in fields.iter().filter_map(map_field) {
+				tests.push(call(COLLECTION_CONTAINS, vec![path.clone(), Node::Text(name.clone())]));
+				pattern_tests(part, subscript(path.clone(), Node::Text(name)), tests, bindings);
 			}
 		}
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
@@ -247,7 +324,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 			pattern_tests(value, item(&path, 2), tests, bindings);
 		}
 		Node::Symbol(name) if name == WILDCARD => {}
-		Node::Symbol(_) => bindings.push(key(pattern.drop_meta().clone(), Op::Assign, path)),
+		Node::Symbol(_) => bindings.push(bind(pattern.drop_meta().clone(), path)),
 		literal => tests.push(key(path, Op::Eq, literal.clone())),
 	}
 }
@@ -261,7 +338,8 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 		}
 	}
 	let (pattern, guard) = split_guard(&case.key);
-	let (test, bindings) = match pattern_test(subject, &pattern, guard.is_some(), names) {
+	let binds = guard.is_some() || is_binding_name(&pattern, &case.body, names);
+	let (test, bindings) = match pattern_test(subject, &pattern, binds, names) {
 		Ok(matched) => matched,
 		Err(message) => return (error(message), case.body),
 	};
@@ -281,6 +359,15 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 		sequence([bindings, vec![case.body]].concat())
 	};
 	(test, body)
+}
+
+/// `name => "hi " + name`: a name defined nowhere that its body uses binds the subject (card match-binding-arm); unused,
+/// `red: "fire"` is the symbol red
+fn is_binding_name(pattern: &Node, body: &Node, names: &Names) -> bool {
+	match pattern.drop_meta() {
+		Node::Symbol(name) => !names.contains(name) && !is_type_word(pattern) && body.mentions_any(&[name.as_str()]),
+		_ => false,
+	}
 }
 
 /// The test the subject passes when it matches the pattern of a case, and the names the pattern binds. A case key is a
@@ -311,7 +398,7 @@ pub(crate) fn pattern_test(
 /// `xs is [_, 2]` and `if xs is [a, b] then b` (card is-pattern): a list or tuple holding `_`, a rest or a name defined
 /// nowhere is a pattern, its names bound as the test holds; a list of known values stays a comparison
 pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Option<Node> {
-	if !is_list_pattern(pattern) || !has_open_part(pattern, names) {
+	if !(is_list_pattern(pattern) || is_map_pattern(pattern)) || !has_open_part(pattern, names) {
 		return None;
 	}
 	let (mut tests, mut bindings) = (vec![], vec![]);
@@ -329,9 +416,23 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 	}
 	match pattern.drop_meta() {
 		Node::List(items, _, _) if is_list_pattern(pattern) => items.iter().any(|part| has_open_part(part, names)),
+		Node::List(fields, _, _) if is_map_pattern(pattern) => fields
+			.iter()
+			.filter_map(map_field)
+			.any(|(_, part)| has_open_part(part, names)),
 		Node::Symbol(name) => name == WILDCARD || !names.contains(name) && !is_type_word(pattern),
 		_ => false,
 	}
+}
+
+/// A name a pattern binds is declared `let`: the arm's own local, never a change of a main-level variable of that name
+/// (card pattern-names)
+fn bind(name: Node, value: Node) -> Node {
+	Node::List(
+		vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)],
+		Bracket::None,
+		Separator::Space,
+	)
 }
 
 /// A list pattern tests its shape, a type word (`int`, `Circle`) the subject's type, `i: int` also binds it; any other
@@ -339,10 +440,7 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Names) -> (Vec<Node>, Vec<Node>) {
 	if let Node::Key(name, Op::Colon, kind) = pattern.drop_meta() {
 		if let (Node::Symbol(_), Some(test)) = (name.drop_meta(), type_test(subject, kind, names)) {
-			return (
-				vec![test],
-				vec![key(name.drop_meta().clone(), Op::Assign, subject.clone())],
-			);
+			return (vec![test], vec![bind(name.drop_meta().clone(), subject.clone())]);
 		}
 	}
 	if let Some(test) = type_test(subject, pattern, names) {
@@ -351,7 +449,7 @@ fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Name
 	if let Some(tests) = range_tests(subject, pattern) {
 		return (tests, vec![]);
 	}
-	if !guarded && !is_list_pattern(pattern) {
+	if !guarded && !is_list_pattern(pattern) && !is_map_pattern(pattern) {
 		return (vec![key(subject.clone(), Op::Eq, pattern.clone())], vec![]);
 	}
 	let (mut tests, mut bindings) = (vec![], vec![]);

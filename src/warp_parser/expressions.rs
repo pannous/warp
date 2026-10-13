@@ -605,6 +605,7 @@ impl WarpParser {
 				&& crate::lowering::nodes::may_be_whole_number(&lhs)
 				&& crate::lowering::nodes::may_be_whole_number(&rhs);
 			let rhs = match bare_symbol.filter(|_| deferred_hint) {
+				Some(_) if self.in_arm_key() => rhs, // `1 | 2 =>`: alternatives, no pipe, no bit hint
 				Some(_) if may_pipe && crate::pipes::may_be_stage(&rhs) => self.pipe_operand(rhs, op_line, op_column),
 				// any operand after `|` may be a pipe stage (`n | f(x)` or `xs | sort`): pipes.rs decides, by the functions
 				Some(_) if bitwise && may_pipe => crate::pipes::pipe_stage(rhs),

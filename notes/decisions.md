@@ -7,6 +7,12 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- pattern-keyword (warp-list-pattern, card patterns-values, user): named patterns are defined only with the keyword
+  `pattern Adult = {age: >= 18}`, then `x is Adult`, `people where it is Adult`, arms `Adult => …`. A plain
+  `Name = …` is always a value (no inference from `_`, `>=`, `..`); one whose right side can only be a pattern is an
+  error with the fix `pattern Name = …`. Names inside a named pattern bind: `pattern Point = [x, y]` →
+  `match p { Point => x + y }`. Rare in other languages (Haskell pattern synonyms, F# active patterns, Scala
+  extractors; not Rust), hence the visible keyword.
 - match-whole-value (warp-semantics, card match-binding-arm, user: "Make it available as the matched variable or the
   special word value"): no binding syntax (`all @ [a, b]`, `[a, b] as all`, `all: [a, b]` all declined). Inside an
   arm the subject's name is the whole value (`match xs { [a, b] => f(xs) }`), and the word `value` is the whole
