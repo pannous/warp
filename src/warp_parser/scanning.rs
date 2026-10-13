@@ -511,6 +511,16 @@ impl WarpParser {
 		line_comment.trim().to_string()
 	}
 
+	/// `// note` or `# note` here: a comment to the end of the line, not floor division (`7//2`), a URL (`://`) or a
+	/// count (`#xs`)
+	pub(super) fn at_line_comment(&self) -> bool {
+		match (self.current_char(), self.peek_char(1)) {
+			('/', '/') => self.prev_char() != ':' && !self.at_floor_division(),
+			('#', ' ' | '\t') => true,
+			_ => false,
+		}
+	}
+
 	/// `/* … */` and `/# … #/` open a block comment
 	pub(super) fn at_block_comment_start(&self) -> bool {
 		self.current_char() == '/' && matches!(self.peek_char(1), '*' | '#')
@@ -570,7 +580,7 @@ impl WarpParser {
 				line_indent = indent;
 			}
 
-			let (c1, c2) = (self.current_char(), self.peek_char(1));
+			let c1 = self.current_char();
 
 			// # line comment (shell-style) at line start: `# note`, `#!`, `##`, `#use …`; `#x`, `#(…)`, `#a-1` count
 			if c1 == '#' && self.is_at_line_start() && self.at_hash_comment() {
@@ -583,7 +593,7 @@ impl WarpParser {
 				continue;
 			}
 			// // line comment (but not :// URL scheme)
-			if c1 == '/' && c2 == '/' && self.prev_char() != ':' && !self.at_floor_division() {
+			if c1 == '/' && self.at_line_comment() {
 				if self.follows_operand_on_its_line() && !self.is_set_apart() && self.comment_reads_like_divisor() {
 					self.set_hint_pos();
 					crate::diagnostic::educate_once(
