@@ -158,6 +158,8 @@ pub(super) struct Loader<'a> {
 	/// files whose declarations a `use` brought in, and files an `include` spliced in: each is loaded once
 	pub(super) loaded: HashSet<PathBuf>,
 	pub(super) included: HashSet<PathBuf>,
+	/// the packages used and the version loaded (None: its module declares none): a program uses one version of each
+	pub(super) packages: HashMap<String, Option<Version>>,
 	/// the directory of the file being loaded; None for the program itself, which searches from the working directory
 	pub(super) including_directory: Option<PathBuf>,
 	/// the widest `use folder|package|project` met
@@ -181,6 +183,7 @@ impl<'a> Loader<'a> {
 			directories,
 			loaded: HashSet::new(),
 			included: HashSet::new(),
+			packages: HashMap::new(),
 			including_directory,
 			scope: None,
 			wasm_modules: vec![],
@@ -336,8 +339,18 @@ impl<'a> Loader<'a> {
 	}
 
 	/// A registered package: fetched once, then its module `<name>.warp` if it has one; a package without is data.
-	/// A required version the default branch does not declare comes from the matching git tag.
+	/// A required version the default branch does not declare comes from the matching git tag. A program uses one
+	/// version of a package: a second `use` the loaded one satisfies brings nothing new, one asking for another version
+	/// is the error naming both (card use-version-twice).
 	pub(super) fn use_package(&mut self, name: &str, requirement: Option<&Requirement>) -> Result<Vec<Node>, Node> {
+		if let Some(loaded) = self.packages.get(name) {
+			return match (requirement, loaded) {
+				(Some(requirement), Some(version)) if !requirement.allows(version) => Err(error(&format!(
+					"use {name} {requirement}: {name} {version} is used already; a program uses one version of a package"
+				))),
+				_ => Ok(vec![]),
+			};
+		}
 		let mut directory = package_directory(name).map_err(|failure| error(&failure))?;
 		if let Some(requirement) = requirement {
 			let declared = package_module(&directory, name).and_then(|path| module_version(&path));
@@ -345,6 +358,8 @@ impl<'a> Loader<'a> {
 				directory = fetch_package_version(name, requirement).map_err(|failure| error(&failure))?;
 			}
 		}
+		let version = package_module(&directory, name).and_then(|path| module_version(&path));
+		self.packages.insert(name.to_string(), version);
 		match package_module(&directory, name) {
 			Some(path) => self.load(Import::Use, name, path),
 			None => Ok(vec![]),
