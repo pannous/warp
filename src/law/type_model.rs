@@ -804,6 +804,7 @@ impl Exporter {
 	}
 
 	fn is_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains_key(name)))
+		node.call_parts()
+			.is_some_and(|(name, _)| self.functions.contains_key(name))
 	}
 }

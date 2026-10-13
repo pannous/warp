@@ -185,6 +185,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   true/false read as yes/no.
 - Truthiness (2026-10-13, implied): ø + 1 stays an error, empty values are falsy in conditions, only 0 equals false.
   #38 a non-empty list is truthy, `[ø]` too. #28 `x=ø; x.size` and `[].count` are 0. `is empty` covers "", [], {}, ø.
+- text-bool (2026-10-13): `as bool` and `bool(x)` are conversions and read the word, like `"80" as int`: "0", "no" and
+  "false" give no, other texts yes. `if` keeps plain truthiness: any non-empty text is yes, `if "0"` runs the
+  then-branch.
 - in-bool (2026-10-12): `x in list` is yes/no; the position comes from `xs.index_of(x)`. `xs.has(x)` likewise.
 
 ## Types and annotations

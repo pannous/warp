@@ -8,7 +8,7 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
-use super::nodes::{children_rewritten, key, parameter_name};
+use super::nodes::{called_name, children_rewritten, key, parameter_name};
 use crate::analyzer::call_name;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -229,10 +229,7 @@ impl Variadic {
 
 	/// `f(…)` with a spread argument, a call of a function with a rest parameter, also `f 1 2 3`
 	fn is_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
-		let Some(name) = items.first().map(Node::drop_meta).and_then(|head| match head {
-			Node::Symbol(name) => Some(name),
-			_ => None,
-		}) else {
+		let Some(name) = called_name(items, bracket, separator) else {
 			return false;
 		};
 		let rest = self
@@ -242,9 +239,7 @@ impl Variadic {
 		let spread = items[1..]
 			.iter()
 			.any(|item| starred(item).is_some() || double_starred(item).is_some());
-		let called = call_name(items, bracket, separator).is_some()
-			|| (*separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round));
-		called && (rest || spread)
+		rest || spread
 	}
 
 	fn call(&self, items: Vec<Node>) -> Node {

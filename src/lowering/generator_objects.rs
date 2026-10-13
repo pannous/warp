@@ -164,15 +164,7 @@ fn fields(generator: &Generator) -> Vec<String> {
 
 /// The names a body assigns: the `for` lowering's `x·items` and `x·index` too
 fn assigned_names(body: &Node) -> BTreeSet<String> {
-	let mut names = BTreeSet::new();
-	body.visit(&mut |part| {
-		if let Node::Key(target, op, _) = part {
-			if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) {
-				names.extend(target.symbol_name().map(String::from));
-			}
-		}
-	});
-	names
+	body.assigned_names(Op::is_write)
 }
 
 /// `class count_to·generator { n: any; k: any; generator·state: any; next() := machine }`

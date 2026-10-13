@@ -6,7 +6,7 @@
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
 
-use super::nodes::{call, children_rewritten, if_then, if_then_else, key};
+use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -763,7 +763,7 @@ fn definition_head(head: &Node) -> Option<&[Node]> {
 }
 
 /// `f()`: the head of a definition without parameters, whose body has variables of its own
-fn is_call_head(head: &Node) -> bool {
+fn is_parameterless_head(head: &Node) -> bool {
 	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [name] if matches!(name.drop_meta(), Node::Symbol(_))))
 }
 
@@ -954,15 +954,6 @@ fn without_claims(node: Node, traits: &Traits) -> Node {
 		return declaration.clone();
 	}
 	children_rewritten(node, |child| without_claims(child, traits))
-}
-
-/// The function a list calls: `f(a, b)`, or spaced `f a b`
-fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
-	let Node::Symbol(name) = items.first()?.drop_meta() else {
-		return None;
-	};
-	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
-	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
 }
 
 /// Every function's parameters with the declared type each one takes, for the functions that take any

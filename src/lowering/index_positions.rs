@@ -297,13 +297,10 @@ fn assignments(node: &Node) -> Vec<(String, Node)> {
 
 /// The names a program assigns or declares
 fn bound_names(node: &Node) -> HashSet<String> {
-	let mut bound: HashSet<String> = assignments(node).into_iter().map(|(name, _)| name).collect();
-	node.visit(&mut |node| {
-		if let Node::Key(name, Op::Colon, _) = node.drop_meta() {
-			if let Some(name) = name.symbol_name() {
-				bound.insert(name.to_string());
-			}
-		}
-	});
-	bound
+	let declared: Vec<String> = node.assigned_names(|op| *op == Op::Colon);
+	assignments(node)
+		.into_iter()
+		.map(|(name, _)| name)
+		.chain(declared)
+		.collect()
 }
