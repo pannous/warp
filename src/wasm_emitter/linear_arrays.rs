@@ -87,20 +87,31 @@ fn ungrouped(body: &Node) -> &Node {
 	}
 }
 
-/// The kernel's name: its parameter and body after LINEAR_MAP_PREFIX
-pub fn kernel_name(parameter: &str, body: &Node) -> String {
-	format!(
-		"{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}",
-		body.serialize().trim()
-	)
+thread_local! {
+	/// The float kernels lowering named (shared_arrays.rs): their parameter and body by name, so the emitter computes
+	/// them without reading the name back
+	static FLOAT_KERNELS: std::cell::RefCell<std::collections::HashMap<String, (String, Node)>> = Default::default();
 }
 
-/// The parameter and body a kernel's name holds
-fn kernel_of(name: &str) -> Option<(String, Node)> {
-	let (parameter, body) = name
-		.strip_prefix(LINEAR_MAP_PREFIX)?
-		.split_once(KERNEL_NAME_SEPARATOR)?;
-	Some((parameter.to_string(), crate::warp_parser::parse(body)))
+/// The kernel's name, its parameter and body after LINEAR_MAP_PREFIX; the emitter finds them by it (kernel_of)
+pub fn kernel_name(parameter: &str, body: &Node) -> String {
+	let name = format!(
+		"{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}",
+		body.serialize().trim()
+	);
+	FLOAT_KERNELS.with(|kernels| {
+		kernels
+			.borrow_mut()
+			.insert(name.clone(), (parameter.to_string(), body.clone()))
+	});
+	name
+}
+
+/// The parameter and body of the kernel lowering named
+fn kernel_of(name: &str) -> (String, Node) {
+	FLOAT_KERNELS
+		.with(|kernels| kernels.borrow().get(name).cloned())
+		.expect("a kernel lowering named (kernel_name)")
 }
 
 /// The block's header (its count) and each cell are 8 bytes
@@ -183,9 +194,7 @@ impl WasmGcEmitter {
 			};
 		}
 		for kernel in kernels {
-			let Some((parameter, body)) = kernel_of(&kernel) else {
-				continue;
-			};
+			let (parameter, body) = kernel_of(&kernel);
 			let name: &'static str = Box::leak(format!("{SPLIT_KERNEL_PREFIX}{kernel}").into_boxed_str());
 			self.runtime_function(
 				name,

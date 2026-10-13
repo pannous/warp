@@ -602,6 +602,7 @@ impl WarpParser {
 			}
 
 			let rhs = match bare_symbol.filter(|_| deferred_hint) {
+				Some(_) if self.in_arm_key() => rhs, // `1 | 2 =>`: alternatives, no pipe, no bit hint
 				Some(_) if may_pipe && crate::pipes::may_be_stage(&rhs) => self.pipe_operand(rhs, op_line, op_column),
 				Some(symbol) if is_mask(&lhs) || is_mask(&rhs) => {
 					set_hint_position(op_line, op_column);

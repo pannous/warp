@@ -88,7 +88,7 @@
 			<select id="examples" aria-label="example"></select>
 			<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
 			<label><input id="auto" type="checkbox" checked> run while typing</label>
-			<label title="prefer ^ over ** and the like, as the CLI shows them (warp --no-hints hides them)"><input id="hints" type="checkbox" checked> hints</label>
+			<label title="the least diagnostic level shown, as warp --warnings=<level> sets it (hints: prefer ^ over ** and the like; warp --no-hints shows from weak)">show <select id="shown-from"><option value="hint" selected>hints</option><option value="weak">weak warnings</option><option value="normal">warnings</option><option value="severe">severe warnings</option></select> and up</label>
 			<a id="guide-link" class="guide-link" hidden></a>
 			<button id="ask" type="button" title="chat with Claude about this program (needs the API key in the ⋯ menu)">Ask ✦</button>
 			<button id="report" type="button" hidden title="draft a GitHub issue with this program, its output and the version">Report ⚑</button>

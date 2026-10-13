@@ -21,7 +21,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
    - Calls: `p.greet()`, `greet(p)`, and `p.area` for a method without parameters (`area := side*side`, a getter).
    - The class keeps only its fields, so construction counts fields as before.
    - A method that assigns a field of its receiver is a loud error until step 2.
-   - Pass: lowering/class_methods.rs, early in SOURCE_PASSES.
+   - Pass: lowering/class_methods.rs, early in SOURCE_PHASES.
 2. **Mutating methods** (P116): `inc() := n += 1`; `c.inc()` updates the variable c, like `xs.add(v)` does (objects
    are values, wiki/class.md).
 3. **Constructors and required fields** (wiki/constructor.md): `init{…}` / `init(name){…}` blocks (P162; `value` was the
@@ -39,7 +39,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
   Traits (`is shape`) stay as they are (step 5).
 
 ## Step 1 as built
-- lowering/class_methods.rs (early in SOURCE_PASSES): each `:=` definition in a class body becomes
+- lowering/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
   `name(self:class, params…) := body`, and the class keeps its fields. The parser keeps a `:=` body as code, not as a
   field type (lists.rs `transform_fields_to_types`).
 - A method name that two or more classes define is declared as the implicit trait `trait has·name{name}`. traits.rs
@@ -380,9 +380,11 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
 - `enum Shape { Circle(r), Rect(w, h), Dot }` and Swift's `case circle(radius: Double)` lines: as soon as one case has
   values the enum IS that sum type (parser parse_enum_with_values, same sum_type builder). An enum without values
   is the sum type of its cases too (user decision enum-case B, lowering/plain_enums.rs, test_plain_enum.rs):
-  `Coin.Dime` is `Dime`, `Dime is Coin`; `Coin.Dime as int` its position 2; `2 as Coin` and `Coin(2)` the case, "9 is
-  no Coin case" past the cases. A match on a declared enum or sum type that misses a case does not compile
-  (match_exhaustive.rs).
+  `Coin.Dime` is `Dime`, `Dime is Coin`; `Coin.Dime as int` its index 2 (counting from 0, as C does; warp's
+  positions `x in xs`, `c#1` are 1-based), `as index` the same, `as position` 3 (spec: wiki/enum.md); `2 as Coin` and `Coin(2)` the case, "9 is no Coin case" past the cases;
+  `f(1)` for `f(c: Coin)` is a type error offering `f(1 as Coin)` (card coin-errors, test_fixits). Enums with
+  written values (`Penny = 1`) are not read yet (card enum-coin). A match on a declared enum or sum type that misses
+  a case does not compile (match_exhaustive.rs).
 - Open: a match on a subject statically known as a bare variant (`s = Dot; match s {Circle(r) => r*r …}`) types the
   dead arm and fails (card match-static); inside a function it works.
 - Emitter fix found on the way: `((a) or b) or c` took the parenthesized operation as a truthy literal and dropped c

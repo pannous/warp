@@ -94,7 +94,8 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 		.map(|hint| {
 			let (line, column) = hint.line_and_column();
 			json!({
-				"original": hint.original, "canonical": hint.canonical, "position": hint.position, "reason": hint.reason,
+				"level": diagnostic::Level::Hint.name(), "original": hint.original, "canonical": hint.canonical,
+				"position": hint.position, "reason": hint.reason,
 				"fixes": fixes_json(code, line, column, &hint.fix().into_iter().collect::<Vec<_>>()),
 			})
 		})
@@ -140,10 +141,10 @@ pub fn renders_itself(code: &str) -> bool {
 	holds_markup
 }
 
-/// A warning or error for the page: its words, position, "got it" topic and the fixes it offers
+/// A warning or error for the page: its words, level, position, "got it" topic and the fixes it offers
 fn diagnostic_json(code: &str, diagnostic: &diagnostic::Diagnostic) -> Value {
 	json!({
-		"message": diagnostic.message, "line": diagnostic.line, "column": diagnostic.column, "fix": diagnostic.fix,
+		"message": diagnostic.message, "level": diagnostic.level.name(), "line": diagnostic.line, "column": diagnostic.column, "fix": diagnostic.fix,
 		"topic": diagnostic.topic, "expression_key": diagnostic.expression_key, "fixes": fixes_json(code, diagnostic.line, diagnostic.column, &diagnostic.fixes),
 	})
 }

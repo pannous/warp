@@ -293,3 +293,13 @@ fn missing_kebab_field_fix() {
 	// field-or-minus (user 2026-10-12): "I meant: p.phone - number"
 	assert_fix("p = {phone: 7}; number = 2; p.phone-number", "subtraction", "5");
 }
+
+#[test]
+fn int_for_enum_parameter_fix() {
+	// card coin-errors, decision enum-case B: an int becomes a case explicitly, so f(1) for f(c: Coin) offers f(1 as Coin)
+	assert_fix(
+		"enum Coin { Penny, Nickel, Dime }; f(c: Coin) := c; f(1)",
+		"the Coin case at index 1",
+		"Nickel",
+	);
+}

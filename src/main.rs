@@ -109,6 +109,10 @@ const NO_HINTS_FLAG: &str = "--no-hints";
 /// Run the program with no C, shell or other runtime (Capability::GRANTED_SANDBOXED), as warp-lambda hosts programs
 const SANDBOX_FLAG: &str = "--sandbox";
 const HINTS_VARIABLE: &str = "WARP_HINTS";
+/// `--warnings=<level>`: print diagnostics from that level up (hint, weak, normal, severe); `--no-hints` is weak
+const WARNINGS_FLAG: &str = "--warnings";
+/// `--strict` (normal and severe warnings are errors, as `use strict`), `--strict=<level>` from another level
+const STRICT_FLAG: &str = "--strict";
 /// The last line of a run that showed hints while nobody chose to see them (neither the flag nor WARP_HINTS was given)
 const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WARP_HINTS=0)";
 /// What the console and `warp <code>` put before a program's value
@@ -189,10 +193,9 @@ fn apply_flags(args: &mut Vec<String>) {
 		args.drain(flag..flag + 2);
 	}
 
-	// `--strict`: warnings are errors (as `use strict` in the program)
-	if let Some(flag) = args.iter().position(|arg| arg == "--strict") {
-		diagnostic::set_warning_mode(diagnostic::WarningMode::Error);
-		args.remove(flag);
+	// `--strict[=level]`: warnings of that level and up are errors (as `use strict` in the program)
+	if let Some(level) = level_flag(args, STRICT_FLAG, diagnostic::STRICT_LEVEL) {
+		diagnostic::set_warning_mode(diagnostic::WarningMode::Strict(level));
 	}
 
 	let no_hints = args
@@ -204,8 +207,15 @@ fn apply_flags(args: &mut Vec<String>) {
 	let hints_wanted = hints_variable
 		.as_deref()
 		.is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
-	warp::normalize::print_hints(hints_wanted && !no_hints);
-	if hints_wanted && !no_hints && hints_variable.is_none() {
+	let hints_shown = hints_wanted && !no_hints;
+	let fewest_shown = if hints_shown {
+		diagnostic::Level::Hint
+	} else {
+		diagnostic::Level::Weak
+	};
+	let shown = level_flag(args, WARNINGS_FLAG, fewest_shown).unwrap_or(fewest_shown);
+	diagnostic::show_from(shown);
+	if shown == diagnostic::Level::Hint && hints_variable.is_none() {
 		tip_hiding_hints_at_exit();
 	}
 
@@ -225,11 +235,38 @@ fn apply_flags(args: &mut Vec<String>) {
 	diagnostic::use_acknowledgements_file(acknowledgements);
 }
 
+/// The level of `--flag=<level>` or `--flag <level>`, `bare` for the flag alone, taken out of the arguments; exits on an
+/// unknown level
+#[cfg(not(test))]
+fn level_flag(args: &mut Vec<String>, flag: &str, bare: diagnostic::Level) -> Option<diagnostic::Level> {
+	let at = args
+		.iter()
+		.position(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))?;
+	let given = match args.remove(at).split_once('=') {
+		Some((_, name)) => Some(name.to_string()),
+		None => args
+			.get(at)
+			.filter(|name| diagnostic::Level::named(name).is_some())
+			.cloned()
+			.inspect(|_| {
+				args.remove(at);
+			}),
+	};
+	let Some(name) = given else {
+		return Some(bare);
+	};
+	diagnostic::Level::named(&name).or_else(|| {
+		let names: Vec<&str> = diagnostic::Level::ALL.iter().map(|level| level.name()).collect();
+		eprintln!("{flag} takes a level: {}", names.join(", "));
+		std::process::exit(2);
+	})
+}
+
 /// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
 #[cfg(not(test))]
 fn tip_hiding_hints_at_exit() {
 	extern "C" fn tip() {
-		if warp::normalize::any_hint_printed() {
+		if diagnostic::any_hint_printed() {
 			eprintln!("{}", diagnostic::paint(diagnostic::Color::Gray, HIDE_HINTS_TIP));
 		}
 	}
@@ -1139,6 +1176,8 @@ fn usage() {
 	println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
 	println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
 	println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
+	println!("  --warnings=<level>   Show diagnostics from hint (default), weak, normal or severe up");
+	println!("  --strict[=<level>]   Warnings from normal (or the level) up are errors, as `use strict`");
 	println!("  --sandbox            No C, shell or other runtime for the program (as hosted programs run)");
 	println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
 	println!(
