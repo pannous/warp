@@ -17,6 +17,7 @@ mod test_ffi_gaps;
 mod test_ffi_handles;
 mod test_ffi_import_group;
 #[cfg(all(feature = "native", target_os = "macos"))] // libc's sranddev and the C headers of macOS
+mod test_ffi_one_parser; // card cleanup-ffi-headers
 mod test_ffi_signatures; // card cleanup-ffi-f32
 #[cfg(feature = "native")] // the C headers: not in the browser build
 mod test_ffi_text_out_pointers; // card ffi-header
