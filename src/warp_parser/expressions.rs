@@ -495,8 +495,8 @@ impl WarpParser {
 			}
 
 			// Consume the operator
-			// a single `|` may pipe into a function (pipes.rs), a single `&` or `|` may mask bits (bit_word_hint): their
-			// `and`/`or` hint waits for the operands
+			// a single `|` may pipe into a function (pipes.rs), a single `&` or `|` may combine bits (may_be_whole_number):
+			// their `and`/`or` hint waits for the operands
 			let may_pipe = chars == 1 && self.current_char() == '|' && !self.options.data_mode;
 			let deferred_hint = may_pipe || (chars == 1 && self.current_char() == '&');
 			let written = if deferred_hint {
@@ -601,14 +601,15 @@ impl WarpParser {
 				continue;
 			}
 
+			let bitwise = deferred_hint
+				&& crate::lowering::nodes::may_be_whole_number(&lhs)
+				&& crate::lowering::nodes::may_be_whole_number(&rhs);
 			let rhs = match bare_symbol.filter(|_| deferred_hint) {
 				Some(_) if self.in_arm_key() => rhs, // `1 | 2 =>`: alternatives, no pipe, no bit hint
 				Some(_) if may_pipe && crate::pipes::may_be_stage(&rhs) => self.pipe_operand(rhs, op_line, op_column),
-				Some(symbol) if is_mask(&lhs) || is_mask(&rhs) => {
-					set_hint_position(op_line, op_column);
-					bit_word_hint(&lhs, symbol, &rhs);
-					rhs
-				}
+				// any operand after `|` may be a pipe stage (`n | f(x)` or `xs | sort`): pipes.rs decides, by the functions
+				Some(_) if bitwise && may_pipe => crate::pipes::pipe_stage(rhs),
+				Some(_) if bitwise => rhs,
 				Some(_) if may_pipe => self.pipe_operand(rhs, op_line, op_column),
 				Some(symbol) => {
 					set_hint_position(op_line, op_column);
@@ -632,6 +633,12 @@ impl WarpParser {
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define
+			} else if bitwise && !crate::pipes::is_pipe_stage(&rhs) {
+				if op == Op::And {
+					Op::BitAnd
+				} else {
+					Op::BitOr
+				}
 			} else {
 				op
 			};

@@ -208,6 +208,7 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
 		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		Op::Xor => &[INT_RUNTIME],
+		Op::BitAnd | Op::BitOr => &[INT_RUNTIME, IS_TRUTHY],
 		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
 		op if op.is_arithmetic() || op.is_compound_assign() => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		op if op.is_shift() => &[INT_RUNTIME],
@@ -512,8 +513,15 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
-					// the host builds a caught stack overflow's or a failed adapter's Error with the module's own error_of
-					if [crate::host::GUARDED_CALL, crate::host::STD_PURE, crate::host::STD_IO].contains(&name.as_str())
+					// the host builds a caught stack overflow's, a failed adapter's or a failed parse's Error with the
+					// module's own error_of
+					if [
+						crate::host::GUARDED_CALL,
+						crate::host::STD_PURE,
+						crate::host::STD_IO,
+						crate::host::PARSE_CODE,
+					]
+					.contains(&name.as_str())
 					{
 						ctx.required_functions
 							.insert(crate::wasm_emitter::text_builtins::ERROR_OF);

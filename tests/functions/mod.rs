@@ -110,6 +110,7 @@ mod test_parameter_assignment;
 mod test_parameter_call_kinds;
 mod test_parameter_codepoint_calls;
 mod test_parameter_overloads;
+mod test_parameter_patterns; // card parameter-patterns
 mod test_parameter_retype;
 mod test_parameter_shapes;
 mod test_parens_getter_warning;

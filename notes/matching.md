@@ -114,6 +114,12 @@ with `_`, a rest or a name defined nowhere is a pattern, else `is` compares), an
 The whole matched value (user): no `@`/`as` binding. In an arm the subject's name (`match xs`), the word `value` (any
 subject, innermost match; a program variable named value wins) and `match name = expr { … }` (assigns, then matches;
 the name stays bound) give it.
+Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `add_pair([a, b]) := a + b`,
+`total(Point{x, y}) := x + y`. Each pattern parameter gets a numbered name (`list·1`, `point·1: Point`), and the body
+becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
+Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
+(card sum-point).
+Open: pattern names warn as main-level shadows (card pattern-names).
 Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
 `else =>` on its own line is the catch-all arm (card match-arm); `else:` on its own line in a switch still fails to
 parse (it clashes with Python's block colon).
@@ -147,11 +153,12 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`
    as a group: `flattened` splices them. Tests tests/control/test_tree_replace.rs, probe probes/matching/tree_replace.warp.
 6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
-7. Code patterns: quoted code with holes, `data($a + 0) => a` (backticks stay template text, notes/parse_word.md).
+7. Code patterns: quoted code with holes, `data($a + 0) => a`, matched against `parse("…")` or `data (…)` (card
+   parse-word, notes/parse_word.md). Backticks stay template text.
    code-holes done (switch.rs code_tests): `$a` binds the subtree, a repeated hole tests equality with the first, a key
    tests `is key` and its op, a list `is list` and its count; `$f($x)` is flattened like a quoted call `g x`. A match
    in a function copies its subject: user_functions.rs now lets a parameter whose copy is kind-tested take any value
    (else indexing the copy typed the parameter list, card alias-indexed-param). Tests tests/control/test_code_holes.rs,
-   probe probes/matching/code_holes.warp. Next: tree-replace for data and code.
+   probe probes/matching/code_holes.warp.
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).

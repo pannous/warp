@@ -1,5 +1,5 @@
 //! `|` in the key of a match arm separates alternatives (user, matching roadmap): no hint toward bit_or or `or` there;
-//! outside an arm `x | 4` still hints
+//! outside an arm `x | 4` of whole numbers is the bit or (card operator-shall), only `|` of truth values hints
 use warp::normalize::*;
 use warp::warp_parser::WarpParser;
 
@@ -21,6 +21,7 @@ fn arm_alternatives_get_no_hint() {
 }
 
 #[test]
-fn a_mask_outside_an_arm_still_hints() {
-	assert_eq!(hinted_originals("x = 3; x | 4"), vec!["x | 4".to_string()]);
+fn outside_an_arm_only_a_bar_of_truth_values_hints() {
+	assert_eq!(hinted_originals("x = 3; x | 4"), Vec::<String>::new());
+	assert_eq!(hinted_originals("x = yes; x | no"), vec!["|".to_string()]);
 }

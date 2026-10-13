@@ -110,5 +110,12 @@ addHostPart({
 			}
 			return buildValue(module, report.result);
 		},
+		// the code of a text known only at run time (src/host.rs parse_code): parsed by the same compiler instance
+		parse_code: text => {
+			const module = program();
+			const report = evalBlock(hooks, JSON.stringify({ parse: readNode(module, text) }));
+			if (report.error !== undefined) return errorInProgram(module, report.error);
+			return buildValue(module, report.result);
+		},
 	}),
 });

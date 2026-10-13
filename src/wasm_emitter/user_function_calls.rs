@@ -105,6 +105,7 @@ impl WasmGcEmitter {
 	pub(super) fn export_exact_builders(&mut self) {
 		let hands_values_in = [
 			crate::host::RUN_BLOCK,
+			crate::host::PARSE_CODE,
 			crate::host::BLOCK_VALUE,
 			crate::host::FOREIGN_CALL,
 			crate::host::STD_PURE,

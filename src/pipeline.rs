@@ -335,6 +335,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::lowering::soft_keywords::lower,
+	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
+	crate::lowering::parameter_patterns::lower,
 	// `fib(0) := 0; fib(n) := …`: a second definition of one shape is an error with a match as its fix
 	crate::lowering::definition_cases::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
@@ -505,6 +507,8 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::comprehensions::lower,
 	crate::lowering::library_words::lower_function_methods,
 	crate::lowering::tuples::lower,
+	// `parse("n * 1")` of a constant text is `data (n * 1)` (card parse-word), before blocks.rs reads data
+	crate::lowering::parse_word::lower,
 	crate::lowering::run_time_blocks::warn_unresolved,
 	crate::lowering::run_time_blocks::lower_interpret,
 	crate::lowering::blocks::lower,
