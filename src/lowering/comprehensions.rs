@@ -121,7 +121,7 @@ fn instances_class(value: &Node) -> Option<&str> {
 	};
 	let mut classes = elements
 		.iter()
-		.map(|element| crate::tuples::call_parts(element).map(|(class, _)| class));
+		.map(|element| element.call_parts().map(|(class, _)| class));
 	let first = classes.next()??;
 	classes.all(|class| class == Some(first)).then_some(first)
 }

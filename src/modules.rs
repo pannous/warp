@@ -537,18 +537,10 @@ fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<No
 
 /// The names a function definition's body assigns: `hue = …` in `def hsv(h, s, v) {…}`; none for other declarations
 fn assigned_names(definition: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
 	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || is_global_declaration(definition) {
-		return names;
+		return HashSet::new();
 	}
-	definition.visit(&mut |node| {
-		if let Node::Key(target, op, _) = node {
-			if *op == Op::Assign || op.is_compound_assign() {
-				names.extend(target.drop_meta().symbol_name().map(String::from));
-			}
-		}
-	});
-	names
+	definition.assigned_names(|op| *op == Op::Assign || op.is_compound_assign())
 }
 
 /// `global x = …`

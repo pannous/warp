@@ -142,7 +142,8 @@ so never wait for input, and make undoable default choices yourself (note them i
 
 YOUR TASK: take one or two cards from the Next column of the board (\`todo list\`), easy ones first, only sub-cards
 of the cleanup topic (marked \"(in cleanup)\"; user, 2026-10-13: no new work outside the cleanup until it is done);
-none free: stop with nothing taken. Skip any card that
+none free: stop with nothing taken. The cleanup's metric is lines removed (simpler, more general code), not files
+split; state the net src/ line delta in your final message. Skip any card that
 already names an agent or whose branch exists on origin (another session works on it). Skip every card whose key
 starts with \`user-\`: those are the user's own to-dos (clicks in web UIs, cloud settings, accounts), not repository
 work, and you must not take, branch or push for them. Take only cards solved by changing this repository. Claim each with

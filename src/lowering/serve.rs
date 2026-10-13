@@ -941,18 +941,18 @@ fn server_calls(page_code: &[Node], servers: &[String]) -> Vec<Node> {
 /// `f(a, b)` / `f a` of a server function f
 fn is_server_call(node: &Node, servers: &[String]) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Round | Bracket::None, _))
-		&& crate::tuples::call_parts(node).is_some_and(|(name, _)| servers.iter().any(|server| server == name))
+		&& node
+			.call_parts()
+			.is_some_and(|(name, _)| servers.iter().any(|server| server == name))
 }
 
 fn callee(call: &Node) -> String {
-	crate::tuples::call_parts(call)
-		.map(|(name, _)| name.to_string())
-		.unwrap_or_default()
+	call.call_parts().map(|(name, _)| name.to_string()).unwrap_or_default()
 }
 
 /// The callee and the arguments of a call, `f(a, b)` written either way
 fn call_items(call: &Node) -> Vec<Node> {
-	let Some((name, arguments)) = crate::tuples::call_parts(call) else {
+	let Some((name, arguments)) = call.call_parts() else {
 		return vec![call.clone()];
 	};
 	let arguments = match arguments {
@@ -1011,7 +1011,7 @@ fn local_argument(call: &Node, main_variables: &HashSet<String>, functions: &Has
 	let mut heads = HashSet::new();
 	for argument in &items[1..] {
 		argument.visit(&mut |node| {
-			if let Some((name, _)) = crate::tuples::call_parts(node) {
+			if let Some((name, _)) = node.call_parts() {
 				heads.insert(name.to_string());
 			}
 		});

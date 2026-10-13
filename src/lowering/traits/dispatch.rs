@@ -206,7 +206,7 @@ impl Dispatch {
 		match node {
 			// a definition head names parameters, it calls nothing
 			Node::Key(head, op @ (Op::Assign | Op::Define), body)
-				if definition_head(&head).is_some() || is_call_head(&head) =>
+				if definition_head(&head).is_some() || is_parameterless_head(&head) =>
 			{
 				self.declared.borrow_mut().push(HashMap::new());
 				let body = self.types.in_definition(&head, || self.expand(*body));

@@ -266,6 +266,7 @@ PASSED:
   ✓ control::test_frame_event::a_frame_handler_leaves_main_running
   ✓ control::test_frame_event::a_frame_handler_runs_once_without_a_window
   ✓ control::test_frame_event::on_key_hears_the_paint_windows_keys
+  ✓ control::test_fresh_names::a_program_lowers_alike_on_every_compile
   ✓ control::test_function_body::a_field_named_body_wins
   ✓ control::test_function_body::a_functions_body_is_its_code_as_data
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
@@ -3313,6 +3314,7 @@ PASSED:
   ✓ programs::test_samples::test_y_combinator
   ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
+  ✓ programs::test_shader_blocks::a_shader_function_takes_warps_colon_result_type
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
   ✓ programs::test_shader_blocks::shader_stays_a_name
   ✓ programs::test_shader_builtins::a_shader_reads_its_previous_frame
@@ -5367,4 +5369,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5362 passed, 0 failed, 5362 total tested
+13 ignored, 5364 passed, 0 failed, 5364 total tested

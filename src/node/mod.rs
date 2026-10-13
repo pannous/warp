@@ -274,6 +274,14 @@ impl Node {
 		}
 	}
 
+	/// `f(args)` / `f args` / `f()`: the callee and the arguments of a list headed by a symbol
+	pub fn call_parts(&self) -> Option<(&str, &[Node])> {
+		match self.drop_meta() {
+			List(items, _, _) => Some((items.first()?.symbol_name()?, &items[1..])),
+			_ => None,
+		}
+	}
+
 	/// The name of a symbol, through its metadata
 	pub fn symbol_name(&self) -> Option<&str> {
 		match self.drop_meta() {
@@ -574,6 +582,19 @@ impl Node {
 		let mut found = false;
 		self.visit(&mut |node| found |= matches!(node, Symbol(name) if wanted(name)));
 		found
+	}
+
+	/// `x` of every `x = …` (or whichever operators `binds` accepts) anywhere in this node, in order of appearance
+	pub fn assigned_names<Names: FromIterator<String>>(&self, binds: impl Fn(&Op) -> bool) -> Names {
+		let mut names = vec![];
+		self.visit(&mut |node| {
+			if let Key(target, op, _) = node {
+				if binds(op) {
+					names.extend(target.symbol_name().map(String::from));
+				}
+			}
+		});
+		names.into_iter().collect()
 	}
 
 	/// Call `action` on this node and every descendant (pre-order, Meta dropped)

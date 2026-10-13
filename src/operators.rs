@@ -480,6 +480,11 @@ impl Op {
 		)
 	}
 
+	/// `=`, `+=` and the like, `++`, `--`: an operator that writes its variable
+	pub fn is_write(&self) -> bool {
+		*self == Op::Assign || self.is_compound_assign() || matches!(self, Op::Inc | Op::Dec)
+	}
+
 	/// Get the base operator for a compound assignment (AddAssign -> Add, etc.)
 	pub fn base_op(&self) -> Op {
 		match self {

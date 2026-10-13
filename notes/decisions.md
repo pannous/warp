@@ -16,6 +16,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
+- cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
+  code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
+  request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
+- cleanup-may-drop-edge-cases (2026-10-13): in this cleanup a simplification may make edge-case tests fail. The
+  worker marks each `#[ignore = "cleanup-edge: <card>: <what no longer works>"]` (assertions untouched) and lists them
+  in its merge request; the Interviewer asks the user whether each edge case is worth the code it needed: yes → the
+  code comes back, no → the test is retired. Core behaviour (samples, the tour, common forms) must keep passing.
 - crash-fixes-first (2026-10-12): crash fixes merge with the highest priority (notes/roles.md).
 - small-changes-on-main (2026-10-12): small or non-conflicting changes may go on main without a worktree.
 - session-names (2026-10-12): a session is named for its current task, never a guessed area.
@@ -185,6 +192,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   true/false read as yes/no.
 - Truthiness (2026-10-13, implied): ø + 1 stays an error, empty values are falsy in conditions, only 0 equals false.
   #38 a non-empty list is truthy, `[ø]` too. #28 `x=ø; x.size` and `[].count` are 0. `is empty` covers "", [], {}, ø.
+- text-bool (2026-10-13): `as bool` and `bool(x)` are conversions and read the word, like `"80" as int`: "0", "no" and
+  "false" give no, other texts yes. `if` keeps plain truthiness: any non-empty text is yes, `if "0"` runs the
+  then-branch.
 - in-bool (2026-10-12): `x in list` is yes/no; the position comes from `xs.index_of(x)`. `xs.has(x)` likewise.
 
 ## Types and annotations
@@ -467,6 +477,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   hole (user's own edit). P234 `paint` takes a shader text and renders on the GPU; `use graphics` = `use draw`.
 
 ## Sound and graphics
+- shader-untouched (2026-10-13, user: "I didn't mean to mess with the shader language"): WGSL in shader blocks stays
+  as written, the `$name` holes are the only change; the colon result-type rewrite (87d15829e) goes. A WGSL error
+  is reported as a warp error with the .warp file's line and column (card wgsl-error).
 - play-dispatch (2026-10-12): `play hum for 2s` dispatches on what hum is (signal, stereo pair, block function); no
   snake case words.
 - sound-at (default): `at 2 beats play C4` places sounds from the voice's first sound.
