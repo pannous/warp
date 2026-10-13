@@ -14,7 +14,6 @@
 use crate::node::{Bracket, Node};
 use crate::operators::{glyph_operator, Op};
 use std::cell::RefCell;
-use std::collections::HashSet;
 
 /// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
 const HINT_TOPIC_PREFIX: &str = "hint:";
@@ -336,7 +335,6 @@ impl Default for Style {
 // test's setting must not leak into another test's compilation
 thread_local! {
 	static STYLE: RefCell<Style> = RefCell::new(Style::default());
-	static SHOWN_HINTS: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
 	static HINT_MODE: std::cell::Cell<HintMode> = const { std::cell::Cell::new(HintMode::Always) };
 }
 
@@ -375,10 +373,7 @@ pub fn hint_mode() -> HintMode {
 	HINT_MODE.with(|current| current.get())
 }
 
-/// Clear shown hints (useful for testing)
-pub fn clear_shown_hints() {
-	SHOWN_HINTS.with(|shown| shown.borrow_mut().clear());
-}
+pub use crate::diagnostic::clear_shown_hints;
 
 // ============================================================================
 // Core Hint Function
@@ -434,15 +429,6 @@ pub(crate) fn show_hint(
 	}
 	.about(topic, original);
 	crate::diagnostic::say(hint)
-}
-
-/// Under HintMode::Once: whether this diagnostic was said before on this thread (remembers it otherwise)
-pub(crate) fn said_before(diagnostic: &crate::diagnostic::Diagnostic) -> bool {
-	let key = match (&diagnostic.written, &diagnostic.preferred) {
-		(Some(written), Some(preferred)) => format!("{written}|{preferred}"),
-		_ => format!("{}@{}:{}", diagnostic.message, diagnostic.line, diagnostic.column),
-	};
-	hint_mode() == HintMode::Once && !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key))
 }
 
 // ============================================================================
