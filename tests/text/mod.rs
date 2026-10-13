@@ -22,7 +22,6 @@ mod test_library_unicode;
 mod test_map_text;
 mod test_nested_list_text;
 mod test_one_character_argument;
-mod test_one_character_list_items;
 mod test_print_all_characters;
 mod test_print_arguments;
 mod test_print_gives_nothing;

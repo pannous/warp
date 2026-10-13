@@ -30,8 +30,9 @@ Gaps (each a card below):
   cost ~800 fuel (text-costs): grapheme_end now returns at once for an ASCII character before an ASCII one (but \r),
   ~300 a step, a far index ~41 a character (tests/text/test_ascii_index_costs.rs).
 - ~~Gaps found by the self-parser~~ fixed: a class literal field named like an element is no markup (class-literal),
-  an untyped `code`/`block` parameter is a block only when the body runs it (parameter-named), a one-character
-  literal beside a text in a list is a text (character-text; a lone `"x"` stays a character). probes/self_gaps/.
+  an untyped `code`/`block` parameter is a block only when the body runs it (parameter-named). probes/self_gaps/.
+  Open: character-text, `["x", b]` of a text b reads back `['x' " "]`; promoting "x" to a text changes the pinned
+  `['a' "bb" "ccc"]` of sort tests, so it waits for a user decision.
 - ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/node_api.rs): `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still
