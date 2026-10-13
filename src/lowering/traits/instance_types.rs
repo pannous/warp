@@ -184,8 +184,17 @@ impl InstanceTypes {
 		let Some(Shape::ListOf(type_name)) = self.shape(list) else {
 			return false;
 		};
+		self.has_field(&type_name, name)
+	}
+
+	/// Is `node` known to be an instance of a declared type with the field `name`
+	pub fn is_instance_field(&self, node: &Node, name: &str) -> bool {
+		matches!(self.shape(node), Some(Shape::Instance(type_name)) if self.has_field(&type_name, name))
+	}
+
+	fn has_field(&self, type_name: &str, name: &str) -> bool {
 		self.registry
-			.get_by_name(&type_name)
+			.get_by_name(type_name)
 			.is_some_and(|type_def| type_def.fields.iter().any(|field| field.name == name))
 	}
 
