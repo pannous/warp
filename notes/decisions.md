@@ -6,6 +6,20 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-13 (user; via the Interviewer)
+- match-other (user): `other` is a catch-all case key in a match, a synonym of `_` / `default` / `else`:
+  `match c { Penny: 1; other: 0 }`.
+- match-alternatives (warp-semantics, user: "ideally both"): a case key is a pattern, as in Rust: `1 | 2`, `1 or 2`
+  and `1, 2` all mean either value; a computed comparison goes in a guard (`x if x == a | b`); `|` stays logical or
+  outside case keys.
+- definition-cases (warp-semantics, user): a second same-shape definition (`fib(0) := 0; fib(n) := …`) is an error
+  "fib is defined twice" with a fix pointing at a match; no joining by cases. Overloads by parameter type are unaffected.
+- match-exhaustive (warp-semantics, user): a match on a known enum or sealed class without a catch-all that misses a
+  case is a compile error "match on Coin misses Dime"; an unknown subject type keeps the run-time error.
+- component-calls (warp-markup; Interviewer during quiet hours, undoable): components called in a loop or `if` keep
+  the enclosing element as their hole (one morph, focus and input kept); per-instance run-time holes parked in Later
+  until a large list proves slow.
+
 ## Decided 2026-10-13 (user, to warp-supervisor)
 - matching-first: the matching roadmap (card matching-create) is the top priority, before any further self-hosting.
 - self-hosting-postponed: self-hosting is postponed until the language features it showed missing are implemented
