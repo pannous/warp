@@ -660,11 +660,7 @@ fn both_gpu_and_cpu(node: &Node) -> Option<Node> {
 
 fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::diagnostic::Diagnostic>) {
 	let warn = |warnings: &mut Vec<_>, reason: String| {
-		warnings.push(crate::diagnostic::Diagnostic::at(
-			node,
-			format!("{reason}, so this runs on the CPU"),
-		)
-		.weak())
+		warnings.push(crate::diagnostic::Diagnostic::at(node, format!("{reason}, so this runs on the CPU")).weak())
 	};
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign, value)

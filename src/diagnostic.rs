@@ -578,12 +578,19 @@ fn print(diagnostic: &Diagnostic) {
 				0 => String::new(),
 				line => format!(
 					" {}",
-					paint(Color::Gray, &crate::meta::place_text(diagnostic.file.as_deref(), line, diagnostic.column))
+					paint(
+						Color::Gray,
+						&crate::meta::place_text(diagnostic.file.as_deref(), line, diagnostic.column)
+					)
 				),
 			};
 			// a note about the text as written (`await job within 100 ms`) prefers nothing else
 			match preferred == written {
-				true => eprintln!("{}{position}: {}", paint(Color::Cyan, "note"), paint(Color::Green, written)),
+				true => eprintln!(
+					"{}{position}: {}",
+					paint(Color::Cyan, "note"),
+					paint(Color::Green, written)
+				),
 				false => eprintln!(
 					"{}{position}: prefer {} over {}",
 					paint(Color::Cyan, "hint"),

@@ -208,7 +208,11 @@ fn apply_flags(args: &mut Vec<String>) {
 		.as_deref()
 		.is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
 	let hints_shown = hints_wanted && !no_hints;
-	let fewest_shown = if hints_shown { diagnostic::Level::Hint } else { diagnostic::Level::Weak };
+	let fewest_shown = if hints_shown {
+		diagnostic::Level::Hint
+	} else {
+		diagnostic::Level::Weak
+	};
 	let shown = level_flag(args, WARNINGS_FLAG, fewest_shown).unwrap_or(fewest_shown);
 	diagnostic::show_from(shown);
 	if shown == diagnostic::Level::Hint && hints_variable.is_none() {
@@ -235,7 +239,9 @@ fn apply_flags(args: &mut Vec<String>) {
 /// unknown level
 #[cfg(not(test))]
 fn level_flag(args: &mut Vec<String>, flag: &str, bare: diagnostic::Level) -> Option<diagnostic::Level> {
-	let at = args.iter().position(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))?;
+	let at = args
+		.iter()
+		.position(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))?;
 	let given = match args.remove(at).split_once('=') {
 		Some((_, name)) => Some(name.to_string()),
 		None => args
