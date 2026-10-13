@@ -118,7 +118,7 @@ fn incomplete(node: &Node, cases: &HashMap<String, Cases>, subjects: &HashMap<St
 		.map(|case| format!("{}: …", type_cases.written(type_name, case)))
 		.collect();
 	let message = format!("match on {type_name} misses {}", missing.join(", "));
-	let fix = format!("add {} or the catch-all _: …", arms_to_add.join("; "));
+	let fix = format!("add {} or other: …", arms_to_add.join("; "));
 	Some(Diagnostic::at(word, message).fix(fix).into_error())
 }
 
