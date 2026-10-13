@@ -2,7 +2,8 @@
 name: Release
 
 # A version tag (v*, matching Cargo.toml's version) publishes a GitHub release with prebuilt binaries: per platform one
-# tarball holding `warp` and `warp-runtime` (the stub `warp build --exe` needs next to warp). The Homebrew formula
+# tarball holding `warp`, `warp-runtime` (the stub `warp build --exe` needs next to warp) and `warp-page-runtime` (the
+# stub of page apps, with the web view). The Homebrew formula
 # (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs these binaries (no Rust build); its
 # --HEAD install builds main from source; notes/packaging.md
 on:
@@ -51,14 +52,15 @@ jobs:
       with:
         targets: ${{ matrix.target }}
     - name: build
-      # two builds: built on its own, warp-runtime has no Cranelift (about 1 MB)
+      # three builds: built on its own, warp-runtime has no Cranelift (about 1 MB); the page stub adds the web view
       run: |
         cargo build --release --locked --target ${{ matrix.target }}
-        cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime
+        cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --features webview --bin warp-page-runtime
+        cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --bin warp-runtime
     - name: upload
       env:
         GH_TOKEN: ${{ github.token }}
         ARCHIVE: warp-${{ env.TAG }}-${{ matrix.target }}.tar.gz
       run: |
-        tar -czf "$ARCHIVE" -C target/${{ matrix.target }}/release warp warp-runtime
+        tar -czf "$ARCHIVE" -C target/${{ matrix.target }}/release warp warp-runtime warp-page-runtime
         gh release upload "$TAG" "$ARCHIVE" --clobber

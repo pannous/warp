@@ -24,6 +24,9 @@ const ALIGNMENT: usize = 16;
 pub const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
 /// The memory print and the host words read texts from
 const MEMORY_EXPORT: &str = "memory";
+/// An app carrying a site loads it in a hidden window and prints its text (tests), as `warp app --check`
+#[cfg(all(feature = "webview", target_os = "macos"))]
+const CHECK_FLAG: &str = "--check";
 
 /// Whether the stub looks up this export of a program: its entry point, memory, handlers and the constructors of their
 /// `event`. warp build drops every other export, and the functions only those reached (tree shaking, card g_gFs8)
@@ -58,6 +61,11 @@ pub fn with_machine_code(runtime: &[u8], machine_code: &[u8]) -> Vec<u8> {
 	executable.resize(executable.len().next_multiple_of(ALIGNMENT), 0);
 	macho::extend_last_segment_to_end(&mut executable);
 	executable
+}
+
+/// `runtime` carrying a page's site: an app showing it in the system's web view (card build-links); sign it as above
+pub fn with_site(runtime: &[u8], site: &[crate::site_files::SiteFile]) -> Vec<u8> {
+	with_machine_code(runtime, &crate::site_files::packed(site))
 }
 
 /// The executable without its code signature and without the program it carries
@@ -113,9 +121,13 @@ fn read_at(file: &mut File, offset: usize, length: usize) -> Option<Vec<u8>> {
 	Some(bytes)
 }
 
-/// When this executable carries a program: run it and give the exit code
+/// When this executable carries a program: run it and give the exit code; a page's site it shows (card build-links)
 pub fn run_carried_program() -> Option<i32> {
-	let machine_code = embedded_machine_code(&std::env::current_exe().ok()?)?;
+	let executable = std::env::current_exe().ok()?;
+	let machine_code = embedded_machine_code(&executable)?;
+	if let Some(site) = crate::site_files::unpacked(&machine_code) {
+		return Some(show_site(&executable, site));
+	}
 	Some(match run(&machine_code) {
 		Ok(()) => 0,
 		Err(failure) => {
@@ -123,6 +135,33 @@ pub fn run_carried_program() -> Option<i32> {
 			1
 		}
 	})
+}
+
+/// The carried site in a web view window titled as the executable; `--check` prints its text from a hidden one
+#[cfg(all(feature = "webview", target_os = "macos"))]
+fn show_site(executable: &Path, site: Vec<crate::site_files::SiteFile>) -> i32 {
+	let title = executable
+		.file_stem()
+		.map(|stem| stem.to_string_lossy().into_owned())
+		.unwrap_or_default();
+	let check = std::env::args().any(|argument| argument == CHECK_FLAG);
+	match crate::webview::show(
+		&title,
+		check,
+		Box::new(move |path| crate::site_files::served(&site, path)),
+	) {
+		Ok(()) => 0,
+		Err(failure) => {
+			eprintln!("{failure}");
+			1
+		}
+	}
+}
+
+#[cfg(not(all(feature = "webview", target_os = "macos")))]
+fn show_site(_: &Path, _: Vec<crate::site_files::SiteFile>) -> i32 {
+	eprintln!("this app shows a page, and this warp-runtime has no web view (macOS only for now)");
+	1
 }
 
 /// Run machine code compiled with warp's settings (`warp build`): its host words, libm and print are linked, its
