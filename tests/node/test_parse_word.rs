@@ -79,3 +79,8 @@ fn a_parenthesized_element_of_quoted_code_has_its_parts() {
 	is!("x = {a: 1, b: 2}; (x#2).key", warp::parse("b"));
 	is!("x = [{a: 7}]; (x#1).a", 7);
 }
+
+#[test]
+fn a_constant_text_that_fails_to_parse_fails_where_try_catches() {
+	is!("try { parse(\"f(a, a\") } else \"bad\"", "bad");
+}
