@@ -1,0 +1,44 @@
+// The lexer written in warp (card self-lexer, notes/self_hosting.md step 5), each word next to its Rust twin
+// (tests/parser/test_self_lexer.rs)
+
+// Where the comments and texts of a source start and end, in characters: [[start, end], …]
+// Rust twin: warp_parser comment_and_text_spans
+def spans(source) {
+	found = []
+	at = 0
+	n = source.length
+	while at < n {
+		end = span_end(source, at, n)
+		if end > at { found += [[at, end]]; at = end } else { at = at + 1 }
+	}
+	found
+}
+
+// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `at`, else `at`
+def span_end(source, at, n) {
+	c = source[at]
+	next = at + 1 < n ? source[at + 1] : ' '
+	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') { return index_of(source, "\n", at, n) }
+	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
+	if c == '"' or c == '\'' { return after(source, c, at + 1, n) }
+	at
+}
+
+// Where `part` first starts in the source from `from` on, else the source's length
+def index_of(source, part, from, n) {
+	at = from
+	while at < n and not starts_at(source, part, at) { at = at + 1 }
+	at
+}
+
+// The index after the first `part` from `from` on, else the source's length
+def after(source, part, from, n) {
+	at = index_of(source, part, from, n)
+	at < n ? at + part.length : n
+}
+
+def starts_at(source, part, at) {
+	i = 0
+	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
+	i == part.length
+}
