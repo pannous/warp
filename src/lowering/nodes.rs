@@ -214,3 +214,126 @@ pub(crate) fn named_assignment(statement: &Node) -> Option<(String, Node)> {
 		_ => None,
 	}
 }
+
+/// How a function definition is written
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DefinitionForm {
+	/// `f(x) := body`, `f(x) = body`, `f(x): int := body`: Define or Assign
+	Operator(Op),
+	/// `def f(x): body`, `def f(x) := body`, `def f(x) -> int {…}`, `def f(x): int = body`: the operator after the head
+	Keyword(Op),
+	/// `def f(x) { body }`: head and block side by side, the parameters grouped `(f (x))`
+	KeywordBlock,
+}
+
+/// One view of a function definition in any of its forms (DefinitionForm): what each pass takes apart
+#[derive(Clone, Debug)]
+pub struct FunctionHead<'a> {
+	/// `(f x y)`
+	pub head: &'a Node,
+	pub name: &'a str,
+	/// What follows the name in the head, as written: `x y` of `(f x y)`, `(x, y)` of `def f(x, y) {…}`
+	pub written_parameters: &'a [Node],
+	pub form: DefinitionForm,
+	/// `int` of `f(x): int := …`, `def f(x) -> int {…}`, `def f(x): int: …`
+	pub result: Option<&'a Node>,
+	pub body: &'a Node,
+	/// Everything after the operator: the body with a result type written before it (`int {…}` of `def f(x): int {…}`)
+	pub written_body: &'a Node,
+}
+
+impl<'a> FunctionHead<'a> {
+	/// The parameters: none for `f()`, the grouped ones of `def f(x, y) {…}`
+	pub fn parameters(&self) -> Vec<&'a Node> {
+		match self.written_parameters {
+			[only] if only.is_nothing() => vec![],
+			[Node::List(grouped, Bracket::Round, _)] => grouped.iter().collect(),
+			parameters => parameters.iter().collect(),
+		}
+	}
+
+	pub fn is_keyword_form(&self) -> bool {
+		!matches!(self.form, DefinitionForm::Operator(_))
+	}
+}
+
+/// `f(x) := body` and the other forms of a function definition (DefinitionForm), whose head is a word and what follows it
+pub fn function_head(statement: &Node) -> Option<FunctionHead<'_>> {
+	match statement.drop_meta() {
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
+			let (head, result) = typed_head(target);
+			viewed(head, DefinitionForm::Operator(*op), result, body, body)
+		}
+		Node::List(items, _, _) => match items.as_slice() {
+			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => {
+				keyword_function_head(definition)
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn keyword_function_head(definition: &Node) -> Option<FunctionHead<'_>> {
+	match definition.drop_meta() {
+		Node::List(parts, _, _) if parts.len() == 2 => {
+			viewed(&parts[0], DefinitionForm::KeywordBlock, None, &parts[1], &parts[1])
+		}
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
+			let (head, result) = typed_head(target);
+			viewed(head, DefinitionForm::Keyword(*op), result, body, body)
+		}
+		Node::Key(head, op @ (Op::Colon | Op::Arrow), written_body) => {
+			let (result, body) = result_and_body(written_body);
+			viewed(head, DefinitionForm::Keyword(*op), result, body, written_body)
+		}
+		_ => None,
+	}
+}
+
+fn viewed<'a>(
+	head: &'a Node,
+	form: DefinitionForm,
+	result: Option<&'a Node>,
+	body: &'a Node,
+	written_body: &'a Node,
+) -> Option<FunctionHead<'a>> {
+	let Node::List(items, _, _) = head.drop_meta() else {
+		return None;
+	};
+	let (name, written_parameters) = items.split_first()?;
+	Some(FunctionHead {
+		head,
+		name: name.drop_meta().symbol_name()?,
+		written_parameters,
+		form,
+		result,
+		body,
+		written_body,
+	})
+}
+
+/// `(f x): int`, `(f x) as int`: the head and its result type
+fn typed_head(target: &Node) -> (&Node, Option<&Node>) {
+	match target.drop_meta() {
+		Node::Key(head, Op::Colon | Op::As, result) if is_word_head(head) => (head, Some(result)),
+		_ => (target, None),
+	}
+}
+
+fn is_word_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|name| matches!(name.drop_meta(), Node::Symbol(_))))
+}
+
+/// `int {…}` or `int: body` after `def f(x):` or `->`: the result type and the body; anything else is the body
+fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
+	match written_body.drop_meta() {
+		Node::List(parts, _, Separator::Space)
+			if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			(Some(&parts[0]), &parts[1])
+		}
+		Node::Key(result, Op::Colon, body) => (Some(result), body),
+		_ => (None, written_body),
+	}
+}

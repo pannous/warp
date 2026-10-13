@@ -55,6 +55,7 @@ pub mod named_patterns;
 pub mod negated_calls;
 pub mod nested_index;
 pub(crate) mod nodes;
+pub use nodes::{function_head, DefinitionForm, FunctionHead};
 pub mod nonlocal_cells;
 pub mod number_keys;
 pub mod number_words;
