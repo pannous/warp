@@ -352,6 +352,13 @@ pub fn dimension_and_factor(name: &str) -> Option<(String, i64)> {
 	unit_named(name).map(|unit| (format!("{:?}", unit.dimension), unit.factor))
 }
 
+/// `h` as its unit's long name `hour` (the unit word where it has none); none when `program` defines the word itself
+pub fn unit_long_name(name: &str, program: &Node) -> Option<&'static str> {
+	let unit = shadowing(program, || unit_named(name))?;
+	let long_name = LONG_NAMES.iter().find(|(_, short)| *short == unit.name);
+	Some(long_name.map_or(unit.name, |(long, _)| *long))
+}
+
 pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }

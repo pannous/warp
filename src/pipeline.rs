@@ -365,6 +365,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::serve::bind_path_parameters,
 	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
 	crate::lowering::named_patterns::lower,
+	// `x is {host: h}`: h is the unit hour, a weak warning while it is still the word (card pattern-unit-name)
+	crate::lowering::switch::check_unit_names,
 	// `tree find {type: "image", src}` and `tree replace p with q`: each a recursive walker of its own (tree_walks.rs)
 	crate::lowering::tree_walks::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
