@@ -8,7 +8,7 @@ use super::sum_variants::sum_types;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use crate::switch::SWITCH_WORDS;
+use crate::words::SWITCH_WORDS;
 use std::collections::HashMap;
 
 /// Kotlin's `when (c) { … }`, matched like `match`
