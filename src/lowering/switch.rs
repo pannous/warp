@@ -1,5 +1,5 @@
 //! `switch subject {key: body …}` (also `match`): map indexing that executes. Lowered to an if/else chain over the
-//! subject, so only the chosen body runs; the `default` (or `_`) key catches the rest, without it a miss is the error
+//! subject, so only the chosen body runs; the `default` (or `_`, `other`) key catches the rest, without it a miss is the error
 //! `no case for <subject> = <value>`. A list key is a structural pattern (wiki/pattern-matching.md): `["", middle, ""]`
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
@@ -13,7 +13,7 @@ use crate::operators::Op;
 use crate::tuples::STARRED;
 
 pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
-const DEFAULT_KEYS: [&str; 2] = ["default", WILDCARD];
+const DEFAULT_KEYS: [&str; 3] = ["default", "other", WILDCARD];
 /// In a pattern: any item, bound to no name
 const WILDCARD: &str = "_";
 const LIST_SPEC: &str = "list";
