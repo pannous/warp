@@ -74,7 +74,7 @@ def main():
 	parent = module_path(file)
 	nested_parent = file.stem != "mod"  # a child of x.rs lives one level below x's siblings; of mod.rs, beside them
 	parent_parent = parent[:-1] if len(parent) > 1 else parent
-	all_spans, declarations = [], []
+	all_spans, declarations, imports = [], [], set()
 	for spec in children:
 		child, doc_and_ranges = spec.split("|", 1)
 		doc, ranges = doc_and_ranges.rsplit("|", 1)
@@ -82,6 +82,8 @@ def main():
 		body = []
 		for first, last in spans:
 			part = lines[first:last + 1]
+			imports.update(line for line in part if line.startswith("use "))  # imports stay with the parent, which the child sees
+			part = [line for line in part if not line.startswith("use ")]
 			if part[0].startswith(("\t", " ")):
 				opened = opened_impl(lines, first)
 				body += [opened] + moved(part, parent_parent, nested_parent, " for " in opened) + ["}", ""]
@@ -105,7 +107,7 @@ def main():
 		for index, line in enumerate(lines)
 		if line.startswith("///") or line and not line.startswith(("use ", "//", "#!", "\t", " ", "}", "pub use ", "pub(crate) use "))
 	)
-	lines[at:at] = declarations + [""]
+	lines[at:at] = sorted(imports) + declarations + [""]
 	file.write_text("\n".join(lines))
 
 
