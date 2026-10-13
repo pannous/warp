@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **48e5f3b27** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27), checked with
+- main commit **3f01a83b5** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5), checked with
   /Users/me/dev/bin/warp built from 19f021863 (no user-visible commits in between).
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 48e5f3b27..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 48e5f3b27 origin/main -- notes/decisions.md`).
+The next sweep starts with `git log --oneline 3f01a83b5..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 3f01a83b5 origin/main -- notes/decisions.md`).
 
 ## How
 
@@ -25,8 +25,13 @@ since (`git diff 48e5f3b27 origin/main -- notes/decisions.md`).
    `web::test_expert_guide`); an "Examples:" line names only existing tour examples or samples.
 6. Style: an intro phrase, a minimal snippet, the explanation; one concept at a time.
 
+## Standing keeper
+
+warp-docs-sync stays on: when idle and main has user-visible commits past the last swept one, sweep them as above.
+Merge requests' "docs:" lines come from warp-integrator; a "docs: none" on a user-visible feature goes back to its
+worker. Samples should run without hints: `for f in samples/*.warp; …grep -c '^hint'` (list in
+data/docs_sync/sample_hints.txt, card sample-hints).
+
 ## Not swept yet
 
-Swept by docs-sync-2: dispatch, units, time, error positions, hints, forms, sound, reflection, Python words, stored,
-signals in fields, slices, tasks, exit status, exec, warp app, recursive laws. Left: `warp types` / W0 (wiki has no
-page; first run builds the Lean model for minutes), crontab sample, visualizer, MIDI input, `warp verify` page.
+Everything up to the last swept commit is covered; the open gaps are cards (midi-receive, let-parallel, types-first-run).
