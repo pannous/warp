@@ -1,5 +1,6 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
+pub(super) use crate::lowering::nodes::parameter_word;
 
 pub(super) fn unsupported(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
@@ -410,7 +411,7 @@ pub(super) fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>
 	if let Some((name, parameters, body)) = function_definition(statement) {
 		return Some((
 			name,
-			parameters.iter().map(|parameter| parameter_name(parameter)).collect(),
+			parameters.iter().map(|parameter| parameter_word(parameter)).collect(),
 			body,
 		));
 	}
@@ -536,14 +537,6 @@ pub(super) fn parameter_type_word(parameter: &Node) -> Option<String> {
 		Node::Key(_, Op::Colon, annotation) => Some(crate::lowering::class_methods::type_word(annotation)),
 		Node::Key(parameter, Op::Assign, _) => parameter_type_word(parameter),
 		_ => None,
-	}
-}
-
-/// `b`, `b: int`, `b=3` and `b: int = 3` all name the parameter b
-pub(super) fn parameter_name(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(parameter, Op::Colon | Op::Assign, _) => parameter_name(parameter),
-		parameter => parameter.name(),
 	}
 }
 

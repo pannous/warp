@@ -469,7 +469,7 @@ impl Exporter {
 					class.clone(),
 					parameters
 						.iter()
-						.find(|parameter| parameter_name(parameter) == local)
+						.find(|parameter| parameter_word(parameter) == local)
 						.and_then(|parameter| parameter_type_word(parameter)),
 				));
 				self.cell_classes.push(class);
@@ -495,7 +495,7 @@ impl Exporter {
 				[] => UNIT_TYPE.to_string(),
 				[parameter] => {
 					self.single_parameters
-						.insert(name.to_string(), parameter_name(parameter));
+						.insert(name.to_string(), parameter_word(parameter));
 					self.parameter_type(parameter)?.1
 				}
 				parameters => {
@@ -506,7 +506,7 @@ impl Exporter {
 						.collect::<Result<Vec<_>, String>>()?;
 					let defaults = parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
 						Node::Key(_, Op::Assign, default) => {
-							Some((parameter_name(parameter), default.as_ref().clone()))
+							Some((parameter_word(parameter), default.as_ref().clone()))
 						}
 						_ => None,
 					});

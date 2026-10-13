@@ -3,7 +3,7 @@
 //! name wins with a got-it note ("send is a keyword; here it is your variable"); redefining one at the top level is a
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
-use super::nodes::is_function_keyword;
+use super::nodes::{is_function_keyword, parameter_name};
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -218,14 +218,5 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| walk_names(item, found)),
 		_ => {}
-	}
-}
-
-/// `x`, `x: int`, `x = 1`
-fn parameter_name(parameter: &Node) -> Option<String> {
-	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, Op::Colon | Op::Assign, _) => name.symbol_name().map(String::from),
-		_ => None,
 	}
 }
