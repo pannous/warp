@@ -1,4 +1,5 @@
 mod test_add_to_text;
+mod test_ascii_index_costs;
 mod test_backtick_templates;
 mod test_brace_hole; // card brace-hole
 mod test_case_table;
@@ -20,6 +21,7 @@ mod test_library_unicode;
 mod test_map_text;
 mod test_nested_list_text;
 mod test_one_character_argument;
+mod test_one_character_list_items;
 mod test_print_all_characters;
 mod test_print_arguments;
 mod test_print_gives_nothing;
