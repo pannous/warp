@@ -1,0 +1,7 @@
+// card text-costs: text[i] steps over ASCII by the byte (a far index ~41 fuel per character, was ~290); prints: 2000
+code = "abcdefghij" * 2000
+n = 0
+for i in 0..19999 {
+	if code[i] == 'a' { n += 1 }
+}
+print n
