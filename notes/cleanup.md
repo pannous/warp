@@ -113,10 +113,17 @@ Left (bigger, needs care):
   i32 here), so it needs its own card and tests of both tables first. tests/ffi pins ffi_parser's public API.
 - (cleanup-const-evaluators) real.rs and time.rs are two small constant evaluators with their own Value types and the same Assign/Define arm;
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
+  Closed as not worth doing (2026-10-13): what they share is the `name = value` arm (4 lines) and the literals; a
+  generic skeleton (a trait over Value, error and the unknown-name case) costs more than that, and each Assign arm
+  also does its own thing (real.rs a declared `x: real`, time.rs getters `t := now`).
 - src/extensions.rs is hard-linked with ~/dev/script/rust/extensions.rs (src/extensions.rs.hardlink is the
   hardlink-guard's marker): edit it only knowing it changes that file too.
 - (cleanup-gc-object) Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
+  Closed as not worth doing (2026-10-13): they read different things. wasm_reader's is a Node view over a Val that may
+  be null (`value()` of the last cell) with kind/tag/text; gc_traits' is a typed reader of a non-null struct (field
+  names, FromVal/ToVal, set_field). Wrapping would share only the store and the field read (~10 lines) and give the
+  Node view a null case of its own.
 - done (cleanup-ffi-f32): ffi/link.rs has one wrapper for every C function of numbers and texts; the 21 typed
   signatures (`link_typed!`, NativeArgument/NativeResult, the signature keys) are gone, since card ffi-mixed passes a
   float in the low half of its register. tests/ffi/test_ffi_signatures.rs calls each signature but raylib's
