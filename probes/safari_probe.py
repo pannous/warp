@@ -88,6 +88,29 @@ PAINTING_LAYOUT = """const shown = [[640, 480], [554, 160], [1280, 800]].map(([w
 showPaintings([]);
 return JSON.stringify(shown);"""
 
+# the size a paint without one takes is the view's (playground.js viewSize), measured around the last painting: does it
+# drift from frame to frame? Each frame paints a canvas of the view's size, as paint(shader) does, pixels or offscreen
+VIEW_DRIFT = """const done = arguments[arguments.length - 1];
+(async () => {
+	const sizes = [];
+	for (const offscreen of [false, true]) {
+		showPaintings([]);
+		for (let frame = 0; frame < 25; frame++) {
+			const { view_width: width = 640, view_height: height = 480 } = viewSize();
+			sizes.push(`${offscreen ? "o" : "p"}${width}x${height}`);
+			if (offscreen) {
+				const canvas = paintingElement({ width, height });
+				canvas.transferControlToOffscreen();
+				document.getElementById("paintings").replaceChildren(canvas);
+				document.getElementById("full-screen").hidden = false;
+			} else showPaintings([{ pixels: new Array(width * height).fill(0), width, height }]);
+			await new Promise(next => requestAnimationFrame(() => setTimeout(next, 20)));
+		}
+	}
+	showPaintings([]);
+	done(sizes.join(" "));
+})();"""
+
 CATCH_ERRORS = """self.probeErrors = [];
 for (const level of ["error", "warn"]) { const original = console[level]; console[level] = (...parts) => { self.probeErrors.push(`${level}: ${parts.join(" ")}`); original.apply(console, parts); }; }
 addEventListener("error", event => self.probeErrors.push(`uncaught: ${event.message}`));
@@ -116,9 +139,10 @@ def main():
 		print("gpu:", call("POST", f"{page}/execute/async", {"script": GPU_REPORT, "args": []}))
 		print("shared buffers:", call("POST", f"{page}/execute/async", {"script": SHARED_BUFFERS, "args": []}))
 		print("painting layout:", run(PAINTING_LAYOUT))
+		print("view drift:", call("POST", f"{page}/execute/async", {"script": VIEW_DRIFT, "args": []}))
 		run(CATCH_ERRORS)
 		print("before:", run(PAGE_STATE))
-		for sample in samples:
+		for sample in samples[:0]:
 			run(f"void playground.chooseExample({json.dumps(sample)})")
 			for poll in range(POLLS):
 				time.sleep(POLL_MS / 1000)
