@@ -56,3 +56,10 @@ r = 7 div 2
 3 times { a.push(true) }
 x = 100 times [0]
 n times: s += 2
+for r in 0..size: x += 1
+for i in 1..n do s += i
+for c in s: print ord c
+print ord c
+for i in 1 upto 4 { sum += i }
+while i < count(items) { i += 1 }
+if f(x) { 1 } else { 2 }
