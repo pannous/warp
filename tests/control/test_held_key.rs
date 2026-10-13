@@ -19,3 +19,25 @@ fn held_key_names_the_key_held_now() {
 	assert_eq!(named(0xF702), r#""ArrowLeft""#);
 	assert_eq!(named(13), r#""Enter""#);
 }
+
+// the key words compare with `held_key` as with `key` in a key handler (card key-if): `held_key == LEFT` is
+// `held_key == "ArrowLeft"`, and a word that names nothing warns, as there
+#[test]
+fn held_key_compares_with_the_key_words() {
+	// whatever key another test's `emit key` holds now, each word reads as its name
+	is!(r#"held_key != ESC or held_key == "Escape""#, true);
+	let lowered = warp::pipeline::lower("held_key == LEFT or ESC == held_key")
+		.expect("lowers")
+		.serialize();
+	assert!(
+		lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#""Escape""#),
+		"{lowered}"
+	);
+	warp::diagnostic::take_warnings();
+	warp::wasm_emitter::eval("held_key == LEFTT");
+	let warned = warp::diagnostic::take_warnings()
+		.into_iter()
+		.filter(|warning| warning.message.contains("LEFTT names nothing"))
+		.count();
+	assert_eq!(warned, 1);
+}

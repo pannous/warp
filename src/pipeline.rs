@@ -423,6 +423,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::undo_history::lower,
 	crate::declarations::lower_tasks,
 	crate::reflection::lower_unknown_dir,
+	// `held_key == LEFT`: the key words, before system_values reads `held_key`
+	crate::key_names::lower_held_comparisons,
 	crate::system_values::name,
 	crate::signal_values::poll_shared,
 	crate::system_values::read,
