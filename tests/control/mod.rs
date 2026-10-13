@@ -197,6 +197,7 @@ mod test_times_count_once;
 mod test_top_level_block;
 mod test_trap_messages;
 mod test_tree_find; // card tree-find
+mod test_tree_replace; // card tree-replace
 mod test_try_braceless_call;
 mod test_try_catch_except;
 mod test_try_deep;

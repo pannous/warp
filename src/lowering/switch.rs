@@ -427,7 +427,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 }
 
 /// `data($a + 0)`: quoted code holding a hole
-fn code_pattern(pattern: &Node) -> Option<Node> {
+pub(crate) fn code_pattern(pattern: &Node) -> Option<Node> {
 	let code = match pattern.drop_meta() {
 		// `data $f ($x)`: the words after data
 		Node::List(words, Bracket::None, Separator::Space) if words.len() > 2 && words[0].is_symbol(DATA_WORD) => {
