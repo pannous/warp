@@ -32,6 +32,14 @@ const _: () = assert!(
 );
 pub const MARK_KINDS_MASK: i64 = (1 << MARK_KIND_BITS) - 1;
 pub const MARK_BOOL_BIT: i64 = MARK_KIND_BITS;
+/// The separator of a list (card keep-list: `,` `;` newline, space; 0 for none), in the kind field above the element
+/// mark; the bracket byte and the kind stay where they were, so whatever masks them reads them as before
+pub const SEPARATOR_SHIFT: i64 = 48;
+pub const SEPARATOR_MASK: i64 = 0x7 << SEPARATOR_SHIFT;
+const _: () = assert!(
+	MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < SEPARATOR_SHIFT,
+	"the separator lies above the element mark"
+);
 /// A kind field without its element mark, for the comparisons of whole kinds (bracket and kind)
 pub const UNMARKED_KIND: i64 = (1 << ELEMENT_MARK_SHIFT) - 1;
 const _: () = assert!(

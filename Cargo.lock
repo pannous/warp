@@ -3630,7 +3630,6 @@ dependencies = [
  "winit",
  "wit-component",
  "wit-parser",
- "wry",
 ]
 
 [[package]]
@@ -3639,8 +3638,11 @@ version = "1.2.6"
 dependencies = [
  "libc",
  "miniz_oxide",
+ "objc2 0.6.5",
  "serde_json",
  "wasmtime",
+ "winit",
+ "wry",
 ]
 
 [[package]]

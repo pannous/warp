@@ -13,6 +13,7 @@ const MARKUP_MODULE: &str = "markup";
 const ELEMENTS_LIST: &str = "html_elements";
 const ATTRIBUTES_LIST: &str = "html_attributes";
 const VOID_ELEMENTS_LIST: &str = "html_void_elements";
+const BOOLEAN_ATTRIBUTES_LIST: &str = "html_boolean_attributes";
 const HEAD: &str = "head";
 /// `data-warp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
@@ -32,11 +33,13 @@ const TEXT_ELEMENTS: [&str; 5] = ["style", "script", "option", "select", "textar
 
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
+	element_names().iter().any(|element| element == word)
+}
+
+/// The HTML elements lib/markup.warp renders
+pub fn element_names() -> &'static [String] {
 	static ELEMENTS: OnceLock<Vec<String>> = OnceLock::new();
-	ELEMENTS
-		.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ELEMENTS_LIST))
-		.iter()
-		.any(|element| element == word)
+	ELEMENTS.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ELEMENTS_LIST))
 }
 
 /// Does the word name an HTML attribute: a listed one or a `data-` one
@@ -52,6 +55,15 @@ fn is_attribute_name(word: &str) -> bool {
 pub fn attribute_names() -> &'static [String] {
 	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
 	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST))
+}
+
+/// An attribute present or absent (`checked: done`), set by yes or no
+pub fn is_boolean_attribute(name: &str) -> bool {
+	static BOOLEAN: OnceLock<Vec<String>> = OnceLock::new();
+	BOOLEAN
+		.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, BOOLEAN_ATTRIBUTES_LIST))
+		.iter()
+		.any(|attribute| attribute == name)
 }
 
 /// Does the element take no content (`img`, `input`, `br`): lib/markup.warp writes no closing tag, nor what it holds
@@ -131,14 +143,14 @@ pub type Holes = (Vec<(Vec<usize>, Node)>, Vec<TextHole>);
 
 /// The holes of markup as written (card web-fine-holes, notes/web_framework.md step 3): the outermost elements holding
 /// a computed text, attribute or child directly, each with its path, the element indices from the root down (as the
-/// page's `children` count them). The other elements are fixed. Empty when the root itself holds one. An element whose
-/// computed parts are all text_holes is none
+/// page's `children` count them). The other elements are fixed. Empty when the root itself is one. An element whose
+/// computed parts are all text_holes is none, the root too (card web-fine-rest)
 pub fn holes(markup: &Node) -> Vec<(Vec<usize>, Node)> {
 	holes_through(markup, &HashMap::new()).0
 }
 
-/// The computed texts standing alone between an element's children, which the page sets as text nodes; empty when the
-/// root itself holds a computed part
+/// The computed texts standing alone between an element's children, the root's too, which the page sets as text nodes;
+/// empty when the root itself is an element hole
 pub fn text_holes(markup: &Node) -> Vec<TextHole> {
 	holes_through(markup, &HashMap::new()).1
 }
@@ -148,7 +160,7 @@ pub fn text_holes(markup: &Node) -> Vec<TextHole> {
 pub fn holes_through<'a>(markup: &'a Node, components: &'a HashMap<String, Node>) -> Holes {
 	let mut holes = (vec![], vec![]);
 	Shapes { components }.collect(markup, &mut vec![], &mut holes);
-	if holes.0.iter().any(|(path, _)| path.is_empty()) || holes.1.iter().any(|hole| hole.path.is_empty()) {
+	if holes.0.iter().any(|(path, _)| path.is_empty()) {
 		return (vec![], vec![]);
 	}
 	holes

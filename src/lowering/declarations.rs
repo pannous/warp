@@ -2287,7 +2287,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let definition = match typed_result(&definition) {
 		Some((untyped, written_type)) => {
 			if matches!(definition, Node::Key(_, Op::Arrow, _)) {
-				hint_as_result(&written_type);
+				hint_as_result(&definition, &written_type);
 			}
 			result_type = Some(written_type);
 			untyped
@@ -2611,7 +2611,8 @@ pub(crate) fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
 }
 
 /// `def f(x) -> int` keeps working; warp writes a result type with `as`, unions too (user 2026-10-12, return-as)
-fn hint_as_result(result_type: &Node) {
+fn hint_as_result(definition: &Node, result_type: &Node) {
+	crate::normalize::set_position_of(definition);
 	let written = result_type.serialize();
 	crate::normalize::hint(
 		&format!("-> {written}"),

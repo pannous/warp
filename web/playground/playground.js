@@ -45,7 +45,7 @@ const REPORT_OFF = "off";
 const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
 const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
-const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
+const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound.rs SAMPLE_OFFSET)
 
@@ -614,17 +614,14 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-// the HTML as a fragment of DOM, not in the page
-function parsedHtml(html) {
-	const template = document.createElement("template");
-	template.innerHTML = html;
-	return template.content;
-}
-
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
 	const root = host.attachShadow({ mode: "open" });
 	root.addEventListener("submit", submitForm);
+	// change is not composed either: it stays inside the shadow root
+	for (const [event, type] of Object.entries(FIELD_EVENT_TYPES)) {
+		root.addEventListener(type, happened => sendElementEvent(event, happened, inputDetail(happened.composedPath()[0])));
+	}
 	return root;
 }
 
@@ -753,27 +750,7 @@ function showEventOutput(data) {
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) showValue(data.value, data.error, data.html);
 	if (data.html !== undefined) showRendered(data.html);
-	(data.patches ?? []).forEach(showPatch);
-}
-
-// one element of the shown markup anew (card web-fine-holes): `path` its element indices from the root down; or the
-// text node after `after` children of that element (card web-fine-text-nodes)
-function showPatch({ path, html, text, after }) {
-	const root = $("rendered").shadowRoot;
-	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
-	if (text !== undefined) return shown ? showText(shown, after, text) : console.error(`markup hole ${path.join("·")}: no element there`);
-	const wanted = parsedHtml(html).children[0];
-	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
-	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
-}
-
-// the text node after `after` children of the element set to `text`; an empty text has none, so one is made or dropped
-function showText(element, after, text) {
-	const next = after === 0 ? element.firstChild : element.children[after - 1]?.nextSibling;
-	const node = next?.nodeType === Node.TEXT_NODE ? next : null;
-	if (node && text) node.data = text;
-	else if (node) node.remove();
-	else if (text) element.insertBefore(document.createTextNode(text), after === 0 ? element.firstChild : next ?? null);
+	(data.patches ?? []).forEach(patch => showPatch($("rendered").shadowRoot, patch));
 }
 
 async function show(code) {

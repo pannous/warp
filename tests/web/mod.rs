@@ -6,9 +6,12 @@ mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs wrangler dev and node
 mod test_assistant_proxy; // card assistant-proxy
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
+mod test_attribute_values; // card attribute-values
 mod test_bound_field_types; // card guest-type
 #[cfg(feature = "native")] // runs node
 mod test_browser_tables; // card orm-browser-stores
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
+mod test_built_app; // card build-links
 #[cfg(feature = "native")] // builds a site natively
 mod test_bundle_budget;
 mod test_class_components;
@@ -38,8 +41,10 @@ mod test_element_events;
 #[cfg(feature = "native")] // the warning is the native run's
 mod test_element_handler_quiet;
 mod test_expert_guide;
+mod test_field_events; // card click-key
 mod test_form_bindings;
 mod test_form_routes; // card g_mSEw
+mod test_glued_attribute_content; // card words-glue
 mod test_gpu_auto; // card gpu-auto
 mod test_guide; // the language guide on the playground page
 mod test_guide_sections; // card guide-lists
@@ -59,6 +64,7 @@ mod test_keyword_registry; // card where-infix
 mod test_markup_holes;
 mod test_markup_lines; // card todo-app
 mod test_markup_mistakes; // card our-html
+mod test_markup_nesting; // card markup-content
 mod test_markup_renderer;
 mod test_markup_scripts;
 mod test_markup_tags;
@@ -121,6 +127,8 @@ mod test_site;
 mod test_site_animation; // card site-build
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_failure; // the dev overlay's message
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view
+mod test_site_holes;
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
@@ -151,4 +159,4 @@ mod test_webgpu;
 mod test_webgpu_ints;
 mod test_webgpu_named; // card web-apis-rest
 #[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
-mod test_webview; // card read-chron // card key-app
+mod test_webview; // card read-chron // card key-app // card web-fine-rest

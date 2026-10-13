@@ -9,7 +9,7 @@ name: Playground
 on:
   push:
     branches: [ main ]
-    paths: [ "src/**", "web/playground/**", "samples/**", "Cargo.toml", "Cargo.lock", ".github/workflows/pages.yml" ]
+    paths: [ "src/**", "crates/**", "web/playground/**", "samples/**", "Cargo.toml", "Cargo.lock", ".github/workflows/pages.yml" ]
   workflow_dispatch:
 
 permissions:

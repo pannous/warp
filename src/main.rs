@@ -52,8 +52,23 @@ const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
 const RUN_PREFIX: &str = "run ";
 const TEST_WORD: &str = "test";
-const RUNTIME_STUB_NAME: &str = "warp-runtime";
-const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
+/// The prebuilt runtimes executables are made of: a stub's binary, the variable naming another, its cargo features
+struct RuntimeStub {
+	name: &'static str,
+	variable: &'static str,
+	features: &'static str,
+}
+const PROGRAM_STUB: RuntimeStub = RuntimeStub {
+	name: "warp-runtime",
+	variable: "WARP_RUNTIME_STUB",
+	features: "",
+};
+// a page app's stub carries the web view (wry, winit), which plain executables do without (card build-links)
+const PAGE_STUB: RuntimeStub = RuntimeStub {
+	name: "warp-page-runtime",
+	variable: "WARP_PAGE_RUNTIME_STUB",
+	features: "webview",
+};
 /// WARP_EXECUTABLE=1 (or true/yes/on): `warp <file>` also leaves the standalone executable next to the file, off by
 /// default (card executable-flag, user 2026-10-12, replaces P103's default); `warp build` always makes it
 const EXECUTABLE_VARIABLE: &str = "WARP_EXECUTABLE";
@@ -428,12 +443,15 @@ fn run_command(args: &[String]) {
 		if flags.contains(&WAGI_FLAG) {
 			return write_wagi(&code, &target);
 		}
-		// a plain `warp build` writes both (card build-should), `--exe` only the executable
-		if !flags.contains(&EXE_FLAG) {
-			write_module(&code, &target, ahead_of_time);
-		}
+		// `warp build` writes both (card build-should), `--exe` too, `--wasm` and `--aot` only the module
+		write_module(&code, &target, ahead_of_time);
 		if standalone {
-			match write_standalone_executable(&code, &target) {
+			let written = if builds_an_app(&code) {
+				write_web_view_app(&code, &target)
+			} else {
+				write_standalone_executable(&code, &target)
+			};
+			match written {
 				Ok(report) => println!("{report}"),
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
@@ -765,23 +783,65 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 		return Err(format!("{} used runtime.", missing.join(", ")));
 	}
 	let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
-	let stub = runtime_stub_path()?;
-	let runtime =
-		fs::read(&stub).map_err(|failure| format!("cannot read the runtime {}: {failure}", stub.display()))?;
+	let (stub, runtime) = runtime_stub(&PROGRAM_STUB)?;
 	let output = standalone_output_path(target);
 	let executable = warp_runtime::standalone::with_machine_code(&runtime, &machine_code);
-	fs::write(&output, &executable).map_err(|failure| format!("cannot write {}: {failure}", output.display()))?;
+	write_executable(&executable, &output)?;
+	Ok(format!(
+		"wrote {} ({} bytes: runtime {}, machine code {})",
+		output.display(),
+		executable.len(),
+		stub.display(),
+		machine_code.len()
+	))
+}
+
+/// `warp build page.warp` of a program showing a page, as `warp page.warp` opens it in a window: an app, the stub
+/// carrying the page's site, which it shows in the system's web view (card build-links); macOS only for now
+fn builds_an_app(code: &str) -> bool {
+	cfg!(target_os = "macos") && warp::serve::shows_page(code)
+}
+
+fn write_web_view_app(code: &str, target: &str) -> Result<String, String> {
+	let output = standalone_output_path(target);
+	let title = output
+		.file_stem()
+		.map(|stem| stem.to_string_lossy().into_owned())
+		.unwrap_or_default();
+	let site = warp::site::files(code, &title, false)?;
+	let (stub, runtime) = runtime_stub(&PAGE_STUB)?;
+	let executable = warp_runtime::standalone::with_site(&runtime, &site);
+	write_executable(&executable, &output)?;
+	Ok(format!(
+		"wrote {} ({} bytes: runtime {}, the page in a web view window)",
+		output.display(),
+		executable.len(),
+		stub.display()
+	))
+}
+
+/// The runtime stub's path and bytes
+fn runtime_stub(kind: &RuntimeStub) -> Result<(std::path::PathBuf, Vec<u8>), String> {
+	let stub = runtime_stub_path(kind)?;
+	let runtime =
+		fs::read(&stub).map_err(|failure| format!("cannot read the runtime {}: {failure}", stub.display()))?;
+	Ok((stub, runtime))
+}
+
+/// The executable written, runnable and (macOS) signed
+fn write_executable(executable: &[u8], output: &std::path::Path) -> Result<(), String> {
+	fs::write(output, executable).map_err(|failure| format!("cannot write {}: {failure}", output.display()))?;
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::PermissionsExt;
-		fs::set_permissions(&output, fs::Permissions::from_mode(EXECUTABLE_MODE))
+		fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_MODE))
 			.map_err(|failure| failure.to_string())?;
 	}
 	// macOS starts only signed executables: an ad-hoc signature, which `codesign --verify --strict` accepts
 	#[cfg(target_os = "macos")]
 	match std::process::Command::new("codesign")
 		.args(["--sign", "-", "--force"])
-		.arg(&output)
+		.arg(output)
 		.output()
 	{
 		Ok(signed) if signed.status.success() => {}
@@ -794,13 +854,7 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 		}
 		Err(failure) => return Err(format!("cannot run codesign for {}: {failure}", output.display())),
 	}
-	Ok(format!(
-		"wrote {} ({} bytes: runtime {}, machine code {})",
-		output.display(),
-		executable.len(),
-		stub.display(),
-		machine_code.len()
-	))
+	Ok(())
 }
 
 /// What an import the standalone runtime lacks is for, in the user's words (card g-13Vk: "tasks need runtime."): the
@@ -947,23 +1001,30 @@ fn standalone_output_path(target: &str) -> std::path::PathBuf {
 /// The runtime an executable is built from: `WARP_RUNTIME_STUB`, else `warp-runtime` next to this warp (or next to the
 /// file a link to warp points to), else built once from warp's own source checkout (issue #10: it just works). P104
 /// (user): never a copy of warp itself (~120 MB); without a stub nothing is written
-fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
-	if let Ok(path) = env::var(RUNTIME_STUB_VARIABLE) {
+fn runtime_stub_path(kind: &RuntimeStub) -> Result<std::path::PathBuf, String> {
+	if let Ok(path) = env::var(kind.variable) {
 		return Ok(std::path::PathBuf::from(path));
 	}
 	let warp = env::current_exe().map_err(|failure| failure.to_string())?;
 	let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
-	let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
+	let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(kind.name));
 	let neighbour = next_to_warp.iter().find(|stub| stub.is_file());
 	if !in_cargo_target(&resolved) {
 		// an installed warp (brew, a release tarball, ~/dev/bin) uses the prebuilt stub shipped next to it and never
 		// builds one (user 2026-10-09)
-		return neighbour.cloned().ok_or_else(|| format!("no runtime stub {}: warp-runtime ships next to warp (brew, the release tarball); put it there or name one in {RUNTIME_STUB_VARIABLE}", next_to_warp[0].display()));
+		return neighbour.cloned().ok_or_else(|| {
+			format!(
+				"no runtime stub {}: {} ships next to warp (brew, the release tarball); put it there or name one in {}",
+				next_to_warp[0].display(),
+				kind.name,
+				kind.variable
+			)
+		});
 	}
 	// a debug warp's neighbour in a cargo target is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one
 	match neighbour.filter(|_| !cfg!(debug_assertions)) {
 		Some(stub) => Ok(stub.clone()),
-		None => build_runtime_stub(&next_to_warp[0]),
+		None => build_runtime_stub(kind, &next_to_warp[0]),
 	}
 }
 
@@ -979,18 +1040,21 @@ fn in_cargo_target(binary: &std::path::Path) -> bool {
 
 /// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next
 /// to a release warp built there; its path as cargo reports it
-fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
+fn build_runtime_stub(kind: &RuntimeStub, expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
 	let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
 	if !source.join(RUNTIME_STUB_CRATE).is_dir() {
-		return Err(format!("no runtime stub {}: put warp-runtime there or name one in {RUNTIME_STUB_VARIABLE} (the warp source {} that would build it is gone)", expected.display(), source.display()));
+		return Err(format!("no runtime stub {}: put warp-runtime there or name one in {} (the warp source {} that would build it is gone)", expected.display(), kind.variable, source.display()));
 	}
 	// cargo runs every time (it keeps the stub current, quickly once built); the note only before the first build
 	let release_stub = expected
 		.parent()
 		.and_then(std::path::Path::parent)
-		.map(|target| target.join("release").join(RUNTIME_STUB_NAME));
+		.map(|target| target.join("release").join(kind.name));
 	if !release_stub.is_some_and(|stub| stub.is_file()) {
-		eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+		eprintln!(
+			"note: building the runtime stub {} once (cargo build -p {})",
+			kind.name, PROGRAM_STUB.name
+		);
 	}
 	let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
 	build
@@ -1000,17 +1064,22 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
 			"--quiet",
 			"--message-format=json",
 			"-p",
-			RUNTIME_STUB_NAME,
+			PROGRAM_STUB.name,
 			"--bin",
-			RUNTIME_STUB_NAME,
+			kind.name,
 		])
 		.current_dir(source);
+	if !kind.features.is_empty() {
+		build.args(["--features", kind.features]);
+	}
 	let output = build
 		.output()
 		.map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
 	if !output.status.success() {
 		return Err(format!(
-			"building the runtime stub failed (cargo build -p {RUNTIME_STUB_NAME} in {}): {}",
+			"building the runtime stub {} failed (cargo build -p {} in {}): {}",
+			kind.name,
+			PROGRAM_STUB.name,
 			source.display(),
 			String::from_utf8_lossy(&output.stderr).trim()
 		));
@@ -1021,10 +1090,10 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
 		.find_map(|message| {
 			message["executable"]
 				.as_str()
-				.filter(|path| path.ends_with(RUNTIME_STUB_NAME))
+				.filter(|path| path.ends_with(kind.name))
 				.map(std::path::PathBuf::from)
 		})
-		.ok_or_else(|| format!("cargo built {RUNTIME_STUB_NAME} but named no executable"))
+		.ok_or_else(|| format!("cargo built {} but named no executable", kind.name))
 }
 
 /// Parse tree as s-expression: `(op left right)` for keys, `[items]` for lists

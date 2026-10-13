@@ -61,12 +61,25 @@ const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
 /// `form{ on submit { … event.fields … } }`: a form sent, its named fields in event.fields (card web-submit)
 pub const PAGE_EVENTS: [&str; 4] = ["click", "key", "input", "submit"];
+/// The events only an element raises (card click-key): `input{ on change {…} }`, a field's value committed, and its
+/// focus gained or lost
+const FIELD_EVENTS: [&str; 3] = ["change", "focus", "blur"];
 /// `click·1`: the page event of one element's handler (element_events.rs), the page event and the element's number
 pub const ELEMENT_EVENT_JOINER: char = '·';
 
-/// A page event (`click`), or one element's (`click·1`)
+/// A page event (`click`), or one element's (`click·1`, `change·2`)
 pub fn is_page_event(name: &str) -> bool {
-	PAGE_EVENTS.contains(&name.split(ELEMENT_EVENT_JOINER).next().unwrap_or(name))
+	let event = name.split(ELEMENT_EVENT_JOINER).next().unwrap_or(name);
+	PAGE_EVENTS.contains(&event) || (event != name && FIELD_EVENTS.contains(&event))
+}
+
+/// The events an element handles: `on click {…}`, `on change {…}`
+pub fn element_events() -> impl Iterator<Item = &'static str> {
+	PAGE_EVENTS.into_iter().chain(FIELD_EVENTS)
+}
+
+pub fn is_element_event(word: &str) -> bool {
+	element_events().any(|event| event == word)
 }
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
 pub const PAGE_VALUE: &str = "page·value";

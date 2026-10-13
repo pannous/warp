@@ -8,7 +8,7 @@ const BUILT_FROM: &str = env!("CARGO_MANIFEST_DIR");
 #[cfg(not(debug_assertions))]
 const BUILT_FROM: &str = "a release build";
 
-fn main() {
+pub fn main() {
 	match warp_runtime::standalone::run_carried_program() {
 		Some(exit_code) => std::process::exit(exit_code),
 		None => {

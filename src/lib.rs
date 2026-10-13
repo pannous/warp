@@ -29,14 +29,15 @@ pub use lowering::{
 	ambiguous_forms, blocks, broadcasting, channel_words, class_methods, closures, component_state, component_worlds,
 	comprehensions, database_tables, declarations, element_events, event_signals, fetch_signals, field_elements,
 	folding, for_loop, foreign_modules, function_values, generator_consumers, generator_expressions, generator_objects,
-	generators, getters, go_blocks, gpu_maps, inlining, introspection, key_names, lambdas, late_binding, lazy_ranges,
-	library_words, list_phrases, markup_tags, memoization, meta_entries, min_max, music_words, mutation,
-	named_arguments, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps, optional_casts,
-	overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, picked_calls, pipes, printable,
-	references, reflection, result_word, routes, ruby_blocks, run_time_blocks, scoped_handlers, select_options, serve,
-	shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals,
-	system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests,
-	undo_history, variable_signals, variadic, versions, welcome_forms, word_operators, word_slices,
+	generators, getters, glued_attributes, go_blocks, gpu_maps, inlining, introspection, key_names, lambdas,
+	late_binding, lazy_ranges, library_words, list_phrases, markup_tags, memoization, meta_entries, min_max,
+	music_words, mutation, named_arguments, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps,
+	optional_casts, overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, picked_calls, pipes,
+	printable, references, reflection, result_word, routes, ruby_blocks, run_time_blocks, scoped_handlers,
+	select_options, serve, shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, style_rules,
+	switch, system_signals, system_values, traits, transitions, tuples, type_aliases, type_constructor,
+	type_name_matching, type_tests, undo_history, variable_signals, variadic, versions, welcome_forms, word_operators,
+	word_slices,
 };
 pub mod accessibility;
 #[cfg(feature = "native")]

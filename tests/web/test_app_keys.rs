@@ -6,7 +6,7 @@ use std::path::PathBuf;
 const PRESSES_Q: &str =
 	"script{ \"setTimeout(() => document.dispatchEvent(new KeyboardEvent('keydown', {key: 'q'})), 100)\" }";
 
-fn checked(name: &str, code: &str) -> std::process::Output {
+pub(crate) fn checked(name: &str, code: &str) -> std::process::Output {
 	let folder = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("test_app_keys");
 	std::fs::create_dir_all(&folder).unwrap();
 	let page = folder.join(format!("{name}.warp"));

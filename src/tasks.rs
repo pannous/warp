@@ -74,7 +74,7 @@ pub enum TaskValue {
 	Char(char),
 	Text(String),
 	Symbol(String),
-	/// the items and the bracket's code (wasm_emitter::bracket_info)
+	/// the items and the list's info: its bracket and separator (wasm_emitter::list_info)
 	List(Vec<TaskValue>, i64),
 	/// left, the operator's code, right
 	Key(Box<TaskValue>, i64, Box<TaskValue>),
@@ -99,9 +99,9 @@ impl TaskValue {
 			Node::Char(c) => TaskValue::Char(*c),
 			Node::Text(text) => TaskValue::Text(text.clone()),
 			Node::Symbol(name) => TaskValue::Symbol(name.clone()),
-			Node::List(items, bracket, _) => TaskValue::List(
+			Node::List(items, bracket, separator) => TaskValue::List(
 				items.iter().map(TaskValue::of).collect::<Result<_>>()?,
-				crate::wasm_emitter::bracket_info(bracket),
+				crate::wasm_emitter::list_info(bracket, separator),
 			),
 			Node::Key(left, op, right) => TaskValue::Key(
 				Box::new(TaskValue::of(left)?),
@@ -296,7 +296,10 @@ impl Builders {
 						.unwrap_anyref()
 						.and_then(|reference| reference.unwrap_struct(&*store).ok());
 				}
-				Ok(TaskValue::List(items, (kind >> 8) & 0xFF))
+				Ok(TaskValue::List(
+					items,
+					((kind >> 8) & 0xFF) | ((kind & crate::type_kinds::SEPARATOR_MASK) >> 8),
+				))
 			}
 			_ => self.read(value, store),
 		}

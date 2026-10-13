@@ -281,6 +281,7 @@ PASSED:
   ✓ control::test_handler_unwinding::a_block_that_ends_still_answers_inside
   ✓ control::test_handler_unwinding::an_error_caught_outside_the_block_leaves_its_handler
   ✓ control::test_handler_unwinding::another_events_abort_leaves_the_inner_handler
+  ✓ control::test_held_key::held_key_compares_with_the_key_words
   ✓ control::test_held_key::held_key_names_the_key_held_now
   ✓ control::test_help_word::a_programs_own_help_wins
   ✓ control::test_help_word::help_of_a_class_and_of_its_instance
@@ -809,6 +810,8 @@ PASSED:
   ✓ ffi::test_ffi_handles::standard_c_structs_are_handles_without_their_header
   ✓ ffi::test_ffi_import_group::a_group_of_three_names_is_imported
   ✓ ffi::test_ffi_import_group::a_group_with_spaces_is_imported
+  ✓ ffi::test_ffi_signatures::libc_signatures
+  ✓ ffi::test_ffi_signatures::raylib_signatures_without_a_window
   ✓ ffi::test_ffi_text_results::a_c_string_result_is_a_text
   ✓ ffi::test_ffi_text_results::a_libc_function_without_use_c_says_how_to_import_it
   ✓ ffi::test_ffi_text_results::other_pointer_results_are_refused
@@ -2130,6 +2133,9 @@ PASSED:
   ✓ node::test_empty_operands::a_written_empty_value_stays
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
   ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
+  ✓ node::test_list_separator::a_list_is_built_with_a_separator
+  ✓ node::test_list_separator::a_list_read_back_keeps_its_separator
+  ✓ node::test_list_separator::a_list_shows_its_separator
   ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
   ✓ node::test_node_api::a_key_shows_its_parts
   ✓ node::test_node_api::a_list_shows_its_bracket
@@ -2914,6 +2920,8 @@ PASSED:
   ✓ parser::test_references::references_survive_a_round_trip
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
+  ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
+  ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -3431,6 +3439,8 @@ PASSED:
   ✓ text::test_string::test_string_substring_from
   ✓ text::test_terminal_escapes::escape_and_hex_escapes_are_their_characters
   ✓ text::test_text_as_float::test_text_as_float
+  ✓ text::test_text_builders::a_text_grown_in_its_room_leaves_earlier_values
+  ✓ text::test_text_builders::texts_built_in_turn_grow_linearly
   ✓ text::test_text_building::a_text_grown_in_place_leaves_its_earlier_value
   ✓ text::test_text_building::appending_in_a_loop_is_linear
   ✓ text::test_text_bytes::byte_at_reads_one_byte
@@ -3885,6 +3895,7 @@ PASSED:
   ✓ types::test_recursive_fields::gc_struct_and_ref_are_wasm_spellings
   ✓ types::test_recursive_fields::ref_fields_on_their_own_lines
   ✓ types::test_repeated_type_parameters::repeated_type_words_number_their_parameters
+  ✓ types::test_return_as_hint::the_arrow_hint_points_at_the_definition
   ✓ types::test_returned_instances::a_parameter_shadows_an_instance_variable
   ✓ types::test_returned_instances::an_instance_returned_by_a_function_takes_its_class_operators
   ✓ types::test_returned_instances::an_operation_of_instances_is_an_instance_too
@@ -4150,7 +4161,7 @@ PASSED:
   ✓ types::test_widened_list_views::a_changed_parent_class_view_of_a_subclass_list_is_a_compile_error
   ✓ types::test_widened_list_views::a_changed_wider_view_of_a_declared_list_is_a_compile_error
   ✓ types::test_widened_list_views::a_reading_or_narrower_view_is_fine
-  ✓ wasm::test_build_emits_wasm::build_exe_or_wasm_writes_only_that
+  ✓ wasm::test_build_emits_wasm::build_exe_writes_both_and_build_wasm_only_the_module
   ✓ wasm::test_build_emits_wasm::build_writes_the_executable_and_the_module
   ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
@@ -4337,9 +4348,14 @@ PASSED:
   ✓ web::test_async_data::a_failed_fetch_is_the_error
   ✓ web::test_async_data::on_change_sees_the_arrived_value
   ✓ web::test_async_data::the_parsed_json_arrives_later
+  ✓ web::test_attribute_values::a_number_for_an_address_warns
+  ✓ web::test_attribute_values::a_text_for_a_boolean_attribute_warns
+  ✓ web::test_attribute_values::a_word_for_a_number_attribute_warns
+  ✓ web::test_attribute_values::values_of_the_right_kind_stay_quiet
   ✓ web::test_bound_field_types::a_bound_float_takes_any_number
   ✓ web::test_bound_field_types::a_bound_int_takes_whole_numbers_only
   ✓ web::test_browser_tables::a_big_browser_table_costs_the_same_per_row
+  ✓ web::test_built_app::a_built_page_program_is_an_app_showing_its_page
   ✓ web::test_bundle_budget::a_hello_world_site_stays_within_its_budget
   ✓ web::test_bundle_budget::a_site_script_is_compacted
   ✓ web::test_bundle_budget::a_site_script_loses_its_trailing_comments
@@ -4399,6 +4415,9 @@ PASSED:
   ✓ web::test_expert_guide::every_expert_snippet_prints_what_the_guide_shows
   ✓ web::test_expert_guide::every_expert_snippet_shows_its_value
   ✓ web::test_expert_guide::the_expert_guide_has_the_beginner_chapters
+  ✓ web::test_field_events::a_committed_value_reaches_on_change
+  ✓ web::test_field_events::a_field_event_is_no_markup_mistake
+  ✓ web::test_field_events::focus_and_blur_reach_their_handlers
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_field_is_validated_by_the_declared_type
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
@@ -4410,6 +4429,9 @@ PASSED:
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
   ✓ web::test_form_routes::a_form_route_inside_an_element
   ✓ web::test_form_routes::a_form_written_as_its_route
+  ✓ web::test_glued_attribute_content::a_bound_value_ends_before_a_text
+  ✓ web::test_glued_attribute_content::a_text_after_a_value_is_content
+  ✓ web::test_glued_attribute_content::a_text_value_ends_before_a_text
   ✓ web::test_gpu_auto::a_heavy_map_of_many_floats_runs_on_the_gpu_by_itself
   ✓ web::test_gpu_auto::a_map_below_the_count_or_of_only_arithmetic_stays_on_the_cpu
   ✓ web::test_gpu_auto::cpu_pins_a_map_its_block_or_its_function_to_the_cpu
@@ -4461,8 +4483,11 @@ PASSED:
   ✓ web::test_markup_mistakes::an_unknown_attribute_warns
   ✓ web::test_markup_mistakes::an_unknown_event_warns
   ✓ web::test_markup_mistakes::an_unknown_input_type_warns
+  ✓ web::test_markup_mistakes::an_unknown_tag_among_markup_warns
   ✓ web::test_markup_mistakes::content_of_a_void_element_warns
   ✓ web::test_markup_mistakes::right_markup_stays_quiet
+  ✓ web::test_markup_nesting::misplaced_elements_warn
+  ✓ web::test_markup_nesting::right_nesting_stays_quiet
   ✓ web::test_markup_renderer::a_style_sheet_inside_a_scoped_element_styles_only_its_elements
   ✓ web::test_markup_renderer::an_element_of_a_loop_keeps_its_attributes_beside_a_condition
   ✓ web::test_markup_renderer::the_renderer_keeps_its_locals_apart_from_the_programs_variables
@@ -4553,6 +4578,7 @@ PASSED:
   ✓ web::test_site_animation::an_endless_animation_builds
   ✓ web::test_site_animation::an_endless_sleeping_loop_builds
   ✓ web::test_site_failure::a_site_that_does_not_compile_says_why
+  ✓ web::test_site_holes::a_built_site_patches_only_its_holes
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
@@ -4582,6 +4608,7 @@ PASSED:
   ✓ web::test_text_holes::a_computed_text_between_children_is_a_text_hole
   ✓ web::test_text_holes::a_page_binds_each_text_hole
   ✓ web::test_text_holes::an_element_whose_text_is_not_alone_stays_an_element_hole
+  ✓ web::test_text_holes::the_roots_own_text_is_a_text_hole
   ✓ web::test_transitions::a_keyed_item_keeps_its_transition
   ✓ web::test_transitions::a_style_transition_is_css
   ✓ web::test_transitions::a_transition_ends_before_the_children
@@ -5060,4 +5087,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5055 passed, 0 failed, 5055 total tested
+10 ignored, 5082 passed, 0 failed, 5082 total tested

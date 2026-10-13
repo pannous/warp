@@ -14,6 +14,8 @@ mod test_ffi;
 mod test_ffi_gaps;
 mod test_ffi_handles;
 mod test_ffi_import_group;
+#[cfg(all(feature = "native", target_os = "macos"))] // libc's sranddev and the C headers of macOS
+mod test_ffi_signatures; // card cleanup-ffi-f32
 mod test_ffi_text_results;
 mod test_ffi_warning_once;
 #[cfg(feature = "native")] // a python3 child process: not in the browser build
