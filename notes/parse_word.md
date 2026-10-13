@@ -38,3 +38,12 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - data-meta: Meta kept in data Nodes, `n.line` / `n.column` / `n.comment`, ignored by `==`.
 - parse-runtime: a run-time text goes through a host word (native and host.js), as run_block does; test: the
   parse of a read text equals `data (…)`.
+
+## Agreed with warp-operator-shall (2026-10-13)
+- Operators stay Keys in data. `&`/`|` are decided at parse time (Op::BitAnd/BitOr for operands that may be ints,
+  else And/Or). A single `|`'s right side carries pipe-stage meta until pipes.rs decides, so patterns match through
+  drop_meta().
+- Code patterns match the canonical form, with both sides normalized by the same rules. BitAnd/BitOr never fold onto
+  And/Or.
+- In a code pattern, `$a | $b` is the written operator, not arm alternatives (or_operands splits Or and BitOr in case
+  keys): alternatives are split only outside `data(…)`.
