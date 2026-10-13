@@ -53,7 +53,8 @@ cleanup-groups, cleanup-filter):
   `take_while_char`; infer_list_type: one head-word block (edition 2021: no let-chains, only if-let guards)
 
 Left (longest functions, candidates for splitting):
-- (cleanup-long-functions) atoms.rs parse_symbol_with_suffix (~140 lines): still a keyword dispatch
+- DONE (cleanup-long-functions) atoms.rs parse_symbol_with_suffix (~160 lines → ~80): the function-name suffix
+  (read_function_name_suffix) and the keyword forms (keyword_form) are their own functions, in the same order
 - atoms.rs parse_atom (~140) and parse_type_declaration_body (~120): long but flat now
 - declaration_lowering.rs lower_declarations_among (~110): a long but now flat rewrite dispatch
 - two `matches!` + `unreachable!("guarded")` arms stay where the arm moves the scrutinee the guard borrows
