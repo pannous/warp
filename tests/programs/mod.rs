@@ -20,8 +20,8 @@ mod test_kitchensink;
 mod test_midi;
 mod test_music_values; // card music-values
 mod test_paint;
-mod test_paint_in_window; // card paint-keeps
 mod test_paint_function; // card gpu-functions
+mod test_paint_in_window; // card paint-keeps
 mod test_paint_lists;
 mod test_paint_shader; // P234
 mod test_paint_window_ends; // card exit-key
