@@ -24,16 +24,26 @@ pub fn lower_negated_calls(node: Node) -> Node {
 		.collect();
 	crate::library_words::collect_assigned_names(&node, &mut bound);
 	bound.extend(crate::soft_keywords::names_given(&node)); // fields and lambda parameters too: `size -1` of a field size
-	negate_calls(node, &ctx.user_functions, &bound)
+	negate_calls(node, &ctx.user_functions, &bound, &HashSet::new())
 }
 
+/// `locals`: the parameters and variables of the function around, which no function of the same name calls there
+/// (`words = [p]; words#1` beside a function words, card local-variable-named)
 fn negate_calls(
 	node: Node,
 	functions: &std::collections::BTreeMap<String, UserFunctionDef>,
 	bound: &HashSet<String>,
+	locals: &HashSet<String>,
 ) -> Node {
+	if let Some((head, body, rebuild)) = crate::type_tests::function_definition(&node) {
+		let mut inner = locals.clone();
+		inner.extend(crate::lowering::memoization::head_parameters(&head));
+		crate::library_words::collect_assigned_names(&body, &mut inner);
+		return rebuild(head, negate_calls(body, functions, bound, &inner));
+	}
 	// `int[100]` is the subscript `int#101` of a typed array: a type or library word takes no count
 	let is_function = |operand: &Node, op: Op| match operand.drop_meta() {
+		Node::Symbol(name) if locals.contains(name) => false,
 		Node::Symbol(name) if functions.contains_key(name) => {
 			functions.get(name).is_some_and(|function| !function.params.is_empty())
 		}
@@ -52,11 +62,11 @@ fn negate_calls(
 			let argument = Node::Key(
 				Box::new(Node::Empty),
 				prefix,
-				Box::new(negate_calls(*argument, functions, bound)),
+				Box::new(negate_calls(*argument, functions, bound, locals)),
 			);
 			Node::List(vec![*function, argument], Bracket::Round, Separator::None)
 		}
-		other => children_rewritten(other, |child| negate_calls(child, functions, bound)),
+		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),
 	}
 }
 

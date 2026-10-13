@@ -153,12 +153,18 @@ pub(crate) fn parameter_names(program: &Node) -> std::collections::HashSet<Strin
 	let mut names = std::collections::HashSet::new();
 	program.visit(&mut |part| {
 		if let Some((head, _, _)) = definition_parts(part) {
-			if let Node::List(items, _, _) = head.drop_meta() {
-				names.extend(items.iter().skip(1).filter_map(super::nodes::parameter_name));
-			}
+			names.extend(head_parameters(&head));
 		}
 	});
 	names
+}
+
+/// The parameter names of a definition's head `(f a b)`
+pub(crate) fn head_parameters(head: &Node) -> Vec<String> {
+	match head.drop_meta() {
+		Node::List(items, _, _) => items.iter().skip(1).filter_map(super::nodes::parameter_name).collect(),
+		_ => vec![],
+	}
 }
 
 /// `(f n)`: a name and its parameters, what `f(n) = body` assigns, unlike `x = body`

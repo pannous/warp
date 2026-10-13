@@ -38,3 +38,16 @@ fn a_local_in_one_function_leaves_the_word_to_the_others() {
 		6
 	);
 }
+
+/// a local or parameter named like a function of the program is indexed there, not called (`words#1` beside the text
+/// module's words, card local-variable-named)
+#[test]
+fn a_local_named_like_a_function_is_indexed_not_called() {
+	is!(
+		"def size(t) { 0 }; def collect(p) { size = [p, 2]; size#2 }; collect(3)",
+		2
+	);
+	is!("def size(t) { 0 }; def g(size) { size#2 }; g([4, 5])", 5);
+	is!("def padded(t) { pad_left(t, 3) }; def collect(p) { words = [p]; if words.length == 1 { return words#1 }; words }; collect(3)", 3);
+	is!("def f(x) { x * 2 }; def g(y) { f -y }; g(3)", -6);
+}
