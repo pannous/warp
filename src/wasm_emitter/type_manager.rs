@@ -26,7 +26,7 @@ pub struct TypeManager {
 	/// $MetaNode, a $Node with its source position and comment (card data-meta): (sub $Node (struct kind data value
 	/// (field $line i64) (field $column i64) (field $comment (ref null $Node)))). Whatever reads a $Node reads it as
 	/// one, so `==` and every operation ignore the extra fields; only `n.line`, `n.column`, `n.comment` read them
-	pub meta_node_type: u32,
+	pub meta_node_type: Option<u32>,
 
 	/// $Limbs = (array (mut i32)): BigInt magnitude, little-endian base 2^32
 	pub limbs_type: u32,
@@ -87,7 +87,7 @@ impl TypeManager {
 			i64_box_type: 0,
 			f64_box_type: 0,
 			node_type: 0,
-			meta_node_type: 0,
+			meta_node_type: None,
 			limbs_type: 0,
 			big_int_type: 0,
 			big_heap_type: 0,
@@ -106,8 +106,8 @@ impl TypeManager {
 		}
 	}
 
-	/// Emit core GC types: String, Node, i64box, f64box
-	pub fn emit_gc_types(&mut self) {
+	/// Emit core GC types: String, Node, i64box, f64box, and $MetaNode for a program that quotes code (`with_meta`)
+	pub fn emit_gc_types(&mut self, with_meta: bool) {
 		// Type 0: $String = (struct (field $ptr i32) (field $len i32))
 		self.types.ty().struct_(string_fields());
 		self.string_type = self.next_type_idx;
@@ -140,8 +140,11 @@ impl TypeManager {
 				mutable: true, // mutable for a field set in place: instances are references (P200)
 			}, // value
 		];
-		// open: $MetaNode extends it
-		self.types.ty().subtype(&struct_subtype(node_fields.clone(), None));
+		// open when $MetaNode extends it
+		match with_meta {
+			true => self.types.ty().subtype(&struct_subtype(node_fields.clone(), None)),
+			false => self.types.ty().struct_(node_fields.clone()),
+		}
 		self.node_type = node_type_idx;
 
 		// Type 2: $i64box = (struct (field i64)) for boxed integers
@@ -165,7 +168,9 @@ impl TypeManager {
 		(self.float_array_type, self.float_list_type) = self.emit_growable_list_types(ValType::F64, None);
 		self.emit_node_list_types();
 		self.emit_node_map_type();
-		self.emit_meta_node_type(node_fields, node_ref);
+		if with_meta {
+			self.emit_meta_node_type(node_fields, node_ref);
+		}
 	}
 
 	fn emit_meta_node_type(&mut self, node_fields: Vec<FieldType>, node_ref: RefType) {
@@ -186,7 +191,7 @@ impl TypeManager {
 			is_final: true,
 			..struct_subtype(fields, Some(self.node_type))
 		});
-		self.meta_node_type = self.next_type_idx;
+		self.meta_node_type = Some(self.next_type_idx);
 		self.next_type_idx += 1;
 	}
 

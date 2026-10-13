@@ -172,12 +172,12 @@ impl WasmGcEmitter {
 			(tm.i64_box_type, "i64box"),
 			(tm.f64_box_type, "f64box"),
 			(tm.node_type, "Node"),
-			(tm.meta_node_type, "MetaNode"),
 			(tm.int_array_type, "IntArray"),
 			(tm.int_list_type, "IntList"),
 			(tm.float_array_type, "FloatArray"),
 			(tm.float_list_type, "FloatList"),
 		];
+		types.extend(tm.meta_node_type.map(|index| (index, "MetaNode")));
 		types.extend(
 			self.ctx
 				.user_type_indices
@@ -228,23 +228,16 @@ impl WasmGcEmitter {
 
 		let mut fields: Vec<(u32, Vec<(u32, &str)>)> = vec![
 			(tm.node_type, vec![(0, "kind"), (1, "data"), (2, "value")]),
-			(
-				tm.meta_node_type,
-				vec![
-					(0, "kind"),
-					(1, "data"),
-					(2, "value"),
-					(3, "line"),
-					(4, "column"),
-					(5, "comment"),
-				],
-			),
 			(tm.string_type, vec![(0, "ptr"), (1, "len")]),
 			(tm.i64_box_type, vec![(0, "value")]),
 			(tm.f64_box_type, vec![(0, "value")]),
 			(tm.int_list_type, vec![(0, "length"), (1, "items")]),
 			(tm.float_list_type, vec![(0, "length"), (1, "items")]),
 		];
+		if let Some(meta_node_type) = tm.meta_node_type {
+			let meta_fields = [(3, "line"), (4, "column"), (5, "comment")];
+			fields.push((meta_node_type, fields[0].1.iter().copied().chain(meta_fields).collect()));
+		}
 		for type_def in self.ctx.type_registry.types() {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
 				fields.push((

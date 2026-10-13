@@ -272,8 +272,8 @@ impl WasmGcEmitter {
 			);
 		}
 
-		if self.should_emit_function(NODE_AT) {
-			let meta_node_type = self.type_manager.meta_node_type;
+		// the type is there exactly when node_at is (emit_gc_types)
+		if let (true, Some(meta_node_type)) = (self.should_emit_function(NODE_AT), self.type_manager.meta_node_type) {
 			let field = |field_index| I::StructGet {
 				struct_type_index: node_type,
 				field_index,
@@ -350,7 +350,23 @@ impl WasmGcEmitter {
 
 	/// In node_part: a $MetaNode's line or column (an Int) or comment (a Text or null), null from any other node
 	fn emit_meta_part(&mut self, f: &mut Function, node: u32, part: u32) {
-		let (node_type, meta_node_type) = (self.type_manager.node_type, self.type_manager.meta_node_type);
+		Self::emit_list(
+			f,
+			&[
+				I::LocalGet(part),
+				I::I32Const(LINE_PART),
+				I::I32GeS,
+				I::If(BlockType::Empty),
+			],
+		);
+		if let Some(meta_node_type) = self.type_manager.meta_node_type {
+			self.emit_meta_fields(f, node, part, meta_node_type);
+		}
+		let node_type = self.type_manager.node_type;
+		Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::Return, I::End]);
+	}
+
+	fn emit_meta_fields(&mut self, f: &mut Function, node: u32, part: u32, meta_node_type: u32) {
 		let meta_field = |field_index| {
 			[
 				I::LocalGet(node),
@@ -361,18 +377,12 @@ impl WasmGcEmitter {
 				},
 			]
 		};
-		Self::emit_list(
-			f,
-			&[
-				I::LocalGet(part),
-				I::I32Const(LINE_PART),
-				I::I32GeS,
-				I::If(BlockType::Empty),
-				I::LocalGet(node),
-				I::RefTestNullable(HeapType::Concrete(meta_node_type)),
-				I::If(BlockType::Empty),
-			],
-		);
+		let is_meta = [
+			I::LocalGet(node),
+			I::RefTestNullable(HeapType::Concrete(meta_node_type)),
+		];
+		Self::emit_list(f, &is_meta);
+		f.instruction(&I::If(BlockType::Empty));
 		for (wanted, field_index) in META_FIELDS {
 			Self::emit_list(
 				f,
@@ -389,10 +399,7 @@ impl WasmGcEmitter {
 			}
 			Self::emit_list(f, &[I::Return, I::End]);
 		}
-		Self::emit_list(
-			f,
-			&[I::End, I::RefNull(HeapType::Concrete(node_type)), I::Return, I::End],
-		);
+		f.instruction(&I::End);
 	}
 
 	/// `name(items, text)`: the list of the same items with the head cell's kind bits under `mask` set to the code
