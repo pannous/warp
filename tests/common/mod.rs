@@ -318,40 +318,43 @@ pub fn printed(code: &str) -> String {
 #[cfg(feature = "native")]
 pub fn runtime_stub() -> &'static std::path::Path {
 	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-	STUB.get_or_init(|| {
-		let built = std::process::Command::new(env!("CARGO"))
-			.args([
-				"build",
-				"--offline",
-				"--quiet",
-				"-p",
-				"warp-runtime",
-				"--bin",
-				"warp-runtime",
-			])
-			.current_dir(env!("CARGO_MANIFEST_DIR"))
-			.status()
-			.expect("cargo runs");
-		assert!(built.success(), "cargo build -p warp-runtime failed");
-		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
-		let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("crates")
-			.join("warp-runtime");
-		let build = checkout_build(
-			&shared,
-			"warp_runtime-",
-			&runtime_manifest.to_string_lossy(),
-			Some(env!("CARGO_PKG_VERSION")),
+	STUB.get_or_init(|| built_stub("warp-runtime", &[]))
+}
+
+/// The stub of page apps (card build-links): the runtime with the web view, as runtime_stub keeps the plain one
+#[cfg(all(feature = "native", target_os = "macos"))]
+pub fn page_runtime_stub() -> &'static std::path::Path {
+	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	STUB.get_or_init(|| built_stub("warp-page-runtime", &["--features", "webview"]))
+}
+
+#[cfg(feature = "native")]
+fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
+	let built = std::process::Command::new(env!("CARGO"))
+		.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
+		.args(features)
+		.current_dir(env!("CARGO_MANIFEST_DIR"))
+		.status()
+		.expect("cargo runs");
+	assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name(name);
+	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+		.join("crates")
+		.join("warp-runtime");
+	let build = checkout_build(
+		&shared,
+		&format!("{}-", name.replace('-', "_")),
+		&runtime_manifest.to_string_lossy(),
+		Some(env!("CARGO_PKG_VERSION")),
+	)
+	.unwrap_or_else(|| {
+		panic!(
+			"target/debug/deps holds no {name} {} built from {}",
+			env!("CARGO_PKG_VERSION"),
+			runtime_manifest.display()
 		)
-		.unwrap_or_else(|| {
-			panic!(
-				"target/debug/deps holds no warp-runtime {} built from {}",
-				env!("CARGO_PKG_VERSION"),
-				runtime_manifest.display()
-			)
-		});
-		own_copy(&build, "warp-runtime").expect("copy the warp-runtime stub")
-	})
+	});
+	own_copy(&build, name).expect("copy the runtime stub")
 }
 
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another

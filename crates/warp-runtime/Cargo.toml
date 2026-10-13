@@ -14,8 +14,15 @@ name = "warp-runtime"
 path = "src/main.rs"
 required-features = ["engine"]
 
+# the stub of page apps (card build-links): the same runtime with the web view, built on its own
+# (`cargo build --release -p warp-runtime --features webview --bin warp-page-runtime`) so plain executables stay small
+[[bin]]
+name = "warp-page-runtime"
+path = "src/main.rs"
+required-features = ["engine", "webview"]
+
 [features]
-default = ["engine", "webview"]
+default = ["engine"]
 # running modules: wasmtime's runtime and GC, the host words; without it only the names of the host words
 engine = ["dep:wasmtime", "dep:miniz_oxide", "dep:serde_json"]
 # compiling modules too (warp itself): Cranelift and its settings; warp's wasmtime has the component model (through

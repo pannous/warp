@@ -102,8 +102,9 @@ module repeats their machine code. A shared runtime module linked to the program
 the executable `page`: the stub carrying the page's site packed (site_files::packed, behind the same trailer as machine
 code, which the stub tells apart by PACKED_SITE) and showing it in the system's web view (warp-runtime webview.rs, the
 window `warp app` uses too, moved there). `page --check` prints the page text from a hidden window (tests/web/
-test_built_app.rs, probe probes/build_app/hello_app.warp). The release stub grew ~170 KB (wry, winit: 1.03 → 1.2 MB),
-macOS only for now (elsewhere build writes the console executable as before). Later: `warp build --app`, a .app bundle
+test_built_app.rs, probe probes/build_app/hello_app.warp). The web view (wry, winit, ~170 KB) is in a stub of its own,
+`warp-page-runtime` (warp-runtime's feature webview, built and shipped next to warp-runtime, WARP_PAGE_RUNTIME_STUB),
+so plain executables stay small (test_executable_size failed with webview a default feature). macOS only for now (elsewhere build writes the console executable as before). Later: `warp build --app`, a .app bundle
 (card build-app-bundle).
 
 ## Executable size (card g_gFs8, 2026-10-09)

@@ -40,9 +40,12 @@ class Warp < Formula
     if build.head?
       ENV["CARGO_NET_OFFLINE"] = "false" # the repository's .cargo/config.toml builds offline, from the local cache
       system "cargo", "install", *std_cargo_args
-      system "cargo", "install", *std_cargo_args(path: "crates/warp-runtime")
+      system "cargo", "install", *std_cargo_args(path: "crates/warp-runtime"), "--bin", "warp-runtime"
+      system "cargo", "install", *std_cargo_args(path: "crates/warp-runtime"), "--features", "webview", "--bin", "warp-page-runtime"
     else
       bin.install "warp", "warp-runtime"
+      # releases before the page stub (card build-links) ship none
+      bin.install "warp-page-runtime" if File.exist?("warp-page-runtime")
     end
   end
 

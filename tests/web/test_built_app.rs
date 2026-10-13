@@ -13,7 +13,7 @@ fn built_app_checked(name: &str, code: &str) -> std::process::Output {
 	let page = folder.join(format!("{name}.warp"));
 	std::fs::write(&page, code).unwrap();
 	let build = crate::common::warp_command()
-		.env("WARP_RUNTIME_STUB", crate::common::runtime_stub())
+		.env("WARP_PAGE_RUNTIME_STUB", crate::common::page_runtime_stub())
 		.env("WARP_NO_WINDOW", "1")
 		.arg("build")
 		.arg(&page)
