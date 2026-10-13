@@ -1,7 +1,9 @@
 //! Type aliases (card types-alias, samples/types.warp): `type Name = string` names the type string wherever a type is
 //! written, `name: Name` in a class, `age: Age?`, `[Name]`, `f(n: Name)`, `a: Age = 3`; an alias of an alias is resolved
-//! to the end. Aliases of other shapes (`type Predicate = int -> bool`) stay declarations only.
+//! to the end. Aliases of other shapes (`type Predicate = int -> bool`) stay declarations only. An enum of plain cases
+//! names the type of its case numbers (card enum-parameter-type): `enum Coin { Penny, Dime }` makes `c: Coin` an int.
 
+use super::declarations::enum_cases;
 use super::nodes::key;
 use crate::node::Node;
 use crate::operators::Op;
@@ -9,6 +11,8 @@ use std::collections::HashMap;
 
 /// `Age?`: the optional form of a type name
 const OPTIONAL_MARK: char = '?';
+/// The type of an enum's cases, numbered from 0 (declarations::enum_object)
+const CASE_TYPE: &str = "int";
 
 pub fn lower(node: Node) -> Node {
 	let mut aliases = HashMap::new();
@@ -19,8 +23,11 @@ pub fn lower(node: Node) -> Node {
 	resolved(node, &aliases)
 }
 
-/// `type Name = string`: (Name, string)
+/// `type Name = string`: (Name, string); `enum Coin { Penny, Dime }`: (Coin, int)
 fn alias(node: &Node) -> Option<(String, String)> {
+	if let Node::List(items, _, _) = node {
+		return enum_cases(items).map(|(name, _)| (name, CASE_TYPE.into()));
+	}
 	let Node::Key(declared, Op::Assign, target) = node else {
 		return None;
 	};

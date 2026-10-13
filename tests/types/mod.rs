@@ -58,6 +58,7 @@ mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
 mod test_empty_type_aliases;
 mod test_enum_cases;
+mod test_enum_parameter_type;
 mod test_enums_ported;
 mod test_extension_methods;
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
