@@ -108,10 +108,6 @@ impl Node {
 			Error(e) => json_object([("_error", e.to_json_value())]),
 		}
 	}
-
-	pub fn from_json(json: &str) -> Result<Node, serde_json::Error> {
-		serde_json::from_str(json)
-	}
 }
 
 /// JSON5 as JSON (card json5-parse, user: no more JSON nonsense), for a text the strict parser refused: 'single quoted' texts, // and /* */ comments, trailing

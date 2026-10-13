@@ -885,10 +885,6 @@ impl Real {
 		}
 	}
 
-	pub fn is_exact(&self) -> bool {
-		matches!(self, Real::Exact(_))
-	}
-
 	pub fn neg(&self) -> Real {
 		match self {
 			Real::Exact(exact) => Real::Exact(exact.neg()),

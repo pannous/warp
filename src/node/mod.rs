@@ -637,14 +637,6 @@ impl Node {
 		}
 	}
 
-	pub fn get_op(&self) -> Op {
-		match self {
-			Key(_, op, _) => *op,
-			Meta { node, .. } => node.get_op(),
-			_ => Op::None,
-		}
-	}
-
 	pub fn get_value(&self) -> Node {
 		match self {
 			Key(_, _, v) => v.as_ref().clone(),
@@ -905,10 +897,6 @@ pub fn print(p0: String) {
 	println!("{}", p0);
 }
 
-pub fn text_node(p0: String) -> Node {
-	Text(p0)
-}
-
 pub fn node(p0: &str) -> Node {
 	Text(p0.s())
 }
@@ -940,10 +928,6 @@ pub fn error(s: &str) -> Node {
 	Error(Box::new(Text(s.to_string())))
 }
 
-pub fn error_node(n: Node) -> Node {
-	Error(Box::new(n))
-}
-
 pub fn codepoint(c: char) -> Node {
 	Char(c)
 }
@@ -955,10 +939,6 @@ pub fn key(k: &str, v: Node) -> Node {
 pub fn types(name: &str) -> Node {
 	// Returns a Symbol with the type name, matching what type() introspection returns
 	Symbol(name.to_string())
-}
-
-pub fn key_op(k: Node, op: Op, v: Node) -> Node {
-	Key(Box::new(k), op, Box::new(v))
 }
 
 pub fn key_ops(k: String, op: Op, v: Node) -> Node {

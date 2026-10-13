@@ -1042,17 +1042,6 @@ impl Scope {
 		Scope::default()
 	}
 
-	pub fn child(&self) -> Self {
-		Scope {
-			locals: HashMap::new(),
-			function_kinds: HashMap::new(),
-			closure_variable_targets: HashMap::new(),
-			globals: HashMap::new(),
-			widened_bindings: HashMap::new(),
-			parent: Some(Box::new(self.clone())),
-		}
-	}
-
 	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
 		Scope {
 			function_kinds,

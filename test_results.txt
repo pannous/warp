@@ -15,6 +15,7 @@ PASSED:
   ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
   ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
+  ✓ control::test_async_ports::await_any_gives_the_first_to_finish
   ✓ control::test_async_ports::await_first_is_the_first_tasks_result
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
@@ -5093,7 +5094,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_async_ports::await_any_gives_the_first_to_finish
 
 SUMMARY:
-11 ignored, 5090 passed, 1 failed, 5091 total tested
+11 ignored, 5091 passed, 0 failed, 5091 total tested

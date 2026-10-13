@@ -139,8 +139,7 @@ pub use node::{Bracket, Node, Separator};
 pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
 // Node convenience constructors
 pub use node::{
-	block, codepoint, data, error, error_node, float, floats, int, ints, key, key_op, key_ops, list, parens, symbol,
-	symbols, text, texts,
+	block, codepoint, data, error, float, floats, int, ints, key, key_ops, list, parens, symbol, symbols, text, texts,
 };
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};

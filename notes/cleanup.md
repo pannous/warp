@@ -4,6 +4,27 @@ Repo-wide leftovers: oversized files (cleanup-big-files), never-called functions
 fmt/clippy drift (cargo-fmt, clippy-reports), probe-script proliferation (cleanup-probe-scripts), stale notes
 (cleanup-stale-notes).
 
+Dead scan (cleanup-dead-scan, 2026-10-13, probes/dead_scan.py): 15 never-used pub functions removed, unused in the default,
+all-features and wasm32 builds alike. Removed: TypeManager len/is_empty/next_type_idx/user_type_indices_mut,
+StringTable next_offset/table, ImportManager is_empty, Scope child, Real is_exact, Signature merge, Node get_op/from_json,
+text_node/error_node/key_op. Kept: function.rs builders, set_hint_file and create_host_linker (in-file unit tests or
+tests/ call them), Node last_item and extensions.rs public_function (the user's comments), get_meta and
+run_wasm_gc_object (commented-out tests name them), the gc_traits reading API (GcReadable, GcObject get_struct…: the
+documented rasm pattern, CLAUDE.md).
+
+Big files (cleanup-big-files, 2026-10-13, probes/cleanup/split_module.py): every source file over 1500 lines split
+into child modules along its own seams (section banners, cohesive groups of methods), one commit per file. No file
+is over 1500 lines now. The tool moves line ranges into `x/child.rs`:
+- It keeps paths and visibility: `use super::*` in the child, and a re-export in the parent as visible as the child's
+  most visible item.
+- Private items become pub(super) and struct fields pub(super); `super::` gains a level under x.rs. `use` lines stay
+  in the parent.
+- What it cannot know: an unused re-export (when only the child calls its items) and a `pub` item that exists only
+  under a cfg (`#[cfg(feature = "native")] pub use raw_structs::run_raw_struct;`). Fix those by hand after
+  `cargo check`.
+Ranges are 1-based and inclusive. Start each at the doc comment of its first item and end it at the closing brace
+of its last item: a range that stops one line short breaks the parse.
+
 Behaviour-preserving only: shared helpers instead of duplication, dead code and stale comments out, flatter control
 flow, meaningful names, no test edits. One area per session, small themed branches through the Integrator.
 

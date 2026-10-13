@@ -132,19 +132,6 @@ impl Signature {
 		self.parameters.iter().position(|p| p.name == name)
 	}
 
-	/// Merge another signature into this one (fill empty fields)
-	pub fn merge(&mut self, other: &Signature) {
-		if self.type_index < 0 {
-			self.type_index = other.type_index;
-		}
-		if self.return_types.is_empty() {
-			self.return_types = other.return_types.clone();
-		}
-		if self.parameters.is_empty() {
-			self.parameters = other.parameters.clone();
-		}
-	}
-
 	/// Format signature for display
 	pub fn format(&self) -> String {
 		let params: Vec<String> = self
