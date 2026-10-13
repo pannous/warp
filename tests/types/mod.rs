@@ -89,6 +89,7 @@ mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
+mod test_match_exhaustive; // card match-exhaustive
 mod test_match_static_variant;
 mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
