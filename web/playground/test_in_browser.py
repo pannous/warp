@@ -100,6 +100,18 @@ NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: a
 gpu_compute(shader, {xs: [1.5 2 3], ns: [7 8 9]}, 1)"""
 NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
 RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
+# card wgsl-error: a WGSL error of a shader block names its line and column in the program, whose word there is marked
+SHADER_ERROR = "(a WGSL error at its place in the program)"
+SHADER_ERROR_CODE = """broken = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		return vec4f(level(at.x), 0.0, 0.0, 1.0);
+	}
+	fn level(band: f32) : f32 {
+		return band / 8.0;
+	}
+}
+paint(broken, 8, 8)"""
+SHADER_ERROR_PLACE = "at 5:22"
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
@@ -512,6 +524,18 @@ def gpu_page_wrong():
 	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
 
 
+def shader_error_wrong():
+	"""the shader's error names the line and column in the program and marks the editor there; skipped loudly without
+	WebGPU"""
+	shown = run_code(SHADER_ERROR_CODE)
+	if NO_GPU in shown:
+		print(f"skip {SHADER_ERROR}: this browser {NO_GPU}")
+		return []
+	marked = browser("eval", '[...document.querySelectorAll(".marked-error")].map(mark => mark.textContent).join(" ")')
+	wrong = [] if SHADER_ERROR_PLACE in shown else [f"shader error: {shown!r}, expected {SHADER_ERROR_PLACE!r} in it"]
+	return wrong + ([] if ":" in marked else [f"shader error marks {marked!r}, expected the colon"])
+
+
 def previous_frame_wrong():
 	"""a shader reading $previous adds to what its last render left; skipped loudly without WebGPU"""
 	rendered = run_code(PREVIOUS_FRAME_CODE)
@@ -680,7 +704,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
