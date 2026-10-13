@@ -790,7 +790,7 @@ fn statement_block(block: Node) -> Node {
 }
 
 /// A loop body as a `{…}` block: `print i` becomes `{print i}`, a block stays itself
-fn as_block(body: Node) -> Node {
+pub(super) fn as_block(body: Node) -> Node {
 	match body.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => body,
 		_ => Node::List(vec![body], Bracket::Curly, Separator::Semicolon),
