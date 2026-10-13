@@ -131,14 +131,14 @@ pub type Holes = (Vec<(Vec<usize>, Node)>, Vec<TextHole>);
 
 /// The holes of markup as written (card web-fine-holes, notes/web_framework.md step 3): the outermost elements holding
 /// a computed text, attribute or child directly, each with its path, the element indices from the root down (as the
-/// page's `children` count them). The other elements are fixed. Empty when the root itself holds one. An element whose
-/// computed parts are all text_holes is none
+/// page's `children` count them). The other elements are fixed. Empty when the root itself is one. An element whose
+/// computed parts are all text_holes is none, the root too (card web-fine-rest)
 pub fn holes(markup: &Node) -> Vec<(Vec<usize>, Node)> {
 	holes_through(markup, &HashMap::new()).0
 }
 
-/// The computed texts standing alone between an element's children, which the page sets as text nodes; empty when the
-/// root itself holds a computed part
+/// The computed texts standing alone between an element's children, the root's too, which the page sets as text nodes;
+/// empty when the root itself is an element hole
 pub fn text_holes(markup: &Node) -> Vec<TextHole> {
 	holes_through(markup, &HashMap::new()).1
 }
@@ -148,7 +148,7 @@ pub fn text_holes(markup: &Node) -> Vec<TextHole> {
 pub fn holes_through<'a>(markup: &'a Node, components: &'a HashMap<String, Node>) -> Holes {
 	let mut holes = (vec![], vec![]);
 	Shapes { components }.collect(markup, &mut vec![], &mut holes);
-	if holes.0.iter().any(|(path, _)| path.is_empty()) || holes.1.iter().any(|hole| hole.path.is_empty()) {
+	if holes.0.iter().any(|(path, _)| path.is_empty()) {
 		return (vec![], vec![]);
 	}
 	holes
