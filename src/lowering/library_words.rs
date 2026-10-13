@@ -1099,8 +1099,10 @@ impl Lowering {
 			{
 				true
 			}
+			// or quoted code `(data n*1).op` (node_api.rs)
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => {
 				matches!(items[0].drop_meta(), Node::List(_, Bracket::Curly, _))
+					|| crate::blocks::quoted_data(&items[0]).is_some()
 			}
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),

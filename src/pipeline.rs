@@ -501,6 +501,8 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::comprehensions::lower,
 	crate::lowering::library_words::lower_function_methods,
 	crate::lowering::tuples::lower,
+	// `parse("n * 1")` of a constant text is `data (n * 1)` (card parse-word), before blocks.rs reads data
+	crate::lowering::parse_word::lower,
 	crate::lowering::run_time_blocks::warn_unresolved,
 	crate::lowering::run_time_blocks::lower_interpret,
 	crate::lowering::blocks::lower,
