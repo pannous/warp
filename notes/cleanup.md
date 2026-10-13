@@ -83,7 +83,7 @@ Not worth it (checked):
 - **Merging lowering passes.** About 150 walks, but each is a small, separately testable rewrite. Merging would couple their order, and warp-markup's experience is that such merges cost more than they save. The few passes that run twice (phrase_calls, reflection, getters) say why in pipeline.rs.
 - **children_rewritten vs Node::map_children.** The difference is documented: map_children also enters class bodies. cleanup-rewrite-tails (warp-markup) is folding the remaining hand-written tails.
 - **The emitter's repeated instruction runs.** 77 overlapping 8-line windows, mostly in list_runtime.rs, linear_arrays.rs, node_arithmetic.rs and big_int; same verdict as cleanup-emitter-loops.
-- Closed earlier: cleanup-const-evaluators, cleanup-gc-object, cleanup-emitter-loops. cleanup-ffi-headers stays parked in Later, since it changes behaviour.
+- Closed earlier: cleanup-const-evaluators, cleanup-gc-object, cleanup-emitter-loops. cleanup-ffi-headers done later the same day.
 
 ## Global state (card cleanup-global-state, 2026-10-13)
 src has 66 thread-locals (`thread_local!`). Nearly all are private to their module behind accessor functions. They are
@@ -233,17 +233,13 @@ Done:
   helpers, the linker) is src/host/native.rs, gated once at `mod native` and re-exported (`pub use native::*`)
 
 Left (bigger, needs care):
-- (cleanup-ffi-headers) Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
-  kind_to_valtype) and ffi/header.rs (`extract_function_signature`, multi-line declarations, C types → ValType via
-  map_c_type_to_valtype, pointer classes). get_ffi_signatures uses the first, get_signatures_from_headers the second,
-  and get_ffi_signature mixes both. One parser would change some mappings (Kind::Pointer is i64 there, a pointer is
-  i32 here), so it needs its own card and tests of both tables first. tests/ffi pins ffi_parser's public API.
-  Measured 2026-10-13 on macOS (m, c, SDL2): ffi_parser's table has 514 functions, the header table 725; 309 differ
-  and 11 are only in the first. The differences: FILE* and other pointers i64 there, i32 here; char* results a number
-  there, a text (anyref) here; long double results anyref there, i32 here; a declaration with a trailing macro call
-  (`strtod(…) __DARWIN_ALIAS(strtod)`) misread here (card ffi-header), `char **` parameters dropped here. One parser
-  changes the signatures of hundreds of implicit calls (get_ffi_signature takes the ffi_parser table first), so it is
-  a behaviour change with decisions per difference, not a cleanup: parked in Later.
+- DONE (cleanup-ffi-headers) One C header parser: ffi/header.rs (`extract_function_signature`, multi-line
+  declarations, pointer classes). ffi_parser.rs keeps its public API (parse_declaration, parse_header_file, header
+  search) as an adapter over it; its own parser and cached table are gone. get_ffi_signatures holds only what warp links
+  by hand (LIBC_SIGNATURES, libm f64, ln, host and linear words); every other C function is as its header declares it.
+  Defaults (supervisor-approved): pointers are handles (i32), not raw i64; `char *` is a text; `char **` parameters
+  are left out (`strtol("ff", 16)`); a long double function is refused by name ("sqrtl is a C function using long
+  double, which wasm has no type for"). No existing tests/ffi test changed value. Pins: tests/ffi/test_ffi_one_parser.rs.
 - (cleanup-const-evaluators) real.rs and time.rs are two small constant evaluators with their own Value types and the same Assign/Define arm;
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
   Closed as not worth doing (2026-10-13): what they share is the `name = value` arm (4 lines) and the literals; a

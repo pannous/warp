@@ -3,7 +3,6 @@
 
 use crate::function::{Arg, Signature};
 use crate::type_kinds::Kind;
-use std::collections::HashMap;
 
 /// Include directories searched for headers, in order (a C compiler's order: the first holding a header wins)
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
@@ -103,155 +102,58 @@ fn parse_c_type(s: &str) -> Kind {
 	Kind::from_c_type(s)
 }
 
-/// Extract function signature from a C declaration line
+/// A C declaration as warp kinds; ffi/header.rs reads it, the one C header parser (card cleanup-ffi-headers)
 pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
-	let decl = decl.trim();
-
-	// Skip non-function lines
-	if decl.is_empty()
-		|| decl.starts_with("//")
-		|| decl.starts_with("/*")
-		|| decl.starts_with("*")
-		|| decl.starts_with("#")
-		|| decl.starts_with("typedef")
-		|| decl.starts_with("struct")
-		|| decl.starts_with("enum")
-		|| decl.starts_with("union")
-		|| decl.starts_with("return")
-		|| !decl.contains('(')
-		|| !decl.contains(')')
-		|| decl.contains('[')
-		|| decl.contains("->")
-	{
-		return None;
-	}
-
-	let decl = decl.split("//").next()?.trim();
-
-	// Remove qualifiers
-	let decl = decl
-		.replace("extern \"C\"", "")
-		.replace("extern ", "")
-		.replace("static ", "")
-		.replace("inline ", "")
-		.replace("SDLCALL ", "")
-		.replace("RLAPI ", "");
-	let decl = decl.trim().trim_end_matches(';').trim();
-
-	let paren_pos = decl.find('(')?;
-	let close_paren = crate::ffi::matching_paren(decl, paren_pos)?;
-
-	let before_paren = &decl[..paren_pos];
-	let params_str = &decl[paren_pos + 1..close_paren];
-
-	// Extract function name
-	let parts: Vec<&str> = before_paren.split_whitespace().collect();
-	if parts.is_empty() {
-		return None;
-	}
-
-	// the stars of `FILE *fopen(…)` belong to the return type
-	let (name, pointer_marks) = crate::ffi::split_pointer_marks(parts.last()?);
-
-	if name.is_empty() || !name.chars().next()?.is_alphabetic() || crate::ffi::C_TYPE_WORDS.contains(&name.as_str()) {
-		return None;
-	}
-
-	let return_type_str = if parts.len() > 1 {
-		format!("{} {pointer_marks}", parts[..parts.len() - 1].join(" "))
-	} else {
-		"int".to_string()
-	};
-	let return_kind = parse_c_type(&return_type_str);
-
-	let mut sig = Signature::new();
-
-	// Add return type
-	if return_kind != Kind::Empty {
-		sig.return_types.push(return_kind);
-	}
-
-	if params_str.trim() != "void" && !params_str.trim().is_empty() {
-		for (i, p) in params_str.split(',').enumerate() {
-			let p = p.trim();
-			if p.is_empty() || p == "..." {
-				continue;
-			}
-
-			let p = p.replace("const ", "");
-			let parts: Vec<&str> = p.split_whitespace().collect();
-			if parts.is_empty() {
-				continue;
-			}
-
-			// Extract type and optional name
-			let (type_str, param_name) = if parts.len() == 1 {
-				(parts[0].to_string(), format!("p{}", i))
-			} else {
-				let last = *parts.last().unwrap();
-				let is_name =
-					last.chars()
-						.next()
-						.map(|c| c.is_alphabetic() || c == '_')
-						.unwrap_or(false) && !last.contains('*');
-				if is_name && parts.len() > 1 {
-					(
-						parts[..parts.len() - 1].join(" "),
-						last.trim_start_matches('*').to_string(),
-					)
-				} else {
-					(parts.join(" "), format!("p{}", i))
-				}
-			};
-
-			let kind = parse_c_type(&type_str);
-			sig.parameters.push(Arg::new(param_name, kind));
-		}
-	}
-
-	Some(FfiFunction {
-		name,
-		signature: sig,
-		library: library.to_string(),
-	})
+	crate::ffi::extract_function_signature(decl, library).map(|declared| function_of(&declared))
 }
 
-/// Parse a header file and extract all function signatures
+/// The functions a header file declares, as warp kinds
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiFunction> {
-	let Some(content) = crate::web::read_text(path) else {
-		return vec![];
-	};
-
-	// block comments span lines, and their prose may read like a call (glibc's "because tolower (EOF) must be EOF")
-	let mut in_comment = false;
-	content
-		.lines()
-		.map(|line| crate::ffi::without_block_comments(line, &mut in_comment))
-		.filter_map(|line| parse_declaration(&line, library))
+	crate::ffi::parse_header_file(path, library)
+		.iter()
+		.map(function_of)
 		.collect()
 }
 
-/// Get all FFI signatures by parsing system headers for known libraries
-pub fn get_all_signatures() -> HashMap<String, FfiFunction> {
-	let mut sigs = HashMap::new();
-
-	for library in ["m", "c", "SDL2"] {
-		for path in find_library_headers(library) {
-			for func in parse_header_file(&path, library) {
-				if !sigs.contains_key(&func.name) {
-					sigs.insert(func.name.clone(), func);
-				}
-			}
-		}
+fn function_of(declared: &crate::ffi::FfiHeaderSignature) -> FfiFunction {
+	let mut signature = Signature::new();
+	let return_kind = parse_c_type(&declared.return_type);
+	if return_kind != Kind::Empty {
+		signature.return_types.push(return_kind);
 	}
-
-	sigs
+	for (index, c_type) in declared.param_types.iter().enumerate() {
+		let name = declared
+			.param_names
+			.get(index)
+			.cloned()
+			.unwrap_or_else(|| format!("p{index}"));
+		signature.parameters.push(Arg::new(name, parse_c_type(c_type)));
+	}
+	FfiFunction {
+		name: declared.name.clone(),
+		signature,
+		library: declared.library.clone(),
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use std::path::Path;
+
+	/// libc's and libm's functions by name, as their headers declare them
+	fn get_all_signatures() -> std::collections::HashMap<String, FfiFunction> {
+		["c", "m"]
+			.into_iter()
+			.flat_map(|library| {
+				find_library_headers(library)
+					.into_iter()
+					.map(move |path| (path, library))
+			})
+			.flat_map(|(path, library)| parse_header_file(&path, library))
+			.map(|function| (function.name.clone(), function))
+			.collect()
+	}
 
 	#[test]
 	fn test_parse_simple_function() {
