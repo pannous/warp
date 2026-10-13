@@ -44,7 +44,9 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
   `try` catches. A method `x.parse(…)` is never rewritten. `parse_word::code_of` never reads a file, so
   `parse("a.warp")` is code.
 - Found on the way (card data-quote-lowered): later lowering passes rewrite inside quoted data, so `data (a.warp)`
-  has the op `#`, while the run-time parse keeps `.`.
+  has the op `#`, while the run-time parse keeps `.`. Fixed 2026-10-13: library_words (member access to `#`) and
+  declaration_forms (a literal range written out as its list) skip quoted data; tests/node/test_quote_as_written.rs
+  checks `data (S) == parse(t)` for a run-time t, so a pass that rewrites a quote again fails there.
 
 ## Agreed with warp-operator-shall (2026-10-13)
 - Operators stay Keys in data. `&`/`|` are decided at parse time (Op::BitAnd/BitOr for operands that may be ints,
