@@ -113,6 +113,11 @@ function readBytes(path) {
 	return asFileRead(() => getSync(fileUrl(path), 0, true));
 }
 
+function byteOf(value) {
+	if (Number.isInteger(value) && value >= 0 && value <= 255) return value;
+	throw new Error(`${JSON.stringify(value)} is no byte (0 to 255)`);
+}
+
 // the body of a host call as (pointer, length), or (pointer, -length) of the failure reason, like src/host.rs
 function hostResult(program, action, what) {
 	return hostBytes(program, () => {
@@ -417,6 +422,9 @@ addHostPart({
 		file: {
 			write: (path, content) => { keepWritten(path, contentText(content)); return null; },
 			append: (path, content) => { keepWritten(path, textOfFile(path) + contentText(content)); return null; },
+			// a list of ints 0 to 255, like src/std_adapters.rs bytes_of
+			write_bytes: (path, bytes) => { keepWritten(path, Uint8Array.from(bytes, byteOf)); return null; },
+			read_bytes: path => Array.from(readBytes(path)),
 			exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
