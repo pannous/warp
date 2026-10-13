@@ -133,6 +133,8 @@ mod test_site_holes;
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
 mod test_sleep_run_limit; // card sleep-run-limit
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_status_reason; // card status-reason
 mod test_style_rules;
 mod test_styles;
 mod test_tag_lists;

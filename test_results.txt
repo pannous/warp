@@ -2256,6 +2256,8 @@ PASSED:
   ✓ numbers::test_dynamic_units::use_units_says_it_too
   ✓ numbers::test_exact_parameters::an_exact_parameter_takes_a_decimal
   ✓ numbers::test_exact_parameters::float64_is_the_word_float
+  ✓ numbers::test_exponent_texts::float_of_an_exponent_text
+  ✓ numbers::test_exponent_texts::int_of_an_exponent_text
   ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
   ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
   ✓ numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
@@ -4617,6 +4619,7 @@ PASSED:
   ✓ web::test_site::a_site_with_routes_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
   ✓ web::test_sleep_run_limit::sleeping_does_not_count_toward_the_run_limit
+  ✓ web::test_status_reason::a_status_line_names_the_real_reason
   ✓ web::test_style_rules::a_selector_with_a_value_is_its_color
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
   ✓ web::test_style_rules::hex_colors_in_a_style_sheet
@@ -5115,4 +5118,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5110 passed, 0 failed, 5110 total tested
+12 ignored, 5113 passed, 0 failed, 5113 total tested

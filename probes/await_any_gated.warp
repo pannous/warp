@@ -1,0 +1,8 @@
+// await any gives the first task to finish: slow() cannot end before its gate opens, after the race (card flaky-await-any)
+// 20
+gate = channel()
+slow(g) := { g.receive(); 10 }
+quick() := 20
+r = await any [go slow(gate), go quick()]
+gate.send(0)
+print(r)
