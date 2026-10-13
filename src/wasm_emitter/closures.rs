@@ -547,7 +547,7 @@ impl WasmGcEmitter {
 							field_index: NODE_DATA_FIELD,
 						},
 						I::RefCastNonNull(HeapType::Concrete(closure)),
-						I::LocalTee(closure_local),
+						I::LocalSet(closure_local),
 					],
 				);
 				s.emit_closure_entry(func, closure_local, closure);
