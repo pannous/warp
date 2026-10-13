@@ -1,5 +1,4 @@
 #!/usr/bin/env warp
-#!/usr/bin/env warp
 float sine(float x){
   	if(x<0) return -sine(-x)
     # magical taylor constants

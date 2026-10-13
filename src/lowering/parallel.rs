@@ -86,7 +86,7 @@ pub(crate) fn sequential_warning(node: &Node) -> Option<Node> {
 	}
 	let message =
 		"@parallel runs this in sequence: only `xs.map(f)`, `f all xs` and `go for x in xs { … }` run in parallel";
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, message.to_string())]).err()
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, message.to_string()).weak()]).err()
 }
 
 /// `@parallel` (or another attribute, `@gpu`) on a form or on the start of its first part: `@parallel xs.map(f)`
@@ -314,5 +314,5 @@ fn copied_updates(body: &Node, shared: &[String]) -> Option<Node> {
 	let message = format!(
 		"{name} is updated in a parallel loop: every task updates its own copy; share it: `shared {name} = …` (P106)"
 	);
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&at, message)]).err()
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&at, message).severe()]).err()
 }

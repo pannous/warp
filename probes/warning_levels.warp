@@ -1,0 +1,11 @@
+// card warning-levels: one hint, one weak, one normal and one severe warning
+// warp probes/warning_levels.warp                     shows all four
+// warp --no-hints probes/warning_levels.warp          hides the hint
+// warp --warnings=severe probes/warning_levels.warp   shows only the severe one
+// warp --strict probes/warning_levels.warp            fails from normal: here at the severe one
+square(x) := x * x
+xs = [1, 2, 3]
+@parallel square xs
+on key { if key == ESCAPEE { print "bye" } }
+print one plus two
+"a" + warning("careful")
