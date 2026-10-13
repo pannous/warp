@@ -20,9 +20,56 @@ pub struct Diagnostic {
 	pub topic: Option<String>,
 	/// What "got it" for this expression only remembers: `topic@expression` (expression_key)
 	pub expression_key: Option<String>,
+	/// How much it matters: what is shown (show_from) and what fails under `use strict` (WarningMode::Strict)
+	pub level: Level,
+	/// A hint's text as written, and the form it prefers (the same for a note about the text itself)
+	pub written: Option<String>,
+	pub preferred: Option<String>,
+}
+
+/// How much a diagnostic matters (user, 2026-10-13: hint < weak < normal < severe; errors are no level, they stop the
+/// program). A hint prefers another form, a weak warning notices how the program runs (`@gpu` maps on the CPU), a
+/// normal warning a likely mistake, a severe one code that can never do what it says (a handler nothing emits)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Level {
+	Hint,
+	Weak,
+	#[default]
+	Normal,
+	Severe,
+}
+
+impl Level {
+	pub const ALL: [Level; 4] = [Level::Hint, Level::Weak, Level::Normal, Level::Severe];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			Level::Hint => "hint",
+			Level::Weak => "weak",
+			Level::Normal => "normal",
+			Level::Severe => "severe",
+		}
+	}
+
+	/// The level of its name (`--warnings=weak`, `--strict=severe`)
+	pub fn named(name: &str) -> Option<Level> {
+		Level::ALL.into_iter().find(|level| level.name() == name)
+	}
 }
 
 impl Diagnostic {
+	pub fn level(self, level: Level) -> Self {
+		Diagnostic { level, ..self }
+	}
+
+	pub fn weak(self) -> Self {
+		self.level(Level::Weak)
+	}
+
+	pub fn severe(self) -> Self {
+		self.level(Level::Severe)
+	}
+
 	/// A diagnostic at the source position of `node`, else of its first part that has one (0:0 if the parser recorded none)
 	pub fn at(node: &Node, message: impl Into<String>) -> Self {
 		let position = line_info(node).unwrap_or_default();
@@ -360,9 +407,58 @@ impl fmt::Display for Diagnostic {
 pub enum WarningMode {
 	#[default]
 	Warn,
+	/// Every warning is an error, weak ones too
 	Error,
+	/// The warnings of this level and above are errors: `use strict` and `--strict` (STRICT_LEVEL), `--strict=<level>`
+	Strict(Level),
 	/// Neither shown nor errors: a compile repeating one whose warnings were shown already
 	Quiet,
+}
+
+impl WarningMode {
+	/// The lowest level that is an error; hints never are
+	fn failing_from(self) -> Option<Level> {
+		match self {
+			WarningMode::Error => Some(Level::Weak),
+			WarningMode::Strict(level) => Some(level.max(Level::Weak)),
+			WarningMode::Warn | WarningMode::Quiet => None,
+		}
+	}
+
+	pub fn fails(self, level: Level) -> bool {
+		self.failing_from().is_some_and(|from| level >= from)
+	}
+
+	/// `use strict` inside a mode: the stricter of the two
+	fn strictened(self) -> WarningMode {
+		match self.failing_from() {
+			Some(from) if from <= STRICT_LEVEL => self,
+			_ => WarningMode::Strict(STRICT_LEVEL),
+		}
+	}
+}
+
+/// What `use strict` and `--strict` make errors: normal and severe warnings (user default, 2026-10-13)
+pub const STRICT_LEVEL: Level = Level::Normal;
+
+/// The lowest level printed, process-wide (Hint: everything); lower ones are still recorded for hosts and tests
+static SHOWN_FROM: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(Level::Hint as u8);
+/// Whether this process printed a hint: the CLI then ends with how to hide them
+static ANY_HINT_PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Print the diagnostics of `level` and above (`--warnings=<level>`; `--no-hints` is Weak)
+pub fn show_from(level: Level) {
+	SHOWN_FROM.store(level as u8, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether diagnostics of `level` are printed
+pub fn is_shown(level: Level) -> bool {
+	level as u8 >= SHOWN_FROM.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Whether this process printed a hint or note
+pub fn any_hint_printed() -> bool {
+	ANY_HINT_PRINTED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// `use strict` in warp source makes warnings errors for that program
@@ -426,39 +522,111 @@ pub(crate) fn note_said() {
 	SAID.with(|said| said.set(said.get() + 1));
 }
 
-/// Compile-time warnings: printed in Warn mode, but those said "got it" to, each followed by its "got it?"; the first
-/// one is the error in Error mode
-pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
-	if !warnings.is_empty() {
+/// Compile-time diagnostics: the first one the warning mode fails at is the error; otherwise each is said (say), but
+/// those said "got it" to
+pub fn report(diagnostics: &[Diagnostic]) -> Result<(), Node> {
+	if !diagnostics.is_empty() {
 		note_said();
 	}
-	match (warning_mode(), warnings.first()) {
-		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
-		(WarningMode::Quiet, _) => Ok(()),
-		_ => {
-			let shown: Vec<Diagnostic> = warnings
-				.iter()
-				.filter(|warning| !warning.is_silenced())
-				.cloned()
-				.collect();
-			for warning in &shown {
-				eprintln!("warning: {warning}");
-				if let Some(excerpt) = shown_excerpt(warning.line, warning.column) {
-					eprintln!("{excerpt}");
-				}
-				if let Some((topic, written)) = warning.acknowledgeable() {
-					offer_acknowledgement(topic, written);
-				}
+	let mode = warning_mode();
+	if let Some(failing) = diagnostics.iter().find(|diagnostic| mode.fails(diagnostic.level)) {
+		return Err(failing.clone().into_error());
+	}
+	if mode != WarningMode::Quiet {
+		for diagnostic in diagnostics.iter().filter(|diagnostic| !diagnostic.is_silenced()) {
+			say(diagnostic.clone());
+		}
+	}
+	Ok(())
+}
+
+thread_local! {
+	/// How many capture_hints scopes are open: hints are recorded only for them (nobody else reads them)
+	static HINT_CAPTURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+	static SAID_HINTS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The one way a diagnostic of any level reaches the user: recorded for hosts (take_warnings, capture_hints), printed
+/// to stderr from the shown level up (show_from), and followed by its "got it?" when printed. Under HintMode::Once a
+/// diagnostic said before is not said again. Whether it was printed
+pub fn say(diagnostic: Diagnostic) -> bool {
+	if crate::normalize::said_before(&diagnostic) {
+		return false;
+	}
+	note_said();
+	let printed = is_shown(diagnostic.level);
+	if printed {
+		print(&diagnostic);
+	}
+	if let Some((topic, written)) = diagnostic.acknowledgeable() {
+		offer_acknowledgement(topic, written, diagnostic.level);
+	}
+	match diagnostic.level {
+		Level::Hint if HINT_CAPTURES.with(|open| open.get()) > 0 => {
+			SAID_HINTS.with(|hints| hints.borrow_mut().push(diagnostic))
+		}
+		Level::Hint => {}
+		_ => COMPILE_WARNINGS.with(|reported| reported.borrow_mut().push(diagnostic)),
+	}
+	printed
+}
+
+/// A hint `prefer <preferred> over <written>` (a note when they are the same) with its reason below; a warning with the
+/// source line it names
+fn print(diagnostic: &Diagnostic) {
+	match (&diagnostic.written, &diagnostic.preferred) {
+		(Some(written), Some(preferred)) => {
+			ANY_HINT_PRINTED.store(true, std::sync::atomic::Ordering::Relaxed);
+			let position = match diagnostic.line {
+				0 => String::new(),
+				line => format!(
+					" {}",
+					paint(Color::Gray, &crate::meta::place_text(diagnostic.file.as_deref(), line, diagnostic.column))
+				),
+			};
+			// a note about the text as written (`await job within 100 ms`) prefers nothing else
+			match preferred == written {
+				true => eprintln!("{}{position}: {}", paint(Color::Cyan, "note"), paint(Color::Green, written)),
+				false => eprintln!(
+					"{}{position}: prefer {} over {}",
+					paint(Color::Cyan, "hint"),
+					paint(Color::Green, preferred),
+					paint(Color::Yellow, written)
+				),
 			}
-			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend(shown));
-			Ok(())
+			eprintln!("      {}", diagnostic.message);
+		}
+		_ => {
+			let label = match diagnostic.level {
+				Level::Normal => "warning".to_string(),
+				level => format!("warning ({})", level.name()),
+			};
+			eprintln!("{label}: {diagnostic}");
+			if let Some(excerpt) = shown_excerpt(diagnostic.line, diagnostic.column) {
+				eprintln!("{excerpt}");
+			}
 		}
 	}
 }
 
-/// The compile-time warnings reported on this thread since the last call (a host without a terminal shows them)
+/// The compile-time warnings (every level but hints) said on this thread since the last call (a host without a
+/// terminal shows them)
 pub fn take_warnings() -> Vec<Diagnostic> {
 	COMPILE_WARNINGS.with(|reported| std::mem::take(&mut *reported.borrow_mut()))
+}
+
+/// Run `body` and return it with the hints said meanwhile on this thread (still printed as always)
+pub fn capture_hints<T>(body: impl FnOnce() -> T) -> (T, Vec<Diagnostic>) {
+	let start = SAID_HINTS.with(|hints| hints.borrow().len());
+	HINT_CAPTURES.with(|open| open.set(open.get() + 1));
+	let result = body();
+	HINT_CAPTURES.with(|open| open.set(open.get() - 1));
+	let hints = SAID_HINTS.with(|hints| {
+		let mut hints = hints.borrow_mut();
+		let start = start.min(hints.len());
+		hints.split_off(start)
+	});
+	(result, hints)
 }
 
 /// The errors with fixes made on this thread since the last call (the page offers their fixes when the program fails)
@@ -469,7 +637,9 @@ pub fn take_error_diagnostics() -> Vec<Diagnostic> {
 /// A warning the running program reports with `warning(message)`
 pub fn report_runtime_warning(message: &str) {
 	note_said();
-	eprintln!("warning: {message}");
+	if is_shown(Level::Normal) {
+		eprintln!("warning: {message}");
+	}
 	RUNTIME_WARNINGS.with(|warnings| warnings.borrow_mut().push(message.to_string()));
 }
 
@@ -845,14 +1015,14 @@ fn remember_acknowledged(topic: &str) {
 
 /// After a warning or note of `topic` was shown, once per run: does the user say "got it", for this expression or all of
 /// the kind? Then it is not shown again
-pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
+pub(crate) fn offer_acknowledgement(topic: &str, written: &str, level: Level) {
 	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
 		return;
 	}
-	// "got it?" about a hint nobody saw (hints not printed) is not asked
+	// "got it?" about something nobody saw (below the shown level) is not asked
 	let acknowledger = ACKNOWLEDGER
 		.with(|current| current.borrow().clone())
-		.filter(|_| crate::normalize::hints_printed());
+		.filter(|_| is_shown(level));
 	match acknowledger.map_or(GotIt::No, |acknowledger| acknowledger.acknowledge(topic, written)) {
 		GotIt::This => remember_acknowledged(&expression_key(topic, written)),
 		GotIt::All => remember_acknowledged(topic),
@@ -863,34 +1033,18 @@ pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || {
-		crate::normalize::show_hint(
-			written,
-			preferred,
-			reason,
-			Some(crate::normalize::rewrite(written, preferred, reason)),
-		)
-	});
+	let fix = crate::normalize::rewrite(written, preferred, reason);
+	advise_once(topic, written, preferred, reason, Some(fix));
 }
 
 /// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
-	noted_once(topic, written, || {
-		crate::normalize::show_hint(written, preferred, reason, fix)
-	});
-}
-
-fn noted_once(topic: &str, written: &str, show: impl FnOnce() -> bool) {
-	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off || is_quiet();
-	if hints_off
+	let silenced = is_quiet()
 		|| is_acknowledged(topic, written)
 		|| silenced_by_comment(crate::normalize::hint_line())
-		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic))
-	{
-		return;
-	}
-	if show() {
-		offer_acknowledgement(topic, written);
+		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
+	if !silenced {
+		crate::normalize::show_hint(written, preferred, reason, fix, topic);
 	}
 }
 
@@ -920,7 +1074,7 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 		assumptions.push(diagnostic.clone());
 		asked_before
 	});
-	if warning_mode() == WarningMode::Error {
+	if warning_mode().fails(diagnostic.level) {
 		return Err(diagnostic.into_error());
 	}
 	if asked_before {
@@ -941,7 +1095,7 @@ pub fn take_assumptions() -> Vec<Diagnostic> {
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 	SOURCE.with(|source| *source.borrow_mut() = code.to_string());
 	match code.lines().any(|line| line.split_whitespace().eq(STRICT_PRAGMA)) {
-		true => with_warning_mode(WarningMode::Error, body),
+		true => with_warning_mode(warning_mode().strictened(), body),
 		false => body(),
 	}
 }
@@ -952,7 +1106,7 @@ pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
 	let previous = COMMENTS_AS_META.with(|flag| flag.replace(comments));
 	let result = match without_strict_pragma(program) {
-		(program, true) => with_warning_mode(WarningMode::Error, || body(program)),
+		(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
 		(program, false) => body(program),
 	};
 	COMMENTS_AS_META.with(|flag| flag.set(previous));

@@ -697,7 +697,7 @@ fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
 	}
 	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, format!(
 		"this module runs blocks known only at run time: its host must provide host.{} (the warp CLI, or web/playground/host.js, which loads warp.wasm on first use)",
-		crate::host::RUN_BLOCK))])
+		crate::host::RUN_BLOCK)).weak()])
 }
 
 /// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.

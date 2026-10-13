@@ -33,7 +33,6 @@ pub struct HintPosition {
 
 thread_local! {
 	static HINT_POSITION: RefCell<HintPosition> = RefCell::new(HintPosition::default());
-	static CAPTURED_HINTS: RefCell<Option<Vec<CapturedHint>>> = const { RefCell::new(None) };
 	static HINTS_MUTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -45,7 +44,7 @@ pub fn without_hints<T>(action: impl FnOnce() -> T) -> T {
 	result
 }
 
-/// A hint recorded instead of only printed, see `capture_hints`
+/// A hint as tests and hosts read it: a view of a Diagnostic of level Hint (see `capture_hints`)
 #[derive(Debug, Clone, PartialEq)]
 pub struct CapturedHint {
 	pub original: String,
@@ -72,14 +71,26 @@ impl CapturedHint {
 	}
 }
 
+impl From<crate::diagnostic::Diagnostic> for CapturedHint {
+	fn from(hint: crate::diagnostic::Diagnostic) -> Self {
+		let position = match hint.line {
+			0 => String::new(),
+			line => crate::meta::place_text(hint.file.as_deref(), line, hint.column),
+		};
+		CapturedHint {
+			original: hint.written.unwrap_or_default(),
+			canonical: hint.preferred.unwrap_or_default(),
+			position,
+			reason: hint.message,
+			fix: hint.fixes.into_iter().next(),
+		}
+	}
+}
+
 /// Run `action` and return the hints it emitted on this thread (hints are still printed)
 pub fn capture_hints<T>(action: impl FnOnce() -> T) -> (T, Vec<CapturedHint>) {
-	CAPTURED_HINTS.with(|captured| *captured.borrow_mut() = Some(Vec::new()));
-	let result = action();
-	let hints = CAPTURED_HINTS
-		.with(|captured| captured.borrow_mut().take())
-		.unwrap_or_default();
-	(result, hints)
+	let (result, hints) = crate::diagnostic::capture_hints(action);
+	(result, hints.into_iter().map(CapturedHint::from).collect())
 }
 
 /// Set the current position for hint messages
@@ -111,6 +122,7 @@ pub fn clear_hint_position() {
 }
 
 /// Get position string in clickable format (file:line:col or line:col)
+#[cfg(test)]
 fn position_string() -> String {
 	HINT_POSITION.with(|pos| {
 		let p = pos.borrow();
@@ -356,28 +368,6 @@ pub enum HintMode {
 	Off,
 }
 
-/// Hints and notes are printed by default; the CLI's `--no-hints` or WARP_HINTS=0 turn printing off for the whole
-/// process (user 2026-10-09, card hints-toggle). Off, they are still recorded: `capture_hints` (the playground's
-/// report, its fix buttons, the tests) sees every hint
-static HINTS_PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
-/// Whether this process printed a hint: the CLI then ends with how to hide them
-static ANY_HINT_PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Print hints and notes to stderr (on, the default) or only record them (off)
-pub fn print_hints(on: bool) {
-	HINTS_PRINTED.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// Whether hints and notes are printed to stderr
-pub fn hints_printed() -> bool {
-	HINTS_PRINTED.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// Whether this process printed a hint or note
-pub fn any_hint_printed() -> bool {
-	ANY_HINT_PRINTED.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 /// Set the hint mode of this thread's compilations
 pub fn set_hint_mode(mode: HintMode) {
 	HINT_MODE.with(|current| current.set(mode));
@@ -416,66 +406,46 @@ pub fn advise(original: &str, preferred: &str, reason: &str, fix: Option<crate::
 /// A hint the user can say "got it" to, for this expression or all hints of its reason (card hints-dismissed)
 fn acknowledgeable_hint(original: &str, canonical: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
 	let topic = format!("{HINT_TOPIC_PREFIX}{reason}");
-	if crate::diagnostic::is_acknowledged(&topic, original) {
-		return;
-	}
-	if show_hint(original, canonical, reason, fix) {
-		crate::diagnostic::offer_acknowledgement(&topic, original);
+	if !crate::diagnostic::is_acknowledged(&topic, original) {
+		show_hint(original, canonical, reason, fix, &topic);
 	}
 }
 
-/// Shows the hint, unless hints are off or it was shown before under HintMode::Once: whether it was shown
-pub(crate) fn show_hint(original: &str, canonical: &str, reason: &str, fix: Option<crate::fixits::Fix>) -> bool {
-	let mode = hint_mode();
-	if mode == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
+/// Says the hint (a Diagnostic of level Hint, diagnostic::say) at the hint position, unless hints are off: whether it
+/// was printed
+pub(crate) fn show_hint(
+	original: &str,
+	canonical: &str,
+	reason: &str,
+	fix: Option<crate::fixits::Fix>,
+	topic: &str,
+) -> bool {
+	if hint_mode() == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
 		return false;
 	}
-
-	let key = format!("{}|{}", original, canonical);
-
-	if mode == HintMode::Once && !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key)) {
-		return false;
+	let position = HINT_POSITION.with(|position| position.borrow().clone());
+	let hint = crate::diagnostic::Diagnostic {
+		message: reason.to_string(),
+		line: position.line,
+		column: position.column,
+		file: position.file.filter(|_| position.line > 0),
+		fixes: fix.into_iter().collect(),
+		level: crate::diagnostic::Level::Hint,
+		written: Some(original.to_string()),
+		preferred: Some(canonical.to_string()),
+		..Default::default()
 	}
+	.about(topic, original);
+	crate::diagnostic::say(hint)
+}
 
-	crate::diagnostic::note_said();
-	let pos = position_string();
-	CAPTURED_HINTS.with(|captured| {
-		if let Some(hints) = captured.borrow_mut().as_mut() {
-			hints.push(CapturedHint {
-				original: original.to_string(),
-				canonical: canonical.to_string(),
-				position: pos.clone(),
-				reason: reason.to_string(),
-				fix,
-			});
-		}
-	});
-	if !hints_printed() {
-		return true;
-	}
-	ANY_HINT_PRINTED.store(true, std::sync::atomic::Ordering::Relaxed);
-	use crate::diagnostic::{paint, Color};
-	let position = if pos.is_empty() {
-		String::new()
-	} else {
-		format!(" {}", paint(Color::Gray, &pos))
+/// Under HintMode::Once: whether this diagnostic was said before on this thread (remembers it otherwise)
+pub(crate) fn said_before(diagnostic: &crate::diagnostic::Diagnostic) -> bool {
+	let key = match (&diagnostic.written, &diagnostic.preferred) {
+		(Some(written), Some(preferred)) => format!("{written}|{preferred}"),
+		_ => format!("{}@{}:{}", diagnostic.message, diagnostic.line, diagnostic.column),
 	};
-	// a note about the text as written (`await job within 100 ms`) prefers nothing else
-	match canonical == original {
-		true => eprintln!(
-			"{}{position}: {}",
-			paint(Color::Cyan, "note"),
-			paint(Color::Green, original)
-		),
-		false => eprintln!(
-			"{}{position}: prefer {} over {}",
-			paint(Color::Cyan, "hint"),
-			paint(Color::Green, canonical),
-			paint(Color::Yellow, original)
-		),
-	}
-	eprintln!("      {}", reason);
-	true
+	hint_mode() == HintMode::Once && !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key))
 }
 
 // ============================================================================

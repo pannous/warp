@@ -330,7 +330,7 @@ impl<'a> Loader<'a> {
 				"{} shadows the standard module {name}: its text differs from the one warp embeds",
 				path.display()
 			);
-			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(statement, shadowing)])?;
+			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(statement, shadowing).weak()])?;
 		}
 		self.load(import, name, path)
 	}

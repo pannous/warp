@@ -663,7 +663,8 @@ fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::diagnostic::Diagnost
 		warnings.push(crate::diagnostic::Diagnostic::at(
 			node,
 			format!("{reason}, so this runs on the CPU"),
-		))
+		)
+		.weak())
 	};
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign, value)
