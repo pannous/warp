@@ -95,7 +95,8 @@ def main():
 		declarations.append(f"mod {child};")
 		visibilities = {item.group(2) for item in map(ITEM.match, body) if item and not item.group(1)}
 		if visibilities:  # methods alone need no re-export; the re-export is as visible as the most visible item
-			reexport = next((v for v in ("pub ", "pub(crate) ") if v in visibilities), "")
+			wider = sorted(v for v in visibilities if v.startswith("pub(in "))
+			reexport = next((v for v in ["pub ", "pub(crate) "] + wider if v in visibilities), "")
 			declarations.append(f"{reexport}use {child}::*;")
 	for first, last in sorted(all_spans, reverse=True):
 		del lines[first:last + 1]
