@@ -13,6 +13,7 @@ use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::optional_field;
 use crate::warp_parser::subscript;
 use crate::words::COUNT_WORD;
 use crate::words::MAP_WORD;
@@ -335,8 +336,12 @@ pub(crate) fn is_map_pattern(pattern: &Node) -> bool {
 	}
 }
 
-/// A field of a map pattern as its name and its pattern: `{name}` binds the field to its own name
+/// A field of a map pattern as its name and its pattern: `{name}` binds the field to its own name; `debug?: bool` is
+/// the optional field (card schemas)
 fn map_field(part: &Node) -> Option<(String, &Node)> {
+	if let Some(field) = optional_field(part) {
+		return map_field(field);
+	}
 	match part.drop_meta() {
 		Node::Symbol(name) if rest_pattern(part).is_none() => Some((name.clone(), part)),
 		Node::Key(name, Op::Colon, pattern) if matches!(name.drop_meta(), Node::Symbol(_) | Node::Text(_)) => {
@@ -390,10 +395,21 @@ impl<'a> Matched<'a> {
 				// a map of one field is a pair
 				let is = |spec| call(crate::words::IS_TYPE, vec![path.clone(), text(spec)]);
 				self.tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_SPEC)));
-				for (name, part) in fields.iter().filter_map(map_field) {
-					self.tests
-						.push(call(COLLECTION_CONTAINS, vec![path.clone(), Node::Text(name.clone())]));
+				for field_part in fields {
+					let Some((name, part)) = map_field(field_part) else {
+						continue;
+					};
+					let present = call(COLLECTION_CONTAINS, vec![path.clone(), Node::Text(name.clone())]);
 					let field = subscript(path.clone(), Node::Text(name.clone()));
+					if optional_field(field_part).is_some() {
+						// missing, or there and matching
+						let Matched { tests, bindings, .. } = Matched::of(part, field, self.names);
+						let missing = key(Node::Empty, Op::Not, present);
+						self.tests.push(key(missing, Op::Or, joined(tests, Op::And)));
+						self.bindings.extend(bindings);
+						continue;
+					}
+					self.tests.push(present);
 					match part.drop_meta() {
 						Node::Symbol(shorthand) if *shorthand == name => self.bind(part, field), // `{text}` too
 						_ => self.pattern(part, field),
@@ -663,10 +679,11 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 	match pattern.drop_meta() {
 		Node::Key(empty, op, _) => matches!(empty.drop_meta(), Node::Empty) && op.is_ordering(),
 		Node::List(items, _, _) if is_list_pattern(pattern) => items.iter().any(|part| has_open_part(part, names)),
-		Node::List(fields, _, _) if is_map_pattern(pattern) => fields
-			.iter()
-			.filter_map(map_field)
-			.any(|(_, part)| has_open_part(part, names)),
+		// a schema `{port: int, debug?: bool}`: no map holds a type or an optional field
+		Node::List(fields, _, _) if is_map_pattern(pattern) => fields.iter().any(|part| {
+			optional_field(part).is_some()
+				|| map_field(part).is_some_and(|(_, part)| is_type_word(part) || has_open_part(part, names))
+		}),
 		Node::Symbol(name) => name == WILDCARD || !names.contains(name) && !is_type_word(pattern),
 		_ => false,
 	}

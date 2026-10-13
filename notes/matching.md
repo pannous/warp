@@ -152,7 +152,12 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
    names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
    Open: `tree replace p with q` (rebuilding maps at run time), `found = [[…]] find P` parses as an assignment first.
-6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
+6. Schemas: `json(text) is Config` with `pattern Config = {port: int, host: text, debug?: bool}`. Done (card schemas):
+   a map pattern whose field is a type word or optional is a pattern for `is` (switch.rs has_open_part; in list
+   patterns type words still compare as values). `debug?: bool` parses as the elvis `debug ? debug : bool`, recognised
+   by type_kinds.rs optional_field (shared with type bodies): missing, or there and matching. Fields not named are
+   allowed, as in every map pattern. Note `{port: p, host: h}` compares host with the unit h (3600), no binding.
+   Tests tests/control/test_schemas.rs, probe probes/matching/schemas.warp.
 7. Code patterns: quoted code with holes, `data($a + 0) => a`, matched against `parse("…")` or `data (…)` (card
    parse-word, notes/parse_word.md; the holes are card code-holes). Backticks stay template text.
 7. Code patterns: quoted code with holes, `data($a + 0) => a` (backticks stay template text, notes/parse_word.md).
