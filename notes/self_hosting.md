@@ -82,5 +82,5 @@ number, yes, no or ø as itself, every other node a list tagged by its kind (["k
   twin uses `x is list`.
 - The entity pass (uniscript_entities::expand_entities) also ended a text at an escaped quote and turned `"\"\\:infinity"`
   into `"\∞`: text_or_comment_end now skips escapes (same card). A Data node without a unit description is written
-  `Data(…)`, so its view carries that text. warp writes small floats with an exponent (`"" + 2.5e-6` is `2.5e-6`),
-  Rust in plain decimal (0.0000025): the twin's `number_text` expands the exponent.
+  `Data(…)`, so its view carries that text. Small floats keep their exponent on both sides (`2.5e-6`, decision
+  float-text): Node's Display writes numbers as Number does (writes-node).

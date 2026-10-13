@@ -50,23 +50,10 @@ attribute_prefix(view:any) := {
 
 serialize(view:any) := written(view, yes)
 
-// a number as Rust writes it, without exponent: 2.5e-6 is 0.0000025
-number_text(number:any) := {
-	parts = split("" + number, "e")
-	if #parts == 1 { return parts#1 }
-	sign = if starts_with(parts#1, "-") then "-" else ""
-	pieces = split(remove_prefix(parts#1, "-"), ".")
-	digits = join(pieces, "")
-	point = #(pieces#1) + int(parts#2)
-	if point <= 0 { return sign + "0." + (0 - point) times "0" + digits }
-	if point >= #digits { return sign + digits + (point - #digits) times "0" }
-	sign + digits[0:point] + "." + digits[point:]
-}
-
 // with_attributes: a key prints its value's annotations in front of itself, so the value leaves them out
 written(view:any, with_attributes:any) := {
 	if view is bool { return if view then yes_text else no_text }
-	if view is number { return number_text(view) }
+	if view is number { return "" + view }
 	if is_empty(view) { return empty_text }
 	tag = kind(view)
 	if tag == "symbol" { return view#2 }
@@ -117,7 +104,7 @@ operand_text(left:any) := if kind(bare(left)) == "text" or kind(bare(left)) == "
 
 // a node as Rust's Display shows it: texts and symbols bare, list items with their separator and a space
 shown(view:any) := {
-	if view is number { return number_text(view) }
+	if view is number { return "" + view }
 	tag = kind(view)
 	if tag == "symbol" or tag == "text" or tag == "data" or tag == "number" { return view#2 }
 	if tag == "char" { return "" + view#2 }

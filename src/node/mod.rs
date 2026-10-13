@@ -867,9 +867,8 @@ impl fmt::Display for Separator {
 impl fmt::Display for Node {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Node::Number(Number::Int(n)) => write!(f, "{}", n),
-			Node::Number(Number::Float(fl)) => write!(f, "{}", fl),
-			Node::Number(Number::Real(real)) => write!(f, "{}", real),
+			// a float as its shortest exact text (decision float-text), as Number writes it
+			Node::Number(number @ (Number::Int(_) | Number::Float(_) | Number::Real(_))) => write!(f, "{}", number),
 			Node::Number(n) => write!(f, "{:?}", n),
 			Text(s) | Symbol(s) => write!(f, "{}", s),
 			Char(c) => write!(f, "{}", c),
