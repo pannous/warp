@@ -75,6 +75,8 @@ notes/open_decisions.md.
   cleanly (pattern matching on tree shapes, a `parse` word giving real Nodes, tagged unions, a text cursor, bytes and
   bits, deep recursion, fast big literals; topic parser-features) and the Rust code has had a proper cleanup (topic
   cleanup). What exists stays: lexer, serializer and parser twins with their differential tests on main.
+- rust-forms-welcome: warp may read Rust's own forms (topic rust-reading), generics `<T>` included, as long as every
+  one has a nicer warp form of its own; the Rust form is an accepted alternative, the warp form stays canonical.
 - warning-levels: diagnostics get levels hint < weak < normal < severe (no "strong"); errors stay separate.
 - hints-are-warnings (supervisor, from the user's worry, undoable): hints and warnings become one system, one
   Diagnostic with a level, one collector, printer and threshold; `--no-hints` and `use strict` become thresholds
