@@ -15,7 +15,10 @@ fn test_cargo_crate_free_functions() {
 fn test_cargo_crate_struct_is_a_resource() {
 	is!("use cargo regex; regex.escape(\"a.b\")", "a\\.b");
 	is!("use cargo regex; r = regex.Regex(\"a+\"); r.is_match(\"caaat\")", true);
-	is!("use cargo regex; r = regex.Regex(\"a+\"); r.replace_all(\"caaat\", \"-\")", "c-t");
+	is!(
+		"use cargo regex; r = regex.Regex(\"a+\"); r.replace_all(\"caaat\", \"-\")",
+		"c-t"
+	);
 	is!("use cargo regex; r = regex.Regex(\"[0-9]+\"); r.as_str()", "[0-9]+");
 }
 

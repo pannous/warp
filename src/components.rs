@@ -263,14 +263,20 @@ impl Loaded {
 				(None, Some(bracketed)) => match (bracketed.split_once(']'), &owner) {
 					(Some(("constructor", resource)), None) => resource == kebab_case(member),
 					(Some(("constructor", resource)), Some(owner)) => resource == owner && function == "new",
-					(Some(("static", function_of)), _) => function_of.split_once('.').is_some_and(|(resource, named)| {
-						owner.as_ref().is_none_or(|owner| owner == resource) && names_match(named, function)
-					}),
+					(Some(("static", function_of)), _) => {
+						function_of.split_once('.').is_some_and(|(resource, named)| {
+							owner.as_ref().is_none_or(|owner| owner == resource) && names_match(named, function)
+						})
+					}
 					_ => false,
 				},
 			})
 			// `regex.Regex("a+")` of a resource without a constructor: its static `new` (a Rust crate's, src/cargo_crates.rs)
-			.or_else(|| self.functions.iter().find(|(name, _)| kind.is_none() && *name == static_new));
+			.or_else(|| {
+				self.functions
+					.iter()
+					.find(|(name, _)| kind.is_none() && *name == static_new)
+			});
 		let Some((_, index)) = found else {
 			let known: Vec<&str> = self
 				.functions
@@ -431,14 +437,9 @@ impl Handles<'_> {
 					.to_string(),
 			),
 			// a text where bytes are wanted: its UTF-8 (`hex.encode("hi")`, `crc32fast.hash("abc")`)
-			Type::List(list) if matches!(list.ty(), Type::U8) && argument.is_string() => Val::List(
-				argument
-					.as_str()
-					.unwrap_or_default()
-					.bytes()
-					.map(Val::U8)
-					.collect(),
-			),
+			Type::List(list) if matches!(list.ty(), Type::U8) && argument.is_string() => {
+				Val::List(argument.as_str().unwrap_or_default().bytes().map(Val::U8).collect())
+			}
 			Type::List(list) => Val::List(
 				items(argument)?
 					.iter()

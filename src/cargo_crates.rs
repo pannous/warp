@@ -19,7 +19,8 @@ const WRAPPERS: &str = "wrappers";
 const FAILED: &str = "failed";
 /// raise when the generated wrappers change: the components of older generators stay unused
 const COMPONENTS: &str = "components-v3";
-const WORKSPACE_MANIFEST: &str = "[workspace]\nmembers = [\"wrappers/*\"]\nresolver = \"2\"\n\n[profile.release]\nopt-level = \"s\"\nstrip = true\n";
+const WORKSPACE_MANIFEST: &str =
+	"[workspace]\nmembers = [\"wrappers/*\"]\nresolver = \"2\"\n\n[profile.release]\nopt-level = \"s\"\nstrip = true\n";
 const WIT_BINDGEN: &str = "0.46";
 const TARGET: &str = "wasm32-wasip2";
 const WRAPPER_PREFIX: &str = "warp-crate-";
@@ -94,7 +95,17 @@ fn build(name: &str) -> Result<PathBuf, String> {
 	let package = format!("{name}@{version}");
 	cargo(
 		&wrapper,
-		&["rustdoc", "-p", &package, "--lib", "--", "-Z", "unstable-options", "--output-format", "json"],
+		&[
+			"rustdoc",
+			"-p",
+			&package,
+			"--lib",
+			"--",
+			"-Z",
+			"unstable-options",
+			"--output-format",
+			"json",
+		],
 		true,
 	)?;
 	let doc = target.join("doc").join(format!("{}.json", rust_name(name)));
@@ -103,7 +114,10 @@ fn build(name: &str) -> Result<PathBuf, String> {
 	let mut api = Api::of(&doc, &rust_name(name));
 	let wasm = compile_dropping_refused(&wrapper, name, &mut api, &target)?;
 	std::fs::create_dir_all(components()).map_err(|e| e.to_string())?;
-	let stem = components().join(format!("{name}@{version}")).to_string_lossy().into_owned();
+	let stem = components()
+		.join(format!("{name}@{version}"))
+		.to_string_lossy()
+		.into_owned();
 	let built = PathBuf::from(format!("{stem}.wasm"));
 	let partial = PathBuf::from(format!("{stem}.wasm.{}", std::process::id()));
 	std::fs::copy(&wasm, &partial).map_err(|e| format!("{}: {e}", wasm.display()))?;
@@ -201,7 +215,16 @@ fn resolved_version(metadata: &Value, name: &str) -> Result<String, String> {
 /// Build the wrapper; a function the compiler refuses is dropped and the wrapper built again
 fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &Path) -> Result<PathBuf, String> {
 	let package = format!("{WRAPPER_PREFIX}{name}");
-	let arguments = ["build", "--release", "--target", TARGET, "-p", &package, "--message-format", "json"];
+	let arguments = [
+		"build",
+		"--release",
+		"--target",
+		TARGET,
+		"-p",
+		&package,
+		"--message-format",
+		"json",
+	];
 	for _ in 0..BUILD_ROUNDS {
 		if api.functions.is_empty() && api.resources.is_empty() {
 			return Err(format!(
@@ -223,7 +246,12 @@ fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &
 		let (refused_lines, rendered) = refused(&messages);
 		let refused_items: HashSet<String> = refused_lines
 			.iter()
-			.filter_map(|line| lines.iter().find(|(range, _)| range.contains(line)).map(|(_, item)| item.clone()))
+			.filter_map(|line| {
+				lines
+					.iter()
+					.find(|(range, _)| range.contains(line))
+					.map(|(_, item)| item.clone())
+			})
 			.collect();
 		if refused_items.is_empty() {
 			let stderr = String::from_utf8_lossy(&output.stderr);
@@ -234,21 +262,29 @@ fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &
 		}
 		api.drop_items(&refused_items);
 	}
-	Err(format!("the wrapper of crate {name} still does not build after {BUILD_ROUNDS} rounds"))
+	Err(format!(
+		"the wrapper of crate {name} still does not build after {BUILD_ROUNDS} rounds"
+	))
 }
 
 /// The lines of src/lib.rs cargo's JSON errors name, and the errors as rustc printed them
 fn refused(messages: &str) -> (Vec<usize>, Vec<String>) {
 	let mut lines = vec![];
 	let mut rendered = vec![];
-	for message in messages.lines().filter_map(|line| serde_json::from_str::<Value>(line).ok()) {
+	for message in messages
+		.lines()
+		.filter_map(|line| serde_json::from_str::<Value>(line).ok())
+	{
 		let message = &message["message"];
 		if message["level"] != "error" {
 			continue;
 		}
 		rendered.extend(message["rendered"].as_str().map(String::from));
 		for span in message["spans"].as_array().into_iter().flatten() {
-			if span["file_name"].as_str().is_some_and(|file| file.ends_with("src/lib.rs")) {
+			if span["file_name"]
+				.as_str()
+				.is_some_and(|file| file.ends_with("src/lib.rs"))
+			{
 				lines.extend(span["line_start"].as_u64().map(|line| line as usize));
 			}
 		}
@@ -408,7 +444,9 @@ impl<'a> Reader<'a> {
 		for id in module["inner"]["module"]["items"].as_array().into_iter().flatten() {
 			let Some(item) = self.item(id) else { continue };
 			if let Some(reexport) = item["inner"].get("use") {
-				let Some(target) = reexport.get("id").and_then(|id| self.item(id)) else { continue };
+				let Some(target) = reexport.get("id").and_then(|id| self.item(id)) else {
+					continue;
+				};
 				let key = reexport["id"].to_string();
 				if reexport["is_glob"] == true {
 					if seen.insert(key) && target["inner"].get("module").is_some() {
@@ -446,7 +484,11 @@ impl<'a> Reader<'a> {
 	/// A parameter given as a generic with these bounds: a text for `AsRef<str>`, `Into<String>`…, bytes for
 	/// `AsRef<[u8]>`; any other trait is tried as a text too and dropped if the compiler refuses
 	fn bounded(&self, bounds: &[&Value]) -> Option<Conversion> {
-		let traits: Vec<&Value> = bounds.iter().filter_map(|bound| bound.get("trait_bound")).map(|bound| &bound["trait"]).collect();
+		let traits: Vec<&Value> = bounds
+			.iter()
+			.filter_map(|bound| bound.get("trait_bound"))
+			.map(|bound| &bound["trait"])
+			.collect();
 		let bytes = traits.iter().any(|t| {
 			type_arguments(t)
 				.first()
@@ -455,7 +497,10 @@ impl<'a> Reader<'a> {
 		match traits.as_slice() {
 			[] => None,
 			_ if bytes => Some(Conversion::same("list<u8>", "Vec<u8>")),
-			_ if traits.iter().all(|t| STRING_TRAITS.contains(&last_segment(t["path"].as_str().unwrap_or("")))) => {
+			_ if traits
+				.iter()
+				.all(|t| STRING_TRAITS.contains(&last_segment(t["path"].as_str().unwrap_or("")))) =>
+			{
 				Some(Conversion::same("string", "String"))
 			}
 			_ => Some(Conversion::new("string", "String", "{}.as_str()")),
@@ -465,7 +510,10 @@ impl<'a> Reader<'a> {
 	/// The type a plain type alias names: `HammingResult` is `Result<usize, StrSimError>`
 	fn aliased(&self, ty: &Value) -> Option<&'a Value> {
 		let alias = self.item(&ty["resolved_path"]["id"])?["inner"].get("type_alias")?;
-		alias["generics"]["params"].as_array().is_some_and(|params| params.is_empty()).then(|| &alias["type"])
+		alias["generics"]["params"]
+			.as_array()
+			.is_some_and(|params| params.is_empty())
+			.then(|| &alias["type"])
 	}
 
 	fn resource_of(&self, ty: &Value, self_type: Option<&str>) -> Option<String> {
@@ -501,7 +549,10 @@ impl<'a> Reader<'a> {
 				return Some(Conversion::new(
 					&format!("borrow<{kebab}>"),
 					&format!("{}Borrow<'_>", camel(&kebab)),
-					&format!("&{}*{{}}.get::<{resource}Resource>().0.{borrow}()", if mutable { "mut " } else { "" }),
+					&format!(
+						"&{}*{{}}.get::<{resource}Resource>().0.{borrow}()",
+						if mutable { "mut " } else { "" }
+					),
 				));
 			}
 			if mutable {
@@ -513,7 +564,11 @@ impl<'a> Reader<'a> {
 			if let Some(element) = inner.get("slice") {
 				let element = self.element(element)?;
 				return Some(match element.is_identity() {
-					true => Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), "&{}"),
+					true => Conversion::new(
+						&format!("list<{}>", element.wit),
+						&format!("Vec<{}>", element.rust),
+						"&{}",
+					),
 					false => Conversion::new(
 						&format!("list<{}>", element.wit),
 						&format!("Vec<{}>", element.rust),
@@ -522,7 +577,10 @@ impl<'a> Reader<'a> {
 				});
 			}
 			if let Some(name) = inner["generic"].as_str().filter(|name| *name != "Self") {
-				return self.bounded(&Reader::bounds(generics, name)).map(|text| Conversion { expression: "&{}".into(), ..text });
+				return self.bounded(&Reader::bounds(generics, name)).map(|text| Conversion {
+					expression: "&{}".into(),
+					..text
+				});
 			}
 			return None;
 		}
@@ -540,8 +598,13 @@ impl<'a> Reader<'a> {
 			("String", []) => Some(Conversion::same("string", "String")),
 			("PathBuf", []) => Some(Conversion::new("string", "String", "{}.into()")),
 			("Vec", [element]) => {
-				let element = self.parameter(element, generics, self_type).filter(Conversion::is_identity)?;
-				Some(Conversion::same(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust)))
+				let element = self
+					.parameter(element, generics, self_type)
+					.filter(Conversion::is_identity)?;
+				Some(Conversion::same(
+					&format!("list<{}>", element.wit),
+					&format!("Vec<{}>", element.rust),
+				))
 			}
 			("Option", [inner]) => {
 				let inner = self.parameter(inner, generics, self_type)?;
@@ -550,7 +613,11 @@ impl<'a> Reader<'a> {
 					"&{}" => "{}.as_deref()",
 					_ => return None,
 				};
-				Some(Conversion::new(&format!("option<{}>", inner.wit), &format!("Option<{}>", inner.rust), expression))
+				Some(Conversion::new(
+					&format!("option<{}>", inner.wit),
+					&format!("Option<{}>", inner.rust),
+					expression,
+				))
 			}
 			_ => None,
 		}
@@ -589,8 +656,14 @@ impl<'a> Reader<'a> {
 			if inner["primitive"] == "str" {
 				return Some(Conversion::new("string", "String", "{}.to_string()"));
 			}
-			let element = self.result(inner.get("slice")?, self_type).filter(Conversion::is_identity)?;
-			return Some(Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), "{}.to_vec()"));
+			let element = self
+				.result(inner.get("slice")?, self_type)
+				.filter(Conversion::is_identity)?;
+			return Some(Conversion::new(
+				&format!("list<{}>", element.wit),
+				&format!("Vec<{}>", element.rust),
+				"{}.to_vec()",
+			));
 		}
 		if let Some(items) = ty["tuple"].as_array() {
 			let items: Vec<Conversion> = items
@@ -599,22 +672,37 @@ impl<'a> Reader<'a> {
 				.collect::<Option<_>>()?;
 			let wit: Vec<&str> = items.iter().map(|item| item.wit.as_str()).collect();
 			let rust: Vec<&str> = items.iter().map(|item| item.rust.as_str()).collect();
-			return Some(Conversion::same(&format!("tuple<{}>", wit.join(", ")), &format!("({})", rust.join(", "))));
+			return Some(Conversion::same(
+				&format!("tuple<{}>", wit.join(", ")),
+				&format!("({})", rust.join(", ")),
+			));
 		}
 		let path = ty.get("resolved_path")?;
 		let arguments = type_arguments(path);
 		match (last_segment(path["path"].as_str()?), arguments.as_slice()) {
 			("String", []) => Some(Conversion::same("string", "String")),
 			("PathBuf", []) => Some(Conversion::new("string", "String", "{}.to_string_lossy().into_owned()")),
-			("Cow", [inner]) if inner["primitive"] == "str" => Some(Conversion::new("string", "String", "{}.into_owned()")),
+			("Cow", [inner]) if inner["primitive"] == "str" => {
+				Some(Conversion::new("string", "String", "{}.into_owned()"))
+			}
 			("Cow", [inner]) => {
-				let element = self.result(inner.get("slice")?, self_type).filter(Conversion::is_identity)?;
-				Some(Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), "{}.into_owned()"))
+				let element = self
+					.result(inner.get("slice")?, self_type)
+					.filter(Conversion::is_identity)?;
+				Some(Conversion::new(
+					&format!("list<{}>", element.wit),
+					&format!("Vec<{}>", element.rust),
+					"{}.into_owned()",
+				))
 			}
 			("Vec", [element]) => {
 				let element = self.result(element, self_type)?;
 				let list = |expression: &str| {
-					Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), expression)
+					Conversion::new(
+						&format!("list<{}>", element.wit),
+						&format!("Vec<{}>", element.rust),
+						expression,
+					)
 				};
 				Some(match element.is_identity() {
 					true => list("{}"),
@@ -624,7 +712,11 @@ impl<'a> Reader<'a> {
 			("Option", [inner]) => {
 				let inner = self.result(inner, self_type)?;
 				let option = |expression: &str| {
-					Conversion::new(&format!("option<{}>", inner.wit), &format!("Option<{}>", inner.rust), expression)
+					Conversion::new(
+						&format!("option<{}>", inner.wit),
+						&format!("Option<{}>", inner.rust),
+						expression,
+					)
 				};
 				Some(match inner.is_identity() {
 					true => option("{}"),
@@ -697,7 +789,12 @@ impl<'a> Reader<'a> {
 		let mut methods: Vec<Function> = impls
 			.filter_map(|id| self.item(id))
 			.filter(|implementation| implementation["inner"]["impl"]["trait"].is_null())
-			.flat_map(|implementation| implementation["inner"]["impl"]["items"].as_array().into_iter().flatten())
+			.flat_map(|implementation| {
+				implementation["inner"]["impl"]["items"]
+					.as_array()
+					.into_iter()
+					.flatten()
+			})
 			.filter_map(|id| self.item(id))
 			.filter(|method| method["visibility"] == "public")
 			.filter_map(|method| self.function(method["name"].as_str()?, method, Some(name)))
@@ -733,7 +830,12 @@ impl<'a> Reader<'a> {
 			.filter(|field| field["visibility"] == "public")
 			.filter_map(|field| {
 				let result = self.result(field["inner"].get("struct_field")?, Some(name))?;
-				Some((kebab(field["name"].as_str()?).map(|_| field["name"].as_str())??.to_string(), result))
+				Some((
+					kebab(field["name"].as_str()?)
+						.map(|_| field["name"].as_str())??
+						.to_string(),
+					result,
+				))
 			})
 			.collect()
 	}
@@ -757,13 +859,21 @@ impl<'a> Reader<'a> {
 		impls
 			.filter_map(|id| self.item(id))
 			.filter(|implementation| implementation["inner"]["impl"]["trait"].is_null())
-			.flat_map(|implementation| implementation["inner"]["impl"]["items"].as_array().into_iter().flatten())
+			.flat_map(|implementation| {
+				implementation["inner"]["impl"]["items"]
+					.as_array()
+					.into_iter()
+					.flatten()
+			})
 			.filter_map(|id| self.item(id))
 			.filter_map(|method| method["inner"].get("function"))
 			.any(|function| {
 				let output = &function["sig"]["output"];
 				let is_self = |ty: &Value| ty["generic"] == "Self" || ty["resolved_path"]["id"] == item["id"];
-				is_self(output) || type_arguments(&output["resolved_path"]).first().is_some_and(|ty| is_self(ty))
+				is_self(output)
+					|| type_arguments(&output["resolved_path"])
+						.first()
+						.is_some_and(|ty| is_self(ty))
 			})
 	}
 }
@@ -798,7 +908,9 @@ impl Api {
 		let structs: Vec<(String, &Value)> = items
 			.iter()
 			.filter(|(name, item)| {
-				let plain = item["inner"]["struct"]["generics"]["params"].as_array().is_some_and(|params| params.is_empty());
+				let plain = item["inner"]["struct"]["generics"]["params"]
+					.as_array()
+					.is_some_and(|params| params.is_empty());
 				plain && reader.constructs(item) && kebab(name).is_some()
 			})
 			.map(|(name, item)| (name.clone(), *item))
@@ -841,7 +953,10 @@ impl Api {
 	}
 
 	fn wit(&self, crate_name: &str) -> String {
-		let mut wit = format!("package warp:{WRAPPER_PREFIX}{};\n\ninterface api {{\n", crate_name.replace('_', "-"));
+		let mut wit = format!(
+			"package warp:{WRAPPER_PREFIX}{};\n\ninterface api {{\n",
+			crate_name.replace('_', "-")
+		);
 		for resource in &self.resources {
 			let kebab = kebab(&resource.name).unwrap_or_default();
 			wit += &format!("  resource %{kebab} {{\n");
@@ -858,7 +973,10 @@ impl Api {
 
 	/// The wrapper's Rust and which item each range of its lines belongs to
 	fn rust(&self, crate_name: &str) -> (String, Vec<(std::ops::Range<usize>, String)>) {
-		let module = format!("exports::warp::{}::api", rust_name(&format!("{WRAPPER_PREFIX}{crate_name}")));
+		let module = format!(
+			"exports::warp::{}::api",
+			rust_name(&format!("{WRAPPER_PREFIX}{crate_name}"))
+		);
 		let mut code = Code::default();
 		code.line("#![allow(warnings, clippy::all)]", None);
 		code.line("wit_bindgen::generate!({ world: \"wrapper\", path: \"wit\" });", None);
@@ -869,10 +987,19 @@ impl Api {
 			let name = &resource.name;
 			let key = Some(name.as_str());
 			code.line(
-				&format!("pub struct {name}Resource(std::cell::RefCell<::{}::{name}>);", self.crate_name),
+				&format!(
+					"pub struct {name}Resource(std::cell::RefCell<::{}::{name}>);",
+					self.crate_name
+				),
 				key,
 			);
-			code.line(&format!("impl Guest{} for {name}Resource {{", camel(&kebab(name).unwrap_or_default())), key);
+			code.line(
+				&format!(
+					"impl Guest{} for {name}Resource {{",
+					camel(&kebab(name).unwrap_or_default())
+				),
+				key,
+			);
 			for function in &resource.functions {
 				let body = self.call(function, Some(name));
 				code.line(&body, Some(&format!("{name}.{}", function.name)));

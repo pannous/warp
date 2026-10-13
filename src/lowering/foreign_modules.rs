@@ -122,7 +122,8 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 /// `use cargo regex`, `use crate "regex" as re`: the component src/cargo_crates.rs builds of the crate, `as` the crate's
 /// name by default
 fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node, String>> {
-	if !word.is_symbol(USE_WORD) || !matches!(runtime.drop_meta(), Node::Symbol(runtime) if CRATE_RUNTIMES.contains(&runtime.as_str()))
+	if !word.is_symbol(USE_WORD)
+		|| !matches!(runtime.drop_meta(), Node::Symbol(runtime) if CRATE_RUNTIMES.contains(&runtime.as_str()))
 	{
 		return None;
 	}
@@ -145,7 +146,9 @@ fn crate_component(name: &str) -> Result<String, String> {
 
 #[cfg(not(feature = "native"))]
 fn crate_component(name: &str) -> Result<String, String> {
-	Err(format!("use cargo {name} builds the crate with cargo: only the native warp can (card use-cargo-browser)"))
+	Err(format!(
+		"use cargo {name} builds the crate with cargo: only the native warp can (card use-cargo-playground)"
+	))
 }
 
 /// `rust_demo.wasm` as written, `rust_demo` where there is a component of that name: natively the file the loader finds,
@@ -777,9 +780,13 @@ impl Foreign<'_> {
 				let arguments = Node::List(arguments, Bracket::Square, Separator::Space);
 				// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
 				return match type_read(&receiver) {
-					Some((path, resource)) => {
-						foreign_call(COMPONENT_RUNTIME, path, &format!("{resource}.{}", items[0].name()), true, arguments)
-					}
+					Some((path, resource)) => foreign_call(
+						COMPONENT_RUNTIME,
+						path,
+						&format!("{resource}.{}", items[0].name()),
+						true,
+						arguments,
+					),
 					None => foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, arguments),
 				};
 			}
