@@ -269,7 +269,29 @@ yes
 sure
 ```
 
-Examples: conditions; samples: control_flow, fizzbuzz
+### Matching
+
+`match` picks the first case that fits the value. `other` takes the rest.
+
+```warp => "teen"
+age = 15
+match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" }
+```
+
+A case can list several values, or name a type.
+
+```warp => "weekend"
+day = Sunday
+match day { Saturday | Sunday => "weekend"; other => "workday" }
+```
+
+A case can also describe the shape of a list or a map, and name its parts.
+
+```warp => 3
+match [1, 2] { [a, b] => a + b; other => 0 }
+```
+
+Examples: conditions; samples: control_flow, fizzbuzz, matching
 
 ## Lists
 
@@ -596,6 +618,9 @@ if r failed then 1 else 2
 ```
 
 When a line could mean two things, warp asks which one you meant.
+
+Some lines work but look like a slip. Then warp prints a warning and goes on. `use strict` at the top of a program
+makes warnings stop it, as errors do.
 
 Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions
 
