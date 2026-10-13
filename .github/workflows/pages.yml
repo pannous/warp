@@ -200,6 +200,24 @@ jobs:
         echo "::warning title=Firefox tour failed once, running it again::${stall:-the first attempt is in the log above} (card tour-firefox-stall)"
         tour second-attempt.log
 
+  # the painting checks in Safari on a macOS runner (card webgpu-safari: samples/webgpu ran Safari out of memory). The
+  # runner's Safari has navigator.gpu but no adapter, so the GPU samples show their no-adapter error. Beside the deploy,
+  # not before it: macOS runners queue longer
+  tour-safari:
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: site
+        path: _site
+    - name: Allow remote automation
+      run: sudo safaridriver --enable
+    - name: The painting checks in Safari
+      run: python3 web/playground/test_in_browser.py --examples --safari --site _site webgpu shader_trails "(the view's size stays as paintings of that size are shown)" "(many GPU jobs in one run)" "(named GPU arrays, a shader painted into the page's canvas)"
+
   # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
   # tours, green, instead of a failed deploy mailing a failed run
   deploy:

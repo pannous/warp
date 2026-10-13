@@ -7,13 +7,14 @@ web/playground/tests.html with agent-browser and prints the results like libtest
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
 `test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
 `test_in_browser.py --examples --firefox [--url …|--site …] [name…]` runs the same check in headless Firefox
-(firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome.
+(firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome; `--safari` in Safari (safaridriver, classic
+WebDriver: macOS CI runners, after `sudo safaridriver --enable`; its console is not watched).
 `test_in_browser.py --examples --site _site [name…]` checks it in a collected site (pages.yml), served as its root: a file
 the deploy forgot fails here, not on the live page.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
-import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse
+import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
@@ -46,7 +47,13 @@ IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
 # the console of the page and its workers (console_watch.mjs): any error or warning there fails the tour check
 CONSOLE_WATCHER = os.path.join(REPOSITORY, "web", "playground", "console_watch.mjs")
 FIREFOX_DRIVER = os.path.join(REPOSITORY, "web", "playground", "firefox_driver.mjs")
-firefox = None  # the FirefoxDriver of a --firefox run: browser() and the console go to it instead of agent-browser
+webdriver = None  # the FirefoxDriver or SafariDriver of a --firefox or --safari run: browser() and the console go to it instead of agent-browser
+SAFARI_PORT = 4445
+SAFARI_START_SECONDS = 10
+SAFARI_SCRIPT_MS = 300_000  # an example that runs this long is stuck
+# agent-browser's eval for classic WebDriver: the expression's value, awaited, as JSON text ("" for undefined)
+SAFARI_EVAL = """const done = arguments[arguments.length - 1];
+Promise.resolve().then(() => (0, eval)(arguments[0])).then(value => done(value === undefined ? "" : JSON.stringify(value)), failure => done(`✗ ${failure?.message ?? failure}`));"""
 CONSOLE_READY = "ready"
 CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watcher
 # warnings the browser logs itself, which no page code can silence, and what the program does instead (card
@@ -95,6 +102,21 @@ NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
 RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
+# card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
+# (it did by ~40 px a frame, until Safari ran out of memory painting samples/webgpu)
+VIEW_STEADY = "(the view's size stays as paintings of that size are shown)"
+VIEW_STEADY_CODE = """paint(int[view_width * view_height], view_width, view_height)
+[view_width, view_height]"""
+VIEW_STEADY_RUNS = 4  # a run measures the view as the last one's painting left the page; the first run's painting may
+# bring a scrollbar or the value's line once, after which the size must hold (it grew ~40 px a run before the fix)
+# card webgpu-safari: a shared buffer per GPU job ran Safari out of memory after ~200 jobs (a frame each; CI's runners
+# have no GPU adapter, so this guards the jobs' path without reproducing that); the jobs fail
+# without an adapter too, which `try` takes, and the last one then shows its own failure, never "Out of memory"
+GPU_JOBS = "(many GPU jobs in one run)"
+GPU_JOBS_CODE = """shader = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(1) fn main() { xs[0] = xs[0] + 1.0; }"
+400 times { try gpu_compute(shader, [1], 1) else 0 }
+gpu_compute(shader, [1], 1)"""
+GPU_JOBS_NEVER = "Out of memory"
 # card shader-brush: samples/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
 BRUSH = "(samples/shader_brush colors the paper under the pointer)"
 BRUSH_SAMPLE = "shader_brush"
@@ -233,8 +255,8 @@ def port_holder(port):
 def open_page(url):
 	"""open `url` in this run's browser and wait until it loaded; a launch that fails is reported and retried, and after
 	LAUNCH_ATTEMPTS the run fails with the reason instead of waiting for the stall check"""
-	if firefox:
-		return firefox.command("open", url) or sys.exit(f"error: Firefox could not open {url}")
+	if webdriver:
+		return webdriver.command("open", url) or sys.exit(f"error: {webdriver.NAME} could not open {url}")
 	for attempt in range(1, LAUNCH_ATTEMPTS + 1):
 		try:
 			opened = subprocess.run(["agent-browser", "--session", SESSION, "open", url], capture_output=True, text=True, timeout=LAUNCH_SECONDS)
@@ -256,8 +278,8 @@ browser_complaint = ""  # what agent-browser said on stderr at its last command
 
 
 def browser(*arguments):
-	if firefox:
-		return firefox.command(*arguments)
+	if webdriver:
+		return webdriver.command(*arguments)
 	global browser_complaint
 	try:
 		ran = subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60)
@@ -288,6 +310,7 @@ def console_line(message):
 
 class FirefoxDriver:
 	"""headless Firefox (firefox_driver.mjs): a command is a JSON line, its answer one JSON line"""
+	NAME = "Firefox"
 
 	def __init__(self):
 		self.process = subprocess.Popen(["node", FIREFOX_DRIVER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
@@ -307,12 +330,53 @@ class FirefoxDriver:
 		return answer
 
 
-class FirefoxConsole:
-	"""the errors and warnings Firefox reported (firefox_driver.mjs), taken per shown example like ConsoleWatch's"""
+class SafariDriver:
+	"""Safari through safaridriver (classic WebDriver over HTTP): open, eval and close as FirefoxDriver's; no console"""
+	NAME = "Safari"
+
+	def __init__(self):
+		self.driver = subprocess.Popen(["safaridriver", "-p", str(SAFARI_PORT)])
+		deadline = time.time() + SAFARI_START_SECONDS
+		while True:
+			try:
+				self.session = self.call("POST", "/session", {"capabilities": {"alwaysMatch": {"browserName": "safari"}}})["sessionId"]
+				break
+			except OSError as failure:
+				if time.time() > deadline:
+					sys.exit(f"error: safaridriver did not start Safari: {failure}")
+				time.sleep(0.5)
+		self.call("POST", f"/session/{self.session}/timeouts", {"script": SAFARI_SCRIPT_MS})
+
+	def call(self, method, path, body=None):
+		request = urllib.request.Request(f"http://127.0.0.1:{SAFARI_PORT}{path}", method=method, data=None if body is None else json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+		with urllib.request.urlopen(request, timeout=SAFARI_SCRIPT_MS / 1000 + 60) as answer:
+			return json.loads(answer.read() or b"{}").get("value")
+
+	def command(self, name, *arguments):
+		page = f"/session/{self.session}"
+		if name == "open":
+			self.call("POST", f"{page}/url", {"url": arguments[0]})
+			return True
+		if name == "eval":
+			try:
+				return self.call("POST", f"{page}/execute/async", {"script": SAFARI_EVAL, "args": [arguments[0]]})
+			except urllib.error.HTTPError as failure:
+				return f"✗ {failure.read().decode(errors='replace')[:500]}"
+		if name == "messages":
+			return []
+		if name == "close":
+			self.call("DELETE", page)
+			self.driver.terminate()
+			return ""
+		sys.exit(f"error: test_in_browser.py drives Safari without {name}")
+
+
+class WebDriverConsole:
+	"""the errors and warnings Firefox reported (firefox_driver.mjs; Safari's: none), taken per shown example like ConsoleWatch's"""
 
 	def take(self):
 		time.sleep(CONSOLE_SETTLE_SECONDS)
-		return list(dict.fromkeys(console_line(message) for message in firefox.command("messages") if reported(message)))
+		return list(dict.fromkeys(console_line(message) for message in webdriver.command("messages") if reported(message)))
 
 	def stop(self):
 		pass
@@ -450,12 +514,24 @@ def previous_frame_wrong():
 	return [] if PREVIOUS_FRAME_SHOWN in rendered else [f"third render: {rendered!r}, expected {PREVIOUS_FRAME_SHOWN} in it"]
 
 
+def view_steady_wrong():
+	"""runs painting at the view's size, one after the other, see the same view once the first painting is shown"""
+	shown = [run_code(VIEW_STEADY_CODE) for _ in range(VIEW_STEADY_RUNS)]
+	return [] if len(set(shown[1:])) == 1 and re.fullmatch(r"\[\d+ \d+\]", shown[-1]) else [f"the view's size, run after run: {shown}, expected the same after the first"]
+
+
+def gpu_jobs_wrong():
+	"""the last of many GPU jobs gives its numbers, or says why not, but never ran out of memory"""
+	shown = run_code(GPU_JOBS_CODE)
+	return [f"after 400 GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
+
+
 def brush_wrong():
 	"""the pointer moved to the middle of the shader brush's canvas: the pixel there is colored, not paper. Its
 	`while window_open` loop runs only once the page was clicked (playground.js tellSystemValues), so a real click first;
 	the sample then runs until stopped, so it is started, not waited for, and checked last (a check after it found
 	the page still busy with it)"""
-	if not firefox:  # Firefox has no WebGPU here: the sample's error is the skip below
+	if not webdriver:  # Firefox has no WebGPU here: the sample's error is the skip below
 		browser("click", "#output")
 	browser("eval", f"void playground.chooseExample({json.dumps(BRUSH_SAMPLE)})")
 	shown = browser("eval", f"""(async () => {{
@@ -566,7 +642,7 @@ def check_examples(names, page_url=None, site=None):
 		server = serve(None)
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
-	console = FirefoxConsole() if firefox else ConsoleWatch()  # before the page, so its loading is watched too
+	console = WebDriverConsole() if webdriver else ConsoleWatch()  # before the page, so its loading is watched too
 	page_url = f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}"
 	open_page(page_url)
 	wait_for_isolation()
@@ -591,7 +667,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -613,10 +689,13 @@ def build_components():
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
 
 
+WEBDRIVERS = {"--firefox": FirefoxDriver, "--safari": SafariDriver}
+
+
 def chrome_allowed():
 	"""Chrome runs only in CI (user, 2026-10-09: no test launches Chrome or Chromium on the Mac): --serve starts none,
-	--firefox runs Firefox"""
-	return bool(os.environ.get("CI")) or sys.argv[1:2] == ["--serve"] or "--firefox" in sys.argv[2:]
+	--firefox runs Firefox, --safari Safari"""
+	return bool(os.environ.get("CI")) or sys.argv[1:2] == ["--serve"] or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
 def main():
@@ -626,9 +705,10 @@ def main():
 		print(CI_ONLY)
 		return
 	if sys.argv[1:2] == ["--examples"]:
-		global firefox
-		names = [name for name in sys.argv[2:] if name != "--firefox"]
-		firefox = FirefoxDriver() if "--firefox" in sys.argv[2:] else None
+		global webdriver
+		names = [name for name in sys.argv[2:] if name not in WEBDRIVERS]
+		chosen = [WEBDRIVERS[name] for name in sys.argv[2:] if name in WEBDRIVERS]
+		webdriver = chosen[0]() if chosen else None
 		place = {names[0]: names[1]} if names[:1] in (["--url"], ["--site"]) else {}
 		check_examples(names[2:] if place else names, place.get("--url"), place.get("--site"))
 	if sys.argv[1:2] == ["--serve"]:
