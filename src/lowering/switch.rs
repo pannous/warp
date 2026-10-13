@@ -1,11 +1,12 @@
 //! `switch subject {key: body …}` (also `match`): map indexing that executes. Lowered to an if/else chain over the
-//! subject, so only the chosen body runs; the `default` (or `_`, `other`) key catches the rest, without it a miss is the error
+//! subject, so only the chosen body runs; the `default` (or `_`, `other`, `else`) key catches the rest, without it a miss is the error
 //! `no case for <subject> = <value>`. A list key is a structural pattern (wiki/pattern-matching.md): `["", middle, ""]`
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
-use super::nodes::{call, children_rewritten, if_then, key, Counter};
+use super::nodes::{call, children_rewritten, if_then, key, or_operands, Counter};
+use super::type_tests::{program_names, type_test, Names};
 use super::words::COUNT_WORD;
 use crate::library_words::SLICE;
 use crate::node::{error, text, Bracket, Node, Separator};
@@ -13,7 +14,7 @@ use crate::operators::Op;
 use crate::tuples::STARRED;
 
 pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
-const DEFAULT_KEYS: [&str; 3] = ["default", "other", WILDCARD];
+const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
 /// In a pattern: any item, bound to no name
 const WILDCARD: &str = "_";
 const LIST_SPEC: &str = "list";
@@ -41,6 +42,7 @@ pub fn lower(node: Node) -> Node {
 	Lowering {
 		words,
 		switches: Counter::default(),
+		names: program_names(&node),
 	}
 	.expand(node)
 }
@@ -48,6 +50,8 @@ pub fn lower(node: Node) -> Node {
 struct Lowering<'a> {
 	words: Vec<&'a str>,
 	switches: Counter,
+	/// The program's variables and declared types: a type word in a case tests the subject's type (`int => …`)
+	names: Names,
 }
 
 struct Case {
@@ -106,7 +110,7 @@ impl Lowering<'_> {
 			None => no_case(subject, &subject_value),
 		};
 		let chain = cases.into_iter().rev().fold(miss, |otherwise, case| {
-			let (matches, body) = case_test(&subject_value, case);
+			let (matches, body) = case_test(&subject_value, case, &self.names);
 			let then = if_then(matches, body);
 			key(then, Op::Else, otherwise)
 		});
@@ -241,26 +245,27 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 
 /// A case as its test and its body: a list key is a structural pattern whose names are bound before the body runs; a
 /// guard `n if n < 0` binds n to the subject and holds when its condition does
-fn case_test(subject: &Node, case: Case) -> (Node, Node) {
+fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 	if let Node::Key(empty, op, bound) = case.key.drop_meta() {
 		if matches!(empty.drop_meta(), Node::Empty) && op.is_ordering() {
 			return (key(subject.clone(), *op, bound.as_ref().clone()), case.body); // `> 100 =>` compares the subject
 		}
 	}
 	let (pattern, guard) = split_guard(&case.key);
-	let alternatives = alternatives_of(&pattern);
-	if alternatives.len() > 1 {
-		return alternatives_test(subject, &alternatives, guard, case.body);
-	}
-	if guard.is_none() && !matches!(pattern.drop_meta(), Node::List(_, Bracket::Square, _)) {
-		return (key(subject.clone(), Op::Eq, case.key), case.body);
-	}
-	let (mut tests, mut bindings) = (vec![], vec![]);
-	pattern_tests(&pattern, subject.clone(), &mut tests, &mut bindings);
-	if let Some(guard) = guard {
-		tests.push(sequence([bindings.clone(), vec![guard]].concat()));
-	}
-	let test = joined(tests, Op::And);
+	let (test, bindings) = match pattern_test(subject, &pattern, guard.is_some(), names) {
+		Ok(matched) => matched,
+		Err(message) => return (error(message), case.body),
+	};
+	let test = match guard {
+		Some(guard) => {
+			let guard = sequence([bindings.clone(), vec![guard]].concat());
+			match test {
+				Node::True => guard, // a class pattern `Circle(r)` arrives as `_` guarded by its type test
+				test => key(test, Op::And, guard),
+			}
+		}
+		None => test,
+	};
 	let body = if bindings.is_empty() {
 		case.body
 	} else {
@@ -269,36 +274,69 @@ fn case_test(subject: &Node, case: Case) -> (Node, Node) {
 	(test, body)
 }
 
-/// A case key is a pattern, so `1 | 2` and `1 or 2` (both parsed as or) are its alternatives, never the logical value;
-/// a computed comparison goes in a guard (user, matching roadmap)
-fn alternatives_of(pattern: &Node) -> Vec<Node> {
-	match pattern.drop_meta() {
-		Node::Key(left, Op::Or, right) => [alternatives_of(left), alternatives_of(right)].concat(),
-		_ => vec![pattern.clone()],
+/// The test the subject passes when it matches the pattern of a case, and the names the pattern binds. A case key is a
+/// pattern, so `1 | 2` and `1 or 2` (both parsed as or) are its alternatives, never the logical value; a computed
+/// comparison goes in a guard (user, matching roadmap)
+pub(crate) fn pattern_test(
+	subject: &Node,
+	pattern: &Node,
+	guarded: bool,
+	names: &Names,
+) -> Result<(Node, Vec<Node>), &'static str> {
+	let alternatives = or_operands(pattern);
+	if let [single] = alternatives.as_slice() {
+		let (tests, bindings) = alternative_tests(subject, single, guarded, names);
+		return Ok((joined(tests, Op::And), bindings));
 	}
-}
-
-/// The case matches when one alternative does; a list alternative tests its shape, any other compares the subject
-fn alternatives_test(subject: &Node, alternatives: &[Node], guard: Option<Node>, body: Node) -> (Node, Node) {
 	let mut matches = vec![];
-	for alternative in alternatives {
-		if !matches!(alternative.drop_meta(), Node::List(_, Bracket::Square, _)) {
-			matches.push(key(subject.clone(), Op::Eq, alternative.clone()));
-			continue;
-		}
-		let (mut tests, mut bindings) = (vec![], vec![]);
-		pattern_tests(alternative, subject.clone(), &mut tests, &mut bindings);
+	for alternative in &alternatives {
+		let (tests, bindings) = alternative_tests(subject, alternative, guarded, names);
 		if !bindings.is_empty() {
-			let message = "alternatives bind no names: write one case per pattern, or `_` for an item";
-			return (error(message), body);
+			return Err("alternatives bind no names: write one case per pattern, or `_` for an item");
 		}
 		matches.push(joined(tests, Op::And));
 	}
-	let test = joined(matches, Op::Or);
-	match guard {
-		Some(guard) => (key(test, Op::And, guard), body),
-		None => (test, body),
+	Ok((joined(matches, Op::Or), vec![]))
+}
+
+/// A list pattern tests its shape, a type word (`int`, `Circle`) the subject's type, `i: int` also binds it; any other
+/// key compares the subject, a guarded name binds it
+fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Names) -> (Vec<Node>, Vec<Node>) {
+	if let Node::Key(name, Op::Colon, kind) = pattern.drop_meta() {
+		if let (Node::Symbol(_), Some(test)) = (name.drop_meta(), type_test(subject, kind, names)) {
+			return (
+				vec![test],
+				vec![key(name.drop_meta().clone(), Op::Assign, subject.clone())],
+			);
+		}
 	}
+	if let Some(test) = type_test(subject, pattern, names) {
+		return (vec![test], vec![]);
+	}
+	if let Some(tests) = range_tests(subject, pattern) {
+		return (tests, vec![]);
+	}
+	if !guarded && !matches!(pattern.drop_meta(), Node::List(_, Bracket::Square, _)) {
+		return (vec![key(subject.clone(), Op::Eq, pattern.clone())], vec![]);
+	}
+	let (mut tests, mut bindings) = (vec![], vec![]);
+	pattern_tests(pattern, subject.clone(), &mut tests, &mut bindings);
+	(tests, bindings)
+}
+
+/// `13 to 19` (also `13...19`) includes its end, `13..20` excludes it, `65..` has none: the subject between the bounds
+fn range_tests(subject: &Node, pattern: &Node) -> Option<Vec<Node>> {
+	let Node::Key(start, op @ (Op::Range | Op::To), end) = pattern.drop_meta() else {
+		return None;
+	};
+	let below_end = if *op == Op::To { Op::Le } else { Op::Lt };
+	let bounds = [(start, Op::Ge), (end, below_end)];
+	let tests: Vec<Node> = bounds
+		.into_iter()
+		.filter(|(bound, _)| !matches!(bound.drop_meta(), Node::Empty))
+		.map(|(bound, comparison)| key(subject.clone(), comparison, bound.as_ref().clone()))
+		.collect();
+	(!tests.is_empty()).then_some(tests)
 }
 
 /// The tests joined by `and` (true without any) or by `or`

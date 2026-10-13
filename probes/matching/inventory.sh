@@ -39,6 +39,13 @@ check field-destructuring 7 'class Point{x:int; y:int}; {x, y} = Point(3, 4); x 
 
 # alternatives, ranges, bindings inside arms
 check or-pattern '"small"' 'match 2 { 1 | 2 => "small"; _ => "big" }'
+check or-word-pattern '"small"' 'match 2 { 1 or 2 => "small"; _ => "big" }'
+check comma-pattern '"small"' 'match 2 { 1, 2 => "small"; _ => "big" }'
+check type-alternatives '"plain"' 'f(v) := match v { int | text => "plain"; _ => "other" }; f("a")'
+check mixed-alternatives '"zero or text"' 'f(v) := match v { 0 or text => "zero or text"; _ => "other" }; f("a")'
+check is-type-union 'yes' 'x = 3; x is (int or text)'
+check other-catch-all 0 'match 3 { 1 => 1; other => 0 }'
+check else-catch-all 0 'match 3 { 1 => 1; else => 0 }'
 check range-pattern '"teen"' 'match 15 { 13..19 => "teen"; _ => "other" }'
 check as-binding 3 'match [1, 2] { all @ [a, b] => #all + 1 }'
 check text-pattern '"hi bob"' 'match "bob" { "alice" => "hey"; name => "hi " + name }'

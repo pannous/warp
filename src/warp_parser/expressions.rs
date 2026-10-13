@@ -656,6 +656,9 @@ impl WarpParser {
 			let value = self.parse_expr(r_bp);
 			self.glued_pair_bp = outer;
 			value
+		} else if matches!(op, Op::Range | Op::To) && self.peek_operator().is_some_and(|(next, _)| next == Op::FatArrow)
+		{
+			Empty // the match arm `65.. => "senior"`: a range without end
 		} else if matches!(op, Op::And | Op::Or) && self.take_braceless_print() {
 			// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
 			print_call([self.rest_of_statement()])

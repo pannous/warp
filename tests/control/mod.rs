@@ -106,6 +106,8 @@ mod test_many_tasks;
 mod test_match_alternatives;
 mod test_match_guards_and_finally;
 mod test_match_other;
+mod test_match_ranges;
+mod test_match_type_arms;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;
