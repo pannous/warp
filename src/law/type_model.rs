@@ -387,10 +387,7 @@ fn is_list_literal(node: &Node) -> bool {
 
 /// The statements of a program or block: an unbracketed `;`/newline list, else the one node
 fn statements(node: &Node) -> Vec<&Node> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.iter().collect(),
-		other => vec![other],
-	}
+	node.drop_meta().sequence_statements().iter().collect()
 }
 
 /// A sum type `type Color = red | rgb(…)` parses as the list of its type definitions (the sum, then each variant)

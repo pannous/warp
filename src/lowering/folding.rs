@@ -10,7 +10,7 @@ use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESU
 use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
 use crate::function_values::{definitions, Definition};
-use crate::late_binding::{changes_in, functions_in, map_statements, statements_of};
+use crate::late_binding::{changes_in, functions_in, map_statements};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -40,7 +40,7 @@ pub fn precompute(program: Node) -> Node {
 /// or changes the variable, a name also used as a key or property (`m.k`, `{k:1}`). A function body with no inlined
 /// variable keeps its form.
 pub fn fold_constant_free_variables(program: Node) -> Node {
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	let mut main = Scope::new();
 	collect_variables(&program, &mut main);
 	let mut index = 0;
@@ -184,7 +184,7 @@ fn is_int_comparison(node: &Node) -> bool {
 }
 
 pub fn fold_constant_calls(program: Node) -> Node {
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	let foldable = foldable_functions(&program, &statements);
 	let mut calls: Vec<Node> = vec![];
 	// main-level statements and function bodies alike: a constant call in a body is computed once, not at every call
@@ -227,7 +227,7 @@ pub fn fold_constant_calls(program: Node) -> Node {
 /// is (card static-int): `def half(x) -> int { x / 2 }; half(3)` gives 3/2, no int. The calls are computed as the
 /// folding computes them, from the definitions without their result checks, so the value is the misfit itself
 pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	let foldable = foldable_functions(&program, &statements);
 	let declared: HashMap<String, String> = statements
 		.iter()
@@ -380,7 +380,7 @@ fn replaced(node: Node, folded: &[(Node, Node)]) -> Node {
 /// arguments calls a variant with those constants in place and every condition on them decided, recursively:
 /// `power(y, 3)` calls power·n3, whose body is `y * power·n2(y)`, down to power·n0 = 1; inlining then removes the chain
 pub fn specialise_constant_arguments(program: Node) -> Node {
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	// possible divergence is allowed: specialising is bounded (MAX_VARIANTS), and the call keeps its meaning
 	let pure = functions_within(
 		&program,

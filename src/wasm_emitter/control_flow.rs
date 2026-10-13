@@ -373,14 +373,13 @@ impl WasmGcEmitter {
 			&& ((kind.is_ref() || ends_in_float) && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
 	}
 
-	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch; gives the enclosing
-	/// function's, to restore when this one is done
-	pub(super) fn declare_loop_values(&mut self, locals: &mut Vec<(u32, ValType)>, body: &Node) -> LoopValues {
+	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch
+	pub(super) fn declare_loop_values(&mut self, locals: &mut Vec<(u32, ValType)>, body: &Node) {
 		let declared = loop_nesting(body);
 		if declared > 0 {
 			locals.push((declared, Ref(self.node_ref(true))));
 		}
-		std::mem::replace(&mut self.loop_values, LoopValues { declared, depth: 0 })
+		self.loop_values = LoopValues { declared, depth: 0 };
 	}
 
 	/// Where the value of a loop whose body ends in a text or list comes from

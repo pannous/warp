@@ -34,7 +34,7 @@ const QUOTED_BODY_LENGTH: usize = 24;
 const GENERATED_NAME_MARK: char = '·';
 
 pub fn lower(program: Node) -> Result<Node, Node> {
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	if let Some(declaration) = statements.iter().find(|statement| is_nonlocal_declaration(statement)) {
 		return Err(nonlocal_at_main_level_error(declaration));
 	}
@@ -43,7 +43,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	let declared = declared_global_reads(&statements, &main, false);
 	// a `global y` read of a variable main declares global already goes too (a lambda's, made global by nonlocal_cells)
 	let program = without_global_reads(program, &declared_global_reads(&statements, &main, true));
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	let definitions = definitions(&statements);
 	let report = EffectReport::of(&program);
 	for definition in &definitions {
@@ -317,13 +317,6 @@ struct Definition {
 struct Change<'a> {
 	index: usize,
 	node: &'a Node,
-}
-
-pub(crate) fn statements_of(program: &Node) -> Vec<Node> {
-	match program.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		_ => vec![program.clone()],
-	}
 }
 
 pub(crate) fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Node {
