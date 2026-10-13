@@ -169,23 +169,32 @@ fn as_compared(value: Node) -> Node {
 	}
 }
 
-/// `word(read(path))` for the sources, in one program
+/// `word(read(path))` for the sources, in one program; when it fails, each half alone, down to a single source that
+/// gives the warp error as its value (so it differs from the Rust twin instead of hiding the other sources)
 fn warp_values(part: &str, word: &str, paths: &[PathBuf]) -> Vec<Node> {
+	match warp_values_at_once(part, word, paths) {
+		Ok(values) => values,
+		Err(failure) if paths.len() == 1 => vec![Node::text(&format!("warp failed: {failure}"))],
+		Err(_) => {
+			let (first, second) = paths.split_at(paths.len() / 2);
+			let mut values = warp_values(part, word, first);
+			values.extend(warp_values(part, word, second));
+			values
+		}
+	}
+}
+
+fn warp_values_at_once(part: &str, word: &str, paths: &[PathBuf]) -> Result<Vec<Node>, String> {
 	let quoted: Vec<String> = paths.iter().map(|path| format!("\"{}\"", path.display())).collect();
 	let program = format!(
 		"use \"{COMPILER_FOLDER}/{part}.warp\"\n[{word}(read(path)) for path in [{}]]",
 		quoted.join(", ")
 	);
 	let result = eval(&program);
-	let Node::List(values, ..) = result.drop_meta().clone() else {
-		panic!("the warp twin {word} gave no list of values: {}", result.serialize())
-	};
-	assert_eq!(
-		values.len(),
-		paths.len(),
-		"the warp twin {word} gave a value for each source"
-	);
-	values
+	match result.drop_meta() {
+		Node::List(values, ..) if values.len() == paths.len() => Ok(values.clone()),
+		other => Err(other.serialize()),
+	}
 }
 
 /// The text around its first character that differs from the other text

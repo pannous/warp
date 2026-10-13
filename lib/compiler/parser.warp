@@ -163,10 +163,16 @@ def binding_powers(op) {
 def atom(p) {
 	c = p.code[p.at]
 	if is_digit(c) {
-		end = number_end(p.code, p.at, p.n)
-		written = p.code[p.at .. end]
-		p.at = end
-		if written.contains(".") { return float(written) }
+		if c == '0' and (is_at(p.code, p.at + 1, 'x', p.n) or is_at(p.code, p.at + 1, 'X', p.n)) {
+			p.at = p.at + 2
+			return radix_value(p, 16)
+		}
+		if c == '0' and (is_at(p.code, p.at + 1, 'b', p.n) or is_at(p.code, p.at + 1, 'B', p.n)) and p.at + 2 < p.n and digit_value(p.code[p.at + 2]) < 2 {
+			p.at = p.at + 2
+			return radix_value(p, 2)
+		}
+		written = decimal(p)
+		if written.contains(".") or written.contains("e-") or written.contains("E-") { return float(written) }
 		return int(written)
 	}
 	if c == '"' or c == '\'' { return quoted(p) }
@@ -182,6 +188,73 @@ def atom(p) {
 	}
 	p.at = p.at + 1
 	ø
+}
+
+// The digits of a number in `base` (`_` between binary digits), read
+// Rust twin: literals.rs read_number_value, its 0x and 0b branches
+def radix_value(p, base) {
+	value = 0
+	while p.at < p.n {
+		c = p.code[p.at]
+		if not (c == '_' and base == 2) {
+			digit = digit_value(c)
+			if digit >= base { return value }
+			value = value * base + digit
+		}
+		p.at = p.at + 1
+	}
+	value
+}
+
+// The value of a hex digit, 16 for any other character
+def digit_value(c) {
+	lower = "0123456789abcdef"
+	upper = "0123456789ABCDEF"
+	i = 0
+	while i < 16 and lower[i] != c and upper[i] != c { i = i + 1 }
+	i
+}
+
+// A decimal number as written, read: digits (`_` between them dropped), a fraction unless `..` or a name follows the
+// point, an exponent
+// Rust twin: literals.rs push_digits, read_number_value, parse_exponent
+def decimal(p) {
+	written = digits_read(p)
+	after_point = peek(p.code, p.at + 1, p.n)
+	if is_at(p.code, p.at, '.', p.n) and after_point != '.' and not is_name_start(after_point) {
+		p.at = p.at + 1
+		written = written + "." + digits_read(p)
+	}
+	e = peek(p.code, p.at, p.n)
+	sign = peek(p.code, p.at + 1, p.n)
+	signed = (sign == '+' or sign == '-') and is_digit(peek(p.code, p.at + 2, p.n))
+	if (e == 'e' or e == 'E') and (is_digit(sign) or signed) {
+		p.at = p.at + 1
+		if signed { p.at = p.at + 1 }
+		exponent = digits_read(p)
+		// 1e3 is the exact integer 1000, like the literal it abbreviates
+		if written.contains(".") or sign == '-' { return written + "e" + (if sign == '-' then "-" else "") + exponent }
+		zeros = int(exponent)
+		while zeros > 0 {
+			written = written + "0"
+			zeros = zeros - 1
+		}
+	}
+	written
+}
+
+def digits_read(p) {
+	written = ""
+	while p.at < p.n {
+		c = p.code[p.at]
+		if is_digit(c) {
+			written = written + c
+		} else if not (c == '_' and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n))) {
+			return written
+		}
+		p.at = p.at + 1
+	}
+	written
 }
 
 // A text in quotes, its backslash escapes read; one character is a codepoint
