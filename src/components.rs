@@ -64,6 +64,8 @@ fn engine() -> &'static Engine {
 	ENGINE.get_or_init(|| {
 		let mut config = Config::new();
 		config.wasm_component_model(true);
+		// a component with DWARF (use cargo's debug builds, WARP_DEBUG_CRATES) puts file and line into trap backtraces
+		config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
 		Engine::new(&config).expect("an engine for components")
 	})
 }
