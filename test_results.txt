@@ -1274,6 +1274,9 @@ PASSED:
   ✓ functions::test_function_aliases::test_a_bare_alias_is_the_error_with_the_fix
   ✓ functions::test_function_aliases::test_a_function_argument_stays_bare
   ✓ functions::test_function_aliases::test_an_alias_names_the_function
+  ✓ functions::test_function_head::no_function_definition
+  ✓ functions::test_function_head::the_keyword_forms
+  ✓ functions::test_function_head::the_operator_forms
   ✓ functions::test_function_keyword::func_colon_body_calls_itself_spaced
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_ref_compare::a_function_value_compares_with_a_reference
@@ -3279,7 +3282,6 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
-  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -3314,7 +3316,6 @@ PASSED:
   ✓ programs::test_samples::test_y_combinator
   ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
-  ✓ programs::test_shader_blocks::a_shader_function_takes_warps_colon_result_type
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
   ✓ programs::test_shader_blocks::shader_stays_a_name
   ✓ programs::test_shader_builtins::a_shader_reads_its_previous_frame
@@ -5367,6 +5368,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-13 ignored, 5364 passed, 0 failed, 5364 total tested
+13 ignored, 5365 passed, 1 failed, 5366 total tested
