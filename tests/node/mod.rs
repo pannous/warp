@@ -2,6 +2,7 @@ mod node_values_test;
 mod test_comment_meta;
 mod test_empty_operands;
 mod test_index_serialization;
+mod test_list_separator; // card keep-list
 mod test_node;
 mod test_node_add;
 mod test_node_api;

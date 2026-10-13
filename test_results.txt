@@ -2130,6 +2130,9 @@ PASSED:
   ✓ node::test_empty_operands::a_written_empty_value_stays
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
   ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
+  ✓ node::test_list_separator::a_list_is_built_with_a_separator
+  ✓ node::test_list_separator::a_list_read_back_keeps_its_separator
+  ✓ node::test_list_separator::a_list_shows_its_separator
   ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
   ✓ node::test_node_api::a_key_shows_its_parts
   ✓ node::test_node_api::a_list_shows_its_bracket
@@ -5060,4 +5063,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 5055 passed, 0 failed, 5055 total tested
+10 ignored, 5058 passed, 0 failed, 5058 total tested

@@ -48,7 +48,7 @@ impl WasmGcEmitter {
 	fn emit_tuple_return(&mut self, func: &mut Function, values: &[Node]) {
 		let kinds = self.returned_tuple.clone();
 		if kinds.is_empty() {
-			self.emit_list_structure(func, values, &Bracket::Square);
+			self.emit_list_structure(func, values, &Bracket::Square, &crate::node::Separator::None);
 		} else {
 			for (value, kind) in values.iter().zip(kinds) {
 				self.emit_value_of_kind(func, value, kind);

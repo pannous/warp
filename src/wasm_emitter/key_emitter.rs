@@ -367,7 +367,7 @@ impl WasmGcEmitter {
 			// the fields as data, nothing run as a block; the instance keeps its braces: `point{x:1 y:2}` (P123)
 			match items.is_empty() {
 				true => self.emit_call(func, "new_empty"),
-				false => self.emit_list_structure(func, items, &Bracket::Curly),
+				false => self.emit_list_structure(func, items, &Bracket::Curly, &Separator::None),
 			}
 		} else if *op == Op::Colon {
 			// the value of an entry is data: unknown words in it stay words (P62)

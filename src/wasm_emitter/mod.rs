@@ -2301,6 +2301,42 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 	}
 }
 
+/// The separators of a list by their code above SEPARATOR_SHIFT (None is 0: a list made at run time names none)
+pub const SEPARATORS: [Separator; 6] = [
+	Separator::None,
+	Separator::Space,
+	Separator::Colon,
+	Separator::Semicolon,
+	Separator::Newline,
+	Separator::Tab,
+];
+
+/// The code of a list's separator, as `separated` and `n.separator` know it
+pub fn separator_code(separator: &Separator) -> i64 {
+	SEPARATORS.iter().position(|known| known == separator).unwrap_or(0) as i64
+}
+
+/// The kind field's info bits (above KIND_BITS) of a list: its bracket and its separator (card keep-list)
+pub fn list_info(bracket: &Bracket, separator: &Separator) -> i64 {
+	bracket_info(bracket)
+		| separator_code(separator) << (crate::type_kinds::SEPARATOR_SHIFT - crate::type_kinds::KIND_BITS)
+}
+
+/// Each separator's code and the text `n.separator` gives for it ("" for none)
+pub fn separator_texts() -> Vec<(i64, String)> {
+	SEPARATORS
+		.iter()
+		.enumerate()
+		.map(|(code, separator)| (code as i64, separator.to_char().map(String::from).unwrap_or_default()))
+		.collect()
+}
+
+/// The separator of a list's kind field, separator_code read back
+pub fn separator_of_kind(kind: i64) -> Separator {
+	let code = (kind & crate::type_kinds::SEPARATOR_MASK) >> crate::type_kinds::SEPARATOR_SHIFT;
+	SEPARATORS.get(code as usize).cloned().unwrap_or(Separator::None)
+}
+
 /// The bracket of a list's kind high bits, bracket_info read back (Other as None)
 pub fn bracket_of_info(info: i64) -> Bracket {
 	match info {

@@ -252,7 +252,7 @@ function plainOfTree(tree) {
 		}
 		case 7: case 8: {
 			const values = items();
-			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
+			const isObject = ((kind >> 8n) & KIND_MASK) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
 		// its value the function's name (src/wasm_emitter/closures.rs), kept for a host word calling the export itself
