@@ -6,6 +6,9 @@ use super::*;
 const THEN_WORD: &str = "then";
 /// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
 const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
+/// The operands a braceless call binds in: from the right side of `or` to the right side of `+`; a `*` operand keeps
+/// `h*w int` the typed array `(h*w) int`
+const OPERAND_APPLICATION_BPS: std::ops::RangeInclusive<u8> = Op::Or.binding_power().1..=Op::Add.binding_power().1;
 
 impl WarpParser {
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
@@ -526,6 +529,20 @@ impl WarpParser {
 		Some(Node::List(vec![lhs.clone()], Bracket::Square, Separator::Space))
 	}
 
+	/// The word at the cursor begins what follows the operand rather than being its argument: a loop clause
+	/// (`[x - y for x in xs]`), a block's `end` (`return a + b end`), a key (`inner  _: 0`) or an element (`n p{m}`)
+	fn word_begins_item(&self) -> bool {
+		if self.matches_keyword(crate::words::FOR_WORD) || self.matches_keyword(END_KEYWORD) {
+			return true;
+		}
+		let length = (0..).take_while(|at| is_identifier_char(self.peek_char(*at))).count();
+		match (self.peek_char(length), self.peek_char(length + 1)) {
+			('{', _) => length > 0,
+			(':', next) => length > 0 && !matches!(next, ':' | '='),
+			_ => false,
+		}
+	}
+
 	pub(super) fn try_parse_implicit_application(
 		&mut self,
 		lhs: &Node,
@@ -539,8 +556,14 @@ impl WarpParser {
 			_ => false,
 		};
 		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
-		let lhs_is_operand_word =
-			|| matches!(lhs.drop_meta(), Node::Symbol(name) if crate::library_words::is_operand_word(name));
+		// application binds tighter than the logical, comparison and additive operators: `1 + count xs` is
+		// `1 + count(xs)` for any name (card count-xs); a `:` operand keeps `a: b c d` apart, and an argument takes no
+		// call of its own: `on change s` is one call with two arguments; a loop header's last word is no call of its body
+		// (`for i in 1 to n body`), and a word that begins the next item is no argument (word_begins_item)
+		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp)
+			&& min_bp != argument_bp
+			&& !self.in_for_header
+			&& !self.word_begins_item();
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier =
@@ -550,8 +573,8 @@ impl WarpParser {
 				|| ch == '(' || ch == '['
 				|| ch == '{' || ch == '-'
 				|| self.starts_function_reference();
-		let should_apply =
-			in_assignment_context || arg_is_non_identifier || lhs_is_defined_function || lhs_is_operand_word();
+		let applies_otherwise = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function;
+		let should_apply = in_operand || applies_otherwise;
 
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
 		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does
@@ -565,7 +588,11 @@ impl WarpParser {
 		}
 
 		let start = self.pos;
+		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's
+		let outer_header = self.in_for_header;
+		self.in_for_header = outer_header || !applies_otherwise;
 		let arg = self.parse_expr(argument_bp);
+		self.in_for_header = outer_header;
 		if arg == Empty && self.pos == start {
 			return None; // an ø or [] written there is the argument: `x = sum []`
 		}
