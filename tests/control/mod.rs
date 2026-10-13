@@ -108,6 +108,7 @@ mod test_many_tasks;
 mod test_match_alternatives;
 mod test_match_alternatives_hint;
 mod test_match_binding_arm;
+mod test_match_deep_conditions; // card deep-conditions
 mod test_match_else_line;
 mod test_match_guards_and_finally;
 mod test_match_item_patterns; // card list-pattern
