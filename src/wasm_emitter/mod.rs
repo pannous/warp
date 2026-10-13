@@ -564,7 +564,9 @@ impl WasmGcEmitter {
 				!matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
 			}
 			Node::Key(_left, op, _right) if op.is_shift() || op.is_comparison() => true,
-			Node::Key(left, op, right) if op.is_logical() => self.is_numeric(left) && self.is_numeric(right),
+			Node::Key(left, op, right) if op.is_logical() || op.is_bitwise() => {
+				self.is_numeric(left) && self.is_numeric(right)
+			}
 			// `not x` is always 1 or 0
 			Node::Key(left, Op::Not, _) if matches!(left.drop_meta(), Node::Empty) => true,
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),

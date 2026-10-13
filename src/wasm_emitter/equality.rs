@@ -187,6 +187,7 @@ impl WasmGcEmitter {
 		condition: &Node,
 		emit_number: fn(&mut Self, &mut Function, &Node),
 	) {
+		self.warn_bits_as_truth(condition);
 		if self.is_structural_operand(condition)
 			|| self.is_held_cell_value(condition)
 			|| self.holds_run_time_kind(condition)
@@ -200,6 +201,31 @@ impl WasmGcEmitter {
 			emit_number(self, func, condition);
 			func.instruction(&I::I64Const(0));
 			func.instruction(&I::I64Ne); // not I32WrapI64: 2^32 is truthy
+		}
+	}
+
+	/// `if 8 & 4` tests the bits 8 and 4 share (none: false), never whether both are truthy (user 2026-10-13)
+	fn warn_bits_as_truth(&mut self, condition: &Node) {
+		let Node::Key(left, op, right) = condition.drop_meta() else {
+			return;
+		};
+		if !op.is_bitwise() || self.logical_reading(left, op, right).is_some() {
+			return;
+		}
+		let (a, b) = (left.serialize(), right.serialize());
+		let (a, b, logical) = (a.trim(), b.trim(), op.logical_twin());
+		let written = format!("{a} {op} {b}");
+		let warning = crate::diagnostic::Diagnostic::at(
+			condition,
+			format!(
+				"`{written}` combines the bits of two whole numbers, true when the result is not 0; write `{a} {logical} {b}` for \
+				 the logical {logical} or `({written}) != 0` for the bits"
+			),
+		)
+		.offer(format!("the logical {logical}"), &written, format!("{a} {logical} {b}"))
+		.offer("a test of the bits", &written, format!("({written}) != 0"));
+		if crate::diagnostic::report(std::slice::from_ref(&warning)).is_err() {
+			self.type_errors.push(self.located(warning.to_string()));
 		}
 	}
 

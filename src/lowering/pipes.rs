@@ -136,6 +136,17 @@ impl Pipes {
 				items.push(*argument);
 				self.applied(&stage, self.rewrite(Node::List(items, Bracket::None, Separator::Space)))
 			}
+			// `n | m` of no function: the bits of two whole numbers, else the logical or (card operator-shall)
+			Node::Key(value, Op::Or, operand)
+				if is_pipe_stage(&operand)
+					&& crate::lowering::nodes::may_be_whole_number(&value)
+					&& crate::lowering::nodes::may_be_whole_number(&operand) =>
+			{
+				let Node::Meta { node: operand, .. } = *operand else {
+					unreachable!("guarded")
+				};
+				key(self.rewrite(*value), Op::BitOr, self.rewrite(*operand))
+			}
 			other => other.map_children(|child| self.rewrite(child)),
 		}
 	}

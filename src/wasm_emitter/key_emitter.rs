@@ -10,6 +10,9 @@ use super::WasmGcEmitter;
 impl WasmGcEmitter {
 	/// Key(left, op, right) by its operator and operands
 	pub(super) fn emit_key_node(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		if let Some(logical) = self.logical_reading(left, op, right) {
+			return self.emit_key_node(func, left, &logical, right);
+		}
 		// `global x = value`, `fetch URL`
 		if let Node::Symbol(kw) = left.drop_meta() {
 			if kw == "global" {
@@ -134,6 +137,7 @@ impl WasmGcEmitter {
 			|| op.is_shift()
 			|| op.is_comparison()
 			|| op.is_logical()
+			|| op.is_bitwise()
 			|| assigns_numeric_variable
 			|| op.is_compound_assign()
 			|| matches!(op, Op::Inc | Op::Dec)
@@ -445,6 +449,16 @@ impl WasmGcEmitter {
 }
 
 /// `ul{ h2{…} [li{f} for f in fruits] }`: an element whose children hold a list, spliced into them at run time
+impl WasmGcEmitter {
+	/// `&` and `|` of anything but two whole numbers: the logical and/or they read as (card operator-shall)
+	pub(super) fn logical_reading(&self, left: &Node, op: &Op, right: &Node) -> Option<Op> {
+		let combines_bits = |side: &Node| {
+			self.get_type(side) == crate::type_kinds::Kind::Int && !crate::analyzer::is_boolean(side, &self.scope)
+		};
+		(op.is_bitwise() && !(combines_bits(left) && combines_bits(right))).then(|| op.logical_twin())
+	}
+}
+
 fn has_list_children(tag: &Node, children: &Node) -> bool {
 	let is_element = matches!(tag.drop_meta(), Node::Symbol(name) if crate::markup::is_element_tag(name));
 	is_element
