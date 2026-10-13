@@ -1,0 +1,6 @@
+use cargo regex
+print regex.escape("a.b")
+r = regex.Regex("a+")
+print r.is_match("caaat")
+print r.replace_all("caaat", "-")
+print r.as_str()

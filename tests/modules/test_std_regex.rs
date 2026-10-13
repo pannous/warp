@@ -25,3 +25,11 @@ fn what_one_engine_lacks_is_an_error_in_both() {
 	crate::common::fails_with("use regex; matches(\"ab\", \"a(?=b)\")", "look-around");
 	crate::common::fails_with("use regex; matches(\"aa\", \"(a)\\\\1\")", "backreference");
 }
+
+/// Card matches-bool: a match is a truth value, printed yes or no, not 1 or 0
+#[cfg(feature = "native")]
+#[test]
+fn a_match_prints_yes_or_no() {
+	let printed = crate::common::printed("use regex; print \"abc\" matches \"a.c\"; print \"abd\" matches \"a.c$\"");
+	assert_eq!(printed.lines().collect::<Vec<_>>(), ["yes", "no"]);
+}
