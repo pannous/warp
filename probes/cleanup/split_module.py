@@ -71,7 +71,8 @@ def main():
 	parent_parent = parent[:-1] if len(parent) > 1 else parent
 	all_spans, declarations = [], []
 	for spec in children:
-		child, doc, ranges = spec.split("|")
+		child, doc_and_ranges = spec.split("|", 1)
+		doc, ranges = doc_and_ranges.rsplit("|", 1)
 		spans = [tuple(int(n) - 1 for n in span.split("-")) for span in ranges.split(",")]
 		body = []
 		for first, last in spans:
@@ -87,8 +88,10 @@ def main():
 		print(f"{target}: {len(body)} lines")
 		all_spans += spans
 		declarations.append(f"mod {child};")
-		if any(ITEM.match(line) and not ITEM.match(line).group(1) for line in body):  # methods alone need no re-export
-			declarations.append(f"pub use {child}::*;")
+		visibilities = {item.group(2) for item in map(ITEM.match, body) if item and not item.group(1)}
+		if visibilities:  # methods alone need no re-export; the re-export is as visible as the most visible item
+			reexport = next((v for v in ("pub ", "pub(crate) ") if v in visibilities), "")
+			declarations.append(f"{reexport}use {child}::*;")
 	for first, last in sorted(all_spans, reverse=True):
 		del lines[first:last + 1]
 	at = next(
