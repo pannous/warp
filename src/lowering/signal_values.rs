@@ -17,7 +17,7 @@ use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{
-	assign, defines_function, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord,
+	assign, defines_function, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord,
 };
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
 use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
@@ -720,7 +720,7 @@ impl Signals {
 					Box::new(self.fields_kept(*value, &fields, signals, main)),
 				)
 			}
-			Node::Key(target, op, value) if is_write(op) && signals.contains(&signal_name(&target)) => {
+			Node::Key(target, op, value) if op.is_write() && signals.contains(&signal_name(&target)) => {
 				let name = signal_name(&target);
 				let value = match op {
 					Op::Assign => self.rewrite(*value, signals, main),
@@ -1203,14 +1203,10 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 		.clone()
 }
 
-fn is_write(op: Op) -> bool {
-	op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
-}
-
 /// `f(a, b) := body`, `def f(a, b) {body}`
 fn definition(node: &Node) -> Option<Definition> {
 	let (head, body) = match node.drop_meta() {
-		Node::Key(head, Op::Define, body) if is_call_head(head) => (head.as_ref().clone(), body.as_ref().clone()),
+		Node::Key(head, Op::Define, body) if is_round_head(head) => (head.as_ref().clone(), body.as_ref().clone()),
 		Node::List(items, _, _) if defines_function(items) => {
 			let parts = keyword_definition_parts(&items[1..]);
 			let (head, body) = (parts.first()?.clone(), parts.last()?.clone());
@@ -1320,7 +1316,7 @@ fn assigned_names(body: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	visit_main_level(body, &mut |node| {
 		if let Node::Key(target, op, _) = node {
-			if let (true, Node::Symbol(name)) = (is_write(*op), target.drop_meta()) {
+			if let (true, Node::Symbol(name)) = (op.is_write(), target.drop_meta()) {
 				names.insert(name.clone());
 			}
 		}

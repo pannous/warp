@@ -584,6 +584,19 @@ impl Node {
 		found
 	}
 
+	/// `x` of every `x = …` (or whichever operators `binds` accepts) anywhere in this node, in order of appearance
+	pub fn assigned_names<Names: FromIterator<String>>(&self, binds: impl Fn(&Op) -> bool) -> Names {
+		let mut names = vec![];
+		self.visit(&mut |node| {
+			if let Key(target, op, _) = node {
+				if binds(op) {
+					names.extend(target.symbol_name().map(String::from));
+				}
+			}
+		});
+		names.into_iter().collect()
+	}
+
 	/// Call `action` on this node and every descendant (pre-order, Meta dropped)
 	pub fn visit<'a>(&'a self, action: &mut dyn FnMut(&'a Node)) {
 		let node = self.drop_meta();

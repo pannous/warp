@@ -763,7 +763,7 @@ fn definition_head(head: &Node) -> Option<&[Node]> {
 }
 
 /// `f()`: the head of a definition without parameters, whose body has variables of its own
-fn is_call_head(head: &Node) -> bool {
+fn is_parameterless_head(head: &Node) -> bool {
 	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [name] if matches!(name.drop_meta(), Node::Symbol(_))))
 }
 

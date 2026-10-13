@@ -200,16 +200,8 @@ pub(crate) fn data_binding(item: &Node) -> Option<(&str, &Node)> {
 	is_data.then(|| (name.as_str(), value.drop_meta()))
 }
 
-pub(crate) fn assigned_names(program: &Node) -> HashSet<&str> {
-	let mut names = HashSet::new();
-	program.visit(&mut |node| {
-		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.insert(name.as_str());
-			}
-		}
-	});
-	names
+pub(crate) fn assigned_names(program: &Node) -> HashSet<String> {
+	program.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
 }
 
 /// Arithmetic on literals that gives a float: a decimal (`0.1 + 0.2`), √2, π (decision exact-default)
@@ -240,7 +232,7 @@ pub(in crate::analyzer) fn kebab_ambiguities(program: &Node) -> Vec<Diagnostic> 
 	program.visit(&mut |item| {
 		let Some((name, _)) = data_binding(item) else { return };
 		let parts: Vec<&str> = name.split('-').collect();
-		if parts.len() < 2 || !parts.iter().all(|part| variables.contains(part)) {
+		if parts.len() < 2 || !parts.iter().all(|part| variables.contains(*part)) {
 			return;
 		}
 		let subtraction = parts.join(" - ");

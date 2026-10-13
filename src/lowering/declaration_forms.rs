@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
-	let variables = assigned_names(&node).into_iter().map(str::to_string).collect();
+	let variables = assigned_names(&node);
 	let mut names = Names {
 		values: names_used_as_values(&node),
 		variables,

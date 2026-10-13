@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 /// A symbol that is not a variable reads the value of the data key of that name given earlier in the same block:
 /// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
 pub fn resolve_data_scope(program: Node) -> Node {
-	let mut variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
+	let mut variables = assigned_names(&program);
 	let context = function_definitions(&program);
 	variables.extend(
 		context
@@ -31,7 +31,7 @@ pub fn lower_kebab_members(program: Node) -> Node {
 	if objects.is_empty() {
 		return program;
 	}
-	let variables: HashSet<String> = assigned_names(&program).into_iter().map(String::from).collect();
+	let variables = assigned_names(&program);
 	let mut missing = None;
 	program.visit(&mut |node| {
 		if let Node::Key(receiver, Op::Dot, member) = node {
