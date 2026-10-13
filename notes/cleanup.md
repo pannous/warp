@@ -370,6 +370,14 @@ stored_values (280), element_events (286). Each repeats three things:
 Order: 1, then 2, then 3 after the decision. Together about −1.2k lines of the 6.0k; the rest is real behaviour
 (effects, polling across tasks, components) that no merge removes.
 
+### Foreign spellings (welcome_forms.rs, asked 2026-10-13, nothing removed until the user answers)
+Lines per form incl. helpers; no sample uses any; tests = files using it (they get cleanup-edge ignores if dropped).
+generic `<T>` ~106 (5 tests) · OCaml let-in ~65 · Rust `let mut` ~18 · Kotlin/Ruby `when` chains ~66 · C++ lambda
+`[](int x){…}` ~44 · C++ `auto x =` ~14 · Elixir `def f(x), do:` ~23 · `Enum.map`/`List.map` ~44 · LINQ ~57 ·
+R/PHP `sapply`/`array_map` ~34 · R `c(1,2)` ~57 · R `<- function` ~24 · OCaml `fun x ->` ~26 · Ruby `lambda {}`/`proc`/
+`.call` ~43 · `xs.sum { |x| }`/`sumOf` ~27 · Ruby `.to_s`/`.upcase` ~33 · Python `lambda x:` ~30 (5 tests) · variadic
+lambdas ~23 · JS `({a, b}) =>` ~38. All ≈ 770 lines. Kept (samples use them): match `=>` arms, `loop {}`, `function(){}`.
+
 ## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)
 
 How a change is checked: behaviour-preserving emitter changes emit the same bytes. Build warp before and after in the
