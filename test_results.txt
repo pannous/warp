@@ -3195,6 +3195,7 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_nonzero_visualizer_child_report_names_its_exit_status
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
+  ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
@@ -5099,7 +5100,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
 
 SUMMARY:
-11 ignored, 5096 passed, 1 failed, 5097 total tested
+12 ignored, 5097 passed, 0 failed, 5097 total tested
