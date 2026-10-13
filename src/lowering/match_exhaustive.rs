@@ -82,7 +82,7 @@ fn incomplete(
 	}
 	let arms_to_add: Vec<String> = missing.iter().map(|case| format!("{case}: …")).collect();
 	let message = format!("match on {type_name} misses {}", missing.join(", "));
-	let fix = format!("add {} or the catch-all _: …", arms_to_add.join("; "));
+	let fix = format!("add {} or other: …", arms_to_add.join("; "));
 	Some(Diagnostic::at(word, message).fix(fix).into_error())
 }
 

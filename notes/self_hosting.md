@@ -84,7 +84,7 @@ Rules
 Order: the lowering passes first, then the analyzer, then the emitter. Each stage can start before the previous one
 is complete; only the bootstrap waits for all three.
 
-- Lowering passes first. src/pipeline.rs runs ~150 passes, each `fn(Node) -> Node`, in SOURCE_PASSES and
+- Lowering passes first. src/pipeline.rs runs ~150 passes, each `fn(Node) -> Node`, in SOURCE_PHASES and
   MEANING_PASSES (~50k lines in src/lowering). A pass is the smallest unit with a twin: one function, one input tree,
   one output tree.
   - They can be ported one at a time, early and self-contained passes first.

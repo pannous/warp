@@ -226,7 +226,7 @@ pub fn lower(program: Node) -> Node {
 	}) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
 		if let Err(error) =
-			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)])
+			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning).weak()])
 		{
 			return error;
 		}
@@ -320,6 +320,7 @@ fn without_unraised(
 					statement,
 					format!("on {name}: nothing emits {name}, so this handler never runs{hint}"),
 				)
+				.severe()
 			})
 		})
 		.collect();
