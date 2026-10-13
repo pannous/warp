@@ -17,7 +17,7 @@ use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{
-	assign, defines_function, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord,
+	assign, defines_function, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord,
 };
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
 use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
@@ -1206,7 +1206,7 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 /// `f(a, b) := body`, `def f(a, b) {body}`
 fn definition(node: &Node) -> Option<Definition> {
 	let (head, body) = match node.drop_meta() {
-		Node::Key(head, Op::Define, body) if is_call_head(head) => (head.as_ref().clone(), body.as_ref().clone()),
+		Node::Key(head, Op::Define, body) if is_round_head(head) => (head.as_ref().clone(), body.as_ref().clone()),
 		Node::List(items, _, _) if defines_function(items) => {
 			let parts = keyword_definition_parts(&items[1..]);
 			let (head, body) = (parts.first()?.clone(), parts.last()?.clone());

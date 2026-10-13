@@ -207,7 +207,7 @@ impl Signals {
 					separator,
 				)
 			}
-			Node::Key(target, Op::Define, body) if is_call_head(&target) => {
+			Node::Key(target, Op::Define, body) if is_round_head(&target) => {
 				Node::Key(target, Op::Define, Box::new(self.lower(*body, &[])))
 			}
 			Node::Key(target, op, value) => {
@@ -360,7 +360,7 @@ impl Signals {
 	fn function_bodies(&mut self, node: Node) -> Node {
 		match node {
 			Node::Key(target, Op::Define, body)
-				if is_call_head(&target) && !word(&head_word(&target)).starts_with(CHECK_PREFIX) =>
+				if is_round_head(&target) && !word(&head_word(&target)).starts_with(CHECK_PREFIX) =>
 			{
 				let proxies = self.proxies(&body);
 				Node::Key(target, Op::Define, Box::new(self.lower(*body, &proxies)))
@@ -773,7 +773,7 @@ fn declared_globals(node: &Node) -> HashSet<String> {
 }
 
 /// `f(x)` or `f()` as the head of a definition
-pub(crate) fn is_call_head(head: &Node) -> bool {
+pub(crate) fn is_round_head(head: &Node) -> bool {
 	matches!(head.drop_meta(), Node::List(_, Bracket::Round, _))
 }
 
