@@ -755,12 +755,14 @@ fn is_plain_data(node: &Node) -> bool {
 /// compute, not data that reads as written (card str-inline)
 fn computes_value(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= match part {
-		Node::Key(_, Op::Hash, _) => true,
-		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
-		// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
-		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&head.as_str())),
-		_ => false,
+	node.visit(&mut |part| {
+		found |= match part {
+			Node::Key(_, Op::Hash, _) => true,
+			Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
+			// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
+			Node::List(..) => crate::time::is_time_call(part),
+			_ => false,
+		}
 	});
 	found
 }

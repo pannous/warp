@@ -21,6 +21,14 @@ pub const INSTANT_AT: &str = "instant_at";
 pub const TIME_OF: &str = "time_of";
 /// time_in_zone(time, zone index, choice): `t in "Europe/Berlin"` of a time only the run knows
 pub use crate::wasm_emitter::time_zones::TIME_IN_ZONE;
+
+/// The calls that build a time node at run time
+pub const TIME_CALLS: [&str; 3] = [INSTANT_AT, TIME_OF, TIME_IN_ZONE];
+
+/// `instant_at(clock)`, `time_of(…)`, `time_in_zone(…)`: a time the run builds
+pub fn is_time_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, ..) if items.first().and_then(Node::symbol_name).is_some_and(|head| TIME_CALLS.contains(&head)))
+}
 /// The one field of an instant that needs no time zone
 pub const EPOCH_SECONDS: &str = "epoch_seconds";
 
