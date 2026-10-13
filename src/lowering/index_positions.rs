@@ -10,7 +10,7 @@
 
 use super::memoization::definition_parts;
 use super::nodes::{children_rewritten, for_in_variable, key, parameter_name};
-use crate::analyzer::{insert_position, AT_WORD, INSERT_METHOD};
+use crate::declaration_forms::{insert_position, AT_WORD, INSERT_METHOD};
 use crate::diagnostic::Diagnostic;
 use crate::library_words::COLLECTION_POSITION;
 use crate::node::{Bracket, Node, Separator};

@@ -6,9 +6,9 @@
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
 use super::nodes::{children_rewritten, key, Counter};
-use super::words::{GLOBAL_WORD, RETURN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{GLOBAL_WORD, RETURN_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// The most statements a body may have to be inlined

@@ -1,5 +1,6 @@
 //! Fields and keys: `x.name`, `m[key]` with a key known only at runtime, the map words
 use super::*;
+use crate::words::MAP_KEYS;
 
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
 pub const NO_FIELD_PREFIX: &str = "no_field_";
@@ -38,8 +39,7 @@ pub(super) const ENTRY_PART: i32 = 0;
 pub(super) const KEY_PART: i32 = 1;
 pub(super) const VALUE_PART: i32 = 2;
 use crate::library_words::{
-	COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_ENTRIES, MAP_GET_OR, MAP_KEYS, MAP_VALUES, MAP_WITHOUT,
-	MAP_WORD_FUNCTIONS,
+	COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_ENTRIES, MAP_GET_OR, MAP_VALUES, MAP_WITHOUT, MAP_WORD_FUNCTIONS,
 };
 use crate::one_entry_maps::MAP_OF_ENTRY;
 
@@ -92,7 +92,7 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_generic_indexed_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		match self.map_key(index) {
-			Some(key) => match crate::analyzer::constant_field_name(&key) {
+			Some(key) => match crate::declaration_forms::constant_field_name(&key) {
 				// the value of the entry, else of the meta entry `@name`, or the runtime error naming the missing field
 				Some(name) => {
 					let node_ref = Ref(self.node_ref(false));
@@ -1273,7 +1273,7 @@ impl WasmGcEmitter {
 		// removed_value(collection, key): what `collection.remove(key)` gives, of a map the key's value (ø if absent), of
 		// a list the list itself, which map_without then changes (the static kinds don't tell a map from a list)
 		self.runtime_function(
-			crate::analyzer::REMOVED_VALUE_CALL,
+			crate::declaration_forms::REMOVED_VALUE_CALL,
 			vec![node_ref, node_ref],
 			vec![node_ref],
 			vec![],

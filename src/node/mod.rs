@@ -956,6 +956,43 @@ pub fn parens(xs: Vec<Node>) -> Node {
 	List(xs, Bracket::Round, Separator::None)
 }
 
+/// `function(arguments…)`
+pub fn call(function: &str, arguments: Vec<Node>) -> Node {
+	Node::List(
+		[vec![symbol(function)], arguments].concat(),
+		Bracket::Round,
+		Separator::None,
+	)
+}
+
+/// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
+/// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone
+pub fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> Node {
+	match node {
+		Node::Key(left, op, right) => {
+			let left = rewrite(*left);
+			Key(Box::new(left), op, Box::new(rewrite(*right)))
+		}
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(rewrite).collect(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(rewrite(*node)),
+			data,
+		},
+		other => other,
+	}
+}
+
+/// The name a member starts with: `count` of `count = 0`, `up` of `up() {…}`
+pub fn leading_name(member: &Node) -> String {
+	match member.drop_meta() {
+		Node::Key(left, _, _) => leading_name(left),
+		Node::List(items, _, _) => items.first().map(leading_name).unwrap_or_default(),
+		other => other.name(),
+	}
+}
+
 pub fn ints(xs: Vec<i32>) -> Node {
 	List(
 		xs.into_iter().map(|x| int(x as i64)).collect(),

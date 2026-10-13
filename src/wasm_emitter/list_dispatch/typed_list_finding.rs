@@ -22,7 +22,7 @@ pub(in crate::wasm_emitter) fn list_sum_call(items: &[Node]) -> Option<(&Node, &
 pub(super) fn zero_fill_parts(value: &Node) -> Option<(&Node, &Node)> {
 	match value.drop_meta() {
 		Node::List(items, _, _) => match items.as_slice() {
-			[call, count, zero] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::analyzer::ZERO_FILL_CALL) => {
+			[call, count, zero] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::declaration_forms::ZERO_FILL_CALL) => {
 				Some((count, zero))
 			}
 			_ => None,
@@ -59,7 +59,7 @@ pub(super) fn is_tuple_or_object(value: &Node) -> bool {
 
 /// The list variables a program indexes (`xs#i`, `xs#i = v`) or counts (`#xs`), as a for loop over them does
 pub(super) fn indexed_lists(program: &Node) -> HashSet<String> {
-	let key_variables = crate::analyzer::key_variables(program);
+	let key_variables = crate::declaration_forms::key_variables(program);
 	let mut indexed = HashSet::new();
 	program.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
@@ -68,7 +68,7 @@ pub(super) fn indexed_lists(program: &Node) -> HashSet<String> {
 		} else {
 			list
 		};
-		let by_key = crate::analyzer::looks_up_a_key(index, &key_variables);
+		let by_key = crate::declaration_forms::looks_up_a_key(index, &key_variables);
 		if let (Node::Symbol(name), false) = (counted.drop_meta(), by_key) {
 			indexed.insert(name.clone());
 		}

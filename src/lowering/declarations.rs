@@ -6,9 +6,9 @@
 use super::nodes::{
 	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key, Counter,
 };
-use super::words::{ON_WORD, RETURN_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
+use crate::words::{ON_WORD, RETURN_WORD};
 
 mod tasks;
 pub use tasks::*;
@@ -89,7 +89,7 @@ fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
 }
 
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
-fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
+pub(crate) fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let [word, name, cases] = items else { return None };
 	let is_enum = word.is_symbol(ENUM_WORD);
 	let Node::Symbol(name) = name.drop_meta() else {
@@ -465,7 +465,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 				crate::normalize::operand_text(value)
 			);
 			let question = crate::diagnostic::Ask::new(
-				crate::warp_parser::FILTER_LOOP_TOPIC,
+				crate::for_loop::headers::FILTER_LOOP_TOPIC,
 				format!("`{written}: …` visits only the items that pass its filter"),
 				vec![crate::diagnostic::reading(
 					"filter the items",

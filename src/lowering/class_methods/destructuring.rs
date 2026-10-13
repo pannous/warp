@@ -142,7 +142,7 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 fn is_match(items: &[Node]) -> bool {
 	items
 		.first()
-		.is_some_and(|word| crate::switch::SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
+		.is_some_and(|word| crate::words::SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
 }
 
 /// `Circle(r): body` in a match's cases is the arm `Circle(r) => body`: outside a match, `f(x): body` defines f

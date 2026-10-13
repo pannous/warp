@@ -211,15 +211,6 @@ pub(super) fn without_modifiers(item: Node) -> Node {
 	}
 }
 
-/// The name a member starts with: `count` of `count = 0`, `up` of `up() {…}`
-pub(crate) fn leading_name(member: &Node) -> String {
-	match member.drop_meta() {
-		Node::Key(left, _, _) => leading_name(left),
-		Node::List(items, _, _) => items.first().map(leading_name).unwrap_or_default(),
-		other => other.name(),
-	}
-}
-
 /// wiki/class.md's `address { street; city; zip? }`: the field address holding a block of fields, `address:{…}`
 pub(super) fn nested_fields(words: &[Node]) -> Option<Node> {
 	let [name, block] = words else { return None };

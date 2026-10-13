@@ -5,10 +5,10 @@
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.
 
 use super::nodes::{call, children_rewritten, key};
-use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
+use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::HashSet;
 
 const TEXT_OPERATION: &str = "text";

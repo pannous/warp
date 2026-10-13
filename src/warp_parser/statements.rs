@@ -174,7 +174,7 @@ impl WarpParser {
 			let before_word = self.mark();
 			let word = self.parse_symbol().unwrap_or_default();
 			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str())
-				|| crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str())
+				|| crate::words::CONSTANT_KEYWORDS.contains(&word.as_str())
 				|| crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
@@ -308,75 +308,8 @@ impl WarpParser {
 		if key_variable.is_some() {
 			self.key_variables.pop();
 		}
-		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
-		// (P46), a call `friend(…)` still constructs
-		let filtered = match variable.drop_meta() {
-			Symbol(name) if self.declared_types.contains(name) => {
-				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-				let test = call(crate::traits::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
-				let header = type_filter_header(name, &iterable, &body);
-				let body = item_named(body, name, &it);
-				self.filtered_body(
-					&format!("for {name} in …"),
-					&format!("for x in … {{ if x is {name} {{ … }} }}"),
-					header,
-					test,
-					body,
-				)
-				.map(|body| (it, body))
-			}
-			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
-			// all are of the type needs no filter
-			Symbol(name)
-				if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) =>
-			{
-				let test = self.type_test(&variable, name).expect("a type word");
-				let header = type_filter_header(name, &iterable, &body);
-				Ok((
-					variable.clone(),
-					self.type_filtered_body(name, &iterable, header, test, body),
-				))
-			}
-			_ => Ok((variable, body)),
-		};
-		let (variable, body) = match filtered {
-			Ok(filtered) => filtered,
-			Err(error) => return Some(error),
-		};
-		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
-		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
-			return Some(for_in_loop(unit, iterable, body));
-		}
-		let iterable = self.walked_text_units(&variable, iterable);
+		// kept as written: lowering/for_loop/headers.rs gives `for int in xs`, `for chars in text` their meaning
 		Some(for_in_loop(variable, iterable, body))
-	}
-
-	/// `for word in text`, `for line in text` (wiki/plural.md): over a text the loop variable's name picks the unit, words
-	/// between runs of spaces or lines (as lib/text.warp's words and lines); any other name walks the characters
-	fn walked_text_units(&self, variable: &Node, iterable: Node) -> Node {
-		let is_text = match iterable.drop_meta() {
-			Node::Text(_) => true,
-			Symbol(name) => self.text_variables.contains(name),
-			_ => false,
-		};
-		let unit = variable
-			.drop_meta()
-			.symbol_name()
-			.and_then(|name| TEXT_UNIT_NAMES.iter().find(|(unit, _)| *unit == name));
-		let (Some((unit, separator)), true) = (unit, is_text) else {
-			return iterable;
-		};
-		let parts = call(SPLIT_WORD, vec![iterable, Node::Text(separator.to_string())]);
-		if *unit != WORD_UNIT {
-			return parts;
-		}
-		let part = Symbol(format!("{unit}·part"));
-		let non_empty = Node::Key(
-			Box::new(part.clone()),
-			Op::FatArrow,
-			Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))),
-		);
-		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
@@ -437,17 +370,13 @@ impl WarpParser {
 			1 => parts.remove(0),
 			_ => Node::List(parts, Bracket::None, Separator::Space),
 		};
-		let mentions_it = crate::warp_parser::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER);
 		// `(even number)`: an adjective and a type word
-		let condition = if mentions_it {
-			Some(condition)
-		} else {
-			self.adjective_condition(&condition)
-		};
-		let Some(condition) = condition.filter(|_| self.current_char() == ')') else {
+		let is_condition = crate::warp_parser::mentions(&condition, crate::words::IMPLICIT_PARAMETER)
+			|| self.names_adjective_and_type(&condition);
+		if !is_condition || self.current_char() != ')' {
 			self.rewind(before);
 			return None;
-		};
+		}
 		self.advance();
 		self.skip_spaces();
 		if !self.matches_keyword("in") {
@@ -460,124 +389,24 @@ impl WarpParser {
 			Some(word) => self.colon_body(word),
 			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
 		};
-		let shown = crate::normalize::operand_text(&condition);
-		let collection = crate::normalize::operand_text(&iterable);
-		let header = (
-			format!("for ({shown}) in {collection}"),
-			format!("for it in {collection}.filter(it => {shown})"),
-		);
-		let body = match self.filtered_body(
-			&format!("for ({shown}) in …"),
-			&format!("for it in … {{ if {shown} {{ … }} }}"),
-			Some(header),
-			condition,
-			body,
-		) {
-			Ok(body) => body,
-			Err(error) => return Some(error),
-		};
-		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-		Some(for_in_loop(it, iterable, body))
+		// kept as written, the condition in round brackets: lowering/for_loop/headers.rs filters the loop
+		let condition = Node::List(vec![condition], Bracket::Round, Separator::None);
+		Some(for_in_loop(condition, iterable, body))
 	}
 
-	/// `(even number)` in a loop header: `even(it)` (built in: `it%2==0`, `odd` its opposite, else the user's function) and
-	/// `it is number`; None for anything else
-	pub(super) fn adjective_condition(&self, words: &Node) -> Option<Node> {
-		// the two words, spaced or read as the call `even(number)`
+	/// `(even number)` in a loop header: two words, spaced or read as the call `even(number)`, the second a declared type
+	/// or a type word
+	fn names_adjective_and_type(&self, words: &Node) -> bool {
 		let Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) = words.drop_meta()
 		else {
-			return None;
+			return false;
 		};
 		let [adjective, type_word] = items.as_slice() else {
-			return None;
+			return false;
 		};
-		let Symbol(adjective) = adjective.drop_meta() else {
-			return None;
-		};
-		let Symbol(type_name) = type_word.drop_meta() else {
-			return None;
-		};
-		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-		let type_test = self.type_test(&it, type_name)?;
-		let parity = |op: Op| {
-			Node::Key(
-				Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))),
-				op,
-				Box::new(Node::int(0)),
-			)
-		};
-		let adjective_test = match adjective.as_str() {
-			word if self.functions.contains(word) => call(word, vec![it.clone()]),
-			EVEN_WORD => parity(Op::Eq),
-			ODD_WORD => parity(Op::Ne),
-			word => call(word, vec![it.clone()]),
-		};
-		Some(Node::Key(Box::new(type_test), Op::And, Box::new(adjective_test)))
-	}
-
-	/// `value is T` for a loop filter: a declared type by its instances, a type word by its runtime kind; None for any other word
-	pub(super) fn type_test(&self, value: &Node, type_name: &str) -> Option<Node> {
-		let test = if self.declared_types.contains(type_name) {
-			crate::traits::INSTANCE_OF
-		} else if crate::analyzer::type_word_kind(type_name).is_some() {
-			crate::type_tests::IS_TYPE
-		} else {
-			return None;
-		};
-		Some(call(test, vec![value.clone(), Node::Text(type_name.to_string())]))
-	}
-
-	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46).
-	/// `header` is the loop's header as written and its explicit form, the fix ("I meant: …"); None when the body
-	/// needs the edit too
-	pub(super) fn filtered_body(
-		&self,
-		written: &str,
-		explicit: &str,
-		header: Option<(String, String)>,
-		test: Node,
-		body: Node,
-	) -> Result<Node, Node> {
-		ask(&self.filter_question(written, explicit, header))?;
-		Ok(guarded_body(test, body))
-	}
-
-	/// The got-it question announcing a filtering loop
-	fn filter_question(&self, written: &str, explicit: &str, header: Option<(String, String)>) -> Ask {
-		let question = format!("`{written}` visits only the items that pass its filter");
-		let filter = reading("filter the items", explicit);
-		let readings = vec![match header {
-			Some((written, replacement)) => filter.replacing(written, replacement),
-			None => filter,
-		}];
-		Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning)
-			.written(written)
-			.at(self.line_nr, self.column)
-	}
-
-	/// `for T in xs` of a type word T, which visits only the items of type T: the type test carries the loop, so the emitter
-	/// decides it from the items' static type and announces the filter only when it is left to run time (`for char in s`
-	/// of a text s filters nothing)
-	fn type_filtered_body(
-		&self,
-		name: &str,
-		iterable: &Node,
-		header: Option<(String, String)>,
-		test: Node,
-		body: Node,
-	) -> Node {
-		let question = self.filter_question(
-			&format!("for {name} in …"),
-			&format!("for x in … {{ if x is {name} {{ … }} }}"),
-			header,
-		);
-		guarded_body(
-			test.with_meta_data(super::FilterLoop {
-				question,
-				iterable: iterable.clone(),
-			}),
-			body,
-		)
+		let is_type =
+			|name: &String| self.declared_types.contains(name) || crate::analyzer::type_word_kind(name).is_some();
+		matches!(adjective.drop_meta(), Symbol(_)) && matches!(type_word.drop_meta(), Symbol(name) if is_type(name))
 	}
 
 	/// `for (i=0;i<n;i++) {body}`, `for(…) print i`, `for(…): body`, at its head: `((for (head)) {body})` as lowering reads it
@@ -795,16 +624,6 @@ pub(super) fn as_block(body: Node) -> Node {
 		Node::List(_, Bracket::Curly, _) => body,
 		_ => Node::List(vec![body], Bracket::Curly, Separator::Semicolon),
 	}
-}
-
-/// `{ if test then body }`, the body of a filtering loop
-fn guarded_body(test: Node, body: Node) -> Node {
-	let guarded = Node::Key(
-		Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))),
-		Op::Then,
-		Box::new(body),
-	);
-	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }
 
 /// `global float y = 2` as `global y: float = 2` (card w0-globals: the type word was dropped, so y held the int 2);

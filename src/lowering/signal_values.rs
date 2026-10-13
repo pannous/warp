@@ -13,7 +13,6 @@
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
 use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
-use super::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -21,6 +20,7 @@ use crate::variable_signals::{
 	assign, defines_function, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord,
 };
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
+use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `signal·set(s, v)`: store v in the signal s, then call its listeners

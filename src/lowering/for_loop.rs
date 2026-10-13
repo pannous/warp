@@ -11,6 +11,8 @@ use crate::operators::Op;
 use crate::warp_parser::while_do;
 use crate::wasm_emitter::{is_step, mark_step};
 
+pub mod headers;
+
 const FOR_KEYWORD: &str = "for";
 const IN_KEYWORD: &str = "in";
 const IMPLICIT_VARIABLE: &str = "it";

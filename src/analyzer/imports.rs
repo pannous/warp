@@ -235,11 +235,11 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			crate::wasm_emitter::list_ops::RETURNED_ERROR,
 		],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
-		crate::analyzer::LIST_BECOME => &[crate::analyzer::LIST_BECOME],
+		crate::declaration_forms::LIST_BECOME => &[crate::declaration_forms::LIST_BECOME],
 		crate::wasm_emitter::library_ops::LIST_SORTED_BY => &[crate::wasm_emitter::library_ops::LIST_SORTED_BY],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
-		crate::type_tests::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
+		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
 		crate::wasm_emitter::text_builtins::TEXT_FORM => &["list_join"],
 		// IEEE bits beyond the fixnums are BigInts
 		crate::wasm_emitter::text_builtins::FLOAT_BITS | crate::wasm_emitter::text_builtins::BITS_FLOAT => {

@@ -156,7 +156,7 @@ fn defined_name(node: &Node) -> Option<String> {
 		},
 		// `def ((init ø) {1})`: the name leads the head
 		Node::List(words, _, _) if words.len() > 1 && words.first().is_some_and(is_function_keyword) => {
-			Some(crate::lowering::class_methods::leading_name(&words[1])).filter(|name| !name.is_empty())
+			Some(crate::node::leading_name(&words[1])).filter(|name| !name.is_empty())
 		}
 		_ => None,
 	}

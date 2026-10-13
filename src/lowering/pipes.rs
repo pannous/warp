@@ -5,12 +5,12 @@
 //! `then` pipes the same way into a function missing its argument (`xs then sort`, P158); otherwise it is the
 //! condition, also without `if`.
 
-use super::lambdas::IMPLICIT_PARAMETER;
 use super::nodes::{if_then, key};
 use crate::analyzer::counting_function;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashSet;
 
 /// Meta key on the word after a single `|`

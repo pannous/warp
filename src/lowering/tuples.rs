@@ -8,11 +8,10 @@
 use super::nodes::key;
 use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::STARRED;
 
 pub const RETURN: &str = "return";
 pub const DESTRUCTURE: &str = "$destructure";
-/// The mark of the name taking the rest in `a, *rest = xs` (Python's starred target)
-pub const STARRED: &str = "*";
 /// The hidden names holding the value of a nested target: `(a, b), c = …`
 const UNPACKED: &str = "unpacked";
 

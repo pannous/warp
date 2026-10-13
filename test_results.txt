@@ -1112,6 +1112,12 @@ PASSED:
   ✓ functions::test_definition_bodies::a_method_body_keeps_its_suffix_word
   ✓ functions::test_definition_bodies::of_phrase_as_a_value
   ✓ functions::test_definition_bodies::ruby_def_indented_by_tabs
+  ✓ functions::test_definition_cases::a_literal_parameter_alone_is_refused
+  ✓ functions::test_definition_cases::definitions_by_cases_are_defined_twice
+  ✓ functions::test_definition_cases::definitions_without_parameters_have_no_literal
+  ✓ functions::test_definition_cases::overloads_by_type_and_count_stay
+  ✓ functions::test_definition_cases::the_fix_joins_the_cases_in_a_match
+  ✓ functions::test_definition_cases::the_match_the_fix_names_works
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
@@ -2000,6 +2006,7 @@ PASSED:
   ✓ modules::test_std_file_bytes::a_value_that_is_no_byte_is_refused
   ✓ modules::test_std_file_bytes::bytes_and_texts_are_the_same_file
   ✓ modules::test_std_file_bytes::write_bytes_and_read_bytes_need_no_use
+  ✓ modules::test_std_file_bytes::writing_creates_missing_folders
   ✓ modules::test_std_file_copy::a_copy_of_a_std_module_knows_the_foreign_names
   ✓ modules::test_std_file::a_file_url_loads_the_module_and_append_is_qualified
   ✓ modules::test_std_file::use_file_lists_a_folder
@@ -2817,6 +2824,8 @@ PASSED:
   ✓ parser::test_dollar_names::dollar_digit_stays_a_parameter_reference
   ✓ parser::test_dollar_names::dollar_names_keep_their_sigil
   ✓ parser::test_dollar_names::dollar_names_survive_eval
+  ✓ parser::test_element_wise_phrase::element_wise_operators_parse_as_written
+  ✓ parser::test_element_wise_phrase::element_wise_operators_still_mean_what_they_did
   ✓ parser::test_emoji_atoms::an_emoji_is_a_codepoint
   ✓ parser::test_emoji_atoms::an_emoji_sequence_is_one_atom
   ✓ parser::test_empty_argument::an_empty_argument_of_a_braceless_call
@@ -3780,6 +3789,8 @@ PASSED:
   ✓ types::test_enum_cases::an_enum_case_with_values_is_a_class
   ✓ types::test_enum_cases::an_enum_without_values_stays_numbered
   ✓ types::test_enum_cases::swift_case_lines_with_values
+  ✓ types::test_enum_parameter_type::an_enum_is_a_field_and_variable_type
+  ✓ types::test_enum_parameter_type::an_enum_is_a_parameter_type
   ✓ types::test_enums_ported::a_kotlin_enum_class_matched_with_when
   ✓ types::test_enums_ported::a_kotlin_sealed_class_matched_by_type
   ✓ types::test_enums_ported::a_rust_enum_matched_by_path
@@ -3870,6 +3881,10 @@ PASSED:
   ✓ types::test_map_runtime_kind::a_map_parameter_is_a_map
   ✓ types::test_map_runtime_kind::map_is_a_type_word
   ✓ types::test_map_type_tests::a_map_is_a_map
+  ✓ types::test_match_exhaustive::a_match_missing_a_variant_fails_to_compile
+  ✓ types::test_match_exhaustive::a_match_missing_an_enum_case_fails_to_compile
+  ✓ types::test_match_exhaustive::a_subject_of_unknown_type_keeps_the_run_time_error
+  ✓ types::test_match_exhaustive::complete_matches_and_catch_alls_compile
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
   ✓ types::test_maybe_declaration::a_maybe_declaration_is_optional
@@ -5141,4 +5156,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5136 passed, 0 failed, 5136 total tested
+12 ignored, 5151 passed, 0 failed, 5151 total tested

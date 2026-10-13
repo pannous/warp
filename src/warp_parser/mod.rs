@@ -2,8 +2,8 @@ use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::extensions::strings::StringExtensions;
-use crate::lowering::nodes::call;
 use crate::meta::LineInfo;
+use crate::node::call;
 use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
@@ -41,16 +41,8 @@ mod suffixes;
 use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
-/// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
 /// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
 const URL_MARK: &str = "://";
-const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
-const BYTES_WORD: &str = "bytes";
-const WORD_UNIT: &str = "word";
-/// The loop variable names that walk a text by a unit other than the character, and the text between two units
-const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
-const SPLIT_WORD: &str = "split";
-const FILTER_WORD: &str = "filter";
 pub const IT_WORD: &str = "it";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
@@ -109,14 +101,6 @@ const NONLOCAL_WORD: &str = "nonlocal";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
-/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [
-	('+', Op::Add),
-	('-', Op::Sub),
-	('*', Op::Mul),
-	('/', Op::Div),
-	('^', Op::Pow),
-];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
@@ -236,7 +220,6 @@ const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 const PRINT_WORD: &str = "print";
-const CODEPOINT_TYPE: &str = "codepoint";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
@@ -413,44 +396,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	items
 }
 
-/// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
-/// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
-fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
-	let Node::Symbol(word) = variable.drop_meta() else {
-		return None;
-	};
-	let mentions = |name: &str| {
-		let mut found = false;
-		body.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
-		found
-	};
-	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || mentions(word) {
-		return None;
-	}
-	let walked = if word == BYTES_WORD {
-		let offset = Symbol("byte·offset".to_string());
-		let count = Node::Key(
-			Box::new(iterable.clone()),
-			Op::Dot,
-			Box::new(Symbol(BYTES_WORD.to_string())),
-		);
-		let offsets = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		let byte = Node::Key(
-			Box::new(offset.clone()),
-			Op::FatArrow,
-			Box::new(call("byte_at", vec![iterable.clone(), offset])),
-		);
-		Node::Key(
-			Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)),
-			Op::Dot,
-			Box::new(call("map", vec![byte])),
-		)
-	} else {
-		call("chars", vec![iterable.clone()])
-	};
-	Some((Symbol(IT_WORD.to_string()), walked))
-}
-
 /// The infix operators continue_expr reads apart from the operator table
 enum SpecialInfix {
 	/// `a mod b`, `a rem b`
@@ -489,7 +434,12 @@ impl SpecialInfix {
 				);
 				lhs
 			}
-			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
+			// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+			SpecialInfix::ElementWise(op) => Node::List(
+				vec![lhs, Symbol(crate::operators::element_wise_word(op)), operand],
+				Bracket::None,
+				Separator::Space,
+			),
 			SpecialInfix::Membership(word) => Node::List(
 				vec![lhs, Symbol(word.to_string()), operand],
 				Bracket::None,
@@ -519,19 +469,6 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 	);
 	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
 	call(MAP_WORD, vec![list, each])
-}
-
-/// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
-/// names the item by the type word (then the body would change too)
-fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(String, String)> {
-	if mentions(body, name) {
-		return None;
-	}
-	let collection = crate::normalize::operand_text(iterable);
-	Some((
-		format!("for {name} in {collection}"),
-		format!("for x in {collection}.filter(x => x is {name})"),
-	))
 }
 
 fn is_unindexable_keyword(node: &Node) -> bool {
@@ -576,49 +513,9 @@ const UNCAUGHT_ERROR: &str = "uncaught·error";
 /// `check C` is `assert C` (user, card check-assert)
 const GUARD_MARKERS: [(&str, &str); 3] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER), ("check", ASSERT_MARKER)];
 pub const ASSERTION_FAILED: &str = "assertion failed";
-/// `nand` and its glyph pair, both `not (a and b)`
-/// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
-fn item_named(node: Node, name: &str, item: &Node) -> Node {
-	match node {
-		Symbol(symbol) if symbol == name => item.clone(),
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(head)) if head == name) =>
-		{
-			let mut items = items.into_iter();
-			let head = items.next().expect("a head");
-			Node::List(
-				std::iter::once(head)
-					.chain(items.map(|part| item_named(part, name, item)))
-					.collect(),
-				Bracket::Round,
-				Separator::None,
-			)
-		}
-		other => other.map_children(|child| item_named(child, name, item)),
-	}
-}
-
-/// A list literal whose items all are literals of the type: `[1, 2]` for `number`
-fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
-	let items = match iterable.drop_meta() {
-		Node::List(items, Bracket::Square, _) => items,
-		// `for char in "abc"`: every item of a text is a char
-		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == CODEPOINT_TYPE,
-		_ => return false,
-	};
-	let spec = crate::analyzer::type_word_kind(type_name)
-		.map(|_| type_name)
-		.unwrap_or(type_name);
-	items.iter().all(|item| match item.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) => {
-			crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec)
-		}
-		_ => false,
-	})
-}
-
 /// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
 fn iterates_keys(iterable: &Node) -> bool {
-	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::library_words::MAP_KEYS);
+	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::words::MAP_KEYS);
 	let is_keys_call = |call: &Node| {
 		is_keys_word(call)
 			|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word))
@@ -629,20 +526,9 @@ fn iterates_keys(iterable: &Node) -> bool {
 	}
 }
 
-/// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
-pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
-
-/// The type test of a loop `for T in xs` carries its loop: the iterable and the got-it question announcing the filter
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct FilterLoop {
-	pub question: crate::diagnostic::Ask,
-	pub iterable: Node,
-}
-/// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
-const EVEN_WORD: &str = "even";
-const ODD_WORD: &str = "odd";
 /// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
+/// `nand` and its glyph pair, both `not (a and b)`
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
@@ -650,7 +536,7 @@ const TO_SENTENCE_WORD: &str = "To";
 const DO_WORD: &str = "do";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
-const SLICE_WORD: &str = crate::library_words::SLICE;
+const SLICE_WORD: &str = crate::words::SLICE;
 pub(crate) const TIMES_WORD: &str = "times";
 /// The call `n times text` is parsed to: the text repeated n times
 pub const TEXT_TIMES: &str = "times·text";
@@ -1118,8 +1004,8 @@ fn typed_parameter(arguments: Node) -> Node {
 			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
 			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => {
 				match name.drop_meta() {
-					Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
-					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::tuples::STARRED, name.name())),
+					Symbol(name) => Symbol(format!("{}{name}", crate::words::STARRED)),
+					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::words::STARRED, name.name())),
 					_ => arguments,
 				}
 			}

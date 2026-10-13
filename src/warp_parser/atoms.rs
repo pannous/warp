@@ -1,8 +1,8 @@
 //! Atoms: symbols with suffixes, definitions and their bodies, indented and end blocks, URLs, type declarations
 
 use super::*;
-use crate::lowering::nodes::children_rewritten;
-use crate::lowering::switch::SWITCH_WORDS;
+use crate::node::children_rewritten;
+use crate::words::SWITCH_WORDS;
 
 mod blocks_and_lambdas;
 mod type_declarations;
@@ -109,7 +109,7 @@ impl WarpParser {
 			}
 			// Python's `**kw`: the keyword arguments as one object (src/lowering/variadic.rs)
 			'*' if self.peek_char(1) == '*' && self.is_identifier_start(2) => match self.parse_starred(2) {
-				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::tuples::STARRED)),
+				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::words::STARRED)),
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
@@ -175,10 +175,7 @@ impl WarpParser {
 				match self.generic_names.take() {
 					Some((name, names)) if head.as_ref() == Some(&name) => Node::Meta {
 						node: Box::new(atom),
-						data: Box::new(Node::key(
-							crate::welcome_forms::GENERIC_MARK,
-							Node::Text(names.join(" ")),
-						)),
+						data: Box::new(Node::key(crate::words::GENERIC_MARK, Node::Text(names.join(" ")))),
 					},
 					pending => {
 						self.generic_names = pending;
@@ -312,15 +309,15 @@ impl WarpParser {
 			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
 			let pattern = crate::phrase_calls::pattern_text(&words, &in_phrase);
 			// `To square a number: …` of one slot is called in English as `square of x` too (`square 3` stays a call)
-			let pattern = if pattern == crate::phrase_calls::SLOT {
+			let pattern = if pattern == crate::words::SLOT {
 				format!("{OF_WORD} {pattern}")
 			} else {
 				pattern
 			};
-			if pattern.split(' ').any(|part| part != crate::phrase_calls::SLOT) {
+			if pattern.split(' ').any(|part| part != crate::words::SLOT) {
 				Node::Meta {
 					node: Box::new(head),
-					data: Box::new(Node::key(crate::phrase_calls::PHRASE_MARK, Node::Text(pattern))),
+					data: Box::new(Node::key(crate::words::PHRASE_MARK, Node::Text(pattern))),
 				}
 			} else {
 				head
@@ -394,7 +391,7 @@ impl WarpParser {
 
 	/// `*rest`, `...rest`: the name after the `prefix` characters, starred
 	fn parse_starred(&mut self, prefix: usize) -> Node {
-		self.symbol_after(prefix, |name| Node::Symbol(format!("{}{name}", crate::tuples::STARRED)))
+		self.symbol_after(prefix, |name| Node::Symbol(format!("{}{name}", crate::words::STARRED)))
 	}
 
 	/// ` name(`: blanks, a name and its parenthesis
@@ -435,7 +432,7 @@ impl WarpParser {
 	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
 	/// The soft keyword `version` before digits takes them as written: `version 1.10` is one value, not the float 1.1
 	pub(super) fn version_operand(&mut self, symbol: &str) -> Option<Node> {
-		if symbol != crate::versions::VERSION_KEYWORD || self.options.data_mode {
+		if symbol != crate::words::VERSION_KEYWORD || self.options.data_mode {
 			return None;
 		}
 		let blanks = self.chars[self.pos..].iter().take_while(|c| **c == ' ').count();
@@ -629,7 +626,7 @@ impl WarpParser {
 		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
 			self.skip_blanks();
 			let construction = self.parse_atom();
-			let class = crate::lowering::class_methods::leading_name(&construction);
+			let class = crate::node::leading_name(&construction);
 			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
 			return Some(construction);
 		}

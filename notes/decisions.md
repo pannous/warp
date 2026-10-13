@@ -7,6 +7,22 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- match-whole-value (warp-semantics, card match-binding-arm, user: "Make it available as the matched variable or the
+  special word value"): no binding syntax (`all @ [a, b]`, `[a, b] as all`, `all: [a, b]` all declined). Inside an
+  arm the subject's name is the whole value (`match xs { [a, b] => f(xs) }`), and the word `value` is the whole
+  matched value for any subject, computed ones included (`match f(x) { [a, b] => value.length }`); the innermost
+  match's value when nested; a program variable named `value` wins.
+- enum-case (warp-dispatch, user): a plain enum case is its own value of its enum type, like a data-less
+  tagged-union case: `print Coin.Dime` → Dime, `Dime is Coin` yes, `Coin.Dime as int` → 2 (position from 0),
+  `2 as Coin` / `Coin(2)` → Dime, `9 as Coin` an error "9 is no Coin case", `f(5)` for `f(c: Coin)` a type error.
+  Replaces cases-as-ints; the pins in test_records_classes, test_enum_cases and test_enum_parameter_type move to
+  symbols or `as int` (relayed user decision).
+- enum-int (user asked "for C backward compatibility, we might accept int as Coin (?)"; Interviewer default,
+  undoable): C functions and struct fields typed with an enum convert to and from its int automatically (card
+  enum-parameters); in warp code an int becomes a case only explicitly (`5 as Coin`), and `f(5)`'s error offers
+  the fix `f(5 as Coin)`. Enums with written values convert by value.
+- match-type-union (user): in a case key `int or text` / `int | text` is the type test against the union (union-or),
+  the same as `x is (int or text)`; values and types mix (`0 or text`).
 - match-other (user): `other` is a catch-all case key in a match, a synonym of `_` / `default` / `else`:
   `match c { Penny: 1; other: 0 }`.
 - match-alternatives (warp-semantics, user: "ideally both"): a case key is a pattern, as in Rust: `1 | 2`, `1 or 2`

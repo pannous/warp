@@ -27,7 +27,7 @@ pub(crate) fn names_a_function(name: &str) -> bool {
 		&& !PREPOSITIONS.contains(&name)
 		&& !STATEMENT_WORDS.contains(&name)
 		&& !crate::modules::is_import_keyword(name)
-		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name)
+		&& !crate::words::CONSTANT_KEYWORDS.contains(&name)
 		&& !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 

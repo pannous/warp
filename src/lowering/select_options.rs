@@ -6,10 +6,10 @@
 
 use super::element_events::{element_items, with_element_items};
 use super::nodes::key;
-use super::words::ON_WORD;
 use crate::event_signals::is_element_event;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::ON_WORD;
 
 const SELECT: &str = "select";
 const OPTION: &str = "option";

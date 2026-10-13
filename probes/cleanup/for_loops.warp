@@ -1,0 +1,10 @@
+class Friend { name: text }
+xs = [Friend("a"), 3, "x"]
+for Friend in xs {
+  print it.name
+}
+for (it>2) in [1 2 3 4]: print it
+for int in xs: print int
+s = "ab cd"
+for word in s: print word
+for chars in s: print it

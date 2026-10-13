@@ -15,7 +15,7 @@ RUNNER = REPOSITORY / "notes/agents/codex_app_run.py"
 PROBE_ROOT = REPOSITORY / "data/agents/codex/lifecycle-probe"
 SCHEDULED_CWD = Path(os.environ.get("CODEX_PROBE_CWD", "/Users/me/dev/angles/warp"))
 PROCESS_EXIT_GRACE_SECONDS = 5
-PROBE_TIMEOUT_SECONDS = 15
+PROBE_TIMEOUT_SECONDS = 30
 TURN_TIMEOUT_SECONDS = 3
 START_TIMEOUT_SECONDS = 10
 
@@ -93,6 +93,18 @@ def run_success_probe():
     print(f"completed lifecycle passed: {result['threadId']} -> {artifact_path}")
 
 
+def run_poll_probe():
+    return_code, output, artifact_path, result = run_probe(
+        "poll",
+        "Run `/bin/sleep 18` in the shell, then reply with just: ok",
+        45,
+    )
+    assert return_code == 0, f"expected completed exit 0 after polling, got {return_code}:\n{output}"
+    assert result["status"] == "completed", result
+    assert artifact_path.read_text().strip() == "ok", artifact_path.read_text()
+    print(f"quiet-turn polling passed: {result['threadId']} -> {artifact_path}")
+
+
 def run_timeout_probe():
     return_code, output, artifact_path, result = run_probe(
         "timeout",
@@ -142,10 +154,12 @@ def run_disconnect_probe():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("scenario", choices=["success", "timeout", "interrupt", "disconnect"])
+    parser.add_argument("scenario", choices=["success", "poll", "timeout", "interrupt", "disconnect"])
     scenario = parser.parse_args().scenario
     if scenario == "success":
         run_success_probe()
+    elif scenario == "poll":
+        run_poll_probe()
     elif scenario == "timeout":
         run_timeout_probe()
     elif scenario == "interrupt":

@@ -14,9 +14,9 @@
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
 use super::nodes::{call, key};
-use super::words::{MAP_WORD, SUM_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `shared xs = int[n]` and its synonym `atomic` (P44)
@@ -834,7 +834,7 @@ fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: 
 				&& items[0].name() == DOT_WORD
 				&& items[1..].iter().any(|list| is_linear_list(list, names)) =>
 		{
-			let product = crate::analyzer::element_wise(items[1].clone(), Op::Mul, items[2].clone());
+			let product = crate::broadcasting::element_wise(items[1].clone(), Op::Mul, items[2].clone());
 			call(SUM_WORD, vec![product])
 		}
 		_ => node,
