@@ -42,3 +42,37 @@ def starts_at(source, part, at) {
 	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
 	i == part.length
 }
+
+// Where the numbers of a source start: [[line, column], …], both from 1
+// Rust twin: the positions of the parse tree's number atoms
+def numbers(source) {
+	found = []
+	line = 1
+	column = 1
+	at = 0
+	n = source.length
+	while at < n {
+		end = span_end(source, at, n)
+		if end == at and number_starts(source, at) {
+			found += [[line, column]]
+			end = number_end(source, at, n)
+		}
+		if end == at { end = at + 1 }
+		while at < end {
+			if source[at] == '\n' { line = line + 1; column = 1 } else { column = column + 1 }
+			at = at + 1
+		}
+	}
+	found
+}
+
+def is_name_char(c) := is_alphanumeric(c) or c == '_'
+
+def number_starts(source, at) := is_digit(source[at]) and (at == 0 or not is_name_char(source[at - 1]))
+
+def number_end(source, at, n) {
+	while at < n and (is_name_char(source[at]) or source[at] == '.' and at + 1 < n and is_digit(source[at + 1])) {
+		at = at + 1
+	}
+	at
+}
