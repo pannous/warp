@@ -114,7 +114,7 @@ type Problem<'a> = (&'a Node, String, String);
 /// The accessibility warnings of a program's markup
 pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 	let mut elements = vec![];
-	collect(program, false, None, &mut elements);
+	collect(program, &class_names(program), false, None, &mut elements);
 	// a program without markup (the renderer, compiled on its own) leaves the written problems of the one it renders
 	if elements.is_empty() {
 		return vec![];
@@ -148,7 +148,7 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 pub fn check_rendered(markup: &Node) {
 	let markup = computed_tags_named(markup.clone());
 	let mut elements = vec![];
-	collect(&markup, false, None, &mut elements);
+	collect(&markup, &HashSet::new(), false, None, &mut elements);
 	for (_, message, fix) in problems(&elements, &HashSet::new()) {
 		if !WRITTEN_PROBLEMS.with(|written| written.borrow().contains(&message)) {
 			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
@@ -500,7 +500,23 @@ fn says_something(item: &Node) -> bool {
 	}
 }
 
-fn collect<'a>(node: &'a Node, inside_label: bool, parent: Option<&str>, found: &mut Vec<Element<'a>>) {
+/// `classes`: the program's class names, whose literal `Parser{source: "ab"}` holds fields, no elements
+fn collect<'a>(
+	node: &'a Node,
+	classes: &HashSet<String>,
+	inside_label: bool,
+	parent: Option<&str>,
+	found: &mut Vec<Element<'a>>,
+) {
+	if let Some(fields) = class_literal_fields(node, classes) {
+		return fields
+			.iter()
+			.map(|field| match field.drop_meta() {
+				Node::Key(_, Op::Colon, value) => value.as_ref(),
+				positional => positional,
+			})
+			.for_each(|value| collect(value, classes, inside_label, parent, found));
+	}
 	if let Some((tag, content, head_attributes)) = element_parts(node) {
 		let (items, events, handler_bodies) = without_handlers(content_items(content));
 		found.push(Element {
@@ -525,28 +541,54 @@ fn collect<'a>(node: &'a Node, inside_label: bool, parent: Option<&str>, found: 
 		let inside_label = inside_label || tag == LABEL;
 		items
 			.into_iter()
-			.for_each(|item| collect(item, inside_label, Some(tag), found));
+			.for_each(|item| collect(item, classes, inside_label, Some(tag), found));
 		return handler_bodies
 			.into_iter()
-			.for_each(|body| collect(body, inside_label, None, found));
+			.for_each(|body| collect(body, classes, inside_label, None, found));
 	}
 	match node.drop_meta() {
-		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, parent, found)),
+		Node::List(items, _, _) => items
+			.iter()
+			.for_each(|item| collect(item, classes, inside_label, parent, found)),
 		// the head of `add(a: i32) := …` holds parameters, the target of `a:V = …` a typed variable: not markup
-		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, inside_label, parent, found),
+		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, classes, inside_label, parent, found),
 		// `c ? then : else`: the colon parts the branches, it makes no element
 		Node::Key(condition, Op::Question, branches)
 			if let Node::Key(then, Op::Colon, otherwise) = branches.drop_meta() =>
 		{
 			[condition, then, otherwise]
 				.into_iter()
-				.for_each(|part| collect(part, inside_label, parent, found));
+				.for_each(|part| collect(part, classes, inside_label, parent, found));
 		}
 		Node::Key(left, _, right) => {
-			collect(left, inside_label, parent, found);
-			collect(right, inside_label, parent, found);
+			collect(left, classes, inside_label, parent, found);
+			collect(right, classes, inside_label, parent, found);
 		}
 		_ => {}
+	}
+}
+
+/// The names of the classes a program declares
+fn class_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::Type { name, .. } = node {
+			names.insert(name.drop_meta().name());
+		}
+	});
+	names
+}
+
+/// `Parser{source: "ab"}` of a class `Parser`: its fields
+fn class_literal_fields<'a>(node: &'a Node, classes: &HashSet<String>) -> Option<&'a [Node]> {
+	let (class, fields) = match node.drop_meta() {
+		Node::Key(class, _, fields) => (class.as_ref(), fields.as_ref()),
+		Node::List(items, _, _) if let [class, fields] = items.as_slice() => (class, fields),
+		_ => return None,
+	};
+	match (class.drop_meta(), fields.drop_meta()) {
+		(Node::Symbol(class), Node::List(fields, Bracket::Curly, _)) if classes.contains(class) => Some(fields),
+		_ => None,
 	}
 }
 
