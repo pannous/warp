@@ -81,6 +81,10 @@ fn collect_patterns(node: &Node, patterns: &mut HashMap<String, Vec<Vec<Part>>>)
 }
 
 fn marked_pattern(head: &Node) -> Option<(String, Vec<Part>)> {
+	// `to render text as pdf: …`: the head before its result type
+	if let Node::Key(head, Op::As, _) = head {
+		return marked_pattern(head);
+	}
 	let Node::Meta { node, data } = head else { return None };
 	let Node::Key(mark, Op::Colon, pattern) = data.as_ref() else {
 		return None;

@@ -113,7 +113,9 @@ thread_local! {
 
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
-	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, run)
+	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, || {
+		crate::sandbox::confined(run)
+	})
 }
 
 /// `run` with the program granted only `granted`
@@ -361,6 +363,10 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::serve::with_default_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
 	crate::lowering::serve::bind_path_parameters,
+	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
+	crate::lowering::named_patterns::lower,
+	// `tree find {type: "image", src}`: a recursive walker of its own (tree_find.rs), lowered like written code
+	crate::lowering::tree_find::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::lowering::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
@@ -647,10 +653,14 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
-		return Err(crate::node::error(&format!(
-			"capability denied: {name} needs the {} capability, which eval does not grant",
-			capability.name()
-		)));
+		return Err(crate::node::error(&if crate::sandbox::is_sandboxed() {
+			crate::sandbox::denial(&name, capability.name())
+		} else {
+			format!(
+				"capability denied: {name} needs the {} capability, which eval does not grant",
+				capability.name()
+			)
+		}));
 	}
 	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
 		without_constraints(node),

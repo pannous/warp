@@ -100,6 +100,7 @@ pub mod paint_window;
 pub mod real;
 #[cfg(feature = "native")]
 pub mod route_split;
+pub mod sandbox;
 pub mod shader_holes;
 #[cfg(feature = "native")]
 pub mod shared;

@@ -306,7 +306,7 @@ fn walked_units(iterable: Node) -> Node {
 	}
 }
 
-fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
+pub(crate) fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	let name = variable.name();
 	let (items, index) = (
 		symbol(&format!("{name}{ITEMS_SUFFIX}")),
