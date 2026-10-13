@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **17b6b455b** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4 and 17b6b455b), checked with
-  /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b, the gate's debug build copied to scratch/docs_sync/warp.
+- main commit **0c2b20013** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b and 0c2b20013), checked with
+  /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 17b6b455b..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 17b6b455b origin/main -- notes/decisions.md`).
+The next sweep starts with `git log --oneline 0c2b20013..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 0c2b20013 origin/main -- notes/decisions.md`).
 
 ## How
 
@@ -48,4 +48,4 @@ major corrections go to warp-interviewer, tiny fixes are made directly.
 
 ## Not swept yet
 
-Everything up to the last swept commit is covered; the open gaps are cards (midi-receive-message, types-first-run, untyped-block-parameter, parse-error-try, param-map-pattern, param-pattern-local-warning, amp-compose).
+Everything up to the last swept commit is covered. Unimplemented spec features are sub-cards of the topic card spec-gaps (Later, supervisor 2026-10-13: not Next, so workers keep to the plan); documented-but-failing bugs stay in Next.
