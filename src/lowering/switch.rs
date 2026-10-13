@@ -22,6 +22,7 @@ const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
 const WILDCARD: &str = "_";
 const LIST_SPEC: &str = "list";
 const PAIR_SPEC: &str = "pair";
+const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
 const TEXT_WORD: &str = "str";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
@@ -221,83 +222,137 @@ fn is_list_pattern(pattern: &Node) -> bool {
 	}
 }
 
-/// The tests the value at `path` passes when it matches `pattern`, and the assignments of the names the pattern binds
-fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
-	match pattern.drop_meta() {
-		Node::List(items, _, _) if is_list_pattern(pattern) => {
-			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
-			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
-				tests.push(key(
-					call(COUNT_WORD, vec![path.clone()]),
-					Op::Eq,
-					Node::int(items.len() as i64),
-				));
-				for (index, part) in items.iter().enumerate() {
-					pattern_tests(part, item(&path, index + 1), tests, bindings);
+/// What a pattern asks of the value it matches: the tests it passes, and the assignments of the names it binds
+struct Matched<'a> {
+	names: &'a Names,
+	tests: Vec<Node>,
+	bindings: Vec<Node>,
+}
+
+impl<'a> Matched<'a> {
+	fn of(pattern: &Node, path: Node, names: &'a Names) -> Self {
+		let mut matched = Matched {
+			names,
+			tests: vec![],
+			bindings: vec![],
+		};
+		matched.pattern(pattern, path);
+		matched
+	}
+
+	/// The tests and bindings of `pattern` matching the value at `path`; at any depth a part takes what a whole arm
+	/// takes (card deep-conditions)
+	fn pattern(&mut self, pattern: &Node, path: Node) {
+		if let Some(test) = condition(&path, pattern, self.names) {
+			self.tests.push(test);
+			return;
+		}
+		match pattern.drop_meta() {
+			Node::List(items, _, _) if is_list_pattern(pattern) => self.items(items, path),
+			// fields not named are ignored, the named ones must be there
+			Node::List(fields, _, _) if is_map_pattern(pattern) => {
+				// a map of one field is a pair
+				let is = |spec| call(crate::words::IS_TYPE, vec![path.clone(), text(spec)]);
+				self.tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_SPEC)));
+				for (name, part) in fields.iter().filter_map(map_field) {
+					self.tests
+						.push(call(COLLECTION_CONTAINS, vec![path.clone(), Node::Text(name.clone())]));
+					let field = subscript(path.clone(), Node::Text(name.clone()));
+					match part.drop_meta() {
+						Node::Symbol(shorthand) if *shorthand == name => self.bind(part, field), // `{text}` too
+						_ => self.pattern(part, field),
+					}
 				}
-				return;
-			};
-			// `[first, ...middle, last]`: the items before the rest count from the start, those after it from the end
-			let fixed = items.len() - 1;
-			let after = fixed - rest_index;
-			let count = call(COUNT_WORD, vec![path.clone()]);
-			tests.push(key(count.clone(), Op::Ge, Node::int(fixed as i64)));
-			let from_end = |distance: usize| match distance {
-				0 => count.clone(),
-				_ => key(count.clone(), Op::Sub, Node::int(distance as i64)),
-			};
+			}
+			// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
+			Node::Key(name, Op::Colon, value) => {
+				self.tests
+					.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
+				self.tests.push(key(
+					call(TEXT_WORD, vec![item(&path, 1)]),
+					Op::Eq,
+					Node::Text(name.name()),
+				));
+				self.pattern(value, item(&path, 2));
+			}
+			Node::Symbol(name) if name == WILDCARD => {}
+			Node::Symbol(_) => self.bind(pattern, path),
+			literal => self.tests.push(key(path, Op::Eq, literal.clone())),
+		}
+	}
+
+	fn bind(&mut self, name: &Node, path: Node) {
+		self.bindings.push(key(name.drop_meta().clone(), Op::Assign, path));
+	}
+
+	/// `[a, b]` by count and position; `[first, ...middle, last]`: the items before the rest count from the start,
+	/// those after it from the end
+	fn items(&mut self, items: &[Node], path: Node) {
+		self.tests
+			.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
+		let count = call(COUNT_WORD, vec![path.clone()]);
+		let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
+			self.tests.push(key(count, Op::Eq, Node::int(items.len() as i64)));
 			for (index, part) in items.iter().enumerate() {
-				match index.cmp(&rest_index) {
-					std::cmp::Ordering::Less => pattern_tests(part, item(&path, index + 1), tests, bindings),
-					std::cmp::Ordering::Greater => pattern_tests(
-						part,
-						key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)),
-						tests,
-						bindings,
-					),
-					std::cmp::Ordering::Equal => {
-						if let Some(Some(name)) = rest_pattern(part) {
-							let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
-							bindings.push(key(Node::Symbol(name), Op::Assign, rest));
-						}
+				self.pattern(part, item(&path, index + 1));
+			}
+			return;
+		};
+		let fixed = items.len() - 1;
+		let after = fixed - rest_index;
+		self.tests.push(key(count.clone(), Op::Ge, Node::int(fixed as i64)));
+		let from_end = |distance: usize| match distance {
+			0 => count.clone(),
+			_ => key(count.clone(), Op::Sub, Node::int(distance as i64)),
+		};
+		for (index, part) in items.iter().enumerate() {
+			match index.cmp(&rest_index) {
+				std::cmp::Ordering::Less => self.pattern(part, item(&path, index + 1)),
+				std::cmp::Ordering::Greater => {
+					self.pattern(part, key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)))
+				}
+				std::cmp::Ordering::Equal => {
+					if let Some(Some(name)) = rest_pattern(part) {
+						let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
+						self.bindings.push(key(Node::Symbol(name), Op::Assign, rest));
 					}
 				}
 			}
 		}
-		// fields not named are ignored, the named ones must be there
-		Node::List(fields, _, _) if is_map_pattern(pattern) => {
-			// a map of one field is a pair
-			let is = |spec| call(crate::words::IS_TYPE, vec![path.clone(), text(spec)]);
-			tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_SPEC)));
-			for (name, part) in fields.iter().filter_map(map_field) {
-				tests.push(call(COLLECTION_CONTAINS, vec![path.clone(), Node::Text(name.clone())]));
-				pattern_tests(part, subscript(path.clone(), Node::Text(name)), tests, bindings);
-			}
-		}
-		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
-		Node::Key(name, Op::Colon, value) => {
-			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
-			tests.push(key(
-				call(TEXT_WORD, vec![item(&path, 1)]),
-				Op::Eq,
-				Node::Text(name.name()),
-			));
-			pattern_tests(value, item(&path, 2), tests, bindings);
-		}
-		Node::Symbol(name) if name == WILDCARD => {}
-		Node::Symbol(_) => bindings.push(key(pattern.drop_meta().clone(), Op::Assign, path)),
-		literal => tests.push(key(path, Op::Eq, literal.clone())),
 	}
+}
+
+/// A test of the value at `path` that binds nothing: a comparison `>= 18`, a type word (`int`, `Circle`), a range
+/// `13 to 17` or alternatives `1 | 2`
+fn condition(path: &Node, pattern: &Node, names: &Names) -> Option<Node> {
+	if let Node::Key(empty, op, bound) = pattern.drop_meta() {
+		if matches!(empty.drop_meta(), Node::Empty) && op.is_ordering() {
+			return Some(key(path.clone(), *op, bound.as_ref().clone()));
+		}
+	}
+	if let Some(test) = type_test(path, pattern, names) {
+		return Some(test);
+	}
+	if let Some(tests) = range_tests(path, pattern) {
+		return Some(joined(tests, Op::And));
+	}
+	let alternatives = or_operands(pattern);
+	if alternatives.len() < 2 {
+		return None;
+	}
+	let tests = alternatives.iter().map(|alternative| {
+		let matched = Matched::of(alternative, path.clone(), names);
+		match matched.bindings.is_empty() {
+			true => joined(matched.tests, Op::And),
+			false => error(ALTERNATIVES_BIND_NO_NAMES),
+		}
+	});
+	Some(joined(tests.collect(), Op::Or))
 }
 
 /// A case as its test and its body: a list key is a structural pattern whose names are bound before the body runs; a
 /// guard `n if n < 0` binds n to the subject and holds when its condition does
 fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
-	if let Node::Key(empty, op, bound) = case.key.drop_meta() {
-		if matches!(empty.drop_meta(), Node::Empty) && op.is_ordering() {
-			return (key(subject.clone(), *op, bound.as_ref().clone()), case.body); // `> 100 =>` compares the subject
-		}
-	}
 	let (pattern, guard) = split_guard(&case.key);
 	let (test, bindings) = match pattern_test(subject, &pattern, guard.is_some(), names) {
 		Ok(matched) => matched,
@@ -352,20 +407,22 @@ pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Optio
 	if !(is_list_pattern(pattern) || is_map_pattern(pattern)) || !has_open_part(pattern, names) {
 		return None;
 	}
-	let (mut tests, mut bindings) = (vec![], vec![]);
-	pattern_tests(pattern, subject.clone(), &mut tests, &mut bindings);
+	let Matched {
+		mut tests, bindings, ..
+	} = Matched::of(pattern, subject.clone(), names);
 	if !bindings.is_empty() {
 		tests.push(sequence([bindings, vec![Node::True]].concat()));
 	}
 	Some(joined(tests, Op::And))
 }
 
-/// `_`, a rest or a name not defined anywhere among the parts of a pattern: what a value never is
+/// `_`, a rest, a comparison `>= 18` or a name not defined anywhere among the parts of a pattern: what a value never is
 fn has_open_part(pattern: &Node, names: &Names) -> bool {
 	if rest_pattern(pattern).is_some() {
 		return true;
 	}
 	match pattern.drop_meta() {
+		Node::Key(empty, op, _) => matches!(empty.drop_meta(), Node::Empty) && op.is_ordering(),
 		Node::List(items, _, _) if is_list_pattern(pattern) => items.iter().any(|part| has_open_part(part, names)),
 		Node::List(fields, _, _) if is_map_pattern(pattern) => fields
 			.iter()
@@ -387,18 +444,14 @@ fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Name
 			);
 		}
 	}
-	if let Some(test) = type_test(subject, pattern, names) {
+	if let Some(test) = condition(subject, pattern, names) {
 		return (vec![test], vec![]);
-	}
-	if let Some(tests) = range_tests(subject, pattern) {
-		return (tests, vec![]);
 	}
 	if !guarded && !is_list_pattern(pattern) && !is_map_pattern(pattern) {
 		return (vec![key(subject.clone(), Op::Eq, pattern.clone())], vec![]);
 	}
-	let (mut tests, mut bindings) = (vec![], vec![]);
-	pattern_tests(pattern, subject.clone(), &mut tests, &mut bindings);
-	(tests, bindings)
+	let matched = Matched::of(pattern, subject.clone(), names);
+	(matched.tests, matched.bindings)
 }
 
 /// `13 to 19` (also `13...19`) includes its end, `13..20` excludes it, `65..` has none: the subject between the bounds

@@ -110,7 +110,11 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    one-field map is a pair), each named field there (`collection_contains`), read by subscript `path["name"]`.
    A bare `{a, b} => …` is an arm now; the JS object-parameter lambda needs its parentheses, `({a, b}) => …`.
    Tests: tests/control/test_match_maps.rs; probe probes/matching/map_patterns.warp.
-2. Conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}` (reuses match-ranges, match-type-arms).
+2. deep-conditions (done): conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}`, `{code: 301 | 302}`,
+   in lists too (`[> 3, text]`). switch.rs `condition` is the one test that binds nothing (comparison, type word,
+   range, alternatives), used by a whole arm and by every part (`Matched::pattern`); a comparison makes `x is {…}` a
+   pattern. A shorthand field `{text}` binds, never tests the type. Tests: tests/control/test_match_deep_conditions.rs;
+   probe probes/matching/deep_conditions.warp.
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
 4. Named patterns as values: `Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
