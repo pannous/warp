@@ -55,22 +55,24 @@ return JSON.stringify({
 # card webgpu-safari: gpuJob made a SharedArrayBuffer of maxByteLength 1 << 28 for every GPU job, a frame each; does
 # Safari run out of memory for a wasm memory's growth after some of them, held or dropped?
 SHARED_BUFFERS = """const done = arguments[arguments.length - 1];
-const worker = new Worker(URL.createObjectURL(new Blob([`
-	const attempt = (count, hold) => {
-		const held = [];
-		let made = 0, failure = "";
-		try {
-			for (; made < count; made++) {
-				const shared = new SharedArrayBuffer(65544, { maxByteLength: 1 << 28 });
-				if (hold) held.push(shared);
-			}
-		} catch (error) { failure = String(error); }
-		let grown = "";
-		try { new WebAssembly.Memory({ initial: 256, maximum: 65536 }).grow(4096); grown = "grew 256 MB"; } catch (error) { grown = String(error); }
-		return { count, hold, made, failure, grown };
-	};
-	postMessage([attempt(1, true), attempt(120, false), attempt(120, true), attempt(1000, false)]);
-`])));
+// as gpuJob: each buffer posted to another Worker (the GPU's task Worker), which stays idle and so never collects them
+const keeper = `onmessage = () => {};`;
+const program = `
+	const keeper = new Worker(URL.createObjectURL(new Blob([${JSON.stringify(keeper)}])));
+	const memory = new WebAssembly.Memory({ initial: 256, maximum: 65536 });
+	const results = [];
+	for (let made = 0; made < 400; made++) {
+		let shared;
+		try { shared = new SharedArrayBuffer(65544, { maxByteLength: 1 << 28 }); } catch (error) { results.push("buffer " + made + ": " + error); break; }
+		keeper.postMessage({ shared });
+		if (made % 20 === 19) {
+			try { memory.grow(64); results.push(made + 1 + " posted: grew to " + memory.buffer.byteLength / 1048576 + " MB"); }
+			catch (error) { results.push(made + 1 + " posted: " + error); }
+		}
+	}
+	postMessage(results);
+`;
+const worker = new Worker(URL.createObjectURL(new Blob([program])));
 worker.onmessage = ({ data }) => done(JSON.stringify(data));
 worker.onerror = event => done(`worker error: ${event.message}`);"""
 
