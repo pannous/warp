@@ -443,10 +443,8 @@ fn run_command(args: &[String]) {
 		if flags.contains(&WAGI_FLAG) {
 			return write_wagi(&code, &target);
 		}
-		// a plain `warp build` writes both (card build-should), `--exe` only the executable
-		if !flags.contains(&EXE_FLAG) {
-			write_module(&code, &target, ahead_of_time);
-		}
+		// `warp build` writes both (card build-should), `--exe` too, `--wasm` and `--aot` only the module
+		write_module(&code, &target, ahead_of_time);
 		if standalone {
 			let written = if builds_an_app(&code) {
 				write_web_view_app(&code, &target)
