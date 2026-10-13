@@ -1,5 +1,5 @@
-//! card build-should: `warp build app.warp` writes the executable app and the WebAssembly module app.wasm; `--exe` only
-//! the executable, `--wasm` only the module
+//! card build-should: `warp build app.warp` writes the executable app and the WebAssembly module app.wasm, `--exe` too
+//! (accepted, redundant), `--wasm` only the module (Interviewer decision 2026-10-13)
 use std::path::PathBuf;
 
 const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
@@ -38,7 +38,7 @@ fn build_writes_the_executable_and_the_module() {
 }
 
 #[test]
-fn build_exe_or_wasm_writes_only_that() {
-	assert_eq!(built("build_exe_only", &["--exe"]), (true, false));
+fn build_exe_writes_both_and_build_wasm_only_the_module() {
+	assert_eq!(built("build_exe_too", &["--exe"]), (true, true));
 	assert_eq!(built("build_wasm_only", &["--wasm"]), (false, true));
 }
