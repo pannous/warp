@@ -1466,11 +1466,11 @@ impl WasmGcEmitter {
 	}
 }
 
-/// The loop `for T in xs` a type test filters, carried from the parser (warp_parser FilterLoop)
-fn filter_loop_of(test: &Node) -> Option<crate::warp_parser::FilterLoop> {
+/// The loop `for T in xs` a type test filters, carried from its header (for_loop/headers.rs FilterLoop)
+fn filter_loop_of(test: &Node) -> Option<crate::for_loop::headers::FilterLoop> {
 	let Node::Meta { data, node } = test else { return None };
 	data.data_value()
-		.downcast_ref::<crate::warp_parser::FilterLoop>()
+		.downcast_ref::<crate::for_loop::headers::FilterLoop>()
 		.cloned()
 		.or_else(|| filter_loop_of(node))
 }
