@@ -114,7 +114,15 @@ with `_`, a rest or a name defined nowhere is a pattern, else `is` compares), an
 The whole matched value (user): no `@`/`as` binding. In an arm the subject's name (`match xs`), the word `value` (any
 subject, innermost match; a program variable named value wins) and `match name = expr { … }` (assigns, then matches;
 the name stays bound) give it.
-Open: pattern names warn as main-level shadows (card pattern-names).
+Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
+`else =>` on its own line is the catch-all arm (card match-arm); `else:` on its own line in a switch still fails to
+parse (it clashes with Python's block colon).
+Item patterns (step 3, card list-pattern): `[[n, s]...]` in a list pattern's rest position matches when every item
+matches; each name binds the list of its values (switch::every_item_test, a while loop over the rest slice).
+Named patterns (step 4, card patterns-values, user: the keyword): `pattern Adult = {age: >= 18}`; `x is Adult`, arms
+`Adult =>`, `it is Adult and Admin`; names inside bind. A plain `Name = …` is a value; one whose right side only a
+pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/named_patterns.rs,
+substitutes the pattern before lower_where).
 Probes: probes/matching/arms.warp, whole_value.warp; inventory with a fresh build: 35 of 48 before tuples, is and
 bare names.
 
@@ -124,7 +132,7 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
 1. map-patterns: deep partial map patterns `{status: 200, body: {user: {name}}}`, fields not named are ignored.
 2. Conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}` (reuses match-ranges, match-type-arms).
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
-4. Named patterns as values: `Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
+4. Named patterns as values: `pattern Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
 6. Schemas: `json(text) is Config` with `Config = {port: int, host: text, debug?: bool}`.
 7. Code patterns: quoted code with holes, `` `$a + 0` => a ``; needs card parse-word (real Nodes of a source).

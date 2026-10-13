@@ -120,6 +120,7 @@ mod test_match_whole_value;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;
+mod test_named_patterns; // card patterns-values
 mod test_not_condition_block;
 mod test_object_blocks;
 mod test_object_functions;

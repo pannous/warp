@@ -18,7 +18,7 @@ use crate::words::SWITCH_WORDS;
 
 const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
 /// In a pattern: any item, bound to no name
-const WILDCARD: &str = "_";
+pub(crate) const WILDCARD: &str = "_";
 const LIST_SPEC: &str = "list";
 const PAIR_SPEC: &str = "pair";
 const TEXT_WORD: &str = "str";
@@ -168,7 +168,7 @@ fn as_subject(node: Node, subject: &Node) -> Node {
 
 /// The word, subject and case block of a switch as the parser groups them: the items [switch, subject, {cases}],
 /// the pair [(switch subject), {cases}], or, when the block juxtaposes with a variable subject, [switch, (subject {cases})]
-fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
+pub(crate) fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
 	match items {
 		[head, subject, cases] => Some((head, subject, cases)),
 		[pair, cases] if matches!(pair.drop_meta(), Node::List(words, _, _) if words.len() == 2) => {
@@ -183,6 +183,11 @@ fn split_switch(items: &[Node]) -> Option<(&Node, &Node, &Node)> {
 		},
 		_ => None,
 	}
+}
+
+/// `match`, `switch`: a word that opens a switch
+pub(crate) fn is_switch_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::Symbol(word) if SWITCH_WORDS.contains(&word.as_str()))
 }
 
 /// The leftmost operand of an operator chain

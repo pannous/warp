@@ -51,6 +51,7 @@ pub mod min_max;
 pub mod music_words;
 pub mod mutation;
 pub mod named_arguments;
+pub mod named_patterns;
 pub mod negated_calls;
 pub mod nested_index;
 pub(crate) mod nodes;

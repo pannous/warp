@@ -359,6 +359,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::serve::with_default_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
 	crate::lowering::serve::bind_path_parameters,
+	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
+	crate::lowering::named_patterns::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::lowering::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
