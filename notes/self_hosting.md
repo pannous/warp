@@ -5,6 +5,10 @@ Goal (card self-hosted, issue #33): "write the whole parser and as many componen
 itself". The wiki ranks it a secondary goal that must not bias the language design (wiki/Features.md "self hosting",
 wiki/goals.md).
 
+POSTPONED (user, 2026-10-13, notes/decisions.md "self-hosting-postponed"): no further steps until the language
+features below are implemented cleanly (topic parser-features) and the Rust code is cleaned up (topic rust-cleanup).
+The twins on main stay and keep being tested.
+
 Decided (user, 2026-10-12, notes/decisions.md "self-hosting"):
 - Purpose: dogfooding (the compiler in warp shows what the language lacks), independence from Rust, and a showcase.
 - Scope: the parser first (lexer, parser, serializer). The later parts: section Next phase (self-next-phase).
