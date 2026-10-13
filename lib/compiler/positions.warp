@@ -1,0 +1,3 @@
+// Positions in a source text, as the lexer counts them (card self-differential; Rust twin: warp_parser/scanning.rs
+// advance, a column per character)
+line_widths(text) := [count(line) for line in split(text, "\n")]

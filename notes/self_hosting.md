@@ -48,4 +48,9 @@ Gaps (each a card below):
 
 Rules
 - Each step lands with its differential test (step 4): same Node, same text as the Rust twin.
+  The harness (self-differential, tests/common/twins.rs): `differential(part, word, rust_twin)` runs
+  `word(read(path))` of lib/compiler/<part>.warp for every sample and probe in one program (~1300 sources, a few
+  seconds) and fails on the first source whose serialized value differs from `rust_twin(text)`, with both texts around
+  the first difference. First twin: lib/compiler/positions.warp `line_widths` (columns per char, as
+  warp_parser/scanning.rs counts them), tests/parser/test_self_differential.rs.
 - A new gap found on the way becomes its own card in this topic (todo add … --topic self-hosted).
