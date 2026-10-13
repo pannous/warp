@@ -312,12 +312,12 @@ questions (`age:{date - 1996}` getters of data, setters): nothing ported from it
 Interfaces (classes-32): class methods satisfy traits, trait-typed parameters, foreign interface/protocol forms and
 `implements`/`: Shape` lists: notes/traits.md "Classes and foreign interfaces".
 
-Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a warp enum is the object of its cases
-numbered from 0 (declarations::enum_object). Ported: Swift's `enum Direction { case north, south }` and
-`switch d { case .north: 1 }` (welcome_forms arrow_cases strips `case`; declarations::enum_paths reads `.north` as
-`Direction.north` when one enum has the case), Kotlin's `enum class` (a note), `when (c) { A -> 1; 1, 2 -> …; is T -> …;
+Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a warp enum is the sum type of its cases,
+each case its own value (lowering/plain_enums.rs, below). Ported: Swift's `enum Direction { case north, south }` and
+`switch d { case .north: 1 }` (plain_enums reads `.north` and the arm `case.north` as `north` when one enum has the
+case), Kotlin's `enum class` (a note), `when (c) { A -> 1; 1, 2 -> …; is T -> …;
 else -> … }` (welcome_forms when_chain: an if chain, `is T` the type test; also without a subject), Rust's
-`Color::Green` (enum_paths). Kotlin's `sealed class Shape` (a class without fields: a bodiless class is `{}` now) and
+`Color::Green` (plain_enums). Kotlin's `sealed class Shape` (a class without fields: a bodiless class is `{}` now) and
 `class Circle(val r: Int) : Shape()` (the superclass with `()` is the parent, as extends). Open (a design question):
 cases with values, Rust's `Circle(f64)`, Swift's `case circle(Double)` and their destructuring patterns.
 
@@ -379,7 +379,10 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
   `red is Color` is true; `Shape::Circle(2)` → `Circle(2)` for any variant, also in match patterns.
 - `enum Shape { Circle(r), Rect(w, h), Dot }` and Swift's `case circle(radius: Double)` lines: as soon as one case has
   values the enum IS that sum type (parser parse_enum_with_values, same sum_type builder). An enum without values
-  stays the numbered object `Color={red:0 green:1}` (declarations::enum_object).
+  is the sum type of its cases too (user decision enum-case B, lowering/plain_enums.rs, test_plain_enum.rs):
+  `Coin.Dime` is `Dime`, `Dime is Coin`; `Coin.Dime as int` its position 2; `2 as Coin` and `Coin(2)` the case, "9 is
+  no Coin case" past the cases. A match on a declared enum or sum type that misses a case does not compile
+  (match_exhaustive.rs).
 - Open: a match on a subject statically known as a bare variant (`s = Dot; match s {Circle(r) => r*r …}`) types the
   dead arm and fails (card match-static); inside a function it works.
 - Emitter fix found on the way: `((a) or b) or c` took the parenthesized operation as a truthy literal and dropped c
