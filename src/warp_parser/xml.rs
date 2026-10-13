@@ -85,7 +85,7 @@ impl WarpParser {
 	}
 
 	pub(super) fn is_at_line_end(&self) -> bool {
-		self.column == 0 && self.current_char() == '\n' || self.pos >= self.input.len()
+		self.column == 0 && self.current_char() == '\n' || self.pos >= self.chars.len()
 	}
 
 	/// A `;` that ends its line is a statement terminator of the same strength as the newline after it
