@@ -28,6 +28,7 @@ pub const NO_CASE_PREFIX: &str = "no_case_";
 const UNNAMED_SUBJECT: &str = "value";
 /// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
 const VALUE_WORD: &str = "value";
+const LET_WORD: &str = "let";
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -268,7 +269,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 					std::cmp::Ordering::Equal => {
 						if let Some(Some(name)) = rest_pattern(part) {
 							let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
-							bindings.push(key(Node::Symbol(name), Op::Assign, rest));
+							bindings.push(bind(Node::Symbol(name), rest));
 						}
 					}
 				}
@@ -285,7 +286,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 			pattern_tests(value, item(&path, 2), tests, bindings);
 		}
 		Node::Symbol(name) if name == WILDCARD => {}
-		Node::Symbol(_) => bindings.push(key(pattern.drop_meta().clone(), Op::Assign, path)),
+		Node::Symbol(_) => bindings.push(bind(pattern.drop_meta().clone(), path)),
 		literal => tests.push(key(path, Op::Eq, literal.clone())),
 	}
 }
@@ -382,15 +383,22 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 	}
 }
 
+/// A name a pattern binds is declared `let`: the arm's own local, never a change of a main-level variable of that name
+/// (card pattern-names)
+fn bind(name: Node, value: Node) -> Node {
+	Node::List(
+		vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)],
+		Bracket::None,
+		Separator::Space,
+	)
+}
+
 /// A list pattern tests its shape, a type word (`int`, `Circle`) the subject's type, `i: int` also binds it; any other
 /// key compares the subject, a guarded name binds it
 fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Names) -> (Vec<Node>, Vec<Node>) {
 	if let Node::Key(name, Op::Colon, kind) = pattern.drop_meta() {
 		if let (Node::Symbol(_), Some(test)) = (name.drop_meta(), type_test(subject, kind, names)) {
-			return (
-				vec![test],
-				vec![key(name.drop_meta().clone(), Op::Assign, subject.clone())],
-			);
+			return (vec![test], vec![bind(name.drop_meta().clone(), subject.clone())]);
 		}
 	}
 	if let Some(test) = type_test(subject, pattern, names) {

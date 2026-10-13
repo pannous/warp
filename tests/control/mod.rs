@@ -107,9 +107,11 @@ mod test_many_tasks;
 mod test_match_alternatives;
 mod test_match_alternatives_hint;
 mod test_match_binding_arm;
+mod test_match_else_line;
 mod test_match_guards_and_finally;
 mod test_match_negative_subject; // card match-negative-subject
 mod test_match_other;
+mod test_match_pattern_bindings; // card pattern-names
 mod test_match_ranges;
 mod test_match_tuples;
 mod test_match_type_arms;
