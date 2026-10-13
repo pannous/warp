@@ -22,7 +22,7 @@ fn gzipped_size(bytes: &[u8]) -> usize {
 
 #[test]
 fn a_hello_world_site_stays_within_its_budget() {
-	let site = warp::site::build(HELLO, "hello", std::path::Path::new(FOLDER)).expect("the site");
+	let site = warp::web::site::build(HELLO, "hello", std::path::Path::new(FOLDER)).expect("the site");
 	let sizes: Vec<(String, usize)> = site
 		.files
 		.iter()
@@ -49,7 +49,7 @@ fn a_hello_world_site_stays_within_its_budget() {
 fn a_site_script_is_compacted() {
 	let script = "// what it does\nfunction f() {\n\t// a comment\n\treturn `a\n  // kept\n  b`;\n}\n\n";
 	assert_eq!(
-		warp::site::compacted(script),
+		warp::web::site::compacted(script),
 		"function f() {\nreturn `a\n  // kept\n  b`;\n}\n"
 	);
 }
@@ -59,7 +59,7 @@ fn a_site_script_is_compacted() {
 fn a_site_script_loses_its_trailing_comments() {
 	let script = "const KEY = \"data-warp-key\"; // a list item's element\nconst LINES = `a; // kept\n b`;\n";
 	assert_eq!(
-		warp::site::compacted(script),
+		warp::web::site::compacted(script),
 		"const KEY = \"data-warp-key\";\nconst LINES = `a; // kept\n b`;\n"
 	);
 }

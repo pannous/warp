@@ -8,7 +8,7 @@
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use crate::site::ServedSite;
+use crate::web::site::ServedSite;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
@@ -291,7 +291,7 @@ fn text_of(node: &Node) -> String {
 }
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
-/// takes is a file of the program's `site` (src/site.rs), its page at /
+/// takes is a file of the program's `site` (src/web/site.rs), its page at /
 pub fn serve(
 	port: u16,
 	routes: &[Route],
@@ -406,7 +406,7 @@ fn site_file(site: &ServedSite, method: &str, path: &str) -> Option<Answer> {
 	Some(match site.file_at(path)? {
 		Ok((name, body)) => Answer {
 			status,
-			content_type: crate::site::content_type(&name),
+			content_type: crate::web::site::content_type(&name),
 			body,
 			headers: vec![],
 		},

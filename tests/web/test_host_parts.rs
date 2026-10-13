@@ -1,6 +1,6 @@
-// card web-bundle: a built site ships only the parts of host.js its module imports words of (src/site.rs HOST_PARTS,
+// card web-bundle: a built site ships only the parts of host.js its module imports words of (src/web/site.rs HOST_PARTS,
 // host.js addHostPart); the playground's workers load them all (host.js HOST_PART_FILES)
-use warp::site::{scripts_of, HOST_PARTS};
+use warp::web::site::{scripts_of, HOST_PARTS};
 
 const HOST_SCRIPT: &str = include_str!("../../web/playground/host.js");
 const PART_KEYS: [&str; 2] = ["words: ", "\n\t}"];
@@ -89,7 +89,7 @@ fn each_part_is_chosen_by_the_words_it_gives() {
 		for word in words {
 			assert!(
 				(part.gives)("host", &word),
-				"{file} gives {word}, but src/site.rs HOST_PARTS does not choose it for {word}"
+				"{file} gives {word}, but src/web/site.rs HOST_PARTS does not choose it for {word}"
 			);
 		}
 	}

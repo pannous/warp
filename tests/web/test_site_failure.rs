@@ -4,7 +4,7 @@ const TYPO: &str = "count = 3\ndiv{ p{ \"count \" + cuont } }";
 
 #[test]
 fn a_site_that_does_not_compile_says_why() {
-	let Err(failure) = warp::site::files(TYPO, "typo", true) else {
+	let Err(failure) = warp::web::site::files(TYPO, "typo", true) else {
 		panic!("the site of a typo builds");
 	};
 	assert!(failure.starts_with("undefined variable: cuont"), "{failure}");

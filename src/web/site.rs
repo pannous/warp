@@ -18,35 +18,35 @@ use warp_runtime::site_files::{PAGE_FILE, ROUTED_PAGE_FILE};
 const MODULE_FILE: &str = "app.wasm";
 /// The scripts every page loads after the host's (host_parts.rs HOST_SCRIPTS)
 const PAGE_SCRIPTS: [Script; 2] = [
-	("markup.js", include_str!("../web/playground/markup.js")),
-	("site.js", include_str!("../web/playground/site.js")),
+	("markup.js", include_str!("../../web/playground/markup.js")),
+	("site.js", include_str!("../../web/playground/site.js")),
 ];
 /// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
 const TRANSITIONS_SCRIPT: Script = (
 	"markup-transitions.js",
-	include_str!("../web/playground/markup-transitions.js"),
+	include_str!("../../web/playground/markup-transitions.js"),
 );
 /// A transition, or a leave animation (`leave: pop 400ms`, data-warp-leave), needs the transitions part
 const TRANSITION_WORDS: [&[u8]; 2] = [b"transition", b"data-warp-leave"];
 /// The part of markup.js for forms with `on submit` (card web-submit): only a module with such a handler has them
-const FORMS_SCRIPT: Script = ("markup-forms.js", include_str!("../web/playground/markup-forms.js"));
+const FORMS_SCRIPT: Script = ("markup-forms.js", include_str!("../../web/playground/markup-forms.js"));
 const SUBMIT_HANDLER_WORD: &[u8] = "on·submit".as_bytes();
 /// The canvas a module that paints shows its paintings and animation frames in, and the pointer over it (mouse_x, …)
-const PAINT_SCRIPT: Script = ("canvas.js", include_str!("../web/playground/canvas.js"));
+const PAINT_SCRIPT: Script = ("canvas.js", include_str!("../../web/playground/canvas.js"));
 /// A page whose program runs in a Worker (card site-worker) loads this before them, and site.js hands over to it
-const THREAD_SCRIPT: Script = ("site-thread.js", include_str!("../web/playground/site-thread.js"));
+const THREAD_SCRIPT: Script = ("site-thread.js", include_str!("../../web/playground/site-thread.js"));
 /// The page makes the task Workers of the program's Worker, which asks for them (Firefox, card tour-firefox-stall), when
 /// the Worker has the task pool (TASK_PART: not a site that only paints)
-const TASK_WORKERS_SCRIPT: Script = ("task-workers.js", include_str!("../web/playground/task-workers.js"));
+const TASK_WORKERS_SCRIPT: Script = ("task-workers.js", include_str!("../../web/playground/task-workers.js"));
 const TASK_PART: &str = "host-tasks.js";
 /// What such a site ships besides: the program's Worker, the task Workers it starts, and the service worker that gives a
 /// static host's page the cross-origin isolation shared memory needs
 const WORKER_FILES: [Script; 3] = [
-	("site-worker.js", include_str!("../web/playground/site-worker.js")),
-	("task-worker.js", include_str!("../web/playground/task-worker.js")),
+	("site-worker.js", include_str!("../../web/playground/site-worker.js")),
+	("task-worker.js", include_str!("../../web/playground/task-worker.js")),
 	(
 		"coi-serviceworker.js",
-		include_str!("../web/playground/coi-serviceworker.js"),
+		include_str!("../../web/playground/coi-serviceworker.js"),
 	),
 ];
 /// The root's attribute listing the scripts of the program's Worker (site-thread.js WORKER_ATTRIBUTE)
@@ -76,8 +76,8 @@ const PAGE_TEMPLATE: &str = r#"<!doctype html>
 </html>
 "#;
 
-/// `warp dev` adds the script asking the dev server for new builds (src/dev_server.rs)
-const DEV_SCRIPT: (&str, &str) = ("dev.js", include_str!("../web/playground/dev.js"));
+/// `warp dev` adds the script asking the dev server for new builds (src/web/dev_server.rs)
+const DEV_SCRIPT: (&str, &str) = ("dev.js", include_str!("../../web/playground/dev.js"));
 
 /// Where the page finds the site's files: index.html beside them, 404.html at any depth from the site's root
 const BESIDE: &str = "";
@@ -116,7 +116,7 @@ pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String
 	})
 }
 
-/// The site a program serving its page serves (src/web_server.rs), none when its last line shows nothing
+/// The site a program serving its page serves (src/web/web_server.rs), none when its last line shows nothing
 pub fn served_files(code: &str, title: &str) -> Result<Option<ServedSite>, String> {
 	site_files(code, title, false)
 }
@@ -227,12 +227,12 @@ fn replies_script(requests: &[Node], values: &[Node]) -> String {
 		.zip(values)
 		.filter_map(|(request, value)| {
 			let [url, arguments] = items_of(request).try_into().ok()?;
-			let answer = crate::web_server::Answer::of(value);
+			let answer = crate::web::web_server::Answer::of(value);
 			Some(serde_json::json!({
 				"url": url.name(),
 				"arguments": crate::foreign::json_of(&arguments),
 				"body": String::from_utf8_lossy(&answer.body),
-				"text": answer.content_type.starts_with(crate::web_server::TEXT_REPLY_TYPE),
+				"text": answer.content_type.starts_with(crate::web::web_server::TEXT_REPLY_TYPE),
 			}))
 		})
 		.collect();
@@ -324,7 +324,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let split = if dev {
 		None
 	} else {
-		crate::route_split::split_by_route(&module.bytes)?
+		crate::web::route_split::split_by_route(&module.bytes)?
 	};
 	let (primary, route_modules) = match split {
 		Some(split) => (split.primary, split.routes),

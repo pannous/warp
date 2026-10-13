@@ -93,7 +93,7 @@ What exists that every option uses:
   parse → `lower_for_emission` → `emit_module`; `CompiledModule` says which imports it needs. The CLI links it with
   wasmtime (feature `native`); web/playground runs the same crate compiled to wasm32 (warp.wasm: 1.59 MB, 545 KB
   gzipped, in a Worker, worker.js → `web_evaluate`), and the page instantiates the emitted modules through the
-  `warp_host` imports (src/web.rs `page`, web/playground/host.js).
+  `warp_host` imports (src/web/mod.rs `page`, web/playground/host.js).
 * **Compile cost is small**: `warp compile` (release) of `3+4`, `a=3;b=4;a*b+a` and recursive fib takes ≤ 10 ms
   wall time including process start; the modules are 7.4-8 KB (each carries its runtime functions).
 * **Values already cross between instances**: tasks.rs (`go f(x)`) runs a function in a *new instance on another

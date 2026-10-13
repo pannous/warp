@@ -1,6 +1,6 @@
 //! `warp deploy app.warp` (card cloud-deploy): the program as a Cloudflare Worker. Workers run V8, which runs WASM GC,
 //! so the Worker is the playground's host scripts the program needs (reader.js, host.js, its parts, as a built site
-//! ships them: src/site.rs) with web/playground/cloud-worker.js, which answers each request by the program's routes
+//! ships them: src/web/site.rs) with web/playground/cloud-worker.js, which answers each request by the program's routes
 //! (`get "/" {…}`, lowering/serve.rs page·submitted), and the program's module. A Worker compiles no module from bytes,
 //! so app.wasm comes in compiled and app.bin as bytes for the host parts that read its sections.
 //! `warp deploy app.warp` writes app-worker/ next to the program and runs `wrangler deploy` there (its browser login
@@ -9,10 +9,10 @@
 //! app.wasm as a compiled module and app.bin as data, the parts wrangler.toml names.
 
 pub use crate::host_parts::worker_parts;
-use crate::site::{write_files, BuiltSite, SiteFile};
+use crate::web::site::{write_files, BuiltSite, SiteFile};
 use std::path::{Path, PathBuf};
 
-const WORKER_SCRIPT: &str = include_str!("../web/playground/cloud-worker.js");
+const WORKER_SCRIPT: &str = include_str!("../../web/playground/cloud-worker.js");
 const WORKER_FILE: &str = "worker.js";
 const MODULE_FILE: &str = "app.wasm";
 const MODULE_BYTES_FILE: &str = "app.bin";
@@ -69,15 +69,15 @@ pub fn spin_manifest(name: &str, source: &str) -> String {
 
 /// The Worker of the program file written next to it: app.warp → app-worker/
 pub fn build(program: &Path) -> Result<BuiltSite, String> {
-	let code = crate::site::read_program(program)?;
+	let code = crate::web::site::read_program(program)?;
 	write_files(
-		&worker_files(&code, &crate::site::program_stem(program))?,
+		&worker_files(&code, &crate::web::site::program_stem(program))?,
 		&worker_directory(program),
 	)
 }
 
 pub fn worker_directory(program: &Path) -> PathBuf {
-	program.with_file_name(format!("{}{WORKER_SUFFIX}", crate::site::program_stem(program)))
+	program.with_file_name(format!("{}{WORKER_SUFFIX}", crate::web::site::program_stem(program)))
 }
 
 /// `warp deploy [--dev|--dry-run] app.warp`: the Worker built, then deployed by wrangler (or run on this machine)
@@ -124,8 +124,8 @@ fn worker_name(name: &str) -> String {
 /// `warp deploy --hosted app.warp`: the module and its host scripts' names to warp-hosting, which uploads the Worker
 /// warp-<name> into our Cloudflare account; answers its address
 pub fn deploy_hosted(program: &Path) -> Result<String, String> {
-	let code = crate::site::read_program(program)?;
-	let name = worker_name(&crate::site::program_stem(program));
+	let code = crate::web::site::read_program(program)?;
+	let name = worker_name(&crate::web::site::program_stem(program));
 	let (module, scripts) = worker_parts(&code)?;
 	let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
 	let hosting = std::env::var(HOSTING_VARIABLE).unwrap_or_else(|_| HOSTING.to_string());

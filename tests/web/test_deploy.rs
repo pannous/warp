@@ -1,4 +1,4 @@
-//! `warp deploy` (card cloud-deploy, src/deploy.rs): the program's routes as a Cloudflare Worker, run here by
+//! `warp deploy` (card cloud-deploy, src/web/deploy.rs): the program's routes as a Cloudflare Worker, run here by
 //! `wrangler dev` (workerd, the Workers runtime, which runs WASM GC) and asked over HTTP
 use crate::common::scratch_directory;
 use std::time::{Duration, Instant};
@@ -40,8 +40,8 @@ fn answer(base: &str, path: &str) -> (u16, String, String) {
 #[test]
 fn a_deployed_program_answers_its_routes() {
 	let directory = scratch_directory("worker");
-	let files = warp::deploy::worker_files(PROGRAM, "worker").expect("the Worker is built");
-	warp::site::write_files(&files, &directory).expect("written");
+	let files = warp::web::deploy::worker_files(PROGRAM, "worker").expect("the Worker is built");
+	warp::web::site::write_files(&files, &directory).expect("written");
 	let port = std::net::TcpListener::bind("127.0.0.1:0")
 		.and_then(|listener| listener.local_addr())
 		.expect("a free port")
@@ -82,11 +82,11 @@ fn a_deployed_program_answers_its_routes() {
 
 #[test]
 fn a_program_without_routes_is_no_worker() {
-	let failure = warp::deploy::worker_files("x = 1", "none").expect_err("no routes");
+	let failure = warp::web::deploy::worker_files("x = 1", "none").expect_err("no routes");
 	assert!(failure.contains("get \"/\""), "{failure}");
 }
 
-/// The playground's Deploy (src/web.rs web_worker_bundle → warp-hosting): the module and the names of the host scripts
+/// The playground's Deploy (src/web/mod.rs web_worker_bundle → warp-hosting): the module and the names of the host scripts
 /// warp-hosting puts before cloud-worker.js; a program answering nothing (no routes, functions or value) is refused before
 /// anything is sent
 #[test]
@@ -118,8 +118,8 @@ fn the_playground_bundles_a_program_for_warp_hosting() {
 /// The Worker of `program` run by `wrangler dev` on a free port, and its address
 fn running_worker(program: &str, name: &str) -> (WranglerDev, String, std::path::PathBuf) {
 	let directory = scratch_directory(name);
-	let files = warp::deploy::worker_files(program, name).expect("the Worker is built");
-	warp::site::write_files(&files, &directory).expect("written");
+	let files = warp::web::deploy::worker_files(program, name).expect("the Worker is built");
+	warp::web::site::write_files(&files, &directory).expect("written");
 	let free_port = || {
 		std::net::TcpListener::bind("127.0.0.1:0")
 			.and_then(|listener| listener.local_addr())

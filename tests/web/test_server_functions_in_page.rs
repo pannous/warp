@@ -5,7 +5,7 @@ const PROGRAM: &str =
 
 #[test]
 fn a_page_build_takes_a_server_function() {
-	let files = warp::site::files(PROGRAM, "users", false).expect("the page builds");
+	let files = warp::web::site::files(PROGRAM, "users", false).expect("the page builds");
 	let (_, page) = files.iter().find(|(name, _)| name == "index.html").expect("index.html");
 	assert!(
 		String::from_utf8_lossy(page).contains("<p>users: 2</p>"),
@@ -19,7 +19,7 @@ fn a_page_build_takes_a_server_function() {
 #[test]
 fn a_page_build_warns_that_a_server_function_ships() {
 	warp::diagnostic::take_warnings();
-	let files = warp::site::files(PROGRAM, "users", false).expect("the page builds");
+	let files = warp::web::site::files(PROGRAM, "users", false).expect("the page builds");
 	let warnings = warp::diagnostic::take_warnings();
 	assert!(
 		!warnings

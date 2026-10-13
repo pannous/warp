@@ -1,8 +1,8 @@
 // The canvas of paint (src/host.rs paint, lib/draw.warp) and the pointer over it, for the playground (playground.js)
-// and for a built site that paints (card site-frames, src/site.rs, site-thread.js)
+// and for a built site that paints (card site-frames, src/web/site.rs, site-thread.js)
 
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
-// (src/paint.rs shade, lib/draw.warp)
+// (src/graphics/paint.rs shade, lib/draw.warp)
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
@@ -11,13 +11,13 @@ const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), 
 // animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
 const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "key"];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
-// the held key's code for key_down and held_key, as the native window gives it (src/paint_window.rs key_code)
+// the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
 const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9 };
 const TYPING_TARGETS = ".CodeMirror, input, textarea, [contenteditable]";
 const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuffer(POINTER_NAMES.length * Int32Array.BYTES_PER_ELEMENT)) : undefined;
 
 // paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
-// what a pixel value shows, as src/paint.rs shade: paper for 0, its color for a value with an alpha byte, else ink
+// what a pixel value shows, as src/graphics/paint.rs shade: paper for 0, its color for a value with an alpha byte, else ink
 function paintShade(value) {
 	const number = Number(value);
 	if (!value) return [PAINT_PAPER, PAINT_PAPER, PAINT_PAPER];

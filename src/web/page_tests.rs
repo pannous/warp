@@ -18,8 +18,8 @@
 //! every program).
 
 use crate::extensions::numbers::Number;
-use crate::headless::Page;
 use crate::node::{error, Node};
+use crate::web::headless::Page;
 use std::ops::Range;
 
 const TEST_WORD: &str = "test";

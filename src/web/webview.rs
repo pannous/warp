@@ -9,7 +9,7 @@ use warp_runtime::webview::show;
 
 /// The page of the program `code` (its site, rendered and hydrated) in a window titled `title`
 pub fn show_program(code: &str, title: &str, check: bool) -> Result<(), String> {
-	let files = crate::site::files(code, title, false)?;
+	let files = crate::web::site::files(code, title, false)?;
 	show(title, check, Box::new(move |path| served(&files, path)))
 }
 
@@ -37,5 +37,5 @@ fn folder_file(page: &Path, folder: &Path, path: &str) -> Option<(Vec<u8>, &'sta
 	let name = file.to_string_lossy().into_owned();
 	std::fs::read(&file)
 		.ok()
-		.map(|bytes| (bytes, crate::site::content_type(&name)))
+		.map(|bytes| (bytes, crate::web::site::content_type(&name)))
 }

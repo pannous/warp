@@ -4,7 +4,7 @@
 const SECRET: &str = "s3cret-token";
 
 fn site(program: &str) -> (String, Vec<u8>) {
-	let files = warp::site::files(program, "rpc", false).expect("the page builds");
+	let files = warp::web::site::files(program, "rpc", false).expect("the page builds");
 	let file = |wanted: &str| {
 		files
 			.iter()
@@ -54,7 +54,7 @@ fn a_call_in_a_handler_asks_the_server() {
 // the page asks the server before its code runs, so an argument only a function of the page knows cannot be sent
 #[test]
 fn a_call_with_a_local_argument_is_refused() {
-	let failure = warp::site::files(
+	let failure = warp::web::site::files(
 		"server def doubled(x) { x * 2 }\ndef show(k) { p{ doubled(k) } }\nshow(3)",
 		"rpc",
 		false,

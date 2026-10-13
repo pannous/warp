@@ -208,17 +208,17 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		}
 		#[cfg(feature = "native")]
 		("sound", "render", [path]) => crate::sound::render(&text_of(path)?).map(Node::float).map_err(failure),
-		// MIDI (card midi-out, src/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
+		// MIDI (card midi-out, src/sound/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
 		#[cfg(feature = "native")]
 		("midi", "write_file", [path, notes]) => {
-			let encoded = crate::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
+			let encoded = crate::sound::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
 			write_file(&text_of(path)?, encoded).map_err(failure)
 		}
 		#[cfg(feature = "native")]
 		("midi", "read_file", [path]) => {
 			let path = text_of(path)?;
 			let bytes = std::fs::read(&path).map_err(|problem| failure(format!("cannot read {path}: {problem}")))?;
-			crate::midi::decode(&bytes)
+			crate::sound::midi::decode(&bytes)
 				.map(|notes| Node::list(notes.into_iter().map(Node::int).collect()))
 				.map_err(failure)
 		}
@@ -229,14 +229,14 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				.into_iter()
 				.map(|byte| u8::try_from(byte).map_err(|_| failure(format!("{byte} is no MIDI byte (0 to 255)"))))
 				.collect::<Result<Vec<_>, _>>()?;
-			crate::midi::send(&text_of(port)?, &bytes)
+			crate::sound::midi::send(&text_of(port)?, &bytes)
 				.map(|_| Node::Empty)
 				.map_err(failure)
 		}
 		#[cfg(feature = "native")]
-		("midi", "outputs", []) => crate::midi::outputs().map(texts).map_err(failure),
+		("midi", "outputs", []) => crate::sound::midi::outputs().map(texts).map_err(failure),
 		#[cfg(feature = "native")]
-		("midi", "receive", []) => crate::midi::receive().map(|_| Node::Empty).map_err(failure),
+		("midi", "receive", []) => crate::sound::midi::receive().map(|_| Node::Empty).map_err(failure),
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),

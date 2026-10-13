@@ -72,7 +72,7 @@ fn channels_root() -> PathBuf {
 /// A new run on this thread starts without listeners
 pub fn forget_listeners() {
 	#[cfg(feature = "native")]
-	crate::web_sockets::forget();
+	crate::web::web_sockets::forget();
 	#[cfg(unix)]
 	LISTENERS.with(|listeners| listeners.borrow_mut().clear());
 }
@@ -80,8 +80,8 @@ pub fn forget_listeners() {
 /// `channel_listen(id, channel)`: listen on the channel from now on
 pub fn listen(id: i64, channel: &str) -> Result<(), String> {
 	#[cfg(feature = "native")]
-	if crate::web_sockets::is_socket_address(channel) {
-		return crate::web_sockets::listen(id, channel);
+	if crate::web::web_sockets::is_socket_address(channel) {
+		return crate::web::web_sockets::listen(id, channel);
 	}
 	#[cfg(unix)]
 	{
@@ -113,7 +113,7 @@ pub fn listen(id: i64, channel: &str) -> Result<(), String> {
 /// `channel_pending(id)`: how many messages wait, after reading what arrived
 pub fn pending(id: i64) -> i64 {
 	#[cfg(feature = "native")]
-	if let Some(count) = crate::web_sockets::pending(id) {
+	if let Some(count) = crate::web::web_sockets::pending(id) {
 		return count;
 	}
 	#[cfg(unix)]
