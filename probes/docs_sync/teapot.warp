@@ -1,0 +1,5 @@
+get "/teapot" {
+	status 418
+	header "X-Warp" "brewed"
+	"short and stout"
+}
