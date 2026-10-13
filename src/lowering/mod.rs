@@ -26,6 +26,7 @@ pub mod generator_expressions;
 pub mod generator_objects;
 pub mod generators;
 pub mod getters;
+pub mod glued_attributes;
 pub mod go_blocks;
 pub mod gpu_maps;
 pub mod index_positions;

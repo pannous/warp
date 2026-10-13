@@ -39,6 +39,7 @@ mod test_element_handler_quiet;
 mod test_expert_guide;
 mod test_form_bindings;
 mod test_form_routes; // card g_mSEw
+mod test_glued_attribute_content; // card words-glue
 mod test_gpu_auto; // card gpu-auto
 mod test_guide; // the language guide on the playground page
 mod test_guide_sections; // card guide-lists

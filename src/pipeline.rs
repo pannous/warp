@@ -346,6 +346,9 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
 	// reads `p.note{…}` as a tag
 	crate::style_rules::lower,
+	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options
+	// of a select are read
+	crate::glued_attributes::lower,
 	// `select{ bind: fruit; ["apple" "pear"] }`: its options spelled out (select_options.rs), before markup_tags makes the
 	// loop over a list variable's options a comprehension and any pass reads the bind
 	crate::select_options::lower,
