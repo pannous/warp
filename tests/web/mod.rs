@@ -102,6 +102,7 @@ mod test_route_phrase_body; // card first-first
 #[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
 mod test_routes;
 mod test_safari_imports;
+#[cfg(feature = "native")] // runs the warp binary
 mod test_sandbox_refusals; // card sandbox-exec
 mod test_sandboxed_programs; // card ferron-hosting
 mod test_select_options; // card select-shorthand
