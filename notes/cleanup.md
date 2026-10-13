@@ -12,6 +12,19 @@ tests/ call them), Node last_item and extensions.rs public_function (the user's 
 run_wasm_gc_object (commented-out tests name them), the gc_traits reading API (GcReadable, GcObject get_struct…: the
 documented rasm pattern, CLAUDE.md).
 
+Big files (cleanup-big-files, 2026-10-13, probes/cleanup/split_module.py): every source file over 1500 lines split
+into child modules along its own seams (section banners, cohesive groups of methods), one commit per file. No file
+is over 1500 lines now. The tool moves line ranges into `x/child.rs`:
+- It keeps paths and visibility: `use super::*` in the child, and a re-export in the parent as visible as the child's
+  most visible item.
+- Private items become pub(super) and struct fields pub(super); `super::` gains a level under x.rs. `use` lines stay
+  in the parent.
+- What it cannot know: an unused re-export (when only the child calls its items) and a `pub` item that exists only
+  under a cfg (`#[cfg(feature = "native")] pub use raw_structs::run_raw_struct;`). Fix those by hand after
+  `cargo check`.
+Ranges are 1-based and inclusive. Start each at the doc comment of its first item and end it at the closing brace
+of its last item: a range that stops one line short breaks the parse.
+
 Behaviour-preserving only: shared helpers instead of duplication, dead code and stale comments out, flatter control
 flow, meaningful names, no test edits. One area per session, small themed branches through the Integrator.
 
