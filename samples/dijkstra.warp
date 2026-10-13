@@ -22,7 +22,7 @@ fun dijkstra(graph, start) {
         current = ""
         best = 999999
         for node in graph.keys() {
-            if !visited.contains(node) && dist[node] < best {
+            if not visited.contains(node) and dist[node] < best {
                 best = dist[node]
                 current = node
             }
@@ -30,8 +30,8 @@ fun dijkstra(graph, start) {
         if current == "" { break }
         visited.push(current)
         for edge in graph[current] {
-            neighbor = edge[0]
-            weight = edge[1]
+            neighbor = edge#1
+            weight = edge#2
             candidate = dist[current] + weight
             if candidate < dist[neighbor] {
                 dist[neighbor] = candidate
@@ -53,6 +53,6 @@ fun path_to(prev, target) {
 }
 
 result = dijkstra(graph, "A")
-dist = result[0]
-prev = result[1]
+dist = result#1
+prev = result#2
 path_to(prev, "F") + ":" + dist["F"]

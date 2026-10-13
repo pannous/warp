@@ -13,7 +13,7 @@ float64 ratio = 3.14159
 bool flag = true
 
 /* Functions */
-fun calculate(a: int, b: real) -> float64 {
+fun calculate(a: int, b: real) as float64 {
     return a + b * 2.0
 }
 

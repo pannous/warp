@@ -149,7 +149,7 @@ ceiled
 names = ["charlie", "alice", "bob"]
 
 // Compare first two names
-comparison = strcmp(names[0], names[1])  // "charlie" vs "alice"
+comparison = strcmp(names#1, names#2)  // "charlie" vs "alice"
 
 if comparison > 0 then
     "charlie comes after alice"
