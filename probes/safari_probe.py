@@ -10,7 +10,7 @@ PORT = 4445
 DRIVER = f"http://127.0.0.1:{PORT}"
 ISOLATION_SECONDS = 60
 POLL_MS = 500
-POLLS = 30
+POLLS = 8
 
 GPU_REPORT = """const done = arguments[arguments.length - 1];
 (async () => {
@@ -52,6 +52,42 @@ return JSON.stringify({
 	errors: (self.probeErrors ?? []).slice(-10),
 });"""
 
+# card webgpu-safari: gpuJob made a SharedArrayBuffer of maxByteLength 1 << 28 for every GPU job, a frame each; does
+# Safari run out of memory for a wasm memory's growth after some of them, held or dropped?
+SHARED_BUFFERS = """const done = arguments[arguments.length - 1];
+const worker = new Worker(URL.createObjectURL(new Blob([`
+	const attempt = (count, hold) => {
+		const held = [];
+		let made = 0, failure = "";
+		try {
+			for (; made < count; made++) {
+				const shared = new SharedArrayBuffer(65544, { maxByteLength: 1 << 28 });
+				if (hold) held.push(shared);
+			}
+		} catch (error) { failure = String(error); }
+		let grown = "";
+		try { new WebAssembly.Memory({ initial: 256, maximum: 65536 }).grow(4096); grown = "grew 256 MB"; } catch (error) { grown = String(error); }
+		return { count, hold, made, failure, grown };
+	};
+	postMessage([attempt(1, true), attempt(120, false), attempt(120, true), attempt(1000, false)]);
+`])));
+worker.onmessage = ({ data }) => done(JSON.stringify(data));
+worker.onerror = event => done(`worker error: ${event.message}`);"""
+
+# card webgpu-safari: the user's Safari showed a painted shader as a narrow strip; how wide a painting is shown here
+PAINTING_LAYOUT = """const shown = [[640, 480], [554, 160], [1280, 800]].map(([width, height]) => {
+	showPaintings([{ pixels: new Array(width * height).fill(0), width, height }]);
+	const canvas = document.querySelector("#paintings canvas"), r = canvas.getBoundingClientRect();
+	const pixels = `${width}x${height} pixels shown ${Math.round(r.width)}x${Math.round(r.height)}`;
+	const gpu = paintingElement({ width, height });
+	gpu.transferControlToOffscreen();
+	document.getElementById("paintings").replaceChildren(gpu);
+	const g = gpu.getBoundingClientRect(), p = document.getElementById("painted").getBoundingClientRect();
+	return `${pixels}, offscreen shown ${Math.round(g.width)}x${Math.round(g.height)} in painted ${Math.round(p.width)}`;
+});
+showPaintings([]);
+return JSON.stringify(shown);"""
+
 CATCH_ERRORS = """self.probeErrors = [];
 for (const level of ["error", "warn"]) { const original = console[level]; console[level] = (...parts) => { self.probeErrors.push(`${level}: ${parts.join(" ")}`); original.apply(console, parts); }; }
 addEventListener("error", event => self.probeErrors.push(`uncaught: ${event.message}`));
@@ -78,6 +114,8 @@ def main():
 		while not run("return document.readyState === 'complete' && self.crossOriginIsolated && !!self.playground") and time.time() < deadline:
 			time.sleep(0.5)
 		print("gpu:", call("POST", f"{page}/execute/async", {"script": GPU_REPORT, "args": []}))
+		print("shared buffers:", call("POST", f"{page}/execute/async", {"script": SHARED_BUFFERS, "args": []}))
+		print("painting layout:", run(PAINTING_LAYOUT))
 		run(CATCH_ERRORS)
 		print("before:", run(PAGE_STATE))
 		for sample in samples:
