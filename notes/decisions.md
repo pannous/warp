@@ -23,6 +23,23 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   worker marks each `#[ignore = "cleanup-edge: <card>: <what no longer works>"]` (assertions untouched) and lists them
   in its merge request; the Interviewer asks the user whether each edge case is worth the code it needed: yes → the
   code comes back, no → the test is retired. Core behaviour (samples, the tour, common forms) must keep passing.
+- cleanup-cuts (2026-10-13, batch from notes/cleanup.md "Feature overlap"): drop compile-time lambdas (run-time
+  closures cover them), generators/yield, type-name parameters `fib int i` (samples move to `fib(i:int)`), scoped
+  handlers `on … in {…}`. Keep return-type overloads, tuple returns ("multi return is definitely desired"), list
+  element checks, instance destructuring, object-shaped parameters, dispatch by class. Rebuild small: traits as a
+  thin alias of classes with default methods ("I don't see how that ever took 1900 lines"); ORM keeps only
+  `stored people: [Person]`; `shared` for any variable, not only arrays; one rule `a of b` ≡ `b.a` replaces the
+  reflection dot words; Ruby blocks via the block type and trailing lambdas. Natural phrases parked (tests ignored,
+  maybe re-implemented via preposition parameters). Discussion card: all methods on classes as dispatch.
+- foreign-spellings (2026-10-13): keep Rust `<T>`/`let mut`, Enum.map/List.map/Seq.sum, Python lambda, variadic
+  lambdas (through the normal parameter path), JS destructured parameters, Ruby lambda/proc/blocks/to_s, C# LINQ,
+  C++ `auto x`; foreign names are cheap aliases of existing words, not lowering code. Drop OCaml let-in and `fun`,
+  Elixir `def …, do:`, C++ `[](…){…}` lambdas, Kotlin `when … ->`. The R/PHP forms move to warp files loaded with
+  `use R` / `use PHP`.
+- real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
+  type next to the exact ratios; then it goes.
+- watched-cells (2026-10-13): watched variables use the run-time cell, except main-level variables no function
+  writes, which keep the inserted check (same speed, about −300 lines).
 - crash-fixes-first (2026-10-12): crash fixes merge with the highest priority (notes/roles.md).
 - small-changes-on-main (2026-10-12): small or non-conflicting changes may go on main without a worktree.
 - session-names (2026-10-12): a session is named for its current task, never a guessed area.
