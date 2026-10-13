@@ -357,11 +357,11 @@ fn block_name(item: &Node) -> Option<String> {
 }
 
 /// A block's name no element, attribute nor warp word: `divv` of `divv{ "hi" }`
-fn is_unknown_tag(tag: &String) -> bool {
+fn is_unknown_tag(tag: &str) -> bool {
 	let known = crate::markup::is_element_tag(tag)
 		|| crate::markup::names_attribute(tag)
-		|| WARP_ELEMENT_WORDS.contains(&tag.as_str())
-		|| crate::transitions::ELEMENT_WORDS.contains(&tag.as_str())
+		|| WARP_ELEMENT_WORDS.contains(&tag)
+		|| crate::transitions::ELEMENT_WORDS.contains(&tag)
 		|| crate::event_signals::is_element_event(tag)
 		// a custom element of the page's own (`my-card{…}`) is named with a dash
 		|| tag.contains('-');
