@@ -102,7 +102,9 @@ fn without_si_amounts(node: Node) -> Node {
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 	match super::shadowing(program, || lower_shadowed(program)) {
 		Some(lowered) => Some(lowered.map(without_si_amounts)),
-		None => program.mentions(SI_AMOUNT_WORD).then(|| Ok(without_si_amounts(program.clone()))),
+		None => program
+			.mentions(SI_AMOUNT_WORD)
+			.then(|| Ok(without_si_amounts(program.clone()))),
 	}
 }
 
