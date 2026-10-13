@@ -25,6 +25,8 @@ mod test_parser_sugar;
 mod test_path_literal; // card play-mozart
 mod test_references;
 mod test_scheme_relative_url;
+#[cfg(feature = "native")]
+mod test_self_differential; // card self-differential
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;
