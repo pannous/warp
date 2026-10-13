@@ -20,6 +20,7 @@ Run the real app-server probes, which create short visible Codex threads and kee
 
 ```sh
 /usr/bin/python3 probes/codex_cron_lifecycle.py success
+/usr/bin/python3 probes/codex_cron_lifecycle.py poll
 /usr/bin/python3 probes/codex_cron_lifecycle.py timeout
 /usr/bin/python3 probes/codex_cron_lifecycle.py interrupt
 /usr/bin/python3 probes/codex_cron_lifecycle.py disconnect
