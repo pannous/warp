@@ -1,3 +1,5 @@
+#[cfg(feature = "native")]
+pub mod twins; // card self-differential
 use warp::wasm_emitter::eval;
 use warp::Node;
 
