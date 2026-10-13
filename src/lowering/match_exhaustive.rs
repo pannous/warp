@@ -1,0 +1,178 @@
+//! Exhaustive matches (card match-exhaustive, user decision match-exhaustive): a match on a name declared of a sum type
+//! (`s: Shape` of `enum Shape { Circle(r), Dot }`) or of a plain enum (`c: Coin`) without a catch-all that misses a
+//! case is the compile error "match on Shape misses Dot". A subject of unknown type, or an arm this check cannot read
+//! (a guard, alternatives, a comparison), keeps the run-time error "no case for …".
+
+use super::declarations::enum_cases;
+use super::sum_variants::sum_types;
+use crate::diagnostic::Diagnostic;
+use crate::node::{Bracket, Node};
+use crate::operators::Op;
+use crate::switch::SWITCH_WORDS;
+use std::collections::HashMap;
+
+/// Kotlin's `when (c) { … }`, matched like `match`
+const KOTLIN_MATCH_WORD: &str = "when";
+/// The arm patterns matching any value
+const CATCH_ALLS: [&str; 4] = ["_", "default", "other", "else"];
+/// Kotlin's arm `is Circle -> …`
+const TYPE_TEST_WORD: &str = "is";
+
+pub fn check(program: Node) -> Node {
+	let cases = declared_cases(&program);
+	if cases.is_empty() {
+		return program;
+	}
+	let subjects = typed_subjects(&program, &cases);
+	let mut problem = None;
+	program.visit(&mut |node| {
+		if problem.is_none() {
+			problem = incomplete(node, &cases, &subjects);
+		}
+	});
+	problem.unwrap_or(program)
+}
+
+/// The cases of a sum type or plain enum: a variant stands by its name (`Dot`), a plain enum's case is written with its
+/// type (`Coin.Dime`, declarations::enum_object)
+struct Cases {
+	names: Vec<String>,
+	qualified: bool,
+}
+
+impl Cases {
+	fn written(&self, type_name: &str, case: &str) -> String {
+		match self.qualified {
+			true => format!("{type_name}.{case}"),
+			false => case.to_string(),
+		}
+	}
+}
+
+/// The cases of each sum type and plain enum, by type name
+fn declared_cases(program: &Node) -> HashMap<String, Cases> {
+	let mut cases: HashMap<String, Cases> = sum_types(program)
+		.into_iter()
+		.map(|(name, variants)| {
+			(
+				name,
+				Cases {
+					names: variants.names(),
+					qualified: false,
+				},
+			)
+		})
+		.collect();
+	program.visit(&mut |node| {
+		if let Node::List(items, _, _) = node {
+			cases.extend(enum_cases(items).map(|(name, names)| (name, Cases { names, qualified: true })));
+		}
+	});
+	cases
+}
+
+/// The names declared of one of these types, `s: Shape`; a name declared of two types is left out
+fn typed_subjects(program: &Node, cases: &HashMap<String, Cases>) -> HashMap<String, Option<String>> {
+	let mut subjects: HashMap<String, Option<String>> = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(name, Op::Colon, type_name) = node {
+			if let (Node::Symbol(name), Node::Symbol(type_name)) = (name.drop_meta(), type_name.drop_meta()) {
+				if cases.contains_key(type_name) {
+					let declared = subjects.entry(name.clone()).or_insert(Some(type_name.clone()));
+					if declared.as_ref() != Some(type_name) {
+						*declared = None;
+					}
+				}
+			}
+		}
+	});
+	subjects
+}
+
+/// The error of a match on a typed subject whose arms name some of its cases and no catch-all
+fn incomplete(node: &Node, cases: &HashMap<String, Cases>, subjects: &HashMap<String, Option<String>>) -> Option<Node> {
+	let (word, subject, arms) = subject_and_arms(node)?;
+	let type_name = subjects.get(&subject)?.as_ref()?;
+	let type_cases = &cases[type_name];
+	let named: Vec<String> = arms
+		.iter()
+		.map(|arm| match arm.drop_meta() {
+			Node::Key(pattern, _, _) => case_named(pattern, type_name),
+			_ => None,
+		})
+		.collect::<Option<_>>()?;
+	if !named.iter().all(|name| type_cases.names.contains(name)) {
+		return None;
+	}
+	let missing: Vec<&str> = type_cases
+		.names
+		.iter()
+		.filter(|case| !named.contains(case))
+		.map(String::as_str)
+		.collect();
+	if missing.is_empty() {
+		return None;
+	}
+	let arms_to_add: Vec<String> = missing
+		.iter()
+		.map(|case| format!("{}: …", type_cases.written(type_name, case)))
+		.collect();
+	let message = format!("match on {type_name} misses {}", missing.join(", "));
+	let fix = format!("add {} or the catch-all _: …", arms_to_add.join("; "));
+	Some(Diagnostic::at(word, message).fix(fix).into_error())
+}
+
+/// `match s { … }`, `match (s { … })`, `when (s) { … }`: the word (where the match is written), the subject's name and
+/// the arms
+fn subject_and_arms(node: &Node) -> Option<(&Node, String, &[Node])> {
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return None;
+	};
+	let word = items.first()?;
+	let written = word.drop_meta().name();
+	if !SWITCH_WORDS.contains(&written.as_str()) && written != KOTLIN_MATCH_WORD {
+		return None;
+	}
+	let (subject, arms) = match &items[1..] {
+		[subject, arms] => (subject, arms),
+		[grouped] => match grouped.drop_meta() {
+			Node::List(pair, _, _) if pair.len() == 2 => (&pair[0], &pair[1]),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let Node::List(arms, Bracket::Curly, _) = arms.drop_meta() else {
+		return None;
+	};
+	Some((word, subject_name(subject)?, arms))
+}
+
+/// `s`, or Kotlin's `(s)`
+fn subject_name(subject: &Node) -> Option<String> {
+	match subject.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => subject_name(&items[0]),
+		_ => None,
+	}
+}
+
+/// The case an arm's pattern names: `Dot`, `Circle(r)`, `Shape::Dot`, `Coin.Penny`, `is Circle`; none for a catch-all
+/// or a pattern of another form
+fn case_named(pattern: &Node, type_name: &str) -> Option<String> {
+	match pattern.drop_meta() {
+		Node::Symbol(name) if CATCH_ALLS.contains(&name.as_str()) => None,
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[head, ..] if matches!(head.drop_meta(), Node::Symbol(_)) => Some(head.drop_meta().name()),
+			_ => None,
+		},
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, case] if word.is_symbol(TYPE_TEST_WORD) => case_named(case, type_name),
+			_ => None,
+		},
+		Node::Key(owner, Op::Scope | Op::Dot, case) if owner.drop_meta().name() == type_name => {
+			case_named(case, type_name)
+		}
+		_ => None,
+	}
+}

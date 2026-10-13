@@ -12,12 +12,30 @@ pub const VARIANTS_MARK: &str = "variants";
 
 /// A sum type's variants: those without payload by name, the classes extending it
 #[derive(Default)]
-struct Variants {
+pub(crate) struct Variants {
 	bare: Vec<Node>,
 	classes: Vec<String>,
 }
 
+impl Variants {
+	/// The names of all variants, those with payload (classes) first, as declared
+	pub(crate) fn names(&self) -> Vec<String> {
+		let bare = self.bare.iter().map(|name| name.drop_meta().name());
+		self.classes.iter().cloned().chain(bare).collect()
+	}
+}
+
 pub fn lower(program: Node) -> Node {
+	let sum_types = sum_types(&program);
+	if sum_types.is_empty() {
+		return program;
+	}
+	with_variant_tests(program, &sum_types)
+}
+
+/// The sum types the program declares by name, `enum Shape { Circle(r), Dot }` read as `type @variants(Dot) Shape`
+/// and the classes extending it
+pub(crate) fn sum_types(program: &Node) -> HashMap<String, Variants> {
 	let mut sum_types: HashMap<String, Variants> = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
@@ -27,7 +45,7 @@ pub fn lower(program: Node) -> Node {
 		}
 	});
 	if sum_types.is_empty() {
-		return program;
+		return sum_types;
 	}
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
@@ -39,7 +57,7 @@ pub fn lower(program: Node) -> Node {
 			}
 		}
 	});
-	with_variant_tests(program, &sum_types)
+	sum_types
 }
 
 /// `x is Color` → `x is Color or x == red or x == green`; a literal variant `red is Color` is true; `Shape::Circle(2)` →

@@ -328,6 +328,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::lowering::test_blocks::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
 	crate::lowering::sum_variants::lower,
+	// card match-exhaustive: a match on a declared sum type or enum that misses a case, while its arms are as written
+	crate::lowering::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::late_binding::split_global_assignments,
 	// `xs from #2 to #4`, `xs up to second`: a slice by position (word_slices.rs), before a pass reads `to` as a range

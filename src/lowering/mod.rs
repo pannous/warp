@@ -41,6 +41,7 @@ pub mod library_words;
 pub mod list_element_checks;
 pub mod list_phrases;
 pub mod markup_tags;
+pub mod match_exhaustive;
 pub mod memoization;
 pub mod meta_entries;
 pub mod min_max;
