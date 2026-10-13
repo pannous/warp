@@ -399,7 +399,9 @@ impl WasmGcEmitter {
 			}
 			// `float(x)` is `x as float` (a text parses its digits), `int(x)` is `x as int` (an int path of a float function)
 			if let [type_word, value] = items {
-				if crate::type_tests::canonical_spec_word(fn_name) == "float" || type_word_kind(fn_name) == Some(Kind::Int) {
+				if crate::type_tests::canonical_spec_word(fn_name) == "float"
+					|| type_word_kind(fn_name) == Some(Kind::Int)
+				{
 					return self.emit_float_value(
 						func,
 						&Node::Key(Box::new(value.clone()), Op::As, Box::new(type_word.clone())),
