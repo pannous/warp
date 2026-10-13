@@ -105,17 +105,14 @@ CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas afte
 # card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
 # (it did by ~40 px a frame, until Safari ran out of memory painting samples/webgpu)
 VIEW_STEADY = "(the view's size stays as paintings of that size are shown)"
-VIEW_STEADY_CODE = """first = [view_width, view_height]
-3 times {
-	paint(int[view_width * view_height], view_width, view_height)
-	sleep 100ms
-}
-[first, [view_width, view_height]]"""
+VIEW_STEADY_CODE = """paint(int[view_width * view_height], view_width, view_height)
+[view_width, view_height]"""
+VIEW_STEADY_RUNS = 3  # a run measures the view as the last one's painting left the page
 # card webgpu-safari: a shared buffer per GPU job ran Safari out of memory after ~200 jobs (a frame each); the jobs fail
 # without an adapter too, which `try` takes, and the last one then shows its own failure, never "Out of memory"
 GPU_JOBS = "(many GPU jobs in one run)"
 GPU_JOBS_CODE = """shader = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(1) fn main() { xs[0] = xs[0] + 1.0; }"
-400 times { try gpu_compute(shader, [1], 1) else 0 }
+1500 times { try gpu_compute(shader, [1], 1) else 0 }
 gpu_compute(shader, [1], 1)"""
 GPU_JOBS_NEVER = "Out of memory"
 # card shader-brush: samples/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
@@ -516,16 +513,15 @@ def previous_frame_wrong():
 
 
 def view_steady_wrong():
-	"""the view's size before three frames painted at that size, and after them: the same"""
-	shown = run_code(VIEW_STEADY_CODE)
-	sizes = re.findall(r"\[(\d+) (\d+)\]", shown)
-	return [] if len(sizes) == 2 and sizes[0] == sizes[1] else [f"[before, after]: {shown!r}, expected the same size twice"]
+	"""runs painting at the view's size, one after the other, each see the view the first saw"""
+	shown = [run_code(VIEW_STEADY_CODE) for _ in range(VIEW_STEADY_RUNS)]
+	return [] if len(set(shown)) == 1 and re.fullmatch(r"\[\d+ \d+\]", shown[0]) else [f"the view's size, run after run: {shown}, expected the same each time"]
 
 
 def gpu_jobs_wrong():
 	"""the last of many GPU jobs gives its numbers, or says why not, but never ran out of memory"""
 	shown = run_code(GPU_JOBS_CODE)
-	return [f"after 400 GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
+	return [f"after 1500 GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
 
 
 def brush_wrong():
