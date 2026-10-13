@@ -18,6 +18,7 @@ mod test_fixed_width_ints;
 mod test_float_accumulator; // card float-accumulator
 mod test_float_assignment;
 mod test_float_bit_operations;
+mod test_float_bits; // card f64-const
 mod test_float_exact_context;
 mod test_float_parameters;
 mod test_float_promotion;
