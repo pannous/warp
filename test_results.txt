@@ -969,6 +969,7 @@ PASSED:
   ✓ functions::test_anonymous_function_forms::an_arrow_lambda_works_too
   ✓ functions::test_anonymous_function_forms::an_immediately_invoked_function_without_arguments
   ✓ functions::test_anonymous_function_forms::python_lambda_is_a_lambda
+  ✓ functions::test_any_result::a_result_of_any_kind
   ✓ functions::test_argument_kinds::an_unknown_word_returned_or_cast_is_an_error
   ✓ functions::test_argument_kinds::counting_a_parameter_makes_it_a_list
   ✓ functions::test_argument_kinds::list_argument_for_an_int_parameter_is_a_type_error
@@ -1227,6 +1228,7 @@ PASSED:
   ✓ functions::test_it_arguments::the_it_of_the_argument_is_not_the_parameter_of_the_function_around_it
   ✓ functions::test_kebab_members::a_missing_kebab_field_is_an_error_offering_the_subtraction
   ✓ functions::test_kebab_members::an_existing_kebab_field_is_read
+  ✓ functions::test_kind_tested_parameter::a_kind_tested_parameter_takes_a_list_whole
   ✓ functions::test_lambda_global::a_lambda_with_global_changes_mains_variable
   ✓ functions::test_lambda_spaced_body::a_lambda_body_may_be_a_spaced_call
   ✓ functions::test_lambda_spaced_body::a_list_of_functions_holds_each_with_its_own_capture
@@ -1288,6 +1290,7 @@ PASSED:
   ✓ functions::test_method_words::test_unknown_method_word_is_an_error
   ✓ functions::test_method_words::test_upper_and_lower
   ✓ functions::test_method_words::test_user_function_as_method_word
+  ✓ functions::test_mixed_number_returns::an_int_path_of_a_float_function_is_a_float
   ✓ functions::test_multi_value::test_big_division_results_unchanged
   ✓ functions::test_multi_value::test_big_exact_division_results_unchanged
   ✓ functions::test_multi_value::test_divmod_returns_quotient_and_remainder
@@ -2134,6 +2137,7 @@ PASSED:
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
   ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
   ✓ node::test_empty_operands::a_written_empty_value_stays
+  ✓ node::test_float_node_text::a_float_node_writes_its_shortest_text
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
   ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
   ✓ node::test_list_separator::a_list_is_built_with_a_separator
@@ -4051,6 +4055,9 @@ PASSED:
   ✓ types::test_type_calls::a_type_called_braceless_converts_like_braced
   ✓ types::test_type_calls::a_type_called_converts_as_the_cast
   ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
+  ✓ types::test_type_compared_with_text::text_naming_no_type_gives_no_hint
+  ✓ types::test_type_compared_with_text::type_compared_with_text_hints_the_type_word
+  ✓ types::test_type_compared_with_text::type_compared_with_text_stays_no
   ✓ types::test_type_model::test_type_model_is_proved
   ✓ types::test_type_model::test_warp_admits_what_the_type_model_subtypes
   ✓ types::test_type_model::test_warp_computes_what_the_type_model_computes
@@ -5105,4 +5112,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5100 passed, 0 failed, 5100 total tested
+12 ignored, 5107 passed, 0 failed, 5107 total tested

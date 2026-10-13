@@ -3,6 +3,7 @@ mod test_all_calls;
 mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
+mod test_any_result; // card def
 mod test_argument_kinds;
 mod test_argument_labels;
 mod test_arity_overloads;
@@ -71,6 +72,7 @@ mod test_go_functions;
 mod test_inlining;
 mod test_it_arguments; // card map-it
 mod test_kebab_members;
+mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
 mod test_lambda_spaced_body;
 mod test_lambda_spellings;
@@ -85,6 +87,7 @@ mod test_map_phrase;
 mod test_memoization;
 mod test_method_syntax_calls;
 mod test_method_words;
+mod test_mixed_number_returns; // card function-returning
 mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;

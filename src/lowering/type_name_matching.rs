@@ -394,6 +394,10 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 			(head, symbol(&crate::analyzer::union_of_types(&union, &|_| true)?))
 		}
 	};
+	// `f(w) as any := …`: a value of any kind converts to nothing (card def); `y: any = yes` stays a declaration
+	if type_name.is_symbol(crate::type_kinds::UNTYPED_FIELD) && is_call_head(&head) {
+		return Some(Node::Key(Box::new(head), *op, body.clone()));
+	}
 	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()))
 }
 
