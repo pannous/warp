@@ -301,6 +301,8 @@ impl WasmGcEmitter {
 					);
 				},
 			);
+			// the host builds a run-time parse's positions with it (tasks.rs TaskValue::Positioned)
+			self.export_runtime_function(NODE_AT);
 		}
 
 		if self.should_emit_function(NEW_KEY_OF) {

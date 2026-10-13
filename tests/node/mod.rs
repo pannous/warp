@@ -11,6 +11,7 @@ mod test_node_api;
 mod test_node_operators;
 mod test_node_todo;
 mod test_normalization;
+mod test_parse_positions; // card parse-word: positions of a run-time parse
 mod test_parse_word; // card parse-word
 mod test_serialized_text_escapes;
 mod test_text_operand_quotes; // card text-operand-quotes // card self-node-api

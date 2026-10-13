@@ -70,4 +70,6 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - `n.line`, `n.column`, `n.comment` read through node_part (NODE_PARTS 6–8); a node without them has no such field.
 - Positions of `parse("…")` are in the parsed text (line 1 column 1 is its start).
 - Open: the parser keeps only the comment *before* a node (`// c` then `a: 1`); a trailing `a: 1 // c` is lost.
-  A run-time `parse(t)` gives no positions yet (built_in_program goes through TaskValue, which has no Meta).
+- Run-time `parse(t)` keeps positions too (2026-10-13): TaskValue::Positioned (from Node::written_at) is built by
+  the program's exported node_at; in the browser tree_of adds `at: [line, column, comment]` and host.js buildValue
+  calls node_at. A program mentioning parse_code emits node_at and $MetaNode. Test tests/node/test_parse_positions.rs.

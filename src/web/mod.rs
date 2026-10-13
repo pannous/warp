@@ -295,6 +295,12 @@ pub fn eval_block_report(request: &Value) -> Value {
 /// A value as the tree host.js buildValue builds in a module (the inverse of node_from_tree for the values a task or a
 /// block hands back); None for what has no constructor there yet (an error, a type)
 fn tree_of(node: &Node) -> Option<Value> {
+	// where it was written: `at` [line, column, comment], host.js builds it with node_at (tasks.rs TaskValue::Positioned)
+	if let Some((line, column, comment)) = node.written_at() {
+		let mut tree = tree_of(node.drop_meta())?;
+		tree["at"] = json!([line, column, comment]);
+		return Some(tree);
+	}
 	let kind = |kind: Kind| (kind as i64).to_string();
 	Some(match node.drop_meta() {
 		Node::Empty => json!({ "kind": kind(Kind::Empty), "data": null, "chain": [] }),
