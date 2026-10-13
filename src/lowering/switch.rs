@@ -30,6 +30,9 @@ const SUBJECT_PREFIX: &str = "switch_subject_";
 pub const NO_CASE_CALL: &str = "switch_no_case";
 pub const NO_CASE_PREFIX: &str = "no_case_";
 const UNNAMED_SUBJECT: &str = "value";
+/// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
+const VALUE_WORD: &str = "value";
+const LET_WORD: &str = "let";
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -43,12 +46,26 @@ pub fn lower(node: Node) -> Node {
 	if words.is_empty() {
 		return node;
 	}
+	let names = program_names(&node);
+	let value_word_free = !names_variable(&node, &context, &names, VALUE_WORD);
 	Lowering {
 		words,
 		switches: Counter::default(),
-		names: program_names(&node),
+		names,
+		value_word_free,
 	}
 	.expand(node)
+}
+
+/// The program has a variable, parameter or loop variable of that name, in any function
+fn names_variable(node: &Node, context: &crate::context::Context, names: &Names, name: &str) -> bool {
+	let is_parameter = context
+		.user_functions
+		.values()
+		.any(|function| function.params.iter().any(|param| param.name == name));
+	let mut assigned = std::collections::HashSet::new();
+	crate::library_words::collect_assigned_names(node, &mut assigned);
+	names.is_variable(name) || is_parameter || assigned.contains(name)
 }
 
 struct Lowering<'a> {
@@ -56,6 +73,8 @@ struct Lowering<'a> {
 	switches: Counter,
 	/// The program's variables and declared types: a type word in a case tests the subject's type (`int => …`)
 	names: Names,
+	/// No variable, parameter or loop variable of the program is named value: in an arm it is the matched value
+	value_word_free: bool,
 }
 
 struct Case {
@@ -104,10 +123,20 @@ impl Lowering<'_> {
 		if !self.words.contains(&word.as_str()) {
 			return None;
 		}
-		let cases = cases_of(cases)?;
 		let number = self.switches.next_number();
 		let subject_name = format!("{SUBJECT_PREFIX}{number}");
 		let subject_value = Node::Symbol(subject_name.clone());
+		let cases = cases_of(cases)?;
+		let cases = match self.value_word_free {
+			true => cases
+				.into_iter()
+				.map(|case| Case {
+					key: as_subject(case.key, &subject_value),
+					body: as_subject(case.body, &subject_value),
+				})
+				.collect(),
+			false => cases,
+		};
 		let (default, cases): (Vec<Case>, Vec<Case>) = cases.into_iter().partition(|case| is_default(&case.key));
 		let miss = match default.into_iter().next() {
 			Some(default) => default.body,
@@ -120,6 +149,16 @@ impl Lowering<'_> {
 		});
 		let bind = key(subject_value, Op::Assign, subject.clone());
 		Some(Node::List(vec![bind, chain], Bracket::Round, Separator::Semicolon))
+	}
+}
+
+/// The word value in an arm as the subject; a field `x.value` and a key `{value: 1}` keep it
+fn as_subject(node: Node, subject: &Node) -> Node {
+	match node {
+		Node::Symbol(name) if name == VALUE_WORD => subject.clone(),
+		Node::Key(left, Op::Dot, right) => key(as_subject(*left, subject), Op::Dot, *right),
+		Node::Key(left, Op::Colon, right) => key(*left, Op::Colon, as_subject(*right, subject)),
+		other => children_rewritten(other, |child| as_subject(child, subject)),
 	}
 }
 
@@ -282,7 +321,7 @@ impl<'a> Matched<'a> {
 	}
 
 	fn bind(&mut self, name: &Node, path: Node) {
-		self.bindings.push(key(name.drop_meta().clone(), Op::Assign, path));
+		self.bindings.push(bind(name.drop_meta().clone(), path));
 	}
 
 	/// `[a, b]` by count and position; `[first, ...middle, last]`: the items before the rest count from the start,
@@ -314,7 +353,7 @@ impl<'a> Matched<'a> {
 				std::cmp::Ordering::Equal => {
 					if let Some(Some(name)) = rest_pattern(part) {
 						let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
-						self.bindings.push(key(Node::Symbol(name), Op::Assign, rest));
+						self.bind(&Node::Symbol(name), rest);
 					}
 				}
 			}
@@ -354,7 +393,8 @@ fn condition(path: &Node, pattern: &Node, names: &Names) -> Option<Node> {
 /// guard `n if n < 0` binds n to the subject and holds when its condition does
 fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 	let (pattern, guard) = split_guard(&case.key);
-	let (test, bindings) = match pattern_test(subject, &pattern, guard.is_some(), names) {
+	let binds = guard.is_some() || is_binding_name(&pattern, &case.body, names);
+	let (test, bindings) = match pattern_test(subject, &pattern, binds, names) {
 		Ok(matched) => matched,
 		Err(message) => return (error(message), case.body),
 	};
@@ -376,6 +416,15 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 	(test, body)
 }
 
+/// `name => "hi " + name`: a name defined nowhere that its body uses binds the subject (card match-binding-arm); unused,
+/// `red: "fire"` is the symbol red
+fn is_binding_name(pattern: &Node, body: &Node, names: &Names) -> bool {
+	match pattern.drop_meta() {
+		Node::Symbol(name) => !names.contains(name) && !is_type_word(pattern) && body.mentions_any(&[name.as_str()]),
+		_ => false,
+	}
+}
+
 /// The test the subject passes when it matches the pattern of a case, and the names the pattern binds. A case key is a
 /// pattern, so `1 | 2` and `1 or 2` (both parsed as or) are its alternatives, never the logical value; a computed
 /// comparison goes in a guard (user, matching roadmap)
@@ -394,7 +443,7 @@ pub(crate) fn pattern_test(
 	for alternative in &alternatives {
 		let (tests, bindings) = alternative_tests(subject, alternative, guarded, names);
 		if !bindings.is_empty() {
-			return Err("alternatives bind no names: write one case per pattern, or `_` for an item");
+			return Err(ALTERNATIVES_BIND_NO_NAMES);
 		}
 		matches.push(joined(tests, Op::And));
 	}
@@ -433,15 +482,22 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 	}
 }
 
+/// A name a pattern binds is declared `let`: the arm's own local, never a change of a main-level variable of that name
+/// (card pattern-names)
+fn bind(name: Node, value: Node) -> Node {
+	Node::List(
+		vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)],
+		Bracket::None,
+		Separator::Space,
+	)
+}
+
 /// A list pattern tests its shape, a type word (`int`, `Circle`) the subject's type, `i: int` also binds it; any other
 /// key compares the subject, a guarded name binds it
 fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Names) -> (Vec<Node>, Vec<Node>) {
 	if let Node::Key(name, Op::Colon, kind) = pattern.drop_meta() {
 		if let (Node::Symbol(_), Some(test)) = (name.drop_meta(), type_test(subject, kind, names)) {
-			return (
-				vec![test],
-				vec![key(name.drop_meta().clone(), Op::Assign, subject.clone())],
-			);
+			return (vec![test], vec![bind(name.drop_meta().clone(), subject.clone())]);
 		}
 	}
 	if let Some(test) = condition(subject, pattern, names) {

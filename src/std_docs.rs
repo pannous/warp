@@ -31,7 +31,7 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 	let mut comment: Option<String> = None;
 	for line in lines {
 		if let Some(text) = comment_text(line) {
-			comment.get_or_insert(text);
+			comment = Some(text);
 			continue;
 		}
 		if let Some(signature) =

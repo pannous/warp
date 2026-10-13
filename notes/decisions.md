@@ -7,6 +7,12 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-13 (user; via the Interviewer)
+- pattern-keyword (warp-list-pattern, card patterns-values, user): named patterns are defined only with the keyword
+  `pattern Adult = {age: >= 18}`, then `x is Adult`, `people where it is Adult`, arms `Adult => …`. A plain
+  `Name = …` is always a value (no inference from `_`, `>=`, `..`); one whose right side can only be a pattern is an
+  error with the fix `pattern Name = …`. Names inside a named pattern bind: `pattern Point = [x, y]` →
+  `match p { Point => x + y }`. Rare in other languages (Haskell pattern synonyms, F# active patterns, Scala
+  extractors; not Rust), hence the visible keyword.
 - match-whole-value (warp-semantics, card match-binding-arm, user: "Make it available as the matched variable or the
   special word value"): no binding syntax (`all @ [a, b]`, `[a, b] as all`, `all: [a, b]` all declined). Inside an
   arm the subject's name is the whole value (`match xs { [a, b] => f(xs) }`), and the word `value` is the whole
@@ -46,6 +52,13 @@ notes/open_decisions.md.
 - hints-are-warnings (supervisor, from the user's worry, undoable): hints and warnings become one system, one
   Diagnostic with a level, one collector, printer and threshold; `--no-hints` and `use strict` become thresholds
   (card warning-levels).
+  Defaults (worker, undoable): shown from hint; `--no-hints` / `WARP_HINTS=0` show from weak; `--warnings=<level>`
+  sets it, as does the playground's "show … and up" select. `use strict` / `--strict` fail from normal,
+  `--strict=<level>` from that level; Rust's `WarningMode::Error` fails on every warning, weak too. Hints never fail.
+  HintMode::Once dedups every level. Severe: a key name that names nothing, an event nothing emits, a signal that
+  never fires, a task that never happens, a variable updated in a parallel loop. Weak: @parallel running in
+  sequence, a GPU map running on the CPU, a std module shadowed, an event from the playground page, run-time blocks
+  needing the host. Every other warning is normal; the CLI labels weak and severe ones `warning (weak):`.
 
 ## Decided 2026-10-13 (quiet hours: Interviewer or worker defaults, undoable; user may revisit)
 - held-key (warp-markup; Interviewer during quiet hours, undoable): `held_key` is the name of the key held now ("" for none); the key-name words of key-if compare against it too (`held_key == LEFT`, `held_key != ESC`), with the same "names nothing" warning.

@@ -1469,7 +1469,7 @@ pub(super) fn control_operation(control: &str) -> i64 {
 /// A warning about task control that cannot happen on one thread, and the statement's value ø (an error under
 /// `use strict`)
 pub(super) fn never_happens(located: &Node, message: &str) -> Node {
-	match crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(located, message.to_string())]) {
+	match crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(located, message.to_string()).severe()]) {
 		Ok(()) => Node::Empty,
 		Err(error) => error,
 	}

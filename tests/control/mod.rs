@@ -105,14 +105,19 @@ mod test_loop_value_at_run_time;
 mod test_loops_in_functions;
 mod test_many_tasks;
 mod test_match_alternatives;
+mod test_match_alternatives_hint;
+mod test_match_binding_arm;
 mod test_match_deep_conditions; // card deep-conditions
+mod test_match_else_line;
 mod test_match_guards_and_finally;
 mod test_match_maps; // card map-patterns
 mod test_match_negative_subject; // card match-negative-subject
 mod test_match_other;
+mod test_match_pattern_bindings; // card pattern-names
 mod test_match_ranges;
 mod test_match_tuples;
 mod test_match_type_arms;
+mod test_match_whole_value;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;

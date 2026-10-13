@@ -15,13 +15,21 @@ pub fn trap_detail_line(detail: &Node) -> String {
 	)
 }
 
-/// A detail written as a quoted text is the message it quotes, its escapes undone (`"a \"b\""` is a "b")
+/// A detail written as a quoted text is the message it quotes, the `\` before a quote or `\` undone (`"a \"b\""` is
+/// a "b"; node/serialization.rs quoted writes them)
 fn unquoted(detail: &str) -> String {
-	let quoted = detail.len() > 1 && detail.starts_with('"') && detail.ends_with('"');
-	match quoted.then(|| crate::warp_parser::parse(detail).drop_meta().clone()) {
-		Some(message @ (Node::Text(_) | Node::Char(_))) => message.to_string(),
-		_ => detail.to_string(),
+	let Some(message) = detail.strip_prefix('"').and_then(|rest| rest.strip_suffix('"')) else {
+		return detail.to_string();
+	};
+	let mut characters = message.chars();
+	let mut unescaped = String::with_capacity(message.len());
+	while let Some(character) = characters.next() {
+		unescaped.push(match character {
+			'\\' => characters.next().unwrap_or(character),
+			plain => plain,
+		});
 	}
+	unescaped
 }
 
 /// The value a trace's `trap detail: …` line carries, its line breaks back

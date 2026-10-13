@@ -91,7 +91,7 @@ fn held_compared(side: &Node, own: &HashSet<String>, warnings: &mut Vec<Diagnost
 }
 
 fn names_nothing_warning(side: &Node, compared: &str, word: &str) -> Diagnostic {
-	Diagnostic::at(side, format!("{compared}: {word} names nothing, so the comparison never holds; write a key name (ESC, ENTER, UP, F1 …) or a text such as \"{word}\""))
+	Diagnostic::at(side, format!("{compared}: {word} names nothing, so the comparison never holds; write a key name (ESC, ENTER, UP, F1 …) or a text such as \"{word}\"")).severe()
 }
 
 fn with_key_names(node: Node, own: &HashSet<String>, warnings: &mut Vec<Diagnostic>) -> Node {

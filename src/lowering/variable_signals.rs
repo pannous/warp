@@ -277,7 +277,7 @@ impl Signals {
 						.offer("a derived value", format!("{name} = {value_text}"), derived)
 				}
 			};
-			if let Err(error) = crate::diagnostic::report(&[warning]) {
+			if let Err(error) = crate::diagnostic::report(&[warning.severe()]) {
 				return Some(error);
 			}
 		}
