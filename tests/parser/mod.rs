@@ -1,3 +1,4 @@
+mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
 mod test_comment_hides_bracket;
