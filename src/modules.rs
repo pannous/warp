@@ -666,7 +666,10 @@ const PRELUDE_MODULE: &str = "prelude";
 /// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
 const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
-const PRELUDE_WORDS: [(&str, &[&str]); 2] = [("file", &["write", "exists"]), ("os", &["exec"])];
+const PRELUDE_WORDS: [(&str, &[&str]); 2] = [
+	("file", &["write", "exists", "write_bytes", "read_bytes"]),
+	("os", &["exec"]),
+];
 const FILE_URL_PREFIX: &str = "file://";
 /// lib/units.warp: quantities whose unit is known only at run time, `quantity("5 km")` (notes/units_runtime.md)
 const UNITS_MODULE: &str = "units";

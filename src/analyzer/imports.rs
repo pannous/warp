@@ -240,6 +240,10 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
 		crate::type_tests::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
 		crate::wasm_emitter::text_builtins::TEXT_FORM => &["list_join"],
+		// IEEE bits beyond the fixnums are BigInts
+		crate::wasm_emitter::text_builtins::FLOAT_BITS | crate::wasm_emitter::text_builtins::BITS_FLOAT => {
+			&[crate::wasm_emitter::INT_RUNTIME]
+		}
 		FIELD_WITH => &[FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL],
 		INSTANCE_COPY => &[INSTANCE_COPY],
 		_ => &[],

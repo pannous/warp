@@ -18,6 +18,7 @@ mod test_global_typed_list; // found writing samples/server.warp
 mod test_globals;
 mod test_node_widening_in_loops;
 mod test_parameter_shadowing; // card two-signal-kinds
+mod test_parameter_shadows_function;
 mod test_prefixed_declarations;
 mod test_result_word;
 mod test_several_globals;

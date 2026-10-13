@@ -30,7 +30,7 @@ needs no files on disk and works in the browser.
 | map | keys values entries get has without, merge, map_values | prelude words; merge in warp |
 | time | clock now sleep, today, duration words (`1 s`, `200 ms`), date parts, format | host words (clock, sleep) + warp |
 | random | random random_below, choice shuffle sample, seed | host words + warp |
-| io / file | read, write, append, exists, list_files, lines | host words (WASI natively, a virtual FS in the browser) |
+| io / file | read, write, append, exists, list_files, lines, write_bytes, read_bytes | host words (WASI natively, a virtual FS in the browser) |
 | net / http | fetch, post, url parts | host word fetch (exists) + warp |
 | json | json.parse (alias parse_json), to_json (warp data is a JSON superset: `Node::from_json` / `to_json` exist) | host words |
 | os / process | args env exit exec | host words (exit exists), Process capability |
@@ -201,7 +201,8 @@ run natively and in the browser.
    prelude word); `use os` brings env. Natively the file system (paths as read resolves them) and the environment; in
    the browser host.js keeps written files in memory and, on a page, in IndexedDB (store `files` of database `warp`,
    read back before the first run, so they survive a reload: card files-written; read sees them first, then the served
-   repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
+   repository) and env is ø (tests/modules/test_std_file.rs). write_bytes(path, list) and read_bytes(path) (card
+   path-list, prelude words): a file as a list of ints 0 to 255, any other item refused (tests/modules/test_std_file_bytes.rs). Names: `append_file`, since `append` is the list
    method `xs.append(v)` a program using `use file` still needs (question Q6). `use os; args` (card std-args): the words
    after the program file, `warp run prog.warp a b` gives ["a" "b"] (main.rs program_file → std_adapters
    set_program_arguments), [] without any and in the browser; without `use os`, `args` is still the symbol.
