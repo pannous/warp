@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+// card self-byte-buffer: texts built in turn, as a lexer builds a token and its output, each grow in amortised O(1)
+n = 400000
+token = ""
+output = ""
+started = clock()
+for i in 0 until n {
+	token += "x"
+	output += "yz"
+}
+print count(token) count(output) "in" (clock() - started) "ms"
