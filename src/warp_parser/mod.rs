@@ -1434,7 +1434,10 @@ fn bit_word_hint(lhs: &Node, symbol: char, rhs: &Node) {
 	crate::normalize::hint(
 		&format!("{left} {symbol} {right}"),
 		&format!("{word}({left}, {right})"),
-		&format!("`{symbol}` is the logical {}; {word} combines the bits (use math)", if symbol == '&' { "and" } else { "or" }),
+		&format!(
+			"`{symbol}` is the logical {}; {word} combines the bits (use math)",
+			if symbol == '&' { "and" } else { "or" }
+		),
 	);
 }
 

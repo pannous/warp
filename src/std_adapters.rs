@@ -365,11 +365,13 @@ fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
 fn bytes_of(list: &Node) -> Result<Vec<u8>, String> {
 	list.as_items()
 		.iter()
-		.map(|item| match item.drop_meta() {
-			Node::Number(crate::extensions::numbers::Number::Int(value)) => u8::try_from(*value).ok(),
-			_ => None,
-		}
-		.ok_or_else(|| format!("{} is no byte (0 to 255)", item.serialize().trim())))
+		.map(|item| {
+			match item.drop_meta() {
+				Node::Number(crate::extensions::numbers::Number::Int(value)) => u8::try_from(*value).ok(),
+				_ => None,
+			}
+			.ok_or_else(|| format!("{} is no byte (0 to 255)", item.serialize().trim()))
+		})
 		.collect()
 }
 

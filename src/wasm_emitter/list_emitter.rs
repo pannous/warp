@@ -94,7 +94,12 @@ const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "rever
 
 impl WasmGcEmitter {
 	/// The word a list calls; a parameter named like a function or global is the parameter (`g(f, b) := [f, b]`)
-	pub(super) fn called_function<'a>(&self, items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	pub(super) fn called_function<'a>(
+		&self,
+		items: &'a [Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> Option<&'a str> {
 		called_word(items, bracket, separator).filter(|name| !self.scope.is_parameter(name))
 	}
 

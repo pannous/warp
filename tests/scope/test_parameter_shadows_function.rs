@@ -7,7 +7,10 @@ use warp::warp_parser::parse;
 fn a_list_of_a_parameter_named_like_a_function_lists_it() {
 	is!("f(x) := x + 1; g(f, b) := [f, b]; g(1, 2)", parse("[1 2]"));
 	is!("f := 3; g(f, b) := [f, b]; g(1, 2)", parse("[1 2]"));
-	is!("path := \"x\"; g(path, t) := [path, t]; g(\"ab\", \"cd\")", parse("[\"ab\" \"cd\"]"));
+	is!(
+		"path := \"x\"; g(path, t) := [path, t]; g(\"ab\", \"cd\")",
+		parse("[\"ab\" \"cd\"]")
+	);
 }
 
 #[test]

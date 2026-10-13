@@ -24,7 +24,10 @@ fn bytes_and_texts_are_the_same_file() {
 	let _ = std::fs::create_dir_all(FOLDER);
 	let path = format!("{FOLDER}/hi.txt");
 	is!(&format!("write_bytes(\"{path}\", [104, 105]); read(\"{path}\")"), "hi");
-	is!(&format!("write(\"{path}\", \"hey\"); read_bytes(\"{path}\")"), parse("[104 101 121]"));
+	is!(
+		&format!("write(\"{path}\", \"hey\"); read_bytes(\"{path}\")"),
+		parse("[104 101 121]")
+	);
 }
 
 #[test]
