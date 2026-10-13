@@ -2,13 +2,26 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{FOR_WORD, IN_WORD};
+use crate::words::{FOR_WORD, IN_WORD, MATCH_WORD};
 use std::cell::Cell;
 
 pub(crate) use crate::node::{call, children_rewritten, int, symbol};
 
 pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))
+}
+
+/// `match subject { arms }`
+pub(crate) fn matched(subject: Node, arms: Vec<Node>) -> Node {
+	Node::List(
+		vec![
+			Node::Symbol(MATCH_WORD.into()),
+			subject,
+			Node::List(arms, Bracket::Curly, Separator::Semicolon),
+		],
+		Bracket::None,
+		Separator::Space,
+	)
 }
 
 /// The operands of `a or b or c` (`|` parses as or), else the node itself

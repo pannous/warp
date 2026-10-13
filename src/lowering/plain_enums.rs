@@ -5,7 +5,7 @@
 //! becomes a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case has that index.
 
 use super::match_exhaustive::typed_subjects;
-use super::nodes::key;
+use super::nodes::{key, matched};
 use super::sum_variants::sum_type;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
@@ -20,7 +20,6 @@ const CASE_WORD: &str = "case";
 /// index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts; index_positions.rs)
 const COUNT_TYPES: [(&str, i64); 3] = [("int", 0), ("index", 0), ("position", 1)];
 const RAISE_WORD: &str = "raise";
-const MATCH_WORD: &str = "match";
 const OTHER_ARM: &str = "_";
 
 /// The plain enums of a program: each one's cases in order, by name
@@ -180,17 +179,4 @@ fn case_at(value: Node, enum_name: &str, enums: &Enums) -> Node {
 		.chain([key(Node::Symbol(OTHER_ARM.into()), Op::Colon, raised)])
 		.collect();
 	matched(value, arms)
-}
-
-/// `match subject { arms }`
-fn matched(subject: Node, arms: Vec<Node>) -> Node {
-	Node::List(
-		vec![
-			Node::Symbol(MATCH_WORD.into()),
-			subject,
-			Node::List(arms, Bracket::Curly, Separator::Semicolon),
-		],
-		Bracket::None,
-		Separator::Space,
-	)
 }
