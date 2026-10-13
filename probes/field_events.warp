@@ -1,0 +1,6 @@
+// card click-key: an element handles change, focus and blur too (try it in the playground: type, then leave the field)
+state = "idle"
+div{
+	input{ aria-label: "name" on focus { state = "typing" } on change { state = "saved " + event.value } }
+	p{ state }
+}

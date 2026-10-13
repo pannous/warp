@@ -1,12 +1,13 @@
 //! A list inside `select{}` gives its options (card select-shorthand, notes/decisions.md): `select{ bind: fruit;
 //! ["apple" "pear"] }` is `select{ bind: fruit option{ "apple" } option{ "pear" } }`, a map item `"s": "small"` the
 //! option `option{ value: "s" "small" }`, a list variable `select{ fruits }` one option per item it holds when the page
-//! shows. A list written right after the bound variable (`bind: fruit ["apple" "pear"]`) is the options, not part of it.
+//! shows. A list written right after the bound variable (`bind: fruit ["apple" "pear"]`) is the options, not part of it
+//! (glued_attributes.rs).
 
 use super::element_events::{element_items, with_element_items};
 use super::nodes::key;
 use super::words::ON_WORD;
-use crate::event_signals::PAGE_EVENTS;
+use crate::event_signals::is_element_event;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -35,20 +36,7 @@ fn options_of(item: Node) -> Vec<Node> {
 			listed.iter().map(option).collect()
 		}
 		// not the words of a handler `on change {…}`
-		Node::Symbol(name) if name != ON_WORD && !PAGE_EVENTS.contains(&name.as_str()) => options_of_variable(name),
-		Node::Key(word, Op::Colon, value) => match value.drop_meta() {
-			// `bind: fruit ["apple" "pear"]`: the variable, then its options
-			Node::List(parts, Bracket::None, _)
-				if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Square, _)) =>
-			{
-				[
-					vec![key(word.as_ref().clone(), Op::Colon, parts[0].clone())],
-					options_of(parts[1].clone()),
-				]
-				.concat()
-			}
-			_ => vec![item],
-		},
+		Node::Symbol(name) if name != ON_WORD && !is_element_event(name) => options_of_variable(name),
 		_ => vec![item],
 	}
 }

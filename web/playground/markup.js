@@ -85,6 +85,10 @@ function elementEvent(event, happened, detail) {
 	return element && { event: `${event}·${element.getAttribute(attribute)}`, detail: instance ? { ...detail, instance: Number(instance) } : detail };
 }
 
+// the element events that are no page events (card click-key, event_signals.rs FIELD_EVENTS), by the DOM event that
+// raises each: focus and blur do not bubble, their focusin and focusout do
+const FIELD_EVENT_TYPES = { change: "change", focus: "focusin", blur: "focusout" };
+
 // what a form field holds now: `input{ bind: name }` sets name to event.value (a number from a number or range field)
 function inputDetail(field) {
 	return { value: NUMBER_FIELDS.includes(field.type) ? field.valueAsNumber : field.value, checked: field.checked ?? false };

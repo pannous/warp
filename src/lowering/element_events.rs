@@ -11,7 +11,7 @@
 
 use super::nodes::key;
 use super::words::ON_WORD;
-use crate::event_signals::{ELEMENT_EVENT_JOINER, PAGE_EVENTS};
+use crate::event_signals::{is_element_event, ELEMENT_EVENT_JOINER};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -230,7 +230,7 @@ pub(crate) fn handler_at(items: &[Node], index: usize) -> Option<(String, Node, 
 		return None;
 	}
 	let event_name = |node: &Node| match node.drop_meta() {
-		Node::Symbol(event) if PAGE_EVENTS.contains(&event.as_str()) => Some(event.clone()),
+		Node::Symbol(event) if is_element_event(event) => Some(event.clone()),
 		_ => None,
 	};
 	match items.get(index + 1)?.drop_meta() {
