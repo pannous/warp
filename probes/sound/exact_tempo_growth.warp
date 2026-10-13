@@ -1,0 +1,4 @@
+// card exact-tempo-growth: tempo *= 1.05 forty times stays a short number
+use sound
+for i in 1 to 40 { tempo *= 1.05 }
+tempo

@@ -13,6 +13,11 @@ on:
   schedule:
     - cron: "23 2 * * *"
   workflow_dispatch:
+    inputs:
+      runner:
+        # validate the next image before ubuntu-latest moves to it: `gh workflow run … --ref <branch> -f runner=ubuntu-26.04`
+        description: the runner image to run on
+        default: ubuntu-latest
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,11 +27,11 @@ env:
 
 jobs:
   decide:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 50
     - id: decide
@@ -49,20 +54,20 @@ jobs:
   test:
     needs: decide
     if: needs.decide.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: clippy, rustfmt
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       with:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       with:
         path: ~/.elan
         key: ${{ runner.os }}-elan-${{ env.LEAN_TOOLCHAIN }}

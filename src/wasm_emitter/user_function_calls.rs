@@ -470,7 +470,9 @@ impl WasmGcEmitter {
 	}
 
 	/// Result kinds of the user functions, of `floor(x)`, `round(x)`…, which build an Int (emit_introspection_fn)
-	/// unless libm's f64 version is imported, and of the exports of imported WebAssembly modules (`shout("hi")`, a text)
+	/// unless libm's f64 version is imported, and of the imported functions as their signatures declare them: a module's
+	/// export (`shout("hi")`, a text), a C library's (raylib's `GetTime()`, a float); a math word that maps a ± interval
+	/// (`exp(0 ± 1)`) has the kind of its argument, which infer_type decides per call
 	pub(super) fn user_function_kinds(&self) -> HashMap<String, Kind> {
 		let rounding = ROUNDING_FUNCTIONS
 			.iter()
@@ -484,13 +486,13 @@ impl WasmGcEmitter {
 				.map(|(index, kind)| (crate::tuples::element_key(name, index), *kind))
 		});
 		let fields = crate::analyzer::declared_field_kinds(&self.ctx.type_registry);
-		let module_exports = self
+		let imports = self
 			.ctx
 			.ffi_imports
 			.iter()
-			.filter(|(_, import)| crate::wasm_modules::is_module_path(import.library))
+			.filter(|(name, _)| !crate::uncertain::maps_intervals(name))
 			.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)));
-		module_exports
+		imports
 			.chain(rounding)
 			.chain(
 				self.ctx
