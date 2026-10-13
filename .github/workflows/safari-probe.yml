@@ -1,0 +1,24 @@
+# Safari on a macOS runner (card webgpu-safari, probes/safari_probe.py): what the deployed playground's GPU samples do
+# there. Runs on a push of the branch webgpu-safari only.
+name: Safari probe
+on:
+  push:
+    branches: [ webgpu-safari ]
+    paths: [ "probes/safari_probe.py", ".github/workflows/safari-probe.yml" ]
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ macos-26, macos-15 ]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v7
+    - name: Safari's version
+      run: defaults read /Applications/Safari.app/Contents/Info CFBundleShortVersionString; sw_vers
+    - name: Allow remote automation
+      run: sudo safaridriver --enable
+    - name: The GPU samples in Safari
+      run: python3 probes/safari_probe.py https://warp.pannous.com/ webgpu shader_trails
