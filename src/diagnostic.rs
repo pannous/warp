@@ -141,7 +141,7 @@ impl Diagnostic {
 		let text = self.to_string();
 		if !self.fixes.is_empty() {
 			note_said();
-			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
+			diagnostics(|diagnostics| diagnostics.errors.push(self));
 		}
 		text
 	}
@@ -473,8 +473,31 @@ const ACKNOWLEDGED_PREFIX: &str = "ack:";
 thread_local! {
 	static WARNING_MODE: std::cell::Cell<WarningMode> = const { std::cell::Cell::new(WarningMode::Warn) };
 	static RUNTIME_WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
-	static COMPILE_WARNINGS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
-	static ERROR_DIAGNOSTICS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
+	static DIAGNOSTICS: std::cell::RefCell<Diagnostics> = std::cell::RefCell::new(Diagnostics::default());
+}
+
+/// What compiles on this thread said, kept for the hosts that take it (take_warnings, take_error_diagnostics,
+/// take_assumptions, capture_hints)
+#[derive(Default)]
+struct Diagnostics {
+	/// How many diagnostics were said (warnings, errors with fixes, assumptions, hints): a step that says something must
+	/// run again to say it again (analysis_memo.rs remembers only silent analyses)
+	said: u64,
+	/// The compile-time warnings, every level but hints
+	warnings: Vec<Diagnostic>,
+	/// The errors with fixes
+	errors: Vec<Diagnostic>,
+	/// The defaults unanswered Asks took
+	assumptions: Vec<Diagnostic>,
+	/// How many capture_hints scopes are open: hints are recorded only for them (nobody else reads them)
+	hint_captures: usize,
+	captured_hints: Vec<Diagnostic>,
+	/// Under HintMode::Once, the hints shown already
+	shown_hints: std::collections::HashSet<String>,
+}
+
+fn diagnostics<R>(use_them: impl FnOnce(&mut Diagnostics) -> R) -> R {
+	DIAGNOSTICS.with(|diagnostics| use_them(&mut diagnostics.borrow_mut()))
 }
 
 /// The program the CLI runs: its warnings and errors print the line they name (show_lines_of); process-wide, as a
@@ -505,18 +528,12 @@ fn is_quiet() -> bool {
 	warning_mode() == WarningMode::Quiet
 }
 
-thread_local! {
-	/// How many diagnostics this thread has said (warnings, errors with fixes, assumptions, hints): a step that says
-	/// something must run again to say it again (analysis_memo.rs remembers only silent analyses)
-	static SAID: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-}
-
 pub fn said() -> u64 {
-	SAID.with(|said| said.get())
+	diagnostics(|diagnostics| diagnostics.said)
 }
 
 pub(crate) fn note_said() {
-	SAID.with(|said| said.set(said.get() + 1));
+	diagnostics(|diagnostics| diagnostics.said += 1);
 }
 
 /// Compile-time diagnostics: the first one the warning mode fails at is the error; otherwise each is said (say), but
@@ -537,17 +554,11 @@ pub fn report(diagnostics: &[Diagnostic]) -> Result<(), Node> {
 	Ok(())
 }
 
-thread_local! {
-	/// How many capture_hints scopes are open: hints are recorded only for them (nobody else reads them)
-	static HINT_CAPTURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-	static SAID_HINTS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
 /// The one way a diagnostic of any level reaches the user: recorded for hosts (take_warnings, capture_hints), printed
 /// to stderr from the shown level up (show_from), and followed by its "got it?" when printed. Under HintMode::Once a
 /// diagnostic said before is not said again. Whether it was printed
 pub fn say(diagnostic: Diagnostic) -> bool {
-	if crate::normalize::said_before(&diagnostic) {
+	if said_before(&diagnostic) {
 		return false;
 	}
 	note_said();
@@ -558,14 +569,27 @@ pub fn say(diagnostic: Diagnostic) -> bool {
 	if let Some((topic, written)) = diagnostic.acknowledgeable() {
 		offer_acknowledgement(topic, written, diagnostic.level);
 	}
-	match diagnostic.level {
-		Level::Hint if HINT_CAPTURES.with(|open| open.get()) > 0 => {
-			SAID_HINTS.with(|hints| hints.borrow_mut().push(diagnostic))
-		}
+	diagnostics(|diagnostics| match diagnostic.level {
+		Level::Hint if diagnostics.hint_captures > 0 => diagnostics.captured_hints.push(diagnostic),
 		Level::Hint => {}
-		_ => COMPILE_WARNINGS.with(|reported| reported.borrow_mut().push(diagnostic)),
-	}
+		_ => diagnostics.warnings.push(diagnostic),
+	});
 	printed
+}
+
+/// Under HintMode::Once: whether this diagnostic was said before on this thread (remembers it otherwise)
+fn said_before(diagnostic: &Diagnostic) -> bool {
+	let key = match (&diagnostic.written, &diagnostic.preferred) {
+		(Some(written), Some(preferred)) => format!("{written}|{preferred}"),
+		_ => format!("{}@{}:{}", diagnostic.message, diagnostic.line, diagnostic.column),
+	};
+	crate::normalize::hint_mode() == crate::normalize::HintMode::Once
+		&& !diagnostics(|diagnostics| diagnostics.shown_hints.insert(key))
+}
+
+/// Clear shown hints (useful for testing)
+pub fn clear_shown_hints() {
+	diagnostics(|diagnostics| diagnostics.shown_hints.clear());
 }
 
 /// A hint `prefer <preferred> over <written>` (a note when they are the same) with its reason below; a warning with the
@@ -616,32 +640,33 @@ fn print(diagnostic: &Diagnostic) {
 /// Whether this warning was said on this thread since the last take_warnings: a step emitted twice (an if's
 /// condition) says its warning once
 pub fn warned_before(warning: &Diagnostic) -> bool {
-	COMPILE_WARNINGS.with(|reported| reported.borrow().contains(warning))
+	diagnostics(|diagnostics| diagnostics.warnings.contains(warning))
 }
 
 /// The compile-time warnings (every level but hints) said on this thread since the last call (a host without a
 /// terminal shows them)
 pub fn take_warnings() -> Vec<Diagnostic> {
-	COMPILE_WARNINGS.with(|reported| std::mem::take(&mut *reported.borrow_mut()))
+	diagnostics(|diagnostics| std::mem::take(&mut diagnostics.warnings))
 }
 
 /// Run `body` and return it with the hints said meanwhile on this thread (still printed as always)
 pub fn capture_hints<T>(body: impl FnOnce() -> T) -> (T, Vec<Diagnostic>) {
-	let start = SAID_HINTS.with(|hints| hints.borrow().len());
-	HINT_CAPTURES.with(|open| open.set(open.get() + 1));
+	let start = diagnostics(|diagnostics| {
+		diagnostics.hint_captures += 1;
+		diagnostics.captured_hints.len()
+	});
 	let result = body();
-	HINT_CAPTURES.with(|open| open.set(open.get() - 1));
-	let hints = SAID_HINTS.with(|hints| {
-		let mut hints = hints.borrow_mut();
-		let start = start.min(hints.len());
-		hints.split_off(start)
+	let hints = diagnostics(|diagnostics| {
+		diagnostics.hint_captures -= 1;
+		let start = start.min(diagnostics.captured_hints.len());
+		diagnostics.captured_hints.split_off(start)
 	});
 	(result, hints)
 }
 
 /// The errors with fixes made on this thread since the last call (the page offers their fixes when the program fails)
 pub fn take_error_diagnostics() -> Vec<Diagnostic> {
-	ERROR_DIAGNOSTICS.with(|errors| std::mem::take(&mut *errors.borrow_mut()))
+	diagnostics(|diagnostics| std::mem::take(&mut diagnostics.errors))
 }
 
 /// A warning the running program reports with `warning(message)`
@@ -907,7 +932,6 @@ thread_local! {
 	static ACKNOWLEDGED_TOPICS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
 	static ACKNOWLEDGEMENTS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
 	static NOTES_SHOWN: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
-	static ASSUMPTIONS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 	/// The source of the program being compiled, for its `// got it` comments
 	static SOURCE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
@@ -985,7 +1009,7 @@ fn load_acknowledgements() {
 /// A new program (eval, compile) starts with no assumptions, no notes shown and only the acknowledgements of the
 /// file: what one program assumed or showed never reaches the next one on the same thread
 pub fn begin_program() {
-	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().clear());
+	diagnostics(|diagnostics| diagnostics.assumptions.clear());
 	NOTES_SHOWN.with(|notes| notes.borrow_mut().clear());
 	load_acknowledgements();
 }
@@ -1076,10 +1100,9 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 		return Err(diagnostic.into_error());
 	}
 	// a pass that runs twice (the emitter) asks the same question at the same place once
-	let asked_before = ASSUMPTIONS.with(|assumptions| {
-		let mut assumptions = assumptions.borrow_mut();
-		let asked_before = assumptions.contains(&diagnostic);
-		assumptions.push(diagnostic.clone());
+	let asked_before = diagnostics(|diagnostics| {
+		let asked_before = diagnostics.assumptions.contains(&diagnostic);
+		diagnostics.assumptions.push(diagnostic.clone());
 		asked_before
 	});
 	if warning_mode().fails(diagnostic.level) {
@@ -1095,7 +1118,7 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 /// The defaults unanswered Asks took on this thread since the last call: a later runtime error names them,
 /// since a wrong guess there typically fails far away from the ambiguous source
 pub fn take_assumptions() -> Vec<Diagnostic> {
-	ASSUMPTIONS.with(|assumptions| std::mem::take(&mut *assumptions.borrow_mut()))
+	diagnostics(|diagnostics| std::mem::take(&mut diagnostics.assumptions))
 }
 
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,

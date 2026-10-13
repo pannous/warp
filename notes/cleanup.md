@@ -125,6 +125,11 @@ B. Compile output, to become one `Diagnostics` sink taken once per compile (card
 | SHOWN_HINTS | normalize | sink (cleared) |
 | MODULE_DEFINITIONS, EARLY_CLASS_MODULES | modules | sink (cleared), also read by modules/loader |
 
+Done: diagnostic.rs's `Diagnostics` (one DIAGNOSTICS thread-local) holds said, warnings, errors, assumptions, the
+hint captures and SHOWN_HINTS (said_before moved to diagnostic.rs). Kept apart: NOTES_SHOWN, which with_acknowledger
+scopes together with the acknowledger statics of F; MODULE_DEFINITIONS and EARLY_CLASS_MODULES, loader state that
+lives beside PROGRAM_FILE and MODULE_FILES of A (a candidate for the compile context, not for the output).
+
 C. Fresh-name counters, never reset, so a name depends on what compiled before (card cleanup-fresh-names): RACES
 (declarations/tasks), ITEM_LOOPS (switch).
 
