@@ -121,3 +121,22 @@ fn test_arithmetic_prints() {
 		"2024-02-29\n2024-03-01\n2024-03-02\n"
 	);
 }
+
+/// Constants fold at compile time (time.rs fold_constants); numbers and truths around them are the run's
+#[test]
+fn test_constant_times_fold_and_the_run_does_the_rest() {
+	assert_eq!(eval("2024-03-01 - 1 day"), date(2024, 2, 29));
+	is!("2024-02-29.month + 1", 3);
+	is!("date(2024, 2, 29).day * 2", 58);
+	is!("2024-02-29 < 2024-03-01 and 2024-01-01 < 2024-02-01", 1);
+	is!("1 day != 2 days", 1);
+	assert_eq!(eval("2024-01-01; 2024-02-01"), date(2024, 2, 1));
+	assert_eq!(
+		eval("2 * 1 day"),
+		Node::data(Duration {
+			months: 0,
+			days: 2,
+			nanos: 0
+		})
+	);
+}
