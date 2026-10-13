@@ -951,10 +951,9 @@ impl Broadcast {
 		}
 		let named = self.namer();
 		let item = key(Node::Symbol(named("ITEM")), op, operand);
-		let bindings = HashMap::from([("fused_list".to_string(), receiver), ("fused_item".to_string(), item)]);
-		Some(crate::law::substitute(
-			&crate::warp_parser::parse(&named(FUSED_SUM_TEMPLATE)),
-			&bindings,
+		Some(super::nodes::filled(
+			&named(FUSED_SUM_TEMPLATE),
+			[("fused_list", receiver), ("fused_item", item)],
 		))
 	}
 
@@ -1077,15 +1076,12 @@ pub(crate) fn paired_by(receiver: Node, op: Op, operand: Node, template: &str, n
 		Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
 		other => unreachable!("{other:?}"),
 	};
-	let bindings = HashMap::from([
-		("paired_left".to_string(), receiver),
-		("paired_right".to_string(), operand),
-		("paired_item".to_string(), item),
-	]);
-	crate::law::substitute(
-		&crate::warp_parser::parse(&named(&template.replace("COUNT", PAIRED_COUNT))),
-		&bindings,
-	)
+	let bindings = [
+		("paired_left", receiver),
+		("paired_right", operand),
+		("paired_item", item),
+	];
+	super::nodes::filled(&named(&template.replace("COUNT", PAIRED_COUNT)), bindings)
 }
 
 /// The templates' names with `unique` appended: LEFT → paired_left_3 …

@@ -52,22 +52,13 @@ impl WasmGcEmitter {
 			nullable: true,
 			heap_type: HeapType::Concrete(order_type),
 		};
-		self.globals.global(
-			GlobalType {
-				val_type: Ref(witness_ref),
-				mutable: true,
-				shared: false,
-			},
-			&ConstExpr::ref_null(HeapType::Concrete(order_type)),
-		);
-		self.exports
-			.export(WITNESS_GLOBAL, ExportKind::Global, self.next_global_idx);
+		let global = self.declare_global_of(Ref(witness_ref), ConstExpr::ref_null(HeapType::Concrete(order_type)));
+		self.exports.export(WITNESS_GLOBAL, ExportKind::Global, global);
 		let table = WitnessTable {
-			global: self.next_global_idx,
+			global,
 			order_type,
 			dispatcher: None,
 		};
-		self.next_global_idx += 1;
 		self.compare_witness = Some(table);
 		Some(table)
 	}

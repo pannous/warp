@@ -60,17 +60,7 @@ impl WasmGcEmitter {
 						HeapType::Concrete(self.type_manager.node_type),
 					),
 				};
-				self.globals.global(
-					GlobalType {
-						val_type,
-						mutable: true,
-						shared: false,
-					},
-					&ConstExpr::ref_null(heap),
-				);
-				self.extra_global_names
-					.push((self.next_global_idx, format!("map_index_{slot}_{name}")));
-				self.next_global_idx += 1;
+				self.declare_named_global(val_type, ConstExpr::ref_null(heap), format!("map_index_{slot}_{name}"));
 			}
 		}
 	}

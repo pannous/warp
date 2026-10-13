@@ -19,3 +19,10 @@ fn now_prints_as_written_and_now_forced_as_a_date() {
 	);
 	assert!(printed("friends{peter james created:now!}\nprint friends").starts_with("{peter james created:20"));
 }
+
+/// Card map-now-bang: `now!` in a map literal is the time the run reads, as in tagged data, not a kept block
+#[test]
+fn now_forced_in_a_map_is_the_time() {
+	is!("x = {created: now!}\nx.created.year >= 2026", true);
+	is!("x = {created: now!, n: 1}\nx.n", 1);
+}

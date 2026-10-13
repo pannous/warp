@@ -4,7 +4,7 @@
 //! `xs.take first 10` is `xs.slice(0, 10)`. The parser reads a chain `xs.keep only positive.sort by size` as one list
 //! `[xs.keep, only, positive.sort, by, size]`: each `.method` binds to the word before it.
 
-use super::nodes::{call, key, symbol};
+use super::nodes::{call, key, phrase_words as words, symbol};
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -146,17 +146,6 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 		phrased |= !words.is_empty();
 	}
 	phrased.then_some(receiver)
-}
-
-/// The words of a phrase, flat: `cheapest = items sorted by price` reads as `[[items, [sorted, by]], price]`
-pub(crate) fn words(items: &[Node]) -> Vec<Node> {
-	items
-		.iter()
-		.flat_map(|item| match item.drop_meta() {
-			Node::List(inner, Bracket::None, Separator::Space) => words(inner),
-			_ => vec![item.clone()],
-		})
-		.collect()
 }
 
 fn canonical(method: &str) -> String {

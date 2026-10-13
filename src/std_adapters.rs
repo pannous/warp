@@ -59,8 +59,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				.map(|_| Node::Empty)
 				.map_err(|problem| failure(problem.to_string()))
 		}
-		// a truth value crosses as 1 or 0, as booleans are encoded
-		("file", "exists", [path]) => Ok(Node::int(i64::from(std::path::Path::new(&text_of(path)?).exists()))),
+		("file", "exists", [path]) => Ok(Node::from(std::path::Path::new(&text_of(path)?).exists())),
 		("file", "list", [folder]) => {
 			let entries = std::fs::read_dir(text_of(folder)?).map_err(|problem| failure(problem.to_string()))?;
 			let mut names: Vec<String> = entries
@@ -82,7 +81,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		("regex", member, [text, pattern, rest @ ..]) => {
 			let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?).map_err(failure)?);
 			match (member, rest) {
-				("matches", []) => Ok(Node::int(i64::from(pattern.is_match(&text)))),
+				("matches", []) => Ok(Node::from(pattern.is_match(&text))),
 				("first", []) => Ok(pattern
 					.find(&text)
 					.map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),

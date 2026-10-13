@@ -278,6 +278,8 @@ fn is_computed(value: &Node) -> bool {
 		{
 			false
 		}
+		// `now!`: the time the run reads where it stands is a value, not a block kept for later (card map-now-bang)
+		_ if crate::time::is_time_call(value) => false,
 		// a range `1..n` is a value too (a descriptor), whatever its bounds compute
 		Node::Key(_, Op::Range | Op::To, _) => false,
 		// a type expression declares: `int[100]`, `100 * int`, `3 * char`

@@ -172,7 +172,7 @@ pub(crate) fn hole_readers(statements: &[Node]) -> Vec<Node> {
 	}
 	HOLE_READERS
 		.iter()
-		.map(|(name, template)| with(template, vec![("READER", symbol(name))]))
+		.map(|(name, template)| super::nodes::filled(template, vec![("READER", symbol(name))]))
 		.collect()
 }
 
@@ -436,18 +436,15 @@ fn handler_symbols(statements: &[Node]) -> Vec<String> {
 
 /// A template with its placeholders filled by names
 fn filled(template: &str, names: &[(&str, &str)]) -> Node {
-	with(
+	super::nodes::filled(
 		template,
-		names
-			.iter()
-			.map(|(placeholder, name)| (*placeholder, symbol(name)))
-			.collect(),
+		names.iter().map(|(placeholder, name)| (*placeholder, symbol(name))),
 	)
 }
 
 /// `template` for the state list `list`, named in the dev store by its own name
 fn kept_in_dev(template: &str, list: &str) -> Node {
-	with(
+	super::nodes::filled(
 		template,
 		vec![
 			("STATE", symbol(list)),
@@ -455,15 +452,6 @@ fn kept_in_dev(template: &str, list: &str) -> Node {
 			("STORE", Node::Text(crate::stored_values::DEV_STORE.to_string())),
 		],
 	)
-}
-
-fn with(template: &str, bindings: Vec<(&str, Node)>) -> Node {
-	let parsed = parse(template);
-	let bindings: HashMap<String, Node> = bindings
-		.into_iter()
-		.map(|(placeholder, node)| (placeholder.to_string(), node))
-		.collect();
-	substitute(parsed.drop_meta(), &bindings)
 }
 
 struct Component {
@@ -685,7 +673,7 @@ impl Component {
 					.map(|(_, _, list)| (list.clone(), initial))
 			});
 			lowered.push(match first_set {
-				Some((list, initial)) => with(
+				Some((list, initial)) => super::nodes::filled(
 					state_start,
 					vec![
 						("STATE", Node::Symbol(list)),
@@ -711,7 +699,7 @@ impl Component {
 			.map(|(variable, _, list)| {
 				(
 					variable.clone(),
-					with(
+					super::nodes::filled(
 						READ,
 						vec![
 							("STATE", Node::Symbol(list.clone())),
@@ -750,7 +738,7 @@ impl Component {
 							.map(|(variable, _, list)| {
 								(
 									variable.clone(),
-									with(HANDLER_READ, vec![("STATE", Node::Symbol(list.clone()))]),
+									super::nodes::filled(HANDLER_READ, vec![("STATE", Node::Symbol(list.clone()))]),
 								)
 							})
 							.collect(),

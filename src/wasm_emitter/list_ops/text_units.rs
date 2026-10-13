@@ -639,18 +639,10 @@ impl WasmGcEmitter {
 		if self.text_heap_global.is_some() {
 			return;
 		}
-		self.globals.global(
-			GlobalType {
-				val_type: ValType::I32,
-				mutable: true,
-				shared: false,
-			},
-			&ConstExpr::i32_const(0),
-		);
-		self.text_heap_global = Some(self.next_global_idx);
+		let global = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
+		self.text_heap_global = Some(global);
 		self.exports
-			.export(crate::host::TEXT_HEAP_EXPORT, ExportKind::Global, self.next_global_idx);
-		self.next_global_idx += 1;
+			.export(crate::host::TEXT_HEAP_EXPORT, ExportKind::Global, global);
 	}
 
 	/// Bump-allocate `length` bytes into local `address`; fresh pages come from memory.grow,

@@ -455,8 +455,9 @@ impl WarpParser {
 					// - lhs is a Symbol or a function call (List with Bracket::None)
 					// - NOT parenthesized expressions (List with Bracket::Round)
 					// - Argument conditions vary by context:
-					//   - In assignment (min_bp <= 60): allow ANY argument (including identifiers)
-					//   - In colon/comparison (min_bp > 60): only non-identifier args
+					//   - In assignment (min_bp <= 60) and in an operand of or/and/comparison/arithmetic: ANY argument
+					//     (including identifiers), `1 + count xs` is `1 + count(xs)`
+					//   - In colon and the like (between): only non-identifier args
 					//   This allows `fetch url` but prevents `a: b c d` from chaining
 					if let Some(updated) =
 						self.try_parse_implicit_application(&lhs, min_bp, ARGUMENT_BP, MAX_BP_FOR_APPLICATION)

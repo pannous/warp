@@ -16,6 +16,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
+  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -23,6 +24,25 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   worker marks each `#[ignore = "cleanup-edge: <card>: <what no longer works>"]` (assertions untouched) and lists them
   in its merge request; the Interviewer asks the user whether each edge case is worth the code it needed: yes → the
   code comes back, no → the test is retired. Core behaviour (samples, the tour, common forms) must keep passing.
+- cleanup-cuts (2026-10-13, batch from notes/cleanup.md "Feature overlap"): drop compile-time lambdas (run-time
+  closures cover them), generators/yield, type-name parameters `fib int i` (samples move to `fib(i:int)`), scoped
+  handlers `on … in {…}`. Keep return-type overloads, tuple returns ("multi return is definitely desired"), list
+  element checks, instance destructuring, object-shaped parameters, dispatch by class. Rebuild small: traits as a
+  thin alias of classes with default methods ("I don't see how that ever took 1900 lines"); ORM keeps only
+  `stored people: [Person]`; shared int arrays stay as built, with a note that `shared` for any atomic variable is
+  the general form for later; one rule `a of b` ≡ `b.a` replaces the
+  reflection dot words; Ruby blocks via the block type and trailing lambdas. Natural phrases parked (tests ignored,
+  maybe re-implemented via preposition parameters). Discussion card: all methods on classes as dispatch.
+- foreign-spellings (2026-10-13): keep Rust `<T>`/`let mut`, Enum.map/List.map/Seq.sum, Python lambda, variadic
+  lambdas (through the normal parameter path), JS destructured parameters, Ruby lambda/proc/blocks/to_s, C# LINQ,
+  C++ `auto x`; foreign names are cheap aliases of existing words, not lowering code. Drop OCaml let-in and `fun`,
+  Elixir `def …, do:`, C++ `[](…){…}` lambdas. The R/PHP forms move to warp files loaded with `use R` / `use PHP`.
+  Kotlin `when x { 1 -> … }` is an alias of `match x { 1 => … }` (`->` ≈ `=>` in arms) with a warning, since `when`
+  means other things too. `case` is an optional word before any match arm (`case 1: …`).
+- real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
+  type next to the exact ratios; then it goes.
+- watched-cells (2026-10-13): watched variables use the run-time cell, except main-level variables no function
+  writes, which keep the inserted check (same speed, about −300 lines).
 - crash-fixes-first (2026-10-12): crash fixes merge with the highest priority (notes/roles.md).
 - small-changes-on-main (2026-10-12): small or non-conflicting changes may go on main without a worktree.
 - session-names (2026-10-12): a session is named for its current task, never a guessed area.

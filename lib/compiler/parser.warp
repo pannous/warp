@@ -2,12 +2,12 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 
-class Parser { code: text; n: int; at: int; header: bool }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0, header: false}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false}
 	items(p, ' ', "")
 }
 
@@ -182,7 +182,7 @@ def continued(p, left, min_power) {
 			op = operator_at(p)
 			if op.length == 0 {
 				if not applies(p, left, min_power) { break }
-				left = listed("", " ", [left, expression(p, ARGUMENT_POWER)])
+				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power))])
 				continue
 			}
 			powers = binding_powers(op#2)
@@ -266,7 +266,8 @@ def operand_after(p, width) {
 	not (c == '\n' or c == '\r' or c == ')' or c == ']' or c == '}' or c == ';' or c == ',')
 }
 
-// `x = f y`: a name before an operand is called with it, as an assignment's value or with an argument that is no name
+// `x = f y`, `1 + count xs`: a name before an operand is called with it, as an assignment's value, in an operand from
+// `or` up to `+` (not in an argument, a loop header or before `for`) or with an argument that is no name
 // Rust twin: suffixes.rs try_parse_implicit_application
 def applies(p, left, min_power) {
 	if min_power == 0 or min_power > 151 { return false }
@@ -274,9 +275,41 @@ def applies(p, left, min_power) {
 	if not callable { return false }
 	c = peek(p.code, p.at, p.n)
 	if c == '{' and p.header { return false }
-	unnamed = is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{' or c == '-'
-	(min_power <= 60 or unnamed) and (unnamed or is_name_start(c))
+	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and not p.iterable and not word_begins_item(p)
+	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
 }
+
+// The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
+// Rust twin: suffixes.rs word_begins_item
+def word_begins_item(p) {
+	if keyword_at(p, "for") or keyword_at(p, "end") { return true }
+	at = p.at
+	while at < p.n and is_name_char(p.code[at]) { at = at + 1 }
+	if at == p.at { return false }
+	c = peek(p.code, at, p.n)
+	next = peek(p.code, at + 1, p.n)
+	c == '{' or (c == ':' and not (next == ':' or next == '='))
+}
+
+// An assignment's value or an argument that is no name is called with whatever the operand is
+def applies_otherwise(p, min_power) := min_power <= 60 or unnamed_at(p)
+
+def unnamed_at(p) {
+	c = peek(p.code, p.at, p.n)
+	is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{' or c == '-'
+}
+
+// The argument of a braceless call; `while i < count t {…}`: a block after an operand's argument is the body
+def argument(p, block_ends) {
+	outer = p.header
+	p.header = outer or block_ends
+	value = expression(p, ARGUMENT_POWER)
+	p.header = outer
+	value
+}
+
+// The operands a braceless call binds in: the right sides of `or` to `+`
+OPERAND_POWERS = [91, 141]
 
 // A braceless argument takes arithmetic and stops at ranges and comparisons: `f 3-1 > 5`
 ARGUMENT_POWER = 140
@@ -480,7 +513,9 @@ def looped(p) {
 		if keyword_at(p, "in") {
 			p.at = p.at + 2
 			skip_spaces(p)
+			p.iterable = true
 			iterable = header_expression(p, 81)
+			p.iterable = false
 			skip_spaces(p)
 			return listed("", " ", [["symbol", "for"], variable, ["symbol", "in"], iterable, loop_body(p)])
 		}
@@ -592,9 +627,12 @@ def atom(p) {
 	if c == '(' or c == '[' or c == '{' {
 		p.at = p.at + 1
 		outer = p.header
+		outer_iterable = p.iterable
 		p.header = outer and c == '('
+		p.iterable = outer_iterable and c == '('
 		group = items(p, closing_of(c), "" + c)
 		p.header = outer
+		p.iterable = outer_iterable
 		return group
 	}
 	if c == 'ø' or c == ')' or c == ']' or c == '}' or c == ';' {

@@ -2,7 +2,7 @@
 //! `(made = []; for x in xs { if c { made += [x * x] } }; made)`. Lowered first, so the loop and the append go through
 //! every later pass like written ones; `+=`, no `push`, which a program's own `push(st, x)` would answer. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
-use super::nodes::{children_rewritten, key, Counter};
+use super::nodes::{children_rewritten, key, phrase_words, Counter};
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -171,7 +171,7 @@ fn with_as_where(node: Node, lists: &Lists) -> Node {
 		return node;
 	};
 	for at in 1..items.len() {
-		let subject = crate::list_phrases::words(&items[at - 1..at])
+		let subject = phrase_words(&items[at - 1..at])
 			.pop()
 			.map(|word| word.drop_meta().name())
 			.unwrap_or_default();
@@ -190,7 +190,7 @@ fn with_as_where(node: Node, lists: &Lists) -> Node {
 /// `name of people`, `name of (people where age > 20)`: the field of each element, `[of·element.name for of·element in
 /// people]`, when people is a list of instances of a class with that field
 fn field_of_elements(items: &[Node], lists: &Lists) -> Option<Node> {
-	let items = crate::list_phrases::words(items);
+	let items = phrase_words(items);
 	let [field, of, subject @ ..] = items.as_slice() else {
 		return None;
 	};
@@ -300,7 +300,7 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 /// table's filter stays its SQL)
 fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	// `for x in (xs where c) {…}` as the parser groups the filter
-	let items = crate::list_phrases::words(items);
+	let items = phrase_words(items);
 	let [for_word, variable, in_word, sequence, where_word, condition, body] = items.as_slice() else {
 		return None;
 	};
