@@ -1,11 +1,12 @@
 //! Nodes read and built by warp code, as a parser written in warp must (card self-node-api, notes/self_hosting.md):
 //! `n.key`, `n.value` and `n.op` of a key, `n.name` of a word or a key, `n.bracket` of a list (a field of that name
-//! wins: `{name: 3}.name` is 3), and `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)` to build them.
+//! wins: `{name: 3}.name` is 3), `n.separator` of a list (card keep-list), and `symbol(text)`, `key(left, op, right)`,
+//! `bracketed(items, bracket)`, `separated(items, separator)` to build them.
 //! `type(n)`, `#n`, `n#i` and `for x in n` read the rest already.
 
 use crate::node::Node;
 use crate::operators::OP_CODES;
-use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
+use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::text_builtins::{TEXT_CONCAT, TEXT_OF};
 use crate::wasm_emitter::WasmGcEmitter;
@@ -17,31 +18,38 @@ use ValType::Ref;
 /// node_part(node, part) -> the part (NODE_PARTS' index) of a node, null when it has none
 pub const NODE_PART: &str = "node_part";
 /// The parts node_part reads, by the field name that reads each
-pub const NODE_PARTS: [&str; 5] = ["key", "value", "op", "name", "bracket"];
+pub const NODE_PARTS: [&str; 6] = ["key", "value", "op", "name", "bracket", "separator"];
 const KEY_PART: i32 = 0;
 const VALUE_PART: i32 = 1;
 const OP_PART: i32 = 2;
 const NAME_PART: i32 = 3;
 const BRACKET_PART: i32 = 4;
+const SEPARATOR_PART: i32 = 5;
 /// operator_code(text) -> i64: the code of the operator written so (operators::OP_CODES), -1 for none
 const OPERATOR_CODE: &str = "operator_code";
 /// bracket_code(text) -> i64: the bracket info of the opening bracket written so, -1 for none
 const BRACKET_CODE: &str = "bracket_code";
+/// separator_code(text) -> i64: the code of the separator written so (wasm_emitter::SEPARATORS), -1 for none
+const SEPARATOR_CODE: &str = "separator_code";
 const NEW_KEY_OF: &str = "new_key_of";
 const NEW_BRACKETED: &str = "new_bracketed";
+const NEW_SEPARATED: &str = "new_separated";
 const SYMBOL: &str = "symbol";
 const KEY: &str = "key";
 const BRACKETED: &str = "bracketed";
+const SEPARATED: &str = "separated";
 /// name, number of arguments, result kind
-pub const NODE_BUILTINS: [(&str, usize, Kind); 3] = [
+pub const NODE_BUILTINS: [(&str, usize, Kind); 4] = [
 	(SYMBOL, 1, Kind::Symbol),
 	(KEY, 3, Kind::Key),
 	(BRACKETED, 2, Kind::List),
+	(SEPARATED, 2, Kind::List),
 ];
 /// The opening brackets by their bracket info in a list's kind field (Curly 0, Square 1, Round 2, Less 3, None 5)
 const BRACKETS: [(&str, i64); 5] = [("{", 0), ("[", 1), ("(", 2), ("<", 3), ("", 5)];
 const UNKNOWN_OPERATOR: &str = "unknown operator: ";
 const UNKNOWN_BRACKET: &str = "unknown bracket: ";
+const UNKNOWN_SEPARATOR: &str = "unknown separator: ";
 
 /// The part a field name reads when the node has no field of that name
 pub fn node_part(field: &str) -> Option<i32> {
@@ -56,10 +64,14 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(NODE_PART) {
 		required.insert("new_text");
 	}
-	if [NEW_KEY_OF, NEW_BRACKETED].iter().any(|name| required.contains(name)) {
+	if [NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED]
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.extend([
 			OPERATOR_CODE,
 			BRACKET_CODE,
+			SEPARATOR_CODE,
 			TEXT_OF,
 			TEXT_CONCAT,
 			super::text_builtins::ERROR_OF,
@@ -70,7 +82,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 }
 
 impl WasmGcEmitter {
-	/// `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)`
+	/// `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)`, `separated(items, separator)`
 	pub(super) fn emit_node_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
 		for argument in arguments {
 			self.emit_node_instructions(func, argument);
@@ -87,6 +99,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_symbol");
 			}
 			KEY => self.emit_call(func, NEW_KEY_OF),
+			SEPARATED => self.emit_call(func, NEW_SEPARATED),
 			_ => self.emit_call(func, NEW_BRACKETED),
 		}
 	}
@@ -181,6 +194,28 @@ impl WasmGcEmitter {
 						code,
 						&BRACKETS.map(|(bracket, info)| (info, bracket)),
 					);
+					Self::emit_list(
+						f,
+						&[
+							I::LocalGet(kind),
+							I::I64Const(SEPARATOR_MASK),
+							I::I64And,
+							I::I64Const(SEPARATOR_SHIFT),
+							I::I64ShrU,
+							I::I32WrapI64,
+							I::LocalSet(code),
+						],
+					);
+					let separators = super::separator_texts();
+					let separators: Vec<(i64, &str)> =
+						separators.iter().map(|(code, text)| (*code, text.as_str())).collect();
+					s.emit_part_text(
+						f,
+						&part_is(SEPARATOR_PART),
+						&is_kind(kind, Kind::List),
+						code,
+						&separators,
+					);
 					// a word's name, or the name of a key's key (`x` of `x: 3`, of `x.y: 3` too)
 					Self::emit_list(f, &part_is(NAME_PART));
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::Loop(BlockType::Empty)]);
@@ -245,55 +280,98 @@ impl WasmGcEmitter {
 			);
 		}
 
-		if self.should_emit_function(NEW_BRACKETED) {
-			self.emit_code_of_text(BRACKET_CODE, &BRACKETS.map(|(bracket, info)| (info, bracket)));
-			// new_bracketed(items, bracket): the list of the same items in that bracket, an Error for an unknown bracket
-			let (items, bracket) = (0, 1);
-			self.runtime_function(
-				NEW_BRACKETED,
-				vec![node_ref, node_ref],
-				vec![node_ref],
-				vec![ValType::I64],
-				|s, f| {
-					let code = 2;
-					Self::emit_list(f, &kind_of(items));
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(Kind::List as i64),
-							I::I64Ne,
-						],
-					);
-					s.emit_fail_if(f, "not_a_list");
-					s.emit_code_or_error(f, bracket, code, BRACKET_CODE, UNKNOWN_BRACKET);
-					Self::emit_list(f, &kind_of(items));
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(!(KIND_MASK << KIND_BITS)),
-							I::I64And,
-							I::LocalGet(code),
-							I::I64Const(KIND_BITS),
-							I::I64Shl,
-							I::I64Or,
-							I::LocalGet(items),
-							I::StructGet {
-								struct_type_index: node_type,
-								field_index: 1,
-							},
-							I::LocalGet(items),
-							I::StructGet {
-								struct_type_index: node_type,
-								field_index: 2,
-							},
-							I::StructNew(node_type),
-						],
-					);
-				},
-			);
+		let brackets = BRACKETS.map(|(bracket, info)| (info, bracket.to_string()));
+		self.emit_relisted(
+			NEW_BRACKETED,
+			BRACKET_CODE,
+			&brackets,
+			KIND_BITS,
+			KIND_MASK << KIND_BITS,
+			UNKNOWN_BRACKET,
+		);
+		let separators = super::separator_texts();
+		self.emit_relisted(
+			NEW_SEPARATED,
+			SEPARATOR_CODE,
+			&separators,
+			SEPARATOR_SHIFT,
+			SEPARATOR_MASK,
+			UNKNOWN_SEPARATOR,
+		);
+	}
+
+	/// `name(items, text)`: the list of the same items with the head cell's kind bits under `mask` set to the code
+	/// (shifted by `shift`) of the entry written as the text, an Error `prefix` + the text for none
+	fn emit_relisted(
+		&mut self,
+		name: &'static str,
+		coder: &'static str,
+		written: &[(i64, String)],
+		shift: i64,
+		mask: i64,
+		prefix: &'static str,
+	) {
+		if !self.should_emit_function(name) {
+			return;
 		}
+		let written: Vec<(i64, &str)> = written.iter().map(|(code, text)| (*code, text.as_str())).collect();
+		self.emit_code_of_text(coder, &written);
+		let node_ref = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		let kind_of = |node: u32| {
+			[
+				I::LocalGet(node),
+				I::StructGet {
+					struct_type_index: node_type,
+					field_index: 0,
+				},
+			]
+		};
+		let (items, text) = (0, 1);
+		self.runtime_function(
+			name,
+			vec![node_ref, node_ref],
+			vec![node_ref],
+			vec![ValType::I64],
+			|s, f| {
+				let code = 2;
+				Self::emit_list(f, &kind_of(items));
+				Self::emit_list(
+					f,
+					&[
+						I::I64Const(KIND_MASK),
+						I::I64And,
+						I::I64Const(Kind::List as i64),
+						I::I64Ne,
+					],
+				);
+				s.emit_fail_if(f, "not_a_list");
+				s.emit_code_or_error(f, text, code, coder, prefix);
+				Self::emit_list(f, &kind_of(items));
+				Self::emit_list(
+					f,
+					&[
+						I::I64Const(!mask),
+						I::I64And,
+						I::LocalGet(code),
+						I::I64Const(shift),
+						I::I64Shl,
+						I::I64Or,
+						I::LocalGet(items),
+						I::StructGet {
+							struct_type_index: node_type,
+							field_index: 1,
+						},
+						I::LocalGet(items),
+						I::StructGet {
+							struct_type_index: node_type,
+							field_index: 2,
+						},
+						I::StructNew(node_type),
+					],
+				);
+			},
+		);
 	}
 
 	/// `if condition and kind: return new_text(written)` for the entry whose code is in local `code`

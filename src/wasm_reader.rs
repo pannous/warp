@@ -595,11 +595,20 @@ fn struct_node<T>(
 			crate::operators::code_to_op(high_byte),
 			Box::new(node(&child)),
 		),
-		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory, path),
+		t if t == Kind::Block as u8 => list_in(
+			data,
+			child,
+			Bracket::Curly,
+			crate::wasm_emitter::separator_of_kind(kind),
+			store,
+			memory,
+			path,
+		),
 		t if t == Kind::List as u8 => list_in(
 			data,
 			child,
 			crate::wasm_emitter::bracket_of_info(high_byte),
+			crate::wasm_emitter::separator_of_kind(kind),
 			store,
 			memory,
 			path,
@@ -635,6 +644,7 @@ fn list_in<T>(
 	mut first: Val,
 	mut rest: Val,
 	bracket: crate::node::Bracket,
+	separator: crate::node::Separator,
 	store: &mut StoreContextMut<'_, T>,
 	memory: wasmtime::Memory,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
@@ -668,7 +678,7 @@ fn list_in<T>(
 		}
 		(first, rest) = (data, child);
 	}
-	Node::List(items, bracket, crate::node::Separator::None)
+	Node::List(items, bracket, separator)
 }
 
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {

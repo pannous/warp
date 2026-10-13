@@ -539,8 +539,8 @@ impl WasmGcEmitter {
 					self.emit_call(func, "new_int");
 				}
 			} else {
-				// Build linked list: (first, rest, bracket_info)
-				self.emit_list_structure(func, items, bracket);
+				// Build linked list: (first, rest, bracket_info); a value keeps no separator, only data does (card keep-list)
+				self.emit_list_structure(func, items, bracket, &Separator::None);
 			}
 		}
 	}

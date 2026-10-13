@@ -476,12 +476,23 @@ impl WasmGcEmitter {
 			self.emit_call(func, "new_empty");
 			return;
 		}
-		self.emit_list_structure(func, &items, &Bracket::Square);
+		self.emit_list_structure(func, &items, &Bracket::Square, &Separator::None);
 	}
 
 	/// Emit a list as linked cons cells
-	pub(super) fn emit_list_structure(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) {
-		self.emit_list_structure_with(func, items, bracket, Self::emit_node_instructions);
+	pub(super) fn emit_list_structure(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) {
+		self.emit_list_structure_with(
+			func,
+			items,
+			&items_info(items, bracket, separator),
+			Self::emit_node_instructions,
+		);
 	}
 
 	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b
@@ -493,8 +504,8 @@ impl WasmGcEmitter {
 				self.emit_literal(func, right);
 				self.emit_new_key(func, op);
 			}
-			Node::List(items, bracket, _) if !items.is_empty() => {
-				self.emit_list_structure_with(func, items, bracket, Self::emit_literal)
+			Node::List(items, bracket, separator) if !items.is_empty() => {
+				self.emit_list_structure_with(func, items, &items_info(items, bracket, separator), Self::emit_literal)
 			}
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),
 			other => self.emit_node_instructions(func, other),
@@ -505,20 +516,18 @@ impl WasmGcEmitter {
 		&mut self,
 		func: &mut Function,
 		items: &[Node],
-		bracket: &Bracket,
+		info: &i64,
 		emit: fn(&mut Self, &mut Function, &Node),
 	) {
-		let bracket_info = bracket_info(bracket);
-
 		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself
 		emit(self, func, &items[0]);
 		if items.len() > 1 {
-			self.emit_list_structure_with(func, &items[1..], bracket, emit);
+			self.emit_list_structure_with(func, &items[1..], info, emit);
 		} else {
 			self.emit_node_null(func);
 		}
 
-		func.instruction(&I::I64Const(bracket_info));
+		func.instruction(&I::I64Const(*info));
 		if self.ctx.func_registry.contains("new_list") {
 			self.emit_call(func, "new_list");
 		} else {
@@ -532,4 +541,10 @@ impl WasmGcEmitter {
 pub(super) fn is_int_type_word(target: &Node) -> bool {
 	let word = target.drop_meta().name().to_lowercase();
 	crate::type_tests::canonical_spec_word(&word) == "int" && !super::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
+}
+
+/// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)
+fn items_info(items: &[Node], bracket: &Bracket, separator: &Separator) -> i64 {
+	let separator = if items.len() > 1 { separator } else { &Separator::None };
+	list_info(bracket, separator)
 }
