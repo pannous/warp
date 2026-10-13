@@ -288,12 +288,12 @@ impl Names {
 }
 
 /// `f(x) := body`, not `x := value`: its head and body
-fn function_definition(node: &Node) -> Option<(Node, Node, Rebuild)> {
+pub(crate) fn function_definition(node: &Node) -> Option<(Node, Node, Rebuild)> {
 	definition_parts(node).filter(|(head, _, _)| is_call_head(head))
 }
 
 /// The names assigned outside the bodies of functions, which every function sees
-fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
+pub(crate) fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
 	if function_definition(node).is_some() {
 		return;
 	}

@@ -21,3 +21,20 @@ fn a_local_named_like_a_program_function_is_the_local() {
 		warp::warp_parser::parse("[3]")
 	);
 }
+
+/// cards local-variable, local-variable-named: a local in one function hides no library or module word in another
+#[test]
+fn a_local_in_one_function_leaves_the_word_to_the_others() {
+	is!(
+		"def f() { lower = \"abc\"; lower.length }; def g(w) := w.lower(); g(\"AB\")",
+		"ab"
+	);
+	is!(
+		"f() := { words = \"a b\"; count(words) }; g(t) := words(t); g(\"x y\") == [\"x\", \"y\"]",
+		true
+	);
+	is!(
+		"def f() { words = \"a b\"; count(words) }; def g(t) := words(t); count(g(\"x y z\")) + f()",
+		6
+	);
+}

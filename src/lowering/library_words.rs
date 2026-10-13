@@ -368,7 +368,7 @@ pub fn lower(node: Node) -> Node {
 		.map(|(operation, _)| operation.to_string())
 		.collect();
 	shadowed.extend(variants);
-	collect_assigned_names(&node, &mut shadowed);
+	crate::type_tests::collect_outer_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);
 
@@ -382,7 +382,7 @@ pub fn lower(node: Node) -> Node {
 	let call_results = call_results(&node, &context);
 	Lowering {
 		context,
-		shadowed,
+		shadowed: RefCell::new(shadowed),
 		objects,
 		plain,
 		instances,
@@ -439,7 +439,7 @@ pub fn lower_function_methods(node: Node) -> Node {
 		.map(|(name, function)| (name.clone(), function.params.len()))
 		.collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
-	collect_assigned_names(&node, &mut defined);
+	crate::type_tests::collect_outer_assigned_names(&node, &mut defined);
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
 	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
 	let is_builtin = |name: &str, arguments: usize| {
@@ -453,14 +453,29 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
 	let node = list_constructor_calls(node, &defined);
-	function_methods_as_calls(node, &|name, arguments| {
+	function_methods_as_calls(node, &defined, &|name, arguments, defined| {
 		(is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments)
 	})
+}
+
+/// A function definition rewritten in its own scope: the names its body assigns join the defined ones there only
+fn in_function_scope(
+	node: &Node,
+	defined: &HashSet<String>,
+	rewrite: impl Fn(Node, &HashSet<String>) -> Node,
+) -> Option<Node> {
+	let (head, body, rebuild) = crate::type_tests::function_definition(node)?;
+	let mut locals = defined.clone();
+	collect_assigned_names(&body, &mut locals);
+	Some(rebuild(head, rewrite(body, &locals)))
 }
 
 /// Python's `list()`: the empty list, as `[]` parses; Kotlin's `listOf(1, 2)`, `arrayOf`, `mutableListOf`: the list
 /// `[1, 2]` (`listOf()` is `[]` too); a word the program defines keeps its call
 fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
+	if let Some(scoped) = in_function_scope(&node, defined, list_constructor_calls) {
+		return scoped;
+	}
 	let is_constructor = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if (name == LIST_WORD || LIST_CONSTRUCTORS.contains(&name.as_str())) && !defined.contains(name));
 	match node {
 		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(is_constructor) => {
@@ -493,13 +508,22 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 	}
 }
 
-fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bool) -> Node {
-	let lowered = |node: Node| function_methods_as_calls(node, is_function);
+fn function_methods_as_calls(
+	node: Node,
+	defined: &HashSet<String>,
+	is_function: &dyn Fn(&str, usize, &HashSet<String>) -> bool,
+) -> Node {
+	if let Some(scoped) = in_function_scope(&node, defined, |body, locals| {
+		function_methods_as_calls(body, locals, is_function)
+	}) {
+		return scoped;
+	}
+	let lowered = |node: Node| function_methods_as_calls(node, defined, is_function);
 	match node {
 		Node::Key(receiver, Op::Dot, method) => {
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
-				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1)) => {
+				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
 					Node::List(
 						[vec![items[0].clone(), receiver], items[1..].to_vec()].concat(),
 						Bracket::Round,
@@ -540,7 +564,9 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 
 struct Lowering {
 	context: Context,
-	shadowed: HashSet<String>,
+	/// The names the program defines where the lowering is: its functions, the variables outside functions and those
+	/// the function being lowered assigns (a local in one function hides no library word in another)
+	shadowed: RefCell<HashSet<String>>,
 	objects: HashMap<String, Node>,
 	/// Variables assigned plain values (AssignedObjects::plain)
 	plain: HashSet<String>,
@@ -646,7 +672,16 @@ impl Lowering {
 			Node::List(items, Bracket::Round, _) => items.first().map(Node::name),
 			_ => None,
 		};
-		self.within_function(name, parameters, || self.expand(self.body_statement(head, right)))
+		let mut locals = self.shadowed.borrow().clone();
+		collect_assigned_names(&right, &mut locals);
+		let outer = self.shadowed.replace(locals);
+		let lowered = self.within_function(name, parameters, || self.expand(self.body_statement(head, right)));
+		self.shadowed.replace(outer);
+		lowered
+	}
+
+	fn shadows(&self, name: &str) -> bool {
+		self.shadowed.borrow().contains(name)
 	}
 
 	/// `lower` with the parameters of a definition in scope, and its function's name when it has one
@@ -707,11 +742,7 @@ impl Lowering {
 			.iter()
 			.find(|(level, ..)| *level == op)
 			.expect("a similarity operator");
-		let tolerance = if self.shadowed.contains(*variable) {
-			variable
-		} else {
-			default
-		};
+		let tolerance = if self.shadows(*variable) { variable } else { default };
 		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
@@ -757,7 +788,7 @@ impl Lowering {
 	}
 
 	fn library_word(&self, name: &str) -> Option<&'static str> {
-		canonical_word(name).filter(|word| !self.shadowed.contains(name) && !self.shadowed.contains(*word))
+		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(*word))
 	}
 
 	/// The library word a call of `name` with that many arguments (receiver included) means
@@ -772,7 +803,7 @@ impl Lowering {
 			.iter()
 			.find(|(word, count, _)| *word == name && *count == argument_count)
 			.map(|(_, _, variant)| *variant);
-		variant.filter(|_| !self.shadowed.contains(name))
+		variant.filter(|_| !self.shadows(name))
 	}
 
 	/// `word(x, args)` and `word x args`
@@ -789,7 +820,7 @@ impl Lowering {
 		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
 			return Some(membership);
 		}
-		if let Some(raised) = raise_call(items, &self.shadowed) {
+		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
 			return Some(raised);
 		}
 		if let Err(error) = self.ask_braceless_argument(items, bracket, separator) {
@@ -801,7 +832,7 @@ impl Lowering {
 		};
 		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument (unless the program defines its own log)
 		if let (LOG_WORD, [_, value, base]) = (head.as_str(), items) {
-			if self.shadowed.contains(LOG_WORD) {
+			if self.shadows(LOG_WORD) {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
@@ -861,8 +892,7 @@ impl Lowering {
 			matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
 		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
 		// (a bare word that names no variable keeps the list data: `[first last]`)
-		let is_value =
-			|argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadowed.contains(name));
+		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadows(name));
 		let is_element = *bracket == Bracket::Square
 			&& *separator == Separator::Space
 			&& items.len() == arity(word) + 1

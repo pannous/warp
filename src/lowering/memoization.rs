@@ -123,6 +123,21 @@ pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
 							}),
 						))
 					}
+					// `def f() { … }` as parsed: the head and the block
+					Node::List(parts, inner_bracket, inner_separator) if matches!(parts.as_slice(), [head, body] if is_call_head(head) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) =>
+					{
+						let (keyword, bracket, separator) = (keyword.clone(), bracket.clone(), separator.clone());
+						let (inner_bracket, inner_separator) = (inner_bracket.clone(), inner_separator.clone());
+						Some((
+							parts[0].clone(),
+							parts[1].clone(),
+							Box::new(move |head: Node, body: Node| {
+								let definition =
+									Node::List(vec![head, body], inner_bracket.clone(), inner_separator.clone());
+								Node::List(vec![keyword.clone(), definition], bracket.clone(), separator.clone())
+							}),
+						))
+					}
 					_ => None,
 				}
 			}

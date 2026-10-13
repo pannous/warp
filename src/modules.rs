@@ -324,7 +324,18 @@ fn own_functions(program: &Node) -> HashSet<String> {
 	own
 }
 
+/// The program's declarations; in a function body only the nested functions, its variables are its own (a local
+/// `words = …` in one function leaves the text module's words to the others, card local-variable-named)
 fn collect_own_functions(node: &Node, classes: &HashSet<String>, own: &mut HashSet<String>) {
+	if let Some((head, body, _)) = crate::type_tests::function_definition(node) {
+		own.extend(leftmost_symbol(&head));
+		let mut locals = HashSet::new();
+		collect_own_functions(&body, classes, &mut locals);
+		let mut assigned = HashSet::new();
+		crate::type_tests::collect_outer_assigned_names(&body, &mut assigned);
+		own.extend(locals.into_iter().filter(|name| !assigned.contains(name)));
+		return;
+	}
 	let is_method = |target: &Node| match target.drop_meta() {
 		Node::List(items, _, _) => {
 			matches!(items.get(1).map(Node::drop_meta), Some(Node::Key(_, Op::Colon, class)) if class.symbol_name().is_some_and(|class| classes.contains(class)))

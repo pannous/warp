@@ -527,14 +527,14 @@ def loop_body(p) {
 // The words up to the end of the statement, one expression: `print ord c` of `for c in s: print ord c`
 // Rust twin: statements.rs rest_of_statement, words_binding
 def statement_words(p) {
-	said = []
+	words = []
 	while true {
-		said = said + [expression(p, 0)]
+		words = words + [expression(p, 0)]
 		skip_spaces(p)
 		if keyword_at(p, "else") or not starts_atom(p) { break }
 	}
-	if said.length == 1 { return said#1 }
-	phrase("", said)
+	if words.length == 1 { return words#1 }
+	phrase("", words)
 }
 
 def starts_atom(p) {
