@@ -3,7 +3,7 @@
 //! A program that binds the name itself (`online = 3`, `f(online) := …`, a field `{battery: 5}`) keeps its own.
 //! `name` (before signal_values::poll_shared) marks each read as the symbol `system·battery`, so poll_shared turns a
 //! main-level listener on one (`whenever battery < 20% {…}`, `on change online {…}`) into a check of `on·shared`, like
-//! a listener on a shared value, and adds a timer `on every 1000 ms {}` so a `warp run` stays and looks once a second.
+//! a listener on a shared value, and adds a timer `on every 1000ms {}` so a `warp run` stays and looks once a second.
 //! `read` (after poll_shared) makes each marked symbol the host call.
 //! `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: a percent compared with the battery is that number.
 //! The clipboard: `on clipboard change {…}` is `on change` of its change count (`clipboard count`), which reads no
@@ -35,7 +35,7 @@ const FLOAT_TYPE: &str = "float";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
-const KEEP_LISTENING: &str = "on every 1000 ms {}";
+const KEEP_LISTENING: &str = "on every 1000ms {}";
 const CLIPBOARD_READ: &str = "read";
 const CLIPBOARD_WRITE: &str = "write";
 /// stands for the text in the template of a clipboard write
