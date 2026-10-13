@@ -294,36 +294,7 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			Node::Number(num) => {
-				match num {
-					Number::Int(_) | Number::BigInt(_) => {
-						let value: f64 = (*num).into();
-						func.instruction(&I::F64Const(Ieee64::new(value.to_bits())));
-					}
-					Number::Float(f) => {
-						func.instruction(&I::F64Const(Ieee64::new(f.to_bits())));
-					}
-					Number::Quotient(n, d) => {
-						func.instruction(&I::F64Const(Ieee64::new((*n as f64 / *d as f64).to_bits())));
-					}
-					Number::BigQuotient(q) => {
-						func.instruction(&I::F64Const(Ieee64::new(q.to_f64().to_bits())));
-					}
-					Number::Complex(r, _i) => {
-						func.instruction(&I::F64Const(Ieee64::new(r.to_bits())));
-					}
-					Number::Real(r) => {
-						func.instruction(&I::F64Const(Ieee64::new(r.to_f64().to_bits())));
-					}
-					Number::Nan => {
-						func.instruction(&I::F64Const(Ieee64::new(f64::NAN.to_bits())));
-					}
-					Number::Inf => {
-						func.instruction(&I::F64Const(Ieee64::new(f64::INFINITY.to_bits())));
-					}
-					Number::NegInf => {
-						func.instruction(&I::F64Const(Ieee64::new(f64::NEG_INFINITY.to_bits())));
-					}
-				};
+				func.instruction(&I::F64Const(Ieee64::new(f64::from(*num).to_bits())));
 			}
 			// `xs#i = 0.5`: the element's value after the assignment
 			Node::Key(left, Op::Assign, right) if matches!(left.drop_meta(), Node::Key(_, Op::Hash, _)) => {
@@ -376,19 +347,6 @@ impl WasmGcEmitter {
 					return;
 				}
 				self.emit_float_operation(func, left, op, right);
-			}
-			// Suffix operators: x² = x*x, x³ = x*x*x (returns f64)
-			Node::Key(left, Op::Square, _) => {
-				self.emit_float_value(func, left);
-				self.emit_float_value(func, left);
-				func.instruction(&I::F64Mul);
-			}
-			Node::Key(left, Op::Cube, _) => {
-				self.emit_float_value(func, left);
-				self.emit_float_value(func, left);
-				func.instruction(&I::F64Mul);
-				self.emit_float_value(func, left);
-				func.instruction(&I::F64Mul);
 			}
 			// Prefix operators: √x, ∛x (return f64)
 			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if matches!(left.drop_meta(), Node::Empty) => {

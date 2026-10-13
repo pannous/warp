@@ -415,3 +415,56 @@ Left:
 - DONE (cleanup-saved-state) user_function_calls.rs compile_user_function_body: the ~15 per-function emitter fields are one
   FunctionState, swapped in at the start (swap_function_state) and back at the end; the fields that need the body's
   scope (typed variables, scratch locals, loop values) are set once it is known, as main does
+
+## Coverage survey (warp-cleanup, 2026-10-13, at 5899b83d1)
+
+What the test suite (which runs every sample too) never executes, by `cargo llvm-cov`: one queued run in a detached
+worktree, `WARP_TEST_TIME_LIMIT=2400 tests/queue.sh cargo llvm-cov --offline --no-report --tests --no-fail-fast`,
+then `cargo llvm-cov report --json` and `--lcov` into data/cleanup/, ranked by
+`probes/cleanup/coverage_ranking.py <json> <lcov> <checkout>` (data/cleanup/coverage.txt). The executable-building
+tests (wasm::test_executable_*, test_build_emits_wasm, runtime stub) fail under instrumentation; nothing else does.
+
+- 6673 of the executable src lines never run: 534 functions never called (2454 lines), 4219 lines of untaken branches.
+  The suite is thorough, so coverage alone frees a few hundred lines, not thousands.
+- Most unexecuted code is I/O no test drives on purpose: main.rs CLI commands (418), the paint window (408), deploy,
+  sound, package downloads, crash cards. Not dead.
+- The real clusters, filed as cleanup cards: unrun emitter branches (key_emitter emit_power_op, values
+  emit_float_value, list_emitter emit_floor_quotient, wasi emit_result_print), unused math (real.rs, reals.rs,
+  numbers.rs), components.rs value_of/json_of, time.rs, gpu_maps.rs, node/ comparison and indexing, gc_traits'
+  name resolver and wasm_reader's string readers (tested by test_gc_name_registry, so not removable without it).
+- Bigger deletions have to come from generalizing what does run: near-twin lowering passes and runtime emitters.
+
+## Feature overlap in src/lowering/ (warp-cleanup, 2026-10-13)
+
+What each lowering feature costs and who uses it, so the user can decide which are worth their code (decisions
+cleanup-means-fewer-lines, cleanup-may-drop-edge-cases). Usage by `probes/cleanup/feature_usage.py . <wiki>`
+(approximate syntax regexes; data/cleanup/feature_usage.txt), the low rows checked by hand. Foreign spellings and the
+signal family are warp-list-pattern's and left out. Samples = files in samples/, tour = web/playground/examples.js.
+
+| feature (files) | example | lines | samples | tour | wiki | overlap |
+|---|---|---|---|---|---|---|
+| compile-time lambdas + function values (lambdas, function_values) | `xs.map(x => x*2)`, `apply(f, x) := f(x)` | 1939 | many | 2 | 43 | run-time closures (closures.rs, 1170) run the same programs; the compile-time path is a speed-up |
+| traits (traits, traits/dispatch, traits/instance_types) | `trait shape{area}`, `compare(a:person, b:person) := …` | 1901 | 1 | 0 | 1 | instance `<`/`==` via compare witnesses rides on it; declared traits barely used |
+| database tables, ORM (database_tables/) | `people: [Person] = database.people` | 1889 | 4 | 0 | 0 | none; big and recent (orm cards) |
+| gpu maps (gpu_maps) | `ys = xs.map(x => x*2) @gpu` | 1306 | 1 | 0 | 0 | shader blocks (WGSL) and data parallelism do GPU/parallel work |
+| shared arrays (shared_arrays) | `shared xs = int[n]` | 1180 | 3 | 0 | 8 | channels and atomics share between tasks |
+| web server (serve) | `serve 8080 { get "/api" { users } }` | 1143 | 0–2 | 1 | 6 | none in warp; routes.rs is the page side |
+| generators (generators, generator_objects, generator_consumers) | `count_to(n) := { … yield i … }` | 1114 | 0 | 0 | 4 | lazy ranges; a go task writing a channel |
+| reflection dot words (reflection) | `f.effects` | 886 | 2 | 0 | 5 | the word forms `effects of f` |
+| return-type overloads (overloads) | `parse(t) -> int` beside `parse(t) -> float` | 827 | 0 | 0 | 12 | `as int` conversions |
+| natural phrases (phrase_calls, list_phrases, word_slices) | `move piece from a to b`, `first 3 of xs` | 787 | 2 | 0 | 3 | plain calls `move(piece, a, b)`, `xs#1..3` |
+| multiple dispatch by class (traits/generics) | `collide(a:Ship, b:Rock)` | 529 | 1 | 0 | 2 | methods on the class; traits' witness dispatch |
+| type-name parameters (type_name_matching) | `fib int i = …`, `foo of int = it+it` | 442 | ~9 | 0 | 8 | `fib(i:int) := …` |
+| scoped handlers (scoped_handlers) | `on ask { 42 } in { compute() }` | 433 | 1 | 0 | 1 | try/catch, raise and event handlers |
+| tuple returns (tuples) | `return a, b`; `x, y = f()` | 387 | 1 | 0 | 4 | returning a list `[a, b]` and list destructuring |
+| list element checks (list_element_checks) | `xs: [int] = [1, "a"]` is an error | 359 | 0 | 0 | 0 | the analyzer's type checks |
+| instance destructuring (class_methods/destructuring) | `{x, y} = p`, `Point{x, y: b}` patterns | 322 | 0 | 0 | 0 | map destructuring and match patterns |
+| nonlocal cells (nonlocal_cells) | `nonlocal y` | 281 | 0 | 0 | 4 | closures already capture |
+| named patterns + definitions by cases (named_patterns, definition_cases) | `pattern Pair = [_, _]`; `fib(0) := 0; fib(n) := …` | 405 | 0 | 0 | 1 | match arms and guards |
+| object-shaped parameters (parameter_shapes) | `f(p{name, title?}) := …` | 230 | 0 | 0 | 1 | named arguments |
+| ruby blocks (ruby_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
+| version literals (versions) | `v1.2.3`, `version 1.2.3` | 210 | 0 | 0 | 4 | texts `"1.2.3"` compared by parts |
+
+Well used (no cut proposed): library words 1909, tasks 1473, broadcasting 1199, blocks 955, switch/match 882, late
+binding 737, for loops 725, constant folding 670, lazy ranges 654, comprehensions 631, type tests 596, named
+arguments 574, markup tags 398, type constructors 370.
