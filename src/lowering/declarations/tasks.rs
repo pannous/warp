@@ -4,7 +4,6 @@ use crate::lowering::nodes::{fresh_number, phrase_words};
 
 /// `go f(x)` starts a task, `await job` waits for it
 pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
-pub(super) const ONCE_WORD: &str = "once";
 /// What a task signals when it is done, and the controls that would interrupt one
 pub(super) const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 pub(super) const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
@@ -775,7 +774,7 @@ impl Tasks<'_> {
 	pub(super) fn signal_handler(&self, items: &[Node]) -> Option<Node> {
 		match items {
 			// `once job finishes: body`, `once the download finishes: body`
-			[once, subject @ .., handler] if word(once) == ONCE_WORD => {
+			[once, subject @ .., handler] if word(once) == crate::words::ONCE_WORD => {
 				let subject = subject.iter().find(|item| word(item) != "the")?;
 				let (event, body) = handler_parts(handler)?;
 				self.is_task(subject)
