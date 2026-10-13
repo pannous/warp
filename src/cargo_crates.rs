@@ -3,9 +3,11 @@
 //! on any toolchain) lists the crate's public functions and the structs it constructs; every one whose types map to
 //! WIT is exported (a struct as a resource), built for wasm32-wasip2 with wit-bindgen, and what the compiler refuses
 //! is dropped by the lines its errors name. The component lands in ~/.cache/warp/crates/<crate>@<version>.wasm (with
-//! its .wit), once per machine; `use wasm` loads it from there (src/components.rs).
+//! its .wit), once per machine; `use wasm` loads it from there (src/components.rs). Common crates are prebuilt by CI
+//! and downloaded instead (release crates-<generation>), so most users need no cargo.
 //! The wrappers are members of one cargo workspace (~/.cache/warp/crates/Cargo.toml), so a configured target-dir is
 //! honoured and a user without one gets that workspace's single target/.
+use crate::package_tools::{download_bytes, write_atomically};
 use crate::versions::Version;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -17,8 +19,14 @@ const CACHE: &str = ".cache/warp/crates";
 const WRAPPERS: &str = "wrappers";
 /// outside the workspace members: the wrappers that did not build
 const FAILED: &str = "failed";
-/// raise when the generated wrappers change: the components of older generators stay unused
-const COMPONENTS: &str = "components-v3";
+/// raise when the generated wrappers change: the components of older generators stay unused (components-<generation>,
+/// and the release crates-<generation> that hosts prebuilt ones)
+const GENERATION: &str = "v3";
+/// prebuilt components: the assets `<crate>.<version>.wasm` of this release, built by .github/workflows/crates.yml
+const HOSTED_RELEASES: &str = "https://api.github.com/repos/pannous/warp/releases/tags/crates-";
+/// set: build every crate locally, never download (the workflow that builds the hosted ones)
+const BUILD_LOCALLY: &str = "WARP_BUILD_CRATES";
+const SHA256_PREFIX: &str = "sha256:";
 const WORKSPACE_MANIFEST: &str =
 	"[workspace]\nmembers = [\"wrappers/*\"]\nresolver = \"2\"\n\n[profile.release]\nopt-level = \"s\"\nstrip = true\n";
 const WIT_BINDGEN: &str = "0.46";
@@ -30,18 +38,64 @@ const MISSING_TARGET_SIGN: &str = "target may not be installed";
 /// one wrapper build at a time within a process; cargo locks the target directory across processes
 static BUILDING: Mutex<()> = Mutex::new(());
 
-/// The component file of the crate `name`: the newest cached build, else generated and built now
+/// The component file of the crate `name`: the newest cached build, else the newest hosted one, else generated and
+/// built now
 pub fn component(name: &str) -> Result<String, String> {
 	if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
 		return Err(format!("{name:?} is no crate name"));
 	}
 	let _building = BUILDING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	if let Some(cached) = newest_cached(name) {
-		return Ok(cached.to_string_lossy().into_owned());
+	let path = match newest_cached(name) {
+		Some(cached) => cached,
+		None => downloaded_or_built(name)?,
+	};
+	Ok(path.to_string_lossy().into_owned())
+}
+
+fn downloaded_or_built(name: &str) -> Result<PathBuf, String> {
+	if std::env::var_os(BUILD_LOCALLY).is_none() {
+		match download(name, &components()) {
+			Ok(path) => return Ok(path),
+			Err(reason) => eprintln!("use cargo {name}: no prebuilt component ({reason}), so it is built here"),
+		}
 	}
-	build(name)
-		.map(|path| path.to_string_lossy().into_owned())
-		.inspect_err(|_| set_aside(name))
+	build(name).inspect_err(|_| set_aside(name))
+}
+
+/// The newest prebuilt component of the crate `name`, checked against its SHA-256, saved into `directory` as
+/// `<crate>@<version>.wasm`
+pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
+	let releases = format!("{HOSTED_RELEASES}{GENERATION}");
+	let release: Value = serde_json::from_slice(&download_bytes(&releases)?).map_err(|e| format!("{releases}: {e}"))?;
+	let assets = release["assets"].as_array().cloned().unwrap_or_default();
+	let (version, asset) = assets
+		.iter()
+		.filter_map(|asset| {
+			let (crate_name, version) = asset["name"].as_str()?.strip_suffix(".wasm")?.split_once('.')?;
+			if crate_name != name {
+				return None;
+			}
+			Some((Version::parse(version)?, version.to_string(), asset))
+		})
+		.max_by(|a, b| a.0.cmp(&b.0))
+		.map(|(_, version, asset)| (version, asset))
+		.ok_or_else(|| format!("{name} is not hosted"))?;
+	let url = asset["browser_download_url"].as_str().unwrap_or_default();
+	let expected = asset["digest"].as_str().and_then(|digest| digest.strip_prefix(SHA256_PREFIX));
+	let bytes = download_bytes(url)?;
+	let actual = hex_digest(&bytes);
+	if expected != Some(actual.as_str()) {
+		return Err(format!("{url}: SHA-256 {actual} is not the published {expected:?}"));
+	}
+	let path = directory.join(format!("{name}@{version}.wasm"));
+	write_atomically(&path, &bytes)?;
+	eprintln!("use cargo {name}: downloaded the prebuilt component of {name} {version}");
+	Ok(path)
+}
+
+fn hex_digest(bytes: &[u8]) -> String {
+	use sha2::Digest;
+	sha2::Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// A wrapper that failed leaves the workspace (an unresolvable dependency would break every other wrapper's build),
@@ -55,7 +109,7 @@ fn set_aside(name: &str) {
 
 /// The built components; a new generation of the wrapper generator builds every crate again
 fn components() -> PathBuf {
-	cache().join(COMPONENTS)
+	cache().join(format!("components-{GENERATION}"))
 }
 
 fn cache() -> PathBuf {
@@ -91,7 +145,7 @@ fn build(name: &str) -> Result<PathBuf, String> {
 	let version = resolved_version(&metadata, name)?;
 	let target = PathBuf::from(metadata["target_directory"].as_str().unwrap_or("target"));
 	write_manifest(&wrapper, name, &format!("={version}"))?;
-	eprintln!("use cargo {name}: building crate {name} {version} as a component, once (~/{CACHE}/{COMPONENTS})");
+	eprintln!("use cargo {name}: building crate {name} {version} as a component, once (~/{CACHE}/components-{GENERATION})");
 	let package = format!("{name}@{version}");
 	cargo(
 		&wrapper,
@@ -113,16 +167,9 @@ fn build(name: &str) -> Result<PathBuf, String> {
 	let doc: Value = serde_json::from_str(&doc).map_err(|e| format!("rustdoc JSON of {name}: {e}"))?;
 	let mut api = Api::of(&doc, &rust_name(name));
 	let wasm = compile_dropping_refused(&wrapper, name, &mut api, &target)?;
-	std::fs::create_dir_all(components()).map_err(|e| e.to_string())?;
-	let stem = components()
-		.join(format!("{name}@{version}"))
-		.to_string_lossy()
-		.into_owned();
-	let built = PathBuf::from(format!("{stem}.wasm"));
-	let partial = PathBuf::from(format!("{stem}.wasm.{}", std::process::id()));
-	std::fs::copy(&wasm, &partial).map_err(|e| format!("{}: {e}", wasm.display()))?;
-	std::fs::rename(&partial, &built).map_err(|e| format!("{}: {e}", built.display()))?;
-	write(Path::new(&format!("{stem}.wit")), &api.wit(name))?;
+	let built = components().join(format!("{name}@{version}.wasm"));
+	write_atomically(&built, &std::fs::read(&wasm).map_err(|e| format!("{}: {e}", wasm.display()))?)?;
+	write(&built.with_extension("wit"), &api.wit(name))?;
 	Ok(built)
 }
 

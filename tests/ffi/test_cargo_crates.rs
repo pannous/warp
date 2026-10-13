@@ -48,3 +48,17 @@ fn test_cargo_crate_type_functions_fields_and_display() {
 fn test_cargo_crate_without_callable_functions_is_refused() {
 	fails_with("use cargo sha2; 1", "no public function warp can call");
 }
+
+/// card use-cargo-downloads: CI builds the components of common crates (.github/workflows/crates.yml) as release
+/// assets; `use cargo X` downloads one, checked against its SHA-256, before building it locally
+#[test]
+fn test_cargo_crate_prebuilt_download() {
+	let directory = std::path::PathBuf::from(format!("scratch/crate-downloads-{}", std::process::id()));
+	let wasm = warp::cargo_crates::download("strsim", &directory).unwrap();
+	let program = format!("use wasm \"{}\" as strsim; strsim.levenshtein(\"kitten\", \"sitting\")", wasm.display());
+	is!(&program, 3);
+	std::fs::remove_dir_all(&directory).unwrap();
+	assert!(warp::cargo_crates::download("no_such_crate_xyz_warp", &directory)
+		.unwrap_err()
+		.contains("not hosted"));
+}
