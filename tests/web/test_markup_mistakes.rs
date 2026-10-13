@@ -1,6 +1,6 @@
 //! Is our HTML type safe (card our-html): markup that would render wrong is warned about where it is written, with the
 //! near name as its fix: a key no attribute (shown as text), a handler of no event, an input type the browser does not
-//! know, content of an element that takes none
+//! know, content of an element that takes none, a block under a name no element
 use warp::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
@@ -47,6 +47,18 @@ fn an_unknown_input_type_warns() {
 	);
 }
 
+// card unknown-tag: a block under a name no element is the text `divv:"hi"`
+#[test]
+fn an_unknown_tag_among_markup_warns() {
+	warns("div{ divv{ \"hi\" } }", "divv is no element: it shows as text");
+	warns("ul{ lli{ \"x\" } }", "lli is no element: it shows as text");
+	let warned = warnings_of("div{ divv{ \"hi\" } }");
+	assert!(
+		!warned.iter().any(|warning| warning.contains("no attribute")),
+		"{warned:?}"
+	);
+}
+
 #[test]
 fn content_of_a_void_element_warns() {
 	warns(
@@ -64,6 +76,8 @@ fn right_markup_stays_quiet() {
 		"name = \"\"\ninput{ type: \"email\" bind: name aria-label: \"n\" }",
 		"img{ src: \"a.png\" alt: \"a\" }",
 		"li{ transition: fade 200ms \"x\" }",
+		"div{ my-card{ \"x\" } }",
+		"card(t) := p{ t }\ndiv{ card{ \"x\" } }",
 	] {
 		assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
 	}

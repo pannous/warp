@@ -76,7 +76,11 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 	if elements.is_empty() {
 		return vec![];
 	}
-	let problems = problems(&elements);
+	let defined: HashSet<String> = crate::analyzer::function_definitions(program)
+		.user_functions
+		.into_keys()
+		.collect();
+	let problems = problems(&elements, &defined);
 	WRITTEN_PROBLEMS
 		.with(|written| *written.borrow_mut() = problems.iter().map(|(_, message, _)| message.clone()).collect());
 	problems
@@ -90,7 +94,7 @@ pub fn check_rendered(markup: &Node) {
 	let markup = computed_tags_named(markup.clone());
 	let mut elements = vec![];
 	collect(&markup, false, &mut elements);
-	for (_, message, fix) in problems(&elements) {
+	for (_, message, fix) in problems(&elements, &HashSet::new()) {
 		if !WRITTEN_PROBLEMS.with(|written| written.borrow().contains(&message)) {
 			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
 		}
@@ -108,7 +112,8 @@ fn computed_tags_named(node: Node) -> Node {
 	}
 }
 
-fn problems<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
+/// `defined`: the program's own names, whose `card{…}` is a component, no unknown tag
+fn problems<'a>(elements: &[Element<'a>], defined: &HashSet<String>) -> Vec<Problem<'a>> {
 	let labeled_ids: HashSet<String> = elements
 		.iter()
 		.filter(|element| element.tag == LABEL)
@@ -118,7 +123,7 @@ fn problems<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
 		.iter()
 		.filter_map(|element| element_problem(element, &labeled_ids))
 		.collect();
-	problems.extend(elements.iter().flat_map(markup_mistakes));
+	problems.extend(elements.iter().flat_map(|element| markup_mistakes(element, defined)));
 	problems.extend(skipped_headings(elements));
 	problems.extend(duplicate_ids(elements));
 	problems
@@ -133,6 +138,8 @@ struct Element<'a> {
 	inside_label: bool,
 	/// the events of its handlers (`on click {…}`)
 	events: Vec<String>,
+	/// the names of its items written as blocks (`divv{ "hi" }`, `my-card{…}`), no attributes
+	blocks: Vec<String>,
 }
 
 impl Element<'_> {
@@ -250,7 +257,7 @@ fn event_word(event: &Node) -> Option<String> {
 }
 
 /// The markup an element as written would render wrong, each with the near name as its fix
-fn markup_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
+fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<Problem<'a>> {
 	let near = |word: &str, names: Vec<String>, otherwise: String| {
 		crate::extensions::strings::near_miss(word, names).unwrap_or(otherwise)
 	};
@@ -259,7 +266,19 @@ fn markup_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 	if element.tag == STYLE {
 		return mistakes;
 	}
-	for (name, _) in &element.attributes {
+	for tag in element
+		.blocks
+		.iter()
+		.filter(|tag| is_unknown_tag(tag) && !defined.contains(*tag))
+	{
+		let fix = near(tag, crate::markup::element_names().to_vec(), "div".to_string());
+		mistakes.push((element.node, format!("{tag} is no element: it shows as text"), fix));
+	}
+	for (name, _) in element
+		.attributes
+		.iter()
+		.filter(|(name, _)| !element.blocks.contains(name))
+	{
 		let renders = crate::markup::names_attribute(name)
 			|| WARP_ELEMENT_WORDS.contains(&name.as_str())
 			|| crate::transitions::ELEMENT_WORDS.contains(&name.as_str())
@@ -319,6 +338,29 @@ fn markup_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 	mistakes
 }
 
+/// `divv{ "hi" }`: the name of an item written as a block
+fn block_name(item: &Node) -> Option<String> {
+	match item.drop_meta() {
+		Node::Key(name, Op::Colon | Op::None, content) => match (name.drop_meta(), content.drop_meta()) {
+			(Node::Symbol(name), Node::List(_, Bracket::Curly, _)) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// A block's name no element, attribute nor warp word: `divv` of `divv{ "hi" }`
+fn is_unknown_tag(tag: &String) -> bool {
+	let known = crate::markup::is_element_tag(tag)
+		|| crate::markup::names_attribute(tag)
+		|| WARP_ELEMENT_WORDS.contains(&tag.as_str())
+		|| crate::transitions::ELEMENT_WORDS.contains(&tag.as_str())
+		|| crate::event_signals::PAGE_EVENTS.contains(&tag.as_str())
+		// a custom element of the page's own (`my-card{…}`) is named with a dash
+		|| tag.contains('-');
+	!known
+}
+
 fn is_handler(item: &Node) -> bool {
 	matches!(item.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HANDLER_WORD))
 }
@@ -354,6 +396,7 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 				.any(|item| attribute_parts(item).is_none() && says_something(item)),
 			inside_label,
 			events,
+			blocks: items.iter().filter_map(|item| block_name(item)).collect(),
 		});
 		if tag == STYLE {
 			return;

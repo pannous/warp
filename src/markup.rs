@@ -32,11 +32,13 @@ const TEXT_ELEMENTS: [&str; 5] = ["style", "script", "option", "select", "textar
 
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
+	element_names().iter().any(|element| element == word)
+}
+
+/// The HTML elements lib/markup.warp renders
+pub fn element_names() -> &'static [String] {
 	static ELEMENTS: OnceLock<Vec<String>> = OnceLock::new();
-	ELEMENTS
-		.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ELEMENTS_LIST))
-		.iter()
-		.any(|element| element == word)
+	ELEMENTS.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ELEMENTS_LIST))
 }
 
 /// Does the word name an HTML attribute: a listed one or a `data-` one
