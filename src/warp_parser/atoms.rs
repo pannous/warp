@@ -255,7 +255,7 @@ impl WarpParser {
 			match self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() {
 				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
 				Some(word) if word == RESULT_TYPE_WORD && !parameters.is_empty() => {
-					result_type = self.to_result_type();
+					result_type = self.phrase_result_type();
 					if result_type.is_some() {
 						break;
 					}
@@ -343,7 +343,7 @@ impl WarpParser {
 	}
 
 	/// The type after `as` when it ends the header: `to render text as pdf: …`
-	fn to_result_type(&mut self) -> Option<String> {
+	fn phrase_result_type(&mut self) -> Option<String> {
 		let after_as = self.mark();
 		self.skip_spaces();
 		let result_type = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten();

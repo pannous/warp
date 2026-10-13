@@ -17,7 +17,7 @@ render(t):docx := docx("<w:t>" + t)
 ```
 The result type is the written one, else the type of the instance the body constructs (`render(t) := pdf(…)`).
 The English phrase names it after a final `as` (card render-as): `to render text as pdf: …` is `render(text) as pdf := …`
-(warp_parser atoms.rs to_result_type); an `as` followed by more words stays a parameter word.
+(warp_parser atoms.rs phrase_result_type); an `as` followed by more words stays a parameter word.
 Definitions of one name whose result types are not all known stay what they were (the last one wins).
 
 ## The expected type of a call
