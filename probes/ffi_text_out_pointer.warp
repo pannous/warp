@@ -1,0 +1,6 @@
+// card ffi-header: a `char **` out-pointer (strtod's endptr) is left out of the call; the C result stays the result
+// prints: 2.5, then 255
+import strtod from 'c'
+import strtol from 'c'
+print strtod('2.5')
+print strtol('ff', 16)
