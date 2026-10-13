@@ -3881,6 +3881,10 @@ PASSED:
   ✓ types::test_map_runtime_kind::a_map_parameter_is_a_map
   ✓ types::test_map_runtime_kind::map_is_a_type_word
   ✓ types::test_map_type_tests::a_map_is_a_map
+  ✓ types::test_match_exhaustive::a_match_missing_a_variant_fails_to_compile
+  ✓ types::test_match_exhaustive::a_match_missing_an_enum_case_fails_to_compile
+  ✓ types::test_match_exhaustive::a_subject_of_unknown_type_keeps_the_run_time_error
+  ✓ types::test_match_exhaustive::complete_matches_and_catch_alls_compile
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
   ✓ types::test_maybe_declaration::a_maybe_declaration_is_optional
@@ -5152,4 +5156,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-12 ignored, 5147 passed, 0 failed, 5147 total tested
+12 ignored, 5151 passed, 0 failed, 5151 total tested
