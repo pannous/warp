@@ -266,16 +266,6 @@ fn kind_of_type_name(name: &str) -> Kind {
 		.unwrap_or(Kind::Int)
 }
 
-pub(crate) fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
-	match node.drop_meta() {
-		Node::List(items, _, _) if !items.is_empty() => match items[0].drop_meta() {
-			Node::Symbol(name) => Some((name.as_str(), &items[1..])),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> Law {
 	let LawDeclaration {
 		name,
@@ -285,7 +275,7 @@ fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> La
 	let known = |name: &str| functions.iter().find(|f| f.name == name);
 	let mut function = String::new();
 	statement.visit(&mut |node| {
-		if let Some((name, args)) = call_parts(node) {
+		if let Some((name, args)) = node.call_parts() {
 			if let Some(definition) = known(name) {
 				if function.is_empty() {
 					function = name.to_string();
@@ -391,7 +381,7 @@ fn is_closed(node: &Node, functions: &[FunctionDefinition]) -> bool {
 fn observed_bindings(lawful: &Lawful, law: &Law) -> Vec<HashMap<String, Node>> {
 	let mut patterns: Vec<(&str, Vec<String>)> = vec![];
 	law.statement.visit(&mut |node| {
-		if let Some((name, args)) = call_parts(node) {
+		if let Some((name, args)) = node.call_parts() {
 			let names: Vec<String> = args
 				.iter()
 				.filter_map(|a| match a.drop_meta() {
@@ -406,7 +396,7 @@ fn observed_bindings(lawful: &Lawful, law: &Law) -> Vec<HashMap<String, Node>> {
 	});
 	let mut bindings = vec![];
 	lawful.program.visit(&mut |node| {
-		if let Some((name, args)) = call_parts(node) {
+		if let Some((name, args)) = node.call_parts() {
 			for (pattern, vars) in &patterns {
 				let covers_all = law.variables.iter().all(|(v, _)| vars.contains(v));
 				if *pattern == name

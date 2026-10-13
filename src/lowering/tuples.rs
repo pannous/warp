@@ -97,17 +97,6 @@ pub fn tuple_arity(body: &Node) -> Option<usize> {
 	arity
 }
 
-/// `f(args)` / `f args` / `f()`: the callee and the arguments; whether `f` returns several values is the caller's question
-pub fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
-	match node.drop_meta() {
-		Node::List(items, _, _) => match items.first()?.drop_meta() {
-			Node::Symbol(name) => Some((name.as_str(), &items[1..])),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 /// The wasm name of the function packing f's values into a list
 pub fn packer_name(function: &str) -> String {
 	format!("{function}$list")

@@ -274,6 +274,14 @@ impl Node {
 		}
 	}
 
+	/// `f(args)` / `f args` / `f()`: the callee and the arguments of a list headed by a symbol
+	pub fn call_parts(&self) -> Option<(&str, &[Node])> {
+		match self.drop_meta() {
+			List(items, _, _) => Some((items.first()?.symbol_name()?, &items[1..])),
+			_ => None,
+		}
+	}
+
 	/// The name of a symbol, through its metadata
 	pub fn symbol_name(&self) -> Option<&str> {
 		match self.drop_meta() {

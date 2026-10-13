@@ -653,7 +653,8 @@ fn given_kind(
 /// The kind of the `index`-th name of `x, y = …`: the tuple function's value kind, or that of the value in that position
 pub(super) fn destructured_kind(values: &[Node], index: usize, scope: &Scope) -> Kind {
 	match values {
-		[call] => crate::tuples::call_parts(call)
+		[call] => call
+			.call_parts()
 			.and_then(|(function, _)| {
 				scope
 					.function_kinds

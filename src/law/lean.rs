@@ -159,7 +159,7 @@ fn proposition(node: &Node) -> Lean {
 fn calls_itself(function: &FunctionDefinition) -> bool {
 	let mut recursive = false;
 	function.body.visit(&mut |node| {
-		if let Some((name, _)) = super::call_parts(node) {
+		if let Some((name, _)) = node.call_parts() {
 			recursive |= name == function.name;
 		}
 	});
@@ -231,7 +231,7 @@ fn closing_alternatives(tactics: &[&str]) -> String {
 fn called_names(node: &Node) -> Vec<String> {
 	let mut names = vec![];
 	node.visit(&mut |part| {
-		if let Some((name, _)) = super::call_parts(part) {
+		if let Some((name, _)) = part.call_parts() {
 			names.push(name.to_string())
 		}
 	});
@@ -277,7 +277,7 @@ fn induction_alternatives(
 	let is_variable = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if law.variables.iter().any(|(variable, _)| variable == name));
 	let mut inductions: Vec<String> = vec![];
 	law.statement.visit(&mut |node| {
-		if let Some((name, arguments)) = super::call_parts(node) {
+		if let Some((name, arguments)) = node.call_parts() {
 			if recursive(name) && arguments.iter().all(is_variable) {
 				let names: Vec<String> = arguments.iter().map(|argument| argument.name()).collect();
 				inductions.push(format!("fun_induction {name} {}", names.join(" ")));
