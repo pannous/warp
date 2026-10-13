@@ -68,7 +68,7 @@ impl WarpParser {
 			.map(|at| self.peek_char(at))
 			.take_while(|ch| is_identifier_char(*ch))
 			.collect::<String>()
-			== crate::lowering::words::ON_WORD;
+			== crate::words::ON_WORD;
 		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !on_follows {
 			return None;
 		}

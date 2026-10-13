@@ -5,10 +5,10 @@
 use super::nodes::{children_rewritten, key};
 use crate::node::Node;
 use crate::operators::Op;
+use crate::words::VERSION_KEYWORD;
 use std::cmp::Ordering;
 use std::fmt;
 
-pub const VERSION_KEYWORD: &str = "version";
 /// `use x from 1.2`: that version or a later one
 pub const MINIMUM_KEYWORD: &str = "from";
 /// tags `v1.2.3` name versions too

@@ -6,11 +6,9 @@ use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
+use crate::words::CONSTANT_KEYWORDS;
 use std::collections::{HashMap, HashSet};
 
-/// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
-/// Words that declare a name assignable once: `const x=5`, `final x=5`
-pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Statement words whose argument is never their property: `return count` is no `return.count`
 const PRINT_CALL: &str = "print";
 /// The error for a user function named like a type word; `{name}` is the word
@@ -120,7 +118,6 @@ pub(crate) fn is_statement_block(node: &Node) -> bool {
 mod booleans;
 mod checks;
 mod counting;
-mod declaration_lowering;
 mod imports;
 mod inference;
 mod upcast_fields;
@@ -131,7 +128,8 @@ mod list_views;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;
-pub use declaration_lowering::*;
+// the declaration and list forms the checks and the inference know (lowering/declaration_forms.rs)
+use crate::lowering::declaration_forms::*;
 pub(crate) use imports::signature_kind;
 pub use imports::*;
 pub use inference::*;

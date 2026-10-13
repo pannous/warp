@@ -10,13 +10,13 @@
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
 use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol, Counter};
-use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, RETURN_WORD};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::ruby_blocks::{arguments, contains_yield, is_yield, yielded};
 use crate::warp_parser::while_do;
+use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, RETURN_WORD};
 use std::collections::{HashMap, HashSet};
 
 const IMPLICIT_VARIABLE: &str = "it";

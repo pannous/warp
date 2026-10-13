@@ -607,7 +607,7 @@ fn method_of(call: &Node) -> Option<(&str, &[Node])> {
 	let Node::Symbol(method) = head.drop_meta() else {
 		return None;
 	};
-	(TEXT_WORDS.contains(&method.as_str()) || crate::analyzer::appends(method, arguments.len()))
+	(TEXT_WORDS.contains(&method.as_str()) || crate::declaration_forms::appends(method, arguments.len()))
 		.then_some((method.as_str(), arguments))
 }
 
@@ -1007,7 +1007,7 @@ impl Inference {
 				.lists
 				.get(list)
 				.cloned()
-				.filter(|_| crate::analyzer::appends(method, 1))
+				.filter(|_| crate::declaration_forms::appends(method, 1))
 			{
 				let (argument, given) = self.infer(argument.clone())?;
 				if given != element {
@@ -1203,7 +1203,7 @@ impl Inference {
 		}
 		let (parameter, body) = match function.drop_meta() {
 			Node::Key(parameter, Op::FatArrow, body) => (parameter.drop_meta().name(), body.as_ref()),
-			body => (crate::lambdas::IMPLICIT_PARAMETER.to_string(), body),
+			body => (crate::words::IMPLICIT_PARAMETER.to_string(), body),
 		};
 		if let Some(class) = self.class_lists.get(&source_name).cloned() {
 			self.declare_instance(parameter, class);

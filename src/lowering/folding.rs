@@ -300,7 +300,7 @@ fn constant_call<T>(node: &Node, functions: &HashMap<String, T>) -> Option<(Stri
 }
 
 /// The type of a body's checked result (type_name_matching checked_result: `the result: int = v`, the type kept on the
-/// name as declaration_lowering keeps a declared type)
+/// name as declaration_forms keeps a declared type)
 fn checked_result_type(body: &Node) -> Option<String> {
 	let mut declared = None;
 	body.visit(&mut |node| {

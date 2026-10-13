@@ -209,10 +209,10 @@ impl WarpParser {
 		if self.current_char() != '.' || self.starts_path_literal() {
 			return None;
 		}
-		ELEMENT_WISE_OPERATORS
-			.iter()
-			.find(|(glyph, _)| *glyph == self.peek_char(1))
-			.map(|(_, op)| *op)
+		let glyph = self.peek_char(1).to_string();
+		crate::operators::ELEMENT_WISE_OPERATORS
+			.into_iter()
+			.find(|op| op.as_str() == glyph)
 	}
 
 	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,

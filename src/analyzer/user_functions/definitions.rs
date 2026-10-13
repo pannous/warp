@@ -1,7 +1,7 @@
 //! Reading function definitions: nested ones lifted as `outer·inner` and their calls renamed, parameters with their annotations and defaults, `it` and `$n`, the `def`/`fun`/`fn` forms
 use super::*;
 
-pub(in crate::analyzer) fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
+pub(crate) fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 	extract_user_functions_in(ctx, node, None);
 }
 

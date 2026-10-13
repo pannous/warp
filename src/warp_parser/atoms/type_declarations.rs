@@ -202,7 +202,7 @@ impl WarpParser {
 		};
 		// C#'s file-scoped `class Foo;` takes in the definitions after it (file_declarations.rs)
 		if bodyless && self.current_char() == ';' {
-			name = name.with_attribute(crate::lowering::file_declarations::FILE_CLASS_MARK, Node::True);
+			name = name.with_attribute(crate::words::FILE_CLASS_MARK, Node::True);
 		}
 		Node::Type {
 			name: Box::new(name),
@@ -324,7 +324,7 @@ impl WarpParser {
 				Node::List(words, _, _)
 					if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) =>
 				{
-					let field = crate::lowering::class_methods::leading_name(&words[1]);
+					let field = crate::node::leading_name(&words[1]);
 					crate::diagnostic::note_alias(&format!("{} {field}", words[0].drop_meta().name()), &field);
 					words[1].clone()
 				}
@@ -601,7 +601,7 @@ pub(super) fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> boo
 /// (`red is Color`, P179), then the classes of the variants with payload
 pub(super) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
 	let name = Symbol(type_name).with_attribute(
-		crate::lowering::sum_variants::VARIANTS_MARK,
+		crate::words::VARIANTS_MARK,
 		Node::List(bare_variants, Bracket::None, Separator::Space),
 	);
 	let sum_type = Node::Type {

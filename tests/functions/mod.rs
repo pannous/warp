@@ -39,6 +39,7 @@ mod test_def_forms;
 mod test_def_without_parameters;
 mod test_default_parameters;
 mod test_definition_bodies;
+mod test_definition_cases; // card definition-cases
 mod test_definition_value;
 mod test_destructuring_in_a_body;
 mod test_deterministic_inference;

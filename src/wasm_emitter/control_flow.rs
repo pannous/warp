@@ -190,7 +190,7 @@ impl WasmGcEmitter {
 		let [head, subject, spec] = items.as_slice() else {
 			return false;
 		};
-		let is_class_test = head.drop_meta().name() == crate::type_tests::IS_TYPE
+		let is_class_test = head.drop_meta().name() == crate::words::IS_TYPE
 			&& matches!(spec.drop_meta(), Node::Text(class) if self.ctx.type_registry.get_by_name(class).is_some());
 		is_class_test
 			&& matches!(

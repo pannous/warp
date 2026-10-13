@@ -194,7 +194,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		if let [word, instance, type_name] = items {
 			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
-				if name == crate::traits::INSTANCE_OF {
+				if name == crate::words::INSTANCE_OF {
 					self.emit_instance_of(func, instance, type_name);
 					return true;
 				}

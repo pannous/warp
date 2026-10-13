@@ -5,11 +5,11 @@
 //! expression: `(upper w for w in words)` reads as the call `upper(w for w in words)` (comprehensions.rs).
 
 use super::nodes::{block, key, statement_list, symbol};
-use super::words::FOR_WORD;
 use crate::comprehensions::{bound_names, Comprehension};
 use crate::generators::NAME_SEPARATOR;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::FOR_WORD;
 use std::collections::BTreeSet;
 
 const NAME: &str = "generator·expression";

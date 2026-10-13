@@ -1,0 +1,4 @@
+// card definition-cases: a second definition of fib is an error whose fix is one definition with a match
+fib(0) := 0
+fib(n) := fib(n-1) + fib(n-2)
+fib(10)

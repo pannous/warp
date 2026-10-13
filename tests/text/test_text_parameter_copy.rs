@@ -1,6 +1,6 @@
 //! card self-lexer: a function that indexes a text parameter in a loop reads the text's characters when it is not
 //! inlined (called from two places) and the text comes at run time: the array copy a list parameter gets
-//! (analyzer::indexed_parameter_copies) held the whole text as its one item
+//! (declaration_forms::indexed_parameter_copies) held the whole text as its one item
 use crate::is;
 
 const SOURCE: &str = "samples/hello.warp";

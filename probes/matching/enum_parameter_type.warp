@@ -1,0 +1,4 @@
+// card enum-parameter-type: an enum names the type of its cases
+enum Coin { Penny, Nickel, Dime }
+cents(c: Coin) := match c { Coin.Penny: 1; Coin.Nickel: 5; _: 10 }
+cents(Coin.Nickel) + cents(Coin.Dime)

@@ -6,7 +6,6 @@
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment, Counter};
-use super::words::ON_WORD;
 use crate::analyzer::call_name;
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -14,8 +13,9 @@ use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::words::IMPLICIT_PARAMETER;
+use crate::words::ON_WORD;
 
-pub const IMPLICIT_PARAMETER: &str = "it";
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";

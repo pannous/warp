@@ -10,10 +10,10 @@
 //! checkbox; an attribute the element sets itself wins.
 
 use super::nodes::key;
-use super::words::ON_WORD;
 use crate::event_signals::{is_element_event, ELEMENT_EVENT_JOINER};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::ON_WORD;
 use std::collections::HashMap;
 
 const BIND_WORD: &str = "bind";

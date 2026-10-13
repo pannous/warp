@@ -7,13 +7,13 @@
 
 use super::nodes::{call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
-use super::words::COUNT_WORD;
-use crate::library_words::SLICE;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::tuples::STARRED;
+use crate::words::COUNT_WORD;
+use crate::words::SLICE;
+use crate::words::STARRED;
+use crate::words::SWITCH_WORDS;
 
-pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
 /// In a pattern: any item, bound to no name
 const WILDCARD: &str = "_";
@@ -197,7 +197,7 @@ fn is_list_pattern(pattern: &Node) -> bool {
 fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	match pattern.drop_meta() {
 		Node::List(items, _, _) if is_list_pattern(pattern) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
+			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
 			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
 				tests.push(key(
 					call(COUNT_WORD, vec![path.clone()]),
@@ -238,7 +238,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 		}
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 		Node::Key(name, Op::Colon, value) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
+			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
 			tests.push(key(
 				call(TEXT_WORD, vec![item(&path, 1)]),
 				Op::Eq,

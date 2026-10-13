@@ -7,7 +7,7 @@
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
 use super::nodes::{call, grouped_parameters, if_then, key, Counter};
-use super::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
+use crate::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
 mod components;
 use components::*;
 mod destructuring;
@@ -15,13 +15,13 @@ pub(crate) use destructuring::*;
 mod instances;
 pub(crate) use instances::*;
 mod members;
-pub(crate) use members::*;
+use members::*;
 
 mod inheritance;
 mod operators;
 mod other_languages;
-use crate::node::{symbol, text, Bracket, Node, Separator};
-use crate::operators::Op;
+use crate::node::{leading_name, symbol, text, Bracket, Node, Separator};
+use crate::operators::{operator_method, Op, OPERATOR_METHODS};
 use inheritance::*;
 pub(crate) use operators::is_library_method;
 use operators::*;
@@ -116,18 +116,6 @@ const REDUCE_WORD: &str = "reduce";
 const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];
 /// `str(q)`: a run-time quantity's text
 const TEXT_WORD: &str = "str";
-/// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
-const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
-	(Op::Add, &["plus", "add", "__add__"]),
-	(Op::Sub, &["minus", "subtract", "__sub__"]),
-	(Op::Mul, &["times", "multiply", "__mul__"]),
-	(Op::Div, &["divide", "div", "__truediv__"]),
-	(Op::Mod, &["mod", "modulo", "__mod__"]),
-	(Op::Lt, &["less", "smaller", "__lt__"]),
-	(Op::Gt, &["more", "bigger", "__gt__"]),
-	(Op::Similar, &["approximately"]),
-	(Op::Rough, &["similar"]),
-];
 /// P212: a class defining the method of only one of these operators has it serve the other too
 const INTERCHANGEABLE_OPERATORS: [(Op, Op); 2] = [(Op::Similar, Op::Rough), (Op::Rough, Op::Similar)];
 /// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
@@ -137,14 +125,6 @@ const INCLUDE_WORD: &str = "include";
 /// The prefix of a method named like a type or library word: `method·double`, `method·sum` (a prefix: a name
 /// `sum·T` reads as the witness of sum for T and would shadow the library's sum)
 const METHOD_PREFIX: &str = "method·";
-
-/// The method an operator on an instance calls, `plus` for `+`
-pub(crate) fn operator_method(op: Op) -> Option<&'static str> {
-	OPERATOR_METHODS
-		.iter()
-		.find(|(known, _)| *known == op)
-		.map(|(_, names)| names[0])
-}
 
 /// A method named by an operator's glyph, `+(o) := …`: the operator's method `plus`
 fn glyph_method(name: &str) -> Option<&'static str> {
@@ -535,7 +515,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 				.filter(|name| {
 					!is_witness_method(name)
 						&& (crate::analyzer::type_word_kind(name).is_some()
-							|| crate::analyzer::is_list_mutating_method(name)
+							|| crate::declaration_forms::is_list_mutating_method(name)
 							|| crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
 				})
 				.collect();
@@ -1314,5 +1294,5 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::analyzer::is_list_mutating_method(name)))
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::declaration_forms::is_list_mutating_method(name)))
 }

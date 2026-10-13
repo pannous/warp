@@ -188,7 +188,7 @@ impl WarpParser {
 		{
 			Some(number_type) => {
 				let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
-				let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
+				let explicit = format!("{}('{c}') as {number_type}", crate::words::CODEPOINT);
 				Diagnostic {
 					message,
 					line,
