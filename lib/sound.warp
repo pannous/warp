@@ -10,8 +10,9 @@ global loudness = 0.3 as float
 global wave_shape = "sine"
 // `as float`: a float assigned later (loudness = -6 dB) stays readable in the functions (card float-global)
 global note_seconds = 0.5 as float
-// beats per minute: `play C4 for 1/4 beat`, `melody [C4 E4] each 1/8 beat`, `sleep 1 bar` (src/lowering/music_words.rs)
-global tempo = 120
+// beats per minute: `play C4 for 1/4 beat`, `melody [C4 E4] each 1/8 beat`, `sleep 1 bar` (src/lowering/music_words.rs);
+// a float, so `tempo *= 1.05` a round stays short instead of an exact ratio growing digits (card exact-tempo-growth)
+global tempo = 120 as float
 global beats_per_bar = 4
 beat_seconds(beats) := beats * 60.0 / tempo
 bar_seconds(bars) := beat_seconds(bars * beats_per_bar)
