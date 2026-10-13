@@ -1,0 +1,7 @@
+// card on-set-value: a listener does not change the value of an assignment or x--; prints v twice, then 2 and 7
+x = 3
+on set x { print "v" }
+y = x--
+print y
+z = (x = 7)
+print z
