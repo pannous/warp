@@ -70,6 +70,14 @@ pub enum Node {
 }
 
 impl Node {
+	/// The statements of an unbracketed `a; b` or newline sequence, else this node as the one statement
+	pub fn sequence_statements(&self) -> &[Node] {
+		match self.drop_meta() {
+			List(items, Bracket::None, separator) if separator.separates_statements() => items,
+			_ => std::slice::from_ref(self),
+		}
+	}
+
 	pub fn meta(node: Node, meta: Node) -> Node {
 		Meta {
 			node: Box::new(node),

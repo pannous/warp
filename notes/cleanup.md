@@ -176,7 +176,10 @@ Left (each changes behaviour or needs care):
   rename_nested_calls; and a Meta arm in front of `other.map_children` with the same rewrite, which is map_children's
   own Meta arm: time.rs, comprehensions.rs, generator_consumers.rs, atoms.rs). The ~45 Meta arms left belong to
   walks down one path (the statement under its comments, the leftmost operand), not to rewrites of every child.
-- (cleanup-statements-of) statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
+- DONE (cleanup-statements-of) the plain copies (an unbracketed `;`/newline sequence, else the one node) are one
+  Node::sequence_statements: late_binding/folding, run_time_blocks, serve, generator_consumers, law/type_model,
+  modules. The ones below keep their own rules on purpose.
+- statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms
   match. The `for v in …` variable is one nodes::for_in_variable (run_time_blocks, signal_values with its five-word
