@@ -1,0 +1,6 @@
+# Item patterns: every item matches, the names collect lists (card list-pattern)
+points = [[1, "a"], [2, "b"]]
+labels = match points { [[n, label]...] => label }
+head = match [0, [1, 2], [3, 4]] { [first, [a, b]...] => b }
+mixed = match [[1, 2], 3] { [[a, b]...] => "all pairs"; _ => "not all pairs" }
+[labels, head, mixed]

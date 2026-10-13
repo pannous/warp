@@ -5,8 +5,10 @@
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
-use super::nodes::{call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
+use super::for_loop::walking_loop;
+use super::nodes::{block, call, children_rewritten, if_then, is_type_word, key, or_operands, Counter};
 use super::type_tests::{program_names, type_test, Names};
+use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::COUNT_WORD;
@@ -29,6 +31,12 @@ const UNNAMED_SUBJECT: &str = "value";
 /// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
 const VALUE_WORD: &str = "value";
 const LET_WORD: &str = "let";
+const ITEM_WORD: &str = "item";
+const HELD_WORD: &str = "held";
+thread_local! {
+	/// Numbers the loops of item patterns apart: `item·0`, `held·0`
+	static ITEM_LOOPS: Counter = Counter::default();
+}
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -223,6 +231,66 @@ pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 	}
 }
 
+/// An item pattern `[a, b]...` (also `{sku}...`) in a list pattern's rest position: every item of the rest matches it
+fn item_pattern(part: &Node) -> Option<&Node> {
+	match part.drop_meta() {
+		Node::Key(each, Op::Range | Op::To, end)
+			if matches!(end.drop_meta(), Node::Empty) && matches!(each.drop_meta(), Node::List(..)) =>
+		{
+			Some(each)
+		}
+		_ => None,
+	}
+}
+
+fn is_rest(part: &Node) -> bool {
+	rest_pattern(part).is_some() || item_pattern(part).is_some()
+}
+
+/// `[[n, s]...]`: a loop testing every item against the item pattern, appending the value of each name it binds to that
+/// name's list; the test holds when every item matched, the names are bound to the lists (card list-pattern)
+fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>) -> Node {
+	let number = ITEM_LOOPS.with(|loops| loops.next_number());
+	let temporary = |name: &str| Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}{number}"));
+	let (item, held) = (temporary(ITEM_WORD), temporary(HELD_WORD));
+	let (mut item_tests, mut item_bindings) = (vec![], vec![]);
+	pattern_tests(each, item.clone(), &mut item_tests, &mut item_bindings);
+	let mut statements = vec![key(held.clone(), Op::Assign, Node::True)];
+	let mut appends = vec![];
+	for (name, value) in item_bindings.iter().filter_map(bound) {
+		let list = temporary(&name.name());
+		statements.push(key(list.clone(), Op::Assign, Node::Empty));
+		appends.push(key(
+			list.clone(),
+			Op::AddAssign,
+			Node::List(vec![value.clone()], Bracket::Square, Separator::None),
+		));
+		bindings.push(bind(name.clone(), list));
+	}
+	let missed = key(held.clone(), Op::Assign, Node::False);
+	let verdict = match appends.is_empty() {
+		true => if_then(key(Node::Empty, Op::Not, joined(item_tests, Op::And)), missed),
+		false => key(if_then(joined(item_tests, Op::And), block(appends)), Op::Else, missed),
+	};
+	statements.push(walking_loop(&item, items, vec![verdict]));
+	statements.push(held);
+	sequence(statements)
+}
+
+/// The name and value of a binding `let name = value`
+fn bound(binding: &Node) -> Option<(&Node, &Node)> {
+	match binding.drop_meta() {
+		Node::List(parts, _, _) => match parts.as_slice() {
+			[_, declaration] => match declaration.drop_meta() {
+				Node::Key(name, Op::Assign, value) => Some((name.as_ref(), value.as_ref())),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 /// `[a, b]` and the tuple `(a, b)` (card match-tuples) match by shape; a parenthesised single item `(x)` is a group
 fn is_list_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
@@ -237,7 +305,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 	match pattern.drop_meta() {
 		Node::List(items, _, _) if is_list_pattern(pattern) => {
 			tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
-			let Some(rest_index) = items.iter().position(|part| rest_pattern(part).is_some()) else {
+			let Some(rest_index) = items.iter().position(is_rest) else {
 				tests.push(key(
 					call(COUNT_WORD, vec![path.clone()]),
 					Op::Eq,
@@ -267,8 +335,10 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 						bindings,
 					),
 					std::cmp::Ordering::Equal => {
-						if let Some(Some(name)) = rest_pattern(part) {
-							let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
+						let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
+						if let Some(each) = item_pattern(part) {
+							tests.push(every_item_test(each, rest, bindings));
+						} else if let Some(Some(name)) = rest_pattern(part) {
 							bindings.push(bind(Node::Symbol(name), rest));
 						}
 					}
@@ -373,7 +443,7 @@ pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Optio
 
 /// `_`, a rest or a name not defined anywhere among the parts of a pattern: what a value never is
 fn has_open_part(pattern: &Node, names: &Names) -> bool {
-	if rest_pattern(pattern).is_some() {
+	if is_rest(pattern) {
 		return true;
 	}
 	match pattern.drop_meta() {
