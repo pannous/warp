@@ -542,7 +542,7 @@ fn link_single_function(
 		let out_pointee = sig
 			.param_types
 			.iter()
-			.find(|t| pointer_kind(t) == Some(CPointer::Out))
+			.find(|t| is_handle_out_pointer(t))
 			.map(|t| pointee(t));
 		let call = PointerCall {
 			name: func_name.clone(),
@@ -846,7 +846,9 @@ fn create_generic_ffi_wrapper(
 		func_name,
 		func_type,
 		move |mut caller, params, results| {
-			let args = native_arguments(&mut caller, "", params, &param_types, &mut 0)?;
+			// lives through the call: a `char **` out-pointer (strtod's endptr) is written there
+			let mut out_slot: usize = 0;
+			let args = native_arguments(&mut caller, "", params, &param_types, &mut out_slot)?;
 
 			let ret = unsafe { call_native_function(func_ptr, &args, ret_type) };
 
