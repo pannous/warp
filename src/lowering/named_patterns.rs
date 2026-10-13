@@ -5,7 +5,8 @@
 //! always a value; one whose right side can only be a pattern (`Pair = [_, _]`) is the error whose fix is the keyword.
 
 use super::nodes::{children_rewritten, key};
-use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, rest_pattern, split_switch, WILDCARD};
+use super::nodes::is_type_word;
+use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, map_field, rest_pattern, split_switch, WILDCARD};
 use super::tree_walks::{FIND_WORD, REPLACE_WORD};
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
@@ -99,6 +100,10 @@ fn substituted(node: Node, patterns: &Patterns) -> Node {
 	match node {
 		Node::Key(subject, Op::Eq, pattern) => Node::Key(subject, Op::Eq, Box::new(resolved(*pattern, patterns))),
 		Node::Key(arm, Op::FatArrow, body) => Node::Key(Box::new(resolved(*arm, patterns)), Op::FatArrow, body),
+		Node::Key(subject, Op::As, target) => match pattern_named(&target, patterns).and_then(schema_fields) {
+			Some(fields) => cast_to_schema(*subject, &target.name(), &fields),
+			None => Node::Key(subject, Op::As, target),
+		},
 		// `x is Pair and Short`: Short tests the same subject
 		Node::Key(tests, op @ (Op::And | Op::Or), pattern) => {
 			match (tested_subject(&tests), pattern_named(&pattern, patterns)) {
@@ -156,6 +161,59 @@ fn pattern_named<'a>(node: &Node, patterns: &'a Patterns) -> Option<&'a Node> {
 
 fn resolved(node: Node, patterns: &Patterns) -> Node {
 	pattern_named(&node, patterns).cloned().unwrap_or(node)
+}
+
+/// A field of a schema: its name, its type word and whether it may be missing (`debug?: bool`)
+struct SchemaField {
+	name: String,
+	type_word: String,
+	optional: bool,
+}
+
+/// The fields of a map pattern whose every field is a type: a schema, which `as` converts to
+fn schema_fields(pattern: &Node) -> Option<Vec<SchemaField>> {
+	if !is_map_pattern(pattern) {
+		return None;
+	}
+	literal_items(pattern)
+		.iter()
+		.map(|part| {
+			let (name, type_word) = map_field(part)?;
+			is_type_word(type_word).then(|| SchemaField {
+				name,
+				type_word: type_word.name(),
+				optional: crate::type_kinds::optional_field(part).is_some(),
+			})
+		})
+		.collect()
+}
+
+/// `x as Config`: a copy of x with each field converted by `as` where it does not have its type yet, else the error
+/// that names the field; a missing optional field stays missing (card loaded-config)
+fn cast_to_schema(subject: Node, schema: &str, fields: &[SchemaField]) -> Node {
+	let copy = format!("as_{schema}");
+	let converted: String = fields
+		.iter()
+		.map(|SchemaField { name, type_word, optional }| {
+			let field = format!("{copy}.{name}");
+			let article = if type_word.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+			let shown = format!(r#"(if {field} is text then "\"" + {field} + "\"" else "\({field})")"#);
+			let failure = format!(r#""{name} of {schema} takes {article} {type_word}, got " + {shown}"#);
+			let conversion = format!(
+				"if not ({field} is {type_word}) {{ {field} = try {{ {field} as {type_word} }} catch problem {{ raise {failure} }} }}"
+			);
+			match optional {
+				true => format!("if ({copy} has {name}) {{ {conversion} }}\n"),
+				false => format!(
+					"if not ({copy} has {name}) {{ raise \"{name} of {schema} is missing\" }}\n{conversion}\n"
+				),
+			}
+		})
+		.collect();
+	let copied = key(Node::Symbol(copy.clone()), Op::Assign, crate::lowering::nodes::call("copy", vec![subject]));
+	let mut statements = vec![copied];
+	statements.extend(crate::warp_parser::parse(&format!("{converted}{copy}")).as_items());
+	Node::List(statements, Bracket::Round, crate::node::Separator::Semicolon)
 }
 
 /// The colon arms `Pair: …` of a switch's case block, which as an item may also hold its subject
