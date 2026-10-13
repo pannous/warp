@@ -312,4 +312,7 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   fragment shader of f (gpu_maps.rs `painted_functions`, tests/programs/test_paint_function.rs), the program's
   numbers f reads as its values; f outside the subset, `@cpu` or WARP_GPU=off: f of each pixel on the CPU
   (probes/gpu/paint_mandelbrot.warp, full HD, debug build: 18.4 s on the CPU → 1.6 s, mostly the PNG). Open: no
-  adapter falls back to the CPU only for maps, a painted function fails like a shader text.
+  adapter falls back to the CPU only for maps, a painted function fails like a shader text (card paint-function).
+  Next, after the Rust cleanup (user decision cleanup-only, 2026-10-13): step 5, the tunnel shader of
+  samples/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
+  values (`levels`).
