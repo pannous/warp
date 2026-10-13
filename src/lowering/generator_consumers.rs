@@ -112,10 +112,7 @@ pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
 	let filled = bindings.iter().fold(parse(text), |node, (placeholder, value)| {
 		substitute(node, placeholder, value)
 	});
-	match filled.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		single => vec![single.clone()],
-	}
+	filled.drop_meta().sequence_statements().to_vec()
 }
 
 impl Consumers<'_> {

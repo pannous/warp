@@ -106,10 +106,7 @@ pub fn lower_run_time_bangs(program: Node) -> Node {
 }
 
 fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn Fn(&Site, Node) -> Node) -> Node {
-	let statements = match program.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		_ => vec![program.clone()],
-	};
+	let statements = program.sequence_statements().to_vec();
 	if !statements.iter().any(applies) {
 		return program;
 	}

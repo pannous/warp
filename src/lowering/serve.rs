@@ -256,10 +256,10 @@ pub fn serves_itself(code: &str) -> bool {
 
 /// The program's statements, read quietly: running it says its hints and warnings
 fn top_level_statements(code: &str) -> Vec<Node> {
-	match crate::diagnostic::quietly(|| crate::warp_parser::parse(code)).drop_meta() {
-		Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.clone(),
-		single => vec![single.clone()],
-	}
+	crate::diagnostic::quietly(|| crate::warp_parser::parse(code))
+		.drop_meta()
+		.sequence_statements()
+		.to_vec()
 }
 
 /// `serve PORT {…}` or a top-level `get "/api" {…}`: the server's alone, the page leaves it out
