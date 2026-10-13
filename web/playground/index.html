@@ -76,19 +76,20 @@
 <main>
 	<details id="guide" class="guide-pane" open>
 		<summary>guide</summary>
-		<div class="guide-level" role="group" aria-label="guide level">
+		<!-- Deactivated until we have a good expert guide  -->
+		<!-- <div class="guide-level" role="group" aria-label="guide level">
 			<button value="beginner" aria-pressed="true" title="every feature step by step">beginner</button>
 			<button value="expert" aria-pressed="false" title="the same chapters in short, for programmers">expert</button>
-		</div>
-		<div id="guide-chapters" class="guide-chapters">loading the guide…</div>
+		</div> -->
+		<!-- <div id="guide-chapters" class="guide-chapters">loading the guide…</div> -->
 	</details>
 	<div id="guide-resizer" class="resizer columns" role="separator" aria-orientation="vertical" aria-label="guide width" tabindex="0" title="drag to resize, double-click to reset"></div>
 	<div class="workspace">
 		<nav class="toolbar">
 			<select id="examples" aria-label="example"></select>
 			<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
-			<label><input id="auto" type="checkbox" checked> run while typing</label>
-			<label title="the least diagnostic level shown, as warp --warnings=<level> sets it (hints: prefer ^ over ** and the like; warp --no-hints shows from weak)">show <select id="shown-from"><option value="hint" selected>hints</option><option value="weak">weak warnings</option><option value="normal">warnings</option><option value="severe">severe warnings</option></select> and up</label>
+			<label><input id="auto" type="checkbox" checked> auto </label>
+			<label title="diagnostic level">warn<select id="shown-from"><option value="hint" selected>all hints</option><option value="weak">weak warnings</option><option value="normal">warnings</option><option value="severe">severe warnings</option></select></label>
 			<a id="guide-link" class="guide-link" hidden></a>
 			<button id="ask" type="button" title="chat with Claude about this program (needs the API key in the ⋯ menu)">Ask ✦</button>
 			<button id="report" type="button" hidden title="draft a GitHub issue with this program, its output and the version">Report ⚑</button>

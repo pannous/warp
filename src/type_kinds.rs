@@ -187,6 +187,18 @@ pub struct TypeDef {
 const OPTIONAL_SUFFIX: char = '?';
 pub const UNTYPED_FIELD: &str = "any";
 
+/// `email?: text` parses as the elvis `email ? email : text`: the optional field, as its `email: text`
+pub(crate) fn optional_field(node: &crate::node::Node) -> Option<&crate::node::Node> {
+	use crate::node::Node;
+	use crate::operators::Op;
+	match node.drop_meta() {
+		Node::Key(name, Op::Question, field) if matches!(field.drop_meta(), Node::Key(same, Op::Colon, _) if same == name) => {
+			Some(field)
+		}
+		_ => None,
+	}
+}
+
 impl FieldDef {
 	/// A field written as a bare word, `name`, optional as `email?`
 	pub fn untyped(word: &str) -> FieldDef {
@@ -389,21 +401,20 @@ impl TypeRegistry {
 	fn extract_field(node: &crate::node::Node) -> Option<FieldDef> {
 		use crate::node::Node;
 		let node = node.drop_meta();
+		// in a type body the optional typed field
+		if let Some(field) = optional_field(node) {
+			let field = Self::extract_field(field)?;
+			return Some(FieldDef {
+				type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name),
+				..field
+			});
+		}
 		match node {
 			// `x:int=0`: the typed field x with a default
 			Node::Key(target, crate::operators::Op::Assign, _)
 				if matches!(target.drop_meta(), Node::Key(_, crate::operators::Op::Colon, _)) =>
 			{
 				Self::extract_field(target)
-			}
-			// `email?: text` parses as the elvis `email ? email : text`; in a type body it is the optional typed field
-			Node::Key(name_node, crate::operators::Op::Question, rest) if matches!(rest.drop_meta(), Node::Key(same, crate::operators::Op::Colon, _) if same == name_node) =>
-			{
-				let field = Self::extract_field(rest)?;
-				Some(FieldDef {
-					type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name),
-					..field
-				})
 			}
 			Node::Key(name_node, _, type_node) => {
 				let name = Self::written_name(name_node)?;
