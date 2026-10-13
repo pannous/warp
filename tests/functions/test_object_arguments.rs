@@ -60,3 +60,16 @@ fn a_number_for_a_class_typed_parameter_is_a_type_error() {
 fn an_instance_of_another_class_is_a_type_error() {
 	fails_with(&format!("{PHOTO}{PAGE}{KEEP}keep(page{{width:3}})"), "photo");
 }
+
+// card sum-point: a user's method of a library word refuses a number the library word cannot take either
+#[test]
+fn a_typed_library_word_names_its_parameter_for_a_number() {
+	crate::common::fails_with(
+		"class Point { x: int; y: int }; sum(p: Point) := p.x + p.y; sum(5)",
+		"sum needs a Point for parameter p, got 5 (an Int)",
+	);
+	is!(
+		"class Point { x: int; y: int }; sum(p: Point) := p.x + p.y; sum(Point(1, 2)) + sum([3, 4])",
+		10
+	);
+}
