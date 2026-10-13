@@ -330,6 +330,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::type_name_matching::lower_prefixed_declarations,
 	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
 	crate::lowering::test_blocks::lower,
+	// card plain-enum: `enum Coin { Penny, Dime }` is the sum type of its cases, `Coin.Dime` is Dime, before sum_variants
+	crate::lowering::plain_enums::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
 	crate::lowering::sum_variants::lower,
 	// card match-exhaustive: a match on a declared sum type or enum that misses a case, while its arms are as written

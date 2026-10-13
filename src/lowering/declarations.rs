@@ -42,75 +42,14 @@ const EXTENSION_WORD: &str = "extension";
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
-const ENUM_WORD: &str = "enum";
-/// Swift's `enum Direction { case north, south }`
-const CASE_WORD: &str = "case";
 /// Ruby's `def f(x) … end`
 const END_WORD: &str = "end";
 const FLAGS_WORD: &str = "flags";
-const FIRST_CASE_INDEX: i64 = 0;
 /// The argument left out of a partial application: `add(1, _)`
 const PLACEHOLDER: &str = "_";
 
 pub fn lower(node: Node) -> Node {
-	let mut enums = vec![];
-	node.visit(&mut |part| {
-		if let Node::List(items, _, _) = part {
-			enums.extend(enum_cases(items));
-		}
-	});
-	let node = if enums.is_empty() {
-		node
-	} else {
-		enum_paths(node, &enums)
-	};
-	lower_lists(lower_flags(node), enum_object)
-}
-
-/// Rust's `Color::Green` and Swift's `.green` (where one enum has the case): the case `Color.green`
-fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
-	let is_enum = |name: &Node| matches!(name.drop_meta(), Node::Symbol(name) if enums.iter().any(|(declared, _)| declared == name));
-	let enum_of = |case: &Node| {
-		let case = case.drop_meta().name();
-		let owners: Vec<&String> = enums
-			.iter()
-			.filter(|(_, cases)| cases.contains(&case))
-			.map(|(name, _)| name)
-			.collect();
-		(owners.len() == 1).then(|| owners[0].clone())
-	};
-	match node {
-		Node::Key(name, Op::Scope, case) if is_enum(&name) => Node::Key(name, Op::Dot, case),
-		Node::Key(empty, Op::Dot, case) if matches!(empty.drop_meta(), Node::Empty) && enum_of(&case).is_some() => {
-			Node::Key(Box::new(Node::Symbol(enum_of(&case).expect("guarded"))), Op::Dot, case)
-		}
-		other => other.map_children(|child| enum_paths(child, enums)),
-	}
-}
-
-/// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
-pub(crate) fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
-	let [word, name, cases] = items else { return None };
-	let is_enum = word.is_symbol(ENUM_WORD);
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
-	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else {
-		return None;
-	};
-	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
-	is_enum.then_some((name.clone(), names?))
-}
-
-/// A case of an enum, `north` of Swift's `case north`
-fn case_name(case: &Node) -> Option<String> {
-	match case.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::List(words, _, _) if matches!(words.as_slice(), [keyword, name] if keyword.drop_meta().name() == CASE_WORD && matches!(name.drop_meta(), Node::Symbol(_))) => {
-			Some(words[1].drop_meta().name())
-		}
-		_ => None,
-	}
+	lower_flags(node)
 }
 
 /// The flags types the program declares (`flags virtues={fast, safe}`), their declarations as the empty set, and the
@@ -1112,19 +1051,6 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 		}
 		other => children_rewritten(other, |child| lower_lists(child, lowering)),
 	}
-}
-
-/// The assignment `name={case:index …}` of the items `enum name {case …}`
-fn enum_object(items: &[Node]) -> Option<Node> {
-	let (_, case_names) = enum_cases(items)?;
-	let name = &items[1];
-	let entries = case_names
-		.into_iter()
-		.zip(FIRST_CASE_INDEX..)
-		.map(|(case, index)| key(Node::Symbol(case), Op::Colon, Node::int(index)))
-		.collect();
-	let object = Node::List(entries, Bracket::Curly, Separator::Space);
-	Some(key(name.clone(), Op::Assign, object))
 }
 
 /// Swift's label for an argument without a label
