@@ -229,8 +229,34 @@ fn quoted_end(chars: &[char], from: usize, quote: char) -> usize {
 	chars.len()
 }
 
-/// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
+/// The operators a source declares, and those of the standard modules it uses: `use regex` makes `matches` infix
+/// (card matches-infix)
 pub(super) fn scan_user_operators(source: &str) -> Vec<UserOperator> {
+	let mut found = declared_operators(source);
+	for module in used_std_modules(source) {
+		found.extend(declared_operators(module));
+	}
+	found
+}
+
+/// The sources of the standard modules a source uses: `use regex`, `import regex`
+fn used_std_modules(source: &str) -> Vec<&'static str> {
+	source
+		.lines()
+		.flat_map(|line| line.split(';'))
+		.filter_map(
+			|statement| match statement.split_whitespace().collect::<Vec<_>>().as_slice() {
+				[keyword, module] if crate::modules::USE_KEYWORDS.contains(keyword) => {
+					crate::modules::std_module_source(module)
+				}
+				_ => None,
+			},
+		)
+		.collect()
+}
+
+/// The operators a source itself declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
+fn declared_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();

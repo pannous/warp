@@ -96,7 +96,7 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | map-patterns | `match {name: "Ann", age: 3} { {name: n} => n }` | done (step 1 of tree patterns, below) |
 | match-negative-subject | `match -3 { … }` | parsed as `match - 3` |
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above |
-| matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
+| matches-infix | `use regex; "abc" matches "a.c"` | done: lib/regex.warp declares `infix operator matches`; the parser scans the operators of used std modules too (declaration_scan.rs used_std_modules); gives 1/0 like `matches()` |
 | render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
 | gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | "needs a value for parameter a" |
 
