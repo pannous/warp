@@ -206,8 +206,25 @@ fn without_libc_annotations(declaration: &str) -> String {
 	kept
 }
 
-/// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak)
+/// C types wasm has no value type for: a function taking or giving one cannot be linked
+const UNLINKABLE_C_TYPES: [&str; 1] = ["long double"];
+
+/// The first type of a declaration that wasm has no value type for (`long double sqrtl(long double)`)
+pub fn unlinkable_type(hsig: &FfiHeaderSignature) -> Option<&'static str> {
+	std::iter::once(&hsig.return_type)
+		.chain(&hsig.param_types)
+		.find_map(|c_type| {
+			UNLINKABLE_C_TYPES
+				.into_iter()
+				.find(|unlinkable| bare_c_type(c_type) == *unlinkable)
+		})
+}
+
+/// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak); none for a function wasm cannot call
 pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> {
+	if unlinkable_type(hsig).is_some() {
+		return None;
+	}
 	let params: Vec<wasm_encoder::ValType> = warp_parameters(&hsig.param_types)
 		.filter_map(|t| map_c_type_to_valtype(t))
 		.collect();

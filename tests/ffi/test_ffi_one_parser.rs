@@ -17,7 +17,7 @@ fn libm_calls_need_no_import() {
 
 #[test]
 fn libc_numbers_and_texts() {
-		is!(&with_c("strlen(\"abc\")"), 3);
+	is!(&with_c("strlen(\"abc\")"), 3);
 	is!(&with_c("atoi(\"42\")"), 42);
 	is!(&with_c("labs(-5) + llabs(-7)"), 12);
 	is!(&with_c("fabs(-2.5)"), 2.5);
@@ -56,4 +56,9 @@ fn table_differences() {
 		.collect();
 	lines.sort();
 	println!("{} differ\n{}", lines.len(), lines.join("\n"));
+}
+
+#[test]
+fn a_long_double_function_is_refused_by_name() {
+	crate::common::fails_with(&with_c("sqrtl(4)"), "sqrtl is a C function using long double");
 }
