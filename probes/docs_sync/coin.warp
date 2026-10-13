@@ -1,0 +1,10 @@
+enum Coin { Penny, Nickel, Dime, Quarter }
+to get value of coin in cents:
+    match coin {
+        Penny : 1
+        Nickel : 5
+        Dime : 10
+        Quarter : 25
+    }
+cents = get value of Dime in cents
+cents

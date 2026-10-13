@@ -1,0 +1,5 @@
+use draw
+canvas(320, 200)
+clear(white)
+circle(160, 100, 40, red)
+show()
