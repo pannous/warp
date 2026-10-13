@@ -85,6 +85,7 @@ mod test_map_phrase;
 mod test_memoization;
 mod test_method_syntax_calls;
 mod test_method_words;
+mod test_mixed_number_returns; // card function-returning
 mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;
