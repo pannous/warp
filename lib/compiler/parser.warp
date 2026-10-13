@@ -132,6 +132,15 @@ def skip_spaces(p) {
 // Rust twin: expressions.rs parse_expr, continue_expr
 def expression(p, min_power) := continued(p, prefixed(p), min_power)
 
+// The head of `if`, `while` or `for`: a `{` after it opens the body, so `f(x) {` calls f rather than defining it
+def header_expression(p, min_power) {
+	outer = p.header
+	p.header = true
+	head = expression(p, min_power)
+	p.header = outer
+	head
+}
+
 // `left` and the operators after it binding at least `min_power`
 // Rust twin: expressions.rs continue_expr
 def continued(p, left, min_power) {
@@ -288,7 +297,7 @@ INDEX_POWER = 170
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
 SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "=>"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
 // The operators written as words, each with its canonical name
-WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"]]
+WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"], ["upto", ".."]]
 
 // The operator at the parser's position as [written, canonical], else []
 // (each text read is a walk from its start, card text-costs: the character is read once and picks the candidates)
@@ -348,7 +357,7 @@ def prefixed(p) {
 		if keyword_at(p, word) {
 			p.at = p.at + word.length
 			skip_spaces(p)
-			return conditioned(word, expression(p, CONDITION_POWER), p)
+			return conditioned(word, header_expression(p, CONDITION_POWER), p)
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
@@ -471,10 +480,7 @@ def looped(p) {
 		if keyword_at(p, "in") {
 			p.at = p.at + 2
 			skip_spaces(p)
-			outer = p.header
-			p.header = true
-			iterable = expression(p, 81)
-			p.header = outer
+			iterable = header_expression(p, 81)
 			skip_spaces(p)
 			return listed("", " ", [["symbol", "for"], variable, ["symbol", "in"], iterable, loop_body(p)])
 		}
