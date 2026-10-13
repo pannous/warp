@@ -1,0 +1,4 @@
+// card matches-infix: `use regex` makes matches an infix word; prints 1, 0 (yes, no once card matches-bool lands)
+use regex
+print "abc" matches "a.c"
+print "abd" matches "a.c$"

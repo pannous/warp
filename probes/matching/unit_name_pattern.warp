@@ -1,0 +1,4 @@
+// card pattern-unit-name: h in a pattern is the unit hour (a warning says so), $h binds; prints 'x' (quoted: card print-bound-text)
+c = {port: 80, host: "x"}
+if c is {port: p, host: h} then print "unit compared"
+if c is {host: $h} then print $h
