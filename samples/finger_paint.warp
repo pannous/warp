@@ -29,6 +29,7 @@ def stroke(x1, y1, x2, y2) {
 
 // any key wipes the canvas white (natively the window's keys, in the playground the page's)
 on key {
+	if key == ESC: exit()
 	clear(white)
 	show()
 }

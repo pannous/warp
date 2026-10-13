@@ -1,5 +1,4 @@
 #!/usr/bin/env warp
-#!/usr/bin/env warp
 use netbase
 load wikidata
 results = query "all cities with population > 100000"
