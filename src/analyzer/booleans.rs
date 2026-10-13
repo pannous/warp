@@ -42,7 +42,8 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::contex
 
 /// The body ends in a bool and every `return` in it returns one
 fn gives_bool(function: &crate::context::UserFunctionDef) -> bool {
-	let scope = parameter_scope(function);
+	let mut scope = parameter_scope(function);
+	define_bool_locals(function, &mut scope);
 	let mut returns_bool = true;
 	function.body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node.drop_meta() {
@@ -66,6 +67,37 @@ fn parameter_scope(function: &crate::context::UserFunctionDef) -> Scope {
 		scope.define(param.name.clone(), param.annotation.clone().map(Box::new), Kind::Int);
 	}
 	scope
+}
+
+/// The locals of the body that only ever store bools (`hit = no; … hit = yes`, the flag `any` inlines to), also
+/// through each other (`b = a`); a parameter or a local updated in place (`n += 1`) is none
+fn define_bool_locals(function: &crate::context::UserFunctionDef, scope: &mut Scope) {
+	let mut stored: HashMap<String, Vec<Node>> = HashMap::new();
+	let mut updated: HashSet<String> = function.params.iter().map(|param| param.name.clone()).collect();
+	function.body.visit(&mut |node| {
+		let Node::Key(left, op, value) = node.drop_meta() else {
+			return;
+		};
+		let Node::Symbol(name) = left.drop_meta() else {
+			return;
+		};
+		match op {
+			Op::Assign | Op::Define => stored.entry(name.clone()).or_default().push(value.as_ref().clone()),
+			_ if op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) => {
+				updated.insert(name.clone());
+			}
+			_ => {}
+		}
+	});
+	stored.retain(|name, _| !updated.contains(name));
+	while let Some(name) = stored
+		.iter()
+		.find(|(_, values)| values.iter().all(|value| is_boolean(value, scope)))
+		.map(|(name, _)| name.clone())
+	{
+		stored.remove(&name);
+		scope.define(name, Some(Box::new(Node::Symbol(BOOL_TYPE.to_string()))), Kind::Int);
+	}
 }
 
 pub fn is_bool_function(name: &str) -> bool {

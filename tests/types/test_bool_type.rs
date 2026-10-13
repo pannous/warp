@@ -89,3 +89,14 @@ fn an_exact_comparison_prints_as_bool() {
 	assert_eq!(text_of("√2 > 1.4"), "yes");
 	assert_eq!(text_of("π < 3"), "no");
 }
+
+/// card xs-xs-2: a local that only ever holds bools is a bool result (`any` inlines to such a flag)
+#[test]
+fn a_function_returning_a_bool_local_gives_a_bool() {
+	is!("f() := { hit = no; hit = yes; hit }; f()", true);
+	is!(
+		"has_any(xs) := any(xs); has_any([false, true]) == yes and type(has_any([false])) == bool",
+		true
+	);
+	is!("f() := { n = no; n += 1; n }; f()", 1);
+}
