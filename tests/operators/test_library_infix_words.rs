@@ -25,6 +25,8 @@ fn a_glued_call_of_an_infix_word_is_a_call() {
 #[test]
 fn a_parenthesis_in_a_text_keeps_the_call() {
 	is!("use regex; print matches(\"(\", \"x\")", false);
-	is!("use regex; print matches(\"a)\", \"a\\\\)\")", true);
-	is!("print sqrt(\"(\".count + 3)", 2);
+	// print gives ø, which equals false loosely: the value itself tells yes from no
+	is!("use regex; ok = matches(\"a)\", \"a\\\\)\"); ok", true);
+	is!("use regex; ok = matches(\"(\", \"x\"); ok", false);
+	is!("sqrt(\")\".count + 3).round(1)", 2);
 }
