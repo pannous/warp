@@ -24,6 +24,7 @@ impl WasmGcEmitter {
 	/// Values that only compare or test structurally: they have no numeric reading
 	pub(crate) fn is_structured_value(&self, node: &Node) -> bool {
 		match node.drop_meta() {
+			_ if crate::analyzer::is_code(node, &self.scope) => true,
 			Node::Empty | Node::Text(_) | Node::List(_, Bracket::Square, _) => true,
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_structured_value(&items[0]),
 			// a tuple `(y, 4)`: compared element by element, never as its last value

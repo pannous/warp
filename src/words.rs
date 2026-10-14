@@ -66,6 +66,10 @@ pub const NUMBER_WORD: &str = "number";
 pub const PAIR_WORD: &str = "pair";
 /// The type of an operator node, `parse("1+1")`, `a<b` as data; a `key: value` pair stays a key (decision parse-type)
 pub const OPERATION_WORD: &str = "operation";
+/// The type of a quoted program part, `f.body`, `parse("1+1")`, whatever its form (decision body-code)
+pub const CODE_WORD: &str = "code";
+/// `as_code(data e)`: e marked as code (wasm_emitter constructors.rs, type_kinds::CODE_MARK)
+pub const AS_CODE: &str = "as_code";
 pub const REAL_WORD: &str = "real";
 pub const SYMBOL_WORD: &str = "symbol";
 pub const TEXT_WORD: &str = "text";
