@@ -124,7 +124,35 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
 	let program = lower_unit_aliases(program);
+	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
+		true => program,
+		false => with_quantity_casts(program),
+	};
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
+}
+
+/// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
+const QUANTITY_CAST_WORDS: [&str; 2] = [RUN_TIME_QUANTITY_WORD, "unit"];
+
+fn with_quantity_casts(node: Node) -> Node {
+	let node = node.map_children(with_quantity_casts);
+	let Node::Key(value, Op::As, target) = node.drop_meta() else {
+		return node;
+	};
+	let Some(word) = target.drop_meta().symbol_name().filter(|word| QUANTITY_CAST_WORDS.contains(word)) else {
+		return node;
+	};
+	if word != RUN_TIME_QUANTITY_WORD {
+		crate::normalize::set_position_of(&node);
+		crate::errors::diagnostic::note_alias(&format!("as {word}"), &format!("as {RUN_TIME_QUANTITY_WORD}"));
+	}
+	as_run_time_quantity(value).unwrap_or_else(|| {
+		Node::List(
+			vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), (**value).clone()],
+			Bracket::Round,
+			Separator::None,
+		)
+	})
 }
 
 /// `60 mi/h as km/h` parses `(60 mi/h as km)/h`: the unit after `as` regrouped whole, as after `in`, when it is one

@@ -31,6 +31,16 @@ pub const PREVIOUS_HOLE: &str = "previous";
 /// other words for $previous, which stay the program's own names: a value missing under one of them hints at $previous
 pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
 
+/// Underscore spellings of a built-in hole's member, aliases that hint at the dotted form (user 2026-10-14, card
+/// values-number): `$mouse_x` is `$mouse.x`
+pub const HOLE_ALIASES: [(&str, &str); 2] = [("mouse_x", "mouse.x"), ("mouse_y", "mouse.y")];
+const ALIAS_REASON: &str = "the pointer is the built-in hole $mouse, a vec2f";
+
+/// The dotted form of an aliased hole (`mouse_x` → `mouse.x`), any other name itself
+fn dotted(name: &str) -> &str {
+	HOLE_ALIASES.iter().find(|(alias, _)| *alias == name).map_or(name, |(_, dotted)| dotted)
+}
+
 /// what a shader missing the value `name` may have meant ("" for nothing)
 pub fn missing_value_hint(name: &str) -> &'static str {
 	match PREVIOUS_WORDS.contains(&name) {
@@ -54,7 +64,9 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 			rest = after;
 			continue;
 		}
-		text.push_str(&format!("{VALUES}.{name}"));
+		let read = dotted(name);
+		text.push_str(&format!("{VALUES}.{read}"));
+		let name = read.split('.').next().unwrap_or(read);
 		if !names.iter().any(|known| known == name) {
 			names.push(name.to_string());
 		}
@@ -66,6 +78,7 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 
 /// The shader text of a block, marked with its holes
 pub fn shader_text(wgsl: &str) -> Node {
+	hint_aliases(wgsl);
 	let (text, names) = written(wgsl);
 	match names.is_empty() {
 		true => Node::Text(text),
@@ -73,6 +86,19 @@ pub fn shader_text(wgsl: &str) -> Node {
 			HOLES_ATTRIBUTE,
 			Node::List(names.into_iter().map(Node::Symbol).collect(), Bracket::Square, Separator::Space),
 		),
+	}
+}
+
+/// `$mouse_x` works as `$mouse.x`, with a hint to write that
+fn hint_aliases(wgsl: &str) {
+	for (alias, dotted) in HOLE_ALIASES {
+		let written = format!("${alias}");
+		let found = wgsl
+			.match_indices(&written)
+			.any(|(at, _)| !wgsl[at + written.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'));
+		if found {
+			crate::normalize::hint(&written, &format!("${dotted}"), ALIAS_REASON);
+		}
 	}
 }
 
@@ -197,6 +223,10 @@ fn with_values(
 	Node::List(items, bracket.clone(), separator.clone()).with_meta_of(&node)
 }
 
+/// `name: name`; a system value's in parentheses, so its word is read rather than kept as data (`$mouse_x` is the
+/// pointer, system_values.rs is_bare_word; card values-number)
 fn entry(name: &str) -> Node {
-	Node::key(name, Node::Symbol(name.to_string()))
+	let word = Node::Symbol(name.to_string());
+	let is_system_value = warp_runtime::host_words::SYSTEM_VALUES.iter().any(|(system, _)| *system == name);
+	Node::key(name, if is_system_value { Node::List(vec![word], Bracket::Round, Separator::None) } else { word })
 }

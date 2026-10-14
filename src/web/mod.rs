@@ -667,6 +667,13 @@ mod exports {
 		kept(report.to_string().into_bytes())
 	}
 
+	/// The members to offer after the code and a dot (completion.js, lowering/data/members.rs), a JSON list of names;
+	/// returns its length, read at `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_member_names(code: *const u8, code_length: usize) -> usize {
+		kept(serde_json::to_vec(&crate::members::member_names(text(code, code_length))).unwrap_or_default())
+	}
+
 	#[no_mangle]
 	pub extern "C" fn web_bundle_module() -> *const u8 {
 		MODULE.with(|kept| kept.borrow().as_ptr())

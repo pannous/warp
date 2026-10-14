@@ -131,7 +131,7 @@ quantity_str = "3"
 price = atof(price_str)
 quantity = atoi(quantity_str)
 total = price * quantity
-test ceil(total)  ≈ 60 (rounds up from 59.97)
+test ceil(total)  ≈ 60 // rounds up from 59.97
 
 
 // Example 4: Mathematical pipeline

@@ -258,6 +258,8 @@ PASSED:
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
+  ✓ control::test_for_semicolon_end::the_semicolon_end_form_hints_the_braces
+  ✓ control::test_for_semicolon_end::the_statements_up_to_end_are_the_body
   ✓ control::test_for_underscore::a_loop_over_underscore_runs
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_for_unit_words::the_loop_variable_byte_walks_a_text_by_its_bytes
@@ -428,6 +430,15 @@ PASSED:
   ✓ control::test_match_whole_value::match_names_its_subject
   ✓ control::test_match_whole_value::match_on_a_literal_in_a_body_or_an_arm
   ✓ control::test_match_whole_value::value_is_the_matched_value
+  ✓ control::test_member_completion::a_chain_and_a_call_receiver_are_one_receiver
+  ✓ control::test_member_completion::a_list_variable_offers_list_methods
+  ✓ control::test_member_completion::a_map_offers_its_keys_first
+  ✓ control::test_member_completion::a_standard_module_offers_its_words
+  ✓ control::test_member_completion::a_text_variable_offers_text_methods
+  ✓ control::test_member_completion::an_instance_offers_its_fields_and_methods
+  ✓ control::test_member_completion::an_unknown_receiver_offers_nothing
+  ✓ control::test_member_completion::every_offered_builtin_is_a_method_of_its_type
+  ✓ control::test_member_completion::literals_offer_their_type_s_methods
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
@@ -748,6 +759,7 @@ PASSED:
   ✓ control::test_threads::function_values_cross_to_a_task
   ✓ control::test_threads::lists_cross_to_a_task
   ✓ control::test_threads::stop_ends_a_running_task
+  ✓ control::test_threads::tasks_run_at_the_same_time
   ✓ control::test_threads::texts_floats_characters_and_lists_cross_to_a_task
   ✓ control::test_threads::try_catches_the_failure_of_a_task
   ✓ control::test_time_of_day::a_time_of_day_must_be_one
@@ -1124,6 +1136,9 @@ PASSED:
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
+  ✓ functions::test_bare_calls::test_assigned_bare_name_holds_the_result
+  ✓ functions::test_bare_calls::test_bare_name_as_an_operand
+  ✓ functions::test_bare_calls::test_function_reference_stays_the_function
   ✓ functions::test_bare_function_name::a_loop_variable_named_like_a_function_is_the_variable
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
@@ -2078,6 +2093,8 @@ PASSED:
   ✓ modules::test_module_signals::a_stored_value_of_a_used_module_is_kept_by_the_program
   ✓ modules::test_netbase_package::a_query_is_a_url_path
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
+  ✓ modules::test_node_json::a_field_named_json_wins
+  ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_package_hints::a_package_s_style_gets_no_hints_the_program_s_does
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
@@ -2594,6 +2611,8 @@ PASSED:
   ✓ numbers::test_printed_quantity::str_and_the_result_keep_the_exact_quantity
   ✓ numbers::test_quantities_in_one_text::a_sum_of_quantities_still_adds
   ✓ numbers::test_quantities_in_one_text::two_quantities_join_one_text
+  ✓ numbers::test_quantity_cast::a_text_as_quantity_is_its_quantity
+  ✓ numbers::test_quantity_cast::as_unit_is_as_quantity
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
   ✓ numbers::test_quantity_global::a_function_reads_a_global_with_its_unit
@@ -3333,6 +3352,8 @@ PASSED:
   ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
   ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
+  ✓ programs::test_shader_system_values::mouse_x_is_an_alias_of_mouse_dot_x_with_a_hint
+  ✓ programs::test_shader_system_values::the_shader_gets_the_pointer
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_sound_aliasing::square_and_sawtooth_do_not_alias
@@ -4118,6 +4139,9 @@ PASSED:
   ✓ types::test_number_keeps_exact::a_float_variable_still_converts
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_float
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_ratio
+  ✓ types::test_operation_type::a_pair_stays_a_key
+  ✓ types::test_operation_type::an_operation_is_a_key_and_an_expression
+  ✓ types::test_operation_type::an_operator_node_is_an_operation
   ✓ types::test_optional_casts::a_function_of_empty_returns_empty
   ✓ types::test_optional_casts::a_javascript_null_is_empty
   ✓ types::test_optional_casts::an_optional_cast_keeps_empty
@@ -4326,6 +4350,12 @@ PASSED:
   ✓ types::test_type_name_matching::test_lone_type_word_parameter_is_it
   ✓ types::test_type_name_matching::test_phrases_differing_only_by_unknown_nouns_are_a_redefinition
   ✓ types::test_type_name_matching::test_type_word_is_the_parameter_name
+  ✓ types::test_type_of_consistency::test_type_of_a_library_function
+  ✓ types::test_type_of_consistency::test_type_of_a_map
+  ✓ types::test_type_of_consistency::test_type_of_a_parameterless_function_calls_it
+  ✓ types::test_type_of_consistency::test_type_of_a_type_word
+  ✓ types::test_type_of_consistency::test_type_of_a_user_function
+  ✓ types::test_type_of_consistency::test_type_of_values_and_unknown_names_unchanged
   ✓ types::test_type_of_node_values::the_type_of_a_node_held_value_is_read_at_run_time
   ✓ types::test_type_of_real_variable::a_variable_holding_a_root_is_real_as_the_root_is
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
@@ -4665,8 +4695,12 @@ PASSED:
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_database_site::a_built_site_keeps_database_values
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
+  ✓ web::test_deploy::a_deployed_route_answers_its_status
   ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
+  ✓ web::test_deploy::a_single_route_and_a_served_route_deploy
+  ✓ web::test_deploy::deploy_names_a_browser_only_feature
+  ✓ web::test_deploy::page_routes_deploy_as_rendered_pages
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_marks::a_failure_without_an_excerpt_is_its_text
   ✓ web::test_dev_marks::the_overlay_marks_the_failing_word
@@ -4797,6 +4831,9 @@ PASSED:
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
   ✓ web::test_page_tests::passing_page_tests_are_counted
+  ✓ web::test_playground_get_routes::a_get_route_is_the_playground_page_at_its_path
+  ✓ web::test_playground_get_routes::a_page_of_a_route_with_headers_shows_its_value
+  ✓ web::test_playground_get_routes::get_and_page_routes_share_the_address_bar
   ✓ web::test_playground_paint::the_default_canvas_fills_the_output_pane
   ✓ web::test_playground_paint::the_playground_paints_a_canvas_of_its_size
   ✓ web::test_playground_paint::the_playground_paints_the_default_canvas
@@ -5373,7 +5410,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ control::test_threads::tasks_run_at_the_same_time
 
 SUMMARY:
-13 ignored, 5370 passed, 1 failed, 5371 total tested
+13 ignored, 5407 passed, 0 failed, 5407 total tested

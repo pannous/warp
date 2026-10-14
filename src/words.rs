@@ -64,6 +64,8 @@ pub const LIST_WORD: &str = "list";
 pub const NUMBER_WORD: &str = "number";
 /// `x is pair`: a `key: value` pair
 pub const PAIR_WORD: &str = "pair";
+/// The type of an operator node, `parse("1+1")`, `a<b` as data; a `key: value` pair stays a key (decision parse-type)
+pub const OPERATION_WORD: &str = "operation";
 pub const REAL_WORD: &str = "real";
 pub const SYMBOL_WORD: &str = "symbol";
 pub const TEXT_WORD: &str = "text";

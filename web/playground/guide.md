@@ -720,8 +720,11 @@ route "/" { b{"bold!"} }
 The parts of the path arrive as arguments of the declared type, so `/square/7` answers 49:
 
 ```warp
+route "/" {a{href='/square/3' 'try three squared'}}
 route "/square/:n:int" { n*n }
 ```
+
+You can share such an app with one click by pressing <a onclick='()=>deploy("native")'>deploy</a>. 
 
 `warp app.warp` (or `warp serve app.warp`) runs a program with routes as a web server; `warp deploy` puts it on the web.
 
