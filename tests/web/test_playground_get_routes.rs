@@ -6,12 +6,7 @@ use warp::host::with_page_path;
 use warp::web::evaluate;
 
 fn shown_at(path: &str, program: &str) -> String {
-	with_page_path(path, || {
-		evaluate(program, HashSet::new())["value"]
-			.as_str()
-			.unwrap_or_default()
-			.to_string()
-	})
+	with_page_path(path, || evaluate(program, HashSet::new())["value"].as_str().unwrap_or_default().to_string())
 }
 
 #[test]
