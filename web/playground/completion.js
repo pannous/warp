@@ -2,7 +2,7 @@
 // - a word being typed lists the words of the code in the editor (all of it: `use math` … `dir(ma` offers math), then
 //   the keywords, then the words of the examples and the samples that start so, the most used first; after `use` the
 //   standard modules;
-// - `\:` and `<:` list the uniscript entities (src/uniscript_entities.tsv, entities.tsv here) with their character, and
+// - `\:` and `<:` list the uniscript entities (src/text/uniscript_entities.tsv, entities.tsv here) with their character, and
 //   a chosen one becomes its character: `\:alpha` → α;
 // - a typed `<:name>` becomes its character at its `>`; undo brings the tag back.
 // Tab and Enter take the chosen one (the first, or another chosen with Up/Down), Esc closes; Enter is a new line when
