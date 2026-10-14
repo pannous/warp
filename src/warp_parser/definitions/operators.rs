@@ -157,38 +157,35 @@ impl WarpParser {
 
 	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
 	pub(crate) fn parenthesis_length(&self, offset: usize) -> Option<usize> {
-		if self.peek_char(offset) != '(' {
-			return None;
-		}
-		let mut depth = 0;
-		for length in 0.. {
-			match self.peek_char(offset + length) {
-				'(' => depth += 1,
-				')' if depth == 1 => return Some(length + 1),
-				')' => depth -= 1,
-				'\0' => return None,
-				_ => {}
-			}
-		}
-		None
+		self.scan_parentheses(offset).map(|(length, _)| length)
 	}
 
 	/// Whether the `(…)` at `offset` separates items with a comma of its own (not one in a nested group or a text)
 	fn holds_top_level_comma(&self, offset: usize) -> bool {
-		let Some(length) = self.parenthesis_length(offset) else { return false };
-		let (mut depth, mut quote) = (0, None);
-		for index in offset..offset + length {
+		self.scan_parentheses(offset).is_some_and(|(_, comma)| comma)
+	}
+
+	/// The balanced `(…)` at `offset`: its length and whether a comma of its own separates items; brackets and commas
+	/// inside a text or a nested group are none of its own
+	fn scan_parentheses(&self, offset: usize) -> Option<(usize, bool)> {
+		if self.peek_char(offset) != '(' {
+			return None;
+		}
+		let (mut depth, mut quote, mut comma) = (0, None, false);
+		for index in offset.. {
 			match (self.peek_char(index), quote) {
+				('\0', _) => return None,
 				(c, Some(open)) if c == open && self.peek_char(index - 1) != '\\' => quote = None,
 				(_, Some(_)) => {}
 				(c @ ('"' | '\''), None) => quote = Some(c),
 				('(' | '[' | '{', None) => depth += 1,
+				(')' | ']' | '}', None) if depth == 1 => return Some((index - offset + 1, comma)),
 				(')' | ']' | '}', None) => depth -= 1,
-				(',', None) if depth == 1 => return true,
+				(',', None) if depth == 1 => comma = true,
 				_ => {}
 			}
 		}
-		false
+		None
 	}
 
 	/// An infix operator alone as an argument or item, `sorted(xs, >)`, `[+, *]`: the operator as a value `(> ø ø)`, as

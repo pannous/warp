@@ -20,3 +20,11 @@ fn a_glued_call_of_an_infix_word_is_a_call() {
 	is!("use regex; print matches(\"abd\", \"a.c$\")", false);
 	is!("use regex; x = matches(\"abc\", \"a.c\"); x", true);
 }
+
+/// Card counts-parens: a parenthesis inside a text is no group bracket, the glued call stays a call
+#[test]
+fn a_parenthesis_in_a_text_keeps_the_call() {
+	is!("use regex; print matches(\"(\", \"x\")", false);
+	is!("use regex; print matches(\"a)\", \"a\\\\)\")", true);
+	is!("print sqrt(\"(\".count + 3)", 2);
+}
