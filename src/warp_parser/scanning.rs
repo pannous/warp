@@ -158,53 +158,6 @@ impl WarpParser {
 			&& !is_identifier_char(self.peek_char(keyword.len()))
 	}
 
-	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
-	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`.
-	/// Inside a list literal a space and a glued sign start the next item after anything (decision list-sign):
-	/// `a=5; [a -1]` is [5 -1], while `[a - 1]` and `[a-1]` subtract
-	pub(super) fn signed_number_starts_a_list(&mut self, lhs: &Node) -> Result<bool, Node> {
-		if self.signed_list_element == Some(self.pos) {
-			return Ok(true); // answered for the operand inside
-		}
-		if self.in_spaced_list && self.prev_char().is_whitespace() && self.sign_glued_to_operand() {
-			self.signed_list_element = Some(self.pos);
-			return Ok(true);
-		}
-		if !matches!(lhs.drop_meta(), Node::Number(_)) || !self.prev_char().is_whitespace() || !self.number_starts_at(1)
-		{
-			return Ok(false);
-		}
-		let signed: String = self.chars[self.pos..]
-			.iter()
-			.take_while(|ch| !ch.is_whitespace() && !matches!(ch, ']' | ')' | '}' | ',' | ';'))
-			.collect();
-		let (first, sign, number) = (lhs.serialize(), self.current_char(), &signed[1..]);
-		let written = format!("{first} {signed}");
-		let readings = vec![
-			crate::diagnostic::reading("the list", &format!("{first} ({signed})")), // also inside brackets: `[1 (-1) 2]`
-			crate::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
-		];
-		let question = crate::diagnostic::Ask::new(
-			SIGNED_OPERAND_TOPIC,
-			format!("is `{written}` a list or arithmetic?"),
-			readings,
-			crate::diagnostic::Fallback::Warning,
-		)
-		.written(&written)
-		.at(self.line_nr, self.column);
-		let is_list = crate::diagnostic::ask(&question)? == 0;
-		if is_list {
-			self.signed_list_element = Some(self.pos);
-		}
-		Ok(is_list)
-	}
-
-	/// `-1`, `-x`, `+(…)`: the sign at the cursor is glued to the operand after it, no operator like `->` or `-=`
-	fn sign_glued_to_operand(&self) -> bool {
-		let next = self.peek_char(1);
-		next.is_alphanumeric() || matches!(next, '(' | '[' | '"' | '\'' | '.' | '_' | '√')
-	}
-
 	pub(super) fn is_at_line_start(&self) -> bool {
 		// Check if we're at the very beginning or right after whitespace/newline
 		self.pos == 0 || self.prev_char().is_whitespace()
@@ -359,4 +312,20 @@ const MAX_DIVISOR_NAME_LENGTH: usize = 2;
 pub(crate) fn is_number_or_short_name(word: &str) -> bool {
 	let is_name = word.len() <= MAX_DIVISOR_NAME_LENGTH && word.chars().all(|c| c.is_ascii_lowercase() || c == '_');
 	is_name || word.parse::<f64>().is_ok()
+}
+
+pub(crate) fn is_identifier_char(c: char) -> bool {
+	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
+}
+
+/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/music_words.rs)
+pub(crate) fn is_music_accidental(c: char) -> bool {
+	matches!(c, '♯' | '♭')
+}
+
+/// The atoms the parser reads in a source, in order, as code: the token stream of this scannerless parser
+pub fn read_atoms(source: &str) -> Vec<Atom> {
+	let mut parser = WarpParser::new_with_options(source.to_string(), ParserOptions::default());
+	parser.parse_list_with_separators(None, Bracket::None);
+	parser.atoms
 }

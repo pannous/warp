@@ -58,8 +58,8 @@ mod test_field_function_values;
 mod test_float_to_int_parameter;
 mod test_float_values_of_tuples;
 mod test_folding_in_bodies;
-mod test_foreign_spellings;
 mod test_foreign_modifiers;
+mod test_foreign_spellings;
 mod test_free_var_if_arms;
 mod test_function_aliases;
 mod test_function_head; // card cleanup-definition-view

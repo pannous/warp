@@ -1,4 +1,4 @@
-//! Looking ahead: what can start an atom, operators ahead, attributes
+//! Looking ahead: what can start an atom, operators ahead
 
 use super::*;
 
@@ -23,17 +23,6 @@ static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync
 const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
 /// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
 const BLOCK_COLON_WORDS: [&str; 3] = ["then", "else", "do"];
-/// The digits of a CSS hex color: `#fff`, `#8884`, `#1e1e1e`, `#00ff0080`
-const CSS_COLOR_DIGITS: [usize; 4] = [3, 4, 6, 8];
-/// What follows an id selector of hex letters (`#fed { … }`, `#add, #b`, `#bad:hover`), never a color
-const SELECTOR_FOLLOWERS: [char; 8] = ['{', ',', '.', ':', '>', '+', '~', '['];
-/// What a style sheet's selector starts after: the sheet's or a rule's brace, a declaration's end, a selector list's comma
-const SELECTOR_STARTS_AFTER: [char; 5] = ['{', '}', ';', ',', '\0'];
-
-/// What ends a path literal: whitespace, a closing bracket or a separator
-pub(super) fn ends_path(c: char) -> bool {
-	c.is_whitespace() || matches!(c, '\0' | ']' | ')' | '}' | ',' | ';')
-}
 
 impl WarpParser {
 	/// Check if current character can start an atom (for implicit application)
@@ -52,19 +41,6 @@ impl WarpParser {
 			|| self.url_follows()
 	}
 
-	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
-	/// `./mozart.mp3`, `../songs/a.wav`: `./` or `../` glued to what follows and not to an operand before it starts a
-	/// file path without quotes; `xs ./ 2` and `xs./2` divide each element
-	pub(super) fn starts_path_literal(&self) -> bool {
-		let dots = if self.peek_char(1) == '.' { 2 } else { 1 };
-		let glued_to_operand =
-			is_identifier_char(self.prev_char()) || matches!(self.prev_char(), ')' | ']' | '}' | '"' | '\'');
-		self.current_char() == '.'
-			&& self.peek_char(dots) == '/'
-			&& !ends_path(self.peek_char(dots + 1))
-			&& !glued_to_operand
-	}
-
 	/// A digit, or a leading-dot decimal like `.5`
 	pub(super) fn number_starts_at(&self, offset: usize) -> bool {
 		let ch = self.peek_char(offset);
@@ -81,24 +57,6 @@ impl WarpParser {
 			self.peek_char(position),
 			'\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '='
 		)
-	}
-
-	/// Check if character terminates a URL
-	pub(super) fn is_url_terminator(&self, ch: char) -> bool {
-		ch == '\0'
-			|| ch == ' '
-			|| ch == '\t'
-			|| ch == '\n'
-			|| ch == '\r'
-			|| ch == ';'
-			|| ch == ')'
-			|| ch == ']'
-			|| ch == '}'
-			|| ch == '>'
-			|| ch == '"'
-			|| ch == '\''
-			|| ch == ','
-			|| ch == '«'
 	}
 
 	/// `{from:1 to:2}`: an operator word directly before a key colon names the key; `else:` and `then:` open blocks
@@ -183,18 +141,6 @@ impl WarpParser {
 		(allowed && operand_after_word && !selector_part && !style_word).then_some((op, spelling))
 	}
 
-	/// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), the range counting down
-	fn down_to_length(&self) -> Option<usize> {
-		if !self.matches_keyword(DOWN_WORD) {
-			return None;
-		}
-		let blanks = (DOWN_WORD.len()..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
-		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD)
-			.then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
-	}
-
 	/// At an opening bracket: a comma separates the group's own items (`[a -1, 2]`), not one of a nested group or text
 	pub(super) fn group_holds_comma(&self) -> bool {
 		let (mut depth, mut quote) = (0i32, None);
@@ -238,42 +184,6 @@ impl WarpParser {
 		let next = self.peek_char(argument);
 		let argument_word = self.word_at(argument);
 		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands(&argument_word)
-	}
-
-	/// In a style sheet `#8884` or `#fff` in a value is a CSS hex color, not the count or index operator (card
-	/// css-block): its length with the `#`. Ids starting with a letter stay selectors where one is followed by a block
-	/// or another selector part (`#fed { … }`); an id never starts with a digit
-	pub(super) fn css_color_length(&self) -> Option<usize> {
-		if !self.in_style_sheet || self.current_char() != '#' {
-			return None;
-		}
-		let digits = (1..)
-			.take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit())
-			.count();
-		let after = self.peek_char(digits + 1);
-		if !CSS_COLOR_DIGITS.contains(&digits) || after.is_alphanumeric() || matches!(after, '_' | '-') {
-			return None;
-		}
-		let next = (digits + 1..)
-			.map(|offset| self.peek_char(offset))
-			.find(|ch| !ch.is_whitespace())
-			.unwrap_or('\0');
-		(self.peek_char(1).is_ascii_digit() || !SELECTOR_FOLLOWERS.contains(&next)).then_some(digits + 1)
-	}
-
-	/// `:root { … }`, `:hover { … }` starting a rule of a style sheet: a selector, not the colon of a declaration (card
-	/// markup-style-block)
-	pub(super) fn at_pseudo_class_selector(&self) -> bool {
-		let previous = self.chars[..self.pos]
-			.iter()
-			.rev()
-			.find(|ch| !ch.is_whitespace())
-			.copied()
-			.unwrap_or('\0');
-		self.in_style_sheet
-			&& self.current_char() == ':'
-			&& self.is_identifier_start(1)
-			&& SELECTOR_STARTS_AFTER.contains(&previous)
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
@@ -362,99 +272,71 @@ impl WarpParser {
 		}
 	}
 
-	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`.
-	/// `@name:value` (inside a literal: `point{x:1 @source:"gps"}`) is the meta entry `@name`, never a field;
-	/// after a dot, `p.@name` names the meta key itself.
-	pub(super) fn parse_attribute(&mut self) -> Node {
-		let after_dot = self.pos > 0 && self.chars[self.pos - 1] == '.';
-		self.advance(); // skip '@'
-		let name = or_return_error!(self.parse_symbol());
-		if after_dot {
-			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
-		}
-		if self.type_fields.is_some() && self.reads_instance_variable() {
-			return Node::Key(
-				Box::new(Symbol(RECEIVER_WORD.to_string())),
-				Op::Dot,
-				Box::new(Symbol(name)),
-			);
-		}
-		if self.current_char() == ':' && self.peek_char(1) != '=' {
-			self.advance();
-			self.skip_spaces();
-			return Node::Key(
-				Box::new(Symbol(format!("{ATTRIBUTE_MARK}{name}"))),
-				Op::Colon,
-				Box::new(self.parse_atom()),
-			);
-		}
-		let value = self.attribute_value();
-		self.parse_atom().with_attribute(&name, value)
+	/// `?` directly after a type name, then `=` (not `==`) or a closing bracket or separator
+	pub(super) fn ends_optional_type(&self, next: char, after: char) -> bool {
+		matches!(next, ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0') || (next == '=' && after != '=')
 	}
 
-	/// Ruby's instance variable `@x` in a class body, after its name: an operator, the end of the statement, or the line
-	/// end before an `end` follows (an annotation `@deprecated fun f()` stands before a word or its own value)
-	fn reads_instance_variable(&self) -> bool {
-		let blanks = (0..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
+	/// one line is two optional fields, no ternary
+	pub(super) fn next_field_follows(&self, width: usize) -> bool {
+		let blanks = (width..)
+			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
 			.count();
-		match self.peek_char(blanks) {
-			'\n' => {
-				let next_line = blanks
-					+ 1 + (0..)
-					.take_while(|&offset| matches!(self.peek_char(blanks + 1 + offset), ' ' | '\t'))
-					.count();
-				let word: String = (next_line..)
-					.map(|offset| self.peek_char(offset))
-					.take_while(|ch| is_identifier_char(*ch))
-					.collect();
-				word == END_KEYWORD
-			}
-			'(' => false,
-			next => !is_identifier_char(next) && next != '@',
-		}
+		let name = self.word_at(width + blanks).chars().count();
+		let colon = width + blanks + name;
+		self.type_fields.is_some()
+			&& blanks > 0
+			&& name > 0
+			&& self.peek_char(colon) == ':'
+			&& !matches!(self.peek_char(colon + 1), '=' | ':')
 	}
 
-	/// The value of `@name(value)`, true for a bare `@name`
-	fn attribute_value(&mut self) -> Node {
-		if self.current_char() == '(' {
-			Self::unwrap_single(self.parse_bracketed('('))
-		} else {
-			Node::True
-		}
+	/// Do blanks and then `bracket` follow (`c {`, not the glued `c{`)
+	pub(super) fn blanks_then(&self, bracket: char) -> bool {
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		blanks > 0 && self.peek_char(blanks) == bracket
 	}
 
-	/// `ys = xs.map(f) @parallel`: an `@name` or `@name(value)` with nothing after it on the statement annotates the
-	/// expression before it (wiki/Purpose.md), where a leading one would annotate an empty atom
-	pub(super) fn try_parse_trailing_attribute(&mut self, annotated: &Node) -> Option<Node> {
-		if self.current_char() != '@' || !self.peek_char(1).is_alphabetic() {
-			return None;
+	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
+	/// `assignments`: C#'s object initializer `Point { X = 3 }` of a declared class sets its fields with `=` too
+	pub(super) fn block_after_blanks(&self, assignments: bool) -> bool {
+		let blanks_from = |start: usize| {
+			(start..)
+				.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
+				.count()
+		};
+		let blanks = blanks_from(0);
+		if blanks == 0 || self.peek_char(blanks) != '{' {
+			return false;
 		}
-		let name = self.word_at(1);
-		let mut end = 1 + name.chars().count();
-		if self.peek_char(end) == '(' {
-			let mut depth = 0;
-			loop {
-				match self.peek_char(end) {
-					'(' => depth += 1,
-					')' if depth == 1 => break,
-					')' => depth -= 1,
-					'\0' | '\n' => return None,
-					_ => {}
-				}
-				end += 1;
-			}
-			end += 1;
-		}
-		let after = end
-			+ (end..)
-				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
-				.count();
-		if !matches!(self.peek_char(after), '\0' | '\n' | '\r' | ';' | ',' | ')' | ']' | '}') {
-			return None;
-		}
-		self.advance_by(1 + name.chars().count());
-		let value = self.attribute_value();
-		Some(annotated.clone().with_attribute(&name, value))
+		// the block's first entry may start on the next line (`Person {⏎ name: "Alice" …}`)
+		let first = blanks
+			+ 1 + (blanks + 1..)
+			.take_while(|at| self.peek_char(*at).is_whitespace())
+			.count();
+		let name = (first..)
+			.take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_')
+			.count();
+		let after_name = first + name + blanks_from(first + name);
+		let assigns = assignments && self.peek_char(after_name) == '=' && self.peek_char(after_name + 1) != '=';
+		self.peek_char(first) == '}'
+			|| (name > 0 && ((self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=') || assigns))
 	}
+
+	/// Do blanks and then a closing bracket, `,`, `;`, an assignment `=`, a comment or the line end follow `offset`:
+	/// nothing a ternary could be followed by
+	pub(super) fn closes_after_blanks(&self, offset: usize) -> bool {
+		let blanks = (offset..)
+			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
+			.count();
+		let at = offset + blanks;
+		let comment_starts = self.peek_char(at) == '/' && matches!(self.peek_char(at + 1), '/' | '*');
+		blanks > 0 && (comment_starts || self.ends_optional_type(self.peek_char(at), self.peek_char(at + 1)))
+	}
+}
+
+/// What ends a path literal: whitespace, a closing bracket or a separator
+pub(crate) fn ends_path(c: char) -> bool {
+	c.is_whitespace() || matches!(c, '\0' | ']' | ')' | '}' | ',' | ';')
 }

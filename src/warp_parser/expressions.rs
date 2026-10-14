@@ -80,38 +80,6 @@ impl WarpParser {
 		self.continue_expr(lhs, min_bp)
 	}
 
-	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
-	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
-	pub(super) fn try_parse_data(&mut self) -> Option<Node> {
-		// `data = [4 2]; for x in data {…}`: a variable named data is read, not a prefix
-		let is_variable = self.variables.contains(DATA_KEYWORD);
-		if is_variable
-			|| self.options.data_mode
-			|| !self.matches_keyword(DATA_KEYWORD)
-			|| self.peek_char(DATA_KEYWORD.len()) != ' '
-		{
-			return None;
-		}
-		let before_keyword = self.mark();
-		self.advance_by(DATA_KEYWORD.len());
-		self.skip_spaces();
-		let ends = matches!(self.current_char(), '}' | ']' | ')' | ';' | ',' | '\n' | '\r' | '\0');
-		if ends || self.peek_operator().is_some() || self.matches_keyword(CLASS_KEYWORD) {
-			self.rewind(before_keyword);
-			return None;
-		}
-		let parsed = self.parse_expr(Op::Assign.binding_power().1);
-		let data = match parsed.drop_meta() {
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
-			_ => parsed,
-		};
-		Some(Node::List(
-			vec![Symbol(DATA_KEYWORD.to_string()), data],
-			Bracket::None,
-			Separator::Space,
-		))
-	}
-
 	pub(super) fn special_operand(&mut self, width: usize, (left, right): (u8, u8), min_bp: u8) -> Option<Node> {
 		if left < min_bp {
 			return None;
@@ -472,21 +440,6 @@ impl WarpParser {
 		}
 	}
 
-	/// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` → 4
-	pub(super) fn parse_norm_bars(&mut self) -> Node {
-		let inner = self.parse_expr(0);
-		self.skip_spaces();
-		if self.current_char() != '‖' {
-			return missing_closer(
-				"Missing closing ‖".into(),
-				"‖",
-				crate::fixits::end_of_line(&self.input, self.line_nr),
-			);
-		}
-		self.advance();
-		self.finish_prefix(Op::Abs, inner)
-	}
-
 	/// Operand of a prefix operator; `++i` binds like `i++`, conditions compare with `=`
 	pub(super) fn parse_prefix_operand(&mut self, op: Op) -> Node {
 		let (left_bp, right_bp) = op.binding_power();
@@ -512,60 +465,81 @@ impl WarpParser {
 	}
 }
 
-impl WarpParser {
-	/// A loop's key variable (`for k in keys(m)`) or a name holding a text: `m[k]` looks a key up, no indexing hint
-	pub(super) fn names_a_key(&self, index: &Node) -> bool {
-		matches!(index.drop_meta(), Node::Symbol(name) if self.key_variables.contains(name) || self.text_variables.contains(name))
-	}
+impl WarpParser {}
+
+/// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
+pub(crate) fn joins_operands(word: &str) -> bool {
+	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word)
 }
 
-/// `lhs op rhs`; a chained comparison `a<b<c` as `a<b and b<c` (`middle` is b), a range subscript `xs#(a..b)` as a slice,
-/// `a down to b` as the reversed `b to a`
-fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -> Node {
-	match (middle, hash_slice_bounds(&rhs)) {
-		(Some(middle), _) if op.is_ordering() => {
-			let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs));
-			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
-		}
-		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
-		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
-		_ if op == Op::In => {
-			let word = if written.ends_with(IN_KEYWORD) {
-				IN_KEYWORD
-			} else {
-				written
-			};
-			Node::List(
-				vec![lhs, Symbol(word.to_string()), rhs],
-				Bracket::None,
-				Separator::Space,
-			)
-		}
-		_ if op == Op::Pipe => piped(lhs, rhs),
-		_ if matches!(op, Op::If | Op::While) => guarded_statement(lhs, op, written, rhs),
-		// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
-		_ if written == ".*" && matches!(rhs, Empty) => {
-			crate::normalize::hint(
-				&format!("{}.*", lhs.serialize()),
-				&lhs.serialize(),
-				"warp imports a module whole",
-			);
-			lhs
-		}
-		// kept as written, lowering/collections/broadcasting.rs lower_element_wise_operators gives it its meaning
-		_ if crate::operators::element_wise_operator(written).is_some() => Node::List(
-			vec![lhs, Symbol(written.to_string()), rhs],
-			Bracket::None,
-			Separator::Space,
-		),
-		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
-		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
-			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
-			Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
-		}
-		_ if op == Op::To && written.starts_with(DOWN_WORD) => {
-			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
-		}
-		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
-	}
+/// `a==b` built in the same expression, not grouped by parentheses (a group is parsed as its own node)
+fn ungrouped_equality(node: &Node) -> bool {
+	matches!(node, Node::Key(_, op, _) if op.is_equality())
+}
+
+/// `1==1==1` chains in Python (true) but is `(1==1)==1` in C: ambiguous, like in Rust
+fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
+	let (left, right) = (lhs.serialize(), rhs.serialize());
+	let middle = match lhs {
+		Node::Key(_, _, middle) => middle.serialize(),
+		_ => left.clone(),
+	};
+	let symbol = op.as_str();
+	let (chained, grouped) = (
+		format!("{left} and {middle} {symbol} {right}"),
+		format!("({left}) {symbol} {right}"),
+	);
+	Diagnostic::default()
+		.fix(format!("{chained} or {grouped}"))
+		.message(format!("ambiguous: equality does not chain in {left} {symbol} {right}"))
+		.offer(
+			"both equalities, as Python chains them",
+			format!("{left} {symbol} {right}"),
+			chained,
+		)
+		.offer(
+			"compare the first result, as C does",
+			format!("{left} {symbol} {right}"),
+			grouped,
+		)
+}
+
+/// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
+/// The word forms `and`/`or` read unambiguously and are not affected: `x==1 and y==2`.
+fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<Diagnostic> {
+	let comparison = |node: &Node| match node.drop_meta() {
+		Node::Key(left, op, right) if op.is_comparison() => Some((left.serialize(), op.as_str(), right.serialize())),
+		_ => None,
+	};
+	let (left, right) = (lhs.serialize(), rhs.serialize());
+	let readings = match (comparison(lhs), comparison(rhs)) {
+		(None, Some((a, op, b))) => vec![
+			(COMPARISON_FIRST.to_string(), format!("{left} {symbol} ({a} {op} {b})")),
+			(
+				format!("`{symbol}` first, as Python"),
+				format!("({left} {symbol} {a}) {op} {b}"),
+			),
+		],
+		(Some((a, op, b)), None) => vec![
+			(COMPARISON_FIRST.to_string(), format!("({a} {op} {b}) {symbol} {right}")),
+			(
+				format!("`{symbol}` first, as Python"),
+				format!("{a} {op} ({b} {symbol} {right})"),
+			),
+		],
+		(Some(_), Some(_)) => vec![(
+			"both comparisons first".to_string(),
+			format!("({left}) {symbol} ({right})"),
+		)],
+		(None, None) => return None,
+	};
+	let word = if symbol == '&' { "and" } else { "or" };
+	let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
+	let written = format!("{left} {symbol} {right}");
+	let diagnostic = Diagnostic::default().fix(forms.join(" or ")).message(format!(
+		"ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"
+	));
+	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
+		diagnostic.offer(meaning, &written, form)
+	}))
 }

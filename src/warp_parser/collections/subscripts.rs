@@ -1,6 +1,9 @@
 //! Subscripts: `xs[i]` as the 1-based `xs#(i+1)`, negative indexes counting from the end, slices `s[2…]` and `xs#(a..b)`
 use super::*;
 
+/// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
+const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
+
 /// The name before a minus written apart, `f - 2`: the subtraction, where `f -2` applies a callable f to -2, as the
 /// math words do (`abs - 2`, `abs -2`; negated_calls::lower_negated_calls)
 #[derive(Clone, Debug, PartialEq)]
@@ -44,7 +47,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 }
 
 /// A negative number or a negated expression: `-1`, `-k`
-pub(super) fn counts_from_the_end(index: &Node) -> bool {
+pub(crate) fn counts_from_the_end(index: &Node) -> bool {
 	match index.drop_meta() {
 		Node::Number(n) => f64::from(*n) < 0.0,
 		Node::Key(empty, Op::Sub, _) => empty.is_empty_node(),
@@ -54,7 +57,7 @@ pub(super) fn counts_from_the_end(index: &Node) -> bool {
 
 /// The 0-based start and exclusive end of a slice index, ø where omitted (Python's `a[1:]`, `a[:2]`);
 /// an inclusive range `start...last` ends after last
-pub(super) fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
+pub(crate) fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let Node::Key(start, op, end) = index.drop_meta() else {
 		return None;
 	};
@@ -70,7 +73,7 @@ pub(super) fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 
 /// `xs#a..b` reads as the range from the value xs#a; P58 (user: "create a strong warning"): a warning naming the slice
 /// `xs#(a..b)` and the range `(xs#a)..b`
-pub(super) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
+pub(crate) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
 	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else {
 		return None;
 	};
@@ -94,7 +97,7 @@ pub(super) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) 
 
 /// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
 /// parentheses, `xs#a..b` stays the range from the value xs#a
-pub(super) fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
+pub(crate) fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, Bracket::Round, _) = index.drop_meta() else {
 		return None;
 	};
@@ -112,7 +115,7 @@ pub(super) fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
 }
 
 /// A slice bound shifted by `shift`; an open bound (`s[2…]`, `s[…3]`) stays open, ø
-pub(super) fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
+pub(crate) fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
 	match bound.drop_meta() {
 		Node::Empty => Node::Empty,
 		_ => shift(bound),
@@ -131,5 +134,128 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 			Some(key)
 		}
 		_ => None,
+	}
+}
+
+pub(crate) fn is_unindexable_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
+}
+
+/// `id=1 kind="x"` in brackets: each attribute
+pub(crate) fn attribute_items(index: &Node) -> Vec<Node> {
+	match index.drop_meta() {
+		Node::List(items, Bracket::None, _) => items.clone(),
+		single => vec![single.clone()],
+	}
+}
+
+impl WarpParser {
+	/// A loop's key variable (`for k in keys(m)`) or a name holding a text: `m[k]` looks a key up, no indexing hint
+	pub(crate) fn names_a_key(&self, index: &Node) -> bool {
+		matches!(index.drop_meta(), Node::Symbol(name) if self.key_variables.contains(name) || self.text_variables.contains(name))
+	}
+
+	pub(crate) fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
+		// a space before the bracket makes it a list, `f [1, 2]`; only `xs[1]` indexes
+		if self.current_char() != '['
+			|| min_bp > subscript_bp
+			|| self.prev_char().is_whitespace()
+			|| is_unindexable_keyword(lhs)
+		{
+			return None;
+		}
+		if let Some(list_type) = self.try_parse_array_type_suffix(lhs) {
+			return Some(list_type);
+		}
+		let before_bracket = self.mark();
+		self.advance(); // skip '['
+		self.skip_whitespace();
+
+		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, false); // `xs[i -1]` subtracts
+		let mut indices = vec![self.parse_slice_from_start().unwrap_or_else(|| self.parse_expr(0))];
+		self.skip_whitespace();
+
+		while self.current_char() == ',' {
+			self.advance(); // skip ','
+			self.skip_whitespace();
+			indices.push(self.parse_expr(0));
+			self.skip_whitespace();
+		}
+		self.in_spaced_list = outer_spaced_list;
+
+		if self.current_char() != ']' {
+			self.rewind(before_bracket); // `foo [1 2 3]`: a list argument, not an index
+			return None;
+		}
+		self.advance(); // skip ']'
+		if let Some(node) = self.try_attributed_body(lhs, &indices) {
+			return Some(node);
+		}
+		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
+		let names_a_type =
+			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::declaration_forms::zero_list(Empty, word).is_some());
+		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
+			crate::normalize::set_position_of(lhs);
+			norm::index_operator(
+				&crate::normalize::operand_text(lhs),
+				&crate::normalize::operand_text(&indices[0]),
+				true,
+			);
+		}
+
+		Some(indices.into_iter().fold(lhs.clone(), subscript))
+	}
+
+	/// `a[id=1]{…}` (wiki/reference.md): attributes in brackets before a body are its meta entries, `a{@id:1 …}`
+	fn try_attributed_body(&mut self, lhs: &Node, indices: &[Node]) -> Option<Node> {
+		let attributes: Vec<Node> = indices
+			.iter()
+			.flat_map(attribute_items)
+			.map(|item| match item.drop_meta() {
+				Node::Key(key, Op::Assign | Op::Colon, value) if matches!(key.drop_meta(), Symbol(_)) => {
+					Some(Node::Key(
+						Box::new(Symbol(format!("{ATTRIBUTE_MARK}{}", key.name()))),
+						Op::Colon,
+						value.clone(),
+					))
+				}
+				_ => None,
+			})
+			.collect::<Option<_>>()?;
+		let mut offset = 0;
+		while self.peek_char(offset) == ' ' {
+			offset += 1;
+		}
+		if !matches!(lhs.drop_meta(), Symbol(_)) || self.peek_char(offset) != '{' {
+			return None;
+		}
+		self.skip_spaces();
+		let Node::List(items, bracket, separator) = self.parse_bracketed('{') else {
+			return None;
+		};
+		let body = Node::List([attributes, items].concat(), bracket, separator);
+		Some(Node::Key(Box::new(lhs.clone()), Op::Colon, Box::new(body)))
+	}
+
+	/// `[:end]`, `[…last]`, `[..end]` and `[:]`, a slice from the start: `ø:end`
+	pub(crate) fn parse_slice_from_start(&mut self) -> Option<Node> {
+		let (op, chars) = SLICE_FROM_START
+			.iter()
+			.copied()
+			.find(|(written, _)| {
+				written
+					.chars()
+					.enumerate()
+					.all(|(offset, ch)| self.peek_char(offset) == ch)
+			})
+			.map(|(written, op)| (op, written.chars().count()))?;
+		self.advance_by(chars);
+		self.skip_whitespace();
+		let end = if self.current_char() == ']' {
+			Empty
+		} else {
+			self.parse_expr(0)
+		};
+		Some(Node::Key(Box::new(Empty), op, Box::new(end)))
 	}
 }
