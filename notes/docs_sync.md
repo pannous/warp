@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **66dd216a9** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73 and 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change)), checked with
+- main commit **43384c15e** (2026-10-13; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) and 43384c15e (internal)), checked with
   /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 66dd216a9..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 66dd216a9 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
+The next sweep starts with `git log --oneline 43384c15e..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 43384c15e origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
 
 ## How
 
@@ -50,7 +50,7 @@ major corrections go to warp-interviewer, tiny fixes are made directly.
 
 Decided, not cut yet; the features still work, so the pages stay until the cut lands, then:
 - scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part).
-- spaced type heads (card cleanup-drop-type-name-params, warp-cleanup) `fib int i`, `foo of int`, `square of a number`,
+- spaced type heads (lands with the cleanup-park-phrases cut; cleanup-drop-type-name-params was withdrawn) `fib int i`, `foo of int`, `square of a number`,
   `combine number with number` → `fib(i:int) := …`: wiki/=.md:11, Bad.md:51, type.md:59, function.md:5 (list of
   natural forms), inventions.md:42/96/137, Purpose.md:455, Features.md:60 (`++ of a number reference`).
   polymorphism.md was rewritten ahead of the cut (wiki 5ec7480, the written form already works).
