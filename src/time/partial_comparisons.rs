@@ -1,8 +1,9 @@
 //! `now` compared with a part of a time compares that part of now (cards now-make, now-allow): with a duration its
 //! local time of day (`now > 17h`, folded by units.rs), with a month name its month (`now >= October` is
 //! `now.month >= 10`), with a date its local date (`now ≈ 2026-10-14`, `now < 2027-01-01`). `≈` asks for the same part,
-//! `==` stays the whole value (an instant is no date). `time.now` is `now`, the type's member (a bare `time` stays the
-//! type, user decision print-time). A program's own `now`, `time` or month name wins.
+//! `==` stays the whole value (an instant is no date). `time.now` is `now.time`, the local time of day, `22:27:46`
+//! (a bare `time` stays the type, user decisions print-time and time-now). A program's own `now`, `time` or month
+//! name wins.
 
 use super::calendar::{parse_literal, Time};
 use super::{TimeLiteral, NOW_WORD, TIME_WORD};
@@ -27,6 +28,8 @@ const MONTH_NAMES: [&str; 12] = [
 /// now's local date as one number, ordered as dates are: 2026-10-14 is 20261014
 const NOW_DATE_NUMBER: &str = "now.year * 10000 + now.month * 100 + now.day";
 const NOW_MONTH: &str = "now.month";
+/// `time.now`, the current time of day (user decision time-now)
+const NOW_TIME_OF_DAY: &str = "now.time";
 
 pub fn lower(program: Node) -> Node {
 	if !program.mentions(NOW_WORD) {
@@ -45,7 +48,7 @@ fn rewrite(node: Node, bound: &HashSet<String>) -> Node {
 		return node;
 	};
 	if *op == Op::Dot && left.is_symbol(TIME_WORD) && right.is_symbol(NOW_WORD) && !bound.contains(TIME_WORD) {
-		return Node::Symbol(NOW_WORD.to_string());
+		return crate::warp_parser::parse(NOW_TIME_OF_DAY);
 	}
 	if !(op.is_ordering() || *op == Op::Similar) {
 		return node;

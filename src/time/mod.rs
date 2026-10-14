@@ -50,9 +50,11 @@ pub enum TimeForm {
 	Local = 2,
 	Duration = 3,
 	Zoned = 4,
+	/// `now.time`: nanoseconds since midnight
+	Clock = 5,
 }
-pub const TIME_FORMS: [TimeForm; 5] =
-	[TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned];
+pub const TIME_FORMS: [TimeForm; 6] =
+	[TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned, TimeForm::Clock];
 /// The info bits of the form
 pub const TIME_FORM_MASK: i64 = 7;
 /// The type of every time, covering the type of each form (card anchor-time): `now is time`, `now is instant`
@@ -73,10 +75,11 @@ impl TimeForm {
 			TimeForm::Local => "local time",
 			TimeForm::Duration => "duration",
 			TimeForm::Zoned => "zoned time",
+			TimeForm::Clock => calendar::CLOCK_KIND,
 		}
 	}
 
-	/// Why a time of this form has no field `name`, as the compile-time evaluator says it
+	/// Why a time of this form has no field or part `name`, as the compile-time evaluator says it
 	pub fn refusal(self, name: &str) -> Option<String> {
 		let example = match self {
 			TimeForm::Instant => Time::Instant(0),
@@ -87,8 +90,12 @@ impl TimeForm {
 			}
 			TimeForm::Duration => return Duration::default().field(name).err(),
 			TimeForm::Zoned => Time::Zoned(Zoned::at(0, &calendar::ZONES[0])),
+			TimeForm::Clock => Time::Clock(calendar::from_wall_nanos(0).1),
 		};
-		example.field(name).err()
+		match example.part(name) {
+			Some(part) => part.err(),
+			None => example.field(name).err(),
+		}
 	}
 }
 
@@ -98,6 +105,7 @@ fn time_info(value: &Value) -> Option<(i64, i64)> {
 		Value::Time(Time::Instant(instant)) => Some((TimeForm::Instant as i64, *instant as i64)),
 		Value::Time(time @ Time::Date(_)) => Some((TimeForm::Date as i64, time.position() as i64)),
 		Value::Time(time @ Time::Local(..)) => Some((TimeForm::Local as i64, time.position() as i64)),
+		Value::Time(time @ Time::Clock(_)) => Some((TimeForm::Clock as i64, time.position() as i64)),
 		Value::Time(Time::Zoned(zoned)) => {
 			let index = calendar::ZONES.iter().position(|zone| zone.name == zoned.zone.name)? as i64;
 			Some((
@@ -181,6 +189,7 @@ pub fn time_node(info: i64, position: Option<Number>) -> Node {
 			let (date, clock) = calendar::from_wall_nanos(position);
 			Node::data(Time::Local(date, clock))
 		}
+		Some(TimeForm::Clock) => Node::data(Time::Clock(calendar::from_wall_nanos(position).1)),
 		Some(TimeForm::Duration) => {
 			let days = (info >> TIME_FORM_BITS) as i32 as i64;
 			Node::data(Duration { months: info >> MONTHS_SHIFT, days, nanos: position })
@@ -584,7 +593,10 @@ fn binary(left: &Node, op: Op, right: &Node) -> Result<Value, String> {
 				}
 				// the wall clock of an instant is the one where the program runs
 				Value::Time(Time::Instant(_)) if field != EPOCH_SECONDS => Err(not_evaluated(right)),
-				Value::Time(time) => time.field(field).map(Value::Int),
+				Value::Time(time) => match time.part(field) {
+					Some(part) => part.map(Value::Time),
+					None => time.field(field).map(Value::Int),
+				},
 				Value::Duration(duration) => duration.field(field).map(Value::Int),
 				other => Err(format!("{} has no field {field}", other.kind())),
 			}

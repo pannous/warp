@@ -7,7 +7,7 @@ use crate::is;
 fn test_now_against_a_time_of_day() {
 	is!("now < 24h", true);
 	is!("now >= 0h", true);
-	is!("(now > 17h) == (time > 17h)", true);
+	is!("(now < 17h) == (now.hour < 17)", true);
 }
 
 #[test]
@@ -24,6 +24,17 @@ fn test_now_against_a_date() {
 	is!("now > 1970-01-01", true);
 	is!("now < 2999-01-01", true);
 	is!("2999-01-01 > now", true);
+}
+
+/// The user's draft lines as written (time-word): `now > 17h`, `now >= 17h` by time of day, `now ≈ <today>` true,
+/// `time == now` is no rather than an error (a bare `time` is the type)
+#[test]
+fn test_the_users_draft_lines() {
+	is!("(now > 17h) == (now.hour >= 17)", true);
+	is!("(now >= 17h) == (now.hour >= 17)", true);
+	is!("time == now", false);
+	let today = ::warp::wasm_emitter::eval("str(now.date)").serialize().trim_matches('"').to_string();
+	is!(&format!("now ≈ {today}"), true);
 }
 
 #[test]
