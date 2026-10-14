@@ -842,8 +842,8 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn require_function_text(&mut self) {
 		let required = &mut self.ctx.required_functions;
 		let shows_values = [
-			super::super::wasi_emitter::PRINT_VALUE,
-			super::super::wasi_emitter::PUT_VALUE,
+			super::super::host::wasi_emitter::PRINT_VALUE,
+			super::super::host::wasi_emitter::PUT_VALUE,
 			"list_join",
 		]
 		.iter()

@@ -105,7 +105,7 @@ pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
 pub const RUNTIME_WORDS: [(&str, usize); 20] = [
-	(crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT, 0),
+	(crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT, 0),
 	(ORD, 1),
 	("upper", 1),
 	("lower", 1),
@@ -249,7 +249,7 @@ const TEXT_RESULT_WORDS: [&str; 5] = [
 	"lower",
 	"trim",
 	"join",
-	crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT,
+	crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT,
 ];
 const LIST_RESULT_WORDS: [&str; 8] = [
 	"chars",

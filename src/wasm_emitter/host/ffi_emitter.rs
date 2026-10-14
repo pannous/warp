@@ -5,11 +5,11 @@ use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 
 impl WasmGcEmitter {
 	/// Emit arguments for FFI function call with type conversion
-	pub(super) fn emit_ffi_args(&mut self, func: &mut Function, args: &[Node], sig: &crate::ffi::FfiSignature) {
+	pub(in crate::wasm_emitter) fn emit_ffi_args(&mut self, func: &mut Function, args: &[Node], sig: &crate::ffi::FfiSignature) {
 		// a text whose length the call leaves out crosses as (pointer, length): strcmp's, a module's `const void *, size_t`
 		let texts_with_lengths = if args.len() < sig.params.len() {
 			crate::modules::wasm_modules::texts_with_lengths(sig)
@@ -49,7 +49,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit a single FFI argument with appropriate type conversion
-	pub(super) fn emit_ffi_arg(&mut self, func: &mut Function, arg: &Node, param_type: &ValType) {
+	pub(in crate::wasm_emitter) fn emit_ffi_arg(&mut self, func: &mut Function, arg: &Node, param_type: &ValType) {
 		match param_type {
 			ValType::F64 => self.emit_float_value(func, arg),
 			ValType::F32 => {
@@ -87,7 +87,7 @@ impl WasmGcEmitter {
 
 	/// Emit FFI result conversion based on context
 	/// None = wrap in Node, Some(Kind::Int) = raw i64, Some(Kind::Float) = raw f64
-	pub(super) fn emit_ffi_result(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature, ctx: Option<Kind>) {
+	pub(in crate::wasm_emitter) fn emit_ffi_result(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature, ctx: Option<Kind>) {
 		let result_type = sig.results.first().copied();
 		// a host word giving a value (task_await_value): the Node it built, its number where one is wanted
 		if matches!(result_type, Some(ValType::Ref(_))) {
@@ -154,7 +154,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit FFI function call with automatic result handling based on context
-	pub(super) fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
+	pub(in crate::wasm_emitter) fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
 		if [crate::host::STD_PURE, crate::host::STD_IO].contains(&fn_name) {
 			self.note_std_module(args.first());
 		}
@@ -182,7 +182,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Check if a node argument should be treated as a string
-	pub(super) fn is_string_arg(&self, node: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn is_string_arg(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::Text(_) | Node::Char(_) => true,
 			Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.data_pointer > 0) => true,
@@ -191,7 +191,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A text (or one-character text) whose letters exist only at run time: a list element, a text variable
-	pub(super) fn is_runtime_text(&self, node: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn is_runtime_text(&self, node: &Node) -> bool {
 		!matches!(node.drop_meta(), Node::Text(_) | Node::Char(_))
 			&& matches!(self.get_type(node), Kind::Text | Kind::Codepoint)
 	}
@@ -199,14 +199,14 @@ impl WasmGcEmitter {
 	/// The text node of a run-time text in the node scratch local, as a Text (a character becomes one)
 	fn emit_runtime_text_node(&mut self, func: &mut Function, node: &Node) -> u32 {
 		self.emit_node_instructions(func, node);
-		self.emit_call(func, super::text::text_builtins::TEXT_OF);
+		self.emit_call(func, super::super::text::text_builtins::TEXT_OF);
 		let text = self.node_scratch();
 		func.instruction(&I::LocalSet(text));
 		text
 	}
 
 	/// Emit string pointer and length for FFI calls
-	pub(super) fn emit_string_ptr_len(&mut self, func: &mut Function, node: &Node) {
+	pub(in crate::wasm_emitter) fn emit_string_ptr_len(&mut self, func: &mut Function, node: &Node) {
 		if self.is_runtime_text(node) {
 			let text = self.emit_runtime_text_node(func, node);
 			self.emit_text_field(func, text, 0);
@@ -221,10 +221,10 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit only string pointer for C-style FFI calls (null-terminated strings)
-	pub(super) fn emit_string_ptr_only(&mut self, func: &mut Function, node: &Node) {
+	pub(in crate::wasm_emitter) fn emit_string_ptr_only(&mut self, func: &mut Function, node: &Node) {
 		if self.is_runtime_text(node) {
 			self.emit_node_instructions(func, node);
-			self.emit_call(func, super::text::text_builtins::C_STRING);
+			self.emit_call(func, super::super::text::text_builtins::C_STRING);
 			return;
 		}
 		let pointer = match self.compile_time_string(node) {
@@ -252,7 +252,7 @@ impl WasmGcEmitter {
 	/// `task·check(task_join(job), task_failure(job))` (resolve_tasks): when the joined task failed, its message becomes
 	/// the trap detail of a `returned_error`, which `try` catches and the runner reports as that message. True when
 	/// `items` is that check (it leaves nothing on the stack)
-	pub(super) fn emit_task_check(&mut self, func: &mut Function, items: &[Node]) -> bool {
+	pub(in crate::wasm_emitter) fn emit_task_check(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, joined, failure] = items else { return false };
 		if !matches!(word.drop_meta(), Node::Symbol(name) if name == crate::host::TASK_CHECK) {
 			return false;
@@ -260,7 +260,7 @@ impl WasmGcEmitter {
 		self.emit_numeric_value(func, joined);
 		Self::emit_list(func, &[I::I32WrapI64, I::If(BlockType::Empty)]);
 		self.emit_trap_detail(func, failure);
-		self.emit_runtime_error(func, super::lists::list_ops::RETURNED_ERROR);
+		self.emit_runtime_error(func, super::super::lists::list_ops::RETURNED_ERROR);
 		func.instruction(&I::End);
 		true
 	}

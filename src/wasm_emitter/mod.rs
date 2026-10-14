@@ -8,7 +8,6 @@ pub use maps::raw_structs::run_raw_struct;
 pub(crate) use maps::raw_structs::*;
 
 pub(crate) mod numbers;
-pub(crate) mod component_adapters;
 pub(crate) mod control;
 mod globals;
 use control::control_flow::LoopValues;
@@ -21,7 +20,6 @@ pub(crate) use numbers::casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
 mod config;
 mod equality;
-mod ffi_emitter;
 mod function_builder;
 mod import_manager;
 mod layout;
@@ -39,7 +37,7 @@ mod string_table;
 pub(crate) mod text;
 mod type_manager;
 pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
-pub(crate) mod wasi_emitter;
+pub(crate) mod host;
 mod witness;
 const WASI_START: &str = "_start";
 
@@ -727,7 +725,7 @@ impl WasmGcEmitter {
 		});
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
 		self.writes_tags = library_ops::mentions_quoted_tag(node);
-		component_adapters::add_dependencies(&mut self.ctx.required_functions);
+		host::component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		numbers::uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
 		self.require_function_text(); // before the similarity's: function_text needs values_equal
 		text::similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of

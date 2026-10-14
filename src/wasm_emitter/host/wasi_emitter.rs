@@ -5,7 +5,7 @@ use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::type_kinds::SQUARE_LIST_KIND;
 use crate::wasm_emitter::layout::WORD;
 
@@ -57,7 +57,7 @@ impl WasmGcEmitter {
 
 	/// Emit WASI puts: write string to stdout
 	/// Memory layout: [0-3]: buf_ptr, [4-7]: buf_len, [8-11]: nwritten
-	pub(super) fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
+	pub(in crate::wasm_emitter) fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
 		// Get string data pointer and length
 		let (str_ptr, str_len) = match arg.drop_meta() {
 			Node::Text(s) => self.allocate_string(s),
@@ -84,7 +84,7 @@ impl WasmGcEmitter {
 	/// `print x` / `print(x)`: writes x and a newline to stdout and gives nothing, ø (user, issue #18). A literal is
 	/// written as compiled; any other value through its runtime text form (print_value); a value without one is a
 	/// type error.
-	pub(super) fn emit_print(&mut self, func: &mut Function, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_print(&mut self, func: &mut Function, value: &Node) {
 		match value.drop_meta() {
 			Node::Number(number) => self.emit_print_literal(func, &number.to_string()),
 			Node::Text(text) => self.emit_print_literal(func, text),
@@ -101,7 +101,7 @@ impl WasmGcEmitter {
 
 	/// The print of the program's value an executable ends with (CompileMode::prints_result): as emit_print, but a value
 	/// only known at run time shows nothing when it is ø, as `warp <file>` shows nothing then
-	pub(super) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
 		if !matches!(
 			self.get_type(value),
 			Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data
@@ -181,7 +181,7 @@ impl WasmGcEmitter {
 
 	/// wasi_environment(): environ_sizes_get, then environ_get into a fresh text-heap allocation of the pointer table
 	/// (aligned) and the text; the text becomes a text node. Locals: count, bytes, table size, allocation size, address
-	pub(super) fn emit_wasi_environment(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_wasi_environment(&mut self) {
 		if !self.should_emit_function(WASI_ENVIRONMENT) {
 			return;
 		}
@@ -256,7 +256,7 @@ impl WasmGcEmitter {
 	}
 
 	/// print_value(x) and put_value(x): the text of x by list_join of the one-element list [x]; locals: text
-	pub(super) fn emit_print_value(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_print_value(&mut self) {
 		self.emit_value_writer(PRINT_VALUE, true);
 		self.emit_value_writer(PUT_VALUE, false);
 	}
@@ -314,7 +314,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit WASI puti: write an integer to stdout, without a newline; a run-time value through put_value
-	pub(super) fn emit_wasi_puti(&mut self, func: &mut Function, arg: &Node) {
+	pub(in crate::wasm_emitter) fn emit_wasi_puti(&mut self, func: &mut Function, arg: &Node) {
 		if let Node::Number(n) = arg.drop_meta() {
 			let (str_ptr, str_len) = self.allocate_string(&n.to_string());
 			if self.emit_stdout_write(func, str_ptr, str_len) {
@@ -331,7 +331,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit WASI putf: write float to stdout
-	pub(super) fn emit_wasi_putf(&mut self, func: &mut Function, arg: &Node) {
+	pub(in crate::wasm_emitter) fn emit_wasi_putf(&mut self, func: &mut Function, arg: &Node) {
 		// For compile-time constants, pre-compute the string
 		if let Node::Number(n) = arg.drop_meta() {
 			let s = format!("{}", n); // Number implements Display
@@ -344,7 +344,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit fd_write call - auto-detects string arguments and sets up iovec
-	pub(super) fn emit_wasi_fd_write_call(&mut self, func: &mut Function, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_wasi_fd_write_call(&mut self, func: &mut Function, args: &[Node]) {
 		// fd_write(fd, iovs_ptr, iovs_len, nwritten_ptr) -> i32
 		// Check if second argument is a string (variable or literal)
 		// If so, use the puts mechanism to set up iovec automatically

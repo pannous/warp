@@ -35,8 +35,8 @@ const EMPTY_TEXT: &str = "ø";
 /// Names of the runtime functions, keyed by the library word
 pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
 	(
-		super::wasi_emitter::WASI_ENVIRONMENT,
-		super::wasi_emitter::WASI_ENVIRONMENT,
+		super::host::wasi_emitter::WASI_ENVIRONMENT,
+		super::host::wasi_emitter::WASI_ENVIRONMENT,
 	),
 	(crate::words::MAP_KEYS, crate::words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),

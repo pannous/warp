@@ -458,7 +458,7 @@ pub(super) fn infer_list_type(
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
 		// a call of a function the component being compiled imports (`host.time()`)
-		if let Some(kind) = crate::wasm_emitter::component_adapters::imported_kind(name) {
+		if let Some(kind) = crate::wasm_emitter::host::component_adapters::imported_kind(name) {
 			return kind;
 		}
 		if items.len() >= 2 {

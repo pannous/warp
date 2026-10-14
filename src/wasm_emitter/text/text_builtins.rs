@@ -273,7 +273,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	{
 		required.extend([TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]);
 	}
-	if required.contains(super::super::wasi_emitter::PRINT_VALUE) || required.contains(super::super::wasi_emitter::PUT_VALUE) {
+	if required.contains(super::super::host::wasi_emitter::PRINT_VALUE) || required.contains(super::super::host::wasi_emitter::PUT_VALUE) {
 		required.insert("list_join");
 	}
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both

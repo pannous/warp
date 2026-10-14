@@ -4,7 +4,7 @@
 //! written to a return area as pointer and length. `cabi_realloc` lets the host place arguments in the text heap.
 //! Each function the world imports (`host.time`) is a core import of the module its import names, called the way the
 //! canonical ABI lowers it: a text argument as pointer and length, a text result through a return area.
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::analyzer::param_kind;
 use crate::component_worlds::{import_name, Signature, WIT_STRING};
 use crate::ffi::FfiSignature;
@@ -28,7 +28,7 @@ const CORE_TYPES: [(&str, ValType, bool); 12] = [
 	("f32", ValType::F32, true),
 	("f64", ValType::F64, true),
 ];
-pub(super) const REALLOC: &str = "cabi_realloc";
+pub(in crate::wasm_emitter) const REALLOC: &str = "cabi_realloc";
 /// A text result's return area: its pointer and its length, two i32
 const RETURN_AREA_BYTES: i32 = 8;
 const RETURN_AREA_ALIGNMENT: i32 = 4;
@@ -44,16 +44,16 @@ const ADAPTER_NEEDS: [&str; 5] = [
 	"new_int",
 	"new_float",
 	"get_int_value",
-	super::text::text_builtins::TEXT_OF,
+	super::super::text::text_builtins::TEXT_OF,
 ];
 
 /// Does the program compile as a component crossing the boundary: exporting or importing a function
 fn crosses_the_boundary() -> bool {
-	!super::config::component_exports().is_empty() || !super::config::component_imports().is_empty()
+	!super::super::config::component_exports().is_empty() || !super::super::config::component_imports().is_empty()
 }
 
 /// The runtime functions a component's adapters and import calls need, when it has any
-pub(super) fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
+pub(in crate::wasm_emitter) fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
 	if crosses_the_boundary() {
 		required.extend(ADAPTER_NEEDS);
 	}
@@ -61,7 +61,7 @@ pub(super) fn add_dependencies(required: &mut std::collections::HashSet<&'static
 
 /// The function the component being compiled imports under `name` (`host.time`)
 fn imported(name: &str) -> Option<Signature> {
-	super::config::component_imports()
+	super::super::config::component_imports()
 		.into_iter()
 		.find(|(interface, function)| import_name(interface, &function.name) == name)
 		.map(|(_, function)| function)
@@ -83,7 +83,7 @@ pub(crate) fn imported_kind(name: &str) -> Option<Kind> {
 /// length, a text result a return area whose address is the last parameter
 pub(crate) fn imported_signatures() -> Vec<(String, FfiSignature)> {
 	let leaked = |name: &str| -> &'static str { Box::leak(name.to_string().into_boxed_str()) };
-	super::config::component_imports()
+	super::super::config::component_imports()
 		.into_iter()
 		.map(|(interface, function)| {
 			let mut params = vec![];
@@ -118,13 +118,13 @@ fn core_scalar(wit: &str) -> Option<(ValType, bool)> {
 
 impl WasmGcEmitter {
 	/// The adapters of the component being compiled, after the program's functions
-	pub(super) fn emit_component_adapters(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_component_adapters(&mut self) {
 		if !crosses_the_boundary() {
 			return;
 		}
 		self.emit_text_heap_global();
 		self.emit_component_realloc();
-		for (interface, function) in super::config::component_exports() {
+		for (interface, function) in super::super::config::component_exports() {
 			if let Err(failure) = self.emit_adapter(&interface, &function) {
 				self.type_errors.push(failure);
 			}
@@ -305,7 +305,7 @@ impl WasmGcEmitter {
 
 	/// The text node on the stack written to a fresh return area as pointer and length: the area's address
 	fn emit_text_out(&mut self, f: &mut Function, text: u32, length: u32, address: u32) {
-		self.emit_call(f, super::text::text_builtins::TEXT_OF);
+		self.emit_call(f, super::super::text::text_builtins::TEXT_OF);
 		Self::emit_list(
 			f,
 			&[
@@ -334,7 +334,7 @@ impl WasmGcEmitter {
 
 	/// A call of the imported function `name` when it is one (`host.time()`): its value as a Node, or as the number
 	/// `context` wants
-	pub(super) fn emit_import_call(
+	pub(in crate::wasm_emitter) fn emit_import_call(
 		&mut self,
 		f: &mut Function,
 		name: &str,
