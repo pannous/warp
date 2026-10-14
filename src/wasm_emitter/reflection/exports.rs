@@ -119,12 +119,10 @@ impl WasmGcEmitter {
 			tested.push(HeapType::Concrete(floats));
 		}
 		for (index, heap_type) in tested.into_iter().enumerate() {
+			#[rustfmt::skip]
 			tag.extend([
-				I::LocalGet(0),
-				I::RefTestNonNull(heap_type),
-				I::If(BlockType::Empty),
-				I::I32Const(index as i32 + 1),
-				I::Return,
+				I::LocalGet(0), I::RefTestNonNull(heap_type), I::If(BlockType::Empty),
+					I::I32Const(index as i32 + 1), I::Return,
 				I::End,
 			]);
 		}

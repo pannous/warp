@@ -147,24 +147,16 @@ impl WasmGcEmitter {
 		self.emit_inline_numerator(f, x);
 		f.instruction(&I::LocalSet(numerator));
 		self.emit_inline_denominator(f, x);
-		Self::emit_list(
-			f,
-			&[
-				I::LocalSet(denominator),
-				I::I32Const(1),
-				I::Else,
-				I::LocalGet(x),
-				I::LocalSet(numerator),
-				I::I64Const(1),
-				I::LocalSet(denominator),
-				I::LocalGet(x),
-				I::I64Const(SMALL_LIMIT),
-				I::I64Add,
-				I::I64Const(2 * SMALL_LIMIT),
-				I::I64LtU,
-				I::End,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::LocalSet(denominator),
+			I::I32Const(1),
+			I::Else,
+				I::LocalGet(x), I::LocalSet(numerator),
+				I::I64Const(1), I::LocalSet(denominator),
+				I::LocalGet(x), I::I64Const(SMALL_LIMIT), I::I64Add, I::I64Const(2 * SMALL_LIMIT), I::I64LtU,
+			I::End,
+		]);
 	}
 
 	/// Both operands small (small_parts into SMALL_PARTS): run `small_op` on their parts in i64 and return
@@ -182,51 +174,25 @@ impl WasmGcEmitter {
 	fn small_ratio(&self, f: &mut Function, combine: &[Instruction]) {
 		let [gcd, rest, ..] = SMALL_PARTS;
 		Self::emit_list(f, combine);
-		Self::emit_list(
-			f,
-			&[
-				I::LocalSet(SMALL_DENOMINATOR),
-				I::LocalTee(SMALL_NUMERATOR),
-				I::LocalGet(SMALL_NUMERATOR),
-				I::I64Const(63),
-				I::I64ShrS,
-				I::I64Xor,
-				I::LocalGet(SMALL_NUMERATOR),
-				I::I64Const(63),
-				I::I64ShrS,
-				I::I64Sub,
-				I::LocalSet(gcd),
-				I::LocalGet(SMALL_DENOMINATOR),
-				I::LocalSet(rest),
-				I::Block(BlockType::Empty),
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::LocalSet(SMALL_DENOMINATOR),
+			I::LocalTee(SMALL_NUMERATOR), I::LocalGet(SMALL_NUMERATOR), I::I64Const(63), I::I64ShrS, I::I64Xor,
+			I::LocalGet(SMALL_NUMERATOR), I::I64Const(63), I::I64ShrS, I::I64Sub, I::LocalSet(gcd),
+			I::LocalGet(SMALL_DENOMINATOR), I::LocalSet(rest),
+			I::Block(BlockType::Empty),
 				I::Loop(BlockType::Empty),
-				I::LocalGet(rest),
-				I::I64Eqz,
-				I::BrIf(1),
-				I::LocalGet(gcd),
-				I::LocalGet(rest),
-				I::I64RemU,
-				I::LocalGet(rest),
-				I::LocalSet(gcd),
-				I::LocalSet(rest),
-				I::Br(0),
-				I::End,
-				I::End,
+					I::LocalGet(rest), I::I64Eqz, I::BrIf(1),
+					I::LocalGet(gcd), I::LocalGet(rest), I::I64RemU, I::LocalGet(rest), I::LocalSet(gcd),
+					I::LocalSet(rest),
+					I::Br(0),
+			I::End, I::End,
+			I::LocalGet(SMALL_NUMERATOR), I::LocalGet(gcd), I::I64DivS, I::LocalSet(SMALL_NUMERATOR),
+			I::LocalGet(SMALL_DENOMINATOR), I::LocalGet(gcd), I::I64DivU, I::LocalTee(SMALL_DENOMINATOR),
+			I::I64Const(1), I::I64Eq, I::If(BlockType::Result(ValType::I64)),
 				I::LocalGet(SMALL_NUMERATOR),
-				I::LocalGet(gcd),
-				I::I64DivS,
-				I::LocalSet(SMALL_NUMERATOR),
-				I::LocalGet(SMALL_DENOMINATOR),
-				I::LocalGet(gcd),
-				I::I64DivU,
-				I::LocalTee(SMALL_DENOMINATOR),
-				I::I64Const(1),
-				I::I64Eq,
-				I::If(BlockType::Result(ValType::I64)),
-				I::LocalGet(SMALL_NUMERATOR),
-				I::Else,
-			],
-		);
+			I::Else,
+		]);
 		self.emit_inline_ratio_fits(f, SMALL_NUMERATOR, SMALL_DENOMINATOR);
 		f.instruction(&I::If(BlockType::Result(ValType::I64)));
 		self.emit_inline_ratio(f, SMALL_NUMERATOR, SMALL_DENOMINATOR);
@@ -321,33 +287,24 @@ impl WasmGcEmitter {
 				s.negate_local(f, local);
 				f.instruction(&I::End);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(1),
-					I::I64Eqz,
-					I::BrIf(1),
-					I::LocalGet(0),
-					I::LocalGet(1),
-				],
-			);
+						I::LocalGet(1), I::I64Eqz, I::BrIf(1),
+						I::LocalGet(0), I::LocalGet(1),
+			]);
 			s.call(f, "int_rem");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(2),
-					I::LocalGet(1),
-					I::LocalSet(0),
-					I::LocalGet(2),
-					I::LocalSet(1),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(0),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(2),
+				I::LocalGet(1), I::LocalSet(0),
+				I::LocalGet(2), I::LocalSet(1),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(0),
+			]);
 		});
 	}
 
@@ -416,18 +373,13 @@ impl WasmGcEmitter {
 				s.call(f, "int_quot");
 				f.instruction(&I::LocalSet(local));
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::End,
-					I::LocalGet(1),
-					I::I64Const(1),
-					I::I64Eq,
-					I::If(BlockType::Result(i64t)),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::End,
+				I::LocalGet(1), I::I64Const(1), I::I64Eq, I::If(BlockType::Result(i64t)),
 					I::LocalGet(0),
-					I::Else,
-				],
-			);
+				I::Else,
+			]);
 			s.emit_inline_ratio_fits(f, 0, 1);
 			f.instruction(&I::If(BlockType::Result(i64t)));
 			s.emit_inline_ratio(f, 0, 1);
@@ -451,26 +403,17 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Eqz]);
 			s.emit_fail_if(f, super::super::lists::list_ops::DIVIDE_BY_ZERO);
 			s.emit_fixnum_test(f, &[0, 1]);
-			Self::emit_list(
-				f,
-				&[
-					I::If(BlockType::Result(i64t)),
-					I::LocalGet(1),
-					I::I64Eqz,
-					I::If(BlockType::Result(i32t)),
-					I::I32Const(0),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::If(BlockType::Result(i64t)),
+					I::LocalGet(1), I::I64Eqz, I::If(BlockType::Result(i32t)),
+						I::I32Const(0),
 					I::Else,
-					I::LocalGet(0),
-					I::LocalGet(1),
-					I::I64RemS,
-					I::I64Eqz,
+						I::LocalGet(0), I::LocalGet(1), I::I64RemS, I::I64Eqz,
 					I::End,
 					I::If(BlockType::Result(i64t)),
-					I::LocalGet(0),
-					I::LocalGet(1),
-					I::I64DivS,
-				],
-			);
+						I::LocalGet(0), I::LocalGet(1), I::I64DivS,
+			]);
 			s.call(f, "int_from_i64");
 			f.instruction(&I::Else);
 			ratio_of_both(f);
@@ -484,18 +427,14 @@ impl WasmGcEmitter {
 			ratio_of_both(f);
 			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "int_divmod_slow");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(remainder),
-					I::LocalSet(quotient),
-					I::LocalGet(remainder),
-					I::I64Eqz,
-					I::If(BlockType::Result(i64t)),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(remainder),
+				I::LocalSet(quotient),
+				I::LocalGet(remainder), I::I64Eqz, I::If(BlockType::Result(i64t)),
 					I::LocalGet(quotient),
-					I::Else,
-				],
-			);
+				I::Else,
+			]);
 			ratio_of_both(f);
 			Self::emit_list(f, &[I::End, I::End, I::End]);
 		});
@@ -574,21 +513,11 @@ impl WasmGcEmitter {
 		// Finite denominators are positive, so a/b <=> c/d is a*d <=> c*b
 		// small: the sign of a.n·b.d - b.n·a.d. exact_cmp ships in every module (equality) and a hello-world site has a
 		// size budget, so the shortcut comes only with exact arithmetic
+		#[rustfmt::skip]
 		let small_sign = [
-			I::LocalGet(a_numerator),
-			I::LocalGet(b_denominator),
-			I::I64Mul,
-			I::LocalGet(b_numerator),
-			I::LocalGet(a_denominator),
-			I::I64Mul,
-			I::I64Sub,
-			I::LocalTee(SMALL_NUMERATOR),
-			I::I64Const(0),
-			I::I64GtS,
-			I::LocalGet(SMALL_NUMERATOR),
-			I::I64Const(0),
-			I::I64LtS,
-			I::I32Sub,
+			I::LocalGet(a_numerator), I::LocalGet(b_denominator), I::I64Mul, I::LocalGet(b_numerator),
+			I::LocalGet(a_denominator), I::I64Mul, I::I64Sub, I::LocalTee(SMALL_NUMERATOR), I::I64Const(0), I::I64GtS,
+			I::LocalGet(SMALL_NUMERATOR), I::I64Const(0), I::I64LtS, I::I32Sub,
 		];
 		let calculates = self.should_emit_function(super::super::EXACT_ARITHMETIC);
 		self.exact_dispatch(
@@ -736,18 +665,11 @@ impl WasmGcEmitter {
 			s.fixnum_division_shortcut(f, &euclidean_quotient);
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0)]);
 			s.call(f, "exact_cmp");
-			Self::emit_list(
-				f,
-				&[
-					I::I32Const(0),
-					I::I32LtS,
-					I::If(BlockType::Result(i64t)),
-					I::I64Const(0),
-					I::I64Const(0),
-					I::LocalGet(0),
-					I::LocalGet(1),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(0), I::I32LtS, I::If(BlockType::Result(i64t)),
+					I::I64Const(0), I::I64Const(0), I::LocalGet(0), I::LocalGet(1),
+			]);
 			s.call(f, "exact_div");
 			s.call(f, "exact_sub");
 			s.call(f, "exact_floor");
@@ -853,79 +775,45 @@ impl WasmGcEmitter {
 			s.is_negative(f, value);
 			Self::emit_list(f, &[I::LocalTee(negative), I::If(BlockType::Empty)]);
 			s.negate_local(f, value);
-			Self::emit_list(
-				f,
-				&[
-					I::End,
-					I::I32Const(1),
-					I::LocalSet(digits),
-					I::LocalGet(value),
-					I::LocalSet(rest),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::End,
+				I::I32Const(1), I::LocalSet(digits),
+				I::LocalGet(value), I::LocalSet(rest),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(rest),
-					I::I64Const(DECIMAL_BASE),
-				],
-			);
+						I::LocalGet(rest), I::I64Const(DECIMAL_BASE),
+			]);
 			s.call(f, "int_cmp");
 			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::BrIf(1), I::LocalGet(rest), I::I64Const(DECIMAL_BASE)]);
 			s.call(f, "int_quot");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(rest),
-					I::LocalGet(digits),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(digits),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(digits),
-					I::LocalGet(negative),
-					I::I32Add,
-					I::LocalTee(length),
-					I::LocalSet(digits),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(rest),
+				I::LocalGet(digits), I::I32Const(1), I::I32Add, I::LocalSet(digits),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(digits), I::LocalGet(negative), I::I32Add, I::LocalTee(length), I::LocalSet(digits),
+			]);
 			s.emit_text_allocation(f, length, address);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(negative),
-					I::If(BlockType::Empty),
-					I::LocalGet(address),
-					I::I32Const(b'-' as i32),
-					I::I32Store8(BYTE),
-					I::End,
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(negative), I::If(BlockType::Empty),
+					I::LocalGet(address), I::I32Const(b'-' as i32), I::I32Store8(BYTE),
+				I::End,
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(digits),
-					I::LocalGet(negative),
-					I::I32LeU,
-					I::BrIf(1),
-					I::LocalGet(digits),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalTee(digits),
-					I::LocalGet(address),
-					I::I32Add,
-					I::LocalGet(value),
-					I::I64Const(DECIMAL_BASE),
-				],
-			);
+						I::LocalGet(digits), I::LocalGet(negative), I::I32LeU, I::BrIf(1),
+						I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address),
+						I::I32Add, I::LocalGet(value), I::I64Const(DECIMAL_BASE),
+			]);
 			s.call(f, "int_rem");
-			Self::emit_list(
-				f,
-				&[
-					I::I32WrapI64,
-					I::I32Const(b'0' as i32),
-					I::I32Add,
-					I::I32Store8(BYTE),
-					I::LocalGet(value),
-					I::I64Const(DECIMAL_BASE),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32WrapI64, I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE),
+				I::LocalGet(value), I::I64Const(DECIMAL_BASE),
+			]);
 			s.call(f, "int_quot");
 			Self::emit_list(f, &[I::LocalSet(value), I::Br(0), I::End, I::End]);
 			s.emit_new_text(f, address, length);
@@ -950,17 +838,11 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalSet(numerator), I::LocalGet(value)]);
 				s.call(f, "exact_denominator");
 				// ±∞ = ±1/0 and NaN = 0/0
-				Self::emit_list(
-					f,
-					&[
-						I::LocalTee(denominator),
-						I::I64Eqz,
-						I::If(BlockType::Empty),
-						I::LocalGet(numerator),
-						I::I64Eqz,
-						I::If(BlockType::Result(node_ref)),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalTee(denominator), I::I64Eqz, I::If(BlockType::Empty),
+						I::LocalGet(numerator), I::I64Eqz, I::If(BlockType::Result(node_ref)),
+				]);
 				push_text(s, f, not_a_number);
 				Self::emit_list(
 					f,
@@ -987,17 +869,13 @@ impl WasmGcEmitter {
 				concat(f);
 				Self::emit_list(f, &[I::Return, I::End]);
 				// scale = the smallest power of ten that makes x an integer, rest = |x| * scale
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(1),
-						I::LocalSet(scale),
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(1), I::LocalSet(scale),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(numerator),
-						I::LocalGet(scale),
-					],
-				);
+							I::LocalGet(numerator), I::LocalGet(scale),
+				]);
 				s.call(f, "int_mul");
 				f.instruction(&I::LocalGet(denominator));
 				s.call(f, "int_rem");
@@ -1068,60 +946,38 @@ impl WasmGcEmitter {
 			for (prime, count) in DECIMAL_PRIMES.into_iter().zip([before_period, fives]) {
 				s.divide_out(f, rest, prime, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(before_period),
-					I::LocalGet(fives),
-					I::LocalGet(before_period),
-					I::LocalGet(fives),
-					I::I32GtS,
-					I::Select,
-					I::LocalSet(before_period),
-					I::LocalGet(rest),
-					I::I64Const(1),
-					I::I64Eq,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(before_period), I::LocalGet(fives), I::LocalGet(before_period), I::LocalGet(fives),
+				I::I32GtS, I::Select, I::LocalSet(before_period),
+				I::LocalGet(rest), I::I64Const(1), I::I64Eq,
+			]);
 			exact_text_if(f);
 			// the period: the first power of ten that is 1 modulo the rest
 			Self::emit_list(f, &[I::I64Const(DECIMAL_BASE), I::LocalGet(rest)]);
 			s.call(f, "int_rem");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(power),
-					I::I32Const(1),
-					I::LocalSet(period),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(power),
+				I::I32Const(1), I::LocalSet(period),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(power),
-					I::I64Const(1),
-					I::I64Eq,
-					I::BrIf(1),
-					I::LocalGet(period),
-					I::I32Const(MAX_PERIOD),
-					I::I32GeU,
-				],
-			);
+						I::LocalGet(power), I::I64Const(1), I::I64Eq, I::BrIf(1),
+						I::LocalGet(period), I::I32Const(MAX_PERIOD), I::I32GeU,
+			]);
 			exact_text_if(f);
 			Self::emit_list(f, &[I::LocalGet(power), I::I64Const(DECIMAL_BASE)]);
 			s.call(f, "int_mul");
 			f.instruction(&I::LocalGet(rest));
 			s.call(f, "int_rem");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(power),
-					I::LocalGet(period),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(period),
-					I::Br(0),
-					I::End,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(power),
+				I::LocalGet(period), I::I32Const(1), I::I32Add, I::LocalSet(period),
+				I::Br(0),
+				I::End,
+				I::End,
+			]);
 			// the sign and the whole part
 			s.is_negative(f, numerator);
 			f.instruction(&I::If(BlockType::Result(node_ref)));
@@ -1140,96 +996,54 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(numerator), I::LocalGet(denominator)]);
 			s.call(f, "int_rem");
 			let overlined_digit_bytes = 1 + OVERLINE_BYTES.len() as i32;
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(rest),
-					I::LocalGet(before_period),
-					I::LocalGet(period),
-					I::I32Const(overlined_digit_bytes),
-					I::I32Mul,
-					I::I32Add,
-					I::LocalSet(length),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(rest),
+				I::LocalGet(before_period), I::LocalGet(period), I::I32Const(overlined_digit_bytes), I::I32Mul,
+				I::I32Add, I::LocalSet(length),
+			]);
 			s.emit_text_allocation(f, length, address);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalSet(at),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(address), I::LocalSet(at),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(before_period),
-					I::LocalGet(period),
-					I::I32Or,
-					I::I32Eqz,
-					I::BrIf(1),
-					I::LocalGet(rest),
-					I::I64Const(DECIMAL_BASE),
-				],
-			);
+						I::LocalGet(before_period), I::LocalGet(period), I::I32Or, I::I32Eqz, I::BrIf(1),
+						I::LocalGet(rest), I::I64Const(DECIMAL_BASE),
+			]);
 			s.call(f, "int_mul");
 			Self::emit_list(f, &[I::LocalSet(rest), I::LocalGet(at), I::LocalGet(rest), I::LocalGet(denominator)]);
 			s.call(f, "int_quot");
-			Self::emit_list(
-				f,
-				&[
-					I::I32WrapI64,
-					I::I32Const(b'0' as i32),
-					I::I32Add,
-					I::I32Store8(BYTE),
-					I::LocalGet(rest),
-					I::LocalGet(denominator),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32WrapI64, I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE),
+				I::LocalGet(rest), I::LocalGet(denominator),
+			]);
 			s.call(f, "int_rem");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(rest),
-					I::LocalGet(at),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(at),
-					I::LocalGet(before_period),
-					I::If(BlockType::Empty),
-					I::LocalGet(before_period),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalSet(before_period),
-					I::Else,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(rest),
+				I::LocalGet(at), I::I32Const(1), I::I32Add, I::LocalSet(at),
+				I::LocalGet(before_period), I::If(BlockType::Empty),
+					I::LocalGet(before_period), I::I32Const(1), I::I32Sub, I::LocalSet(before_period),
+				I::Else,
+			]);
 			for byte in OVERLINE_BYTES {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(at),
-						I::I32Const(byte as i32),
-						I::I32Store8(BYTE),
-						I::LocalGet(at),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalSet(at),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(at), I::I32Const(byte as i32), I::I32Store8(BYTE),
+					I::LocalGet(at), I::I32Const(1), I::I32Add, I::LocalSet(at),
+				]);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(period),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalSet(period),
-					I::End,
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(prefix),
-					I::RefAsNonNull,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(period), I::I32Const(1), I::I32Sub, I::LocalSet(period),
+				I::End,
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(prefix), I::RefAsNonNull,
+			]);
 			s.emit_new_text(f, address, length);
 			concat(f);
 		});

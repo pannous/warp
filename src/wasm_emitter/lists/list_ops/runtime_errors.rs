@@ -158,18 +158,12 @@ impl WasmGcEmitter {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
 		let fixnum_offset = super::super::super::numbers::big_int::FIXNUM_OFFSET;
-		Self::emit_list(
-			func,
-			&[
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(local), I::I64Const(fixnum_offset), I::I64Add, I::I64Const(0), I::I64LtS,
+			I::If(BlockType::Empty),
 				I::LocalGet(local),
-				I::I64Const(fixnum_offset),
-				I::I64Add,
-				I::I64Const(0),
-				I::I64LtS,
-				I::If(BlockType::Empty),
-				I::LocalGet(local),
-			],
-		);
+		]);
 		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);

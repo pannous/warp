@@ -156,7 +156,8 @@ pub fn insert_module_classes(program: Node) -> Node {
 		}
 		early.insert(path.canonicalize().unwrap_or(path));
 	}
-	crate::compiler::compile_context::change(|context| context.early_class_modules = early);
+	// joined, not replaced: a module's own lowering (markup's) runs this again before the program's sound loads
+	crate::compiler::compile_context::change(|context| context.early_class_modules.extend(early));
 	let is_foreign = |class: &Node| name_declared_by(class).is_none_or(|name| !own_names.contains(&name));
 	let aliases: Vec<(&str, &str)> = STD_ALIASES
 		.into_iter()

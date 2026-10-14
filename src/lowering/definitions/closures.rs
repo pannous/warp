@@ -257,7 +257,7 @@ fn lift_closures(program: Node) -> Node {
 		passing_through,
 		lifted: vec![],
 		enclosing: vec![],
-		locals: vec![],
+		locals: vec![crate::lowering::for_loop::loop_variables(&program).into_iter().collect()],
 	};
 	let program = lifting.walk(program, &HashSet::new());
 	if lifting.lifted.is_empty() {
@@ -852,8 +852,11 @@ impl Lifting {
 }
 
 /// The names a body assigns, `angle = 0.5`: its local variables, never a function of the same name
+/// `for sample in samples` too: a loop variable named like a function holds the item, never the function
 fn assigned_variables(body: &Node) -> HashSet<String> {
-	body.assigned_names(|op| *op == Op::Assign)
+	let mut assigned: HashSet<String> = body.assigned_names(|op| *op == Op::Assign);
+	assigned.extend(crate::lowering::for_loop::loop_variables(body));
+	assigned
 }
 
 /// A closure changing a captured variable would change its own copy (wiki/charged.md §3): a loud error naming `global`

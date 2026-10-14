@@ -862,25 +862,12 @@ impl WasmGcEmitter {
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				Self::emit_list(
-					func,
-					&[
-						I::I64ReinterpretF64,
-						I::LocalTee(bits),
-						I::F64ReinterpretI64,
-						I::F64Floor,
-						I::LocalGet(bits),
-						I::F64ReinterpretI64,
-						I::LocalGet(bits),
-						I::F64ReinterpretI64,
-						I::F64Floor,
-						I::F64Sub,
-						I::F64Const(0.5f64.into()),
-						I::F64Ge,
-						I::F64ConvertI32U,
-						I::F64Add,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(func, &[
+					I::I64ReinterpretF64, I::LocalTee(bits), I::F64ReinterpretI64, I::F64Floor, I::LocalGet(bits),
+					I::F64ReinterpretI64, I::LocalGet(bits), I::F64ReinterpretI64, I::F64Floor, I::F64Sub,
+					I::F64Const(0.5f64.into()), I::F64Ge, I::F64ConvertI32U, I::F64Add,
+				]);
 				self.emit_integral_float_as_int(func);
 				true
 			}
@@ -908,16 +895,11 @@ impl WasmGcEmitter {
 		let instance_local = self.node_scratch();
 		func.instruction(&I::LocalSet(instance_local));
 		self.emit_field(func, instance_local, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(crate::type_kinds::KIND_MASK),
-				I::I64And,
-				I::I64Const(crate::Kind::Key as i64),
-				I::I64Eq,
-				I::If(BlockType::Result(ValType::I64)),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(crate::Kind::Key as i64), I::I64Eq,
+			I::If(BlockType::Result(ValType::I64)),
+		]);
 		self.emit_field(func, instance_local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
 		let (pointer, length) = self.allocate_string(type_name);
@@ -944,33 +926,17 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		Self::emit_list(
-			func,
-			&[
-				I::I64ReinterpretF64,
-				I::LocalTee(divisor_bits),
-				I::F64ReinterpretI64,
-				I::F64Div,
-				I::I64ReinterpretF64,
-				I::LocalSet(quotient),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64ReinterpretF64, I::LocalTee(divisor_bits), I::F64ReinterpretI64, I::F64Div, I::I64ReinterpretF64,
+			I::LocalSet(quotient),
+		]);
 		// a negative divisor rounds the quotient up, a positive one down
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(quotient),
-				I::F64ReinterpretI64,
-				I::F64Ceil,
-				I::LocalGet(quotient),
-				I::F64ReinterpretI64,
-				I::F64Floor,
-				I::LocalGet(divisor_bits),
-				I::I64Const(0),
-				I::I64LtS,
-				I::Select,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil, I::LocalGet(quotient), I::F64ReinterpretI64,
+			I::F64Floor, I::LocalGet(divisor_bits), I::I64Const(0), I::I64LtS, I::Select,
+		]);
 		self.emit_truncating_cast(func);
 	}
 

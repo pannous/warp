@@ -43,47 +43,23 @@ impl WasmGcEmitter {
 				s.emit_text_field(f, node, 1);
 				f.instruction(&I::LocalSet(length));
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(index),
-					I::LocalGet(first_length),
-					I::I32GeU,
-					I::LocalGet(index),
-					I::LocalGet(second_length),
-					I::I32GeU,
-					I::I32Or,
-					I::BrIf(1),
-					I::LocalGet(first_pointer),
-					I::LocalGet(index),
-					I::I32Add,
-					I::I32Load8U(BYTE),
-					I::LocalGet(second_pointer),
-					I::LocalGet(index),
-					I::I32Add,
-					I::I32Load8U(BYTE),
-					I::I32Sub,
-					I::LocalTee(difference),
-					I::If(BlockType::Empty),
-					I::LocalGet(difference),
-					I::Return,
-					I::End,
-					I::LocalGet(index),
-					I32Const(1),
-					I::I32Add,
-					I::LocalSet(index),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(first_length),
-					I::LocalGet(second_length),
-					I::I32Sub,
-					I::Return,
-					I::End,
-				],
-			);
+						I::LocalGet(index), I::LocalGet(first_length), I::I32GeU, I::LocalGet(index),
+						I::LocalGet(second_length), I::I32GeU, I::I32Or, I::BrIf(1),
+						I::LocalGet(first_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE),
+						I::LocalGet(second_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE), I::I32Sub,
+						I::LocalTee(difference), I::If(BlockType::Empty),
+							I::LocalGet(difference), I::Return,
+						I::End,
+						I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+						I::Br(0),
+				I::End, I::End,
+				I::LocalGet(first_length), I::LocalGet(second_length), I::I32Sub, I::Return,
+				I::End,
+			]);
 			if let Some(table) = witness {
 				s.emit_instance_order(f, table, kinds, first, second);
 			}
@@ -104,20 +80,12 @@ impl WasmGcEmitter {
 			} else {
 				// both kinds are known to be Int here, so their locals hold the values
 				let (a, b) = (kinds[0], kinds[1]);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(b),
-						I::LocalSet(a),
-						I::LocalGet(a),
-						I::LocalGet(b),
-						I::I64GtS,
-						I::LocalGet(a),
-						I::LocalGet(b),
-						I::I64LtS,
-						I::I32Sub,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalSet(b),
+					I::LocalSet(a),
+					I::LocalGet(a), I::LocalGet(b), I::I64GtS, I::LocalGet(a), I::LocalGet(b), I::I64LtS, I::I32Sub,
+				]);
 			}
 			Self::emit_list(f, &[I::Return, I::End]);
 			// a float on either side compares both as f64
@@ -141,18 +109,11 @@ impl WasmGcEmitter {
 				}
 				Self::emit_list(f, &[I::End, I::LocalSet(float)]);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(first_float),
-					I::LocalGet(second_float),
-					I::F64Gt,
-					I::LocalGet(first_float),
-					I::LocalGet(second_float),
-					I::F64Lt,
-					I::I32Sub,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(first_float), I::LocalGet(second_float), I::F64Gt, I::LocalGet(first_float),
+				I::LocalGet(second_float), I::F64Lt, I::I32Sub,
+			]);
 		});
 	}
 
@@ -214,93 +175,53 @@ impl WasmGcEmitter {
 			// in order already (ascending: as it is; strictly descending: reversed, so equal keys keep their order) takes
 			// n - 1 comparisons and no merging
 			let (ascending, descending) = (left, right);
-			Self::emit_list(
-				f,
-				&[
-					I::I32Const(1),
-					I::LocalSet(ascending),
-					I::I32Const(1),
-					I::LocalSet(descending),
-					I::I32Const(1),
-					I::LocalSet(low),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(1), I::LocalSet(ascending),
+				I::I32Const(1), I::LocalSet(descending),
+				I::I32Const(1), I::LocalSet(low),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(low),
-					I::LocalGet(count),
-					I::I32GeU,
-					I::BrIf(1),
-				],
-			);
+						I::LocalGet(low), I::LocalGet(count), I::I32GeU, I::BrIf(1),
+			]);
 			Self::emit_list(f, &get(ranks, low));
-			Self::emit_list(
-				f,
-				&[
-					I::RefAsNonNull,
-					I::LocalGet(ranks),
-					I::LocalGet(low),
-					I::I32Const(1),
-					I::I32Sub,
-					I::ArrayGet(array),
-					I::RefAsNonNull,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::RefAsNonNull, I::LocalGet(ranks), I::LocalGet(low), I::I32Const(1), I::I32Sub, I::ArrayGet(array),
+				I::RefAsNonNull,
+			]);
 			s.call(f, NODE_ORDER);
-			Self::emit_list(
-				f,
-				&[
-					I::I32Const(0),
-					I::I32LtS,
-					I::If(BlockType::Empty),
-					I::I32Const(0),
-					I::LocalSet(ascending),
-					I::Else,
-					I::I32Const(0),
-					I::LocalSet(descending),
-					I::End,
-					I::LocalGet(ascending),
-					I::LocalGet(descending),
-					I::I32Or,
-					I::I32Eqz,
-					I::BrIf(1),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(0), I::I32LtS, I::If(BlockType::Empty),
+					I::I32Const(0), I::LocalSet(ascending),
+				I::Else,
+					I::I32Const(0), I::LocalSet(descending),
+				I::End,
+				I::LocalGet(ascending), I::LocalGet(descending), I::I32Or, I::I32Eqz, I::BrIf(1),
+			]);
 			Self::emit_list(f, &increment(low));
-			Self::emit_list(
-				f,
-				&[
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(descending),
-					I::If(BlockType::Empty),
-					I::I32Const(0),
-					I::LocalSet(low),
-					I::LocalGet(count),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalSet(high),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(descending), I::If(BlockType::Empty),
+					I::I32Const(0), I::LocalSet(low),
+					I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(high),
 					I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-					I::LocalGet(low),
-					I::LocalGet(high),
-					I::I32GeS,
-					I::BrIf(1),
-				],
-			);
+						I::Loop(BlockType::Empty),
+							I::LocalGet(low), I::LocalGet(high), I::I32GeS, I::BrIf(1),
+			]);
 			for array_local in [cells, ranks] {
 				Self::emit_list(f, &get(array_local, low));
 				Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(array_local), I::LocalGet(low)]);
 				Self::emit_list(f, &get(array_local, high));
-				Self::emit_list(
-					f,
-					&[
-						I::ArraySet(array),
-						I::LocalGet(array_local),
-						I::LocalGet(high),
-						I::LocalGet(cell),
-						I::ArraySet(array),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::ArraySet(array),
+					I::LocalGet(array_local), I::LocalGet(high), I::LocalGet(cell), I::ArraySet(array),
+				]);
 			}
 			Self::emit_list(f, &increment(low));
 			Self::emit_list(
@@ -308,86 +229,53 @@ impl WasmGcEmitter {
 				&[I::LocalGet(high), I::I32Const(1), I::I32Sub, I::LocalSet(high), I::Br(0), I::End, I::End, I::End],
 			);
 			// runs of width merged pairwise into the other arrays, which then take their place
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(count),
-					I::I32Const(1),
-					I::LocalGet(ascending),
-					I::LocalGet(descending),
-					I::I32Or,
-					I::Select,
-					I::LocalSet(width),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(count), I::I32Const(1), I::LocalGet(ascending), I::LocalGet(descending), I::I32Or,
+				I::Select, I::LocalSet(width),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(width),
-					I::LocalGet(count),
-					I::I32GeU,
-					I::BrIf(1),
-					I::I32Const(0),
-					I::LocalSet(low),
-					I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-					I::LocalGet(low),
-					I::LocalGet(count),
-					I::I32GeU,
-					I::BrIf(1),
-				],
-			);
+						I::LocalGet(width), I::LocalGet(count), I::I32GeU, I::BrIf(1),
+						I::I32Const(0), I::LocalSet(low),
+						I::Block(BlockType::Empty),
+							I::Loop(BlockType::Empty),
+								I::LocalGet(low), I::LocalGet(count), I::I32GeU, I::BrIf(1),
+			]);
 			smaller(f, &[I::LocalGet(low), I::LocalGet(width), I::I32Add], &[I::LocalGet(count)]);
 			Self::emit_list(f, &[I::LocalSet(middle), I::LocalGet(low), I::LocalSet(left)]);
 			smaller(f, &[I::LocalGet(middle), I::LocalGet(width), I::I32Add], &[I::LocalGet(count)]);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(high),
-					I::LocalGet(middle),
-					I::LocalSet(right),
-					I::LocalGet(low),
-					I::LocalSet(index),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(high),
+				I::LocalGet(middle), I::LocalSet(right),
+				I::LocalGet(low), I::LocalSet(index),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(index),
-					I::LocalGet(high),
-					I::I32GeU,
-					I::BrIf(1),
-				],
-			);
+						I::LocalGet(index), I::LocalGet(high), I::I32GeU, I::BrIf(1),
+			]);
 			// the left item unless the right one sorts before it
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(left),
-					I::LocalGet(middle),
-					I::I32LtU,
-					I::If(BlockType::Result(ValType::I32)),
-					I::LocalGet(right),
-					I::LocalGet(high),
-					I::I32GeU,
-					I::If(BlockType::Result(ValType::I32)),
-					I::I32Const(1),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(left), I::LocalGet(middle), I::I32LtU, I::If(BlockType::Result(ValType::I32)),
+					I::LocalGet(right), I::LocalGet(high), I::I32GeU, I::If(BlockType::Result(ValType::I32)),
+						I::I32Const(1),
 					I::Else,
-				],
-			);
+			]);
 			Self::emit_list(f, &get(ranks, right));
 			f.instruction(&I::RefAsNonNull);
 			Self::emit_list(f, &get(ranks, left));
 			f.instruction(&I::RefAsNonNull);
 			s.call(f, NODE_ORDER);
-			Self::emit_list(
-				f,
-				&[
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(0), I::I32GeS,
+				I::End,
+				I::Else,
 					I::I32Const(0),
-					I::I32GeS,
-					I::End,
-					I::Else,
-					I::I32Const(0),
-					I::End,
-					I::If(BlockType::Empty),
-					I::LocalGet(left),
-					I::LocalSet(from),
-				],
-			);
+				I::End,
+				I::If(BlockType::Empty),
+					I::LocalGet(left), I::LocalSet(from),
+			]);
 			Self::emit_list(f, &increment(left));
 			Self::emit_list(f, &[I::Else, I::LocalGet(right), I::LocalSet(from)]);
 			Self::emit_list(f, &increment(right));
@@ -410,20 +298,13 @@ impl WasmGcEmitter {
 				&[I::LocalGet(width), I::I32Const(1), I::I32Shl, I::LocalSet(width), I::Br(0), I::End, I::End],
 			);
 			// new cells from the last one back, each of its item's kind of cell
-			Self::emit_list(
-				f,
-				&[
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(count),
-					I::I32Eqz,
-					I::BrIf(1),
-					I::LocalGet(count),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalSet(count),
-				],
-			);
+						I::LocalGet(count), I::I32Eqz, I::BrIf(1),
+						I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count),
+			]);
 			Self::emit_list(f, &get(cells, count));
 			Self::emit_list(f, &[I::RefAsNonNull, I::LocalSet(cell)]);
 			s.emit_field(f, cell, 0);
