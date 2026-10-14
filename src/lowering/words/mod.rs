@@ -6,6 +6,7 @@ use super::*;
 
 pub mod channel_words;
 pub mod library_words;
+pub mod module_properties;
 pub mod music_words;
 pub mod negated_calls;
 pub mod number_words;
