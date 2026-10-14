@@ -12,6 +12,7 @@
 
 // TODO turn this into a module, albeit built-in one
 
+pub mod audio_files;
 pub mod midi;
 pub mod sound_engine;
 
@@ -632,10 +633,8 @@ fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 pub fn render(path: &str) -> Result<f64, String> {
 	crate::host::sandbox::check_write(path)?;
 	let sounds = std::mem::take(&mut *UNRENDERED.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
-	let rate = sounds.first().map_or(DEFAULT_RATE, |sound| sound.rate);
-	if let Some(other) = sounds.iter().find(|sound| sound.rate != rate) {
-		return Err(format!("sounds of {rate} and {} samples per second cannot share {path}", other.rate));
-	}
+	// the highest rate of the sounds, the others converted to it (a 44.1 kHz sample beside 22.05 kHz synthesis)
+	let rate = sounds.iter().map(|sound| sound.rate).max().unwrap_or(DEFAULT_RATE);
 	let channels = sounds.iter().map(|sound| sound.channels).max().unwrap_or(MONO);
 	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
 	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
@@ -653,8 +652,7 @@ pub fn render(path: &str) -> Result<f64, String> {
 				faded_gain(&own, sound.place + frame as f64 / rate as f64)
 			}
 		};
-		let samples: Vec<i16> = sound
-			.samples
+		let samples: Vec<i16> = at_rate(&sound.samples, sound.channels, sound.rate, rate)
 			.chunks(sound.channels as usize)
 			.enumerate()
 			.flat_map(|(index, frame)| {
@@ -688,6 +686,28 @@ fn faded_gain(fades: &[Fade], place: f64) -> f64 {
 		ramp = (fade, ramped(ramp.0, ramp.1, fade.place));
 	}
 	ramped(ramp.0, ramp.1, place)
+}
+
+/// Interleaved samples at another rate, each channel's linearly interpolated between its neighbours
+fn at_rate(samples: &[i16], channels: u16, from: u32, to: u32) -> Vec<i16> {
+	let channels = channels.max(1) as usize;
+	if from == to || samples.len() < channels {
+		return samples.to_vec();
+	}
+	let frames = samples.len() / channels;
+	let converted_frames = (frames as f64 * to as f64 / from as f64).round() as usize;
+	(0..converted_frames)
+		.flat_map(|frame| {
+			let position = frame as f64 * from as f64 / to as f64;
+			let before = (position.floor() as usize).min(frames - 1);
+			let after = (before + 1).min(frames - 1);
+			let share = position - before as f64;
+			(0..channels).map(move |channel| {
+				let (a, b) = (samples[before * channels + channel] as f64, samples[after * channels + channel] as f64);
+				(a + (b - a) * share).round() as i16
+			})
+		})
+		.collect()
 }
 
 /// A 16-bit mono PCM WAV of the offset samples

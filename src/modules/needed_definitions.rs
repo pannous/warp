@@ -120,11 +120,17 @@ pub(crate) fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
 }
 
 pub(crate) fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
-	if definitions.is_empty() {
-		return program;
-	}
+	let needed = needed_definitions(&program, &definitions);
+	with_statements_in_front(program, needed)
+}
+
+/// The definitions the program's calls reach, and those their calls reach in turn
+pub(crate) fn needed_definitions(program: &Node, definitions: &[Node]) -> Vec<Node> {
 	let mut needed: Vec<Node> = vec![];
-	let mut mentioned = called_names(std::slice::from_ref(&program));
+	if definitions.is_empty() {
+		return needed;
+	}
+	let mut mentioned = called_names(std::slice::from_ref(program));
 	loop {
 		let now_needed: Vec<Node> = definitions
 			.iter()
@@ -132,11 +138,15 @@ pub(crate) fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> 
 			.cloned()
 			.collect();
 		if now_needed.len() == needed.len() {
-			break;
+			return needed;
 		}
 		mentioned.extend(called_names(&now_needed));
 		needed = now_needed;
 	}
+}
+
+/// The program with the statements before its own
+pub(crate) fn with_statements_in_front(program: Node, needed: Vec<Node>) -> Node {
 	if needed.is_empty() {
 		return program;
 	}

@@ -161,6 +161,16 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    nodes and buses as values, effects (delay, reverb, compressor, distortion, EQ), a mixer.
 5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points (card sound-samples); render offline to a file
    (`render 8 bars to "song.wav"`), which is also how tests check audio without speakers.
+   Samples built (card sound-samples, samples/sound_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
+   `class Sample {rate, channels, frames}`; `sample(path)` reads a file through the host word sound.load
+   (src/sound/audio_files.rs: WAV decoded in Rust, other formats converted by afconvert or ffmpeg first), then
+   sample_seconds, sample_slice(clip, from, to), sample_slices(clip, n), sample_looped(clip, seconds, from, to),
+   play_sample(clip, rate) and play(x) for `x is Sample`. The rate trick: play_sample hands the frames on with the host
+   sample rate scaled by rate (twice the rate = twice as fast, an octave up), and render_sound mixes all sounds at the
+   highest rate among them (at_rate, natively and in host-sound.js). The playground decodes WAV only (wavFrames).
+   Samples skip the effect chain: they sound as recorded. Trap: a lib parameter named `s` (a unit) shadows `0.5s`
+   program-wide, hence `clip`. A class with fields only (Sample) keeps sound a used module: with_implicit_class_modules
+   moves only modules whose classes have methods (units' Quantity), else note names stop lowering.
 6. Patterns and sequencing. Sonic Pi `live_loop`, Tidal mini-notation (`"c4 e4 [g4 b4]*2"`), Euclidean rhythms,
    swing, randomness with seeds; live coding: redefine a loop while it plays.
 7. MIDI and devices. MIDI in/out (CoreMIDI, Web MIDI), choosing the output device, channels, buffer size and latency.

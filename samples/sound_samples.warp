@@ -1,0 +1,18 @@
+#!/usr/bin/env warp
+// Audio files as samples: read a WAV (natively also mp3, ogg, flac, aiff, m4a), play it at a rate, slice it, loop it.
+
+use sound
+
+// a kick made and saved here, so the sample has a file to read; any recording plays the same way
+release = 0.08
+melody([C2 G1], 60ms)
+render_sound("kick.wav")
+release = 0.005
+
+kick = sample("kick.wav")
+play(kick)                                  // as recorded
+play_sample(kick, 2)                        // twice as fast, an octave up
+play_sample(kick, 0.5)                      // half as fast, an octave down
+for part in sample_slices(kick, 2) { play(part) }
+play(sample_looped(kick, 1s, 60ms, 120ms))  // up to 120 ms, then 60 to 120 ms again for a second
+wait_sound()
