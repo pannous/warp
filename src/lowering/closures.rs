@@ -780,10 +780,7 @@ impl Lifting {
 	/// closure
 	fn walk_body_block(&mut self, body: Node, bound: &HashSet<String>) -> Node {
 		match body {
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.walk_body_block(*node, bound)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.walk_body_block(node, bound)),
 			Node::List(items, Bracket::Curly, separator) => Node::List(
 				items.into_iter().map(|item| self.walk(item, bound)).collect(),
 				Bracket::Curly,
@@ -811,10 +808,7 @@ impl Lifting {
 				};
 				key(choice, op, self.function_value(*chosen, bound))
 			}
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.function_value(*node, bound)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.function_value(node, bound)),
 			// `return function add`
 			Node::List(mut items, bracket, separator) if is_return(&items) && gives_reference(&items[1]) => {
 				let value = items.pop().expect("a returned value");

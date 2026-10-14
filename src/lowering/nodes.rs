@@ -101,10 +101,7 @@ pub(crate) fn is_assigned_data(target: &Node, value: &Node) -> bool {
 /// The parts of a node rewritten, the node itself kept as written
 pub(crate) fn with_parts_rewritten(node: Node, rewrite: &mut dyn FnMut(Node) -> Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_parts_rewritten(*node, rewrite)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_parts_rewritten(node, rewrite)),
 		other => children_rewritten(other, rewrite),
 	}
 }

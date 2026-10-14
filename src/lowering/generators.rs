@@ -205,10 +205,7 @@ fn rewritten(node: Node, step: &dyn Fn(&Node) -> Step) -> Node {
 			});
 			Node::List(items.collect(), bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(rewritten(*node, step)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| rewritten(node, step)),
 		other => match step(&other) {
 			Step::Keep => other,
 			Step::Descend => other.map_children(|child| rewritten(child, step)),

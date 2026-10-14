@@ -51,3 +51,14 @@ fn a_local_named_like_a_function_is_indexed_not_called() {
 	is!("def padded(t) { pad_left(t, 3) }; def collect(p) { words = [p]; if words.length == 1 { return words#1 }; words }; collect(3)", 3);
 	is!("def f(x) { x * 2 }; def g(y) { f -y }; g(3)", -6);
 }
+
+/// a parameter named like a standard module's word is the parameter: no module is needed for it (card
+/// parameter-module-word)
+#[test]
+fn a_parameter_named_like_a_module_word_needs_no_module() {
+	is!("f(subject, pattern) := subject; f(1, 2)", 1);
+	is!("f(x, melody) := x + melody; f(1, 2)", 3);
+	is!("f(x, live_loop) := x; f(1, 2)", 1);
+	let error = warp::wasm_emitter::eval("f(x) := melody(x); f(1)").serialize();
+	assert!(error.contains("use sound"), "{error}");
+}

@@ -345,10 +345,7 @@ pub(super) fn awaited(node: Node) -> Node {
 			items[0] = symbol(named);
 			Node::List(items, bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(awaited(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(awaited),
 		other => other,
 	}
 }

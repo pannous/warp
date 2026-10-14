@@ -780,10 +780,7 @@ impl Lowering {
 	/// The word after a dot, `word` or `word(arguments)`: only the arguments are expanded, the word is not a call of its own
 	fn expand_method(&self, method: Node) -> Node {
 		match method {
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.expand_method(*node)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.expand_method(node)),
 			Node::List(items, bracket, separator)
 				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
 			{

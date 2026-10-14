@@ -613,10 +613,7 @@ impl WasmGcEmitter {
 			// a number (any node but a text or character) as it is
 			let is_kind = |s: &mut Self, f: &mut Function, kind: Kind| {
 				s.emit_field(f, 0, 0);
-				Self::emit_list(
-					f,
-					&[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq],
-				);
+				Self::emit_kind_test(f, kind as i64, I::I64Eq);
 			};
 			is_kind(s, f, Kind::Text);
 			is_kind(s, f, Kind::Codepoint);
@@ -633,16 +630,8 @@ impl WasmGcEmitter {
 			);
 			// a text with a slash: the exact ratio of the integers before and after it ("1/x" is invalid_number)
 			s.emit_field(f, 0, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(Kind::Text as i64),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-				],
-			);
+			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
+			Self::emit_list(f, &[I::If(BlockType::Empty)]);
 			s.emit_text_bounds(f, start, end);
 			Self::emit_list(
 				f,

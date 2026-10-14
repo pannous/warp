@@ -1066,6 +1066,7 @@ PASSED:
   ✓ functions::test_alias_definition::a_partial_definition_names_its_hole
   ✓ functions::test_alias_definition::an_alias_of_an_alias_calls_the_function
   ✓ functions::test_alias_definition::an_assigned_bare_name_stays_the_error
+  ✓ functions::test_alias_definition::an_unused_partial_definition_names_its_hole
   ✓ functions::test_all_calls::a_function_applied_to_all_items
   ✓ functions::test_all_calls::a_list_built_by_appending_broadcasts
   ✓ functions::test_all_calls::a_singular_name_walks_its_plural_list
@@ -1520,6 +1521,7 @@ PASSED:
   ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
   ✓ functions::test_passed_through_functions::a_returned_parameter_is_called
   ✓ functions::test_passed_through_functions::a_variable_holds_the_returned_function
+  ✓ functions::test_phrase_calls::a_get_phrase_is_a_call
   ✓ functions::test_phrase_calls::test_prepositions_keep_their_meaning_elsewhere
   ✓ functions::test_phrase_calls::test_spaced_phrases_are_called_with_their_prepositions
   ✓ functions::test_phrase_calls::test_to_phrases_are_called_with_their_prepositions
@@ -2231,6 +2233,7 @@ PASSED:
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_function_is_indexed_not_called
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_module_word_is_the_local
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_program_function_is_the_local
+  ✓ modules::test_std_shadowed_names::a_parameter_named_like_a_module_word_needs_no_module
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
   ✓ modules::test_std_time::format_duration_in_the_largest_units
@@ -2308,6 +2311,7 @@ PASSED:
   ✓ node::test_node_api::a_key_shows_its_parts
   ✓ node::test_node_api::a_list_shows_its_bracket
   ✓ node::test_node_api::nodes_are_built_from_parts
+  ✓ node::test_node_api::rebuilt_lists_equal_the_written_ones
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -2533,7 +2537,6 @@ PASSED:
   ✓ numbers::test_math::test_global_with_pi
   ✓ numbers::test_math::test_harder_arithmetic
   ✓ numbers::test_math::test_hypen_versus_minus
-  ✓ numbers::test_math::test_hyphen_units
   ✓ numbers::test_math::test_if_block_syntax
   ✓ numbers::test_math::test_if_then_else
   ✓ numbers::test_math::test_logarithm_in_runtime
@@ -2602,7 +2605,6 @@ PASSED:
   ✓ numbers::test_plus_minus_units::a_plain_spread_counts_in_the_value_unit
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
-  ✓ numbers::test_plus_minus_units::compile_time_tolerances_stay_at_compile_time
   ✓ numbers::test_plus_minus::approximately_within_the_tolerance
   ✓ numbers::test_plus_minus::bounds_propagate_through_arithmetic
   ✓ numbers::test_plus_minus::intervals_are_not_correlated
@@ -2626,7 +2628,6 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::a_sum_of_quantities_is_a_quantity
   ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
-  ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
@@ -2676,6 +2677,7 @@ PASSED:
   ✓ numbers::test_static_units_data::test_annotated_variables_keep_and_check_units
   ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
   ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
+  ✓ numbers::test_static_units_functions::a_function_with_a_default_takes_a_quantity
   ✓ numbers::test_static_units_functions::test_a_unit_word_called_as_a_function_is_no_unit
   ✓ numbers::test_static_units_functions::test_dimension_errors_inside_functions_are_compile_errors
   ✓ numbers::test_static_units_functions::test_functions_take_and_give_quantities
@@ -3432,6 +3434,7 @@ PASSED:
   ✓ programs::test_sound::the_note_table_matches_note
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
+  ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
   ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
@@ -4762,6 +4765,8 @@ PASSED:
   ✓ web::test_markup_lines::a_line_of_attributes_renders_as_attributes
   ✓ web::test_markup_lines::an_aria_attribute_renders
   ✓ web::test_markup_mistakes::a_class_literal_field_named_like_an_element_is_no_markup
+  ✓ web::test_markup_mistakes::a_data_map_key_named_like_an_element_is_no_markup
+  ✓ web::test_markup_mistakes::a_nested_data_map_is_no_markup
   ✓ web::test_markup_mistakes::an_unknown_attribute_warns
   ✓ web::test_markup_mistakes::an_unknown_event_warns
   ✓ web::test_markup_mistakes::an_unknown_input_type_warns
@@ -5384,4 +5389,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5379 passed, 0 failed, 5379 total tested
+13 ignored, 5384 passed, 0 failed, 5384 total tested

@@ -519,6 +519,17 @@ impl Node {
 		}
 	}
 
+	/// `rewrite` applied to the node under the Meta layers (comments, positions), which stay around its result
+	pub fn under_meta(self, rewrite: impl FnOnce(Node) -> Node) -> Node {
+		match self {
+			Meta { node, data } => Meta {
+				node: Box::new(node.under_meta(rewrite)),
+				data,
+			},
+			other => rewrite(other),
+		}
+	}
+
 	/// This node under the Meta layers (comments, positions) of `original`, which it replaces
 	pub fn with_meta_of(self, original: &Node) -> Node {
 		match original {
