@@ -1145,14 +1145,7 @@ pub(crate) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	Some(match crate::diagnostic::ask(&question) {
 		Ok(0) => filled_list(count.clone(), list)
 			.unwrap_or_else(|| crate::node::error("`n times [x]` repeats one element: `3 times [0]`")),
-		Ok(_) => {
-			let mapped = crate::warp_parser::parse(&format!(
-				"({}).map(item => item * ({}))",
-				list.serialize(),
-				count.serialize()
-			));
-			lower_list_times(mapped)
-		}
+		Ok(_) => lower_list_times(element_wise(list.clone(), Op::Mul, count.clone())),
 		Err(error) => error,
 	})
 }
