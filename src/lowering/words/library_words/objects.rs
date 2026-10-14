@@ -196,20 +196,7 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 }
 
 pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
-	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.insert(name.clone());
-			}
-			collect_assigned_names(value, names);
-		}
-		Node::Key(left, _, right) => {
-			collect_assigned_names(left, names);
-			collect_assigned_names(right, names);
-		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_names(item, names)),
-		_ => {}
-	}
+	names.extend(node.assigned_names::<Vec<String>>(|op| matches!(op, Op::Assign | Op::Define)));
 }
 
 impl Lowering {
