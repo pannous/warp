@@ -512,7 +512,8 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
-			Node::Key(name, Op::Colon, _) => Some(name.name()),
+			// `t = 0.05`: a call giving every argument specialises it; one leaving t out is no specialisation
+			Node::Key(name, Op::Colon | Op::Assign, _) => Some(name.name()),
 			_ => None,
 		})
 		.collect::<Option<Vec<_>>>()?;
