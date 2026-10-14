@@ -1,6 +1,6 @@
 # Function broadcasting (wiki/broadcasting.md, wiki_features row 24)
 
-`src/lowering/broadcasting.rs`, a meaning pass right before `lambdas::lower`. Tests: tests/functions/test_broadcasting.rs.
+`src/lowering/collections/broadcasting.rs`, a meaning pass right before `lambdas::lower`. Tests: tests/functions/test_broadcasting.rs.
 
 - A function of one undeclared parameter that its body uses as an arithmetic operand (`square:=it*it`, `square(x):=x*x`)
   broadcasts when called with a list literal: `square [1 2 3]` → `[square(1) square(2) square(3)]`, unrolled at compile

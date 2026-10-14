@@ -2,7 +2,7 @@
 // generic wrapper taking them over is checked: void, int, bool, float, double results, int, float, double parameters.
 // The raylib calls that need a window (InitWindow, DrawCircle, DrawRectangle, DrawText) are left out
 use crate::is;
-use warp::ffi_parser::find_library_headers;
+use warp::formats::ffi_parser::find_library_headers;
 
 #[test]
 fn libc_signatures() {

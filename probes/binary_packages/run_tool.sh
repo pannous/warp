@@ -1,5 +1,5 @@
 #!/bin/bash
-# warp runs a package's prebuilt <name>.wasm (src/package_tools.rs) and never builds into the shared cargo target dir.
+# warp runs a package's prebuilt <name>.wasm (src/modules/package_tools.rs) and never builds into the shared cargo target dir.
 # Usage: probes/binary_packages/run_tool.sh <warp binary>   (from the repository root)
 warp=${1:?warp binary}
 shared=$(sed -nE 's/^target-dir *= *"(.*)"/\1/p' ~/.cargo/config.toml)

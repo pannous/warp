@@ -1,6 +1,6 @@
 // card std-module-docs (notes/stdlib.md §8 "Discoverability"): `warp help list` prints a module's words, each with the
 // comment line above it; the same index makes wiki/standard-library.md (`warp help --markdown`)
-use warp::std_docs::{module_help, standard_library_markdown};
+use warp::modules::std_docs::{module_help, standard_library_markdown};
 
 #[test]
 fn help_lists_a_modules_words_with_their_comment() {

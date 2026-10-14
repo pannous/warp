@@ -92,7 +92,7 @@ Legend: (a) a small no-decision fix exists or is pending; (b) needs a user decis
 
 ## (b) needs a user decision: wisp `def` dialect: 1
 
-- src/wisp_parser.rs::test_wisp_defn
+- src/formats/wisp_parser.rs::test_wisp_defn
 
 ## (c) test defect: expects what the Decided rules exclude: 22
 

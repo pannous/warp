@@ -5,7 +5,10 @@ use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
-use warp::{diagnostic, extensions, law, markup, package_tools, run, util, warp_parser, wasm_emitter, wasm_reader};
+use warp::{
+	diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser, wasm_emitter,
+	web::markup,
+};
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
 use wasm_emitter::eval;
 
@@ -29,7 +32,7 @@ const DEFAULT_SITE_NAME: &str = "site";
 /// `warp build --wit app.warp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
 const WIT_FLAG: &str = "--wit";
 const WIT_EXTENSION: &str = "wit";
-/// `warp build --component app.warp`: app.component.wasm, the component of that world (src/component_builder.rs)
+/// `warp build --component app.warp`: app.component.wasm, the component of that world (src/modules/component_builder.rs)
 const COMPONENT_FLAG: &str = "--component";
 const COMPONENT_EXTENSION: &str = "component.wasm";
 /// `warp build --wagi app.warp`: app.wagi.wasm, its routes answering one WAGI request (lib/wagi.warp), and app.spin.toml
@@ -80,7 +83,7 @@ const EXECUTABLE_MODE: u32 = 0o755;
 /// the program and of warp, not on every run
 const STANDALONE_NOTES_CACHE: &str = ".cache/warp/standalone_notes";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
-/// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
+/// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/modules/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
 /// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/web/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
@@ -92,7 +95,7 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
-/// `warp register`: Finder and `open` run .warp files (macOS, src/file_type.rs)
+/// `warp register`: Finder and `open` run .warp files (macOS, src/run/file_type.rs)
 const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
@@ -107,7 +110,7 @@ const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
 const NO_HINTS_FLAG: &str = "--no-hints";
 /// Run the program with no C, shell or other runtime (Capability::GRANTED_SANDBOXED), writing files only in its state
-/// folder (src/sandbox.rs), as warp-lambda hosts programs
+/// folder (src/host/sandbox.rs), as warp-lambda hosts programs
 const SANDBOX_FLAG: &str = "--sandbox";
 const HINTS_VARIABLE: &str = "WARP_HINTS";
 /// `--warnings=<level>`: print diagnostics from that level up (hint, weak, normal, severe); `--no-hints` is weak
@@ -151,7 +154,7 @@ fn main() {
 	match args.iter().position(|arg| arg == SANDBOX_FLAG) {
 		Some(flag) => {
 			args.remove(flag);
-			warp::sandbox::confine_process();
+			warp::host::sandbox::confine_process();
 			warp::pipeline::sandboxed(|| run_command(&args))
 		}
 		None => run_command(&args),
@@ -292,7 +295,7 @@ fn tip_hiding_hints_at_exit() {
 
 #[cfg(all(not(test), target_os = "macos"))]
 fn register_file_type() {
-	match warp::file_type::register() {
+	match warp::run::file_type::register() {
 		Ok(app) => println!(
 			"registered .warp files: {} runs them in Terminal (Open With offers editors)",
 			app.display()
@@ -522,7 +525,7 @@ fn run_command(args: &[String]) {
 		std::process::exit(if failed { 1 } else { 0 });
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
-		warp::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`
+		warp::modules::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`
 		if !file_exists(path) {
 			eprintln!("Error: Could not read file '{}'", path);
 		}
@@ -584,16 +587,16 @@ fn run_command(args: &[String]) {
 		println!("LSP not yet implemented");
 	} else if matches!(arg_string.as_str(), "help" | "--help" | "-h") {
 		usage();
-		println!("{}", warp::std_docs::modules_overview());
+		println!("{}", warp::modules::std_docs::modules_overview());
 		println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
 	} else if arg_string == HELP_MARKDOWN {
-		print!("{}", warp::std_docs::standard_library_markdown());
+		print!("{}", warp::modules::std_docs::standard_library_markdown());
 	} else if let Some(module) = command_argument(&arg_string, HELP_PREFIX) {
-		match warp::std_docs::module_help(module) {
+		match warp::modules::std_docs::module_help(module) {
 			Some(help) => println!("{help}"),
 			None => fail(format!(
 				"no standard module {module}; {}",
-				warp::std_docs::modules_overview()
+				warp::modules::std_docs::modules_overview()
 			)),
 		}
 	} else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
@@ -672,7 +675,7 @@ fn ended_well(result: &Node) {
 /// A program's value after what it printed, behind `mark`; nothing for ø, the value of `print` (issue #18) and of a
 /// program that only acts, as Python's console shows nothing for None
 fn show(result: &Node, mark: &str) {
-	if !matches!(result.drop_meta(), Node::Empty) {
+	if !result.is_empty_node() {
 		// markup (`html{ body{ … } }`) is printed as HTML: `warp run page.warp > page.html` (card web-dom)
 		let shown = if markup::is_markup(result) {
 			markup::to_html(result)
@@ -810,12 +813,12 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 	let program = wasm_emitter::compile_printing_result(code)
 		.map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
 	let foreign_call = (HOST_LIBRARY.to_string(), FOREIGN_CALL.to_string());
-	let kept_exports = if warp::host_parts::imports_of(&program.bytes)?.contains(&foreign_call) {
+	let kept_exports = if warp::host::host_parts::imports_of(&program.bytes)?.contains(&foreign_call) {
 		warp_runtime::standalone::stub_calls_export_with_foreign_calls
 	} else {
 		warp_runtime::standalone::stub_calls_export
 	};
-	let bytes = warp::dead_functions::keeping_exports(&program.bytes, kept_exports)?;
+	let bytes = warp::compiler::dead_functions::keeping_exports(&program.bytes, kept_exports)?;
 	let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
 	let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
 	let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
@@ -939,7 +942,7 @@ fn write_wit(code: &str, target: &str) {
 /// `warp build --component`: the component next to the program file (out.component.wasm for inline code)
 fn write_component(code: &str, target: &str) {
 	let path = std::path::Path::new(&compiled_output_path(target)).with_extension(COMPONENT_EXTENSION);
-	match warp::component_builder::build(code) {
+	match warp::modules::component_builder::build(code) {
 		Ok(component) => {
 			fs::write(&path, &component).expect("could not write the component");
 			println!("wrote {} ({} bytes)", path.display(), component.len());

@@ -1,4 +1,4 @@
-// card browser-unit-migrations: the playground's table store migrates a unit column like src/database.rs does: km → m
+// card browser-unit-migrations: the playground's table store migrates a unit column like src/host/database.rs does: km → m
 // keeps the SI amounts, km → kg and km → float are loud errors, plain numbers given a unit are read as it, loudly.
 // The same program runs natively and in the browser (tests/control/test_database_tables.rs pins the native run)
 use crate::common::fails_with;

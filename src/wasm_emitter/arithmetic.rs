@@ -815,7 +815,8 @@ impl WasmGcEmitter {
 			func.instruction(&I::I64ExtendI32U);
 		} else {
 			self.emit_int_op(func, op, left_range, right_range);
-			let width = crate::fixed_width::wider(self.declared_fixed_width(left), self.declared_fixed_width(right));
+			let width =
+				crate::numbers::fixed_width::wider(self.declared_fixed_width(left), self.declared_fixed_width(right));
 			self.emit_fixed_width_check(func, width);
 		}
 	}

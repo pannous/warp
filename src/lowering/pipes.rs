@@ -7,7 +7,7 @@
 
 use super::nodes::{if_then, key};
 use crate::analyzer::counting_function;
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::IMPLICIT_PARAMETER;
@@ -37,11 +37,7 @@ pub fn pipe_stage(stage: Node) -> Node {
 /// `sqrt`, `abs` alone: the operator
 fn operator_stage(node: &Node) -> Option<Op> {
 	match node.drop_meta() {
-		Node::Key(left, op, right)
-			if OPERATOR_STAGES.contains(op)
-				&& matches!(left.drop_meta(), Node::Empty)
-				&& matches!(right.drop_meta(), Node::Empty) =>
-		{
+		Node::Key(left, op, right) if OPERATOR_STAGES.contains(op) && left.is_empty_node() && right.is_empty_node() => {
 			Some(*op)
 		}
 		_ => None,
@@ -243,9 +239,7 @@ impl Pipes {
 				(pipe_stage(words.remove(0)), words)
 			}
 			Node::Key(left, op, operand)
-				if OPERATOR_STAGES.contains(op)
-					&& matches!(left.drop_meta(), Node::Empty)
-					&& !matches!(operand.drop_meta(), Node::Empty) =>
+				if OPERATOR_STAGES.contains(op) && left.is_empty_node() && !operand.is_empty_node() =>
 			{
 				(
 					pipe_stage(key(Node::Empty, *op, Node::Empty)),

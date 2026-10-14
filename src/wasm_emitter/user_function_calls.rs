@@ -21,13 +21,12 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// A program that starts tasks (`go`): each runs in a fresh instance of the module (src/tasks.rs)
+	/// A program that starts tasks (`go`): each runs in a fresh instance of the module (src/host/tasks.rs)
 	pub(super) fn spawns_tasks(&self) -> bool {
 		self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES)
-			|| self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN)
 	}
 
-	/// A global whose value a task's instance gets from the spawning instance (src/tasks.rs copies these at the start)
+	/// A global whose value a task's instance gets from the spawning instance (src/host/tasks.rs copies these at the start)
 	pub(super) fn export_to_tasks(&mut self, label: &str, global: u32) {
 		if self.spawns_tasks() {
 			self.exports
@@ -110,8 +109,6 @@ impl WasmGcEmitter {
 			crate::host::FOREIGN_CALL,
 			crate::host::STD_PURE,
 			crate::host::STD_IO,
-			crate::host::TASK_SPAWN,
-			crate::host::TASK_AWAIT,
 			crate::host::TASK_SPAWN_VALUES,
 			crate::host::TASK_AWAIT_VALUE,
 		]
@@ -491,7 +488,7 @@ impl WasmGcEmitter {
 			.ctx
 			.ffi_imports
 			.iter()
-			.filter(|(name, _)| !crate::uncertain::maps_intervals(name))
+			.filter(|(name, _)| !crate::numbers::uncertain::maps_intervals(name))
 			.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)));
 		imports
 			.chain(rounding)
@@ -730,7 +727,7 @@ struct FunctionState {
 	returns_float: bool,
 	returns_list: bool,
 	returned_tuple: Vec<Kind>,
-	statement_position: Option<crate::meta::LineInfo>,
+	statement_position: Option<crate::compiler::meta::LineInfo>,
 	loop_labels: Vec<super::loop_control::LoopLabels>,
 	loop_values: super::control_flow::LoopValues,
 }

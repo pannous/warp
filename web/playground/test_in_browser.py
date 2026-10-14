@@ -13,7 +13,7 @@ WebDriver: macOS CI runners, after `sudo safaridriver --enable`; its console is 
 the deploy forgot fails here, not on the live page.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
-src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
+src/formats/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
@@ -163,9 +163,11 @@ served = []
 SERVED_SHOWN = 400  # the first requests: the page's and its workers' loading
 
 
+@functools.cache
 def include_dirs():
-	"""the compiler's own list, so both look in the same places"""
-	source = open(os.path.join(REPOSITORY, "src", "ffi_parser.rs"), encoding="utf-8").read()
+	"""the compiler's own list, so both look in the same places; read when the server starts, so a moved ffi_parser.rs
+	stops the run instead of failing each header request quietly"""
+	source = open(os.path.join(REPOSITORY, "src", "formats", "ffi_parser.rs"), encoding="utf-8").read()
 	return re.findall(r'"([^"]+)"', re.search(r"const INCLUDE_DIRS[^=]*=\s*&\[(.*?)\];", source, re.S).group(1))
 
 
@@ -189,6 +191,8 @@ SERVER_STARTED = time.time()
 
 
 def serve(binary, root=REPOSITORY):
+	include_dirs()
+
 	class Handler(http.server.SimpleHTTPRequestHandler):
 		def translate_path(self, path):
 			path = urllib.parse.unquote(urllib.parse.urlsplit(path).path)

@@ -65,7 +65,7 @@ pub(super) const TRAP_POSITION_GLOBAL: &str = "trap·position";
 pub(super) const COLUMN_BITS: u32 = 12;
 
 /// A source position of the program as the i32 `trap_position` holds: the line above, the column below
-pub(super) fn encoded_position(position: &crate::meta::LineInfo) -> i32 {
+pub(super) fn encoded_position(position: &crate::compiler::meta::LineInfo) -> i32 {
 	((position.line_nr as i32) << COLUMN_BITS) | position.column.min((1 << COLUMN_BITS) - 1) as i32
 }
 
@@ -75,7 +75,7 @@ pub fn trap_position_line(encoded: i64) -> Option<String> {
 }
 
 /// The position a trace's `trap position: …` line carries
-pub(super) fn trap_position(trace: &str) -> Option<crate::meta::LineInfo> {
+pub(super) fn trap_position(trace: &str) -> Option<crate::compiler::meta::LineInfo> {
 	let encoded: i64 = trace
 		.split_once(TRAP_POSITION_PREFIX)?
 		.1
@@ -84,7 +84,7 @@ pub(super) fn trap_position(trace: &str) -> Option<crate::meta::LineInfo> {
 		.trim()
 		.parse()
 		.ok()?;
-	Some(crate::meta::LineInfo {
+	Some(crate::compiler::meta::LineInfo {
 		line_nr: (encoded >> COLUMN_BITS) as usize,
 		column: (encoded & ((1 << COLUMN_BITS) - 1)) as usize,
 		..Default::default()
@@ -100,7 +100,7 @@ pub(super) const IF_THEN: &str = "`if condition then ...`";
 pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	if let Some(task) = failure
 		.chain()
-		.find_map(|cause| cause.downcast_ref::<crate::tasks::TaskFailure>())
+		.find_map(|cause| cause.downcast_ref::<crate::host::tasks::TaskFailure>())
 	{
 		return crate::node::error(&task.0);
 	}
@@ -154,10 +154,12 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 			None => format!("no case for {label}"),
 		}
 	});
-	let overflow = trace.split_once(crate::fixed_width::OVERFLOW_PREFIX).map(|(_, rest)| {
-		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
-		crate::fixed_width::overflow_message(&type_name)
-	});
+	let overflow = trace
+		.split_once(crate::numbers::fixed_width::OVERFLOW_PREFIX)
+		.map(|(_, rest)| {
+			let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
+			crate::numbers::fixed_width::overflow_message(&type_name)
+		});
 	// `return error "…"` from a number function: the message is the trap detail
 	let returned_error = trace
 		.contains(list_ops::RETURNED_ERROR)

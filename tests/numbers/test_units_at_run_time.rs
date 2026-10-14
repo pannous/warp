@@ -1,4 +1,4 @@
-//! Quantities are computed at compile time only (src/units.rs): where they would be needed at run time the unit is a loud,
+//! Quantities are computed at compile time only (src/numbers/units.rs): where they would be needed at run time the unit is a loud,
 //! explained error, never a dropped unit (notes/units_runtime.md)
 
 #[test]

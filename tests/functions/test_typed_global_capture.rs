@@ -28,6 +28,6 @@ fn a_call_before_the_definition_reads_a_constant() {
 #[test]
 fn a_route_reads_a_typed_list_of_main() {
 	let program = "class User{name: text}; users: [User] = [User(\"a\")]; route \"/\" { p{ \"home\" } }; route \"/u\" { h1{ \"User \" + users#1.name } }";
-	let page = warp::host::with_page_path("/u", || warp::markup::to_html(&warp::wasm_emitter::eval(program)));
+	let page = warp::host::with_page_path("/u", || warp::web::markup::to_html(&warp::wasm_emitter::eval(program)));
 	assert_eq!(page, "<h1>User a</h1>");
 }

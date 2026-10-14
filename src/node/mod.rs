@@ -1,8 +1,8 @@
 // type string = str; NO! ugly for a reason!
+use crate::compiler::meta::{DataType, DataValue, LineInfo};
 use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{DataType, DataValue, LineInfo};
 use crate::node::Node::*;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
@@ -84,6 +84,10 @@ impl Node {
 	}
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
+	}
+	/// ø itself, under any metadata: unlike `is_nil`, an empty text, list or zero is not
+	pub fn is_empty_node(&self) -> bool {
+		matches!(self.drop_meta(), Empty)
 	}
 	/// ø or a block without statements: `{}` evaluates to nothing
 	pub fn is_nothing(&self) -> bool {
@@ -917,7 +921,7 @@ impl fmt::Display for Node {
 				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
-			Data(data) => match crate::units::describe(data) {
+			Data(data) => match crate::numbers::units::describe(data) {
 				Some(text) => write!(f, "{}", text),
 				None => write!(f, "{:?}", self),
 			},

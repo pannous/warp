@@ -42,11 +42,11 @@ fn only_a_program_with_markup_renders_itself() {
 #[test]
 fn the_renderer_inside_the_module_gives_the_html() {
 	let module = warp::pipeline::rendering_itself(|| warp::pipeline::compile("div{ p{ \"hi\" } }")).expect("compiled");
-	let imports = warp::wasm_reader::Imports {
+	let imports = warp::run::wasm_reader::Imports {
 		host: true,
 		wasi: true,
 		ffi: false,
 	};
-	let html = warp::wasm_reader::read_export_after_main(&module.bytes, imports, PAGE_HTML).expect("rendered");
+	let html = warp::run::wasm_reader::read_export_after_main(&module.bytes, imports, PAGE_HTML).expect("rendered");
 	assert_eq!(html.serialize().trim(), "\"<div><p>hi</p></div>\"");
 }

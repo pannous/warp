@@ -1,7 +1,7 @@
-//! Cells: one mutable value that several functions share (lowering/nonlocal_cells.rs, `nonlocal y` changed by a nested
+//! Cells: one mutable value that several functions share (lowering/definitions/nonlocal_cells.rs, `nonlocal y` changed by a nested
 //! function). A cell is a $Node of Kind::Data whose data is a $node_array of one element:
 //!   cell_new(v) → the cell holding v, cell_get(c) → its value, cell_set(c, v) → stores v and gives it back.
-//! A signal (lowering/signal_values.rs) is a cell with a second slot, the list of its listener closures:
+//! A signal (lowering/signals/signal_values.rs) is a cell with a second slot, the list of its listener closures:
 //!   signal_new(v) → the signal holding v and no listeners, cell_get / cell_set its value,
 //!   signal_listeners(s) → the listener list, signal_listeners_set(s, list) → stores it and gives it back.
 //! Everything is in the module itself, so the browser build runs it as it is.

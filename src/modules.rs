@@ -13,7 +13,22 @@ mod loader;
 use loader::*;
 mod std_modules;
 pub use std_modules::*;
+pub mod binaryen;
+#[cfg(feature = "native")]
+pub mod cargo_crates;
+#[cfg(feature = "native")]
+pub mod component_builder;
+#[cfg(feature = "native")]
+pub mod components;
+#[cfg(feature = "native")]
+pub mod foreign;
+#[cfg(feature = "native")]
+pub mod package_tools;
 mod packages;
+#[cfg(feature = "native")]
+pub mod std_adapters;
+pub mod std_docs;
+pub mod wasm_modules;
 pub use packages::*;
 
 /// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
@@ -73,7 +88,7 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
-	crate::compile_context::change(|context| context.module_definitions.clear());
+	crate::compiler::compile_context::change(|context| context.module_definitions.clear());
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(declared_name).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
@@ -87,7 +102,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 			Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 			None => Ok(program),
 		})
-		.map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
+		.map(|program| crate::modules::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
 	let files = loader
 		.loaded
@@ -96,7 +111,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		.filter(|path| path.is_file())
 		.cloned()
 		.collect();
-	crate::compile_context::change(|context| {
+	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
 		context.early_class_modules.clear(); // for this program only
 		own_names.iter().for_each(|own| {
@@ -126,14 +141,17 @@ pub fn insert_module_classes(program: Node) -> Node {
 		if let Some(module) = loader
 			.find(&used.name)
 			.is_none()
-			.then(|| loader.find_with(&used.name, &crate::wasm_modules::MODULE_EXTENSIONS))
+			.then(|| loader.find_with(&used.name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
 			.flatten()
 		{
 			let module = module.to_string_lossy();
-			let classes = crate::wasm_modules::classes(&module);
+			let classes = crate::modules::wasm_modules::classes(&module);
 			let names: Vec<String> = classes.iter().filter_map(declared_name).collect();
-			program =
-				crate::wasm_modules::with_bare_classes(program, &crate::wasm_modules::module_alias(&module), &names);
+			program = crate::modules::wasm_modules::with_bare_classes(
+				program,
+				&crate::modules::wasm_modules::module_alias(&module),
+				&names,
+			);
 			file_classes.extend(classes);
 			continue;
 		}
@@ -165,7 +183,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		}
 		early.insert(path.canonicalize().unwrap_or(path));
 	}
-	crate::compile_context::change(|context| context.early_class_modules = early);
+	crate::compiler::compile_context::change(|context| context.early_class_modules = early);
 	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
 	let aliases: Vec<(&str, &str)> = STD_ALIASES
 		.into_iter()
@@ -579,7 +597,7 @@ pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
 	if names_a_module(name) {
 		return None;
 	}
-	program_loader().find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS)
+	program_loader().find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS)
 }
 
 /// Does `use name` name anything: a module (warp, standard, WebAssembly), a scope, a package or a C library
@@ -603,12 +621,12 @@ fn program_loader() -> Loader<'static> {
 
 /// The file being compiled, None for inline code
 pub fn program_file() -> Option<PathBuf> {
-	crate::compile_context::read(|context| context.program_file.clone())
+	crate::compiler::compile_context::read(|context| context.program_file.clone())
 }
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
-	crate::compile_context::scoped(|context| &mut context.program_file, Some(file.to_path_buf()), body)
+	crate::compiler::compile_context::scoped(|context| &mut context.program_file, Some(file.to_path_buf()), body)
 }
 
 fn folder_of(file: &Path) -> PathBuf {
@@ -662,7 +680,7 @@ const FILE_URL_PREFIX: &str = "file://";
 /// lib/units.warp: quantities whose unit is known only at run time, `quantity("5 km")` (notes/units_runtime.md)
 const UNITS_MODULE: &str = "units";
 const QUANTITY: &str = "quantity";
-/// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/serve.rs) are read by the router's words
+/// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/web/serve.rs) are read by the router's words
 const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 const AGENT_MODULE: &str = "agent";
@@ -692,8 +710,8 @@ const SOUND_WORDS: [&str; 17] = [
 const SOUND_SETUP_FREE_WORDS: [&str; 4] = ["play", "beep", "stop_sound", "wait_sound"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
-/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
-/// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
+/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/web/page_html.rs),
+/// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/web/routes.rs), a call of quantity → units (run-time units),
 /// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
 const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
@@ -812,7 +830,7 @@ fn statement_words(node: &Node) -> Option<Vec<&Node>> {
 }
 
 /// The modules a `use` statement names, each with the statement that uses it alone: `use list, text` and
-/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign_modules.rs), not two
+/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign/foreign_modules.rs), not two
 fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 	if let Some(used) = used_module(node) {
 		return Some(vec![(used, node.clone())]);
@@ -1109,7 +1127,7 @@ fn template_holes(statements: &[Node]) -> Vec<Node> {
 	fn collect(node: &Node, holes: &mut Vec<Node>) {
 		match node {
 			Node::Meta { node: inner, .. } => {
-				holes.extend(crate::interpolation::holes(node));
+				holes.extend(crate::text::interpolation::holes(node));
 				collect(inner, holes);
 			}
 			Node::Key(left, _, right) => {
@@ -1157,7 +1175,7 @@ fn mentioned_names(statements: &[Node]) -> Vec<String> {
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
 			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
-			Node::Meta { node: inner, .. } => crate::interpolation::holes(node)
+			Node::Meta { node: inner, .. } => crate::text::interpolation::holes(node)
 				.iter()
 				.chain([inner.as_ref()])
 				.for_each(|part| collect(part, names)),

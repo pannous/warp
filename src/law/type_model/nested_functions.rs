@@ -5,11 +5,10 @@
 //! as in Python and warp.
 
 use super::{assigned_locals, cell_class, function_definition, parameter_word, statements};
+use crate::lowering::nodes::typed;
 use crate::lowering::FunctionHead;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-
-const NONLOCAL_WORD: &str = "nonlocal";
 
 struct Nested {
 	name: String,
@@ -81,7 +80,7 @@ fn lift_from(lifted_from: &FunctionHead, globals: &[String]) -> Result<Vec<Node>
 			let nested = function_definition(definition).expect("a function definition");
 			let (name, parameters, body) = (nested.name, nested.parameters(), nested.body);
 			let own: Vec<String> = parameters.iter().map(|parameter| parameter_word(parameter)).collect();
-			let references = nonlocal_names(body);
+			let references = crate::late_binding::declared_nonlocals(body);
 			let locals: Vec<String> = assigned_locals(body, globals)
 				.into_iter()
 				.filter(|local| !references.contains(local))
@@ -194,34 +193,12 @@ fn definition(head: Node, result: Option<&Node>, body: Node) -> Node {
 	Node::Key(Box::new(target), Op::Define, Box::new(body))
 }
 
-fn typed(name: &str, type_word: &str) -> Node {
-	Node::Key(
-		Box::new(Node::Symbol(name.to_string())),
-		Op::Colon,
-		Box::new(Node::Symbol(type_word.to_string())),
-	)
-}
-
-/// `nonlocal y` (parsed `nonlocal: y`)
-fn nonlocal_declaration(statement: &Node) -> Option<String> {
-	match statement.drop_meta() {
-		Node::Key(word, Op::Colon, name) if matches!(word.drop_meta(), Node::Symbol(word) if word == NONLOCAL_WORD) => {
-			Some(name.name())
-		}
-		_ => None,
-	}
-}
-
-fn nonlocal_names(body: &Node) -> Vec<String> {
-	body_items(body).iter().filter_map(nonlocal_declaration).collect()
-}
-
 fn without_nonlocal(body: &Node) -> Node {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, separator) => Node::List(
 			items
 				.iter()
-				.filter(|item| nonlocal_declaration(item).is_none())
+				.filter(|item| crate::late_binding::nonlocal_names(item).is_empty())
 				.cloned()
 				.collect(),
 			Bracket::Curly,

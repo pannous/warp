@@ -445,7 +445,7 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 			_ => assignment_mismatch(assignment, name, base, value),
 		};
 	}
-	if matches!(value.drop_meta(), Node::Empty) && builtin_type_kind(type_name).is_some() {
+	if value.is_empty_node() && builtin_type_kind(type_name).is_some() {
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
 		return Some(
 			Diagnostic::at(assignment, message)
@@ -605,7 +605,7 @@ pub(crate) fn misfit_item<'a>(element: &str, value: &'a Node) -> Option<(&'a Nod
 }
 
 pub(super) fn out_of_width(element: &str, item: &Node) -> Option<Kind> {
-	let width = crate::fixed_width::fixed_width(element)?;
+	let width = crate::numbers::fixed_width::fixed_width(element)?;
 	let Node::Number(Number::Int(value)) = item.drop_meta() else {
 		return None;
 	};

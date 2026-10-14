@@ -1,6 +1,6 @@
-//! `use cargo regex`: a crate from crates.io as a WebAssembly component (src/cargo_crates.rs): warp generates a wrapper
+//! `use cargo regex`: a crate from crates.io as a WebAssembly component (src/modules/cargo_crates.rs): warp generates a wrapper
 //! crate exporting a WIT world of the crate's public functions, builds it for wasm32-wasip2 once per machine
-//! (~/.cache/warp/crates) and loads it like `use wasm` (src/components.rs). Real crates, built on first use.
+//! (~/.cache/warp/crates) and loads it like `use wasm` (src/modules/components.rs). Real crates, built on first use.
 use crate::common::fails_with;
 use crate::is;
 
@@ -54,16 +54,18 @@ fn test_cargo_crate_without_callable_functions_is_refused() {
 #[test]
 fn test_cargo_crate_prebuilt_download() {
 	let directory = std::path::PathBuf::from(format!("scratch/crate-downloads-{}", std::process::id()));
-	let wasm = warp::cargo_crates::download("strsim", &directory).unwrap();
+	let wasm = warp::modules::cargo_crates::download("strsim", &directory).unwrap();
 	let program = format!(
 		"use wasm \"{}\" as strsim; strsim.levenshtein(\"kitten\", \"sitting\")",
 		wasm.display()
 	);
 	is!(&program, 3);
 	std::fs::remove_dir_all(&directory).unwrap();
-	assert!(warp::cargo_crates::download("no_such_crate_xyz_warp", &directory)
-		.unwrap_err()
-		.contains("not hosted"));
+	assert!(
+		warp::modules::cargo_crates::download("no_such_crate_xyz_warp", &directory)
+			.unwrap_err()
+			.contains("not hosted")
+	);
 }
 
 /// card use-cargo-debug-names: crate components keep their name section, so a trap's backtrace names the Rust

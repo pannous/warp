@@ -274,7 +274,7 @@ fn is_computed(value: &Node) -> bool {
 		// a quantity `5 m` is a value, written as data
 		Node::Key(amount, Op::Mul, unit)
 			if matches!(amount.drop_meta(), Node::Number(_))
-				&& matches!(unit.drop_meta(), Node::Symbol(name) if crate::units::is_unit(name)) =>
+				&& matches!(unit.drop_meta(), Node::Symbol(name) if crate::numbers::units::is_unit(name)) =>
 		{
 			false
 		}

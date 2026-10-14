@@ -34,13 +34,13 @@ fn a_field_of_a_filtered_table_reads_only_its_rows() {
 		format!("class Person{{name: text; age: int}}\npeople: [Person] = database.people_field_of\n{rest}")
 	};
 	eval(&stored("for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }"));
-	let before = warp::database::rows_read();
+	let before = warp::host::database::rows_read();
 	is!(
 		&stored("names = name of people with age > 48\nnames#1 + names#2"),
 		"N49N50"
 	);
 	assert_eq!(
-		warp::database::rows_read(),
+		warp::host::database::rows_read(),
 		before + 2,
 		"name of a filtered table read other rows than its two"
 	);

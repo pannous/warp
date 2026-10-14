@@ -20,11 +20,8 @@ pub use warp_runtime::host_words::{
 	RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_LISTEN, SIGNAL_POLL, SIGNAL_WATCH, SLEEP, SYSTEM_VALUE,
 	TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
 };
-/// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
-pub const TASK_SPAWN: &str = "task_spawn";
-pub const TASK_AWAIT: &str = "task_await";
 pub const TASK_CONTROL: &str = "task_control";
-/// `go f(x)` of a function of numbers, texts or characters: task_spawn_values(name, [arguments]) → task id,
+/// `go f(x)` on a thread (tasks.rs) of a function of numbers, texts, characters or lists: task_spawn_values(name, [arguments]) → task id,
 /// task_await_value(id) → the result, both carried as Nodes
 pub const TASK_SPAWN_VALUES: &str = "task_spawn_values";
 pub const TASK_AWAIT_VALUE: &str = "task_await_value";
@@ -64,9 +61,7 @@ pub const TASK_PAUSED: i64 = 4;
 pub const TASK_STOP: i64 = 1;
 pub const TASK_PAUSE: i64 = 2;
 pub const TASK_RESUME: i64 = 3;
-/// The Int arguments task_spawn carries; a function of more runs where it is started
-pub const MAX_TASK_ARGUMENTS: usize = 4;
-/// Shared arrays (shared_arrays.rs, src/shared.rs natively, host.js): shared_new(n) → array, shared_get(array, i),
+/// Shared arrays (shared_arrays.rs, src/host/shared.rs natively, host.js): shared_new(n) → array, shared_get(array, i),
 /// shared_set(array, i, v), shared_add(array, i, v) (atomic, the new value), shared_count(array)
 pub const SHARED_WORDS: [&str; 5] = ["shared_new", "shared_get", "shared_set", "shared_add", "shared_count"];
 /// shared_writes(array): how many sets and adds the array had, so a listener polling it sees each write (P156 footgun
@@ -78,7 +73,7 @@ pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared
 /// values, definitions) compiles the block with the names bound to the values the program had where it ran it and the
 /// program's function definitions, runs it, and gives its value
 pub const RUN_BLOCK: &str = "run_block";
-/// parse_code(text): the code a text known only at run time holds, as data (card parse-runtime, lowering/parse_word.rs):
+/// parse_code(text): the code a text known only at run time holds, as data (card parse-runtime, lowering/words/parse_word.rs):
 /// natively the Rust parser, in the browser run_block's compiler instance (host-compiler.js)
 pub const PARSE_CODE: &str = "parse_code";
 /// block·value(index): the number a block run at run time reads, of the values its run_block call passed
@@ -97,16 +92,16 @@ pub const DRAW_SHOW: &str = "draw_show";
 pub const SOUND: &str = "sound_samples";
 /// The host words whose first argument is a list of ints, read in one call of the module's list_to_ints
 pub const INT_LIST_WORDS: [&str; 2] = [PAINT, SOUND];
-/// Channels between programs (src/channels.rs): channel_listen(id, channel), channel_pending(id) → count,
+/// Channels between programs (src/host/channels.rs): channel_listen(id, channel), channel_pending(id) → count,
 /// channel_next(id) → the oldest message, channel_send(channel, value)
 pub const CHANNEL_LISTEN: &str = "channel_listen";
 pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
 /// dispatch_event(name, detail): an emit no handler of a page's program receives, as a DOM CustomEvent on the page
-/// (card page-custom-event, lowering/event_signals.rs; host.js; natively the headless page keeps it)
+/// (card page-custom-event, lowering/signals/event_signals.rs; host.js; natively the headless page keeps it)
 pub const DISPATCH_EVENT: &str = "dispatch_event";
-/// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/std_adapters.rs, host.js),
+/// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/modules/std_adapters.rs, host.js),
 /// called by the words of lib/<module>.warp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
 pub const STD_IO: &str = "std_io";
@@ -123,12 +118,12 @@ pub const USER_FUNCTIONS_SEPARATOR: &str = "\n";
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// response_header(name, value): `header "name" "value"` in a route's body, `status 418` the CGI header Status
-/// (card web-route-header, lowering/serve.rs with_answer_headers): natively the route's HTTP answer carries it
+/// (card web-route-header, lowering/web/serve.rs with_answer_headers): natively the route's HTTP answer carries it
 pub const RESPONSE_HEADER: &str = "response_header";
 pub const STATUS_HEADER: &str = "Status";
 /// `users := fetch url` (src/web/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
-/// `users := fetch url` (lowering/fetch_signals.rs)
+/// `users := fetch url` (lowering/signals/fetch_signals.rs)
 pub const FETCH_WORD: &str = "fetch";
 pub const FETCH_START: &str = "fetch_start";
 pub const FETCH_REPLY: &str = "fetch_reply";
@@ -146,9 +141,7 @@ pub const CHANNEL_WORDS: [&str; 5] = [
 ];
 /// The host words of tasks, their signals and channels: a module calling one runs tasks (tasks.rs), a function that
 /// calls one has the effect Async (effects.rs)
-pub const TASK_WORDS: [&str; 18] = [
-	TASK_SPAWN,
-	TASK_AWAIT,
+pub const TASK_WORDS: [&str; 16] = [
 	TASK_CONTROL,
 	TASK_SPAWN_VALUES,
 	TASK_AWAIT_VALUE,
@@ -187,7 +180,7 @@ pub const VALUE_GIVING_WORDS: [&str; 15] = [
 use wasm_encoder::ValType::{F64, I32, I64};
 const NODE: wasm_encoder::ValType = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 /// name, parameters, results of each host word
-pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 67] = [
+pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 65] = [
 	(DRAW_SHAPE, &[I64, F64, F64, F64, F64, I64], &[]),
 	(DRAW_SHOW, &[I64, I64], &[]),
 	(GPU_COMPUTE, &[NODE, NODE, I64], &[NODE]),
@@ -228,8 +221,6 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(SIGNAL_WATCH, &[I64, I32], &[]),
 	(SYSTEM_VALUE, &[I32], &[I64]),
 	(EXIT, &[I64], &[]),
-	(TASK_SPAWN, &[I32, I64, I64, I64, I64], &[I64]),
-	(TASK_AWAIT, &[I64], &[I64]),
 	(TASK_CONTROL, &[I64, I64], &[I64]),
 	(TASK_SPAWN_VALUES, &[I32, NODE], &[I64]),
 	(TASK_AWAIT_VALUE, &[I64], &[NODE]),
@@ -276,7 +267,17 @@ use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
 #[cfg(feature = "native")]
+pub mod channels;
+#[cfg(feature = "native")]
+pub mod database;
+pub mod host_parts;
+#[cfg(feature = "native")]
 mod native;
+pub mod sandbox;
+#[cfg(feature = "native")]
+pub mod shared;
+#[cfg(feature = "native")]
+pub mod tasks;
 #[cfg(feature = "native")]
 pub use native::*;
 /// Body of `url`, or the reason it could not be fetched

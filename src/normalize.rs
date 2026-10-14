@@ -11,7 +11,7 @@
 //! ```
 //! Every axis also takes `Any`: all its forms are fine and never hinted (function definitions by default).
 
-use crate::compile_context;
+use crate::compiler::compile_context;
 use crate::node::{Bracket, Node};
 use crate::operators::{glyph_operator, Op};
 
@@ -66,7 +66,7 @@ impl From<crate::diagnostic::Diagnostic> for CapturedHint {
 	fn from(hint: crate::diagnostic::Diagnostic) -> Self {
 		let position = match hint.line {
 			0 => String::new(),
-			line => crate::meta::place_text(hint.file.as_deref(), line, hint.column),
+			line => crate::compiler::meta::place_text(hint.file.as_deref(), line, hint.column),
 		};
 		CapturedHint {
 			original: hint.written.unwrap_or_default(),

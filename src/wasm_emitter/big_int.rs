@@ -18,8 +18,8 @@
 
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
-use crate::fixed_width::FixedWidth;
 use crate::node::Node;
+use crate::numbers::fixed_width::FixedWidth;
 use crate::operators::Op;
 use num_bigint::{BigInt, Sign};
 use std::collections::HashSet;
@@ -147,16 +147,12 @@ impl WasmGcEmitter {
 			Node::False => Some((0, 0)),
 			Node::Char(_) => Some((0, char::MAX as i128)),
 			Node::Symbol(name) if self.bounded_counters.contains(name) => Some((0, i32::MAX as i128)),
-			Node::Key(left, op, right)
-				if matches!(left.drop_meta(), Node::Empty) && (op.is_prefix() || *op == Op::Hash) =>
-			{
-				match op {
-					Op::Neg => self.int_range(right).map(|(low, high)| (-high, -low)),
-					Op::Not => Some((0, 1)),
-					Op::Hash => Some((0, i32::MAX as i128)),
-					_ => None,
-				}
-			}
+			Node::Key(left, op, right) if left.is_empty_node() && (op.is_prefix() || *op == Op::Hash) => match op {
+				Op::Neg => self.int_range(right).map(|(low, high)| (-high, -low)),
+				Op::Not => Some((0, 1)),
+				Op::Hash => Some((0, i32::MAX as i128)),
+				_ => None,
+			},
 			Node::Key(left, op, right) => {
 				let (l, r) = (self.int_range(left), self.int_range(right));
 				match op {
@@ -555,7 +551,7 @@ impl WasmGcEmitter {
 			return None;
 		};
 		let type_node = self.scope.lookup(name)?.type_node.as_ref()?;
-		crate::fixed_width::fixed_width(&type_node.name())
+		crate::numbers::fixed_width::fixed_width(&type_node.name())
 	}
 
 	/// Is the variable `node` declared a whole-number type (`int`, `long`, `byte` …, not `exact`)

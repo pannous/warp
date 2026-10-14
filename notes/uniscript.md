@@ -43,7 +43,7 @@ Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tes
   name: alpha), the block form (`<:fracture A>`), else the Unicode name.
 
 ## Porting note: meta information (TAG sequences), done in Rust and Swift, open in the package's uniscript.wasp
-Reference: github.com/pannous/uniscript `src/meta.rs`, `src/lib.rs` (`meta_tag`, `to_uniscript`, `html`), tests
+Reference: github.com/pannous/uniscript `src/compiler/meta.rs`, `src/lib.rs` (`meta_tag`, `to_uniscript`, `html`), tests
 `tests/meta_test.rs`, Swift `Sources/Uniscript/Meta.swift`; spec wiki/uniscript.md "Meta information".
 - Data: the package's index already has the 5 tables, appended, so `names_table`/`chars_table`/`suffixes_table` stay
   valid: `fonts_table = 3` (`han-japanese ` → "", `han-japanese lang` → ja, `… families`, `… features`), `meta_table = 4`

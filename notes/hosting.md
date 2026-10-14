@@ -85,7 +85,7 @@ lambda's DNS moves to Cloudflare):
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
 - Clients: `warp deploy --hosted app.warp` (src/web/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
-  scripts, src/web/mod.rs worker_bundle → src/host_parts.rs).
+  scripts, src/web/mod.rs worker_bundle → src/host/host_parts.rs).
 - Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
   dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
 
@@ -99,7 +99,7 @@ lambda's DNS moves to Cloudflare):
   warp-lambda@*.service), install.sh (over ssh, optional Linux binary:
   `cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.39 --bin warp`).
 - Sandboxed (user, 2026-10-09): `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
-  runtimes: "capability denied" at deploy). The rule at run time (src/sandbox.rs, cards sandbox-exec and
+  runtimes: "capability denied" at deploy). The rule at run time (src/host/sandbox.rs, cards sandbox-exec and
   sandbox-hosted, 2026-10-13): no process (os.exec behind `exec sh"…"`, which std_io hid from the capability check;
   sound players, the MIDI sender), loud "capability denied … warp --sandbox"; files are written only inside the state
   folder (systemd's STATE_DIRECTORY, else the working directory): file.write/write_bytes/append, stored values,

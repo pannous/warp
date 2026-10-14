@@ -84,7 +84,7 @@ pub(crate) fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else {
 		return None;
 	};
-	if !matches!(empty.drop_meta(), Node::Empty) || !keyword.is_symbol("in") {
+	if !empty.is_empty_node() || !keyword.is_symbol("in") {
 		return None;
 	}
 	let Node::Symbol(word) = unit.drop_meta() else {

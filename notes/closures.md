@@ -2,10 +2,10 @@
 
 Functions and lambdas are values: stored in variables and lists, passed, returned, called later. The machine still
 captures BY VALUE (a closure copies the captured variables when it is made), but the meaning is Python's late binding
-(wiki/charged.md §3, revising D7/#33; src/lowering/late_binding.rs): a main-level change of a captured variable that a
+(wiki/charged.md §3, revising D7/#33; src/lowering/definitions/late_binding.rs): a main-level change of a captured variable that a
 later call could see is a compile error unless the function declares `global y`, so the copy always equals the
 current value; a variable first bound after the definition is made a global. Compile-time specialisation
-(src/lowering/function_values.rs, decision #37) stays wherever the function is known; closures cover the rest.
+(src/lowering/definitions/function_values.rs, decision #37) stays wherever the function is known; closures cover the rest.
 
 ```warp
 make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)      # 7
@@ -22,7 +22,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
    known at compile time (a variable, a capturing lambda, a call), the call stays and the function gets a **generic
    version** beside its specialisations (`make_generic`); `f x` with a function parameter becomes `f(x)` there.
    A literal number or text where a function is expected stays the loud `functions are not first-class values yet`.
-3. `closures::lower` (src/lowering/closures.rs, new):
+3. `closures::lower` (src/lowering/definitions/closures.rs, new):
    - every remaining arrow lambda is **lifted** to `closure_lambda_n(captured…, params…) := body` (top level) and replaced
      by `closure_new(closure_lambda_n, captured…)`; captured = variables of the enclosing scopes the body reads, in order;
    - a function name where a value is expected (assignment value, list item, argument, function result, if/else
@@ -77,7 +77,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 - A nested `outer·inner` reads its captures from globals; outer refreshes them before every call it makes
   (`refresh_enclosing_captures`). Used as a value, `closure_new(outer·inner)` stores the current capture values in the
   closure and its entry sets the globals from them before the call, so `make(1)` and `make(2)` keep their own `k`.
-- `nonlocal y` written by inner: y lives in a cell (lowering/nonlocal_cells.rs, `y·cell`; wasm_emitter/cells.rs:
+- `nonlocal y` written by inner: y lives in a cell (lowering/definitions/nonlocal_cells.rs, `y·cell`; wasm_emitter/cells.rs:
   `cell_new/cell_get/cell_set`, a $Node of Kind::Data holding a one-element $node_array, in the module itself, so the
   browser build needs nothing). A cell holds any value; `cell_get` is typed like a map value (Kind::Empty, a Node that
   joins texts and adds at run time), `cell_set` counts as a statement (a block of calls only would be a list). The

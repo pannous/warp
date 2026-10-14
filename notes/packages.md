@@ -20,7 +20,7 @@
   `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/web/test_uniscript.rs 335 s → 24 s.
   A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
   identical GC rec groups); not there yet.
-- Package tools are prebuilt WebAssembly, never built from source into a shared target (src/package_tools.rs):
+- Package tools are prebuilt WebAssembly, never built from source into a shared target (src/modules/package_tools.rs):
   `run_package_tool(name, args)` / `warp tool <name> args…` runs `<name>.wasm`, a wasm32-wasip1 command, in-process
   under wasmtime-wasi with the package directory preopened as `.`. One artifact for every OS, no per-platform binaries.
   It comes from `<package>/<name>.wasm`, else the GitHub release asset `<name>.wasm` of the pinned tag (v1.2.3 or 1.2.3),
@@ -38,7 +38,7 @@
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.warp
   and data/uniscript/. warp's tests/web/test_uniscript.rs still tests it (through `use uniscript`).
-- Versions (src/lowering/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
+- Versions (src/lowering/data/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
   The default branch's module declares its version with a top level `version 1.2.3`; if it does not satisfy the
   requirement, the best git tag (`v1.2.3` or `1.2.3`, via `git ls-remote --tags`) is cloned into packages/<name>@<version>.
   A local module named in a versioned `use` must declare a satisfying version.

@@ -301,7 +301,7 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 fn glued_unit(node: &Node, defined: &HashSet<String>) -> Option<(&'static str, Node)> {
 	match node.drop_meta() {
 		Node::Key(amount, Op::Mul, unit) => unit_amount_word(unit, defined).map(|word| (word, *amount.clone())),
-		Node::Key(nothing, op @ (Op::Sub | Op::Neg), product) if matches!(nothing.drop_meta(), Node::Empty) => {
+		Node::Key(nothing, op @ (Op::Sub | Op::Neg), product) if nothing.is_empty_node() => {
 			let (word, amount) = glued_unit(product, defined)?;
 			Some((word, Node::Key(nothing.clone(), *op, Box::new(amount))))
 		}

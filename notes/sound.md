@@ -36,7 +36,7 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
   file is decoded first by ffprobe or afinfo (a broken one fails play, also headless); a player failing within 0.3 s
   fails play, a later failure prints `sound file <path>: <player> failed (<status>): <its error output>`; without a
   decoder on the machine only the format is checked. In the browser a failure reaches the console.
-- Units: `Hz` is `1/s`, `kHz` `1/ms` (src/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
+- Units: `Hz` is `1/s`, `kHz` `1/ms` (src/numbers/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 
 A module's `global` is a setting: the program's top-level `note_seconds = 0.25` or `tempo = 90` sets it (modules.rs
 shadowed_apart leaves globals alone; other program variables named like a module word still shadow it). Before
@@ -100,7 +100,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    amount is the item before the word, of an assignment its value (src/lowering/music_words.rs → lib beat_seconds,
    bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
    Voices built (step 5, 2026-10-10, samples/voices.warp): every task (`go { }`) is a voice. It forks its starter's
-   place in time (src/sound/mod.rs Voice, joined in src/tasks.rs spawn), so a task's notes sound along with the
+   place in time (src/sound/mod.rs Voice, joined in src/host/tasks.rs spawn), so a task's notes sound along with the
    starter's instead of after them; each queued sound plays from its own sleeping thread (overlapping players, the OS
    mixes), and render_sound mixes the sounds at their logical places (tests/programs/test_sound_voices.rs).
    In the Playground too (card playground-go): each Worker keeps its voice's end on a clock the page and the Workers

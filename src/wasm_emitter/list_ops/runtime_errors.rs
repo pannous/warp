@@ -112,7 +112,7 @@ impl WasmGcEmitter {
 			.missing_case_labels
 			.iter()
 			.map(|label| &*Box::leak(format!("{}{label}", crate::switch::NO_CASE_PREFIX).into_boxed_str()));
-		let overflow_errors = crate::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
+		let overflow_errors = crate::numbers::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
 		RUNTIME_ERRORS
 			.into_iter()
 			.chain(no_case_errors)

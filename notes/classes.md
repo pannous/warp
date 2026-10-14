@@ -21,7 +21,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
    - Calls: `p.greet()`, `greet(p)`, and `p.area` for a method without parameters (`area := side*side`, a getter).
    - The class keeps only its fields, so construction counts fields as before.
    - A method that assigns a field of its receiver is a loud error until step 2.
-   - Pass: lowering/class_methods.rs, early in SOURCE_PHASES.
+   - Pass: lowering/types/class_methods.rs, early in SOURCE_PHASES.
 2. **Mutating methods** (P116): `inc() := n += 1`; `c.inc()` updates the variable c, like `xs.add(v)` does (objects
    are values, wiki/class.md).
 3. **Constructors and required fields** (wiki/constructor.md): `init{…}` / `init(name){…}` blocks (P162; `value` was the
@@ -39,7 +39,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
   Traits (`is shape`) stay as they are (step 5).
 
 ## Step 1 as built
-- lowering/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
+- lowering/types/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
   `name(self:class, params…) := body`, and the class keeps its fields. The parser keeps a `:=` body as code, not as a
   field type (lists.rs `transform_fields_to_types`).
 - A method name that two or more classes define is declared as the implicit trait `trait has·name{name}`. traits.rs
@@ -375,7 +375,7 @@ block as children and per-instance state are web's (blocks.rs lower_trailing_blo
 - `type Color = red | rgb(int, int, int)` (parser parse_sum_type): Color is a class without fields carrying
   `@variants(red …)`, each variant with payload a class `@extends(Color)` with fields value / value1… or named
   `rgb(r, g, b)`. Positional fields `c#1` (1-based) or `c.0` (Rust) work on any class instance.
-- lowering/sum_variants.rs (SOURCE pass after soft_keywords): `x is Color` → `is_type(x, Color) or x == red …`,
+- lowering/types/sum_variants.rs (SOURCE pass after soft_keywords): `x is Color` → `is_type(x, Color) or x == red …`,
   `red is Color` is true; `Shape::Circle(2)` → `Circle(2)` for any variant, also in match patterns.
 - `enum Shape { Circle(r), Rect(w, h), Dot }` and Swift's `case circle(radius: Double)` lines: as soon as one case has
   values the enum IS that sum type (parser parse_enum_with_values, same sum_type builder). An enum without values

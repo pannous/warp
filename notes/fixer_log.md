@@ -80,7 +80,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   emitted before the list ops now (tests/control/test_try_list_index.rs).
 
 ## 2026-10-05 fix-uniscript-entities
-- `\alpha` / `\:infinity` uniscript entities in code (src/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
+- `\alpha` / `\:infinity` uniscript entities in code (src/text/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
   sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
   `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
   blocks stay with the uniscript package.
@@ -118,7 +118,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-05 fix-is-declaration
 - `x is number 9` of a name assigned nowhere (and no parameter) declares it, `x:number = 9` (wiki Features.md,
-  inventions.md); of a variable it stays the type-and-value test (lowering/type_tests.rs is_declaration).
+  inventions.md); of a variable it stays the type-and-value test (lowering/types/type_tests.rs is_declaration).
 
 ## 2026-10-05 fix-raise
 - `raise X` / `throw X` / `raise error("m")`: the builtin raise(X) fails the run through returned_error with X as its

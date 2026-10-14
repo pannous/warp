@@ -71,7 +71,7 @@ pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
 			is_float_kernel(parameter, left) && is_float_kernel(parameter, right)
 		}
 		Node::Key(empty, op, operand)
-			if matches!(empty.drop_meta(), Node::Empty) && KERNEL_PREFIX.iter().any(|(known, _, _)| known == op) =>
+			if empty.is_empty_node() && KERNEL_PREFIX.iter().any(|(known, _, _)| known == op) =>
 		{
 			is_float_kernel(parameter, operand)
 		}
@@ -93,7 +93,7 @@ pub fn kernel_name(parameter: &str, body: &Node) -> String {
 		"{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}",
 		body.serialize().trim()
 	);
-	crate::compile_context::change(|context| {
+	crate::compiler::compile_context::change(|context| {
 		context
 			.float_kernels
 			.insert(name.clone(), (parameter.to_string(), body.clone()))
@@ -103,7 +103,7 @@ pub fn kernel_name(parameter: &str, body: &Node) -> String {
 
 /// The parameter and body of the kernel lowering named
 fn kernel_of(name: &str) -> (String, Node) {
-	crate::compile_context::read(|context| context.float_kernels.get(name).cloned())
+	crate::compiler::compile_context::read(|context| context.float_kernels.get(name).cloned())
 		.expect("a kernel lowering named (kernel_name)")
 }
 
@@ -499,7 +499,7 @@ fn emit_kernel(func: &mut Function, parameter: &str, body: &Node, value: u32, la
 			}
 		}
 		Node::Key(empty, op, operand)
-			if matches!(empty.drop_meta(), Node::Empty)
+			if empty.is_empty_node()
 				&& let Some(known) = KERNEL_PREFIX.iter().find(|(known, _, _)| known == op) =>
 		{
 			emit_kernel(func, parameter, operand, value, lanes);

@@ -26,7 +26,7 @@ fn quoted_by(text: &str, quote: char) -> String {
 impl Node {
 	/// An operator in front of its one operand, ø on the left in the tree (`#x`, `-x`)
 	pub(super) fn is_prefix_form(&self) -> bool {
-		matches!(self.drop_meta(), Key(k, op, _) if matches!(k.drop_meta(), Empty) && writes_as_prefix(op))
+		matches!(self.drop_meta(), Key(k, op, _) if k.is_empty_node() && writes_as_prefix(op))
 	}
 
 	pub fn serialize(&self) -> String {
@@ -125,7 +125,7 @@ impl Node {
 				};
 				format!("{op}{space}{}", v.serialize_recurse(meta))
 			}
-			Key(k, op, v) if matches!(v.drop_meta(), Empty) && op.is_suffix() => {
+			Key(k, op, v) if v.is_empty_node() && op.is_suffix() => {
 				format!("{}{op}", k.operand_text(meta))
 			}
 			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => {
@@ -174,7 +174,7 @@ impl Node {
 				}
 			}
 			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
-			Data(d) => crate::units::describe(d).unwrap_or_else(|| format!("Data({:?})", d)),
+			Data(d) => crate::numbers::units::describe(d).unwrap_or_else(|| format!("Data({:?})", d)),
 			// _ => format!("{:?}", self),
 		}
 	}

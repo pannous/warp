@@ -38,6 +38,7 @@ probes/*-work/
 scratch/
 # kept but not committed: logs, test results, patches, dumps, benchmark data
 data/
+!src/lowering/data/
 
 # packages fetched by `use <name>`, see packages.warp
 /packages/

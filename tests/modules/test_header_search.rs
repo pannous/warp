@@ -2,7 +2,7 @@
 // (WARP_INCLUDE overrides the list; the browser test runner points it at the one folder it serves) and the first
 // directory holding it wins; only SDL_ names make the implicit lookup read the SDL headers
 use warp::ffi::implicit_header_libraries;
-use warp::ffi_parser::find_header_in;
+use warp::formats::ffi_parser::find_header_in;
 
 #[test]
 fn a_header_comes_from_the_first_include_directory_holding_it() {

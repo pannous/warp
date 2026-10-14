@@ -16,10 +16,10 @@ fn a_filter_reads_only_the_rows_it_keeps() {
 		"people_filtered_rows",
 		"for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }",
 	));
-	let before = warp::database::rows_read();
+	let before = warp::host::database::rows_read();
 	is!(&program("people_filtered_rows", "count(people where it.age > 45)"), 5);
 	assert_eq!(
-		warp::database::rows_read(),
+		warp::host::database::rows_read(),
 		before + 5,
 		"the filter read other rows than its five"
 	);

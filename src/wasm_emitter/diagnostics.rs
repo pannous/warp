@@ -102,9 +102,7 @@ impl WasmGcEmitter {
 			}
 			// an array of Ints or Floats holds no character: its fast read stays
 			Node::Key(list, Op::Hash, index)
-				if !matches!(list.drop_meta(), Node::Empty)
-					&& !self.holds_only_numbers(list)
-					&& !self.map_is_indexed_by_key(index) =>
+				if !list.is_empty_node() && !self.holds_only_numbers(list) && !self.map_is_indexed_by_key(index) =>
 			{
 				self.emit_list_element_node(func, list, index);
 				let held = self.node_scratch();
@@ -130,7 +128,7 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
-		let unit_hint = if crate::units::is_unit(name) {
+		let unit_hint = if crate::numbers::units::is_unit(name) {
 			UNIT_AT_RUN_TIME
 		} else {
 			""

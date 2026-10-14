@@ -1,7 +1,7 @@
 # Channels (P155, plan by warp-93, 2026-10-06)
 
 User decision P155: one concept. `ch = channel()` is a channel local to the run, `channel "chat"` the machine-wide one
-(src/channels.rs, sockets in /tmp/warp-channels-<user>); both have the same words, and `send v to "chat"` (P129) is the
+(src/host/channels.rs, sockets in /tmp/warp-channels-<user>); both have the same words, and `send v to "chat"` (P129) is the
 machine channel's send.
 
 ```warp
@@ -21,7 +21,7 @@ Semantics (Go's unbuffered channel): `send` waits until a receiver took the valu
   empty), channel_more(id) waits until a value is offered (1) or the channel closed (0), channel_close(id). The program
   waiting with no task left is an error ("ch.receive() waits forever: no task is left to answer it"); tasks still
   waiting stop when the program ends.
-- Lowering src/lowering/channel_words.rs, FIRST of SOURCE_PHASES (go_blocks renames what a go block reads,
+- Lowering src/lowering/words/channel_words.rs, FIRST of SOURCE_PHASES (go_blocks renames what a go block reads,
   system_signals takes `send v to "chat"`): `channel()` → channel_new(); `ch.send(v)` / `send v to ch` →
   channel_put(ch, v); `ch.receive()` → channel_take(ch); `ch.close()` → channel_close(ch); `for v in ch {…}` →
   `while channel_more(ch) { v = channel_take(ch); … }`. Channels are the variables assigned `channel()` plus the

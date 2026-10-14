@@ -3,7 +3,7 @@
 
 use warp::extensions::numbers::Number;
 use warp::node::Node;
-use warp::wasm_reader::read_bytes;
+use warp::run::wasm_reader::read_bytes;
 
 const I64_RESULT: &str = r#"(module (func (export "main") (result i64) i64.const 42))"#;
 const I32_RESULT: &str = r#"(module (func (export "main") (result i32) i32.const -7))"#;

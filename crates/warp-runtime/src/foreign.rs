@@ -1,4 +1,4 @@
-//! The bridge of foreign_call(runtime, module, member, arguments) (warp's lowering/foreign_modules.rs,
+//! The bridge of foreign_call(runtime, module, member, arguments) (warp's lowering/foreign/foreign_modules.rs,
 //! notes/stdlib_connectors.md), shared by warp and its executables (card exe-foreign): one long-lived child per runtime
 //! and process, started on first use, speaking one JSON line per request and per answer. Python: `python3 -u` running
 //! FOREIGN_PYTHON_LOOP (`WARP_PYTHON` names another interpreter); JavaScript: `node` running FOREIGN_JS_LOOP
@@ -76,7 +76,7 @@ const plain = value => {
 	if (typeof value === "function" || typeof value === "object") return handle(value); // a Date, a Map, an instance, a function
 	return value;
 };
-// what warp's operators on a value of this runtime forward to (lowering/foreign_modules.rs)
+// what warp's operators on a value of this runtime forward to (lowering/foreign/foreign_modules.rs)
 const operator = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
@@ -100,7 +100,7 @@ const readLine = () => {
 	buffered = buffered.slice(line.length + 1);
 	return line;
 };
-// a request's answer; each `yield` waits for what may be a promise (lowering/foreign_modules.rs CONSTRUCTOR_MEMBER: member
+// a request's answer; each `yield` waits for what may be a promise (lowering/foreign/foreign_modules.rs CONSTRUCTOR_MEMBER: member
 // "" constructs the module, `new URL(…)`; SETTER_PREFIX: "set innerHTML" sets the member to the one argument)
 const SETTER = /^set (.+)$/;
 function* answerOf(request) {

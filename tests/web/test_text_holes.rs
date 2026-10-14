@@ -1,8 +1,8 @@
 //! Card web-fine-text-nodes (notes/web_framework.md step 3): a computed text between an element's children is a hole of
 //! its own, `page·hole·<path>·text·<n>` (n the children before it), so a change reads and patches only that text node
 //! instead of the element with its fixed children
-use warp::markup::{holes, text_holes};
 use warp::warp_parser::parse;
+use warp::web::markup::{holes, text_holes};
 
 /// Each text hole as (element path, children before it, its text as written)
 fn text_hole_places(markup: &str) -> Vec<(Vec<usize>, usize, String)> {

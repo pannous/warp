@@ -329,7 +329,7 @@ pub(in crate::analyzer) fn is_negative(node: &Node) -> bool {
 		Node::Number(Number::Quotient(numerator, _)) => *numerator < 0,
 		Node::Number(Number::BigQuotient(q)) => q.is_negative(),
 		Node::Number(Number::BigInt(big)) => big.sign() == num_bigint::Sign::Minus,
-		Node::Key(left, Op::Neg | Op::Sub, _) => matches!(left.drop_meta(), Node::Empty),
+		Node::Key(left, Op::Neg | Op::Sub, _) => left.is_empty_node(),
 		Node::List(items, _, _) if items.len() == 1 => is_negative(&items[0]),
 		_ => false,
 	}

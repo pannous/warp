@@ -43,7 +43,7 @@ whenever it links f, because the call to it only appears here. `agent "is 7 prim
 probes/agent_types.sh.
 
 ## Lowering
-src/lowering/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
+src/lowering/definitions/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
 library_words, so `x = render "x" as pdf; x.body` reads a field: traits::InstanceTypes knows the result shape of a user
 function from its body.
 

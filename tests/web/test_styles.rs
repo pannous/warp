@@ -1,8 +1,8 @@
 //! Styles as warp data (card web-styles, notes/web_framework.md step 7): `style: { color: theme padding: 8 }` on an
 //! element is its inline style, `style{ ".card": { padding: 8 } }` a style sheet; numbers are pixels unless the
 //! property has no unit, camelCase names are CSS's kebab-case, values may read variables (shown anew as any markup)
-use warp::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 fn html_of(code: &str) -> String {
 	to_html(&eval(code))

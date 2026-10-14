@@ -37,8 +37,12 @@ warp_parser/
 Removed by the moves: statements.rs, lists.rs, literals.rs, subscripts.rs, user_operators.rs, xml.rs, atoms/ (its two
 files split into blocks.rs, definitions/functions.rs, definitions/lambdas.rs, types/declarations.rs).
 
-Blocked until their branches land (ask the owner): atoms.rs (cleanup-park-phrases, synonyms-table), lookahead.rs and
-mod.rs (synonyms-table). Moves out of other files go first.
+Status (2026-10-14): chunk 1 (statements.rs dissolved) is on main. Branch restructure-layout carries chunk 2a (comments,
+pipes, guards, functions, lambdas, operators: 7a29fb0a0) and 2b (literals/, markup/, collections/, types/expressions,
+math_notation, annotations: bce8c7292). Left: everything out of atoms.rs, atoms/type_declarations.rs and lists.rs
+(types/declarations, collections/lists, literals/paths), blocked until cleanup-park-phrases lands.
+Tool: scripts/move_fn.py (cuts fns with docs and attributes, widens what leaves mod.rs or goes deeper); intermediate
+folder mod.rs files start with `use super::*;` and glob-import their children so `use super::*` chains see them.
 
 ### Function → target (parser, 320 moves; 93 functions stay in core)
 
@@ -84,9 +88,8 @@ mod.rs (synonyms-table). Moves out of other files go first.
 
 ## Root (`src/*.rs`, 56 flat files): proposed folders
 
-The user (2026-10-14): the root needs the most restructuring. File level first: `git mv` into a concept folder, with
-`pub use <folder>::<file>;` in lib.rs so `crate::<file>::…` paths stay valid (no use-site edits in the move commit);
-then a per-function pass over the big mixed files (main.rs, pipeline.rs, normalize.rs, diagnostic.rs, tasks.rs,
+The user (2026-10-14): the root needs the most restructuring. File level first: `git mv` into a concept folder with
+scripts/move_module.py, which rewrites every `crate::`/`warp::` use path (no `pub use` aliases); then a per-function pass over the big mixed files (main.rs, pipeline.rs, normalize.rs, diagnostic.rs, tasks.rs,
 modules.rs, wasm_modules.rs, cargo_crates.rs, effects.rs), whose table is added here when it starts.
 
 - stays at the root: lib.rs, main.rs, pipeline.rs, util.rs, extensions.rs + extensions/, words.rs, operators.rs,
@@ -105,6 +108,22 @@ modules.rs, wasm_modules.rs, cargo_crates.rs, effects.rs), whose table is added 
 - run/: wasm_reader, file_type (`warp register`)
 - web/: markup, accessibility
 - law.rs + law/, graphics/, sound/, gc_traits/, ffi/: stay
+
+Status (2026-10-14): branch layout-root (4749cbf5b) did compiler/, analyzer/effects, numbers/, text/, formats/, modules/,
+host/, run/, web/. Deferred: diagnostics/ (diagnostic and normalize are used by nearly every open branch) and time/.
+
+### Moves with many users (pattern, warp-supervisor 2026-10-14)
+
+A module whose path many files use (and open branches keep adding uses of) moves in two steps:
+1. Move the file with `scripts/move_module.py <module> <folder> --keep-paths`. Uses stay as they are, and lib.rs keeps
+   the old path alive with `pub use <folder>::<module>;`. No open branch breaks, and branches merged later just keep
+   writing the old path.
+2. Once those branches have landed, run one fastmod pass in a quiet window right after an Integrator batch (agree the
+   window with warp-integrator): `crate::<module>` → `crate::<folder>::<module>` (also `warp::` in tests), then drop
+   the re-export.
+
+Applied: diagnostics/ (diagnostic 173 using files, normalize 115, fixits 12, crash_card 2) on branch
+layout-diagnostics; step 2 is pending. time.rs → time/mod.rs needed no path changes (branch layout-time).
 
 ## Lowering (`src/lowering/`, 112 files): proposed folders
 
@@ -132,6 +151,12 @@ added here then).
 
 Owned by open branches (warp-operator-shall: the big lowering files; warp-cleanup: type-name-params, orm): checked
 with the owner before each folder move.
+
+Status (branches layout-lowering-signals … -control, 2026-10-14): all folders exist. Each folder mod.rs does
+`use super::*`, so moved files kept every `super::x` path unchanged. Still flat until their open branches land:
+blocks (tree-patterns-step7), declarations and type_name_matching (cleanup-drop-type-name-params, warp-cleanup's
+park-phrases), plain_enums (enum-coin), welcome_forms (foreign-spellings), library_words, and the park-phrases files
+phrase_calls, list_phrases, word_slices, music_words, of_lookups.
 
 ## Analyzer (`src/analyzer/`, 10 files)
 

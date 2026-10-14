@@ -10,7 +10,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   A bare flag name sets it: `f(3, loud)` of a parameter `loud = no` (default yes or no) is `f(3, loud: yes)` when no
   variable loud is in scope, as `x.copy(shallow)` is `x.copy(shallow: yes)` (card copy-shallow, named_arguments.rs
   flag_arguments).
-- Overloading by arity: `def f(a)` + `def f(a,b)` become `f·1`, `f·2` (src/lowering/overloads.rs
+- Overloading by arity: `def f(a)` + `def f(a,b)` become `f·1`, `f·2` (src/lowering/definitions/overloads.rs
   `lower_arity_overloads`, a MEANING pass before broadcasting reads arities). A call names the variant its argument
   count fits; none or two fitting (`f(a)` + `f(a, b=2)` called `f(5)`) is an error. Methods: class_methods prepends
   `self`, so a method's variant number is one more than written.
@@ -18,7 +18,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   into the starred `*xs` of tuples.rs). Only the last parameter. `total(1,2,3)` → `total([1 2 3])`.
 - Spreading: `f(...xs)`, `f(xs...)`, `f(*xs)`: into a rest parameter the list is passed as is (`[2] + xs` after other
   leftovers), into fixed parameters as `xs#1, xs#2, …`. Static: no run-time arity check, a plain call
-  (src/lowering/variadic.rs, a SOURCE pass before named_arguments).
+  (src/lowering/definitions/variadic.rs, a SOURCE pass before named_arguments).
 - Prefix nesting: `square square 2` / `square(square 2)` → `square(square(2))` when the call has more juxtaposed
   arguments than its function takes (broadcasting.rs `lower_prefix_calls`, before the function value passes).
 - Ruby keyword parameters `def f(a, b: 2)`: a literal after the colon is the default (named_arguments.rs).
@@ -100,7 +100,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   through call_ref, the entry unboxes each capture per call). Now even with a plain call:
   - a closure variable whose targets (closure_variable_targets) are one function, and no parameter of that name
     anywhere, calls that target's entry directly (wasm_emitter/closures.rs `emit_direct_closure_call`);
-  - assigned once with captured values, lowering/closures.rs `hoist_captures` reads them once after the assignment,
+  - assigned once with captured values, lowering/definitions/closures.rs `hoist_captures` reads them once after the assignment,
     `h·capture·0 = closure_lambda_1·captured·0(h)` (a capture reader, its kind the target's parameter kind via
     closure_call_kind), and the call passes the locals to the target itself (`emit_hoisted_closure_call`). Nested
     functions with capture globals keep the entry, which restores them.

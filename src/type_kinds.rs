@@ -338,7 +338,7 @@ impl TypeRegistry {
 		let node = node.drop_meta();
 		if let Node::Type { name, body } = node {
 			// Skip type references (empty body) - only register actual definitions
-			if matches!(body.drop_meta(), Node::Empty) {
+			if body.is_empty_node() {
 				return None;
 			}
 			let type_name = Self::written_name(name)?;

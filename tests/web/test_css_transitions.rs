@@ -1,9 +1,9 @@
 //! Transitions as real CSS (card web-css, user: stay close to HTML and CSS): `transition:` in an element is its inline
 //! CSS transition, `starting-style: {…}` the state it enters from and leaves towards (CSS @starting-style, which an
 //! inline style cannot hold, so the page applies it, markup-transitions.js); fade/scale/slide are this CSS, with a hint to it
-use warp::markup::to_html;
 use warp::normalize::capture_hints;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 fn html_of(code: &str) -> String {
 	to_html(&eval(code))

@@ -1,6 +1,6 @@
 # Quantities at run time: survey and proposal
 
-## Today (src/units/static_units.rs, card cleanup-units-answer 2026-10-13)
+## Today (src/numbers/units/static_units.rs, card cleanup-units-answer 2026-10-13)
 Every program with quantities takes one path: static_units checks the unit signatures at compile time and runs the
 amounts as exact SI numbers (`1 km/h + 1 m/s` → 23/18 m/s). The compile-time interpreter `units::answer` is gone.
 Temperatures run as kelvin from absolute zero: `40°C` is 313.15, shown back as 40°C; a sum or negation of temperatures
@@ -43,7 +43,7 @@ time (parsed input), but every operation checks and rescales at run time and nee
 Recommendation: static units first (sound, zero cost, errors at compile time), the dynamic struct only if input with units
 becomes a use case.
 
-## Stage 1 done (branch static-units-1): src/units/static_units.rs
+## Stage 1 done (branch static-units-1): src/numbers/units/static_units.rs
 Variables, loops (`total += 5 m`), while loops and if-branches compute quantities at run time: signatures checked at
 compile time (DimensionError for `+ - ==` and branches of different units, and a variable given another signature), unit
 literals as exact SI amounts, the final value read back in the finest written unit. `compile` of a program whose result is
@@ -108,7 +108,7 @@ input) would need the dynamic struct.
 come first, then the plain ones as an object of them prints them (`{dist:500 m name:"run"}`). A field of a mixed object
 is any-typed at run time; its arithmetic has a text since card text-arithmetic (casts.rs: Kind::Data reads dynamically).
 `q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion: see card static-units below. Since card reflection step 5 the text lives in the entry `units` of the module's one
-`warp.meta` section (src/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.
+`warp.meta` section (src/formats/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.
 
 ## Stage 8 done (card units-dynamic, 2026-10-09): units known only at run time
 The dynamic struct, written in warp: lib/units.warp's `class Quantity {amount; dims; unit; scale}`. `quantity("5 km")`
@@ -139,7 +139,7 @@ yd mi, mg g kg lb, ms s min h, mph, with powers (`m²`, `s^2`), products (`kg·m
 ## Units in texts, imperial units (card units-text, 2026-10-09)
 - `"total: " + (total as km)` and `(v in m/s)` join a text in the conversion's unit (static_units.rs: a parenthesized
   expression keeps its signature, the text arm reads conversion_target).
-- src/units.rs UNITS: inch ft yd mi, lb. Factors count the smallest step of a dimension, so length counts 0.1 mm and
+- src/numbers/units.rs UNITS: inch ft yd mi, lb. Factors count the smallest step of a dimension, so length counts 0.1 mm and
   mass 10 µg (1 ft = 3048, 1 lb = 45_359_237); time stays ms (milliseconds() reads the factor directly). The inch is
   `inch` (`inches`): `in` is the word of `x in xs` and `100 cm in m`.
 - UNIT_ALIASES: `mph` is `mi/h`, rewritten by lower_unit_aliases before any units pass (the parser binds it to the

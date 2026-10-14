@@ -12,12 +12,8 @@ pub mod util; // reexported for tests
 pub mod words;
 #[cfg(feature = "native")]
 pub use util::gc_engine;
-pub mod analysis_memo;
 pub mod analyzer;
-pub mod binaryen;
-pub mod compile_context;
-pub mod context;
-pub mod dead_functions;
+pub mod compiler;
 #[cfg(feature = "native")]
 pub mod gc_traits;
 /// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
@@ -41,69 +37,25 @@ pub use lowering::{
 	type_aliases, type_constructor, type_name_matching, type_tests, undo_history, variable_signals, variadic, versions,
 	welcome_forms, word_operators,
 };
-pub mod accessibility;
-#[cfg(feature = "native")]
-pub mod cargo_crates;
-#[cfg(feature = "native")]
-pub mod channels;
-mod compile_time;
-#[cfg(feature = "native")]
-pub mod component_builder;
-#[cfg(feature = "native")]
-pub mod components;
 #[cfg(feature = "native")]
 pub mod crash_card;
-#[cfg(feature = "native")]
-pub mod database;
 pub mod diagnostic;
-pub mod effects;
 pub mod ffi;
-pub mod ffi_parser;
-#[cfg(all(feature = "native", target_os = "macos"))]
-pub mod file_type;
-pub mod fixed_width;
 pub mod fixits;
-#[cfg(feature = "native")]
-pub mod foreign;
-pub mod function;
-pub mod function_equality;
+pub mod formats;
 pub mod graphics;
 pub mod host;
-pub mod host_parts;
-pub mod injection;
-pub mod interpolation;
 pub mod law;
-pub mod local;
-pub mod markup;
-pub mod meta;
-pub mod meta_section;
 pub mod modules;
 pub mod normalize;
+pub mod numbers;
 pub mod operators;
 #[cfg(feature = "native")]
-pub mod package_tools;
-pub mod real;
-pub mod sandbox;
-#[cfg(feature = "native")]
-pub mod shared;
-#[cfg(feature = "native")]
 pub mod sound;
-#[cfg(feature = "native")]
-pub mod std_adapters;
-pub mod std_docs;
-#[cfg(feature = "native")]
-pub mod tasks;
+pub mod text;
 pub mod time;
-pub mod uncertain;
-pub mod uniscript_entities;
-pub mod units;
 pub mod warp_parser;
-pub mod wasm_modules;
-#[cfg(feature = "native")]
-pub mod wasm_reader;
 pub mod web;
-pub mod web_idl;
-pub mod wisp_parser;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of warp
@@ -116,24 +68,24 @@ pub use node::{
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
+pub use formats::wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
-pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{
 	extract_instance_values, AstKind, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry,
 	USER_TYPE_TAG_START,
 };
 // Metadata
-pub use meta::{DataType, DataValue, LineInfo};
+pub use compiler::meta::{DataType, DataValue, LineInfo};
 // WASM
 pub use wasm_emitter::WasmGcEmitter;
 // Host functions
 #[cfg(feature = "native")]
 pub use host::{create_host_linker, link_host_functions, HostState};
 // Functions
-pub use function::{Function, FunctionRegistry};
+pub use compiler::function::{Function, FunctionRegistry};
 // Local (unified struct for variables)
-pub use local::Local;
+pub use compiler::local::Local;
 // New gc_traits module with rasm-style ergonomic GC struct access
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]

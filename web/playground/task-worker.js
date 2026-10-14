@@ -1,4 +1,4 @@
-// A task of a program on its own Worker (host.js startTask, src/tasks.rs natively): the function runs in a fresh instance
+// A task of a program on its own Worker (host.js startTask, src/host/tasks.rs natively): the function runs in a fresh instance
 // of the program's module, and its result (or failure) and printed output go back as JSON in the shared buffer the
 // starting program waits on with Atomics.wait.
 
@@ -23,7 +23,7 @@ self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "stri
 
 
 // the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
-function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels, files, voice }) {
+function runTaskInto({ module, name, values, shared, arrays, captured, control, channels, files, voice }) {
 	Atomics.store(control, TASK_TAKEN_SLOT, 1);
 	Atomics.notify(control, TASK_TAKEN_SLOT);
 	let output = "";
@@ -32,8 +32,7 @@ function runTaskInto({ module, name, ints, values, shared, arrays, captured, con
 	self.joinVoice?.(voice);
 	try {
 		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: sound => relay("playSamples", sound) };
-		const record = runTask(module, hooks, [], name, ints, values, arrays, captured, control, channels);
-		if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
+		const record = runTask(module, hooks, [], name, values, arrays, captured, control, channels);
 		writeShared(shared, { ...record, value: taskTree(record.value), output, files: [...taskFiles] });
 	} catch (failure) {
 		console.error(failure);

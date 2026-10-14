@@ -63,11 +63,7 @@ pub(super) fn indexed_lists(program: &Node) -> HashSet<String> {
 	let mut indexed = HashSet::new();
 	program.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
-		let counted = if matches!(list.drop_meta(), Node::Empty) {
-			index
-		} else {
-			list
-		};
+		let counted = if list.is_empty_node() { index } else { list };
 		let by_key = crate::declaration_forms::looks_up_a_key(index, &key_variables);
 		if let (Node::Symbol(name), false) = (counted.drop_meta(), by_key) {
 			indexed.insert(name.clone());
@@ -175,7 +171,7 @@ impl WasmGcEmitter {
 			// `1.5f` is `1.5 as float`
 			Node::Key(value, Op::As, _) => is_number(value),
 			Node::Key(left, op, right) if op.is_arithmetic() || op.is_prefix() => {
-				(matches!(left.drop_meta(), Node::Empty) || is_number(left)) && is_number(right)
+				(left.is_empty_node() || is_number(left)) && is_number(right)
 			}
 			Node::List(items, _, _) => {
 				matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name))
@@ -453,8 +449,8 @@ impl WasmGcEmitter {
 		// write_back), not to a typed array
 		let changes_arguments = |callee: &str| {
 			self.ctx.ffi_imports.get(callee).is_some_and(|import| {
-				crate::wasm_modules::is_module_path(import.library)
-					&& crate::wasm_modules::exports(import.library)
+				crate::modules::wasm_modules::is_module_path(import.library)
+					&& crate::modules::wasm_modules::exports(import.library)
 						.get(import.name)
 						.is_some_and(|export| export.node_result.is_some())
 			})
@@ -654,7 +650,7 @@ impl WasmGcEmitter {
 			as_locals
 				.locals
 				.entry(name.clone())
-				.or_insert_with(|| crate::local::Local {
+				.or_insert_with(|| crate::compiler::local::Local {
 					is_param: false,
 					..global.clone()
 				});

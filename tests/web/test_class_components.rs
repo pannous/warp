@@ -1,7 +1,7 @@
 //! Class components (notes/web_framework.md step 4, notes/classes.md): an instance of a class with a render() method
 //! is its markup where markup is expected
-use warp::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 fn html_of(code: &str) -> String {
 	to_html(&eval(code))

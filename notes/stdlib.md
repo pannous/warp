@@ -15,7 +15,7 @@ Draft by functions (warp-64), adapters section by async (warp-f0). Defaults belo
 - **P165 soft keywords.** Module names and module words are soft: a program may name a local variable `text` or a
   parameter `count`; a top-level redefinition of a *prelude* word stays allowed as today (user function wins, e.g.
   `def sum(xs)`), unless the word is in `soft_keywords::SOFT_KEYWORDS`.
-- **Capabilities.** Modules that touch the outside declare it (src/effects.rs): file → Wasi/Host, net → Host, os/process
+- **Capabilities.** Modules that touch the outside declare it (src/analyzer/effects.rs): file → Wasi/Host, net → Host, os/process
   → Process. `eval_untrusted` gets math, text, list, map, json, random-with-seed only.
 
 ## 2. Module layout
@@ -50,7 +50,7 @@ strip split join replace starts_with ends_with chars ord chr is_digit is_alpha i
 values entries get has contains without`; conversion `int text float list type as`; time `clock now sleep`, durations;
 random `random random_below`; io `read`; net `fetch`; os `exit`; signals `every daily at whenever on emit send`.
 Sources: src/lowering/library_words.rs (SYNONYMS, RUNTIME_WORDS, EXPANDED_WORDS), src/wasm_emitter/library_ops.rs
-(LIBRARY_FUNCTIONS), text_builtins.rs (TEXT_BUILTINS), list_emitter.rs (BUILTIN_CALLS), src/real.rs (FUNCTIONS),
+(LIBRARY_FUNCTIONS), text_builtins.rs (TEXT_BUILTINS), list_emitter.rs (BUILTIN_CALLS), src/numbers/real.rs (FUNCTIONS),
 src/host.rs (HOST_WORDS), notes/library_words.md.
 
 Missing (probe gives "undefined function"): `unique zip enumerate product mean write exists env args hash regex
@@ -188,7 +188,7 @@ engine has is a loud error in both, never a different result.
 Two host words carry every adapter: `std_pure(module, member, arguments)` for words without effects (json, hash,
 regex: capability like libm's) and `std_io(…)` for words that touch the outside (file, os, net: Host, IO). A std module
 defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (lib/json.warp); natively
-src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
+src/modules/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
 runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
 ANY_VALUE_WORDS). The wrappers' parameters are annotated `any` (`to_json(value:any)`): an unannotated parameter fed
 only by such values would default to an int ("not an int" for `parse_json(post(…))`).
@@ -216,7 +216,7 @@ run natively and in the browser.
    the list word find(xs, predicate).
 3b. Done: net (A, std_io): `use net` brings post(url, body), the body sent as UTF-8 text, the answer's text (ureq
    natively, a synchronous XMLHttpRequest in the browser; tests/modules/test_std_net.rs against httpbin.org).
-3c. Done: other ecosystems' names (src/lowering/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
+3c. Done: other ecosystems' names (src/lowering/welcoming/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
    `json.loads` → json.parse (warp's own form, card g_ogQg: lowered to lib/json.warp's parse_json, which written by hand gets the note too), `JSON.stringify` / `json.dumps` → to_json, `re.findall(p, t)` → find_all(t, p),
    `re.sub(p, r, t)` → replace_all(t, p, r), `fs.readFileSync` → read, `fs.writeFileSync` / `appendFileSync` /
    `existsSync` → write / append_file / exists, `os.getenv` → env, `process.exit` → exit: the got-it note names warp's
@@ -247,11 +247,11 @@ every word lives today and what still moves.
 | src/wasm_emitter/library_ops.rs LIBRARY_FUNCTIONS | runtime functions in wasm: keys values entries contains index_of get without ord chars field_with reverse sort upper lower split join slice | 17 |
 | src/wasm_emitter/text_builtins.rs TEXT_BUILTINS | text runtime functions | 21 |
 | src/wasm_emitter/list_emitter.rs BUILTIN_CALLS | list runtime calls | 18 |
-| src/real.rs FUNCTIONS | exact-real functions | 6 |
+| src/numbers/real.rs FUNCTIONS | exact-real functions | 6 |
 | src/host.rs HOST_WORDS | host imports (print, clock, fetch, paint, clipboard, notify, tasks, foreign_call, gpu, std_pure/std_io …) | 55 |
 | src/modules.rs STD_MODULES | embedded lib/*.warp: memory net collections hash regex file json os list math text random map time matrix draw markup router i18n | 19 |
 | … PRELUDE_WORDS | module words global without `use`: file: write exists | 2 |
-| … STD_ALIASES, lowering/std_aliases.rs, welcome_forms QUALIFIED_WORDS | foreign and qualified names (OrderedDict, JSON.parse, file.append …) | 27 + 21 + 1 |
+| … STD_ALIASES, lowering/welcoming/std_aliases.rs, welcome_forms QUALIFIED_WORDS | foreign and qualified names (OrderedDict, JSON.parse, file.append …) | 27 + 21 + 1 |
 | … IMPLICIT_MODULES | modules a program needs without `use`: file (a file URL), markup (a page), router (routes), regex (a route's regular expression); markup.rs reads markup's lists at compile time | 4 |
 Words per module: math 45, list 38, text 26, markup 19, matrix 15, time 14, map 10, router 9, the rest fewer.
 lib/web.webidl is data for web_idl.rs, not a module. The playground has no prelude of its own (warp-70).
@@ -290,7 +290,7 @@ is the symbol args (no CLI way to pass them); a std module's `use list` worked, 
 - **Discoverability** (done, card std-module-docs): `warp help list` prints a module's leading comment and its words,
   each with the comment line right above it; `warp help --markdown` prints the same index as wiki/standard-library.md,
   so docs never drift from lib/. Consecutive comments keep the nearest line, preventing an earlier helper comment from
-  attaching to the next public word (src/std_docs.rs, tests/modules/test_std_module_docs.rs). `warp help` lists the modules.
+  attaching to the next public word (src/modules/std_docs.rs, tests/modules/test_std_module_docs.rs). `warp help` lists the modules.
 
 ### Cards (column Next)
 std-use-several, std-from-import, std-module-uses-module, std-prelude-module, std-implicit-use, std-args,

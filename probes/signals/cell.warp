@@ -1,4 +1,4 @@
-// the $Signal runtime by hand (what lowering/signal_values.rs generates): a cell with a listener list
+// the $Signal runtime by hand (what lowering/signals/signal_values.rs generates): a cell with a listener list
 s = signal_new(1)
 signal_listeners_set(s, signal_listeners(s) + [(value, old) => { print "now " + value + " was " + old; 0 }])
 old = cell_get(s)

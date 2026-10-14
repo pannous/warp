@@ -46,7 +46,7 @@ An operation called on a value whose type is unknown at compile time calls the o
 types define it, a generated dispatcher `area·dispatch(x) := if instance_of(x, "rect") then area·rect(x) else
 area·square(x)` picks the witness at run time (traits::with_dispatchers; `instance_of` reads the instance's type name).
 
-## Lowering (src/lowering/traits.rs)
+## Lowering (src/lowering/types/traits.rs)
 - `lower_declarations` (before type_tests): `trait shape{…}` becomes ø carrying the `Trait` (Meta data), which later
   passes collect (`Traits::of`); `x is shape` becomes the type test `is_type(x, "shape")`.
 - `lower_conformances` (after type_constructor): a definition of a trait operation whose first parameter (every
@@ -92,7 +92,7 @@ Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` re
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
 
-## Printable and Iterable (2026-10-04, lowering/printable.rs)
+## Printable and Iterable (2026-10-04, lowering/data/printable.rs)
 `text(p:person)` (P31) and `iterate(b:bag)` become the witnesses `text·person`, `iterate·bag`; where an instance's type
 is known, `as text` / str / print / interpolation call the first, `for x in b` and `x in b` walk what the second gives.
 The pass runs right after type_constructor: later passes would read `for x in b` of an instance as a walk of its keys.

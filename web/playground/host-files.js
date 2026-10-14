@@ -135,7 +135,7 @@ function hostBytes(program, action, what) {
 	}
 }
 
-// `database[k]`: the store of any file ending so (src/lowering/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
+// `database[k]`: the store of any file ending so (src/lowering/data/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
 // Workers have too; its values are read before the program runs (loadKept: worker.js, site-worker.js, site.js) and
 // each change written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory)
 const DATABASE_STORE = "database.json";
@@ -228,8 +228,8 @@ function takeDatabaseValue(name, value) {
 const byRowId = entries => entries.map(entry => [entry, Number(entry[0].match(ROW_KEY)?.[2] ?? 0)])
 	.sort((first, second) => first[1] - second[1]).map(([entry]) => entry);
 
-// `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept in the database
-// store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types under the
+// `people: [Person] = database.people` (src/lowering/data/database_tables.rs): a table of the browser, kept in the database
+// store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/host/database.rs): its column types under the
 // table's key, each row, an object with its id, under its own (`table people.database.json people #3`), so a change
 // writes only its row. In memory a table holds its rows. Filters stay list comprehensions over the rows (no SQL here).
 const TABLE_PREFIX = "table ";
@@ -238,7 +238,7 @@ const tableKey = (file, table) => `${TABLE_PREFIX}${file} ${table}`;
 const ROW_MARK = " #";
 const ROW_KEY = /^(table .*) #(\d+)$/;
 const rowKey = (file, table, id) => `${tableKey(file, table)}${ROW_MARK}${id}`;
-// field types by column (src/database.rs column_of), each holding every value of the ones before it
+// field types by column (src/host/database.rs column_of), each holding every value of the ones before it
 const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "str", "char"]];
 const REAL = 1;
 // `text?`, an optional field: a column of its type that may hold null
@@ -247,7 +247,7 @@ const widening = type => LOSSLESS_ORDER.findIndex(types => types.includes(plainT
 // texts as SQLite's CAST writes them: a real keeps its ".0"
 const textOfColumn = (value, from) => from === REAL && Number.isInteger(value) ? value.toFixed(1) : String(value);
 
-// a converter of rows retyping the column as src/database.rs converted does (conversion_factor), else the same loud
+// a converter of rows retyping the column as src/host/database.rs converted does (conversion_factor), else the same loud
 // error. A unit column (`distance: km`) holds SI amounts: another unit of its quantity keeps them, plain numbers given a
 // unit are read as it, loudly. Each column is [type, quantity, SI amount per unit], the last two for units only
 function convertColumn(table, name, [storedType, storedQuantity], [type, quantity, perUnit], warn) {
@@ -280,8 +280,8 @@ const keepRow = (file, table, row) => keep(rowKey(file, table, row[ID_COLUMN]), 
 
 // the table's rows [id, columns…], the table first created or migrated to the class's fields [name, type, default];
 // a removed field keeps its column (data is never dropped silently), loudly
-// the table migrated to the class's fields, then its rows; src/database.rs gives the two halves apart too: a table's
-// list migrates at registration and loads its rows at the first read (lowering/database_tables.rs)
+// the table migrated to the class's fields, then its rows; src/host/database.rs gives the two halves apart too: a table's
+// list migrates at registration and loads its rows at the first read (lowering/data/database_tables.rs)
 function openTable(table, schema, file) {
 	migrateTable.call(this, table, schema, file);
 	return tableRows(table, schema, file);
@@ -363,7 +363,7 @@ function updateRow(table, id, column, value, file) {
 	return null;
 }
 
-// `transaction { … }` (src/lowering/database_tables.rs): its file's tables as they were at the start, put back with every
+// `transaction { … }` (src/lowering/data/database_tables.rs): its file's tables as they were at the start, put back with every
 // row's kept value by a rollback; writes go on to IndexedDB meanwhile, as SQLite's would to its journal
 const tablesBefore = {};
 const tablesOf = file => Object.keys(databaseValues).filter(key => key.startsWith(tableKey(file, "")) && !ROW_KEY.test(key));
@@ -405,7 +405,7 @@ addHostPart({
 	adapters: {
 		// a page has no command line; its environment is what the page sets (the stand-in of the playground's key)
 		os: { env: name => self.pageEnvironment?.[name] ?? null, args: () => [] },
-		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/stored_values.rs, std_io): the page's values
+		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/data/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
 		// session's, else the program's)
 		store: {
@@ -422,7 +422,7 @@ addHostPart({
 		file: {
 			write: (path, content) => { keepWritten(path, contentText(content)); return null; },
 			append: (path, content) => { keepWritten(path, textOfFile(path) + contentText(content)); return null; },
-			// a list of ints 0 to 255, like src/std_adapters.rs bytes_of
+			// a list of ints 0 to 255, like src/modules/std_adapters.rs bytes_of
 			write_bytes: (path, bytes) => { keepWritten(path, Uint8Array.from(bytes, byteOf)); return null; },
 			read_bytes: path => Array.from(readBytes(path)),
 			exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
@@ -434,7 +434,7 @@ addHostPart({
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
-		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
+		// `clipboard.write(text)` (lowering/signals/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
 	},

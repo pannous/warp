@@ -48,8 +48,18 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Elixir `def …, do:`, C++ `[](…){…}` lambdas. The R/PHP forms move to warp files loaded with `use R` / `use PHP`.
   Kotlin `when x { 1 -> … }` is an alias of `match x { 1 => … }` (`->` ≈ `=>` in arms) with a warning, since `when`
   means other things too. `case` is an optional word before any match arm (`case 1: …`).
-- real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
-  type next to the exact ratios; then it goes.
+- real-runtime (2026-10-13, 2026-10-14): real.rs (compile-time symbolic reals) stays until symbolic reals are a
+  run-time number type next to the exact ratios; then it goes. The generalized run-time exact mechanism is parked
+  ("for later"), with its open points (sum in a denominator, undecidable comparisons) in notes/real_runtime.md; ⅈ
+  comes after π ℯ √ ∛.
+- cleanup-cuts-2 (2026-10-14): tests whose setup uses a cut spelling get only that line rewritten (`stored people:
+  [Person]`, `play(440Hz, 10ms)`), assertions untouched. All phrase calls are parked, `play hum for 2s`, `melody …
+  each 20ms`, `add 1 to 2` and gap feeding included, until prepositions become call keywords in the general call
+  mechanism (`move x from a to b`, card prepositions-call); sound uses calls until then. Version literals stay but
+  get rebuilt small ("why do we need 200 lines for this simple pattern?"), without the semver crate. The defined-twice
+  diagnostic is cut. `nonlocal` only loses its error and checks: the cells behind P124 sharing stay, a nested def
+  also shares `n += 1` without it, a plain `y = 5` there stays local unless `nonlocal y` (P124). rustfmt `use_small_heuristics = "Max"` comes
+  in one fmt commit after the open cleanup branches are merged.
 - watched-cells (2026-10-13): watched variables use the run-time cell, except main-level variables no function
   writes, which keep the inserted check (same speed, about −300 lines).
 - crash-fixes-first (2026-10-12): crash fixes merge with the highest priority (notes/roles.md).
@@ -346,6 +356,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P34 a number subscript on an empty `{}` keys it as a map.
 - single-entry (2026-10-12): "keep everything as it is and automatically upgrade it to a map": `{a:1}` stays a pair
   and becomes a one-entry map where a map is needed.
+- element-named-pair (2026-10-14): a one-key pair named like an element, `{body: [{type: "image"}]}`, is markup
+  (`<body type="image">`); as data it takes a second key or a quoted key. Larger maps with such keys stay data.
 - #25/#36 a space before `[` never indexes; only glued `a[..]` indexes.
 - P29 `pair.0` counts from 0. P30 `xs.pop()` gives the last item, `m.remove(k)` the value or ø.
 - Word slices (2026-10-09): `xs from #2 to #4`, `xs starting from #2`, `xs up to #2` or ordinals, both ends inclusive;
@@ -510,7 +522,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   as written, the `$name` holes are the only change; the colon result-type rewrite (87d15829e) goes. A WGSL error
   is reported as a warp error with the .warp file's line and column (card wgsl-error).
 - play-dispatch (2026-10-12): `play hum for 2s` dispatches on what hum is (signal, stereo pair, block function); no
-  snake case words.
+  snake case words. The phrase form is parked until prepositions-call (cleanup-cuts-2); meanwhile `play(hum, 2s)`.
 - sound-at (default): `at 2 beats play C4` places sounds from the voice's first sound.
 - signal-samples: samples/signal*.warp were renamed siren_sound/stereo_sound; the wiki "Signals" examples stay.
 

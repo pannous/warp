@@ -28,7 +28,7 @@
 // ============================================================================
 
 use crate::{eq, is};
-use warp::ffi_parser::{find_library_headers, parse_header_file};
+use warp::formats::ffi_parser::{find_library_headers, parse_header_file};
 use warp::parse;
 
 #[test]
@@ -399,7 +399,7 @@ CloseWindow()
 #[test]
 fn test_ffi_header_parser() {
 	// Test that we can parse function declarations
-	use warp::ffi_parser::parse_declaration;
+	use warp::formats::ffi_parser::parse_declaration;
 
 	let func = parse_declaration("double sin(double x);", "m").unwrap();
 	assert_eq!(func.name, "sin");

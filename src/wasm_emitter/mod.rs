@@ -195,12 +195,12 @@ use crate::analyzer::{
 	analyze_required_functions, captured_variables, collect_all_types, collect_variables, extract_ffi_imports,
 	extract_user_functions, infer_type, kind_with_article, param_kind, type_word_kind, Scope,
 };
-use crate::context::{Context, UserFunctionDef};
+use crate::compiler::context::{Context, UserFunctionDef};
+use crate::compiler::function::Function as FuncDef;
+use crate::compiler::local::Local;
 use crate::extensions::numbers::Number;
-use crate::function::Function as FuncDef;
 #[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
-use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::pipeline::returned_error_message;
@@ -307,9 +307,9 @@ pub struct WasmGcEmitter {
 	/// named at run time
 	std_modules: std::collections::BTreeSet<String>,
 	/// The latest source position among the nodes being emitted (note_position)
-	source_position: Option<crate::meta::LineInfo>,
+	source_position: Option<crate::compiler::meta::LineInfo>,
 	/// The position of the statement being emitted, which `trap_position` holds while it runs (emit_trap_position)
-	statement_position: Option<crate::meta::LineInfo>,
+	statement_position: Option<crate::compiler::meta::LineInfo>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
@@ -568,7 +568,7 @@ impl WasmGcEmitter {
 				self.is_numeric(left) && self.is_numeric(right)
 			}
 			// `not x` is always 1 or 0
-			Node::Key(left, Op::Not, _) if matches!(left.drop_meta(), Node::Empty) => true,
+			Node::Key(left, Op::Not, _) if left.is_empty_node() => true,
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
 			// grouping: `(1==2)` is the number it computes
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_numeric(&items[0]),
@@ -711,8 +711,8 @@ impl WasmGcEmitter {
 
 	pub fn emit_for_node(&mut self, node: &Node) {
 		let lowered;
-		let node = if crate::real::mentions_real(node) {
-			lowered = crate::real::lower(node.clone());
+		let node = if crate::numbers::real::mentions_real(node) {
+			lowered = crate::numbers::real::lower(node.clone());
 			&lowered
 		} else {
 			node
@@ -812,7 +812,7 @@ impl WasmGcEmitter {
 	/// Imports follow resolved calls: only called FFI functions, WASI/host only if called.
 	/// Explicitly enabled imports stay enabled.
 	fn derive_imports_from_effects(&mut self, node: &Node) {
-		use crate::effects::{Capability, EffectReport};
+		use crate::analyzer::effects::{Capability, EffectReport};
 		let effects = EffectReport::of(node);
 		// task_poll is called by the emitted loops of a program that controls tasks, not by the program itself
 		let polls = effects.calls_external(crate::host::TASK_CONTROL);
@@ -844,12 +844,12 @@ impl WasmGcEmitter {
 		});
 		self.config.emit_host_imports |= host_import_word;
 		// an ordering of ± values that overlap warns through the host (P224b)
-		self.config.emit_host_imports |= crate::uncertain::may_order_intervals(node);
+		self.config.emit_host_imports |= crate::numbers::uncertain::may_order_intervals(node);
 	}
 
 	/// Import modules this module declares, known after `emit_for_node`
-	pub fn imports(&self, capability: crate::effects::Capability) -> bool {
-		use crate::effects::Capability::*;
+	pub fn imports(&self, capability: crate::analyzer::effects::Capability) -> bool {
+		use crate::analyzer::effects::Capability::*;
 		match capability {
 			Host | Foreign => {
 				self.config.emit_host_imports || self.ctx.ffi_imports.contains_key(crate::host::FOREIGN_CALL)
@@ -1243,7 +1243,7 @@ fn last_statement_items(program: &Node) -> usize {
 }
 
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
-	use crate::effects::Capability;
+	use crate::analyzer::effects::Capability;
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit_for_node(node);
 	if let Some(type_error) = emitter.type_error() {

@@ -13,13 +13,13 @@ fn program(rest: &str) -> String {
 #[test]
 fn a_filtered_comprehension_over_a_table_reads_only_its_rows() {
 	eval(&program("for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }"));
-	let before = warp::database::rows_read();
+	let before = warp::host::database::rows_read();
 	is!(
 		&program("names = [p.name for p in people if p.age > 47]\nnames#1 + names#3"),
 		"N48N50"
 	);
 	assert_eq!(
-		warp::database::rows_read(),
+		warp::host::database::rows_read(),
 		before + 3,
 		"the comprehension read other rows than its three"
 	);

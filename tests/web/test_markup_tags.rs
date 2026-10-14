@@ -49,7 +49,7 @@ fn an_element_statement_takes_its_attributes_in_parentheses() {
 fn rendering_markup_warns_nothing_more() {
 	let shown = eval("html{ p{ \"x\" } }");
 	warp::diagnostic::take_warnings();
-	assert_eq!(warp::markup::to_html(&shown), "<html><p>x</p></html>");
+	assert_eq!(warp::web::markup::to_html(&shown), "<html><p>x</p></html>");
 	assert_eq!(warp::diagnostic::take_warnings().len(), 0);
 }
 
@@ -79,7 +79,7 @@ fn repeated_keys_in_a_tag_block_are_children() {
 // also for the keywords type and class and in parentheses; a name that is no attribute stays an assignment
 #[test]
 fn a_tag_takes_html_attributes_with_equals() {
-	let html_of = |code: &str| warp::markup::to_html(&eval(code));
+	let html_of = |code: &str| warp::web::markup::to_html(&eval(code));
 	assert_eq!(
 		html_of("label{\"Name\" input{type=\"text\" style=\"color: blue\"}}"),
 		"<label>Name<input type=\"text\" style=\"color: blue\"></label>"

@@ -13,7 +13,7 @@ for small arithmetic blocks.** Effort to a usable native + browser version: abou
 
 The first version takes the *copying* road, not the shared-store one below: simpler, and the same on both hosts.
 
-* `interpret e` (the spec's word for `x!!`; src/lowering/run_time_blocks.rs): of a constant block it is `x!!`
+* `interpret e` (the spec's word for `x!!`; src/lowering/control/run_time_blocks.rs): of a constant block it is `x!!`
   (blocks.rs inlines it); of anything else it is the host word `run_block(e, "a b", [a, b])`, the main-level
   variables assigned before it as a snapshot (the block reads them, never writes them).
 * The host (natively src/host.rs `run_block`, in the browser host.js → `web_eval_block` of a second compiler
@@ -27,7 +27,7 @@ The first version takes the *copying* road, not the shared-store one below: simp
 * run-block-4: the program's function definitions travel along as data, so the block may call them; exact ratios and
   big Ints come back, composed from fixnums with the exported Int operations (EXACT_BUILDERS).
 * run-block-5 (P73, `!` forces): `e!` of an expression known only at run time (`xs#2!`) and of a name holding an
-  element of a list of data runs through run_block (src/lowering/run_time_blocks.rs `lower_run_time_bangs`, between
+  element of a list of data runs through run_block (src/lowering/control/run_time_blocks.rs `lower_run_time_bangs`, between
   blocks.rs and mutation.rs); ø is "unwrapped ø", a value is itself. Other names keep mutation.rs's pure unwrap.
 
 * run-block-6: `!` decides at run time where the kind is not known statically: an untyped parameter (`f(b) := b!`)

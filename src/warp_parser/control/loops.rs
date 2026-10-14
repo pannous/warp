@@ -139,7 +139,7 @@ impl WarpParser {
 		if key_variable.is_some() {
 			self.key_variables.pop();
 		}
-		// kept as written: lowering/for_loop/headers.rs gives `for int in xs`, `for chars in text` their meaning
+		// kept as written: lowering/control/for_loop/headers.rs gives `for int in xs`, `for chars in text` their meaning
 		Some(for_in_loop(variable, iterable, body))
 	}
 
@@ -220,7 +220,7 @@ impl WarpParser {
 			Some(word) => self.colon_body(word),
 			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
 		};
-		// kept as written, the condition in round brackets: lowering/for_loop/headers.rs filters the loop
+		// kept as written, the condition in round brackets: lowering/control/for_loop/headers.rs filters the loop
 		let condition = Node::List(vec![condition], Bracket::Round, Separator::None);
 		Some(for_in_loop(condition, iterable, body))
 	}
@@ -291,7 +291,7 @@ impl WarpParser {
 		let binds = min_bp <= TIMES_BP
 			|| self.times_fills_list()
 			|| (self.value_after_times() && min_bp <= Op::Mul.binding_power().0);
-		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) || !binds || !self.matches_keyword(TIMES_WORD) {
+		if self.options.data_mode || lhs.is_empty_node() || !binds || !self.matches_keyword(TIMES_WORD) {
 			return None;
 		}
 		self.advance_by(TIMES_WORD.len());
@@ -321,7 +321,7 @@ impl WarpParser {
 	}
 
 	/// `n times {body}`, `n times: body`, `n times [x]`, `n times "ab"`: the phrase [n times operand] as written, which
-	/// lowering/times_phrases.rs makes a loop, a filled list or a repeated text
+	/// lowering/words/times_phrases.rs makes a loop, a filled list or a repeated text
 	pub(crate) fn parse_times_loop(&mut self, count: Node) -> Node {
 		self.skip_spaces();
 		let operand = match self.current_char() {

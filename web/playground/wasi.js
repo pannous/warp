@@ -15,7 +15,7 @@ const TEMPORARY_FD = 5; // "/tmp": a directory of the overlay only, for scratch 
 const TEMPORARY_DIRECTORY = "/tmp";
 const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY]]);
 const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
-// WARP_INCLUDE replaces the compiler's include directories (src/ffi_parser.rs), so it looks in exactly one place;
+// WARP_INCLUDE replaces the compiler's include directories (src/formats/ffi_parser.rs), so it looks in exactly one place;
 // WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch
 const ENVIRONMENT = [`WARP_INCLUDE=${INCLUDE_DIRECTORY}`, `WARP_HTTP_STUB=${new URL("/__stub__", self.location.href).href}`,
 	`TMPDIR=${TEMPORARY_DIRECTORY}`];

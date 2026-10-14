@@ -2,7 +2,7 @@
 // arithmetic and comparisons, as it is for libm's (`GetTime() >= 0.0` failed: "GetTime is a float where an exact Int
 // is expected")
 use crate::is;
-use warp::ffi_parser::find_library_headers;
+use warp::formats::ffi_parser::find_library_headers;
 
 #[test]
 fn a_raylib_float_result_is_a_float() {

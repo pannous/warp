@@ -1,8 +1,8 @@
 // card html-meta (default A, notes/web_framework.md "Page facts"): the page's facts as keys on html, `html{ title:
 // "Shop" description: "…" }`, go into its head as <title> and <meta name content>; `meta: {author: "Ann"}` names any
 // other meta; an html with a head of its own gets them there. A meta element with its own attributes stays one
-use warp::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 fn page(markup: &str) -> String {
 	to_html(&eval(markup))

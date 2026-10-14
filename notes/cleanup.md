@@ -58,7 +58,7 @@ probes/cleanup/same_wasm.sh. Ranked by value per effort:
 | 1 | cleanup-scoped-state | one `scoped(&KEY, value, run)` helper for the 12 replace → run → restore triples (pipeline.rs GRANTED, COMPONENT_FUNCTIONS, SERVER_VALUES, SERVING_PORT, with_flag; diagnostic.rs ×3, util, units, modules, meta, host/native) | one idiom instead of twelve copies | S |
 | 2 | cleanup-compile-mode | the 9 bool statics in pipeline.rs (FOR_A_PAGE, FOR_DEV, RENDERS_ITSELF, FOR_WAGI, PRINTS_RESULT, PRERENDERING, FOR_ANY_HOST, FOR_HOSTING, FOR_TESTS) and their for_x/is_x pairs as one `CompileMode` struct in one thread-local. The emitter reads it only through wasm_emitter/config.rs, not via `pipeline::is_for_*` in function_builder, mod.rs, module_finish and component_adapters | a twin passes one mode value; the emitter stops reaching into the pipeline | S–M |
 | 3 | cleanup-parser-words | the parser imports from lowering and analyzer: SWITCH_WORDS, EMIT_WORDS/ALIASES, ON_WORD, IMPLICIT_PARAMETER, FILE_CLASS_MARK, VARIANTS_MARK, leading_name, operator_method, `call`, children_rewritten. Move these words and node helpers into leaf modules (lowering/words.rs → src/words.rs, node helpers to node/), so the parser depends only on node, words and the type registry | the parser is the first thing self-hosting rewrites; its dependencies are what the twin has to carry along | S |
-| 4 | cleanup-parser-for-loops | the for-loop desugarings out of the parser (statements.rs + mod.rs unit_iteration, type_filter_header): type-filtered `for int in xs` (and the FilterLoop meta the list emitter downcasts), `for chars in text` (byte_at/map/chars), walked_text_units, `for … where`. The parser emits plain `for v in iter body`; lowering/for_loop.rs does the rest | the biggest semantic rewrite left in the parser (warp-dispatch moved `times` already) | M |
+| 4 | cleanup-parser-for-loops | the for-loop desugarings out of the parser (statements.rs + mod.rs unit_iteration, type_filter_header): type-filtered `for int in xs` (and the FilterLoop meta the list emitter downcasts), `for chars in text` (byte_at/map/chars), walked_text_units, `for … where`. The parser emits plain `for v in iter body`; lowering/control/for_loop.rs does the rest | the biggest semantic rewrite left in the parser (warp-dispatch moved `times` already) | M |
 | 5 | cleanup-parser-element-wise | `xs .* 2` is built into a map lambda in the parser (mod.rs SpecialInfix::ElementWise → analyzer::element_wise); keep the operator node and lower it in broadcasting.rs | same as 4, small | S |
 | 6 | cleanup-analyzer-lowering | analyzer/declaration_lowering.rs (1393 lines) and the analyzer's lower_* passes (lower_inline_unions, lower_list_times, lower_negated_calls, lower_kebab_members) move to lowering/; the analyzer keeps analysis | "analyzer" today means both; one place for passes | S–M |
 | 7 | cleanup-pass-phases | SOURCE_PASSES (118) and MEANING_PASSES (31) as named phase slices (sugar, markup/web, declarations, signals, functions, dispatch) joined in the same order, each pass named one way: today pipeline.rs mixes `crate::serve::lower` (root re-exports from lib.rs) with `crate::lowering::index_positions::lower` | the order becomes readable; the twin's pipeline can copy the phases one at a time | S |
@@ -66,7 +66,7 @@ probes/cleanup/same_wasm.sh. Ranked by value per effort:
 | 9 | cleanup-kernel-names | linear_arrays writes a kernel's body into its function name and parses it back in the emitter (kernel_of; analyzer/imports.rs matches the prefix). Replace that with a side table keyed by name; also traps.rs's parse of a detail text | the emitter stops calling the parser | M |
 
 Done, all nine (warp-cleanup, 2026-10-13). What came out of them:
-- 4: the parser keeps `for int in xs`, `for (it>2) in xs`, `for chars in text` as written. lowering/for_loop/headers.rs
+- 4: the parser keeps `for int in xs`, `for (it>2) in xs`, `for chars in text` as written. lowering/control/for_loop/headers.rs
   is the first pass of lower_for_emission and lower_module_source, and it re-derives what the parser used to know:
   declared types (analyzer::declared_classes), functions (function_definitions), and text variables (post-order). One
   visible change: a filter loop's got-it warning points at the loop header instead of the loop's end.
@@ -116,7 +116,7 @@ A. Compile context, to become one `CompileContext` beside `CompileMode` (card cl
 | BOOL_FUNCTIONS | analyzer/booleans | set | functions known to return a bool |
 | WRITTEN_PROBLEMS | accessibility | pass | accessibility problems the source states itself |
 
-Done (2026-10-14): all of A are fields of src/compile_context.rs `CompileContext`, one thread-local; `compile_context::scoped(field, value, run)` replaces the per-static `util::scoped` calls and pipeline's with_flag / set_mode_flag, `read` and `change` the `.with(|cell| …)` accessors, and single-caller accessors (hint_line, module_files, is_module_definition, comments_as_meta, serving_port, server_value, sandbox::confined) are gone. Not done: a reset of the `set` fields per compile, since an inner compile (a module, the renderer) would wipe the outer one's kernels and module definitions; that needs a scoped context per compile, not a reset.
+Done (2026-10-14): all of A are fields of src/compiler/compile_context.rs `CompileContext`, one thread-local; `compile_context::scoped(field, value, run)` replaces the per-static `util::scoped` calls and pipeline's with_flag / set_mode_flag, `read` and `change` the `.with(|cell| …)` accessors, and single-caller accessors (hint_line, module_files, is_module_definition, comments_as_meta, serving_port, server_value, sandbox::confined) are gone. Not done: a reset of the `set` fields per compile, since an inner compile (a module, the renderer) would wipe the outer one's kernels and module definitions; that needs a scoped context per compile, not a reset.
 
 B. Compile output, to become one `Diagnostics` sink taken once per compile (card cleanup-diagnostic-sink)
 
@@ -362,7 +362,7 @@ stored_values (280), element_events (286). Each repeats three things:
    their length undoes the groups the parser made of the phrase (`(on stop) (the (machine {…}))`).
    Design: one reader `listeners::read(statement) -> Option<Listener { word: On|Once|Whenever|Before|After, name:
    Option<String> /* h = on … */, trigger: Vec<Node> /* flat words */, body: Node, scope: Option<Node> /* in {…} */ }>`
-   in a new src/lowering/listeners.rs, and each pass asks it and matches on the trigger words. Estimate −300 lines,
+   in a new src/lowering/web/listeners.rs, and each pass asks it and matches on the trigger words. Estimate −300 lines,
    low risk (behaviour kept; the forms each reader accepts are the union, a few odd spellings may start or stop
    matching → cleanup-edge ignores).
 2. Calling the handler. Host-triggered events each have their own registration: `signal_every(id, ms)`,

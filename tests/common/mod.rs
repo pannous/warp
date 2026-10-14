@@ -45,7 +45,7 @@ pub const LEAN: Resource = Resource {
 #[cfg(feature = "native")]
 pub const WASM_SPLIT: Resource = Resource {
 	name: "binaryen's wasm-split",
-	available: || warp::binaryen::available("wasm-split"),
+	available: || warp::modules::binaryen::available("wasm-split"),
 };
 
 // The test macros (user decision P100: they live with the tests, not in the library). is!(code, value) compiles and

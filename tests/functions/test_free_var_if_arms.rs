@@ -10,7 +10,7 @@ use warp::*;
 #[cfg(feature = "native")]
 fn compiled(code: &str) -> Node {
 	let module = warp::pipeline::compile(code).expect("compiles");
-	warp::wasm_reader::read_bytes(&module.bytes).expect("runs")
+	warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs")
 }
 
 fn same_value(code: &str, value: i64) {

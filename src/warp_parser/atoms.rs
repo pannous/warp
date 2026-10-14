@@ -102,12 +102,12 @@ impl WarpParser {
 			':' if self.url_follows() => self.parse_url(String::new()),
 			':' if self.at_pseudo_class_selector() => self.symbol_after(1, |name| Node::Symbol(format!(":{name}"))),
 			'.' if self.starts_path_literal() => self.parse_path_literal(),
-			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
-			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
+			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/types/tuples.rs); `...rest`
+			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/definitions/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => {
 				self.parse_starred(3)
 			}
-			// Python's `**kw`: the keyword arguments as one object (src/lowering/variadic.rs)
+			// Python's `**kw`: the keyword arguments as one object (src/lowering/definitions/variadic.rs)
 			'*' if self.peek_char(1) == '*' && self.is_identifier_start(2) => match self.parse_starred(2) {
 				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::words::STARRED)),
 				other => other,
@@ -129,12 +129,12 @@ impl WarpParser {
 				return Node::Number(Number::Inf);
 			} // the float infinity (P56)
 			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
-			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => {
-				self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE)))
-			}
-			crate::units::DEGREE => {
+			crate::numbers::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| {
+				Node::Symbol(format!("{}{name}", crate::numbers::units::DEGREE))
+			}),
+			crate::numbers::units::DEGREE => {
 				self.advance();
-				Node::Symbol(crate::units::DEGREE.to_string())
+				Node::Symbol(crate::numbers::units::DEGREE.to_string())
 			}
 			_ if let Some((truth, length)) = self.truth_glyph_at() => {
 				self.advance_by(length);
@@ -183,12 +183,14 @@ impl WarpParser {
 					}
 				}
 			}
-			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
+			'\\' if let Some((name, length)) =
+				crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos) =>
+			{
 				let warned = self.warn_unknown_entity(&name, self.column);
 				self.advance_by(length);
 				warned.map_or_else(|strict| strict, |()| Node::Text(format!("\\:{name}")))
 			}
-			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
+			'\\' if let Some(name) = crate::text::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
 				self.advance_by(name.len() + 1);
 				Diagnostic::default()
 					.message(format!("a uniscript entity is written \\:{name}, not \\{name}"))
@@ -478,12 +480,12 @@ impl WarpParser {
 			return version;
 		}
 		// `x°`: a variable in degrees, as `30°` (card angles-degrees)
-		if self.current_char() == crate::units::DEGREE && !self.peek_char(1).is_alphabetic() {
+		if self.current_char() == crate::numbers::units::DEGREE && !self.peek_char(1).is_alphabetic() {
 			self.advance();
 			return Node::Key(
 				Box::new(Node::Symbol(symbol)),
 				Op::Mul,
-				Box::new(Node::Symbol(crate::units::DEGREE.to_string())),
+				Box::new(Node::Symbol(crate::numbers::units::DEGREE.to_string())),
 			);
 		}
 
@@ -640,23 +642,29 @@ impl WarpParser {
 		if !PRINT_SPELLINGS.contains(&symbol.as_str()) || !self.in_code() || named {
 			return symbol;
 		}
-		crate::diagnostic::note_alias(&symbol, PRINT_WORD);
+		note_alias_at(self.start_of(&symbol), &symbol, PRINT_WORD);
 		PRINT_WORD.to_string()
+	}
+
+	/// Where the symbol just read starts: line and column
+	fn start_of(&self, symbol: &str) -> (usize, usize) {
+		(self.line_nr, self.column.saturating_sub(symbol.chars().count()))
 	}
 
 	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,
 	/// `operator +`, Kotlin's `enum class` and `data class`, `mixin Name {…}`
 	fn foreign_form(&mut self, symbol: &str) -> Option<Node> {
+		let start = self.start_of(symbol);
 		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
 		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
 			self.skip_blanks();
 			let construction = self.parse_atom();
 			let class = crate::node::leading_name(&construction);
-			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
+			note_alias_at(start, &format!("{NEW_WORD} {class}"), &class);
 			return Some(construction);
 		}
 		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
-			crate::diagnostic::note_alias(CONSTANT_ALIAS, CONST_WORD);
+			note_alias_at(start, CONSTANT_ALIAS, CONST_WORD);
 			return Some(Symbol(CONST_WORD.to_string()));
 		}
 		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
@@ -674,7 +682,7 @@ impl WarpParser {
 				.all(|name| !name.is_empty() && name.chars().all(is_identifier_char))
 			{
 				self.advance_by(line.chars().count());
-				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
+				note_alias_at(start, &format!("{symbol}{line}"), &names.join("; "));
 				return Some(Node::List(
 					names.into_iter().map(Symbol).collect(),
 					Bracket::None,
@@ -685,7 +693,8 @@ impl WarpParser {
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
 			self.skip_blanks();
 			if let Some(head) = self.try_parse_operator_method_head() {
-				crate::diagnostic::note_alias(
+				note_alias_at(
+					start,
 					&format!("{OPERATOR_WORD} {}", head.first().name()),
 					&head.first().name(),
 				);
@@ -696,13 +705,13 @@ impl WarpParser {
 		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
 			self.skip_blanks();
 			self.advance_by("class".len());
-			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
+			note_alias_at(start, &format!("{ENUM_WORD} class"), ENUM_WORD);
 			return Some(Symbol(symbol.to_string()));
 		}
 		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol) {
 			if let Some(keyword) = self.class_keyword_after_blanks() {
-				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
+				note_alias_at(start, &format!("{symbol} {keyword}"), keyword);
 				self.skip_blanks();
 				self.advance_by(keyword.len());
 				return Some(self.parse_type_declaration());
@@ -916,4 +925,10 @@ fn argument_group(arguments: Node) -> Node {
 		Node::Empty => Node::List(vec![], Bracket::Round, Separator::None),
 		other => Node::List(vec![other], Bracket::Round, Separator::None),
 	}
+}
+
+/// A got-it note on another language's word, pointing at where the word starts
+fn note_alias_at((line, column): (usize, usize), written: &str, warp_word: &str) {
+	crate::normalize::set_hint_position(line, column);
+	crate::diagnostic::note_alias(written, warp_word);
 }

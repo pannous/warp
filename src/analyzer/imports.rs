@@ -63,11 +63,11 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			} else if *op == Op::Square || *op == Op::Cube {
 				analyze_required_functions(ctx, key);
 				return;
-			} else if op.is_prefix() && matches!(key.drop_meta(), Node::Empty) {
+			} else if op.is_prefix() && key.is_empty_node() {
 				analyze_required_functions(ctx, value);
 				return;
 			} else if *op == Op::Hash {
-				if matches!(key.drop_meta(), Node::Empty) {
+				if key.is_empty_node() {
 					ctx.required_functions.insert("node_count");
 				} else {
 					ctx.required_functions.extend([
@@ -295,9 +295,9 @@ pub(super) fn ffi_call_kind(name: &str) -> Kind {
 /// The kind of a foreign function's result: a float, a text (a C string), a host word's Node, what a function of a module
 /// warp compiled declares, else an int
 pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
-	let declared = crate::wasm_modules::is_module_path(signature.library)
+	let declared = crate::modules::wasm_modules::is_module_path(signature.library)
 		.then(|| {
-			crate::wasm_modules::exports(signature.library)
+			crate::modules::wasm_modules::exports(signature.library)
 				.get(signature.name)?
 				.node_result
 		})
@@ -629,11 +629,13 @@ pub(super) fn add_ffi_lib(ctx: &mut Context, lib: &str) {
 pub(super) fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 	use crate::ffi::get_signatures_from_headers;
 
-	if crate::wasm_modules::is_module_path(lib) {
-		for (name, export) in crate::wasm_modules::exports(lib) {
+	if crate::modules::wasm_modules::is_module_path(lib) {
+		for (name, export) in crate::modules::wasm_modules::exports(lib) {
 			ctx.ffi_imports.insert(name.clone(), export.signature.clone());
-			ctx.ffi_imports
-				.insert(crate::wasm_modules::qualified(lib, name), export.signature.clone());
+			ctx.ffi_imports.insert(
+				crate::modules::wasm_modules::qualified(lib, name),
+				export.signature.clone(),
+			);
 		}
 		return;
 	}

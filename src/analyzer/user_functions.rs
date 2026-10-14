@@ -260,7 +260,7 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if crate::type_constructor::instance_parts_marked(type_node) {
 		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
 	}
-	if crate::uncertain::is_interval_number(type_node) {
+	if crate::numbers::uncertain::is_interval_number(type_node) {
 		return Some(Kind::Empty); // `a:number` given a ± value: a Node, checked at run time (wasm_emitter admitted)
 	}
 	let type_name = type_node.name();
@@ -475,7 +475,7 @@ fn kind_tested(node: &Node) -> Option<&str> {
 	}
 }
 
-/// The names a foreign call takes as its receiver or arguments (lowering/foreign_modules.rs): values of any kind, as
+/// The names a foreign call takes as its receiver or arguments (lowering/foreign/foreign_modules.rs): values of any kind, as
 /// foreign code gives them (a warp function called back by JavaScript, card js-callbacks)
 fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
 	let given = match node {
@@ -603,7 +603,7 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 /// - `name(param) = body` → Key(List[name, param], Assign, body)
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
-	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
+	crate::compiler::analysis_memo::analysed(ctx, node, analyse_user_functions);
 }
 
 /// A fresh context holding the functions the program defines (extract_user_functions)
@@ -747,7 +747,7 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 }
 
 /// The user functions a list calls and their arguments: `f(a, b)`, and a task start that runs f in another instance with
-/// them: `task·go(f, a, b)` (lower_tasks), `task_spawn("f", a, b)`, and `task_spawn_values("f·node", [a, b])`, which
+/// them: `task·go(f, a, b)` (lower_tasks) and `task_spawn_values("f·node", [a, b])`, which
 /// calls the wrapper f·node with the list and through it f with the items (resolve_tasks)
 pub(crate) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 	let Some(Node::Symbol(head)) = items.first().map(Node::drop_meta) else {
@@ -758,7 +758,7 @@ pub(crate) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 		_ => None,
 	};
 	match head.as_str() {
-		crate::declarations::TASK_GO | crate::host::TASK_SPAWN => started
+		crate::declarations::TASK_GO => started
 			.map(|name| (name, items[2..].iter().collect()))
 			.into_iter()
 			.collect(),
@@ -881,7 +881,7 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 		.filter(|(_, function)| !function.params.is_empty())
 		.map(|(name, _)| name);
 	user_functions
-		.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string()))
+		.chain(crate::numbers::real::FUNCTIONS.iter().map(|name| name.to_string()))
 		.collect()
 }
 
@@ -925,7 +925,7 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 			body.visit(&mut |node| {
 				let value_kind = |value: &Node| match value.drop_meta() {
 					Node::Symbol(name) => kinds.get(name).or(variable_kinds.get(name)).copied(),
-					// a cell's value is a Node of any kind (a signal's new value, lowering/signal_values.rs)
+					// a cell's value is a Node of any kind (a signal's new value, lowering/signals/signal_values.rs)
 					Node::List(items, _, _)
 						if items
 							.first()

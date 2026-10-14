@@ -15,7 +15,7 @@ program the model rejects, that is a **hole** (listed at the end, each with its 
 Warp has no single type checker. Static typing is spread over passes that each refuse one kind of mistake:
 `analyzer::check_type_errors`/`check_assignment` (variable kinds), `check_kind_changes` (P45), `check_declared_types`
 (`x:int = …`), `check_constants` (P130), charged `:=` (P71/P138), parameter checks in user_functions.rs (P49) and
-lowering/traits.rs `admit`, and the operator checks in inference.rs `node_arithmetic`. The model W0 is the single
+lowering/types/traits.rs `admit`, and the operator checks in inference.rs `node_arithmetic`. The model W0 is the single
 judgment those passes approximate. The contract: **warp rejects ⇐ W0 rejects** (soundness of the implementation is
 what we want; every program W0 rejects should be refused by warp at compile time). Warp may refuse more (it refuses
 ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
@@ -499,7 +499,7 @@ the value comparison above, maps, then tasks.
 `f(b=1, a=5)` writes the fields of `f·args` by name, positional arguments fill the others in order, a missing one
 takes its default (`f(a, b=3)`, `b: int = 3`); a call whose arguments do not fit exports as a call given `unit`, so
 W0 rejects it as warp does. Arguments run as written, left to right (P216; warp computed them in parameter order
-until src/lowering/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
+until src/lowering/definitions/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
 parameter. A function defined in a function's body is lifted (src/law/type_model/nested_functions.rs) to the
 main-level `outer·inner`, the names of outer it reads added as parameters passed by name; a name it declares
 `nonlocal` is passed as outer's cell (parameter type `outer·y`, the cell class), so writes reach outer. Siblings

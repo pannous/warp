@@ -142,7 +142,7 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::uncertain::INTERVAL_WORDS)
+/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::numbers::uncertain::INTERVAL_WORDS)
 /// The number a text literal spells: `"4"` is 4
 pub fn literal_number(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
@@ -243,13 +243,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64; of a value held as a Node maybe an interval, which it maps (a Node)
-		Node::Key(left, Op::Sqrt | Op::Cbrt, right) if matches!(left.drop_meta(), Node::Empty) => {
-			interval_or(Kind::Float, right, scope)
-		}
+		Node::Key(left, Op::Sqrt | Op::Cbrt, right) if left.is_empty_node() => interval_or(Kind::Float, right, scope),
 		// Prefix operators (neg, abs): inherit type from operand
-		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
-			infer_type(right, scope)
-		}
+		Node::Key(left, op, right) if op.is_prefix() && left.is_empty_node() => infer_type(right, scope),
 		// Ternary operator: condition ? then : else, an error branch as in `if c {a} else {b}`
 		Node::Key(_cond, Op::Question, then_else) => match then_else.drop_meta() {
 			Node::Key(then_expr, Op::Colon, else_expr) => choice_kind(then_expr, else_expr, scope),
@@ -268,12 +264,12 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(indexed, Op::Hash, index)
 			if let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta)
 				&& let Some(kind) = scope.function_kind(&field_kind_key(name))
-				&& !matches!(indexed.drop_meta(), Node::Empty)
+				&& !indexed.is_empty_node()
 				&& !declared_any(indexed, scope) =>
 		{
 			kind
 		}
-		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => {
+		Node::Key(indexed, Op::Hash, index) if !indexed.is_empty_node() => {
 			element_kind(indexed, scope).unwrap_or_else(|| {
 				let by_name = crate::warp_parser::subscript_key(index).is_some_and(|key| {
 					matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
@@ -468,7 +464,7 @@ pub(super) fn infer_list_type(
 			// FFI/builtin function calls (strcmp, strlen, abs, …) return Int by default
 			if crate::ffi::is_ffi_function(name) {
 				return match items {
-					[_, argument] if crate::uncertain::maps_intervals(name) => {
+					[_, argument] if crate::numbers::uncertain::maps_intervals(name) => {
 						interval_or(ffi_call_kind(name), argument, scope)
 					}
 					_ => ffi_call_kind(name),

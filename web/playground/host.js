@@ -9,7 +9,7 @@ const TRAP_DETAIL_EXPORT = "trap_detail";
 const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_ROUTES_EXPORT = "page·routes";
-const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/serve.rs PAGE_SUBMITTED
+const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/web/serve.rs PAGE_SUBMITTED
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -17,7 +17,7 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
 // window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
 const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
-// the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
+// the standard library's adapters (src/modules/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
 
@@ -53,7 +53,7 @@ function errorInProgram(program, reason) {
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
 // host-files.js, host-sound.js (needs host-files.js), host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
 // host-gpu.js (needs host-media.js), host-timers.js, host-random.js, host-media.js. A built site
-// ships a part only when its module imports one of the part's words or calls one of its std modules (src/host_parts.rs HOST_PARTS); the playground's workers
+// ships a part only when its module imports one of the part's words or calls one of its std modules (src/host/host_parts.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
 // name) an import module by its name (a .wasm path), else undefined; adapters, std modules for STD_ADAPTERS;
@@ -188,7 +188,7 @@ const decode = bytes => utf8Decoder.decode(bytes);
 
 const textTree = text => ({ kind: "3", data: { text }, chain: [] });
 const KIND_LIST = 8n;
-// the inverse of reader.js readNode for the values a task carries (src/tasks.rs TaskValue): built through the module's
+// the inverse of reader.js readNode for the values a task carries (src/host/tasks.rs TaskValue): built through the module's
 // constructors; a list from its cons cells, the first item in data, the next cells in the chain
 function buildValue(module, tree) {
 	// where it was written (src/web/mod.rs tree_of): kept by node_at, which only a module quoting or parsing code has
@@ -210,7 +210,7 @@ function buildValue(module, tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
 		case 1: {
-			// a module without bools (no new_bool) takes a truth as its Int 1/0, as src/tasks.rs does
+			// a module without bools (no new_bool) takes a truth as its Int 1/0, as src/host/tasks.rs does
 			if (payload.int !== undefined && String(kind) === BOOL_KIND && module.new_bool) return module.new_bool(BigInt(payload.int));
 			if (payload.int !== undefined) return module.new_int(BigInt(payload.int));
 			// beyond the fixnums: exact.js starts the parts that carry such numbers (tasks, foreign calls, run blocks)
@@ -288,7 +288,7 @@ const BOOL_KIND = String((1n << 8n) | 1n); // BOOL_INFO above Kind::Int
 const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
 const CURLY_LIST = String(KIND_LIST);
 const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: Colon is 1
-// a codepoint (a WIT char, P94) as src/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
+// a codepoint (a WIT char, P94) as src/modules/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
 const KIND_CODEPOINT = "4";
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
 function treeOfPlain(value) {
@@ -354,9 +354,9 @@ function runMain(holder, hooks) {
 	return whenSettled(outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => main())), outcome => {
 		holder.waiting = false;
 		const events = pageEvents(exports);
-		// a program with routes stays for its links (lowering/routes.rs page·routes)
+		// a program with routes stays for its links (lowering/web/routes.rs page·routes)
 		if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-		// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
+		// a run without page events (lib/markup.warp rendering the page's HTML, src/web/markup.rs) keeps the page's run
 		if (events.length > 0 && outcome.result) listeningRun = holder;
 		return outcome;
 	});
@@ -365,7 +365,7 @@ function runMain(holder, hooks) {
 // the last run that handles page events, for the compiler's warp_host.page_event (src/web/headless.rs in the browser tests)
 let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
-const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
+const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/web/page_html.rs PAGE_RENDER
 
 // the HTML of a value by the program's own renderer (lib/markup.warp's to_html, exported as page·render by a program
 // holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
@@ -385,7 +385,7 @@ const PAGE_HOLES = "page·holes"; // a page with components renders once, its ho
 const PATH_JOINER = "·";
 const TEXT_HOLE = "text"; // page·hole·<path>·text·<n>: the text after n children of that element (card web-fine-text-nodes)
 
-// the holes of a page's markup (src/lowering/event_signals.rs hole_name): each binding's name and where it shows, its
+// the holes of a page's markup (src/lowering/signals/event_signals.rs hole_name): each binding's name and where it shows, its
 // element's path from the root and, for a text, the element's children before it
 function pageHoles(exports) {
 	return Object.keys(exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER)).map(name => {
@@ -413,7 +413,7 @@ function holePatches(exports) {
 	}
 }
 
-// `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
+// `on exit {…}` (src/lowering/signals/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
 // main returns or `exit(code)` ends it, never after a failure
 function withExitHandler(holder, exports, call) {
 	const handler = exports["on·exit"];
@@ -470,7 +470,7 @@ function outcomeOf(holder, hooks, call) {
 	}
 }
 
-// the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS, and an element's FIELD_EVENTS):
+// the page events a program handles (src/lowering/signals/event_signals.rs PAGE_EVENTS, and an element's FIELD_EVENTS):
 // `on click {…}` exports on·click·node
 const PAGE_EVENT_HANDLER = /^on·((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)·node$/;
 function pageEvents(exports) {
@@ -485,7 +485,7 @@ function runPageEvent(holder, hooks, event, detail) {
 }
 
 // a form's request {method, path, query, body} for the program's own routes, without a server (worker.js handleSubmit,
-// lowering/serve.rs with_local_routes)
+// lowering/web/serve.rs with_local_routes)
 function runSubmitted(holder, hooks, request) {
 	holder.warnings = [];
 	const submitted = holder.exports[PAGE_SUBMITTED_EXPORT];

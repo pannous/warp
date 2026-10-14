@@ -1,4 +1,4 @@
-//! Closures at run time (lowering in src/lowering/closures.rs, notes/closures.md):
+//! Closures at run time (lowering in src/lowering/definitions/closures.rs, notes/closures.md):
 //!   (type $Closure (struct (field $entry (ref func)) (field $captured (ref null $Node))))
 //!   (type $closure_entry_n (func (param $captured (ref null $Node)) (param (ref null $Node))×n (result (ref null $Node))))
 //! A closure value is a $Node of Kind::Function whose data is the $Closure and whose value is the function name as a Symbol.
@@ -9,7 +9,7 @@
 use super::WasmGcEmitter;
 use crate::analyzer::param_kind;
 use crate::closures::closure_call_arity;
-use crate::context::UserFunctionDef;
+use crate::compiler::context::UserFunctionDef;
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ use ValType::Ref;
 
 const ENTRY_PREFIX: &str = "closure_entry_";
 /// closure_rebuild(name, captured) and closure_captured(f): what a host needs to carry a closure to another instance of
-/// the module (a task, src/tasks.rs): its target's name and its captured values; the entry is found again by name
+/// the module (a task, src/host/tasks.rs): its target's name and its captured values; the entry is found again by name
 pub const CLOSURE_REBUILD: &str = "closure_rebuild";
 pub const CLOSURE_CAPTURED: &str = "closure_captured";
 /// closure_apply(f, arguments): f called with the items of the list `arguments`, as many as f takes (missing ones ø,
@@ -98,7 +98,7 @@ impl WasmGcEmitter {
 				.iter()
 				.map(|param| (param.name.clone(), param.annotation.clone()))
 				.collect();
-			let form = crate::function_equality::written_form(target, &parameters, &function.body);
+			let form = crate::compiler::function_equality::written_form(target, &parameters, &function.body);
 			let forms = &mut self.closures.written_forms;
 			let index = forms.iter().position(|known| *known == form).unwrap_or_else(|| {
 				forms.push(form);
@@ -627,7 +627,7 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// `closure_call_n(h, a1…an)` after `h·capture·0 = …` (lowering/closures.rs hoist_captures): the target itself called
+	/// `closure_call_n(h, a1…an)` after `h·capture·0 = …` (lowering/definitions/closures.rs hoist_captures): the target itself called
 	/// with the captured values read once and the arguments, as a plain call
 	fn emit_hoisted_closure_call(
 		&mut self,

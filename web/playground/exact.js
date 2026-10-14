@@ -1,5 +1,5 @@
 // Exact numbers beyond the fixnums as they cross between a module and JavaScript: a task's value, a foreign call's
-// big integer, a run block's result (src/tasks.rs EXACT_BUILDERS, integer_handle). src/web/site.rs prepends this to the
+// big integer, a run block's result (src/host/tasks.rs EXACT_BUILDERS, integer_handle). src/web/site.rs prepends this to the
 // parts that carry them (host-tasks.js, host-foreign.js, host-compiler.js), so a site with two of them declares these
 // twice: function declarations only, which a top-level const could not be (as imports.js)
 

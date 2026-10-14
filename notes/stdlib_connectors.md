@@ -21,7 +21,7 @@ access to anything." Card hijack-stdlib. Survey of what exists, options per ecos
 - **Host words** (src/host.rs): Rust functions the module imports, Node in / Node out. `run_block` reads Nodes with
   `wasm_reader::node_in` and builds its result with `tasks::Builders` (TaskValue: ø, Int, Float, Char, Text, Symbol,
   List, Key, Closure, Exact). That is a general bridge for any value: every connector below can use it.
-- **Capabilities** (src/effects.rs): Host, Wasi, Ffi, Libm, Sql, Process. `eval` grants Host+Wasi+Ffi+Libm,
+- **Capabilities** (src/analyzer/effects.rs): Host, Wasi, Ffi, Libm, Sql, Process. `eval` grants Host+Wasi+Ffi+Libm,
   `eval_untrusted` only Libm. Process (`exec sh "…"`) and Sql are granted by no host yet: there is no "allow anything"
   mode.
 - **Packages** (notes/packages.md): `use name` = local `.warp`, then builtin/FFI library, then the git registry
@@ -66,12 +66,12 @@ step 3.
 4. **Components/WIT** when the component model is turned on again: the general, typed, sandboxable connector.
 
 ## Step 1 as implemented (branch hijack-stdlib)
-- Lowering (src/lowering/foreign_modules.rs, the first source pass, before `x.word(…)` becomes a method call of a
+- Lowering (src/lowering/foreign/foreign_modules.rs, the first source pass, before `x.word(…)` becomes a method call of a
   built-in word): `use python "math"` / `use python math` / `use python "os.path" as path` record the module and
   vanish; `math.sqrt(2)` → `foreign_call("python", "math", "sqrt", [2])`, `math.pi` →
   `foreign_call("python", "math", "pi", ø)` (ø: a read, a list: a call).
 - Parser: a word right after `.` is a member name: `math.sqrt`, `math.pi` stay `sqrt`, `pi` (no √ operator, no π).
-- Host (src/foreign.rs, native only): one `python3 -u` child per warp process (`WARP_PYTHON` names another), its loop
+- Host (src/modules/foreign.rs, native only): one `python3 -u` child per warp process (`WARP_PYTHON` names another), its loop
   script embedded; request and answer one JSON line each; an exception is an error with the Python message
   (`AttributeError: module 'math' has no attribute 'nope'`). The result is built with tasks::Builders like run_block's
   (host::VALUE_GIVING_WORDS: the module exports its constructors and exact builders).
@@ -119,7 +119,7 @@ step 3.
   crates and every language that compiles to components. A Rust crate builds one directly: `cargo build --target
   wasm32-wasip2` with `wit_bindgen::generate!` exporting a WIT world (tests/fixtures/components/rust_demo: fib, words,
   a record, an enum, a result; 84 KB). componentize-py and jco make them from Python and JS.
-- `lib.f(x)` → foreign_call("wasm", path, "f", 1, [x]); src/components.rs loads each component once per path and
+- `lib.f(x)` → foreign_call("wasm", path, "f", 1, [x]); src/modules/components.rs loads each component once per path and
   process on an engine of its own with the component model on (the programs' engines stay core-only), WASI p2 linked
   for its imports (stdio inherited, no files). A relative path is next to the program's file (modules::beside_program).
 - Values by the WIT type the function declares: integers range-checked into s8…u64, floats, bool, char (a one-character

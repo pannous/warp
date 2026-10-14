@@ -112,7 +112,7 @@ Decisions (user, via warp-interviewer):
 - Exhaustiveness: a match over a known enum or sealed set that misses a case is the compile error "match on Coin
   misses Dime"; an unknown subject type keeps the run-time "no case".
 
-Done on branch matching (warp-semantics), all in src/lowering/switch.rs, one entry `pattern_test` shared with
+Done on branch matching (warp-semantics), all in src/lowering/control/switch.rs, one entry `pattern_test` shared with
 parameter patterns: alternatives, type arms (`int =>`, `i: int =>`, `Circle =>`), ranges (`13 to 19` inclusive,
 `13..20` exclusive, open `65..`), `other`/`else` catch-alls, tuple arms `(1, t)` (a round comma list matches by
 shape like `[1, t]`), `xs is [_, 2]` and `if xs is [a, b] then b` (switch::is_pattern, called from type_tests: a list
@@ -121,7 +121,7 @@ with `_`, a rest or a name defined nowhere is a pattern, else `is` compares), an
 The whole matched value (user): no `@`/`as` binding. In an arm the subject's name (`match xs`), the word `value` (any
 subject, innermost match; a program variable named value wins) and `match name = expr { … }` (assigns, then matches;
 the name stays bound) give it.
-Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `add_pair([a, b]) := a + b`,
+Parameter patterns (card parameter-patterns, lowering/definitions/parameter_patterns.rs): `add_pair([a, b]) := a + b`,
 `total(Point{x, y}) := x + y`. Each pattern parameter gets a numbered name (`list·1`, `point·1: Point`), and the body
 becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
 Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
@@ -137,7 +137,7 @@ Item patterns (step 3, card list-pattern): `[[n, s]...]` in a list pattern's res
 matches; each name binds the list of its values (switch::every_item_test, a while loop over the rest slice).
 Named patterns (step 4, card patterns-values, user: the keyword): `pattern Adult = {age: >= 18}`; `x is Adult`, arms
 `Adult =>`, `it is Adult and Admin`; names inside bind. A plain `Name = …` is a value; one whose right side only a
-pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/named_patterns.rs,
+pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/types/named_patterns.rs,
 substitutes the pattern before lower_where).
 Probes: probes/matching/arms.warp, whole_value.warp; inventory with a fresh build: 35 of 48 before tuples, is and
 bare names.
@@ -158,7 +158,7 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
 4. Named patterns as values: `pattern Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
-   find done (src/lowering/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
+   find done (src/lowering/collections/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
    names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
    Open: `found = [[…]] find P` parses as an assignment first (card found-find; its parser special case was removed by cleanup-found-find, the general fix belongs in assignment parsing).

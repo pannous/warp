@@ -52,7 +52,7 @@ impl WasmGcEmitter {
 	/// A key held as a Node (`edge[0]` of a map's value): a number indexes, a name looks up, decided at runtime
 	pub(in crate::wasm_emitter) fn dynamic_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::warp_parser::subscript_key(index)?;
-		(self.get_type(key) == Kind::Empty && !matches!(key.drop_meta(), Node::Empty)).then(|| key.clone())
+		(self.get_type(key) == Kind::Empty && !key.is_empty_node()).then(|| key.clone())
 	}
 
 	pub(in crate::wasm_emitter) fn map_key(&self, index: &Node) -> Option<Node> {
