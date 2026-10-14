@@ -11,7 +11,6 @@ fn test_to_phrases_are_called_with_their_prepositions() {
 }
 
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `square of a number = …` no longer defines square"]
 fn test_spaced_phrases_are_called_with_their_prepositions() {
 	is!("square of a number = it*it; square of 4", 16);
 	is!("square of a number = it*it; square 4", 16);

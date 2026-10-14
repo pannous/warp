@@ -5,7 +5,6 @@ use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `fib int i = …` no longer defines fib(i:int)"]
 fn test_type_then_name_parameter() {
 	is!("fib int i = if i<2 : i else fib(i - 1) + fib(i - 2); fib(10)", 55);
 	is!("twice int x := x+x; twice 4", 8);
@@ -21,7 +20,6 @@ fn test_type_word_is_the_parameter_name() {
 }
 
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: a type word in a spaced head no longer names a parameter"]
 fn test_lone_type_word_parameter_is_it() {
 	is!("foo of int = it + it; foo 3", 6);
 	is!("square of a number = it*it; square 3", 9);

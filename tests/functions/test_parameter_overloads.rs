@@ -32,7 +32,6 @@ const COMBINE_WITH: &str = "combine number with number = number#1 + number#2; co
 
 // Card paren-overload: a phrase call in parentheses dispatches as the bare call
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `combine number with number = …` no longer defines combine"]
 fn a_phrase_call_in_parentheses_takes_its_variant() {
 	is!(&format!("{COMBINE_WITH}(combine 1.1 with 2.2)"), 3.3);
 	is!(&format!("{COMBINE_WITH}x = (combine 2 with 3); x"), 6);
@@ -41,7 +40,6 @@ fn a_phrase_call_in_parentheses_takes_its_variant() {
 
 // Card similar-vs: ≈ and ~ end a phrase call's arguments as == does
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `combine number with number = …` no longer defines combine"]
 fn a_similarity_compares_the_phrase_calls_value() {
 	is!(&format!("{COMBINE_WITH}combine 1.1 with 2.2 ≈ 3.3"), true);
 	is!(&format!("{COMBINE_WITH}check combine 1.1 with 2.2 ≈ 3.3; 7"), 7);
@@ -60,7 +58,6 @@ fn an_untyped_variant_is_the_fallback() {
 
 // card of-any-variant: `foo of any` is the fallback variant, as wiki/polymorphism.md shows
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `foo of int = …` no longer defines foo(it:int)"]
 fn of_any_is_the_fallback_variant() {
 	is!(
 		"foo of int = it+it; foo of text = it.length; foo of any = 1; foo(\"abc\") + foo(2) + foo(2.5)",

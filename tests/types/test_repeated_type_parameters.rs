@@ -3,7 +3,6 @@
 use crate::is;
 
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `combine float with float = …` no longer defines combine"]
 fn repeated_type_words_number_their_parameters() {
 	is!("combine float with float = float#1 + float#2\ncombine(1.5, 2.0)", 3.5);
 	is!("combine int with int = $0 * $1\ncombine(2, 3)", 6);

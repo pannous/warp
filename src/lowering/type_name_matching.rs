@@ -1,8 +1,8 @@
-//! Matching by type name (D5, notes/matching.md): known type words in the `to` phrase `to square a number:` name typed
-//! parameters (`parameter_slots`). The spaced head `fib int i = …` is gone (decision cleanup-cuts): `fib(i:int) := …`.
-//! Also declared result types (`square(x) -> int`) and C-style declarations (`int age = 30`).
+//! Matching by type name (D5, notes/matching.md): known type words in a definition head name typed parameters.
+//! `fibonacci number = …` → `fibonacci(number:number) := …`,
+//! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
-use super::nodes::{is_block, is_call_head, key};
+use super::nodes::{call, is_block, is_call_head, key, spaced_statement};
 use crate::analyzer::type_word_kind;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -67,11 +67,9 @@ pub fn phrase_words(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) ->
 /// - prepositions (`to of from …`) only separate slots: `to add number a to number b` → `a:number`, `b:number`
 /// - an article starts a noun slot when a known type follows it or the body never uses the article as a name:
 ///   `a number` → `number:number`, `a photo` → `photo` (`photo:photo` once `class photo` is declared); `to add a b: a+b` keeps `a`
-/// - a known type before a name types it: `int i` → `i:int`; a lone known type names itself, or is `it` when the body uses `it`
+/// - a lone known type names itself, or is `it` when the body uses `it`; a type before a name (`fib int i`) is no
+///   longer read (decision cleanup-cuts): write `fib(i:int)`
 /// - several nouns after an article are one multi-word name, typed by its head noun and named by it: `a phone number` → `number:number`
-///
-/// - a type word repeated alone numbers its parameters: `combine float with float = float#1 + float#2` →
-///   `combine(float·1:float, float·2:float) := float·1 + float·2`, the body read the same way
 ///
 /// Err when two parameters end up with one name (`a first name`, `a last name`).
 pub fn parameter_slots(
@@ -80,7 +78,6 @@ pub fn parameter_slots(
 	is_known_type: &dyn Fn(&str) -> bool,
 ) -> Result<(Vec<Node>, Node), String> {
 	let in_phrase = phrase_words(words, body, is_known_type);
-	let is_name = |word: &str| !PREPOSITIONS.contains(&word) && !is_known_type(word);
 	let mut parameters = vec![];
 	// `number a to …`: an article right before a preposition or the end is a name
 	let ends_slot = |index: usize| in_phrase.get(index).is_none_or(|phrase_word| *phrase_word);
@@ -102,11 +99,6 @@ pub fn parameter_slots(
 				symbol(head)
 			});
 			index += 1 + noun.len();
-		} else if is_known_type(word)
-			&& next.is_some_and(|next| is_name(next) && (!ARTICLES.contains(&next) || ends_slot(index + 2)))
-		{
-			parameters.push(typed(next.unwrap_or_default(), word));
-			index += 2;
 		} else {
 			parameters.push(if is_known_type(word) {
 				typed(word, word)
@@ -116,8 +108,7 @@ pub fn parameter_slots(
 			index += 1;
 		}
 	}
-	let mut parameters = numbered_repeated_types(parameters);
-	let body = numbered_type_reads(body, &parameters);
+	let body = body.clone();
 	let names: Vec<String> = parameters.iter().map(Node::name).collect();
 	if let Some(shared) = names
 		.iter()
@@ -138,62 +129,29 @@ pub fn parameter_slots(
 	Ok((parameters, body))
 }
 
-const NUMBER_JOINER: &str = "·";
-
-/// The lone type parameters `float:float` that repeat, as `float·1:float`, `float·2:float`
-fn numbered_repeated_types(parameters: Vec<Node>) -> Vec<Node> {
-	let lone_type = |parameter: &Node| match parameter.drop_meta() {
-		Node::Key(name, Op::Colon, type_name) if name == type_name => Some(type_name.name()),
-		_ => None,
-	};
-	let repeated = |type_name: &str| {
-		parameters
-			.iter()
-			.filter(|parameter| lone_type(parameter).as_deref() == Some(type_name))
-			.count() > 1
-	};
-	let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-	parameters
-		.iter()
-		.map(
-			|parameter| match lone_type(parameter).filter(|type_name| repeated(type_name)) {
-				Some(type_name) => {
-					let number = seen.entry(type_name.clone()).or_default();
-					*number += 1;
-					typed(&format!("{type_name}{NUMBER_JOINER}{number}"), &type_name)
-				}
-				None => parameter.clone(),
-			},
-		)
-		.collect()
-}
-
-/// `float#2` of the body as the numbered parameter `float·2` it names
-fn numbered_type_reads(body: &Node, parameters: &[Node]) -> Node {
-	let names: Vec<String> = parameters
-		.iter()
-		.map(Node::name)
-		.filter(|name| name.contains(NUMBER_JOINER))
-		.collect();
-	if names.is_empty() {
-		return body.clone();
-	}
-	fn rewrite(node: &Node, names: &[String]) -> Node {
-		if let Node::Key(type_name, Op::Hash, number) = node.drop_meta() {
-			if let (Node::Symbol(type_name), Node::Number(number)) = (type_name.drop_meta(), number.drop_meta()) {
-				let numbered = format!("{type_name}{NUMBER_JOINER}{number}");
-				if names.contains(&numbered) {
-					return Node::Symbol(numbered);
-				}
-			}
-		}
-		node.clone().map_children(|child| rewrite(&child, names))
-	}
-	rewrite(body, &names)
-}
-
 pub fn uses_it(node: &Node) -> bool {
 	node.mentions(IT)
+}
+
+/// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
+/// word; None for `f x = …` without one, which keeps its old meaning (each word a parameter)
+pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node>, Node), String>> {
+	words
+		.iter()
+		.any(|word| is_type_word(word))
+		.then(|| parameter_slots(words, body, &is_type_word))
+}
+
+/// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
+fn spaced_definition(items: &[Node]) -> Option<Node> {
+	let (name, words, body) = spaced_statement(items)?;
+	let name = name.symbol_name().filter(|name| names_a_function(name))?;
+	let (parameters, body) = match spaced_parameters(&words, body)? {
+		Ok(slots) => slots,
+		Err(message) => return Some(crate::node::error(&message)),
+	};
+	let head = call(name, parameters);
+	Some(key(head, Op::Define, body))
 }
 
 /// A function head `name(params)`, as a call
@@ -407,6 +365,9 @@ pub fn lower(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [type_name, definition] if typed_return(type_name, definition).is_some()) => {
 			typed_return(&items[0], &items[1]).expect("guarded")
+		}
+		Node::List(items, Bracket::None, Separator::Space) if spaced_definition(&items).is_some() => {
+			spaced_definition(&items).expect("guarded")
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
 		meta @ Node::Meta { .. } => meta.under_meta(lower),

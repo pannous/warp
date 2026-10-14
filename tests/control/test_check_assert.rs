@@ -14,7 +14,6 @@ fn check_throws_when_the_condition_fails() {
 }
 
 #[test]
-#[ignore = "cleanup-edge: cleanup-drop-type-name-params: `combine number with number = …` no longer defines combine"]
 fn check_passes_a_condition_that_holds() {
 	is!("check 1 == 1; 7", 7);
 	is!("check 1.1 + 2.2 == 3.3; 7", 7);
