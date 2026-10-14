@@ -2231,6 +2231,7 @@ PASSED:
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_function_is_indexed_not_called
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_module_word_is_the_local
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_program_function_is_the_local
+  ✓ modules::test_std_shadowed_names::a_parameter_named_like_a_module_word_needs_no_module
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
   ✓ modules::test_std_time::format_duration_in_the_largest_units
@@ -4825,7 +4826,6 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
-  ✓ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
   ✓ web::test_sandbox_refusals::a_sandboxed_program_starts_no_process_and_calls_no_c
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_inside_its_state_folder
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_nothing_outside_its_state_folder
@@ -5383,6 +5383,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
 
 SUMMARY:
-13 ignored, 5380 passed, 0 failed, 5380 total tested
+13 ignored, 5380 passed, 1 failed, 5381 total tested
