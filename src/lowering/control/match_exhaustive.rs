@@ -9,15 +9,13 @@ use super::sum_variants::sum_types;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use crate::words::SWITCH_WORDS;
+use crate::words::{IS_WORD, SWITCH_WORDS};
 use std::collections::HashMap;
 
 /// Kotlin's `when (c) { … }`, matched like `match`
 const KOTLIN_MATCH_WORD: &str = "when";
 /// The arm patterns matching any value
 const CATCH_ALLS: [&str; 4] = ["_", "default", "other", "else"];
-/// Kotlin's arm `is Circle -> …`
-const TYPE_TEST_WORD: &str = "is";
 
 pub fn check(program: Node) -> Node {
 	let cases: HashMap<String, Vec<String>> = sum_types(&program)
@@ -179,7 +177,7 @@ fn case_named(pattern: &Node, type_name: &str) -> Option<String> {
 			_ => None,
 		},
 		Node::List(items, _, _) => match items.as_slice() {
-			[word, case] if word.is_symbol(TYPE_TEST_WORD) => case_named(case, type_name),
+			[word, case] if word.is_symbol(IS_WORD) => case_named(case, type_name),
 			_ => None,
 		},
 		Node::Key(owner, Op::Scope | Op::Dot, case) if owner.drop_meta().name() == type_name => {

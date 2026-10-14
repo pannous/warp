@@ -1,5 +1,6 @@
 //! Type declarations: `class`, `struct`, `type`, `record` with their bodies, conformances, primary constructors, type parameters, sum types and enums with values
 use super::*;
+use crate::words::ANY_TYPE;
 
 impl WarpParser {
 	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
@@ -575,11 +576,9 @@ pub(super) fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node
 		_ => false,
 	};
 	match node {
-		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => Node::Key(
-			name,
-			Op::Colon,
-			Box::new(Symbol(crate::type_kinds::UNTYPED_FIELD.to_string())),
-		),
+		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => {
+			Node::Key(name, Op::Colon, Box::new(Symbol(ANY_TYPE.to_string())))
+		}
 		Node::Key(head, Op::Define, body) => {
 			Node::Key(Box::new(untyped_parameters(*head, &is_parameter)), Op::Define, body)
 		}

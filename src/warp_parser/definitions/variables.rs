@@ -1,6 +1,7 @@
 //! Variable declarations: global, nonlocal, typed globals, modifiers
 
 use super::*;
+use crate::words::GLOBAL_WORD;
 
 /// `global float y = 2` as `global y: float = 2` (card w0-globals: the type word was dropped, so y held the int 2);
 /// `global int k` without a value stays the declaration of k
@@ -33,14 +34,14 @@ impl WarpParser {
 		}
 		let global = |declaration: Node| {
 			Node::Key(
-				Box::new(Symbol(crate::node::GLOBAL_DECLARATION.to_string())),
+				Box::new(Symbol(GLOBAL_WORD.to_string())),
 				Op::Colon,
 				Box::new(declaration),
 			)
 		};
 		// `global a, b` (Python): one declaration per name
 		let mut names = vec![declaration];
-		while keyword == crate::node::GLOBAL_DECLARATION
+		while keyword == GLOBAL_WORD
 			&& matches!(names.last().map(Node::drop_meta), Some(Symbol(_)))
 			&& self.current_char() == ','
 		{
@@ -204,6 +205,6 @@ pub(crate) fn declarations_of_several_globals(item: &Node) -> Option<Vec<Node>> 
 	let Node::List(declarations, Bracket::None, Separator::Semicolon) = item.drop_meta() else {
 		return None;
 	};
-	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(crate::node::GLOBAL_DECLARATION));
+	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_WORD));
 	declarations.iter().all(is_global).then(|| declarations.clone())
 }

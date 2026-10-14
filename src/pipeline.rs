@@ -7,6 +7,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::WarpParser;
 use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
+use crate::words::RAISE_WORD;
 #[cfg(feature = "native")]
 use log::warn;
 
@@ -984,7 +985,7 @@ pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Round, _)
 			if items.len() == 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text::text_builtins::RAISE) =>
+				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == RAISE_WORD) =>
 		{
 			Some(&items[1])
 		}

@@ -14,8 +14,7 @@ use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
-use crate::words::SUM_WORD;
-use crate::words::{CODEPOINT, MAP_KEYS, SLICE};
+use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -424,7 +423,7 @@ fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 		Node::Text(_) | Node::Symbol(_) => message,
 		_ => call(crate::wasm_emitter::text::text_builtins::TEXT_FORM, vec![message]),
 	};
-	Some(call(crate::wasm_emitter::text::text_builtins::RAISE, vec![message]))
+	Some(call(RAISE_WORD, vec![message]))
 }
 
 /// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding, extremum,
@@ -1273,7 +1272,7 @@ impl Lowering {
 		self.instantiate_template(
 			&format!(
 				"(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})",
-				crate::wasm_emitter::text::text_builtins::RAISE
+				RAISE_WORD
 			),
 			&[
 				(condition_placeholder, &condition),

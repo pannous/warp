@@ -10,19 +10,16 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::while_do;
 use crate::wasm_emitter::{is_step, mark_step};
-use crate::words::IMPLICIT_PARAMETER;
+use crate::words::{CHR_WORD, FOR_WORD, IMPLICIT_PARAMETER, IN_WORD};
 use std::collections::HashSet;
 
 pub mod headers;
 
-const FOR_KEYWORD: &str = "for";
-const IN_KEYWORD: &str = "in";
 const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 /// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
 const CODE_SUFFIX: &str = "·code";
 const ORD_WORD: &str = "ord";
-const CHR_WORD: &str = "chr";
 /// `for c in w.chars`, `w.chars.map(…)`: walked, the unit word `w.chars` (elsewhere the count) is the list `chars(w)`
 const CHARS_CALL: &str = "chars";
 const CODEPOINT_UNIT: &str = "codepoints";
@@ -91,7 +88,7 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	let [init, test, step] = parts.as_slice() else {
 		return None;
 	};
-	if !keyword.is_symbol(FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let mut statements = body.body_statements();
@@ -107,7 +104,7 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	let [keyword, variable, in_word, rest @ ..] = items else {
 		return None;
 	};
-	if !keyword.is_symbol(FOR_KEYWORD) || !in_word.is_symbol(IN_KEYWORD) {
+	if !keyword.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 		return None;
 	}
 	let names = loop_names(variable)?;
@@ -257,13 +254,13 @@ fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 /// `for iterable {body}` binds the implicit `it`: `for 1..4 {x+=it}`
 fn for_it(items: &[Node]) -> Option<Node> {
 	let [keyword, iterable, body] = items else { return None };
-	if !keyword.is_symbol(FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	for_in(&[
 		keyword.clone(),
 		symbol(IMPLICIT_PARAMETER),
-		symbol(IN_KEYWORD),
+		symbol(IN_WORD),
 		iterable.clone(),
 		body.clone(),
 	])
@@ -366,9 +363,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 		return node;
 	};
 	let (variable, iterable, body) = match items.as_slice() {
-		[keyword, variable, within, iterable, body]
-			if keyword.is_symbol(FOR_KEYWORD) && within.is_symbol(IN_KEYWORD) =>
-		{
+		[keyword, variable, within, iterable, body] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => {
 			(variable, iterable, body)
 		}
 		_ => return node,

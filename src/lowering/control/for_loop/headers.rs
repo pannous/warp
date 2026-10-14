@@ -7,13 +7,11 @@ use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{call, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, mentions};
-use crate::words::{IMPLICIT_PARAMETER, INSTANCE_OF, IS_TYPE};
+use crate::words::{FOR_WORD, IMPLICIT_PARAMETER, INSTANCE_OF, IN_WORD, IS_TYPE};
 use std::collections::HashSet;
 
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";

@@ -1,6 +1,7 @@
 //! Literals: the value at the cursor: numbers, texts, units, paths, constants, shaders, data
 
 use super::*;
+use crate::words::FLOAT_WORD;
 mod constants;
 mod data;
 mod numbers;
@@ -18,7 +19,6 @@ const BACKTICK: char = '`';
 const BACKTICK_TOPIC: &str = "backtick text";
 const F_STRING_TOPIC: &str = "python f-string";
 const F_STRING_PREFIX: char = 'f';
-const FLOAT_WORD: &str = "float";
 /// U+0305 COMBINING OVERLINE, written on each repeating digit of a decimal: 0.3̅ (card repeating-decimals)
 pub const OVERLINE: char = '\u{305}';
 /// The words of a WGSL block, `shader { … }` (card g_oFJc)

@@ -13,8 +13,7 @@ use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use crate::words::IMPLICIT_PARAMETER;
-use crate::words::ON_WORD;
+use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
 
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -37,13 +36,11 @@ struct Iteration {
 const SWIFT_IN: &str = "in";
 const SHORTHAND_MARK: char = '$';
 const MAX_SHORTHAND_ARGUMENTS: usize = 10;
-const SORT_WORD: &str = "sort";
 const REDUCE_WORD: &str = "reduce";
 /// `any(xs)`, `all(xs)` without a function test the items themselves
 const TRUTH_WORDS: [&str; 2] = ["any", "all"];
 const TRUTH_ITEM: &str = "truth_item";
 const FOLD_WORD: &str = "fold";
-const EACH_WORD: &str = "each";
 /// Iteration words as other languages spell them: sorting with a function (Python sorted, Ruby sort_by, Kotlin
 /// sortedBy), each (JS and Kotlin forEach, Rust for_each, PHP foreach)
 const ITERATION_SPELLINGS: [(&str, &[&str]); 2] = [

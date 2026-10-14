@@ -9,9 +9,8 @@
 use super::nodes::{call, key, parameter_word, Counter};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{FOR_WORD, RETURN_WORD};
+use crate::words::{FOR_WORD, GO_WORD, RETURN_WORD};
 
-const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
 /// A go block's parameter is the variable it reads with this suffix: `n` comes in as `n·in`
 const INPUT_SUFFIX: &str = "·in";

@@ -6,10 +6,9 @@
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{FOR_WORD, IN_WORD};
+use crate::words::{ALL_WORD, FOR_WORD, IN_WORD};
 use std::collections::HashSet;
 
-const ALL_WORD: &str = "all";
 const TAG_ITEM: &str = "tag·item"; // the loop variable of `li all xs`
 /// `form post "/todos" { … }`: a form written as the route it sends to (card g_mSEw)
 const FORM_TAG: &str = "form";

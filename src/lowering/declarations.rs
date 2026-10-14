@@ -8,8 +8,7 @@ use super::nodes::{
 };
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::words::IMPLICIT_PARAMETER;
-use crate::words::{ON_WORD, RETURN_WORD};
+use crate::words::{IMPLICIT_PARAMETER, ON_WORD, RETURN_WORD, SELF_WORD};
 
 mod tasks;
 pub use tasks::*;
@@ -41,7 +40,6 @@ pub(crate) fn collection_type_meant(word: &str) -> Option<&'static str> {
 		.map(|(_, meant)| *meant)
 }
 
-const SELF_WORD: &str = "self";
 /// Swift's block of methods added to a type: `extension Int {…}`
 const EXTENSION_WORD: &str = "extension";
 

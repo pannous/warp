@@ -2,8 +2,7 @@
 //! texts in the order the module defines them. A program's own `dir`, or its own name of the module, wins
 
 use crate::node::{Bracket, Node};
-
-const DIR_WORD: &str = "dir";
+use crate::words::DIR_WORD;
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[DIR_WORD]) {

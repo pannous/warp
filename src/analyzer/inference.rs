@@ -1,6 +1,7 @@
 //! Kind inference: the kind of a node, of arithmetic, of list elements and branches
 
 use super::*;
+use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, PRINT_WORD, REAL_WORD};
 
 /// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
 pub(super) fn is_update(node: &Node) -> bool {
@@ -449,7 +450,7 @@ pub(super) fn infer_list_type(
 		if (super::counting::is_counting_word(name) || name == BYTE_SIZE) && items.len() == 2 {
 			return Kind::Int;
 		}
-		if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
+		if name == PRINT_WORD && (items.len() >= 2 || *bracket == Bracket::Round) {
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
 		// a call of a function the component being compiled imports (`host.time()`)
@@ -548,7 +549,7 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		return Some(Kind::Text); // a character, held as a node like any one-character text (see binding_kind)
 	}
 	let list_type = list_type_name(indexed, scope);
-	if list_type == MAP_TYPE || list_type == NODE_LIST_TYPE || infer_type(indexed, scope) == Kind::Empty {
+	if list_type == MAP_WORD || list_type == NODE_LIST_TYPE || infer_type(indexed, scope) == Kind::Empty {
 		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
 	}
 	match list_type
@@ -671,7 +672,7 @@ fn declared_any(node: &Node, scope: &Scope) -> bool {
 		Node::Symbol(name) => scope
 			.lookup(name)
 			.and_then(|local| local.type_node.as_deref())
-			.is_some_and(|type_node| type_node.is_symbol(crate::type_kinds::UNTYPED_FIELD)),
+			.is_some_and(|type_node| type_node.is_symbol(ANY_TYPE)),
 		Node::Key(indexed, Op::Hash, _) => declared_any(indexed, scope),
 		_ => false,
 	}

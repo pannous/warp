@@ -16,7 +16,7 @@
 use super::nodes::{call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{MAP_WORD, SUM_WORD};
+use crate::words::{DOT_WORD, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `shared xs = int[n]` and its synonym `atomic` (P44)
@@ -25,7 +25,6 @@ const SHARED_WORDS: [&str; 2] = ["shared", "atomic"];
 const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
-const DOT_WORD: &str = "dot";
 
 /// `linear xs = int[n]`: an array in linear memory
 const LINEAR_WORD: &str = "linear";

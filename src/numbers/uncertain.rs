@@ -4,6 +4,7 @@
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::NUMBER_WORD;
 use std::collections::HashSet;
 use std::fmt;
 
@@ -19,8 +20,6 @@ const CERTAINTY_WORDS: [&str; 2] = [CERTAINLY, POSSIBLY];
 pub const INTERVAL_FIELDS: [&str; 4] = ["value", "low", "high", "uncertainty"];
 /// `5 ± 1σ`: a Gaussian ± (card plus-minus-gaussian), its spread one standard deviation; shown after its ± part
 pub const SIGMA: &str = "σ";
-/// The type of every number, a ± value among them
-const NUMBER_TYPE: &str = "number";
 
 /// Where a math word turns or jumps: an interval reaching `at + k·every` (just `at` when `every` is 0) has `value` as
 /// its low (`high` false) or high bound
@@ -236,7 +235,7 @@ fn with_interval_parameters(node: Node) -> Node {
 			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
 		{
 			let head = head.map_children(|parameter| match parameter.drop_meta() {
-				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_TYPE => Node::Key(
+				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_WORD => Node::Key(
 					name.clone(),
 					Op::Colon,
 					Box::new(Node::meta(type_node.drop_meta().clone(), Node::data(IntervalNumber))),

@@ -13,13 +13,10 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
-use crate::words::IMPLICIT_PARAMETER;
-use crate::words::{MAP_WORD, SUM_WORD};
+use crate::words::{ALL_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
-const ALL_WORD: &str = "all";
-const EACH_WORD: &str = "each";
 const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
@@ -41,8 +38,6 @@ pub(crate) const PAIRED_COUNT: &str =
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
 pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
-/// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot; `xs * ys` of two lists is the same
-const DOT_WORD: &str = "dot";
 
 /// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
 /// parameter are one list, `sum 1 2 3` is `sum [1 2 3]`, and a scalar function broadcasts over it (`square 1 2 3`).

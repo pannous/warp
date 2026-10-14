@@ -7,6 +7,7 @@ use crate::lowering::nodes::call;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
+use crate::words::FLOAT_WORD;
 use std::collections::HashSet;
 
 /// Pseudo-call `zero_fill(count, zero)`: the emitter builds the zero-filled list of `count` elements with a runtime loop,

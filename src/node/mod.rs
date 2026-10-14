@@ -6,6 +6,7 @@ use crate::extensions::strings::StringExtensions;
 use crate::node::Node::*;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
+use crate::words::GLOBAL_WORD;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt;
@@ -38,8 +39,6 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
-/// `global x` parses as the pair `global: x`: a block may declare several, no duplicate key
-pub const GLOBAL_DECLARATION: &str = "global";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
@@ -790,7 +789,7 @@ impl Node {
 				// repeated tags `div{…} div{…}` are children, as repeated elements in XML/HTML, not duplicate keys
 				Key(_, Op::Colon, value) if matches!(value.drop_meta(), List(_, Bracket::Curly, _)) => None,
 				Key(key, Op::Colon, _) => match key.drop_meta() {
-					Symbol(name) if name == GLOBAL_DECLARATION => None,
+					Symbol(name) if name == GLOBAL_WORD => None,
 					Symbol(name) | Text(name) => Some(name.clone()),
 					_ => None,
 				},

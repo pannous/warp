@@ -13,7 +13,7 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_constructor::{instance_parts, Instance};
 use crate::type_kinds::TypeRegistry;
-use crate::words::{FOR_WORD, IN_WORD};
+use crate::words::{FOR_WORD, IN_WORD, LIST_WORD, SELF_WORD, SORT_WORD};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -39,15 +39,8 @@ pub const TRAIT_KEYWORDS: [&str; 8] = [
 	"feature",
 ];
 pub const WITNESS_SEPARATOR: char = '·';
-const SORT_WORD: &str = "sort";
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
 const DEFAULT_PARAMETER: &str = "x";
-/// The word after a trait in a list annotation `xs: shape list`
-const LIST_WORD: &str = "list";
-/// The receiver a foreign signature names, Rust's `fn area(&self)`
-const SELF_WORD: &str = "self";
-/// A method's position taking any value, in its name `describe·any·Ship` and its messages
-const ANY_WORD: &str = "any";
 /// Static type names (`type(x)`) of the built-in kinds that `node_order` orders
 const BUILTIN_COMPARABLE: [&str; 6] = ["int", "rational", "real", "float", "text", "codepoint"];
 

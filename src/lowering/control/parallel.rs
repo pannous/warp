@@ -10,12 +10,11 @@ use super::go_blocks::AWAIT_WORD;
 use super::nodes::{is_call_head, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{FOR_WORD, IN_WORD, MAP_WORD};
+use crate::words::{FOR_WORD, GO_WORD, IN_WORD, MAP_WORD};
 
 /// How many slices a parallel map or loop splits its items into: tasks are threads with an instance each, so never one
 /// per item; a later backend (SIMD, GPU) may choose its own split
 const PARALLEL_CHUNKS: i64 = 8;
-const GO_WORD: &str = "go";
 const PARALLEL_ATTRIBUTE: &str = "parallel";
 /// A `go` map of a float kernel, split on the host where its list is a linear float array (kernel_map)
 pub(crate) const SPLIT_ATTRIBUTE: &str = "split_kernel";

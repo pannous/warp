@@ -5,9 +5,9 @@
 use super::nodes::children_rewritten;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::ADD_WORD;
 
 const DO_WORD: &str = "do";
-const ADD_WORD: &str = "add";
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[DO_WORD, ADD_WORD]) {

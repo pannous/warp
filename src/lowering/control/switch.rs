@@ -18,20 +18,13 @@ use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::optional_field;
 use crate::warp_parser::subscript;
-use crate::words::COUNT_WORD;
-use crate::words::MAP_WORD;
-use crate::words::SLICE;
-use crate::words::STARRED;
-use crate::words::SWITCH_WORDS;
+use crate::words::{COUNT_WORD, LET_WORD, LIST_WORD, MAP_WORD, PAIR_WORD, SLICE, STARRED, STR_WORD, SWITCH_WORDS};
 
 const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
 /// In a pattern: any item, bound to no name
 pub(crate) const WILDCARD: &str = "_";
-const LIST_SPEC: &str = "list";
-const PAIR_SPEC: &str = "pair";
 const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
 const KEY_SPEC: &str = "key";
-const TEXT_WORD: &str = "str";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
 /// which eval reports as `no case for <label> = <value>`
@@ -40,7 +33,6 @@ pub const NO_CASE_PREFIX: &str = "no_case_";
 const UNNAMED_SUBJECT: &str = "value";
 /// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
 const VALUE_WORD: &str = "value";
-const LET_WORD: &str = "let";
 const ITEM_WORD: &str = "item";
 const HELD_WORD: &str = "held";
 /// `$a` in a code pattern `data($a + 0)`: a hole that binds the subtree there (card code-holes)
@@ -388,7 +380,7 @@ impl<'a> Matched<'a> {
 			Node::List(fields, _, _) if is_map_pattern(pattern) => {
 				// a map of one field is a pair
 				let is = |spec| call(crate::words::IS_TYPE, vec![path.clone(), text(spec)]);
-				self.tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_SPEC)));
+				self.tests.push(key(is(MAP_WORD), Op::Or, is(PAIR_WORD)));
 				for field_part in fields {
 					let Some((name, part)) = map_field(field_part) else {
 						continue;
@@ -413,9 +405,9 @@ impl<'a> Matched<'a> {
 			// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 			Node::Key(name, Op::Colon, value) => {
 				self.tests
-					.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
+					.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_WORD)]));
 				self.tests.push(key(
-					call(TEXT_WORD, vec![item(&path, 1)]),
+					call(STR_WORD, vec![item(&path, 1)]),
 					Op::Eq,
 					Node::Text(name.name()),
 				));
@@ -435,7 +427,7 @@ impl<'a> Matched<'a> {
 	/// those after it from the end
 	fn items(&mut self, items: &[Node], path: Node) {
 		self.tests
-			.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
+			.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_WORD)]));
 		let count = call(COUNT_WORD, vec![path.clone()]);
 		let Some(rest_index) = items.iter().position(is_rest) else {
 			self.tests.push(key(count, Op::Eq, Node::int(items.len() as i64)));
@@ -551,7 +543,7 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 		}
 		Node::List(items, _, _) if has_hole(code) => {
 			let items = called_hole_items(items);
-			tests.push(type_named(&path, LIST_SPEC));
+			tests.push(type_named(&path, LIST_WORD));
 			tests.push(key(
 				call(COUNT_WORD, vec![path.clone()]),
 				Op::Eq,

@@ -9,17 +9,15 @@ use crate::lowering::function_head;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
-use crate::words::{FOR_WORD, IN_WORD};
+use crate::words::{FOR_WORD, IN_WORD, PRINT_WORD, TEXT_WORD};
 use std::collections::HashSet;
 
-const TEXT_OPERATION: &str = "text";
 const ITERATE_OPERATION: &str = "iterate";
-const PRINT_WORD: &str = "print";
 
 pub fn lower(node: Node) -> Node {
 	let declared = super::nodes::declared_class_names(&node);
 	let (printable, iterable) = (
-		defining(&node, &declared, TEXT_OPERATION),
+		defining(&node, &declared, TEXT_WORD),
 		defining(&node, &declared, ITERATE_OPERATION),
 	);
 	if printable.is_empty() && iterable.is_empty() {
@@ -60,13 +58,13 @@ impl Operations {
 				Node::List(statements, Bracket::None, separator)
 			}
 			value => self
-				.call(TEXT_OPERATION, &self.printable, &value)
+				.call(TEXT_WORD, &self.printable, &value)
 				.unwrap_or_else(|| self.rewrite(value)),
 		}
 	}
 
 	fn rewrite(&self, node: Node) -> Node {
-		for (operation, types) in [(TEXT_OPERATION, &self.printable), (ITERATE_OPERATION, &self.iterable)] {
+		for (operation, types) in [(TEXT_WORD, &self.printable), (ITERATE_OPERATION, &self.iterable)] {
 			if let Some((type_name, parameter, body)) = definition(&node, types, operation) {
 				let head = call(&witness_name(operation, &type_name), vec![parameter]);
 				let body = self.types.in_definition(&head, || self.rewrite(body));
@@ -75,13 +73,13 @@ impl Operations {
 		}
 		match node {
 			Node::Key(value, Op::As, target) if is_text_word(&target) => {
-				match self.call(TEXT_OPERATION, &self.printable, &value) {
+				match self.call(TEXT_WORD, &self.printable, &value) {
 					Some(call) => call,
 					None => Node::Key(Box::new(self.rewrite(*value)), Op::As, target),
 				}
 			}
 			Node::List(items, bracket, separator) => {
-				let text_call = |value: &Node| self.call(TEXT_OPERATION, &self.printable, value);
+				let text_call = |value: &Node| self.call(TEXT_WORD, &self.printable, value);
 				let items_of = |value: &Node| self.call(ITERATE_OPERATION, &self.iterable, value);
 				let called = match items.as_slice() {
 					[word, value]
@@ -131,7 +129,7 @@ impl Operations {
 				if self.joins_printable(&left, &right) || self.joins_printable(&right, &left) =>
 			{
 				let joined = |side: Node| {
-					self.call(TEXT_OPERATION, &self.printable, &side)
+					self.call(TEXT_WORD, &self.printable, &side)
 						.unwrap_or_else(|| self.rewrite(side))
 				};
 				key(joined(*left), Op::Add, joined(*right))

@@ -9,6 +9,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::warp_parser::TRY_MARKER;
+use crate::words::{COUNT_WORD, IN_WORD, LET_WORD, MAP_WORD};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -33,9 +34,6 @@ const MODEL_BUILD_OUTPUT: &str = ".lake/build";
 const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
-const ERROR_CALL: &str = "error";
-/// `x failed` (warp_parser suffixes): is x a stored error
-const IS_ERROR_CALL: &str = "is_error";
 const BOOL_TYPE: &str = ".bool";
 const EXACT_TYPE: &str = ".exact";
 const ANY_TYPE: &str = ".any";
@@ -53,10 +51,7 @@ const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
-const FOR_KEYWORD: &str = "for";
 const SHARED_KEYWORD: &str = "shared";
-/// `let x = 1` binds x once, as const does (user, card let-reassign)
-const LET_KEYWORD: &str = "let";
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
 const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` is the join of its alternatives, every value given to it a cast
@@ -69,28 +64,17 @@ const OPTIONAL_TYPE_PREFIX: &str = ".opt ";
 /// ø is the empty list (`xs = []` parses as ø), but the empty part where an optional takes it
 const EMPTY_LIST: &str = ".nil";
 const EMPTY_VALUE: &str = ".unit";
-/// Effect handlers (notes/effect_handlers.md): `on ev {h}`, `emit ev{payload}`
-const ON_KEYWORD: &str = "on";
-const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
 /// `global n = 0` at main level, `global n` in a function: a main-level name functions may assign
 /// What a global declared without a value holds until it is assigned: `global x; x + 1` is 1
 const UNSET_GLOBAL: i64 = 0;
 /// `break` is not in W0: block handlers, whose block it ended, were dropped (card cleanup-drop-scoped-handlers)
 const BREAK_KEYWORD: &str = "break";
-/// `return v` before a function's end is the event `f·return` whose block handler, around f's body, breaks with v
-const RETURN_KEYWORD: &str = "return";
 const RETURN_EVENT_SUFFIX: &str = "·return";
 /// the handler's local holding the payload, `event.level`
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
 const EVENT_CLASS_SUFFIX: &str = "·event";
-/// Maps `{a:1}` (P200b: they share, like instances) are instances of one class `map` whose fields are every key the
-/// program writes, in a literal or with `m.key = v`; reading a key never written is W0's run-time "unset field"
-const MAP_CLASS: &str = "map";
-/// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (yes when x has a first position from 1) walk the list
-/// with a `·tally` instance: its int fields hold the count or position and the current index
-const COUNT_WORD: &str = "count";
 /// `min(a, b)` and `max(a, b)` of two values (lowering/collections/min_max.rs): a comparison, each argument computed once
 const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
@@ -494,7 +478,7 @@ impl Exporter {
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
 		program_node.visit(&mut |part| {
-			words_used |= [COUNT_WORD, IN_KEYWORD]
+			words_used |= [COUNT_WORD, IN_WORD]
 				.iter()
 				.chain(&crate::analyzer::COUNTING_WORDS)
 				.any(|word| part.is_symbol(word))
@@ -509,13 +493,13 @@ impl Exporter {
 		}
 		if let Some(keys) = map_keys(program_node) {
 			self.classes.insert(
-				MAP_CLASS.to_string(),
+				MAP_WORD.to_string(),
 				(
-					vec![MAP_CLASS.to_string()],
+					vec![MAP_WORD.to_string()],
 					keys.into_iter().map(|key| (key, None)).collect(),
 				),
 			);
-			argument_classes.push(MAP_CLASS.to_string());
+			argument_classes.push(MAP_WORD.to_string());
 		}
 		let mut items = argument_classes
 			.iter()
@@ -576,7 +560,7 @@ impl Exporter {
 					unreachable!("an assignment")
 				};
 				match items[0].drop_meta() {
-					Node::Symbol(word) if word == LET_KEYWORD => self.binding(target, ".const", value),
+					Node::Symbol(word) if word == LET_WORD => self.binding(target, ".const", value),
 					Node::Symbol(word) if word == SHARED_KEYWORD => self.binding(target, ".var", value),
 					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(
 						&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())),

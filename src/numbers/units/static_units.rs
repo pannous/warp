@@ -16,6 +16,7 @@
 
 use super::{exponent_of, finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 use crate::lowering::function_head;
+use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
 mod function_units;
 
@@ -42,23 +43,18 @@ const BASE_UNITS: [(Dimension, &str); 5] = [
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
-const TEXT_WORD: &str = "str";
 /// A run-time amount as text that reads back: `1.5`, or a fraction `str` shows as `10/3` in parentheses, `(10/3)km/h`
 const AMOUNT_TEXT: &str = r#"(if str(the_amount).contains("/") then "(" + str(the_amount) + ")" else str(the_amount))"#;
 /// `print` rounds a fraction to two decimals, `6.17km`; `str` keeps it exact (P231)
 const PRINTED_AMOUNT_TEXT: &str =
 	r#"(if str(the_amount).contains("/") then str(round(the_amount * 100) / 100.0) else str(the_amount))"#;
 const AMOUNT_PLACEHOLDER: &str = "the_amount";
-const PRINT_WORD: &str = "print";
 /// `std_io("table", "insert", [r.distance, …])`: a host call takes SI amounts as they are (stored rows hold SI amounts)
 const HOST_CALL: &str = "std_io";
-const RETURN_WORD: &str = "return";
 /// `si_amount(q)`: the plain SI number of a quantity, so a library takes `0.5s` and `0.5` alike (lib/sound.warp)
 const SI_AMOUNT_WORD: &str = "si_amount";
 /// The text of a value: `str(q)`, and `text_form(q)` of `${q}` interpolation (interpolation.rs)
-const TEXT_WORDS: [&str; 3] = [TEXT_WORD, "text_form", "serialize"];
-/// `xs.map(f)`: a list of what f gives each element
-const MAP_WORD: &str = "map";
+const TEXT_WORDS: [&str; 3] = [STR_WORD, "text_form", "serialize"];
 /// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
 const ELEMENT_WORDS: [&str; 7] = ["sum", "max", "min", "first", "last", "mean", "average"];
 

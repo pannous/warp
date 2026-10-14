@@ -14,6 +14,7 @@
 use crate::compiler::compile_context;
 use crate::node::{Bracket, Node};
 use crate::operators::{glyph_operator, Op};
+use crate::words::{LIST_WORD, OF_WORD};
 
 /// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
 const HINT_TOPIC_PREFIX: &str = "hint:";
@@ -613,9 +614,9 @@ pub mod hints {
 					.iter()
 					.rev()
 					.fold(last.to_string(), |inner, word| format!("{word}<{inner}>"));
-				Some(format!("{LIST_TYPE_HEAD}<{arguments}>"))
+				Some(format!("{LIST_WORD}<{arguments}>"))
 			}
-			(ListTypeStyle::Of, words) => Some(format!("{LIST_TYPE_HEAD} {OF_WORD} {}", words.join(" of "))),
+			(ListTypeStyle::Of, words) => Some(format!("{LIST_WORD} {OF_WORD} {}", words.join(" of "))),
 			(ListTypeStyle::Bracket, words) => {
 				let (last, nested) = words.split_last()?;
 				Some(
@@ -759,9 +760,6 @@ pub mod hints {
 // Style check of a parsed program: the forms that are only visible in the AST
 // ============================================================================
 
-/// Type word of the list types; `list<int>`, `list of int` and `ints` all denote a list of int
-const LIST_TYPE_HEAD: &str = "list";
-const OF_WORD: &str = "of";
 /// The acknowledge-once note that `let` is immutable in warp
 pub const LET_TOPIC: &str = "let";
 /// The acknowledge-once note on `x ? y : z` against `if x then y else z`
@@ -839,7 +837,7 @@ fn of_list_type(items: &[Node], of_index: usize) -> Option<(&Node, Vec<&str>)> {
 	let Node::Key(_, Op::Colon, head) = items.get(of_index.checked_sub(1)?)?.drop_meta() else {
 		return None;
 	};
-	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_TYPE_HEAD).then_some(())?;
+	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_WORD).then_some(())?;
 	let mut words = Vec::new();
 	for item in &items[of_index + 1..] {
 		match item.drop_meta() {

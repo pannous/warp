@@ -18,6 +18,7 @@ use super::memoization::definition_parts;
 use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{AT_WORD, FLOAT_WORD};
 use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
@@ -34,7 +35,6 @@ const UNIT_WORDS: [(&str, &str); 5] = [
 	("bars", "bar_seconds"),
 	("dB", "decibels"),
 ];
-const AT_WORD: &str = "at";
 const DEF_WORD: &str = "def";
 const AT_CALL: &str = "sound_at";
 const AT_END_CALL: &str = "sound_at_end";
@@ -46,7 +46,6 @@ const LIVE_BODY: &str = "live_body";
 /// the words whose second argument is a kind: chord(root, kind), scale(root, kind)
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
 const SIGNAL_WORD: &str = "play_signal";
-const FLOAT_TYPE: &str = "float";
 /// `play_blocks(fill, seconds)` → BLOCKS_CALLS: the host (native.rs played_blocks) calls fill·blocks(t) for each block,
 /// which hands fill the linear float array fill·block of BLOCK_SAMPLES cells to fill (BLOCK_TEMPLATES), in stereo
 /// (fill of three parameters: left, right, t) fill·block and fill·right; mono first, then stereo
@@ -244,7 +243,7 @@ fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {
 		{
 			let typed = items.iter().enumerate().map(|(index, item)| {
 				if index > 0 && item.symbol_name().is_some() {
-					key(item.clone(), Op::Colon, Node::symbol(FLOAT_TYPE))
+					key(item.clone(), Op::Colon, Node::symbol(FLOAT_WORD))
 				} else {
 					item.clone()
 				}
@@ -254,7 +253,7 @@ fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {
 				key(
 					Node::List(vec![body], Bracket::Round, Separator::None),
 					Op::As,
-					Node::symbol(FLOAT_TYPE),
+					Node::symbol(FLOAT_WORD),
 				),
 			)
 		}

@@ -55,3 +55,38 @@ pub const GENERIC_MARK: &str = "generic";
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
 /// Rust's `let mut x` and `let mutable x`
 pub const MUTABLE_WORDS: [&str; 2] = ["mut", "mutable"];
+
+// Words several passes look for, each spelled once here (card duplicate-constants)
+/// Type words
+pub const FLOAT_WORD: &str = "float";
+pub const LIST_WORD: &str = "list";
+/// The type of every number, a ± value among them
+pub const NUMBER_WORD: &str = "number";
+/// `x is pair`: a `key: value` pair
+pub const PAIR_WORD: &str = "pair";
+pub const REAL_WORD: &str = "real";
+pub const SYMBOL_WORD: &str = "symbol";
+pub const TEXT_WORD: &str = "text";
+/// Keywords and their companions: `await all`, `x at 2`, `go f()`, `x is int`, `let x = 1`, `raise e`
+pub const ALL_WORD: &str = "all";
+pub const AT_WORD: &str = "at";
+pub const GO_WORD: &str = "go";
+pub const IS_WORD: &str = "is";
+/// `let x = 1` binds x once, as const does (user, card let-reassign)
+pub const LET_WORD: &str = "let";
+pub const RAISE_WORD: &str = "raise";
+pub const SELF_WORD: &str = "self";
+/// Library words: `xs.add(x)`, `chr(n)`, `dir(x)`, `dot(xs, ys)`, `error "e"`, `xs.pop()`, `print x`, `str(x)` …
+pub const ADD_WORD: &str = "add";
+pub const CHR_WORD: &str = "chr";
+pub const DELETE_WORD: &str = "delete";
+pub const DIR_WORD: &str = "dir";
+pub const DOT_WORD: &str = "dot";
+pub const ERROR_WORD: &str = "error";
+/// `x failed` reads `is_error(x)`: whether x is an Error value
+pub const IS_ERROR_WORD: &str = "is_error";
+pub const POP_WORD: &str = "pop";
+pub const PRINT_WORD: &str = "print";
+pub const SEND_WORD: &str = "send";
+pub const SORT_WORD: &str = "sort";
+pub const STR_WORD: &str = "str";

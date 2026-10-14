@@ -17,7 +17,7 @@ use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
-use crate::words::ON_WORD;
+use crate::words::{FLOAT_WORD, ON_WORD};
 use std::collections::HashSet;
 use warp_runtime::host_words::{
 	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, HELD_KEY, KEY_CODE_HELD, MOUSE_X, MOUSE_Y, SYSTEM_VALUE,
@@ -31,7 +31,6 @@ pub const SYSTEM_PREFIX: &str = "system·";
 /// Host readings that are measurements, not counts: float sources (decision exact-decimals), so the exact decimals
 /// they meet (`col + 0.5 - mouse_x`) convert once at that use instead of making every later step exact
 const FLOAT_VALUES: [&str; 2] = [MOUSE_X, MOUSE_Y];
-const FLOAT_TYPE: &str = "float";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
@@ -280,7 +279,7 @@ fn reading(node: Node) -> Node {
 			if yes_no {
 				key(call, Op::Ne, Node::int(0))
 			} else if measured {
-				key(call, Op::As, symbol(FLOAT_TYPE))
+				key(call, Op::As, symbol(FLOAT_WORD))
 			} else {
 				call
 			}

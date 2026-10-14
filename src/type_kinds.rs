@@ -1,5 +1,6 @@
 use crate::type_kinds;
 use crate::wasm_emitter::WasmGcEmitter;
+use crate::words::ANY_TYPE;
 use wasm_encoder::ValType::Ref;
 use wasm_encoder::{AbstractHeapType, HeapType, RefType, ValType};
 
@@ -154,7 +155,6 @@ pub struct TypeDef {
 }
 
 const OPTIONAL_SUFFIX: char = '?';
-pub const UNTYPED_FIELD: &str = "any";
 
 /// `email?: text` parses as the elvis `email ? email : text`: the optional field, as its `email: text`
 pub(crate) fn optional_field(node: &crate::node::Node) -> Option<&crate::node::Node> {
@@ -172,9 +172,9 @@ impl FieldDef {
 	/// A field written as a bare word, `name`, optional as `email?`
 	pub fn untyped(word: &str) -> FieldDef {
 		let type_name = if word.ends_with(OPTIONAL_SUFFIX) {
-			format!("{UNTYPED_FIELD}{OPTIONAL_SUFFIX}")
+			format!("{ANY_TYPE}{OPTIONAL_SUFFIX}")
 		} else {
-			UNTYPED_FIELD.to_string()
+			ANY_TYPE.to_string()
 		};
 		FieldDef {
 			name: word.trim_end_matches(OPTIONAL_SUFFIX).to_string(),
@@ -394,7 +394,7 @@ impl TypeRegistry {
 					// `size: int | text`: the union's name, `int or text`
 					written => Self::written_name(written).or_else(|| crate::analyzer::union_type_name(written)), // none for a default value `x=0` or `x:0`
 				};
-				let type_name = type_name.unwrap_or_else(|| UNTYPED_FIELD.to_string());
+				let type_name = type_name.unwrap_or_else(|| ANY_TYPE.to_string());
 				Some(FieldDef { name, type_name })
 			}
 			Node::Symbol(word) => Some(FieldDef::untyped(word)),
@@ -453,7 +453,7 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 		"i32" | "int" => FieldStorage::I32,
 		"f32" | "float" => FieldStorage::F32,
 		"Text" | "String" | "string" | "text" => FieldStorage::Text,
-		"Node" | UNTYPED_FIELD => FieldStorage::Node,
+		"Node" | ANY_TYPE => FieldStorage::Node,
 		_ if crate::analyzer::union_parts(word).is_some() => FieldStorage::Node,
 		_ if crate::analyzer::type_word_kind(word).is_some()
 			|| crate::analyzer::plural_element_type(word).is_some()

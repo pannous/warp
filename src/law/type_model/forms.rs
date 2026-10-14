@@ -4,6 +4,7 @@ pub(super) use crate::filled_lists::is_list_literal;
 pub(super) use crate::lowering::nodes::parameter_word;
 use crate::lowering::{function_head, DefinitionForm, FunctionHead};
 pub(super) use crate::text::injection::literal_text;
+use crate::words::{ON_WORD, RETURN_WORD};
 
 pub(super) fn outside_w0(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
@@ -85,7 +86,7 @@ pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 		return None;
 	};
 	let (first, rest) = items.split_first()?;
-	if first.is_symbol(ON_KEYWORD) {
+	if first.is_symbol(ON_WORD) {
 		let (last, words) = rest.split_last()?;
 		let event = crate::event_signals::event_name(words.iter())?;
 		return matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))
@@ -202,7 +203,7 @@ pub(super) fn map_keys(program: &Node) -> Option<Vec<String>> {
 /// the value of `return v`, ø of a bare `return`
 pub(super) fn returned(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.first().is_some_and(|first| first.is_symbol(RETURN_KEYWORD)) => {
+		Node::List(items, _, _) if items.first().is_some_and(|first| first.is_symbol(RETURN_WORD)) => {
 			Some(match &items[1..] {
 				[] => Node::Empty,
 				[value] => value.clone(),

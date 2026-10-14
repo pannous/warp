@@ -1,5 +1,6 @@
 //! Constants: `const` and `let` bind once; later changes are errors, the same value again only warns
 use super::*;
+use crate::words::LET_WORD;
 
 /// Each bound name with the text of its value, and the value nodes
 type Bindings<'a> = (Vec<(String, String)>, &'a [Node]);
@@ -50,9 +51,7 @@ pub(crate) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
-				[keyword, declaration, rest @ ..]
-					if is_constant_keyword(keyword) || keyword.is_symbol(IMMUTABLE_LET) =>
-				{
+				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) || keyword.is_symbol(LET_WORD) => {
 					let keyword = keyword.name();
 					let Some((bindings, values)) = declared_bindings(declaration) else {
 						return Some(
@@ -88,7 +87,7 @@ pub(crate) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			};
 			let assignment = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => return Some(let_change(node, &place, &assignment)),
+				Some((keyword, _)) if keyword == LET_WORD => return Some(let_change(node, &place, &assignment)),
 				Some((_, bound))
 					if *op == Op::Assign
 						&& matches!(target.drop_meta(), Node::Symbol(_))
@@ -119,7 +118,7 @@ pub(crate) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			let place = list.name();
 			let change = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => return Some(let_change(node, &place, &change)),
+				Some((keyword, _)) if keyword == LET_WORD => return Some(let_change(node, &place, &change)),
 				Some(_) => {
 					return Some(
 						Diagnostic::at(node, format!("{place} is const, cannot change it: {change}")).fix(format!(
