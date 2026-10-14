@@ -1328,24 +1328,8 @@ PASSED:
   ✓ functions::test_generator_arguments::a_generator_argument
   ✓ functions::test_generator_arguments::any_and_all_of_a_list
   ✓ functions::test_generators::a_changing_method_returns_early
-  ✓ functions::test_generators::a_generator_call_collects_what_it_yields
-  ✓ functions::test_generators::a_generator_expression_is_a_generator
-  ✓ functions::test_generators::a_generator_object_jumps_like_its_loops
   ✓ functions::test_generators::a_loop_ending_in_break_has_a_value
-  ✓ functions::test_generators::a_loop_over_a_generator_runs_its_body_per_yield
-  ✓ functions::test_generators::a_loop_walks_a_generator_object
   ✓ functions::test_generators::a_loop_walks_an_object_with_next_until_it_gives_nothing
-  ✓ functions::test_generators::break_stops_an_endless_generator
-  ✓ functions::test_generators::continue_goes_on_after_the_yield
-  ✓ functions::test_generators::list_and_sum_take_the_rest_of_a_generator_object
-  ✓ functions::test_generators::next_resumes_a_generator_where_it_stopped
-  ✓ functions::test_generators::python_generator
-  ✓ functions::test_generators::return_ends_a_generator
-  ✓ functions::test_generators::send_gives_the_yield_a_value
-  ✓ functions::test_generators::take_stops_an_endless_generator
-  ✓ functions::test_generators::two_generator_objects_advance_apart
-  ✓ functions::test_generators::yield_from_hands_on_what_another_yields
-  ✓ functions::test_generators::zip_pairs_generators_and_lists
   ✓ functions::test_getter_warning_text::a_long_getter_body_is_not_spelled_out_in_its_warning
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
   ✓ functions::test_go_functions::a_go_short_declaration_that_is_assigned_stays_an_error
@@ -4500,7 +4484,6 @@ PASSED:
   ✓ wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
-  ✓ wasm::test_reproducible_builds::test_generator_classes_compile_in_one_order
   ✓ wasm::test_reproducible_builds::test_table_saves_compile_in_one_order
   ✓ wasm::test_runtime_stub_found::build_finds_or_builds_the_runtime_stub_by_itself
   ✓ wasm::test_runtime_stub_note::the_note_comes_only_before_the_first_build
@@ -5389,4 +5372,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5384 passed, 0 failed, 5384 total tested
+13 ignored, 5367 passed, 0 failed, 5367 total tested
