@@ -58,16 +58,21 @@ pub(crate) fn collect_own_functions(node: &Node, classes: &HashSet<String>, own:
 /// may be a field, `list.zip(a, b)` of a module name is a qualified word
 pub(crate) fn called_words(program: &Node, is_module_name: &dyn Fn(&Node) -> bool) -> HashSet<String> {
 	let mut names = HashSet::new();
-	collect_called_words(program, is_module_name, &mut names);
+	collect_called_words(program, program, is_module_name, &mut names);
 	names
 }
 
 /// In a function, its parameters and variables are no calls of a module's words (a local `items` beside map.warp's
 /// items, lib/sound.warp)
-pub(crate) fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, names: &mut HashSet<String>) {
+fn collect_called_words(
+	node: &Node,
+	program: &Node,
+	is_module_name: &dyn Fn(&Node) -> bool,
+	names: &mut HashSet<String>,
+) {
 	if let Some((head, body, _)) = crate::type_tests::function_definition(node) {
 		let mut called_inside = HashSet::new();
-		collect_called_words(&body, is_module_name, &mut called_inside);
+		collect_called_words(&body, program, is_module_name, &mut called_inside);
 		let mut locals: HashSet<String> = crate::lowering::memoization::head_parameters(&head).into_iter().collect();
 		crate::library_words::collect_assigned_names(&body, &mut locals);
 		names.extend(called_inside.into_iter().filter(|name| !locals.contains(name)));
@@ -81,32 +86,34 @@ pub(crate) fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -
 	}
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
-			collect_called_words(receiver, is_module_name, names);
-			// `xs.product` is `xs.product()` (user 2026-10-14, card type-module)
+			collect_called_words(receiver, program, is_module_name, names);
+			// `xs.product` of a list is `xs.product()` (user 2026-10-14, card type-module); `p.center` of an object a field
 			match member.drop_meta() {
 				Node::List(call, _, _) => {
 					if !is_module_name(receiver) {
 						names.extend(called(call));
 					}
-					call.iter().skip(1).for_each(|argument| collect_called_words(argument, is_module_name, names));
+					call.iter()
+						.skip(1)
+						.for_each(|argument| collect_called_words(argument, program, is_module_name, names));
 				}
-				Node::Symbol(word) if !is_module_name(receiver) => {
+				Node::Symbol(word) if crate::members::is_fieldless_value(receiver, program) => {
 					names.insert(word.clone());
 				}
 				_ => {}
 			}
 		}
 		Node::Key(left, _, right) => {
-			collect_called_words(left, is_module_name, names);
-			collect_called_words(right, is_module_name, names);
+			collect_called_words(left, program, is_module_name, names);
+			collect_called_words(right, program, is_module_name, names);
 		}
 		Node::List(items, bracket, _) => {
 			if matches!(bracket, Bracket::Round | Bracket::None) && items.len() > 1 {
 				names.extend(called(items));
 			}
-			items.iter().for_each(|item| collect_called_words(item, is_module_name, names));
+			items.iter().for_each(|item| collect_called_words(item, program, is_module_name, names));
 		}
-		Node::Type { body, .. } => collect_called_words(body, is_module_name, names),
+		Node::Type { body, .. } => collect_called_words(body, program, is_module_name, names),
 		_ => {}
 	}
 }
