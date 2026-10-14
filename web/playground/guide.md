@@ -699,21 +699,52 @@ Examples: markup, "element events", "fine updates", components, cleanup, "keyed 
 
 ## Servers
 
-Routes answer requests. `warp serve` runs the program as a web server; `warp deploy` puts it on the web.
+Routes answer requests. 
+
+```warp
+route "/" { "hello"}`  // is all you need for your first server! 
+```
+
+Instead of text, you can also return complex HTML 
+
+```warp
+route "/" { b{"bold!"} }`  
+```
+
+Arguments are automatically provided with the correct type: 
+
+```warp
+`route "/square/:n:int" { n*n }`
+```
+
+`warp (serve)` runs the program as a web server; `warp deploy` puts it on the web.
 
 Examples: forms; samples: server, route_headers, hosting, worker
 
-## Pictures and the GPU
+## Pictures
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card.
-
 Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
+
+
+## GPU
+Warp *automatically* parallelizes bulk operations either as SIMD or sends to Accelerator cards (GPU) beyond a threshold of computational complexity.
+
+If you want to fine tune the performance you can make it explicit with `@gpu` :
+```warp 
+sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
+```
+
+Also see [[##graphics]] on how to draw directly on the GPU 
+
+Examples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
+
 
 ## Sound and music
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
 
-Examples: melody; samples: music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
+Examples: melody; samples: music, play_mp3, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
 
 ## WebAssembly
 
