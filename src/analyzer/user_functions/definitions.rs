@@ -297,7 +297,7 @@ pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 			if let Node::Symbol(s) = n.drop_meta() {
 				Some(Param {
 					name: s.clone(),
-					annotation: Some(type_name.as_ref().clone()),
+					annotation: Some(named_list_annotation(type_name)),
 					default: None,
 					used_as: None,
 				})

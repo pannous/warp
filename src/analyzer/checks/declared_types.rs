@@ -395,6 +395,16 @@ pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
 	}
 }
 
+/// A list annotation as one type name, so that its name is the list type rather than its first word: `[text]`
+/// (named `text` as a list node) and the spaced `list of text` (named `list`)
+pub(crate) fn named_list_annotation(annotation: &Node) -> Node {
+	match (annotation.drop_meta(), declared_element_type(annotation)) {
+		(Node::List(_, Bracket::Square, _), Some(element)) => Node::Symbol(format!("[{element}]")),
+		(Node::List(..), Some(element)) => Node::Symbol(format!("{LIST_OF_PREFIX}{element}")),
+		_ => annotation.clone(),
+	}
+}
+
 /// The element type a list annotation names: `texts`, `[text]` and `list of text` are lists of `text`
 pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 	match annotation.drop_meta() {
@@ -551,9 +561,11 @@ pub(crate) fn is_zero_or_one(value: &Node) -> bool {
 	matches!(value.drop_meta(), Node::Number(Number::Int(0 | 1)))
 }
 
-/// The element type of a list type: `texts` and `list of text` hold `text`
+/// The element type of a list type: `texts`, `list of text` and `[text]` hold `text`
 pub(crate) fn list_element_type(type_name: &str) -> Option<&str> {
-	plural_element_type(type_name).or_else(|| type_name.strip_prefix(LIST_OF_PREFIX))
+	plural_element_type(type_name)
+		.or_else(|| type_name.strip_prefix(LIST_OF_PREFIX))
+		.or_else(|| type_name.strip_prefix('[')?.strip_suffix(']'))
 }
 
 /// The items a list value is given literally: all of `[a b]`, the appended ones of `xs + [c]` and of
