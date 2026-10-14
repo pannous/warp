@@ -26,6 +26,7 @@ mod test_print_all_characters;
 mod test_print_arguments;
 mod test_print_gives_nothing;
 mod test_print_juxtaposed;
+mod test_print_list_shapes; // card print-shows
 mod test_print_lists;
 mod test_print_runtime_number;
 mod test_print_type_error;

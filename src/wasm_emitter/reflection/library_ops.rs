@@ -1,9 +1,9 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::{op_to_code, Op};
-use crate::type_kinds::{Kind, KIND_MASK};
-use crate::type_kinds::{CURLY_BRACKET_INFO, CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
+use crate::type_kinds::{Kind, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
+use crate::type_kinds::{CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
