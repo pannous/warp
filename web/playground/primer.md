@@ -153,10 +153,11 @@ t = try 10/0
 
 ## Effects
 The compiler infers what a function does (IO, …); `! Pure` declares none. Effect handlers: `emit word` asks, the
-caller answers with `on word { … } in { … }`.
+program answers with `on word { … }`.
 ```warp => 120
 price(net) := net * (1 + emit tax_rate)
-on tax_rate { 0.2 } in { price(100) }
+on tax_rate { 0.2 }
+price(100)
 ```
 ```warp => [IO Pure]
 log(x) := print x
