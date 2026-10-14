@@ -1,5 +1,5 @@
 //! `now` compared with a part of a time compares that part of now (cards now-make, now-allow): with a duration its
-//! local time of day (`now > 17h` is `time > 17h`, units.rs), with a month name its month (`now >= October` is
+//! local time of day (`now > 17h`, folded by units.rs), with a month name its month (`now >= October` is
 //! `now.month >= 10`), with a date its local date (`now ≈ 2026-10-14`, `now < 2027-01-01`). `≈` asks for the same part,
 //! `==` stays the whole value (an instant is no date). `time.now` is `now`, the type's member (a bare `time` stays the
 //! type, user decision print-time). A program's own `now`, `time` or month name wins.
@@ -65,14 +65,8 @@ fn part_compared(op: Op, part: &Node, bound: &HashSet<String>) -> Option<Node> {
 	if let Some(month) = month_number(part, bound) {
 		return compare(crate::warp_parser::parse(NOW_MONTH), Node::int(month));
 	}
-	if let Some(date) = date_number(part) {
-		return compare(crate::warp_parser::parse(NOW_DATE_NUMBER), Node::int(date));
-	}
-	let time_of_day = op != Op::Similar && !bound.contains(TIME_WORD);
-	if time_of_day && crate::numbers::units::milliseconds(part).is_some() {
-		return Some(Node::Key(Box::new(Node::Symbol(TIME_WORD.to_string())), op, Box::new(part.clone())));
-	}
-	None
+	let date = date_number(part)?;
+	compare(crate::warp_parser::parse(NOW_DATE_NUMBER), Node::int(date))
 }
 
 fn month_number(node: &Node, bound: &HashSet<String>) -> Option<i64> {
