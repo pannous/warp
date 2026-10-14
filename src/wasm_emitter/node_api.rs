@@ -487,15 +487,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				let code = 2;
 				Self::emit_list(f, &kind_of(items));
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::List as i64),
-						I::I64Ne,
-					],
-				);
+				Self::emit_kind_test(f, Kind::List as i64, I::I64Ne);
 				s.emit_fail_if(f, "not_a_list");
 				s.emit_code_or_error(f, text, code, coder, prefix);
 				Self::emit_list(f, &kind_of(items));

@@ -948,15 +948,7 @@ impl WasmGcEmitter {
 				},
 			],
 		);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Float as i64),
-				I::I64Eq,
-			],
-		);
+		Self::emit_kind_test(func, Kind::Float as i64, I::I64Eq);
 		held
 	}
 
@@ -996,15 +988,7 @@ impl WasmGcEmitter {
 				},
 			],
 		);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Codepoint as i64),
-				I::I64Eq,
-			],
-		);
+		Self::emit_kind_test(func, Kind::Codepoint as i64, I::I64Eq);
 		Self::emit_list(
 			func,
 			&[
