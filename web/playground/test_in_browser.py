@@ -660,16 +660,22 @@ def brush_wrong():
 
 def completion_keys_wrong():
 	"""the editor's code after each of COMPLETIONS' keys, pressed through CodeMirror's own key handling: what differs"""
-	script = f"""(() => {{
+	script = f"""(async () => {{
 		const editor = document.querySelector(".CodeMirror").CodeMirror;
 		const press = code => editor.triggerOnKeyDown({{ type: "keydown", keyCode: code, preventDefault() {{}}, stopPropagation() {{}} }});
 		editor.focus();
-		return JSON.stringify({json.dumps(COMPLETIONS)}.map(([code, keys]) => {{
+		const shown = JSON.stringify({json.dumps(COMPLETIONS)}.map(([code, keys]) => {{
 			editor.setValue(code);
 			editor.setCursor(editor.lastLine(), editor.getLine(editor.lastLine()).length);
 			keys.forEach(key => press({json.dumps(KEY_CODES)}[key]));
 			return editor.getValue();
 		}}));
+		// the Enters left the assistant's pause timer, which continues a focused editor (assistant.js completeAfterPause)
+		// and loads Cloudflare's bot check, an "uncaught exception: undefined" in Firefox, into the next check: unfocused,
+		// it passes doing nothing
+		editor.getInputField().blur();
+		await new Promise(done => setTimeout(done, {ASSISTANT_PAUSE_MS}));
+		return shown;
 	}})()"""
 	shown = browser("eval", script)
 	if not shown.startswith('"'):
