@@ -276,42 +276,13 @@ pub(in crate::analyzer) fn check_declared_types(
 			)
 		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
-			let declaration = match target.drop_meta() {
-				Node::Symbol(name) => declared
-					.get_key_value(name)
-					.map(|(name, type_name)| (name.clone(), type_name.clone())),
-				declaring => declaring_name_and_type(declaring),
-			};
-			if let Some((name, type_name)) = declaration {
-				if let Some(part) = unsupported_union_part(&type_name, classes) {
-					return Some(unknown_union_part(node, &name, &name, &type_name, part));
-				}
-				declared.insert(name.clone(), type_name.clone());
-				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value)
-					.or_else(|| evident_items_mismatch(node, &name, &type_name, value, lists))
-				{
-					return Some(mismatch);
-				}
-				if list_element_type(&type_name).is_some() {
-					lists.define(name, Some(Box::new(Node::Symbol(type_name))), Kind::List);
-				}
-			} else if let Node::Symbol(name) = target.drop_meta() {
-				let (kind, type_node) = super::super::variables::value_binding(value, lists);
-				lists.define(name.clone(), type_node, kind);
-			}
-			check_declared_types(value, declared, lists, classes)
+			assignment_checked(node, target, value, declared, lists, classes)
+				.or_else(|| check_declared_types(value, declared, lists, classes))
 		}
 		// `names.add(420)`, `names.insert(420, at: 0)`: the method call appends before mutation lowers it to
 		// `names = names + [420]`
-		Node::Key(list, Op::Dot, _) if appended_items(node).or_else(|| inserted_item(node)).is_some() => {
-			let Node::Symbol(name) = list.drop_meta() else {
-				return None;
-			};
-			let type_name = declared.get(name)?;
-			let element = list_element_type(type_name)?;
-			let items = appended_items(node).or_else(|| inserted_item(node))?;
-			let appended = Node::List(items.to_vec(), Bracket::Square, Separator::Space);
-			list_items_mismatch(node, name, type_name, element, &appended)
+		Node::Key(list, Op::Dot, _) if let Some(items) = appended_items(node).or_else(|| inserted_item(node)) => {
+			appended_mismatch(node, list, items, declared)
 		}
 		Node::Key(left, _, right) => check_declared_types(left, declared, lists, classes)
 			.or_else(|| check_declared_types(right, declared, lists, classes)),
@@ -330,6 +301,57 @@ pub(in crate::analyzer) fn check_declared_types(
 		}
 		_ => None,
 	}
+}
+
+/// `x:int = …` or `x = …` of a declared x: the value must fit the type, which the assignment declares; a list's
+/// element type is kept in `lists`, as an undeclared variable's binding
+fn assignment_checked(
+	node: &Node,
+	target: &Node,
+	value: &Node,
+	declared: &mut HashMap<String, String>,
+	lists: &mut Scope,
+	classes: &HashSet<String>,
+) -> Option<Diagnostic> {
+	let declaration = match target.drop_meta() {
+		Node::Symbol(name) => declared
+			.get_key_value(name)
+			.map(|(name, type_name)| (name.clone(), type_name.clone())),
+		declaring => declaring_name_and_type(declaring),
+	};
+	let Some((name, type_name)) = declaration else {
+		if let Node::Symbol(name) = target.drop_meta() {
+			let (kind, type_node) = super::super::variables::value_binding(value, lists);
+			lists.define(name.clone(), type_node, kind);
+		}
+		return None;
+	};
+	if let Some(part) = unsupported_union_part(&type_name, classes) {
+		return Some(unknown_union_part(node, &name, &name, &type_name, part));
+	}
+	declared.insert(name.clone(), type_name.clone());
+	let mismatch = assignment_mismatch(node, &name, &type_name, value)
+		.or_else(|| evident_items_mismatch(node, &name, &type_name, value, lists));
+	if mismatch.is_none() && list_element_type(&type_name).is_some() {
+		lists.define(name, Some(Box::new(Node::Symbol(type_name))), Kind::List);
+	}
+	mismatch
+}
+
+/// The items appended to a declared list must fit its element type
+fn appended_mismatch(
+	node: &Node,
+	list: &Node,
+	items: &[Node],
+	declared: &HashMap<String, String>,
+) -> Option<Diagnostic> {
+	let Node::Symbol(name) = list.drop_meta() else {
+		return None;
+	};
+	let type_name = declared.get(name)?;
+	let element = list_element_type(type_name)?;
+	let appended = Node::List(items.to_vec(), Bracket::Square, Separator::Space);
+	list_items_mismatch(node, name, type_name, element, &appended)
 }
 
 /// The declared types inside a function `(f n:int m)`: its annotated parameters are declared, a plain one hides an outer
