@@ -16,17 +16,13 @@ const BOOL_CALLS: [&str; 8] = [
 	crate::uncertain::POSSIBLY,
 ];
 
-thread_local! {
-	/// The user functions of the program being emitted whose result is a bool (note_bool_functions)
-	static BOOL_FUNCTIONS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
-}
-
 /// `even(n) := n % 2 == 0`: the functions whose body ends in a bool, also through each other (`odd(n) := not even(n)`)
 /// and themselves (`f(n) := if n == 0 then true else f(n - 1)`), for the emission of one program: every function is
 /// taken for one until its body shows otherwise
 pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::context::UserFunctionDef> + Clone) {
-	BOOL_FUNCTIONS
-		.with(|known| *known.borrow_mut() = functions.clone().map(|function| function.name.clone()).collect());
+	crate::compile_context::change(|context| {
+		context.bool_functions = functions.clone().map(|function| function.name.clone()).collect()
+	});
 	loop {
 		let refuted: Vec<String> = functions
 			.clone()
@@ -36,7 +32,7 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::contex
 		if refuted.is_empty() {
 			return;
 		}
-		BOOL_FUNCTIONS.with(|known| known.borrow_mut().retain(|name| !refuted.contains(name)));
+		crate::compile_context::change(|context| context.bool_functions.retain(|name| !refuted.contains(name)));
 	}
 }
 
@@ -101,7 +97,7 @@ fn define_bool_locals(function: &crate::context::UserFunctionDef, scope: &mut Sc
 }
 
 pub fn is_bool_function(name: &str) -> bool {
-	BOOL_FUNCTIONS.with(|known| known.borrow().contains(name))
+	crate::compile_context::read(|context| context.bool_functions.contains(name))
 }
 
 /// `true`, `3 > 2`, `2 as bool`, `bool(2)`, `not x`, `a and b` of bools, `x is int`, a variable bound to one, `(…; x < 3)` ending in one

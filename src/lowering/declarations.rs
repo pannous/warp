@@ -787,7 +787,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
 		// parameters it stays a def form for late_binding, which would read `z() := e` as a getter (P71); a generator
 		// (`def numbers(): yield 1`) is no getter
-		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::ruby_blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
 			(*head, Op::Define, *body)
 		}
 		Node::List(parts, Bracket::Round, _)
@@ -1110,20 +1110,6 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 			}
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(key(name.clone(), Op::Colon, kind.clone()))
-			}
-			// `int b = 2` as the parser groups it, the type then the assignment
-			[kind, assignment]
-				if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)))
-					&& matches!(kind.drop_meta(), Node::Symbol(_)) =>
-			{
-				let Node::Key(name, _, default) = assignment.drop_meta() else {
-					unreachable!("guarded")
-				};
-				Some(Node::Key(
-					Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))),
-					Op::Assign,
-					default.clone(),
-				))
 			}
 			_ => None,
 		},

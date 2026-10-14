@@ -17,7 +17,7 @@ echo "Compiling tests..."
 COMPILE_START=$SECONDS
 # Match RustRover's runner injection exactly
 RUNNER="target.aarch64-apple-darwin.runner=['/Applications/RustRover.app/Contents/bin/native-helper/intellij-rust-native-helper']"
-FEATURES="--all-features" # native + optimizer + ffi: the default build plus the optimizer and FFI tests
+FEATURES="--all-features" # native + ffi: the default build plus the FFI tests
 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --no-run || exit 1
 
 COMPILE_SECONDS=$((SECONDS - COMPILE_START))

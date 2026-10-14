@@ -200,13 +200,8 @@ const EACH_WORD: &str = "each";
 /// The local time of day, unless the program names something so (card time-day-value)
 const TIME_WORD: &str = "time";
 
-thread_local! {
-	/// The unit words the program being lowered defines itself (`m = 2`, `g(x) := …`): no units while it is lowered
-	static SHADOWED_UNITS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
-}
-
 fn unit_named(name: &str) -> Option<&'static Unit> {
-	if SHADOWED_UNITS.with(|shadowed| shadowed.borrow().contains(name)) {
+	if crate::compile_context::read(|context| context.shadowed_units.contains(name)) {
 		return None;
 	}
 	UNITS.iter().find(|unit| unit.name == name)
@@ -214,7 +209,7 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 
 /// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
 fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&SHADOWED_UNITS, defined_unit_names(program), run)
+	crate::compile_context::scoped(|context| &mut context.shadowed_units, defined_unit_names(program), run)
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`
@@ -930,61 +925,6 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		.parts()
 		.into_iter()
 		.for_each(|child| collect_defined_unit_names(child, names));
-}
-
-/// `f(s) := s * 2; f(3 s)`: a parameter named like a unit the program also writes outside the function is a name clash
-/// (card static-units-parameter); the parameter shadows the unit, so `3 s` would be an undefined variable
-pub fn check_unit_parameter_clashes(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
-	let mut parameter_of = HashMap::new();
-	program.visit(&mut |node| {
-		if let Some(definition) = plain_definition(node) {
-			for parameter in definition
-				.written_parameters
-				.iter()
-				.map(Node::name)
-				.filter(|name| is_unit(name))
-			{
-				parameter_of.insert(parameter, definition.name.to_string());
-			}
-		}
-	});
-	let outside = without_function_definitions(program.clone());
-	let names_outside = defined_unit_names(&outside);
-	parameter_of.retain(|parameter, _| !names_outside.contains(parameter));
-	let used = first_word_of(&outside, &parameter_of)?;
-	let name = used.drop_meta().name();
-	Some(crate::diagnostic::Diagnostic::at(
-		used,
-		format!(
-			"{name} is a parameter of {} and a unit here: rename the parameter",
-			parameter_of[&name]
-		),
-	))
-}
-
-/// A function definition `f(a, b) := …`
-fn plain_definition(node: &Node) -> Option<crate::lowering::FunctionHead<'_>> {
-	crate::lowering::function_head(node).filter(|definition| definition.plain_operator().is_some())
-}
-
-fn without_function_definitions(node: Node) -> Node {
-	match plain_definition(&node) {
-		Some(_) => Node::Empty,
-		None => node.map_children(without_function_definitions),
-	}
-}
-
-/// The first of `words` the code writes, not as a field name (`q.s`)
-fn first_word_of<'a>(node: &'a Node, words: &HashMap<String, String>) -> Option<&'a Node> {
-	match node.drop_meta() {
-		Node::Symbol(name) if words.contains_key(name) => Some(node),
-		Node::Key(object, Op::Dot, _) => first_word_of(object, words),
-		_ => node
-			.drop_meta()
-			.parts()
-			.into_iter()
-			.find_map(|child| first_word_of(child, words)),
-	}
 }
 
 /// Main-level variables holding a constant quantity, and its value: `x = 2 km`

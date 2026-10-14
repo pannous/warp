@@ -51,7 +51,6 @@ native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:cr
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
 #test = [] superfluous, just use cargo test => #[cfg(test)]
-optimizer = [] # Enable optimizing wasm via ...
 ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
 
 [dependencies]

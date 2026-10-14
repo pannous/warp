@@ -479,8 +479,7 @@ impl WasmGcEmitter {
 		let Some((line, column, comment)) = node.written_at() else {
 			return;
 		};
-		func.instruction(&I::I64Const(line));
-		func.instruction(&I::I64Const(column));
+		Self::emit_list(func, &[I::I64Const(line), I::I64Const(column)]);
 		match comment {
 			Some(comment) => self.emit_node_instructions(func, &Node::Text(comment)),
 			None => self.emit_node_null(func),

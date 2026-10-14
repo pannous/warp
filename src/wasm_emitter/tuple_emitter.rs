@@ -54,8 +54,7 @@ impl WasmGcEmitter {
 				self.emit_value_of_kind(func, value, kind);
 			}
 		}
-		func.instruction(&I::Return);
-		func.instruction(&I::Unreachable); // the stack is polymorphic after it: any expected value type fits
+		Self::emit_list(func, &[I::Return, I::Unreachable]); // the stack is polymorphic after it: any expected value type fits
 	}
 
 	fn emit_destructuring(&mut self, func: &mut Function, names: &[String], values: &[Node]) {

@@ -284,16 +284,6 @@ pub fn is_field_update_of(name: &str, value: &Node) -> bool {
 	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
 }
 
-/// Library words of a list, text or map that refuse a number (`sum(5)`, `sort(5)`): a user's typed method of one is
-/// what a number would call (traits/generics.rs)
-const COLLECTION_WORDS: [&str; 9] = [
-	SUM_WORD, "sort", "reverse", "first", "last", "keys", "values", "chars", "upper",
-];
-
-pub fn takes_no_number(name: &str) -> bool {
-	COLLECTION_WORDS.contains(&canonical_spelling(name))
-}
-
 pub fn is_runtime_word(name: &str) -> bool {
 	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
 }
@@ -460,7 +450,7 @@ pub fn lower_function_methods(node: Node) -> Node {
 			|| is_libm(name)
 	};
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
-	// are specialised (function_values.rs), which would otherwise see map(square)
+	// are made (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
 	let node = list_constructor_calls(node, &defined);
 	function_methods_as_calls(node, &defined, &|name, arguments, defined| {

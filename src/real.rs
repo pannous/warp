@@ -649,7 +649,7 @@ fn call(function: &str, argument: Value) -> Evaluated {
 	}))
 }
 
-/// sin/cos/tan at multiples of π/12 are exact, anything else is approximated
+/// sin/cos at multiples of π/12 are exact, tan where cos inverts, anything else is approximated
 fn trigonometric(function: &str, real: Real) -> Result<Real, Stop> {
 	if let Real::Exact(exact) = &real {
 		if let Some(q) = exact.pi_multiple() {
@@ -657,13 +657,18 @@ fn trigonometric(function: &str, real: Real) -> Result<Real, Stop> {
 			if twelfths.is_integer() {
 				let k = (twelfths.numerator % BigInt::from(24) + BigInt::from(24)) % BigInt::from(24);
 				let k = k.to_i64().unwrap_or(0);
-				return match function {
-					"sin" => Ok(Real::Exact(sine_table(k))),
-					"cos" => Ok(Real::Exact(sine_table((k + 6) % 24))),
-					_ => tangent_table(k % 12)
-						.map(Real::Exact)
-						.ok_or_else(|| Stop::Error(format!("tan({exact}) is undefined"))),
-				};
+				let (sine, cosine) = (sine_table(k), sine_table((k + 6) % 24));
+				match function {
+					"sin" => return Ok(Real::Exact(sine)),
+					"cos" => return Ok(Real::Exact(cosine)),
+					_ if cosine.is_zero() => return fail(format!("tan({exact}) is undefined")),
+					// sin/cos where cos inverts exactly; tan(π/12) = 2-√3 is approximated
+					_ => {
+						if let Some(inverse) = cosine.inverse() {
+							return Ok(Real::Exact(sine.mul(&inverse)));
+						}
+					}
+				}
 			}
 		}
 		if exact.has_imaginary() {
@@ -707,22 +712,6 @@ fn sine_table(k: i64) -> Exact {
 		5 => square_root(6).add(&square_root(2)).scale(&quarter),
 		_ => Exact::integer(1),
 	}
-}
-
-/// tan(k·π/12) for k in 0..12, None at π/2
-fn tangent_table(k: i64) -> Option<Exact> {
-	if k > 6 {
-		return tangent_table(12 - k).map(|t| t.neg());
-	}
-	Some(match k {
-		0 => Exact::integer(0),
-		1 => Exact::integer(2).sub(&square_root(3)),
-		2 => square_root(3).scale(&fraction(1, 3)),
-		3 => Exact::integer(1),
-		4 => square_root(3),
-		5 => Exact::integer(2).add(&square_root(3)),
-		_ => return None,
-	})
 }
 
 /// ln(1) = 0, ln(ℯ^n) = n, else approximated

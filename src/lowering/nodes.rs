@@ -139,6 +139,32 @@ pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node
 	key(if_then(condition, body), Op::Else, otherwise)
 }
 
+/// `if c then a else b` and `c ? a : b`: the condition and both branches
+pub(crate) fn branches(node: &Node) -> Option<(&Node, &Node, &Node)> {
+	match node.drop_meta() {
+		Node::Key(if_then, Op::Else, otherwise) => {
+			let (condition, then) = if_then_parts(if_then)?;
+			Some((condition, then, otherwise))
+		}
+		Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
+			Node::Key(then, Op::Colon, otherwise) => Some((condition, then, otherwise)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `if c then a`: the condition and the branch
+pub(crate) fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
+	let Node::Key(condition, Op::Then, then) = node.drop_meta() else {
+		return None;
+	};
+	match condition.drop_meta() {
+		Node::Key(empty, Op::If, condition) if matches!(empty.drop_meta(), Node::Empty) => Some((condition, then)),
+		_ => None,
+	}
+}
+
 /// `a: 1`
 pub(crate) fn is_colon_pair(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, Op::Colon, _))
@@ -423,4 +449,14 @@ pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &
 	};
 	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
 	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
+}
+
+/// The statements of a template with its placeholders filled in
+pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
+	let filled = bindings
+		.iter()
+		.fold(crate::warp_parser::parse(text), |node, (placeholder, value)| {
+			crate::library_words::substitute(node, placeholder, value)
+		});
+	filled.drop_meta().sequence_statements().to_vec()
 }

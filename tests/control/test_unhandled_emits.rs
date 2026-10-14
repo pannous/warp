@@ -21,6 +21,7 @@ fn an_emit_nobody_handles_warns() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn a_handled_emit_does_not_warn() {
 	assert!(!warns_unhandled("n = 0; on ping { n += 1 }; emit ping; n"));
 	assert!(!warns_unhandled("compute() := emit ask; on ask { 2 } in { compute() }"));

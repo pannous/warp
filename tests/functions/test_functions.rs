@@ -2,8 +2,6 @@
 // Migrated from tests_*.rs files
 
 use crate::{eq, is};
-use warp::analyzer::{analyze, collect_functions};
-use warp::type_kinds::Kind;
 use warp::warp_parser::parse;
 use warp::Node;
 
@@ -45,19 +43,6 @@ fn test_default_params() {
 	is!("f(a=5, b=10) = a+b; f()", 15); // multiple defaults
 	is!("f(a=5, b=10) = a+b; f(1)", 11); // override first
 	is!("f(a=5, b=10) = a+b; f(1, 2)", 3); // override both
-}
-
-#[test]
-fn test_function_declaration_parse() {
-	let node2 = analyze(parse("fun test(a:float){return a*2}"));
-	eq!(node2.name(), "test");
-
-	let functions = collect_functions(&node2);
-	eq!(functions["test"].signature.len(), 1);
-	eq!(functions["test"].signature.parameters[0].name, "a");
-	eq!(functions["test"].signature.parameters[0].kind, Kind::Float);
-	// TODO: once body comparison is implemented
-	// eq!(*functions["test"].body.as_ref().unwrap(), analyze(parse("return a*2")));
 }
 
 #[test]

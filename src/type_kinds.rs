@@ -103,36 +103,6 @@ impl Kind {
 	pub fn is_ref(&self) -> bool {
 		!self.is_primitive()
 	}
-
-	/// Parse a C type string to Kind with smart defaults
-	pub fn from_c_type(s: &str) -> Kind {
-		let s = s.trim();
-
-		// Handle pointer types
-		if s.contains('*') {
-			if s.contains("char") {
-				return Kind::Text; // char* is a string
-			}
-			return Kind::Pointer; // other pointers as i64 handles
-		}
-
-		// Strip qualifiers
-		let s = s.replace("const ", "").replace("unsigned ", "").replace("signed ", "");
-		let s = s.trim();
-
-		match s {
-			"void" => Kind::Empty,
-			"int" | "int32_t" | "uint32_t" | "Uint32" => Kind::Int32,
-			s if crate::ffi::C_INT64_TYPES.contains(&s) => Kind::Int,
-			"float" => Kind::Float32,
-			"double" => Kind::Float,
-			"bool" | "_Bool" => Kind::Int32,
-			"short" | "int16_t" | "uint16_t" => Kind::Int32,
-			"char" | "int8_t" | "uint8_t" => Kind::Codepoint,
-			"Color" => Kind::Int32, // raylib Color is 4 bytes packed
-			_ => Kind::Data,        // unknown types as generic data
-		}
-	}
 }
 
 impl std::fmt::Display for Kind {
