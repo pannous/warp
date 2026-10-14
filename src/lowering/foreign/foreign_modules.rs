@@ -735,97 +735,118 @@ impl Foreign<'_> {
 			return self.rewrite(text);
 		}
 		if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
-			let receiver = self.rewrite(receiver.as_ref().clone());
-			if let Some((runtime, module)) = self.receiver(&receiver) {
-				let (member, is_call, arguments) = match member.drop_meta() {
-					Node::Symbol(member) => (member.clone(), false, Node::Empty),
-					Node::List(items, Bracket::Round, _) => match items.split_first() {
-						Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
-							let arguments = arguments
-								.iter()
-								.cloned()
-								.map(|argument| self.rewrite(argument))
-								.collect();
-							(
-								head.name(),
-								true,
-								Node::List(arguments, Bracket::Square, Separator::Space),
-							)
-						}
-						_ => return node,
-					},
-					_ => return node,
-				};
-				let result_type = match runtime == JS_RUNTIME {
-					true => self.web_idl_result(&receiver, &member, is_call, &arguments),
-					false => Ok(None),
-				};
-				let call = foreign_call(&runtime, module, &member, is_call, arguments);
-				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
-				return match result_type {
-					Err(problem) => crate::errors::diagnostic::Diagnostic::at(&node, problem).into_error(),
-					Ok(Some(warp_type)) => key(call, Op::As, Node::Symbol(warp_type)),
-					Ok(None) => call,
-				};
-			}
-			// `counter.increment(2)` of a handle a component gave: the method of its resource
-			if let Some(items) = called_method(member)
-				.filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name()))
-			{
-				let arguments = items[1..]
-					.iter()
-					.cloned()
-					.map(|argument| self.rewrite(argument))
-					.collect();
-				let arguments = Node::List(arguments, Bracket::Square, Separator::Space);
-				// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
-				return match type_read(&receiver) {
-					Some((path, resource)) => foreign_call(
-						COMPONENT_RUNTIME,
-						path,
-						&format!("{resource}.{}", items[0].name()),
-						true,
-						arguments,
-					),
-					None => foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, arguments),
-				};
-			}
-			// `v.major` of a handle whose resource has a method `major` without arguments (a Rust struct's field)
-			if let (Node::Symbol(field), Some((path, kind))) = (member.drop_meta(), self.component_handle(&receiver)) {
-				if has_method(&path, &kind, field) {
-					let arguments = Node::List(vec![], Bracket::Square, Separator::Space);
-					return foreign_call(COMPONENT_RUNTIME, receiver, field, true, arguments);
-				}
+			if let Some(read) = self.member_read(&node, receiver, member) {
+				return read;
 			}
 		}
 		match node {
-			// `d = datetime.date(2020, 1, 2)`: d holds a value of that runtime, `d.isoformat()` asks it
-			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
-				let value = self.rewrite(*value);
-				if let Some(set) = (op == Op::Assign).then(|| self.member_set(&target, &value)).flatten() {
-					return set;
-				}
-				if let Node::Symbol(name) = target.drop_meta() {
-					match foreign_runtime(&value) {
-						Some(runtime) => self.values.insert(name.clone(), runtime),
-						None => self.values.remove(name),
-					};
-					match self.web_idl_receiver(&value) {
-						Ok(Some((interface, _))) => self.web_idl_values.insert(name.clone(), interface),
-						_ => self.web_idl_values.remove(name),
-					};
-					match called_runtime(&value).is_some_and(|runtime| runtime == COMPONENT_RUNTIME) {
-						true => self.component_values.insert(name.clone()),
-						false => self.component_values.remove(name),
-					};
-					match self.component_handle(&value) {
-						Some(handle) => self.component_handles.insert(name.clone(), handle),
-						None => self.component_handles.remove(name),
-					};
-				}
-				Node::Key(target, op, Box::new(value))
-			}
+			Node::Key(target, op @ (Op::Assign | Op::Define), value) => self.assigned(target, op, *value),
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
+	}
+
+	/// `receiver.member` of a foreign module, value or component handle: the call asking its runtime
+	fn member_read(&mut self, node: &Node, receiver: &Node, member: &Node) -> Option<Node> {
+		let receiver = self.rewrite(receiver.clone());
+		if let Some((runtime, module)) = self.receiver(&receiver) {
+			return Some(self.runtime_member(node, &receiver, &runtime, module, member));
+		}
+		// `counter.increment(2)` of a handle a component gave: the method of its resource
+		if let Some(items) = called_method(member)
+			.filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name()))
+		{
+			let arguments = self.arguments_rewritten(&items[1..]);
+			// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
+			return Some(match type_read(&receiver) {
+				Some((path, resource)) => foreign_call(
+					COMPONENT_RUNTIME,
+					path,
+					&format!("{resource}.{}", items[0].name()),
+					true,
+					arguments,
+				),
+				None => foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, arguments),
+			});
+		}
+		// `v.major` of a handle whose resource has a method `major` without arguments (a Rust struct's field)
+		if let (Node::Symbol(field), Some((path, kind))) = (member.drop_meta(), self.component_handle(&receiver)) {
+			if has_method(&path, &kind, field) {
+				return Some(foreign_call(
+					COMPONENT_RUNTIME,
+					receiver,
+					field,
+					true,
+					self.arguments_rewritten(&[]),
+				));
+			}
+		}
+		None
+	}
+
+	/// `module.member` or `module.member(arguments)` of the runtime holding the module or value; a member it can't
+	/// call stays the `node` it is
+	fn runtime_member(&mut self, node: &Node, receiver: &Node, runtime: &str, module: Node, member: &Node) -> Node {
+		let (member, is_call, arguments) = match member.drop_meta() {
+			Node::Symbol(member) => (member.clone(), false, Node::Empty),
+			Node::List(items, Bracket::Round, _) => match items.split_first() {
+				Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
+					(head.name(), true, self.arguments_rewritten(arguments))
+				}
+				_ => return node.clone(),
+			},
+			_ => return node.clone(),
+		};
+		let result_type = match runtime == JS_RUNTIME {
+			true => self.web_idl_result(receiver, &member, is_call, &arguments),
+			false => Ok(None),
+		};
+		let call = foreign_call(runtime, module, &member, is_call, arguments);
+		// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
+		match result_type {
+			Err(problem) => crate::errors::diagnostic::Diagnostic::at(node, problem).into_error(),
+			Ok(Some(warp_type)) => key(call, Op::As, Node::Symbol(warp_type)),
+			Ok(None) => call,
+		}
+	}
+
+	fn arguments_rewritten(&mut self, arguments: &[Node]) -> Node {
+		let arguments = arguments
+			.iter()
+			.cloned()
+			.map(|argument| self.rewrite(argument))
+			.collect();
+		Node::List(arguments, Bracket::Square, Separator::Space)
+	}
+
+	/// `d = datetime.date(2020, 1, 2)`: d holds a value of that runtime, `d.isoformat()` asks it
+	fn assigned(&mut self, target: Box<Node>, op: Op, value: Node) -> Node {
+		let value = self.rewrite(value);
+		if let Some(set) = (op == Op::Assign).then(|| self.member_set(&target, &value)).flatten() {
+			return set;
+		}
+		if let Node::Symbol(name) = target.drop_meta() {
+			self.remember_value(name, &value);
+		}
+		Node::Key(target, op, Box::new(value))
+	}
+
+	/// What the variable `name` holds now: a value of a runtime, of a Web IDL interface, of a component, a handle
+	fn remember_value(&mut self, name: &str, value: &Node) {
+		match foreign_runtime(value) {
+			Some(runtime) => self.values.insert(name.to_string(), runtime),
+			None => self.values.remove(name),
+		};
+		match self.web_idl_receiver(value) {
+			Ok(Some((interface, _))) => self.web_idl_values.insert(name.to_string(), interface),
+			_ => self.web_idl_values.remove(name),
+		};
+		match called_runtime(value).is_some_and(|runtime| runtime == COMPONENT_RUNTIME) {
+			true => self.component_values.insert(name.to_string()),
+			false => self.component_values.remove(name),
+		};
+		match self.component_handle(value) {
+			Some(handle) => self.component_handles.insert(name.to_string(), handle),
+			None => self.component_handles.remove(name),
+		};
 	}
 }
