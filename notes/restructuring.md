@@ -152,8 +152,9 @@ Owned by open branches (warp-operator-shall: the big lowering files; warp-cleanu
 with the owner before each folder move.
 
 Status (branches layout-lowering-signals … -control, 2026-10-14): all folders exist. Each folder mod.rs does
-`use super::*`, so moved files kept every `super::x` path unchanged. Only welcome_forms is still flat, until
-foreign-spellings lands (park-phrases deleted phrase_calls, list_phrases and word_slices).
+`use super::*`, so moved files kept every `super::x` path unchanged. welcome_forms joined welcoming/ last (branch
+layout-welcoming, after rs-private); park-phrases deleted phrase_calls, list_phrases and word_slices. Only folding,
+nodes and pipes stay flat in src/lowering: they serve every folder.
 
 ### Lowering per function (branch layout-lowering-functions)
 

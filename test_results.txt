@@ -447,6 +447,8 @@ PASSED:
   ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
   ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
   ✓ control::test_parallel_map::go_maps_in_parallel
+  ✓ control::test_parsed_code_patterns::code_pattern_matches_code_parsed_at_run_time
+  ✓ control::test_parsed_code_patterns::quoted_statements_bind_no_blocks
   ✓ control::test_pattern_unit_name::a_dollar_name_binds_without_a_warning
   ✓ control::test_pattern_unit_name::a_dollar_name_is_a_call_argument
   ✓ control::test_pattern_unit_name::a_list_item_named_like_a_unit_binds
@@ -3545,6 +3547,7 @@ PASSED:
   ✓ text::test_print_gives_nothing::the_console_shows_no_value_after_a_print
   ✓ text::test_print_juxtaposed::a_text_next_to_values_prints_joined
   ✓ text::test_print_juxtaposed::the_joined_text_is_written
+  ✓ text::test_print_list_shapes::printed_data_lists_keep_their_shape
   ✓ text::test_print_lists::print_of_a_list_gives_nothing
   ✓ text::test_print_lists::print_of_a_list_writes_its_text
   ✓ text::test_print_runtime_number::a_runtime_number_prints
@@ -4678,6 +4681,7 @@ PASSED:
   ✓ web::test_markup_lines::a_line_of_attributes_renders_as_attributes
   ✓ web::test_markup_lines::an_aria_attribute_renders
   ✓ web::test_markup_mistakes::a_class_literal_field_named_like_an_element_is_no_markup
+  ✓ web::test_markup_mistakes::a_custom_element_with_a_dash_renders
   ✓ web::test_markup_mistakes::a_data_map_key_named_like_an_element_is_no_markup
   ✓ web::test_markup_mistakes::a_nested_data_map_is_no_markup
   ✓ web::test_markup_mistakes::an_unknown_attribute_warns
@@ -5149,6 +5153,10 @@ PASSED:
   ✓ welcoming::test_plain_hint_got_it::an_acknowledged_kind_of_hint_stays_away
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_relaxed_pragma::a_relaxed_program_shows_no_hints
+  ✓ welcoming::test_script_pragma::a_script_has_the_scripting_words
+  ✓ welcoming::test_script_pragma::a_script_reads_its_input
+  ✓ welcoming::test_script_pragma::a_script_shows_no_hints
+  ✓ welcoming::test_script_pragma::inline_code_exits_with_its_exit_status
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_without_space_divides
@@ -5279,4 +5287,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5274 passed, 0 failed, 5274 total tested
+13 ignored, 5282 passed, 0 failed, 5282 total tested

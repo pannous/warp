@@ -260,4 +260,4 @@ Picking a card is `todo take <card> <session name>`
 
 Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). 
 Never create a local target/ or *_target dir. 
-Remove worktrees when done.
+Remove worktrees and branches when done!
