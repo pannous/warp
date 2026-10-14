@@ -173,6 +173,24 @@ impl WarpParser {
 		None
 	}
 
+	/// Whether the `(…)` at `offset` separates items with a comma of its own (not one in a nested group or a text)
+	fn holds_top_level_comma(&self, offset: usize) -> bool {
+		let Some(length) = self.parenthesis_length(offset) else { return false };
+		let (mut depth, mut quote) = (0, None);
+		for index in offset..offset + length {
+			match (self.peek_char(index), quote) {
+				(c, Some(open)) if c == open && self.peek_char(index - 1) != '\\' => quote = None,
+				(_, Some(_)) => {}
+				(c @ ('"' | '\''), None) => quote = Some(c),
+				('(' | '[' | '{', None) => depth += 1,
+				(')' | ']' | '}', None) => depth -= 1,
+				(',', None) if depth == 1 => return true,
+				_ => {}
+			}
+		}
+		false
+	}
+
 	/// An infix operator alone as an argument or item, `sorted(xs, >)`, `[+, *]`: the operator as a value `(> ø ø)`, as
 	/// `by: >` gives
 	pub(crate) fn try_parse_operator_value(&mut self) -> Option<Node> {
@@ -220,7 +238,10 @@ impl WarpParser {
 	pub(crate) fn try_parse_user_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Infix])?;
 		let (left_bp, right_bp) = (operator.level, operator.level + 1);
-		if left_bp < min_bp {
+		// `print matches("abd", "a.c$")`: a word glued to `(both, operands)` is its call, as `f(x, y)` is; a right operand
+		// never holds a comma, so `"abc" matches("a.c")` stays infix (card use-regex)
+		let is_glued_call = is_operator_word(&operator.glyph) && self.holds_top_level_comma(operator.glyph.len());
+		if left_bp < min_bp || is_glued_call {
 			return None;
 		}
 		self.advance_by(operator.glyph.len());
