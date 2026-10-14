@@ -702,12 +702,8 @@ impl TaskTable {
 			      arguments: Option<Rooted<AnyRef>>|
 			      -> wasmtime::Result<i64> {
 				let name = c_string(&mut caller, name).map_err(host_error)?;
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 				let unreadable = |failure: anyhow::Error| task_failure(format!("task {}: {failure}", task_name(&name)));
-				let arguments = match builders
-					.read_value(&Val::AnyRef(arguments), &mut caller.as_context_mut())
-					.map_err(unreadable)?
-				{
+				let arguments = match read_in(&mut caller, arguments).map_err(unreadable)? {
 					TaskValue::List(items, _) => items,
 					TaskValue::Empty => vec![],
 					single => vec![single],
@@ -722,11 +718,7 @@ impl TaskTable {
 			TASK_AWAIT_VALUE,
 			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
 				let value = value_awaiter.take(id).map_err(task_failure)?;
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-				let built = builders
-					.build(&value, &mut caller.as_context_mut())
-					.map_err(host_error)?;
-				Ok(built.unwrap_anyref().copied())
+				build_in(&mut caller, &value)
 			},
 		)?;
 		// every await joins first: the raises the task forwarded run here, before its value is read
@@ -746,11 +738,7 @@ impl TaskTable {
 			TASK_FAILURE,
 			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
 				let message = reporter.take(id).err().unwrap_or_default();
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-				let built = builders
-					.build(&TaskValue::Text(message), &mut caller.as_context_mut())
-					.map_err(host_error)?;
-				Ok(built.unwrap_anyref().copied())
+				build_in(&mut caller, &TaskValue::Text(message))
 			},
 		)?;
 		// natively the epoch checks pause a task: a loop start only runs the forwarded raises
@@ -799,10 +787,7 @@ impl TaskTable {
 			      arguments: Option<Rooted<AnyRef>>|
 			      -> wasmtime::Result<i64> {
 				let handler = c_string(&mut caller, handler).map_err(host_error)?;
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-				let arguments = builders
-					.read_value(&Val::AnyRef(arguments), &mut caller.as_context_mut())
-					.map_err(host_error)?;
+				let arguments = read_in(&mut caller, arguments).map_err(host_error)?;
 				sender.signals.lock().expect("task signals").push((handler, arguments));
 				Ok(0)
 			},
@@ -825,10 +810,7 @@ impl TaskTable {
 			HOST_LIBRARY,
 			CHANNEL_PUT,
 			move |mut caller: Caller<'_, HostState>, id: i64, value: Option<Rooted<AnyRef>>| -> wasmtime::Result<()> {
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-				let value = builders
-					.read_value(&Val::AnyRef(value), &mut caller.as_context_mut())
-					.map_err(host_error)?;
+				let value = read_in(&mut caller, value).map_err(host_error)?;
 				let alone = sender.alone_in(&caller);
 				sender.channels.put(id, value, &alone).map_err(task_failure)
 			},
@@ -844,12 +826,7 @@ impl TaskTable {
 					.take(id, &alone)
 					.map_err(task_failure)?
 					.unwrap_or(TaskValue::Empty);
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-				Ok(builders
-					.build(&value, &mut caller.as_context_mut())
-					.map_err(host_error)?
-					.unwrap_anyref()
-					.copied())
+				build_in(&mut caller, &value)
 			},
 		)?;
 		let looper = self.clone();
@@ -1196,6 +1173,20 @@ impl TaskTable {
 		}
 		unread.map_or(Ok(()), Err)
 	}
+}
+
+/// A task value as the calling module's GC value
+fn build_in(caller: &mut Caller<'_, HostState>, value: &TaskValue) -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
+	let built = builders
+		.build(value, &mut caller.as_context_mut())
+		.map_err(host_error)?;
+	Ok(built.unwrap_anyref().copied())
+}
+
+/// The calling module's GC value as a task value
+fn read_in(caller: &mut Caller<'_, HostState>, value: Option<Rooted<AnyRef>>) -> Result<TaskValue> {
+	Builders::of(&mut |export| caller.get_export(export))?.read_value(&Val::AnyRef(value), &mut caller.as_context_mut())
 }
 
 fn host_error(failure: anyhow::Error) -> wasmtime::Error {
