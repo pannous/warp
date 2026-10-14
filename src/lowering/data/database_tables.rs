@@ -1,4 +1,4 @@
-//! Plain classes as database tables (card orm, notes/orm.md step 1): `people: [Person] = database.people` registers the
+//! Plain classes as database tables (card orm, notes/orm.md step 1): `stored people: [Person]` registers the
 //! table people for the class Person. Registering creates the table or migrates it to the class's fields
 //! (`std_io("table", "migrate", …)`); the list loads the rows at its first read (`people·load()`, notes/orm.md
 //! Loading), `people.add(p)` inserts p and gives it its row's id, and a field change
