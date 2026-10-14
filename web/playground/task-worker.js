@@ -14,6 +14,14 @@ self.onmessage = ({ data }) => {
 	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)
 };
 
+// a promise failing without a reason (Firefox's WebGPU, card uncaught-exception-undefined) is said with where it failed,
+// not as the console's bare "uncaught exception: undefined"
+self.addEventListener("unhandledrejection", event => {
+	if (event.reason !== undefined) return;
+	event.preventDefault();
+	console.error("warp task Worker: a browser API failed without saying why", event.promise);
+});
+
 // what a task does for the page goes through the program's Worker (host-tasks.js relayed)
 const relay = (method, ...values) => program.postMessage({ relay: [method, ...values] });
 for (const method of ["playSoundFile", "stopSound", "stopSoundFiles", "fadeSound"]) self[method] = (...values) => relay(method, ...values);
