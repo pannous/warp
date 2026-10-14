@@ -189,7 +189,7 @@ impl Query<'_> {
 		let field = self
 			.field_of_it(left)
 			.filter(|field| self.table.reference(field).is_some())?;
-		if crate::lambdas::mentions(right, crate::words::IMPLICIT_PARAMETER) {
+		if right.mentions(crate::words::IMPLICIT_PARAMETER) {
 			return None;
 		}
 		let id = generated(

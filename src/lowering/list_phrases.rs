@@ -82,7 +82,7 @@ fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
 /// The key of `sort by it.age` as `it => it.age`, of `sort by size` as key names it
 fn sort_key(written: &Node, context: &Context) -> Option<Node> {
 	let it = crate::words::IMPLICIT_PARAMETER;
-	match crate::lambdas::mentions(written, it) {
+	match written.mentions(it) {
 		true => Some(key(symbol(it), Op::Arrow, written.clone())),
 		false => key_function(written, context),
 	}

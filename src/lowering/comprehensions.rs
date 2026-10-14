@@ -326,7 +326,7 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 		return None;
 	};
 	let condition = phrase(rest);
-	if crate::lambdas::mentions(&condition, crate::words::IMPLICIT_PARAMETER) {
+	if condition.mentions(crate::words::IMPLICIT_PARAMETER) {
 		return None;
 	}
 	let condition = substitute(condition, name, &symbol(crate::words::IMPLICIT_PARAMETER));
@@ -342,7 +342,7 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 
 /// `[it, (for it in xs if), condition]`, as the parser groups a comprehension
 fn where_comprehension(subject: &Node, condition: &Node) -> Node {
-	if !crate::lambdas::mentions(condition, crate::words::IMPLICIT_PARAMETER) {
+	if !condition.mentions(crate::words::IMPLICIT_PARAMETER) {
 		let subject = subject.serialize();
 		let field_hint = field_condition(condition)
 			.map(|(field, written)| format!(", or {subject} where {written} for a field {field} of each element"))

@@ -268,15 +268,6 @@ fn dangling_operator(node: &Node) -> Option<(Node, Node)> {
 	Some((operand.as_ref().clone(), operator_symbol(*op)?))
 }
 
-pub(crate) fn mentions(node: &Node, name: &str) -> bool {
-	match node.drop_meta() {
-		Node::Symbol(symbol) => symbol == name,
-		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),
-		Node::List(items, _, _) => items.iter().any(|item| mentions(item, name)),
-		_ => false,
-	}
-}
-
 /// `a-b` in the body of `(a b)->a-b` reads as one hyphenated name: it is the difference when its parts are parameters
 fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 	match node {
@@ -474,7 +465,7 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 		many if *separator == Separator::Space => Node::List(many.to_vec(), Bracket::None, Separator::Space),
 		many => Node::List(many.to_vec(), Bracket::Round, separator.clone()),
 	};
-	let params = if mentions(&body, IMPLICIT_PARAMETER) {
+	let params = if body.mentions(IMPLICIT_PARAMETER) {
 		vec![IMPLICIT_PARAMETER.to_string()]
 	} else {
 		shorthand_parameters(&body)
@@ -564,7 +555,7 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	};
 	params
 		.iter()
-		.any(|param| mentions(&body, param))
+		.any(|param| body.mentions(param))
 		.then(|| Lambda::new(params, body))
 }
 

@@ -187,7 +187,7 @@ pub(crate) fn declared_nonlocals(body: &Node) -> Vec<String> {
 }
 
 /// `nonlocal y` → [y]; `nonlocal a, b` → [a, b]; any other node → []
-fn nonlocal_names(node: &Node) -> Vec<String> {
+pub(crate) fn nonlocal_names(node: &Node) -> Vec<String> {
 	let Node::Key(keyword, Op::Colon, names) = node.drop_meta() else {
 		return vec![];
 	};
