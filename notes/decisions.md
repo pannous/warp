@@ -29,7 +29,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   80 % passing (failures marked cleanup-edge as above, so they stay countable); samples and the tour should still run.
 - error-type (2026-10-14): no ugly Rust types. A function that can fail has the sound type `T or error` (warp's
   union spelling, as in `as int or text`), shown and written like that, never as Result; not hidden as plain `T`
-  ("`T or error` is not that ugly, keep it as a sound type"). Only the WIT export bytes carry a `result` for Rust callers. Where a caller can take it, the Error value propagates instead of
+  ("`T or error` is not that ugly, keep it as a sound type"). Only the WIT export bytes carry a `result` for Rust callers.
+  error-optional (2026-10-14, "YES!!!"): `T?` means T, nothing (ø) or an error; `T or error` stays the precise
+  spelling. Rules: writing an Error into a field or list element raises ("a field holds no error: handle it or declare
+  `or error`"), so data stays clean while results, locals and arguments carry it; `x is ø` is missing only, `x failed`
+  failed only, `if no x` and `x or 0` cover both; at a WIT export a function that can fail gives `result`, one that
+  only gives ø an `option`, one doing both `result<option<T>>`; `effects of f` tells which. Where a caller can take it, the Error value propagates instead of
   being raised (card error-gaps, wiki/Error.md "Not yet").
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
