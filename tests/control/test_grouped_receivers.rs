@@ -12,3 +12,9 @@ fn a_grouped_receiver_reads_its_field() {
 fn a_grouped_text_without_the_field_names_it() {
 	fails_with("for t in [\"a\" \"b\"]: print (t).dump", "no field dump");
 }
+
+#[test]
+fn a_call_without_arguments_stays_a_call() {
+	is!("f() := {a:1 b:2}; f().b", 2);
+	is!("use time\ntoday().year > 2025", true);
+}
