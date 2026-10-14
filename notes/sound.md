@@ -59,11 +59,13 @@ exact-decimal list decision (warp-numbers) lands.
 formats 0 and 1, running status, tempo changes) of notes `[start s, pitch, length s, velocity]`; they cross to the host as
 flat whole numbers `[start ms, key, length ms, velocity …]` (src/sound/midi.rs natively, host-files.js midiFileOf / midiNotesOf in
 the browser, the same codec twice). `midi_on(pitch, velocity = 100, channel = 1)`, `midi_off`, `midi_send(status, d1, d2, port)`.
-Natively a message goes to `sendmidi` (brew install gbevin/tools/sendmidi; missing → a loud error naming it), headless only
-`midi out <port>: 90 3c 64` on stderr. Browser: Web MIDI on the page (playground.js sendMidi, first output or by name,
-failures to the console). Open, each failing loudly today (card midi-receive): `midi_receive()` (no CoreMIDI binding natively: needs the midir
-crate or libloading CoreMIDI; in the browser the page's input would have to be handed to the Worker), `midi_outputs()` in the
-browser (a Worker cannot wait for the page's device list), 
+Natively messages go through midir (CoreMIDI, ALSA, WinMM; card midi-receive): an output or input is opened by name
+(exactly, else the first containing it; "" the first device) and kept open for the run; headless only
+`midi out <port>: 90 3c 64` on stderr. `midi_inputs()`, `midi_outputs()` list the devices (ø without any).
+`midi_receive(port = "", seconds = 0)` gives the next message [status, data1, data2], waiting for it (seconds > 0: at
+most that long, then ø); messages between two calls queue up. tests/programs/test_midi.rs plays a CoreMIDI virtual
+source into a program (macOS). Browser: Web MIDI on the page (playground.js sendMidi, first output or by name, failures
+to the console); `midi_receive`, `midi_inputs`, `midi_outputs` fail loudly there (a Worker cannot wait for the page).
 Clock-timed built (card midi-clock): a message goes out at its voice's moment (sound.rs moment / on_clock): after the
 sounds queued before it, at an `at`'s time, in a task on its own voice; natively a thread sleeping until then (wait_sound
 and the process's end wait for it, stop_sound drops it), headless the line names the place (`midi out : 90 40 64 at 0.500 s`),

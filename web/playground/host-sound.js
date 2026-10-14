@@ -287,6 +287,7 @@ addHostPart({
 				return null;
 			},
 			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
+			inputs: () => { throw new Error("midi.inputs: the playground's page owns the MIDI devices and a program cannot wait for their list"); },
 			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
 		},
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
