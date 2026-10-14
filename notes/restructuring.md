@@ -133,6 +133,12 @@ added here then).
 Owned by open branches (warp-operator-shall: the big lowering files; warp-cleanup: type-name-params, orm): checked
 with the owner before each folder move.
 
+Status (branches layout-lowering-signals … -control, 2026-10-14): all folders exist. Each folder mod.rs does
+`use super::*`, so moved files kept every `super::x` path unchanged. Still flat until their open branches land:
+blocks (tree-patterns-step7), declarations and type_name_matching (cleanup-drop-type-name-params, warp-cleanup's
+park-phrases), plain_enums (enum-coin), welcome_forms (foreign-spellings), library_words, and the park-phrases files
+phrase_calls, list_phrases, word_slices, music_words, of_lookups.
+
 ## Analyzer (`src/analyzer/`, 10 files)
 
 Small and already by concept (booleans, counting, imports, inference, list_views, upcast_fields, user_functions/,
