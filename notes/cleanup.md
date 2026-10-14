@@ -472,7 +472,7 @@ signal family are warp-list-pattern's and left out. Samples = files in samples/,
 | nonlocal cells (nonlocal_cells) | `nonlocal y` | 281 | 0 | 0 | 4 | closures already capture |
 | named patterns + definitions by cases (named_patterns, definition_cases) | `pattern Pair = [_, _]`; `fib(0) := 0; fib(n) := …` | 405 | 0 | 0 | 1 | match arms and guards |
 | object-shaped parameters (parameter_shapes) | `f(p{name, title?}) := …` | 230 | 0 | 0 | 1 | named arguments |
-| ruby blocks (ruby_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
+| ruby blocks (blocks.rs lower_trailing_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
 | version literals (versions) | `v1.2.3`, `version 1.2.3` | 210 | 0 | 0 | 4 | texts `"1.2.3"` compared by parts |
 
 Well used (no cut proposed): library words 1909, tasks 1473, broadcasting 1199, blocks 955, switch/match 882, late

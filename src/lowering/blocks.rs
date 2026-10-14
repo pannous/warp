@@ -12,7 +12,7 @@
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{call, children_rewritten, is_block, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -953,5 +953,114 @@ impl Blocks {
 			),
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
+	}
+}
+
+/// A block after a call that leaves a parameter of the function without its value is that argument (Kotlin's and
+/// Swift's trailing closure, Ruby's block): `Card("Hi") { p:"text" }`, `apply(3) { |x| x*2 }`, `twice(3) do |x| … end`.
+/// Ruby's `yield a, b` in a function is `block(a, b)` of its extra last parameter `block` (card functions-ruby-yield).
+pub fn lower_trailing_blocks(program: Node) -> Node {
+	let program = with_yield_parameters(program);
+	let mut parameter_counts = HashMap::new();
+	program.visit(&mut |node| parameter_counts.extend(parameter_count(node)));
+	match parameter_counts.is_empty() {
+		true => program,
+		false => with_trailing_blocks(program, &parameter_counts),
+	}
+}
+
+const YIELD_WORD: &str = "yield";
+
+pub(crate) fn contains_yield(body: &Node) -> bool {
+	let mut found = false;
+	body.visit(&mut |part| found |= part.is_symbol(YIELD_WORD));
+	found
+}
+
+fn with_yield_parameters(node: Node) -> Node {
+	if let Node::Key(head, Op::Define, body) = node.drop_meta() {
+		if let Node::List(items, Bracket::Round, separator) = head.drop_meta() {
+			if contains_yield(body) && items.first().is_some_and(|name| name.symbol_name().is_some()) {
+				let head = Node::List([&items[..], &[symbol(BLOCK_WORDS[1])]].concat(), Bracket::Round, separator.clone());
+				return key(head, Op::Define, yields_as_calls(body.as_ref().clone()));
+			}
+		}
+	}
+	node.map_children(with_yield_parameters)
+}
+
+/// `yield`, `yield v` or `yield a, b`: the values yielded
+fn yielded(node: &Node) -> Option<Vec<Node>> {
+	match node.drop_meta() {
+		_ if node.is_symbol(YIELD_WORD) => Some(vec![]),
+		Node::List(items, _, Separator::Space | Separator::None) if items.first()?.is_symbol(YIELD_WORD) => {
+			Some(items[1..].to_vec())
+		}
+		Node::List(items, _, Separator::Colon) => Some([yielded(items.first()?)?, items[1..].to_vec()].concat()),
+		_ => None,
+	}
+}
+
+fn yields_as_calls(node: Node) -> Node {
+	match yielded(&node) {
+		Some(values) => call(BLOCK_WORDS[1], values.into_iter().map(yields_as_calls).collect()),
+		None => node.map_children(yields_as_calls),
+	}
+}
+
+/// `f(a, b) := body`: the name and the number of parameters
+fn parameter_count(node: &Node) -> Option<(String, usize)> {
+	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else {
+		return None;
+	};
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
+	let name = items.first()?.drop_meta().symbol_name()?;
+	(items.len() > 1).then(|| (name.to_string(), items.len() - 1))
+}
+
+fn with_trailing_blocks(node: Node, parameter_counts: &HashMap<String, usize>) -> Node {
+	let node = trailing_block_call(&node, parameter_counts).unwrap_or(node);
+	node.map_children(|child| with_trailing_blocks(child, parameter_counts))
+}
+
+/// `f {…}`, `f(a) {…}`, `f(a) do … end`, `f a do … end`: the call with the block as its last argument
+fn trailing_block_call(node: &Node, parameter_counts: &HashMap<String, usize>) -> Option<Node> {
+	let (callee, more_arguments, block) = match node.drop_meta() {
+		Node::List(items, _, Separator::Space | Separator::None) if items.len() == 2 && is_block(&items[1]) => {
+			(&items[0], vec![], &items[1])
+		}
+		Node::Key(callee, Op::Do, block) if is_block(block) => (callee.as_ref(), vec![], block.as_ref()),
+		Node::List(items, _, Separator::Space) if items.len() == 2 => match items[1].drop_meta() {
+			Node::Key(argument, Op::Do, block) if is_block(block) => (&items[0], grouped_arguments(argument), block.as_ref()),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let (name, mut arguments) = call_parts(callee, parameter_counts)?;
+	arguments.extend(more_arguments);
+	(arguments.len() < parameter_counts[&name]).then(|| {
+		arguments.push(block.clone());
+		call(&name, arguments)
+	})
+}
+
+/// `f`, `f(a)` or `f a`: the function and its arguments
+fn call_parts(node: &Node, parameter_counts: &HashMap<String, usize>) -> Option<(String, Vec<Node>)> {
+	let (name, arguments) = match node.drop_meta() {
+		Node::List(items, Bracket::Round | Bracket::None, _) => items.split_first()?,
+		single => (single, &[][..]),
+	};
+	let name = name.drop_meta().symbol_name().filter(|name| parameter_counts.contains_key(*name))?;
+	Some((name.to_string(), arguments.iter().flat_map(grouped_arguments).collect()))
+}
+
+/// `(3)` and `(a, b)` hold the arguments
+fn grouped_arguments(node: &Node) -> Vec<Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, Separator::Colon) => items.clone(),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => items.clone(),
+		_ => vec![node.clone()],
 	}
 }

@@ -501,7 +501,7 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::declarations::lower_spaced_definitions,
 	crate::lowering::number_words::lower,
 	crate::lowering::parameter_shapes::lower,
-	crate::lowering::ruby_blocks::lower,
+	crate::lowering::blocks::lower_trailing_blocks,
 	crate::lowering::declarations::lower_sized_arrays,
 	crate::lowering::result_word::lower,
 	crate::lowering::picked_calls::lower,
