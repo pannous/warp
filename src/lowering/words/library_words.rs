@@ -23,6 +23,13 @@ mod objects;
 pub(crate) use objects::*;
 mod counts;
 pub use counts::*;
+mod function_methods;
+pub use function_methods::*;
+mod guards;
+mod similarity;
+pub use similarity::*;
+mod templates;
+pub(crate) use templates::*;
 
 /// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
 /// JavaScript's spellings too) and `m.get(k)`/`m.get(k, default)`. A key is found by its letters, quoted or not.
@@ -204,37 +211,11 @@ const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
 const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
 	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
 const IS_ALPHA: &str = "is_alpha";
-/// Hidden variables and placeholders of the `try`/`assert` templates
-/// `try_tmp_value` of a try template becomes the temporary `try·value·3`
-const TRY_TEMPORARY: &str = "try_tmp_";
-const TRY_BASE: &str = "try";
-const TRY_VALUE_PLACEHOLDER: &str = "try_placeholder_value";
-const TRY_FALLBACK_PLACEHOLDER: &str = "try_placeholder_fallback";
-const LIST_PLACEHOLDER: &str = "try_placeholder_list";
-const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
-const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
-const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
-const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand";
 /// The variable holding a list while one of its elements changes: `place·0`
 const PLACE_TEMPORARY: &str = "place·";
-/// values_similar(a, b, tolerance): `a ≈ b` (wasm_emitter/similarity.rs)
-pub const VALUES_SIMILAR: &str = "values_similar";
-/// values_rough(a, b, tolerance): `a ~ b`, looser (P211)
-pub const VALUES_ROUGH: &str = "values_rough";
-/// Per level of approximation: its operator, its call, the variable a program sets its relative tolerance with
-/// (|a-b| ≤ tolerance·max(|a|, |b|)) and the default tolerance
-/// values_similar or values_rough
-pub fn is_similarity_call(name: &str) -> bool {
-	SIMILARITY_LEVELS.iter().any(|(_, function, ..)| *function == name)
-}
-
-pub const SIMILARITY_LEVELS: [(Op, &str, &str, &str); 2] = [
-	(Op::Similar, VALUES_SIMILAR, "tolerance", "1e-9"),
-	(Op::Rough, VALUES_ROUGH, "rough_tolerance", "0.01"),
-];
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "hidden_value";
@@ -425,116 +406,6 @@ fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 		_ => call(crate::wasm_emitter::text::text_builtins::TEXT_FORM, vec![message]),
 	};
 	Some(call(crate::wasm_emitter::text::text_builtins::RAISE, vec![message]))
-}
-
-/// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding, extremum,
-/// text or libm function the program does not define. Runs first, so the passes that know these calls see their plain form; user
-/// functions are called so later, in `method_call`
-pub fn lower_function_methods(node: Node) -> Node {
-	let context = crate::analyzer::function_definitions(&node);
-	let arities: HashMap<String, usize> = context
-		.user_functions
-		.iter()
-		.map(|(name, function)| (name.clone(), function.params.len()))
-		.collect();
-	let mut defined: HashSet<String> = arities.keys().cloned().collect();
-	crate::type_tests::collect_outer_assigned_names(&node, &mut defined);
-	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
-	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
-	let is_builtin = |name: &str, arguments: usize| {
-		let is_text_builtin =
-			crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, arguments + 1).is_some();
-		crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
-			|| crate::min_max::is_extremum(name)
-			|| is_text_builtin
-			|| is_libm(name)
-	};
-	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
-	// are made (function_values.rs), which would otherwise see map(square)
-	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
-	let node = list_constructor_calls(node, &defined);
-	function_methods_as_calls(node, &defined, &|name, arguments, defined| {
-		(is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments)
-	})
-}
-
-/// A function definition rewritten in its own scope: the names its body assigns join the defined ones there only
-fn in_function_scope(
-	node: &Node,
-	defined: &HashSet<String>,
-	rewrite: impl Fn(Node, &HashSet<String>) -> Node,
-) -> Option<Node> {
-	let (head, body, rebuild) = crate::type_tests::function_definition(node)?;
-	let mut locals = defined.clone();
-	collect_assigned_names(&body, &mut locals);
-	Some(rebuild(head, rewrite(body, &locals)))
-}
-
-/// Python's `list()`: the empty list, as `[]` parses; Kotlin's `listOf(1, 2)`, `arrayOf`, `mutableListOf`: the list
-/// `[1, 2]` (`listOf()` is `[]` too); a word the program defines keeps its call
-fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
-	if let Some(scoped) = in_function_scope(&node, defined, list_constructor_calls) {
-		return scoped;
-	}
-	let is_constructor = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if (name == LIST_WORD || LIST_CONSTRUCTORS.contains(&name.as_str())) && !defined.contains(name));
-	match node {
-		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(is_constructor) => {
-			let elements: Vec<Node> = match &items[1..] {
-				[Node::List(arguments, Bracket::Round, _)] => arguments.clone(),
-				arguments => arguments.to_vec(),
-			};
-			let is_list_word = items[0].is_symbol(LIST_WORD);
-			match elements.is_empty() {
-				true => Node::Empty,
-				false if is_list_word => Node::List(
-					items
-						.into_iter()
-						.map(|item| list_constructor_calls(item, defined))
-						.collect(),
-					Bracket::Round,
-					Separator::None,
-				), // `list(x)` is `x as list`
-				false => Node::List(
-					elements
-						.into_iter()
-						.map(|element| list_constructor_calls(element, defined))
-						.collect(),
-					Bracket::Square,
-					Separator::Colon,
-				),
-			}
-		}
-		other => other.map_children(|child| list_constructor_calls(child, defined)),
-	}
-}
-
-fn function_methods_as_calls(
-	node: Node,
-	defined: &HashSet<String>,
-	is_function: &dyn Fn(&str, usize, &HashSet<String>) -> bool,
-) -> Node {
-	if let Some(scoped) = in_function_scope(&node, defined, |body, locals| {
-		function_methods_as_calls(body, locals, is_function)
-	}) {
-		return scoped;
-	}
-	let lowered = |node: Node| function_methods_as_calls(node, defined, is_function);
-	match node {
-		Node::Key(receiver, Op::Dot, method) => {
-			let (receiver, method) = (lowered(*receiver), lowered(*method));
-			match method.drop_meta() {
-				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
-					Node::List(
-						[vec![items[0].clone(), receiver], items[1..].to_vec()].concat(),
-						Bracket::Round,
-						Separator::None,
-					)
-				}
-				_ => key(receiver, Op::Dot, method),
-			}
-		}
-		other => children_rewritten(other, lowered),
-	}
 }
 
 /// The field and step of `x++` / `x--` after a dot
@@ -732,19 +603,6 @@ impl Lowering {
 
 	fn is_parameter(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::Symbol(name) if self.parameters.borrow().contains(name))
-	}
-
-	/// `a ≈ b`, `a ~ b`, `a circa b`: compared within the relative tolerance; a side that is more than a plain value or
-	/// arithmetic is computed once into a temporary
-	/// `a ≈ b`: the emitter's values_similar(a, b, tolerance), numbers inline, any other values field by field
-	fn lower_similar(&self, op: Op, left: Node, right: Node) -> Node {
-		let (_, function, variable, default) = SIMILARITY_LEVELS
-			.iter()
-			.find(|(level, ..)| *level == op)
-			.expect("a similarity operator");
-		let tolerance = if self.shadows(variable) { variable } else { default };
-		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
-		Node::List(call, Bracket::Round, Separator::None)
 	}
 
 	/// `a ?? b`: a unless it is ø, then b (a is computed once)
@@ -1203,85 +1061,6 @@ impl Lowering {
 		[kept.to_vec(), vec![phrase]].concat()
 	}
 
-	/// A source template with `hidden` variables made unique, its placeholders replaced by the given nodes
-	fn instantiate_template(&self, template: &str, replacements: &[(&str, &Node)]) -> Node {
-		let mut program = named_apart(parse(template), TRY_TEMPORARY, TRY_BASE, self.next_temporary());
-		for (placeholder, replacement) in replacements {
-			program = substitute(program, placeholder, replacement);
-		}
-		program
-	}
-
-	/// A list or text written in place (`[1 2]#3`, `"ab"#5`): `count` of it cannot fail
-	fn is_known_list(&self, list: &Node) -> bool {
-		matches!(list.drop_meta(), Node::List(_, Bracket::Square, _) | Node::Text(_))
-	}
-
-	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
-	/// division or modulo by zero directly under `try` are checked before they happen; a runtime error deeper inside X
-	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/try_guard.rs).
-	fn lower_try(&self, guarded: Node, fallback: Node) -> Node {
-		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
-		match guarded.drop_meta() {
-			Node::Key(target, Op::Assign, assigned) if matches!(target.drop_meta(), Node::Symbol(_)) => {
-				Node::Key(target.clone(), Op::Assign, Box::new(self.lower_try(assigned.as_ref().clone(), fallback)))
-			}
-			// a list written in place: the index is checked before it happens; any other value
-			// may be no list at all (`n#1`, `xs#2#1`), which the exception path catches as not_a_list
-			Node::Key(list, Op::Hash, index) if !matches!(list.drop_meta(), Node::Empty) && self.is_known_list(list) => self.instantiate_template(
-				&format!("(try_tmp_list={LIST_PLACEHOLDER}; try_tmp_index={INDEX_PLACEHOLDER}; if try_tmp_index >= 1 and try_tmp_index <= count(try_tmp_list) {{try_tmp_list#try_tmp_index}} else {{{fallback_placeholder}}})"),
-				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
-			),
-			// the divisor checked first; any other error of the division (a text divided) is caught as below
-			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.instantiate_template(
-				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{\
-					try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}}); \
-					if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}}}})"),
-				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
-			),
-			_ => self.instantiate_template(
-				// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
-				&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}})"),
-				&[(value, &guarded), (fallback_placeholder, &fallback)],
-			),
-		}
-	}
-
-	/// `try X catch e { Y }`: Y runs with e the caught Error: the Error X gave back, else the runtime error it raised
-	/// (caught_error, try_guard.rs)
-	fn lower_try_binding(&self, guarded: Node, fallback: Node, binding: &Node) -> Node {
-		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
-		self.instantiate_template(
-			&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{\
-				{CAUGHT_BINDING_PLACEHOLDER} = {CAUGHT_ERROR}(try_tmp_finished, try_tmp_value); {fallback_placeholder}}})"),
-			&[(value, &guarded), (fallback_placeholder, &fallback), (CAUGHT_BINDING_PLACEHOLDER, binding)],
-		)
-	}
-
-	/// `assert C else X` is 1 when C holds and throws X otherwise, also mid-program (`check C`, card check-assert); without
-	/// a message the error says the assertion failed
-	fn lower_assert(&self, condition: Node, message: Node) -> Node {
-		let message = match message.drop_meta() {
-			Node::Empty => Node::Text(format!(
-				"{}: {}",
-				crate::warp_parser::ASSERTION_FAILED,
-				condition.serialize()
-			)),
-			_ => message,
-		};
-		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;
-		self.instantiate_template(
-			&format!(
-				"(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})",
-				crate::wasm_emitter::text::text_builtins::RAISE
-			),
-			&[
-				(condition_placeholder, &condition),
-				(TRY_FALLBACK_PLACEHOLDER, &message),
-			],
-		)
-	}
-
 	/// The template of an expanded word with the receiver (held once in a temporary) and the further arguments in place
 	fn expanded(&self, template: &str, arguments: Vec<Node>) -> Node {
 		let program = named_apart(
@@ -1336,29 +1115,6 @@ fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
 			data,
 		},
 		operand => replace(operand),
-	}
-}
-
-/// A compiler temporary's name, `word·sum·3`: the program never writes `·` in a name (`a·b` is a product), so the
-/// scope checks pass it by (analyzer::is_compiler_temporary)
-pub(crate) fn temporary_name(parts: &[&str]) -> String {
-	parts.join(crate::analyzer::TEMPORARY_SEPARATOR)
-}
-
-/// A parsed template's temporaries named apart: `prefix_part` becomes `base·part·number`
-pub(crate) fn named_apart(node: Node, prefix: &str, base: &str, number: usize) -> Node {
-	match node {
-		Node::Symbol(name) if name.starts_with(prefix) => {
-			Node::Symbol(temporary_name(&[base, &name[prefix.len()..], &number.to_string()]))
-		}
-		other => other.map_children(|child| named_apart(child, prefix, base, number)),
-	}
-}
-
-pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {
-	match node {
-		Node::Symbol(name) if name == placeholder => replacement.clone(),
-		other => children_rewritten(other, |child| substitute(child, placeholder, replacement)),
 	}
 }
 
