@@ -1,9 +1,11 @@
 #!/bin/zsh
 # Removes finished agent worktrees from warp.worktrees.noindex and the branches merged into origin/main, which nobody
 # else removes (54 worktrees, 56 local and 39 remote branches on 2026-10-14). Nothing unmerged is touched:
-#   1. a worktree on a branch whose HEAD origin/main holds, idle for IDLE_HOURS, whose only uncommitted changes are the
-#      Cargo version tweak (TWEAK_FILES) and with no untracked files: removed with its branch
-#   2. local and remote branches origin/main holds, with no worktree checked out and a tip older than IDLE_HOURS
+#   1. a worktree on a branch whose HEAD origin/main holds (also as equal patches after a rebase or squash), idle for
+#      IDLE_HOURS, whose only uncommitted changes are the Cargo version tweak (TWEAK_FILES) and with no untracked
+#      files: removed with its branch
+#   2. local and remote branches origin/main holds the same way, with no worktree checked out and a tip older than
+#      IDLE_HOURS
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
 # Detached worktrees (integrate, main-binary …) are never touched. Worktrees skipped for untracked files are listed.
 #   prune-worktrees.sh            prune, print what it did
@@ -25,7 +27,9 @@ act() {  # print the action, run it unless dry run
   [[ -n $dry_run ]] || "$@" >/dev/null 2>&1 || echo "  failed: $*"
 }
 
-merged() { $git merge-base --is-ancestor $1 origin/main 2>/dev/null }
+merged() {  # origin/main holds the commit or, after a rebase or squash merge, an equal patch of each commit
+  $git merge-base --is-ancestor $1 origin/main 2>/dev/null || ! $git cherry origin/main $1 | grep -q '^+'
+}
 
 recently_written() {  # any file in the worktree written within IDLE_HOURS
   [[ -n $(/usr/bin/find $1 -path $1/.git -prune -o -type f -mmin -$(( IDLE_HOURS * 60 )) -print -quit) ]]
