@@ -71,6 +71,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   goes: an error with the fix `now > 18h`.
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
+- chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
+  printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes.
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - float-as-rational (2026-10-14): `x as rational` / `rational(x)` of a float is the exact fraction of its shortest
