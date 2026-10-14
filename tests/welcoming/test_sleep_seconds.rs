@@ -1,7 +1,7 @@
 // decision sleep-seconds: a bare number of sleep counts seconds, as in sh and Python, with the warning that asks for the
 // unit; `use relaxed` takes it silently
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 #[test]
