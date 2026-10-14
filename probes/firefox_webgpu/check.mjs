@@ -1,6 +1,7 @@
 (async () => {
 	const describe = async () => {
-		const out = { gpu: !!self.navigator.gpu, steps: [] };
+		const out = { steps: [] };
+		try { out.gpu = !!self.navigator.gpu; } catch (failure) { out.gpu = `THREW ${failure} ${failure?.stack}`; return out; }
 		const thrown = value => value === undefined ? "undefined" : value === null ? "null" : `${value?.constructor?.name}: ${value?.message ?? value}`;
 		const step = async (name, run) => {
 			try {
@@ -44,7 +45,9 @@
 		}
 		return out;
 	};
-	const page = await describe();
+	const where = [];
+	let page;
+	try { where.push("page"); page = await describe(); } catch (failure) { return `page THREW ${failure} ${failure?.stack} after ${where}`; }
 	const source = `const describe = ${describe}; describe().then(r => postMessage(r), e => postMessage({ workerError: String(e) }));`;
 	const worker = new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
 	const inWorker = await new Promise(done => { worker.onmessage = m => done(m.data); worker.onerror = e => done({ onerror: e.message }); setTimeout(() => done({ timeout: true }), 20000); });
