@@ -17,8 +17,8 @@ pub fn lower_dispatch(node: Node) -> Node {
 		return node;
 	}
 	let witnesses = defined_functions(&node);
-	let signatures = instance_signatures(&node, &types.registry);
 	let traits = Traits::of(&node);
+	let signatures = instance_signatures(&node, &types.registry, &traits);
 	let enums = crate::lowering::sum_variants::sum_types(&node)
 		.into_iter()
 		.filter(|(_, variants)| variants.is_plain())
@@ -136,7 +136,7 @@ pub(super) struct Dispatch {
 	traits: Traits,
 	types: InstanceTypes,
 	witnesses: Vec<String>,
-	/// Per function, its parameters and the declared type each one takes (`p:photo`), if any
+	/// Per function, its parameters and the declared type each one takes (`p:photo`, `xs: Comparable list`), if any
 	signatures: HashMap<String, Vec<(String, Option<String>)>>,
 	/// The plain enums, `enum Coin { Penny, Dime }`: an int becomes one of their cases explicitly, `1 as Coin`
 	enums: std::collections::HashSet<String>,
@@ -316,6 +316,23 @@ impl Dispatch {
 	/// `like`; written data (`pic{…}` of no declared pic, `{…}`) is used without its ad hoc name, with a warning for each
 	/// field it lacks or has extra; a known non-object is an error; anything else is judged by its uses
 	pub(super) fn admit(&self, value: &Node, declared: &str, needs: &str) -> Result<Node, Node> {
+		// `smallest([dot(1)])` of `smallest(xs: Comparable list)`: each operation of the trait needs its witness
+		if let Some(required) = self.traits.element_trait(declared) {
+			return match self.types.shape(value) {
+				Some(Shape::ListOf(type_name))
+					if let Some(operation) = self.traits.missing(required, &type_name, &self.witnesses) =>
+				{
+					Err(missing_conformance(
+						value,
+						&type_name,
+						required,
+						operation,
+						&value.serialize(),
+					))
+				}
+				_ => Ok(value.clone()),
+			};
+		}
 		let got = format!("{needs}, got {}", value.serialize());
 		let parts = class_parts(declared);
 		if let Some(type_name) = self.instance_type(value) {

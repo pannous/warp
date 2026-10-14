@@ -333,9 +333,10 @@ Left (each changes behaviour or needs care):
 - (cleanup-traits-alias, 2026-10-14) Of src/lowering/traits* (2572 lines) only about 700 are trait code; the rest is
   class dispatch (generics.rs multiple dispatch, dispatch.rs `<`/`==`/sort on instances, instance_types.rs static
   shapes, likeness.rs `like`, op·T witnesses that class methods and overloads use too; notes on card
-  methods-as-dispatch). Cut: foreign method signatures in trait bodies, the element check of `xs: Comparable list`
-  (−126, 3 cleanup-edge ignores). Kept on purpose: free-function default methods (a mixin rewrite saves ~40 lines and
-  loses them), checked `implements` claims (loud), trait-typed parameters, WIT members (samples/wasm_interop.warp).
+  methods-as-dispatch). The element check of `xs: Comparable list` is now Dispatch::admit's (a trait list is a
+  declared parameter type like a class), dropping trait_constraints / unmet_constraint (−33). Foreign signatures and
+  the element check stay (interviewer: rust-forms-welcome, list element checks kept). A mixin rewrite of traits saves
+  ~40 lines and loses free-function default methods.
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
 - (cleanup-big-files) class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs
