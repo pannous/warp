@@ -1,0 +1,29 @@
+# Probe (card shaders-firefox, branch shaders only, not merged): Firefox's WebGPU on the runner, with and without the
+# worker preference, then the shader examples of the live playground
+name: Probe Firefox WebGPU
+on:
+  push:
+    branches: [ shaders ]
+    paths: [ ".github/workflows/probe-firefox-webgpu.yml", "probes/firefox_webgpu/**" ]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        prefs:
+          - "{}"
+          - "{'dom.webgpu.enabled': true, 'gfx.webgpu.ignore-blocklist': true}"
+          - "{'dom.webgpu.enabled': true, 'gfx.webgpu.ignore-blocklist': true, 'dom.webgpu.workers.enabled': true}"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Software Vulkan (lavapipe)
+      run: sudo apt-get update -q && sudo apt-get install -y -q mesa-vulkan-drivers && firefox --version
+    - name: WebGPU on the page and in a Worker
+      env:
+        FIREFOX_PREFS: ${{ matrix.prefs }}
+      run: probes/firefox_webgpu/check.sh
+    - name: The shader examples of the live playground
+      env:
+        FIREFOX_PREFS: ${{ matrix.prefs }}
+      run: python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/ shader "shader mouse" samples/shader samples/shader_brush samples/shader_trails samples/gpu_visualizer samples/webgpu "(a WGSL error at its place in the program)" "(a shader reads its previous frame)" || true
