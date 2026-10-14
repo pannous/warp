@@ -283,18 +283,7 @@ pub(super) fn gpu_render(
 	let pixels: Vec<u32> =
 		crate::graphics::gpu::opaque_colors(&rendered(&mut caller, &shader, width, height, values, &failure)?)
 			.collect();
-	if let Some(list) = list_of_ints(&mut caller, &pixels)? {
-		return Ok(list);
-	}
-	let pixels = pixels
-		.into_iter()
-		.map(|pixel| Node::Number(Number::Int(i64::from(pixel))))
-		.collect();
-	built_in_program(
-		&mut caller,
-		&Node::List(pixels, crate::node::Bracket::Square, crate::node::Separator::Space),
-		GPU_RENDER,
-	)
+	list_of_ints(&mut caller, &pixels, GPU_RENDER)
 }
 
 /// `text_coverage(words, size)` through a system font (src/graphics/text_raster.rs): [width, height, coverage row by row]
@@ -309,18 +298,7 @@ pub(super) fn text_coverage(
 	};
 	let covered = crate::graphics::text_raster::coverage(&words, size as f32)
 		.map_err(|problem| task_failure(format!("{TEXT_COVERAGE}: {problem}")))?;
-	if let Some(list) = list_of_ints(&mut caller, &covered)? {
-		return Ok(list);
-	}
-	let ints = covered
-		.into_iter()
-		.map(|int| Node::Number(Number::Int(i64::from(int))))
-		.collect();
-	built_in_program(
-		&mut caller,
-		&Node::List(ints, crate::node::Bracket::Square, crate::node::Separator::Space),
-		TEXT_COVERAGE,
-	)
+	list_of_ints(&mut caller, &covered, TEXT_COVERAGE)
 }
 
 /// The pixels the fragment shader colors through wgpu (src/graphics/gpu.rs), 0xFFRRGGBB row by row
@@ -354,23 +332,29 @@ pub(super) fn shader_request(
 	Ok((side(width)?, side(height)?, values))
 }
 
-/// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none
-pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32]) -> wasmtime::Result<Option<HostNode>> {
+/// The ints as a list, built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs) when it has one,
+/// else node by node
+pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32], word: &str) -> wasmtime::Result<HostNode> {
 	use crate::wasm_emitter::lists::int_lists::INTS_TO_LIST;
-	let (Some(Extern::Func(ints_to_list)), Some(Extern::Memory(memory))) =
+	if let (Some(Extern::Func(ints_to_list)), Some(Extern::Memory(memory))) =
 		(caller.get_export(INTS_TO_LIST), caller.get_export("memory"))
-	else {
-		return Ok(None);
-	};
-	let ints_to_list = ints_to_list.typed::<(i32, i32), HostNode>(&*caller)?;
-	let Some(address) = scratch(caller, memory, std::mem::size_of_val(ints))? else {
-		return Ok(None);
-	};
-	let bytes: Vec<u8> = ints.iter().flat_map(|int| int.to_le_bytes()).collect();
-	memory.write(&mut *caller, address as usize, &bytes)?;
-	Ok(Some(
-		ints_to_list.call(&mut *caller, (address as i32, ints.len() as i32))?,
-	))
+	{
+		let ints_to_list = ints_to_list.typed::<(i32, i32), HostNode>(&*caller)?;
+		if let Some(address) = scratch(caller, memory, std::mem::size_of_val(ints))? {
+			let bytes: Vec<u8> = ints.iter().flat_map(|int| int.to_le_bytes()).collect();
+			memory.write(&mut *caller, address as usize, &bytes)?;
+			return ints_to_list.call(&mut *caller, (address as i32, ints.len() as i32));
+		}
+	}
+	let ints = ints
+		.iter()
+		.map(|&int| Node::Number(Number::Int(i64::from(int))))
+		.collect();
+	built_in_program(
+		caller,
+		&Node::List(ints, crate::node::Bracket::Square, crate::node::Separator::Space),
+		word,
+	)
 }
 
 /// The module's memory, or the task failure "`word`: the module exports no memory"
