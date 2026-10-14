@@ -385,7 +385,8 @@ impl Lowering {
 		}
 		let written = call.serialize().trim().to_string();
 		let question = format!("{name} has variants returning {}: which does `{written}` mean?", results.join(", "));
-		let readings = results.iter().map(|result| reading(result, &format!("{written} as {result}"))).collect();
+		// `(render "x") as pdf`: grouped, as `render "x" as pdf` casts the argument (card parameter-named-number)
+		let readings = results.iter().map(|result| reading(result, &format!("({written}) as {result}"))).collect();
 		match ask(&Ask::new(TOPIC, question, readings, Fallback::Warning).written(&written).at_node(head)) {
 			Ok(chosen) => self.call(head, &results[chosen], arguments),
 			Err(error) => error,
