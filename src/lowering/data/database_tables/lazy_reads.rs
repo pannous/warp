@@ -49,130 +49,156 @@ pub(super) fn called(name: String, argument: Option<Node>) -> Node {
 /// its add and `people#i` as its element, which load no rows; a table's own lazy functions keep its list (`own`). Registrations, `global people`,
 /// assigned lists and field names (`x.people`) stay
 pub(super) fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&str>) -> Node {
-	let table_of = |node: &Node| match node.drop_meta() {
-		Node::Symbol(name) if tables.contains_key(name) && own != Some(name.as_str()) => Some(name.clone()),
-		_ => None,
-	};
-	let rewrite = |node: Node| with_lazy_reads(node, tables, own);
-	if let Some(variable) = lazy_definition(&node, tables) {
-		return node.map_children(|child| with_lazy_reads(child, tables, Some(&variable)));
+	LazyReads { tables, own }.read(node)
+}
+
+struct LazyReads<'a> {
+	tables: &'a BTreeMap<String, Table>,
+	own: Option<&'a str>,
+}
+
+impl LazyReads<'_> {
+	/// The table a node names, unless it is the one whose lazy functions are being defined
+	fn table_of(&self, node: &Node) -> Option<String> {
+		match node.drop_meta() {
+			Node::Symbol(name) if self.tables.contains_key(name) && self.own != Some(name.as_str()) => {
+				Some(name.clone())
+			}
+			_ => None,
+		}
 	}
-	match node.drop_meta().clone() {
-		Node::Symbol(_) => match table_of(&node) {
-			Some(variable) => called(lazy_name(&variable, "load"), None),
-			None => node,
-		},
-		Node::Key(_, Op::Assign, source) if database_table(&source).is_some() => node,
-		Node::Key(word, Op::Colon, _) if word.drop_meta().name() == GLOBAL_WORD => node,
-		Node::List(parts, _, _)
-			if parts.len() == 2
-				&& crate::analyzer::is_counting_word(&parts[0].drop_meta().name())
-				&& table_of(&parts[1]).is_some() =>
-		{
-			called(lazy_name(&table_of(&parts[1]).unwrap_or_default(), "count"), None)
+
+	fn read(&self, node: Node) -> Node {
+		if let Some(variable) = lazy_definition(&node, self.tables) {
+			return node.map_children(|child| with_lazy_reads(child, self.tables, Some(&variable)));
 		}
-		// `people#(11..20)`, `people[10:20]` (the parser's `slice(people, 10, 20)`; an open bound is ø)
-		Node::List(parts, Bracket::Round, _)
-			if parts.len() == 4 && parts[0].is_symbol(crate::words::SLICE) && table_of(&parts[1]).is_some() =>
-		{
-			let variable = table_of(&parts[1]).unwrap_or_default();
-			let bound = |bound: &Node, open: Node| match bound.drop_meta() {
-				Node::Empty => open,
-				_ => rewrite(bound.clone()),
-			};
-			let count = called(lazy_name(&variable, "count"), None);
-			sliced(&variable, bound(&parts[2], Node::int(0)), bound(&parts[3], count))
-		}
-		Node::List(parts, _, _)
-			if parts.len() == 5
-				&& parts[0].drop_meta().name() == FOR_WORD
-				&& parts[2].drop_meta().name() == IN_WORD
-				&& matches!(parts[1].drop_meta(), Node::Symbol(_))
-				&& table_of(&parts[3]).is_some()
-				&& matches!(parts[4].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
-		{
-			let variable = table_of(&parts[3]).unwrap_or_default();
-			paged_loop(
-				&parts[1].drop_meta().name(),
-				&variable,
-				&tables[&variable].class,
-				rewrite(parts[4].clone()),
-			)
-		}
-		// the row keeps its class, so `cups#1.size` reads the field, not the builtin word (card orm-size-field)
-		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => {
-			let variable = table_of(&left).unwrap_or_default();
-			let row = called(lazy_name(&variable, "at"), Some(rewrite(*position)));
-			Node::meta(
-				row,
-				Node::data(crate::lowering::traits::TypedAs(tables[&variable].class.clone())),
-			)
-		}
-		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
-			(Some(variable), Node::Symbol(word)) if crate::analyzer::is_counting_word(word) => {
+		match node.drop_meta().clone() {
+			Node::Symbol(_) => match self.table_of(&node) {
+				Some(variable) => called(lazy_name(&variable, "load"), None),
+				None => node,
+			},
+			Node::Key(_, Op::Assign, source) if database_table(&source).is_some() => node,
+			Node::Key(word, Op::Colon, _) if word.drop_meta().name() == GLOBAL_WORD => node,
+			Node::List(parts, _, _)
+				if let [word, listed] = parts.as_slice()
+					&& crate::analyzer::is_counting_word(&word.drop_meta().name())
+					&& let Some(variable) = self.table_of(listed) =>
+			{
 				called(lazy_name(&variable, "count"), None)
 			}
-			(Some(variable), Node::List(parts, _, _))
-				if parts.len() == 3 && parts[0].drop_meta().name() == FOUND_WORD =>
+			// `people#(11..20)`, `people[10:20]` (the parser's `slice(people, 10, 20)`; an open bound is ø)
+			Node::List(ref parts, Bracket::Round, _)
+				if let [word, listed, from, until] = parts.as_slice()
+					&& word.is_symbol(crate::words::SLICE)
+					&& let Some(variable) = self.table_of(listed) =>
 			{
+				self.slice_read(&variable, from, until)
+			}
+			Node::List(ref parts, _, _)
+				if let [for_word, item, in_word, listed, body] = parts.as_slice()
+					&& for_word.drop_meta().name() == FOR_WORD
+					&& in_word.drop_meta().name() == IN_WORD
+					&& matches!(item.drop_meta(), Node::Symbol(_))
+					&& let Some(variable) = self.table_of(listed)
+					&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			{
+				paged_loop(
+					&item.drop_meta().name(),
+					&variable,
+					&self.tables[&variable].class,
+					self.read(body.clone()),
+				)
+			}
+			// the row keeps its class, so `cups#1.size` reads the field, not the builtin word (card orm-size-field)
+			Node::Key(left, Op::Hash, position) if let Some(variable) = self.table_of(&left) => {
+				let row = called(lazy_name(&variable, "at"), Some(self.read(*position)));
+				Node::meta(
+					row,
+					Node::data(crate::lowering::traits::TypedAs(self.tables[&variable].class.clone())),
+				)
+			}
+			Node::Key(left, Op::Dot, right) => self.method_read(left, right),
+			Node::Key(target, op, value)
+				if (op == Op::Assign || op.is_compound_assign()) && self.table_of(declared(&target)).is_some() =>
+			{
+				Node::Key(target, op, Box::new(self.read(*value)))
+			}
+			Node::Type { name, body } => self.class_read(name, *body),
+			_ => node.map_children(|child| self.read(child)),
+		}
+	}
+
+	fn slice_read(&self, variable: &str, from: &Node, until: &Node) -> Node {
+		let bound = |bound: &Node, open: Node| match bound.drop_meta() {
+			Node::Empty => open,
+			_ => self.read(bound.clone()),
+		};
+		let count = called(lazy_name(variable, "count"), None);
+		sliced(variable, bound(from, Node::int(0)), bound(until, count))
+	}
+
+	/// `people.count`, `people.add(p)` and the other methods of a table; other methods are of the value read
+	fn method_read(&self, left: Box<Node>, right: Box<Node>) -> Node {
+		if let Some(variable) = self.table_of(&left) {
+			match right.drop_meta() {
+				Node::Symbol(word) if crate::analyzer::is_counting_word(word) => {
+					return called(lazy_name(&variable, "count"), None);
+				}
+				Node::List(parts, _, _) => {
+					if let Some(read) = self.table_method_read(&variable, parts) {
+						return read;
+					}
+				}
+				_ => {}
+			}
+		}
+		match right.drop_meta() {
+			Node::Symbol(_) => Node::Key(Box::new(self.read(*left)), Op::Dot, right),
+			_ => key(self.read(*left), Op::Dot, self.read(*right)),
+		}
+	}
+
+	fn table_method_read(&self, variable: &str, parts: &[Node]) -> Option<Node> {
+		let word = parts.first()?.drop_meta().name();
+		let argument = || self.read(parts[1].clone());
+		Some(match (parts.len(), word.as_str()) {
+			(3, FOUND_WORD) => {
 				let code = format!("{FUNCTION_PLACEHOLDER}({CONDITION_PLACEHOLDER}, {PARAMETERS_PLACEHOLDER})");
 				generated(
 					&code,
 					[
-						(FUNCTION_PLACEHOLDER, Node::Symbol(lazy_name(&variable, "found"))),
+						(FUNCTION_PLACEHOLDER, Node::Symbol(lazy_name(variable, "found"))),
 						(CONDITION_PLACEHOLDER, parts[1].clone()),
-						(PARAMETERS_PLACEHOLDER, rewrite(parts[2].clone())),
+						(PARAMETERS_PLACEHOLDER, self.read(parts[2].clone())),
 					],
 				)
 			}
-			(Some(variable), Node::List(parts, _, _))
-				if parts.len() == 2 && [ADD_WORD, REMOVE_WORD].contains(&parts[0].drop_meta().name().as_str()) =>
-			{
-				called(
-					lazy_name(&variable, &parts[0].drop_meta().name()),
-					Some(rewrite(parts[1].clone())),
-				)
-			}
-			(Some(variable), Node::List(parts, _, _))
-				if parts.len() == 2 && END_WORDS.contains(&parts[0].drop_meta().name().as_str()) =>
-			{
-				end_slice(&variable, &parts[0].drop_meta().name(), rewrite(parts[1].clone()))
-			}
-			(Some(variable), Node::List(parts, _, _))
-				if parts.len() == 2 && parts[0].drop_meta().name() == INSTANCE_OF_WORD =>
-			{
-				called(lazy_name(&variable, "of"), Some(rewrite(parts[1].clone())))
-			}
-			(Some(variable), Node::List(parts, _, _))
-				if parts.len() == 2 && parts[0].drop_meta().name() == FETCHED_WORD =>
-			{
-				called(lazy_name(&variable, "fetched"), Some(rewrite(parts[1].clone())))
-			}
-			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
-			_ => key(rewrite(*left), Op::Dot, rewrite(*right)),
-		},
-		Node::Key(target, op, value)
-			if (op == Op::Assign || op.is_compound_assign()) && table_of(declared(&target)).is_some() =>
-		{
-			Node::Key(target, op, Box::new(rewrite(*value)))
+			(2, ADD_WORD | REMOVE_WORD) => called(lazy_name(variable, &word), Some(argument())),
+			(2, end) if END_WORDS.contains(&end) => end_slice(variable, end, argument()),
+			(2, INSTANCE_OF_WORD) => called(lazy_name(variable, "of"), Some(argument())),
+			(2, FETCHED_WORD) => called(lazy_name(variable, "fetched"), Some(argument())),
+			_ => return None,
+		})
+	}
+
+	/// A class's own field named like a table is the field
+	fn class_read(&self, name: Box<Node>, body: Node) -> Node {
+		let fields: Vec<String> = crate::class_methods::field_declarations(&body)
+			.into_iter()
+			.map(|(field, ..)| field)
+			.collect();
+		let visible: BTreeMap<String, Table> = self
+			.tables
+			.iter()
+			.filter(|(variable, _)| !fields.contains(variable))
+			.map(|(variable, table)| (variable.clone(), table.clone()))
+			.collect();
+		Node::Type {
+			name,
+			body: Box::new(in_method_bodies(body, &|child| {
+				with_lazy_reads(child, &visible, self.own)
+			})),
 		}
-		// a class's own field named like a table is the field
-		Node::Type { name, body } => {
-			let fields: Vec<String> = crate::class_methods::field_declarations(&body)
-				.into_iter()
-				.map(|(field, ..)| field)
-				.collect();
-			let visible: BTreeMap<String, Table> = tables
-				.iter()
-				.filter(|(variable, _)| !fields.contains(variable))
-				.map(|(variable, table)| (variable.clone(), table.clone()))
-				.collect();
-			Node::Type {
-				name,
-				body: Box::new(in_method_bodies(*body, &|child| with_lazy_reads(child, &visible, own))),
-			}
-		}
-		_ => node.map_children(rewrite),
 	}
 }
 
