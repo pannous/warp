@@ -3,13 +3,13 @@
 use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::{Op, is_function_keyword};
+use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
 use crate::words::{ERROR_WORD, MAP_WORD, PRINT_WORD, SYMBOL_WORD, TEXT_WORD};
-use Instruction as I;
 use wasm_encoder::*;
+use Instruction as I;
 
-use super::super::{ROUNDING_FUNCTIONS, WasmGcEmitter, items_info};
+use super::super::{items_info, WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// The kinds of a local that no call reaches: `n = 2; n(3)` is an error (reject_variable_applied); a function, block,
 /// pointer or node-typed local may hold something callable
@@ -1043,7 +1043,7 @@ impl WasmGcEmitter {
 		first: &'a Node,
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
-		use crate::errors::diagnostic::{Ask, Fallback, ask, reading};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if call == crate::list_mutations::INSERT_AT_CALL {
 			return Some((first, second));
 		}
@@ -1160,7 +1160,7 @@ impl WasmGcEmitter {
 
 	/// `pirnt`: a lone word that names nothing but is one or two letters away from a defined name; a got-it warning
 	pub(in crate::wasm_emitter) fn warn_near_miss(&self, word: &str) -> Result<(), Node> {
-		use crate::errors::diagnostic::{Ask, Fallback, ask, reading};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}

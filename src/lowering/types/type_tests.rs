@@ -5,12 +5,12 @@
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
-use super::memoization::{Rebuild, definition_parts};
+use super::memoization::{definition_parts, Rebuild};
 use super::nodes::{call, children_rewritten, is_call_head, key, or_operands, parameter_name};
 use super::switch::is_pattern;
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
-use crate::node::{Bracket, Node, Separator, text};
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{
 	ERROR_WORD, FLOAT_WORD, IS_TYPE, LIST_WORD, MAP_WORD, NUMBER_WORD, OF_WORD, PAIR_WORD, REAL_WORD, SYMBOL_WORD,
