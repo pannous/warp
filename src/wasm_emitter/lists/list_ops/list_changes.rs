@@ -198,7 +198,7 @@ impl WasmGcEmitter {
 	/// list_drop_last(list): the list without its last item, in place (`xs.pop()`, P200b): the cell before the last ends
 	/// the list, a single cell becomes ø itself
 	pub(super) fn emit_list_drop_last(&mut self) {
-		if !self.should_emit_function(crate::declaration_forms::LIST_DROP_LAST) {
+		if !self.should_emit_function(crate::list_mutations::LIST_DROP_LAST) {
 			return;
 		}
 		let node_ref_nullable = Ref(self.node_ref(true));
@@ -210,7 +210,7 @@ impl WasmGcEmitter {
 		};
 		let no_node = || I::RefNull(HeapType::Concrete(node_type));
 		self.runtime_function(
-			crate::declaration_forms::LIST_DROP_LAST,
+			crate::list_mutations::LIST_DROP_LAST,
 			vec![node_ref_nullable],
 			vec![node_ref],
 			vec![node_ref_nullable],
@@ -270,7 +270,7 @@ impl WasmGcEmitter {
 	/// `xs.clear()`, card aliased-list): its first cell takes fresh's kind, item and rest, its element mark stays; an
 	/// empty fresh list makes it ø itself, ø takes nothing and is fresh
 	pub(super) fn emit_list_become(&mut self) {
-		if !self.should_emit_function(crate::declaration_forms::LIST_BECOME) {
+		if !self.should_emit_function(crate::list_mutations::LIST_BECOME) {
 			return;
 		}
 		let node_ref_nullable = Ref(self.node_ref(true));
@@ -281,7 +281,7 @@ impl WasmGcEmitter {
 			field_index,
 		};
 		self.runtime_function(
-			crate::declaration_forms::LIST_BECOME,
+			crate::list_mutations::LIST_BECOME,
 			vec![node_ref_nullable, node_ref_nullable],
 			vec![node_ref],
 			vec![],

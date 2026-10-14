@@ -1247,5 +1247,5 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::declaration_forms::is_list_mutating_method(name)))
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::list_mutations::is_list_mutating_method(name)))
 }

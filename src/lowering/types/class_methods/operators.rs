@@ -633,7 +633,7 @@ pub(super) fn is_operator_method_call(call: &Node, operands: &Operands) -> bool 
 /// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
 /// instance
 pub(crate) fn is_library_method(name: &str) -> bool {
-	crate::declaration_forms::is_list_mutating_method(name)
+	crate::list_mutations::is_list_mutating_method(name)
 		|| crate::library_words::is_standard_function(name)
 		|| crate::analyzer::is_counting_property(name)
 }

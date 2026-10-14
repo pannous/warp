@@ -678,7 +678,7 @@ impl WasmGcEmitter {
 	/// list_insert_at(list, position, value): value at the 0-based position, in place so every holder sees it (P200b):
 	/// the cell there moves one on and takes value; a position past the end (or negative) appends, ø becomes [value]
 	fn emit_list_insert_at(&mut self) {
-		if !self.should_emit_function(crate::declaration_forms::INSERT_AT_CALL) {
+		if !self.should_emit_function(crate::list_mutations::INSERT_AT_CALL) {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
@@ -690,7 +690,7 @@ impl WasmGcEmitter {
 		};
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
 		self.runtime_function(
-			crate::declaration_forms::INSERT_AT_CALL,
+			crate::list_mutations::INSERT_AT_CALL,
 			params,
 			vec![node_ref],
 			vec![node_ref_nullable],
@@ -832,14 +832,14 @@ impl WasmGcEmitter {
 impl WasmGcEmitter {
 	/// zero_fill(count, zero): a square list of `count` times the node `zero`, ø when count is not positive
 	fn emit_zero_fill(&mut self) {
-		if !self.should_emit_function(crate::declaration_forms::ZERO_FILL_CALL) {
+		if !self.should_emit_function(crate::filled_lists::ZERO_FILL_CALL) {
 			return;
 		}
 		let node = self.type_manager.node_type;
 		let node_ref = Ref(self.node_ref(false));
 		let nullable_node_ref = Ref(self.node_ref(true));
 		self.runtime_function(
-			crate::declaration_forms::ZERO_FILL_CALL,
+			crate::filled_lists::ZERO_FILL_CALL,
 			vec![ValType::I64, node_ref],
 			vec![node_ref],
 			vec![nullable_node_ref],

@@ -292,7 +292,7 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::graphics::shader_holes::lower,
-	crate::lowering::declaration_forms::lower_inline_unions,
+	crate::lowering::inline_unions::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
@@ -512,7 +512,7 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::traits::lower_declarations,
 	crate::lowering::type_tests::lower,
 	crate::lowering::ambiguous_forms::lower,
-	crate::lowering::declaration_forms::lower_list_times,
+	crate::lowering::filled_lists::lower_list_times,
 	// before any pass reads a call's arity: `square square 2` nests, `f(a)` and `f(a, b)` become `f·1`, `f·2`
 	crate::lowering::broadcasting::lower_scalar_element_wise,
 	crate::lowering::broadcasting::lower_prefix_calls,

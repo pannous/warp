@@ -5,6 +5,7 @@
 use super::*;
 
 pub mod channel_words;
+pub mod library_words;
 pub mod negated_calls;
 pub mod number_words;
 pub mod parse_word;

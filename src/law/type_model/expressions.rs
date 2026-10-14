@@ -567,7 +567,7 @@ impl Exporter {
 				(Node::Symbol(name), Node::List(items, _, _))
 					if items.len() == 2
 						&& self.cell_lists.contains(name)
-						&& crate::declaration_forms::appends(&items[0].drop_meta().name(), 1) =>
+						&& crate::list_mutations::appends(&items[0].drop_meta().name(), 1) =>
 				{
 					let item = self.expression(&items[1])?;
 					Ok(format!(
@@ -578,7 +578,7 @@ impl Exporter {
 					))
 				}
 				(Node::Symbol(name), Node::List(items, _, _))
-					if items.len() == 2 && crate::declaration_forms::appends(&items[0].drop_meta().name(), 1) =>
+					if items.len() == 2 && crate::list_mutations::appends(&items[0].drop_meta().name(), 1) =>
 				{
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
@@ -587,9 +587,9 @@ impl Exporter {
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
 				(Node::Symbol(name), call)
-					if self.list_names.contains(name) && crate::declaration_forms::insert_arguments(call).is_some() =>
+					if self.list_names.contains(name) && crate::list_mutations::insert_arguments(call).is_some() =>
 				{
-					let (value, position) = crate::declaration_forms::insert_arguments(call).expect("guarded");
+					let (value, position) = crate::list_mutations::insert_arguments(call).expect("guarded");
 					Ok(format!(
 						".insertAt (.glob {}) ({}) ({})",
 						quoted(name),

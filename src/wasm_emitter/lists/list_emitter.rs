@@ -32,14 +32,14 @@ const BUILTIN_CALLS: [&str; 27] = [
 	"use",
 	crate::min_max::EMPTY_EXTREMUM_CALL,
 	crate::switch::NO_CASE_CALL,
-	crate::declaration_forms::ZERO_FILL_CALL,
-	crate::declaration_forms::INSERT_AT_CALL,
-	crate::declaration_forms::INSERT_EITHER_CALL,
+	crate::filled_lists::ZERO_FILL_CALL,
+	crate::list_mutations::INSERT_AT_CALL,
+	crate::list_mutations::INSERT_EITHER_CALL,
 	crate::library_words::LIST_SUM,
 	crate::words::INSTANCE_OF,
-	crate::declaration_forms::REMOVED_VALUE_CALL,
-	crate::declaration_forms::LIST_DROP_LAST,
-	crate::declaration_forms::LIST_BECOME,
+	crate::list_mutations::REMOVED_VALUE_CALL,
+	crate::list_mutations::LIST_DROP_LAST,
+	crate::list_mutations::LIST_BECOME,
 	crate::library_words::VALUES_SIMILAR,
 	super::super::lists::list_ops::LIST_EXTEND,
 	crate::library_words::VALUES_ROUGH,
@@ -449,10 +449,10 @@ impl WasmGcEmitter {
 			return;
 		}
 		if let [Node::Symbol(call), count, zero] = items {
-			if call == crate::declaration_forms::ZERO_FILL_CALL {
+			if call == crate::filled_lists::ZERO_FILL_CALL {
 				self.emit_numeric_value(func, count);
 				self.emit_node_instructions(func, zero);
-				self.emit_call(func, crate::declaration_forms::ZERO_FILL_CALL);
+				self.emit_call(func, crate::filled_lists::ZERO_FILL_CALL);
 				return;
 			}
 		}
@@ -490,23 +490,22 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(call), collection, key] = items {
-			if call == crate::declaration_forms::REMOVED_VALUE_CALL {
+			if call == crate::list_mutations::REMOVED_VALUE_CALL {
 				self.emit_node_instructions(func, collection);
 				self.emit_node_instructions(func, key);
-				self.emit_call(func, crate::declaration_forms::REMOVED_VALUE_CALL);
+				self.emit_call(func, crate::list_mutations::REMOVED_VALUE_CALL);
 				return;
 			}
 		}
 		if let [Node::Symbol(call), list, first, second] = items {
-			if call == crate::declaration_forms::INSERT_AT_CALL || call == crate::declaration_forms::INSERT_EITHER_CALL
-			{
+			if call == crate::list_mutations::INSERT_AT_CALL || call == crate::list_mutations::INSERT_EITHER_CALL {
 				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else {
 					return;
 				};
 				self.emit_node_instructions(func, list);
 				self.emit_numeric_value(func, position);
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, crate::declaration_forms::INSERT_AT_CALL);
+				self.emit_call(func, crate::list_mutations::INSERT_AT_CALL);
 				return;
 			}
 		}
@@ -1046,7 +1045,7 @@ impl WasmGcEmitter {
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
 		use crate::diagnostic::{ask, reading, Ask, Fallback};
-		if call == crate::declaration_forms::INSERT_AT_CALL {
+		if call == crate::list_mutations::INSERT_AT_CALL {
 			return Some((first, second));
 		}
 		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;

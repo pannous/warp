@@ -887,7 +887,7 @@ fn statement_write(statement: &Node) -> Option<String> {
 			Node::List(items, _, _)
 				if items
 					.first()
-					.is_some_and(|method| crate::declaration_forms::is_list_mutating_method(&word(method))) =>
+					.is_some_and(|method| crate::list_mutations::is_list_mutating_method(&word(method))) =>
 			{
 				written_path(list)
 			}

@@ -22,7 +22,7 @@ pub(in crate::wasm_emitter) fn list_sum_call(items: &[Node]) -> Option<(&Node, &
 pub(super) fn zero_fill_parts(value: &Node) -> Option<(&Node, &Node)> {
 	match value.drop_meta() {
 		Node::List(items, _, _) => match items.as_slice() {
-			[call, count, zero] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::declaration_forms::ZERO_FILL_CALL) => {
+			[call, count, zero] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::filled_lists::ZERO_FILL_CALL) => {
 				Some((count, zero))
 			}
 			_ => None,

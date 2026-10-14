@@ -41,7 +41,7 @@ pub(in crate::wasm_emitter) const NODE_MAP_FUNCTIONS: [&str; 6] = [
 /// Words that read a map without holding on to it, besides those reading any collection (reads_collection): a map
 /// variable given to them stays a hash table
 const MAP_READING_WORDS: [&str; 5] = [
-	crate::declaration_forms::REMOVED_VALUE_CALL,
+	crate::list_mutations::REMOVED_VALUE_CALL,
 	crate::words::MAP_KEYS,
 	crate::library_words::MAP_VALUES,
 	COLLECTION_CONTAINS,

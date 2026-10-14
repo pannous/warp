@@ -474,7 +474,7 @@ impl FunctionValues {
 				if let Node::Key(list, Op::Dot, call) = node {
 					if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
 						if let [method, value] = items.as_slice() {
-							if crate::declaration_forms::appends(&method.drop_meta().name(), 1)
+							if crate::list_mutations::appends(&method.drop_meta().name(), 1)
 								&& self.is_function_value(value)
 							{
 								lists.insert(name.clone());

@@ -7,9 +7,9 @@
 
 use super::nodes::{call, children_rewritten, key, Counter};
 use crate::analyzer::{call_name, counting_method};
-use crate::compiler::context::Context;
-use crate::declaration_forms::is_list_mutating_method;
+use crate::context::Context;
 use crate::diagnostic::Diagnostic;
+use crate::list_mutations::is_list_mutating_method;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
@@ -199,7 +199,7 @@ const ARITY_VARIANTS: [(&str, usize, &str); 3] = [
 	("last", 2, "last_items"),
 ];
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
-/// and popped_rest, `x.clear()` to cleared (declaration_forms removed_key, cleared_collection)
+/// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
 const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
 	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];

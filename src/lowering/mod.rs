@@ -3,7 +3,6 @@
 
 pub mod declarations;
 pub mod folding;
-pub mod library_words;
 pub mod list_phrases;
 pub mod music_words;
 pub(crate) mod nodes;

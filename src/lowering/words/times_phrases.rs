@@ -34,7 +34,7 @@ fn meaning(count: Node, operand: Node, loops: &mut usize) -> Node {
 			*loops += 1;
 			rounds(count, operand, *loops)
 		}
-		Node::List(_, Bracket::Square, _) => crate::declaration_forms::filled_list(count, &operand)
+		Node::List(_, Bracket::Square, _) => crate::filled_lists::filled_list(count, &operand)
 			.unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`")),
 		_ => call(TEXT_TIMES, vec![count, operand]),
 	}
