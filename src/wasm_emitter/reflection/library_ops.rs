@@ -5,6 +5,7 @@ use crate::operators::{op_to_code, Op};
 use crate::type_kinds::{Kind, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
 use crate::type_kinds::{CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
 use crate::wasm_emitter::WasmGcEmitter;
+use crate::words::ORD_WORD;
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
@@ -52,7 +53,7 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
 	(crate::library_words::MAP_GET_OR, crate::library_words::MAP_GET_OR),
 	(crate::library_words::MAP_WITHOUT, crate::library_words::MAP_WITHOUT),
 	(crate::one_entry_maps::MAP_OF_ENTRY, crate::one_entry_maps::MAP_OF_ENTRY),
-	(crate::library_words::ORD, CODEPOINT_OF),
+	(ORD_WORD, CODEPOINT_OF),
 	("chars", "text_chars"),
 	("field_with", "field_with"),
 	(crate::library_words::INSTANCE_COPY, crate::library_words::INSTANCE_COPY),

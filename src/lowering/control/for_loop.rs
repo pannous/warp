@@ -10,6 +10,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::while_do;
 use crate::wasm_emitter::{is_step, mark_step};
+use crate::words::ORD_WORD;
 use crate::words::{CHR_WORD, FOR_WORD, IMPLICIT_PARAMETER, IN_WORD};
 use std::collections::HashSet;
 
@@ -19,7 +20,6 @@ const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 /// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
 const CODE_SUFFIX: &str = "·code";
-const ORD_WORD: &str = "ord";
 /// `for c in w.chars`, `w.chars.map(…)`: walked, the unit word `w.chars` (elsewhere the count) is the list `chars(w)`
 const CHARS_CALL: &str = "chars";
 const CODEPOINT_UNIT: &str = "codepoints";

@@ -1,5 +1,6 @@
 //! Kind changes: an assignment must keep the kind of its variable
 use super::*;
+use crate::words::GLOBAL_WORD;
 
 /// Check for type errors in the AST, returns Some(Node::Error) if found
 pub(crate) fn check_type_errors(node: &Node, scope: &mut Scope) -> Option<Node> {
@@ -157,7 +158,7 @@ fn global_variables(program: &Node) -> HashSet<String> {
 	let mut globals = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() {
-			if keyword.drop_meta().name() == crate::late_binding::GLOBAL {
+			if keyword.drop_meta().name() == GLOBAL_WORD {
 				let target = if let Node::Key(target, Op::Assign, _) = declared.drop_meta() {
 					target
 				} else {

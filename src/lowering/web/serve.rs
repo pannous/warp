@@ -12,6 +12,7 @@ use crate::declarations::word;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
+use crate::words::GLOBAL_WORD;
 use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashSet;
 
@@ -552,7 +553,7 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 
 /// `global name`
 fn global(name: &str) -> Node {
-	crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL))
+	crate::warp_parser::parse(&format!("{} {name}", GLOBAL_WORD))
 }
 
 /// The block with these statements first; a one-line block of words, `{ last 2 of users }`, is one statement

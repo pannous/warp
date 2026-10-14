@@ -90,3 +90,12 @@ pub const PRINT_WORD: &str = "print";
 pub const SEND_WORD: &str = "send";
 pub const SORT_WORD: &str = "sort";
 pub const STR_WORD: &str = "str";
+pub const DO_WORD: &str = "do";
+/// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
+/// compiler it is `ord`, since `codepoint` is also a type word
+pub const ORD_WORD: &str = "ord";
+pub const SPLIT_WORD: &str = "split";
+/// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
+pub const LOG_WORD: &str = "log";
+/// `b = a.copy()`: values are never shared, so the copy is the value itself
+pub const COPY_WORD: &str = "copy";

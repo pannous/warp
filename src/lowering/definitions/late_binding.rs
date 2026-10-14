@@ -20,9 +20,9 @@ use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
+use crate::words::GLOBAL_WORD;
 use std::collections::{HashMap, HashSet};
 
-pub(crate) const GLOBAL: &str = "global";
 pub(crate) const NONLOCAL: &str = "nonlocal";
 const NEEDLESS_CHARGING_TOPIC: &str = "needless-charging";
 const EFFECTFUL_GETTER_TOPIC: &str = "effectful-getter";
@@ -291,7 +291,7 @@ pub fn split_global_assignments(node: Node) -> Node {
 		return node;
 	};
 	let split = |item: Node| match item.drop_meta() {
-		Node::Key(keyword, Op::Colon, assignment) if keyword.is_symbol(GLOBAL) => match assignment.drop_meta() {
+		Node::Key(keyword, Op::Colon, assignment) if keyword.is_symbol(GLOBAL_WORD) => match assignment.drop_meta() {
 			Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
 				vec![
 					Node::Key(keyword.clone(), Op::Colon, name.clone()),
@@ -315,7 +315,7 @@ pub fn split_global_assignments(node: Node) -> Node {
 /// `global y` (no value) as a statement of a function body: the function reads main's current y
 fn global_read(node: &Node) -> Option<&String> {
 	match node.drop_meta() {
-		Node::Key(keyword, Op::Colon, name) if keyword.is_symbol(GLOBAL) => match name.drop_meta() {
+		Node::Key(keyword, Op::Colon, name) if keyword.is_symbol(GLOBAL_WORD) => match name.drop_meta() {
 			Node::Symbol(name) => Some(name),
 			_ => None,
 		},

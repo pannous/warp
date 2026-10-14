@@ -7,6 +7,12 @@ use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
+use crate::words::DO_WORD;
+use crate::words::EACH_WORD;
+use crate::words::IS_WORD;
+use crate::words::MAP_WORD;
+use crate::words::OF_WORD;
+use crate::words::PRINT_WORD;
 use log::warn;
 use std::fs::read_to_string;
 
@@ -64,7 +70,6 @@ use unicode_normalization::UnicodeNormalization;
 const URL_MARK: &str = "://";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
-const MAP_WORD: &str = "map";
 /// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
 const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
@@ -84,7 +89,6 @@ pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
 /// Other languages' list types: warp's list holds any elements, unboxed numbers too, so `Vec<int>` is `list of int`
 const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"];
-const LIST_HEAD: &str = "list";
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
@@ -172,8 +176,6 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
-/// `for each item in basket` is `for item in basket`
-const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
 const DOWN_WORD: &str = "down";
 const REVERSE_WORD: &str = "reverse";
@@ -185,15 +187,11 @@ const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op
 /// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
 const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
 const FAILED_WORD: &str = "failed";
-/// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
-const IS_ERROR_CALL: &str = "is_error";
-const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
-const RETURN_KEYWORD: &str = "return";
 /// `x = data a and b`: the prefix takes the whole expression after it (card data-quoting); `data class` is a modifier
 const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
@@ -206,12 +204,10 @@ const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
-const PRINT_WORD: &str = "print";
 /// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
 const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
-const IN_KEYWORD: &str = "in";
 /// What ends a loop's iterable besides its body: the statement, a comprehension's bracket or condition (`if`)
 const ITERABLE_ENDS: [char; 6] = [';', '}', ']', ')', ',', '\0'];
 const IF_WORD: &str = "if";
@@ -221,8 +217,6 @@ const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
 const PYTHON_LAMBDA_KEYWORD: &str = "lambda";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
-/// The receiver a Ruby instance variable `@x` reads, `self.x`
-const RECEIVER_WORD: &str = "self";
 /// Ruby's field declarations `attr_accessor :x, :y`
 const RUBY_FIELD_WORDS: [&str; 3] = ["attr_accessor", "attr_reader", "attr_writer"];
 /// The words a Ruby `end` closes in a class body: `def … end`, `do … end`
@@ -272,11 +266,8 @@ pub const ASSERTION_FAILED: &str = "assertion failed";
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
-/// `to greet p do …`: the word between a `to` definition's parameters and its body
-const DO_WORD: &str = "do";
 /// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
 const RESULT_TYPE_WORD: &str = "as";
-const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = crate::words::SLICE;
 pub(crate) const TIMES_WORD: &str = "times";
@@ -285,8 +276,6 @@ pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 const ELVIS_WORD: &str = "elvis";
-/// `x is int` tests the type; `x == int` stays equality (user decision #30)
-const IS_WORD: &str = "is";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
 

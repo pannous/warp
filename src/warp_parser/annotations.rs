@@ -1,5 +1,6 @@
 //! Annotations: `@attribute` and trailing attributes, `@x` instance variables
 use super::*;
+use crate::words::SELF_WORD;
 
 impl WarpParser {
 	/// `@name` or `@name(value)` annotates the atom that follows: `@version(2) @draft tee{a:1}`.
@@ -13,11 +14,7 @@ impl WarpParser {
 			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
 		}
 		if self.type_fields.is_some() && self.reads_instance_variable() {
-			return Node::Key(
-				Box::new(Symbol(RECEIVER_WORD.to_string())),
-				Op::Dot,
-				Box::new(Symbol(name)),
-			);
+			return Node::Key(Box::new(Symbol(SELF_WORD.to_string())), Op::Dot, Box::new(Symbol(name)));
 		}
 		if self.current_char() == ':' && self.peek_char(1) != '=' {
 			self.advance();

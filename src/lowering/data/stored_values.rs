@@ -13,6 +13,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::words::DELETE_WORD;
 use std::collections::HashSet;
 
 pub const STORED_WORD: &str = "stored";
@@ -36,7 +37,6 @@ pub const SESSION_STORE: &str = "warp-session";
 pub const DATABASE_STORE: &str = "database.json";
 /// `database.people`: the store of tables (database_tables, serve)
 pub(crate) const DATABASE_WORD: &str = "database";
-const DELETE_WORD: &str = "delete";
 const KEYS_WORD: &str = "keys";
 /// stand for the key and the value in the templates of a storage access
 const KEY_PLACEHOLDER: &str = "storage_key";

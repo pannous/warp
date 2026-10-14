@@ -8,6 +8,7 @@ use crate::lowering::nodes::arguments_rewritten;
 use crate::node::{call, parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, mentions};
+use crate::words::SPLIT_WORD;
 use crate::words::{FOR_WORD, IMPLICIT_PARAMETER, INSTANCE_OF, IN_WORD, IS_TYPE};
 use std::collections::HashSet;
 
@@ -20,7 +21,6 @@ const BYTE_WORD: &str = "byte";
 const WORD_UNIT: &str = "word";
 /// The loop variable names that walk a text by a unit other than the character, and the text between two units
 const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
-const SPLIT_WORD: &str = "split";
 const FILTER_WORD: &str = "filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
