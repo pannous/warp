@@ -76,7 +76,7 @@ pub fn lower(program: Node) -> Node {
 		return without_serving(program);
 	}
 	let port = crate::compiler::compile_context::read(|context| context.serving_port);
-	let program = if port.is_none() { with_local_routes(program) } else { program };
+	let program = if port.is_none() { with_local_routes(hosted_serving(program)) } else { program };
 	let program = match program {
 		single
 			if port.is_some()
@@ -240,6 +240,32 @@ fn top_level_statements(code: &str) -> Vec<Node> {
 /// `serve PORT {…}` or a top-level `get "/api" {…}`: the server's alone, the page leaves it out
 fn is_serving(statement: &Node) -> bool {
 	served(statement).is_some() || !top_level_routes(statement).is_empty()
+}
+
+/// Hosted (`warp deploy`), `serve PORT { get "/" {…} }` is its routes: the Worker answers them, the port was the local
+/// server's (card deploy-single-route)
+fn hosted_serving(program: Node) -> Node {
+	if !crate::pipeline::compile_mode().for_hosting {
+		return program;
+	}
+	let routes_of = |statement: Node| -> Vec<Node> {
+		match served(&statement) {
+			Some((_, routes)) => routes
+				.into_iter()
+				.map(|(method, path, body)| {
+					Node::List(vec![symbol(&method.to_lowercase()), path, body], Bracket::None, Separator::Space)
+				})
+				.collect(),
+			None => vec![statement],
+		}
+	};
+	match program {
+		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => {
+			Node::List(statements.into_iter().flat_map(routes_of).collect(), bracket, separator)
+		}
+		single if served(&single).is_some() => Node::List(routes_of(single), Bracket::None, Separator::Newline),
+		other => other,
+	}
 }
 
 /// The route a top-level `get "/api" {…}` statement is
@@ -576,8 +602,11 @@ fn with_generated_names(node: Node) -> Node {
 /// route·N(request), as served, and page·submitted(request) calls the one answering the request of a form of the page.
 /// Like an event handler, a route changes the page's variables: those it mentions are its globals
 fn with_local_routes(program: Node) -> Node {
-	let Node::List(statements, bracket, separator) = program else {
-		return program;
+	let (statements, bracket, separator) = match program {
+		// a program of routes only, one or several on a line, is one list of words (card deploy-single-route)
+		words if !top_level_routes(&words).is_empty() => (vec![words], Bracket::None, Separator::Newline),
+		Node::List(statements, bracket, separator) => (statements, bracket, separator),
+		other => return other,
 	};
 	let Some(first_route) = statements.iter().position(|statement| !top_level_routes(statement).is_empty()) else {
 		return Node::List(statements, bracket, separator);
