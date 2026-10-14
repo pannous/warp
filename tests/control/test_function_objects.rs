@@ -55,7 +55,7 @@ fn a_function_in_a_list_prints_by_its_name() {
 
 #[test]
 fn printing_a_function_without_parameters_calls_it_and_warns() {
-	crate::common::warns_with("hi() := \"hello\"\nprint hi", "hello", "write `print function hi`");
+	crate::common::warns_with("hi() := \"hello\"\nprint hi\n1", 1, "write `print function hi`");
 }
 
 #[test]
