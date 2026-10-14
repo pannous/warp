@@ -5,7 +5,6 @@ pub mod folding;
 pub(crate) mod nodes;
 pub use nodes::{function_head, DefinitionForm, FunctionHead};
 pub mod pipes;
-pub mod welcome_forms;
 
 // concept folders (notes/restructuring.md): their passes stay reachable as crate::lowering::x
 mod signals;

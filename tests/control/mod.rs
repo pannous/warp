@@ -135,6 +135,7 @@ mod test_on_set_value; // card on-set-value
 mod test_page_events;
 mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;
+mod test_parsed_code_patterns; // card tree-patterns step 7
 mod test_pattern_unit_name; // card pattern-unit-name
 mod test_print_empty; // card print-error
 mod test_print_empty_map;

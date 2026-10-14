@@ -106,16 +106,38 @@ fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {
 				.map_err(said)
 		}
 		("exists", [path]) => Ok(Node::from(std::path::Path::new(&text_of(path)?).exists())),
-		("list", [folder]) => {
-			let entries = std::fs::read_dir(text_of(folder)?).map_err(said)?;
-			let mut names: Vec<String> = entries
-				.filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned()))
-				.collect();
-			names.sort();
-			Ok(texts(names))
-		}
+		("list", [folder]) => names_in(&text_of(folder)?).map(texts),
+		("glob", [pattern]) => globbed(&text_of(pattern)?).map(texts),
 		_ => no_such_word(arguments),
 	}
+}
+
+/// The names of a folder's entries, sorted
+fn names_in(folder: &str) -> Result<Vec<String>, String> {
+	let mut names: Vec<String> = std::fs::read_dir(folder)
+		.map_err(said)?
+		.filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned()))
+		.collect();
+	names.sort();
+	Ok(names)
+}
+
+/// `glob("src/*.rs")`: the paths matching a pattern whose wildcards `*` and `?` are in its last part; a hidden file
+/// only when the pattern's name starts with `.`, as in the shell
+fn globbed(pattern: &str) -> Result<Vec<String>, String> {
+	let (folder, name, prefix) = match pattern.rsplit_once('/') {
+		Some(("", name)) => ("/", name, "/".to_string()),
+		Some((folder, name)) => (folder, name, format!("{folder}/")),
+		None => (".", pattern, String::new()),
+	};
+	let wildcards = regex::escape(name).replace(r"\*", "[^/]*").replace(r"\?", "[^/]");
+	let matching = regex_of(&format!("^{wildcards}$"))?;
+	let shown = |entry: &String| matching.is_match(entry) && (name.starts_with('.') || !entry.starts_with('.'));
+	Ok(names_in(folder)?
+		.into_iter()
+		.filter(shown)
+		.map(|entry| format!("{prefix}{entry}"))
+		.collect())
 }
 
 fn hash(member: &str, arguments: &[Node]) -> Result<Node, String> {
@@ -167,6 +189,14 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		("args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
+		("cwd", []) => std::env::current_dir()
+			.map(|folder| Node::Text(folder.to_string_lossy().into_owned()))
+			.map_err(said),
+		("input", prompt) => typed_line(prompt),
+		("stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::Text).map_err(said),
+		// `command("ls | wc -l")`: the line run by sh, the explicit opt-in to text as shell (decision use-script)
+		#[cfg(feature = "native")]
+		("command", [line]) => executed(&["sh".into(), "-c".into(), content_of(line)]).map(Node::Text),
 		#[cfg(feature = "native")]
 		("exec", [command]) => {
 			let command: Vec<String> = command.as_items().iter().map(content_of).collect();
@@ -358,6 +388,20 @@ fn executed(command: &[String]) -> Result<String, String> {
 	Ok(String::from_utf8_lossy(&output.stdout)
 		.trim_end_matches('\n')
 		.to_string())
+}
+
+/// A line typed on standard input without its line end, ø at the input's end; a prompt is shown first
+fn typed_line(prompt: &[Node]) -> Result<Node, String> {
+	use std::io::Write;
+	if let [prompt] = prompt {
+		print!("{}", content_of(prompt));
+		std::io::stdout().flush().map_err(said)?;
+	}
+	let mut line = String::new();
+	Ok(match std::io::stdin().read_line(&mut line).map_err(said)? {
+		0 => Node::Empty,
+		_ => Node::Text(line.trim_end_matches(['\n', '\r']).to_string()),
+	})
 }
 
 /// The whole numbers of a list argument
