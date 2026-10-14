@@ -113,7 +113,8 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
-			let shown_units = last_statement(program).and_then(conversion_target);
+			let shown_units = last_statement(program)
+				.map(|last| conversion_target(last).unwrap_or_else(|| inference.shown_factors(last, &result)));
 			let node = if inference.new_definitions.is_empty() {
 				node
 			} else {
@@ -210,6 +211,7 @@ impl Inference {
 			numbered: 0,
 			new_definitions: vec![],
 			display: finest_units(&written),
+			written: HashMap::new(),
 			temperatures,
 			returns: vec![],
 			at_top: true,
@@ -617,6 +619,8 @@ struct Inference {
 	new_definitions: Vec<Node>,
 	/// The finest written unit of each dimension: the unit a quantity shows in unless converted
 	display: Vec<&'static Unit>,
+	/// The units written in each variable's values: the units it shows in (card print-print)
+	written: HashMap<String, Vec<Factor>>,
 	/// The temperature units written, each once
 	temperatures: Vec<&'static Unit>,
 	/// The signatures of the `return`s of each function being specialised
@@ -776,6 +780,7 @@ impl Inference {
 				Ok((Node::Key(keyword, Op::Colon, Box::new(declaration)), signature))
 			}
 			Node::Key(target, op, value) if op.is_compound_assign() => {
+				self.remember_written(&target, &value);
 				let (target, held) = self.infer(*target)?;
 				let (value, given) = self.infer(*value)?;
 				let result = self.arithmetic(op.base_op(), &held, &given)?;
@@ -1051,6 +1056,9 @@ impl Inference {
 				return Ok((Node::Key(Box::new(target), op, Box::new(value)), vec![]));
 			}
 		}
+		// an object literal and a plain value show in the units written in them; a list of class instances (above) in its
+		// fields' declared units
+		self.remember_written(&target, &value);
 		if let Some(object) = self.object_literal(&value) {
 			let (object, fields) = object?;
 			self.objects.insert(name, fields);
@@ -1074,6 +1082,37 @@ impl Inference {
 		}
 		self.variables.insert(name, signature.clone());
 		Ok((Node::Key(Box::new(target), op, Box::new(value)), signature))
+	}
+
+	/// The units written in an expression and in the values of the variables it reads
+	fn written_in(&self, node: &Node) -> Vec<Factor> {
+		let mut written = vec![];
+		node.visit(&mut |part| {
+			if let Node::Symbol(name) = part {
+				match self.written.get(name) {
+					Some(units) => written.extend(units.iter().cloned()),
+					None => written.extend(unit_named(name).map(|unit| Factor { unit, power: 1 })),
+				}
+			}
+		});
+		written
+	}
+
+	/// `x = value`, `x += value`: x shows in the units written in its values
+	fn remember_written(&mut self, target: &Node, value: &Node) {
+		let written = self.written_in(value);
+		self.written.entry(target.name()).or_default().extend(written);
+	}
+
+	/// A signature in the units an expression shows in: the finest written in it, else in the program
+	fn shown_factors(&self, node: &Node, signature: &Signature) -> Vec<Factor> {
+		let mut display = finest_units(&self.written_in(node));
+		let unwritten: Vec<_> = (self.display.iter())
+			.filter(|unit| !display.iter().any(|shown| shown.dimension == unit.dimension))
+			.copied()
+			.collect();
+		display.extend(unwritten);
+		display_factors(&display, signature)
 	}
 
 	/// `{dist: 5 m, name: "run"}`: the object with its amounts in SI units and its fields' signatures; None for an object
