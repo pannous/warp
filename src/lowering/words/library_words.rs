@@ -433,6 +433,30 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 	key(place, update, Node::int(1))
 }
 
+/// The word of a method and its arguments: `x.word`, `x.word(args)`
+fn method_parts(method: &Node) -> Option<(&Node, &String, Vec<Node>)> {
+	let (word_node, arguments) = match method.drop_meta() {
+		Node::Symbol(_) => (method, vec![]),
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+			(&items[0], items[1..].to_vec())
+		}
+		_ => return None,
+	};
+	let Node::Symbol(name) = word_node.drop_meta() else {
+		return None;
+	};
+	Some((word_node, name, arguments))
+}
+
+/// The call `word(receiver, arguments…)`
+fn word_call(word_node: &Node, receiver: &Node, arguments: Vec<Node>) -> Node {
+	Node::List(
+		[vec![word_node.clone(), receiver.clone()], arguments].concat(),
+		Bracket::Round,
+		Separator::None,
+	)
+}
+
 struct Lowering {
 	context: Context,
 	/// The names the program defines where the lowering is: its functions, the variables outside functions and those
@@ -843,16 +867,7 @@ impl Lowering {
 		if let Node::Number(crate::extensions::numbers::Number::Int(_)) = method.drop_meta() {
 			return Some(crate::warp_parser::subscript(receiver.clone(), method.clone()));
 		}
-		let (word_node, arguments) = match method.drop_meta() {
-			Node::Symbol(_) => (method, vec![]),
-			Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-				(&items[0], items[1..].to_vec())
-			}
-			_ => return None,
-		};
-		let Node::Symbol(name) = word_node.drop_meta() else {
-			return None;
-		};
+		let (word_node, name, arguments) = method_parts(method)?;
 		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
 			return Some(self.call(FROMKEYS, word_node, arguments, false));
 		}
@@ -877,14 +892,7 @@ impl Lowering {
 		{
 			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
 		}
-		// `x.square` and `x.add(y)` call the user function with the receiver as first argument; `l.start` of an object
-		// with a field start reads the field, even beside a function start (`start(l) := l.start`)
-		let reads_declared_field = !is_called
-			&& self.instances.is_declared_field(name)
-			&& (self.is_parameter(receiver) || self.instances.shape(receiver).is_some());
-		let reads_declared_field =
-			reads_declared_field || (!is_called && self.reads_own_parameter_field(receiver, name));
-		if reads_declared_field {
+		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
 		if self
@@ -893,8 +901,7 @@ impl Lowering {
 			.get(name)
 			.is_some_and(|function| !function.params.is_empty())
 		{
-			let call = [vec![word_node.clone(), receiver.clone()], arguments].concat();
-			return Some(Node::List(call, Bracket::Round, Separator::None));
+			return Some(word_call(word_node, receiver, arguments));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
 		// only the common conversions (not `e.text`, a common field); a counting word stays a count (`xs.number()`)
@@ -903,31 +910,57 @@ impl Lowering {
 			&& counting_method(name, &self.context).is_none();
 		let is_conversion = CONVERSION_METHODS.contains(&name.as_str()) || is_type_word_call;
 		if is_conversion && arguments.is_empty() && !self.instances.is_declared_field(name) {
-			return Some(Node::List(
-				vec![word_node.clone(), receiver.clone()],
-				Bracket::Round,
-				Separator::None,
-			));
+			return Some(word_call(word_node, receiver, vec![]));
 		}
-		// `f.effects` of a function, not of a variable: the query effects.rs answers
+		let is_known = self.is_known_method(receiver, name);
+		let is_object = literal.is_some() || self.is_object(receiver, name) || self.may_hold_object(receiver);
+		if is_object && !is_known && !has_arguments {
+			return Some(field_lookup(receiver, name, word_node));
+		}
+		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
+		if name == crate::type_tests::TYPE_WORD && !has_arguments {
+			return Some(word_call(word_node, receiver, vec![]));
+		}
+		let is_value = matches!(
+			receiver.drop_meta(),
+			Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _)
+		);
+		let call = key(receiver.clone(), Op::Dot, method.clone());
+		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
+	}
+
+	/// `x.square` and `x.add(y)` call the user function with the receiver as first argument; `l.start` of an object
+	/// with a field start reads the field, even beside a function start (`start(l) := l.start`)
+	fn reads_declared_field(&self, receiver: &Node, name: &str) -> bool {
+		(self.instances.is_declared_field(name)
+			&& (self.is_parameter(receiver) || self.instances.shape(receiver).is_some()))
+			|| self.reads_own_parameter_field(receiver, name)
+	}
+
+	/// A word a value answers other than by a field: a count, a list change, a user function, or `f.effects` of a
+	/// function (not of a variable), the query effects.rs answers
+	fn is_known_method(&self, receiver: &Node, name: &str) -> bool {
 		let is_effects_query = name == crate::analyzer::effects::EFFECTS_WORD
 			&& receiver
 				.symbol_name()
 				.is_some_and(|function| !self.plain.contains(function));
-		let is_known = counting_method(name, &self.context).is_some()
+		counting_method(name, &self.context).is_some()
 			|| is_list_mutating_method(name)
 			|| self.context.user_functions.contains_key(name)
-			|| is_effects_query;
+			|| is_effects_query
+	}
+
+	/// A receiver known to be an object: a field lookup, a parameter, a call's result, or one of a declared field name
+	fn is_object(&self, receiver: &Node, name: &str) -> bool {
 		let is_call_result =
 			matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
-		let is_object = literal.is_some()
-			|| is_field_lookup(receiver)
+		is_field_lookup(receiver)
 			|| self.is_parameter(receiver)
 			|| is_call_result
-			|| self.instances.is_declared_field(name);
-		if is_object && !is_known && !has_arguments {
-			return Some(field_lookup(receiver, name, word_node));
-		}
+			|| self.instances.is_declared_field(name)
+	}
+
+	fn may_hold_object(&self, receiver: &Node) -> bool {
 		// a variable of unknown value (`o` of `for o in people.filter(…)`), or an element of one (`xs[1]`), may hold an
 		// object: its field is looked up at run time
 		// a parenthesized receiver is what it holds: `(x#2).name` is `x#2.name` (card name-quoted); `f()` stays a call
@@ -943,7 +976,7 @@ impl Lowering {
 			Node::Key(list, Op::Hash, _) => list.drop_meta(),
 			other => other,
 		};
-		let may_hold_object = match variable {
+		match variable {
 			Node::Symbol(variable) => {
 				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
 			}
@@ -958,24 +991,7 @@ impl Lowering {
 			_ if crate::blocks::quoted_data(variable).is_some() => true,
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
-		};
-		if may_hold_object && !is_known && !has_arguments {
-			return Some(field_lookup(receiver, name, word_node));
 		}
-		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
-		if name == crate::type_tests::TYPE_WORD && !has_arguments {
-			return Some(Node::List(
-				vec![word_node.clone(), receiver.clone()],
-				Bracket::Round,
-				Separator::None,
-			));
-		}
-		let is_value = matches!(
-			receiver.drop_meta(),
-			Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _)
-		);
-		let call = key(receiver.clone(), Op::Dot, method.clone());
-		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
 	}
 
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form

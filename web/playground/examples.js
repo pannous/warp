@@ -142,6 +142,7 @@ for x in 0..32 {
   clear(paper)
   circle(x, 8, 4, purple)
   show()
+  sleep(50ms)
 }
 "done"` },
 	shader: { value: '"done"', canvases: 1, code: `// paint a WGSL fragment shader: the GPU colors every pixel, values change each frame
@@ -170,7 +171,7 @@ start = clock()
 ripples = shader {
   @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
     let away = distance(at.xy, $mouse);
-    let ring = 0.5 + 0.5 * sin(away * 0.8 - $seconds * 6.0);
+    let ring = 0.5*$mouse.x/10 + 0.5 * sin(away * 0.8 - $seconds * 6.0);
     let light = 0.35 + 0.65 * $mouse_down;
     return vec4f(ring * light, ring * light * 0.4, light * (1.0 - away / 64.0), 1.0);
   }
