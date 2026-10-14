@@ -130,3 +130,15 @@ fn a_program_without_routes_answers_its_value_and_functions() {
 	assert_eq!(answer(&base, "/square/12").2, "144");
 	std::fs::remove_dir_all(directory).ok();
 }
+
+/// A program painting, drawing or listening for frames runs in a browser page, not in a Worker (card
+/// deploy-browser-site): Deploy names the feature before anything is sent, instead of failing at the first request
+#[test]
+fn deploy_names_a_browser_only_feature() {
+	let refused = |code: &str| warp::web::worker_bundle(code).0["error"].as_str().unwrap_or_default().to_string();
+	let painting = refused(include_str!("../../samples/filled_circle.warp"));
+	assert!(painting.contains("paint") && painting.contains("browser"), "{painting}");
+	let framing = refused(include_str!("../../samples/shader_trails.warp"));
+	assert!(framing.contains("browser"), "{framing}");
+	assert_eq!(refused(include_str!("../../samples/hosting.warp")), "", "a route program still deploys");
+}
