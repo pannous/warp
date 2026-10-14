@@ -1147,7 +1147,7 @@ fn with_returns(node: Node, given: &dyn Fn(Node) -> Node) -> Node {
 			let value = items.get(1).cloned().unwrap_or(Node::Empty);
 			Node::List(vec![items[0].clone(), given(value)], bracket, separator)
 		}
-		Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _) => node,
+		Node::Key(_, Op::Define | Op::Arrow, _) => node,
 		other => other.map_children(|child| with_returns(child, given)),
 	}
 }

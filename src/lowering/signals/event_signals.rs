@@ -457,7 +457,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 			);
 		}
 		let list = Node::Symbol(subscribers_name(&event));
-		let listener = key(symbol(EVENT_WORD), Op::FatArrow, body);
+		let listener = key(symbol(EVENT_WORD), Op::Arrow, body);
 		let added = key(
 			list.clone(),
 			Op::Add,

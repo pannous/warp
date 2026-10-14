@@ -715,7 +715,7 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 fn constant_quantities(program: &Node) -> Constants {
 	let mut assignments: HashMap<String, usize> = HashMap::new();
 	program.visit(&mut |part| {
-		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _)
+		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow, _)
 		| Node::Key(target, Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign, _) = part
 		{
 			crate::variable_signals::symbols(target)
@@ -900,7 +900,7 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 			add_parameters(head)
 		}
 		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => add_parameters(target),
-		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => add_parameters(parameters),
+		Node::Key(parameters, Op::Arrow, _) => add_parameters(parameters),
 		// `for g in 0 to 2 {…}`: a loop variable named like a unit is the variable (card loop-variable)
 		Node::List(words, _, _) => {
 			if let Some(variable) = crate::lowering::nodes::for_in_variable(words) {

@@ -320,7 +320,7 @@ pub(super) fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 		return None;
 	};
-	let (Node::Symbol(name), Node::Key(parameter, Op::FatArrow, body)) =
+	let (Node::Symbol(name), Node::Key(parameter, Op::Arrow, body)) =
 		(target.drop_meta(), unwrapped(value).drop_meta())
 	else {
 		return None;

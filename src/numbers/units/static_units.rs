@@ -1370,7 +1370,7 @@ impl Inference {
 			return None;
 		}
 		let (parameter, body) = match function.drop_meta() {
-			Node::Key(parameter, Op::FatArrow, body) => (parameter.drop_meta().name(), body.as_ref()),
+			Node::Key(parameter, Op::Arrow, body) => (parameter.drop_meta().name(), body.as_ref()),
 			body => (crate::words::IMPLICIT_PARAMETER.to_string(), body),
 		};
 		if let Some(class) = self.class_lists.get(&source_name).cloned() {
@@ -1380,7 +1380,7 @@ impl Inference {
 		}
 		Some(self.infer(body.clone()).map(|(body, element)| {
 			let function = match function.drop_meta() {
-				Node::Key(parameter, Op::FatArrow, _) => Node::Key(parameter.clone(), Op::FatArrow, Box::new(body)),
+				Node::Key(parameter, Op::Arrow, _) => Node::Key(parameter.clone(), Op::Arrow, Box::new(body)),
 				_ => body,
 			};
 			let call = Node::List(vec![method.clone(), function], Bracket::Round, separator.clone());

@@ -383,8 +383,8 @@ pub(super) fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			)
 		}
 		// a match arm's `Point{x, y} =>` is a pattern (destructurings), no construction
-		Node::Key(pattern, Op::FatArrow, body) => {
-			Node::Key(pattern, Op::FatArrow, Box::new(constructed_from_braces(*body, classes)))
+		Node::Key(pattern, Op::Arrow, body) => {
+			Node::Key(pattern, Op::Arrow, Box::new(constructed_from_braces(*body, classes)))
 		}
 		other => other.map_children(|child| constructed_from_braces(child, classes)),
 	}

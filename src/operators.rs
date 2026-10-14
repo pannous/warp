@@ -13,7 +13,7 @@ const PREFIX_BP: u8 = 162;
 /// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 139] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -24,11 +24,13 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	("=", Op::Assign),
 	("<-", Op::Assign), // R's `x <- 3` (P145)
 	("->", Op::Arrow),
-	("=>", Op::FatArrow),
+	("=>", Op::Arrow),
 	("+", Op::Add),
 	("plus", Op::Add),
+	("add", Op::Add),
 	("-", Op::Sub),
 	("minus", Op::Sub),
+	("subtract", Op::Sub),
 	// the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`
 	("‐", Op::Sub),
 	("‑", Op::Sub),
@@ -42,16 +44,17 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
 	("·", Op::Mul),
 	("⋅", Op::Mul),
+	("times", Op::Mul),
 	("/", Op::Div),
 	("÷", Op::Div),
 	("divided by", Op::Div),
 	// Python's floor division `7//2`, `x//=2` and `7 div 2`: the parser makes them floor_quotient calls
-	("//", Op::Div),
+	("//", Op::Div), // todo cleaner? ^^
 	("div", Op::Div),
-	("//=", Op::DivAssign),
+	("//=", Op::DivAssign), // todo /= ≠ //=
 	("%", Op::Mod),
 	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
-	("mod", Op::Mod),
+	("mod", Op::Mod), // rest overloaded
 	("modulo", Op::Mod),
 	("rem", Op::Rem),
 	("^", Op::Pow),
@@ -155,6 +158,9 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	("contains", Op::In),
 	("has", Op::In),
 	("includes", Op::In),
+	("↑", Op::ArrowUp),
+	("↓", Op::ArrowDown),
+	// Arrows ˂ ˃ ˄ ˅ ͍ ͎ ͢   ⃔ ⃕ ⃖ ⃗ ⃡  ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙ ↚ ↛ ↜ ↝ ↞ ↟ ↠ ↡ ↢ ↣ ↤ ↥ ↦ ↧ ↨ ↩ ↪ ↫ ↬ ↭ ↮ ↯ ↰ ↱ ↲ ↳ ↴ ↵ ↶ ↷ ↸ ↹ ↺ ⇄ ⇅ ⇆ ⇇ ⇈ ⇉ ⇊ ⇍ ⇎ ⇏ ⇐ ⇑ ⇒ ⇓ ⇔ ⇕ ⇖ ⇗ ⇘ ⇙ ⇚ ⇛ ⇜ ⇝ ⇞ ⇟ ⇠ ⇡ ⇢ ⇣ ⇤ ⇦ ⇧ ⇨ ⇩ ⇪ ⇫ ⇬ ⇭ ⇮ ⇯ ⇰ ⇱ ⇲ ⇳ ⌁ ⌃ ⌄ ⌤ ⍇ ⍈ ⍐ ⍗ ⎋ ➔ ➘ ➙ ➚ ➛ ➜ ➝ ➞ ➟ ➠ ➡ ➢ ➣ ➤ ➥ ➦ ➧ ➨ ➩ ➪ ➫ ➬ ➭ ➮ ➯ ➱ ➲ ➳ ➴ ➵ ➶ ➷ ➸ ➹ ➺ ➻ ➼ ➽ ➾ ⽮ ￩ ￪ ￫ ￬ ⬀ ⬁ ⬂ ⬃ ⬄ ⬅ ⬆ ⬇ ⬈ ⬉ ⬊ ⬋ ⬌ ⬍ ⬎ ⬏ ⬐ ⬑ ⭠ ⭡ ⭢ ⭣ ⭤ ⭥ ⬰ ⬱ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭅ ⭆ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ⟰ ⟱ ⟲ ⟳ ⟴ ⟵ ⟶ ⟷ ⟸ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤾ ⤿ ⥀ ⥁ ⥂ ⥃ ⥄ ⥅ ⥆ ⥇ ⥈ ⥉ ⥊ ⥋ ⥌ ⥍ ⥎ ⥏ ⥐ ⥑ ⥒ ⥓ ⥔ ⥕ ⥖
 ];
 
 /// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
@@ -260,15 +266,16 @@ pub fn is_function_keyword(s: &str) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Op {
 	// Structural operators (existing)
-	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42}
-	Dot,      // .   member access
-	SafeDot,  // ?.  member access that is ø when the receiver is ø
-	Coalesce, // ??  the left value unless it is ø, then the right (Swift, C#, JS)
-	Scope,    // ::  scope resolution
-	Define,   // :=  definition
-	Assign,   // =   assignment
-	Arrow,    // ->  arrow/return type
-	FatArrow, // =>  fat arrow/lambda
+	Colon,     // :   type annotation and object construction person:{name:"Joe" age:42}
+	Dot,       // .   member access
+	SafeDot,   // ?.  member access that is ø when the receiver is ø
+	Coalesce,  // ??  the left value unless it is ø, then the right (Swift, C#, JS)
+	Scope,     // ::  scope resolution
+	Define,    // :=  definition
+	Assign,    // =   assignment
+	Arrow,     // ->  arrow/lambda/return type
+	ArrowUp,   // ↑  e.g. exponential x^n
+	ArrowDown, // ↓ e.g. logarithmic   log(x)/log(base)
 
 	// Arithmetic operators
 	Add,     // +
@@ -376,7 +383,7 @@ impl Op {
 			Op::Hash => (170, 182),
 
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
-			Op::Pow => (160, 159),
+			Op::Pow | Op::ArrowUp | Op::ArrowDown => (160, 159),
 			Op::LogBase | Op::LogOf => (160, 161),
 
 			// Multiplicative (left-assoc)
@@ -426,11 +433,10 @@ impl Op {
 			Op::Do => (77, 10),   // do binds very loosely to capture whole body including assignments
 
 			// Structural/Key operators (existing, adjusted for consistency)
-			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
-			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (70, 58), // right-assoc: a => b; the body takes an assignment as in JS: x => total += x
-			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
-			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
+			Op::Colon => (80, 81),  // type annotation: a:b:c → a:(b:c)
+			Op::Arrow => (70, 58),  // right-assoc: a->b->c is a->(b->c); the body takes an assignment as in JS: x => total += x
+			Op::Define => (60, 59), // right-assoc: a:=b:=c → a:=(b:=c)
+			Op::Assign => (60, 59), // right-assoc: a=b=c → a=(b=c)
 
 			// Compound assignment (same precedence as assignment)
 			Op::AddAssign
@@ -465,7 +471,8 @@ impl Op {
 			Op::Define => ":=",
 			Op::Assign => "=",
 			Op::Arrow => "->",
-			Op::FatArrow => "=>",
+			Op::ArrowUp => "↑",
+			Op::ArrowDown => "↓",
 
 			// Arithmetic
 			Op::Add => "+",
@@ -679,7 +686,7 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-pub const OP_CODES: [Op; 65] = [
+pub const OP_CODES: [Op; 66] = [
 	Op::None,
 	Op::Colon,
 	Op::Assign,
@@ -688,7 +695,6 @@ pub const OP_CODES: [Op; 65] = [
 	Op::SafeDot,
 	Op::Scope,
 	Op::Arrow,
-	Op::FatArrow,
 	Op::Add,
 	Op::Sub,
 	Op::Mul,
@@ -745,6 +751,8 @@ pub const OP_CODES: [Op; 65] = [
 	Op::LogOf,
 	Op::BitAnd,
 	Op::BitOr,
+	Op::ArrowUp,
+	Op::ArrowDown,
 ];
 
 /// Encode Op as i64 for storage in kind field
