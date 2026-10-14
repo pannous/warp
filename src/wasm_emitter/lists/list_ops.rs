@@ -316,13 +316,54 @@ impl WasmGcEmitter {
 						I::If(BlockType::Result(ValType::I64)),
 							I::I64Const(crate::type_kinds::BOOL_MASK_BIT),
 						I::Else,
+					]);
+					Self::emit_is_operation(f, kind);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::If(BlockType::Result(ValType::I64)),
+							I::I64Const(crate::type_kinds::OPERATION_MASK_BIT),
+						I::Else,
 							I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And,
+						I::End,
 						I::End,
 						I::I64ShrU, I::I64Const(1), I::I64And,
 					]);
 				},
 			);
 		}
+	}
+
+	/// i32 1 when the kind in local `kind` is an operation: a key whose operator code is one of Op::is_operation
+	/// (`1+1` as data), no pair `a:1` or instance entry; the code picks its bit in one of two 64-bit masks
+	fn emit_is_operation(f: &mut Function, kind: u32) {
+		let [low, high] = crate::operators::operation_code_masks();
+		let code = || {
+			[
+				I::LocalGet(kind),
+				I::I64Const(UNMARKED_KIND),
+				I::I64And,
+				I::I64Const(crate::type_kinds::KIND_BITS),
+				I::I64ShrU,
+			]
+		};
+		let mut instructions = vec![I::I64Const(low), I::I64Const(high)];
+		instructions.extend(code());
+		instructions.extend([I::I64Const(64), I::I64LtU, I::Select]);
+		// i64.shr_u takes the shift modulo 64: the code's bit in the mask chosen
+		instructions.extend(code());
+		instructions.extend([
+			I::I64ShrU,
+			I::I64Const(1),
+			I::I64And,
+			I::I32WrapI64,
+			I::LocalGet(kind),
+			I::I64Const(KIND_MASK),
+			I::I64And,
+			I::I64Const(Kind::Key as i64),
+			I::I64Eq,
+			I::I32And,
+		]);
+		Self::emit_list(f, &instructions);
 	}
 
 	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`)
@@ -406,6 +447,11 @@ impl WasmGcEmitter {
 					s.emit_string_call(f, form.name(), "new_symbol");
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
+				// an operator node `1+1` is an operation, a pair `a:1` (or an instance's entry) stays a key
+				Self::emit_is_operation(f, kind);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_string_call(f, crate::words::OPERATION_WORD, "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End]);
 				for named in RUN_TIME_TYPE_KINDS {
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
