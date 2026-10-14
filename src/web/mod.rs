@@ -231,13 +231,22 @@ pub fn shown(outcome: &Value) -> Value {
 	json!({ "value": value.serialize(), "html": html_of(&value) })
 }
 
-/// The playground's Deploy (deploy.js, notes/hosting.md): `{scripts, module_length}` (the host scripts' names, which
-/// warp-hosting takes as ?scripts=) and the program's module for a Worker, or `{error}` and no module
+/// The playground's Deploy (deploy.js, notes/hosting.md): `{query, scripts, site, module_length}` (the query naming the
+/// scripts warp-hosting composes the Worker of, those scripts, whether it serves a site) and the program's module, or
+/// `{error}` and no module
 pub fn worker_bundle(code: &str) -> (Value, Vec<u8>) {
-	match crate::host::host_parts::worker_parts(code) {
-		Ok((module, scripts)) => {
+	use crate::host::host_parts::Deployable;
+	match crate::host::host_parts::deployable(code) {
+		Ok(deployable) => {
+			let scripts = match &deployable {
+				Deployable::Server { scripts, .. } => scripts.clone(),
+				Deployable::Site { layout, .. } => layout.shipped(),
+			};
 			let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
-			(json!({ "scripts": names, "module_length": module.len() }), module)
+			let site = matches!(deployable, Deployable::Site { .. });
+			let module = deployable.module().to_vec();
+			let report = json!({ "query": deployable.hosting_query(), "scripts": names, "site": site, "module_length": module.len() });
+			(report, module)
 		}
 		Err(message) => (json!({ "error": message }), Vec::new()),
 	}
