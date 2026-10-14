@@ -1111,20 +1111,6 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(key(name.clone(), Op::Colon, kind.clone()))
 			}
-			// `int b = 2` as the parser groups it, the type then the assignment
-			[kind, assignment]
-				if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)))
-					&& matches!(kind.drop_meta(), Node::Symbol(_)) =>
-			{
-				let Node::Key(name, _, default) = assignment.drop_meta() else {
-					unreachable!("guarded")
-				};
-				Some(Node::Key(
-					Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))),
-					Op::Assign,
-					default.clone(),
-				))
-			}
 			_ => None,
 		},
 		_ => None,
