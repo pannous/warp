@@ -11,10 +11,7 @@ fn a_union_part_that_names_no_type_is_refused() {
 	fails_with("x: int | zork = 3", "zork is neither");
 	fails_with("x: zork or int = 3", "zork is neither");
 	fails_with("f(a: int or zork) := a; f(2)", "parameter a is declared int or zork");
-	fails_with(
-		"class B{size: int | zork}; B(2)",
-		"field B.size is declared int or zork",
-	);
+	fails_with("class B{size: int | zork}; B(2)", "field B.size is declared int or zork");
 }
 
 #[test]

@@ -14,8 +14,5 @@ fn fetch_of_a_parameter_and_a_concatenation() {
 	// halves of the URL, not its path: in the browser the URL is the page's stub with the answer in its query
 	let (server, path) = url.split_at(url.len() / 2);
 	is!(&format!("get(u) := fetch(u); get(\"{url}\")"), "hi\n");
-	is!(
-		&format!("get(server) := fetch(server + \"{path}\"); get(\"{server}\")"),
-		"hi\n"
-	);
+	is!(&format!("get(server) := fetch(server + \"{path}\"); get(\"{server}\")"), "hi\n");
 }

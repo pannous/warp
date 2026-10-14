@@ -16,10 +16,7 @@ fn ten_million_float_fills_fit_the_default_fuel() {
 	let fill = format!(
 		"xs = float[{MEASURED_STEPS}]; for i in 1 to {MEASURED_STEPS} {{ xs#i = i * 0.5 }}; xs#{MEASURED_STEPS}"
 	);
-	assert_eq!(
-		with_fuel(share_of_default, || eval(&fill)),
-		eval(&format!("({MEASURED_STEPS} * 0.5) as float"))
-	);
+	assert_eq!(with_fuel(share_of_default, || eval(&fill)), eval(&format!("({MEASURED_STEPS} * 0.5) as float")));
 }
 
 #[test]

@@ -11,11 +11,7 @@ pub(super) struct Conversion {
 
 impl Conversion {
 	fn new(wit: &str, rust: &str, expression: &str) -> Conversion {
-		Conversion {
-			wit: wit.into(),
-			rust: rust.into(),
-			expression: expression.into(),
-		}
+		Conversion { wit: wit.into(), rust: rust.into(), expression: expression.into() }
 	}
 	fn same(wit: &str, rust: &str) -> Conversion {
 		Conversion::new(wit, rust, "{}")
@@ -85,12 +81,7 @@ pub(super) fn last_segment(path: &str) -> &str {
 }
 
 pub(super) fn type_arguments(path: &Value) -> Vec<&Value> {
-	path["args"]["angle_bracketed"]["args"]
-		.as_array()
-		.into_iter()
-		.flatten()
-		.filter_map(|arg| arg.get("type"))
-		.collect()
+	path["args"]["angle_bracketed"]["args"].as_array().into_iter().flatten().filter_map(|arg| arg.get("type")).collect()
 }
 
 pub(super) fn kebab(rust: &str) -> Option<String> {
@@ -127,10 +118,7 @@ pub(super) fn camel(kebab: &str) -> String {
 		.split('-')
 		.map(|segment| {
 			let mut chars = segment.chars();
-			chars
-				.next()
-				.map(|first| first.to_ascii_uppercase().to_string() + chars.as_str())
-				.unwrap_or_default()
+			chars.next().map(|first| first.to_ascii_uppercase().to_string() + chars.as_str()).unwrap_or_default()
 		})
 		.collect()
 }
@@ -192,23 +180,15 @@ impl<'a> Reader<'a> {
 	/// A parameter given as a generic with these bounds: a text for `AsRef<str>`, `Into<String>`…, bytes for
 	/// `AsRef<[u8]>`; any other trait is tried as a text too and dropped if the compiler refuses
 	fn bounded(&self, bounds: &[&Value]) -> Option<Conversion> {
-		let traits: Vec<&Value> = bounds
+		let traits: Vec<&Value> =
+			bounds.iter().filter_map(|bound| bound.get("trait_bound")).map(|bound| &bound["trait"]).collect();
+		let bytes = traits
 			.iter()
-			.filter_map(|bound| bound.get("trait_bound"))
-			.map(|bound| &bound["trait"])
-			.collect();
-		let bytes = traits.iter().any(|t| {
-			type_arguments(t)
-				.first()
-				.is_some_and(|argument| argument["slice"]["primitive"] == "u8")
-		});
+			.any(|t| type_arguments(t).first().is_some_and(|argument| argument["slice"]["primitive"] == "u8"));
 		match traits.as_slice() {
 			[] => None,
 			_ if bytes => Some(Conversion::same("list<u8>", "Vec<u8>")),
-			_ if traits
-				.iter()
-				.all(|t| STRING_TRAITS.contains(&last_segment(t["path"].as_str().unwrap_or("")))) =>
-			{
+			_ if traits.iter().all(|t| STRING_TRAITS.contains(&last_segment(t["path"].as_str().unwrap_or("")))) => {
 				Some(Conversion::same("string", "String"))
 			}
 			_ => Some(Conversion::new("string", "String", "{}.as_str()")),
@@ -218,10 +198,7 @@ impl<'a> Reader<'a> {
 	/// The type a plain type alias names: `HammingResult` is `Result<usize, StrSimError>`
 	fn aliased(&self, ty: &Value) -> Option<&'a Value> {
 		let alias = self.item(&ty["resolved_path"]["id"])?["inner"].get("type_alias")?;
-		alias["generics"]["params"]
-			.as_array()
-			.is_some_and(|params| params.is_empty())
-			.then(|| &alias["type"])
+		alias["generics"]["params"].as_array().is_some_and(|params| params.is_empty()).then(|| &alias["type"])
 	}
 
 	fn resource_of(&self, ty: &Value, self_type: Option<&str>) -> Option<String> {
@@ -257,10 +234,7 @@ impl<'a> Reader<'a> {
 				return Some(Conversion::new(
 					&format!("borrow<{kebab}>"),
 					&format!("{}Borrow<'_>", camel(&kebab)),
-					&format!(
-						"&{}*{{}}.get::<{resource}Resource>().0.{borrow}()",
-						if mutable { "mut " } else { "" }
-					),
+					&format!("&{}*{{}}.get::<{resource}Resource>().0.{borrow}()", if mutable { "mut " } else { "" }),
 				));
 			}
 			if mutable {
@@ -272,11 +246,9 @@ impl<'a> Reader<'a> {
 			if let Some(element) = inner.get("slice") {
 				let element = self.element(element)?;
 				return Some(match element.is_identity() {
-					true => Conversion::new(
-						&format!("list<{}>", element.wit),
-						&format!("Vec<{}>", element.rust),
-						"&{}",
-					),
+					true => {
+						Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), "&{}")
+					}
 					false => Conversion::new(
 						&format!("list<{}>", element.wit),
 						&format!("Vec<{}>", element.rust),
@@ -285,10 +257,9 @@ impl<'a> Reader<'a> {
 				});
 			}
 			if let Some(name) = inner["generic"].as_str().filter(|name| *name != "Self") {
-				return self.bounded(&Reader::bounds(generics, name)).map(|text| Conversion {
-					expression: "&{}".into(),
-					..text
-				});
+				return self
+					.bounded(&Reader::bounds(generics, name))
+					.map(|text| Conversion { expression: "&{}".into(), ..text });
 			}
 			return None;
 		}
@@ -306,13 +277,8 @@ impl<'a> Reader<'a> {
 			("String", []) => Some(Conversion::same("string", "String")),
 			("PathBuf", []) => Some(Conversion::new("string", "String", "{}.into()")),
 			("Vec", [element]) => {
-				let element = self
-					.parameter(element, generics, self_type)
-					.filter(Conversion::is_identity)?;
-				Some(Conversion::same(
-					&format!("list<{}>", element.wit),
-					&format!("Vec<{}>", element.rust),
-				))
+				let element = self.parameter(element, generics, self_type).filter(Conversion::is_identity)?;
+				Some(Conversion::same(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust)))
 			}
 			("Option", [inner]) => {
 				let inner = self.parameter(inner, generics, self_type)?;
@@ -321,11 +287,7 @@ impl<'a> Reader<'a> {
 					"&{}" => "{}.as_deref()",
 					_ => return None,
 				};
-				Some(Conversion::new(
-					&format!("option<{}>", inner.wit),
-					&format!("Option<{}>", inner.rust),
-					expression,
-				))
+				Some(Conversion::new(&format!("option<{}>", inner.wit), &format!("Option<{}>", inner.rust), expression))
 			}
 			_ => None,
 		}
@@ -364,9 +326,7 @@ impl<'a> Reader<'a> {
 			if inner["primitive"] == "str" {
 				return Some(Conversion::new("string", "String", "{}.to_string()"));
 			}
-			let element = self
-				.result(inner.get("slice")?, self_type)
-				.filter(Conversion::is_identity)?;
+			let element = self.result(inner.get("slice")?, self_type).filter(Conversion::is_identity)?;
 			return Some(Conversion::new(
 				&format!("list<{}>", element.wit),
 				&format!("Vec<{}>", element.rust),
@@ -380,10 +340,7 @@ impl<'a> Reader<'a> {
 				.collect::<Option<_>>()?;
 			let wit: Vec<&str> = items.iter().map(|item| item.wit.as_str()).collect();
 			let rust: Vec<&str> = items.iter().map(|item| item.rust.as_str()).collect();
-			return Some(Conversion::same(
-				&format!("tuple<{}>", wit.join(", ")),
-				&format!("({})", rust.join(", ")),
-			));
+			return Some(Conversion::same(&format!("tuple<{}>", wit.join(", ")), &format!("({})", rust.join(", "))));
 		}
 		let path = ty.get("resolved_path")?;
 		let arguments = type_arguments(path);
@@ -394,9 +351,7 @@ impl<'a> Reader<'a> {
 				Some(Conversion::new("string", "String", "{}.into_owned()"))
 			}
 			("Cow", [inner]) => {
-				let element = self
-					.result(inner.get("slice")?, self_type)
-					.filter(Conversion::is_identity)?;
+				let element = self.result(inner.get("slice")?, self_type).filter(Conversion::is_identity)?;
 				Some(Conversion::new(
 					&format!("list<{}>", element.wit),
 					&format!("Vec<{}>", element.rust),
@@ -406,11 +361,7 @@ impl<'a> Reader<'a> {
 			("Vec", [element]) => {
 				let element = self.result(element, self_type)?;
 				let list = |expression: &str| {
-					Conversion::new(
-						&format!("list<{}>", element.wit),
-						&format!("Vec<{}>", element.rust),
-						expression,
-					)
+					Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), expression)
 				};
 				Some(match element.is_identity() {
 					true => list("{}"),
@@ -420,11 +371,7 @@ impl<'a> Reader<'a> {
 			("Option", [inner]) => {
 				let inner = self.result(inner, self_type)?;
 				let option = |expression: &str| {
-					Conversion::new(
-						&format!("option<{}>", inner.wit),
-						&format!("Option<{}>", inner.rust),
-						expression,
-					)
+					Conversion::new(&format!("option<{}>", inner.wit), &format!("Option<{}>", inner.rust), expression)
 				};
 				Some(match inner.is_identity() {
 					true => option("{}"),
@@ -483,12 +430,7 @@ impl<'a> Reader<'a> {
 			true => None,
 			false => Some(self.result(output, self_type)?),
 		};
-		Some(Function {
-			name: name.to_string(),
-			parameters,
-			result,
-			receiver,
-		})
+		Some(Function { name: name.to_string(), parameters, result, receiver })
 	}
 
 	/// The public functions of a struct's inherent impls
@@ -531,9 +473,7 @@ impl<'a> Reader<'a> {
 
 	/// The items of a struct's inherent impls (those of no trait)
 	fn inherent_items(&self, item: &'a Value) -> impl Iterator<Item = &'a Value> + '_ {
-		let inherent = self
-			.impls(item)
-			.filter(|implementation| implementation["inner"]["impl"]["trait"].is_null());
+		let inherent = self.impls(item).filter(|implementation| implementation["inner"]["impl"]["trait"].is_null());
 		inherent.flat_map(|implementation| self.items(&implementation["inner"]["impl"]["items"]))
 	}
 
@@ -543,12 +483,7 @@ impl<'a> Reader<'a> {
 			.filter(|field| field["visibility"] == "public")
 			.filter_map(|field| {
 				let result = self.result(field["inner"].get("struct_field")?, Some(name))?;
-				Some((
-					kebab(field["name"].as_str()?)
-						.map(|_| field["name"].as_str())??
-						.to_string(),
-					result,
-				))
+				Some((kebab(field["name"].as_str()?).map(|_| field["name"].as_str())??.to_string(), result))
 			})
 			.collect()
 	}
@@ -563,16 +498,11 @@ impl<'a> Reader<'a> {
 
 	/// Does a function of the struct make one (`new` returning `Self`, `Result<Self, E>`, `Option<Self>`)?
 	fn constructs(&self, item: &Value) -> bool {
-		self.inherent_items(item)
-			.filter_map(|method| method["inner"].get("function"))
-			.any(|function| {
-				let output = &function["sig"]["output"];
-				let is_self = |ty: &Value| ty["generic"] == "Self" || ty["resolved_path"]["id"] == item["id"];
-				is_self(output)
-					|| type_arguments(&output["resolved_path"])
-						.first()
-						.is_some_and(|ty| is_self(ty))
-			})
+		self.inherent_items(item).filter_map(|method| method["inner"].get("function")).any(|function| {
+			let output = &function["sig"]["output"];
+			let is_self = |ty: &Value| ty["generic"] == "Self" || ty["resolved_path"]["id"] == item["id"];
+			is_self(output) || type_arguments(&output["resolved_path"]).first().is_some_and(|ty| is_self(ty))
+		})
 	}
 }
 
@@ -585,30 +515,22 @@ pub(super) fn primitive_conversion(primitive: &str, parameter: bool) -> Option<C
 	match primitive {
 		"usize" => Some(sized("u64", "u64", "usize")),
 		"isize" => Some(sized("s64", "i64", "isize")),
-		_ => PRIMITIVES
-			.iter()
-			.find(|(rust, _)| *rust == primitive)
-			.map(|(rust, wit)| Conversion::same(wit, rust)),
+		_ => PRIMITIVES.iter().find(|(rust, _)| *rust == primitive).map(|(rust, wit)| Conversion::same(wit, rust)),
 	}
 }
 
 impl Api {
 	pub(super) fn of(doc: &Value, crate_name: &str) -> Api {
 		let index = &doc["index"];
-		let mut reader = Reader {
-			index,
-			crate_name: crate_name.to_string(),
-			resources: HashMap::new(),
-		};
+		let mut reader = Reader { index, crate_name: crate_name.to_string(), resources: HashMap::new() };
 		let root = reader.item(&doc["root"]).cloned().unwrap_or(Value::Null);
 		let mut items = vec![];
 		reader.root_items(&root, &mut items, &mut HashSet::new());
 		let structs: Vec<(String, &Value)> = items
 			.iter()
 			.filter(|(name, item)| {
-				let plain = item["inner"]["struct"]["generics"]["params"]
-					.as_array()
-					.is_some_and(|params| params.is_empty());
+				let plain =
+					item["inner"]["struct"]["generics"]["params"].as_array().is_some_and(|params| params.is_empty());
 				plain && reader.constructs(item) && kebab(name).is_some()
 			})
 			.map(|(name, item)| (name.clone(), *item))
@@ -621,21 +543,14 @@ impl Api {
 		let resources: Vec<Resource> = structs
 			.iter()
 			.filter(|(name, _)| names.insert(kebab(name).unwrap_or_default()))
-			.map(|(name, item)| Resource {
-				name: name.clone(),
-				functions: reader.methods(name, item),
-			})
+			.map(|(name, item)| Resource { name: name.clone(), functions: reader.methods(name, item) })
 			.collect();
 		let functions = items
 			.iter()
 			.filter_map(|(name, item)| reader.function(name, item, None))
 			.filter(|function| names.insert(kebab(&function.name).unwrap_or_default()))
 			.collect();
-		Api {
-			crate_name: reader.crate_name,
-			functions,
-			resources,
-		}
+		Api { crate_name: reader.crate_name, functions, resources }
 	}
 
 	/// Item keys: `escape`, `Regex`, `Regex.is_match`
@@ -644,9 +559,7 @@ impl Api {
 		self.resources.retain(|resource| !refused.contains(&resource.name));
 		for resource in &mut self.resources {
 			let name = resource.name.clone();
-			resource
-				.functions
-				.retain(|function| !refused.contains(&format!("{name}.{}", function.name)));
+			resource.functions.retain(|function| !refused.contains(&format!("{name}.{}", function.name)));
 		}
 	}
 }

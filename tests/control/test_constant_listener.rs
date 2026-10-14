@@ -20,9 +20,6 @@ fn a_listener_on_a_written_or_derived_value_does_not_warn() {
 		"n = 1; whenever n > 2 { print \"n\" }; n++; n",
 	] {
 		let (_, warnings) = warnings_of(code);
-		assert!(
-			!warnings.iter().any(|warning| warning.contains(NEVER_FIRES)),
-			"{code}: {warnings:?}"
-		);
+		assert!(!warnings.iter().any(|warning| warning.contains(NEVER_FIRES)), "{code}: {warnings:?}");
 	}
 }

@@ -14,10 +14,7 @@ fn a_beat_is_a_share_of_a_minute() {
 #[test]
 fn the_tempo_sets_the_beat() {
 	is!("use sound\nglobal tempo = 90\nplay(C4, 5ms)\n3 beats", 2.0);
-	is!(
-		"use sound\nglobal tempo = 240\nplay(C4, 1/8 beat)\nsound_queued() <= 1/32",
-		true
-	);
+	is!("use sound\nglobal tempo = 240\nplay(C4, 1/8 beat)\nsound_queued() <= 1/32", true);
 }
 
 #[test]

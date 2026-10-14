@@ -23,9 +23,10 @@ pub fn lower(node: Node) -> Node {
 			if patterns.is_empty() {
 				return Node::Key(head, op, body);
 			}
-			let body = patterns.into_iter().rev().fold(*body, |body, (name, pattern)| {
-				matched(Node::Symbol(name), vec![key(pattern, Op::Colon, body)])
-			});
+			let body = patterns
+				.into_iter()
+				.rev()
+				.fold(*body, |body, (name, pattern)| matched(Node::Symbol(name), vec![key(pattern, Op::Colon, body)]));
 			key(named_head, op, body)
 		}
 		other => other,
@@ -37,19 +38,14 @@ fn parameters_named(head: Node, patterns: &mut Vec<(String, Node)>) -> Node {
 	let Node::List(items, bracket, separator) = head.drop_meta().clone() else {
 		return head;
 	};
-	arguments_rewritten(items, bracket, separator, |parameter| {
-		parameter_named(parameter, patterns)
-	})
+	arguments_rewritten(items, bracket, separator, |parameter| parameter_named(parameter, patterns))
 }
 
 fn parameter_named(parameter: Node, patterns: &mut Vec<(String, Node)>) -> Node {
 	match parameter.drop_meta() {
 		// `f(n, [a, b])` may hold its parameters as one comma list
 		Node::List(items, Bracket::None, separator) => Node::List(
-			items
-				.iter()
-				.map(|item| parameter_named(item.clone(), patterns))
-				.collect(),
+			items.iter().map(|item| parameter_named(item.clone(), patterns)).collect(),
 			Bracket::None,
 			separator.clone(),
 		),

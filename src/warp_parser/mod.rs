@@ -74,14 +74,8 @@ const BROADCAST_ITEM: &str = "broadcast_item";
 const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
-const LITERAL_SUFFIXES: [(char, &str); 6] = [
-	('f', "float"),
-	('F', "float"),
-	('d', "float"),
-	('D', "float"),
-	('l', "exact"),
-	('L', "exact"),
-];
+const LITERAL_SUFFIXES: [(char, &str); 6] =
+	[('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
 pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
@@ -129,9 +123,7 @@ const LEFT_ARROW_TOPIC: &str = "left-arrow";
 pub(crate) const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 /// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 /// `open`, `abstract`, `sealed`, `final`, visibility
-const CLASS_MODIFIERS: [&str; 8] = [
-	"data", "open", "abstract", "sealed", "final", "public", "private", "internal",
-];
+const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
 /// The keywords of a field: Kotlin's primary constructor `class Point(val x: Int, var y: Int)`, Swift's `var count = 0`
 pub(crate) const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
@@ -298,24 +290,15 @@ pub struct ParserOptions {
 
 impl ParserOptions {
 	pub fn wit() -> Self {
-		ParserOptions {
-			wit_mode: true,
-			..Default::default()
-		}
+		ParserOptions { wit_mode: true, ..Default::default() }
 	}
 
 	pub fn xml() -> Self {
-		ParserOptions {
-			xml_mode: true,
-			..Default::default()
-		}
+		ParserOptions { xml_mode: true, ..Default::default() }
 	}
 
 	pub fn data() -> Self {
-		ParserOptions {
-			data_mode: true,
-			..Default::default()
-		}
+		ParserOptions { data_mode: true, ..Default::default() }
 	}
 }
 
@@ -360,11 +343,7 @@ const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 const PIPE_GLYPH: &str = "|";
 
 pub fn parse_file(path: &str) -> Node {
-	let options = if path.ends_with(".wit") {
-		ParserOptions::wit()
-	} else {
-		ParserOptions::default()
-	};
+	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
 	match read_to_string(path) {
 		Ok(content) => WarpParser::parse_with_options(&content, options),
 		_ => error(&format!("Failed to read {}", path)),
@@ -375,10 +354,7 @@ pub fn parse_file(path: &str) -> Node {
 /// has one arrow, `->` (user 2026-10-14: "equal for us, but not for others")
 fn one_arrow(node: Node) -> Node {
 	let node = match node {
-		Node::Type { name, body } => Node::Type {
-			name,
-			body: Box::new(one_arrow(*body)),
-		},
+		Node::Type { name, body } => Node::Type { name, body: Box::new(one_arrow(*body)) },
 		other => crate::node::children_rewritten(other, one_arrow),
 	};
 	match node {
@@ -510,19 +486,11 @@ impl WarpParser {
 			unicode_normalization::IsNormalized::Yes => input,
 			_ => input.nfc().collect(),
 		};
-		let input = if options.data_mode {
-			input
-		} else {
-			crate::text::uniscript_entities::expand_entities(&input)
-		};
+		let input = if options.data_mode { input } else { crate::text::uniscript_entities::expand_entities(&input) };
 		let lines: Vec<String> = input.lines().map(String::from).collect();
 		let current_line = lines.first().cloned().unwrap_or_default();
 		let chars: Vec<char> = input.chars().collect();
-		let user_operators = if options == ParserOptions::default() {
-			scan_user_operators(&input)
-		} else {
-			Vec::new()
-		};
+		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
 		let (declared_types, multi_word_types) = if options == ParserOptions::default() {
 			(scan_declared_types(&input), scan_multi_word_types(&input))
 		} else {

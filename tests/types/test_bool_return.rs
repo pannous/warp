@@ -13,8 +13,5 @@ fn a_function_giving_a_bool_returns_a_bool() {
 	assert_eq!(text_of("f(n) := if n == 0 then true else f(n - 1)\nf(2)"), "yes");
 	assert_eq!(text_of("f(n) := n == 0 ? false : f(n - 1)\nf(2)"), "no");
 	assert_eq!(text_of("g(n) := if n == 0 then 5 else g(n - 1)\ng(2)"), "5");
-	assert_eq!(
-		text_of("fib(n) := if n < 2 then n else fib(n-1) + fib(n-2)\nfib(10)"),
-		"55"
-	);
+	assert_eq!(text_of("fib(n) := if n < 2 then n else fib(n-1) + fib(n-2)\nfib(10)"), "55");
 }

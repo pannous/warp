@@ -35,31 +35,16 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 	};
 	let block = spaced(block);
 	let definitions: Vec<Node> = definitions.as_items().into_iter().map(spaced).collect();
-	let mentioned = |name: &str| {
-		[&block]
-			.into_iter()
-			.chain(&definitions)
-			.any(|part| names_or_interpolates(part, name))
-	};
-	let bound: Vec<(String, Node)> = names
-		.into_iter()
-		.zip(values.as_items())
-		.filter(|(name, _)| mentioned(name))
-		.collect();
+	let mentioned = |name: &str| [&block].into_iter().chain(&definitions).any(|part| names_or_interpolates(part, name));
+	let bound: Vec<(String, Node)> =
+		names.into_iter().zip(values.as_items()).filter(|(name, _)| mentioned(name)).collect();
 	let program_of = |bindings: Vec<Node>| {
-		let statements: Vec<Node> = bindings
-			.into_iter()
-			.chain(definitions.iter().cloned())
-			.chain([block.clone()])
-			.collect();
+		let statements: Vec<Node> =
+			bindings.into_iter().chain(definitions.iter().cloned()).chain([block.clone()]).collect();
 		Node::List(statements, Bracket::None, Separator::Newline)
 	};
-	let as_written = program_of(
-		bound
-			.iter()
-			.map(|(name, value)| assignment(name, as_written(value.clone())))
-			.collect(),
-	);
+	let as_written =
+		program_of(bound.iter().map(|(name, value)| assignment(name, as_written(value.clone()))).collect());
 	let result = match crate::analyzer::effects::EffectReport::of(&as_written)
 		.denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED)
 	{
@@ -136,29 +121,16 @@ pub(crate) fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(
 				Separator::None,
 			);
 			numbers.push(number);
-			assignment(
-				&name,
-				Node::Key(Box::new(read), Op::As, Box::new(Node::Symbol(type_word.to_string()))),
-			)
+			assignment(&name, Node::Key(Box::new(read), Op::As, Box::new(Node::Symbol(type_word.to_string()))))
 		})
 		.collect();
 	let program = program_of(bindings);
-	crate::host::with_block_values(numbers, || {
-		crate::errors::diagnostic::in_program_mode(program, run_cached_block)
-	})
+	crate::host::with_block_values(numbers, || crate::errors::diagnostic::in_program_mode(program, run_cached_block))
 }
 
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
-	eval_parsed(
-		program_of(
-			bound
-				.into_iter()
-				.map(|(name, value)| assignment(&name, as_written(value)))
-				.collect(),
-		),
-		"",
-	)
+	eval_parsed(program_of(bound.into_iter().map(|(name, value)| assignment(&name, as_written(value))).collect()), "")
 }
 
 /// How many block programs this thread compiled (the cache's misses)
@@ -205,8 +177,5 @@ pub(crate) fn spaced(node: Node) -> Node {
 
 /// A block's value the host has no constructor for in the running module yet
 pub fn cannot_hand_back(value: &Node) -> String {
-	format!(
-		"the block gave {}, a value run_block cannot hand back yet",
-		value.serialize().trim()
-	)
+	format!("the block gave {}, a value run_block cannot hand back yet", value.serialize().trim())
 }

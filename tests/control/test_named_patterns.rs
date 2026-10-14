@@ -12,22 +12,13 @@ fn is_tests_a_named_pattern() {
 
 #[test]
 fn an_arm_matches_a_named_pattern() {
-	is!(
-		"pattern Pair = [_, _]\nmatch [1, 2] { Pair => \"pair\"; _ => \"other\" }",
-		"pair"
-	);
-	is!(
-		"pattern Pair = [_, _]\nmatch [1] { Pair => \"pair\"; _ => \"other\" }",
-		"other"
-	);
+	is!("pattern Pair = [_, _]\nmatch [1, 2] { Pair => \"pair\"; _ => \"other\" }", "pair");
+	is!("pattern Pair = [_, _]\nmatch [1] { Pair => \"pair\"; _ => \"other\" }", "other");
 }
 
 #[test]
 fn a_named_pattern_binds_its_names() {
-	is!(
-		"pattern Tagged = [\"tag\", name, ..]\nmatch [\"tag\", \"xy\", 1] { Tagged => name; _ => \"none\" }",
-		"xy"
-	);
+	is!("pattern Tagged = [\"tag\", name, ..]\nmatch [\"tag\", \"xy\", 1] { Tagged => name; _ => \"none\" }", "xy");
 }
 
 #[test]

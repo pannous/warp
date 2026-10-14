@@ -18,10 +18,7 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = OPERATOR_ALIASES
-		.into_iter()
-		.filter(|(alias, _, _)| !defined.contains(*alias))
-		.collect();
+	let aliases: Vec<_> = OPERATOR_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
 	if aliases.is_empty() {
 		return node;
 	}
@@ -48,10 +45,9 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 		}
 		// the pipe stage `| root` (pipes.rs reads the operator alone)
 		stage @ Node::Meta { .. } if crate::pipes::is_pipe_stage(&stage) => match stage {
-			Node::Meta { node, data } if alias_of(&node).is_some() => Node::Meta {
-				node: Box::new(key(Node::Empty, noted(&node), Node::Empty)),
-				data,
-			},
+			Node::Meta { node, data } if alias_of(&node).is_some() => {
+				Node::Meta { node: Box::new(key(Node::Empty, noted(&node), Node::Empty)), data }
+			}
 			other => other.map_children(|child| operators(child, aliases)),
 		},
 		// the stage `then root` (P158, pipes.rs reads the operator alone)

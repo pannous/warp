@@ -39,11 +39,7 @@ pub(crate) fn result_count(bytes: &[u8], name: &str) -> Option<usize> {
 					NameSectionReader::new(wasmparser::BinaryReader::new(section.data(), section.data_offset()));
 				for subsection in names.flatten() {
 					if let Name::Function(map) = subsection {
-						index = map
-							.into_iter()
-							.flatten()
-							.find(|naming| naming.name == name)
-							.map(|naming| naming.index);
+						index = map.into_iter().flatten().find(|naming| naming.name == name).map(|naming| naming.index);
 					}
 				}
 			}
@@ -51,9 +47,7 @@ pub(crate) fn result_count(bytes: &[u8], name: &str) -> Option<usize> {
 		}
 	}
 	let defined = index? - imported;
-	result_counts
-		.get(*type_of_function.get(defined as usize)? as usize)
-		.copied()
+	result_counts.get(*type_of_function.get(defined as usize)? as usize).copied()
 }
 
 #[test]
@@ -64,14 +58,8 @@ fn test_divmod_returns_quotient_and_remainder() {
 
 #[test]
 fn test_big_division_results_unchanged() {
-	is!(
-		"123456789012345678901234567890//1000000000000",
-		int("123456789012345678")
-	);
-	is!(
-		"-123456789012345678901234567890//1000000000000",
-		int("-123456789012345679")
-	);
+	is!("123456789012345678901234567890//1000000000000", int("123456789012345678"));
+	is!("-123456789012345678901234567890//1000000000000", int("-123456789012345679"));
 	is!("123456789012345678901234567890 % -1000", 890);
 	is!("-123456789012345678901234567890 % -1000", 110);
 	is!(BIG_DIVISION, int("60308641996265432088"));
@@ -87,28 +75,13 @@ fn test_int_divmod_returns_both_results() {
 
 #[test]
 fn test_big_exact_division_results_unchanged() {
-	is!(
-		"123456789012345678901234567890//-1000",
-		int("-123456789012345678901234567")
-	);
-	is!(
-		"-123456789012345678901234567890//-1000",
-		int("123456789012345678901234568")
-	);
+	is!("123456789012345678901234567890//-1000", int("-123456789012345678901234567"));
+	is!("-123456789012345678901234567890//-1000", int("123456789012345678901234568"));
 	is!("123456789012345678901234567890//98765432109876543210", 1249999988);
 	is!("-123456789012345678901234567890//98765432109876543210", -1249999989);
-	is!(
-		"864197523086419752308641975230 / 7",
-		int("123456789012345678901234567890")
-	);
-	is!(
-		"x = 123456789012345678901234567891 / 2; x * 2",
-		int("123456789012345678901234567891")
-	);
-	is!(
-		"(123456789012345678901234567891 / 2) * 4 / 2",
-		int("123456789012345678901234567891")
-	);
+	is!("864197523086419752308641975230 / 7", int("123456789012345678901234567890"));
+	is!("x = 123456789012345678901234567891 / 2; x * 2", int("123456789012345678901234567891"));
+	is!("(123456789012345678901234567891 / 2) * 4 / 2", int("123456789012345678901234567891"));
 	crate::common::fails_with("98765432109876543210 / 0 > 10^40", "divide by zero"); // P66: no exact infinity
 	is!("x = 98765432109876543210 / 3; x * 3", int("98765432109876543210"));
 }

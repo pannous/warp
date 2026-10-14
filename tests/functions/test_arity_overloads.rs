@@ -6,10 +6,7 @@ use crate::is;
 #[test]
 fn a_call_takes_the_definition_of_its_argument_count() {
 	is!("def f(a){a}; def f(a,b){a+b}; f(1)*10 + f(2,3)", 15);
-	is!(
-		"f(a) := a; f(a,b) := a+b; f(a,b,c) := a*b*c; f(7) + f(1,2) + f(2,3,4)",
-		34
-	);
+	is!("f(a) := a; f(a,b) := a+b; f(a,b,c) := a*b*c; f(7) + f(1,2) + f(2,3,4)", 34);
 	is!("area(r) := 3*r*r; area(w, h) := w*h; area(2) + area(2, 5)", 22); // Julia area(r), area(w, h)
 }
 

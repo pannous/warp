@@ -13,11 +13,5 @@ fn print_empty_gives_nothing() {
 #[test]
 fn print_empty_prints_it() {
 	let printed = crate::common::printed("print ø\nprint(nil)");
-	assert_eq!(
-		printed
-			.lines()
-			.filter(|line| !line.starts_with('»'))
-			.collect::<Vec<_>>(),
-		["ø", "ø"]
-	);
+	assert_eq!(printed.lines().filter(|line| !line.starts_with('»')).collect::<Vec<_>>(), ["ø", "ø"]);
 }

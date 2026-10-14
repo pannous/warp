@@ -31,13 +31,8 @@ pub fn lower(node: Node) -> Node {
 	let class_fields = crate::class_methods::class_fields(&node);
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
 	let instances = crate::class_methods::instance_classes(&node, &classes);
-	ElementChecks {
-		declared: HashMap::new(),
-		class_fields,
-		instances,
-		temporaries: Counter::starting_at(1),
-	}
-	.lower(node)
+	ElementChecks { declared: HashMap::new(), class_fields, instances, temporaries: Counter::starting_at(1) }
+		.lower(node)
 }
 
 struct ElementChecks {
@@ -102,10 +97,7 @@ impl ElementChecks {
 					return self.checked_store(&field_tests, &target.clone(), *target, op, value);
 				}
 				let declaration = match target.drop_meta() {
-					Node::Symbol(name) => self
-						.declared
-						.get(name)
-						.map(|type_name| (name.clone(), type_name.clone())),
+					Node::Symbol(name) => self.declared.get(name).map(|type_name| (name.clone(), type_name.clone())),
 					declaring => declaring_name_and_type(declaring),
 				};
 				let Some((name, type_name)) = declaration else {
@@ -128,9 +120,7 @@ impl ElementChecks {
 				if appended_items(&append).or_else(|| inserted_item(&append)).is_none() {
 					return append.map_children(|child| self.lower(child));
 				}
-				let Node::Key(list, _, _) = append.drop_meta() else {
-					unreachable!("an append call")
-				};
+				let Node::Key(list, _, _) = append.drop_meta() else { unreachable!("an append call") };
 				let tests = match list.drop_meta() {
 					Node::Symbol(name) => self.declared_test(name).into_iter().collect(),
 					field => self.field_tests(field),
@@ -190,11 +180,7 @@ impl ElementChecks {
 				false => self.checked_items(vec![argument.clone()], tests, &mut checks),
 			})
 			.collect();
-		let call = Node::List(
-			[vec![method.clone()], arguments].concat(),
-			bracket.clone(),
-			separator.clone(),
-		);
+		let call = Node::List([vec![method.clone()], arguments].concat(), bracket.clone(), separator.clone());
 		self.with_checks(checks, Node::Key(list.clone(), Op::Dot, Box::new(call)))
 	}
 
@@ -241,10 +227,7 @@ impl ElementChecks {
 			return true;
 		}
 		let element = |variable: &Node| match variable.drop_meta() {
-			Node::Symbol(name) => self
-				.declared
-				.get(name)
-				.and_then(|type_name| list_element_type(type_name)),
+			Node::Symbol(name) => self.declared.get(name).and_then(|type_name| list_element_type(type_name)),
 			_ => None,
 		};
 		element(list).is_some_and(|element_type| element(stored) == Some(element_type))
@@ -273,10 +256,7 @@ impl ElementChecks {
 				.into_iter()
 				.filter_map(|class| {
 					let test = test_of(class)?;
-					Some(ElementTest {
-						guard: Some((instance.drop_meta().clone(), class.clone())),
-						..test
-					})
+					Some(ElementTest { guard: Some((instance.drop_meta().clone(), class.clone())), ..test })
 				})
 				.collect(),
 		}
@@ -302,18 +282,9 @@ fn checked_at_compile_time(value: &Node, tests: &[ElementTest]) -> bool {
 fn element_test(name: &str, type_name: &str) -> Option<ElementTest> {
 	let element = list_element_type(type_name)?;
 	let kind = builtin_type_kind(element)?;
-	let type_word = if kind == Kind::Float {
-		NUMBER_WORD.to_string()
-	} else {
-		element.to_string()
-	};
+	let type_word = if kind == Kind::Float { NUMBER_WORD.to_string() } else { element.to_string() };
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}");
-	Some(ElementTest {
-		type_word,
-		message,
-		guard: None,
-		stores_floats: crate::type_tests::is_float_type_word(element),
-	})
+	Some(ElementTest { type_word, message, guard: None, stores_floats: crate::type_tests::is_float_type_word(element) })
 }
 
 /// `"a"`: a literal no number, refused by the compile-time check, not converted
@@ -323,11 +294,7 @@ fn is_other_literal_than_number(item: &Node) -> bool {
 
 /// `item as float`
 fn as_float(item: &Node) -> Node {
-	substitute(
-		crate::warp_parser::parse(&format!("{ITEM_PLACEHOLDER} as {FLOAT_WORD}")),
-		ITEM_PLACEHOLDER,
-		item,
-	)
+	substitute(crate::warp_parser::parse(&format!("{ITEM_PLACEHOLDER} as {FLOAT_WORD}")), ITEM_PLACEHOLDER, item)
 }
 
 /// `if not (v is text) { raise "…" }`
@@ -337,9 +304,8 @@ fn item_check(item: &Node, test: &ElementTest) -> Node {
 
 /// `for item in list { if not (item is text) { raise "…" } }`
 fn each_item_check(list: &Node, test: &ElementTest) -> Node {
-	let template = crate::warp_parser::parse(&format!(
-		"for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {CHECK_PLACEHOLDER} }}"
-	));
+	let template =
+		crate::warp_parser::parse(&format!("for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {CHECK_PLACEHOLDER} }}"));
 	let template = substitute(template, CHECK_PLACEHOLDER, &test.check());
 	let item = Node::Symbol(format!("{}·item", list.name()));
 	substitute(substitute(template, LIST_PLACEHOLDER, list), ITEM_PLACEHOLDER, &item)

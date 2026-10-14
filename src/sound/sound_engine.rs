@@ -46,10 +46,7 @@ impl Mixed {
 		let position = frame as f64 * self.ratio;
 		let (before, share) = (position.floor() as usize, position.fract() as f32);
 		let at = |frame: usize| {
-			self.samples
-				.get(frame * self.channels + channel.min(self.channels - 1))
-				.copied()
-				.unwrap_or(0.0)
+			self.samples.get(frame * self.channels + channel.min(self.channels - 1)).copied().unwrap_or(0.0)
 		};
 		at(before) * (1.0 - share) + at(before + 1) * share
 	}
@@ -57,11 +54,7 @@ impl Mixed {
 	/// The gain of the frame played now, then one step on toward the target
 	fn next_gain(&mut self) -> f32 {
 		let gain = self.gain;
-		self.gain = if (self.target - gain).abs() <= self.step.abs() {
-			self.target
-		} else {
-			gain + self.step
-		};
+		self.gain = if (self.target - gain).abs() <= self.step.abs() { self.target } else { gain + self.step };
 		gain
 	}
 }
@@ -76,12 +69,7 @@ pub struct Mixer {
 
 impl Mixer {
 	pub fn new(rate: u32, channels: u16) -> Mixer {
-		Mixer {
-			rate,
-			channels,
-			frame: 0,
-			sounds: Vec::new(),
-		}
+		Mixer { rate, channels, frame: 0, sounds: Vec::new() }
 	}
 
 	/// The 16-bit samples (`channels` interleaved, at `rate`) starting at the frame, played at the device's rate and
@@ -140,11 +128,7 @@ impl Mixer {
 	/// sample by sample, so no click; 0 fades all of them
 	pub fn fade(&mut self, handle: usize, gain: f32, seconds: f64) {
 		let frames = (seconds * self.rate as f64).round().max(1.0) as f32;
-		for sound in self
-			.sounds
-			.iter_mut()
-			.filter(|sound| handle == 0 || sound.handle == handle)
-		{
+		for sound in self.sounds.iter_mut().filter(|sound| handle == 0 || sound.handle == handle) {
 			sound.target = gain;
 			sound.step = (gain - sound.gain) / frames;
 		}
@@ -173,8 +157,7 @@ impl Mixer {
 		}
 		self.frame += frames;
 		let frame = self.frame;
-		self.sounds
-			.retain(|sound| sound.start + sound.frames() > frame && !(sound.stolen && sound.gain == 0.0));
+		self.sounds.retain(|sound| sound.start + sound.frames() > frame && !(sound.stolen && sound.gain == 0.0));
 		buffer.iter_mut().for_each(|sample| *sample = sample.clamp(-1.0, 1.0));
 	}
 
@@ -203,9 +186,7 @@ mod output {
 	fn engine() -> Option<&'static Engine> {
 		ENGINE
 			.get_or_init(|| {
-				started()
-					.map_err(|failure| eprintln!("sound: no output stream ({failure}), playing by afplay"))
-					.ok()
+				started().map_err(|failure| eprintln!("sound: no output stream ({failure}), playing by afplay")).ok()
 			})
 			.as_ref()
 	}
@@ -216,10 +197,8 @@ mod output {
 		std::thread::spawn(move || {
 			let opened = (|| {
 				let device = cpal::default_host().default_output_device().ok_or("no output device")?;
-				let config: cpal::StreamConfig = device
-					.default_output_config()
-					.map_err(|failure| failure.to_string())?
-					.into();
+				let config: cpal::StreamConfig =
+					device.default_output_config().map_err(|failure| failure.to_string())?.into();
 				let mixer = Arc::new(Mutex::new(Mixer::new(config.sample_rate, config.channels)));
 				let fed = mixer.clone();
 				let stream = device
@@ -234,13 +213,7 @@ mod output {
 					)
 					.map_err(|failure| failure.to_string())?;
 				stream.play().map_err(|failure| failure.to_string())?;
-				Ok::<_, String>((
-					stream,
-					Engine {
-						mixer,
-						anchor: Instant::now(),
-					},
-				))
+				Ok::<_, String>((stream, Engine { mixer, anchor: Instant::now() }))
 			})();
 			match opened {
 				Ok((stream, engine)) => {

@@ -47,14 +47,7 @@ fn malformed_wisp_never_panics() {
 #[test]
 fn malformed_wisp_is_an_error_not_a_repaired_value() {
 	for input in ["(", "(int x)", "(float abc)", "(text", "[a b", "\"open"] {
-		assert!(
-			matches!(parse_wisp(input), warp::Node::Error(_)),
-			"parse_wisp({input:?}) = {:?}",
-			parse_wisp(input)
-		);
+		assert!(matches!(parse_wisp(input), warp::Node::Error(_)), "parse_wisp({input:?}) = {:?}", parse_wisp(input));
 	}
-	assert_eq!(
-		parse_wisp("(int 99999999999999999999999)").serialize(),
-		"99999999999999999999999"
-	);
+	assert_eq!(parse_wisp("(int 99999999999999999999999)").serialize(), "99999999999999999999999");
 }

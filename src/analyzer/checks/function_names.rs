@@ -39,10 +39,7 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 		clash = defined.map(|(word, op)| (node.clone(), word, op));
 	});
 	let (definition, word, op) = clash?;
-	Some(Diagnostic::at(
-		&definition,
-		format!("{word} is an operator ({op}); rename your function"),
-	))
+	Some(Diagnostic::at(&definition, format!("{word} is an operator ({op}); rename your function")))
 }
 
 /// The operator word a definition's head names: `norm(x)` keeps its name (the parser's defines_named), also as the
@@ -69,11 +66,7 @@ pub(crate) fn operator_word(head: &Node) -> Option<(String, Op)> {
 pub(crate) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, program);
-	let mut clashes: Vec<&String> = ctx
-		.user_functions
-		.keys()
-		.filter(|name| type_word_kind(name).is_some())
-		.collect();
+	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(|name| type_word_kind(name).is_some()).collect();
 	clashes.sort();
 	let name = clashes.first()?;
 	let mut definition = None;
@@ -88,8 +81,5 @@ pub(crate) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
 			}
 		}
 	});
-	Some(Diagnostic::at(
-		definition.unwrap_or(program),
-		TYPE_WORD_FUNCTION_CLASH.replace("{name}", name),
-	))
+	Some(Diagnostic::at(definition.unwrap_or(program), TYPE_WORD_FUNCTION_CLASH.replace("{name}", name)))
 }

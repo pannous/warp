@@ -90,12 +90,7 @@ impl FfiSignature {
 		params: Vec<wasm_encoder::ValType>,
 		results: Vec<wasm_encoder::ValType>,
 	) -> Self {
-		FfiSignature {
-			name,
-			library,
-			params,
-			results,
-		}
+		FfiSignature { name, library, params, results }
 	}
 }
 
@@ -147,10 +142,9 @@ pub fn unresolved_import_message(name: &str, library: &str) -> String {
 		true => {
 			format!("{name} is imported from {library}, but no header of {library} is found in the include directories")
 		}
-		false => format!(
-			"{name} is imported from {library}, but its headers do not declare it: {}",
-			headers.join(", ")
-		),
+		false => {
+			format!("{name} is imported from {library}, but its headers do not declare it: {}", headers.join(", "))
+		}
 	}
 }
 
@@ -168,9 +162,7 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 		if let Some(file) = crate::modules::module_file_shadowing(module) {
 			return Some(format!("{name} is in the standard module {module}, but `use {module}` finds the file {} first, which has no {name}: rename that file", file.display()));
 		}
-		return Some(format!(
-			"{name} is in the standard module {module}: write `use {module}`"
-		));
+		return Some(format!("{name} is in the standard module {module}: write `use {module}`"));
 	}
 	if let Some(c_type) = unlinkable_header_function(name) {
 		return Some(format!(
@@ -178,9 +170,7 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 		));
 	}
 	if get_ffi_signature_from_lib(name, "c").is_some() {
-		return Some(format!(
-			"{name} is a C function: write `use c` or `import {name} from \"c\"`"
-		));
+		return Some(format!("{name} is a C function: write `use c` or `import {name} from \"c\"`"));
 	}
 	// only f64 functions link by themselves (analyzer imports.rs is_f64_header_function): an int parameter may be a
 	// pointer (frexp's int *), which the import's author knows
@@ -194,11 +184,7 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 fn unlinkable_header_function(name: &str) -> Option<&'static str> {
 	implicit_header_libraries(name)
 		.iter()
-		.flat_map(|library| {
-			get_library_header_paths(library)
-				.into_iter()
-				.map(move |path| (path, library))
-		})
+		.flat_map(|library| get_library_header_paths(library).into_iter().map(move |path| (path, library)))
 		.flat_map(|(path, library)| parse_header_file(&path, library))
 		.find(|declared| declared.name == name)
 		.and_then(|declared| unlinkable_type(&declared))
@@ -224,11 +210,7 @@ const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union",
 /// `FILE` of `FILE *`), "" for none (`unsigned *`)
 fn pointee(c_type: &str) -> String {
 	let before_star = &c_type[..c_type.find('*').unwrap_or(c_type.len())];
-	before_star
-		.split_whitespace()
-		.rfind(|word| !C_QUALIFIERS.contains(word))
-		.unwrap_or_default()
-		.to_string()
+	before_star.split_whitespace().rfind(|word| !C_QUALIFIERS.contains(word)).unwrap_or_default().to_string()
 }
 
 /// How the C type `c_type` crosses, None for no pointer. A handle points to a struct (`struct stat *`, or one a header
@@ -334,30 +316,17 @@ pub fn get_ffi_signatures() -> &'static HashMap<String, FfiSignature> {
 fn hand_linked_signatures() -> HashMap<String, FfiSignature> {
 	let mut sigs = HashMap::new();
 	for (name, params, result) in LIBC_SIGNATURES {
-		sigs.insert(
-			name.to_string(),
-			FfiSignature::new(name, "c", params.to_vec(), vec![result]),
-		);
+		sigs.insert(name.to_string(), FfiSignature::new(name, "c", params.to_vec(), vec![result]));
 	}
 	for (name, arity) in LIBM_F64_FUNCTIONS {
 		sigs.entry(name.to_string()).or_insert_with(|| {
-			FfiSignature::new(
-				name,
-				"m",
-				vec![wasm_encoder::ValType::F64; arity],
-				vec![wasm_encoder::ValType::F64],
-			)
+			FfiSignature::new(name, "m", vec![wasm_encoder::ValType::F64; arity], vec![wasm_encoder::ValType::F64])
 		});
 	}
 	// `ln(x)` is the natural logarithm: libm's log under the name the program calls
 	sigs.insert(
 		"ln".to_string(),
-		FfiSignature::new(
-			"log",
-			"m",
-			vec![wasm_encoder::ValType::F64],
-			vec![wasm_encoder::ValType::F64],
-		),
+		FfiSignature::new("log", "m", vec![wasm_encoder::ValType::F64], vec![wasm_encoder::ValType::F64]),
 	);
 	for (name, params, results) in crate::host::HOST_WORD_SIGNATURES {
 		sigs.insert(
@@ -367,10 +336,7 @@ fn hand_linked_signatures() -> HashMap<String, FfiSignature> {
 	}
 	use crate::wasm_emitter::lists::linear_arrays::{linear_word_signatures, LINEAR_LIBRARY};
 	for (name, params, results) in linear_word_signatures() {
-		sigs.insert(
-			name.to_string(),
-			FfiSignature::new(name, LINEAR_LIBRARY, params, results),
-		);
+		sigs.insert(name.to_string(), FfiSignature::new(name, LINEAR_LIBRARY, params, results));
 	}
 
 	sigs
@@ -405,10 +371,7 @@ pub fn implicit_header_libraries(name: &str) -> &'static [&'static str] {
 /// Get FFI signature from a specific library's headers
 pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignature> {
 	let library = resolve_library_alias(library);
-	let built_in = get_ffi_signatures()
-		.get(name)
-		.filter(|sig| sig.library == library)
-		.cloned();
+	let built_in = get_ffi_signatures().get(name).filter(|sig| sig.library == library).cloned();
 	// the hand-linked libc functions and libm keep their wasm-adapted signatures (strcmp of two texts)
 	if (library == "m" || (library == "c" && HAND_LINKED_LIBC.contains(&name))) && built_in.is_some() {
 		return built_in;

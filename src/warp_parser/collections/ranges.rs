@@ -14,29 +14,19 @@ pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Opti
 		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
 		_ if op == Op::In => {
 			let word = if written.ends_with(IN_WORD) { IN_WORD } else { written };
-			Node::List(
-				vec![lhs, Symbol(word.to_string()), rhs],
-				Bracket::None,
-				Separator::Space,
-			)
+			Node::List(vec![lhs, Symbol(word.to_string()), rhs], Bracket::None, Separator::Space)
 		}
 		_ if op == Op::Pipe => piped(lhs, rhs),
 		_ if matches!(op, Op::If | Op::While) => guarded_statement(lhs, op, written, rhs),
 		// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
 		_ if written == ".*" && matches!(rhs, Empty) => {
-			crate::normalize::hint(
-				&format!("{}.*", lhs.serialize()),
-				&lhs.serialize(),
-				"warp imports a module whole",
-			);
+			crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "warp imports a module whole");
 			lhs
 		}
 		// kept as written, lowering/collections/broadcasting.rs lower_element_wise_operators gives it its meaning
-		_ if crate::operators::element_wise_operator(written).is_some() => Node::List(
-			vec![lhs, Symbol(written.to_string()), rhs],
-			Bracket::None,
-			Separator::Space,
-		),
+		_ if crate::operators::element_wise_operator(written).is_some() => {
+			Node::List(vec![lhs, Symbol(written.to_string()), rhs], Bracket::None, Separator::Space)
+		}
 		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
 		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
 			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
@@ -81,9 +71,7 @@ impl WarpParser {
 		};
 		let topic = if written == UPTO { UPTO } else { KOTLIN_RANGE };
 		let readings = vec![reading("exclusive", "..<"), reading("inclusive", "...")];
-		let chosen = ask(&Ask::new(topic, question, readings, Fallback::Warning)
-			.written(written)
-			.at(line, column))?;
+		let chosen = ask(&Ask::new(topic, question, readings, Fallback::Warning).written(written).at(line, column))?;
 		Ok(if chosen == 0 { Op::Range } else { Op::To })
 	}
 
@@ -92,9 +80,7 @@ impl WarpParser {
 		if !self.matches_keyword(DOWN_WORD) {
 			return None;
 		}
-		let blanks = (DOWN_WORD.len()..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
+		let blanks = (DOWN_WORD.len()..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD)
 			.then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
 	}

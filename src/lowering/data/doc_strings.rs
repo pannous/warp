@@ -82,14 +82,9 @@ fn leading_text(body: &Node) -> (Option<String>, Node) {
 fn with_doc(body: Node, doc: &str) -> Node {
 	match body {
 		Node::Meta { node, data } if body.get_lineinfo().is_some() => Node::meta(with_doc(*node, doc), *data),
-		body => Node::meta(
-			body,
-			Node::Key(
-				Box::new(symbol(DOC_KEY)),
-				Op::Colon,
-				Box::new(Node::Text(doc.to_string())),
-			),
-		),
+		body => {
+			Node::meta(body, Node::Key(Box::new(symbol(DOC_KEY)), Op::Colon, Box::new(Node::Text(doc.to_string()))))
+		}
 	}
 }
 

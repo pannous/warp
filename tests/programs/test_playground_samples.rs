@@ -36,21 +36,12 @@ fn slice_runs_without_an_error(slice: usize) {
 	let excluded = excluded_samples();
 	let mut menu: Vec<String> = fs::read_dir(SAMPLES)
 		.expect(SAMPLES)
-		.filter_map(|entry| {
-			entry
-				.ok()?
-				.path()
-				.file_name()?
-				.to_str()?
-				.strip_suffix(".warp")
-				.map(str::to_string)
-		})
+		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".warp").map(str::to_string))
 		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
 	menu.sort();
-	let failures: Vec<String> = crate::common::sample_slice(&menu, slice)
-		.filter_map(|name| sample_failure(name))
-		.collect();
+	let failures: Vec<String> =
+		crate::common::sample_slice(&menu, slice).filter_map(|name| sample_failure(name)).collect();
 	assert!(
 		failures.is_empty(),
 		"playground samples with an error (fix them or list them in {EXCLUDED_LIST}):\n{}",
@@ -117,12 +108,7 @@ fn sample_outcome(name: &str) -> Result<Option<String>, ()> {
 
 #[test]
 fn every_excluded_sample_exists() {
-	let missing: Vec<String> = excluded_samples()
-		.into_iter()
-		.filter(|name| fs::metadata(sample_path(name)).is_err())
-		.collect();
-	assert!(
-		missing.is_empty(),
-		"{EXCLUDED_LIST} names samples that are gone: {missing:?}"
-	);
+	let missing: Vec<String> =
+		excluded_samples().into_iter().filter(|name| fs::metadata(sample_path(name)).is_err()).collect();
+	assert!(missing.is_empty(), "{EXCLUDED_LIST} names samples that are gone: {missing:?}");
 }

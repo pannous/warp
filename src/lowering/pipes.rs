@@ -28,10 +28,7 @@ pub fn may_be_stage(operand: &Node) -> bool {
 
 /// The right operand of a single `|` as the parser marks it (may_be_stage)
 pub fn pipe_stage(stage: Node) -> Node {
-	Node::Meta {
-		node: Box::new(stage),
-		data: Box::new(Node::key(PIPE_STAGE, Node::True)),
-	}
+	Node::Meta { node: Box::new(stage), data: Box::new(Node::key(PIPE_STAGE, Node::True)) }
 }
 
 /// `sqrt`, `abs` alone: the operator
@@ -61,12 +58,7 @@ pub fn lower(node: Node) -> Node {
 		Node::List(items, Bracket::None, Separator::Space) => spaced_functions.extend(spaced_function(items)),
 		_ => {}
 	});
-	Pipes {
-		context,
-		variables,
-		spaced_functions,
-	}
-	.rewrite(node)
+	Pipes { context, variables, spaced_functions }.rewrite(node)
 }
 
 struct Pipes {
@@ -83,11 +75,7 @@ impl Pipes {
 			// `sum|print`: functions on both sides compose, `it => print(sum(it))` (wiki/pipe.md, card pipe-compose)
 			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) && self.is_function_chain(&value) => {
 				let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
-				key(
-					it.clone(),
-					Op::Arrow,
-					self.applied(&stage, self.chain_applied(*value, it)),
-				)
+				key(it.clone(), Op::Arrow, self.applied(&stage, self.chain_applied(*value, it)))
 			}
 			// `sum|print 1 2 3` parses as `sum | (print 1 2 3)`: the composition applied, `print(sum([1 2 3]))` (card pipe-applied)
 			Node::Key(value, Op::Or, applied)
@@ -99,17 +87,13 @@ impl Pipes {
 			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) => self.applied(&stage, self.rewrite(*value)),
 			// `cond then a else b`: the condition, also without `if` (P158)
 			Node::Key(then, Op::Else, otherwise) if is_bare_then(&then) => {
-				let Node::Key(condition, _, body) = then.drop_meta().clone() else {
-					unreachable!("guarded")
-				};
+				let Node::Key(condition, _, body) = then.drop_meta().clone() else { unreachable!("guarded") };
 				let condition = if_then(self.rewrite(*condition), self.rewrite(*body));
 				key(condition, Op::Else, self.rewrite(*otherwise))
 			}
 			// `3 then f then g` parses as `3 then (f then g)`: a pipeline reads left to right, `(3 then f) then g`
 			Node::Key(value, Op::Then, stage) if !is_if_head(&value) && is_bare_then(&stage) => {
-				let Node::Key(first, _, rest) = stage.drop_meta().clone() else {
-					unreachable!("guarded")
-				};
+				let Node::Key(first, _, rest) = stage.drop_meta().clone() else { unreachable!("guarded") };
 				self.rewrite(Node::Key(Box::new(Node::Key(value, Op::Then, first)), Op::Then, rest))
 			}
 			Node::Key(value, Op::Then, stage) if !is_if_head(&value) => {
@@ -138,9 +122,7 @@ impl Pipes {
 					&& crate::lowering::nodes::may_be_whole_number(&value)
 					&& crate::lowering::nodes::may_be_whole_number(&operand) =>
 			{
-				let Node::Meta { node: operand, .. } = *operand else {
-					unreachable!("guarded")
-				};
+				let Node::Meta { node: operand, .. } = *operand else { unreachable!("guarded") };
 				key(self.rewrite(*value), Op::BitOr, self.rewrite(*operand))
 			}
 			other => other.map_children(|child| self.rewrite(child)),
@@ -241,10 +223,7 @@ impl Pipes {
 			Node::Key(left, op, operand)
 				if OPERATOR_STAGES.contains(op) && left.is_empty_node() && !operand.is_empty_node() =>
 			{
-				(
-					pipe_stage(key(Node::Empty, *op, Node::Empty)),
-					vec![operand.as_ref().clone()],
-				)
+				(pipe_stage(key(Node::Empty, *op, Node::Empty)), vec![operand.as_ref().clone()])
 			}
 			_ => return None,
 		};
@@ -278,12 +257,9 @@ impl Pipes {
 		let Node::Symbol(name) = node.drop_meta() else {
 			return None;
 		};
-		let is_user_function = self
-			.context
-			.user_functions
-			.get(name)
-			.is_some_and(|function| !function.params.is_empty())
-			|| self.spaced_functions.contains(name);
+		let is_user_function =
+			self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
+				|| self.spaced_functions.contains(name);
 		let is_word = !self.variables.contains(name) && is_function_word(name, &self.context);
 		(is_pipe_stage(stage) && (is_user_function || is_word)).then(|| node.as_ref().clone())
 	}

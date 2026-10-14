@@ -14,11 +14,7 @@ pub fn lower(node: Node) -> Node {
 	hint_shadowed_meta(&node);
 	let mut comments = vec![];
 	binding_comments(&node, &mut comments);
-	as_entries(if comments.is_empty() {
-		node
-	} else {
-		comment_reads(node, &comments)
-	})
+	as_entries(if comments.is_empty() { node } else { comment_reads(node, &comments) })
 }
 
 const COMMENT_KEY: &str = "comment";
@@ -119,14 +115,12 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 						),
 						_ => return None,
 					};
-					Some(
-						match crate::compiler::compile_context::read(|context| context.comments_as_meta) {
-							true => read,
-							false => crate::node::error(&format!(
-								"no field {field}: {name}'s comment becomes its meta information under `use comments`"
-							)),
-						},
-					)
+					Some(match crate::compiler::compile_context::read(|context| context.comments_as_meta) {
+						true => read,
+						false => crate::node::error(&format!(
+							"no field {field}: {name}'s comment becomes its meta information under `use comments`"
+						)),
+					})
 				}),
 				_ => None,
 			};
@@ -139,20 +133,14 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 fn as_entries(node: Node) -> Node {
 	match node {
 		Node::Meta { node, data } => match annotation_entry(&data) {
-			Some(entry) => with_entry(as_entries(*node), entry).unwrap_or_else(|inner| Node::Meta {
-				node: Box::new(inner),
-				data,
-			}),
-			None => Node::Meta {
-				node: Box::new(as_entries(*node)),
-				data,
-			},
+			Some(entry) => {
+				with_entry(as_entries(*node), entry).unwrap_or_else(|inner| Node::Meta { node: Box::new(inner), data })
+			}
+			None => Node::Meta { node: Box::new(as_entries(*node)), data },
 		},
-		Node::List(items, Bracket::Curly, separator) => Node::List(
-			meta_last(items.into_iter().map(as_entries).collect()),
-			Bracket::Curly,
-			separator,
-		),
+		Node::List(items, Bracket::Curly, separator) => {
+			Node::List(meta_last(items.into_iter().map(as_entries).collect()), Bracket::Curly, separator)
+		}
 		other => children_rewritten(other, as_entries),
 	}
 }
@@ -168,17 +156,13 @@ fn meta_last(items: Vec<Node>) -> Vec<Node> {
 fn annotation_entry(data: &Node) -> Option<Node> {
 	let Node::Key(key, _, value) = data else { return None };
 	let Node::Symbol(name) = key.as_ref() else { return None };
-	name.starts_with(ATTRIBUTE_MARK)
-		.then(|| Node::Key(key.clone(), Op::Colon, value.clone()))
+	name.starts_with(ATTRIBUTE_MARK).then(|| Node::Key(key.clone(), Op::Colon, value.clone()))
 }
 
 /// The object with the entry added to its fields; Err gives back anything that is no object
 fn with_entry(object: Node, entry: Node) -> Result<Node, Node> {
 	match object {
-		Node::Meta { node, data } => with_entry(*node, entry).map(|node| Node::Meta {
-			node: Box::new(node),
-			data,
-		}),
+		Node::Meta { node, data } => with_entry(*node, entry).map(|node| Node::Meta { node: Box::new(node), data }),
 		Node::List(mut items, Bracket::Curly, separator) => {
 			items.push(entry);
 			Ok(Node::List(items, Bracket::Curly, separator))

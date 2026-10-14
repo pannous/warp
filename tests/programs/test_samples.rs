@@ -121,10 +121,7 @@ fn test_parse_all_samples() {
 
 		// Known problematic files that can fail
 		let known_issues = ["lib.warp", "errors.warp", "webgpu.warp"];
-		let unexpected_failures: Vec<_> = failed_files
-			.iter()
-			.filter(|f| !known_issues.contains(&f.as_str()))
-			.collect();
+		let unexpected_failures: Vec<_> = failed_files.iter().filter(|f| !known_issues.contains(&f.as_str())).collect();
 
 		if !unexpected_failures.is_empty() {
 			println!("\n⚠ Unexpected failures (not in known issues list):");
@@ -181,9 +178,7 @@ fn test_sin() {
 
 #[test] // the Taylor kernel at π/2
 fn test_sine() {
-	assert!(warp::wasm_emitter::eval("samples/sine.warp")
-		.serialize()
-		.starts_with("1.0000000"));
+	assert!(warp::wasm_emitter::eval("samples/sine.warp").serialize().starts_with("1.0000000"));
 }
 
 #[test] // 14 + 20 + 5
@@ -209,10 +204,7 @@ fn test_data_structures() {
 #[test] // every feature in one program (card g-_c-A): each part checks itself, a new check needs no change here
 fn test_kitchensink() {
 	let value = warp::pipeline::for_tests(|| warp::wasm_emitter::eval("samples/kitchensink.warp")).serialize();
-	assert!(
-		value.starts_with("\"✓ ") && value.ends_with(" tests passed\""),
-		"{value}"
-	);
+	assert!(value.starts_with("\"✓ ") && value.ends_with(" tests passed\""), "{value}");
 }
 
 #[test] // fact(10) and fib(20) through the Z combinator (card y-combinator)

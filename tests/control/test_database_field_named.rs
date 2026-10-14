@@ -22,8 +22,6 @@ fn a_stored_row_reads_its_size_field() {
 #[cfg(feature = "native")]
 #[test]
 fn a_loop_over_a_table_prints_each_row() {
-	let printed = crate::common::printed(&program(
-		"cups.add(Cup(\"small\", 1))\nfor cup in cups { print cup.size }",
-	));
+	let printed = crate::common::printed(&program("cups.add(Cup(\"small\", 1))\nfor cup in cups { print cup.size }"));
 	assert!(printed.contains("small"), "{printed}");
 }

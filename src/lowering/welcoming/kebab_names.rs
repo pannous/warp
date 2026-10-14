@@ -47,12 +47,9 @@ fn missing_kebab_field(read: &Node) -> Node {
 	};
 	let (object, name) = (receiver.drop_meta().name(), member.drop_meta().name());
 	let subtraction = format!("{object}.{}", name.replace('-', " - "));
-	Diagnostic::at(
-		read,
-		format!("{object} has no field {name}: write `{subtraction}` to subtract"),
-	)
-	.offer("the subtraction", format!("{object}.{name}"), subtraction)
-	.into_error()
+	Diagnostic::at(read, format!("{object} has no field {name}: write `{subtraction}` to subtract"))
+		.offer("the subtraction", format!("{object}.{name}"), subtraction)
+		.into_error()
 }
 
 /// The fields of the variables assigned object literals (`p = {phone: 7}`), over every such assignment
@@ -105,9 +102,7 @@ fn subtract_kebab_variables(node: Node, variables: &HashSet<String>) -> Node {
 			if parts.len() > 1 && parts.iter().all(|part| variables.contains(*part)) {
 				let mut terms = parts.into_iter().map(|part| Node::Symbol(part.to_string()));
 				let first = terms.next().expect("split gives a part");
-				terms.fold(first, |difference, term| {
-					Node::Key(Box::new(difference), Op::Sub, Box::new(term))
-				})
+				terms.fold(first, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(term)))
 			} else {
 				Node::Symbol(name)
 			}

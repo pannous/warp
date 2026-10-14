@@ -50,9 +50,7 @@ impl CaseMapping {
 				let mut parts = vec![];
 				unicode_normalization::char::decompose_canonical(letter, |part| parts.push(part));
 				let accented = parts.len() > 1
-					&& parts[1..]
-						.iter()
-						.all(|&part| unicode_normalization::char::is_combining_mark(part));
+					&& parts[1..].iter().all(|&part| unicode_normalization::char::is_combining_mark(part));
 				let base = if accented { parts[0] } else { letter };
 				base.to_lowercase().map(u32::from).collect()
 			}
@@ -76,10 +74,7 @@ fn case_table(mapping: CaseMapping) -> Vec<u8> {
 			continue;
 		}
 		let delta = mapped[0].wrapping_sub(code);
-		if let Some(range) = ranges
-			.last_mut()
-			.filter(|range| mapped.len() == 1 && extends(range, code, delta))
-		{
+		if let Some(range) = ranges.last_mut().filter(|range| mapped.len() == 1 && extends(range, code, delta)) {
 			// a range of one takes its stride here; a longer one keeps it (extends checked the step)
 			range[STRIDE] = code - range[LAST];
 			range[LAST] = code;
@@ -93,23 +88,14 @@ fn case_table(mapping: CaseMapping) -> Vec<u8> {
 
 /// The instructions loading field `index` of the range at the address in local `entry`
 fn range_field(entry: u32, index: usize) -> [I<'static>; 4] {
-	[
-		I::LocalGet(entry),
-		I32Const(index as i32 * 4),
-		I::I32Add,
-		I::I32Load(WORD),
-	]
+	[I::LocalGet(entry), I32Const(index as i32 * 4), I::I32Add, I::I32Load(WORD)]
 }
 
 /// Whether `code` mapped by `delta` continues `range`: the same delta, one stride after its last code point (a range of
 /// one takes the stride from it), and the range maps to one code point
 fn extends(range: &[u32; ENTRY_FIELDS], code: u32, delta: u32) -> bool {
 	let step = code - range[LAST];
-	let stride_fits = if range[LAST] == range[START] {
-		STRIDES.contains(&step)
-	} else {
-		step == range[STRIDE]
-	};
+	let stride_fits = if range[LAST] == range[START] { STRIDES.contains(&step) } else { step == range[STRIDE] };
 	range[DELTA] == delta && range[SECOND] == 0 && stride_fits
 }
 
@@ -323,88 +309,76 @@ impl WasmGcEmitter {
 	/// text_reverse(text): a fresh text with the code points in the opposite order
 	pub(in crate::wasm_emitter) fn emit_text_reverse(&mut self) {
 		// list_reverse, which text_split also uses, hands a text on to it
-		if !["list_reverse", "text_reverse", "text_split"]
-			.iter()
-			.any(|name| self.should_emit_function(name))
-		{
+		if !["list_reverse", "text_reverse", "text_split"].iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
 		self.emit_text_heap_global();
 		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function(
-			"text_reverse",
-			vec![node_ref],
-			vec![node_ref],
-			vec![ValType::I32; 6],
-			|s, f| {
-				let (pointer, end, destination, out, scan, start) = (1, 2, 3, 4, 5, 6);
-				s.emit_text_argument_bounds(f, pointer, end);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(scan)],
-				);
-				s.emit_text_allocation(f, scan, destination);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(destination),
-						I::LocalSet(out),
-						I::LocalGet(end),
-						I::LocalSet(scan),
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(scan),
-						I::LocalGet(pointer),
-						I::I32LeU,
-						I::BrIf(1),
-					],
-				);
-				// the code point ending at `scan` starts at the last byte that is no continuation byte
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(scan),
-						I32Const(1),
-						I::I32Sub,
-						I::LocalSet(start),
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(start),
-						I::I32Load8U(BYTE),
-						I32Const(utf8::CONTINUATION_MASK),
-						I::I32And,
-						I32Const(utf8::CONTINUATION_MARK),
-						I::I32Ne,
-						I::BrIf(1),
-						I::LocalGet(start),
-						I32Const(1),
-						I::I32Sub,
-						I::LocalSet(start),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(out),
-						I::LocalGet(start),
-						I::LocalGet(scan),
-						I::LocalGet(start),
-						I::I32Sub,
-						COPY_BYTES,
-						I::LocalGet(out),
-						I::LocalGet(scan),
-						I::LocalGet(start),
-						I::I32Sub,
-						I::I32Add,
-						I::LocalSet(out),
-						I::LocalGet(start),
-						I::LocalSet(scan),
-						I::Br(0),
-						I::End,
-						I::End,
-					],
-				);
-				s.emit_new_text_to(f, destination, out);
-			},
-		);
+		self.runtime_function("text_reverse", vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
+			let (pointer, end, destination, out, scan, start) = (1, 2, 3, 4, 5, 6);
+			s.emit_text_argument_bounds(f, pointer, end);
+			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(scan)]);
+			s.emit_text_allocation(f, scan, destination);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(destination),
+					I::LocalSet(out),
+					I::LocalGet(end),
+					I::LocalSet(scan),
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(scan),
+					I::LocalGet(pointer),
+					I::I32LeU,
+					I::BrIf(1),
+				],
+			);
+			// the code point ending at `scan` starts at the last byte that is no continuation byte
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(scan),
+					I32Const(1),
+					I::I32Sub,
+					I::LocalSet(start),
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(start),
+					I::I32Load8U(BYTE),
+					I32Const(utf8::CONTINUATION_MASK),
+					I::I32And,
+					I32Const(utf8::CONTINUATION_MARK),
+					I::I32Ne,
+					I::BrIf(1),
+					I::LocalGet(start),
+					I32Const(1),
+					I::I32Sub,
+					I::LocalSet(start),
+					I::Br(0),
+					I::End,
+					I::End,
+					I::LocalGet(out),
+					I::LocalGet(start),
+					I::LocalGet(scan),
+					I::LocalGet(start),
+					I::I32Sub,
+					COPY_BYTES,
+					I::LocalGet(out),
+					I::LocalGet(scan),
+					I::LocalGet(start),
+					I::I32Sub,
+					I::I32Add,
+					I::LocalSet(out),
+					I::LocalGet(start),
+					I::LocalSet(scan),
+					I::Br(0),
+					I::End,
+					I::End,
+				],
+			);
+			s.emit_new_text_to(f, destination, out);
+		});
 	}
 
 	/// text_chars(text): the list of its code points as characters

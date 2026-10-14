@@ -14,8 +14,5 @@ fn test_loop_over_list_with_global_tuple() {
 		"global d = (1, 0); def f() { for o in [d, (0, 1)] { if o#1 == 0 { d = o; return 1 } }; return 0 }; f(); d#2",
 		1
 	);
-	is!(
-		"global d = (1, 0); def f() { for o in [d, (0,1)] { d = o }; return d }; t=f(); t#2",
-		1
-	);
+	is!("global d = (1, 0); def f() { for o in [d, (0,1)] { d = o }; return d }; t=f(); t#2", 1);
 }

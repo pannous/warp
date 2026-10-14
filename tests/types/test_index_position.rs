@@ -51,10 +51,7 @@ fn arithmetic_keeps_the_dimension() {
 
 #[test]
 fn insert_at_takes_an_index() {
-	assert_eq!(
-		eval(&with_xs("xs.insert(15, at: xs.index_of(20)); xs")).serialize(),
-		"[10 15 20 30]"
-	);
+	assert_eq!(eval(&with_xs("xs.insert(15, at: xs.index_of(20)); xs")).serialize(), "[10 15 20 30]");
 	assert_eq!(eval(&with_xs("xs.insert(5, at: 0); xs")).serialize(), "[5 10 20 30]");
 }
 

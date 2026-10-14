@@ -32,9 +32,7 @@ pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
 		let widened = std::mem::take(&mut scope.widened_bindings);
 		split_globals.extend(split);
 		*scope = before.clone();
-		scope
-			.globals
-			.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
+		scope.globals.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
 		scope.widened_bindings = widened;
 	}
 }
@@ -50,10 +48,7 @@ pub(super) fn global_binding(declaration: &Node, scope: &Scope) -> Option<Local>
 		_ => return None,
 	};
 	let (kind, type_node) = value_binding(value, scope);
-	Some(Local {
-		type_node,
-		..Local::new(0, name.clone(), kind)
-	})
+	Some(Local { type_node, ..Local::new(0, name.clone(), kind) })
 }
 
 /// Kind and type of a variable bound to `value` without a declared type; a list keeps its element type
@@ -155,10 +150,9 @@ pub(super) fn collect_variables_inner(
 		Node::Key(left, Op::Abs, right) if left.is_empty_node() => 1 + visit(right, scope),
 		Node::Key(left, _, right) => visit(left, scope) + visit(right, scope),
 		// a group of statements in a structure is code: `ul{ (made = ø; for … ; made) }`, a lowered `[li{t} for t in ts]`
-		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => items
-			.iter()
-			.map(|item| collect_variables_inner(item, scope, false, false))
-			.sum(),
+		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => {
+			items.iter().map(|item| collect_variables_inner(item, scope, false, false)).sum()
+		}
 		Node::List(items, _, _) => items.iter().map(|item| visit(item, scope)).sum(),
 		_ => 0,
 	}
@@ -184,19 +178,11 @@ fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scop
 	// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
 	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
 	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
-		widen_to_node(
-			scope,
-			name,
-			&Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())),
-		);
+		widen_to_node(scope, name, &Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())));
 	}
 	// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
 	if *op == Op::AddAssign {
-		type_list_by_first_append(
-			name,
-			&Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone())),
-			scope,
-		);
+		type_list_by_first_append(name, &Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone())), scope);
 	}
 }
 
@@ -288,9 +274,8 @@ pub(super) fn type_list_by_first_append(name: &str, value: &Node, scope: &mut Sc
 		return;
 	}
 	let appended_type = list_type_name(appended, scope);
-	if let Some(local) = scope
-		.own_binding_mut(name)
-		.filter(|local| local.kind == Kind::Empty && local.type_node.is_none())
+	if let Some(local) =
+		scope.own_binding_mut(name).filter(|local| local.kind == Kind::Empty && local.type_node.is_none())
 	{
 		local.kind = Kind::List;
 		local.type_node = Some(Box::new(Node::Symbol(appended_type)));
@@ -341,9 +326,7 @@ fn set_widened_list_type(scope: &mut Scope, name: &str, widened: String) {
 	if let Some(local) = scope.own_binding_mut(name) {
 		local.type_node = Some(type_node.clone());
 	}
-	scope
-		.widened_bindings
-		.insert(name.to_string(), (Kind::List, Some(type_node)));
+	scope.widened_bindings.insert(name.to_string(), (Kind::List, Some(type_node)));
 }
 
 /// `ys = ["a"]; ys = [3]`: a variable given lists of two element types holds the items of both, of their common type
@@ -353,10 +336,7 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 		return;
 	}
 	let assigned = list_type_name(value, scope);
-	let Some(local) = scope
-		.own_binding_mut(name)
-		.filter(|local| local.kind == Kind::List && !local.is_param)
-	else {
+	let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::List && !local.is_param) else {
 		return;
 	};
 	let Some(held) = local.type_node.as_ref().map(|type_node| type_node.name()) else {
@@ -371,9 +351,7 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 		return;
 	}
 	let common = super::checks::common_type_word(&[held_element.to_string(), assigned_element.to_string()]);
-	let widened = common.map_or(NODE_LIST_TYPE.to_string(), |element| {
-		format!("{LIST_OF_PREFIX}{element}")
-	});
+	let widened = common.map_or(NODE_LIST_TYPE.to_string(), |element| format!("{LIST_OF_PREFIX}{element}"));
 	set_widened_list_type(scope, name, widened);
 }
 
@@ -383,9 +361,8 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
 	let is_local = scope.locals.contains_key(name);
-	if let Some(local) = scope
-		.own_binding_mut(name)
-		.filter(|local| local.kind == Kind::Int && local.type_node.is_none())
+	if let Some(local) =
+		scope.own_binding_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none())
 	{
 		if float_value {
 			local.kind = Kind::Float;
@@ -401,14 +378,8 @@ pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 /// of them that do not mix (a list, then an Int; a text, then an Int) is a compile error when both kinds are evident
 /// from the source (P45, check_kind_changes); where the compiler only infers them it is held as a Node of run-time kind.
 /// Int and Float widen to Float instead (widen_to_float), a text and a character are both texts.
-pub(super) const CONCRETE_KINDS: [Kind; 6] = [
-	Kind::Int,
-	Kind::Float,
-	Kind::Text,
-	Kind::Codepoint,
-	Kind::List,
-	Kind::Symbol,
-];
+pub(super) const CONCRETE_KINDS: [Kind; 6] =
+	[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List, Kind::Symbol];
 
 pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let assigned = binding_kind(value, scope);
@@ -442,12 +413,7 @@ pub(super) fn destructured_kind(values: &[Node], index: usize, scope: &Scope) ->
 	match values {
 		[call] => call
 			.call_parts()
-			.and_then(|(function, _)| {
-				scope
-					.function_kinds
-					.get(&crate::tuples::element_key(function, index))
-					.copied()
-			})
+			.and_then(|(function, _)| scope.function_kinds.get(&crate::tuples::element_key(function, index)).copied())
 			.unwrap_or(Kind::Data),
 		_ => values.get(index).map_or(Kind::Data, |value| binding_kind(value, scope)),
 	}
@@ -676,13 +642,8 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 	if names.is_empty() {
 		return program;
 	}
-	let as_global = |declaration: Node| {
-		Node::Key(
-			Box::new(Node::Symbol("global".to_string())),
-			Op::Colon,
-			Box::new(declaration),
-		)
-	};
+	let as_global =
+		|declaration: Node| Node::Key(Box::new(Node::Symbol("global".to_string())), Op::Colon, Box::new(declaration));
 	let (mut items, bracket, separator) = match program {
 		Node::List(items, bracket, separator) => (items, bracket, separator),
 		single => (vec![single], Bracket::None, Separator::Newline),
@@ -690,9 +651,7 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 	for name in names {
 		let assigns = |assignment: &&Node| matches!(assignment, Node::Key(target, Op::Assign, _) if name_before_type(target) == Some(name));
 		let found = items.iter().enumerate().find_map(|(index, item)| {
-			statement_assignment(item)
-				.filter(assigns)
-				.map(|assignment| (index, assignment.clone()))
+			statement_assignment(item).filter(assigns).map(|assignment| (index, assignment.clone()))
 		});
 		match found {
 			Some((index, assignment)) => items[index] = as_global(assignment),
@@ -750,9 +709,7 @@ pub(crate) fn find_assignments<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> b
 
 /// The assignments and list updates (`xs.add(x)`, lowered to an assignment later) whose variable satisfies `wanted`
 fn find_changes<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
-	find_changes_by(node, wanted, |node| {
-		assignment_target_root(node).or_else(|| updated_list_root(node))
-	})
+	find_changes_by(node, wanted, |node| assignment_target_root(node).or_else(|| updated_list_root(node)))
 }
 
 fn find_changes_by<'a>(
@@ -760,17 +717,11 @@ fn find_changes_by<'a>(
 	wanted: &dyn Fn(&String) -> bool,
 	changed: fn(&Node) -> Option<&String>,
 ) -> Vec<(&'a Node, &'a String)> {
-	let mut found: Vec<(&'a Node, &'a String)> = changed(node.drop_meta())
-		.filter(|name| wanted(name))
-		.map(|name| (node, name))
-		.into_iter()
-		.collect();
+	let mut found: Vec<(&'a Node, &'a String)> =
+		changed(node.drop_meta()).filter(|name| wanted(name)).map(|name| (node, name)).into_iter().collect();
 	match node.drop_meta() {
-		Node::Key(left, _, right) => found.extend(
-			find_changes_by(left, wanted, changed)
-				.into_iter()
-				.chain(find_changes_by(right, wanted, changed)),
-		),
+		Node::Key(left, _, right) => found
+			.extend(find_changes_by(left, wanted, changed).into_iter().chain(find_changes_by(right, wanted, changed))),
 		Node::List(items, _, _) => found.extend(items.iter().flat_map(|item| find_changes_by(item, wanted, changed))),
 		_ => {}
 	}
@@ -831,10 +782,7 @@ impl Scope {
 	}
 
 	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
-		Scope {
-			function_kinds,
-			..Scope::default()
-		}
+		Scope { function_kinds, ..Scope::default() }
 	}
 
 	pub fn with_closure_targets(mut self, closure_variable_targets: HashMap<String, HashSet<String>>) -> Self {
@@ -854,9 +802,7 @@ impl Scope {
 	}
 
 	pub fn global(&self, name: &str) -> Option<&Local> {
-		self.globals
-			.get(name)
-			.or_else(|| self.parent.as_ref().and_then(|parent| parent.global(name)))
+		self.globals.get(name).or_else(|| self.parent.as_ref().and_then(|parent| parent.global(name)))
 	}
 
 	/// The local or declared global a name refers to, for its kind and type
@@ -873,10 +819,7 @@ impl Scope {
 	}
 
 	pub fn function_kind(&self, name: &str) -> Option<Kind> {
-		self.function_kinds
-			.get(name)
-			.copied()
-			.or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
+		self.function_kinds.get(name).copied().or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
 	}
 
 	/// A parameter here: it shadows a function of its name (`g(f, b) := [f, b]` lists f)
@@ -886,9 +829,7 @@ impl Scope {
 
 	/// Look up a variable by name, checking parent scopes
 	pub fn lookup(&self, name: &str) -> Option<&Local> {
-		self.locals
-			.get(name)
-			.or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
+		self.locals.get(name).or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
 	}
 
 	/// The names of the variables in this scope and its parents

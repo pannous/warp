@@ -129,13 +129,7 @@ pub const ANY_VALUE_WORDS: [&str; 5] = [FETCH_REPLY, FOREIGN_CALL, STD_PURE, STD
 /// Channels inside one run (P155, notes/channels.md, tasks.rs Channels), Go's unbuffered channel: channel_new() → id,
 /// channel_put(id, value) waits until a receiver took it, channel_take(id) waits for a value (ø once closed and empty),
 /// channel_more(id) waits until a value is offered (1) or the channel is closed (0), channel_close(id)
-pub const CHANNEL_WORDS: [&str; 5] = [
-	"channel_new",
-	"channel_put",
-	"channel_take",
-	"channel_more",
-	"channel_close",
-];
+pub const CHANNEL_WORDS: [&str; 5] = ["channel_new", "channel_put", "channel_take", "channel_more", "channel_close"];
 /// The host words of tasks, their signals and channels: a module calling one runs tasks (tasks.rs), a function that
 /// calls one has the effect Async (effects.rs)
 pub const TASK_WORDS: [&str; 16] = [

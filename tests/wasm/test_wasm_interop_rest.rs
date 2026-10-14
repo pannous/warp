@@ -12,10 +12,7 @@ fn optional_fields_on_one_line() {
 
 #[test]
 fn linear_memory_by_its_bytes() {
-	is!(
-		"use memory; memory.copy([104, 105], 60000); memory.slice(60000, 60002)",
-		parse("[104 105]")
-	);
+	is!("use memory; memory.copy([104, 105], 60000); memory.slice(60000, 60002)", parse("[104 105]"));
 	is!(
 		"use memory; use text; memory.copy(to_utf8(\"wasm ✓\"), 60000); from_utf8(memory.slice(60000, 60008))",
 		"wasm ✓"
@@ -44,14 +41,8 @@ fn imported_memory_and_table() {
 				.collect::<Vec<_>>()
 		})
 		.collect();
-	assert!(
-		imports.contains(&("env".to_string(), "memory".to_string())),
-		"{imports:?}"
-	);
-	assert!(
-		imports.contains(&("env".to_string(), "table".to_string())),
-		"{imports:?}"
-	);
+	assert!(imports.contains(&("env".to_string(), "memory".to_string())), "{imports:?}");
+	assert!(imports.contains(&("env".to_string(), "table".to_string())), "{imports:?}");
 }
 
 #[test]

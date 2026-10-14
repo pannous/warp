@@ -7,11 +7,7 @@ const PROGRAM: &str =
 fn a_page_build_takes_a_server_function() {
 	let files = warp::web::site::files(PROGRAM, "users", false).expect("the page builds");
 	let (_, page) = files.iter().find(|(name, _)| name == "index.html").expect("index.html");
-	assert!(
-		String::from_utf8_lossy(page).contains("<p>users: 2</p>"),
-		"{}",
-		String::from_utf8_lossy(page)
-	);
+	assert!(String::from_utf8_lossy(page).contains("<p>users: 2</p>"), "{}", String::from_utf8_lossy(page));
 }
 
 // its body no longer ships in app.wasm (card rpc-everywhere: the page asks POST /rpc/user_count), so the build no
@@ -21,16 +17,9 @@ fn a_page_build_warns_that_a_server_function_ships() {
 	warp::errors::diagnostic::take_warnings();
 	let files = warp::web::site::files(PROGRAM, "users", false).expect("the page builds");
 	let warnings = warp::errors::diagnostic::take_warnings();
-	assert!(
-		!warnings
-			.iter()
-			.any(|warning| warning.message.contains("ships in its app.wasm")),
-		"{warnings:?}"
-	);
+	assert!(!warnings.iter().any(|warning| warning.message.contains("ships in its app.wasm")), "{warnings:?}");
 	let (_, module) = files.iter().find(|(name, _)| name == "app.wasm").expect("app.wasm");
-	assert!(module
-		.windows("/rpc/user_count".len())
-		.any(|window| window == b"/rpc/user_count"));
+	assert!(module.windows("/rpc/user_count".len()).any(|window| window == b"/rpc/user_count"));
 }
 
 // `g := f(x)` of a server function is the page's asking form; the server build takes it as the value it renders, so

@@ -15,10 +15,7 @@ fn bar_and_or_are_alternatives() {
 fn commas_are_alternatives() {
 	is!("match 2 { 1, 2 => \"small\"; _ => \"big\" }", "small");
 	is!("match 1 { 1, 2 => \"small\" }", "small");
-	is!(
-		"match 5 { 1, 2 => \"small\"; 4, 5, 6 => \"middle\"; _ => \"big\" }",
-		"middle"
-	);
+	is!("match 5 { 1, 2 => \"small\"; 4, 5, 6 => \"middle\"; _ => \"big\" }", "middle");
 }
 
 #[test]

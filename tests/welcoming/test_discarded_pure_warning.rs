@@ -6,22 +6,14 @@ use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 
 #[test]
 fn a_discarded_pure_call_warns() {
-	with_warning_mode(WarningMode::Error, || {
-		fails_with("x=\"hi\"; uppercase x; x", "unused value of uppercase x")
-	});
-	with_warning_mode(WarningMode::Error, || {
-		fails_with("x=\"hi\"; x.upper; x", "x.upper! to change x")
-	});
-	with_warning_mode(WarningMode::Error, || {
-		fails_with("xs=[2,1]; sort(xs); xs", "unused value of sort xs")
-	});
+	with_warning_mode(WarningMode::Error, || fails_with("x=\"hi\"; uppercase x; x", "unused value of uppercase x"));
+	with_warning_mode(WarningMode::Error, || fails_with("x=\"hi\"; x.upper; x", "x.upper! to change x"));
+	with_warning_mode(WarningMode::Error, || fails_with("xs=[2,1]; sort(xs); xs", "unused value of sort xs"));
 }
 
 #[test]
 fn an_assigned_mutating_call_warns() {
-	with_warning_mode(WarningMode::Error, || {
-		fails_with("x=\"hi\"; y = x.upper!; y", "changes x too")
-	});
+	with_warning_mode(WarningMode::Error, || fails_with("x=\"hi\"; y = x.upper!; y", "changes x too"));
 }
 
 #[test]

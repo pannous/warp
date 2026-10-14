@@ -16,10 +16,7 @@ fn a_function_knows_where_it_was_written() {
 #[test]
 fn a_function_knows_what_made_it() {
 	is!(&format!("{TWICE}twice.wasm_name"), "twice");
-	is!(
-		&format!("{TWICE}twice.compiler"),
-		format!("warp {}", env!("CARGO_PKG_VERSION")).as_str()
-	);
+	is!(&format!("{TWICE}twice.compiler"), format!("warp {}", env!("CARGO_PKG_VERSION")).as_str());
 }
 
 #[test]

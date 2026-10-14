@@ -18,23 +18,11 @@ impl Drop for WranglerDev {
 
 /// status, content type and body of GET path
 fn answer(base: &str, path: &str) -> (u16, String, String) {
-	let mut reply = ureq::get(&format!("{base}{path}"))
-		.config()
-		.http_status_as_error(false)
-		.build()
-		.call()
-		.expect("an answer");
-	let content_type = reply
-		.headers()
-		.get("content-type")
-		.and_then(|value| value.to_str().ok())
-		.unwrap_or_default()
-		.to_string();
-	(
-		reply.status().as_u16(),
-		content_type,
-		reply.body_mut().read_to_string().expect("a text"),
-	)
+	let mut reply =
+		ureq::get(&format!("{base}{path}")).config().http_status_as_error(false).build().call().expect("an answer");
+	let content_type =
+		reply.headers().get("content-type").and_then(|value| value.to_str().ok()).unwrap_or_default().to_string();
+	(reply.status().as_u16(), content_type, reply.body_mut().read_to_string().expect("a text"))
 }
 
 #[test]
@@ -69,14 +57,7 @@ fn a_deployed_program_answers_its_routes() {
 	// the program's variables live across requests: the readiness check above asked "/" only
 	assert_eq!(answer(&base, "/visits").2, "1");
 	assert_eq!(answer(&base, "/visits").2, "2");
-	assert_eq!(
-		answer(&base, "/nope"),
-		(
-			404,
-			"text/plain; charset=utf-8".into(),
-			"no route answers GET /nope".into()
-		)
-	);
+	assert_eq!(answer(&base, "/nope"), (404, "text/plain; charset=utf-8".into(), "no route answers GET /nope".into()));
 	std::fs::remove_dir_all(directory).ok();
 }
 
@@ -94,24 +75,11 @@ fn the_playground_bundles_a_program_for_warp_hosting() {
 	let (report, module) = warp::web::worker_bundle(include_str!("../../samples/hosting.warp"));
 	assert_eq!(&module[..4], b"\0asm");
 	assert_eq!(report["module_length"], module.len());
-	let scripts: Vec<&str> = report["scripts"]
-		.as_array()
-		.expect("script names")
-		.iter()
-		.filter_map(|name| name.as_str())
-		.collect();
-	assert_eq!(
-		scripts,
-		["reader.js", "host.js"],
-		"a program of routes only imports no part of host.js"
-	);
+	let scripts: Vec<&str> =
+		report["scripts"].as_array().expect("script names").iter().filter_map(|name| name.as_str()).collect();
+	assert_eq!(scripts, ["reader.js", "host.js"], "a program of routes only imports no part of host.js");
 	let (refused, nothing) = warp::web::worker_bundle("x = 1");
-	assert!(
-		refused["error"]
-			.as_str()
-			.is_some_and(|message| message.contains("answers no request")),
-		"{refused}"
-	);
+	assert!(refused["error"].as_str().is_some_and(|message| message.contains("answers no request")), "{refused}");
 	assert!(nothing.is_empty());
 }
 
@@ -130,15 +98,7 @@ fn running_worker(program: &str, name: &str) -> (WranglerDev, String, std::path:
 	let port = free_port();
 	// its own inspector port too: two wrangler dev at once (the test above) clash on the default 9229
 	let wrangler = std::process::Command::new("wrangler")
-		.args([
-			"dev",
-			"--ip",
-			"127.0.0.1",
-			"--port",
-			&port,
-			"--inspector-port",
-			&free_port(),
-		])
+		.args(["dev", "--ip", "127.0.0.1", "--port", &port, "--inspector-port", &free_port()])
 		.current_dir(&directory)
 		.stdout(std::process::Stdio::null())
 		.stderr(std::process::Stdio::null())
@@ -157,14 +117,9 @@ fn running_worker(program: &str, name: &str) -> (WranglerDev, String, std::path:
 /// calling it with the path's parts; a program of functions only lists their routes at /
 #[test]
 fn a_program_without_routes_answers_its_value_and_functions() {
-	let (_running, base, directory) = running_worker(
-		"square(n) := n*n\nadd(a, b) := a + b\ntwice := it * 2\n\"squares and sums\"",
-		"lambda",
-	);
-	assert_eq!(
-		answer(&base, "/"),
-		(200, "text/plain; charset=utf-8".into(), "squares and sums".into())
-	);
+	let (_running, base, directory) =
+		running_worker("square(n) := n*n\nadd(a, b) := a + b\ntwice := it * 2\n\"squares and sums\"", "lambda");
+	assert_eq!(answer(&base, "/"), (200, "text/plain; charset=utf-8".into(), "squares and sums".into()));
 	assert_eq!(answer(&base, "/square/3").2, "9");
 	assert_eq!(answer(&base, "/add/2/40").2, "42");
 	assert_eq!(answer(&base, "/twice/21").2, "42");

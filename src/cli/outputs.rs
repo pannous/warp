@@ -27,10 +27,7 @@ pub(crate) fn write_module(code: &str, target: &str, ahead_of_time: bool) {
 
 pub(crate) fn compiled_output_path(target: &str) -> String {
 	if file_exists(target) {
-		std::path::Path::new(target)
-			.with_extension("wasm")
-			.to_string_lossy()
-			.into_owned()
+		std::path::Path::new(target).with_extension("wasm").to_string_lossy().into_owned()
 	} else {
 		DEFAULT_COMPILED_NAME.to_string()
 	}
@@ -43,11 +40,7 @@ pub(crate) fn write_machine_code(bytes: &[u8], wasm_path: &str) {
 	match engine.precompile_module(bytes) {
 		Ok(machine_code) => {
 			fs::write(&path, &machine_code).expect("could not write the machine code");
-			println!(
-				"compiled {} bytes of machine code to {}",
-				machine_code.len(),
-				path.display()
-			);
+			println!("compiled {} bytes of machine code to {}", machine_code.len(), path.display());
 		}
 		Err(failure) => fail(format!("could not compile to machine code: {failure}")),
 	}
@@ -110,12 +103,7 @@ pub(crate) fn write_wagi(code: &str, target: &str) {
 			let source = module_path.file_name().unwrap_or_default().to_string_lossy();
 			fs::write(&manifest_path, warp::web::deploy::spin_manifest(&name, &source))
 				.expect("could not write the Spin manifest");
-			println!(
-				"wrote {} ({} bytes) and {}",
-				module_path.display(),
-				module.bytes.len(),
-				manifest_path.display()
-			);
+			println!("wrote {} ({} bytes) and {}", module_path.display(), module.bytes.len(), manifest_path.display());
 		}
 		Err(failure) => {
 			eprintln!("warp build --wagi: {failure}");
@@ -132,17 +120,10 @@ pub(crate) fn write_site(code: &str, target: &str) {
 			stem.to_string_lossy().into_owned(),
 			file.with_file_name(format!("{}{SITE_SUFFIX}", stem.to_string_lossy())),
 		),
-		None => (
-			DEFAULT_SITE_NAME.to_string(),
-			std::path::PathBuf::from(DEFAULT_SITE_NAME),
-		),
+		None => (DEFAULT_SITE_NAME.to_string(), std::path::PathBuf::from(DEFAULT_SITE_NAME)),
 	};
 	match warp::web::site::build(code, &name, &directory) {
-		Ok(site) => println!(
-			"built the site {} ({})",
-			site.directory.display(),
-			site.files.join(", ")
-		),
+		Ok(site) => println!("built the site {} ({})", site.directory.display(), site.files.join(", ")),
 		Err(failure) => fail(format!("warp build --site: {failure}")),
 	}
 }

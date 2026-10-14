@@ -23,13 +23,7 @@ pub(super) fn exponent_of(op: Op) -> i32 {
 }
 
 pub(super) fn powered(factors: Vec<Factor>, exponent: i32) -> Vec<Factor> {
-	factors
-		.into_iter()
-		.map(|factor| Factor {
-			power: factor.power * exponent,
-			..factor
-		})
-		.collect()
+	factors.into_iter().map(|factor| Factor { power: factor.power * exponent, ..factor }).collect()
 }
 
 /// A conversion target written as units: `m`, `minutes`, `cm²`, `km/h`, `kg*m/s²`
@@ -60,13 +54,7 @@ pub(crate) fn conversion(node: &Node) -> Option<(&Node, Vec<Factor>)> {
 }
 
 pub(super) fn inverse(factors: &[Factor]) -> Vec<Factor> {
-	factors
-		.iter()
-		.map(|factor| Factor {
-			power: -factor.power,
-			..*factor
-		})
-		.collect()
+	factors.iter().map(|factor| Factor { power: -factor.power, ..*factor }).collect()
 }
 
 /// The unit given to the last amount of an expression: `a == 3010` with `meters` is `a == (3010 meters)`
@@ -90,10 +78,7 @@ pub(crate) fn is_global_keyword(node: &Node) -> bool {
 pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<Node> {
 	let target = target_unit(&Node::Symbol(unit_word.to_string()))?;
 	if target.dimension != Dimension::Time {
-		return Some(error(&format!(
-			"DimensionError: {duration} cannot be converted to {}",
-			target.name
-		)));
+		return Some(error(&format!("DimensionError: {duration} cannot be converted to {}", target.name)));
 	}
 	let milliseconds = match duration_milliseconds(duration, target.name) {
 		Ok(milliseconds) => milliseconds?,
@@ -101,10 +86,8 @@ pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<
 	};
 	let millisecond = unit_named("ms").expect("a unit");
 	Some(Node::data(Quantity {
-		amount: Rational::integer(milliseconds).mul(&Rational::new(
-			BigInt::from(millisecond.factor),
-			BigInt::from(target.factor),
-		)),
+		amount: Rational::integer(milliseconds)
+			.mul(&Rational::new(BigInt::from(millisecond.factor), BigInt::from(target.factor))),
 		factors: vec![Factor { unit: target, power: 1 }],
 	}))
 }
@@ -126,11 +109,7 @@ pub(super) fn duration_milliseconds(duration: &crate::time::Duration, target: &s
 pub(super) fn scale(factors: &[Factor], target: impl Fn(&Factor) -> &'static Unit) -> Rational {
 	factors.iter().fold(Rational::integer(1), |product, factor| {
 		let ratio = Rational::new(BigInt::from(factor.unit.factor), BigInt::from(target(factor).factor));
-		let ratio = if factor.power > 0 {
-			ratio
-		} else {
-			ratio.inverse().expect("unit factors are positive")
-		};
+		let ratio = if factor.power > 0 { ratio } else { ratio.inverse().expect("unit factors are positive") };
 		(0..factor.power.unsigned_abs()).fold(product, |product, _| product.mul(&ratio))
 	})
 }
@@ -161,10 +140,6 @@ pub(super) fn finest_units(factors: &[Factor]) -> Vec<&'static Unit> {
 /// `x = 1 m; x = 2 s`: a variable keeps its dimension, as the static units pass checks (card units-reassign)
 /// `x = 1200; x = 1.2kHz`: a variable keeps its dimension; a plain number becomes a quantity by its first value's unit
 pub(crate) fn reassigned_dimension(name: &str, was: &str, was_plain: bool, given: &str) -> String {
-	let hint = if was_plain {
-		": give its first value a unit too"
-	} else {
-		""
-	};
+	let hint = if was_plain { ": give its first value a unit too" } else { "" };
 	format!("DimensionError: {name} was {was}, is given {given}{hint}")
 }

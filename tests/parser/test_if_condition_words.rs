@@ -4,18 +4,9 @@ use crate::is;
 
 #[test]
 fn an_if_condition_takes_a_word_after_a_variable() {
-	is!(
-		"area = 12 ± 1; if area certainly > 10 then \"big\" else \"small\"",
-		"big"
-	);
-	is!(
-		"area = 11 ± 2; if area certainly > 10 then \"big\" else \"small\"",
-		"small"
-	);
-	is!(
-		"area = 11 ± 2; if area possibly > 10 then \"big\" else \"small\"",
-		"big"
-	);
+	is!("area = 12 ± 1; if area certainly > 10 then \"big\" else \"small\"", "big");
+	is!("area = 11 ± 2; if area certainly > 10 then \"big\" else \"small\"", "small");
+	is!("area = 11 ± 2; if area possibly > 10 then \"big\" else \"small\"", "big");
 }
 
 #[test]

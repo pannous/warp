@@ -13,10 +13,7 @@ fn a_file_class_takes_in_the_definitions_after_it() {
 fn a_namespace_qualifies_the_words_of_the_file() {
 	is!("namespace test; int bar(){42}; test.bar()", 42);
 	is!("namespace test; int bar(){42}; bar()", 42);
-	is!(
-		"namespace test; class Foo; int bar (){ 42 }; int boom (){ -1 }; test.Foo().boom()",
-		-1
-	);
+	is!("namespace test; class Foo; int bar (){ 42 }; int boom (){ -1 }; test.Foo().boom()", -1);
 }
 
 #[test]

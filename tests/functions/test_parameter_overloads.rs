@@ -14,18 +14,12 @@ fn a_call_takes_the_variant_its_arguments_fit() {
 
 #[test]
 fn an_int_widens_to_a_float_variant() {
-	is!(
-		"combine(a:float, b:float) := a+b; combine(a:string, b:string) := a; combine(2, 3)",
-		5.0
-	);
+	is!("combine(a:float, b:float) := a+b; combine(a:string, b:string) := a; combine(2, 3)", 5.0);
 }
 
 #[test]
 fn an_argument_of_unknown_type_is_an_error() {
-	fails_with(
-		&format!("{COMBINE}def g(p){{ combine(p, p) }}; g(2)"),
-		"fits no single variant",
-	);
+	fails_with(&format!("{COMBINE}def g(p){{ combine(p, p) }}; g(2)"), "fits no single variant");
 }
 
 const COMBINE_WITH: &str = "combine number with number = number#1 + number#2; combine int with int = $0 * $1; ";
@@ -61,9 +55,6 @@ fn an_untyped_variant_is_the_fallback() {
 // card of-any-variant: `foo of any` is the fallback variant, as wiki/polymorphism.md shows
 #[test]
 fn of_any_is_the_fallback_variant() {
-	is!(
-		"foo of int = it+it; foo of text = it.length; foo of any = 1; foo(\"abc\") + foo(2) + foo(2.5)",
-		8
-	);
+	is!("foo of int = it+it; foo of text = it.length; foo of any = 1; foo(\"abc\") + foo(2) + foo(2.5)", 8);
 	is!("foo of any = 1; foo(3)", 1);
 }

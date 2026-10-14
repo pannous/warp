@@ -149,11 +149,7 @@ impl WasmGcEmitter {
 	/// A call of a function returning several values: its name and their kinds
 	fn tuple_call(&self, call: &Node) -> Option<(String, Vec<Kind>)> {
 		let (name, _) = call.call_parts()?;
-		let function = self
-			.ctx
-			.user_functions
-			.get(name)
-			.filter(|function| !function.tuple_kinds.is_empty())?;
+		let function = self.ctx.user_functions.get(name).filter(|function| !function.tuple_kinds.is_empty())?;
 		Some((name.to_string(), function.tuple_kinds.clone()))
 	}
 
@@ -172,10 +168,7 @@ impl WasmGcEmitter {
 			// `a = 0; a, b = [5, 6]`: a number item into a variable that holds a number
 			self.emit_node_as_number(func, variable_kind);
 		} else if self.storage_type(variable_kind) != self.storage_type(kind) {
-			self.emit_type_error(
-				func,
-				format!("{name} holds {variable_kind:?}, the destructured value is {kind:?}"),
-			);
+			self.emit_type_error(func, format!("{name} holds {variable_kind:?}, the destructured value is {kind:?}"));
 			return;
 		}
 		if variable_kind == Kind::Int {

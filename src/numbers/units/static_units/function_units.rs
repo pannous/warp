@@ -73,10 +73,7 @@ impl Inference {
 						}
 					};
 					match printed {
-						true => Ok((
-							Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
-							vec![],
-						)),
+						true => Ok((Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![])),
 						false => Ok((text, vec![])),
 					}
 				})())
@@ -89,10 +86,7 @@ impl Inference {
 				if let Some(returns) = self.returns.last_mut() {
 					returns.push(signature.clone());
 				}
-				Ok((
-					Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()),
-					signature,
-				))
+				Ok((Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()), signature))
 			})()),
 			[quantity, in_word, unit]
 				if *bracket == Bracket::None
@@ -121,24 +115,13 @@ impl Inference {
 			Ok(_) => return None,
 			Err(stop) => return Some(Err(stop)),
 		};
-		self.started
-			.insert(declarations::word(&call[0]), declarations::word(&started[0]));
-		Some(Ok((
-			Node::List(
-				[vec![head.clone()], started].concat(),
-				bracket.clone(),
-				separator.clone(),
-			),
-			vec![],
-		)))
+		self.started.insert(declarations::word(&call[0]), declarations::word(&started[0]));
+		Some(Ok((Node::List([vec![head.clone()], started].concat(), bracket.clone(), separator.clone()), vec![])))
 	}
 
 	/// The reads and controls of a task (`await job`: `task·value(job, f)`) name the specialisation it started
 	pub(super) fn with_started_names(&self, items: Vec<Node>) -> Vec<Node> {
-		if !items
-			.first()
-			.is_some_and(|head| declarations::is_task_marker(&declarations::word(head)))
-		{
+		if !items.first().is_some_and(|head| declarations::is_task_marker(&declarations::word(head))) {
 			return items;
 		}
 		items
@@ -172,19 +155,9 @@ impl Inference {
 		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition) {
 			return None;
 		}
-		Some(
-			self.specialise(name, &definition, signatures)
-				.map(|(specialised, result)| {
-					(
-						Node::List(
-							[vec![Node::Symbol(specialised)], lowered].concat(),
-							Bracket::Round,
-							Separator::None,
-						),
-						result,
-					)
-				}),
-		)
+		Some(self.specialise(name, &definition, signatures).map(|(specialised, result)| {
+			(Node::List([vec![Node::Symbol(specialised)], lowered].concat(), Bracket::Round, Separator::None), result)
+		}))
 	}
 
 	/// The specialisation of a function for the unit signatures of its arguments: its name and result signature
@@ -200,11 +173,7 @@ impl Inference {
 		}
 		if let Some(progressing) = self.in_progress.iter_mut().find(|progressing| progressing.key == key) {
 			progressing.recursive = true;
-			return progressing
-				.result
-				.clone()
-				.map(|result| (progressing.name.clone(), result))
-				.ok_or(Stop::Recursive);
+			return progressing.result.clone().map(|result| (progressing.name.clone(), result)).ok_or(Stop::Recursive);
 		}
 		if self
 			.in_progress
@@ -223,10 +192,9 @@ impl Inference {
 		});
 		let mut inferred = self.infer_body(name, definition, &signatures);
 		// a recursive function: its recursive calls give the result of the first pass, which the second pass must confirm
-		if let (Ok((_, result)), Some(progressing)) = (
-			&inferred,
-			self.in_progress.last_mut().filter(|progressing| progressing.recursive),
-		) {
+		if let (Ok((_, result)), Some(progressing)) =
+			(&inferred, self.in_progress.last_mut().filter(|progressing| progressing.recursive))
+		{
 			progressing.result = Some(result.clone());
 			let provisional = result.clone();
 			inferred = self.infer_body(name, definition, &signatures);
@@ -242,19 +210,13 @@ impl Inference {
 		}
 		self.in_progress.pop();
 		let (body, result) = inferred?;
-		let parameters = definition
-			.parameters
-			.iter()
-			.map(|parameter| Node::Symbol(parameter.clone()));
+		let parameters = definition.parameters.iter().map(|parameter| Node::Symbol(parameter.clone()));
 		let head = Node::List(
-			std::iter::once(Node::Symbol(specialised.clone()))
-				.chain(parameters)
-				.collect(),
+			std::iter::once(Node::Symbol(specialised.clone())).chain(parameters).collect(),
 			Bracket::Round,
 			Separator::None,
 		);
-		self.new_definitions
-			.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+		self.new_definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
 		self.specialised.insert(key, (specialised.clone(), result.clone()));
 		Ok((specialised, result))
 	}
@@ -263,10 +225,7 @@ impl Inference {
 	pub(super) fn has_units(&self, definition: &Definition) -> bool {
 		let body = &definition.body;
 		let holds_quantity = |name: &String| {
-			self.globals
-				.get(name)
-				.or_else(|| self.variables.get(name))
-				.is_some_and(|signature| !signature.is_empty())
+			self.globals.get(name).or_else(|| self.variables.get(name)).is_some_and(|signature| !signature.is_empty())
 		};
 		mentions_units(body)
 			|| definition.defaults.iter().flatten().any(mentions_units)
@@ -301,11 +260,7 @@ impl Inference {
 		// every `return` gives the result's units: the first one decides, the others and the last statement agree
 		let result = returns.first().cloned().unwrap_or(result);
 		if let Some(other) = returns.iter().find(|signature| **signature != result) {
-			return Err(Stop::Error(format!(
-				"DimensionError: {name} returns {} and {}",
-				shown(&result),
-				shown(other)
-			)));
+			return Err(Stop::Error(format!("DimensionError: {name} returns {} and {}", shown(&result), shown(other))));
 		}
 		Ok((body, result))
 	}
@@ -338,12 +293,7 @@ impl Inference {
 		if let Some(object) = self.object_literal(&list).filter(|_| is_written_object) {
 			let (object, fields) = object?;
 			if self.at_top {
-				self.result_fields = Some(
-					fields
-						.into_iter()
-						.filter(|(_, signature)| !signature.is_empty())
-						.collect(),
-				);
+				self.result_fields = Some(fields.into_iter().filter(|(_, signature)| !signature.is_empty()).collect());
 			}
 			return Ok((object, vec![]));
 		}
@@ -391,19 +341,10 @@ impl Inference {
 			// the program's last statement may show a whole list of quantities
 			if statements && index + 1 == count && self.at_top {
 				// a final object: its fields' units go into the `units` entry
-				let fields = self
-					.objects
-					.get(&item.name())
-					.cloned()
-					.or_else(|| self.list_instance_fields(&item));
+				let fields = self.objects.get(&item.name()).cloned().or_else(|| self.list_instance_fields(&item));
 				if let Some(fields) = fields.filter(|_| matches!(item.drop_meta(), Node::Symbol(_))) {
-					self.result_fields = Some(
-						fields
-							.iter()
-							.filter(|(_, signature)| !signature.is_empty())
-							.cloned()
-							.collect(),
-					);
+					self.result_fields =
+						Some(fields.iter().filter(|(_, signature)| !signature.is_empty()).cloned().collect());
 					lowered.push(item);
 					signatures.push(vec![]);
 					continue;
