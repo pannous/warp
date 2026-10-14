@@ -171,11 +171,14 @@ impl WarpParser {
 		if self.peek_char(offset) != '(' {
 			return None;
 		}
-		let (mut depth, mut quote, mut comma) = (0, None, false);
+		let (mut depth, mut quote, mut comma, mut escaped) = (0, None, false, false);
 		for index in offset.. {
 			match (self.peek_char(index), quote) {
 				('\0', _) => return None,
-				(c, Some(open)) if c == open && self.peek_char(index - 1) != '\\' => quote = None,
+				// `"a\\"` ends at its quote: a backslash escapes the one character after it
+				(_, Some(_)) if escaped => escaped = false,
+				('\\', Some(_)) => escaped = true,
+				(c, Some(open)) if c == open => quote = None,
 				(_, Some(_)) => {}
 				(c @ ('"' | '\''), None) => quote = Some(c),
 				('(' | '[' | '{', None) => depth += 1,
