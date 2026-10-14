@@ -1209,10 +1209,7 @@ pub fn without_constraints(node: Node) -> Node {
 		return definition.clone();
 	}
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(without_constraints(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(without_constraints),
 		Node::List(items, bracket, separator) => {
 			let mut kept: Vec<Node> = constrained_statements(&items)
 				.into_iter()

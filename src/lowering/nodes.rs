@@ -101,10 +101,7 @@ pub(crate) fn is_assigned_data(target: &Node, value: &Node) -> bool {
 /// The parts of a node rewritten, the node itself kept as written
 pub(crate) fn with_parts_rewritten(node: Node, rewrite: &mut dyn FnMut(Node) -> Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_parts_rewritten(*node, rewrite)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_parts_rewritten(node, rewrite)),
 		other => children_rewritten(other, rewrite),
 	}
 }
@@ -426,4 +423,14 @@ pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &
 	};
 	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
 	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
+}
+
+/// The statements of a template with its placeholders filled in
+pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
+	let filled = bindings
+		.iter()
+		.fold(crate::warp_parser::parse(text), |node, (placeholder, value)| {
+			crate::library_words::substitute(node, placeholder, value)
+		});
+	filled.drop_meta().sequence_statements().to_vec()
 }

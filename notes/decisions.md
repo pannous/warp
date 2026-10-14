@@ -24,6 +24,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   worker marks each `#[ignore = "cleanup-edge: <card>: <what no longer works>"]` (assertions untouched) and lists them
   in its merge request; the Interviewer asks the user whether each edge case is worth the code it needed: yes → the
   code comes back, no → the test is retired. Core behaviour (samples, the tour, common forms) must keep passing.
+- cleanup-bold (2026-10-14): "get rid of everything you can without asking": clearly superfluous code, duplicate
+  paths, unused or rarely-run branches go without a question; we have everything in GitHub. The suite may drop to
+  80 % passing (failures marked cleanup-edge as above, so they stay countable); samples and the tour should still run.
+- edge-cases-general (2026-10-14): special-cased border cases (one-off ifs, extra arms, word/shape checks, fallbacks
+  for a single test) belong in the general machinery or go; cleanup investigation 2 reviews the week's diffs for them.
 - cleanup-cuts (2026-10-13, batch from notes/cleanup.md "Feature overlap"): drop compile-time lambdas (run-time
   closures cover them), generators/yield, type-name parameters `fib int i` (samples move to `fib(i:int)`), scoped
   handlers `on … in {…}`. Keep return-type overloads, tuple returns ("multi return is definitely desired"), list

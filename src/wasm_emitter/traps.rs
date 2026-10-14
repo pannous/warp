@@ -49,8 +49,9 @@ pub(super) fn trap_detail(trace: &str) -> Option<String> {
 	Some(detail)
 }
 
-/// Why a unit word is an undefined variable: quantities are computed in constant expressions only
-pub(super) const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
+/// Why a unit word is an undefined variable: the static units pass left this quantity uncomputed
+pub(super) const UNIT_AT_RUN_TIME: &str =
+	" (a unit: quantities compute in functions, loops, lists, branches and print, but not in this use yet; notes/units_runtime.md)";
 /// The global behind the export `trap_detail`: not a warp name, so no user global meets it
 pub(super) const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 /// The exported global where a program leaves the source position of the statement it runs, for its runtime errors

@@ -254,10 +254,7 @@ fn suffix_call(suffix: &Suffix, argument: Node) -> Node {
 /// The leftmost operand of an infix chain, replaced: `squared+1` → `(2 squared)+1`
 fn with_leftmost(node: Node, replace: impl FnOnce(Node) -> Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_leftmost(*node, replace)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_leftmost(node, replace)),
 		Node::Key(left, op, right) if ARITHMETIC.contains(&op) => {
 			Node::Key(Box::new(with_leftmost(*left, replace)), op, right)
 		}
@@ -268,10 +265,7 @@ fn with_leftmost(node: Node, replace: impl FnOnce(Node) -> Node) -> Node {
 /// The rightmost operand of an infix chain, replaced: `1+2` → `1+(2 squared)`
 fn with_rightmost(node: Node, replace: impl FnOnce(Node) -> Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_rightmost(*node, replace)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_rightmost(node, replace)),
 		Node::Key(left, op, right) if ARITHMETIC.contains(&op) => {
 			Node::Key(left, op, Box::new(with_rightmost(*right, replace)))
 		}

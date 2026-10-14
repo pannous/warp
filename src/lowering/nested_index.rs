@@ -111,10 +111,7 @@ fn called_root(place: &Node) -> Option<String> {
 /// The statement with the element inside its place (element_below) replaced by `inner`
 fn with_element_replaced(node: Node, inner: &Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_element_replaced(*node, inner)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_element_replaced(node, inner)),
 		Node::Key(target, op, value) => Node::Key(Box::new(replaced_below(*target, inner)), op, value),
 		other => other,
 	}
@@ -122,10 +119,7 @@ fn with_element_replaced(node: Node, inner: &Node) -> Node {
 
 fn replaced_below(place: Node, inner: &Node) -> Node {
 	match place {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(replaced_below(*node, inner)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| replaced_below(node, inner)),
 		Node::Key(left, op, right) if inside(&Node::Key(left.clone(), op, right.clone())).is_some() => {
 			let is_index = matches!(left.drop_meta(), Node::Key(_, Op::Hash, _));
 			let left = if is_index {

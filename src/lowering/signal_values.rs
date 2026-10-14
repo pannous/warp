@@ -1180,10 +1180,7 @@ fn parameter_names(param: &Node) -> Vec<String> {
 /// The definition with another body (the last part of it)
 fn with_body(node: Node, body: Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_body(*node, body)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_body(node, body)),
 		Node::Key(head, op, _) => Node::Key(head, op, Box::new(body)),
 		Node::List(mut items, bracket, separator) => {
 			let last = items.pop().expect("a definition has a body");

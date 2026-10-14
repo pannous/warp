@@ -506,10 +506,8 @@ impl Lowering {
 	}
 }
 
-/// `[element for v in xs if c for w in ys]`, `(element for v in xs)`
+/// `[element for v in xs if c for w in ys]`
 pub(crate) struct Comprehension {
-	/// Where the first `for` clause starts: 1 after an element of one word
-	pub(crate) at: usize,
 	element: Node,
 	qualifiers: Vec<Qualifier>,
 }
@@ -521,34 +519,9 @@ impl Comprehension {
 		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
 		let qualifiers = qualifiers(&items[at], &items[at + 1..])?;
 		Some(Comprehension {
-			at,
 			element: phrase(&items[..at]),
 			qualifiers,
 		})
-	}
-
-	/// `for v in xs { if c { for w in ys { yield element } } }`
-	pub(crate) fn yielding_loop(&self) -> Node {
-		self.looped(LOOPS, &format!("yield {ELEMENT}"))
-	}
-
-	/// The element, sequences and conditions: what the comprehension reads
-	pub(crate) fn parts(&self) -> Vec<&Node> {
-		let clauses = self.qualifiers.iter().map(|qualifier| match qualifier {
-			Qualifier::Each(_, sequence) => sequence,
-			Qualifier::If(condition) => condition,
-		});
-		std::iter::once(&self.element).chain(clauses).collect()
-	}
-
-	pub(crate) fn loop_variables(&self) -> Vec<String> {
-		self.qualifiers
-			.iter()
-			.filter_map(|qualifier| match qualifier {
-				Qualifier::Each(variable, _) => Some(variable.name()),
-				Qualifier::If(_) => None,
-			})
-			.collect()
 	}
 
 	/// `template` with LOOPS replaced by the clauses nested in order around `inner`, which reads ELEMENT

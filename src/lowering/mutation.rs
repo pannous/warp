@@ -253,10 +253,7 @@ fn is_mark(data: &Node) -> bool {
 fn unmarked(node: Node) -> Node {
 	match node {
 		Node::Meta { node, data } if is_mark(&data) => *node,
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(unmarked(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(unmarked),
 		other => other,
 	}
 }

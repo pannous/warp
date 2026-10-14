@@ -594,10 +594,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 	}
 	match body {
 		Node::Key(left, op, right) => Node::Key(left, op, Box::new(applied_to_last(*right, extra))),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(applied_to_last(*node, extra)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| applied_to_last(node, extra)),
 		last => Node::List([vec![last], extra.to_vec()].concat(), Bracket::Round, Separator::None),
 	}
 }

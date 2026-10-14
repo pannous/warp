@@ -290,12 +290,22 @@ new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 // view_width, view_height (use draw's default canvas, paint(shader) without a size): the room below the output pane's
 // text, in CSS pixels: the pane's width, down to the window's bottom; none while the pane is folded away, so host.js's
 // defaults stand. Never measured from the paintings: the pane grows with them, so a view-sized painting made the next
-// view taller each frame, until Safari ran out of memory (card webgpu-safari)
+// view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
+// page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
+// next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
+// resizing the pane, which is all the ResizeObserver sees
 function viewSize() {
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
-	const room = innerHeight - Math.max(painted.top, 0) - parseFloat(style.paddingBottom) - PAINTING_MARGIN - PAINTING_BORDERS;
+	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
 	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
+}
+
+// the diagnostics, the pane's padding and border and the page's padding below the paintings, in CSS pixels
+function roomBelowPaintings(paneStyle) {
+	const diagnostics = $("diagnostics"), listStyle = getComputedStyle(diagnostics), pixels = parseFloat;
+	return diagnostics.offsetHeight + pixels(listStyle.marginTop) + pixels(listStyle.marginBottom)
+		+ pixels(paneStyle.paddingBottom) + pixels(paneStyle.borderBottomWidth) + pixels(getComputedStyle(document.body).paddingBottom);
 }
 
 // `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
@@ -477,6 +487,7 @@ async function runInWorker(code) {
 		stopAfterTimeout(run);
 		pending = run;
 		silence();
+		tellSystemValues();
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
 }

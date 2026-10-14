@@ -1,0 +1,3 @@
+// card data-map: a data map whose keys are named like elements (body, title) is data, no markup: no warnings
+response = {status: 200, body: {user: {name: "Ann", title: "Dr"}}}
+response.body.user.title
