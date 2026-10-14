@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 use sound
 
 print "the sound module contains many useful functions and tweaks"
