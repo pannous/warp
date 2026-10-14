@@ -7,6 +7,7 @@ const COUNT_TO: &str = "count_to(n) := { k = 1; while k <= n { yield k; k += 1 }
 const NATURALS: &str = "naturals() := { k = 1; while yes { yield k; k += 1 } }\n";
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: a call of a yielding function no longer collects a list"]
 fn a_generator_call_collects_what_it_yields() {
 	is!("abc() := { yield 1; yield 2; yield 3 }\nabc()", ints(vec![1, 2, 3]));
 	is!(&format!("{COUNT_TO}count_to(4)"), ints(vec![1, 2, 3, 4]));
@@ -18,6 +19,7 @@ fn a_generator_call_collects_what_it_yields() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: a loop over a generator call no longer runs per yield"]
 fn a_loop_over_a_generator_runs_its_body_per_yield() {
 	is!(&format!("{COUNT_TO}s = 0\nfor x in count_to(4) {{ s += x }}\ns"), 10);
 	is!(&format!("{COUNT_TO}k = 100\nfor count_to(3) {{ k += it }}\nk"), 106);
@@ -28,6 +30,7 @@ fn a_loop_over_a_generator_runs_its_body_per_yield() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: endless generators are gone"]
 fn break_stops_an_endless_generator() {
 	is!(
 		&format!("{NATURALS}t = 0\nfor x in naturals() {{ if x > 5 {{ break }}; t += x }}\nt"),
@@ -41,6 +44,7 @@ fn break_stops_an_endless_generator() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: loops over generators are gone"]
 fn continue_goes_on_after_the_yield() {
 	is!(
 		&format!(
@@ -51,6 +55,7 @@ fn continue_goes_on_after_the_yield() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: generators are gone"]
 fn return_ends_a_generator() {
 	let squares = "squares_below(limit) := { k = 1; while yes { if k * k > limit { return }; yield k * k; k += 1 } }\n";
 	is!(
@@ -64,6 +69,7 @@ fn return_ends_a_generator() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: Python generators (def … yield) are gone"]
 fn python_generator() {
 	is!(
 		"def squares(n):\n    for i in range(n):\n        yield i * i\n\nsum(squares(4))",
@@ -107,6 +113,7 @@ fn a_changing_method_returns_early() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: generator objects (next) are gone"]
 fn next_resumes_a_generator_where_it_stopped() {
 	is!(
 		&format!("{COUNT_TO}counter = count_to(3)\n[next(counter), next(counter), counter.next(), next(counter)]"),
@@ -117,6 +124,7 @@ fn next_resumes_a_generator_where_it_stopped() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: generator objects are gone"]
 fn two_generator_objects_advance_apart() {
 	let fib = "fib() := { a = 0; b = 1; while yes { yield a; t = a; a = b; b = t + b } }\n";
 	is!(
@@ -126,6 +134,7 @@ fn two_generator_objects_advance_apart() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: generator objects are gone"]
 fn a_generator_object_jumps_like_its_loops() {
 	let skipping = "skipping() := { k = 0; while yes { k += 1; if k % 3 == 0 { continue }; if k > 8 { break }; yield k }; yield 100 }\n";
 	is!(
@@ -135,6 +144,7 @@ fn a_generator_object_jumps_like_its_loops() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: iter(generator) is gone"]
 fn a_loop_walks_a_generator_object() {
 	is!(
 		"evens(n) := { for i in 1 to n { if i % 2 == 0 { yield i } } }\ns = 0\nfor x in iter(evens(10)) { s += x }\ns",
@@ -143,6 +153,7 @@ fn a_loop_walks_a_generator_object() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: take of an endless generator is gone"]
 fn take_stops_an_endless_generator() {
 	is!(&format!("{NATURALS}take(naturals(), 3)"), ints(vec![1, 2, 3]));
 	is!(
@@ -159,6 +170,7 @@ fn take_stops_an_endless_generator() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: zip of generators is gone"]
 fn zip_pairs_generators_and_lists() {
 	is!(&format!("{NATURALS}zip(naturals(), [5, 6])"), parse("[[1 5] [2 6]]"));
 	is!(
@@ -168,6 +180,7 @@ fn zip_pairs_generators_and_lists() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: generator objects are gone"]
 fn list_and_sum_take_the_rest_of_a_generator_object() {
 	is!(
 		&format!("{COUNT_TO}c = count_to(4)\nnext(c)\nlist(c)"),
@@ -177,6 +190,7 @@ fn list_and_sum_take_the_rest_of_a_generator_object() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: generator expressions (x for x in xs) as values are gone"]
 fn a_generator_expression_is_a_generator() {
 	is!("squares = (x * x for x in [1, 2, 3])\nsquares", ints(vec![1, 4, 9]));
 	is!("evens = (x for x in 1 to 9 if x % 2 == 0)\nsum(evens)", 20);
@@ -195,6 +209,7 @@ fn a_generator_expression_is_a_generator() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: yield from is gone"]
 fn yield_from_hands_on_what_another_yields() {
 	let inner = "inner() := { yield 1; yield 2 }\n";
 	is!(
@@ -217,6 +232,7 @@ fn yield_from_hands_on_what_another_yields() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: send to a generator is gone"]
 fn send_gives_the_yield_a_value() {
 	let averager = "averager() := { total = 0; n = 0; average = 0; while yes { value = yield average; total += value; n += 1; average = total / n } }\n";
 	is!(

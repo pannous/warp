@@ -10,8 +10,7 @@
 //! a function stays the first item f accepts, `replace(text, a, b)` the text word.
 
 use super::blocks::DATA_WORD;
-use super::generator_consumers::template;
-use super::nodes::call;
+use super::nodes::{call, template};
 use super::switch::{bound_names, code_pattern, is_list_pattern, is_map_pattern};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{Bracket, Node, Separator};
