@@ -18,8 +18,8 @@
 
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
-use crate::numbers::fixed_width::FixedWidth;
 use crate::node::Node;
+use crate::numbers::fixed_width::FixedWidth;
 use crate::operators::Op;
 use num_bigint::{BigInt, Sign};
 use std::collections::HashSet;

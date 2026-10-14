@@ -12,8 +12,8 @@
 //! ```
 
 use crate::element_events::HANDLER_ATTRIBUTE_PREFIX;
-use crate::web::markup::to_html;
 use crate::node::Node;
+use crate::web::markup::to_html;
 use serde_json::{json, Map, Value};
 
 /// the attribute naming the component instance an element belongs to (component_state.rs), passed as event.instance
@@ -260,8 +260,8 @@ mod native {
 	use crate::host::HostState;
 	use crate::node::{Bracket, Node, Separator};
 	use crate::pipeline::CompiledModule;
-	use crate::wasm_emitter::failed_run;
 	use crate::run::wasm_reader::{run_main_kept, val_to_node, with_trap_detail, Imports};
+	use crate::wasm_emitter::failed_run;
 	use serde_json::Value;
 	use wasmtime::{AsContextMut, Instance, Store, Val};
 
@@ -291,7 +291,11 @@ mod native {
 
 		/// Runs the handler `on·click·1·node` with `[detail]`, then reads page·value
 		pub(super) fn handled(&mut self, page_event: &str, detail: &Value) -> Result<Node, String> {
-			let arguments = Node::List(vec![crate::modules::foreign::node_of(detail)], Bracket::Square, Separator::None);
+			let arguments = Node::List(
+				vec![crate::modules::foreign::node_of(detail)],
+				Bracket::Square,
+				Separator::None,
+			);
 			self.call(&format!("{HANDLER_PREFIX}{page_event}{NODE_SUFFIX}"), Some(arguments))?;
 			self.call(PAGE_VALUE, None)
 		}

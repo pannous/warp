@@ -79,7 +79,8 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 /// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is the task engine: a
 /// program that starts tasks needs its epoch interruption
 pub fn engine_for(bytes: &[u8]) -> (wasmtime::Engine, bool) {
-	let starts_tasks = crate::host::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
+	let starts_tasks =
+		crate::host::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
 	(
 		if starts_tasks {
 			crate::util::task_engine()
@@ -282,8 +283,8 @@ fn link_run(
 ) -> Result<()> {
 	link_imports(linker, engine, module, imports)?;
 	// the shared arrays of the run: the program's and every task's instance reach the same ones
-	let shared =
-		crate::host::shared::imports_shared(module).then(|| std::sync::Arc::new(crate::host::shared::SharedArrays::default()));
+	let shared = crate::host::shared::imports_shared(module)
+		.then(|| std::sync::Arc::new(crate::host::shared::SharedArrays::default()));
 	if let Some(shared) = &shared {
 		shared.link_into(linker)?;
 	}

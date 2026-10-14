@@ -133,7 +133,8 @@ impl WarpParser {
 				match escaped {
 					'\0' => continue, // `"\` ends the source: the loop reports the unterminated text
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
-						let Some((name, length)) = crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
+						let Some((name, length)) =
+							crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
 						else {
 							unreachable!("a letter follows")
 						};
@@ -436,7 +437,10 @@ impl WarpParser {
 
 	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
 	fn hint_glued_unit(&self, number: &Node) {
-		let Some(unit) = self.spaced_word().filter(|word| word != crate::numbers::uncertain::SIGMA) else {
+		let Some(unit) = self
+			.spaced_word()
+			.filter(|word| word != crate::numbers::uncertain::SIGMA)
+		else {
 			return;
 		};
 		let amount = number.serialize();

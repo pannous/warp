@@ -518,7 +518,8 @@ pub(super) fn summed_quantities<'n>(node: &'n Node, operands: &Operands) -> Opti
 	let Node::List(items, Bracket::Square, _) = list.drop_meta() else {
 		return None;
 	};
-	let is_quantity = |item: &Node| operand_class(item, operands).as_deref() == Some(crate::numbers::units::RUN_TIME_QUANTITY);
+	let is_quantity =
+		|item: &Node| operand_class(item, operands).as_deref() == Some(crate::numbers::units::RUN_TIME_QUANTITY);
 	(!items.is_empty() && items.iter().all(is_quantity)).then_some(list)
 }
 
@@ -579,7 +580,10 @@ pub(super) fn with_run_time_units(
 ) -> (Node, Option<String>, Node) {
 	let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
 	let lifted_left = class.is_none() && right_class.or_else(|| operand_class(&right, operands)).as_deref() == run_time;
-	let (left, class) = match lifted_left.then(|| crate::numbers::units::as_run_time_quantity(&left)).flatten() {
+	let (left, class) = match lifted_left
+		.then(|| crate::numbers::units::as_run_time_quantity(&left))
+		.flatten()
+	{
 		Some(quantity) => (quantity, run_time.map(str::to_string)),
 		None => (left, class),
 	};

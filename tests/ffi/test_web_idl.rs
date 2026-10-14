@@ -77,11 +77,23 @@ fn a_declared_primitive_result_is_a_warp_value() {
 	is!("use js crypto; count crypto.randomUUID().upper()", 36);
 	is!("use js crypto; id = crypto.randomUUID(); count id", 36);
 	is!("use js navigator; navigator.hardwareConcurrency + 0.5 > 1", 1);
-	eq!(warp::formats::web_idl::result_type("Crypto", "randomUUID", true), Some("text"));
-	eq!(warp::formats::web_idl::result_type("Navigator", "onLine", false), Some("bool"));
-	eq!(warp::formats::web_idl::result_type("Performance", "now", true), Some("float"));
+	eq!(
+		warp::formats::web_idl::result_type("Crypto", "randomUUID", true),
+		Some("text")
+	);
+	eq!(
+		warp::formats::web_idl::result_type("Navigator", "onLine", false),
+		Some("bool")
+	);
+	eq!(
+		warp::formats::web_idl::result_type("Performance", "now", true),
+		Some("float")
+	);
 	eq!(warp::formats::web_idl::result_type("Storage", "getItem", true), None); // DOMString? may be ø
-	eq!(warp::formats::web_idl::result_type("Navigator", "clipboard", false), None); // an object
+	eq!(
+		warp::formats::web_idl::result_type("Navigator", "clipboard", false),
+		None
+	); // an object
 }
 
 // the text of a foreign call is the text of its value, not of the call
@@ -157,8 +169,14 @@ fn the_global_object_is_typed() {
 		warp::formats::web_idl::result_interface("Window", "fetch", true),
 		Some("Response".to_string())
 	);
-	eq!(warp::formats::web_idl::result_type("Response", "text", true), Some("text")); // Promise<USVString>
-	eq!(warp::formats::web_idl::result_type("Response", "status", false), Some("int"));
+	eq!(
+		warp::formats::web_idl::result_type("Response", "text", true),
+		Some("text")
+	); // Promise<USVString>
+	eq!(
+		warp::formats::web_idl::result_type("Response", "status", false),
+		Some("int")
+	);
 }
 
 #[cfg(not(feature = "native"))]

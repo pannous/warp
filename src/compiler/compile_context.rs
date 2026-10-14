@@ -2,13 +2,13 @@
 //! thread-local instead of one per module. A field set for one run is `scoped`; a field a compile writes and later stages
 //! (the emitter, the runner) read is written with `change`. Closures given to `read` and `change` only touch fields:
 //! nothing in them compiles, or the context would be borrowed twice.
-use crate::diagnostic::WarningMode;
 use crate::analyzer::effects::Capability;
+use crate::diagnostic::WarningMode;
 use crate::lowering::component_worlds::WorldFunctions;
 use crate::node::Node;
 use crate::normalize::{HintMode, HintPosition, Style};
-use crate::pipeline::CompileMode;
 use crate::numbers::units::static_units::ResultUnits;
+use crate::pipeline::CompileMode;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

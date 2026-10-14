@@ -85,5 +85,6 @@ pub fn reply(id: i64) -> Node {
 
 /// The value a server function's JSON reply holds, a number or a text too; else the text
 fn value_of_json(body: String) -> Node {
-	serde_json::from_str::<serde_json::Value>(&body).map_or(Node::Text(body), |value| crate::modules::foreign::node_of(&value))
+	serde_json::from_str::<serde_json::Value>(&body)
+		.map_or(Node::Text(body), |value| crate::modules::foreign::node_of(&value))
 }

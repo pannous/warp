@@ -31,7 +31,9 @@ fn guarded_call(
 	let value = match function.call(&mut caller, &[Val::AnyRef(arguments)], &mut result) {
 		Ok(()) => match result[0] {
 			Val::I64(n) => crate::host::tasks::TaskValue::Int(n),
-			Val::F64(bits) => crate::host::tasks::TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits))),
+			Val::F64(bits) => {
+				crate::host::tasks::TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits)))
+			}
 			node => return Ok(node.unwrap_anyref().copied()),
 		},
 		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => {
@@ -372,7 +374,9 @@ fn paint(
 	let values = match ints_of_list(&mut caller, memory, pixels, size.0 * size.1)? {
 		Some(values) => values,
 		None => {
-			match crate::run::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory).drop_meta() {
+			match crate::run::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory)
+				.drop_meta()
+			{
 				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
 				crate::node::Node::Text(shader) => {
 					let failure = gpu_failure(PAINT);
@@ -415,7 +419,9 @@ fn sound(
 	let values = match ints_of_list(&mut caller, memory, samples, count.max(0) as usize)? {
 		Some(values) => values,
 		None => {
-			match crate::run::wasm_reader::node_in(&Val::AnyRef(samples), &mut caller.as_context_mut(), memory).drop_meta() {
+			match crate::run::wasm_reader::node_in(&Val::AnyRef(samples), &mut caller.as_context_mut(), memory)
+				.drop_meta()
+			{
 				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
 				other => {
 					return Err(task_failure(format!(
@@ -620,8 +626,8 @@ fn function_arguments(
 	store: &mut wasmtime::StoreContextMut<'_, HostState>,
 	arguments: HostNode,
 ) -> wasmtime::Result<Vec<Option<wasmtime::Rooted<wasmtime::AnyRef>>>> {
-	use crate::type_kinds::{Kind, KIND_MASK};
 	use crate::run::wasm_reader::{FIELD_DATA, FIELD_KIND, FIELD_VALUE};
+	use crate::type_kinds::{Kind, KIND_MASK};
 	let node_of = |value: &Val, store: &wasmtime::StoreContextMut<'_, HostState>| {
 		value
 			.unwrap_anyref()
@@ -665,7 +671,10 @@ fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<w
 	}
 	let marker = |index: usize| {
 		Node::List(
-			vec![Node::key(crate::modules::foreign::WARP_FUNCTION_KEY, Node::int(index as i64))],
+			vec![Node::key(
+				crate::modules::foreign::WARP_FUNCTION_KEY,
+				Node::int(index as i64),
+			)],
 			crate::node::Bracket::Curly,
 			crate::node::Separator::Space,
 		)
@@ -971,9 +980,10 @@ fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode)
 /// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/serve.rs)
 fn request_of(request: &Node) -> crate::web::fetches::Request {
 	match request.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 => {
-			(items[0].name(), Some(crate::modules::foreign::json_of(&items[1]).to_string()))
-		}
+		Node::List(items, _, _) if items.len() == 2 => (
+			items[0].name(),
+			Some(crate::modules::foreign::json_of(&items[1]).to_string()),
+		),
 		url => (url.name(), None),
 	}
 }

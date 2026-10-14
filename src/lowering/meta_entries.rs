@@ -119,12 +119,14 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 						),
 						_ => return None,
 					};
-					Some(match crate::compiler::compile_context::read(|context| context.comments_as_meta) {
-						true => read,
-						false => crate::node::error(&format!(
-							"no field {field}: {name}'s comment becomes its meta information under `use comments`"
-						)),
-					})
+					Some(
+						match crate::compiler::compile_context::read(|context| context.comments_as_meta) {
+							true => read,
+							false => crate::node::error(&format!(
+								"no field {field}: {name}'s comment becomes its meta information under `use comments`"
+							)),
+						},
+					)
 				}),
 				_ => None,
 			};

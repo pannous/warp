@@ -154,10 +154,12 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 			None => format!("no case for {label}"),
 		}
 	});
-	let overflow = trace.split_once(crate::numbers::fixed_width::OVERFLOW_PREFIX).map(|(_, rest)| {
-		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
-		crate::numbers::fixed_width::overflow_message(&type_name)
-	});
+	let overflow = trace
+		.split_once(crate::numbers::fixed_width::OVERFLOW_PREFIX)
+		.map(|(_, rest)| {
+			let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
+			crate::numbers::fixed_width::overflow_message(&type_name)
+		});
 	// `return error "…"` from a number function: the message is the trap detail
 	let returned_error = trace
 		.contains(list_ops::RETURNED_ERROR)

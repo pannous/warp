@@ -15,9 +15,9 @@ const UNWRAPPED_EMPTY: &str = "unwrapped ø";
 const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
 use crate::lowering::nodes::children_rewritten;
 #[cfg(feature = "native")]
-use crate::wasm_emitter::{failed_run, run_raw_struct};
-#[cfg(feature = "native")]
 use crate::run::wasm_reader::read_bytes;
+#[cfg(feature = "native")]
+use crate::wasm_emitter::{failed_run, run_raw_struct};
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
@@ -97,7 +97,9 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 pub fn eval_untrusted(code: &str) -> Node {
 	crate::diagnostic::begin_program();
 	let program = WarpParser::parse(code);
-	match crate::analyzer::effects::EffectReport::of(&program).denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED) {
+	match crate::analyzer::effects::EffectReport::of(&program)
+		.denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED)
+	{
 		Some((external, _)) => crate::node::error(&format!(
 			"untrusted code has no capabilities but pure libm, refusing to call {external}"
 		)),
@@ -826,14 +828,15 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 			.map(|(name, value)| assignment(name, as_written(value.clone())))
 			.collect(),
 	);
-	let result =
-		match crate::analyzer::effects::EffectReport::of(&as_written).denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED) {
-			Some((external, capability)) => crate::node::error(&format!(
-				"a block run at run time is pure: {external} needs the {} capability, which it does not get",
-				capability.name()
-			)),
-			None => run_block_program(bound, program_of),
-		};
+	let result = match crate::analyzer::effects::EffectReport::of(&as_written)
+		.denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED)
+	{
+		Some((external, capability)) => crate::node::error(&format!(
+			"a block run at run time is pure: {external} needs the {} capability, which it does not get",
+			capability.name()
+		)),
+		None => run_block_program(bound, program_of),
+	};
 	match result.drop_meta() {
 		Node::Error(message) => Err(format!("the block {written} failed: {}", message.drop_meta())),
 		_ => Ok(result),

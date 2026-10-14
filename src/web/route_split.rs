@@ -4,9 +4,9 @@
 //! keeps a table slot and a placeholder import (module `placeholder.app-route-N`) per moved function, and the route's
 //! module, instantiated with the primary's exports as `primary`, fills the slots. Without wasm-split on PATH the site
 //! ships one module, with a note.
-use crate::modules::binaryen::BINARYEN_FEATURES;
 use crate::compiler::dead_functions::CallGraph;
 use crate::host::{TASK_SPAWN, TASK_SPAWN_VALUES, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR};
+use crate::modules::binaryen::BINARYEN_FEATURES;
 use std::collections::HashMap;
 use std::process::Command;
 use wasmparser::{Name, NameSectionReader, Parser, Payload};

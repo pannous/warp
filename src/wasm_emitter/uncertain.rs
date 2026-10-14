@@ -13,9 +13,9 @@ use super::similarity::NUMBERS_SIMILAR;
 use super::text_builtins::TEXT_CONCAT;
 use super::WasmGcEmitter;
 use crate::node::Node;
+use crate::numbers::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
-use crate::numbers::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
 use wasm_encoder::*;
 use Instruction as I;
 

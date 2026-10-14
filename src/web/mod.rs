@@ -3,6 +3,7 @@
 //! page runs the compiled module (`run_in_host`) and hands its result back as a JSON tree that its reader
 //! (web/playground/reader.js) walked through the module's reflection exports (wasm_emitter/reflection.rs).
 
+pub mod accessibility;
 #[cfg(feature = "native")]
 pub mod deploy;
 #[cfg(feature = "native")]
@@ -10,6 +11,7 @@ pub mod dev_server;
 #[cfg(feature = "native")]
 pub mod fetches;
 pub mod headless;
+pub mod markup;
 pub mod page_tests;
 #[cfg(feature = "native")]
 pub mod route_split;
@@ -21,13 +23,11 @@ pub mod web_server;
 pub mod web_sockets;
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub mod webview;
-pub mod markup;
-pub mod accessibility;
 
+use crate::compiler::meta::{DataType, DataValue};
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
 use crate::fixits::{self, Fix};
-use crate::compiler::meta::{DataType, DataValue};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::KIND_BITS;
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -461,7 +461,9 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		},
 		tag if tag == Kind::Uncertain as i64 => {
 			let floats = data.get("floats").and_then(Value::as_array);
-			crate::numbers::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
+			crate::numbers::uncertain::Uncertain::read_node(
+				floats.map(|parts| parts.iter().filter_map(float_value).collect()),
+			)
 		}
 		tag if tag == Kind::Time as i64 => crate::time::time_node(kind >> KIND_BITS, payload_number(data)),
 		tag => Node::Text(format!("Unknown Kind: {tag}")),

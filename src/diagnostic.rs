@@ -1071,8 +1071,9 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
 	let silenced = is_quiet()
 		|| is_acknowledged(topic, written)
-		|| silenced_by_comment(crate::compiler::compile_context::read(|context| context.hint_position.line))
-		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
+		|| silenced_by_comment(crate::compiler::compile_context::read(|context| {
+			context.hint_position.line
+		})) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
 	if !silenced {
 		crate::normalize::show_hint(written, preferred, reason, fix, topic);
 	}

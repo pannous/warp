@@ -61,9 +61,11 @@ fn test_cargo_crate_prebuilt_download() {
 	);
 	is!(&program, 3);
 	std::fs::remove_dir_all(&directory).unwrap();
-	assert!(warp::modules::cargo_crates::download("no_such_crate_xyz_warp", &directory)
-		.unwrap_err()
-		.contains("not hosted"));
+	assert!(
+		warp::modules::cargo_crates::download("no_such_crate_xyz_warp", &directory)
+			.unwrap_err()
+			.contains("not hosted")
+	);
 }
 
 /// card use-cargo-debug-names: crate components keep their name section, so a trap's backtrace names the Rust

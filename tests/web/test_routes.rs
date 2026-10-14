@@ -2,8 +2,8 @@
 // matches, id bound to that part of the path (a number when it is digits); `route "*"` is the not-found page; a layout
 // shows the matched route where it says `outlet`. Natively the path is "/" unless a render asks for another one.
 use warp::host::with_page_path;
-use warp::web::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 const SITE: &str = "users = [\"Ann\", \"Bo\"]
 route \"/\" { h1{ \"Home\" } }

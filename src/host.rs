@@ -276,17 +276,17 @@ use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
 #[cfg(feature = "native")]
-mod native;
-pub mod host_parts;
-pub mod sandbox;
-#[cfg(feature = "native")]
 pub mod channels;
 #[cfg(feature = "native")]
-pub mod tasks;
+pub mod database;
+pub mod host_parts;
+#[cfg(feature = "native")]
+mod native;
+pub mod sandbox;
 #[cfg(feature = "native")]
 pub mod shared;
 #[cfg(feature = "native")]
-pub mod database;
+pub mod tasks;
 #[cfg(feature = "native")]
 pub use native::*;
 /// Body of `url`, or the reason it could not be fetched

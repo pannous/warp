@@ -627,7 +627,9 @@ impl Foreign<'_> {
 			return Ok(None);
 		};
 		crate::formats::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
-		Ok(crate::formats::web_idl::optional_result_type(&interface, member, is_call))
+		Ok(crate::formats::web_idl::optional_result_type(
+			&interface, member, is_call,
+		))
 	}
 
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares

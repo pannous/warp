@@ -3,8 +3,8 @@
 //! the units of a program and runs its amounts as exact SI numbers. The unit shown is the finest one written:
 //! `3km+10m` is `3010m`. A quantity is an amount times units to powers: `6 m²`, `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
 
-use crate::extensions::numbers::Number;
 use crate::compiler::meta::DataValue;
+use crate::extensions::numbers::Number;
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;

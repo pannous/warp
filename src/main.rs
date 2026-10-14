@@ -5,7 +5,10 @@ use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
-use warp::{diagnostic, extensions, law, web::markup, modules::package_tools, run, util, warp_parser, wasm_emitter, run::wasm_reader};
+use warp::{
+	diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser, wasm_emitter,
+	web::markup,
+};
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
 use wasm_emitter::eval;
 

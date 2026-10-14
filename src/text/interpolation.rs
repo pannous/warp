@@ -6,10 +6,10 @@
 //! injection::parts) marked as a template, so `sql "…"` / `sh "…"` still see the literal and turn holes into parameters.
 //! Every other template becomes text building here: `"a \(x) b"` → `"a " + text_form(x) + " b"`.
 
-use crate::text::injection::{parts_with, Part};
 use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::text::injection::{parts_with, Part};
 use crate::wasm_emitter::text_builtins::TEXT_FORM;
 
 /// Meta key marking a text literal as a template

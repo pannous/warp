@@ -147,7 +147,11 @@ fn a_table_loads_its_rows_only_when_read() {
 		&program("people_lazy", "people.add(Person(\"Lu\", 7))\ncount(people)"),
 		3
 	);
-	assert_eq!(warp::host::database::rows_read(), before, "counting and adding loaded rows");
+	assert_eq!(
+		warp::host::database::rows_read(),
+		before,
+		"counting and adding loaded rows"
+	);
 	is!(&program("people_lazy", "people#2.name"), "Ki");
 	assert!(
 		warp::host::database::rows_read() > before,

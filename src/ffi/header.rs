@@ -276,7 +276,9 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
 	let dirs: Vec<String> = std::iter::once(header_dir)
 		.chain(crate::formats::ffi_parser::include_dirs())
 		.collect();
-	match crate::formats::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| crate::web::read_text(&path)) {
+	match crate::formats::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs)
+		.and_then(|path| crate::web::read_text(&path))
+	{
 		Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
 		None => content,
 	}

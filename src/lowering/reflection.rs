@@ -469,7 +469,11 @@ fn module_objects(node: &Node) -> Objects {
 	for path in paths {
 		let alias = crate::modules::wasm_modules::module_alias(path);
 		let bytes = crate::modules::wasm_modules::module_bytes(path).ok();
-		let entry = |key: &str| bytes.as_ref().and_then(|bytes| crate::formats::meta_section::entry(bytes, key));
+		let entry = |key: &str| {
+			bytes
+				.as_ref()
+				.and_then(|bytes| crate::formats::meta_section::entry(bytes, key))
+		};
 		let functions = entry(META_FUNCTIONS);
 		let is_own = |name: &String| {
 			functions

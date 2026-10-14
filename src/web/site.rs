@@ -5,11 +5,11 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
 pub(crate) use crate::host::host_parts::{
 	compile_failure, exports, host_scripts_of, imports_of, message_of, with_excerpt, GPU_WORDS, TASK_WORD_PREFIXES,
 };
 pub use crate::host::host_parts::{HostPart, Script, HOST_PARTS};
+use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 pub use warp_runtime::site_files::{content_type, file_at, SiteFile};

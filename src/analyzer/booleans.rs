@@ -32,7 +32,9 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::compil
 		if refuted.is_empty() {
 			return;
 		}
-		crate::compiler::compile_context::change(|context| context.bool_functions.retain(|name| !refuted.contains(name)));
+		crate::compiler::compile_context::change(|context| {
+			context.bool_functions.retain(|name| !refuted.contains(name))
+		});
 	}
 }
 

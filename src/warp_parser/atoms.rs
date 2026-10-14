@@ -129,9 +129,9 @@ impl WarpParser {
 				return Node::Number(Number::Inf);
 			} // the float infinity (P56)
 			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
-			crate::numbers::units::DEGREE if self.peek_char(1).is_alphabetic() => {
-				self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::numbers::units::DEGREE)))
-			}
+			crate::numbers::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| {
+				Node::Symbol(format!("{}{name}", crate::numbers::units::DEGREE))
+			}),
 			crate::numbers::units::DEGREE => {
 				self.advance();
 				Node::Symbol(crate::numbers::units::DEGREE.to_string())
@@ -183,7 +183,9 @@ impl WarpParser {
 					}
 				}
 			}
-			'\\' if let Some((name, length)) = crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
+			'\\' if let Some((name, length)) =
+				crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos) =>
+			{
 				let warned = self.warn_unknown_entity(&name, self.column);
 				self.advance_by(length);
 				warned.map_or_else(|strict| strict, |()| Node::Text(format!("\\:{name}")))

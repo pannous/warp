@@ -42,20 +42,20 @@ pub mod crash_card;
 pub mod diagnostic;
 pub mod ffi;
 pub mod fixits;
+pub mod formats;
 pub mod graphics;
 pub mod host;
-pub mod text;
 pub mod law;
 pub mod modules;
 pub mod normalize;
-pub mod operators;
 pub mod numbers;
+pub mod operators;
 #[cfg(feature = "native")]
 pub mod sound;
+pub mod text;
 pub mod time;
 pub mod warp_parser;
 pub mod web;
-pub mod formats;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of warp
@@ -68,8 +68,8 @@ pub use node::{
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
-pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 pub use formats::wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
+pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 // Type system
 pub use type_kinds::{
 	extract_instance_values, AstKind, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry,

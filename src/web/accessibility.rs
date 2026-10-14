@@ -400,7 +400,11 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 			|| crate::transitions::ELEMENT_WORDS.contains(&name.as_str())
 			|| OWN_ATTRIBUTE_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
 		if !renders {
-			let fix = near(name, crate::web::markup::attribute_names().to_vec(), format!("data-{name}"));
+			let fix = near(
+				name,
+				crate::web::markup::attribute_names().to_vec(),
+				format!("data-{name}"),
+			);
 			mistakes.push((element.node, no_attribute(name, &element.tag), fix));
 		}
 	}

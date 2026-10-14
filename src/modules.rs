@@ -13,22 +13,22 @@ mod loader;
 use loader::*;
 mod std_modules;
 pub use std_modules::*;
-mod packages;
-pub mod wasm_modules;
-#[cfg(feature = "native")]
-pub mod components;
-#[cfg(feature = "native")]
-pub mod component_builder;
+pub mod binaryen;
 #[cfg(feature = "native")]
 pub mod cargo_crates;
 #[cfg(feature = "native")]
+pub mod component_builder;
+#[cfg(feature = "native")]
+pub mod components;
+#[cfg(feature = "native")]
+pub mod foreign;
+#[cfg(feature = "native")]
 pub mod package_tools;
+mod packages;
 #[cfg(feature = "native")]
 pub mod std_adapters;
 pub mod std_docs;
-#[cfg(feature = "native")]
-pub mod foreign;
-pub mod binaryen;
+pub mod wasm_modules;
 pub use packages::*;
 
 /// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
@@ -147,8 +147,11 @@ pub fn insert_module_classes(program: Node) -> Node {
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);
 			let names: Vec<String> = classes.iter().filter_map(declared_name).collect();
-			program =
-				crate::modules::wasm_modules::with_bare_classes(program, &crate::modules::wasm_modules::module_alias(&module), &names);
+			program = crate::modules::wasm_modules::with_bare_classes(
+				program,
+				&crate::modules::wasm_modules::module_alias(&module),
+				&names,
+			);
 			file_classes.extend(classes);
 			continue;
 		}

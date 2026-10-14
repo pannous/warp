@@ -99,7 +99,8 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(name, Op::Colon, body) => match *body {
 			Node::List(items, Bracket::Curly, separator) => {
-				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::web::markup::is_element_tag(tag));
+				let is_element =
+					matches!(name.drop_meta(), Node::Symbol(tag) if crate::web::markup::is_element_tag(tag));
 				let items = if is_element {
 					tags_over_values(spaced_children(items, &separator, defined), defined)
 				} else {

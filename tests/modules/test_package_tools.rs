@@ -3,8 +3,8 @@
 //! the binary of a uniscript checkout.
 
 use std::path::Path;
-use warp::modules::{cached_package, pinned_version};
 use warp::modules::package_tools::{package_tool, run_package_tool};
+use warp::modules::{cached_package, pinned_version};
 
 #[test]
 fn a_package_tool_runs_in_the_package_directory() {

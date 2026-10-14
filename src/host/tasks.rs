@@ -1144,7 +1144,11 @@ impl TaskTable {
 		};
 		let mut results = zero_results(&signature);
 		// a raised error leaves its message in trap_detail, as in the program
-		crate::run::wasm_reader::with_trap_detail(callee.call(&mut store, &values, &mut results), &mut store, &instance)?;
+		crate::run::wasm_reader::with_trap_detail(
+			callee.call(&mut store, &values, &mut results),
+			&mut store,
+			&instance,
+		)?;
 		match results.first() {
 			Some(result) => builders.read(result, &mut store.as_context_mut()),
 			None => Ok(TaskValue::Empty),

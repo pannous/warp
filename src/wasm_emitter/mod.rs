@@ -196,11 +196,11 @@ use crate::analyzer::{
 	extract_user_functions, infer_type, kind_with_article, param_kind, type_word_kind, Scope,
 };
 use crate::compiler::context::{Context, UserFunctionDef};
-use crate::extensions::numbers::Number;
 use crate::compiler::function::Function as FuncDef;
+use crate::compiler::local::Local;
+use crate::extensions::numbers::Number;
 #[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
-use crate::compiler::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::pipeline::returned_error_message;

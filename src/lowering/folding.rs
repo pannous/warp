@@ -6,8 +6,8 @@
 //! program computes; a call that fails or runs out of fuel stays a call.
 
 use super::nodes::{branches, call, children_rewritten, key};
-use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::analyzer::effects::EffectReport;
+use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::extensions::numbers::Number;
 use crate::function_values::{definitions, Definition};
 use crate::late_binding::{changes_in, functions_in, map_statements};
@@ -323,7 +323,11 @@ fn foldable_functions(program: &Node, statements: &[Node]) -> HashSet<String> {
 }
 
 /// The functions whose effects stay within `allowed` and that read no main-level variable
-fn functions_within(program: &Node, statements: &[Node], allowed: crate::analyzer::effects::EffectSet) -> HashSet<String> {
+fn functions_within(
+	program: &Node,
+	statements: &[Node],
+	allowed: crate::analyzer::effects::EffectSet,
+) -> HashSet<String> {
 	let report = EffectReport::of(program);
 	let mut main = Scope::new();
 	collect_variables(program, &mut main);

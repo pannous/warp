@@ -508,8 +508,9 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 			.position(|known| known.eq_ignore_ascii_case(sql_type))
 	};
 	let lossless = matches!((widening(stored_base), widening(base)), (Some(from), Some(to)) if from <= to);
-	let quantity =
-		|unit: &str| crate::numbers::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"));
+	let quantity = |unit: &str| {
+		crate::numbers::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"))
+	};
 	match (stored_unit, unit) {
 		(Some(stored_unit), Some(unit)) => {
 			let ((stored_quantity, _), (field_quantity, _)) = (quantity(stored_unit)?, quantity(unit)?);

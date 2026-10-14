@@ -196,16 +196,18 @@ fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		}
 		("save", [name, value, file]) => {
 			let name = text_of(name)?;
-			changed_store(file, |values| drop(values.insert(name, crate::modules::foreign::json_of(value))))
+			changed_store(file, |values| {
+				drop(values.insert(name, crate::modules::foreign::json_of(value)))
+			})
 		}
 		// `delete storage[k]`, `keys(storage)`, `storage` alone
 		("remove", [name, file]) => {
 			let name = text_of(name)?;
 			changed_store(file, |values| drop(values.remove(&name)))
 		}
-		("all", [file]) => Ok(crate::modules::foreign::node_of(&serde_json::Value::Object(stored_values(
-			&text_of(file)?,
-		)?))),
+		("all", [file]) => Ok(crate::modules::foreign::node_of(&serde_json::Value::Object(
+			stored_values(&text_of(file)?)?,
+		))),
 		("names", [file]) => Ok(texts(stored_values(&text_of(file)?)?.into_iter().map(|(name, _)| name))),
 		_ => no_such_word(arguments),
 	}
