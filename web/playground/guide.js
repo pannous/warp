@@ -23,11 +23,14 @@ const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<":
 const CHAPTER_PREFIX = "guide-";
 const chapterId = title => CHAPTER_PREFIX + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-// `code`, **bold** and [text](url) in one line of escaped text
+// `code`, **bold**, *italic*, [text](url) and [[#Chapter]] (a link to that chapter, as in the wiki) in one line of
+// escaped text
 function inline(text) {
 	return escapeHtml(text)
 		.replace(/`([^`]+)`/g, "<code>$1</code>")
 		.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+		.replace(/\*([^*\s][^*]*)\*/g, "<em>$1</em>")
+		.replace(/\[\[#([^\]]+)\]\]/g, (_, title) => `<a href="#${chapterId(title)}">${title}</a>`)
 		.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
 }
 
