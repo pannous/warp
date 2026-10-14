@@ -5,9 +5,6 @@ use warp::wasm_emitter::eval;
 #[test]
 fn the_arrow_hint_points_at_the_definition() {
 	let (_, hints) = capture_hints(|| eval("def half(x) -> int { x / 2 }"));
-	let hint = hints
-		.iter()
-		.find(|hint| hint.reason.contains("as int"))
-		.expect("a hint toward as");
+	let hint = hints.iter().find(|hint| hint.reason.contains("as int")).expect("a hint toward as");
 	assert_eq!(hint.line_and_column().0, 1, "{}", hint.position);
 }

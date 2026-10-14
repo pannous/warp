@@ -111,10 +111,7 @@ mod tests {
 		assert_eq!(s.cast, CastStyle::Any);
 
 		// Swap to constructor style
-		set_style(Style {
-			cast: CastStyle::Constructor,
-			..Style::default()
-		});
+		set_style(Style { cast: CastStyle::Constructor, ..Style::default() });
 
 		let s = style();
 		assert_eq!(s.cast, CastStyle::Constructor);

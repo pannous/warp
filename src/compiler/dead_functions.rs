@@ -15,9 +15,7 @@ pub fn without_dead_functions(module: &[u8]) -> Result<Vec<u8>, String> {
 	}
 	let mut renumbering = Renumbering::new(graph.imported, &live);
 	let mut pruned = wasm_encoder::Module::new();
-	renumbering
-		.parse_core_module(&mut pruned, Parser::new(0), module)
-		.map_err(|failure| format!("{failure:?}"))?;
+	renumbering.parse_core_module(&mut pruned, Parser::new(0), module).map_err(|failure| format!("{failure:?}"))?;
 	Ok(pruned.finish())
 }
 
@@ -162,16 +160,10 @@ struct Renumbering {
 impl Renumbering {
 	fn new(imported: u32, live: &[bool]) -> Renumbering {
 		let mut new_index: HashMap<u32, u32> = (0..imported).map(|index| (index, index)).collect();
-		let live_indices = live
-			.iter()
-			.enumerate()
-			.filter(|(_, &is_live)| is_live)
-			.map(|(defined, _)| imported + defined as u32);
+		let live_indices =
+			live.iter().enumerate().filter(|(_, &is_live)| is_live).map(|(defined, _)| imported + defined as u32);
 		new_index.extend(live_indices.zip(imported..));
-		Renumbering {
-			new_index,
-			live: live.to_vec(),
-		}
+		Renumbering { new_index, live: live.to_vec() }
 	}
 
 	fn is_live(&self, defined: usize) -> bool {

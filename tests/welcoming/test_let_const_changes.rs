@@ -13,10 +13,7 @@ fn a_constant_assigned_its_own_value_again() {
 
 #[test]
 fn a_let_variable_changes() {
-	fails_with(
-		"let x=\"hello\"; x+=\" world\"; x",
-		"x is let (immutable), cannot change it",
-	);
+	fails_with("let x=\"hello\"; x+=\" world\"; x", "x is let (immutable), cannot change it");
 	fails_with("let x = 1; x++; x", "fix: use var x");
 	fails_with("let xs = [1 2]; xs#1 = 5; xs", "xs is let (immutable)");
 }
@@ -26,10 +23,7 @@ fn a_let_variable_changes() {
 fn let_and_const_unpack_a_tuple() {
 	is!("let (a, b) = (1, 2); a + b", 3);
 	is!("let [a, b] = [3, 4]; a * b", 12);
-	is!(
-		"v = {x: 1, y: 2}; let (names, numbers) = (keys(v), values(v)); count(names) + numbers#2",
-		4
-	);
+	is!("v = {x: 1, y: 2}; let (names, numbers) = (keys(v), values(v)); count(names) + numbers#2", 4);
 	is!("const (a, b) = (5, 6); b - a", 1);
 	fails_with("const (a, b) = (5, 6); a = 7", "a is const, cannot assign it again");
 }

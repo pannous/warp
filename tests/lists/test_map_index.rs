@@ -16,16 +16,10 @@ fn timed(definitions: &str, work: &str) -> String {
 fn a_map_parameter_fills_and_finds_in_linear_time() {
 	let fill = "def fill(m, n) { for i in 0..n { m[\"k\" + i] = i } }";
 	let look = "def look(m, n) { s = 0; for i in 0..n { s += m[\"k\" + i] }; s }";
-	is!(
-		&timed(&format!("{fill}; {look}"), "m = {}; fill(m, n); s = look(m, n)"),
-		SUM
-	);
+	is!(&timed(&format!("{fill}; {look}"), "m = {}; fill(m, n); s = look(m, n)"), SUM);
 	// a returned map, looked up where it lands
 	let build = "def build(n) { m = {}; for i in 0..n { m[\"k\" + i] = i }; m }";
-	is!(
-		&timed(build, "m = build(n); s = 0; for i in 0..n { s += m[\"k\" + i] }"),
-		SUM
-	);
+	is!(&timed(build, "m = build(n); s = 0; for i in 0..n { s += m[\"k\" + i] }"), SUM);
 }
 
 #[test]

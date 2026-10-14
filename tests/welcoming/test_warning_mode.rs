@@ -23,11 +23,7 @@ fn use_strict_turns_a_runtime_warning_into_an_error() {
 fn the_rust_setting_turns_a_runtime_warning_into_an_error() {
 	let strict = with_warning_mode(WarningMode::Error, || eval("\"a\" + warning(\"careful\")"));
 	assert_eq!(strict, error("careful"));
-	assert_eq!(
-		eval("\"a\" + warning(\"careful\")"),
-		Node::Text("a".into()),
-		"the setting is scoped"
-	);
+	assert_eq!(eval("\"a\" + warning(\"careful\")"), Node::Text("a".into()), "the setting is scoped");
 	take_runtime_warnings();
 }
 

@@ -11,10 +11,7 @@ pub(super) fn operator_calls(node: Node) -> Node {
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
 			for (method, _, _) in class_items(body).iter().filter_map(method_parts) {
-				if let Some((op, names)) = OPERATOR_METHODS
-					.iter()
-					.find(|(_, names)| names.contains(&method.as_str()))
-				{
+				if let Some((op, names)) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&method.as_str())) {
 					if method != names[0] {
 						crate::normalize::set_position_of(part);
 						crate::errors::diagnostic::note_alias(&method, names[0]);
@@ -28,10 +25,7 @@ pub(super) fn operator_calls(node: Node) -> Node {
 		return node;
 	}
 	let defines = |methods: &[(String, Op, String)], class: &str, op: Op| {
-		methods
-			.iter()
-			.find(|(owner, known, _)| owner == class && *known == op)
-			.map(|(_, _, method)| method.clone())
+		methods.iter().find(|(owner, known, _)| owner == class && *known == op).map(|(_, _, method)| method.clone())
 	};
 	for (class, _, _) in methods.clone() {
 		for (defined, missing) in INTERCHANGEABLE_OPERATORS {
@@ -54,14 +48,7 @@ pub(super) fn operator_calls(node: Node) -> Node {
 	};
 	let node = specialized_calls(node, &operands);
 	let parameters = parameter_classes(&argument_classes(&node, &operands));
-	with_operator_calls(
-		node,
-		&Operands {
-			parameters: &parameters,
-			..operands
-		},
-	)
-	.0
+	with_operator_calls(node, &Operands { parameters: &parameters, ..operands }).0
 }
 
 /// Each class's fields: (name, type) in declaration order
@@ -72,10 +59,8 @@ pub(super) type ClassOf<'a> = dyn Fn(&Node) -> Option<String> + 'a;
 pub(super) type CallClasses = std::collections::HashMap<String, Vec<Vec<Option<String>>>>;
 
 pub(super) fn argument_classes(node: &Node, operands: &Operands) -> CallClasses {
-	let defined: std::collections::HashSet<String> = definition_heads(node)
-		.into_iter()
-		.map(|items| items[0].drop_meta().name())
-		.collect();
+	let defined: std::collections::HashSet<String> =
+		definition_heads(node).into_iter().map(|items| items[0].drop_meta().name()).collect();
 	let mut calls = CallClasses::new();
 	collect_argument_classes(node, operands, &defined, &mut calls);
 	calls
@@ -93,10 +78,7 @@ pub(super) fn parameter_classes(calls: &CallClasses) -> std::collections::HashMa
 				.collect()
 		})
 	};
-	calls
-		.iter()
-		.map(|(function, calls)| (function.clone(), agreed(calls)))
-		.collect()
+	calls.iter().map(|(function, calls)| (function.clone(), agreed(calls))).collect()
 }
 
 /// `f(x) := x * 2` called with a quantity and with a plain number (card mixed-arguments): each call whose argument is
@@ -138,10 +120,7 @@ pub(super) fn copyable_functions(node: &Node) -> std::collections::HashSet<Strin
 		.filter_map(|statement| match statement.drop_meta() {
 			Node::Key(head, Op::Define, _) => match head.drop_meta() {
 				Node::List(items, Bracket::Round, _)
-					if items.len() > 1
-						&& items[1..]
-							.iter()
-							.all(|item| matches!(item.drop_meta(), Node::Symbol(_))) =>
+					if items.len() > 1 && items[1..].iter().all(|item| matches!(item.drop_meta(), Node::Symbol(_))) =>
 				{
 					Some(items[0].drop_meta().name())
 				}
@@ -162,11 +141,8 @@ impl Specializations<'_> {
 	/// The classes a call gives at its function's mixed positions, when it gives one there
 	fn variant(&self, function: &str, given: &[Option<String>]) -> Option<Vec<Option<String>>> {
 		let mixed = self.mixed.get(function)?;
-		let variant: Vec<Option<String>> = given
-			.iter()
-			.zip(mixed)
-			.map(|(class, mixed)| class.clone().filter(|_| *mixed))
-			.collect();
+		let variant: Vec<Option<String>> =
+			given.iter().zip(mixed).map(|(class, mixed)| class.clone().filter(|_| *mixed)).collect();
 		variant.iter().any(Option::is_some).then_some(variant)
 	}
 
@@ -191,20 +167,14 @@ impl Specializations<'_> {
 				if items.len() > 1 && self.mixed.contains_key(&items[0].drop_meta().name()) =>
 			{
 				let function = items[0].drop_meta().name();
-				let given: Vec<Option<String>> = items[1..]
-					.iter()
-					.map(|argument| argument_class(argument, self.operands))
-					.collect();
+				let given: Vec<Option<String>> =
+					items[1..].iter().map(|argument| argument_class(argument, self.operands)).collect();
 				let head = match self.variant(&function, &given) {
 					Some(variant) => Node::Symbol(variant_name(&function, &variant)),
 					None => items[0].clone(),
 				};
 				let arguments = items[1..].iter().map(|argument| self.rewrite(argument.clone()));
-				Node::List(
-					std::iter::once(head).chain(arguments).collect(),
-					Bracket::Round,
-					separator,
-				)
+				Node::List(std::iter::once(head).chain(arguments).collect(), Bracket::Round, separator)
 			}
 			other => other.map_children(|child| self.rewrite(child)),
 		}
@@ -232,17 +202,12 @@ impl Specializations<'_> {
 						.into_iter()
 						.flatten()
 						.map(|variant| {
-							let typed = parameters[1..]
-								.iter()
-								.zip(variant)
-								.map(|(parameter, class)| match class {
-									Some(class) => key(parameter.clone(), Op::Colon, Node::Symbol(class.clone())),
-									None => parameter.clone(),
-								});
+							let typed = parameters[1..].iter().zip(variant).map(|(parameter, class)| match class {
+								Some(class) => key(parameter.clone(), Op::Colon, Node::Symbol(class.clone())),
+								None => parameter.clone(),
+							});
 							let head = Node::List(
-								std::iter::once(Node::Symbol(variant_name(&function, variant)))
-									.chain(typed)
-									.collect(),
+								std::iter::once(Node::Symbol(variant_name(&function, variant))).chain(typed).collect(),
 								Bracket::Round,
 								head_separator.clone(),
 							);
@@ -266,10 +231,7 @@ impl Specializations<'_> {
 
 /// `f_Quantity`, the copy of f for its classes at the mixed positions
 pub(super) fn variant_name(function: &str, variant: &[Option<String>]) -> String {
-	std::iter::once(function)
-		.chain(variant.iter().flatten().map(String::as_str))
-		.collect::<Vec<_>>()
-		.join("_")
+	std::iter::once(function).chain(variant.iter().flatten().map(String::as_str)).collect::<Vec<_>>().join("_")
 }
 
 pub(super) fn definition_heads(node: &Node) -> Vec<Vec<Node>> {
@@ -295,18 +257,14 @@ pub(super) fn collect_argument_classes(
 	match node.drop_meta() {
 		Node::Key(_, Op::Define, body) => collect_argument_classes(body, operands, defined, calls),
 		Node::List(items, Bracket::Round, _) if items.len() > 1 && defined.contains(&items[0].drop_meta().name()) => {
-			let given: Vec<Option<String>> = items[1..]
-				.iter()
-				.map(|argument| argument_class(argument, operands))
-				.collect();
+			let given: Vec<Option<String>> =
+				items[1..].iter().map(|argument| argument_class(argument, operands)).collect();
 			calls.entry(items[0].drop_meta().name()).or_default().push(given);
-			items[1..]
-				.iter()
-				.for_each(|argument| collect_argument_classes(argument, operands, defined, calls));
+			items[1..].iter().for_each(|argument| collect_argument_classes(argument, operands, defined, calls));
 		}
-		other => children_of(other)
-			.into_iter()
-			.for_each(|child| collect_argument_classes(child, operands, defined, calls)),
+		other => {
+			children_of(other).into_iter().for_each(|child| collect_argument_classes(child, operands, defined, calls))
+		}
 	}
 }
 
@@ -345,10 +303,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 		sum if summed_quantities(&sum, operands).is_some() => {
 			let quantities =
 				with_operator_calls(summed_quantities(&sum, operands).expect("guarded").clone(), operands).0;
-			(
-				quantities_reduced(quantities),
-				Some(crate::numbers::units::RUN_TIME_QUANTITY.to_string()),
-			)
+			(quantities_reduced(quantities), Some(crate::numbers::units::RUN_TIME_QUANTITY.to_string()))
 		}
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
 			operator_call(*left, op, *right, operands)
@@ -374,14 +329,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1) =>
 		{
 			let instances = parameter_instances(head.drop_meta(), operands);
-			let body = with_operator_calls(
-				*body,
-				&Operands {
-					instances: &instances,
-					..*operands
-				},
-			)
-			.0;
+			let body = with_operator_calls(*body, &Operands { instances: &instances, ..*operands }).0;
 			(Node::Key(head, Op::Define, Box::new(body)), None)
 		}
 		other => (other.map_children(recurse), None),
@@ -399,12 +347,10 @@ fn operator_call(left: Node, op: Op, right: Node, operands: &Operands) -> (Node,
 		return (key(joined_text(left, class), op, joined_text(right, right_class)), None);
 	}
 	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
-	match class.as_ref().and_then(|class| {
-		operands
-			.methods
-			.iter()
-			.find(|(owner, known, _)| owner == class && *known == op)
-	}) {
+	match class
+		.as_ref()
+		.and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op))
+	{
 		Some((_, _, method)) => (method_call(left, method, vec![right]), class),
 		None if class.is_none() && may_hold_instance(&left, operands) => {
 			(dispatched_operator(left, op, right, operands), None)
@@ -421,34 +367,22 @@ fn quantity_conversion(conversion: Node, operands: &Operands) -> (Node, Option<S
 	let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
 	match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
 		true => (
-			method_call(
-				quantity,
-				CONVERSION_METHOD,
-				vec![Node::Text(crate::numbers::units::unit_suffix(&units))],
-			),
+			method_call(quantity, CONVERSION_METHOD, vec![Node::Text(crate::numbers::units::unit_suffix(&units))]),
 			run_time.map(str::to_string),
 		),
-		false => (
-			conversion.map_children(|child| with_operator_calls(child, operands).0),
-			None,
-		),
+		false => (conversion.map_children(|child| with_operator_calls(child, operands).0), None),
 	}
 }
 
 /// The instance variables in a function's body: the program's, but its parameters for their own classes
 fn parameter_instances(head: &Node, operands: &Operands) -> std::collections::HashMap<String, String> {
-	let Node::List(items, _, _) = head else {
-		unreachable!("guarded")
-	};
+	let Node::List(items, _, _) = head else { unreachable!("guarded") };
 	let mut instances = operands.instances.clone();
 	let called_with = operands.parameters.get(&items[0].drop_meta().name());
 	for (position, parameter) in items[1..].iter().enumerate() {
 		let (name, declared) = match parameter.drop_meta() {
 			Node::Key(name, Op::Colon, type_node) => (name.drop_meta().name(), Some(type_node.drop_meta().name())),
-			other => (
-				other.name(),
-				called_with.and_then(|classes| classes.get(position).cloned().flatten()),
-			),
+			other => (other.name(), called_with.and_then(|classes| classes.get(position).cloned().flatten())),
 		};
 		match declared.filter(|class| operands.methods.iter().any(|(owner, _, _)| owner == class)) {
 			Some(class) => instances.insert(name, class),
@@ -469,9 +403,9 @@ fn plain_variables(node: &Node) -> std::collections::HashSet<String> {
 	let is_plain_value = |value: &Node| match value.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
 		Node::Key(_, Op::Range | Op::To, _) => true,
-		Node::List(items, Bracket::Square, _) => items
-			.iter()
-			.all(|item| matches!(item.drop_meta(), Node::Number(_) | Node::Text(_))),
+		Node::List(items, Bracket::Square, _) => {
+			items.iter().all(|item| matches!(item.drop_meta(), Node::Number(_) | Node::Text(_)))
+		}
 		_ => false,
 	};
 	let mut plain = std::collections::HashSet::new();
@@ -481,12 +415,7 @@ fn plain_variables(node: &Node) -> std::collections::HashSet<String> {
 		}
 		Node::Type { body, .. } => {
 			let typed_by_word = |item: &&Node| crate::analyzer::type_word_kind(&field_type_name(item)).is_some();
-			plain.extend(
-				class_items(body)
-					.iter()
-					.filter(typed_by_word)
-					.filter_map(declared_field_name),
-			)
+			plain.extend(class_items(body).iter().filter(typed_by_word).filter_map(declared_field_name))
 		}
 		Node::List(items, _, _)
 			if crate::lowering::nodes::for_in_variable(items).is_some() && items.get(3).is_some_and(is_plain_value) =>
@@ -503,12 +432,7 @@ fn plain_variables(node: &Node) -> std::collections::HashSet<String> {
 fn dispatched_operator(left: Node, op: Op, right: Node, operands: &Operands) -> Node {
 	let defining = operands.methods.iter().filter(|(_, known, _)| *known == op);
 	defining.fold(key(left.clone(), op, right.clone()), |otherwise, (class, _, method)| {
-		super::by_class(
-			&left,
-			class,
-			method_call(left.clone(), method, vec![right.clone()]),
-			otherwise,
-		)
+		super::by_class(&left, class, method_call(left.clone(), method, vec![right.clone()]), otherwise)
 	})
 }
 
@@ -518,9 +442,7 @@ fn dispatched_operator(left: Node, op: Op, right: Node, operands: &Operands) -> 
 /// amount as the interval it is; `Quantity.more` would answer a plain yes (card quantity-tolerance)
 pub(super) fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
 	let (word, ordering) = crate::numbers::uncertain::certainty_parts(certainty).expect("guarded");
-	let Node::Key(left, op, right) = ordering.drop_meta() else {
-		unreachable!("certainty_parts takes orderings")
-	};
+	let Node::Key(left, op, right) = ordering.drop_meta() else { unreachable!("certainty_parts takes orderings") };
 	let (left, class) = with_operator_calls(left.as_ref().clone(), operands);
 	let (right, right_class) = with_operator_calls(right.as_ref().clone(), operands);
 	let class = class.or_else(|| operand_class(&left, operands));
@@ -565,17 +487,11 @@ pub(super) fn summed_list(node: &Node) -> Option<&Node> {
 pub(super) fn quantities_reduced(quantities: Node) -> Node {
 	let [sum, item] = REDUCED_NAMES.map(symbol);
 	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
-	let added = key(
-		parameters,
-		Op::Arrow,
-		method_call(sum, operator_method(Op::Add).expect("plus"), vec![item]),
-	);
+	let added = key(parameters, Op::Arrow, method_call(sum, operator_method(Op::Add).expect("plus"), vec![item]));
 	let reduced = key(quantities, Op::Dot, call(REDUCE_WORD, vec![added]));
 	Node::meta(
 		reduced,
-		Node::data(crate::lowering::traits::TypedAs(
-			crate::numbers::units::RUN_TIME_QUANTITY.to_string(),
-		)),
+		Node::data(crate::lowering::traits::TypedAs(crate::numbers::units::RUN_TIME_QUANTITY.to_string())),
 	)
 }
 
@@ -594,10 +510,7 @@ pub(super) fn with_run_time_units(
 ) -> (Node, Option<String>, Node) {
 	let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
 	let lifted_left = class.is_none() && right_class.or_else(|| operand_class(&right, operands)).as_deref() == run_time;
-	let (left, class) = match lifted_left
-		.then(|| crate::numbers::units::as_run_time_quantity(&left))
-		.flatten()
-	{
+	let (left, class) = match lifted_left.then(|| crate::numbers::units::as_run_time_quantity(&left)).flatten() {
 		Some(quantity) => (quantity, run_time.map(str::to_string)),
 		None => (left, class),
 	};
@@ -614,9 +527,9 @@ pub(super) fn operand_class(operand: &Node, operands: &Operands) -> Option<Strin
 	match operand.drop_meta() {
 		Node::Symbol(variable) => operands.instances.get(variable).cloned(),
 		// `(a + b).x`: the parenthesized operation, `(quantity("5 m")) * 2` the parenthesized instance
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), operands)
-			.1
-			.or_else(|| operand_class(&items[0], operands)),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => {
+			with_operator_calls(items[0].clone(), operands).1.or_else(|| operand_class(&items[0], operands))
+		}
 		// `f(quantity("5 m") / 5)`: an operation of an instance as an argument
 		Node::Key(_, op, _) if OPERATOR_METHODS.iter().any(|(known, _)| known == op) => {
 			with_operator_calls(operand.drop_meta().clone(), operands).1

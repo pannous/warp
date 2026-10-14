@@ -71,9 +71,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		// a `{key:value …}` map, `map of int` when all its values are ints
 		Node::List(entries, Bracket::Curly, _)
 			if !entries.is_empty()
-				&& entries
-					.iter()
-					.all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+				&& entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) =>
 		{
 			map_type_name(entries, scope)
 		}
@@ -91,10 +89,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 
 /// A variable's list type: as declared, or a list whose elements are only known at runtime
 fn variable_list_type(name: &str, scope: &Scope) -> String {
-	let type_name = scope
-		.binding(name)
-		.and_then(|local| local.type_node.as_ref())
-		.map(|type_node| type_node.name());
+	let type_name = scope.binding(name).and_then(|local| local.type_node.as_ref()).map(|type_node| type_node.name());
 	match type_name {
 		Some(word) => match list_element_type(&word) {
 			Some(element) => format!("{LIST_OF_PREFIX}{element}"),
@@ -139,10 +134,8 @@ fn map_type_name(entries: &[Node], scope: &Scope) -> String {
 		value.is_empty_node() || matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty())
 	};
 	let typed: Vec<&Node> = values.iter().copied().filter(|value| !is_empty_list(value)).collect();
-	let words: Vec<String> = if typed.is_empty() { &values } else { &typed }
-		.iter()
-		.map(|value| nested_type_word(value, scope))
-		.collect();
+	let words: Vec<String> =
+		if typed.is_empty() { &values } else { &typed }.iter().map(|value| nested_type_word(value, scope)).collect();
 	let is_list_map = typed.len() < values.len() && words.iter().all(|word| word.starts_with(LIST_WORD));
 	match common_type_word(&words) {
 		Some(word) if is_list_map || typed.len() == values.len() => format!("{MAP_TYPE_PREFIX}{word}"),
@@ -152,10 +145,8 @@ fn map_type_name(entries: &[Node], scope: &Scope) -> String {
 
 fn joined_list_type(left: &Node, right: &Node, scope: &Scope) -> String {
 	let elements = [left, right].map(|list| list_type_name(list, scope));
-	let words: Option<Vec<String>> = elements
-		.iter()
-		.map(|list| list.strip_prefix(LIST_OF_PREFIX).map(str::to_string))
-		.collect();
+	let words: Option<Vec<String>> =
+		elements.iter().map(|list| list.strip_prefix(LIST_OF_PREFIX).map(str::to_string)).collect();
 	let Some(words) = words else {
 		return LIST_WORD.to_string();
 	};
@@ -171,10 +162,7 @@ fn joined_list_type(left: &Node, right: &Node, scope: &Scope) -> String {
 /// A list value of a map or list: see list_type_name
 fn element_list_type(map: &Node, scope: &Scope) -> String {
 	let outer = list_type_name(map, scope);
-	match outer
-		.strip_prefix(MAP_TYPE_PREFIX)
-		.or_else(|| outer.strip_prefix(LIST_OF_PREFIX))
-	{
+	match outer.strip_prefix(MAP_TYPE_PREFIX).or_else(|| outer.strip_prefix(LIST_OF_PREFIX)) {
 		Some(LIST_WORD) if outer.starts_with(LIST_OF_PREFIX) => NODE_LIST_TYPE.to_string(),
 		Some(value_type) if value_type.starts_with(LIST_WORD) => value_type.to_string(),
 		_ => LIST_WORD.to_string(),
@@ -225,9 +213,7 @@ pub(super) const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
 pub(in crate::analyzer) fn map_word(call: &Node) -> Option<&'static str> {
 	use crate::library_words::{MAP_ENTRIES, MAP_VALUES};
 	use crate::words::MAP_KEYS;
-	[MAP_KEYS, MAP_VALUES, MAP_ENTRIES]
-		.into_iter()
-		.find(|word| call.is_symbol(word))
+	[MAP_KEYS, MAP_VALUES, MAP_ENTRIES].into_iter().find(|word| call.is_symbol(word))
 }
 
 pub(in crate::analyzer) const INT_WORD: &str = "int";
@@ -259,11 +245,7 @@ pub fn literal_number_type_word(node: &Node) -> Option<&'static str> {
 		Node::Symbol(name) if REAL_CONSTANTS.contains(&name.as_str()) => Some(REAL_WORD),
 		Node::Key(numerator, Op::Div, denominator) => match (numerator.drop_meta(), denominator.drop_meta()) {
 			(Node::Number(Number::Int(numerator)), Node::Number(Number::Int(denominator))) if *denominator != 0 => {
-				Some(if numerator % denominator == 0 {
-					INT_WORD
-				} else {
-					RATIONAL_WORD
-				})
+				Some(if numerator % denominator == 0 { INT_WORD } else { RATIONAL_WORD })
 			}
 			_ => None,
 		},
@@ -275,9 +257,7 @@ pub(in crate::analyzer) fn element_type_word(item: &Node, scope: &Scope) -> Stri
 	if item.is_empty_node() {
 		return crate::type_tests::EMPTY_TYPE.to_string();
 	}
-	literal_number_type_word(item)
-		.map(str::to_string)
-		.unwrap_or_else(|| infer_type(item, scope).to_string())
+	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| infer_type(item, scope).to_string())
 }
 
 /// The one type word all element words fit: the same word, `rational` for a mix of `int` and `rational` (int is a special
@@ -305,11 +285,7 @@ pub(in crate::analyzer) fn common_type_word(words: &[String]) -> Option<String> 
 		return None;
 	}
 	Some(
-		if words.iter().all(|word| is_type_within(word, RATIONAL_WORD)) {
-			RATIONAL_WORD
-		} else {
-			NUMBER_WORD
-		}
-		.to_string(),
+		if words.iter().all(|word| is_type_within(word, RATIONAL_WORD)) { RATIONAL_WORD } else { NUMBER_WORD }
+			.to_string(),
 	)
 }

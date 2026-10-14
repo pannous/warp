@@ -31,9 +31,6 @@ fn tasks_add_floats_to_one_shared_array() {
 fn a_shared_array_is_a_list_as_a_whole() {
 	is!("shared xs = int[3]; xs#2 = 5; xs", warp::ints(vec![0, 5, 0]));
 	is!("shared xs = int[3]; xs#3 = 7; t = 0; for x in xs { t += x }; t", 7);
-	is!(
-		"shared xs = float[2]; xs#1 = 0.5; xs",
-		warp::list(vec![warp::float(0.5), warp::float(0.0)])
-	);
+	is!("shared xs = float[2]; xs#1 = 0.5; xs", warp::list(vec![warp::float(0.5), warp::float(0.0)]));
 	is!("shared xs = int[2]; bump(ys) := { ys#1 += 4 }; bump(xs); xs#1", 4);
 }

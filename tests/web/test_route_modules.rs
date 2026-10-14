@@ -11,29 +11,20 @@ fn each_route_comes_in_a_module_of_its_own() {
 	requires!(WASM_SPLIT);
 	let files = warp::web::site::files(ROUTED, "routed", false).expect("the site is built");
 	let names: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
-	assert!(
-		names.contains(&"app-route-0.wasm") && names.contains(&"app-route-1.wasm"),
-		"{names:?}"
-	);
+	assert!(names.contains(&"app-route-0.wasm") && names.contains(&"app-route-1.wasm"), "{names:?}");
 	let module = |name: &str| &files.iter().find(|(file, _)| file == name).unwrap().1;
 	let placeholders: Vec<String> = wasmparser::Parser::new(0)
 		.parse_all(module("app.wasm"))
 		.filter_map(|payload| match payload.unwrap() {
-			wasmparser::Payload::ImportSection(imports) => Some(
-				imports
-					.into_imports()
-					.map(|import| import.unwrap().module.to_string())
-					.collect::<Vec<_>>(),
-			),
+			wasmparser::Payload::ImportSection(imports) => {
+				Some(imports.into_imports().map(|import| import.unwrap().module.to_string()).collect::<Vec<_>>())
+			}
 			_ => None,
 		})
 		.flatten()
 		.filter(|module| module.starts_with("placeholder."))
 		.collect();
-	assert!(
-		placeholders.contains(&"placeholder.app-route-1".to_string()),
-		"{placeholders:?}"
-	);
+	assert!(placeholders.contains(&"placeholder.app-route-1".to_string()), "{placeholders:?}");
 	for name in ["app.wasm", "app-route-0.wasm", "app-route-1.wasm"] {
 		wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::WASM3)
 			.validate_all(module(name))

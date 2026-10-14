@@ -109,15 +109,7 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::And, right) => {
 				// Truthy and: if left is 0, return 0; else return right
 				self.emit_numeric_value(func, left);
-				Self::emit_list(
-					func,
-					&[
-						I::I64Eqz,
-						I::If(BlockType::Result(ValType::I64)),
-						I::I64Const(0),
-						I::Else,
-					],
-				);
+				Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(ValType::I64)), I::I64Const(0), I::Else]);
 				self.emit_numeric_value(func, right);
 				func.instruction(&I::End);
 			}
@@ -216,10 +208,7 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
-			match (
-				text::text_builtins::text_builtin_kind(fn_name, arguments.len()),
-				arguments,
-			) {
+			match (text::text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
 				(Some(Kind::Int), _) => {
 					self.emit_integer_text_builtin(func, fn_name, arguments);
 					return true;

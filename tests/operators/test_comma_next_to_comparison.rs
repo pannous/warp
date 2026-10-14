@@ -5,14 +5,8 @@ use crate::is;
 
 #[test]
 fn a_comma_next_to_a_comparison_needs_parentheses() {
-	fails_with(
-		"(2 as float, 4.3 as int) == 2.0, 4",
-		"a comma next to == needs parentheses",
-	);
-	fails_with(
-		"x = (1, 2) == 1, 2; x",
-		"write `(1, 2) == (1, 2)` or `((1, 2) == 1), 2`",
-	);
+	fails_with("(2 as float, 4.3 as int) == 2.0, 4", "a comma next to == needs parentheses");
+	fails_with("x = (1, 2) == 1, 2; x", "write `(1, 2) == (1, 2)` or `((1, 2) == 1), 2`");
 	fails_with("a=1; b=2; c=2; a, b == c", "write `(a, b) == c` or `a, (b == c)`");
 	fails_with("a=1; a != 2, 3", "a comma next to != needs parentheses");
 }

@@ -61,11 +61,7 @@ pub(super) fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 	names
 		.iter()
 		.map(|name| {
-			let statement = Node::List(
-				vec![(*keyword).clone(), (*name).clone()],
-				Bracket::None,
-				Separator::Space,
-			);
+			let statement = Node::List(vec![(*keyword).clone(), (*name).clone()], Bracket::None, Separator::Space);
 			used_module(&statement).map(|used| (used, statement))
 		})
 		.collect()
@@ -110,11 +106,8 @@ pub(super) fn words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, 
 		})
 		.collect::<Option<Vec<String>>>()
 		.filter(|names| !names.is_empty())?;
-	let statement = Node::List(
-		vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()],
-		Bracket::None,
-		Separator::Space,
-	);
+	let statement =
+		Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
 	used_module(&statement).map(|used| (used, statement, names))
 }
 
@@ -151,11 +144,7 @@ pub(super) fn used_module(node: &Node) -> Option<Used> {
 		}
 		_ => return None,
 	};
-	Some(Used {
-		import,
-		name,
-		requirement,
-	})
+	Some(Used { import, name, requirement })
 }
 
 /// `version 1.2.3`, as the parser binds it
@@ -179,9 +168,7 @@ pub(crate) fn is_explicit_path(name: &str) -> bool {
 
 /// A relative path that stays below its directory
 pub(crate) fn is_plain_relative_path(name: &str) -> bool {
-	Path::new(name)
-		.components()
-		.all(|component| matches!(component, std::path::Component::Normal(_)))
+	Path::new(name).components().all(|component| matches!(component, std::path::Component::Normal(_)))
 }
 
 /// `require x` and `import x` of a native library stay in the program as `use x`

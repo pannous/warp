@@ -16,10 +16,7 @@ const ENTITIES: &str = include_str!("uniscript_entities.tsv");
 /// The characters an entity name stands for
 pub fn entity(name: &str) -> Option<&'static str> {
 	static TABLE: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-	TABLE
-		.get_or_init(|| ENTITIES.lines().filter_map(|line| line.split_once('\t')).collect())
-		.get(name)
-		.copied()
+	TABLE.get_or_init(|| ENTITIES.lines().filter_map(|line| line.split_once('\t')).collect()).get(name).copied()
 }
 
 /// The entity written at `chars[at..]`, `\:name`: its name and the number of chars it spans. The name is its whole run
@@ -33,16 +30,10 @@ pub fn entity_name_at(chars: &[char], at: usize) -> Option<(String, usize)> {
 	if letters == 0 {
 		return None;
 	}
-	let run = name_chars
-		.iter()
-		.take_while(|c| c.is_ascii_alphanumeric() || **c == '-')
-		.count();
-	let part_ends = (letters + 1..=run)
-		.rev()
-		.filter(|&end| end == run || name_chars[end] == '-');
-	let hyphenated = part_ends
-		.map(|end| name_chars[..end].iter().collect::<String>())
-		.find(|name| entity(name).is_some());
+	let run = name_chars.iter().take_while(|c| c.is_ascii_alphanumeric() || **c == '-').count();
+	let part_ends = (letters + 1..=run).rev().filter(|&end| end == run || name_chars[end] == '-');
+	let hyphenated =
+		part_ends.map(|end| name_chars[..end].iter().collect::<String>()).find(|name| entity(name).is_some());
 	let name = hyphenated.unwrap_or_else(|| name_chars[..letters].iter().collect());
 	Some((name.clone(), 2 + name.chars().count()))
 }

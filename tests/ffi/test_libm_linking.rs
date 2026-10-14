@@ -10,13 +10,7 @@ fn linked(signatures: &[warp::ffi::FfiHeaderSignature], names: &[&str]) -> (Libm
 	let mut linker: Linker<FfiState> = Linker::new(&engine);
 	let source = link_libm(&mut linker, &engine, signatures).unwrap();
 	let mut store = Store::new(&engine, FfiState::new());
-	(
-		source,
-		names
-			.iter()
-			.map(|name| linker.get(&mut store, "m", name).is_ok())
-			.collect(),
-	)
+	(source, names.iter().map(|name| linker.get(&mut store, "m", name).is_ok()).collect())
 }
 
 #[test]

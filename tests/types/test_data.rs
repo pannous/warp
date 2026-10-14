@@ -9,10 +9,7 @@ struct CustomDataExample {
 
 #[test]
 fn test_node_data() {
-	let custom = CustomDataExample {
-		id: 42,
-		name: "test".to_string(),
-	};
+	let custom = CustomDataExample { id: 42, name: "test".to_string() };
 
 	let n = Node::data(custom.clone());
 	println!("{:?}", n);
@@ -85,20 +82,11 @@ fn test_node_data_equality() {
 	assert_ne!(s1, s3);
 
 	// Custom type equality
-	let c1 = Node::data(CustomDataExample {
-		id: 42,
-		name: "test".to_string(),
-	});
-	let c2 = Node::data(CustomDataExample {
-		id: 42,
-		name: "test".to_string(),
-	});
+	let c1 = Node::data(CustomDataExample { id: 42, name: "test".to_string() });
+	let c2 = Node::data(CustomDataExample { id: 42, name: "test".to_string() });
 	eq!(c1, c2);
 
-	let c3 = Node::data(CustomDataExample {
-		id: 99,
-		name: "test".to_string(),
-	});
+	let c3 = Node::data(CustomDataExample { id: 99, name: "test".to_string() });
 	assert_ne!(c1, c3);
 
 	// Different types should not be equal
@@ -151,10 +139,7 @@ fn test_node_data_metadata() {
 	}
 
 	// Custom struct metadata
-	let c = Node::data(CustomDataExample {
-		id: 1,
-		name: "test".to_string(),
-	});
+	let c = Node::data(CustomDataExample { id: 1, name: "test".to_string() });
 	if let Node::Data(dada) = &c {
 		eq!(dada.data_type, DataType::Struct);
 		assert!(dada.type_name.contains("CustomDataExample"));

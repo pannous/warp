@@ -125,10 +125,8 @@ impl WasmGcEmitter {
 				typed = self.body_typed_lists(function, &params);
 			}
 			// a result that is the array copy itself, held as a $NodeList; the calls among the results are judged below
-			let results: Vec<Node> = results(&function.body)
-				.into_iter()
-				.map(|result| last_value(result).clone())
-				.collect();
+			let results: Vec<Node> =
+				results(&function.body).into_iter().map(|result| last_value(result).clone()).collect();
 			let arrays = results.iter().all(|result| match result.drop_meta() {
 				Node::Symbol(name) => typed.get(name).is_some_and(|list| list.element == ElementType::Node),
 				other => called_function(other).is_some(),
@@ -136,13 +134,7 @@ impl WasmGcEmitter {
 			if arrays {
 				list_results.insert(function.name.clone(), results);
 			}
-			abi.insert(
-				function.name.clone(),
-				ListAbi {
-					params,
-					returns_list: false,
-				},
-			);
+			abi.insert(function.name.clone(), ListAbi { params, returns_list: false });
 		}
 		// greatest fixpoint: a result call returns an array when its function does
 		let mut returning: HashSet<String> = list_results.keys().cloned().collect();
@@ -171,12 +163,7 @@ impl WasmGcEmitter {
 	/// The user functions only ever called directly, never as a closure, a tuple function or a witness the runtime
 	/// dispatches to (witness.rs): those may take a calling convention of their own (lists as arrays, instances as structs)
 	pub(in crate::wasm_emitter) fn directly_called_functions(&self) -> Vec<UserFunctionDef> {
-		let excluded: HashSet<String> = self
-			.ctx
-			.closure_targets
-			.iter()
-			.map(|(target, _)| target.clone())
-			.collect();
+		let excluded: HashSet<String> = self.ctx.closure_targets.iter().map(|(target, _)| target.clone()).collect();
 		self.ctx
 			.user_functions
 			.values()
@@ -201,30 +188,19 @@ impl WasmGcEmitter {
 		let saved_scope = std::mem::replace(&mut self.scope, scope);
 		self.scope.globals = self.function_globals(&function.name);
 		for (param, is_list) in function.params.iter().zip(list_params) {
-			self.scope
-				.define_param(param, if *is_list { Kind::List } else { param_kind(param) });
+			self.scope.define_param(param, if *is_list { Kind::List } else { param_kind(param) });
 		}
 		collect_variables(&function.body, &mut self.scope);
 		let mut typed = self.find_typed_lists(&function.body);
 		self.scope = saved_scope;
 		for (param, _) in function.params.iter().zip(list_params).filter(|(_, is_list)| **is_list) {
-			typed.insert(
-				param.name.clone(),
-				TypedList {
-					element: ElementType::Node,
-					updated: true,
-					aliased: true,
-				},
-			);
+			typed.insert(param.name.clone(), TypedList { element: ElementType::Node, updated: true, aliased: true });
 		}
 		typed
 	}
 
 	pub(in crate::wasm_emitter) fn node_list_type(&self) -> ValType {
-		ValType::Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.type_manager.node_list_type),
-		})
+		ValType::Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_list_type) })
 	}
 
 	/// Does a call of this function give back a $NodeList
@@ -233,9 +209,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(in crate::wasm_emitter) fn takes_list_abi(&self, name: &str, index: usize) -> bool {
-		self.list_abi
-			.get(name)
-			.is_some_and(|abi| abi.params.get(index).copied().unwrap_or(false))
+		self.list_abi.get(name).is_some_and(|abi| abi.params.get(index).copied().unwrap_or(false))
 	}
 
 	/// A value where a $NodeList is wanted: a Node-list variable as its array, a call of a function returning one as it
@@ -251,11 +225,7 @@ impl WasmGcEmitter {
 			}
 		}
 		if let Node::Symbol(name) = value.drop_meta() {
-			if self
-				.typed_lists
-				.get(name)
-				.is_some_and(|list| list.element == ElementType::Node)
-			{
+			if self.typed_lists.get(name).is_some_and(|list| list.element == ElementType::Node) {
 				let slot = self.scope.lookup(name).expect("a typed list is a local").position;
 				func.instruction(&I::LocalGet(slot));
 				return;
@@ -266,9 +236,7 @@ impl WasmGcEmitter {
 		}
 		if let Some(callee) = called_function(value).filter(|callee| self.returns_list_abi(callee)) {
 			let callee = callee.to_string();
-			let Node::List(items, _, _) = value.drop_meta() else {
-				unreachable!("a call")
-			};
+			let Node::List(items, _, _) = value.drop_meta() else { unreachable!("a call") };
 			let user_fn = self.ctx.user_functions[&callee].clone();
 			self.emit_user_function_call_inner(func, &user_fn, &items[1..]);
 			return;

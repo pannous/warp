@@ -11,18 +11,12 @@ fn other_catches_the_rest() {
 
 #[test]
 fn else_catches_the_rest() {
-	is!(
-		"fib(n) := match n { 0: 0; 1: 1; else: fib(n - 1) + fib(n - 2) }; fib(10)",
-		55
-	);
+	is!("fib(n) := match n { 0: 0; 1: 1; else: fib(n - 1) + fib(n - 2) }; fib(10)", 55);
 	is!("match 3 { 1 => \"one\"; else => \"many\" }", "many");
 }
 
 #[test]
 fn a_variable_named_other_stays_a_variable() {
 	is!("other = 2; match other { 2 => \"two\"; _ => \"no\" }", "two");
-	is!(
-		"other = 5; match 7 { n if n > other => \"more\"; _ => \"less\" }",
-		"more"
-	);
+	is!("other = 5; match 7 { n if n > other => \"more\"; _ => \"less\" }", "more");
 }

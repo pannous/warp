@@ -21,10 +21,7 @@ fn a_component_is_a_function_returning_markup() {
 fn the_block_after_the_call_is_the_children() {
 	let card = "<div class=\"card\"><h2>Hi</h2><p>text</p><em>x</em></div>";
 	assert_eq!(html_of(&format!("{CARD}Card(\"Hi\") {{ p:\"text\" em:\"x\" }}")), card);
-	assert_eq!(
-		html_of(&format!("{CARD}Card(title:\"Hi\") {{ p:\"text\" em:\"x\" }}")),
-		card
-	);
+	assert_eq!(html_of(&format!("{CARD}Card(title:\"Hi\") {{ p:\"text\" em:\"x\" }}")), card);
 	assert_eq!(
 		html_of(&format!("{CARD}section{{ Card(\"Hi\") {{ p:\"text\" em:\"x\" }} }}")),
 		format!("<section>{card}</section>")
@@ -70,11 +67,7 @@ fn a_bound_field_in_a_component_binds_its_instance() {
 	let mut page = warp::web::headless::Page::render(&format!("{greeter}div{{ Greeter(\"you\") Greeter(\"there\") }}"))
 		.expect("the page");
 	page.type_into("name", "Ann").expect("typed");
-	assert!(
-		page.text().contains("Hi Ann") && page.text().contains("Hi there"),
-		"{}",
-		page.html()
-	);
+	assert!(page.text().contains("Hi Ann") && page.text().contains("Hi there"), "{}", page.html());
 }
 
 // A component's handler reads and writes the program's own variables: each Counter counts on its own by the shared step,
@@ -106,11 +99,7 @@ fn a_handler_outside_a_component_reads_its_state() {
 	page.click("+").expect("clicked");
 	assert!(page.text().contains("sum 11"), "{}", page.html());
 	page.click("Reset").expect("reset");
-	assert!(
-		page.text().contains("n 0") && page.text().contains("sum 10"),
-		"{}",
-		page.html()
-	);
+	assert!(page.text().contains("n 0") && page.text().contains("sum 10"), "{}", page.html());
 }
 
 // `key:` on a component call ties its state to the key, not to the position: after a swap the counted item keeps its
@@ -124,11 +113,7 @@ fn keyed_component_state_survives_reordering() {
 	page.click("+").expect("clicked");
 	page.click("Swap").expect("swapped");
 	let text = page.text();
-	assert!(
-		text.contains("a 1") && text.contains("b 0") && text.find("b 0") < text.find("a 1"),
-		"{}",
-		page.html()
-	);
+	assert!(text.contains("a 1") && text.contains("b 0") && text.find("b 0") < text.find("a 1"), "{}", page.html());
 }
 
 // A keyed instance gone from the middle takes its state along: the ones after it keep theirs (card web-instance-keys)
@@ -141,11 +126,7 @@ fn keyed_component_state_survives_a_removal() {
 	page.click("b").expect("clicked");
 	page.click("Drop a").expect("dropped");
 	let text = page.text();
-	assert!(
-		!text.contains("a 0") && text.contains("b 1") && text.contains("c 0"),
-		"{}",
-		page.html()
-	);
+	assert!(!text.contains("a 0") && text.contains("b 1") && text.contains("c 0"), "{}", page.html());
 }
 
 // `counters`, the lower-case plural, is Counter's instances in page order: `counters#1.count` the first one's count,
@@ -157,15 +138,7 @@ fn a_components_plural_names_its_instances() {
 	let page_markup = "div{ Counter(0) Counter(10) button{ on click { counters#1.count = 0 } \"Reset\" } p{ \"sum \" + sum(counters.count) } p{ \"last \" + Counter.instances#2.count } }";
 	let mut page = warp::web::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
 	page.click("+").expect("clicked");
-	assert!(
-		page.text().contains("sum 11") && page.text().contains("last 10"),
-		"{}",
-		page.html()
-	);
+	assert!(page.text().contains("sum 11") && page.text().contains("last 10"), "{}", page.html());
 	page.click("Reset").expect("reset");
-	assert!(
-		page.text().contains("n 0") && page.text().contains("sum 10"),
-		"{}",
-		page.html()
-	);
+	assert!(page.text().contains("n 0") && page.text().contains("sum 10"), "{}", page.html());
 }

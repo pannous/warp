@@ -13,19 +13,12 @@ pub struct Function {
 impl Function {
 	/// A host function: an import
 	pub fn host(name: impl Into<String>) -> Self {
-		Function {
-			name: name.into(),
-			call_index: -1,
-			is_import: true,
-		}
+		Function { name: name.into(), call_index: -1, is_import: true }
 	}
 
 	/// A runtime function emitted into the code section
 	pub fn builtin(name: impl Into<String>) -> Self {
-		Function {
-			is_import: false,
-			..Self::host(name)
-		}
+		Function { is_import: false, ..Self::host(name) }
 	}
 }
 

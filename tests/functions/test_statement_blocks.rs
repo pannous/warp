@@ -18,11 +18,7 @@ fn a_block_of_one_phrase_call_runs_it() {
 
 #[test]
 fn a_block_of_one_sound_word_plays() {
-	for program in [
-		"f() := {play \"x.wav\"}; f()",
-		"if 1 {play \"x.wav\"}",
-		"job = go { play \"x.wav\" }; await job",
-	] {
+	for program in ["f() := {play \"x.wav\"}; f()", "if 1 {play \"x.wav\"}", "job = go { play \"x.wav\" }; await job"] {
 		assert!(eval(program).serialize().contains(MISSING_FILE_ERROR), "{program}");
 	}
 }

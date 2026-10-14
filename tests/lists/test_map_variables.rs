@@ -14,10 +14,7 @@ fn two_million_keys_are_set_and_found() {
 #[test]
 fn a_map_variable_reads_as_the_node_of_its_entries() {
 	is!("m = {}; m", Node::Empty);
-	is!(
-		"m = {}; m[\"a\"] = 1; m[\"b\"] = 2; m[\"a\"] = 3; m == {a:3, b:2}",
-		true
-	);
+	is!("m = {}; m[\"a\"] = 1; m[\"b\"] = 2; m[\"a\"] = 3; m == {a:3, b:2}", true);
 	is!("m = {}; m[\"a\"] = 1; n = m; m[\"b\"] = 2; n == {a:1, b:2}", true);
 	is!("m = {}; m[\"a\"] = 1; m.a + count(m)", 2);
 }
@@ -31,13 +28,7 @@ fn a_missing_key_of_a_map_variable_is_the_same_error() {
 // call stack near ten thousand)
 #[test]
 fn keys_and_values_of_a_big_map() {
-	is!(
-		"m = {}; for i in 1 to 100000 { m[i] = i * 2 }; count(keys(m)) + count(values(m))",
-		200000
-	);
-	is!(
-		"m = {}; for i in 1 to 100000 { m[i] = i * 2 }; values(m)#100000 + count(keys(m))",
-		300000
-	);
+	is!("m = {}; for i in 1 to 100000 { m[i] = i * 2 }; count(keys(m)) + count(values(m))", 200000);
+	is!("m = {}; for i in 1 to 100000 { m[i] = i * 2 }; values(m)#100000 + count(keys(m))", 300000);
 	is!("m = {a: 1, b: 2}; keys(m)#2 + \"\" + values(m)#2", "b2");
 }

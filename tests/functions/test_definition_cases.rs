@@ -7,10 +7,7 @@ use crate::is;
 #[test]
 #[ignore = "cleanup-edge: cleanup-cut-definition-cases: the defined-twice diagnostic is cut (cleanup-cuts-2)"]
 fn definitions_by_cases_are_defined_twice() {
-	fails_with(
-		"fib(0) := 0; fib(1) := 1; fib(n) := fib(n-1) + fib(n-2); fib(10)",
-		"fib is defined twice",
-	);
+	fails_with("fib(0) := 0; fib(1) := 1; fib(n) := fib(n-1) + fib(n-2); fib(10)", "fib is defined twice");
 	fails_with("f(x) := 1; f(y) := 2; f(3)", "f is defined twice");
 }
 

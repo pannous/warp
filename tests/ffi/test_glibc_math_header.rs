@@ -6,14 +6,8 @@ const GLIBC_STYLE_MATH_H: &str = "tests/fixtures/glibc_math/math.h";
 
 #[test]
 fn glibc_math_macros_expand_to_double_declarations() {
-	assert_eq!(
-		expand_glibc_math_macros("__MATHCALL (sqrt,, (_Mdouble_ __x));"),
-		"double sqrt (double __x);"
-	);
-	assert_eq!(
-		expand_glibc_math_macros("__MATHDECL (int,ilogb,, (_Mdouble_ __x));"),
-		"int ilogb (double __x);"
-	);
+	assert_eq!(expand_glibc_math_macros("__MATHCALL (sqrt,, (_Mdouble_ __x));"), "double sqrt (double __x);");
+	assert_eq!(expand_glibc_math_macros("__MATHDECL (int,ilogb,, (_Mdouble_ __x));"), "int ilogb (double __x);");
 }
 
 #[test]

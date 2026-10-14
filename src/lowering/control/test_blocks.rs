@@ -36,12 +36,7 @@ pub fn lower(program: Node) -> Node {
 			]
 			.concat(),
 		),
-		false => sequence(
-			written
-				.into_iter()
-				.filter(|statement| test_of(statement).is_none())
-				.collect(),
-		),
+		false => sequence(written.into_iter().filter(|statement| test_of(statement).is_none()).collect()),
 	}
 }
 
@@ -86,11 +81,7 @@ fn run_test(statement: Node) -> Vec<Node> {
 				Bracket::Curly,
 				Separator::Newline,
 			);
-			substitute(
-				substitute(template(NAMED_TEST), BODY, &body),
-				NAME,
-				&Node::Text(format!("\"{name}\"")),
-			)
+			substitute(substitute(template(NAMED_TEST), BODY, &body), NAME, &Node::Text(format!("\"{name}\"")))
 		}
 		None => return vec![statement],
 	};

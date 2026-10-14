@@ -66,13 +66,8 @@ pub const TABLE_ENTITY: &str = "table";
 pub const IMPORTABLE_ENTITIES: [&str; 2] = [MEMORY_ENTITY, TABLE_ENTITY];
 /// The bytes of a wasm memory page
 const PAGE_BYTES: u64 = 65536;
-const MEMORY: MemoryType = MemoryType {
-	minimum: 1,
-	maximum: None,
-	memory64: false,
-	shared: false,
-	page_size_log2: None,
-};
+const MEMORY: MemoryType =
+	MemoryType { minimum: 1, maximum: None, memory64: false, shared: false, page_size_log2: None };
 
 pub use config::EmitterConfig;
 pub use import_manager::ImportManager;
@@ -343,8 +338,7 @@ impl WasmGcEmitter {
 
 	/// Emit core GC types (String, Node, i64box, f64box)
 	fn emit_gc_types(&mut self) {
-		self.type_manager
-			.emit_gc_types(self.should_emit_function(reflection::node_api::NODE_AT));
+		self.type_manager.emit_gc_types(self.should_emit_function(reflection::node_api::NODE_AT));
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -421,9 +415,7 @@ impl WasmGcEmitter {
 				if items.len() >= 2
 					&& matches!(items[0].drop_meta(), Node::Symbol(name) if self.ctx.user_functions.contains_key(name)) =>
 			{
-				let Node::Symbol(name) = items[0].drop_meta() else {
-					unreachable!()
-				};
+				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
 				if let Some(arity) = crate::closures::closure_call_arity(name) {
 					let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
 						Node::Symbol(variable) => Some(variable.as_str()),
@@ -448,29 +440,16 @@ impl WasmGcEmitter {
 	/// The linear memory, exported as `memory`: defined, or imported with a function table by `use { memory, table } from "env"`
 	fn emit_memory(&mut self) {
 		let imported = |emitter: &Self, entity: &str| {
-			emitter
-				.ctx
-				.imported_entities
-				.iter()
-				.find(|(_, name)| name == entity)
-				.map(|(module, _)| module.clone())
+			emitter.ctx.imported_entities.iter().find(|(_, name)| name == entity).map(|(module, _)| module.clone())
 		};
 		match imported(self, MEMORY_ENTITY) {
-			Some(module) => self
-				.import_manager
-				.import_entity(&module, MEMORY_ENTITY, EntityType::Memory(MEMORY)),
+			Some(module) => self.import_manager.import_entity(&module, MEMORY_ENTITY, EntityType::Memory(MEMORY)),
 			None => self.owns_memory = true,
 		}
 		if let Some(module) = imported(self, TABLE_ENTITY) {
-			let table = TableType {
-				element_type: RefType::FUNCREF,
-				minimum: 0,
-				maximum: None,
-				table64: false,
-				shared: false,
-			};
-			self.import_manager
-				.import_entity(&module, TABLE_ENTITY, EntityType::Table(table));
+			let table =
+				TableType { element_type: RefType::FUNCREF, minimum: 0, maximum: None, table64: false, shared: false };
+			self.import_manager.import_entity(&module, TABLE_ENTITY, EntityType::Table(table));
 		}
 		self.exports.export(MEMORY_ENTITY, ExportKind::Memory, 0);
 	}
@@ -483,8 +462,7 @@ impl WasmGcEmitter {
 	pub fn emit(&mut self) {
 		self.emit_memory();
 		// Host imports must come before GC types (imports section comes before types in WASM)
-		self.import_manager
-			.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
+		self.import_manager.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
 		self.next_func_idx = self.import_manager.import_count();
 		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
@@ -590,12 +568,10 @@ impl WasmGcEmitter {
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
 		}
-		self.ctx
-			.required_functions
-			.extend(self.discovered_needs.iter().filter_map(|need| match need {
-				Need::Function(name) => Some(*name),
-				Need::MathImport(_) | Need::KeyOperator(_) => None,
-			}));
+		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
+			Need::Function(name) => Some(*name),
+			Need::MathImport(_) | Need::KeyOperator(_) => None,
+		}));
 		let key_operators = self.discovered_needs.iter().filter_map(|need| {
 			if let Need::KeyOperator(code) = need {
 				Some(*code)
@@ -613,11 +589,7 @@ impl WasmGcEmitter {
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = control::try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
-		trace!(
-			"tree-shaking: {} functions required: {:?}",
-			len,
-			self.ctx.required_functions
-		);
+		trace!("tree-shaking: {} functions required: {:?}", len, self.ctx.required_functions);
 		self.emit();
 		// Pre-allocate strings from user function bodies before compiling
 		self.collect_user_function_strings();
@@ -629,16 +601,9 @@ impl WasmGcEmitter {
 		self.emit_component_adapters();
 		self.emit_compare_dispatcher();
 		self.emit_node_main(node);
-		let missing: Vec<Need> = self
-			.discovered_needs
-			.iter()
-			.filter(|need| !self.is_provided(need))
-			.copied()
-			.collect();
+		let missing: Vec<Need> = self.discovered_needs.iter().filter(|need| !self.is_provided(need)).copied().collect();
 		if let Some(unprovidable) = missing.iter().find(|need| self.inherited_needs.contains(need)) {
-			self.type_errors.push(format!(
-				"the compiler found it needs {unprovidable:?} but cannot provide it"
-			));
+			self.type_errors.push(format!("the compiler found it needs {unprovidable:?} but cannot provide it"));
 		} else if !missing.is_empty() {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
@@ -675,9 +640,7 @@ impl WasmGcEmitter {
 				|| (polls_signals && name == crate::host::SIGNAL_POLL)
 				|| name == crate::host::LOCAL_OFFSET
 		};
-		self.ctx
-			.ffi_imports
-			.retain(|name, _| effects.calls_external(name) || emitter_calls(name));
+		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || emitter_calls(name));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {
 				let function = key.trim_start_matches("m.");
@@ -738,14 +701,7 @@ impl WasmGcEmitter {
 			.map(|compiling| self.nested_functions(&compiling))
 			.unwrap_or_default()
 			.iter()
-			.flat_map(|nested| {
-				self.ctx
-					.captures
-					.get(nested)
-					.into_iter()
-					.flatten()
-					.map(|(name, _)| name.clone())
-			})
+			.flat_map(|nested| self.ctx.captures.get(nested).into_iter().flatten().map(|(name, _)| name.clone()))
 			.collect();
 		let node_storage = Ref(self.node_ref(false));
 		let mut defaulted: Vec<u32> = self
@@ -778,17 +734,10 @@ impl WasmGcEmitter {
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
-		self.result_print = if config::compile_mode().prints_result {
-			last_statement_items(node)
-		} else {
-			0
-		};
+		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
-		self.typed_lists = self
-			.main_typed_lists
-			.take()
-			.unwrap_or_else(|| self.find_typed_lists(node));
+		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));
 		self.typed_maps = self.find_typed_maps(node);
 		self.typed_structs = self.find_typed_structs(node);
 		self.bounded_counters = numbers::big_int::bounded_counters(node);
@@ -845,11 +794,7 @@ impl WasmGcEmitter {
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
 		if !self.ctx.func_registry.contains(name) && !self.ctx.user_functions.contains_key(name) {
-			assert!(
-				!self.ctx.required_functions.contains(name),
-				"Unknown function: {}",
-				name
-			);
+			assert!(!self.ctx.required_functions.contains(name), "Unknown function: {}", name);
 			self.discovered_needs.insert(Need::Function(name));
 			func.instruction(&I::Unreachable);
 			return;
@@ -859,8 +804,7 @@ impl WasmGcEmitter {
 			&& self.should_emit_function("list_join")
 			&& !self.should_emit_function(numbers::float_text::FLOAT_TEXT)
 		{
-			self.discovered_needs
-				.insert(Need::Function(numbers::float_text::FLOAT_TEXT));
+			self.discovered_needs.insert(Need::Function(numbers::float_text::FLOAT_TEXT));
 		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));
@@ -1050,22 +994,13 @@ pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 	let needs_wasi = emitter.imports(Capability::Wasi);
 	let needs_ffi = emitter.imports(Capability::Ffi);
 	let bytes = emitter.try_finish().map_err(|message| crate::node::error(&message))?;
-	Ok(CompiledModule {
-		bytes,
-		needs_host,
-		needs_wasi,
-		needs_ffi,
-	})
+	Ok(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi })
 }
 
 /// Is the first statement that mentions `name` its plain assignment `name = value` (value not reading name)
 fn first_mention_assigns(statements: &[Node], name: &str) -> bool {
 	let mentions = |node: &Node| node.mentions(name);
-	match statements
-		.iter()
-		.find(|statement| mentions(statement))
-		.map(Node::drop_meta)
-	{
+	match statements.iter().find(|statement| mentions(statement)).map(Node::drop_meta) {
 		Some(Node::Key(target, Op::Assign | Op::Define, value)) => {
 			matches!(target.drop_meta(), Node::Symbol(word) if word == name) && !mentions(value)
 		}
@@ -1087,14 +1022,8 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 }
 
 /// The separators of a list by their code above SEPARATOR_SHIFT (None is 0: a list made at run time names none)
-pub const SEPARATORS: [Separator; 6] = [
-	Separator::None,
-	Separator::Space,
-	Separator::Colon,
-	Separator::Semicolon,
-	Separator::Newline,
-	Separator::Tab,
-];
+pub const SEPARATORS: [Separator; 6] =
+	[Separator::None, Separator::Space, Separator::Colon, Separator::Semicolon, Separator::Newline, Separator::Tab];
 
 /// The code of a list's separator, as `separated` and `n.separator` know it
 pub fn separator_code(separator: &Separator) -> i64 {
@@ -1142,10 +1071,7 @@ pub fn debug_module_path() -> Option<std::path::PathBuf> {
 /// Keep the last module at `debug_module_path`; a read-only cache must not fail the program
 pub(crate) fn write_debug_module(bytes: &[u8]) {
 	let Some(path) = debug_module_path() else { return };
-	let written = path
-		.parent()
-		.map_or(Ok(()), std::fs::create_dir_all)
-		.and_then(|()| std::fs::write(&path, bytes));
+	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, bytes));
 	if let Err(failure) = written {
 		warn!("could not write {}: {failure}", path.display());
 	}

@@ -5,10 +5,7 @@ use crate::is;
 
 #[test]
 fn instances_are_approximately_equal_field_by_field() {
-	is!(
-		"class Point{x:float y:float}; Point(1, 2) ≈ Point(1.0000000001, 2)",
-		true
-	);
+	is!("class Point{x:float y:float}; Point(1, 2) ≈ Point(1.0000000001, 2)", true);
 	is!("class Point{x:float y:float}; Point(1, 2) ≈ Point(1.1, 2)", false);
 }
 

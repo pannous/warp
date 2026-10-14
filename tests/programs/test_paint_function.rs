@@ -49,10 +49,7 @@ fn rgb_pixels(rows: &[u8], width: usize) -> Vec<[u8; 3]> {
 	let row_bytes = if colored { 3 * width + 1 } else { width + 1 };
 	rows.chunks(row_bytes)
 		.flat_map(|row| match colored {
-			true => row[1..]
-				.chunks(3)
-				.map(|rgb| [rgb[0], rgb[1], rgb[2]])
-				.collect::<Vec<_>>(),
+			true => row[1..].chunks(3).map(|rgb| [rgb[0], rgb[1], rgb[2]]).collect::<Vec<_>>(),
 			false => row[1..].iter().map(|&level| [level; 3]).collect(),
 		})
 		.collect()
@@ -72,10 +69,7 @@ fn painted_both_ways(program: &str, function: &str, width: usize, folder: &str) 
 #[test]
 fn a_painted_function_becomes_a_fragment_shader() {
 	let mandelbrot = lowered(&format!("{MANDELBROT}paint(ink, width, height)"));
-	assert!(
-		mandelbrot.contains("@fragment") && mandelbrot.contains("fn warp_escape_time("),
-		"{mandelbrot}"
-	);
+	assert!(mandelbrot.contains("@fragment") && mandelbrot.contains("fn warp_escape_time("), "{mandelbrot}");
 	let colored = lowered(&format!("{COLORED}paint(stripes, width, height)"));
 	assert!(colored.contains("fn warp_hsv_color("), "{colored}");
 }
@@ -88,10 +82,7 @@ fn a_painted_function_paints_on_the_gpu_what_the_cpu_paints() {
 	let (gpu, cpu) = painted_both_ways(MANDELBROT, "ink", 48, "paint-mandelbrot");
 	assert_eq!(gpu.len(), 48 * 32);
 	let flipped = gpu.iter().zip(&cpu).filter(|(a, b)| a != b).count();
-	assert!(
-		(flipped as f64) < MOST_FLIPPED_SHARE * gpu.len() as f64,
-		"{flipped} pixels differ"
-	);
+	assert!((flipped as f64) < MOST_FLIPPED_SHARE * gpu.len() as f64, "{flipped} pixels differ");
 	let (gpu, cpu) = painted_both_ways(COLORED, "stripes", 24, "paint-stripes");
 	assert_eq!(gpu.len(), 24 * 16);
 	for (pixel, (a, b)) in gpu.iter().zip(&cpu).enumerate() {

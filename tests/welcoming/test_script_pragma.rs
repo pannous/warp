@@ -14,10 +14,7 @@ fn script(code: &str) -> String {
 fn a_script_shows_no_hints() {
 	set_hint_mode(HintMode::Always);
 	for pragma in ["use script", "use script mode"] {
-		assert!(
-			capture_hints(|| eval(&format!("{pragma}\n2**3"))).1.is_empty(),
-			"{pragma}"
-		);
+		assert!(capture_hints(|| eval(&format!("{pragma}\n2**3"))).1.is_empty(), "{pragma}");
 	}
 }
 

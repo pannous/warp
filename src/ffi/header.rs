@@ -95,17 +95,11 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
 /// A declaration without qualifiers, API macros and annotations; zlib's K&R-compatible prototypes
 /// `zlibVersion OF((void));` declare `zlibVersion(void);`
 fn plain_declaration(declaration: &str) -> String {
-	let decl = DROPPED_QUALIFIERS
-		.iter()
-		.fold(declaration.to_string(), |decl, qualifier| decl.replace(qualifier, ""));
+	let decl = DROPPED_QUALIFIERS.iter().fold(declaration.to_string(), |decl, qualifier| decl.replace(qualifier, ""));
 	let decl = without_libc_annotations(decl.trim());
 	let decl = decl.trim();
 	match decl.find(" OF((") {
-		Some(start) => format!(
-			"{}({}",
-			&decl[..start],
-			decl[start + " OF((".len()..].replacen("))", ")", 1)
-		),
+		Some(start) => format!("{}({}", &decl[..start], decl[start + " OF((".len()..].replacen("))", ")", 1)),
 		None => decl.to_string(),
 	}
 }
@@ -122,16 +116,8 @@ fn name_and_return_type(before_paren: &str) -> Option<(String, String)> {
 	if name.is_empty() || C_TYPE_WORDS.contains(&name.as_str()) {
 		return None;
 	}
-	let return_type = if parts.len() > 1 {
-		parts[..parts.len() - 1].join(" ")
-	} else {
-		"int".to_string()
-	};
-	let return_type = if pointer_marks.is_empty() {
-		return_type
-	} else {
-		format!("{return_type} {pointer_marks}")
-	};
+	let return_type = if parts.len() > 1 { parts[..parts.len() - 1].join(" ") } else { "int".to_string() };
+	let return_type = if pointer_marks.is_empty() { return_type } else { format!("{return_type} {pointer_marks}") };
 	Some((name, return_type))
 }
 
@@ -140,12 +126,7 @@ fn parameters(params_str: &str) -> Vec<(String, String)> {
 	if params_str.trim() == "void" {
 		return vec![];
 	}
-	params_str
-		.split(',')
-		.map(str::trim)
-		.filter(|param| *param != "...")
-		.filter_map(parameter)
-		.collect()
+	params_str.split(',').map(str::trim).filter(|param| *param != "...").filter_map(parameter).collect()
 }
 
 /// "type *name" or "type* name" or "type name", or a type alone
@@ -158,11 +139,7 @@ fn parameter(param: &str) -> Option<(String, String)> {
 	let name = last.trim_start_matches('*').to_string();
 	// Reconstruct type (everything except pure name); `sqlite3 **ppDb` keeps both stars
 	let stars = &last[..last.len() - name.len()];
-	let type_str = if !stars.is_empty() {
-		format!("{} {stars}", type_words.join(" "))
-	} else {
-		type_words.join(" ")
-	};
+	let type_str = if !stars.is_empty() { format!("{} {stars}", type_words.join(" ")) } else { type_words.join(" ") };
 	Some((type_str, name))
 }
 
@@ -175,9 +152,8 @@ fn without_libc_annotations(declaration: &str) -> String {
 	while let Some(start) = rest.find(LIBC_ANNOTATION_PREFIX) {
 		kept.push_str(&rest[..start]);
 		let after = &rest[start..];
-		let word_end = after
-			.find(|letter: char| !(letter.is_ascii_alphanumeric() || letter == '_'))
-			.unwrap_or(after.len());
+		let word_end =
+			after.find(|letter: char| !(letter.is_ascii_alphanumeric() || letter == '_')).unwrap_or(after.len());
 		rest = &after[word_end..];
 		if rest.starts_with('(') {
 			rest = matching_paren(rest, 0).map_or("", |close| &rest[close + 1..]);
@@ -195,11 +171,7 @@ const UNLINKABLE_C_TYPES: [&str; 1] = ["long double"];
 pub fn unlinkable_type(hsig: &FfiHeaderSignature) -> Option<&'static str> {
 	std::iter::once(&hsig.return_type)
 		.chain(&hsig.param_types)
-		.find_map(|c_type| {
-			UNLINKABLE_C_TYPES
-				.into_iter()
-				.find(|unlinkable| bare_c_type(c_type) == *unlinkable)
-		})
+		.find_map(|c_type| UNLINKABLE_C_TYPES.into_iter().find(|unlinkable| bare_c_type(c_type) == *unlinkable))
 }
 
 /// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak); none for a function wasm cannot call
@@ -207,21 +179,15 @@ pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> 
 	if unlinkable_type(hsig).is_some() {
 		return None;
 	}
-	let params: Vec<wasm_encoder::ValType> = warp_parameters(&hsig.param_types)
-		.filter_map(|t| map_c_type_to_valtype(t))
-		.collect();
+	let params: Vec<wasm_encoder::ValType> =
+		warp_parameters(&hsig.param_types).filter_map(|t| map_c_type_to_valtype(t)).collect();
 	let results: Vec<wasm_encoder::ValType> = header_result(hsig).into_iter().collect();
 
 	// Leak strings for 'static lifetime (acceptable for long-running process)
 	let name: &'static str = Box::leak(hsig.name.clone().into_boxed_str());
 	let library: &'static str = Box::leak(hsig.library.clone().into_boxed_str());
 
-	Some(FfiSignature {
-		name,
-		library,
-		params,
-		results,
-	})
+	Some(FfiSignature { name, library, params, results })
 }
 
 /// Get standard header file paths for a library (delegates to ffi_parser)
@@ -247,13 +213,9 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
 	if !content.contains(GLIBC_MATHCALLS) {
 		return content;
 	}
-	let header_dir = std::path::Path::new(header_path)
-		.parent()
-		.map(|dir| dir.to_string_lossy().to_string())
-		.unwrap_or_default();
-	let dirs: Vec<String> = std::iter::once(header_dir)
-		.chain(crate::formats::ffi_parser::include_dirs())
-		.collect();
+	let header_dir =
+		std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
+	let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::formats::ffi_parser::include_dirs()).collect();
 	match crate::formats::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs)
 		.and_then(|path| crate::web::read_text(&path))
 	{
@@ -266,10 +228,9 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
 /// `int ilogb (double __x);`: plain declarations of the double variants
 pub fn expand_glibc_math_macros(source: &str) -> String {
 	let declaration = |line: &str| -> Option<String> {
-		let (macro_name, typed) = GLIBC_MATH_MACROS.iter().find(|(name, _)| {
-			line.strip_prefix(name)
-				.is_some_and(|rest| rest.trim_start().starts_with('('))
-		})?;
+		let (macro_name, typed) = GLIBC_MATH_MACROS
+			.iter()
+			.find(|(name, _)| line.strip_prefix(name).is_some_and(|rest| rest.trim_start().starts_with('(')))?;
 		let inner = line[macro_name.len()..].trim_start().strip_prefix('(')?;
 		let inner = &inner[..inner.rfind(')')?];
 		let mut parts = vec![String::new()];
@@ -286,23 +247,12 @@ pub fn expand_glibc_math_macros(source: &str) -> String {
 			}
 			parts.last_mut()?.push(c);
 		}
-		let (result, rest) = if *typed {
-			(parts.first()?.trim().to_string(), &parts[1..])
-		} else {
-			("double".to_string(), &parts[..])
-		};
+		let (result, rest) =
+			if *typed { (parts.first()?.trim().to_string(), &parts[1..]) } else { ("double".to_string(), &parts[..]) };
 		let (name, arguments) = (rest.first()?.trim(), rest.get(2)?.trim());
-		Some(format!(
-			"{} {name} {};",
-			result.replace("_Mdouble_", "double"),
-			arguments.replace("_Mdouble_", "double")
-		))
+		Some(format!("{} {name} {};", result.replace("_Mdouble_", "double"), arguments.replace("_Mdouble_", "double")))
 	};
-	source
-		.lines()
-		.filter_map(|line| declaration(line.trim()))
-		.collect::<Vec<_>>()
-		.join("\n")
+	source.lines().filter_map(|line| declaration(line.trim())).collect::<Vec<_>>().join("\n")
 }
 
 /// Parse a header file and extract all function signatures
@@ -333,11 +283,7 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
 		}
 
 		// Strip inline comments (// ...) for processing but keep declaration
-		let line_for_check = if let Some(comment_pos) = line.find("//") {
-			line[..comment_pos].trim()
-		} else {
-			line
-		};
+		let line_for_check = if let Some(comment_pos) = line.find("//") { line[..comment_pos].trim() } else { line };
 
 		// Accumulate multi-line declarations (use original line content)
 		current_decl.push_str(line_for_check);
@@ -378,10 +324,7 @@ impl StructTypes {
 		} else if self.in_definition && line.starts_with('}') && line.ends_with(';') {
 			self.in_definition = false;
 			self.names.extend(
-				words
-					.last()
-					.map(|name| name.trim_start_matches('}').to_string())
-					.filter(|name| !name.is_empty()),
+				words.last().map(|name| name.trim_start_matches('}').to_string()).filter(|name| !name.is_empty()),
 			);
 		}
 	}
@@ -443,9 +386,7 @@ fn is_annotation_line(line: &str) -> bool {
 	let Some(open) = line.find('(') else { return false };
 	let name = &line[..open];
 	!name.is_empty()
-		&& name
-			.chars()
-			.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+		&& name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 		&& line.ends_with(')')
 }
 

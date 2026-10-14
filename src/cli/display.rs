@@ -51,11 +51,7 @@ pub(crate) fn ended_well(result: &Node) {
 pub(crate) fn show(result: &Node, mark: &str) {
 	if !result.is_empty_node() {
 		// markup (`html{ body{ … } }`) is printed as HTML: `warp run page.warp > page.html` (card web-dom)
-		let shown = if markup::is_markup(result) {
-			markup::to_html(result)
-		} else {
-			result.serialize()
-		};
+		let shown = if markup::is_markup(result) { markup::to_html(result) } else { result.serialize() };
 		println!("{mark}{shown}");
 	}
 	if let Some(excerpt) =

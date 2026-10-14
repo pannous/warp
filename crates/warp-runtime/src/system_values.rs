@@ -85,9 +85,7 @@ pub fn tell_gpu_drawing(on_gpu: bool) {
 }
 
 pub fn window_input() -> [f32; 4] {
-	WINDOW_INPUT
-		.each_ref()
-		.map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
+	WINDOW_INPUT.each_ref().map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
 }
 
 pub fn tell_window_input(input: [f32; 4]) {
@@ -154,18 +152,11 @@ pub fn read(name: &str) -> Result<i64, String> {
 	if name == GPU_DRAWING {
 		return Ok(DRAWING_ON_GPU.load(Ordering::Relaxed) as i64);
 	}
-	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN]
-		.iter()
-		.position(|pointer| *pointer == name)
-	{
+	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN].iter().position(|pointer| *pointer == name) {
 		return Ok(window_input()[at] as i64);
 	}
 	let kept = READINGS.with(|readings| {
-		readings
-			.borrow()
-			.get(name)
-			.filter(|(when, _)| when.elapsed() < READING_LIFETIME)
-			.map(|(_, value)| *value)
+		readings.borrow().get(name).filter(|(when, _)| when.elapsed() < READING_LIFETIME).map(|(_, value)| *value)
 	});
 	if let Some(value) = kept {
 		return Ok(value);
@@ -184,17 +175,12 @@ fn read_now(name: &str) -> Result<i64, String> {
 		CLIPBOARD_COUNT => clipboard_count(),
 		VIEW_WIDTH => Ok(NATIVE_VIEW.0),
 		VIEW_HEIGHT => Ok(NATIVE_VIEW.1),
-		other => Err(format!(
-			"{other} is no system value; known: {}",
-			SYSTEM_VALUES.map(|(name, _)| name).join(", ")
-		)),
+		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
 	}
 }
 
 fn online() -> bool {
-	std::net::UdpSocket::bind("0.0.0.0:0")
-		.and_then(|socket| socket.connect(INTERNET_ADDRESS))
-		.is_ok()
+	std::net::UdpSocket::bind("0.0.0.0:0").and_then(|socket| socket.connect(INTERNET_ADDRESS)).is_ok()
 }
 
 fn output(program: &str, arguments: &[&str]) -> Result<String, String> {
@@ -210,20 +196,14 @@ fn output(program: &str, arguments: &[&str]) -> Result<String, String> {
 fn battery() -> Result<(i64, bool), String> {
 	// "-InternalBattery-0 (id=…)	87%; charging; 1:02 remaining present: true"
 	let report = output("pmset", &["-g", "batt"])?;
-	let line = report
-		.lines()
-		.find(|line| line.contains('%'))
-		.ok_or("battery: this Mac has no battery")?;
+	let line = report.lines().find(|line| line.contains('%')).ok_or("battery: this Mac has no battery")?;
 	let percent = line
 		.split('%')
 		.next()
 		.and_then(|before| before.rsplit(|letter: char| !letter.is_ascii_digit()).next())
 		.and_then(|digits| digits.parse().ok());
 	let charging = line.contains("; charging") || line.contains("; charged") || report.contains("'AC Power'");
-	Ok((
-		percent.ok_or_else(|| format!("battery: cannot read {line:?}"))?,
-		charging,
-	))
+	Ok((percent.ok_or_else(|| format!("battery: cannot read {line:?}"))?, charging))
 }
 
 #[cfg(target_os = "linux")]
@@ -239,9 +219,7 @@ fn battery() -> Result<(i64, bool), String> {
 			.map(|text| text.trim().to_string())
 			.map_err(|problem| format!("battery: {problem}"))
 	};
-	let percent = read("capacity")?
-		.parse()
-		.map_err(|_| "battery: cannot read its capacity".to_string())?;
+	let percent = read("capacity")?.parse().map_err(|_| "battery: cannot read its capacity".to_string())?;
 	Ok((percent, matches!(read("status")?.as_str(), "Charging" | "Full")))
 }
 
@@ -321,9 +299,7 @@ pub fn notify(text: &str) -> Result<(), String> {
 		])
 		.output();
 	#[cfg(not(target_os = "macos"))]
-	let shown = std::process::Command::new("notify-send")
-		.args([NOTIFICATION_TITLE, text])
-		.output();
+	let shown = std::process::Command::new("notify-send").args([NOTIFICATION_TITLE, text]).output();
 	match shown {
 		Ok(output) if output.status.success() => Ok(()),
 		Ok(output) => Err(format!("notify: {}", String::from_utf8_lossy(&output.stderr).trim())),
@@ -356,10 +332,7 @@ fn input(program: &str, arguments: &[&str], text: &str) -> Result<(), String> {
 		.write_all(text.as_bytes())
 		.map_err(|problem| format!("{program}: {problem}"))?;
 	let status = child.wait().map_err(|problem| format!("{program}: {problem}"))?;
-	status
-		.success()
-		.then_some(())
-		.ok_or_else(|| format!("{program} failed: {status}"))
+	status.success().then_some(()).ok_or_else(|| format!("{program} failed: {status}"))
 }
 
 /// The clipboard's text: macOS `pbpaste`, Linux `wl-paste` or `xclip`

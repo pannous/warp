@@ -296,13 +296,7 @@ fn test_parse_all_xml_files() {
 
 	println!("\n=== Parsing all XML files in filesystem ===\n");
 
-	let search_paths = vec![
-		"/usr/share",
-		"/System/Library",
-		"/Library",
-		"/Applications",
-		"/Users/me",
-	];
+	let search_paths = vec!["/usr/share", "/System/Library", "/Library", "/Applications", "/Users/me"];
 
 	let mut total_files = 0;
 	let mut successful = 0;
@@ -359,16 +353,8 @@ fn test_parse_all_xml_files() {
 
 	println!("\n=== Results ===");
 	println!("Total files:  {}", total_files);
-	println!(
-		"Successful:   {} ({:.1}%)",
-		successful,
-		(successful as f64 / total_files as f64) * 100.0
-	);
-	println!(
-		"Failed:       {} ({:.1}%)",
-		failed,
-		(failed as f64 / total_files as f64) * 100.0
-	);
+	println!("Successful:   {} ({:.1}%)", successful, (successful as f64 / total_files as f64) * 100.0);
+	println!("Failed:       {} ({:.1}%)", failed, (failed as f64 / total_files as f64) * 100.0);
 
 	if !errors.is_empty() {
 		println!("\n=== First {} Errors ===", errors.len());

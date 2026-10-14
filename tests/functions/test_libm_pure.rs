@@ -10,10 +10,7 @@ fn libm_calls_are_pure() {
 	assert_eq!(effects_of("sin(1.0)", "main"), Some(EffectSet::PURE));
 	assert_eq!(effects_of("use m;floor(4.5)", "main"), Some(EffectSet::PURE));
 	assert_eq!(effects_of("wave(x) := exp(x) + cos(x)", "wave"), Some(EffectSet::PURE));
-	assert_eq!(
-		effects_of("import strlen from \"c\"; strlen(\"ab\")", "main"),
-		Some(EffectSet::of(&[FFI]))
-	);
+	assert_eq!(effects_of("import strlen from \"c\"; strlen(\"ab\")", "main"), Some(EffectSet::of(&[FFI])));
 }
 
 #[test]

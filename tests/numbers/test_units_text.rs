@@ -10,15 +10,9 @@ fn shown(code: &str) -> String {
 #[test]
 fn a_conversion_joins_a_text_in_its_unit() {
 	assert_eq!(shown("total = 1500 m\n\"total: \" + (total as km)"), "\"total: 1.5km\"");
-	assert_eq!(
-		shown("total = 3 km\n\"total: \" + (total as m) + \"!\""),
-		"\"total: 3000m!\""
-	);
+	assert_eq!(shown("total = 3 km\n\"total: \" + (total as m) + \"!\""), "\"total: 3000m!\"");
 	assert_eq!(shown("v = 36 km/h\n\"v: \" + (v in m/s)"), "\"v: 10m/s\"");
-	assert_eq!(
-		shown("d = 0 mi\nfor i in 1..3 { d += 1 mi }\n\"d: \" + (d as km)"),
-		"\"d: 3.218688km\""
-	);
+	assert_eq!(shown("d = 0 mi\nfor i in 1..3 { d += 1 mi }\n\"d: \" + (d as km)"), "\"d: 3.218688km\"");
 }
 
 #[test]

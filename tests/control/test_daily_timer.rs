@@ -19,11 +19,7 @@ fn a_daily_timer_needs_a_time_of_day() {
 fn the_delay_until_a_time_of_day_wraps_to_tomorrow() {
 	use warp_runtime::system_signals::seconds_until;
 	assert_eq!(seconds_until(9 * 60, 8 * 3600), 3600);
-	assert_eq!(
-		seconds_until(9 * 60, 9 * 3600),
-		24 * 3600,
-		"at 9:00 sharp the next tick is tomorrow's"
-	);
+	assert_eq!(seconds_until(9 * 60, 9 * 3600), 24 * 3600, "at 9:00 sharp the next tick is tomorrow's");
 	assert_eq!(seconds_until(9 * 60, 10 * 3600), 23 * 3600);
 	assert_eq!(seconds_until(0, 23 * 3600 + 59 * 60 + 59), 1);
 }

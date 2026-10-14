@@ -4,14 +4,8 @@ use super::super::*;
 use crate::wasm_emitter::layout::BYTE;
 
 /// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = [
-	"ceil",
-	"floor",
-	"round",
-	"round_half_up",
-	"round_half_even",
-	crate::warp_parser::FLOOR_QUOTIENT,
-];
+pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] =
+	["ceil", "floor", "round", "round_half_up", "round_half_even", crate::warp_parser::FLOOR_QUOTIENT];
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 pub(crate) const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
 
@@ -57,9 +51,7 @@ impl WasmGcEmitter {
 		separator: &Separator,
 	) -> bool {
 		crate::analyzer::call_name(items, bracket, separator).is_some_and(|name| {
-			reflection::library_ops::LIBRARY_FUNCTIONS
-				.iter()
-				.any(|(word, _)| *word == name)
+			reflection::library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == name)
 				&& !self.ctx.user_functions.contains_key(name)
 		})
 	}
@@ -92,12 +84,7 @@ impl WasmGcEmitter {
 			Kind::Int | Kind::Float => target_name == "list",
 			_ => false,
 		};
-		refused.then(|| {
-			format!(
-				"cannot cast {kind} to {target_name}: {} as {target_name}",
-				value.serialize()
-			)
-		})
+		refused.then(|| format!("cannot cast {kind} to {target_name}: {} as {target_name}", value.serialize()))
 	}
 
 	pub(in crate::wasm_emitter) fn emit_numeric_cast(
@@ -177,10 +164,9 @@ impl WasmGcEmitter {
 				let characters = text.chars().map(Node::Char).collect();
 				self.emit_node_instructions(func, &Node::List(characters, Bracket::Square, Separator::Space));
 			}
-			Node::Char(_) => self.emit_node_instructions(
-				func,
-				&Node::List(vec![value.clone()], Bracket::Square, Separator::Space),
-			),
+			Node::Char(_) => {
+				self.emit_node_instructions(func, &Node::List(vec![value.clone()], Bracket::Square, Separator::Space))
+			}
 			_ if self.get_type(value) == Kind::List => self.emit_node_instructions(func, value),
 			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => {
 				self.emit_node_instructions(func, value);
@@ -188,10 +174,7 @@ impl WasmGcEmitter {
 			}
 			_ => {
 				let kind = self.get_type(value);
-				self.emit_type_error(
-					func,
-					format!("cannot cast {kind} to list: {} as list", value.serialize()),
-				);
+				self.emit_type_error(func, format!("cannot cast {kind} to list: {} as list", value.serialize()));
 			}
 		}
 	}
@@ -219,10 +202,7 @@ impl WasmGcEmitter {
 			_ => {
 				self.emit_type_error(
 					func,
-					format!(
-						"cannot cast {kind} to string: `{} as string` has no runtime text yet",
-						value.serialize()
-					),
+					format!("cannot cast {kind} to string: `{} as string` has no runtime text yet", value.serialize()),
 				);
 				return;
 			}
@@ -240,10 +220,7 @@ impl WasmGcEmitter {
 				I::LocalSet(held),
 				I::I64Const(Kind::Text as i64),
 				I::LocalGet(held),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 1,
-				},
+				I::StructGet { struct_type_index: node_type, field_index: 1 },
 				I::RefNull(HeapType::Concrete(node_type)),
 				I::StructNew(node_type),
 			],
@@ -260,10 +237,7 @@ impl WasmGcEmitter {
 		let kind_is = |kind: Kind| {
 			[
 				I::LocalGet(held),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: node_type, field_index: 0 },
 				I::I64Const(crate::type_kinds::KIND_MASK),
 				I::I64And,
 				I::I64Const(kind as i64),
@@ -274,20 +248,12 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &kind_is(Kind::Codepoint));
 		Self::emit_list(
 			func,
-			&[
-				I::I32Or,
-				I::If(BlockType::Result(Ref(self.node_ref(false)))),
-				I::LocalGet(held),
-				I::RefAsNonNull,
-			],
+			&[I::I32Or, I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull],
 		);
 		self.emit_call(func, text::text_builtins::TEXT_OF);
 		Self::emit_list(func, &[I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND)]);
 		self.emit_entry_in_braces(func, held);
-		Self::emit_list(
-			func,
-			&[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)],
-		);
+		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 		let (pointer, length) = self.allocate_string("");
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_text");
@@ -326,10 +292,7 @@ impl WasmGcEmitter {
 		};
 
 		let (written, value) = (value, value.drop_meta());
-		if let Some(refusal) = self
-			.unknown_word_refusal(value)
-			.or_else(|| self.cast_refusal(value, target_type))
-		{
+		if let Some(refusal) = self.unknown_word_refusal(value).or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;
 		}
@@ -577,10 +540,8 @@ impl WasmGcEmitter {
 				use crate::lowering::nodes::call;
 				let falsy = FALSY_TEXTS.iter().map(|text| Node::Text(text.to_string())).collect();
 				let falsy = Node::List(falsy, Bracket::Square, Separator::Colon);
-				let spells_falsy = call(
-					crate::library_words::COLLECTION_CONTAINS,
-					vec![falsy, call("lower", vec![value.clone()])],
-				);
+				let spells_falsy =
+					call(crate::library_words::COLLECTION_CONTAINS, vec![falsy, call("lower", vec![value.clone()])]);
 				self.emit_node_instructions(func, &Node::Key(Box::new(Node::Empty), Op::Not, Box::new(spells_falsy)));
 			}
 			None => {
@@ -628,17 +589,7 @@ impl WasmGcEmitter {
 			};
 			is_kind(s, f, Kind::Text);
 			is_kind(s, f, Kind::Codepoint);
-			Self::emit_list(
-				f,
-				&[
-					I::I32Or,
-					I::I32Eqz,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::Return,
-					I::End,
-				],
-			);
+			Self::emit_list(f, &[I::I32Or, I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
 			// a text with a slash: the exact ratio of the integers before and after it ("1/x" is invalid_number)
 			s.emit_field(f, 0, 0);
 			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
@@ -832,9 +783,7 @@ pub(crate) fn is_called_conversion(type_name: &str) -> bool {
 	(converts_to(type_name) || type_name == super::super::numbers::exact::DECIMAL_WORD)
 		&& (crate::analyzer::type_word_kind(type_name).is_none()
 			|| super::super::numbers::radix::shown_radix(type_name).is_some())
-		&& !reflection::library_ops::LIBRARY_FUNCTIONS
-			.iter()
-			.any(|(word, _)| *word == type_name)
+		&& !reflection::library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == type_name)
 }
 
 /// `255 as hex`: a word that names no type, unit or class, which used to stay a silent `255 as hex` node

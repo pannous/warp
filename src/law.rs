@@ -128,15 +128,8 @@ fn quantified_law(node: &Node) -> Option<LawDeclaration> {
 	};
 	let items = top_level_items(body);
 	let (statement, quantifiers) = items.split_last()?;
-	let variables = quantifiers
-		.iter()
-		.map(quantified_variable)
-		.collect::<Option<Vec<_>>>()?;
-	(!variables.is_empty()).then(|| LawDeclaration {
-		name: Some(name.name()),
-		statement: statement.clone(),
-		variables,
-	})
+	let variables = quantifiers.iter().map(quantified_variable).collect::<Option<Vec<_>>>()?;
+	(!variables.is_empty()).then(|| LawDeclaration { name: Some(name.name()), statement: statement.clone(), variables })
 }
 
 fn law_declaration(node: &Node) -> Option<LawDeclaration> {
@@ -145,13 +138,8 @@ fn law_declaration(node: &Node) -> Option<LawDeclaration> {
 		Node::List(items, _, _)
 			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == LAW_KEYWORD) =>
 		{
-			quantified_law(&items[1]).or_else(|| {
-				Some(LawDeclaration {
-					name: None,
-					statement: items[1].clone(),
-					variables: vec![],
-				})
-			})
+			quantified_law(&items[1])
+				.or_else(|| Some(LawDeclaration { name: None, statement: items[1].clone(), variables: vec![] }))
 		}
 		_ => None,
 	}
@@ -177,25 +165,14 @@ fn rebuild_block(items: Vec<Node>, like: &Node) -> Node {
 pub fn separate_laws(parsed: Node) -> Lawful {
 	let items = top_level_items(&parsed);
 	if !items.iter().any(|item| law_declaration(item).is_some()) {
-		return Lawful {
-			program: parsed,
-			laws: vec![],
-			functions: vec![],
-		};
+		return Lawful { program: parsed, laws: vec![], functions: vec![] };
 	}
 	let (law_items, program_items): (Vec<Node>, Vec<Node>) =
 		items.into_iter().partition(|item| law_declaration(item).is_some());
 	let functions: Vec<FunctionDefinition> = program_items.iter().filter_map(function_definition).collect();
-	let laws = law_items
-		.iter()
-		.filter_map(law_declaration)
-		.map(|declaration| make_law(declaration, &functions))
-		.collect();
-	Lawful {
-		program: rebuild_block(program_items, &parsed),
-		laws,
-		functions,
-	}
+	let laws =
+		law_items.iter().filter_map(law_declaration).map(|declaration| make_law(declaration, &functions)).collect();
+	Lawful { program: rebuild_block(program_items, &parsed), laws, functions }
 }
 
 pub fn extract_laws(parsed: &Node) -> Vec<Law> {
@@ -213,19 +190,11 @@ pub(crate) fn function_definition(item: &Node) -> Option<FunctionDefinition> {
 		.iter()
 		.map(|param| (param.name.clone(), kinds.get(&param.name).copied().unwrap_or(Kind::Int)))
 		.collect();
-	Some(FunctionDefinition {
-		name: def.name,
-		parameters,
-		body: *def.body,
-		source: item.clone(),
-	})
+	Some(FunctionDefinition { name: def.name, parameters, body: *def.body, source: item.clone() })
 }
 
 fn declared_parameter_kinds(item: &Node) -> HashMap<String, Kind> {
-	declared_parameter_types(item)
-		.into_iter()
-		.map(|(name, type_name)| (name, kind_of_type_name(&type_name)))
-		.collect()
+	declared_parameter_types(item).into_iter().map(|(name, type_name)| (name, kind_of_type_name(&type_name))).collect()
 }
 
 /// Parameter name → declared type name, for parameters written `name:type`.
@@ -244,17 +213,11 @@ pub(crate) fn declared_parameter_types(item: &Node) -> HashMap<String, String> {
 }
 
 fn kind_of_type_name(name: &str) -> Kind {
-	crate::analyzer::builtin_type_kind(name)
-		.filter(|kind| kind.is_float())
-		.unwrap_or(Kind::Int)
+	crate::analyzer::builtin_type_kind(name).filter(|kind| kind.is_float()).unwrap_or(Kind::Int)
 }
 
 fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> Law {
-	let LawDeclaration {
-		name,
-		statement,
-		mut variables,
-	} = declaration;
+	let LawDeclaration { name, statement, mut variables } = declaration;
 	let known = |name: &str| functions.iter().find(|f| f.name == name);
 	let mut function = String::new();
 	statement.visit(&mut |node| {
@@ -282,31 +245,23 @@ fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> La
 			}
 		}
 	});
-	Law {
-		name,
-		function,
-		statement,
-		variables,
-	}
+	Law { name, function, statement, variables }
 }
 
 pub fn substitute(node: &Node, bindings: &HashMap<String, Node>) -> Node {
 	match node {
 		Node::Symbol(name) => bindings.get(name).cloned().unwrap_or_else(|| node.clone()),
-		Node::Key(left, op, right) => Node::Key(
-			Box::new(substitute(left, bindings)),
-			*op,
-			Box::new(substitute(right, bindings)),
-		),
+		Node::Key(left, op, right) => {
+			Node::Key(Box::new(substitute(left, bindings)), *op, Box::new(substitute(right, bindings)))
+		}
 		Node::List(items, bracket, separator) => Node::List(
 			items.iter().map(|item| substitute(item, bindings)).collect(),
 			bracket.clone(),
 			separator.clone(),
 		),
-		Node::Meta { node: inner, data } => Node::Meta {
-			node: Box::new(substitute(inner, bindings)),
-			data: data.clone(),
-		},
+		Node::Meta { node: inner, data } => {
+			Node::Meta { node: Box::new(substitute(inner, bindings)), data: data.clone() }
+		}
 		_ => node.clone(),
 	}
 }
@@ -338,10 +293,8 @@ fn instance_verdict(lawful: &Lawful, statement: &Node, bindings: &HashMap<String
 }
 
 fn describe(bindings: &HashMap<String, Node>) -> String {
-	let mut pairs: Vec<String> = bindings
-		.iter()
-		.map(|(name, value)| format!("{}={}", name, value.serialize().trim()))
-		.collect();
+	let mut pairs: Vec<String> =
+		bindings.iter().map(|(name, value)| format!("{}={}", name, value.serialize().trim())).collect();
 	pairs.sort();
 	format!("counterexample {}", pairs.join(" "))
 }
@@ -357,22 +310,10 @@ pub fn verify(code: &str) -> Vec<LawReport> {
 	for law in &lawful.laws {
 		let report = match property_test(&lawful, law, PROPERTY_TRIALS, code) {
 			Verdict::Holds => match lean::prove_using(&lawful.functions, law, &proved) {
-				Verdict::Holds => LawReport {
-					law: law.clone(),
-					assurance: Assurance::Proved,
-					verdict: Verdict::Holds,
-				},
-				verdict => LawReport {
-					law: law.clone(),
-					assurance: Assurance::Tested,
-					verdict,
-				},
+				Verdict::Holds => LawReport { law: law.clone(), assurance: Assurance::Proved, verdict: Verdict::Holds },
+				verdict => LawReport { law: law.clone(), assurance: Assurance::Tested, verdict },
 			},
-			verdict => LawReport {
-				law: law.clone(),
-				assurance: Assurance::Stated,
-				verdict,
-			},
+			verdict => LawReport { law: law.clone(), assurance: Assurance::Stated, verdict },
 		};
 		if report.assurance == Assurance::Proved {
 			proved.push(law.clone());

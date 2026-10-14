@@ -8,18 +8,12 @@ use warp::parse;
 fn notes_of(code: &str) -> Vec<String> {
 	warp::normalize::clear_shown_hints();
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
-	hints
-		.iter()
-		.map(|hint| format!("{} → {}", hint.original, hint.canonical))
-		.collect()
+	hints.iter().map(|hint| format!("{} → {}", hint.original, hint.canonical)).collect()
 }
 
 #[test]
 fn foreign_method_names_are_warps_methods() {
-	is!(
-		"xs = [1, 2, 3]; xs.Select(x => x * 2).Where(x => x > 2)",
-		parse("[4 6]")
-	);
+	is!("xs = [1, 2, 3]; xs.Select(x => x * 2).Where(x => x > 2)", parse("[4 6]"));
 	is!("\"42\".to_i + 1", 43);
 	is!("xs = [1, 2, 3].map(&:to_s); xs#2 + \"!\"", "2!");
 	is!("xs = [1, 2, 3]; xs.sumOf { it * 2 }", 12);

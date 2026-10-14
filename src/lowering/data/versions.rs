@@ -136,10 +136,7 @@ pub fn is_version_keyword(node: &Node) -> bool {
 
 /// The version a module declares with a top level `version 1.2.3`
 pub fn declared_version(statements: &[Node]) -> Option<Version> {
-	statements
-		.iter()
-		.find(|statement| is_version_value(statement))
-		.and_then(version_of)
+	statements.iter().find(|statement| is_version_value(statement)).and_then(version_of)
 }
 
 /// `version 1.2.3` and a version literal (`v2` stays a name)
