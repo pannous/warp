@@ -23,10 +23,7 @@ fn lower_unions_of(node: Node, is_class: &dyn Fn(&str) -> bool) -> Node {
 				list @ Node::List(..) => list.map_children(|item| lower_unions_of(item, is_class)),
 				single => lower_unions_of(single, is_class),
 			};
-			Node::Type {
-				name,
-				body: Box::new(body),
-			}
+			Node::Type { name, body: Box::new(body) }
 		}
 		other => other.map_children(|child| lower_unions_of(child, is_class)),
 	}

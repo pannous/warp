@@ -3,6 +3,7 @@
 //! A connection per file and thread; inline code's tables (database_tables::TABLES_FILE) live in memory per thread.
 
 use crate::lowering::database_tables::OPTIONAL_MARK;
+use crate::lowering::database_tables::WARP_CALL;
 use crate::node::{Bracket, Node, Separator};
 use crate::Number;
 use std::collections::HashMap;
@@ -27,8 +28,6 @@ const LOSSLESS_ORDER: [&str; 3] = ["INTEGER", "REAL", "TEXT"];
 const NUMBER_COLUMNS: [&str; 2] = ["INTEGER", "REAL"];
 /// The column of a unit field (`NUMERIC km`): NUMERIC keeps a whole SI amount an integer, as the program holds it
 const UNIT_COLUMN: &str = "NUMERIC";
-/// The SQL function a filter's query calls a warp function through: `warp_call('function', arguments…)`
-const WARP_CALL: &str = "warp_call";
 /// How long a write waits for another connection's (another program or thread) before "database is locked"
 const BUSY_MILLISECONDS: c_int = 5000;
 /// A folder set by cargo's test runs (.cargo/config.toml): each test thread keeps a sample's tables in its own copy there
@@ -146,10 +145,7 @@ pub fn rows_read() -> usize {
 /// position), count, insert
 /// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
-	let text = |node: &Node| {
-		node.text_value()
-			.ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
-	};
+	let text = |node: &Node| node.text_value().ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()));
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
 		("rows", [table, schema, file]) => {
@@ -171,28 +167,18 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			migrated(connection(&text(file)?)?, &text(table)?, &schema.children()).map(|_| Node::Empty)
 		}
 		("count", [table, _schema, file]) => {
-			let counted = rows(
-				connection(&text(file)?)?,
-				&format!("SELECT COUNT(*) FROM {}", quote(&text(table)?)),
-				&[],
-			)?;
+			let counted =
+				rows(connection(&text(file)?)?, &format!("SELECT COUNT(*) FROM {}", quote(&text(table)?)), &[])?;
 			Ok(counted.into_iter().flatten().next().unwrap_or(Node::int(0)))
 		}
 		("insert", [table, columns, values, file]) => {
-			let (table, columns) = (
-				text(table)?,
-				columns.children().iter().map(text).collect::<Result<Vec<_>, _>>()?,
-			);
+			let (table, columns) = (text(table)?, columns.children().iter().map(text).collect::<Result<Vec<_>, _>>()?);
 			let placeholders = vec!["?"; columns.len()].join(", ");
 			let database = connection(&text(file)?)?;
 			let quoted: Vec<String> = columns.iter().map(|column| quote(column)).collect();
 			rows(
 				database,
-				&format!(
-					"INSERT INTO {} ({}) VALUES ({placeholders})",
-					quote(&table),
-					quoted.join(", ")
-				),
+				&format!("INSERT INTO {} ({}) VALUES ({placeholders})", quote(&table), quoted.join(", ")),
 				&values.children(),
 			)?;
 			Ok(Node::int(unsafe { (sqlite()?.last_insert_rowid)(database) }))
@@ -202,28 +188,19 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
 		}
 		("update", [table, id, column, value, file]) => {
-			let sql = format!(
-				"UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?",
-				quote(&text(table)?),
-				quote(&text(column)?)
-			);
+			let sql =
+				format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
 			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
 		}
-		(member, [file]) if transaction_statement(member).is_some() => rows(
-			connection(&text(file)?)?,
-			transaction_statement(member).expect("guarded"),
-			&[],
-		)
-		.map(|_| Node::Empty),
+		(member, [file]) if transaction_statement(member).is_some() => {
+			rows(connection(&text(file)?)?, transaction_statement(member).expect("guarded"), &[]).map(|_| Node::Empty)
+		}
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
 }
 
 fn transaction_statement(member: &str) -> Option<&'static str> {
-	TRANSACTION_STATEMENTS
-		.iter()
-		.find(|(word, _)| *word == member)
-		.map(|(_, sql)| *sql)
+	TRANSACTION_STATEMENTS.iter().find(|(word, _)| *word == member).map(|(_, sql)| *sql)
 }
 
 /// `std_io("table", "select", [table, schema, file, condition, parameters])`: the rows `[id, columns…]` the SQL
@@ -235,10 +212,7 @@ pub fn select(arguments: &[Node], callback: &mut Callback) -> Result<Node, Strin
 	};
 	let database = connection(&file.drop_meta().name())?;
 	let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-	let mut call = WarpCall {
-		callback,
-		failure: None,
-	};
+	let mut call = WarpCall { callback, failure: None };
 	register_warp_call(database, Some((&mut call as *mut WarpCall).cast()))?;
 	let found = selected(
 		database,
@@ -289,9 +263,8 @@ fn register_warp_call(database: Handle, call: Option<*mut c_void>) -> Result<(),
 unsafe extern "C" fn warp_call(context: Handle, count: c_int, values: *mut Handle) {
 	let Ok(sqlite) = sqlite() else { return };
 	let call = unsafe { &mut *(sqlite.user_data)(context).cast::<WarpCall>() };
-	let arguments: Vec<Node> = (0..count as usize)
-		.map(|index| unsafe { value_of(sqlite, *values.add(index)) })
-		.collect();
+	let arguments: Vec<Node> =
+		(0..count as usize).map(|index| unsafe { value_of(sqlite, *values.add(index)) }).collect();
 	let Some((function, arguments)) = arguments.split_first() else {
 		return;
 	};
@@ -309,11 +282,7 @@ unsafe fn value_of(sqlite: &Sqlite, value: Handle) -> Node {
 		match (sqlite.value_type)(value) {
 			SQLITE_INTEGER => Node::int((sqlite.value_int64)(value)),
 			SQLITE_FLOAT => Node::float((sqlite.value_double)(value)),
-			SQLITE_TEXT => Node::Text(
-				CStr::from_ptr((sqlite.value_text)(value))
-					.to_string_lossy()
-					.into_owned(),
-			),
+			SQLITE_TEXT => Node::Text(CStr::from_ptr((sqlite.value_text)(value)).to_string_lossy().into_owned()),
 			_ => Node::Empty,
 		}
 	}
@@ -362,16 +331,11 @@ fn selected(
 	limit: &str,
 	parameters: &[Node],
 ) -> Result<Node, String> {
-	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string())
-		.chain(columns.iter().map(|(name, _, _)| quote(name)))
-		.collect();
+	let selected: Vec<String> =
+		std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
 	let rows = rows(
 		database,
-		&format!(
-			"SELECT {} FROM {}{filter} ORDER BY {ID_COLUMN}{limit}",
-			selected.join(", "),
-			quote(table)
-		),
+		&format!("SELECT {} FROM {}{filter} ORDER BY {ID_COLUMN}{limit}", selected.join(", "), quote(table)),
 		parameters,
 	)?;
 	ROWS_READ.set(ROWS_READ.get() + rows.len());
@@ -381,19 +345,14 @@ fn selected(
 /// The table created or migrated to the class's fields; their columns
 fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(String, String, String)>, String> {
 	let columns = schema.iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-	let definitions: Vec<String> = columns
-		.iter()
-		.map(|(name, column_type, _)| format!("{} {column_type}", quote(name)))
-		.collect();
+	let definitions: Vec<String> =
+		columns.iter().map(|(name, column_type, _)| format!("{} {column_type}", quote(name))).collect();
 	let quoted_table = quote(table);
 	rows(
 		database,
 		&format!(
 			"CREATE TABLE IF NOT EXISTS {quoted_table} ({ID_COLUMN} INTEGER PRIMARY KEY{})",
-			definitions
-				.iter()
-				.map(|definition| format!(", {definition}"))
-				.collect::<String>()
+			definitions.iter().map(|definition| format!(", {definition}")).collect::<String>()
 		),
 		&[],
 	)?;
@@ -404,11 +363,7 @@ fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(Strin
 		if has_column(&before_renames, &old_name) && !has_column(&before_renames, &name) {
 			rows(
 				database,
-				&format!(
-					"ALTER TABLE {quoted_table} RENAME COLUMN {} TO {}",
-					quote(&old_name),
-					quote(&name)
-				),
+				&format!("ALTER TABLE {quoted_table} RENAME COLUMN {} TO {}", quote(&old_name), quote(&name)),
 				&[],
 			)?;
 		}
@@ -419,10 +374,7 @@ fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(Strin
 			None => {
 				rows(
 					database,
-					&format!(
-						"ALTER TABLE {quoted_table} ADD COLUMN {} {column_type} DEFAULT {default}",
-						quote(name)
-					),
+					&format!("ALTER TABLE {quoted_table} ADD COLUMN {} {column_type} DEFAULT {default}", quote(name)),
 					&[],
 				)?;
 			}
@@ -432,9 +384,8 @@ fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(Strin
 			Some(_) => {}
 		}
 	}
-	for (name, _) in stored
-		.iter()
-		.filter(|(name, _)| name != ID_COLUMN && !columns.iter().any(|(column, _, _)| column == name))
+	for (name, _) in
+		stored.iter().filter(|(name, _)| name != ID_COLUMN && !columns.iter().any(|(column, _, _)| column == name))
 	{
 		crate::errors::diagnostic::report_runtime_warning(&format!(
 			"the table {table} keeps its column {name}, which the class no longer has (its data is kept)"
@@ -467,11 +418,7 @@ fn renamed_column(field: &Node) -> Option<(String, String)> {
 /// column with the new type: SQLite's column affinity would turn the converted values back
 fn converted(database: Handle, table: &str, name: &str, stored_type: &str, column_type: &str) -> Result<(), String> {
 	let factor = conversion_factor(table, name, stored_type, column_type)?;
-	let (quoted_table, column, kept) = (
-		quote(table),
-		quote(name),
-		quote(&format!("{name} before {column_type}")),
-	);
+	let (quoted_table, column, kept) = (quote(table), quote(name), quote(&format!("{name} before {column_type}")));
 	let value = match factor == 1.0 {
 		true => format!("CAST({kept} AS {column_type})"),
 		false => format!("CAST({kept} AS REAL) * {factor:?}"),
@@ -483,9 +430,7 @@ fn converted(database: Handle, table: &str, name: &str, stored_type: &str, colum
 		format!("UPDATE {quoted_table} SET {column} = {value}"),
 		format!("ALTER TABLE {quoted_table} DROP COLUMN {kept}"),
 	];
-	let done = steps
-		.iter()
-		.try_for_each(|statement| rows(database, statement, &[]).map(drop));
+	let done = steps.iter().try_for_each(|statement| rows(database, statement, &[]).map(drop));
 	if done.is_err() {
 		rows(database, "ROLLBACK TO converted", &[])?;
 	}
@@ -502,11 +447,7 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 	let column = format!("the column {table}.{name} holds {stored_type}, the class's field is {column_type}");
 	let (stored_base, stored_unit) = split_unit(stored_type);
 	let (base, unit) = split_unit(column_type);
-	let widening = |sql_type: &str| {
-		LOSSLESS_ORDER
-			.iter()
-			.position(|known| known.eq_ignore_ascii_case(sql_type))
-	};
+	let widening = |sql_type: &str| LOSSLESS_ORDER.iter().position(|known| known.eq_ignore_ascii_case(sql_type));
 	let lossless = matches!((widening(stored_base), widening(base)), (Some(from), Some(to)) if from <= to);
 	let quantity = |unit: &str| {
 		crate::numbers::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"))
@@ -521,11 +462,7 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 				)),
 			}
 		}
-		(None, Some(unit))
-			if NUMBER_COLUMNS
-				.iter()
-				.any(|number| number.eq_ignore_ascii_case(stored_base)) =>
-		{
+		(None, Some(unit)) if NUMBER_COLUMNS.iter().any(|number| number.eq_ignore_ascii_case(stored_base)) => {
 			let (_, per_unit) = quantity(unit)?;
 			crate::errors::diagnostic::report_runtime_warning(&format!("{column}: its plain numbers are read as {unit} (each × {per_unit} to the SI amount a unit field holds)"));
 			Ok(per_unit)
@@ -560,11 +497,7 @@ fn column_of(field: &Node) -> Result<(String, String, String), String> {
 		"" => String::new(),
 		// a unit field (`distance: km`) holds SI amounts; its column keeps the unit for migrations
 		unit if crate::numbers::units::static_units::unit_type(unit).is_some() => format!("{UNIT_COLUMN} {unit}"),
-		other => {
-			return Err(format!(
-				"a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)"
-			))
-		}
+		other => return Err(format!("a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)")),
 	};
 	let default = match (default.drop_meta(), split_unit(&column_type).0) {
 		(Node::Empty, _) if optional => "NULL".to_string(),
@@ -626,24 +559,16 @@ fn connection(file: &str) -> Result<Handle, String> {
 /// sample's file, so tests running one sample at once neither lock nor change each other's rows
 fn test_thread_copy(file: &str) -> Option<String> {
 	let file = std::path::Path::new(file);
-	let in_samples = file
-		.parent()
-		.and_then(|folder| folder.file_name())
-		.is_some_and(|folder| folder == SAMPLES_FOLDER);
+	let in_samples = file.parent().and_then(|folder| folder.file_name()).is_some_and(|folder| folder == SAMPLES_FOLDER);
 	let folder = std::env::var(TEST_TABLES).ok().filter(|_| in_samples)?;
-	let thread = std::thread::current()
-		.name()
-		.filter(|name| *name != "main")?
-		.replace("::", ".");
+	let thread = std::thread::current().name().filter(|name| *name != "main")?.replace("::", ".");
 	let folder = std::path::Path::new(&folder).join(thread);
 	std::fs::create_dir_all(&folder).ok()?;
 	Some(folder.join(file.file_name()?).to_string_lossy().into_owned())
 }
 
 fn message(sqlite: &Sqlite, database: Handle) -> String {
-	unsafe { CStr::from_ptr((sqlite.errmsg)(database)) }
-		.to_string_lossy()
-		.into_owned()
+	unsafe { CStr::from_ptr((sqlite.errmsg)(database)) }.to_string_lossy().into_owned()
 }
 
 /// The rows the statement gives, its parameters bound in order
@@ -706,11 +631,9 @@ fn row(sqlite: &Sqlite, statement: Handle) -> Vec<Node> {
 			match (sqlite.column_type)(statement, column) {
 				SQLITE_INTEGER => Node::int((sqlite.column_int64)(statement, column)),
 				SQLITE_FLOAT => Node::float((sqlite.column_double)(statement, column)),
-				SQLITE_TEXT => Node::Text(
-					CStr::from_ptr((sqlite.column_text)(statement, column))
-						.to_string_lossy()
-						.into_owned(),
-				),
+				SQLITE_TEXT => {
+					Node::Text(CStr::from_ptr((sqlite.column_text)(statement, column)).to_string_lossy().into_owned())
+				}
 				_ => Node::Empty,
 			}
 		})

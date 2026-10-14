@@ -7,10 +7,7 @@ use crate::is;
 fn a_ratio_crosses_to_a_task_and_back() {
 	is!("m(t) := t * 2; job = go m(1/3); await job == 2/3", 1);
 	is!("h() := 7/2; job = go h(); z = await job; z * 2", 7);
-	is!(
-		"f(x) := x; jobs = []; jobs.add(go f(1/3)); jobs.add(go f(2)); sum(await all jobs) == 7/3",
-		1
-	);
+	is!("f(x) := x; jobs = []; jobs.add(go f(1/3)); jobs.add(go f(2)); sum(await all jobs) == 7/3", 1);
 }
 
 #[test]

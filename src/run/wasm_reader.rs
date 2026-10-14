@@ -24,9 +24,7 @@ const ENTRY_POINTS: [&str; 4] = ["main", "wasp_main", "warp_main", "_start"];
 /// or an exact `$Ratio(numerator, denominator)` of two such payloads (wasm_emitter/exact.rs)
 fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val) -> Result<Number> {
 	let mut store = store;
-	let anyref = data_val
-		.unwrap_anyref()
-		.ok_or_else(|| anyhow!("Int node without payload"))?;
+	let anyref = data_val.unwrap_anyref().ok_or_else(|| anyhow!("Int node without payload"))?;
 	let payload = anyref.unwrap_struct(&store)?;
 	match payload.field(&mut store, 0)? {
 		numerator @ Val::AnyRef(_) => {
@@ -38,14 +36,9 @@ fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val)
 		Val::I64(value) => Ok(Number::Int(value)),
 		Val::I32(negative) => {
 			let limbs_ref = payload.field(&mut store, 1)?;
-			let limbs_array = limbs_ref
-				.unwrap_anyref()
-				.ok_or_else(|| anyhow!("BigInt without limbs"))?
-				.unwrap_array(&store)?;
-			let limbs: Vec<u32> = limbs_array
-				.elems(&mut store)?
-				.map(|limb| limb.unwrap_i32() as u32)
-				.collect();
+			let limbs_array =
+				limbs_ref.unwrap_anyref().ok_or_else(|| anyhow!("BigInt without limbs"))?.unwrap_array(&store)?;
+			let limbs: Vec<u32> = limbs_array.elems(&mut store)?.map(|limb| limb.unwrap_i32() as u32).collect();
 			let sign = if negative != 0 { Sign::Minus } else { Sign::Plus };
 			Ok(Number::from_bigint(BigInt::from_slice(sign, &limbs)))
 		}
@@ -69,10 +62,7 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 		}
 		// a plain number or the null reference: no Node struct to read
 		Val::I32(_) | Val::I64(_) | Val::F64(_) | Val::AnyRef(None) => val_to_node(&result, &mut store, &instance),
-		other => Err(anyhow!(
-			"main returns {:?}, which is no Node and no number",
-			other.ty(&store)?
-		)),
+		other => Err(anyhow!("main returns {:?}, which is no Node and no number", other.ty(&store)?)),
 	}
 }
 
@@ -81,14 +71,7 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 pub fn engine_for(bytes: &[u8]) -> (wasmtime::Engine, bool) {
 	let starts_tasks =
 		crate::host::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
-	(
-		if starts_tasks {
-			crate::util::task_engine()
-		} else {
-			gc_engine()
-		},
-		starts_tasks,
-	)
+	(if starts_tasks { crate::util::task_engine() } else { gc_engine() }, starts_tasks)
 }
 
 /// Instantiates `bytes` with the imports `link` adds and calls its `main` (or `_start`): the result, the store and the instance
@@ -113,19 +96,13 @@ fn run_main<S: 'static>(
 		.ok_or_else(|| anyhow!("No entry point: {:?}", ENTRY_POINTS))?;
 	let result_types: Vec<_> = main.ty(&store).results().collect();
 	if result_types.len() > MAX_MAIN_RESULTS {
-		return Err(anyhow!(
-			"main returns {} values, at most {} can be read",
-			result_types.len(),
-			MAX_MAIN_RESULTS
-		));
+		return Err(anyhow!("main returns {} values, at most {} can be read", result_types.len(), MAX_MAIN_RESULTS));
 	}
 	// a main without a result leaves nothing to read: the null reference reads as Empty
 	let mut results = vec![Val::AnyRef(None); result_types.len()];
 	use warp_runtime::system_signals::{stay_while_listening, with_exit_handler};
 	// `warp run` keeps a program with a live timer after main (notes/system_signals.md), then `on exit {…}` runs
-	let outcome = main
-		.call(&mut store, &[], &mut results)
-		.and_then(|_| stay_while_listening(&mut store, &instance));
+	let outcome = main.call(&mut store, &[], &mut results).and_then(|_| stay_while_listening(&mut store, &instance));
 	let outcome = with_exit_handler(outcome, &mut store, |store, name| instance.get_func(&mut *store, name));
 	match with_trap_detail(outcome, &mut store, &instance)? {
 		Some(()) => Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance)),
@@ -163,13 +140,7 @@ pub(crate) fn run_main_kept(bytes: &[u8], imports: Imports) -> Result<(Val, Stor
 /// Load WASM bytes with host function support and return Node
 /// Use this for modules that import host.fetch or host.run
 pub fn read_bytes_with_host(bytes: &[u8]) -> Result<Node> {
-	read_bytes_with_imports(
-		bytes,
-		Imports {
-			host: true,
-			..Imports::default()
-		},
-	)
+	read_bytes_with_imports(bytes, Imports { host: true, ..Imports::default() })
 }
 
 /// The import families a module needs linked
@@ -182,11 +153,7 @@ pub struct Imports {
 
 impl Imports {
 	/// For a module that does not say which families it needs: a .wasm file, an imported module
-	pub const EVERY: Imports = Imports {
-		host: true,
-		wasi: true,
-		ffi: true,
-	};
+	pub const EVERY: Imports = Imports { host: true, wasi: true, ffi: true };
 }
 
 /// Link the import families a module needs: the host words, WASI, FFI (the task words come from tasks::link). `linker`
@@ -199,10 +166,7 @@ pub fn link_imports(
 	imports: Imports,
 ) -> Result<()> {
 	// the host words (sleep, random, clock) are imported like C functions from the host module
-	let host = imports.host
-		|| module
-			.imports()
-			.any(|import| import.module() == crate::host::HOST_LIBRARY);
+	let host = imports.host || module.imports().any(|import| import.module() == crate::host::HOST_LIBRARY);
 	*linker = family_linker(engine, Imports { host, ..imports })?;
 	if imports.ffi {
 		// the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
@@ -321,9 +285,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 	names
 		.iter()
 		.map(|name| {
-			let export = instance
-				.get_func(&mut store, name)
-				.ok_or_else(|| anyhow!("the module exports no {name}"))?;
+			let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
 			let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
 			let outcome = export.call(&mut store, &[], &mut results);
 			// a value that ends by `exit`, or at a prerender's first frame (until_first_frame), is ø, as a run's is
@@ -331,11 +293,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 				return Ok(Node::Empty);
 			}
 			with_trap_detail(outcome, &mut store, &instance)?;
-			val_to_node(
-				&results.first().copied().unwrap_or(Val::AnyRef(None)),
-				&mut store,
-				&instance,
-			)
+			val_to_node(&results.first().copied().unwrap_or(Val::AnyRef(None)), &mut store, &instance)
 		})
 		.collect()
 }
@@ -349,13 +307,9 @@ pub(crate) fn with_trap_detail<T, R>(
 	instance: &Instance,
 ) -> Result<R> {
 	outcome.map_err(|failure| {
-		let position = instance
-			.get_global(&mut *store, TRAP_POSITION)
-			.map(|global| global.get(&mut *store));
+		let position = instance.get_global(&mut *store, TRAP_POSITION).map(|global| global.get(&mut *store));
 		let failure = with_trap_position(anyhow::Error::from(failure), position);
-		let detail = instance
-			.get_global(&mut *store, TRAP_DETAIL)
-			.map(|global| global.get(&mut *store));
+		let detail = instance.get_global(&mut *store, TRAP_DETAIL).map(|global| global.get(&mut *store));
 		match detail
 			.filter(|value| !matches!(value, Val::AnyRef(None)))
 			.and_then(|value| val_to_node(&value, store, instance).ok())
@@ -368,11 +322,7 @@ pub(crate) fn with_trap_detail<T, R>(
 
 /// A trapped run with the source position the program left in `trap_position` (its value) as the error's context
 pub(crate) fn with_trap_position(failure: anyhow::Error, position: Option<Val>) -> anyhow::Error {
-	match position
-		.and_then(|value| value.i32())
-		.map(i64::from)
-		.and_then(trap_position_line)
-	{
+	match position.and_then(|value| value.i32()).map(i64::from).and_then(trap_position_line) {
 		Some(line) => failure.context(line),
 		None => failure,
 	}
@@ -383,9 +333,7 @@ pub(crate) fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Inst
 	match result {
 		Val::I64(n) => Ok(Node::Number(Number::Int(*n))),
 		Val::I32(n) => Ok(Node::Number(Number::Int(*n as i64))),
-		Val::F64(bits) => Ok(Node::Number(Number::Float(warp_runtime::floats::canonical_nan(
-			f64::from_bits(*bits),
-		)))),
+		Val::F64(bits) => Ok(Node::Number(Number::Float(warp_runtime::floats::canonical_nan(f64::from_bits(*bits))))),
 		Val::AnyRef(_) => Ok(node_of(result, &mut store.as_context_mut(), instance)),
 		_ => Ok(Node::Empty),
 	}
@@ -417,16 +365,10 @@ fn node_along<T>(
 	memory: wasmtime::Memory,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
 ) -> Node {
-	let Some(structref) = value
-		.unwrap_anyref()
-		.and_then(|reference| reference.unwrap_struct(&*store).ok())
-	else {
+	let Some(structref) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else {
 		return Node::Empty;
 	};
-	if path
-		.iter()
-		.any(|outer| wasmtime::Rooted::ref_eq(&*store, outer, &structref).unwrap_or(false))
-	{
+	if path.iter().any(|outer| wasmtime::Rooted::ref_eq(&*store, outer, &structref).unwrap_or(false)) {
 		return Node::Symbol(CYCLE_MARK.to_string());
 	}
 	path.push(structref);
@@ -458,20 +400,12 @@ fn struct_node<T>(
 		t if t == Kind::Text as u8 => Node::Text(text_of(store, &data, memory)),
 		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
 		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
-		t if t == Kind::Key as u8 => Node::Key(
-			Box::new(node(&data)),
-			crate::operators::code_to_op(high_byte),
-			Box::new(node(&child)),
-		),
-		t if t == Kind::Block as u8 => list_in(
-			data,
-			child,
-			Bracket::Curly,
-			crate::wasm_emitter::separator_of_kind(kind),
-			store,
-			memory,
-			path,
-		),
+		t if t == Kind::Key as u8 => {
+			Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child)))
+		}
+		t if t == Kind::Block as u8 => {
+			list_in(data, child, Bracket::Curly, crate::wasm_emitter::separator_of_kind(kind), store, memory, path)
+		}
 		t if t == Kind::List as u8 => list_in(
 			data,
 			child,
@@ -487,10 +421,7 @@ fn struct_node<T>(
 			Some(_) => node(&child),
 			None => Node::Symbol("function".to_string()),
 		},
-		t if t == Kind::TypeDef as u8 => Node::Type {
-			name: Box::new(node(&data)),
-			body: Box::new(node(&child)),
-		},
+		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
 		t if t == Kind::Uncertain as u8 => crate::numbers::uncertain::Uncertain::read_node(float_array(store, &data)),
 		t if t == Kind::Time as u8 => {
 			crate::time::time_node(kind >> crate::type_kinds::KIND_BITS, read_payload(store, &data).ok())
@@ -520,10 +451,7 @@ fn int_node<T>(store: &mut StoreContextMut<'_, T>, data: &Val, high_byte: i64) -
 }
 
 fn char_node<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Node {
-	let code = data
-		.unwrap_anyref()
-		.and_then(|reference| reference.unwrap_i31(&*store).ok())
-		.map(|code| code.get_u32());
+	let code = data.unwrap_anyref().and_then(|reference| reference.unwrap_i31(&*store).ok()).map(|code| code.get_u32());
 	Node::Char(code.and_then(char::from_u32).unwrap_or('\0'))
 }
 
@@ -553,10 +481,7 @@ fn list_in<T>(
 		if first.unwrap_anyref().is_some() {
 			items.push(node_along(&first, store, memory, path));
 		}
-		let Some(cell) = rest
-			.unwrap_anyref()
-			.and_then(|reference| reference.unwrap_struct(&*store).ok())
-		else {
+		let Some(cell) = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else {
 			break;
 		};
 		let (Ok(kind), Ok(data), Ok(child)) = (
@@ -581,19 +506,12 @@ fn list_in<T>(
 
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
 	let float_box = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
-	float_box
-		.field(&mut *store, 0)
-		.ok()
-		.map(|value| warp_runtime::floats::canonical_nan(value.unwrap_f64()))
+	float_box.field(&mut *store, 0).ok().map(|value| warp_runtime::floats::canonical_nan(value.unwrap_f64()))
 }
 
 fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<f64>> {
 	let array = data.unwrap_anyref()?.unwrap_array(&*store).ok()?;
-	let parts = array
-		.elems(&mut *store)
-		.ok()?
-		.map(|element| element.unwrap_f64())
-		.collect();
+	let parts = array.elems(&mut *store).ok()?.map(|element| element.unwrap_f64()).collect();
 	Some(parts)
 }
 
@@ -611,11 +529,5 @@ fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: wasmtime::
 
 /// Load WASM bytes with FFI support (for native function imports)
 pub fn read_bytes_with_ffi(bytes: &[u8]) -> Result<Node> {
-	read_bytes_with_imports(
-		bytes,
-		Imports {
-			ffi: true,
-			..Imports::default()
-		},
-	)
+	read_bytes_with_imports(bytes, Imports { ffi: true, ..Imports::default() })
 }

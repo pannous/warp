@@ -18,8 +18,5 @@ fn a_run_time_quantity_converts_with_as() {
 fn a_run_time_quantity_joins_a_text() {
 	assert_eq!(shown("q = quantity(\"5 km\")\n\"q: \" + q"), "q: 5km");
 	assert_eq!(shown("rope = 5 m ± 1 cm\n\"r: \" + (rope as cm)"), "r: 500.0 ± 1.0cm");
-	assert_eq!(
-		shown("q = quantity(\"5 km\")\nw = q.to(\"m\")\n\"q: \" + w + \"!\""),
-		"q: 5000m!"
-	);
+	assert_eq!(shown("q = quantity(\"5 km\")\nw = q.to(\"m\")\n\"q: \" + w + \"!\""), "q: 5000m!");
 }

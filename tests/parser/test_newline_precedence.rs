@@ -32,9 +32,6 @@ fn a_method_call_starting_the_next_line_continues_the_expression() {
 #[test]
 fn then_and_else_branches_on_their_own_lines() {
 	crate::is!("if 1 == 0 then\n    \"ab\"\nelse\n    \"cd\"", "cd");
-	crate::is!(
-		"x = if 2 == 3 then\n    1\nelse if 2 == 2 then\n    2\nelse\n    3\nx",
-		2
-	);
+	crate::is!("x = if 2 == 3 then\n    1\nelse if 2 == 2 then\n    2\nelse\n    3\nx", 2);
 	crate::is!("elsewhere = 3\nelsewhere", 3);
 }

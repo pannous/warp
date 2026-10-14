@@ -20,12 +20,6 @@ fn a_block_of_one_call_returns_the_calls_value() {
 #[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 #[test]
 fn a_colon_body_prints_its_argument() {
-	assert_eq!(
-		crate::common::printed(r#"to mail x to address: print address; mail "hi" to "a@b""#).trim(),
-		"a@b"
-	);
-	assert_eq!(
-		crate::common::printed("to move x from a to b { print b }; move 1 from 2 to 3").trim(),
-		"3"
-	);
+	assert_eq!(crate::common::printed(r#"to mail x to address: print address; mail "hi" to "a@b""#).trim(), "a@b");
+	assert_eq!(crate::common::printed("to move x from a to b { print b }; move 1 from 2 to 3").trim(), "3");
 }

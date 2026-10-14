@@ -12,10 +12,7 @@ fn shown(rest: &str) -> String {
 #[test]
 fn a_unit_field_holds_a_quantity() {
 	assert_eq!(shown("Run(5 km, \"park\").distance"), "5km");
-	assert_eq!(
-		shown("r = Run(5 km, \"park\")\nr.distance += 500 m\nr.distance"),
-		"5500m"
-	);
+	assert_eq!(shown("r = Run(5 km, \"park\")\nr.distance += 500 m\nr.distance"), "5500m");
 }
 
 #[test]

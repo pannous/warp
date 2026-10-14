@@ -17,10 +17,7 @@ fn a_function_applied_to_all_items() {
 #[test]
 fn broadcasting_compares_as_a_list() {
 	// P143 (user): a parameter typed as no truth value takes the call, `(square …) == …`
-	assert_eq!(
-		printed("square number = number*number; square [1 2 3] == [1 4 9]"),
-		"yes"
-	);
+	assert_eq!(printed("square number = number*number; square [1 2 3] == [1 4 9]"), "yes");
 	assert_eq!(printed("def square(x: int){ x*x }; square 3 == 9"), "yes");
 	assert_eq!(printed("square(x) := x*x; (square [1 2 3]) == [1 4 9]"), "yes");
 }
@@ -40,14 +37,8 @@ fn all_over_nested_lists_broadcasts_again() {
 
 #[test]
 fn a_list_built_by_appending_broadcasts() {
-	assert_eq!(
-		printed("square(x) := x*x; xs = []; xs.add(2); xs.add(3); ys = square all xs; ys"),
-		"[4 9]"
-	);
-	assert_eq!(
-		printed("square(x) := x*x; xs = []; for i in 1..3 { xs = xs + [i] }; square xs"),
-		"[1 4]"
-	);
+	assert_eq!(printed("square(x) := x*x; xs = []; xs.add(2); xs.add(3); ys = square all xs; ys"), "[4 9]");
+	assert_eq!(printed("square(x) := x*x; xs = []; for i in 1..3 { xs = xs + [i] }; square xs"), "[1 4]");
 }
 
 #[test]
@@ -61,11 +52,7 @@ fn every_definition_form_reads_a_comparison_alike() {
 	] {
 		assert_eq!(printed(code), "yes", "{code}");
 	}
-	for code in [
-		"def same(x) = x; same 3 == 9",
-		"same := it; same 3 == 9",
-		"same = x => x; same 3 == 9",
-	] {
+	for code in ["def same(x) = x; same 3 == 9", "same := it; same 3 == 9", "same = x => x; same 3 == 9"] {
 		crate::common::fails_with(code, "write (same 3) == 9 or same(3 == 9)");
 	}
 }

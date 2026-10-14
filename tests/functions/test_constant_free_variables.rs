@@ -42,10 +42,7 @@ fn constant_arithmetic_is_computed_after_inlining() {
 	same_value(code, 10);
 	let code = "def f(x){x + 3*4}; f(1)";
 	let program = inlined(code);
-	assert!(
-		program.contains("x+3*4"),
-		"a body without inlined variable keeps its form: {program}"
-	);
+	assert!(program.contains("x+3*4"), "a body without inlined variable keeps its form: {program}");
 }
 
 #[test]

@@ -44,9 +44,7 @@ pub(crate) fn parallel_map(node: &Node) -> Option<(Node, Node)> {
 			}
 		}
 	}
-	is_annotated(node, PARALLEL_ATTRIBUTE)
-		.then(|| map_call(node).or_else(|| all_call(node)))
-		.flatten()
+	is_annotated(node, PARALLEL_ATTRIBUTE).then(|| map_call(node).or_else(|| all_call(node))).flatten()
 }
 
 /// `go xs.map(x => x * 0.5 + 1)` of a float kernel (linear_arrays.rs is_float_kernel): the map marked SPLIT_ATTRIBUTE,
@@ -104,10 +102,7 @@ fn head(node: &Node) -> Option<&Node> {
 }
 
 fn is_form(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Key(..) | Node::List(_, Bracket::None | Bracket::Round, _)
-	)
+	matches!(node.drop_meta(), Node::Key(..) | Node::List(_, Bracket::None | Bracket::Round, _))
 }
 
 /// `f all xs` (wiki/all.md): xs and f
@@ -155,23 +150,11 @@ pub(crate) fn parallel_loop(items: &[Node]) -> Option<(Node, Node, Node)> {
 /// named first, so each task gets it as a value
 pub(crate) fn map_in_tasks(list: Node, function: Node, number: usize) -> Node {
 	let named = !matches!(function.drop_meta(), Node::Symbol(_));
-	let mapped = if named {
-		"parallel_function"
-	} else {
-		FUNCTION_PLACEHOLDER
-	};
-	let naming = if named {
-		format!("parallel_function = {FUNCTION_PLACEHOLDER}; ")
-	} else {
-		String::new()
-	};
+	let mapped = if named { "parallel_function" } else { FUNCTION_PLACEHOLDER };
+	let naming = if named { format!("parallel_function = {FUNCTION_PLACEHOLDER}; ") } else { String::new() };
 	let program = format!("({naming}{}; parallel_results = []; for parallel_done in parallel_parts {{ parallel_results = parallel_results + parallel_done }}; parallel_results)",
 		chunked(&format!("parallel_part.map({mapped})")));
-	filled(
-		&program,
-		number,
-		&[(LIST_PLACEHOLDER, list), (FUNCTION_PLACEHOLDER, function)],
-	)
+	filled(&program, number, &[(LIST_PLACEHOLDER, list), (FUNCTION_PLACEHOLDER, function)])
 }
 
 /// The loop over slices in tasks; it ends when every slice is done and gives ø
@@ -180,13 +163,7 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 		return error;
 	}
 	let walk = Node::List(
-		vec![
-			symbol(FOR_WORD),
-			variable,
-			symbol(IN_WORD),
-			temporary_symbol("part", number),
-			body,
-		],
+		vec![symbol(FOR_WORD), variable, symbol(IN_WORD), temporary_symbol("part", number), body],
 		Bracket::None,
 		Separator::Space,
 	);
@@ -199,21 +176,12 @@ pub(crate) fn parallel_let(items: &[Node], bracket: &Bracket, separator: &Separa
 	if (bracket, separator) != (&Bracket::None, &Separator::Space) {
 		return None;
 	}
-	let assignment = items
-		.iter()
-		.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
 	let Node::Key(last_name, Op::Assign, first_value) = items[assignment].drop_meta() else {
 		return None;
 	};
-	let names: Vec<Node> = items[..assignment]
-		.iter()
-		.chain([last_name.as_ref()])
-		.cloned()
-		.collect();
-	let values: Vec<Node> = std::iter::once(first_value.as_ref())
-		.chain(&items[assignment + 1..])
-		.cloned()
-		.collect();
+	let names: Vec<Node> = items[..assignment].iter().chain([last_name.as_ref()]).cloned().collect();
+	let values: Vec<Node> = std::iter::once(first_value.as_ref()).chain(&items[assignment + 1..]).cloned().collect();
 	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
 	(names.len() >= 2 && names.len() == values.len() && names.iter().all(is_name) && values.iter().all(is_call_head))
 		.then_some((names, values))
@@ -235,51 +203,29 @@ pub(crate) fn let_in_tasks(names: Vec<Node>, values: Vec<Node>, number: usize) -
 	let last = names.len() - 1;
 	let forks = (0..last).map(|index| assign(&job(index), word(GO_WORD, values[index].clone())));
 	let awaits = (0..last).map(|index| assign(&names[index], word(AWAIT_WORD, job(index))));
-	let forked = forks
-		.chain([assign(&names[last], values[last].clone())])
-		.chain(awaits)
-		.collect();
-	let sequential = names
-		.iter()
-		.zip(values)
-		.map(|(name, value)| assign(name, value))
-		.collect();
+	let forked = forks.chain([assign(&names[last], values[last].clone())]).chain(awaits).collect();
+	let sequential = names.iter().zip(values).map(|(name, value)| assign(name, value)).collect();
 	let statements = |items| Node::List(items, Bracket::None, Separator::Semicolon);
-	let program = format!(
-		"if {}() {{ {FORKED_PLACEHOLDER} }} else {{ {SEQUENTIAL_PLACEHOLDER} }}",
-		crate::host::TASK_FORKS
-	);
+	let program =
+		format!("if {}() {{ {FORKED_PLACEHOLDER} }} else {{ {SEQUENTIAL_PLACEHOLDER} }}", crate::host::TASK_FORKS);
 	filled(
 		&program,
 		number,
-		&[
-			(FORKED_PLACEHOLDER, statements(forked)),
-			(SEQUENTIAL_PLACEHOLDER, statements(sequential)),
-		],
+		&[(FORKED_PLACEHOLDER, statements(forked)), (SEQUENTIAL_PLACEHOLDER, statements(sequential))],
 	)
 }
 
 /// The template with its temporaries named apart, then the placeholders filled (the program's own `parallel_…` names
 /// stay as they are)
 fn filled(program: &str, number: usize, fills: &[(&str, Node)]) -> Node {
-	let template = crate::library_words::named_apart(
-		crate::warp_parser::parse(program),
-		TEMPORARY_PREFIX,
-		TEMPORARY_BASE,
-		number,
-	);
-	fills.iter().fold(template, |node, (placeholder, value)| {
-		crate::library_words::substitute(node, placeholder, value)
-	})
+	let template =
+		crate::library_words::named_apart(crate::warp_parser::parse(program), TEMPORARY_PREFIX, TEMPORARY_BASE, number);
+	fills.iter().fold(template, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, value))
 }
 
 /// `part` of the third parallel map or loop: `parallel·part·3`
 fn temporary_symbol(name: &str, number: usize) -> Node {
-	Node::Symbol(crate::library_words::temporary_name(&[
-		TEMPORARY_BASE,
-		name,
-		&number.to_string(),
-	]))
+	Node::Symbol(crate::library_words::temporary_name(&[TEMPORARY_BASE, name, &number.to_string()]))
 }
 
 /// `t += x`, `t++`, `t = t + x` in a parallel loop body of a variable that is not shared: each task would update its own

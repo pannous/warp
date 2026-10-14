@@ -8,7 +8,6 @@ const stage = name => self.postMessage({ type: "stage", stage: name });
 stage("loading its scripts");
 importScripts("reader.js", "imports.js", "exact.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
-reportUncaughtErrors("the program's Worker");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
@@ -52,7 +51,7 @@ self.lastSoundHandle = () => soundHandles;
 self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
 self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
 self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
-self.sendMidi = (port, message) => post({ type: "midi", port, message }); // host-files.js STD_ADAPTERS.midi
+self.sendMidi = (port, message, at) => post({ type: "midi", port, message, at }); // host-files.js STD_ADAPTERS.midi
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
 self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
 // a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
@@ -68,6 +67,7 @@ const hooks = {
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
+	resizeWindow: (width, height) => post({ type: "window", width, height }), // window.width = 800 (canvas.js)
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
@@ -191,8 +191,8 @@ function handleSubmit(request) {
 	if (live) showHandled(live, runSubmitted(live, hooks, request));
 }
 
-// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web/mod.rs
-// worker_bundle), `{scripts, module}` or `{error}`
+// the playground's Deploy (deploy.js): the program's Worker module and the query naming the scripts warp-hosting
+// composes its Worker of (src/web/mod.rs worker_bundle), `{query, module}` or `{error}`
 async function workerBundle(code) {
 	const codeText = passText(code);
 	try {
@@ -200,10 +200,25 @@ async function workerBundle(code) {
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
 		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, compiler.web_bundle_module(), report.module_length).slice();
 		compiler.web_free(...codeText);
-		return { scripts: report.scripts, module, error: report.error };
+		return { query: report.query, module, error: report.error };
 	} catch (crash) {
 		compiler = undefined; // as in evaluate: load it again
 		return { error: `compiler crashed: ${panicMessage ?? crash.message}` };
+	}
+}
+
+// the members to offer after the code and a dot (completion.js, src/lowering/data/members.rs): a list of names
+function memberNames(code) {
+	const codeText = passText(code);
+	try {
+		const length = compiler.web_member_names(...codeText);
+		const names = JSON.parse(compilerText(compiler.web_report(), length));
+		compiler.web_free(...codeText);
+		return names;
+	} catch (crash) {
+		compiler = undefined; // as in evaluate: load it again
+		console.warn(`member completion failed: ${panicMessage ?? crash.message}`);
+		return [];
 	}
 }
 
@@ -292,6 +307,10 @@ async function handleMessage(data) {
 	if (data.bundle !== undefined) { // the running program keeps running
 		if (!compiler) await loadCompiler();
 		return post({ type: "bundle", bundle: await workerBundle(data.bundle) });
+	}
+	if (data.members !== undefined) { // the running program keeps running
+		if (!compiler) await loadCompiler();
+		return post({ type: "members", id: data.id, names: memberNames(data.members) });
 	}
 	if (live) stopListening(live);
 	live = undefined;

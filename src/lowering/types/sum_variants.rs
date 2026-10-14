@@ -31,19 +31,11 @@ impl Variants {
 /// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name
 /// (`red is Color`, P179), then the classes of the variants with payload
 pub(crate) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
-	let name = Node::Symbol(type_name).with_attribute(
-		VARIANTS_MARK,
-		Node::List(bare_variants, Bracket::None, Separator::Space),
-	);
-	let sum_type = Node::Type {
-		name: Box::new(name),
-		body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)),
-	};
-	Node::List(
-		[vec![sum_type], declarations].concat(),
-		Bracket::None,
-		Separator::Semicolon,
-	)
+	let name = Node::Symbol(type_name)
+		.with_attribute(VARIANTS_MARK, Node::List(bare_variants, Bracket::None, Separator::Space));
+	let sum_type =
+		Node::Type { name: Box::new(name), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) };
+	Node::List([vec![sum_type], declarations].concat(), Bracket::None, Separator::Semicolon)
 }
 
 pub fn lower(program: Node) -> Node {
@@ -76,9 +68,7 @@ pub(crate) fn sum_types(program: &Node) -> HashMap<String, Variants> {
 	}
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
-			let parent = name
-				.attribute(crate::warp_parser::EXTENDS_KEYWORD)
-				.map(|parent| parent.drop_meta().name());
+			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
 			if let Some(variants) = parent.and_then(|parent| sum_types.get_mut(&parent)) {
 				variants.classes.push(name.drop_meta().name());
 			}
@@ -91,10 +81,9 @@ pub(crate) fn sum_types(program: &Node) -> HashMap<String, Variants> {
 /// `Circle(2)`
 fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node {
 	let bare_of = |right: &Node| match right.drop_meta() {
-		Node::Symbol(type_name) if !crate::type_tests::is_equality_operand(right) => sum_types
-			.get(type_name)
-			.map(|variants| &variants.bare)
-			.filter(|names| !names.is_empty()),
+		Node::Symbol(type_name) if !crate::type_tests::is_equality_operand(right) => {
+			sum_types.get(type_name).map(|variants| &variants.bare).filter(|names| !names.is_empty())
+		}
 		_ => None,
 	};
 	match node {
@@ -130,9 +119,7 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 
 fn is_bare_variant(node: &Node, sum_types: &HashMap<String, Variants>) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(_))
-		&& sum_types
-			.values()
-			.any(|variants| variants.bare.iter().any(|bare| bare.drop_meta() == node.drop_meta()))
+		&& sum_types.values().any(|variants| variants.bare.iter().any(|bare| bare.drop_meta() == node.drop_meta()))
 }
 
 /// `Shape::Circle(2)`, `Shape::Dot`: a variant of the sum type Shape, by its name or the head of its call

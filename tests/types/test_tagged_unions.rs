@@ -24,22 +24,13 @@ fn arrow_arms_bind_the_variant_data() {
 		),
 		9.0
 	);
-	is!(
-		&with_shape("s = Circle(2.0); match s { Shape::Circle(r) => r; _ => 0.0 }"),
-		2.0
-	);
+	is!(&with_shape("s = Circle(2.0); match s { Shape::Circle(r) => r; _ => 0.0 }"), 2.0);
 }
 
 #[test]
 fn colon_arms_bind_the_variant_data_too() {
-	is!(
-		&with_shape("area(s) := match s { Circle(r): 3*r*r; Square(a): a*a; Dot: 0.0 }; area(Circle(2.0))"),
-		12.0
-	);
-	is!(
-		&with_shape("s = Square(3.0); match s { Dot: 0.0; Square(a): a*a; _: 1.0 }"),
-		9.0
-	);
+	is!(&with_shape("area(s) := match s { Circle(r): 3*r*r; Square(a): a*a; Dot: 0.0 }; area(Circle(2.0))"), 12.0);
+	is!(&with_shape("s = Square(3.0); match s { Dot: 0.0; Square(a): a*a; _: 1.0 }"), 9.0);
 }
 
 #[test]

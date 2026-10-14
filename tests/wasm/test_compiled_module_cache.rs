@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use warp::gc_engine;
-use warp::run::module_cache::{compiled_module_in, Origin};
+use warp::run::module_cache::{compiled_in, compiled_module_in, Origin};
 use wasmtime::{Linker, Module};
 
 const ANSWER_MODULE: &str = r#"(module (func (export "main") (result i64) i64.const 42))"#;
@@ -18,11 +18,7 @@ fn fresh_cache(name: &str) -> PathBuf {
 fn main_result(engine: &wasmtime::Engine, module: &Module) -> i64 {
 	let mut store = warp::util::fueled_store(engine, ());
 	let instance = Linker::new(engine).instantiate(&mut store, module).unwrap();
-	instance
-		.get_typed_func::<(), i64>(&mut store, "main")
-		.unwrap()
-		.call(&mut store, ())
-		.unwrap()
+	instance.get_typed_func::<(), i64>(&mut store, "main").unwrap().call(&mut store, ()).unwrap()
 }
 
 #[test]
@@ -78,6 +74,19 @@ fn test_compiled_module_cache_holds_compiled_programs() {
 	assert_eq!((first, second), (Origin::Compiled, Origin::Cached));
 }
 
+/// `use lib.wasm` compiles a component once; later runs load its machine code (card takes-three: uniscript's took 0.9 s)
+#[test]
+fn test_compiled_module_cache_holds_components() {
+	let cache = fresh_cache("components");
+	let mut config = wasmtime::Config::new();
+	config.wasm_component_model(true);
+	let engine = wasmtime::Engine::new(&config).unwrap();
+	let component = r#"(component (core module (func (export "f"))))"#.as_bytes();
+	let (_, first) = compiled_in::<wasmtime::component::Component>(&cache, &engine, component).unwrap();
+	let (_, second) = compiled_in::<wasmtime::component::Component>(&cache, &engine, component).unwrap();
+	assert_eq!((first, second), (Origin::Compiled, Origin::Cached));
+}
+
 /// `warp compile --aot` writes the machine code next to the .wasm; `warp <file>.cwasm` runs it with its imports
 #[test]
 fn test_compile_aot_writes_machine_code_that_runs() {
@@ -85,32 +94,17 @@ fn test_compile_aot_writes_machine_code_that_runs() {
 	fs::write(&source, "print \"hello\"; 6*7").unwrap();
 	let machine_code = source.with_extension("cwasm");
 	let _ = fs::remove_file(&machine_code);
-	let compiled = crate::common::warp_command()
-		.args(["compile", "--aot"])
-		.arg(&source)
-		.output()
-		.unwrap();
-	assert!(
-		compiled.status.success(),
-		"{}",
-		String::from_utf8_lossy(&compiled.stderr)
-	);
+	let compiled = crate::common::warp_command().args(["compile", "--aot"]).arg(&source).output().unwrap();
+	assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
 	assert!(source.with_extension("wasm").exists());
 	let run = crate::common::warp_command().arg(&machine_code).output().unwrap();
 	let printed = String::from_utf8_lossy(&run.stdout);
-	assert!(
-		printed.contains("hello") && printed.contains("42"),
-		"{printed}{}",
-		String::from_utf8_lossy(&run.stderr)
-	);
+	assert!(printed.contains("hello") && printed.contains("42"), "{printed}{}", String::from_utf8_lossy(&run.stderr));
 }
 
 /// every run shares one gc_engine, so a module compiled once in a process runs again without compiling
 #[test]
 fn test_gc_engine_is_shared() {
 	assert!(wasmtime::Engine::same(&gc_engine(), &gc_engine()));
-	assert!(!wasmtime::Engine::same(
-		&warp::util::task_engine(),
-		&warp::util::task_engine()
-	));
+	assert!(!wasmtime::Engine::same(&warp::util::task_engine(), &warp::util::task_engine()));
 }

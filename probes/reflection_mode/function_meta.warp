@@ -1,0 +1,8 @@
+use reflection
+# doubles a number
+twice(x) := x*2
+fs = [function twice]
+print fs#1
+print fs#1.line, fs#1.origin, fs#1.compiler, fs#1.wasm_name
+print twice.column
+twice.line

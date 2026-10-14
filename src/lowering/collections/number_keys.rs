@@ -19,13 +19,8 @@ use std::collections::HashSet;
 /// The word that makes a key of a number known only at run time
 const KEY_TEXT: &str = "string";
 /// The words `word(map, key, …)` that find an entry by its key
-const KEY_WORDS: [&str; 5] = [
-	COLLECTION_CONTAINS,
-	COLLECTION_POSITION,
-	MAP_GET_OR,
-	MAP_WITHOUT,
-	crate::list_mutations::REMOVED_VALUE_CALL,
-];
+const KEY_WORDS: [&str; 5] =
+	[COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT, crate::list_mutations::REMOVED_VALUE_CALL];
 
 pub fn lower(node: Node) -> Node {
 	if !has_map_variable(&node) {
@@ -73,10 +68,7 @@ fn collect_map_variables(node: &Node, maps: &mut HashSet<String>) {
 		return;
 	}
 	maps.extend(map_assigned(node).map(str::to_string));
-	node.drop_meta()
-		.parts()
-		.into_iter()
-		.for_each(|part| collect_map_variables(part, maps));
+	node.drop_meta().parts().into_iter().for_each(|part| collect_map_variables(part, maps));
 }
 
 /// A function definition with its body rewritten for the maps it sees: those of the scope around it it doesn't
@@ -87,12 +79,7 @@ fn in_function_scope(node: &Node, maps: &HashSet<String>, rewrite: fn(Node, &Has
 	}
 	let (head, body, rebuild) = definition_parts(node)?;
 	let own = own_names(&head, &body);
-	let seen = maps
-		.iter()
-		.filter(|name| !own.contains(*name))
-		.cloned()
-		.chain(map_variables(&body))
-		.collect();
+	let seen = maps.iter().filter(|name| !own.contains(*name)).cloned().chain(map_variables(&body)).collect();
 	Some(rebuild(head, rewrite(body, &seen)))
 }
 
@@ -138,10 +125,7 @@ fn text_keyed(literal: Node) -> Node {
 			};
 			Node::List(items.into_iter().map(entry).collect(), Bracket::Curly, separator)
 		}
-		Node::Meta { data, node } => Node::Meta {
-			data,
-			node: Box::new(text_keyed(*node)),
-		},
+		Node::Meta { data, node } => Node::Meta { data, node: Box::new(text_keyed(*node)) },
 		other => other,
 	}
 }
@@ -170,22 +154,14 @@ fn keyed(node: Node, maps: &HashSet<String>) -> Node {
 				(None, Some(key)) => key_text(keyed(key.clone(), maps)),
 				(None, None) => return Node::Key(target, Op::Hash, Box::new(keyed(*index, maps))),
 			};
-			Node::Key(
-				target,
-				Op::Hash,
-				Box::new(Node::Key(Box::new(key), Op::Add, Box::new(crate::node::int(1)))),
-			)
+			Node::Key(target, Op::Hash, Box::new(Node::Key(Box::new(key), Op::Add, Box::new(crate::node::int(1)))))
 		}
 		// `d.remove(k)`, lowered by the analyzer after lower_key_words
 		Node::Key(target, Op::Dot, call) if is_map(&target, maps) => match call.drop_meta() {
 			Node::List(items, bracket, separator) if matches!(items.as_slice(), [method, _] if method.name() == crate::list_mutations::REMOVE_METHOD) =>
 			{
 				let removed = vec![items[0].clone(), key_text(keyed(items[1].clone(), maps))];
-				Node::Key(
-					target,
-					Op::Dot,
-					Box::new(Node::List(removed, bracket.clone(), separator.clone())),
-				)
+				Node::Key(target, Op::Dot, Box::new(Node::List(removed, bracket.clone(), separator.clone())))
 			}
 			_ => Node::Key(target, Op::Dot, Box::new(keyed(*call, maps))),
 		},
@@ -225,10 +201,9 @@ fn key_text(key: Node) -> Node {
 fn written_index(index: &Node) -> Option<crate::extensions::numbers::Number> {
 	match index {
 		Node::Meta { data, node } => match data.as_ref() {
-			Node::Data(dada) => dada
-				.downcast_ref::<WrittenIndex>()
-				.map(|WrittenIndex(number)| *number)
-				.or_else(|| written_index(node)),
+			Node::Data(dada) => {
+				dada.downcast_ref::<WrittenIndex>().map(|WrittenIndex(number)| *number).or_else(|| written_index(node))
+			}
 			_ => written_index(node),
 		},
 		_ => None,

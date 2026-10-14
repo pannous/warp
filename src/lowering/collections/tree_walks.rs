@@ -72,11 +72,7 @@ pub fn lower(program: Node) -> Node {
 		Node::List(items, Bracket::None, separator) if separator.separates_statements() => items,
 		single => vec![single],
 	};
-	Node::List(
-		walkers.into_iter().chain(statements).collect(),
-		Bracket::None,
-		Separator::Newline,
-	)
+	Node::List(walkers.into_iter().chain(statements).collect(), Bracket::None, Separator::Newline)
 }
 
 fn with_walker_calls(node: Node, walkers: &RefCell<Vec<Node>>) -> Node {
@@ -157,11 +153,7 @@ fn with_quoted_patterns(words: Vec<Node>) -> Vec<Node> {
 			}
 			(Some(_), _) if after_walk_word && word.is_symbol(DATA_WORD) => {
 				let quoted = words.next().into_iter();
-				joined.push(Node::List(
-					[word].into_iter().chain(quoted).collect(),
-					Bracket::None,
-					Separator::Space,
-				));
+				joined.push(Node::List([word].into_iter().chain(quoted).collect(), Bracket::None, Separator::Space));
 			}
 			_ => joined.push(word),
 		}
@@ -180,11 +172,7 @@ fn temporary(name: &str, number: usize) -> String {
 /// The walker's definition, `find·0(node·0) := {…}`, of the words `find P` or `replace P with Q`
 fn walker(number: usize, words: &[Node]) -> Node {
 	let own_names = PLACEHOLDERS.map(|placeholder| {
-		let name = if placeholder == WALK {
-			words[0].name()
-		} else {
-			placeholder.to_string()
-		};
+		let name = if placeholder == WALK { words[0].name() } else { placeholder.to_string() };
 		Node::Symbol(temporary(&name, number))
 	});
 	let (source, pattern, result) = match words {
@@ -207,10 +195,7 @@ fn found_result(pattern: &Node, node: &Node) -> Node {
 		[] => node.clone(),
 		[name] => name.clone(),
 		names => Node::List(
-			names
-				.iter()
-				.map(|name| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(name.clone())))
-				.collect(),
+			names.iter().map(|name| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(name.clone()))).collect(),
 			Bracket::Curly,
 			Separator::Colon,
 		),

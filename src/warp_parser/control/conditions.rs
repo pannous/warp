@@ -8,10 +8,8 @@ use crate::words::IS_ERROR_WORD;
 pub(crate) fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
 	if guard == Op::While {
 		// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
-		let (statement, test) = (
-			crate::normalize::operand_text(&statement),
-			crate::normalize::operand_text(&condition),
-		);
+		let (statement, test) =
+			(crate::normalize::operand_text(&statement), crate::normalize::operand_text(&condition));
 		crate::normalize::hint(
 			&format!("{statement} {word} {test}"),
 			&format!("{word} {test} {{ {statement} }}"),
@@ -25,11 +23,9 @@ pub(crate) fn guarded_statement(statement: Node, guard: Op, word: &str, conditio
 	};
 	match guard {
 		Op::While => while_do(condition, statement),
-		_ => Node::Key(
-			Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))),
-			Op::Then,
-			Box::new(statement),
-		),
+		_ => {
+			Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))), Op::Then, Box::new(statement))
+		}
 	}
 }
 
@@ -71,23 +67,16 @@ impl WarpParser {
 		let is_length = "is".len();
 		let after_is = self.matches_keyword("is");
 		let word_start = if after_is {
-			is_length
-				+ (is_length..)
-					.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-					.count()
+			is_length + (is_length..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
 		} else {
 			0
 		};
 		let word = TEST_WORDS.iter().find(|word| {
-			word.chars()
-				.enumerate()
-				.all(|(index, letter)| self.peek_char(word_start + index) == letter)
+			word.chars().enumerate().all(|(index, letter)| self.peek_char(word_start + index) == letter)
 				&& !is_identifier_char(self.peek_char(word_start + word.len()))
 		})?;
 		let end = word_start + word.len();
-		let blanks = (end..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
+		let blanks = (end..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let next = self.peek_char(end + blanks);
 		let word_ends_condition = !self.operand_follows(end)
 			|| matches!(next, '{' | ':')
@@ -111,10 +100,7 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		NEGATED_CONTROL_WORDS
-			.iter()
-			.find(|(word, _)| self.matches_keyword(word))
-			.map(|(word, op)| (*op, word.len()))
+		NEGATED_CONTROL_WORDS.iter().find(|(word, _)| self.matches_keyword(word)).map(|(word, op)| (*op, word.len()))
 	}
 }
 
@@ -125,13 +111,8 @@ pub(crate) fn guarded_command(items: &[Node]) -> Option<Node> {
 	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
 		return None;
 	}
-	let whole = |tail: &Node| {
-		Node::List(
-			[command, std::slice::from_ref(tail)].concat(),
-			Bracket::None,
-			Separator::Space,
-		)
-	};
+	let whole =
+		|tail: &Node| Node::List([command, std::slice::from_ref(tail)].concat(), Bracket::None, Separator::Space);
 	match last.drop_meta() {
 		Node::Key(head, Op::Do, body) => match head.drop_meta() {
 			Node::Key(nothing, Op::While, condition) if **nothing == Node::Empty => {

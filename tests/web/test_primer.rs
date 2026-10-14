@@ -41,11 +41,7 @@ fn failures_of(check: impl Fn(&Snippet) -> Option<String>) -> String {
 
 #[test]
 fn the_primer_fits_a_system_prompt() {
-	assert!(
-		PRIMER.len() < MOST_CHARACTERS,
-		"the primer has {} characters",
-		PRIMER.len()
-	);
+	assert!(PRIMER.len() < MOST_CHARACTERS, "the primer has {} characters", PRIMER.len());
 }
 
 #[test]

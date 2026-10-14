@@ -11,8 +11,5 @@ fn a_name_end_stays_a_name() {
 #[test]
 fn end_still_closes_blocks() {
 	is!("x = if 1 > 2 then 1 else 2 end; x", 2);
-	is!(
-		"def f(x)\n  if x > 1 then\n    \"big\"\n  else\n    \"small\"\n  end\nend\nf(3)",
-		"big"
-	);
+	is!("def f(x)\n  if x > 1 then\n    \"big\"\n  else\n    \"small\"\n  end\nend\nf(3)", "big");
 }

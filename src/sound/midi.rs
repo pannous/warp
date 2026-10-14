@@ -4,8 +4,9 @@
 //! velocity (1..127); a file is a list of them flattened. Files are format 0, 480 ticks a quarter at 120 beats per
 //! minute (960 ticks a second), so a millisecond is a whole number of ticks to within 5%: ticks are rounded, not kept.
 //! Live output goes to `sendmidi` when the user may hear it; headless (tests, CI, WARP_NO_WINDOW) only a
-//! `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. Live input has no backend yet, natively or in the
-//! playground (its Web MIDI input stays on the page, out of the program's Worker): it fails loudly (card midi-receive).
+//! `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. A message goes out at its voice's moment like a
+//! sound (card midi-clock): after the sounds before it, or at an `at`'s time. Live input has no backend yet, natively or
+//! in the playground (its Web MIDI input stays on the page, out of the program's Worker): it fails loudly (card midi-receive).
 
 use std::process::Command;
 
@@ -65,12 +66,7 @@ pub fn encode(flat: &[i64]) -> Result<Vec<u8>, String> {
 		now = tick;
 	}
 	track.extend([0, 0xff, 0x2f, 0]);
-	let header = [
-		0u16.to_be_bytes(),
-		1u16.to_be_bytes(),
-		(TICKS_PER_QUARTER as u16).to_be_bytes(),
-	]
-	.concat();
+	let header = [0u16.to_be_bytes(), 1u16.to_be_bytes(), (TICKS_PER_QUARTER as u16).to_be_bytes()].concat();
 	Ok([chunk(b"MThd", &header), chunk(b"MTrk", &track)].concat())
 }
 
@@ -113,10 +109,7 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<i64>, String> {
 	if header.len() < 6 {
 		return Err("the MIDI header is too short".into());
 	}
-	let (tracks, division) = (
-		u16::from_be_bytes([header[2], header[3]]),
-		u16::from_be_bytes([header[4], header[5]]),
-	);
+	let (tracks, division) = (u16::from_be_bytes([header[2], header[3]]), u16::from_be_bytes([header[4], header[5]]));
 	if division & 0x8000 != 0 {
 		return Err("MIDI files timed in SMPTE frames are not supported, only ticks per quarter note".into());
 	}
@@ -188,11 +181,7 @@ fn read_track(
 			}
 			_ => {
 				let (kind, channel) = (status & 0xf0, status & 0x0f);
-				let data = if kind == 0xc0 || kind == 0xd0 {
-					vec![track.byte()?]
-				} else {
-					track.take(2)?.to_vec()
-				};
+				let data = if kind == 0xc0 || kind == 0xd0 { vec![track.byte()?] } else { track.take(2)?.to_vec() };
 				match kind {
 					NOTE_ON => messages.push((tick, data[1] > 0, channel, data[0], data[1])),
 					NOTE_OFF => messages.push((tick, false, channel, data[0], 0)),
@@ -204,40 +193,40 @@ fn read_track(
 	Ok(())
 }
 
-/// A message of up to three bytes to the output `port` ("" the first one)
+/// A message of up to three bytes to the output `port` ("" the first one), at its voice's moment (card midi-clock):
+/// after the sounds queued before it, or at an `at`'s time; headless the line names that place on the voice
 pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 	if bytes.is_empty() {
 		return Err("a MIDI message has at least a status byte".into());
 	}
 	let hex = bytes.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>();
 	if !crate::graphics::paint::shows_windows() {
-		eprintln!("midi out {port}: {}", hex.join(" "));
+		let (_, place) = crate::sound::moment();
+		let at = if place > 0.0 { format!(" at {place:.3} s") } else { String::new() };
+		eprintln!("midi out {port}: {}{at}", hex.join(" "));
 		return Ok(());
 	}
+	crate::host::sandbox::check_process("midi.send")?;
+	let port = port.to_string();
+	crate::sound::on_clock(move || sent(&port, &hex))
+}
+
+/// The message's hex bytes handed to the sender now
+fn sent(port: &str, hex: &[String]) -> Result<(), String> {
 	let port = if port.is_empty() {
 		outputs()?.into_iter().next().ok_or("no MIDI output devices found")?
 	} else {
 		port.to_string()
 	};
-	crate::host::sandbox::check_process("midi.send")?;
-	let status = Command::new(SENDER)
-		.args(["dev", &port, "hex"])
-		.args(&hex)
-		.status()
-		.map_err(|failure| no_backend(&failure))?;
-	status
-		.success()
-		.then_some(())
-		.ok_or_else(|| format!("{SENDER} failed ({status}) sending to {port}"))
+	let status =
+		Command::new(SENDER).args(["dev", &port, "hex"]).args(hex).status().map_err(|failure| no_backend(&failure))?;
+	status.success().then_some(()).ok_or_else(|| format!("{SENDER} failed ({status}) sending to {port}"))
 }
 
 /// The names of the MIDI outputs the system has
 pub fn outputs() -> Result<Vec<String>, String> {
 	crate::host::sandbox::check_process("midi.outputs")?;
-	let listed = Command::new(SENDER)
-		.arg("list")
-		.output()
-		.map_err(|failure| no_backend(&failure))?;
+	let listed = Command::new(SENDER).arg("list").output().map_err(|failure| no_backend(&failure))?;
 	Ok(String::from_utf8_lossy(&listed.stdout)
 		.lines()
 		.map(|line| line.trim().trim_matches('"').to_string())

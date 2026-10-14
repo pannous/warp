@@ -19,25 +19,17 @@ fn embedded(module: &str) -> &'static str {
 
 #[test]
 fn another_checkout_lib_is_the_standard_module() {
-	let folder = checkout_with(
-		"checkout_std_lib_copy",
-		&[("draw", embedded("draw")), ("math", embedded("math"))],
-	);
+	let folder = checkout_with("checkout_std_lib_copy", &[("draw", embedded("draw")), ("math", embedded("math"))]);
 	take_warnings();
-	let result = warp::modules::with_program_file(&folder.join("lib").join("app.warp"), || {
-		eval("use draw\nhsv(120, 1, 1)")
-	});
+	let result =
+		warp::modules::with_program_file(&folder.join("lib").join("app.warp"), || eval("use draw\nhsv(120, 1, 1)"));
 	assert_eq!(result.serialize().trim(), "4278255360");
-	assert!(take_warnings()
-		.iter()
-		.all(|warning| !warning.message.contains("shadows")));
+	assert!(take_warnings().iter().all(|warning| !warning.message.contains("shadows")));
 }
 
 fn made_long_ago(file: &std::path::Path) {
 	let opened = std::fs::File::options().write(true).open(file).expect("the lib file");
-	opened
-		.set_modified(std::time::SystemTime::UNIX_EPOCH)
-		.expect("an old modification time");
+	opened.set_modified(std::time::SystemTime::UNIX_EPOCH).expect("an old modification time");
 }
 
 #[test]
@@ -47,9 +39,7 @@ fn a_stale_lib_file_shadows_the_standard_module_loudly() {
 	take_warnings();
 	let result = warp::modules::with_program_file(&folder.join("lib").join("app.warp"), || eval("use draw\nanswer"));
 	assert_eq!(result.serialize().trim(), "42");
-	assert!(take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("shadows the standard module draw")));
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("shadows the standard module draw")));
 }
 
 #[test]
@@ -58,7 +48,5 @@ fn a_lib_file_edited_since_the_build_is_used_quietly() {
 	take_warnings();
 	let result = warp::modules::with_program_file(&folder.join("lib").join("app.warp"), || eval("use draw\nanswer"));
 	assert_eq!(result.serialize().trim(), "43");
-	assert!(take_warnings()
-		.iter()
-		.all(|warning| !warning.message.contains("shadows")));
+	assert!(take_warnings().iter().all(|warning| !warning.message.contains("shadows")));
 }

@@ -1,6 +1,7 @@
 //! `use lib.wasm; lib.f(x)` (long form `use wasm "lib.wasm" as lib`): a WebAssembly component (a Rust crate built for wasm32-wasip2 with
 //! wit-bindgen, componentize-py's output, anything with a WIT interface) called through foreign_call
-//! (notes/stdlib_connectors.md). Each component is compiled once per path and process and instantiated once per
+//! (notes/stdlib_connectors.md). Each component is compiled once per path and process (its machine code cached on disk
+//! by module_cache) and instantiated once per
 //! thread, on an engine of its own with the component model (the programs' engines run core modules only), with WASI p2 for its imports. Values cross as JSON,
 //! like the other foreign runtimes: a Node argument becomes the WIT type the function declares, its result comes back as
 //! JSON (records objects, variants `{case: payload}`, enums texts, chars codepoints (P94), an `err` of a result an error).
@@ -23,10 +24,7 @@ struct ComponentState {
 
 impl WasiView for ComponentState {
 	fn ctx(&mut self) -> WasiCtxView<'_> {
-		WasiCtxView {
-			ctx: &mut self.wasi,
-			table: &mut self.table,
-		}
+		WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
 	}
 }
 
@@ -85,11 +83,7 @@ pub fn call_method(handle: &Value, member: &str, arguments: &[Value]) -> Result<
 		.get(COMPONENT_KEY)
 		.and_then(Value::as_str)
 		.ok_or_else(|| format!("{handle} is no handle of a component's resource"))?;
-	let kind = handle
-		.get("type")
-		.and_then(Value::as_str)
-		.unwrap_or_default()
-		.to_string();
+	let kind = handle.get("type").and_then(Value::as_str).unwrap_or_default().to_string();
 	with_component(path, |loaded| match loaded.function(member, Some(&kind)) {
 		Err(_) if member == DROP_METHOD && arguments.is_empty() => loaded.dropped(handle),
 		function => loaded.invoke(path, member, function?, Some(handle), arguments),
@@ -146,7 +140,9 @@ fn compiled(path: &str) -> Result<Component, String> {
 	if let Some(component) = components.get(path) {
 		return Ok(component.clone());
 	}
-	let component = Component::from_file(engine(), path)
+	let component = std::fs::read(path)
+		.map_err(wasmtime::Error::from)
+		.and_then(|bytes| crate::run::module_cache::compiled_component(engine(), &bytes))
 		.map_err(|failure| format!("cannot load the component {path}: {failure:#}"))?;
 	components.insert(path.to_string(), component.clone());
 	Ok(component)
@@ -157,10 +153,7 @@ fn load(path: &str) -> Result<Loaded, String> {
 	let mut linker = Linker::new(engine());
 	wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|failure| failure.to_string())?;
 	serve_host_imports(&mut linker, &component).map_err(|failure| format!("{path}: {failure:#}"))?;
-	let state = ComponentState {
-		wasi: WasiCtx::builder().inherit_stdio().build(),
-		table: ResourceTable::new(),
-	};
+	let state = ComponentState { wasi: WasiCtx::builder().inherit_stdio().build(), table: ResourceTable::new() };
 	let mut store = Store::new(engine(), state);
 	warp_runtime::engine::cap_memory(&mut store);
 	let instance = linker
@@ -172,11 +165,9 @@ fn load(path: &str) -> Result<Loaded, String> {
 			let Some(index) = index else { return };
 			match item {
 				ComponentItem::ComponentFunc(_) => functions.push((name.to_string(), index)),
-				ComponentItem::Resource(_) => kinds.extend(
-					instance
-						.get_resource(&mut *store, index)
-						.map(|ty| (ty, name.to_string())),
-				),
+				ComponentItem::Resource(_) => {
+					kinds.extend(instance.get_resource(&mut *store, index).map(|ty| (ty, name.to_string())))
+				}
 				_ => {}
 			}
 		};
@@ -186,52 +177,30 @@ fn load(path: &str) -> Result<Loaded, String> {
 				continue;
 			};
 			for (inner, item) in interface.exports(engine()) {
-				add(
-					&mut store,
-					inner,
-					&item.ty,
-					component.get_export_index(Some(&interface_index), inner),
-				);
+				add(&mut store, inner, &item.ty, component.get_export_index(Some(&interface_index), inner));
 			}
 		} else {
 			add(&mut store, name, &item.ty, component.get_export_index(None, name));
 		}
 	}
-	Ok(Loaded {
-		store,
-		instance,
-		functions,
-		kinds,
-		held: vec![],
-	})
+	Ok(Loaded { store, instance, functions, kinds, held: vec![] })
 }
 
 /// What warp's host gives a component importing `host` (a warp component's world, `import host: { time: () -> i64 }`,
 /// component_worlds.rs): its words print, time (milliseconds since 1970) and read (a file's text); any other function
 /// of the import traps when called, naming itself
 fn serve_host_imports(linker: &mut Linker<ComponentState>, component: &Component) -> wasmtime::Result<()> {
-	if component
-		.component_type()
-		.imports(engine())
-		.any(|(name, _)| name == HOST_IMPORT)
-	{
+	if component.component_type().imports(engine()).any(|(name, _)| name == HOST_IMPORT) {
 		let mut host = linker.instance(HOST_IMPORT)?;
 		host.func_wrap("print", |_, (text,): (String,)| {
 			println!("{text}");
 			Ok(())
 		})?;
 		host.func_wrap("time", |_, (): ()| {
-			Ok((std::time::SystemTime::now()
-				.duration_since(std::time::UNIX_EPOCH)?
-				.as_millis() as i64,))
+			Ok((std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis() as i64,))
 		})?;
 		host.func_wrap("read", |_, (path,): (String,)| {
-			Ok(
-				(
-					std::fs::read_to_string(&path)
-						.map_err(|failure| wasmtime::format_err!("read {path}: {failure}"))?,
-				),
-			)
+			Ok((std::fs::read_to_string(&path).map_err(|failure| wasmtime::format_err!("read {path}: {failure}"))?,))
 		})?;
 	}
 	// stubbing defines each import under its exact name, shadowing the WASI version a newer one serves (a crate's std
@@ -274,11 +243,7 @@ impl Loaded {
 				},
 			})
 			// `regex.Regex("a+")` of a resource without a constructor: its static `new` (a Rust crate's, src/modules/cargo_crates/)
-			.or_else(|| {
-				self.functions
-					.iter()
-					.find(|(name, _)| kind.is_none() && *name == static_new)
-			});
+			.or_else(|| self.functions.iter().find(|(name, _)| kind.is_none() && *name == static_new));
 		let Some((_, index)) = found else {
 			let known: Vec<&str> = self
 				.functions
@@ -287,25 +252,18 @@ impl Loaded {
 				.filter(|name| kind.is_none_or(|kind| name.contains(&format!("]{kind}."))))
 				.collect();
 			return Err(match kind {
-				None => format!(
-					"the component exports no function {member}; it exports {}",
-					known.join(", ")
-				),
+				None => format!("the component exports no function {member}; it exports {}", known.join(", ")),
 				Some(kind) => format!("a {kind} has no method {member}; it has {}", known.join(", ")),
 			});
 		};
-		self.instance
-			.get_func(&mut self.store, index)
-			.ok_or_else(|| format!("{member} is no function"))
+		self.instance.get_func(&mut self.store, index).ok_or_else(|| format!("{member} is no function"))
 	}
 
 	/// Run the destructor of a handle's resource; its slot stays empty, so a later use is refused
 	fn dropped(&mut self, handle: &Value) -> Result<Value, String> {
 		let slot = held_slot(&self.held, handle)?;
 		let resource = self.held[slot].take().ok_or_else(|| dropped_error(handle))?;
-		resource
-			.resource_drop(&mut self.store)
-			.map_err(|failure| format!("{}: {failure:#}", handle_text(handle)))?;
+		resource.resource_drop(&mut self.store).map_err(|failure| format!("{}: {failure:#}", handle_text(handle)))?;
 		Ok(Value::Null)
 	}
 
@@ -319,11 +277,8 @@ impl Loaded {
 		arguments: &[Value],
 	) -> Result<Value, String> {
 		let signature = function.ty(&self.store);
-		let parameters: Vec<(String, Type)> = signature
-			.params()
-			.map(|(name, ty)| (name.to_string(), ty))
-			.skip(receiver.is_some() as usize)
-			.collect();
+		let parameters: Vec<(String, Type)> =
+			signature.params().map(|(name, ty)| (name.to_string(), ty)).skip(receiver.is_some() as usize).collect();
 		if parameters.len() != arguments.len() {
 			let names: Vec<&str> = parameters.iter().map(|(name, _)| name.as_str()).collect();
 			return Err(format!(
@@ -333,31 +288,17 @@ impl Loaded {
 				arguments.len()
 			));
 		}
-		let handles = Handles {
-			path,
-			held: &mut self.held,
-			kinds: &self.kinds,
-		};
+		let handles = Handles { path, held: &mut self.held, kinds: &self.kinds };
 		let mut values = vec![];
 		if let (Some(receiver), Some((_, self_type))) = (receiver, signature.params().next()) {
 			values.push(handles.value_of(receiver, &self_type)?);
 		}
 		for ((name, ty), argument) in parameters.iter().zip(arguments) {
-			values.push(
-				handles
-					.value_of(argument, ty)
-					.map_err(|failure| format!("{member} {name}: {failure}"))?,
-			);
+			values.push(handles.value_of(argument, ty).map_err(|failure| format!("{member} {name}: {failure}"))?);
 		}
 		let mut results = vec![Val::Bool(false); signature.results().len()];
-		function
-			.call(&mut self.store, &values, &mut results)
-			.map_err(|failure| format!("{member}: {failure:#}"))?;
-		let mut handles = Handles {
-			path,
-			held: &mut self.held,
-			kinds: &self.kinds,
-		};
+		function.call(&mut self.store, &values, &mut results).map_err(|failure| format!("{member}: {failure:#}"))?;
+		let mut handles = Handles { path, held: &mut self.held, kinds: &self.kinds };
 		match results.as_slice() {
 			[] => Ok(Value::Null),
 			[result] => handles.json_of(result),
@@ -401,11 +342,7 @@ impl Handles<'_> {
 	/// A JSON argument as the WIT type `ty`
 	fn value_of(&self, argument: &Value, ty: &Type) -> Result<Val, String> {
 		let integer = || argument.as_i64().ok_or_else(|| format!("{argument} is no integer"));
-		let unsigned = || {
-			argument
-				.as_u64()
-				.ok_or_else(|| format!("{argument} is no natural number"))
-		};
+		let unsigned = || argument.as_u64().ok_or_else(|| format!("{argument} is no natural number"));
 		let fits = |what: &str| format!("{argument} does not fit a {what}");
 		Ok(match ty {
 			Type::Bool => Val::Bool(
@@ -425,21 +362,13 @@ impl Handles<'_> {
 			Type::Float32 => Val::Float32(argument.as_f64().ok_or_else(|| format!("{argument} is no number"))? as f32),
 			Type::Float64 => Val::Float64(argument.as_f64().ok_or_else(|| format!("{argument} is no number"))?),
 			Type::Char => char_of(argument)?,
-			Type::String => Val::String(
-				argument
-					.as_str()
-					.ok_or_else(|| format!("{argument} is no text"))?
-					.to_string(),
-			),
+			Type::String => Val::String(argument.as_str().ok_or_else(|| format!("{argument} is no text"))?.to_string()),
 			// a text where bytes are wanted: its UTF-8 (`hex.encode("hi")`, `crc32fast.hash("abc")`)
 			Type::List(list) if matches!(list.ty(), Type::U8) && argument.is_string() => {
 				Val::List(argument.as_str().unwrap_or_default().bytes().map(Val::U8).collect())
 			}
 			Type::List(list) => Val::List(
-				items(argument)?
-					.iter()
-					.map(|item| self.value_of(item, &list.ty()))
-					.collect::<Result<_, _>>()?,
+				items(argument)?.iter().map(|item| self.value_of(item, &list.ty())).collect::<Result<_, _>>()?,
 			),
 			Type::Tuple(tuple) => self.tuple_of(argument, tuple)?,
 			Type::Record(record) => self.record_of(argument, record)?,
@@ -459,32 +388,21 @@ impl Handles<'_> {
 	fn tuple_of(&self, argument: &Value, tuple: &types::Tuple) -> Result<Val, String> {
 		let items = items(argument)?;
 		if items.len() != tuple.types().len() {
-			return Err(format!(
-				"{argument} has {} items, the tuple {}",
-				items.len(),
-				tuple.types().len()
-			));
+			return Err(format!("{argument} has {} items, the tuple {}", items.len(), tuple.types().len()));
 		}
 		Ok(Val::Tuple(
-			items
-				.iter()
-				.zip(tuple.types())
-				.map(|(item, ty)| self.value_of(item, &ty))
-				.collect::<Result<_, _>>()?,
+			items.iter().zip(tuple.types()).map(|(item, ty)| self.value_of(item, &ty)).collect::<Result<_, _>>()?,
 		))
 	}
 
 	fn record_of(&self, argument: &Value, record: &types::Record) -> Result<Val, String> {
-		let fields = argument
-			.as_object()
-			.ok_or_else(|| format!("{argument} is no object of the record's fields"))?;
+		let fields = argument.as_object().ok_or_else(|| format!("{argument} is no object of the record's fields"))?;
 		Ok(Val::Record(
 			record
 				.fields()
 				.map(|field| {
-					let value = fields
-						.get(field.name)
-						.ok_or_else(|| format!("{argument} has no field {}", field.name))?;
+					let value =
+						fields.get(field.name).ok_or_else(|| format!("{argument} has no field {}", field.name))?;
 					Ok((field.name.to_string(), self.value_of(value, &field.ty)?))
 				})
 				.collect::<Result<_, String>>()?,
@@ -495,11 +413,9 @@ impl Handles<'_> {
 	fn variant_of(&self, argument: &Value, variant: &types::Variant) -> Result<Val, String> {
 		let (name, payload) = match argument {
 			Value::String(name) => (name.as_str(), None),
-			Value::Object(entries) if entries.len() == 1 => entries
-				.iter()
-				.next()
-				.map(|(name, payload)| (name.as_str(), Some(payload)))
-				.expect("one"),
+			Value::Object(entries) if entries.len() == 1 => {
+				entries.iter().next().map(|(name, payload)| (name.as_str(), Some(payload))).expect("one")
+			}
 			_ => return Err(format!("{argument} is no case: a name or {{case: value}}")),
 		};
 		let case = variant
@@ -548,11 +464,9 @@ impl Handles<'_> {
 			}
 			Val::Option(None) => Value::Null,
 			Val::Option(Some(present)) => self.json_of(present)?,
-			Val::Result(Ok(value)) => value
-				.as_deref()
-				.map(|item| self.json_of(item))
-				.transpose()?
-				.unwrap_or(Value::Null),
+			Val::Result(Ok(value)) => {
+				value.as_deref().map(|item| self.json_of(item)).transpose()?.unwrap_or(Value::Null)
+			}
 			Val::Result(Err(failure)) => {
 				let reason = failure.as_deref().map(|item| self.json_of(item)).transpose()?;
 				return Err(match reason {
@@ -581,10 +495,7 @@ impl Handles<'_> {
 		}
 		let resource = self.held[slot].ok_or_else(|| dropped_error(argument))?;
 		if resource.ty() != *wanted {
-			return Err(format!(
-				"{argument} is a {}, the parameter another resource",
-				self.kind_of(&resource)
-			));
+			return Err(format!("{argument} is a {}, the parameter another resource", self.kind_of(&resource)));
 		}
 		Ok(resource)
 	}
@@ -602,14 +513,9 @@ impl Handles<'_> {
 
 /// The slot of a handle's resource among those its component handed out (empty once dropped)
 fn held_slot(held: &[Option<ResourceAny>], handle: &Value) -> Result<usize, String> {
-	let id = handle
-		.get(HANDLE_KEY)
-		.and_then(Value::as_u64)
-		.ok_or_else(|| format!("{handle} is no handle of a resource"))?;
-	(1..=held.len() as u64)
-		.contains(&id)
-		.then(|| id as usize - 1)
-		.ok_or_else(|| format!("no handle {id}"))
+	let id =
+		handle.get(HANDLE_KEY).and_then(Value::as_u64).ok_or_else(|| format!("{handle} is no handle of a resource"))?;
+	(1..=held.len() as u64).contains(&id).then(|| id as usize - 1).ok_or_else(|| format!("no handle {id}"))
 }
 
 /// The WIT name of a resource type of a component
@@ -618,11 +524,7 @@ fn kind_name(kinds: &[(ResourceType, String)], ty: &ResourceType) -> Option<Stri
 }
 
 fn handle_text(handle: &Value) -> String {
-	handle
-		.get("text")
-		.and_then(Value::as_str)
-		.unwrap_or("the handle")
-		.to_string()
+	handle.get("text").and_then(Value::as_str).unwrap_or("the handle").to_string()
 }
 
 fn dropped_error(handle: &Value) -> String {
@@ -642,10 +544,7 @@ fn char_of(argument: &Value) -> Result<Val, String> {
 fn enum_of(argument: &Value, cases: &types::Enum) -> Result<Val, String> {
 	let name = argument.as_str().ok_or_else(|| format!("{argument} is no case name"))?;
 	if !cases.names().any(|case| case == name) {
-		return Err(format!(
-			"{name} is none of {}",
-			cases.names().collect::<Vec<_>>().join(", ")
-		));
+		return Err(format!("{name} is none of {}", cases.names().collect::<Vec<_>>().join(", ")));
 	}
 	Ok(Val::Enum(name.to_string()))
 }
@@ -654,20 +553,10 @@ fn enum_of(argument: &Value, cases: &types::Enum) -> Result<Val, String> {
 fn flags_of(argument: &Value, flags: &types::Flags) -> Result<Val, String> {
 	let names: Vec<String> = items(argument)?
 		.iter()
-		.map(|name| {
-			name.as_str()
-				.map(str::to_string)
-				.ok_or_else(|| format!("{name} is no flag name"))
-		})
+		.map(|name| name.as_str().map(str::to_string).ok_or_else(|| format!("{name} is no flag name")))
 		.collect::<Result<_, _>>()?;
-	if let Some(unknown) = names
-		.iter()
-		.find(|name| !flags.names().any(|flag| flag == name.as_str()))
-	{
-		return Err(format!(
-			"{unknown} is none of the flags {}",
-			flags.names().collect::<Vec<_>>().join(", ")
-		));
+	if let Some(unknown) = names.iter().find(|name| !flags.names().any(|flag| flag == name.as_str())) {
+		return Err(format!("{unknown} is none of the flags {}", flags.names().collect::<Vec<_>>().join(", ")));
 	}
 	Ok(Val::Flags(names))
 }

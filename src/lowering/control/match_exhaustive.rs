@@ -18,10 +18,8 @@ const KOTLIN_MATCH_WORD: &str = "when";
 const CATCH_ALLS: [&str; 4] = ["_", "default", "other", "else"];
 
 pub fn check(program: Node) -> Node {
-	let cases: HashMap<String, Vec<String>> = sum_types(&program)
-		.into_iter()
-		.map(|(name, variants)| (name, variants.names()))
-		.collect();
+	let cases: HashMap<String, Vec<String>> =
+		sum_types(&program).into_iter().map(|(name, variants)| (name, variants.names())).collect();
 	if cases.is_empty() {
 		return program;
 	}
@@ -82,9 +80,8 @@ fn assigned_subjects(
 		if let Node::Key(name, Op::Assign, value) = node {
 			if let Some(name) = name.drop_meta().symbol_name() {
 				let assigned = type_of_case(value);
-				let known = subjects
-					.entry(name.to_string())
-					.or_insert(assigned.clone().map(|type_name| (type_name, vec![])));
+				let known =
+					subjects.entry(name.to_string()).or_insert(assigned.clone().map(|type_name| (type_name, vec![])));
 				match (known.as_mut(), assigned) {
 					(Some((type_name, held)), Some(assigned)) if *type_name == assigned => {
 						held.push(value.drop_meta().name())

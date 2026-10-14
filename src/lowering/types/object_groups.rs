@@ -15,16 +15,9 @@ pub fn lower(node: Node) -> Node {
 	if items.is_empty() || !regrouped || !items.iter().all(|item| is_colon_pair(item) || is_field_group(item)) {
 		return node;
 	}
-	let flat = Node::List(
-		items.iter().flat_map(fields).collect(),
-		Bracket::Curly,
-		Separator::Colon,
-	);
+	let flat = Node::List(items.iter().flat_map(fields).collect(), Bracket::Curly, Separator::Colon);
 	match node {
-		Node::Meta { data, .. } => Node::Meta {
-			node: Box::new(flat),
-			data,
-		},
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(flat), data },
 		_ => flat,
 	}
 }

@@ -71,7 +71,7 @@ const WEEKEND_WORD: &str = "weekend";
 /// `9am`, `9pm`: the half of the day by its index
 const HALVES: [&str; 2] = ["am", "pm"];
 const FILE_WORD: &str = "file";
-const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
+pub(crate) const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 const MESSAGE_WORD: &str = "message";
 const BROADCAST_WORD: &str = "broadcast";
 /// `chat/stop the machine`: the named event `stop the machine` on the channel `chat`, a channel of its own
@@ -84,15 +84,8 @@ const CHANNEL_CHECK_MILLISECONDS: i64 = 20;
 const MESSAGES_TEMPLATE: &str = "while channel_pending(ID) > 0 { event = channel_next(ID); BODY }";
 
 pub fn lower(program: Node) -> Node {
-	let program = if defines(&program, crate::host::EXIT) {
-		program
-	} else {
-		bare_exits(program)
-	};
-	let verbs: Vec<&str> = [BROADCAST_WORD, SEND_WORD]
-		.into_iter()
-		.filter(|verb| !defines(&program, verb))
-		.collect();
+	let program = if defines(&program, crate::host::EXIT) { program } else { bare_exits(program) };
+	let verbs: Vec<&str> = [BROADCAST_WORD, SEND_WORD].into_iter().filter(|verb| !defines(&program, verb)).collect();
 	let program = broadcasts(program, &verbs);
 	lower_timers(with_window_events(program))
 }
@@ -107,9 +100,7 @@ fn with_window_events(program: Node) -> Node {
 	}
 	let mut listened = false;
 	for (event, reader) in [(KEY_EVENT, keys_reader as fn() -> Node), (CLICK_EVENT, clicks_reader)] {
-		let listener = statements
-			.iter()
-			.position(|statement| event_listener(statement, event).is_some());
+		let listener = statements.iter().position(|statement| event_listener(statement, event).is_some());
 		if let Some(listener) = listener {
 			// right after the listener: the program's last statement stays its value
 			statements.insert(listener + 1, reader().drop_meta().clone());
@@ -124,18 +115,13 @@ fn with_window_events(program: Node) -> Node {
 
 #[cfg(feature = "native")]
 fn keys_reader() -> Node {
-	super::nodes::filled(
-		KEYS_TEMPLATE,
-		[("CODE", symbol("key·code")), ("NAMED", key_named(symbol("key·code")))],
-	)
+	super::nodes::filled(KEYS_TEMPLATE, [("CODE", symbol("key·code")), ("NAMED", key_named(symbol("key·code")))])
 }
 
 /// The name of the key with that code, as the page's KeyboardEvent.key: a key's name (KEY_NAMES), else its character
 pub fn key_named(code: Node) -> Node {
-	let choices: String = KEY_NAMES
-		.iter()
-		.map(|(number, name)| format!("if CODE == {number} then \"{name}\" else "))
-		.collect();
+	let choices: String =
+		KEY_NAMES.iter().map(|(number, name)| format!("if CODE == {number} then \"{name}\" else ")).collect();
 	super::nodes::filled(&format!("{choices}\"\" + chr(CODE)"), [("CODE", code)])
 }
 
@@ -198,10 +184,7 @@ fn lower_timers(program: Node) -> Node {
 		let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 		lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
 		lowered.extend(channel_listen);
-		lowered.push(call(
-			crate::host::SIGNAL_LISTEN,
-			vec![Node::int(kind), id, Node::int(argument)],
-		));
+		lowered.push(call(crate::host::SIGNAL_LISTEN, vec![Node::int(kind), id, Node::int(argument)]));
 		count += 1;
 	}
 	Node::List(lowered, bracket, separator)
@@ -312,10 +295,7 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 			Some((name, data)) => (event_channel(&channel, &name), data),
 			None => (channel, listeners::row(value)),
 		};
-		Some(call(
-			crate::host::CHANNEL_SEND,
-			vec![Node::Text(channel), broadcasts(value, verbs)],
-		))
+		Some(call(crate::host::CHANNEL_SEND, vec![Node::Text(channel), broadcasts(value, verbs)]))
 	};
 	match node {
 		Node::List(items, _, _) if sent(&items).is_some() => sent(&items).expect("checked"),
@@ -361,11 +341,7 @@ fn one_shot(statement: &Node) -> Option<(Option<i64>, Node)> {
 }
 
 fn no_time_of_day(statement: &Node, form: &str) -> Node {
-	Diagnostic::at(
-		statement,
-		format!("{form} needs a time of day from 0:00 to 23:59 or 12am to 11:59pm"),
-	)
-	.into_error()
+	Diagnostic::at(statement, format!("{form} needs a time of day from 0:00 to 23:59 or 12am to 11:59pm")).into_error()
 }
 
 enum ClockError {
@@ -388,23 +364,10 @@ fn clock_schedule(duration: &Node) -> Option<Result<(i64, i64), ClockError>> {
 	let Some(weekdays) = weekdays(&word(days)) else {
 		return Some(Err(ClockError::Days(days.serialize().trim().to_string())));
 	};
-	Some(
-		minute_of_day(time)
-			.flatten()
-			.map(|minute| (minute, weekdays))
-			.ok_or(ClockError::Time),
-	)
+	Some(minute_of_day(time).flatten().map(|minute| (minute, weekdays)).ok_or(ClockError::Time))
 }
 
-const WEEKDAY_NAMES: [&str; 7] = [
-	"sunday",
-	"monday",
-	"tuesday",
-	"wednesday",
-	"thursday",
-	"friday",
-	"saturday",
-];
+const WEEKDAY_NAMES: [&str; 7] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const EVERY_DAY: i64 = 0b111_1111;
 const WORKDAYS: i64 = 0b011_1110;
 const WEEKEND: i64 = 0b100_0001;
@@ -417,10 +380,7 @@ fn weekdays(name: &str) -> Option<i64> {
 		DAY_WORD => Some(EVERY_DAY),
 		WEEKDAY_WORD => Some(WORKDAYS),
 		WEEKEND_WORD => Some(WEEKEND),
-		_ => WEEKDAY_NAMES
-			.iter()
-			.position(|day| *day == singular)
-			.map(|day| 1 << day),
+		_ => WEEKDAY_NAMES.iter().position(|day| *day == singular).map(|day| 1 << day),
 	}
 }
 
@@ -458,14 +418,9 @@ fn minute_of_day(words: &[Node]) -> Option<Option<i64>> {
 	};
 	let hour = match half {
 		None => Some(hour).filter(|hour| (0..24).contains(hour)),
-		Some(half) => Some(hour)
-			.filter(|hour| (1..=12).contains(hour))
-			.map(|hour| hour % 12 + 12 * half as i64),
+		Some(half) => Some(hour).filter(|hour| (1..=12).contains(hour)).map(|hour| hour % 12 + 12 * half as i64),
 	};
-	Some(
-		hour.filter(|_| (0..60).contains(&minute))
-			.map(|hour| hour * 60 + minute),
-	)
+	Some(hour.filter(|_| (0..60).contains(&minute)).map(|hour| hour * 60 + minute))
 }
 
 /// `exit` or `exit()` as a statement: `exit(0)`; braces holding `exit 3` are one call, not two statements
@@ -481,10 +436,7 @@ fn bare_exits(node: Node) -> Node {
 			if separator.separates_statements() || (bracket == Bracket::Curly && items.len() == 1) =>
 		{
 			Node::List(
-				items
-					.into_iter()
-					.map(|item| if is_exit(&item) { exit_zero() } else { bare_exits(item) })
-					.collect(),
+				items.into_iter().map(|item| if is_exit(&item) { exit_zero() } else { bare_exits(item) }).collect(),
 				bracket,
 				separator,
 			)

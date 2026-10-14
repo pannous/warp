@@ -16,11 +16,7 @@ pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 /// `match subject { arms }`
 pub(crate) fn matched(subject: Node, arms: Vec<Node>) -> Node {
 	Node::List(
-		vec![
-			Node::Symbol(MATCH_WORD.into()),
-			subject,
-			Node::List(arms, Bracket::Curly, Separator::Semicolon),
-		],
+		vec![Node::Symbol(MATCH_WORD.into()), subject, Node::List(arms, Bracket::Curly, Separator::Semicolon)],
 		Bracket::None,
 		Separator::Space,
 	)
@@ -28,10 +24,7 @@ pub(crate) fn matched(subject: Node, arms: Vec<Node>) -> Node {
 
 /// The code with each placeholder word as its node: `filled("f(X)", [("X", x)])`
 pub(crate) fn filled<'a>(code: &str, bindings: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
-	let bindings = bindings
-		.into_iter()
-		.map(|(placeholder, node)| (placeholder.to_string(), node))
-		.collect();
+	let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
 	crate::law::substitute(crate::warp_parser::parse(code).drop_meta(), &bindings)
 }
 
@@ -204,8 +197,7 @@ pub(crate) fn is_function_keyword(node: &Node) -> bool {
 
 /// `int`, `float`, `text`, `u8`, `number` …: a word naming a type with a value kind (analyzer::type_word_kind)
 pub(crate) fn is_kinded_type_word(node: &Node) -> bool {
-	node.symbol_name()
-		.is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
+	node.symbol_name().is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
 }
 
 /// An operand `&` and `|` may combine bit by bit (card operator-shall): a whole number, a name, a call or an
@@ -252,11 +244,8 @@ pub(crate) fn spaced_statement(items: &[Node]) -> Option<(&Node, Vec<&str>, &Nod
 	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else {
 		return None;
 	};
-	let words = middle
-		.iter()
-		.chain(std::iter::once(last_word.as_ref()))
-		.map(Node::symbol_name)
-		.collect::<Option<_>>()?;
+	let words =
+		middle.iter().chain(std::iter::once(last_word.as_ref())).map(Node::symbol_name).collect::<Option<_>>()?;
 	Some((name, words, body))
 }
 
@@ -392,10 +381,7 @@ fn keyword_function_head(definition: &Node) -> Option<FunctionHead<'_>> {
 	match definition.drop_meta() {
 		Node::List(parts, bracket, _) if parts.len() == 2 => {
 			let definition = viewed(&parts[0], DefinitionForm::KeywordBlock, None, &parts[1], &parts[1])?;
-			Some(FunctionHead {
-				block_bracket: Some(bracket),
-				..definition
-			})
+			Some(FunctionHead { block_bracket: Some(bracket), ..definition })
 		}
 		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
 			let (head, result) = typed_head(target);
@@ -469,9 +455,9 @@ pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &
 /// The statements of a template with its placeholders filled in, its match arms in the form the passes read
 pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
 	let parsed = crate::welcome_forms::lower_match_arms(crate::warp_parser::parse(text));
-	let filled = bindings.iter().fold(parsed, |node, (placeholder, value)| {
-		crate::library_words::substitute(node, placeholder, value)
-	});
+	let filled = bindings
+		.iter()
+		.fold(parsed, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, value));
 	filled.drop_meta().sequence_statements().to_vec()
 }
 
@@ -509,9 +495,5 @@ pub(crate) fn arguments_rewritten(
 ) -> Node {
 	let mut items = items.into_iter();
 	let head = items.next();
-	Node::List(
-		head.into_iter().chain(items.map(&mut rewrite)).collect(),
-		bracket,
-		separator,
-	)
+	Node::List(head.into_iter().chain(items.map(&mut rewrite)).collect(), bracket, separator)
 }

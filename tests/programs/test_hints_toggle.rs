@@ -18,14 +18,7 @@ fn stderr_of(arguments: &[&str], hints_variable: Option<&str>) -> String {
 fn a_plain_run_shows_its_hints_and_how_to_hide_them() {
 	let errors = stderr_of(&["--no-ask", "eval", HINTED], None);
 	assert!(errors.contains("hint 1:3: prefer ^ over **"), "{errors}");
-	assert!(
-		errors
-			.trim_end()
-			.lines()
-			.last()
-			.is_some_and(|last| last.contains(HIDE_TIP)),
-		"{errors}"
-	);
+	assert!(errors.trim_end().lines().last().is_some_and(|last| last.contains(HIDE_TIP)), "{errors}");
 	assert_eq!(errors.matches(HIDE_TIP).count(), 1, "{errors}");
 }
 
@@ -43,8 +36,5 @@ fn no_hints_hides_them() {
 #[test]
 fn hints_chosen_explicitly_need_no_tip() {
 	let errors = stderr_of(&["--no-ask", "eval", HINTED], Some("1"));
-	assert!(
-		errors.contains("prefer ^ over **") && !errors.contains(HIDE_TIP),
-		"{errors}"
-	);
+	assert!(errors.contains("prefer ^ over **") && !errors.contains(HIDE_TIP), "{errors}");
 }

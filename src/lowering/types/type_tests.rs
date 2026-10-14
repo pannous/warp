@@ -1,7 +1,7 @@
 //! Type tests: `x is int`, `x is a number`, `[1 2] is list of int`, `[1 2] is ints`, `x is pair`, `p is friend` (a declared
 //! type) lower to `is_type(x, "spec")`, which the emitter answers in any position from the static type name of `x` (the same
 //! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kind_mask`, node_kind_in) or, for a
-//! declared type, its instance type (instance_of). `type of x` is `type(x)`.
+//! declared type, its instance type (instance_of). `type of x` is `type(x)` (of_lookups.rs).
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
@@ -13,8 +13,8 @@ use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{
-	ERROR_WORD, FLOAT_WORD, IS_TYPE, LIST_WORD, MAP_WORD, NUMBER_WORD, OF_WORD, PAIR_WORD, REAL_WORD, SYMBOL_WORD,
-	TEXT_WORD,
+	ERROR_WORD, FLOAT_WORD, IS_TYPE, LIST_WORD, MAP_WORD, NUMBER_WORD, OF_WORD, OPERATION_WORD, PAIR_WORD, REAL_WORD,
+	SYMBOL_WORD, TEXT_WORD,
 };
 use std::collections::HashSet;
 
@@ -49,13 +49,7 @@ const fn builtin(
 	held_as: Option<K>,
 	kind_bits: &'static [i64],
 ) -> BuiltinType {
-	BuiltinType {
-		name,
-		aliases,
-		covers,
-		held_as,
-		kind_bits,
-	}
+	BuiltinType { name, aliases, covers, held_as, kind_bits }
 }
 
 use crate::type_kinds::Kind as K;
@@ -63,28 +57,10 @@ use crate::type_kinds::Kind as K;
 /// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/numbers/fixed_width.rs
-const BUILTIN_TYPES: [BuiltinType; 15] = [
-	builtin(
-		"int",
-		&["integer", "long", "i64", "i32"],
-		&[],
-		Some(K::Int),
-		&[K::Int as i64],
-	),
-	builtin(
-		"rational",
-		&[],
-		&["int"],
-		Some(K::Int),
-		&[K::Int as i64, K::Float as i64],
-	),
-	builtin(
-		REAL_WORD,
-		&["exact"],
-		&["rational"],
-		Some(K::Empty),
-		&[K::Int as i64, K::Float as i64],
-	),
+const BUILTIN_TYPES: [BuiltinType; 22] = [
+	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
+	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
 	builtin(
 		FLOAT_WORD,
 		&["double", "f64", "f32", "float32", "float64", "fast"],
@@ -92,59 +68,33 @@ const BUILTIN_TYPES: [BuiltinType; 15] = [
 		Some(K::Float),
 		&[K::Float as i64],
 	),
-	builtin(
-		"number",
-		&[],
-		&["real", "float"],
-		Some(K::Float),
-		&[K::Int as i64, K::Float as i64, K::Uncertain as i64],
-	),
-	builtin(
-		TEXT_WORD,
-		&["str", "string"],
-		&["codepoint"],
-		Some(K::Text),
-		&[K::Text as i64, K::Codepoint as i64],
-	),
-	builtin(
-		"codepoint",
-		&["char", "character"],
-		&[],
-		Some(K::Codepoint),
-		&[K::Codepoint as i64],
-	),
-	builtin(
-		crate::analyzer::BOOL_TYPE,
-		&["boolean"],
-		&[],
-		Some(K::Int),
-		&[crate::type_kinds::BOOL_MASK_BIT],
-	),
+	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
+	builtin(TEXT_WORD, &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
+	builtin("codepoint", &["char", "character"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
+	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], Some(K::Int), &[crate::type_kinds::BOOL_MASK_BIT]),
 	builtin("function", &["closure"], &[], Some(K::Function), &[]),
 	builtin(SYMBOL_WORD, &[], &[], None, &[K::Symbol as i64]),
-	builtin("key", &[PAIR_WORD], &[], None, &[K::Key as i64]),
-	builtin(
-		EMPTY_TYPE,
-		&["unit", "nil", "ø", "none", "null", "void"],
-		&[],
-		None,
-		&[K::Empty as i64],
-	),
+	builtin("key", &[PAIR_WORD], &[OPERATION_WORD], None, &[K::Key as i64, crate::type_kinds::OPERATION_MASK_BIT]),
+	builtin(OPERATION_WORD, &["expression"], &[], None, &[crate::type_kinds::OPERATION_MASK_BIT]),
+	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
 	builtin(ERROR_WORD, &[], &[], None, &[K::Error as i64]),
-	builtin(
-		LIST_WORD,
-		&[],
-		&[],
-		None,
-		&[K::List as i64, K::Block as i64, K::Empty as i64],
-	),
+	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
 	builtin(MAP_WORD, &[], &[], None, &[]),
+	builtin(crate::time::TIME_WORD, &[], &TIME_FORM_NAMES, None, &[K::Time as i64]),
+	// the forms share Kind::Time: a value of unknown static type tests its form by its type name (node_type_name)
+	builtin(TIME_FORM_NAMES[0], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[1], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[2], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[3], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[4], &[], &[], None, &[]),
 ];
+const TIME_FORM_NAMES: [&str; 5] = {
+	let forms = crate::time::TIME_FORMS;
+	[forms[0].name(), forms[1].name(), forms[2].name(), forms[3].name(), forms[4].name()]
+};
 
 fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
-	BUILTIN_TYPES
-		.iter()
-		.find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
+	BUILTIN_TYPES.iter().find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
 }
 
 /// A word naming a built-in type or an alias of one (BUILTIN_TYPES): where it stands bare, it is that type as a
@@ -155,9 +105,7 @@ pub fn is_builtin_type_word(word: &str) -> bool {
 
 /// Every word naming a built-in type, aliases too
 pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
-	BUILTIN_TYPES
-		.iter()
-		.flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
+	BUILTIN_TYPES.iter().flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
 }
 
 /// `int`, `i64`, `exact`, `real`, `f64` …: a word naming a type of numbers (one number is covers), `number` itself not
@@ -219,9 +167,7 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	for collection in COLLECTION_WORDS {
 		let of = format!("{collection} of ");
 		if let Some(element) = spec.strip_prefix(&of) {
-			return actual
-				.strip_prefix(&of)
-				.is_some_and(|actual_element| type_matches(actual_element, element));
+			return actual.strip_prefix(&of).is_some_and(|actual_element| type_matches(actual_element, element));
 		}
 		if spec == collection {
 			return actual == collection || actual.starts_with(&of);
@@ -233,11 +179,7 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 
 /// The built-in types a value of type `spec` may have: `t is number` of a type value t is t == one of them
 pub fn builtin_types_matching(spec: &str) -> Vec<&'static str> {
-	BUILTIN_TYPES
-		.iter()
-		.map(|builtin| builtin.name)
-		.filter(|name| type_matches(name, spec))
-		.collect()
+	BUILTIN_TYPES.iter().map(|builtin| builtin.name).filter(|name| type_matches(name, spec)).collect()
 }
 
 /// The run-time kinds of a value of type `spec` as a mask of their bits (node_kind_in), for a value whose static type is
@@ -305,21 +247,16 @@ pub fn lower(node: Node) -> Node {
 /// The program's variables, functions and declared types
 pub(crate) fn program_names(node: &Node) -> Names {
 	let context = crate::analyzer::function_definitions(node);
-	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
+	// a function named like a type is a class's printing method (`text() := …`, card is-text-method): no shadow, a
+	// program's own `text(x) := …` is refused as "text is a type"
+	let mut variables: HashSet<String> =
+		context.user_functions.keys().filter(|name| !is_builtin_type_word(name)).cloned().collect();
 	collect_outer_assigned_names(node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, node);
-	let types = registry
-		.types()
-		.iter()
-		.map(|definition| definition.name.clone())
-		.collect();
+	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
 	let loop_variables = super::for_loop::loop_variables(node).into_iter().collect();
-	Names {
-		variables,
-		types,
-		loop_variables,
-	}
+	Names { variables, types, loop_variables }
 }
 
 /// `is_type(subject, spec)` when the word names a type (`int`, `ints`, `Circle`) and no variable
@@ -353,9 +290,7 @@ fn union_operands(union: &Node) -> Vec<Node> {
 fn is_type_union(union: &Node) -> bool {
 	let types = union_operands(union);
 	types.len() > 1
-		&& types
-			.iter()
-			.all(|word| matches!(word.drop_meta(), Node::Symbol(name) if is_builtin_type_word(name)))
+		&& types.iter().all(|word| matches!(word.drop_meta(), Node::Symbol(name) if is_builtin_type_word(name)))
 }
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
@@ -368,8 +303,10 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 	if shadowed.contains(first) {
 		return None;
 	}
+	let phrase = words.join(" ");
 	match (*first, rest) {
 		(word, []) if is_builtin_type_word(word) => Some(canonical_spec_word(word).to_string()),
+		(_, [_, ..]) if is_builtin_type_word(&phrase) => Some(canonical_spec_word(&phrase).to_string()),
 		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => {
 			Some(format!("{collection} of {}", type_spec(element, shadowed)?))
 		}
@@ -395,11 +332,9 @@ fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
 /// The words of `x is int` and of `x is a number`, whose `a number` parses as a call (application binds tighter than `is`)
 fn phrase_words(node: &Node) -> Option<Vec<&str>> {
 	match node.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Space) => items
-			.iter()
-			.map(phrase_words)
-			.collect::<Option<Vec<_>>>()
-			.map(|words| words.concat()),
+		Node::List(items, Bracket::None, Separator::Space) => {
+			items.iter().map(phrase_words).collect::<Option<Vec<_>>>().map(|words| words.concat())
+		}
 		_ => symbol_words(std::slice::from_ref(node)),
 	}
 }
@@ -425,21 +360,14 @@ fn marked_operand(word: &str) -> Node {
 }
 
 fn marked(operand: Node) -> Node {
-	Node::Meta {
-		node: Box::new(operand),
-		data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)),
-	}
+	Node::Meta { node: Box::new(operand), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
 }
 
 /// `left == right` or `left != right`, a type word on either side by its canonical name
 fn comparison(left: Node, op: Op, right: Node, shadowed: &Names) -> Node {
 	hint_type_compared_with_text(&left, &op, &right);
 	hint_type_compared_with_text(&right, &op, &left);
-	key(
-		canonical_operand(expand(left, shadowed), shadowed),
-		op,
-		canonical_operand(expand(right, shadowed), shadowed),
-	)
+	key(canonical_operand(expand(left, shadowed), shadowed), op, canonical_operand(expand(right, shadowed), shadowed))
 }
 
 /// `type(x) == "int"` is no: a type never equals a text, though it prints as one (decision type-equal), so the
@@ -482,10 +410,9 @@ pub const COMPARED_WITH: &str = "compared with";
 pub fn with_compared_text(subject: Node, written: &str) -> Node {
 	match subject.drop_meta() {
 		// a literal too: `30 is Age` is a test type_aliases.rs resolves the alias of (card alias-is-literal)
-		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) => Node::Meta {
-			node: Box::new(subject),
-			data: Box::new(Node::key(COMPARED_WITH, text(written))),
-		},
+		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) => {
+			Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, text(written))) }
+		}
 		_ => subject,
 	}
 }
@@ -535,15 +462,14 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		return rebuild(head, expand(body, &inner));
 	}
 	match node {
+		Node::List(items, Bracket::None | Bracket::Round, _) if names_a_type(&items, shadowed) => {
+			Node::Symbol(TYPE_WORD.to_string())
+		}
 		Node::List(items, bracket, separator) => {
-			if let Some(call) = type_of_word(&items, shadowed).or_else(|| spaced_type_test(&items, shadowed)) {
+			if let Some(call) = spaced_type_test(&items, shadowed) {
 				return expand(call, shadowed);
 			}
-			Node::List(
-				items.into_iter().map(|item| expand(item, shadowed)).collect(),
-				bracket,
-				separator,
-			)
+			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
 		}
 		Node::Key(subject, Op::Eq, right) => {
 			match phrase_words(&right).and_then(|words| type_spec(&words, shadowed)) {
@@ -560,6 +486,16 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 	}
 }
 
+/// `type(int)`, `type(Circle)`: the type of a type is type, unless a variable takes the name
+fn names_a_type(items: &[Node], names: &Names) -> bool {
+	let [word, subject] = items else { return false };
+	let Some(name) = subject.symbol_name() else { return false };
+	word.is_symbol(TYPE_WORD)
+		&& !names.is_variable(TYPE_WORD)
+		&& !names.is_variable(name)
+		&& (is_builtin_type_word(name) || names.types.contains(name))
+}
+
 /// `x is a number` is the items `x is a` and `number`: the words after the comparison continue the type phrase
 fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let [first, tail @ ..] = items else { return None };
@@ -572,23 +508,4 @@ fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let mut words = vec![word.as_str()];
 	words.extend(symbol_words(tail)?);
 	Some(is_type_call(subject.as_ref().clone(), type_spec(&words, shadowed)?))
-}
-
-/// `type of x`: the parser reads `type of` as a declaration head, its argument is the next item
-fn type_of_word(items: &[Node], shadowed: &Names) -> Option<Node> {
-	let [head, argument @ ..] = items else { return None };
-	if argument.is_empty() || shadowed.contains(TYPE_WORD) {
-		return None;
-	}
-	let Node::Type { name, body } = head.drop_meta() else {
-		return None;
-	};
-	if !name.is_symbol(OF_WORD) || !body.is_empty_node() {
-		return None;
-	}
-	let argument = match argument {
-		[single] => single.clone(),
-		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
-	};
-	Some(call(TYPE_WORD, vec![argument]))
 }

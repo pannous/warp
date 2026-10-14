@@ -7,6 +7,7 @@
 //! and downloaded instead (release crates-<generation>), so most users need no cargo.
 //! The wrappers are members of one cargo workspace (~/.cache/warp/crates/Cargo.toml), so a configured target-dir is
 //! honoured and a user without one gets that workspace's single target/.
+use crate::modules::package_tools::MISSING_TARGET_SIGN;
 use crate::modules::package_tools::{download_bytes, write_atomically};
 use crate::versions::Version;
 use serde_json::Value;
@@ -42,7 +43,6 @@ const TARGET: &str = "wasm32-wasip2";
 const WRAPPER_PREFIX: &str = "warp-crate-";
 /// rounds of dropping the functions the compiler refused
 const BUILD_ROUNDS: usize = 12;
-const MISSING_TARGET_SIGN: &str = "target may not be installed";
 /// one wrapper build at a time within a process; cargo locks the target directory across processes
 static BUILDING: Mutex<()> = Mutex::new(());
 
@@ -51,14 +51,8 @@ struct Variant {
 	profile: &'static str,
 	ending: &'static str,
 }
-const RELEASE: Variant = Variant {
-	profile: "release",
-	ending: ".wasm",
-};
-const DEBUG: Variant = Variant {
-	profile: "debugging",
-	ending: ".debug.wasm",
-};
+const RELEASE: Variant = Variant { profile: "release", ending: ".wasm" };
+const DEBUG: Variant = Variant { profile: "debugging", ending: ".debug.wasm" };
 
 fn variant() -> &'static Variant {
 	match std::env::var_os(DEBUG_BUILDS) {
@@ -69,10 +63,7 @@ fn variant() -> &'static Variant {
 
 /// The version in a component file name `<crate><separator><version><ending>` of the variant
 fn version_in<'a>(file: &'a str, name: &str, separator: char) -> Option<&'a str> {
-	let version = file
-		.strip_prefix(name)?
-		.strip_prefix(separator)?
-		.strip_suffix(variant().ending)?;
+	let version = file.strip_prefix(name)?.strip_prefix(separator)?.strip_suffix(variant().ending)?;
 	(!version.ends_with(".debug")).then_some(version)
 }
 
@@ -116,9 +107,7 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 		.map(|(_, version, asset)| (version, asset))
 		.ok_or_else(|| format!("{name} is not hosted"))?;
 	let url = asset["browser_download_url"].as_str().unwrap_or_default();
-	let expected = asset["digest"]
-		.as_str()
-		.and_then(|digest| digest.strip_prefix(SHA256_PREFIX));
+	let expected = asset["digest"].as_str().and_then(|digest| digest.strip_prefix(SHA256_PREFIX));
 	let bytes = download_bytes(url)?;
 	let actual = hex_digest(&bytes);
 	if expected != Some(actual.as_str()) {
@@ -132,10 +121,7 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 
 fn hex_digest(bytes: &[u8]) -> String {
 	use sha2::Digest;
-	sha2::Sha256::digest(bytes)
-		.iter()
-		.map(|byte| format!("{byte:02x}"))
-		.collect()
+	sha2::Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// A wrapper that failed leaves the workspace (an unresolvable dependency would break every other wrapper's build),

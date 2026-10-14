@@ -9,9 +9,7 @@ fn reasons_of(code: &str) -> Vec<String> {
 }
 
 fn warns_unhandled(code: &str) -> bool {
-	reasons_of(code)
-		.iter()
-		.any(|reason| reason.contains("no handler for event"))
+	reasons_of(code).iter().any(|reason| reason.contains("no handler for event"))
 }
 
 #[test]

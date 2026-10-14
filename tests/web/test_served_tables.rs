@@ -73,10 +73,7 @@ fn a_get_reading_a_table_does_not_ship_it() {
 	let program = "class User{name: text}\nstored people: [User]\nget \"/api/all\" { people }\nroute \"/\" { p{ \"home\" } }\nroute \"/u/:id:int\" { h1{ people#id.name } }";
 	let files = warp::web::site::files(program, "people_app", false).expect("the page builds");
 	let module = &files.iter().find(|(name, _)| name == "app.wasm").expect("app.wasm").1;
-	assert!(
-		!module.windows("people".len()).any(|window| window == b"people"),
-		"the table shipped in app.wasm"
-	);
+	assert!(!module.windows("people".len()).any(|window| window == b"people"), "the table shipped in app.wasm");
 }
 
 // card server-def-giving: a server function giving an empty table answers POST /rpc/f with [] too

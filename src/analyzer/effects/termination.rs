@@ -23,10 +23,7 @@ pub(super) fn never_true(condition: &Node) -> bool {
 }
 
 pub(super) fn recursion_shrinks(name: &str, parameters: &[&str], body: &Node) -> bool {
-	let measures = parameters
-		.iter()
-		.enumerate()
-		.filter(|(_, parameter)| !assigns(body, parameter));
+	let measures = parameters.iter().enumerate().filter(|(_, parameter)| !assigns(body, parameter));
 	measures
 		.flat_map(|(index, parameter)| [(index, *parameter, Bound::Lower), (index, *parameter, Bound::Upper)])
 		.any(|(index, parameter, bound)| calls_shrink(body, name, index, parameter, bound, &mut vec![]))
@@ -51,20 +48,12 @@ fn calls_shrink(node: &Node, name: &str, index: usize, parameter: &str, bound: B
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(callee)) if callee == name) =>
 		{
 			let arguments = call_arguments(&items[1..]);
-			let bounded = facts
-				.iter()
-				.any(|(known, known_bound)| known == parameter && *known_bound == bound);
+			let bounded = facts.iter().any(|(known, known_bound)| known == parameter && *known_bound == bound);
 			bounded
-				&& arguments
-					.get(index)
-					.is_some_and(|argument| moves_toward(argument, parameter, bound))
-				&& arguments
-					.iter()
-					.all(|argument| calls_shrink(argument, name, index, parameter, bound, facts))
+				&& arguments.get(index).is_some_and(|argument| moves_toward(argument, parameter, bound))
+				&& arguments.iter().all(|argument| calls_shrink(argument, name, index, parameter, bound, facts))
 		}
-		Node::List(items, _, _) => items
-			.iter()
-			.all(|item| calls_shrink(item, name, index, parameter, bound, facts)),
+		Node::List(items, _, _) => items.iter().all(|item| calls_shrink(item, name, index, parameter, bound, facts)),
 		Node::Key(left, _, right) => {
 			calls_shrink(left, name, index, parameter, bound, facts)
 				&& calls_shrink(right, name, index, parameter, bound, facts)
@@ -127,11 +116,7 @@ fn guard_bounds(guard: &Node, holds: bool) -> Facts {
 				}
 				_ => return vec![],
 			};
-			let bound = if below_literal == holds {
-				Bound::Upper
-			} else {
-				Bound::Lower
-			};
+			let bound = if below_literal == holds { Bound::Upper } else { Bound::Lower };
 			vec![(parameter.clone(), bound)]
 		}
 		_ => vec![],

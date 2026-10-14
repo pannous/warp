@@ -49,11 +49,7 @@ pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &N
 				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
 					// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
 					let takes_it = !is_statement_block(body) || uses_it_outside_loops(body) || uses_dollar_param(body);
-					let params = if takes_it {
-						vec![Param::untyped(crate::words::IMPLICIT_PARAMETER)]
-					} else {
-						vec![]
-					};
+					let params = if takes_it { vec![Param::untyped(crate::words::IMPLICIT_PARAMETER)] } else { vec![] };
 					register_user_function(ctx, name, params, body, enclosing);
 					return;
 				}
@@ -107,18 +103,13 @@ pub(in crate::analyzer) fn register_user_function(
 	let body = rename_nested_calls(body, &renames);
 	// a sibling calls a nested function too: `def sibling(){ inner() }` beside `def inner()` in outer
 	let nested_prefix = format!("{name}{NESTED_DEF_SEPARATOR}");
-	for function in ctx
-		.user_functions
-		.values_mut()
-		.filter(|function| function.name.starts_with(&nested_prefix))
-	{
+	for function in ctx.user_functions.values_mut().filter(|function| function.name.starts_with(&nested_prefix)) {
 		*function.body = rename_nested_calls(function.body.as_ref().clone(), &renames);
 	}
 	if let Some(parent) = enclosing {
 		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
 	}
-	ctx.user_functions
-		.insert(name.clone(), user_function(&name, params, body));
+	ctx.user_functions.insert(name.clone(), user_function(&name, params, body));
 }
 
 /// Nested function definitions in `body` become UserFunctionDefs named `parent·short`; their statements stay (emit skips
@@ -150,11 +141,7 @@ pub(in crate::analyzer) fn lift_nested_defs_walk(
 					// LHS must use the mangled name so emit's defined_function_name finds it in user_functions
 					let mut items = items.clone();
 					items[0] = Node::Symbol(mangled);
-					return Node::Key(
-						Box::new(Node::List(items, bracket.clone(), separator.clone())),
-						op,
-						body,
-					);
+					return Node::Key(Box::new(Node::List(items, bracket.clone(), separator.clone())), op, body);
 				}
 			}
 			Node::Key(
@@ -183,10 +170,7 @@ pub(in crate::analyzer) fn lift_nested_defs_walk(
 				}
 			}
 			Node::List(
-				items
-					.into_iter()
-					.map(|item| lift_nested_defs_walk(ctx, item, parent, renames))
-					.collect(),
+				items.into_iter().map(|item| lift_nested_defs_walk(ctx, item, parent, renames)).collect(),
 				bracket,
 				separator,
 			)
@@ -203,10 +187,7 @@ pub(in crate::analyzer) fn rename_nested_calls(node: Node, renames: &HashMap<Str
 	match node {
 		Node::Symbol(name) if renames.contains_key(&name) => Node::Symbol(renames[&name].clone()),
 		Node::List(items, bracket, separator) => {
-			let mut items: Vec<Node> = items
-				.into_iter()
-				.map(|item| rename_nested_calls(item, renames))
-				.collect();
+			let mut items: Vec<Node> = items.into_iter().map(|item| rename_nested_calls(item, renames)).collect();
 			if bracket == Bracket::Round {
 				if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
 					if let Some(mangled) = renames.get(name) {
@@ -249,12 +230,7 @@ pub(in crate::analyzer) fn extract_params(signature: &[Node], bracket: &Bracket)
 		};
 		match type_first_name {
 			Some(name) => {
-				params.push(Param {
-					name: name.clone(),
-					annotation: Some(item.clone()),
-					default: None,
-					used_as: None,
-				});
+				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None, used_as: None });
 				items.next();
 			}
 			None => params.extend(extract_param(item).map(|param| with_list_annotation(param, &mut items))),
@@ -288,10 +264,7 @@ pub(in crate::analyzer) fn with_list_annotation<'a>(
 		_ => return param,
 	};
 	items.next();
-	Param {
-		annotation: Some(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))),
-		..param
-	}
+	Param { annotation: Some(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))), ..param }
 }
 
 /// Extract parameter name, annotated kind and optional default value from a parameter node
@@ -313,18 +286,12 @@ pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 		// `f: (Int) -> Int` parses as `(f: (Int)) -> Int`: a function
 		Node::Key(typed, Op::Arrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
 			let param = extract_param(typed)?;
-			Some(Param {
-				annotation: Some(Node::Symbol(Kind::Function.to_string())),
-				..param
-			})
+			Some(Param { annotation: Some(Node::Symbol(Kind::Function.to_string())), ..param })
 		}
 		// `b=2` and the typed `b:int=2`
 		Node::Key(declared, Op::Assign, default) => {
 			let param = extract_param(declared)?;
-			Some(Param {
-				default: Some(default.as_ref().clone()),
-				..param
-			})
+			Some(Param { default: Some(default.as_ref().clone()), ..param })
 		}
 		_ => None,
 	}
@@ -367,11 +334,7 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 		if let Node::List(sig_items, bracket, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {
-					return Some(user_function(
-						name,
-						extract_params(sig_items, bracket),
-						body.as_ref().clone(),
-					));
+					return Some(user_function(name, extract_params(sig_items, bracket), body.as_ref().clone()));
 				}
 			}
 		}

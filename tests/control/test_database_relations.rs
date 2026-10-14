@@ -27,19 +27,13 @@ fn a_list_field_holds_the_rows_pointing_back() {
 	is!(&program("players", "count(teams#1.players)"), 2);
 	is!(&program("players", "teams#1.players#2.name"), "Cy");
 	is!(&program("players", "count(teams#2.players)"), 0);
-	is!(
-		&program("players", "people.add(Person(\"Di\", teams#2))\nteams#2.players#1.name"),
-		"Di"
-	);
+	is!(&program("players", "people.add(Person(\"Di\", teams#2))\nteams#2.players#1.name"), "Di");
 }
 
 #[test]
 fn a_related_row_is_the_same_instance() {
 	eval(&program("same", SEED));
-	is!(
-		&program("same", "red = teams#1\nred.name = \"Crimson\"\npeople#1.team.name"),
-		"Crimson"
-	);
+	is!(&program("same", "red = teams#1\nred.name = \"Crimson\"\npeople#1.team.name"), "Crimson");
 	is!(&program("same", "people#2.team.name"), "Crimson");
 }
 
@@ -56,25 +50,13 @@ fn a_changed_foreign_key_is_written_through() {
 #[test]
 fn a_list_field_reads_the_rows_pointing_back_now() {
 	eval(&program("now", SEED));
-	is!(
-		&program(
-			"now",
-			"bo = people#1\nbo.team = teams#2\ncount(teams#1.players) * 10 + count(teams#2.players)"
-		),
-		11
-	);
-	is!(
-		&program("now", "people.add(Person(\"Di\", teams#1))\ncount(teams#1.players)"),
-		2
-	);
+	is!(&program("now", "bo = people#1\nbo.team = teams#2\ncount(teams#1.players) * 10 + count(teams#2.players)"), 11);
+	is!(&program("now", "people.add(Person(\"Di\", teams#1))\ncount(teams#1.players)"), 2);
 }
 
 #[test]
 fn a_row_pointing_to_an_instance_without_a_row_is_an_error() {
-	fails_with(
-		&program("unsaved", "people.add(Person(\"Ed\", Team(\"Green\")))"),
-		"add it to its table first",
-	);
+	fails_with(&program("unsaved", "people.add(Person(\"Ed\", Team(\"Green\")))"), "add it to its table first");
 }
 
 #[test]

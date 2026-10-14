@@ -143,13 +143,8 @@ fn null_operand_used(
 	right: &Node,
 	nullable: &HashMap<String, Unchecked>,
 ) -> Option<Diagnostic> {
-	let operand = possibly_null(left, nullable).or_else(|| {
-		if *op == Op::Dot {
-			None
-		} else {
-			possibly_null(right, nullable)
-		}
-	});
+	let operand =
+		possibly_null(left, nullable).or_else(|| if *op == Op::Dot { None } else { possibly_null(right, nullable) });
 	let (name, reason, call) = operand?;
 	let expression = node.drop_meta().serialize();
 	let fix = match call {
@@ -162,16 +157,10 @@ fn null_operand_used(
 /// A possibly null variable, or a fetch: its name, why, and the fetch call to name
 fn possibly_null(operand: &Node, nullable: &HashMap<String, Unchecked>) -> Option<(String, String, Option<String>)> {
 	match operand.drop_meta() {
-		Node::Symbol(name) => nullable
-			.get(name)
-			.map(|reason| (name.clone(), reason.describe(name), None)),
+		Node::Symbol(name) => nullable.get(name).map(|reason| (name.clone(), reason.describe(name), None)),
 		fetched if crate::host::fetch_call(fetched).is_some() => {
 			let call = fetched.serialize();
-			Some((
-				"result".to_string(),
-				format!("{call} may be an error (fetch can fail)"),
-				Some(call),
-			))
+			Some(("result".to_string(), format!("{call} may be an error (fetch can fail)"), Some(call)))
 		}
 		_ => None,
 	}

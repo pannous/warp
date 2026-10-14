@@ -47,30 +47,20 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let context = crate::analyzer::function_definitions(&node);
-	let words: Vec<&str> = SWITCH_WORDS
-		.into_iter()
-		.filter(|word| !context.user_functions.contains_key(*word))
-		.collect();
+	let words: Vec<&str> =
+		SWITCH_WORDS.into_iter().filter(|word| !context.user_functions.contains_key(*word)).collect();
 	if words.is_empty() {
 		return node;
 	}
 	let names = program_names(&node);
 	let value_word_free = !names_variable(&node, &context, &names, VALUE_WORD);
-	Lowering {
-		words,
-		switches: Counter::default(),
-		names,
-		value_word_free,
-	}
-	.expand(node)
+	Lowering { words, switches: Counter::default(), names, value_word_free }.expand(node)
 }
 
 /// The program has a variable, parameter or loop variable of that name, in any function
 fn names_variable(node: &Node, context: &crate::compiler::context::Context, names: &Names, name: &str) -> bool {
-	let is_parameter = context
-		.user_functions
-		.values()
-		.any(|function| function.params.iter().any(|param| param.name == name));
+	let is_parameter =
+		context.user_functions.values().any(|function| function.params.iter().any(|param| param.name == name));
 	let mut assigned = std::collections::HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut assigned);
 	names.is_variable(name) || is_parameter || assigned.contains(name)
@@ -222,10 +212,9 @@ fn item(path: &Node, position: usize) -> Node {
 /// A rest in a pattern, with its name: `...rest` and `*rest` (parsed alike), `rest...`; `..` and `...` unnamed
 pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 	match part.drop_meta() {
-		Node::Symbol(name) => name
-			.strip_prefix(STARRED)
-			.filter(|rest| !rest.is_empty())
-			.map(|rest| Some(rest.to_string())),
+		Node::Symbol(name) => {
+			name.strip_prefix(STARRED).filter(|rest| !rest.is_empty()).map(|rest| Some(rest.to_string()))
+		}
 		Node::Key(start, Op::Range | Op::To, end) if end.is_empty_node() => match start.drop_meta() {
 			Node::Empty => Some(None),
 			Node::Symbol(name) => Some(Some(name.clone())),
@@ -257,11 +246,7 @@ fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>, names: &N
 	let number = fresh_number();
 	let temporary = |name: &str| Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}{number}"));
 	let (item, held) = (temporary(ITEM_WORD), temporary(HELD_WORD));
-	let Matched {
-		tests: item_tests,
-		bindings: item_bindings,
-		..
-	} = Matched::of(each, item.clone(), names);
+	let Matched { tests: item_tests, bindings: item_bindings, .. } = Matched::of(each, item.clone(), names);
 	let mut statements = vec![key(held.clone(), Op::Assign, Node::True)];
 	let mut appends = vec![];
 	for (name, value) in item_bindings.iter().filter_map(bound) {
@@ -314,9 +299,7 @@ pub(crate) fn is_map_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
 		Node::List(fields, Bracket::Curly, _) => {
 			!fields.is_empty()
-				&& fields
-					.iter()
-					.all(|part| map_field(part).is_some() || rest_pattern(part) == Some(None))
+				&& fields.iter().all(|part| map_field(part).is_some() || rest_pattern(part) == Some(None))
 		}
 		_ => false,
 	}
@@ -355,11 +338,7 @@ struct Matched<'a> {
 
 impl<'a> Matched<'a> {
 	fn of(pattern: &Node, path: Node, names: &'a Names) -> Self {
-		let mut matched = Matched {
-			names,
-			tests: vec![],
-			bindings: vec![],
-		};
+		let mut matched = Matched { names, tests: vec![], bindings: vec![] };
 		matched.pattern(pattern, path);
 		matched
 	}
@@ -404,13 +383,8 @@ impl<'a> Matched<'a> {
 			}
 			// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 			Node::Key(name, Op::Colon, value) => {
-				self.tests
-					.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_WORD)]));
-				self.tests.push(key(
-					call(STR_WORD, vec![item(&path, 1)]),
-					Op::Eq,
-					Node::Text(name.name()),
-				));
+				self.tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(PAIR_WORD)]));
+				self.tests.push(key(call(STR_WORD, vec![item(&path, 1)]), Op::Eq, Node::Text(name.name())));
 				self.pattern(value, item(&path, 2));
 			}
 			Node::Symbol(name) if name == WILDCARD => {}
@@ -426,8 +400,7 @@ impl<'a> Matched<'a> {
 	/// `[a, b]` by count and position; `[first, ...middle, last]`: the items before the rest count from the start,
 	/// those after it from the end
 	fn items(&mut self, items: &[Node], path: Node) {
-		self.tests
-			.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_WORD)]));
+		self.tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_WORD)]));
 		let count = call(COUNT_WORD, vec![path.clone()]);
 		let Some(rest_index) = items.iter().position(is_rest) else {
 			self.tests.push(key(count, Op::Eq, Node::int(items.len() as i64)));
@@ -504,10 +477,7 @@ pub(crate) fn code_pattern(pattern: &Node) -> Option<Node> {
 }
 
 fn hole_name(part: &Node) -> Option<&str> {
-	part.drop_meta()
-		.symbol_name()?
-		.strip_prefix(HOLE_PREFIX)
-		.filter(|name| !name.is_empty())
+	part.drop_meta().symbol_name()?.strip_prefix(HOLE_PREFIX).filter(|name| !name.is_empty())
 }
 
 fn has_hole(code: &Node) -> bool {
@@ -523,11 +493,7 @@ fn has_hole(code: &Node) -> bool {
 fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	if let Some(name) = hole_name(code) {
 		let name = Node::Symbol(name.to_string());
-		match bindings
-			.iter()
-			.filter_map(bound)
-			.find(|(bound_name, _)| **bound_name == name)
-		{
+		match bindings.iter().filter_map(bound).find(|(bound_name, _)| **bound_name == name) {
 			Some((_, earlier)) => tests.push(key(path, Op::Eq, earlier.clone())),
 			None => bindings.push(bind(name, path)),
 		}
@@ -544,11 +510,7 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 		Node::List(items, _, _) if has_hole(code) => {
 			let items = called_hole_items(items);
 			tests.push(type_named(&path, LIST_WORD));
-			tests.push(key(
-				call(COUNT_WORD, vec![path.clone()]),
-				Op::Eq,
-				Node::int(items.len() as i64),
-			));
+			tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
 			for (index, part) in items.iter().enumerate() {
 				code_tests(part, item(&path, index + 1), tests, bindings);
 			}
@@ -556,11 +518,7 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 		_ => tests.push(key(
 			path,
 			Op::Eq,
-			Node::List(
-				vec![Node::Symbol(DATA_WORD.to_string()), code.clone()],
-				Bracket::None,
-				Separator::Space,
-			),
+			Node::List(vec![Node::Symbol(DATA_WORD.to_string()), code.clone()], Bracket::None, Separator::Space),
 		)),
 	}
 }
@@ -599,11 +557,7 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 		}
 		None => test,
 	};
-	let body = if bindings.is_empty() {
-		case.body
-	} else {
-		semicolon_sequence([bindings, vec![case.body]].concat())
-	};
+	let body = if bindings.is_empty() { case.body } else { semicolon_sequence([bindings, vec![case.body]].concat()) };
 	(test, body)
 }
 
@@ -666,10 +620,8 @@ fn unit_names(pattern: &Node, program: &Node, warnings: &mut Vec<Diagnostic>) {
 		}
 		Node::List(fields, _, _) if is_map_pattern(pattern) => {
 			// a shorthand `{h}` binds the field h
-			let values = fields
-				.iter()
-				.filter_map(map_field)
-				.filter(|(name, part)| part.symbol_name() != Some(name.as_str()));
+			let values =
+				fields.iter().filter_map(map_field).filter(|(name, part)| part.symbol_name() != Some(name.as_str()));
 			for (_, part) in values {
 				let unit = part
 					.symbol_name()
@@ -697,9 +649,7 @@ pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Optio
 	if !is_structural && code_pattern(pattern).is_none() {
 		return None;
 	}
-	let Matched {
-		mut tests, bindings, ..
-	} = Matched::of(pattern, subject.clone(), names);
+	let Matched { mut tests, bindings, .. } = Matched::of(pattern, subject.clone(), names);
 	if !bindings.is_empty() {
 		tests.push(semicolon_sequence([bindings, vec![Node::True]].concat()));
 	}
@@ -727,11 +677,7 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 /// A name a pattern binds is declared `let`: the arm's own local, never a change of a main-level variable of that name
 /// (card pattern-names)
 pub(crate) fn bind(name: Node, value: Node) -> Node {
-	Node::List(
-		vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)],
-		Bracket::None,
-		Separator::Space,
-	)
+	Node::List(vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)], Bracket::None, Separator::Space)
 }
 
 /// A list pattern tests its shape, a type word (`int`, `Circle`) the subject's type, `i: int` also binds it; any other
@@ -769,10 +715,7 @@ fn range_tests(subject: &Node, pattern: &Node) -> Option<Vec<Node>> {
 
 /// The tests joined by `and` (true without any) or by `or`
 fn joined(tests: Vec<Node>, op: Op) -> Node {
-	tests
-		.into_iter()
-		.reduce(|all, test| key(all, op, test))
-		.unwrap_or(Node::True)
+	tests.into_iter().reduce(|all, test| key(all, op, test)).unwrap_or(Node::True)
 }
 
 /// `n if n < 0` (parsed as `if n < 0 then n`): the pattern n and the guard `n < 0`; any other key has no guard
@@ -834,10 +777,7 @@ fn cases_of(block: &Node) -> Option<Vec<Case>> {
 	for item in items.iter().flat_map(comma_items) {
 		match case_of(&item) {
 			Some(case) => {
-				let key = alternatives
-					.drain(..)
-					.rev()
-					.fold(case.key, |later, earlier| key(earlier, Op::Or, later));
+				let key = alternatives.drain(..).rev().fold(case.key, |later, earlier| key(earlier, Op::Or, later));
 				cases.push(Case { key, body: case.body });
 			}
 			None => alternatives.push(item),
@@ -857,16 +797,10 @@ fn comma_items(item: &Node) -> Vec<Node> {
 /// `1: 10` is a Colon key; `1: x=5` parses as `(1:x)=5`, so the colon is found down the left spine of the assignment
 fn case_of(item: &Node) -> Option<Case> {
 	match item.drop_meta() {
-		Node::Key(key, Op::Colon, body) => Some(Case {
-			key: key.as_ref().clone(),
-			body: body.as_ref().clone(),
-		}),
+		Node::Key(key, Op::Colon, body) => Some(Case { key: key.as_ref().clone(), body: body.as_ref().clone() }),
 		Node::Key(left, op, right) => {
 			let Case { key, body } = case_of(left)?;
-			Some(Case {
-				key,
-				body: Node::Key(Box::new(body), *op, right.clone()),
-			})
+			Some(Case { key, body: Node::Key(Box::new(body), *op, right.clone()) })
 		}
 		_ => None,
 	}

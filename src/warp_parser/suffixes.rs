@@ -109,11 +109,7 @@ impl WarpParser {
 		// item is no argument (word_begins_item)
 		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp)
 			&& min_bp != argument_bp
-			&& if self.in_for_header {
-				self.word_ends_header()
-			} else {
-				!self.word_begins_item()
-			};
+			&& if self.in_for_header { self.word_ends_header() } else { !self.word_begins_item() };
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier =

@@ -10,9 +10,7 @@ fn a_loop_it_still_shadows_the_function_it() {
 
 #[test]
 fn a_loop_it_hiding_the_function_it_warns() {
-	with_warning_mode(WarningMode::Error, || {
-		fails_with("f:={s=it; for 1..3 {s+=it}; s}; f(10)", "hides")
-	});
+	with_warning_mode(WarningMode::Error, || fails_with("f:={s=it; for 1..3 {s+=it}; s}; f(10)", "hides"));
 }
 
 #[test]

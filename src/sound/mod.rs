@@ -12,6 +12,7 @@
 
 // TODO turn this into a module, albeit built-in one
 
+pub mod audio_files;
 pub mod midi;
 pub mod sound_engine;
 
@@ -55,25 +56,13 @@ type Command = (&'static str, &'static [&'static str], &'static [&'static str]);
 const FILE_PLAYERS: [Command; 5] = [
 	("afplay", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 	("paplay", &[], &["wav", "ogg", "flac", "aiff"]),
-	(
-		"ffplay",
-		&["-nodisp", "-autoexit", "-loglevel", "error"],
-		&["wav", "mp3", "ogg", "flac", "aiff", "m4a"],
-	),
-	(
-		"mpv",
-		&["--no-video", "--msg-level=all=error"],
-		&["wav", "mp3", "ogg", "flac", "aiff", "m4a"],
-	),
+	("ffplay", &["-nodisp", "-autoexit", "-loglevel", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+	("mpv", &["--no-video", "--msg-level=all=error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
 	("aplay", &["-q"], &["wav"]),
 ];
 /// The decoders that read a music file without playing it, the first the system has that knows its format
 const FILE_PROBES: [Command; 2] = [
-	(
-		"ffprobe",
-		&["-v", "error"],
-		&["wav", "mp3", "ogg", "flac", "aiff", "m4a"],
-	),
+	("ffprobe", &["-v", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
 	("afinfo", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 ];
 /// A player failing at once (a file it cannot decode) fails play itself; a later failure is printed when it happens
@@ -154,12 +143,8 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 		eprintln!("sound file {format}: {path}");
 		return Ok(handle);
 	}
-	let (player, child) = spawned(&FILE_PLAYERS, format, path, false).ok_or_else(|| {
-		format!(
-			"no player for {format} found ({}) to play {path}",
-			names_for(&FILE_PLAYERS, format)
-		)
-	})?;
+	let (player, child) = spawned(&FILE_PLAYERS, format, path, false)
+		.ok_or_else(|| format!("no player for {format} found ({}) to play {path}", names_for(&FILE_PLAYERS, format)))?;
 	let child: Player = Arc::new(Mutex::new(child));
 	let started = Instant::now();
 	while started.elapsed() < EARLY_FAILURE {
@@ -169,12 +154,7 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 		std::thread::sleep(PLAYER_POLL);
 	}
 	listed(handle, &child);
-	let queued = Queued {
-		path: path.into(),
-		start: Instant::now(),
-		stops: STOPS.load(Ordering::Relaxed),
-		handle,
-	};
+	let queued = Queued { path: path.into(), start: Instant::now(), stops: STOPS.load(Ordering::Relaxed), handle };
 	std::thread::spawn(move || watched(child, player, &queued, "sound file"));
 	Ok(handle)
 }
@@ -236,10 +216,7 @@ pub fn stop() {
 /// stop_sound(handle): that sound or music file alone dropped from the queue or stopped
 pub fn stop_one(handle: usize) -> Result<(), String> {
 	if handle == 0 || handle > last_handle() {
-		return Err(format!(
-			"stop_sound({handle}): no sound {handle} in this run, which played {}",
-			last_handle()
-		));
+		return Err(format!("stop_sound({handle}): no sound {handle} in this run, which played {}", last_handle()));
 	}
 	if let Ok(mut stopped) = STOPPED.lock() {
 		stopped.push(handle);
@@ -253,29 +230,15 @@ pub fn stop_one(handle: usize) -> Result<(), String> {
 /// handle 0 fades all. Only warp's own output ramps a playing sound (sound_engine.rs); played by afplay it can't
 pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 	if handle > last_handle() {
-		return Err(format!(
-			"fade_sound({handle}): no sound {handle} in this run, which played {}",
-			last_handle()
-		));
+		return Err(format!("fade_sound({handle}): no sound {handle} in this run, which played {}", last_handle()));
 	}
 	if !(0.0..=1.0).contains(&gain) || seconds < 0.0 {
-		return Err(format!(
-			"fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"
-		));
+		return Err(format!("fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"));
 	}
 	// headless nothing is heard: the render places the fade at the start, not wherever the program's slowness put it
-	let place = if crate::graphics::paint::shows_windows() {
-		voice().seconds - queued_seconds()
-	} else {
-		0.0
-	};
+	let place = if crate::graphics::paint::shows_windows() { voice().seconds - queued_seconds() } else { 0.0 };
 	if let Ok(mut fades) = FADES.lock() {
-		fades.push(Fade {
-			handle,
-			place,
-			gain,
-			seconds,
-		});
+		fades.push(Fade { handle, place, gain, seconds });
 	}
 	let faded = crate::sound::sound_engine::fade(handle, gain as f32, seconds);
 	if !faded && crate::graphics::paint::shows_windows() && last_handle() > 0 {
@@ -288,13 +251,7 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 fn killed(chosen: impl Fn(usize) -> bool) {
 	let playing: Vec<Player> = PLAYING
 		.lock()
-		.map(|playing| {
-			playing
-				.iter()
-				.filter(|(handle, _)| chosen(*handle))
-				.map(|(_, child)| child.clone())
-				.collect()
-		})
+		.map(|playing| playing.iter().filter(|(handle, _)| chosen(*handle)).map(|(_, child)| child.clone()).collect())
 		.unwrap_or_default();
 	for child in playing {
 		if let Ok(mut child) = child.lock() {
@@ -345,11 +302,44 @@ pub fn at(seconds: f64) {
 
 pub fn at_end() {
 	if let Some(before) = BEFORE_AT.with(|before| before.borrow_mut().pop()) {
-		join_voice(Voice {
-			origin: voice().origin,
-			..before
-		}); // the origin `at` gave a voice without sounds stays
+		join_voice(Voice { origin: voice().origin, ..before }); // the origin `at` gave a voice without sounds stays
 	}
+}
+
+/// A moment on this voice (card midi-clock): where the sounds queued before it end, or an `at`'s time; its place on
+/// the voice. Nothing is queued, the voice stays where it stands
+pub fn moment() -> (Instant, f64) {
+	scheduled(0.0)
+}
+
+/// `run` at this voice's moment: at once when that is now, else on a thread of its own sleeping until then (the
+/// process's end and wait_sound wait for it, stop_sound drops it as it drops a queued sound; its failure goes to stderr)
+pub fn on_clock(run: impl FnOnce() -> Result<(), String> + Send + 'static) -> Result<(), String> {
+	let (start, _) = moment();
+	if start <= Instant::now() {
+		return run();
+	}
+	wait_at_exit();
+	PENDING.fetch_add(1, Ordering::Relaxed);
+	let stops = STOPS.load(Ordering::Relaxed);
+	std::thread::spawn(move || {
+		std::thread::sleep(start.saturating_duration_since(Instant::now()));
+		if STOPS.load(Ordering::Relaxed) == stops {
+			if let Err(failure) = run() {
+				eprintln!("{failure}");
+			}
+		}
+		PENDING.fetch_sub(1, Ordering::Relaxed);
+	});
+	Ok(())
+}
+
+/// The voice goes on that many seconds without a sound (midi_note's length); heard, paced as a sound is
+pub fn rest(seconds: f64) {
+	if crate::graphics::paint::shows_windows() && BEFORE_AT.with(|before| before.borrow().is_empty()) {
+		paced(PLAY_AHEAD);
+	}
+	scheduled(seconds.max(0.0));
 }
 
 /// The sound's seconds added to its voice behind the sounds queued there before it: when it starts in real time, and
@@ -358,10 +348,7 @@ fn scheduled(seconds: f64) -> (Instant, f64) {
 	let now = Instant::now();
 	let stops = STOPS.load(Ordering::Relaxed);
 	let mut voice = voice();
-	let start = voice
-		.end
-		.filter(|end| *end > now && voice.stops == stops)
-		.unwrap_or(now);
+	let start = voice.end.filter(|end| *end > now && voice.stops == stops).unwrap_or(now);
 	let place = voice.seconds;
 	let origin = voice.origin.unwrap_or_else(|| start - Duration::from_secs_f64(place));
 	voice = Voice {
@@ -397,10 +384,7 @@ fn play_wav(queued: &Queued) {
 			listed(queued.handle, &child);
 			watched(child, player, queued, "sound")
 		}
-		None => eprintln!(
-			"sound: no player found ({}) for {shown}",
-			names_for(&FILE_PLAYERS, "wav")
-		),
+		None => eprintln!("sound: no player found ({}) for {shown}", names_for(&FILE_PLAYERS, "wav")),
 	}
 }
 
@@ -432,16 +416,11 @@ fn probe(path: &str, format: &'static str) -> Result<(), String> {
 	let Some((prober, child)) = spawned(&FILE_PROBES, format, path, true) else {
 		return Ok(());
 	};
-	let output = child
-		.wait_with_output()
-		.map_err(|failure| format!("{prober} could not check {path}: {failure}"))?;
+	let output = child.wait_with_output().map_err(|failure| format!("{prober} could not check {path}: {failure}"))?;
 	if output.status.success() {
 		return Ok(());
 	}
-	Err(format!(
-		"{path} cannot be decoded as {format}: {prober} failed: {}",
-		tail(&output.stderr, &output.stdout)
-	))
+	Err(format!("{path} cannot be decoded as {format}: {prober} failed: {}", tail(&output.stderr, &output.stdout)))
 }
 
 /// The first command of the list the system has for the format, started on the file, its error output kept (its output
@@ -488,10 +467,7 @@ fn knowing<'a>(
 }
 
 fn names_for(commands: &[Command], format: &str) -> String {
-	knowing(commands, format)
-		.map(|(command, _)| command)
-		.collect::<Vec<_>>()
-		.join(", ")
+	knowing(commands, format).map(|(command, _)| command).collect::<Vec<_>>().join(", ")
 }
 
 fn which(command: &str) -> bool {
@@ -511,19 +487,13 @@ fn failure_of(child: &Player, player: &str, path: &str) -> Option<Result<(), Str
 		use std::io::Read;
 		let _ = stderr.read_to_end(&mut errors);
 	}
-	Some(Err(format!(
-		"{path}: {player} failed ({status}): {}",
-		tail(&errors, &[])
-	)))
+	Some(Err(format!("{path}: {player} failed ({status}): {}", tail(&errors, &[]))))
 }
 
 /// The last characters of a command's error output (or its output, where afinfo writes its failure)
 fn tail(errors: &[u8], output: &[u8]) -> String {
-	let said = String::from_utf8_lossy(if errors.iter().any(|byte| !byte.is_ascii_whitespace()) {
-		errors
-	} else {
-		output
-	});
+	let said =
+		String::from_utf8_lossy(if errors.iter().any(|byte| !byte.is_ascii_whitespace()) { errors } else { output });
 	let said = said.trim();
 	let start = said.char_indices().rev().nth(FAILURE_TAIL).map_or(0, |(at, _)| at);
 	said[start..].replace('\n', " ")
@@ -534,9 +504,7 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 	use std::io::Read;
 	let mut start = [0u8; 12];
 	let mut file = std::fs::File::open(path).map_err(|failure| format!("cannot open {path}: {failure}"))?;
-	let read = file
-		.read(&mut start)
-		.map_err(|failure| format!("cannot read {path}: {failure}"))?;
+	let read = file.read(&mut start).map_err(|failure| format!("cannot read {path}: {failure}"))?;
 	FILE_FORMATS
 		.iter()
 		.find(|(_, magic, at)| start[..read].get(*at..at + magic.len()) == Some(magic))
@@ -635,24 +603,13 @@ fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result
 	} else {
 		let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
 		if audible {
-			queued(Queued {
-				path,
-				start,
-				stops: STOPS.load(Ordering::Relaxed),
-				handle,
-			});
+			queued(Queued { path, start, stops: STOPS.load(Ordering::Relaxed), handle });
 		} else {
 			eprintln!("sound {seconds:.2} s: {}", path.display());
 		}
 	}
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
-		unrendered.push(Unrendered {
-			handle,
-			place,
-			rate,
-			channels,
-			samples,
-		});
+		unrendered.push(Unrendered { handle, place, rate, channels, samples });
 	}
 	Ok(())
 }
@@ -675,37 +632,19 @@ fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 /// voice, the voices mixed (in stereo when one of them is: a mono sound on both speakers alike); its seconds
 pub fn render(path: &str) -> Result<f64, String> {
 	crate::host::sandbox::check_write(path)?;
-	let sounds = std::mem::take(
-		&mut *UNRENDERED
-			.lock()
-			.map_err(|_| "the rendered sounds are poisoned".to_string())?,
-	);
-	let rate = sounds.first().map_or(DEFAULT_RATE, |sound| sound.rate);
-	if let Some(other) = sounds.iter().find(|sound| sound.rate != rate) {
-		return Err(format!(
-			"sounds of {rate} and {} samples per second cannot share {path}",
-			other.rate
-		));
-	}
+	let sounds = std::mem::take(&mut *UNRENDERED.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
+	// the highest rate of the sounds, the others converted to it (a 44.1 kHz sample beside 22.05 kHz synthesis)
+	let rate = sounds.iter().map(|sound| sound.rate).max().unwrap_or(DEFAULT_RATE);
 	let channels = sounds.iter().map(|sound| sound.channels).max().unwrap_or(MONO);
 	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
-	let mut rendered_until = RENDERED_UNTIL
-		.lock()
-		.map_err(|_| "the rendered sounds are poisoned".to_string())?;
+	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
 	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until, f64::min);
-	let fades = std::mem::take(
-		&mut *FADES
-			.lock()
-			.map_err(|_| "the rendered sounds are poisoned".to_string())?,
-	);
+	let fades = std::mem::take(&mut *FADES.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
 	let mut mixed: Vec<i32> = vec![];
 	for sound in sounds {
 		let start = ((sound.place - first_place) * rate as f64).round() as usize * channels as usize;
-		let own: Vec<Fade> = fades
-			.iter()
-			.filter(|fade| fade.handle == 0 || fade.handle == sound.handle)
-			.copied()
-			.collect();
+		let own: Vec<Fade> =
+			fades.iter().filter(|fade| fade.handle == 0 || fade.handle == sound.handle).copied().collect();
 		let gain = |frame: usize| {
 			if own.is_empty() {
 				1.0
@@ -713,8 +652,7 @@ pub fn render(path: &str) -> Result<f64, String> {
 				faded_gain(&own, sound.place + frame as f64 / rate as f64)
 			}
 		};
-		let samples: Vec<i16> = sound
-			.samples
+		let samples: Vec<i16> = at_rate(&sound.samples, sound.channels, sound.rate, rate)
 			.chunks(sound.channels as usize)
 			.enumerate()
 			.flat_map(|(index, frame)| {
@@ -726,17 +664,11 @@ pub fn render(path: &str) -> Result<f64, String> {
 		if mixed.len() < start + samples.len() {
 			mixed.resize(start + samples.len(), 0);
 		}
-		mixed[start..]
-			.iter_mut()
-			.zip(samples)
-			.for_each(|(sum, sample)| *sum += sample as i32);
+		mixed[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample as i32);
 	}
 	let seconds = mixed.len() as f64 / channels as f64 / rate as f64;
 	*rendered_until = first_place + seconds;
-	let samples: Vec<i16> = mixed
-		.iter()
-		.map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16)
-		.collect();
+	let samples: Vec<i16> = mixed.iter().map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
 	std::fs::write(path, wav_of(&samples, rate, channels))
 		.map_err(|failure| format!("cannot write {path}: {failure}"))?;
 	Ok(seconds)
@@ -746,26 +678,36 @@ pub fn render(path: &str) -> Result<f64, String> {
 /// there to its own
 fn faded_gain(fades: &[Fade], place: f64) -> f64 {
 	let ramped = |fade: &Fade, from: f64, place: f64| {
-		let share = if fade.seconds > 0.0 {
-			((place - fade.place) / fade.seconds).clamp(0.0, 1.0)
-		} else {
-			1.0
-		};
+		let share = if fade.seconds > 0.0 { ((place - fade.place) / fade.seconds).clamp(0.0, 1.0) } else { 1.0 };
 		from + (fade.gain - from) * share
 	};
-	let mut ramp = (
-		&Fade {
-			handle: 0,
-			place: 0.0,
-			gain: 1.0,
-			seconds: 0.0,
-		},
-		1.0,
-	);
+	let mut ramp = (&Fade { handle: 0, place: 0.0, gain: 1.0, seconds: 0.0 }, 1.0);
 	for fade in fades.iter().filter(|fade| fade.place <= place) {
 		ramp = (fade, ramped(ramp.0, ramp.1, fade.place));
 	}
 	ramped(ramp.0, ramp.1, place)
+}
+
+/// Interleaved samples at another rate, each channel's linearly interpolated between its neighbours
+fn at_rate(samples: &[i16], channels: u16, from: u32, to: u32) -> Vec<i16> {
+	let channels = channels.max(1) as usize;
+	if from == to || samples.len() < channels {
+		return samples.to_vec();
+	}
+	let frames = samples.len() / channels;
+	let converted_frames = (frames as f64 * to as f64 / from as f64).round() as usize;
+	(0..converted_frames)
+		.flat_map(|frame| {
+			let position = frame as f64 * from as f64 / to as f64;
+			let before = (position.floor() as usize).min(frames - 1);
+			let after = (before + 1).min(frames - 1);
+			let share = position - before as f64;
+			(0..channels).map(move |channel| {
+				let (a, b) = (samples[before * channels + channel] as f64, samples[after * channels + channel] as f64);
+				(a + (b - a) * share).round() as i16
+			})
+		})
+		.collect()
 }
 
 /// A 16-bit mono PCM WAV of the offset samples

@@ -12,15 +12,7 @@ fn quote_equals_runtime_parse(code: &str) -> String {
 fn quoted_code_is_the_code_parse_gives() {
 	is!("q = data (a.b); q.op", ".");
 	is!("q = data (1..3); q.op", "..");
-	for code in [
-		"a.b",
-		"a.warp",
-		"1..3",
-		"x += 1",
-		"f(x) := x * 2",
-		"a > 0 ? b : c",
-		"5 km",
-	] {
+	for code in ["a.b", "a.warp", "1..3", "x += 1", "f(x) := x * 2", "a > 0 ? b : c", "5 km"] {
 		is!(&quote_equals_runtime_parse(code), true);
 	}
 }

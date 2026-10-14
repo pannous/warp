@@ -4,22 +4,13 @@ use crate::is;
 
 #[test]
 fn alias_as_field_type() {
-	is!(
-		"type Name = string; type P: { name: Name }; p = P{name: \"Al\"}; p.name",
-		"Al"
-	);
-	is!(
-		"type Age = int; type Years = Age; class P { age: Years }; P(3).age + 1",
-		4
-	);
+	is!("type Name = string; type P: { name: Name }; p = P{name: \"Al\"}; p.name", "Al");
+	is!("type Age = int; type Years = Age; class P { age: Years }; P(3).age + 1", 4);
 }
 
 #[test]
 fn alias_as_optional_field_and_parameter() {
-	is!(
-		"type Email = string; type P: { name: string; email: Email? }; p = P{name: \"Al\"}; p.name",
-		"Al"
-	);
+	is!("type Email = string; type P: { name: string; email: Email? }; p = P{name: \"Al\"}; p.name", "Al");
 	is!("type Age = int; older(a: Age) := a + 1; older(41)", 42);
 }
 
@@ -38,10 +29,7 @@ fn is_tests_the_type_an_alias_names() {
 	is!("type Age = int\nx = \"a\"\nx is Age", false);
 	is!("type Age = int\nx = 3\nx is an Age", true);
 	is!("type Years = Age\ntype Age = int\nx = 3\nx is Years", true);
-	is!(
-		"enum Color { red green }\ntype Paint = Color\nc = red\nc is Paint",
-		true
-	);
+	is!("enum Color { red green }\ntype Paint = Color\nc = red\nc is Paint", true);
 	is!("enum Color { red green }\ntype Paint = Color\nc = 3\nc is Paint", false);
 }
 

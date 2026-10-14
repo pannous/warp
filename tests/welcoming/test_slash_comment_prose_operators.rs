@@ -9,11 +9,7 @@ fn slash_notes(code: &str) -> usize {
 	let _ = std::fs::remove_file(path);
 	let notes = with_acknowledger(Acknowledging(vec![]), || {
 		use_acknowledgements_file(path);
-		capture_hints(|| warp::wasm_emitter::eval(code))
-			.1
-			.iter()
-			.filter(|hint| hint.canonical == "a//b")
-			.count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count()
 	});
 	let _ = std::fs::remove_file(path);
 	notes
@@ -23,10 +19,7 @@ fn slash_notes(code: &str) -> usize {
 fn prose_with_operator_characters_gets_no_division_note() {
 	assert_eq!(slash_notes("x = 7 // data for anyone: GET /api/users\nx"), 0);
 	assert_eq!(slash_notes("x = 7 // well-known (see notes)\nx"), 0);
-	assert_eq!(
-		slash_notes("users = 1\nfun f() {\n\tglobal users // the table, see /api/users\n\tusers\n}\nf()"),
-		0
-	);
+	assert_eq!(slash_notes("users = 1\nfun f() {\n\tglobal users // the table, see /api/users\n\tusers\n}\nf()"), 0);
 }
 
 #[test]

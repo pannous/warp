@@ -6,10 +6,7 @@ use crate::is;
 fn test_a_returned_closure_takes_a_text() {
 	is!("make = () => (t => t + \"!\"); a = make(); a(\"x\")", "x!");
 	is!("make = () => (t => t + \"!\"); a = make(); a(\"xy\")", "xy!");
-	is!(
-		"def make(){ def add(t){ t + \"!\" }; function add }; a = make(); a(\"x\")",
-		"x!"
-	);
+	is!("def make(){ def add(t){ t + \"!\" }; function add }; a = make(); a(\"x\")", "x!");
 }
 
 #[test]
@@ -32,8 +29,5 @@ fn a_lambda_of_the_loop_variable_given_to_a_function_sees_each_turn() {
 		&format!("{counted}; xs = [1, 2, 2]; out = []; for x in xs {{ out = out + [g(xs, z => z == x)] }}; out"),
 		warp::ints(vec![1, 2, 2])
 	);
-	is!(
-		"use list; xs = [1, 2, 2, 3]; [count_by(xs, y => y == x) for x in xs]",
-		warp::ints(vec![1, 2, 2, 1])
-	);
+	is!("use list; xs = [1, 2, 2, 3]; [count_by(xs, y => y == x) for x in xs]", warp::ints(vec![1, 2, 2, 1]));
 }

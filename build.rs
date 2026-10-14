@@ -9,11 +9,7 @@ const DETACHED_HEAD: &str = "HEAD";
 const MAIN_STACK_BYTES: u64 = 512 << 20; // ld: at most 512 MB on arm64
 
 fn git(arguments: &[&str]) -> Option<String> {
-	let output = Command::new("git")
-		.args(arguments)
-		.output()
-		.ok()
-		.filter(|output| output.status.success())?;
+	let output = Command::new("git").args(arguments).output().ok().filter(|output| output.status.success())?;
 	Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 

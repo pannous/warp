@@ -29,11 +29,7 @@ fn operand() -> Box<Node> {
 /// `f = abs`, `xs.map(sqrt)`: an operator word left without an operand is the function `value => abs value`
 fn operator_values(node: Node) -> Node {
 	match operator_reference(&node) {
-		Some(op) => Node::Key(
-			operand(),
-			Op::Arrow,
-			Box::new(Node::Key(Box::new(Node::Empty), op, operand())),
-		),
+		Some(op) => Node::Key(operand(), Op::Arrow, Box::new(Node::Key(Box::new(Node::Empty), op, operand()))),
 		None => node.map_children(operator_values),
 	}
 }
@@ -45,10 +41,7 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 		return node;
 	};
 	let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
-	if let Some(function) = items
-		.last_mut()
-		.filter(|last| is_iteration && words.is_library_word(last))
-	{
+	if let Some(function) = items.last_mut().filter(|last| is_iteration && words.is_library_word(last)) {
 		let call = Node::List(vec![function.clone(), *operand()], Bracket::None, Separator::Space);
 		*function = Node::Key(operand(), Op::Arrow, Box::new(call));
 	}
@@ -61,23 +54,17 @@ fn suffix_words(node: &Node) -> SuffixWords {
 	let mut variables = HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
-	let words = functions
-		.iter()
-		.flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
-	let mut words: HashMap<String, String> = words
-		.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word))
-		.collect();
+	let words =
+		functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
+	let mut words: HashMap<String, String> =
+		words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
 	for (word, function) in LIBRARY_SUFFIX_WORDS {
 		if !variables.contains(word) && !functions.contains(function.trim_start_matches(POWER_MARK)) {
 			words.entry(word.to_string()).or_insert(function.to_string());
 		}
 	}
-	SuffixWords {
-		words,
-		variables,
-		functions,
-	}
+	SuffixWords { words, variables, functions }
 }
 
 const VOWELS: [char; 5] = ['a', 'e', 'i', 'o', 'u'];
@@ -87,10 +74,7 @@ const UNDOUBLED_CONSONANTS: [char; 3] = ['w', 'x', 'y'];
 /// The English past forms of a function name (P24): `halve` → `halved`, `fix` → `fixed`, `stop` → `stopped` (a final
 /// consonant after a single vowel doubles), `copy` → `copied`
 fn past_forms(function: &str) -> Vec<String> {
-	let mut forms: Vec<String> = SUFFIX_WORD_ENDINGS
-		.iter()
-		.map(|ending| format!("{function}{ending}"))
-		.collect();
+	let mut forms: Vec<String> = SUFFIX_WORD_ENDINGS.iter().map(|ending| format!("{function}{ending}")).collect();
 	let letters: Vec<char> = function.chars().collect();
 	let is_vowel = |c: &char| VOWELS.contains(c);
 	if let [.., before, vowel, last] = letters.as_slice() {
@@ -112,12 +96,8 @@ fn past_forms(function: &str) -> Vec<String> {
 }
 
 /// Suffix words of library functions; a function marked `^` is the power of its number: `squared` is `^2`
-const LIBRARY_SUFFIX_WORDS: [(&str, &str); 4] = [
-	("sorted", "sort"),
-	("reversed", "reverse"),
-	("squared", "^square"),
-	("cubed", "^cube"),
-];
+const LIBRARY_SUFFIX_WORDS: [(&str, &str); 4] =
+	[("sorted", "sort"), ("reversed", "reverse"), ("squared", "^square"), ("cubed", "^cube")];
 const POWER_MARK: char = '^';
 
 struct SuffixWords {
@@ -173,20 +153,12 @@ fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator
 	if rest.is_empty() || !is_number_or_text(value) || !rest.iter().all(is_number_or_text) {
 		return None;
 	}
-	let values = std::iter::once(value.as_ref().clone())
-		.chain(rest.iter().cloned())
-		.collect();
-	let list = Node::Key(
-		name.clone(),
-		Op::Assign,
-		Box::new(Node::List(values, Bracket::Square, separator.clone())),
-	);
+	let values = std::iter::once(value.as_ref().clone()).chain(rest.iter().cloned()).collect();
+	let list = Node::Key(name.clone(), Op::Assign, Box::new(Node::List(values, Bracket::Square, separator.clone())));
 	let statements = Node::List(items.to_vec(), Bracket::None, Separator::Semicolon);
 	let written = Node::List(items.to_vec(), Bracket::None, separator.clone()).serialize();
-	let readings = vec![
-		reading("a list", &list.serialize()),
-		reading("separate statements", statements.serialize().trim()),
-	];
+	let readings =
+		vec![reading("a list", &list.serialize()), reading("separate statements", statements.serialize().trim())];
 	let question = Ask::new(
 		BARE_LIST_TOPIC,
 		format!("is `{}` one list or separate statements?", written.trim()),
@@ -217,11 +189,8 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
 
 /// The word as written: `sqrt` for the parser's `√ø`
 pub(crate) fn written_word(word: &Node) -> Node {
-	let spelling = operator_reference(word).and_then(|op| {
-		crate::warp_parser::PREFIX_OPERATOR_WORDS
-			.into_iter()
-			.find(|(_, known)| *known == op)
-	});
+	let spelling = operator_reference(word)
+		.and_then(|op| crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(_, known)| *known == op));
 	spelling.map_or_else(|| word.clone(), |(spelling, _)| symbol(spelling))
 }
 
@@ -303,10 +272,9 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 		let suffix = heading_suffix_word(&item, functions);
 		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
 		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
-		let (Some(operand), Some((word, function))) = (
-			applied.last().filter(|operand| !functions.is_library_word(operand)),
-			suffix,
-		) else {
+		let (Some(operand), Some((word, function))) =
+			(applied.last().filter(|operand| !functions.is_library_word(operand)), suffix)
+		else {
 			applied.push(item);
 			continue;
 		};
@@ -323,10 +291,9 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 /// `operand item`, where `item` heads with the suffix word: `x = 7 squared + 1` squares the assigned value, `x = 49 + 1`
 fn suffix_applied(operand: Node, item: Node, word: &Node, function: &Suffix) -> Node {
 	match operand {
-		Node::Meta { node, data } if is_assignment(&node) => Node::Meta {
-			node: Box::new(suffix_applied(*node, item, word, function)),
-			data,
-		},
+		Node::Meta { node, data } if is_assignment(&node) => {
+			Node::Meta { node: Box::new(suffix_applied(*node, item, word, function)), data }
+		}
 		Node::Key(target, op, value) if is_binding(&op) => {
 			Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function)))
 		}
@@ -355,29 +322,16 @@ fn suffix_precedence(operand: &Node, word: &Node) -> Result<bool, Node> {
 		nearest = leaf.clone();
 		Node::List(vec![leaf, word.clone()], Bracket::Round, Separator::Space)
 	});
-	let loose = Node::List(
-		vec![grouped(operand.clone()), word.clone()],
-		Bracket::None,
-		Separator::Space,
-	);
+	let loose = Node::List(vec![grouped(operand.clone()), word.clone()], Bracket::None, Separator::Space);
 	let (word_text, whole_text) = (word.serialize(), operand.serialize());
 	let written = format!("{whole_text} {word_text}");
 	let readings = vec![
-		reading(
-			&format!("{word_text} binds to {}", nearest.serialize()),
-			tight.serialize().trim(),
-		),
-		reading(
-			&format!("{word_text} applies to {whole_text}"),
-			loose.serialize().trim(),
-		),
+		reading(&format!("{word_text} binds to {}", nearest.serialize()), tight.serialize().trim()),
+		reading(&format!("{word_text} applies to {whole_text}"), loose.serialize().trim()),
 	];
 	let question = Ask::new(
 		SUFFIX_PRECEDENCE_TOPIC,
-		format!(
-			"does `{word_text}` in `{written}` apply to {} or to {whole_text}?",
-			nearest.serialize()
-		),
+		format!("does `{word_text}` in `{written}` apply to {} or to {whole_text}?", nearest.serialize()),
 		readings,
 		Fallback::Error,
 	)

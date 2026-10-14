@@ -19,6 +19,7 @@ mod test_json_parser_fixes;
 mod test_kitchensink;
 mod test_midi;
 mod test_music_values; // card music-values
+mod test_note_values; // card note-value
 mod test_paint;
 mod test_paint_function; // card gpu-functions
 mod test_paint_in_window; // card paint-keeps
@@ -33,6 +34,7 @@ mod test_shader_blocks; // card g_oFJc
 mod test_shader_builtins; // card shader-builtins
 mod test_shader_errors; // card wgsl-error
 mod test_shader_holes; // card shader-holes
+mod test_shader_system_values;
 mod test_small_samples; // cards text-samples, error-examples
 mod test_sound;
 mod test_sound_aliasing; // card reason-beep
@@ -49,6 +51,7 @@ mod test_sound_notes; // card sound-pro
 mod test_sound_pan; // card stereo-pan
 mod test_sound_patterns; // card patterns-live
 mod test_sound_render; // card sound-pro
+mod test_sound_samples; // card sound-samples
 mod test_sound_signal; // card real-time
 mod test_sound_spectrum; // card winamp-like
 mod test_sound_synth; // card sound-pro
@@ -58,4 +61,5 @@ mod test_sound_use; // card bizarre-global
 pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves scope too
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
-mod test_warp_command; // card midi-out
+mod test_warp_command; // card midi-out // card values-number
+mod test_window_size; // card make-width

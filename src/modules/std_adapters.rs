@@ -39,8 +39,7 @@ fn no_such_word(arguments: &[Node]) -> Result<Node, String> {
 }
 
 fn text_of(node: &Node) -> Result<String, String> {
-	node.text_value()
-		.ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
+	node.text_value().ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
 }
 
 #[cfg(feature = "native")]
@@ -72,14 +71,8 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("to_json", [value]) => Ok(Node::Text(crate::modules::foreign::json_of(value).to_string())),
 		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
 		("to_json", [value, classes]) => {
-			let classes: Vec<String> = classes
-				.children()
-				.iter()
-				.filter_map(|class| text_of(class).ok())
-				.collect();
-			Ok(Node::Text(
-				without_class_tags(crate::modules::foreign::json_of(value), &classes).to_string(),
-			))
+			let classes: Vec<String> = classes.children().iter().filter_map(|class| text_of(class).ok()).collect();
+			Ok(Node::Text(without_class_tags(crate::modules::foreign::json_of(value), &classes).to_string()))
 		}
 		_ => no_such_word(arguments),
 	}
@@ -96,14 +89,8 @@ fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			use std::io::Write;
 			let path = text_of(path)?;
 			crate::host::sandbox::check_write(&path)?;
-			let mut file = std::fs::OpenOptions::new()
-				.append(true)
-				.create(true)
-				.open(path)
-				.map_err(said)?;
-			file.write_all(content_of(text).as_bytes())
-				.map(|_| Node::Empty)
-				.map_err(said)
+			let mut file = std::fs::OpenOptions::new().append(true).create(true).open(path).map_err(said)?;
+			file.write_all(content_of(text).as_bytes()).map(|_| Node::Empty).map_err(said)
 		}
 		("exists", [path]) => Ok(Node::from(std::path::Path::new(&text_of(path)?).exists())),
 		("list", [folder]) => names_in(&text_of(folder)?).map(texts),
@@ -133,11 +120,7 @@ fn globbed(pattern: &str) -> Result<Vec<String>, String> {
 	let wildcards = regex::escape(name).replace(r"\*", "[^/]*").replace(r"\?", "[^/]");
 	let matching = regex_of(&format!("^{wildcards}$"))?;
 	let shown = |entry: &String| matching.is_match(entry) && (name.starts_with('.') || !entry.starts_with('.'));
-	Ok(names_in(folder)?
-		.into_iter()
-		.filter(shown)
-		.map(|entry| format!("{prefix}{entry}"))
-		.collect())
+	Ok(names_in(folder)?.into_iter().filter(shown).map(|entry| format!("{prefix}{entry}")).collect())
 }
 
 fn hash(member: &str, arguments: &[Node]) -> Result<Node, String> {
@@ -145,10 +128,7 @@ fn hash(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("sha256", [subject]) => {
 			use sha2::Digest;
 			Ok(Node::Text(
-				sha2::Sha256::digest(content_of(subject).as_bytes())
-					.iter()
-					.map(|byte| format!("{byte:02x}"))
-					.collect(),
+				sha2::Sha256::digest(content_of(subject).as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect(),
 			))
 		}
 		("crc32", [subject]) => Ok(Node::int(i64::from(crc32fast::hash(content_of(subject).as_bytes())))),
@@ -163,13 +143,11 @@ fn regex(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?)?);
 	match (member, rest) {
 		("matches", []) => Ok(Node::from(pattern.is_match(&text))),
-		("first", []) => Ok(pattern
-			.find(&text)
-			.map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
+		("first", []) => Ok(pattern.find(&text).map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
 		("all", []) => Ok(texts(pattern.find_iter(&text).map(|found| found.as_str().to_string()))),
-		("replace", [replacement]) => Ok(Node::Text(
-			pattern.replace_all(&text, text_of(replacement)?.as_str()).into_owned(),
-		)),
+		("replace", [replacement]) => {
+			Ok(Node::Text(pattern.replace_all(&text, text_of(replacement)?.as_str()).into_owned()))
+		}
 		_ => no_such_word(arguments),
 	}
 }
@@ -189,9 +167,9 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		("args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
-		("cwd", []) => std::env::current_dir()
-			.map(|folder| Node::Text(folder.to_string_lossy().into_owned()))
-			.map_err(said),
+		("cwd", []) => {
+			std::env::current_dir().map(|folder| Node::Text(folder.to_string_lossy().into_owned())).map_err(said)
+		}
 		("input", prompt) => typed_line(prompt),
 		("stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::Text).map_err(said),
 		// `command("ls | wc -l")`: the line run by sh, the explicit opt-in to text as shell (decision use-script)
@@ -226,18 +204,16 @@ fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		}
 		("save", [name, value, file]) => {
 			let name = text_of(name)?;
-			changed_store(file, |values| {
-				drop(values.insert(name, crate::modules::foreign::json_of(value)))
-			})
+			changed_store(file, |values| drop(values.insert(name, crate::modules::foreign::json_of(value))))
 		}
 		// `delete storage[k]`, `keys(storage)`, `storage` alone
 		("remove", [name, file]) => {
 			let name = text_of(name)?;
 			changed_store(file, |values| drop(values.remove(&name)))
 		}
-		("all", [file]) => Ok(crate::modules::foreign::node_of(&serde_json::Value::Object(
-			stored_values(&text_of(file)?)?,
-		))),
+		("all", [file]) => {
+			Ok(crate::modules::foreign::node_of(&serde_json::Value::Object(stored_values(&text_of(file)?)?)))
+		}
 		("names", [file]) => Ok(texts(stored_values(&text_of(file)?)?.into_iter().map(|(name, _)| name))),
 		_ => no_such_word(arguments),
 	}
@@ -253,17 +229,20 @@ fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		// stop(handle), play's handle; handle 0: all of them
 		("stop", [handle]) if number_of(handle)? == 0.0 => crate::sound::stop(),
 		("stop", [handle]) => crate::sound::stop_one(number_of(handle)?.max(0.0) as usize)?,
-		("fade", [handle, gain, seconds]) => crate::sound::fade(
-			number_of(handle)?.max(0.0) as usize,
-			number_of(gain)?,
-			number_of(seconds)?,
-		)?,
+		("fade", [handle, gain, seconds]) => {
+			crate::sound::fade(number_of(handle)?.max(0.0) as usize, number_of(gain)?, number_of(seconds)?)?
+		}
 		("at", [seconds]) => crate::sound::at(number_of(seconds)?),
 		("at_end", []) => crate::sound::at_end(),
+		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),
 		("last", []) => return Ok(Node::int(crate::sound::last_handle() as i64)),
 		("queued", []) => return Ok(Node::float(crate::sound::queued_seconds())),
 		("render", [path]) => return crate::sound::render(&text_of(path)?).map(Node::float),
+		("load", [path]) => {
+			return crate::sound::audio_files::load(&text_of(path)?)
+				.map(|flat| Node::list(flat.into_iter().map(Node::int).collect()))
+		}
 		_ => return no_such_word(arguments),
 	}
 	Ok(Node::Empty)
@@ -338,9 +317,7 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 /// writes a file, creating its missing folders first
 fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
 	crate::host::sandbox::check_write(path)?;
-	let folder = std::path::Path::new(path)
-		.parent()
-		.filter(|folder| !folder.as_os_str().is_empty());
+	let folder = std::path::Path::new(path).parent().filter(|folder| !folder.as_os_str().is_empty());
 	folder
 		.map_or(Ok(()), std::fs::create_dir_all)
 		.and_then(|_| std::fs::write(path, contents))
@@ -385,9 +362,7 @@ fn executed(command: &[String]) -> Result<String, String> {
 			String::from_utf8_lossy(&output.stderr).trim()
 		));
 	}
-	Ok(String::from_utf8_lossy(&output.stdout)
-		.trim_end_matches('\n')
-		.to_string())
+	Ok(String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string())
 }
 
 /// A line typed on standard input without its line end, ø at the input's end; a prompt is shown first
@@ -422,11 +397,7 @@ fn texts(items: impl IntoIterator<Item = String>) -> Node {
 }
 
 fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
-	Node::List(
-		items.into_iter().collect(),
-		crate::node::Bracket::Square,
-		crate::node::Separator::Space,
-	)
+	Node::List(items.into_iter().collect(), crate::node::Bracket::Square, crate::node::Separator::Space)
 }
 
 /// The bytes a list of ints 0 to 255 stands for
@@ -447,22 +418,16 @@ fn bytes_of(list: &Node) -> Result<Vec<u8>, String> {
 /// use them either (host.js checks the same); every other syntax error is the regex crate's own
 fn regex_of(pattern: &str) -> Result<regex::Regex, String> {
 	if let Some(feature) = unshared_feature(pattern) {
-		return Err(format!(
-			"{feature} is not in warp's regex (one engine lacks it): {pattern}"
-		));
+		return Err(format!("{feature} is not in warp's regex (one engine lacks it): {pattern}"));
 	}
 	regex::Regex::new(pattern).map_err(|problem| problem.to_string())
 }
 
 /// look-around `(?=`, `(?!`, `(?<=`, `(?<!` or a backreference `\1`
 fn unshared_feature(pattern: &str) -> Option<&'static str> {
-	let look_around = ["(?=", "(?!", "(?<=", "(?<!"]
-		.iter()
-		.any(|opening| pattern.contains(opening));
-	let backreference = pattern
-		.as_bytes()
-		.windows(2)
-		.any(|pair| pair[0] == b'\\' && pair[1].is_ascii_digit() && pair[1] != b'0');
+	let look_around = ["(?=", "(?!", "(?<=", "(?<!"].iter().any(|opening| pattern.contains(opening));
+	let backreference =
+		pattern.as_bytes().windows(2).any(|pair| pair[0] == b'\\' && pair[1].is_ascii_digit() && pair[1] != b'0');
 	match (look_around, backreference) {
 		(true, _) => Some("look-around"),
 		(_, true) => Some("a backreference"),
@@ -473,10 +438,7 @@ fn unshared_feature(pattern: &str) -> Option<&'static str> {
 /// A map of texts `{"x-api-key": key}` as (name, value) pairs
 fn header_pairs(headers: &Node) -> Result<Vec<(String, String)>, String> {
 	let serde_json::Value::Object(pairs) = crate::modules::foreign::json_of(headers) else {
-		return Err(format!(
-			"headers are a map of texts, got {}",
-			headers.serialize().trim()
-		));
+		return Err(format!("headers are a map of texts, got {}", headers.serialize().trim()));
 	};
 	pairs
 		.into_iter()
@@ -491,27 +453,15 @@ fn header_pairs(headers: &Node) -> Result<Vec<(String, String)>, String> {
 fn without_class_tags(value: serde_json::Value, classes: &[String]) -> serde_json::Value {
 	use serde_json::Value;
 	match value {
-		Value::Array(items) => Value::Array(
-			items
-				.into_iter()
-				.map(|item| without_class_tags(item, classes))
-				.collect(),
-		),
+		Value::Array(items) => Value::Array(items.into_iter().map(|item| without_class_tags(item, classes)).collect()),
 		Value::Object(entries) => match entries.len() == 1
-			&& entries
-				.iter()
-				.next()
-				.is_some_and(|(key, fields)| classes.contains(key) && fields.is_object())
+			&& entries.iter().next().is_some_and(|(key, fields)| classes.contains(key) && fields.is_object())
 		{
-			true => without_class_tags(
-				entries.into_iter().next().map(|(_, fields)| fields).unwrap_or_default(),
-				classes,
-			),
+			true => {
+				without_class_tags(entries.into_iter().next().map(|(_, fields)| fields).unwrap_or_default(), classes)
+			}
 			false => Value::Object(
-				entries
-					.into_iter()
-					.map(|(key, entry)| (key, without_class_tags(entry, classes)))
-					.collect(),
+				entries.into_iter().map(|(key, entry)| (key, without_class_tags(entry, classes))).collect(),
 			),
 		},
 		other => other,

@@ -28,9 +28,7 @@ pub(crate) fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structu
 		}
 		Node::Key(left, _, right) => check_type_errors_inner(left, scope, in_structure)
 			.or_else(|| check_type_errors_inner(right, scope, in_structure)),
-		Node::List(items, _, _) => items
-			.iter()
-			.find_map(|item| check_type_errors_inner(item, scope, in_structure)),
+		Node::List(items, _, _) => items.iter().find_map(|item| check_type_errors_inner(item, scope, in_structure)),
 		_ => None,
 	}
 }
@@ -112,10 +110,7 @@ fn evident_results(program: &Node) -> HashMap<String, Kind> {
 				.iter()
 				.filter_map(|param| {
 					let kind = builtin_type_kind(annotated_builtin_type(param.annotation.as_ref()?)?)?;
-					Some((
-						param.name.clone(),
-						if kind == Kind::Codepoint { Kind::Text } else { kind },
-					))
+					Some((param.name.clone(), if kind == Kind::Codepoint { Kind::Text } else { kind }))
 				})
 				.collect();
 			let kind = evident_kind(last_expression(&function.body), &parameters)?;
@@ -148,9 +143,7 @@ pub fn check_kind_changes(program: &Node) -> Option<Diagnostic> {
 	});
 	let results = evident_results(program);
 	let globals = global_variables(program);
-	bodies
-		.into_iter()
-		.find_map(|body| first_kind_change(body, &mut HashMap::new(), &results, &globals))
+	bodies.into_iter().find_map(|body| first_kind_change(body, &mut HashMap::new(), &results, &globals))
 }
 
 /// The variables declared `global y` (at this stage late_binding has moved a function's `global y` to main)
@@ -159,11 +152,8 @@ fn global_variables(program: &Node) -> HashSet<String> {
 	program.visit(&mut |node| {
 		if let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() {
 			if keyword.drop_meta().name() == GLOBAL_WORD {
-				let target = if let Node::Key(target, Op::Assign, _) = declared.drop_meta() {
-					target
-				} else {
-					declared
-				};
+				let target =
+					if let Node::Key(target, Op::Assign, _) = declared.drop_meta() { target } else { declared };
 				globals.insert(target.name());
 			}
 		}
@@ -211,9 +201,7 @@ fn first_kind_change(
 		}
 		Node::Key(left, _, right) => first_kind_change(left, kinds, results, globals)
 			.or_else(|| first_kind_change(right, kinds, results, globals)),
-		Node::List(items, _, _) => items
-			.iter()
-			.find_map(|item| first_kind_change(item, kinds, results, globals)),
+		Node::List(items, _, _) => items.iter().find_map(|item| first_kind_change(item, kinds, results, globals)),
 		_ => None,
 	}
 }
@@ -282,11 +270,8 @@ fn given_kind(
 		(Some(Some(was)), Some(now)) => match was.given(now) {
 			Some(kind) => Some(kind),
 			None => {
-				let message = format!(
-					"{name} was {}, is given {}: use another name",
-					was.with_article(),
-					now.with_article()
-				);
+				let message =
+					format!("{name} was {}, is given {}: use another name", was.with_article(), now.with_article());
 				return Some(Diagnostic::at(value, message));
 			}
 		},

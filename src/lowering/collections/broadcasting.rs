@@ -6,18 +6,18 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{call, children_rewritten, is_colon_pair, key, Counter};
+use super::nodes::{call, children_rewritten, is_colon_pair, key, parameter_name, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
+use crate::words::EXTREMUM_WORDS;
 use crate::words::{ALL_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
-const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";
@@ -97,24 +97,14 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	// `(int 3) == 3` like `f(x: int)`; a truth type (`bool 3 == 3`) takes anything and is ambiguous like `same(x) := x`
 	for name in type_calls_used(&program) {
 		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
-		arities.entry(name).or_insert(Arity {
-			fewest: 1,
-			most: 1,
-			typed_first: typed,
-			converts: true,
-		});
+		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true });
 	}
 	if arities.is_empty() {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
-		arities.entry(word.to_string()).or_insert(Arity {
-			fewest: 1,
-			most: 1,
-			typed_first: false,
-			converts: false,
-		});
+		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1, typed_first: false, converts: false });
 	}
 	nest_prefix_calls(program, &arities)
 }
@@ -133,11 +123,7 @@ fn all_calls(node: Node) -> Node {
 				let calls = elements
 					.iter()
 					.map(|element| {
-						Node::List(
-							vec![function.clone(), all_calls(element.clone())],
-							Bracket::None,
-							Separator::Space,
-						)
+						Node::List(vec![function.clone(), all_calls(element.clone())], Bracket::None, Separator::Space)
 					})
 					.collect();
 				return Node::List(calls, Bracket::Square, element_separator.clone());
@@ -245,6 +231,11 @@ fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -
 }
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
+	if let Some((head, body, rebuild)) = crate::lowering::type_tests::function_definition(&node) {
+		if let Some(inner) = without_parameters(&head, arities) {
+			return rebuild(head, nest_prefix_calls(body, &inner));
+		}
+	}
 	let arity = |node: &Node| arity_of(node, arities);
 	match node {
 		Node::List(
@@ -280,17 +271,9 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) =>
 		{
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
-			let Node::Key(left, op, right) = argument.drop_meta().clone() else {
-				unreachable!("guarded")
-			};
+			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
 			if !arity(&head).expect("guarded").typed_first {
-				return ambiguous_call(
-					&argument,
-					&head.drop_meta().name(),
-					&left.serialize(),
-					&op,
-					&right.serialize(),
-				);
+				return ambiguous_call(&argument, &head.drop_meta().name(), &left.serialize(), &op, &right.serialize());
 			}
 			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
 			key(nest_prefix_calls(call, arities), op, nest_prefix_calls(*right, arities))
@@ -301,16 +284,8 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			if op.is_comparison()
 				&& matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) =>
 		{
-			let Node::List(items, _, _) = left.drop_meta() else {
-				unreachable!("guarded")
-			};
-			ambiguous_call(
-				&left,
-				&items[0].drop_meta().name(),
-				&items[1].serialize(),
-				&op,
-				&right.serialize(),
-			)
+			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
+			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
@@ -325,14 +300,21 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 	}
 }
 
+/// In a function's body its parameters are values, no functions of the same name: `f(name) := contains(name, "-")`
+/// beside a class's name() method
+fn without_parameters(head: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
+	let Node::List(items, _, _) = head.drop_meta() else { return None };
+	let shadowed: Vec<String> =
+		items.iter().skip(1).filter_map(parameter_name).filter(|name| arities.contains_key(name)).collect();
+	let unshadowed = arities.iter().filter(|(name, _)| !shadowed.contains(name));
+	(!shadowed.is_empty()).then(|| unshadowed.map(|(name, arity)| (name.clone(), *arity)).collect())
+}
+
 /// `add 1` (also as the value of `x = add 1`) given the items after its comma, when it is short of arguments and they fit
 fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Arity>) -> Result<Node, Node> {
 	match node {
 		Node::Meta { node, data } => {
-			let wrapped = |inner| Node::Meta {
-				node: Box::new(inner),
-				data: data.clone(),
-			};
+			let wrapped = |inner| Node::Meta { node: Box::new(inner), data: data.clone() };
 			with_comma_arguments(*node, rest, arities).map(wrapped).map_err(wrapped)
 		}
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => match with_comma_arguments(*value, rest, arities) {
@@ -344,26 +326,16 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 			let fits = arity_of(&items[0], arities)
 				.is_some_and(|takes| given < takes.fewest && given + rest.len() <= takes.most);
 			if fits {
-				return Ok(Node::List(
-					[items, rest.to_vec()].concat(),
-					Bracket::None,
-					Separator::Space,
-				));
+				return Ok(Node::List([items, rest.to_vec()].concat(), Bracket::None, Separator::Space));
 			}
 			// `puts add 1, 2`: the short call is the last argument
 			let last = items.pop().expect("a call has its function");
 			match with_comma_arguments(last, rest, arities) {
-				Ok(call) if !items.is_empty() => Ok(Node::List(
-					[items, vec![call]].concat(),
-					Bracket::None,
-					Separator::Space,
-				)),
+				Ok(call) if !items.is_empty() => {
+					Ok(Node::List([items, vec![call]].concat(), Bracket::None, Separator::Space))
+				}
 				Ok(call) => Ok(call),
-				Err(last) => Err(Node::List(
-					[items, vec![last]].concat(),
-					Bracket::None,
-					Separator::Space,
-				)),
+				Err(last) => Err(Node::List([items, vec![last]].concat(), Bracket::None, Separator::Space)),
 			}
 		}
 		other => Err(other),
@@ -377,10 +349,7 @@ fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -
 			if items.len() > 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if single.contains(name)) =>
 		{
 			*gathered = true;
-			let mut items: Vec<Node> = items
-				.into_iter()
-				.map(|item| gather_arguments(item, single, gathered))
-				.collect();
+			let mut items: Vec<Node> = items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect();
 			let arguments = items.split_off(1);
 			items.push(Node::List(arguments, Bracket::Square, Separator::Space));
 			Node::List(items, Bracket::None, Separator::Space)
@@ -400,31 +369,20 @@ pub fn lower(program: Node) -> Node {
 		.collect();
 	// the library words of one scalar: `upper ["ab" "cd"]`, unless the program defines the name itself
 	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
-	broadcasting.extend(
-		SCALAR_LIBRARY_WORDS
-			.iter()
-			.map(|word| word.to_string())
-			.filter(|word| !defined.contains(word)),
-	);
+	broadcasting
+		.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &broadcasting, &mut assigned);
 	let names: HashSet<String> = assigned.keys().cloned().collect();
-	let list_variables: HashSet<String> = assigned
-		.into_iter()
-		.filter(|(_, only_lists)| *only_lists)
-		.map(|(name, _)| name)
-		.collect();
+	let list_variables: HashSet<String> =
+		assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let program = each_singular(program, &list_variables, &names);
 	let scalar_parameters = found
 		.iter()
 		.map(|definition| {
 			(
 				definition.name.clone(),
-				definition
-					.params
-					.iter()
-					.map(|param| takes_a_scalar(param, &definition.body))
-					.collect(),
+				definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect(),
 			)
 		})
 		.collect();
@@ -455,19 +413,14 @@ fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -
 			format!("{}ies", name.strip_suffix('y').unwrap_or(name)),
 		];
 		let is_plural_of = |plural: &String| *plural == name || !names.contains(name);
-		plurals
-			.into_iter()
-			.find(|plural| lists.contains(plural) && is_plural_of(plural))
+		plurals.into_iter().find(|plural| lists.contains(plural) && is_plural_of(plural))
 	};
 	match node {
 		Node::List(items, bracket, separator) => {
 			// `each xs {it*10}`: a leading each with a body is the loop over xs (wiki/Iteration.md), no `all` argument
 			let is_loop = items.len() > 2 && items[0].is_symbol(EACH_WORD);
 			let mut walked = Vec::with_capacity(items.len());
-			let mut items = items
-				.into_iter()
-				.map(|item| each_singular(item, lists, names))
-				.peekable();
+			let mut items = items.into_iter().map(|item| each_singular(item, lists, names)).peekable();
 			while let Some(item) = items.next() {
 				let list = items.peek().filter(|_| item.is_symbol(EACH_WORD)).and_then(walked_list);
 				if let (true, Some(plural)) = (is_loop, &list) {
@@ -523,18 +476,10 @@ fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 		// `f = x => x + 1`: lambdas.rs makes it the definition f(x) later
 		if let Some(lambda) = crate::lambdas::arrow_lambda(body) {
 			let params = lambda.params.iter().map(|param| Node::Symbol(param.clone())).collect();
-			found.push(Definition {
-				name: name.clone(),
-				params,
-				body: lambda.body,
-			});
+			found.push(Definition { name: name.clone(), params, body: lambda.body });
 		} else if *op == Op::Define {
 			let params = vec![symbol(IMPLICIT_PARAMETER)];
-			found.push(Definition {
-				name: name.clone(),
-				params,
-				body: body.as_ref().clone(),
-			});
+			found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
 		}
 	});
 }
@@ -676,9 +621,7 @@ fn is_list_literal(node: &Node) -> bool {
 		Node::List(items, Bracket::Square, _) => !items.is_empty() && !items.iter().any(is_colon_pair),
 		Node::List(items, Bracket::Round | Bracket::Curly, _) => {
 			items.len() > 1
-				&& items
-					.iter()
-					.all(|item| matches!(item.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_)))
+				&& items.iter().all(|item| matches!(item.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_)))
 		}
 		_ => false,
 	}
@@ -758,8 +701,7 @@ impl Broadcast {
 			}
 			Node::Key(left, op, right) if left.is_empty_node() && SCALAR_OPERATORS.contains(&op) => {
 				let right = self.rewrite(*right);
-				self.broadcast_operator(op, &right)
-					.unwrap_or(Node::Key(left, op, Box::new(right)))
+				self.broadcast_operator(op, &right).unwrap_or(Node::Key(left, op, Box::new(right)))
 			}
 			// a definition head names parameters, it calls nothing
 			Node::Key(head, op @ (Op::Define | Op::Assign | Op::Arrow), body) if is_function_head(&head, op) => {
@@ -772,17 +714,12 @@ impl Broadcast {
 				if let Some(paired) = self.paired_lists(&key) {
 					return paired;
 				}
-				let Node::Key(left, op, right) = key else {
-					unreachable!()
-				};
+				let Node::Key(left, op, right) = key else { unreachable!() };
 				if op == Op::Mul && self.is_list(&left) && self.is_list(&right) {
 					return self.inner_product(*left, *right);
 				}
 				let method_call = (op == Op::Dot)
-					.then(|| {
-						self.broadcast_method(&left, &right)
-							.or_else(|| self.element_fields(&left, &right))
-					})
+					.then(|| self.broadcast_method(&left, &right).or_else(|| self.element_fields(&left, &right)))
 					.flatten();
 				method_call.unwrap_or(Node::Key(left, op, right))
 			}
@@ -795,10 +732,7 @@ impl Broadcast {
 		let (name, argument) = broadcasting_call(items, bracket, separator, &self.functions)?;
 		match argument.drop_meta() {
 			Node::List(elements, Bracket::Square, element_separator) if !elements.is_empty() => {
-				let applied = elements
-					.iter()
-					.map(|element| self.apply(name, element.clone()))
-					.collect();
+				let applied = elements.iter().map(|element| self.apply(name, element.clone())).collect();
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, vec![item]))),
@@ -823,11 +757,7 @@ impl Broadcast {
 		if !self.is_list(receiver) {
 			return None;
 		}
-		self.broadcast_call(
-			&[Node::Symbol(name.clone()), receiver.clone()],
-			&Bracket::Round,
-			&Separator::None,
-		)
+		self.broadcast_call(&[Node::Symbol(name.clone()), receiver.clone()], &Bracket::Round, &Separator::None)
 	}
 
 	/// `people.name` of a list of instances whose type declares the field name: `map(people, item => item.name)`; a list's
@@ -840,10 +770,7 @@ impl Broadcast {
 		let is_list_word = crate::library_words::is_library_word(name);
 		(!shadowed
 			&& !is_list_word
-			&& self
-				.instances
-				.as_ref()
-				.is_some_and(|instances| instances.is_element_field(list, name)))
+			&& self.instances.as_ref().is_some_and(|instances| instances.is_element_field(list, name)))
 		.then(|| each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
@@ -867,9 +794,8 @@ impl Broadcast {
 		if !is_call || arguments.is_empty() {
 			return None;
 		}
-		let marked: Vec<usize> = (0..arguments.len())
-			.filter(|index| all_marked(&arguments[*index]).is_some())
-			.collect();
+		let marked: Vec<usize> =
+			(0..arguments.len()).filter(|index| all_marked(&arguments[*index]).is_some()).collect();
 		let (index, list) = match marked.as_slice() {
 			[index] => (*index, all_marked(&arguments[*index]).expect("marked").clone()),
 			[] => {
@@ -877,9 +803,8 @@ impl Broadcast {
 					.scalar_parameters
 					.get(name)
 					.filter(|scalars| scalars.len() == arguments.len() && arguments.len() > 1)?;
-				let lists: Vec<usize> = (0..arguments.len())
-					.filter(|index| scalar[*index] && self.is_list(&arguments[*index]))
-					.collect();
+				let lists: Vec<usize> =
+					(0..arguments.len()).filter(|index| scalar[*index] && self.is_list(&arguments[*index])).collect();
 				let [index] = lists.as_slice() else { return None };
 				(*index, arguments[*index].clone())
 			}
@@ -927,10 +852,7 @@ impl Broadcast {
 		}
 		let named = self.namer();
 		let item = key(Node::Symbol(named("ITEM")), op, operand);
-		Some(super::nodes::filled(
-			&named(FUSED_SUM_TEMPLATE),
-			[("fused_list", receiver), ("fused_item", item)],
-		))
+		Some(super::nodes::filled(&named(FUSED_SUM_TEMPLATE), [("fused_list", receiver), ("fused_item", item)]))
 	}
 
 	/// A list, or an element-wise expression giving one: `xs`, `[1 2]`, `(xs .* 2)`
@@ -972,11 +894,7 @@ impl Broadcast {
 			Node::List(elements, Bracket::Square, separator)
 				if !elements.is_empty() && !elements.iter().any(is_colon_pair) =>
 			{
-				Some(Node::List(
-					elements.iter().cloned().map(applied).collect(),
-					Bracket::Square,
-					separator.clone(),
-				))
+				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
 			_ => None,
@@ -986,11 +904,9 @@ impl Broadcast {
 	/// The function applied to one element: to the value of a pair, broadcast again over a nested list
 	fn apply(&self, name: &str, element: Node) -> Node {
 		match element.drop_meta() {
-			Node::Key(key, Op::Colon, value) => Node::Key(
-				key.clone(),
-				Op::Colon,
-				Box::new(self.apply(name, value.as_ref().clone())),
-			),
+			Node::Key(key, Op::Colon, value) => {
+				Node::Key(key.clone(), Op::Colon, Box::new(self.apply(name, value.as_ref().clone())))
+			}
 			_ => {
 				let items = vec![symbol(name), element];
 				self.broadcast_call(&items, &Bracket::Round, &Separator::None)
@@ -1019,10 +935,8 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 	match node {
 		// a function or lambda: its own parameters, the outer ones are out of scope
 		Node::Key(head, op @ (Op::Define | Op::Assign | Op::Arrow), body) if is_function_head(&head, op) => {
-			let inner: Vec<String> = untyped_parameters(&head, op)
-				.into_iter()
-				.filter(|name| only_operand(&body, name))
-				.collect();
+			let inner: Vec<String> =
+				untyped_parameters(&head, op).into_iter().filter(|name| only_operand(&body, name)).collect();
 			Node::Key(head, op, Box::new(scalar_element_wise(*body, &inner)))
 		}
 		other => other.map_children(|child| scalar_element_wise(child, parameters)),
@@ -1045,11 +959,7 @@ pub(crate) fn paired_by(receiver: Node, op: Op, operand: Node, template: &str, n
 		Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
 		other => unreachable!("{other:?}"),
 	};
-	let bindings = [
-		("paired_left", receiver),
-		("paired_right", operand),
-		("paired_item", item),
-	];
+	let bindings = [("paired_left", receiver), ("paired_right", operand), ("paired_item", item)];
 	super::nodes::filled(&named(&template.replace("COUNT", PAIRED_COUNT)), bindings)
 }
 
@@ -1064,9 +974,7 @@ pub(crate) fn named_by(unique: String) -> impl Fn(&str) -> String {
 			("ITEM", "fused_item"),
 		]
 		.iter()
-		.fold(text.to_string(), |text, (placeholder, name)| {
-			text.replace(placeholder, &format!("{name}_{unique}"))
-		})
+		.fold(text.to_string(), |text, (placeholder, name)| text.replace(placeholder, &format!("{name}_{unique}")))
 	}
 }
 
@@ -1076,11 +984,7 @@ pub const EACH_ELEMENT: &str = "each_element";
 /// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
-	let lambda = Node::Key(
-		element(),
-		Op::Arrow,
-		Box::new(Node::Key(element(), op, Box::new(operand))),
-	);
+	let lambda = Node::Key(element(), Op::Arrow, Box::new(Node::Key(element(), op, Box::new(operand))));
 	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
 }
 
@@ -1139,10 +1043,7 @@ fn untyped_parameters(head: &Node, op: Op) -> Vec<String> {
 		(Node::List(items, _, _), _) => flattened(items),
 		(single, _) => vec![single.clone()],
 	};
-	parameters
-		.iter()
-		.filter_map(|parameter| parameter.symbol_name().map(String::from))
-		.collect()
+	parameters.iter().filter_map(|parameter| parameter.symbol_name().map(String::from)).collect()
 }
 
 /// Whether `name` appears in body only as an operand of arithmetic or as an element-wise receiver
@@ -1153,9 +1054,9 @@ fn only_operand(body: &Node, name: &str) -> bool {
 	}
 	match body.drop_meta() {
 		Node::Symbol(symbol) => symbol != name,
-		Node::Key(left, op, right) if ARITHMETIC.contains(op) => [left, right]
-			.into_iter()
-			.all(|side| is_name(side) || only_operand(side, name)),
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) => {
+			[left, right].into_iter().all(|side| is_name(side) || only_operand(side, name))
+		}
 		Node::Key(left, _, right) => only_operand(left, name) && only_operand(right, name),
 		Node::List(items, _, _) => items.iter().all(|item| only_operand(item, name)),
 		_ => true,

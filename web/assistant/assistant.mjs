@@ -16,6 +16,7 @@ const MAX_MESSAGES = 24;
 const MAX_INPUT_CHARACTERS = 24000; // the messages' and the program's text together
 const ROLES = ["user", "assistant"];
 const NO_THINKING = { type: "disabled" };
+const KEY_REFUSED = "The assistant's Anthropic key was refused, so it cannot answer until its owner renews it (warp-assistant-secrets); a key of your own in the ⋯ menu works meanwhile";
 const NOT_SET_UP = "The playground's shared assistant is not set up yet: paste your own Anthropic API key into the ⋯ menu.";
 
 export default {
@@ -95,6 +96,12 @@ async function claudeAnswer({ task, messages, program = "" }, env) {
 			thinking: thinking === false ? NO_THINKING : undefined,
 		}),
 	});
+	// the API refusing this Worker's own key is no fault of the caller's session (a 401 passed on made the page renew
+	// its session, a second Turnstile check, in vain): said loudly as the proxy's (card failed-load)
+	if (reply.status === 401 || reply.status === 403) {
+		const refusal = (await reply.json().catch(() => ({}))).error?.message ?? `HTTP status ${reply.status}`;
+		throw failure(502, `${KEY_REFUSED}: ${refusal}`);
+	}
 	return new Response(reply.body, { status: reply.status, headers: { "content-type": "application/json" } });
 }
 

@@ -6,9 +6,7 @@ use warp::errors::diagnostic::take_warnings;
 fn warns_of_spelled_number(code: &str) -> bool {
 	take_warnings();
 	warp::wasm_emitter::eval(code);
-	take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("spells a number"))
+	take_warnings().iter().any(|warning| warning.message.contains("spells a number"))
 }
 
 #[test]

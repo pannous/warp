@@ -25,9 +25,6 @@ fn a_bracketed_list_parameter_holds_its_element_type() {
 		"def f(values: [float]) -> float { last = 0.0 as float; for x in values { last = x + 0.5 * last }; last }\nf([1.0 as float, 2.0 as float])",
 		2.5
 	);
-	is!(
-		"def f(values: [float]) { values#1 + 0.5 }\nf([1.0 as float, 2.0 as float])",
-		1.5
-	);
+	is!("def f(values: [float]) { values#1 + 0.5 }\nf([1.0 as float, 2.0 as float])", 1.5);
 	is!("def f(xs: [text]) { xs#2 }\nf([\"a\", \"b\"])", "b");
 }

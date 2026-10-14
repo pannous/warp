@@ -16,10 +16,7 @@ fn an_awaited_bool_is_a_bool() {
 #[test]
 fn bools_of_a_job_list_are_bools() {
 	assert_eq!(text_of("f(x) := x > 2; await all [go f(3), go f(1)]"), "[yes no]");
-	assert_eq!(
-		text_of("f(x) := x > 2; jobs = []; jobs.add(go f(3)); jobs.add(go f(1)); await all jobs"),
-		"[yes no]"
-	);
+	assert_eq!(text_of("f(x) := x > 2; jobs = []; jobs.add(go f(3)); jobs.add(go f(1)); await all jobs"), "[yes no]");
 }
 
 #[test]

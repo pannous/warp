@@ -35,10 +35,8 @@ impl WarpParser {
 
 	/// The path literal at the cursor, up to whitespace, a closing bracket or a separator
 	pub(crate) fn parse_path_literal(&mut self) -> Node {
-		let path: String = (0..)
-			.map(|offset| self.peek_char(offset))
-			.take_while(|&c| !super::lookahead::ends_path(c))
-			.collect();
+		let path: String =
+			(0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
 		self.advance_by(path.chars().count());
 		Node::Text(path)
 	}
@@ -55,23 +53,14 @@ impl WarpParser {
 		if blanks == 0 || length == 0 {
 			return None;
 		}
-		let operand: String = self.chars[self.pos + blanks..self.pos + blanks + length]
-			.iter()
-			.collect();
+		let operand: String = self.chars[self.pos + blanks..self.pos + blanks + length].iter().collect();
 		self.advance_by(blanks + length);
-		Some(Node::List(
-			vec![Node::Symbol(symbol.to_string()), Node::Symbol(operand)],
-			Bracket::None,
-			Separator::Space,
-		))
+		Some(Node::List(vec![Node::Symbol(symbol.to_string()), Node::Symbol(operand)], Bracket::None, Separator::Space))
 	}
 
 	/// `http://…`, `file://…`, `ssh://…`: the scheme of a URL, the rest of which reads as one text
 	pub(crate) fn url_follows(&self) -> bool {
-		URL_MARK
-			.chars()
-			.enumerate()
-			.all(|(offset, mark)| self.peek_char(offset) == mark)
+		URL_MARK.chars().enumerate().all(|(offset, mark)| self.peek_char(offset) == mark)
 	}
 
 	pub(crate) fn parse_url(&mut self, scheme: String) -> Node {

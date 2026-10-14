@@ -13,6 +13,7 @@
 use super::listeners;
 use super::nodes::{block, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
+use crate::lowering::signals::event_signals::FIRED_PREFIX;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{ONCE_WORD, ON_WORD, WHENEVER_WORD};
@@ -34,8 +35,6 @@ const OLD_REASON: &str = "`old` is the value before the write (P148)";
 const OLD_PREFIX: &str = "change_old_";
 /// `watched·0`: the `:=` value of the first expression an `on change` listener watches
 const WATCHED_PREFIX: &str = "watched·";
-/// `once_fired_0`: whether the first once listener ran
-const FIRED_PREFIX: &str = "once_fired_";
 /// `whenever_held_0`, `whenever_was_0`: whether the first whenever's condition holds now and held before the write
 /// (P156: whenever runs each time its condition becomes true)
 const HELD_PREFIX: &str = "whenever_held_";
@@ -71,16 +70,10 @@ impl Listener {
 	/// A write of `p.age` concerns listeners of p and of p.age; a write of p (or of `p#1`) those of p and of its fields
 	fn watches(&self, written: &str) -> bool {
 		let root = written.split(FIELD_SEPARATOR).next().unwrap_or(written);
-		let field_of_written = |watched: &str| {
-			watched
-				.strip_prefix(written)
-				.is_some_and(|rest| rest.starts_with(FIELD_SEPARATOR))
-		};
-		self.watched().is_some_and(|watched| {
-			watched
-				.iter()
-				.any(|name| name == written || name == root || field_of_written(name))
-		})
+		let field_of_written =
+			|watched: &str| watched.strip_prefix(written).is_some_and(|rest| rest.starts_with(FIELD_SEPARATOR));
+		self.watched()
+			.is_some_and(|watched| watched.iter().any(|name| name == written || name == root || field_of_written(name)))
 	}
 
 	fn watched(&self) -> Option<&HashSet<String>> {
@@ -113,11 +106,7 @@ impl Listener {
 pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
 	let not_before = key(Node::Empty, Op::Not, symbol(was));
 	let became_true = key(symbol(held), Op::And, not_before);
-	let parts = vec![
-		assign(was, symbol(held)),
-		assign(held, condition),
-		if_then(became_true, block(vec![body])),
-	];
+	let parts = vec![assign(was, symbol(held)), assign(held, condition), if_then(became_true, block(vec![body]))];
 	Node::List(parts, Bracket::Round, Separator::Semicolon)
 }
 
@@ -175,21 +164,13 @@ impl Signals {
 				// checks added to a block of one statement (`{ x = i }`) make it a sequence: `{ x = i; check }`
 				let count = items.len();
 				let statements = self.statements(items, listeners);
-				let separator = if statements.len() > count {
-					Separator::Semicolon
-				} else {
-					separator
-				};
+				let separator = if statements.len() > count { Separator::Semicolon } else { separator };
 				Node::List(statements, bracket, separator)
 			}
 			Node::List(items, bracket, separator) => {
 				// a function body is not in the flow of the statements around it (P111: its writes reach cells, signal_values)
 				let listeners = if defines_function(&items) { &[] } else { listeners };
-				Node::List(
-					items.into_iter().map(|item| self.lower(item, listeners)).collect(),
-					bracket,
-					separator,
-				)
+				Node::List(items.into_iter().map(|item| self.lower(item, listeners)).collect(), bracket, separator)
 			}
 			Node::Key(target, Op::Define, body) if is_round_head(&target) => {
 				Node::Key(target, Op::Define, Box::new(self.lower(*body, &[])))
@@ -259,9 +240,11 @@ impl Signals {
 					let message = format!(
 						"{never_fires}: {name} is a copy of {value_text} that nothing writes again; did you mean {derived}?"
 					);
-					crate::errors::diagnostic::Diagnostic::at(statement, message)
-						.fix(derived.clone())
-						.offer("a derived value", format!("{name} = {value_text}"), derived)
+					crate::errors::diagnostic::Diagnostic::at(statement, message).fix(derived.clone()).offer(
+						"a derived value",
+						format!("{name} = {value_text}"),
+						derived,
+					)
 				}
 			};
 			if let Err(error) = crate::errors::diagnostic::report(&[warning.severe()]) {
@@ -332,14 +315,7 @@ impl Signals {
 			_ => None,
 		};
 		let body = self.lower(body, &[]);
-		Some(Listener {
-			trigger: Trigger::Write(watched),
-			condition: Some(subject),
-			body,
-			fired,
-			held,
-			start,
-		})
+		Some(Listener { trigger: Trigger::Write(watched), condition: Some(subject), body, fired, held, start })
 	}
 
 	fn fresh_name(&mut self, prefix: &str) -> String {
@@ -354,11 +330,8 @@ impl Signals {
 		let mut sources = HashSet::new();
 		let mut pending = symbols(expression);
 		while let Some(name) = pending.pop() {
-			if let Some(read) = self
-				.derived
-				.get(&name)
-				.or_else(|| self.function_reads.get(&name))
-				.filter(|_| !sources.contains(&name))
+			if let Some(read) =
+				self.derived.get(&name).or_else(|| self.function_reads.get(&name)).filter(|_| !sources.contains(&name))
 			{
 				pending.extend(read.iter().cloned());
 			}
@@ -445,12 +418,7 @@ impl Signals {
 	/// `test`, `tested` (and `saved` for save, `stopped` for stop) name the defined function
 	fn function_named(&self, name: &str) -> Option<String> {
 		let mut stems = vec![name.to_string()];
-		stems.extend(
-			PAST_SUFFIXES
-				.iter()
-				.filter_map(|suffix| name.strip_suffix(suffix))
-				.map(str::to_string),
-		);
+		stems.extend(PAST_SUFFIXES.iter().filter_map(|suffix| name.strip_suffix(suffix)).map(str::to_string));
 		if let Some(stem) = name.strip_suffix(PAST_SUFFIXES[0]) {
 			let mut letters: Vec<char> = stem.chars().collect();
 			if letters.len() > 1 && letters[letters.len() - 1] == letters[letters.len() - 2] {
@@ -501,14 +469,7 @@ fn with_watched_expressions(node: Node, count: &Counter) -> Node {
 		Some((listener_word, expression, body)) => {
 			let name = Node::Symbol(format!("{WATCHED_PREFIX}{}", count.next_number()));
 			let derived = key(name.clone(), Op::Define, expression);
-			vec![
-				derived,
-				Node::List(
-					vec![symbol(ON_WORD), listener_word, name, body],
-					Bracket::None,
-					Separator::Space,
-				),
-			]
+			vec![derived, Node::List(vec![symbol(ON_WORD), listener_word, name, body], Bracket::None, Separator::Space)]
 		}
 		None => vec![statement.clone()],
 	});
@@ -557,10 +518,7 @@ pub(crate) fn with_old(body: &Node, main_variables: &HashSet<String>) -> Option<
 
 /// The listener body with `value` (or `signal`, `event`) standing for the written value
 pub(crate) fn with_value(body: &Node, value: &Node) -> Node {
-	let bindings = VALUE_WORDS
-		.iter()
-		.map(|word| (word.to_string(), value.clone()))
-		.collect();
+	let bindings = VALUE_WORDS.iter().map(|word| (word.to_string(), value.clone())).collect();
 	crate::law::substitute(body, &bindings)
 }
 
@@ -631,20 +589,14 @@ pub(crate) fn is_round_head(head: &Node) -> bool {
 
 /// `def f(x) {…}`, `fun f …`: a keyword definition
 pub(crate) fn defines_function(items: &[Node]) -> bool {
-	items
-		.first()
-		.is_some_and(|first| crate::operators::is_function_keyword(&word(first)))
+	items.first().is_some_and(|first| crate::operators::is_function_keyword(&word(first)))
 }
 
 /// The bodies of the call listeners to run before and after the statement
 fn call_listeners(listeners: &[Listener], statement: &Node) -> (Vec<Node>, Vec<Node>) {
 	let (mut before, mut after) = (vec![], vec![]);
 	for listener in listeners {
-		if let Trigger::Call {
-			function,
-			before: runs_before,
-		} = &listener.trigger
-		{
+		if let Trigger::Call { function, before: runs_before } = &listener.trigger {
 			if calls(statement, function) {
 				if *runs_before {
 					before.push(listener.check())
@@ -729,11 +681,7 @@ fn watches(listeners: &[Listener], name: &str) -> bool {
 
 /// The checks of the listeners watching any of the written names, each once
 fn checks(listeners: &[Listener], written: &[String]) -> Vec<Node> {
-	listeners
-		.iter()
-		.filter(|listener| written.iter().any(|name| listener.watches(name)))
-		.map(Listener::check)
-		.collect()
+	listeners.iter().filter(|listener| written.iter().any(|name| listener.watches(name))).map(Listener::check).collect()
 }
 
 /// A check's block as its statements, nested blocks too: in the sequence `(x--; …; x)` of a write inside an expression
@@ -761,11 +709,9 @@ fn written_variable(target: &Node, op: Op) -> Option<String> {
 /// `x`, `p.age`, `p.home.city`; an item `xs#1` is a write of xs
 fn written_path(target: &Node) -> Option<String> {
 	match target.drop_meta() {
-		Node::Key(base, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => Some(format!(
-			"{}{FIELD_SEPARATOR}{}",
-			written_path(base)?,
-			field.drop_meta().name()
-		)),
+		Node::Key(base, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => {
+			Some(format!("{}{FIELD_SEPARATOR}{}", written_path(base)?, field.drop_meta().name()))
+		}
 		_ => root_variable(target),
 	}
 }

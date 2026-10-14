@@ -12,10 +12,7 @@ fn play_and_beep_need_no_use() {
 
 #[test]
 fn a_rare_sound_word_needs_use_sound() {
-	fails_with(
-		"melody([C4 E4], 5ms)",
-		"melody is in the standard module sound: write `use sound`",
-	);
+	fails_with("melody([C4 E4], 5ms)", "melody is in the standard module sound: write `use sound`");
 	fails_with(
 		"play(C4, 5ms)\ntone(220Hz, 5ms, \"square\")",
 		"tone is in the standard module sound: write `use sound`",

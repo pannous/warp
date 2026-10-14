@@ -106,11 +106,7 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
 	let value = prelude_call(value_word, vec![map.clone(), key.clone()]);
 	let without = prelude_call(rest_word, vec![map.clone(), key.clone()]);
-	let without = if rest_word == POPPED_REST_CALL {
-		became(map, without)
-	} else {
-		without
-	};
+	let without = if rest_word == POPPED_REST_CALL { became(map, without) } else { without };
 	Some(Node::List(
 		vec![
 			Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
@@ -196,11 +192,9 @@ pub(crate) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 /// `xs.add(v)` as `xs += [v]` and `xs.insert(i, v)` as its assignment, for a call that `updates_list`
 pub(crate) fn list_update(list: Box<Node>, call: &Node) -> Node {
 	match appended_element(&list, call).cloned() {
-		Some(element) => Node::Key(
-			list,
-			Op::AddAssign,
-			Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)),
-		),
+		Some(element) => {
+			Node::Key(list, Op::AddAssign, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)))
+		}
 		None => lowered_insert(list, call),
 	}
 }

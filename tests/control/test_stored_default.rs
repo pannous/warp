@@ -23,9 +23,6 @@ fn a_stored_assignment_notes_the_default_form() {
 	set_hint_mode(HintMode::Always);
 	let (_, hints) = capture_hints(|| eval("stored visits_noted = 0; visits_noted"));
 	let rewrites: Vec<(String, String)> = hints.into_iter().map(|hint| (hint.original, hint.canonical)).collect();
-	let expected = (
-		"stored visits_noted = 0".to_string(),
-		"stored visits_noted default 0".to_string(),
-	);
+	let expected = ("stored visits_noted = 0".to_string(), "stored visits_noted default 0".to_string());
 	assert!(rewrites.contains(&expected), "{rewrites:?}");
 }

@@ -90,45 +90,21 @@ impl WasmGcEmitter {
 	fn emit_numbers_similar(&mut self) {
 		let (a, b, tolerance, difference) = (0, 1, 2, 3);
 		let f64t = ValType::F64;
-		self.runtime_function(
-			NUMBERS_SIMILAR,
-			vec![f64t; 3],
-			vec![ValType::I32],
-			vec![f64t],
-			|_, f| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(a),
-						I::LocalGet(b),
-						I::F64Sub,
-						I::F64Abs,
-						I::LocalSet(difference),
-						I::LocalGet(a),
-						I::LocalGet(b),
-						I::F64Eq,
-						I::LocalGet(difference),
-						I::F64Const(ABSOLUTE_TOLERANCE.into()),
-						I::F64Le,
-						I::I32Or,
-					],
-				);
-				for side in [a, b] {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(difference),
-							I::LocalGet(tolerance),
-							I::LocalGet(side),
-							I::F64Abs,
-							I::F64Mul,
-							I::F64Le,
-							I::I32Or,
-						],
-					);
-				}
-			},
-		);
+		self.runtime_function(NUMBERS_SIMILAR, vec![f64t; 3], vec![ValType::I32], vec![f64t], |_, f| {
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(a), I::LocalGet(b), I::F64Sub, I::F64Abs, I::LocalSet(difference),
+				I::LocalGet(a), I::LocalGet(b), I::F64Eq, I::LocalGet(difference),
+				I::F64Const(ABSOLUTE_TOLERANCE.into()), I::F64Le, I::I32Or,
+			]);
+			for side in [a, b] {
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(difference), I::LocalGet(tolerance), I::LocalGet(side), I::F64Abs, I::F64Mul, I::F64Le,
+					I::I32Or,
+				]);
+			}
+		});
 	}
 
 	/// values_similar(a: anyref, b: anyref, tolerance: f64) -> i32, or values_rough when `rough`, which trims texts
@@ -140,17 +116,7 @@ impl WasmGcEmitter {
 		let tolerance_argument = [I::LocalGet(tolerance)];
 		let (i64t, i32t) = (ValType::I64, ValType::I32);
 		let cell = ValType::Ref(self.node_ref(true));
-		let locals = vec![
-			i64t,
-			i64t,
-			i32t,
-			i32t,
-			cell,
-			cell,
-			i32t,
-			Self::any_ref(),
-			Self::any_ref(),
-		];
+		let locals = vec![i64t, i64t, i32t, i32t, cell, cell, i32t, Self::any_ref(), Self::any_ref()];
 		self.runtime_function(
 			name,
 			vec![Self::any_ref(), Self::any_ref(), ValType::F64],
@@ -174,29 +140,14 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 				for (from, to) in [(a, kind_a), (b, kind_b)] {
 					Self::field(f, from, node, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(crate::type_kinds::UNMARKED_KIND),
-							I::I64And,
-							I::LocalSet(to),
-						],
-					);
+					Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 				}
 				// a bool and any value: alike in truthiness
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(kind_a),
-						I::I64Const(BOOL_KIND),
-						I::I64Eq,
-						I::LocalGet(kind_b),
-						I::I64Const(BOOL_KIND),
-						I::I64Eq,
-						I::I32Or,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(kind_a), I::I64Const(BOOL_KIND), I::I64Eq, I::LocalGet(kind_b), I::I64Const(BOOL_KIND),
+					I::I64Eq, I::I32Or, I::If(BlockType::Empty),
+				]);
 				for side in [a, b] {
 					f.instruction(&I::LocalGet(side));
 					s.call(f, IS_TRUTHY);
@@ -244,20 +195,12 @@ impl WasmGcEmitter {
 					s.call(f, TEXT_FOLD);
 				}
 				s.call(f, VALUES_EQUAL);
-				Self::emit_list(
-					f,
-					&[I::Return, I::End, I::LocalGet(kind_a), I::LocalGet(kind_b), I::I64Ne],
-				);
+				Self::emit_list(f, &[I::Return, I::End, I::LocalGet(kind_a), I::LocalGet(kind_b), I::I64Ne]);
 				Self::return_if(f, 0);
 				// `{…}` objects are maps: their entries may come in any order
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(kind_a),
-						I::I64Const(CURLY_LIST_KIND),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-					],
+					&[I::LocalGet(kind_a), I::I64Const(CURLY_LIST_KIND), I::I64Eq, I::If(BlockType::Empty)],
 				);
 				Self::emit_unordered_entries_equal(f, node, recurse, s.func_index(IS_META_ENTRY), &tolerance_argument);
 				f.instruction(&I::End);

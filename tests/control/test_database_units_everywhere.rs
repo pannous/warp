@@ -14,40 +14,18 @@ fn value(code: &str) -> String {
 
 #[test]
 fn a_unit_column_migrates_within_its_quantity() {
-	eval(&runs(
-		"distance: km",
-		"units_everywhere",
-		"runs.add(Run(5 km))\nruns.add(Run(1500 m))",
-	));
-	assert_eq!(
-		value(&runs("distance: km", "units_everywhere", "runs#2.distance")),
-		"1.5km"
-	);
-	assert_eq!(
-		value(&runs("distance: m", "units_everywhere", "runs#1.distance")),
-		"5000m"
-	);
-	fails_with(
-		&runs("distance: kg", "units_everywhere", "runs#1.distance"),
-		"different quantities",
-	);
-	fails_with(
-		&runs("distance: float", "units_everywhere", "runs#1.distance"),
-		"the unit would be lost",
-	);
+	eval(&runs("distance: km", "units_everywhere", "runs.add(Run(5 km))\nruns.add(Run(1500 m))"));
+	assert_eq!(value(&runs("distance: km", "units_everywhere", "runs#2.distance")), "1.5km");
+	assert_eq!(value(&runs("distance: m", "units_everywhere", "runs#1.distance")), "5000m");
+	fails_with(&runs("distance: kg", "units_everywhere", "runs#1.distance"), "different quantities");
+	fails_with(&runs("distance: float", "units_everywhere", "runs#1.distance"), "the unit would be lost");
 }
 
 #[test]
 fn plain_numbers_given_a_unit_are_read_as_it() {
 	eval(&runs("distance: int", "plain_everywhere", "runs.add(Run(3))"));
 	warp::errors::diagnostic::take_runtime_warnings();
-	assert_eq!(
-		value(&runs("distance: km", "plain_everywhere", "runs#1.distance")),
-		"3km"
-	);
+	assert_eq!(value(&runs("distance: km", "plain_everywhere", "runs#1.distance")), "3km");
 	let warnings = warp::errors::diagnostic::take_runtime_warnings();
-	assert!(
-		warnings.iter().any(|warning| warning.contains("read as km")),
-		"{warnings:?}"
-	);
+	assert!(warnings.iter().any(|warning| warning.contains("read as km")), "{warnings:?}");
 }

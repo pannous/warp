@@ -33,14 +33,7 @@ pub(crate) fn declared_bindings(declaration: &Node) -> Option<Bindings<'_>> {
 		[single] => format!("{}#{}", single.serialize(), index + 1),
 		_ => values[index].serialize(),
 	};
-	Some((
-		names
-			.into_iter()
-			.enumerate()
-			.map(|(index, name)| (name, value_of(index)))
-			.collect(),
-		values,
-	))
+	Some((names.into_iter().enumerate().map(|(index, name)| (name, value_of(index))).collect(), values))
 }
 
 pub(crate) fn check_constants(node: &Node, constants: &mut HashMap<String, (String, String)>) -> Option<Diagnostic> {
@@ -59,9 +52,7 @@ pub(crate) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 				}
 				_ => items.as_slice(),
 			};
-			statements
-				.iter()
-				.find_map(|statement| check_constants(statement, constants))
+			statements.iter().find_map(|statement| check_constants(statement, constants))
 		}
 		Node::Key(target, op, value)
 			if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() =>
@@ -85,21 +76,14 @@ fn declaration_problem(
 ) -> Option<Diagnostic> {
 	let Some((bindings, values)) = declared_bindings(declaration) else {
 		return Some(
-			Diagnostic::at(
-				declaration,
-				format!("{keyword} needs a value: {}", declaration.serialize()),
-			)
-			.fix(format!("{keyword} x = 5")),
+			Diagnostic::at(declaration, format!("{keyword} needs a value: {}", declaration.serialize()))
+				.fix(format!("{keyword} x = 5")),
 		);
 	};
 	if let Some(found) = values.iter().find_map(|value| check_constants(value, constants)) {
 		return Some(found);
 	}
-	constants.extend(
-		bindings
-			.into_iter()
-			.map(|(name, value)| (name, (keyword.to_string(), value))),
-	);
+	constants.extend(bindings.into_iter().map(|(name, value)| (name, (keyword.to_string(), value))));
 	None
 }
 
@@ -121,19 +105,14 @@ fn reassignment_problem(
 		(_, bound)
 			if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound =>
 		{
-			let redundant = Diagnostic::at(
-				node,
-				format!("{place} is const and already {bound}: {assignment} changes nothing"),
-			)
-			.fix("remove the redundant assignment".to_string());
-			crate::errors::diagnostic::report(std::slice::from_ref(&redundant))
-				.is_err()
-				.then_some(redundant)
+			let redundant =
+				Diagnostic::at(node, format!("{place} is const and already {bound}: {assignment} changes nothing"))
+					.fix("remove the redundant assignment".to_string());
+			crate::errors::diagnostic::report(std::slice::from_ref(&redundant)).is_err().then_some(redundant)
 		}
 		_ => Some(
-			Diagnostic::at(node, format!("{place} is const, cannot assign it again: {assignment}")).fix(format!(
-				"use a new name instead of {place}, or declare it without const"
-			)),
+			Diagnostic::at(node, format!("{place} is const, cannot assign it again: {assignment}"))
+				.fix(format!("use a new name instead of {place}, or declare it without const")),
 		),
 	}
 }
@@ -144,9 +123,8 @@ fn list_change_problem(node: &Node, place: &str, constants: &HashMap<String, (St
 	match constants.get(place)? {
 		(keyword, _) if keyword == LET_WORD => Some(let_change(node, place, &change)),
 		_ => Some(
-			Diagnostic::at(node, format!("{place} is const, cannot change it: {change}")).fix(format!(
-				"change a copy (copy = {place}), or declare {place} without const"
-			)),
+			Diagnostic::at(node, format!("{place} is const, cannot change it: {change}"))
+				.fix(format!("change a copy (copy = {place}), or declare {place} without const")),
 		),
 	}
 }

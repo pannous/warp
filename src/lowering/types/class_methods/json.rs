@@ -50,11 +50,7 @@ fn with_json_classes(node: Node, classes: &Node) -> Node {
 			if items.len() == 2 && items[0].drop_meta().name() == TO_JSON_WORD =>
 		{
 			let value = with_json_classes(items[1].clone(), classes);
-			Node::List(
-				vec![symbol(TO_JSON_OF_CLASSES_WORD), value, classes.clone()],
-				Bracket::Round,
-				separator,
-			)
+			Node::List(vec![symbol(TO_JSON_OF_CLASSES_WORD), value, classes.clone()], Bracket::Round, separator)
 		}
 		other => other.map_children(|child| with_json_classes(child, classes)),
 	}

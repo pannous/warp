@@ -30,17 +30,11 @@ fn the_dev_server_rebuilds_a_changed_program() {
 	});
 	let started = std::time::Instant::now();
 	while std::net::TcpStream::connect(("127.0.0.1", PORT)).is_err() {
-		assert!(
-			started.elapsed() < Duration::from_secs(60),
-			"the dev server did not start"
-		);
+		assert!(started.elapsed() < Duration::from_secs(60), "the dev server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	}
 	let page = get("/");
-	assert!(
-		page.contains("<p>one</p>") && page.contains("<script src=\"dev.js\">"),
-		"{page}"
-	);
+	assert!(page.contains("<p>one</p>") && page.contains("<script src=\"dev.js\">"), "{page}");
 	assert!(get("/dev.js").contains("warp-dev/state"));
 	let first = state();
 	assert!(first["error"].is_null(), "{first}");
@@ -53,10 +47,7 @@ fn the_dev_server_rebuilds_a_changed_program() {
 	std::fs::write(&program, "x = 1\np{ \"three\" + y }").expect("a failing program");
 	let failed = state();
 	let error = failed["error"].as_str().expect("the failure");
-	assert!(
-		error.contains("y") && error.contains("2 | p{ \"three\" + y }"),
-		"{error}"
-	);
+	assert!(error.contains("y") && error.contains("2 | p{ \"three\" + y }"), "{error}");
 }
 
 // a dev build keeps each main-level variable the program changes (as `stored` does, in the page's sessionStorage), so
@@ -68,11 +59,7 @@ fn a_dev_build_keeps_the_values_the_program_changed() {
 	assert_eq!(run("dev_count = 0\ndev_count += 1\ndev_count"), "2");
 	assert_eq!(run("dev_start = 5\ndev_start"), "5");
 	assert_eq!(run("dev_start = 6\ndev_start"), "6");
-	assert_eq!(
-		run("dev_count = 0\ndev_count"),
-		"0",
-		"a variable the program no longer changes takes its new value"
-	);
+	assert_eq!(run("dev_count = 0\ndev_count"), "0", "a variable the program no longer changes takes its new value");
 }
 
 // a dev build keeps each component instance's state too (card web-dev-instances): after a reload the second counter
@@ -116,10 +103,7 @@ fn the_dev_server_watches_the_modules_used() {
 	let state = || serde_json::from_str::<serde_json::Value>(&get("/warp-dev/state")).expect("json");
 	let started = std::time::Instant::now();
 	while std::net::TcpStream::connect(("127.0.0.1", MODULES_PORT)).is_err() {
-		assert!(
-			started.elapsed() < Duration::from_secs(60),
-			"the dev server did not start"
-		);
+		assert!(started.elapsed() < Duration::from_secs(60), "the dev server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	}
 	assert!(get("/").contains("<p>one</p>"));
@@ -132,10 +116,7 @@ fn the_dev_server_watches_the_modules_used() {
 
 	std::fs::write(&module, "x = 1\ndef greeting(){ (\"three\" }").expect("a failing module");
 	let error = state()["error"].as_str().expect("the failure").to_string();
-	assert!(
-		error.contains("dev_greeting.warp") && error.contains("2 | def greeting(){ (\"three\" }"),
-		"{error}"
-	);
+	assert!(error.contains("dev_greeting.warp") && error.contains("2 | def greeting(){ (\"three\" }"), "{error}");
 }
 
 // card dev-opens-browser: `warp dev` opens its page in the default browser when run from a terminal; piped, as here,
@@ -159,9 +140,7 @@ fn warp_dev_opens_no_browser_when_piped() {
 		.spawn()
 		.expect("warp dev");
 	let mut first_line = String::new();
-	std::io::BufReader::new(dev.stdout.take().expect("its output"))
-		.read_line(&mut first_line)
-		.expect("its first line");
+	std::io::BufReader::new(dev.stdout.take().expect("its output")).read_line(&mut first_line).expect("its first line");
 	let _ = dev.kill();
 	let _ = dev.wait();
 	let mut failure = String::new();

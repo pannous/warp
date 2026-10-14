@@ -9,10 +9,7 @@ const POINT: &str = "class Point { x: int; y: int }";
 #[test]
 fn a_map_parameter_names_its_fields() {
 	is!("greet({name}) := \"hi \" + name\ngreet({name: \"Ann\"})", "hi Ann");
-	is!(
-		"area({width, height}) := width * height\narea({width: 3, height: 4, unit: \"cm\"})",
-		12
-	);
+	is!("area({width, height}) := width * height\narea({width: 3, height: 4, unit: \"cm\"})", 12);
 	is!("label({name: n}) := \"#\" + n\nlabel({name: \"x\"})", "#x");
 }
 
@@ -37,8 +34,5 @@ fn pattern_names_are_no_main_level_variables() {
 fn asks_nothing(code: &str, expected: Node) {
 	let (value, warnings) = warnings_of(code);
 	assert_eq!(value, expected, "{code}");
-	assert!(
-		!warnings.iter().any(|warning| warning.contains("main-level")),
-		"{warnings:?}"
-	);
+	assert!(!warnings.iter().any(|warning| warning.contains("main-level")), "{warnings:?}");
 }

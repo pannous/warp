@@ -32,15 +32,12 @@ impl WarpParser {
 	/// Ruby's instance variable `@x` in a class body, after its name: an operator, the end of the statement, or the line
 	/// end before an `end` follows (an annotation `@deprecated fun f()` stands before a word or its own value)
 	fn reads_instance_variable(&self) -> bool {
-		let blanks = (0..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		match self.peek_char(blanks) {
 			'\n' => {
-				let next_line = blanks
-					+ 1 + (0..)
-					.take_while(|&offset| matches!(self.peek_char(blanks + 1 + offset), ' ' | '\t'))
-					.count();
+				let next_line =
+					blanks
+						+ 1 + (0..).take_while(|&offset| matches!(self.peek_char(blanks + 1 + offset), ' ' | '\t')).count();
 				let word: String = (next_line..)
 					.map(|offset| self.peek_char(offset))
 					.take_while(|ch| is_identifier_char(*ch))
@@ -83,10 +80,7 @@ impl WarpParser {
 			}
 			end += 1;
 		}
-		let after = end
-			+ (end..)
-				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
-				.count();
+		let after = end + (end..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
 		if !matches!(self.peek_char(after), '\0' | '\n' | '\r' | ';' | ',' | ')' | ']' | '}') {
 			return None;
 		}

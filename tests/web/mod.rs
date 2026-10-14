@@ -48,6 +48,8 @@ mod test_glued_attribute_content; // card words-glue
 mod test_gpu_auto; // card gpu-auto
 mod test_gpu_functions; // card gpu-functions
 mod test_guide; // the language guide on the playground page
+#[cfg(feature = "native")] // runs node
+mod test_guide_heading_links; // card heading-links
 mod test_guide_sections; // card guide-lists
 mod test_headless_pages;
 #[cfg(feature = "native")] // src/web/site.rs is native
@@ -78,12 +80,15 @@ mod test_page_rendered_sound; // card playground-refuses
 #[cfg(feature = "native")] // builds a site natively
 mod test_page_server_data; // a main-level statement changing server data stays on the server
 mod test_page_tests;
+#[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
+mod test_playground_get_routes; // cards square-int, recognized-browser
 #[cfg(feature = "native")] // runs node
 mod test_playground_paint; // card canvas-zero
 mod test_primer; // card language-primer: the assistant's system prompt, /llms.txt
 mod test_rendered_at; // card sample-accurate
 mod test_rendered_fades; // card sound-gain-ramps
 mod test_rendered_pan; // card stereo-pan
+mod test_rendered_samples; // card sound-samples
 mod test_rendered_task_sounds; // card playground-drops
 mod test_rendering_itself; // card playground-render
 #[cfg(feature = "native")] // a server on a port, HTTP requests

@@ -19,10 +19,7 @@ pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
 		format!("{}\t{}\t{parameters}\t{result}\n", import.library, import.name)
 	};
 	let libc_line = |import: &FfiSignature| {
-		let texts = crate::ffi::header_text_parameters(LIBC)
-			.get(import.name)
-			.cloned()
-			.unwrap_or_default();
+		let texts = crate::ffi::header_text_parameters(LIBC).get(import.name).cloned().unwrap_or_default();
 		let pairs = crate::ffi::string_pair_count(import.name);
 		let parameters = (0..import.params.len())
 			.map(|index| match index {
@@ -40,11 +37,7 @@ pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
 		line(
 			import,
 			parameters,
-			if matches!(import.results.first(), Some(wasm_encoder::ValType::Ref(_))) {
-				"t"
-			} else {
-				"n"
-			},
+			if matches!(import.results.first(), Some(wasm_encoder::ValType::Ref(_))) { "t" } else { "n" },
 		)
 	};
 	let module_line = |import: &FfiSignature, export: &Export| {
@@ -89,19 +82,13 @@ pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
 /// The parameters of a module function's import (the program's view) whose text crosses with its length in the next one
 pub fn texts_with_lengths(signature: &FfiSignature) -> Vec<usize> {
 	if !is_module_path(signature.library) {
-		return (0..crate::ffi::string_pair_count(signature.name))
-			.map(|pair| 2 * pair)
-			.collect();
+		return (0..crate::ffi::string_pair_count(signature.name)).map(|pair| 2 * pair).collect();
 	}
 	let Some(export) = exports(signature.library).get(signature.name) else {
 		return vec![];
 	};
-	let passed: Vec<CParameter> = export
-		.c_parameters
-		.iter()
-		.copied()
-		.filter(|parameter| parameter.is_passed())
-		.collect();
+	let passed: Vec<CParameter> =
+		export.c_parameters.iter().copied().filter(|parameter| parameter.is_passed()).collect();
 	(0..passed.len())
 		.filter(|index| passed[*index] == CParameter::Text && passed.get(index + 1) == Some(&CParameter::TextLength))
 		.collect()

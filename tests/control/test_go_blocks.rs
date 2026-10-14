@@ -14,14 +14,8 @@ fn a_go_block_prints_after_the_program_goes_on() {
 
 #[test]
 fn a_go_block_does_not_hold_up_the_program() {
-	is!(
-		"def hi: {sleep(1000ms);print('hi')}; started = clock(); go { hi() }; clock() - started < 500",
-		true
-	);
-	is!(
-		"hi() := { sleep(1000ms); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500",
-		true
-	);
+	is!("def hi: {sleep(1000ms);print('hi')}; started = clock(); go { hi() }; clock() - started < 500", true);
+	is!("hi() := { sleep(1000ms); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500", true);
 }
 
 #[test]
@@ -60,10 +54,7 @@ fn lines_printed_by_tasks_stay_whole() {
 	let printed = crate::common::printed("for i in 10..30 { go { print(i) } }");
 	let lines: Vec<&str> = printed.lines().filter(|line| !line.starts_with('»')).collect();
 	assert_eq!(lines.len(), 20, "printed {printed:?}");
-	assert!(
-		lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()),
-		"printed {printed:?}"
-	);
+	assert!(lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()), "printed {printed:?}");
 }
 
 /// `f() := { go h(2) }` is a function in braces, no getter: no warning about running at every read

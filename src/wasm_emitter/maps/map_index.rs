@@ -27,20 +27,14 @@ enum IndexPart {
 	Tail,
 	Seen,
 }
-const INDEX_PARTS: [(IndexPart, &str); 4] = [
-	(IndexPart::Owner, "owner"),
-	(IndexPart::Index, "index"),
-	(IndexPart::Tail, "tail"),
-	(IndexPart::Seen, "seen"),
-];
+const INDEX_PARTS: [(IndexPart, &str); 4] =
+	[(IndexPart::Owner, "owner"), (IndexPart::Index, "index"), (IndexPart::Tail, "tail"), (IndexPart::Seen, "seen")];
 const KEY_KIND: i64 = Kind::Key as i64;
 
 impl WasmGcEmitter {
 	/// Programs finding or setting entries of a map node
 	pub(in crate::wasm_emitter) fn uses_map_lookups(&self) -> bool {
-		["map_get", "map_find", "field_with"]
-			.iter()
-			.any(|name| self.should_emit_function(name))
+		["map_get", "map_find", "field_with"].iter().any(|name| self.should_emit_function(name))
 	}
 
 	pub(in crate::wasm_emitter) fn emit_map_index_globals(&mut self) {
@@ -51,14 +45,8 @@ impl WasmGcEmitter {
 		for slot in 0..MAP_INDEXES {
 			for (part, name) in INDEX_PARTS {
 				let (val_type, heap) = match part {
-					IndexPart::Index => (
-						Ref(self.node_map_ref()),
-						HeapType::Concrete(self.type_manager.node_map_type),
-					),
-					_ => (
-						Ref(self.node_ref(true)),
-						HeapType::Concrete(self.type_manager.node_type),
-					),
+					IndexPart::Index => (Ref(self.node_map_ref()), HeapType::Concrete(self.type_manager.node_map_type)),
+					_ => (Ref(self.node_ref(true)), HeapType::Concrete(self.type_manager.node_type)),
 				};
 				self.declare_named_global(val_type, ConstExpr::ref_null(heap), format!("map_index_{slot}_{name}"));
 			}
@@ -87,14 +75,7 @@ impl WasmGcEmitter {
 		let kind_of = |f: &mut Function| {
 			Self::emit_list(
 				f,
-				&[
-					I::StructGet {
-						struct_type_index: node,
-						field_index: 0,
-					},
-					I::I64Const(KIND_MASK),
-					I::I64And,
-				],
+				&[I::StructGet { struct_type_index: node, field_index: 0 }, I::I64Const(KIND_MASK), I::I64And],
 			)
 		};
 		let [owner, index, tail, seen] = [IndexPart::Owner, IndexPart::Index, IndexPart::Tail, IndexPart::Seen]
@@ -106,12 +87,7 @@ impl WasmGcEmitter {
 			.iter()
 			.flat_map(|&(part, _)| {
 				let (first, second) = (self.map_index_part(0, part), self.map_index_part(1, part));
-				[
-					I::GlobalGet(first),
-					I::GlobalGet(second),
-					I::GlobalSet(first),
-					I::GlobalSet(second),
-				]
+				[I::GlobalGet(first), I::GlobalGet(second), I::GlobalSet(first), I::GlobalSet(second)]
 			})
 			.collect();
 
@@ -129,11 +105,7 @@ impl WasmGcEmitter {
 				return_unless(f);
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(item),
-						I::RefCastNonNull(HeapType::Concrete(node)),
-						I::LocalTee(entry),
-					],
+					&[I::LocalGet(item), I::RefCastNonNull(HeapType::Concrete(node)), I::LocalTee(entry)],
 				);
 				kind_of(f);
 				Self::emit_list(f, &[I::I64Const(KEY_KIND), I::I64Eq]);
@@ -154,13 +126,7 @@ impl WasmGcEmitter {
 				return_unless(f);
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(table),
-						I::LocalGet(name),
-						I::RefAsNonNull,
-						I::LocalGet(entry),
-						I::RefAsNonNull,
-					],
+					&[I::LocalGet(table), I::LocalGet(name), I::RefAsNonNull, I::LocalGet(entry), I::RefAsNonNull],
 				);
 				s.call(f, super::super::maps::map_backend::NODE_MAP_SET);
 			},
@@ -182,12 +148,7 @@ impl WasmGcEmitter {
 				return_when(f, 1);
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(fields),
-						I::GlobalGet(other_owner),
-						I::RefEq,
-						I::If(BlockType::Empty),
-					],
+					&[I::LocalGet(fields), I::GlobalGet(other_owner), I::RefEq, I::If(BlockType::Empty)],
 				);
 				Self::emit_list(f, &swap);
 				Self::emit_list(f, &[I::I32Const(1), I::Return, I::End, I::LocalGet(fields)]);
@@ -195,42 +156,22 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I64Const(Kind::List as i64), I::I64Ne]);
 				return_when(f, 0);
 				// walked for the first time lately: remembered
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(fields),
-						I::GlobalGet(seen),
-						I::RefEq,
-						I::LocalGet(fields),
-						I::GlobalGet(other_seen),
-						I::RefEq,
-						I::I32Or,
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-						I::GlobalGet(seen),
-						I::GlobalSet(other_seen),
-						I::LocalGet(fields),
-						I::GlobalSet(seen),
-						I::I32Const(0),
-						I::Return,
-						I::End,
-						I::LocalGet(fields),
-						I::LocalSet(cell),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(fields), I::GlobalGet(seen), I::RefEq, I::LocalGet(fields), I::GlobalGet(other_seen),
+					I::RefEq, I::I32Or, I::I32Eqz, I::If(BlockType::Empty),
+						I::GlobalGet(seen), I::GlobalSet(other_seen),
+						I::LocalGet(fields), I::GlobalSet(seen),
+						I::I32Const(0), I::Return,
+					I::End,
+					I::LocalGet(fields), I::LocalSet(cell),
+				]);
 				s.emit_cell_walk(f, cell, |f| {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(count),
-							I::I32Const(1),
-							I::I32Add,
-							I::LocalTee(count),
-							I::I32Const(MIN_INDEXED_ENTRIES),
-							I::I32GeU,
-							I::BrIf(1),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalTee(count),
+						I::I32Const(MIN_INDEXED_ENTRIES), I::I32GeU, I::BrIf(1),
+					]);
 				});
 				Self::emit_list(f, &[I::LocalGet(count), I::I32Const(MIN_INDEXED_ENTRIES), I::I32LtU]);
 				return_when(f, 0);
@@ -238,10 +179,7 @@ impl WasmGcEmitter {
 				for part in [IndexPart::Owner, IndexPart::Index, IndexPart::Tail] {
 					Self::emit_list(
 						f,
-						&[
-							I::GlobalGet(s.map_index_part(0, part)),
-							I::GlobalSet(s.map_index_part(1, part)),
-						],
+						&[I::GlobalGet(s.map_index_part(0, part)), I::GlobalSet(s.map_index_part(1, part))],
 					);
 				}
 				Self::emit_list(f, &[I::LocalGet(fields), I::GlobalSet(owner)]);
@@ -255,13 +193,7 @@ impl WasmGcEmitter {
 					s.call(f, super::super::reflection::equality::IS_META_ENTRY);
 					Self::emit_list(
 						f,
-						&[
-							I::LocalGet(meta),
-							I::I32Or,
-							I::LocalSet(meta),
-							I::LocalGet(cell),
-							I::LocalSet(last),
-						],
+						&[I::LocalGet(meta), I::I32Or, I::LocalSet(meta), I::LocalGet(cell), I::LocalSet(last)],
 					);
 				});
 				Self::emit_list(
@@ -289,13 +221,7 @@ impl WasmGcEmitter {
 			vec![nullable],
 			|s, f| {
 				let (fields, key, name) = (0, 1, 2);
-				let unindexed = [
-					I::If(BlockType::Empty),
-					null_node.clone(),
-					I::I32Const(0),
-					I::Return,
-					I::End,
-				];
+				let unindexed = [I::If(BlockType::Empty), null_node.clone(), I::I32Const(0), I::Return, I::End];
 				f.instruction(&I::LocalGet(fields));
 				s.call(f, MAP_INDEX_OF);
 				f.instruction(&I::I32Eqz);
@@ -314,91 +240,63 @@ impl WasmGcEmitter {
 
 		// map_index_grow(fields, entry) -> appended: a new field of an indexed map goes in its index, and after its last
 		// cell when it has no meta entries; else (0) fields_grow places it
-		self.runtime_function(
-			MAP_INDEX_GROW,
-			vec![node_ref, node_ref],
-			vec![ValType::I32],
-			vec![nullable],
-			|s, f| {
-				let (fields, entry, made) = (0, 1, 2);
-				let tail_cell = [I::GlobalGet(tail), I::RefAsNonNull];
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(fields),
-						I::GlobalGet(other_owner),
-						I::RefEq,
-						I::If(BlockType::Empty),
-						null_node.clone(),
-						I::GlobalSet(other_owner),
-						I::End,
-						I::LocalGet(fields),
-						I::GlobalGet(owner),
-						I::RefEq,
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-						I::I32Const(0),
-						I::Return,
-						I::End,
-						I::GlobalGet(index),
-						I::RefAsNonNull,
-						I::LocalGet(entry),
-					],
-				);
-				s.call(f, MAP_INDEX_ADD);
-				Self::emit_list(
-					f,
-					&[
-						I::GlobalGet(tail),
-						I::RefIsNull,
-						I::If(BlockType::Empty),
-						I::I32Const(0),
-						I::Return,
-						I::End,
-						I::LocalGet(entry),
-					],
-				);
-				s.call(f, super::super::reflection::equality::IS_META_ENTRY);
-				Self::emit_list(
-					f,
-					&[
-						I::If(BlockType::Empty),
-						null_node.clone(),
-						I::GlobalSet(tail),
-						I::I32Const(0),
-						I::Return,
-						I::End,
-					],
-				);
-				Self::emit_list(f, &tail_cell);
-				Self::emit_list(
-					f,
-					&[
-						I::StructGet {
-							struct_type_index: node,
-							field_index: 0,
-						},
-						I::LocalGet(entry),
-						null_node.clone(),
-						I::StructNew(node),
-						I::LocalSet(made),
-					],
-				);
-				Self::emit_list(f, &tail_cell);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(made),
-						I::StructSet {
-							struct_type_index: node,
-							field_index: 2,
-						},
-						I::LocalGet(made),
-						I::GlobalSet(tail),
-						I::I32Const(1),
-					],
-				);
-			},
-		);
+		self.runtime_function(MAP_INDEX_GROW, vec![node_ref, node_ref], vec![ValType::I32], vec![nullable], |s, f| {
+			let (fields, entry, made) = (0, 1, 2);
+			let tail_cell = [I::GlobalGet(tail), I::RefAsNonNull];
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(fields),
+					I::GlobalGet(other_owner),
+					I::RefEq,
+					I::If(BlockType::Empty),
+					null_node.clone(),
+					I::GlobalSet(other_owner),
+					I::End,
+					I::LocalGet(fields),
+					I::GlobalGet(owner),
+					I::RefEq,
+					I::I32Eqz,
+					I::If(BlockType::Empty),
+					I::I32Const(0),
+					I::Return,
+					I::End,
+					I::GlobalGet(index),
+					I::RefAsNonNull,
+					I::LocalGet(entry),
+				],
+			);
+			s.call(f, MAP_INDEX_ADD);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::GlobalGet(tail), I::RefIsNull, I::If(BlockType::Empty),
+					I::I32Const(0), I::Return,
+				I::End,
+				I::LocalGet(entry),
+			]);
+			s.call(f, super::super::reflection::equality::IS_META_ENTRY);
+			Self::emit_list(
+				f,
+				&[I::If(BlockType::Empty), null_node.clone(), I::GlobalSet(tail), I::I32Const(0), I::Return, I::End],
+			);
+			Self::emit_list(f, &tail_cell);
+			Self::emit_list(
+				f,
+				&[
+					I::StructGet { struct_type_index: node, field_index: 0 },
+					I::LocalGet(entry),
+					null_node.clone(),
+					I::StructNew(node),
+					I::LocalSet(made),
+				],
+			);
+			Self::emit_list(f, &tail_cell);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(made), I::StructSet { struct_type_index: node, field_index: 2 },
+				I::LocalGet(made), I::GlobalSet(tail),
+				I::I32Const(1),
+			]);
+		});
 	}
 }

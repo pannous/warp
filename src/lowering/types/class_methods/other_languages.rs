@@ -24,11 +24,8 @@ pub(super) fn taking_in_impls(node: Node, impls: &[(String, Vec<Node>)]) -> Node
 		_ if impl_block(&node).is_some() => Node::Empty,
 		Node::Type { name, body } => {
 			let class = name.drop_meta().name();
-			let added: Vec<Node> = impls
-				.iter()
-				.filter(|(owner, _)| *owner == class)
-				.flat_map(|(_, items)| items.clone())
-				.collect();
+			let added: Vec<Node> =
+				impls.iter().filter(|(owner, _)| *owner == class).flat_map(|(_, items)| items.clone()).collect();
 			match added.is_empty() {
 				true => Node::Type { name, body },
 				false => Node::Type {
@@ -51,10 +48,7 @@ pub(super) fn taking_in_impls(node: Node, impls: &[(String, Vec<Node>)]) -> Node
 		}
 		Node::Meta { node, data } => match taking_in_impls(*node, impls) {
 			Node::Empty => Node::Empty,
-			node => Node::Meta {
-				node: Box::new(node),
-				data,
-			},
+			node => Node::Meta { node: Box::new(node), data },
 		},
 		other => other,
 	}
@@ -124,19 +118,13 @@ pub(super) fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 		&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space),
 		&bindings,
 	);
-	Some((
-		class.clone(),
-		class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon)),
-	))
+	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
 }
 
 /// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note
 pub(super) fn ruby_constructions(node: Node) -> Node {
 	let classes = declared_classes(&node, |body| {
-		!class_items(body)
-			.iter()
-			.filter_map(method_parts)
-			.any(|(method, _, _)| method == RUBY_NEW_WORD)
+		!class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RUBY_NEW_WORD)
 	});
 	if classes.is_empty() {
 		return node;
@@ -166,11 +154,9 @@ pub(super) fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 			crate::normalize::set_position_of(&class);
 			crate::errors::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
 			let arguments = match member.drop_meta().clone() {
-				Node::List(items, _, _) => items[1..]
-					.iter()
-					.cloned()
-					.map(|argument| constructed_by_new(argument, classes))
-					.collect(),
+				Node::List(items, _, _) => {
+					items[1..].iter().cloned().map(|argument| constructed_by_new(argument, classes)).collect()
+				}
 				_ => vec![],
 			};
 			parens([vec![*class], arguments].concat())
@@ -199,10 +185,7 @@ pub(super) fn with_witness_methods(node: Node) -> Node {
 				return Node::Type { name, body };
 			}
 			let items = items.into_iter().map(|item| witness_method(item, &class)).collect();
-			Node::Type {
-				name,
-				body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)),
-			}
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
 		}
 		other => other.map_children(with_witness_methods),
 	}
@@ -212,9 +195,8 @@ pub(super) fn witness_method(item: Node, class: &str) -> Node {
 	let Some((method, parameters, _)) = method_parts(&item) else {
 		return item;
 	};
-	let Some((witness, _)) = WITNESS_METHODS
-		.iter()
-		.find(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str()))
+	let Some((witness, _)) =
+		WITNESS_METHODS.iter().find(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str()))
 	else {
 		return item;
 	};
@@ -228,11 +210,9 @@ pub(super) fn witness_method(item: Node, class: &str) -> Node {
 	let head = call(witness, parameters.into_iter().map(typed).collect());
 	match item.drop_meta().clone() {
 		Node::Key(old_head, Op::Define, body) => match old_head.drop_meta() {
-			Node::Key(_, Op::Colon, result) if result_type(&item).is_some() => Node::Key(
-				Box::new(Node::Key(Box::new(head), Op::Colon, result.clone())),
-				Op::Define,
-				body,
-			),
+			Node::Key(_, Op::Colon, result) if result_type(&item).is_some() => {
+				Node::Key(Box::new(Node::Key(Box::new(head), Op::Colon, result.clone())), Op::Define, body)
+			}
 			_ => Node::Key(Box::new(head), Op::Define, body),
 		},
 		_ => item,

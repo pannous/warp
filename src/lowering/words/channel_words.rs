@@ -70,11 +70,7 @@ fn with_listeners(node: Node, machine: &HashMap<String, i64>) -> Node {
 		let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 			return None;
 		};
-		Some((
-			machine_channel(value)?,
-			*machine.get(&word(target))?,
-			target.as_ref().clone(),
-		))
+		Some((machine_channel(value)?, *machine.get(&word(target))?, target.as_ref().clone()))
 	}
 	let Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) = node.drop_meta() else {
 		return node;
@@ -83,10 +79,9 @@ fn with_listeners(node: Node, machine: &HashMap<String, i64>) -> Node {
 		return node;
 	}
 	let items = items.iter().flat_map(|item| match listened(item, machine) {
-		Some((name, id, target)) => vec![
-			key(target, Op::Assign, name.clone()),
-			call(crate::host::CHANNEL_LISTEN, vec![Node::int(id), name]),
-		],
+		Some((name, id, target)) => {
+			vec![key(target, Op::Assign, name.clone()), call(crate::host::CHANNEL_LISTEN, vec![Node::int(id), name])]
+		}
 		None => vec![item.clone()],
 	});
 	Node::List(items.collect(), bracket.clone(), separator.clone())
@@ -122,14 +117,9 @@ fn channel_names(program: &Node) -> HashSet<String> {
 				let Some(parameters) = functions.get(&word(callee)) else {
 					return;
 				};
-				let given = arguments
-					.iter()
-					.zip(parameters)
-					.filter(|(argument, _)| channels.contains(&word(argument)));
+				let given = arguments.iter().zip(parameters).filter(|(argument, _)| channels.contains(&word(argument)));
 				found.extend(
-					given
-						.map(|(_, parameter)| parameter.clone())
-						.filter(|parameter| !channels.contains(parameter)),
+					given.map(|(_, parameter)| parameter.clone()).filter(|parameter| !channels.contains(parameter)),
 				);
 			}
 		});
@@ -167,10 +157,9 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 			let lowered = match (items.first().map(word).as_deref(), &items[1..]) {
 				(Some(SEND_WORD), [value]) => sent(channel, value),
 				(Some(RECEIVE_WORD), []) => match listener(channel) {
-					Some(id) => Some(filled(
-						RECEIVE_TEMPLATE,
-						[("ID", id), ("CHECK", Node::int(RECEIVE_CHECK_MILLISECONDS))],
-					)),
+					Some(id) => {
+						Some(filled(RECEIVE_TEMPLATE, [("ID", id), ("CHECK", Node::int(RECEIVE_CHECK_MILLISECONDS))]))
+					}
 					None => is_local(channel).then(|| call(TAKE, vec![channel.as_ref().clone()])),
 				},
 				(Some(CLOSE_WORD), []) if is_local(channel) => Some(call(CLOSE, vec![channel.as_ref().clone()])),
@@ -193,14 +182,7 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 			[for_word, item, in_word, channel, body]
 				if word(for_word) == FOR_WORD && word(in_word) == IN_WORD && is_local(channel) =>
 			{
-				filled(
-					FOR_TEMPLATE,
-					[
-						("CHANNEL", channel.clone()),
-						("ITEM", item.clone()),
-						("BODY", body.clone()),
-					],
-				)
+				filled(FOR_TEMPLATE, [("CHANNEL", channel.clone()), ("ITEM", item.clone()), ("BODY", body.clone())])
 			}
 			_ => node,
 		},

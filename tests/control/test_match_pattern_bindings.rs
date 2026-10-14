@@ -6,18 +6,12 @@ use warp::Node;
 fn local_without_question(code: &str, expected: i64) {
 	let (value, warnings) = warnings_of(code);
 	assert_eq!(value, Node::from(expected), "{code}");
-	assert!(
-		!warnings.iter().any(|warning| warning.contains("make a new local")),
-		"{code}: {warnings:?}"
-	);
+	assert!(!warnings.iter().any(|warning| warning.contains("make a new local")), "{code}: {warnings:?}");
 }
 
 #[test]
 fn tuple_pattern_name_shadows_main_variable() {
-	local_without_question(
-		"x = 3\nwhere(p) := match p { (x, 0) => x; _ => 0 }\nwhere((4, 0)) + x",
-		7,
-	);
+	local_without_question("x = 3\nwhere(p) := match p { (x, 0) => x; _ => 0 }\nwhere((4, 0)) + x", 7);
 }
 
 #[test]

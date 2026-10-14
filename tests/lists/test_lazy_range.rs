@@ -15,16 +15,10 @@ fn a_big_range_variable_compiles() {
 /// count, index and sum read the bounds: a trillion numbers are never collected
 #[test]
 fn a_range_is_read_from_its_bounds() {
-	is!(
-		"xs = 1 to 1000000000000; [#xs, xs#999999999999]",
-		list(vec![int(1000000000000), int(999999999999)])
-	);
+	is!("xs = 1 to 1000000000000; [#xs, xs#999999999999]", list(vec![int(1000000000000), int(999999999999)]));
 	is!("xs = 1..1000000000000; xs.count", 999999999999i64);
 	is!("sum(1 to 10000000000) == 50000000005000000000", true);
-	is!(
-		"n = 5000; xs = 3..n; for x in xs { y = x }; [y, xs.sum]",
-		ints(vec![4999, 12497497])
-	);
+	is!("n = 5000; xs = 3..n; for x in xs { y = x }; [y, xs.sum]", ints(vec![4999, 12497497]));
 	is!("count(5..1)", 0);
 	is!("f(n) := { xs = 1..n; count xs }; f(100000)", 99999);
 }

@@ -6,10 +6,7 @@ use crate::is;
 /// the text of the program's last value, a quantity's own `5km`
 fn shown(code: &str) -> String {
 	let (statements, last) = code.rsplit_once('\n').unwrap_or(("", code));
-	warp::wasm_emitter::eval(&format!("{statements}\nstr({last})"))
-		.serialize()
-		.trim_matches('"')
-		.to_string()
+	warp::wasm_emitter::eval(&format!("{statements}\nstr({last})")).serialize().trim_matches('"').to_string()
 }
 
 #[test]

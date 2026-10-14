@@ -29,9 +29,6 @@ fn a_program_may_define_its_own_mean() {
 /// A function's float variable captured by a closure stays a float in it
 #[test]
 fn a_captured_float_stays_a_float() {
-	assert_eq!(
-		shown("g() := { m = float(2.5); s(x => x * m) }\ns(f) := f(1)\ng()"),
-		"2.5"
-	);
+	assert_eq!(shown("g() := { m = float(2.5); s(x => x * m) }\ns(f) := f(1)\ng()"), "2.5");
 	assert_eq!(shown("m = float(2.5)\ns(f) := f(1)\ns(x => x * m)"), "2.5");
 }

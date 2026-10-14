@@ -43,12 +43,8 @@ fn options_of(item: Node) -> Vec<Node> {
 
 /// `"apple"`, `"s": "small"`: an option's value, or its value and label
 fn is_listed_option(listed: &Node) -> bool {
-	let is_value = |node: &Node| {
-		matches!(
-			node.drop_meta(),
-			Node::Text(_) | Node::Number(_) | Node::Char(_) | Node::Symbol(_)
-		)
-	};
+	let is_value =
+		|node: &Node| matches!(node.drop_meta(), Node::Text(_) | Node::Number(_) | Node::Char(_) | Node::Symbol(_));
 	match listed.drop_meta() {
 		Node::Key(value, Op::Colon, label) => is_value(value) && is_value(label),
 		other => is_value(other),
@@ -59,10 +55,7 @@ fn is_listed_option(listed: &Node) -> bool {
 fn option(listed: &Node) -> Node {
 	let content = match listed.drop_meta() {
 		Node::Key(value, Op::Colon, label) => {
-			vec![
-				key(symbol(VALUE), Op::Colon, value.as_ref().clone()),
-				label.as_ref().clone(),
-			]
+			vec![key(symbol(VALUE), Op::Colon, value.as_ref().clone()), label.as_ref().clone()]
 		}
 		other => vec![other.clone()],
 	};
@@ -84,9 +77,5 @@ fn options_of_variable(name: &str) -> Vec<Node> {
 }
 
 fn element(content: Vec<Node>) -> Node {
-	key(
-		symbol(OPTION),
-		Op::Colon,
-		Node::List(content, Bracket::Curly, Separator::None),
-	)
+	key(symbol(OPTION), Op::Colon, Node::List(content, Bracket::Curly, Separator::None))
 }

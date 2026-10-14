@@ -120,20 +120,14 @@ fn end_quietly_on_closed_pipe() {}
 fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
 	let only_run = args.get(1).is_some_and(|word| RUN_PREFIX.trim_end() == word);
 	let file = if only_run { 2 } else { 1 };
-	let path = args
-		.get(file)
-		.filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
+	let path = args.get(file).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
 	Some((only_run, path.as_str(), &args[file + 1..]))
 }
 
 /// `warp test file.warp`: the program file whose tests run
 fn test_file(args: &[String]) -> Option<&str> {
-	let path = args
-		.get(2)
-		.filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
-	args.get(1)
-		.is_some_and(|word| TEST_WORD == word)
-		.then_some(path.as_str())
+	let path = args.get(2).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
+	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(path.as_str())
 }
 
 /// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
@@ -171,17 +165,9 @@ fn run_command(args: &[String]) {
 		let code = source_of(target);
 		let reports = law::verify(&code);
 		reports.iter().for_each(|report| println!("{}", report));
-		let all_proofs_check = reports
-			.iter()
-			.all(|report| report.assurance == law::Assurance::Proved && !report.failed());
-		println!(
-			"{}",
-			if all_proofs_check {
-				"ALL PROOFS CHECK"
-			} else {
-				"SOME PROOFS FAIL"
-			}
-		);
+		let all_proofs_check =
+			reports.iter().all(|report| report.assurance == law::Assurance::Proved && !report.failed());
+		println!("{}", if all_proofs_check { "ALL PROOFS CHECK" } else { "SOME PROOFS FAIL" });
 		std::process::exit((!all_proofs_check) as i32);
 	} else if let Some(target) = command_argument(&arg_string, "types") {
 		println!("{}", law::type_model::report(&source_of(target)));
@@ -197,8 +183,7 @@ fn run_command(args: &[String]) {
 		}
 	} else if args[1] == warp::graphics::paint_window::COMMAND {
 		if let Err(failure) = warp::graphics::paint_window::run(
-			args.get(2)
-				.is_some_and(|flag| flag == warp::graphics::paint_window::CHECK),
+			args.get(2).is_some_and(|flag| flag == warp::graphics::paint_window::CHECK),
 		) {
 			fail(failure);
 		}
@@ -216,22 +201,16 @@ fn run_command(args: &[String]) {
 			_ => Deployment::Cloud,
 		};
 		let Some(program) = args.get(if deployment == Deployment::Cloud { 2 } else { 3 }) else {
-			fail(format!(
-				"warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp"
-			));
+			fail(format!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp"));
 		};
 		if let Err(failure) = warp::web::deploy::deploy(std::path::Path::new(program), deployment) {
 			fail(format!("warp deploy: {failure}"));
 		}
 	} else if args[1] == DEV_COMMAND && args.len() >= 3 {
-		let port = args
-			.get(3)
-			.map_or(Ok(warp::web::dev_server::DEV_PORT), |port| port.parse::<u16>());
-		let served = port
-			.map_err(|_| format!("warp dev: the port is a number, not {}", args[3]))
-			.and_then(|port| {
-				warp::web::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser())
-			});
+		let port = args.get(3).map_or(Ok(warp::web::dev_server::DEV_PORT), |port| port.parse::<u16>());
+		let served = port.map_err(|_| format!("warp dev: the port is a number, not {}", args[3])).and_then(|port| {
+			warp::web::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser())
+		});
 		if let Err(failure) = served {
 			fail(failure);
 		}
@@ -239,10 +218,7 @@ fn run_command(args: &[String]) {
 		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
 		println!("{}", warp_parser::parse_data(&text).serialize());
-	} else if COMPILE_COMMANDS
-		.iter()
-		.any(|command| arg_string.starts_with(&format!("{command} ")))
-	{
+	} else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
 		let target = extract_after(&arg_string, " ");
 		let (flags, target) = leading_flags(target);
 		let ahead_of_time = flags.contains(&AOT_FLAG);
@@ -353,10 +329,7 @@ fn run_command(args: &[String]) {
 	} else if let Some(module) = command_argument(&arg_string, HELP_PREFIX) {
 		match warp::modules::std_docs::module_help(module) {
 			Some(help) => println!("{help}"),
-			None => fail(format!(
-				"no standard module {module}; {}",
-				warp::modules::std_docs::modules_overview()
-			)),
+			None => fail(format!("no standard module {module}; {}", warp::modules::std_docs::modules_overview())),
 		}
 	} else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
 		print_version();
@@ -376,30 +349,17 @@ fn print_version() {
 	println!("🌀 Warp {}", WARP_VERSION);
 	let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
 	let commit = option_env!("WARP_COMMIT").unwrap_or("of an unknown commit");
-	let branch = option_env!("WARP_BRANCH")
-		.map(|branch| format!(" on {branch}"))
-		.unwrap_or_default();
-	let binary = env::current_exe()
-		.map(|path| path.display().to_string())
-		.unwrap_or_default();
+	let branch = option_env!("WARP_BRANCH").map(|branch| format!(" on {branch}")).unwrap_or_default();
+	let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
 	let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
-	eprintln!(
-		"{profile} build {commit}{branch} · built {}",
-		built.as_deref().unwrap_or("?")
-	);
+	eprintln!("{profile} build {commit}{branch} · built {}", built.as_deref().unwrap_or("?"));
 }
 
 /// The first line a successful command prints
 fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
-	let output = std::process::Command::new(program)
-		.args(arguments)
-		.output()
-		.ok()
-		.filter(|output| output.status.success())?;
-	String::from_utf8_lossy(&output.stdout)
-		.lines()
-		.next()
-		.map(str::to_string)
+	let output =
+		std::process::Command::new(program).args(arguments).output().ok().filter(|output| output.status.success())?;
+	String::from_utf8_lossy(&output.stdout).lines().next().map(str::to_string)
 }
 
 /// The message on stderr and exit status 1

@@ -8,10 +8,7 @@ use warp::ints;
 fn then_pipes_into_a_function() {
 	is!("xs = [3,1,2]; xs then sort", ints(vec![1, 2, 3]));
 	is!("xs = [1,6,9]; xs then filter(x => x > 5)", ints(vec![6, 9]));
-	is!(
-		"square x := x*x; numbers = [1,2,3]; square numbers then filter(x => x > 5)",
-		ints(vec![9])
-	);
+	is!("square x := x*x; numbers = [1,2,3]; square numbers then filter(x => x > 5)", ints(vec![9]));
 	is!("twice(x) := x * 2; 3 then twice then twice", 12);
 }
 

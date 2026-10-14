@@ -57,12 +57,11 @@ fn gives_bool(function: &crate::compiler::context::UserFunctionDef) -> bool {
 /// The function's parameters declared bool (`f(b: bool) := b`), the rest unknown
 fn parameter_scope(function: &crate::compiler::context::UserFunctionDef) -> Scope {
 	let mut scope = Scope::new();
-	for param in function.params.iter().filter(|param| {
-		param
-			.annotation
-			.as_ref()
-			.is_some_and(|annotation| annotation.drop_meta().name() == BOOL_TYPE)
-	}) {
+	for param in function
+		.params
+		.iter()
+		.filter(|param| param.annotation.as_ref().is_some_and(|annotation| annotation.drop_meta().name() == BOOL_TYPE))
+	{
 		scope.define(param.name.clone(), param.annotation.clone().map(Box::new), Kind::Int);
 	}
 	scope

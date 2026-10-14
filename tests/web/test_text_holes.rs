@@ -6,20 +6,14 @@ use warp::web::markup::{holes, text_holes};
 
 /// Each text hole as (element path, children before it, its text as written)
 fn text_hole_places(markup: &str) -> Vec<(Vec<usize>, usize, String)> {
-	text_holes(&parse(markup))
-		.into_iter()
-		.map(|hole| (hole.path, hole.after, hole.text.serialize()))
-		.collect()
+	text_holes(&parse(markup)).into_iter().map(|hole| (hole.path, hole.after, hole.text.serialize())).collect()
 }
 
 #[test]
 fn a_computed_text_between_children_is_a_text_hole() {
 	let markup = "div{ section{ h1{ \"Title\" } \"count \" + n p{ \"fixed\" } } }";
 	assert_eq!(text_hole_places(markup), vec![(vec![0], 1, "\"count \"+n".to_string())]);
-	assert!(
-		holes(&parse(markup)).is_empty(),
-		"the section is no element hole any more"
-	);
+	assert!(holes(&parse(markup)).is_empty(), "the section is no element hole any more");
 	// one before the first child, one after the last
 	assert_eq!(
 		text_hole_places("div{ section{ \"a\" + n h1{ \"t\" } \"b\" + m } }")
@@ -54,17 +48,8 @@ fn a_page_binds_each_text_hole() {
 #[test]
 fn the_roots_own_text_is_a_text_hole() {
 	let markup = "div{ h1{ \"Counter\" } \"clicked \" + n p{ m } }";
-	assert_eq!(
-		text_hole_places(markup),
-		vec![(vec![], 1, "\"clicked \"+n".to_string())]
-	);
-	assert_eq!(
-		holes(&parse(markup))
-			.into_iter()
-			.map(|(path, _)| path)
-			.collect::<Vec<_>>(),
-		vec![vec![1]]
-	);
+	assert_eq!(text_hole_places(markup), vec![(vec![], 1, "\"clicked \"+n".to_string())]);
+	assert_eq!(holes(&parse(markup)).into_iter().map(|(path, _)| path).collect::<Vec<_>>(), vec![vec![1]]);
 	let code = "n = 0\ndiv{ button{ on click { n += 1 } \"add\" } \"clicked \" + n }";
 	let lowered = warp::pipeline::lower(code).expect("lowers").serialize();
 	assert!(lowered.contains("(page·hole·text·1):="), "{lowered}");

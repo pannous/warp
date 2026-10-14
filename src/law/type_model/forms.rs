@@ -46,10 +46,7 @@ pub(super) fn type_of_word(word: &str) -> Option<String> {
 	}
 	match scalar(word) {
 		Some(lean) => Some(lean),
-		None => word
-			.strip_suffix('s')
-			.and_then(scalar)
-			.map(|element| format!(".list ({element})")),
+		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list ({element})")),
 	}
 }
 
@@ -71,14 +68,8 @@ pub(super) fn admitted(declared: &str, value: String) -> String {
 
 /// `on`/`emit` forms; an event is named by one or more words (`on stop the machine {…}`)
 pub(super) enum Effect<'a> {
-	On {
-		event: String,
-		handler: &'a Node,
-	},
-	Emit {
-		event: String,
-		payload: Vec<(String, &'a Node)>,
-	},
+	On { event: String, handler: &'a Node },
+	Emit { event: String, payload: Vec<(String, &'a Node)> },
 }
 
 pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
@@ -110,16 +101,10 @@ pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 				.collect();
 			let mut words = words.to_vec();
 			words.push((**word).clone());
-			return Some(Effect::Emit {
-				event: crate::event_signals::event_name(words.iter())?,
-				payload: payload?,
-			});
+			return Some(Effect::Emit { event: crate::event_signals::event_name(words.iter())?, payload: payload? });
 		}
 	}
-	Some(Effect::Emit {
-		event: crate::event_signals::event_name(rest.iter())?,
-		payload: vec![],
-	})
+	Some(Effect::Emit { event: crate::event_signals::event_name(rest.iter())?, payload: vec![] })
 }
 
 /// `global n`, `global n = 0` or `global float y = 2` (parsed `global: n`, `global: (n = 0)`, `global: (y: float = 2)`):
@@ -264,10 +249,7 @@ pub(super) fn function_definition(statement: &Node) -> Option<FunctionHead<'_>> 
 					definition.result.is_none()
 						&& (definition.form == DefinitionForm::Operator(Op::Assign) || is_exported(definition))
 				})?;
-				return Some(FunctionHead {
-					result: Some(result),
-					..definition
-				});
+				return Some(FunctionHead { result: Some(result), ..definition });
 			}
 		}
 	}
@@ -287,9 +269,7 @@ fn is_exported(definition: &FunctionHead) -> bool {
 
 /// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
 pub(super) fn destructuring_assignment(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
-	let assignment = items
-		.iter()
-		.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
 	let Node::Key(target, Op::Assign, value) = items[assignment].drop_meta() else {
 		return None;
 	};
@@ -302,20 +282,13 @@ pub(super) fn destructuring_assignment(items: &[Node]) -> Option<(Vec<String>, V
 			_ => None,
 		})
 		.collect();
-	Some((
-		names?,
-		std::iter::once(&**value).chain(&items[assignment + 1..]).collect(),
-	))
+	Some((names?, std::iter::once(&**value).chain(&items[assignment + 1..]).collect()))
 }
 
 /// A function or lambda bound at main level: its name, parameters and body
 pub(super) fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>, &Node)> {
 	if let Some(definition) = function_definition(statement) {
-		let parameters = definition
-			.parameters()
-			.iter()
-			.map(|parameter| parameter_word(parameter))
-			.collect();
+		let parameters = definition.parameters().iter().map(|parameter| parameter_word(parameter)).collect();
 		return Some((definition.name, parameters, definition.body));
 	}
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
@@ -339,11 +312,7 @@ pub(super) fn unwrapped(node: &Node) -> &Node {
 
 /// `global x; x = 7`: the first statement naming x assigns it (or none names it), so that is the global's binding
 pub(super) fn assigned_before_read(statements: &[&Node], name: &str) -> bool {
-	match statements
-		.iter()
-		.find(|statement| statement.mentions(name))
-		.map(|statement| statement.drop_meta())
-	{
+	match statements.iter().find(|statement| statement.mentions(name)).map(|statement| statement.drop_meta()) {
 		Some(Node::Key(target, Op::Assign, value)) => target.is_symbol(name) && !value.mentions(name),
 		Some(_) => false,
 		None => true,
@@ -367,9 +336,7 @@ pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<S
 			};
 			let read = body.mentions(changed) && !parameters.contains(changed) && !globals.contains(changed);
 			if (*op == Op::Assign || op.is_compound_assign())
-				&& read && statements[position + offset + 2..]
-				.iter()
-				.any(|call| call.mentions(name))
+				&& read && statements[position + offset + 2..].iter().any(|call| call.mentions(name))
 			{
 				return Some(format!(
 					"not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"
@@ -472,8 +439,5 @@ pub(super) fn is_evident_bool(value: &Node) -> bool {
 }
 
 pub(super) fn lean_strings(words: &[String]) -> String {
-	format!(
-		"[{}]",
-		words.iter().map(|word| quoted(word)).collect::<Vec<_>>().join(", ")
-	)
+	format!("[{}]", words.iter().map(|word| quoted(word)).collect::<Vec<_>>().join(", "))
 }

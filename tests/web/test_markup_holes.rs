@@ -19,10 +19,7 @@ fn the_elements_holding_computed_parts_are_the_holes() {
 		vec![vec![1], vec![2, 0]]
 	);
 	// a fixed list's elements count as children; an element holding none itself is no hole, its children may be
-	assert_eq!(
-		hole_paths("div{ [p{\"a\"} p{\"b\"}] section{ h1{\"t\"} p{ n } } }"),
-		vec![vec![2, 1]]
-	);
+	assert_eq!(hole_paths("div{ [p{\"a\"} p{\"b\"}] section{ h1{\"t\"} p{ n } } }"), vec![vec![2, 1]]);
 	// a hole holds its whole element, nested ones included
 	assert_eq!(hole_paths("div{ p{ n b{ m } } }"), vec![vec![0]]);
 }

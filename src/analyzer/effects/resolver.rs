@@ -32,16 +32,10 @@ impl Resolver<'_> {
 			return None;
 		}
 		if name == crate::host::RUN_BLOCK {
-			return Some(External {
-				capability: Host,
-				effects: EffectSet::of(&[Eval]),
-			});
+			return Some(External { capability: Host, effects: EffectSet::of(&[Eval]) });
 		}
 		if name == crate::host::FOREIGN_CALL {
-			return Some(External {
-				capability: Foreign,
-				effects: EffectSet::of(&[IO, FFI]),
-			});
+			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI]) });
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
@@ -51,22 +45,11 @@ impl Resolver<'_> {
 			// (warp --sandbox) keeps them
 			let host_word = import.library == crate::host::HOST_LIBRARY;
 			let capability = if host_word { Host } else { Ffi };
-			return Some(
-				match (pure_library, host_word && crate::host::TASK_WORDS.contains(&name)) {
-					(true, _) => External {
-						capability: Libm,
-						effects: EffectSet::PURE,
-					},
-					(_, true) => External {
-						capability,
-						effects: EffectSet::of(&[Async]),
-					},
-					_ => External {
-						capability,
-						effects: EffectSet::of(&[FFI]),
-					},
-				},
-			);
+			return Some(match (pure_library, host_word && crate::host::TASK_WORDS.contains(&name)) {
+				(true, _) => External { capability: Libm, effects: EffectSet::PURE },
+				(_, true) => External { capability, effects: EffectSet::of(&[Async]) },
+				_ => External { capability, effects: EffectSet::of(&[FFI]) },
+			});
 		}
 		trusted_external(name)
 	}
@@ -126,11 +109,7 @@ impl Resolver<'_> {
 				if *op == Op::While && !never_true(right) {
 					function.perform(Div);
 				}
-				if *op == Op::Add
-					&& [left, right]
-						.iter()
-						.any(|operand| matches!(operand.drop_meta(), Node::Text(_)))
-				{
+				if *op == Op::Add && [left, right].iter().any(|operand| matches!(operand.drop_meta(), Node::Text(_))) {
 					function.perform(Allocation); // a text joined: "hi " + name
 				}
 				self.collect(left, function);
@@ -142,8 +121,7 @@ impl Resolver<'_> {
 	}
 
 	fn is_definition(&self, node: &Node) -> bool {
-		node.defined_name()
-			.is_some_and(|name| self.context.user_functions.contains_key(&name))
+		node.defined_name().is_some_and(|name| self.context.user_functions.contains_key(&name))
 	}
 }
 
@@ -159,10 +137,7 @@ pub(super) fn trusted_external(name: &str) -> Option<External> {
 	TRUSTED_EXTERNALS
 		.iter()
 		.find(|(known, _, _)| *known == name)
-		.map(|(_, capability, effects)| External {
-			capability: *capability,
-			effects: EffectSet::of(effects),
-		})
+		.map(|(_, capability, effects)| External { capability: *capability, effects: EffectSet::of(effects) })
 }
 
 /// The variables the program declares `global` at its main level (`global limit = 10`)

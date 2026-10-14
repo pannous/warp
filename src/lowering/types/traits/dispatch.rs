@@ -58,28 +58,22 @@ pub(super) fn with_dispatchers(
 	if dispatched.is_empty() {
 		return node;
 	}
-	let mut items: Vec<Node> = dispatched
-		.iter()
-		.map(|((operation, arity), types)| dispatcher(operation, *arity, types))
-		.collect();
+	let mut items: Vec<Node> =
+		dispatched.iter().map(|((operation, arity), types)| dispatcher(operation, *arity, types)).collect();
 	items.push(node);
 	Node::List(items, Bracket::None, Separator::Semicolon)
 }
 
 pub(super) fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
-	let cases: Vec<DispatchCase> = types
-		.iter()
-		.map(|type_name| (vec![(0, type_name.clone())], type_name.clone()))
-		.collect();
+	let cases: Vec<DispatchCase> =
+		types.iter().map(|type_name| (vec![(0, type_name.clone())], type_name.clone())).collect();
 	dispatcher_of_cases(operation, arity, &cases, false)
 }
 
 /// `op·dispatch(x, …)`: per case (the classes its arguments are instances of, the method variant that calls) the
 /// method; the last case unchecked, or with a `fallback` every case checked and any other value calling `op` itself
 pub(super) fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[DispatchCase], fallback: bool) -> Node {
-	let parameters: Vec<Node> = (0..arity)
-		.map(|index| Node::Symbol(format!("dispatched_{index}")))
-		.collect();
+	let parameters: Vec<Node> = (0..arity).map(|index| Node::Symbol(format!("dispatched_{index}"))).collect();
 	let method = |variant: &str| witness_call(operation, variant, parameters.clone());
 	let (checked, otherwise) = match fallback {
 		true => (cases, call(operation, parameters.clone())),
@@ -91,43 +85,22 @@ pub(super) fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[Dispat
 	let test = |tests: &[(usize, String)]| {
 		tests
 			.iter()
-			.map(|(position, class)| {
-				call(
-					INSTANCE_OF,
-					vec![parameters[*position].clone(), Node::Text(class.clone())],
-				)
-			})
+			.map(|(position, class)| call(INSTANCE_OF, vec![parameters[*position].clone(), Node::Text(class.clone())]))
 			.reduce(|all, test| key(all, Op::And, test))
 	};
-	let body = checked
-		.iter()
-		.rev()
-		.fold(otherwise, |otherwise, (tests, variant)| match test(tests) {
-			Some(test) => if_then_else(test, method(variant), otherwise),
-			None => method(variant),
-		});
+	let body = checked.iter().rev().fold(otherwise, |otherwise, (tests, variant)| match test(tests) {
+		Some(test) => if_then_else(test, method(variant), otherwise),
+		None => method(variant),
+	});
 	// a tested parameter is an instance of some type: held as a Node, like a parameter `s:square`
-	let tested: Vec<usize> = cases
-		.iter()
-		.flat_map(|(tests, _)| tests.iter().map(|(position, _)| *position))
-		.collect();
+	let tested: Vec<usize> = cases.iter().flat_map(|(tests, _)| tests.iter().map(|(position, _)| *position)).collect();
 	let instance = |position: usize, parameter: &Node| match tested.contains(&position) || position == 0 {
-		true => key(
-			parameter.clone(),
-			Op::Colon,
-			Node::meta(symbol(DISPATCH), Node::data(Instance)),
-		),
+		true => key(parameter.clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance))),
 		false => parameter.clone(),
 	};
-	let head_parameters = parameters
-		.iter()
-		.enumerate()
-		.map(|(position, parameter)| instance(position, parameter));
-	let head = parens(
-		std::iter::once(Node::Symbol(witness_name(operation, DISPATCH)))
-			.chain(head_parameters)
-			.collect(),
-	);
+	let head_parameters = parameters.iter().enumerate().map(|(position, parameter)| instance(position, parameter));
+	let head =
+		parens(std::iter::once(Node::Symbol(witness_name(operation, DISPATCH))).chain(head_parameters).collect());
 	key(head, Op::Define, body)
 }
 
@@ -235,8 +208,7 @@ impl Dispatch {
 				if let Some(error) = self.misfit_field_write(&items) {
 					return self.fail(error).expect("fail gives the error");
 				}
-				self.call(&items, &bracket, &separator)
-					.unwrap_or(Node::List(items, bracket, separator))
+				self.call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			other => children_rewritten(other, |child| self.expand(child)),
 		}
@@ -271,15 +243,12 @@ impl Dispatch {
 				// `x in xs` (its 1-based position), `xs.has(x)` of an instance whose type overrides equality: a search by its equals
 				(crate::library_words::COLLECTION_POSITION, [list, element]) => {
 					let type_name = self.instance_type(element)?;
-					return self
-						.has_witness(EQUALS, &type_name)
-						.then(|| position_by_equals(list, element, &type_name));
+					return self.has_witness(EQUALS, &type_name).then(|| position_by_equals(list, element, &type_name));
 				}
 				(crate::library_words::COLLECTION_CONTAINS, [list, element]) => {
 					let type_name = self.instance_type(element)?;
-					let found = self
-						.has_witness(EQUALS, &type_name)
-						.then(|| position_by_equals(list, element, &type_name))?;
+					let found =
+						self.has_witness(EQUALS, &type_name).then(|| position_by_equals(list, element, &type_name))?;
 					return Some(key(found, Op::Ne, Node::int(0)));
 				}
 				// `x is Comparable` of a trait, `dog(…) is animal` of a type dog is like (class dog extends animal)
@@ -321,13 +290,7 @@ impl Dispatch {
 				Some(Shape::ListOf(type_name))
 					if let Some(operation) = self.traits.missing(required, &type_name, &self.witnesses) =>
 				{
-					Err(missing_conformance(
-						value,
-						&type_name,
-						required,
-						operation,
-						&value.serialize(),
-					))
+					Err(missing_conformance(value, &type_name, required, operation, &value.serialize()))
 				}
 				_ => Ok(value.clone()),
 			};
@@ -335,11 +298,8 @@ impl Dispatch {
 		let got = format!("{needs}, got {}", value.serialize());
 		let parts = class_parts(declared);
 		if let Some(type_name) = self.instance_type(value) {
-			let classes: Vec<&str> = parts
-				.iter()
-				.copied()
-				.filter(|part| self.types.registry.get_by_name(part).is_some())
-				.collect();
+			let classes: Vec<&str> =
+				parts.iter().copied().filter(|part| self.types.registry.get_by_name(part).is_some()).collect();
 			return match parts.as_slice() {
 				_ if classes.iter().any(|class| self.is_like(&type_name, class)) => Ok(value.clone()),
 				[_] => Err(not_like(value, &got, &type_name, declared)),
@@ -399,10 +359,7 @@ impl Dispatch {
 			*argument = self.admit(
 				argument,
 				declared,
-				&format!(
-					"{name} needs {} for parameter {parameter}",
-					crate::analyzer::with_article(declared)
-				),
+				&format!("{name} needs {} for parameter {parameter}", crate::analyzer::with_article(declared)),
 			)?;
 		}
 		Ok((admitted != items).then_some(admitted))
@@ -411,21 +368,13 @@ impl Dispatch {
 	/// The variable an assignment writes and the class it is declared of: `s: C = …` (remembered), a later `s = …` of it
 	pub(super) fn declared_place(&self, target: &Node) -> Option<(String, String)> {
 		if let Some((name, declared)) = typed_target(target, &self.types.registry) {
-			self.declared
-				.borrow_mut()
-				.last_mut()
-				.expect("main's scope")
-				.insert(name.clone(), declared.clone());
+			self.declared.borrow_mut().last_mut().expect("main's scope").insert(name.clone(), declared.clone());
 			return Some((name, declared));
 		}
 		let Node::Symbol(name) = target.drop_meta() else {
 			return None;
 		};
-		self.declared
-			.borrow()
-			.last()?
-			.get(name)
-			.map(|declared| (name.clone(), declared.clone()))
+		self.declared.borrow().last()?.get(name).map(|declared| (name.clone(), declared.clone()))
 	}
 
 	/// `b.content = v` is `b = field_with(b, "content", v)` here: the error of a value the field's declared class does not take
@@ -444,10 +393,7 @@ impl Dispatch {
 		self.admit(
 			value,
 			&declared,
-			&format!(
-				"{class}.{field}:{declared} needs {}",
-				crate::analyzer::with_article(&declared)
-			),
+			&format!("{class}.{field}:{declared} needs {}", crate::analyzer::with_article(&declared)),
 		)
 		.err()
 	}
@@ -459,12 +405,7 @@ impl Dispatch {
 			return None;
 		}
 		let type_def = self.types.registry.get_by_name(class)?;
-		let declared = type_def
-			.fields
-			.iter()
-			.find(|declared| declared.name == field)?
-			.type_name
-			.trim_end_matches('?');
+		let declared = type_def.fields.iter().find(|declared| declared.name == field)?.type_name.trim_end_matches('?');
 		names_classes(declared, &self.types.registry).then(|| declared.to_string())
 	}
 
@@ -481,12 +422,8 @@ impl Dispatch {
 			};
 			let field = field.drop_meta().name();
 			let declared = self.class_field_type(&class, &field, value)?;
-			self.admit(
-				value,
-				&declared,
-				&format!("{class}.{field} is {}", crate::analyzer::with_article(&declared)),
-			)
-			.err()
+			self.admit(value, &declared, &format!("{class}.{field} is {}", crate::analyzer::with_article(&declared)))
+				.err()
 		})
 	}
 
@@ -507,19 +444,14 @@ impl Dispatch {
 			)),
 			// a declared operation of an argument whose type is unknown here: the one type that defines it, else ask for the type
 			None if !is_builtin_trait(&required.name) && !self.witnesses.iter().any(|witness| witness == name) => {
-				let defining: Vec<&str> = self
-					.witnesses
-					.iter()
-					.filter_map(|witness| witness_type(witness, name))
-					.collect();
+				let defining: Vec<&str> =
+					self.witnesses.iter().filter_map(|witness| witness_type(witness, name)).collect();
 				match defining.as_slice() {
 					[type_name] => Some(witness_call(name, type_name, arguments)),
 					// several types define it: the dispatcher picks the witness of the value's type at run time
 					[_, _, ..] => {
 						let types = defining.iter().map(|type_name| type_name.to_string()).collect();
-						self.dispatched
-							.borrow_mut()
-							.insert((name.to_string(), arguments.len()), types);
+						self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), types);
 						Some(witness_call(name, DISPATCH, arguments))
 					}
 					_ => {
@@ -528,11 +460,8 @@ impl Dispatch {
 							first.serialize(),
 							defining.join(", ")
 						);
-						let fix = format!(
-							"give it a type, e.g. {}:{}",
-							first.serialize(),
-							defining.first().unwrap_or(&"T")
-						);
+						let fix =
+							format!("give it a type, e.g. {}:{}", first.serialize(), defining.first().unwrap_or(&"T"));
 						self.fail(Diagnostic::at(head, message).fix(fix).into_error())
 					}
 				}

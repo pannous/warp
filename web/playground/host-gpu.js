@@ -65,6 +65,11 @@ const keptBuffers = new Map(); // the task Worker's: block → {storage, count}
 const CANVAS_MISSING = "no canvas of this paint";
 const CANVAS_FAILED = "paint: the page's canvas failed, so shaders paint through pixels"; // said once a run, with why
 let canvasFailure;
+// card uncaught-exception-undefined: Firefox's WebGPU may fail with no error at all (a rejection with undefined), which
+// left the program waiting and the console saying "uncaught exception: undefined"; it is said as this instead
+const SILENT_FAILURE = "the browser's WebGPU failed without saying why";
+const NO_CANVAS_CONTEXT = "this browser gives a Worker's canvas no WebGPU context";
+const GPU_JOB_WAIT_MS = 30000; // the program's side: a task Worker that gives no answer in this time is said to
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
 let paintCanvasCount = 0; // the program's side: the canvases asked of the page, which names them by this count
@@ -150,6 +155,7 @@ async function gpuCanvas({ id, replaces }) {
 	arrivingCanvases.delete(id);
 	paintCanvases.delete(replaces);
 	const context = canvas.getContext("webgpu");
+	if (!context) throw new Error(NO_CANVAS_CONTEXT); // the program paints through pixels then (gpuPainted)
 	const format = navigator.gpu.getPreferredCanvasFormat();
 	// COPY_DST: a shader reading $previous draws into a texture it keeps, copied here
 	context.configure({ device, format, alphaMode: "opaque", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
@@ -379,15 +385,15 @@ const GPU_JOBS = {
 	gpu_paint: async job => ({ values: (await gpuRendered(job), job.canvas) }),
 };
 
+const failureText = failure => failure === undefined || failure === null ? SILENT_FAILURE : String(failure.message ?? failure);
+
 // a task Worker's job (task-worker.js): the shader's answer, or why not, into the shared buffer the program waits on
 async function gpuJobInto({ gpu: { word, job }, shared }) {
 	let answer;
 	try {
 		answer = await GPU_JOBS[word](job);
 	} catch (failure) {
-		// a browser's WebGPU may reject with no Error at all (Firefox: `undefined`), which still answers the waiting program
-		answer = { error: failure instanceof Error ? failure.message : `the browser's WebGPU failed with ${failure} (${word})` };
-		if (!(failure instanceof Error)) console.error(answer.error);
+		answer = { error: failureText(failure) };
 		await forgetDeviceIfLost().catch(() => {});
 	}
 	if (answer.words) writeSharedWords(shared, answer.words);
@@ -412,7 +418,8 @@ function gpuJob(word, job, transfer = [], Words = Float32Array, worker = hasTask
 	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
-	Atomics.wait(header, 0, 0);
+	// the buffer and the Worker stay out of their pools: the answer may still come
+	if (Atomics.wait(header, 0, 0, GPU_JOB_WAIT_MS) === "timed-out") throw new Error(`${word}: the GPU's task Worker gave no answer in ${GPU_JOB_WAIT_MS / 1000} s`);
 	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
 	returnAnswerBuffer(shared);

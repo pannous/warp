@@ -208,10 +208,7 @@ impl WasmGcEmitter {
 		let is_class_test = head.drop_meta().name() == crate::words::IS_TYPE
 			&& matches!(spec.drop_meta(), Node::Text(class) if self.ctx.type_registry.get_by_name(class).is_some());
 		is_class_test
-			&& matches!(
-				self.get_type(subject),
-				Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint
-			)
+			&& matches!(self.get_type(subject), Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint)
 	}
 
 	/// Emit while loop: (while condition) do body
@@ -234,15 +231,7 @@ impl WasmGcEmitter {
 		let ran_local = self.next_temp_local;
 		self.next_temp_local += 1;
 
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(0),
-				I::LocalSet(result_local),
-				I::I64Const(0),
-				I::LocalSet(ran_local),
-			],
-		);
+		Self::emit_list(func, &[I::I64Const(0), I::LocalSet(result_local), I::I64Const(0), I::LocalSet(ran_local)]);
 
 		func.instruction(&I::Block(BlockType::Empty));
 		let break_frame = control::loop_control::open_control_frames(func);
@@ -284,11 +273,7 @@ impl WasmGcEmitter {
 		} else {
 			self.emit_loop_body(
 				func,
-				if step_apart || step.is_none() {
-					&statements
-				} else {
-					body
-				},
+				if step_apart || step.is_none() { &statements } else { body },
 				result_local,
 				value_local,
 			);
@@ -309,11 +294,7 @@ impl WasmGcEmitter {
 			// the value of a loop is its last body value; a loop whose body never ran is empty
 			Self::emit_list(
 				func,
-				&[
-					I::LocalGet(ran_local),
-					I::I32WrapI64,
-					I::If(BlockType::Result(Ref(self.node_ref(false)))),
-				],
+				&[I::LocalGet(ran_local), I::I32WrapI64, I::If(BlockType::Result(Ref(self.node_ref(false))))],
 			);
 			match value {
 				LoopValue::Held(local) => {
@@ -347,10 +328,7 @@ impl WasmGcEmitter {
 			Node::List(items, Bracket::Curly, _) => items.clone(),
 			other => vec![other.clone()],
 		};
-		if let Some((last, before)) = statements
-			.split_last()
-			.filter(|(last, _)| self.is_float_assignment(last))
-		{
+		if let Some((last, before)) = statements.split_last().filter(|(last, _)| self.is_float_assignment(last)) {
 			// `while … { …; x = x * 0.5 }` of a float x: the statements run, the float is the loop's value when held
 			for statement in before {
 				self.emit_discarded_statement(func, statement, Self::emit_numeric_value);

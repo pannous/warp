@@ -5,8 +5,5 @@ use crate::is;
 fn a_task_gives_back_its_character() {
 	is!("job = go { 'a' }; await job", 'a');
 	is!("f() := { \"a\" }; job = go f(); await job", 'a');
-	is!(
-		"f() := 'b'; jobs = [go f(), go f()]; results = await all jobs; results#2",
-		'b'
-	);
+	is!("f() := 'b'; jobs = [go f(), go f()]; results = await all jobs; results#2", 'b');
 }

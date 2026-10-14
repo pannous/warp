@@ -38,10 +38,7 @@ pub fn lower(program: Node) -> Node {
 	if !statements.iter().any(has_element_handler) {
 		return Node::List(statements, bracket, separator);
 	}
-	let mut marker = Marker {
-		handlers: vec![],
-		numbered: 0,
-	};
+	let mut marker = Marker { handlers: vec![], numbered: 0 };
 	let mut lowered = vec![];
 	for statement in statements {
 		let marked = marker.marked(statement);
@@ -80,12 +77,9 @@ fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
 			.iter()
 			.enumerate()
 			.flat_map(|(index, item)| match bound_at(&items, index) {
-				Some(variable) => checks
-					.take()
-					.unwrap_or_default()
-					.into_iter()
-					.chain(bound(variable, property, declared))
-					.collect(),
+				Some(variable) => {
+					checks.take().unwrap_or_default().into_iter().chain(bound(variable, property, declared)).collect()
+				}
 				None => vec![item.clone()],
 			})
 			.collect()
@@ -125,15 +119,9 @@ fn type_checks(variable: &Node, declared: &HashMap<String, Option<String>>, item
 	let checks: &[(&str, Node)] = if crate::analyzer::is_bool_type(kind) {
 		&[(TYPE_ATTRIBUTE, Node::Text(CHECKBOX_FIELD.to_string()))]
 	} else if crate::analyzer::is_whole_type(kind) {
-		&[
-			(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())),
-			(STEP_ATTRIBUTE, Node::Text(WHOLE_STEP.to_string())),
-		]
+		&[(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())), (STEP_ATTRIBUTE, Node::Text(WHOLE_STEP.to_string()))]
 	} else if crate::analyzer::builtin_type_kind(kind) == Some(crate::type_kinds::Kind::Float) {
-		&[
-			(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())),
-			(STEP_ATTRIBUTE, Node::Text(ANY_STEP.to_string())),
-		]
+		&[(TYPE_ATTRIBUTE, Node::Text(NUMBER_FIELD.to_string())), (STEP_ATTRIBUTE, Node::Text(ANY_STEP.to_string()))]
 	} else {
 		&[]
 	};
@@ -209,12 +197,8 @@ pub(crate) fn with_element_items(node: Node, rewrite: impl FnOnce(Vec<Node>) -> 
 	if element_items(&node).is_none() {
 		return node;
 	}
-	let Node::Key(tag, op, content) = node else {
-		unreachable!("an element")
-	};
-	let Node::List(items, bracket, separator) = content.drop_meta().clone() else {
-		unreachable!("an element's block")
-	};
+	let Node::Key(tag, op, content) = node else { unreachable!("an element") };
+	let Node::List(items, bracket, separator) = content.drop_meta().clone() else { unreachable!("an element's block") };
 	Node::Key(tag, op, Box::new(Node::List(rewrite(items), bracket, separator)))
 }
 

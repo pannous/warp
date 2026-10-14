@@ -25,26 +25,17 @@ fn kept_values_last_into_the_next_run() {
 
 #[test]
 fn delete_drops_a_key() {
-	is!(
-		"storage[\"gone_soon\"] = 1; delete storage[\"gone_soon\"]; storage[\"gone_soon\"]",
-		warp::node::Node::Empty
-	);
+	is!("storage[\"gone_soon\"] = 1; delete storage[\"gone_soon\"]; storage[\"gone_soon\"]", warp::node::Node::Empty);
 }
 
 #[test]
 fn keys_name_the_kept_values() {
-	is!(
-		"storage[\"listed_key\"] = 1; contains(keys(storage), \"listed_key\")",
-		true
-	);
+	is!("storage[\"listed_key\"] = 1; contains(keys(storage), \"listed_key\")", true);
 }
 
 #[test]
 fn a_stored_variable_and_its_key_are_one_entry() {
-	is!(
-		"stored shared_entry = \"dark\"; shared_entry = \"light\"; storage[\"shared_entry\"]",
-		"light"
-	);
+	is!("stored shared_entry = \"dark\"; shared_entry = \"light\"; storage[\"shared_entry\"]", "light");
 }
 
 // a soft keyword: a program that names its own storage keeps it
@@ -60,31 +51,16 @@ fn a_program_variable_named_storage_stays_its_own() {
 fn local_is_the_store_of_storage() {
 	is!("local[\"theme_local\"] = \"dark\"; storage[\"theme_local\"]", "dark");
 	is!("local.color_local = \"red\"; local[\"color_local\"]", "red");
-	is!(
-		"local[\"gone_local\"] = 1; delete local[\"gone_local\"]; local[\"gone_local\"]",
-		warp::node::Node::Empty
-	);
-	is!(
-		"local[\"listed_local\"] = 1; contains(keys(local), \"listed_local\")",
-		true
-	);
+	is!("local[\"gone_local\"] = 1; delete local[\"gone_local\"]; local[\"gone_local\"]", warp::node::Node::Empty);
+	is!("local[\"listed_local\"] = 1; contains(keys(local), \"listed_local\")", true);
 }
 
 #[test]
 fn session_is_a_store_of_its_own() {
 	is!("session[\"tab_only\"] = \"open\"; session[\"tab_only\"]", "open");
-	is!(
-		"session[\"apart\"] = 1; local[\"apart\"] = 2; session[\"apart\"] * 10 + local[\"apart\"]",
-		12
-	);
-	is!(
-		"session[\"session_listed\"] = 1; contains(keys(session), \"session_listed\")",
-		true
-	);
-	is!(
-		"session[\"session_only\"] = 1; contains(keys(local), \"session_only\")",
-		false
-	);
+	is!("session[\"apart\"] = 1; local[\"apart\"] = 2; session[\"apart\"] * 10 + local[\"apart\"]", 12);
+	is!("session[\"session_listed\"] = 1; contains(keys(session), \"session_listed\")", true);
+	is!("session[\"session_only\"] = 1; contains(keys(local), \"session_only\")", false);
 }
 
 #[test]
@@ -99,19 +75,10 @@ fn a_program_variable_named_local_or_session_stays_its_own() {
 #[ignore = "cleanup-edge: cleanup-orm-stored-only: the alias indexedDB of database is cut (it shadowed the web API indexedDB)"]
 fn database_is_a_store_of_its_own() {
 	is!("database[\"big_one\"] = [1 2 3]; count(database[\"big_one\"])", 3);
-	is!(
-		"database[\"db_apart\"] = 1; local[\"db_apart\"] = 2; database[\"db_apart\"] * 10 + local[\"db_apart\"]",
-		12
-	);
+	is!("database[\"db_apart\"] = 1; local[\"db_apart\"] = 2; database[\"db_apart\"] * 10 + local[\"db_apart\"]", 12);
 	is!("database.db_dotted = \"x\"; indexedDB[\"db_dotted\"]", "x");
-	is!(
-		"database[\"db_gone\"] = 1; delete database[\"db_gone\"]; database[\"db_gone\"]",
-		warp::node::Node::Empty
-	);
-	is!(
-		"database[\"db_listed\"] = 1; contains(keys(database), \"db_listed\")",
-		true
-	);
+	is!("database[\"db_gone\"] = 1; delete database[\"db_gone\"]; database[\"db_gone\"]", warp::node::Node::Empty);
+	is!("database[\"db_listed\"] = 1; contains(keys(database), \"db_listed\")", true);
 	is!("database[\"db_only\"] = 1; contains(keys(session), \"db_only\")", false);
 }
 

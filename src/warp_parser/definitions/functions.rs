@@ -74,11 +74,9 @@ pub(crate) fn typed_parameter(arguments: Node) -> Node {
 /// Every argument of `f(int x, float y)` as its typed parameter
 pub(crate) fn typed_parameters(arguments: Node) -> Node {
 	match arguments.drop_meta() {
-		Node::List(items, bracket, Separator::Colon) => Node::List(
-			items.iter().cloned().map(typed_parameter).collect(),
-			bracket.clone(),
-			Separator::Colon,
-		),
+		Node::List(items, bracket, Separator::Colon) => {
+			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Colon)
+		}
 		_ => typed_parameter(arguments),
 	}
 }
@@ -110,20 +108,13 @@ impl WarpParser {
 			return None;
 		}
 		let start = self.pos + ELIXIR_FUNCTION_KEYWORD.len();
-		let line_end = (start..self.chars.len())
-			.find(|&at| self.chars[at] == '\n')
-			.unwrap_or(self.chars.len());
+		let line_end = (start..self.chars.len()).find(|&at| self.chars[at] == '\n').unwrap_or(self.chars.len());
 		let arrow =
 			(start..line_end.saturating_sub(1)).find(|&at| self.chars[at] == '-' && self.chars[at + 1] == '>')?;
 		let head: String = self.chars[start..arrow].iter().collect();
-		let is_parameter_text = head
-			.chars()
-			.all(|ch| is_identifier_char(ch) || matches!(ch, ' ' | ',' | '(' | ')'));
-		let names: Vec<String> = head
-			.split([',', '(', ')', ' '])
-			.filter(|name| !name.is_empty())
-			.map(str::to_string)
-			.collect();
+		let is_parameter_text = head.chars().all(|ch| is_identifier_char(ch) || matches!(ch, ' ' | ',' | '(' | ')'));
+		let names: Vec<String> =
+			head.split([',', '(', ')', ' ']).filter(|name| !name.is_empty()).map(str::to_string).collect();
 		let body_start = arrow + 2;
 		let after: String = self.chars[body_start..].iter().collect();
 		let mut words = after.trim_start().splitn(2, |ch: char| !is_identifier_char(ch));
@@ -174,20 +165,13 @@ impl WarpParser {
 		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
 			return None;
 		}
-		let name: String = (blanks..)
-			.map(|at| self.peek_char(at))
-			.take_while(|ch| is_identifier_char(*ch))
-			.collect();
+		let name: String = (blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
 		let after = blanks + name.chars().count();
-		let rest = (after..)
-			.find(|at| !matches!(self.peek_char(*at), ' ' | '\t'))
-			.unwrap_or(after);
+		let rest = (after..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(after);
 		// `map function square on [1 2 3]`: the iteration words' `on` ends it too
-		let on_follows = (rest..)
-			.map(|at| self.peek_char(at))
-			.take_while(|ch| is_identifier_char(*ch))
-			.collect::<String>()
-			== crate::words::ON_WORD;
+		let on_follows =
+			(rest..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect::<String>()
+				== crate::words::ON_WORD;
 		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !on_follows {
 			return None;
 		}
@@ -277,11 +261,9 @@ impl WarpParser {
 		let body = self.parse_end_block(false);
 		let parameters = match names.as_slice() {
 			[single] => Node::Symbol(single.clone()),
-			several => Node::List(
-				several.iter().cloned().map(Node::Symbol).collect(),
-				Bracket::Round,
-				Separator::Colon,
-			),
+			several => {
+				Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon)
+			}
 		};
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
@@ -347,12 +329,10 @@ impl WarpParser {
 		};
 		let parameters: Vec<Node> = parameters
 			.into_iter()
-			.map(
-				|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
-					Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
-					None => parameter,
-				},
-			)
+			.map(|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
+				Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
+				None => parameter,
+			})
 			.collect();
 		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
 			return Some(clash);
@@ -362,11 +342,7 @@ impl WarpParser {
 		} else {
 			self.functions_with_parameters.insert(name.clone());
 			self.phrase_definitions.insert(name.clone(), parameters.clone());
-			Node::List(
-				[vec![Symbol(name)], parameters].concat(),
-				Bracket::Round,
-				Separator::None,
-			)
+			Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None)
 		};
 		let head = match result_type {
 			Some(result_type) => Node::Key(Box::new(head), Op::As, Box::new(Symbol(result_type))),
@@ -395,16 +371,10 @@ impl WarpParser {
 
 	/// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns can only be told apart by types
 	pub(crate) fn phrase_redefinition(&self, name: &str, parameters: &[Node]) -> Option<Node> {
-		let earlier = self
-			.phrase_definitions
-			.get(name)
-			.filter(|earlier| earlier.len() == parameters.len())?;
+		let earlier = self.phrase_definitions.get(name).filter(|earlier| earlier.len() == parameters.len())?;
 		let untyped = |parameter: &Node| matches!(parameter.drop_meta(), Symbol(_));
-		let differing: Vec<(&Node, &Node)> = earlier
-			.iter()
-			.zip(parameters)
-			.filter(|(before, now)| before != now)
-			.collect();
+		let differing: Vec<(&Node, &Node)> =
+			earlier.iter().zip(parameters).filter(|(before, now)| before != now).collect();
 		if differing.is_empty() || !differing.iter().all(|(before, now)| untyped(before) && untyped(now)) {
 			return None;
 		}
@@ -413,9 +383,6 @@ impl WarpParser {
 			.flat_map(|(before, now)| [before.name(), now.name()])
 			.map(|noun| format!("class {noun}"))
 			.collect();
-		Some(error(&format!(
-			"{name} is defined twice; declare {} to dispatch on them",
-			classes.join(" and ")
-		)))
+		Some(error(&format!("{name} is defined twice; declare {} to dispatch on them", classes.join(" and "))))
 	}
 }

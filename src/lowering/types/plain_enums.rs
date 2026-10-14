@@ -32,10 +32,7 @@ struct Enums {
 impl Enums {
 	/// The enum having a case of that name, when only one has it
 	fn owner(&self, case: &str) -> Option<&str> {
-		let mut owners = self
-			.cases
-			.iter()
-			.filter(|(_, cases)| cases.iter().any(|named| named == case));
+		let mut owners = self.cases.iter().filter(|(_, cases)| cases.iter().any(|named| named == case));
 		match (owners.next(), owners.next()) {
 			(Some((name, _)), None) => Some(name),
 			_ => None,
@@ -43,9 +40,7 @@ impl Enums {
 	}
 
 	fn is_case_of(&self, enum_name: &Node, case: &Node) -> bool {
-		self.cases
-			.get(&enum_name.drop_meta().name())
-			.is_some_and(|cases| cases.contains(&case.drop_meta().name()))
+		self.cases.get(&enum_name.drop_meta().name()).is_some_and(|cases| cases.contains(&case.drop_meta().name()))
 	}
 
 	/// The enum of a value: a case by name, or a name declared of the enum
@@ -147,9 +142,7 @@ fn counted(value: Node, cases: &[String], first: i64) -> Node {
 	if let Some((_, number)) = numbered.clone().find(|(case, _)| value.drop_meta().name() == **case) {
 		return Node::int(number);
 	}
-	let arms = numbered
-		.map(|(case, number)| key(Node::Symbol(case.clone()), Op::Colon, Node::int(number)))
-		.collect();
+	let arms = numbered.map(|(case, number)| key(Node::Symbol(case.clone()), Op::Colon, Node::int(number))).collect();
 	matched(value, arms)
 }
 
@@ -165,10 +158,7 @@ fn case_at(value: Node, enum_name: &str, enums: &Enums) -> Node {
 		};
 	}
 	let raised = Node::List(
-		vec![
-			Node::Symbol(RAISE_WORD.into()),
-			key(value.clone(), Op::Add, Node::Text(no_case)),
-		],
+		vec![Node::Symbol(RAISE_WORD.into()), key(value.clone(), Op::Add, Node::Text(no_case))],
 		Bracket::None,
 		Separator::Space,
 	);

@@ -10,12 +10,6 @@ fn a_function_changes_a_typed_global_list() {
 
 #[test]
 fn a_function_reads_a_typed_global_list_of_instances() {
-	is!(
-		"class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; count(xs) }; f()",
-		1
-	);
-	is!(
-		"class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; xs.add(U(\"b\")); xs#2.n }; f()",
-		"b"
-	);
+	is!("class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; count(xs) }; f()", 1);
+	is!("class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; xs.add(U(\"b\")); xs#2.n }; f()", "b");
 }

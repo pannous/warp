@@ -13,7 +13,7 @@ use std::collections::HashSet;
 pub const PAGE_HTML: &str = "page·html";
 /// page·render(value): the HTML of any value of the program, for the playground's fine holes (worker.js showHoles)
 pub const PAGE_RENDER: &str = "page·render";
-const TO_HTML: &str = "to_html";
+pub(crate) const TO_HTML: &str = "to_html";
 /// Words that start a statement, not a value to show
 const STATEMENT_WORDS: [&str; 3] = ["print", "puts", "return"];
 
@@ -53,10 +53,8 @@ pub fn lower(program: Node) -> Node {
 	match statements.last().filter(|last| is_shown(last)).cloned() {
 		Some(shown) => {
 			let main_variables = main_level_variables(&statements);
-			statements.insert(
-				statements.len() - 1,
-				function_with_globals(PAGE_VALUE, false, &[shown], &main_variables),
-			);
+			statements
+				.insert(statements.len() - 1, function_with_globals(PAGE_VALUE, false, &[shown], &main_variables));
 		}
 		None => statements.retain(|statement| !defines(statement, PAGE_HTML)),
 	}

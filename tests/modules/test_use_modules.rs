@@ -50,10 +50,7 @@ fn test_module_statements_are_not_imported() {
 	let directory = module_directory("statements", &[("noisy.warp", "double(x):=x*2\n99")]);
 	let resolved = resolved_text("use noisy;1", &directory);
 	assert!(resolved.contains("double"), "definition imported: {resolved}");
-	assert!(
-		!resolved.contains("99"),
-		"the module's own expression must not run: {resolved}"
-	);
+	assert!(!resolved.contains("99"), "the module's own expression must not run: {resolved}");
 }
 
 #[test]
@@ -66,20 +63,15 @@ fn test_warp_extension_is_found() {
 fn test_search_order_prefers_earlier_directory() {
 	let first = module_directory("order_first", &[("same.warp", "from_first:=1")]);
 	let second = module_directory("order_second", &[("same.warp", "from_second:=2")]);
-	let resolved = resolve_in(
-		WarpParser::parse("use same;1"),
-		&[first.to_str().unwrap(), second.to_str().unwrap()],
-	);
+	let resolved = resolve_in(WarpParser::parse("use same;1"), &[first.to_str().unwrap(), second.to_str().unwrap()]);
 	let text = format!("{resolved:?}");
 	assert!(text.contains("from_first") && !text.contains("from_second"), "{text}");
 }
 
 #[test]
 fn test_module_using_module_imports_transitively_and_survives_cycles() {
-	let directory = module_directory(
-		"cycle",
-		&[("ping.warp", "use pong\nping:=1"), ("pong.warp", "use ping\npong:=2")],
-	);
+	let directory =
+		module_directory("cycle", &[("ping.warp", "use pong\nping:=1"), ("pong.warp", "use ping\npong:=2")]);
 	let resolved = resolved_text("use ping;1", &directory);
 	assert!(resolved.contains("ping") && resolved.contains("pong"), "{resolved}");
 }
@@ -91,15 +83,10 @@ fn module_function_locals_are_not_the_programs_variables() {
 	warp::errors::diagnostic::take_warnings();
 	let compiled =
 		warp::pipeline::for_a_page(|| warp::pipeline::compile("use markup\nlet items = 3\nhtml{ p{ \"x\" } }"));
-	let warnings: Vec<String> = warp::errors::diagnostic::take_warnings()
-		.iter()
-		.map(|warning| warning.to_string())
-		.collect();
+	let warnings: Vec<String> =
+		warp::errors::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect();
 	assert!(compiled.is_ok());
-	assert!(
-		warnings.iter().all(|warning| !warning.contains("new local")),
-		"{warnings:?}"
-	);
+	assert!(warnings.iter().all(|warning| !warning.contains("new local")), "{warnings:?}");
 }
 
 /// A file module's own code calls its own words, whatever the program names its variables (card module-scope)
@@ -107,21 +94,12 @@ fn module_function_locals_are_not_the_programs_variables() {
 fn a_program_variable_leaves_a_file_module_its_words() {
 	let directory = module_directory(
 		"module_scope",
-		&[(
-			"mytext.warp",
-			"words(t) := split(t, \" \")\ntitled(t) := join([upper(w) for w in words(t)], \" \")",
-		)],
+		&[("mytext.warp", "words(t) := split(t, \" \")\ntitled(t) := join([upper(w) for w in words(t)], \" \")")],
 	);
 	let program = directory.join("app.warp");
 	let run = |code: &str| warp::modules::with_program_file(&program, || eval(code));
-	assert_eq!(
-		run("use mytext; words = [\"ab\", \"cd\"]; [titled w for w in words]"),
-		texts(vec!["AB", "CD"])
-	);
-	assert_eq!(
-		run("use mytext; words = [\"a b\"]; titled \"hello world\""),
-		Node::Text("HELLO WORLD".into())
-	);
+	assert_eq!(run("use mytext; words = [\"ab\", \"cd\"]; [titled w for w in words]"), texts(vec!["AB", "CD"]));
+	assert_eq!(run("use mytext; words = [\"a b\"]; titled \"hello world\""), Node::Text("HELLO WORLD".into()));
 }
 
 /// `use "./helper.warp"` and `use "/absolute/helper.warp"` load that file; `./` starts at the program's folder
@@ -151,8 +129,5 @@ fn a_module_is_used_as_an_alias() {
 #[test]
 fn a_programs_global_is_not_a_module_functions_local() {
 	is!("use draw; global hue = 10; c = hsv(120, 1, 1); hue", 10);
-	is!(
-		"use draw; global hue = 10; c = hsv(120, 1, 1); c == rgb(0, 255, 0)",
-		true
-	);
+	is!("use draw; global hue = 10; c = hsv(120, 1, 1); c == rgb(0, 255, 0)", true);
 }

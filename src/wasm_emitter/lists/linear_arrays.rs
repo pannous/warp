@@ -49,18 +49,11 @@ const KERNEL_BINARY: [(Op, I<'static>, I<'static>); 4] = [
 	(Op::Mul, I::F64Mul, I::F64x2Mul),
 	(Op::Div, I::F64Div, I::F64x2Div),
 ];
-const KERNEL_PREFIX: [(Op, I<'static>, I<'static>); 3] = [
-	(Op::Neg, I::F64Neg, I::F64x2Neg),
-	(Op::Sqrt, I::F64Sqrt, I::F64x2Sqrt),
-	(Op::Abs, I::F64Abs, I::F64x2Abs),
-];
+const KERNEL_PREFIX: [(Op, I<'static>, I<'static>); 3] =
+	[(Op::Neg, I::F64Neg, I::F64x2Neg), (Op::Sqrt, I::F64Sqrt, I::F64x2Sqrt), (Op::Abs, I::F64Abs, I::F64x2Abs)];
 /// A pair of cells
 const PAIR_BYTES: i32 = 16;
-const PAIR_ALIGNED: MemArg = MemArg {
-	offset: 0,
-	align: 3,
-	memory_index: 0,
-};
+const PAIR_ALIGNED: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 
 /// Whether `body` is float arithmetic of the parameter and number literals, which a kernel computes lane by lane
 pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
@@ -89,14 +82,9 @@ fn ungrouped(body: &Node) -> &Node {
 
 /// The kernel's name, its parameter and body after LINEAR_MAP_PREFIX; the emitter finds them by it (kernel_of)
 pub fn kernel_name(parameter: &str, body: &Node) -> String {
-	let name = format!(
-		"{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}",
-		body.serialize().trim()
-	);
+	let name = format!("{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}", body.serialize().trim());
 	crate::compiler::compile_context::change(|context| {
-		context
-			.float_kernels
-			.insert(name.clone(), (parameter.to_string(), body.clone()))
+		context.float_kernels.insert(name.clone(), (parameter.to_string(), body.clone()))
 	});
 	name
 }
@@ -109,11 +97,7 @@ fn kernel_of(name: &str) -> (String, Node) {
 
 /// The block's header (its count) and each cell are 8 bytes
 const CELL_BYTES: i64 = 8;
-const CELL: MemArg = MemArg {
-	offset: 0,
-	align: 3,
-	memory_index: 0,
-};
+const CELL: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 
 /// name, parameters, results of the linear words
 pub fn linear_word_signatures() -> [(&'static str, Vec<ValType>, Vec<ValType>); 9] {
@@ -146,23 +130,14 @@ impl WasmGcEmitter {
 		if called.is_empty() {
 			return;
 		}
-		let mut kernels: Vec<String> = self
-			.ctx
-			.ffi_imports
-			.keys()
-			.filter(|name| name.starts_with(LINEAR_MAP_PREFIX))
-			.cloned()
-			.collect();
+		let mut kernels: Vec<String> =
+			self.ctx.ffi_imports.keys().filter(|name| name.starts_with(LINEAR_MAP_PREFIX)).cloned().collect();
 		kernels.sort();
 		// a `go` map splitting on the host calls the kernels and linear_new in instances of its own (tasks.rs split_map)
 		let splits = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPLIT_MAPF);
 		self.emit_text_heap_global();
 		for (word, params, results) in called {
-			let name = FUNCTION_NAMES
-				.iter()
-				.find(|(known, _)| *known == word)
-				.expect("every linear word is named")
-				.1;
+			let name = FUNCTION_NAMES.iter().find(|(known, _)| *known == word).expect("every linear word is named").1;
 			let float = results == [F64];
 			match word {
 				LINEAR_NEW => self.runtime_function(name, params, results, vec![I32, I32], |s, f| s.emit_linear_new(f)),
@@ -180,22 +155,16 @@ impl WasmGcEmitter {
 				}
 				_ => {
 					let adds = word == LINEAR_INT_WORDS[2] || word == LINEAR_FLOAT_WORDS[2];
-					self.runtime_function(name, params, results, vec![I32], |s, f| {
-						s.emit_linear_store(f, float, adds)
-					})
+					self.runtime_function(name, params, results, vec![I32], |s, f| s.emit_linear_store(f, float, adds))
 				}
 			};
 		}
 		for kernel in kernels {
 			let (parameter, body) = kernel_of(&kernel);
 			let name: &'static str = Box::leak(format!("{SPLIT_KERNEL_PREFIX}{kernel}").into_boxed_str());
-			self.runtime_function(
-				name,
-				vec![I64],
-				vec![I64],
-				vec![I64, I32, I32, I32, F64, V128],
-				|s, f| s.emit_float_map(f, &parameter, &body),
-			);
+			self.runtime_function(name, vec![I64], vec![I64], vec![I64, I32, I32, I32, F64, V128], |s, f| {
+				s.emit_float_map(f, &parameter, &body)
+			});
 			if splits {
 				self.export_runtime_function(name);
 			}
@@ -216,13 +185,7 @@ impl WasmGcEmitter {
 		for (block, cursor) in [(source, reading), (result, writing)] {
 			Self::emit_list(
 				func,
-				&[
-					I::LocalGet(block),
-					I::I32WrapI64,
-					I::I32Const(CELL_BYTES as i32),
-					I::I32Add,
-					I::LocalSet(cursor),
-				],
+				&[I::LocalGet(block), I::I32WrapI64, I::I32Const(CELL_BYTES as i32), I::I32Add, I::LocalSet(cursor)],
 			);
 		}
 		// the end of the whole pairs: reading + (count & -2) * 8
@@ -230,70 +193,24 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &count);
 		Self::emit_list(
 			func,
-			&[
-				I::I32WrapI64,
-				I::I32Const(-2),
-				I::I32And,
-				I::I32Const(3),
-				I::I32Shl,
-				I::I32Add,
-				I::LocalSet(pairs_end),
-			],
+			&[I::I32WrapI64, I::I32Const(-2), I::I32And, I::I32Const(3), I::I32Shl, I::I32Add, I::LocalSet(pairs_end)],
 		);
+		Self::emit_list(func, &[I::Block(wasm_encoder::BlockType::Empty), I::Loop(wasm_encoder::BlockType::Empty)]);
+		Self::emit_list(func, &[I::LocalGet(reading), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)]);
 		Self::emit_list(
 			func,
-			&[
-				I::Block(wasm_encoder::BlockType::Empty),
-				I::Loop(wasm_encoder::BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[I::LocalGet(reading), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)],
-		);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(reading),
-				I::V128Load(PAIR_ALIGNED),
-				I::LocalSet(lanes),
-				I::LocalGet(writing),
-			],
+			&[I::LocalGet(reading), I::V128Load(PAIR_ALIGNED), I::LocalSet(lanes), I::LocalGet(writing)],
 		);
 		emit_kernel(func, parameter, body, lanes, true);
 		func.instruction(&I::V128Store(PAIR_ALIGNED));
 		for cursor in [reading, writing] {
-			Self::emit_list(
-				func,
-				&[
-					I::LocalGet(cursor),
-					I::I32Const(PAIR_BYTES),
-					I::I32Add,
-					I::LocalSet(cursor),
-				],
-			);
+			Self::emit_list(func, &[I::LocalGet(cursor), I::I32Const(PAIR_BYTES), I::I32Add, I::LocalSet(cursor)]);
 		}
 		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
 		// an odd count: the last cell
 		Self::emit_list(func, &count);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(1),
-				I::I64And,
-				I::I32WrapI64,
-				I::If(wasm_encoder::BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(reading),
-				I::F64Load(CELL),
-				I::LocalSet(cell),
-				I::LocalGet(writing),
-			],
-		);
+		Self::emit_list(func, &[I::I64Const(1), I::I64And, I::I32WrapI64, I::If(wasm_encoder::BlockType::Empty)]);
+		Self::emit_list(func, &[I::LocalGet(reading), I::F64Load(CELL), I::LocalSet(cell), I::LocalGet(writing)]);
 		emit_kernel(func, parameter, body, cell, false);
 		Self::emit_list(func, &[I::F64Store(CELL), I::End, I::LocalGet(result)]);
 	}
@@ -306,102 +223,41 @@ impl WasmGcEmitter {
 		for (block, cursor) in [(left, reading_left), (right, reading_right)] {
 			Self::emit_list(
 				func,
-				&[
-					I::LocalGet(block),
-					I::I32WrapI64,
-					I::I32Const(CELL_BYTES as i32),
-					I::I32Add,
-					I::LocalSet(cursor),
-				],
+				&[I::LocalGet(block), I::I32WrapI64, I::I32Const(CELL_BYTES as i32), I::I32Add, I::LocalSet(cursor)],
 			);
 		}
 		func.instruction(&I::LocalGet(reading_left));
 		Self::emit_list(func, &count);
 		Self::emit_list(
 			func,
-			&[
-				I::I32WrapI64,
-				I::I32Const(-2),
-				I::I32And,
-				I::I32Const(3),
-				I::I32Shl,
-				I::I32Add,
-				I::LocalSet(pairs_end),
-			],
+			&[I::I32WrapI64, I::I32Const(-2), I::I32And, I::I32Const(3), I::I32Shl, I::I32Add, I::LocalSet(pairs_end)],
 		);
-		Self::emit_list(
-			func,
-			&[
-				I::Block(wasm_encoder::BlockType::Empty),
-				I::Loop(wasm_encoder::BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[I::LocalGet(reading_left), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)],
-		);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(lanes),
-				I::LocalGet(reading_left),
-				I::V128Load(PAIR_ALIGNED),
-				I::LocalGet(reading_right),
-				I::V128Load(PAIR_ALIGNED),
-				I::F64x2Mul,
-				I::F64x2Add,
-				I::LocalSet(lanes),
-			],
-		);
+		Self::emit_list(func, &[I::Block(wasm_encoder::BlockType::Empty), I::Loop(wasm_encoder::BlockType::Empty)]);
+		Self::emit_list(func, &[I::LocalGet(reading_left), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)]);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(lanes), I::LocalGet(reading_left), I::V128Load(PAIR_ALIGNED), I::LocalGet(reading_right),
+			I::V128Load(PAIR_ALIGNED), I::F64x2Mul, I::F64x2Add, I::LocalSet(lanes),
+		]);
 		for cursor in [reading_left, reading_right] {
-			Self::emit_list(
-				func,
-				&[
-					I::LocalGet(cursor),
-					I::I32Const(PAIR_BYTES),
-					I::I32Add,
-					I::LocalSet(cursor),
-				],
-			);
+			Self::emit_list(func, &[I::LocalGet(cursor), I::I32Const(PAIR_BYTES), I::I32Add, I::LocalSet(cursor)]);
 		}
 		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(lanes),
-				I::F64x2ExtractLane(0),
-				I::LocalGet(lanes),
-				I::F64x2ExtractLane(1),
-				I::F64Add,
-				I::LocalSet(sum),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(lanes), I::F64x2ExtractLane(0), I::LocalGet(lanes), I::F64x2ExtractLane(1), I::F64Add,
+			I::LocalSet(sum),
+		]);
 		// an odd count: the last pair
 		Self::emit_list(func, &count);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(1),
-				I::I64And,
-				I::I32WrapI64,
-				I::If(wasm_encoder::BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(sum),
-				I::LocalGet(reading_left),
-				I::F64Load(CELL),
-				I::LocalGet(reading_right),
-				I::F64Load(CELL),
-				I::F64Mul,
-				I::F64Add,
-				I::LocalSet(sum),
-				I::End,
-				I::LocalGet(sum),
-			],
-		);
+		Self::emit_list(func, &[I::I64Const(1), I::I64And, I::I32WrapI64, I::If(wasm_encoder::BlockType::Empty)]);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(sum), I::LocalGet(reading_left), I::F64Load(CELL), I::LocalGet(reading_right), I::F64Load(CELL),
+			I::F64Mul, I::F64Add, I::LocalSet(sum),
+			I::End,
+			I::LocalGet(sum),
+		]);
 	}
 
 	/// linear_new(count) -> address: a zeroed block (fresh pages, never reused) with its count in the header
@@ -410,32 +266,17 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(0), I::I64Const(0), I::I64LtS]);
 		self.emit_fail_if(func, "index_out_of_range");
 		// header + cells + room to align the start to 8
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(0),
-				I::I64Const(CELL_BYTES),
-				I::I64Mul,
-				I::I64Const(2 * CELL_BYTES - 1),
-				I::I64Add,
-				I::I32WrapI64,
-				I::LocalSet(length),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(0), I::I64Const(CELL_BYTES), I::I64Mul, I::I64Const(2 * CELL_BYTES - 1), I::I64Add,
+			I::I32WrapI64, I::LocalSet(length),
+		]);
 		self.emit_text_allocation(func, length, address);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(address),
-				I::I32Const(CELL_BYTES as i32 - 1),
-				I::I32Add,
-				I::I32Const(-(CELL_BYTES as i32)),
-				I::I32And,
-				I::LocalTee(address),
-				I::LocalGet(0),
-				I::I64Store(CELL),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(address), I::I32Const(CELL_BYTES as i32 - 1), I::I32Add, I::I32Const(-(CELL_BYTES as i32)),
+			I::I32And, I::LocalTee(address), I::LocalGet(0), I::I64Store(CELL),
+		]);
 		Self::emit_list(func, &[I::LocalGet(address), I::I64ExtendI32U]);
 	}
 
@@ -443,27 +284,12 @@ impl WasmGcEmitter {
 	fn emit_linear_cell(&self, func: &mut Function) {
 		Self::emit_list(
 			func,
-			&[
-				I::LocalGet(1),
-				I::I64Const(1),
-				I::I64Sub,
-				I::LocalGet(0),
-				I::I32WrapI64,
-				I::I64Load(CELL),
-				I::I64GeU,
-			],
+			&[I::LocalGet(1), I::I64Const(1), I::I64Sub, I::LocalGet(0), I::I32WrapI64, I::I64Load(CELL), I::I64GeU],
 		);
 		self.emit_fail_if(func, "index_out_of_range");
 		Self::emit_list(
 			func,
-			&[
-				I::LocalGet(0),
-				I::LocalGet(1),
-				I::I64Const(CELL_BYTES),
-				I::I64Mul,
-				I::I64Add,
-				I::I32WrapI64,
-			],
+			&[I::LocalGet(0), I::LocalGet(1), I::I64Const(CELL_BYTES), I::I64Mul, I::I64Add, I::I32WrapI64],
 		);
 	}
 

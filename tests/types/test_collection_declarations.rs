@@ -16,12 +16,7 @@ fn a_collection_word_declares_a_variable() {
 fn dict_and_array_say_their_warp_word() {
 	clear_shown_hints();
 	let (_, hints) = capture_hints(|| warp::wasm_emitter::eval("dict d = {a: 1}; d.a"));
-	assert!(
-		hints
-			.iter()
-			.any(|hint| hint.original == "dict" && hint.canonical == "map"),
-		"{hints:?}"
-	);
+	assert!(hints.iter().any(|hint| hint.original == "dict" && hint.canonical == "map"), "{hints:?}");
 }
 
 #[test]

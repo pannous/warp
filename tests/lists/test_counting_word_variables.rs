@@ -11,8 +11,5 @@ fn a_counting_word_variable_in_a_list_is_an_item() {
 
 #[test]
 fn shared_values_named_like_counting_words_reach_a_go_block() {
-	is!(
-		"shared a = 0; shared count = 0; j = go { count += 1; a = 1; 0 }; await j; count + a",
-		2
-	);
+	is!("shared a = 0; shared count = 0; j = go { count += 1; a = 1; 0 }; await j; count + a", 2);
 }

@@ -4,9 +4,11 @@
 use sound
 
 tempo = 110
-live_loop 4 { pattern "c3 ~ [c3 c3] ~" }               // the bass: a bar, four times
+live_loop bass 4 { pattern "c3 ~ [c3 c3] <~ c3?>" }   // the bass: a bar, four times; the last step alternates
+live_loop 4 { pattern "c2 _ _ e2" }                  // c2 holds three steps
 live_loop 4 { pattern("~ g4 ~ g4*2", 1 bar) }       // the offbeat chords' root
 live_loop 2 { pattern("c5(3,8) e5(2,8)", 2 bars) }   // Euclidean rhythms, 3 and 2 of 8
 swing = 0.6
-live_loop 2 { pattern "c4 e4 g4 [b4 c5]" }            // the swung tune
+live_loop 2 { pattern "c4 e4 <g4 a4> [b4 c5?]" }      // the swung tune, c5 in about half the cycles (pattern_seed)
+await bass
 wait_sound()

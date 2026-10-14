@@ -25,14 +25,10 @@ fn test_computed_entries_are_uncharged() {
 fn test_a_computed_entry_warns_where_it_is_written() {
 	take_warnings();
 	eval("a=1;b=2; o = {s1: a+b}; o.s1!");
-	assert!(take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("write s1 = a+b for its value")));
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("write s1 = a+b for its value")));
 	take_warnings();
 	eval("o = {age: 3, color: red}; o.age");
-	assert!(take_warnings()
-		.iter()
-		.all(|warning| !warning.message.contains("keeps the block")));
+	assert!(take_warnings().iter().all(|warning| !warning.message.contains("keeps the block")));
 }
 
 #[test]

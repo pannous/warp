@@ -90,11 +90,9 @@ impl Channels {
 
 	/// `for v in ch`: whether another value comes, waiting until one is offered or the channel is closed
 	fn more(&self, id: i64, alone: &dyn Fn() -> bool) -> Result<bool, String> {
-		self.wait(id, alone, "for … in ch", |channel| {
-			match (channel.offered.is_empty(), channel.closed) {
-				(false, _) => Some(Ok(true)),
-				(true, closed) => closed.then_some(Ok(false)),
-			}
+		self.wait(id, alone, "for … in ch", |channel| match (channel.offered.is_empty(), channel.closed) {
+			(false, _) => Some(Ok(true)),
+			(true, closed) => closed.then_some(Ok(false)),
 		})
 	}
 
@@ -137,11 +135,7 @@ impl TaskTable {
 			CHANNEL_TAKE,
 			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
 				let alone = receiver.alone_in(&caller);
-				let value = receiver
-					.channels
-					.take(id, &alone)
-					.map_err(task_failure)?
-					.unwrap_or(TaskValue::Empty);
+				let value = receiver.channels.take(id, &alone).map_err(task_failure)?.unwrap_or(TaskValue::Empty);
 				build_in(&mut caller, &value)
 			},
 		)?;

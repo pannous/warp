@@ -43,11 +43,7 @@ impl WasmGcEmitter {
 		let depth_global = self.declare_named_global(ValType::I32, ConstExpr::i32_const(0), TRY_DEPTH_GLOBAL.into());
 		let caught_global =
 			self.declare_named_global(ValType::I32, ConstExpr::i32_const(-1), CAUGHT_ERROR_GLOBAL.into());
-		let catching = ErrorCatching {
-			tag,
-			depth_global,
-			caught_global,
-		};
+		let catching = ErrorCatching { tag, depth_global, caught_global };
 		self.error_catching = Some(catching);
 		catching
 	}
@@ -56,10 +52,7 @@ impl WasmGcEmitter {
 	fn declare_i32_tag(&mut self) -> u32 {
 		let tag = self.tags.len();
 		let tag_type = self.type_manager.function_type(vec![ValType::I32], vec![]);
-		self.tags.tag(TagType {
-			kind: TagKind::Exception,
-			func_type_idx: tag_type,
-		});
+		self.tags.tag(TagType { kind: TagKind::Exception, func_type_idx: tag_type });
 		tag
 	}
 
@@ -90,16 +83,12 @@ impl WasmGcEmitter {
 	/// the trapping function)
 	pub(in crate::wasm_emitter) fn emit_error_body(&self, func: &mut Function, error_id: i32) {
 		if let Some(catching) = self.error_catching {
-			Self::emit_list(
-				func,
-				&[
-					I::GlobalGet(catching.depth_global),
-					I::If(BlockType::Empty),
-					I::I32Const(error_id),
-					I::Throw(catching.tag),
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::GlobalGet(catching.depth_global), I::If(BlockType::Empty),
+					I::I32Const(error_id), I::Throw(catching.tag),
+				I::End,
+			]);
 		}
 		func.instruction(&I::Unreachable);
 	}
@@ -108,24 +97,15 @@ impl WasmGcEmitter {
 	/// drops by their count, as their normal end would have done. Every exit path takes this, whatever its keyword.
 	pub(in crate::wasm_emitter) fn emit_leave_tries(&self, func: &mut Function, target_frame: usize) {
 		let frames = super::super::control::loop_control::open_frames(func);
-		let left = frames
-			.get(target_frame..)
-			.unwrap_or_default()
-			.iter()
-			.filter(|is_try| **is_try)
-			.count();
+		let left = frames.get(target_frame..).unwrap_or_default().iter().filter(|is_try| **is_try).count();
 		let Some(catching) = self.error_catching.filter(|_| left > 0) else {
 			return;
 		};
-		Self::emit_list(
-			func,
-			&[
-				I::GlobalGet(catching.depth_global),
-				I::I32Const(left as i32),
-				I::I32Sub,
-				I::GlobalSet(catching.depth_global),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::GlobalGet(catching.depth_global), I::I32Const(left as i32), I::I32Sub,
+			I::GlobalSet(catching.depth_global),
+		]);
 	}
 
 	/// `ran_without_error{statement}` as i64: 1 when the statement finished, 0 when a runtime error was thrown in it.
@@ -137,12 +117,7 @@ impl WasmGcEmitter {
 		let step_depth = |func: &mut Function, step: I<'static>| {
 			Self::emit_list(
 				func,
-				&[
-					I::GlobalGet(catching.depth_global),
-					I::I32Const(1),
-					step,
-					I::GlobalSet(catching.depth_global),
-				],
+				&[I::GlobalGet(catching.depth_global), I::I32Const(1), step, I::GlobalSet(catching.depth_global)],
 			);
 		};
 		step_depth(func, I::I32Add);
@@ -163,24 +138,16 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(node_ref))]);
 		let names = self.runtime_error_names();
 		for (id, name) in names.iter().enumerate() {
-			Self::emit_list(
-				func,
-				&[
-					I::GlobalGet(catching.caught_global),
-					I::I32Const(id as i32),
-					I::I32Eq,
-					I::If(BlockType::Result(node_ref)),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::GlobalGet(catching.caught_global), I::I32Const(id as i32), I::I32Eq,
+				I::If(BlockType::Result(node_ref)),
+			]);
 			if *name == super::super::lists::list_ops::RETURNED_ERROR {
 				let detail = self.trap_detail_global();
 				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);
 			} else {
-				self.emit_string_call(
-					func,
-					&super::super::lists::list_ops::runtime_error_message(name),
-					"new_text",
-				);
+				self.emit_string_call(func, &super::super::lists::list_ops::runtime_error_message(name), "new_text");
 			}
 			self.emit_call(func, super::super::text::text_builtins::ERROR_OF);
 			func.instruction(&I::Else);
@@ -202,11 +169,7 @@ impl WasmGcEmitter {
 			return;
 		};
 		let Node::Symbol(name) = target.drop_meta() else { return };
-		let Some(local) = self
-			.scope
-			.lookup(name)
-			.filter(|local| local.kind.is_ref())
-			.map(|local| local.position)
+		let Some(local) = self.scope.lookup(name).filter(|local| local.kind.is_ref()).map(|local| local.position)
 		else {
 			return;
 		};

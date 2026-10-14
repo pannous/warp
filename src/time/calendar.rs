@@ -110,15 +110,8 @@ pub struct TzRules {
 }
 
 /// The rules compiled into warp
-pub static BUILTIN_RULES: TzRules = TzRules {
-	version: "warp-2026a",
-	published: Date {
-		year: 2026,
-		month: 9,
-		day: 28,
-	},
-	zones: ZONES,
-};
+pub static BUILTIN_RULES: TzRules =
+	TzRules { version: "warp-2026a", published: Date { year: 2026, month: 9, day: 28 }, zones: ZONES };
 
 thread_local! {
 	static CURRENT_RULES: std::cell::Cell<&'static TzRules> = const { std::cell::Cell::new(&BUILTIN_RULES) };
@@ -184,10 +177,7 @@ pub static ZONES: &[Zone] = &[
 pub fn zone_named(name: &str) -> Result<&'static Zone, String> {
 	let rules = rules();
 	rules.zones.iter().find(|zone| zone.name == name).ok_or_else(|| {
-		format!(
-			"unknown time zone {name:?}: not in the time zone rules {} (src/time/calendar.rs)",
-			rules.version
-		)
+		format!("unknown time zone {name:?}: not in the time zone rules {} (src/time/calendar.rs)", rules.version)
 	})
 }
 
@@ -222,11 +212,7 @@ pub fn civil_from_days(days: i64) -> Date {
 	let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
 	let shifted_month = (5 * day_of_year + 2) / 153;
 	let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
-	let month = if shifted_month < 10 {
-		shifted_month + 3
-	} else {
-		shifted_month - 9
-	};
+	let month = if shifted_month < 10 { shifted_month + 3 } else { shifted_month - 9 };
 	let year = year_of_era + era * 400 + if month <= 2 { 1 } else { 0 };
 	Date { year, month, day }
 }
@@ -302,12 +288,7 @@ impl Clock {
 		if !(0..60).contains(&second) {
 			return Err(format!("second out of range: {second}"));
 		}
-		Ok(Clock {
-			hour,
-			minute,
-			second,
-			nanos,
-		})
+		Ok(Clock { hour, minute, second, nanos })
 	}
 
 	fn nanos_of_day(self) -> i128 {
@@ -350,10 +331,9 @@ impl Zone {
 		let year = civil_from_days(seconds.div_euclid(DAY_SECONDS)).year;
 		let (start, end) = match self.dst {
 			Dst::None => return self.standard,
-			Dst::Europe => (
-				Date::last_sunday(year, 3) * DAY_SECONDS + HOUR,
-				Date::last_sunday(year, 10) * DAY_SECONDS + HOUR,
-			),
+			Dst::Europe => {
+				(Date::last_sunday(year, 3) * DAY_SECONDS + HOUR, Date::last_sunday(year, 10) * DAY_SECONDS + HOUR)
+			}
 			Dst::UnitedStates => (
 				Date::nth_sunday(year, 3, 2) * DAY_SECONDS + 2 * HOUR - self.standard,
 				Date::nth_sunday(year, 11, 1) * DAY_SECONDS + 2 * HOUR - self.standard - HOUR,
@@ -369,24 +349,14 @@ impl Zone {
 	/// A wall time skipped or repeated by a transition is an error unless the choice is spelled out, never a silent shift
 	pub fn resolve(&'static self, date: Date, clock: Clock, choice: Disambiguation) -> Result<Zoned, String> {
 		let offsets = [self.standard + HOUR, self.standard];
-		let offsets = if self.dst == Dst::None {
-			&offsets[1..]
-		} else {
-			&offsets[..]
-		};
+		let offsets = if self.dst == Dst::None { &offsets[1..] } else { &offsets[..] };
 		let valid: Vec<i64> = offsets
 			.iter()
 			.copied()
 			.filter(|offset| self.offset_at(instant_of(date, clock, *offset)) == *offset)
 			.collect();
 		if let [offset] = valid[..] {
-			return Ok(Zoned {
-				date,
-				clock,
-				offset,
-				zone: self,
-				rules: rules(),
-			});
+			return Ok(Zoned { date, clock, offset, zone: self, rules: rules() });
 		}
 		// Both offsets give the two candidates: the repeated instants, or the wall time shifted across the gap
 		let instants = offsets.iter().map(|offset| instant_of(date, clock, *offset));
@@ -417,13 +387,7 @@ impl Zoned {
 	pub fn at(instant: Instant, zone: &'static Zone) -> Zoned {
 		let offset = zone.offset_at(instant);
 		let (date, clock) = local_at(instant, offset);
-		Zoned {
-			date,
-			clock,
-			offset,
-			zone,
-			rules: rules(),
-		}
+		Zoned { date, clock, offset, zone, rules: rules() }
 	}
 
 	pub fn instant(self) -> Instant {
@@ -438,17 +402,8 @@ impl Zoned {
 	/// RFC 9557 form without the rules version: `2030-10-27T02:30+01:00[Europe/Berlin]`
 	pub fn plain(self) -> String {
 		let mut text = Time::Local(self.date, self.clock).to_string();
-		let (sign, offset) = if self.offset < 0 {
-			('-', -self.offset)
-		} else {
-			('+', self.offset)
-		};
-		text += &format!(
-			"{sign}{:02}:{:02}[{}]",
-			offset / HOUR,
-			offset / MINUTE % MINUTE,
-			self.zone.name
-		);
+		let (sign, offset) = if self.offset < 0 { ('-', -self.offset) } else { ('+', self.offset) };
+		text += &format!("{sign}{:02}:{:02}[{}]", offset / HOUR, offset / MINUTE % MINUTE, self.zone.name);
 		text
 	}
 }
@@ -502,11 +457,7 @@ pub fn literal_len(chars: &[char]) -> usize {
 /// Validate a literal found by `literal_len`: an offset makes an instant, a bracketed zone a zoned time
 pub fn parse_literal(text: &str) -> Result<Time, String> {
 	let bytes = text.as_bytes();
-	let number = |from: usize, to: usize| {
-		text.get(from..to)
-			.and_then(|digits| digits.parse::<i64>().ok())
-			.unwrap_or(0)
-	};
+	let number = |from: usize, to: usize| text.get(from..to).and_then(|digits| digits.parse::<i64>().ok()).unwrap_or(0);
 	let date = Date::new(number(0, 4), number(5, 7), number(8, 10))?;
 	if bytes.len() == 10 {
 		return Ok(Time::Date(date));
@@ -551,19 +502,13 @@ pub fn parse_literal(text: &str) -> Result<Time, String> {
 		let suffix = suffix.strip_prefix('[').unwrap_or(suffix);
 		match suffix.split_once('=') {
 			Some(("_tzdata", version)) => resolved_with = Some(version),
-			Some(_) => {
-				return Err(format!(
-					"unsupported suffix [{suffix}] in {text}: only [_tzdata=version] is known"
-				))
-			}
+			Some(_) => return Err(format!("unsupported suffix [{suffix}] in {text}: only [_tzdata=version] is known")),
 			None if zone.is_none() => zone = Some(zone_named(suffix)?),
 			None => return Err(format!("{text} names two zones")),
 		}
 	}
 	if resolved_with.is_some() && zone.is_none() {
-		return Err(format!(
-			"{text}: only a zoned time records the time zone rules it was resolved with"
-		));
+		return Err(format!("{text}: only a zoned time records the time zone rules it was resolved with"));
 	}
 	match (offset, zone) {
 		(None, None) => Ok(Time::Local(date, clock)),
@@ -575,13 +520,7 @@ pub fn parse_literal(text: &str) -> Result<Time, String> {
 		(Some(offset), Some(zone)) => {
 			let instant = instant_of(date, clock, offset);
 			if zone.offset_at(instant) == offset {
-				return Ok(Time::Zoned(Zoned {
-					date,
-					clock,
-					offset,
-					zone,
-					rules: rules(),
-				}));
+				return Ok(Time::Zoned(Zoned { date, clock, offset, zone, rules: rules() }));
 			}
 			// The numeric offset disagrees with the zone: never pick the wall time or the instant silently
 			let keep_wall = match zone.resolve(date, clock, Disambiguation::Reject) {
@@ -598,36 +537,19 @@ pub fn parse_literal(text: &str) -> Result<Time, String> {
 				),
 				_ => format!("offset does not match {}", zone.name),
 			};
-			Err(format!(
-				"{text} {reason}: keep the wall time → {keep_wall}, or keep the instant → {keep_instant}"
-			))
+			Err(format!("{text} {reason}: keep the wall time → {keep_wall}, or keep the instant → {keep_instant}"))
 		}
 	}
 }
 
 /// Duration of one time unit word: `month`, `24 hours`
 pub fn unit_named(word: &str) -> Option<Duration> {
-	let exact = |seconds: i128| Duration {
-		nanos: seconds * SECOND,
-		..Duration::default()
-	};
+	let exact = |seconds: i128| Duration { nanos: seconds * SECOND, ..Duration::default() };
 	Some(match word {
-		"year" | "years" => Duration {
-			months: 12,
-			..Duration::default()
-		},
-		"month" | "months" => Duration {
-			months: 1,
-			..Duration::default()
-		},
-		"week" | "weeks" => Duration {
-			days: 7,
-			..Duration::default()
-		},
-		"day" | "days" => Duration {
-			days: 1,
-			..Duration::default()
-		},
+		"year" | "years" => Duration { months: 12, ..Duration::default() },
+		"month" | "months" => Duration { months: 1, ..Duration::default() },
+		"week" | "weeks" => Duration { days: 7, ..Duration::default() },
+		"day" | "days" => Duration { days: 1, ..Duration::default() },
 		"hour" | "hours" => exact(HOUR as i128),
 		"minute" | "minutes" => exact(MINUTE as i128),
 		"second" | "seconds" => exact(1),
@@ -638,38 +560,23 @@ pub fn unit_named(word: &str) -> Option<Duration> {
 /// A time unit word after a number (`1 month`): its duration and how many chars it spans including leading spaces
 pub fn unit_after(chars: &[char]) -> Option<(Duration, usize)> {
 	let start = chars.iter().take_while(|c| **c == ' ').count();
-	let length = chars[start..]
-		.iter()
-		.take_while(|c| c.is_alphanumeric() || **c == '_')
-		.count();
+	let length = chars[start..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').count();
 	let word: String = chars[start..start + length].iter().collect();
 	unit_named(&word).map(|unit| (unit, start + length))
 }
 
 impl Duration {
 	pub fn times(self, factor: i64) -> Duration {
-		Duration {
-			months: self.months * factor,
-			days: self.days * factor,
-			nanos: self.nanos * factor as i128,
-		}
+		Duration { months: self.months * factor, days: self.days * factor, nanos: self.nanos * factor as i128 }
 	}
 
 	pub fn plus(self, other: Duration) -> Duration {
-		Duration {
-			months: self.months + other.months,
-			days: self.days + other.days,
-			nanos: self.nanos + other.nanos,
-		}
+		Duration { months: self.months + other.months, days: self.days + other.days, nanos: self.nanos + other.nanos }
 	}
 
 	/// `1 day == 24 hours` depends on the day: equal fields are equal, one differing field is unequal, more is an error
 	pub fn equals(self, other: Duration) -> Result<bool, String> {
-		let differing = [
-			self.months != other.months,
-			self.days != other.days,
-			self.nanos != other.nanos,
-		];
+		let differing = [self.months != other.months, self.days != other.days, self.nanos != other.nanos];
 		match differing.iter().filter(|differs| **differs).count() {
 			0 => Ok(true),
 			1 => Ok(false),
@@ -689,9 +596,7 @@ impl Duration {
 			if self.is_exact() {
 				Ok((self.nanos / (unit * SECOND)) as i64)
 			} else {
-				Err(format!(
-					"{self} has calendar parts: {name} depends on the dates it is added to"
-				))
+				Err(format!("{self} has calendar parts: {name} depends on the dates it is added to"))
 			}
 		};
 		match name {
@@ -722,10 +627,9 @@ impl Time {
 			Time::Instant(instant) => Ok(Time::Zoned(Zoned::at(instant, zone))),
 			Time::Zoned(zoned) => Ok(Time::Zoned(Zoned::at(zoned.instant(), zone))),
 			Time::Local(date, clock) => Ok(Time::Zoned(zone.resolve(date, clock, Disambiguation::Reject)?)),
-			Time::Date(date) => Err(format!(
-				"a date has no time of day: give {date} a clock before placing it in {}",
-				zone.name
-			)),
+			Time::Date(date) => {
+				Err(format!("a date has no time of day: give {date} a clock before placing it in {}", zone.name))
+			}
 		}
 	}
 
@@ -779,23 +683,17 @@ impl Time {
 				let (date, clock) = from_wall_nanos(wall_nanos(date, clock) + nanos);
 				Ok(Time::Local(date, clock))
 			}
-			Time::Instant(_) if !duration.is_exact() => Err(format!(
-				"an instant has no calendar: place it in a zone before adding {duration}"
-			)),
+			Time::Instant(_) if !duration.is_exact() => {
+				Err(format!("an instant has no calendar: place it in a zone before adding {duration}"))
+			}
 			Time::Instant(instant) => Ok(Time::Instant(instant + nanos)),
 			Time::Zoned(zoned) => {
 				let zoned = if duration.is_exact() {
 					zoned
 				} else {
-					zoned
-						.zone
-						.resolve(zoned.date.shift(months, days, overflow)?, zoned.clock, choice)?
+					zoned.zone.resolve(zoned.date.shift(months, days, overflow)?, zoned.clock, choice)?
 				};
-				Ok(Time::Zoned(if nanos == 0 {
-					zoned
-				} else {
-					Zoned::at(zoned.instant() + nanos, zoned.zone)
-				}))
+				Ok(Time::Zoned(if nanos == 0 { zoned } else { Zoned::at(zoned.instant() + nanos, zoned.zone) }))
 			}
 		}
 	}
@@ -833,10 +731,7 @@ impl Time {
 		let difference = self.position() - other.position();
 		Ok(match self {
 			Time::Date(_) => Ok(difference as i64),
-			_ => Err(Duration {
-				nanos: difference,
-				..Duration::default()
-			}),
+			_ => Err(Duration { nanos: difference, ..Duration::default() }),
 		})
 	}
 }
@@ -901,11 +796,9 @@ impl fmt::Display for Duration {
 		// whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
 		if self.nanos % SECOND == 0 && self.nanos != 0 {
 			let (seconds, hour, minute) = (self.nanos / SECOND, HOUR as i128, MINUTE as i128);
-			for (amount, unit) in [
-				(seconds / hour, "hour"),
-				(seconds % hour / minute, "minute"),
-				(seconds % minute, "second"),
-			] {
+			for (amount, unit) in
+				[(seconds / hour, "hour"), (seconds % hour / minute, "minute"), (seconds % minute, "second")]
+			{
 				if amount != 0 {
 					parts.push(count(amount, unit));
 				}

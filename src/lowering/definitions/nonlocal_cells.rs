@@ -29,11 +29,7 @@ pub fn lower(node: Node) -> Node {
 fn definition(node: &Node) -> Option<(&Node, Op, Vec<String>, &Node)> {
 	let definition = function_head(node).filter(FunctionHead::is_glued_head)?;
 	let op = definition.plain_operator()?;
-	let params = definition
-		.written_parameters
-		.iter()
-		.map(|param| param.drop_meta().name())
-		.collect();
+	let params = definition.written_parameters.iter().map(|param| param.drop_meta().name()).collect();
 	Some((definition.head, op, params, definition.body))
 }
 
@@ -174,11 +170,7 @@ fn with_first(statements: Vec<Node>, body: Node) -> Node {
 		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => {
 			Node::List([statements, items].concat(), Bracket::Curly, Separator::Semicolon)
 		}
-		single => Node::List(
-			[statements, vec![single]].concat(),
-			Bracket::Curly,
-			Separator::Semicolon,
-		),
+		single => Node::List([statements, vec![single]].concat(), Bracket::Curly, Separator::Semicolon),
 	}
 }
 

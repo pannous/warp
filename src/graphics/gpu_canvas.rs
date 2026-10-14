@@ -15,12 +15,7 @@ pub const CIRCLE: u32 = 2;
 /// kind u32, color u32 (0xAARRGGBB), four f32 coordinates: rect x y width height, circle x y radius
 pub const SHAPE_BYTES: usize = 24;
 /// The canvas before anything is drawn (lib/draw.warp paper, paint.rs PAPER)
-const PAPER: wgpu::Color = wgpu::Color {
-	r: 250.0 / 255.0,
-	g: 250.0 / 255.0,
-	b: 250.0 / 255.0,
-	a: 1.0,
-};
+const PAPER: wgpu::Color = wgpu::Color { r: 250.0 / 255.0, g: 250.0 / 255.0, b: 250.0 / 255.0, a: 1.0 };
 /// Bytes, mixed as bytes: CPU's mixed() mixes 0–255 channels, not light
 const CANVAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const LABEL: &str = "draw canvas";
@@ -130,17 +125,9 @@ impl Canvas {
 		let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: Some(LABEL),
 			layout: &pipeline.get_bind_group_layout(0),
-			entries: &[wgpu::BindGroupEntry {
-				binding: 0,
-				resource: size_buffer.as_entire_binding(),
-			}],
+			entries: &[wgpu::BindGroupEntry { binding: 0, resource: size_buffer.as_entire_binding() }],
 		});
-		Canvas {
-			pipeline,
-			size_buffer,
-			bindings,
-			texture: None,
-		}
+		Canvas { pipeline, size_buffer, bindings, texture: None }
 	}
 
 	/// The shapes drawn over the canvas, a new one of paper when the size changed; the encoder still to submit
@@ -152,11 +139,7 @@ impl Canvas {
 		height: u32,
 		shapes: &[u8],
 	) -> wgpu::CommandEncoder {
-		let size = wgpu::Extent3d {
-			width: width.max(1),
-			height: height.max(1),
-			depth_or_array_layers: 1,
-		};
+		let size = wgpu::Extent3d { width: width.max(1), height: height.max(1), depth_or_array_layers: 1 };
 		let fresh = self.texture.as_ref().is_none_or(|texture| texture.size() != size);
 		if fresh {
 			let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
@@ -193,19 +176,12 @@ impl Canvas {
 			queue.write_buffer(&buffer, 0, shapes);
 			buffer
 		});
-		let load = if fresh {
-			wgpu::LoadOp::Clear(PAPER)
-		} else {
-			wgpu::LoadOp::Load
-		};
+		let load = if fresh { wgpu::LoadOp::Clear(PAPER) } else { wgpu::LoadOp::Load };
 		let attachment = wgpu::RenderPassColorAttachment {
 			view: &view,
 			depth_slice: None,
 			resolve_target: None,
-			ops: wgpu::Operations {
-				load,
-				store: wgpu::StoreOp::Store,
-			},
+			ops: wgpu::Operations { load, store: wgpu::StoreOp::Store },
 		};
 		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 			label: Some(LABEL),

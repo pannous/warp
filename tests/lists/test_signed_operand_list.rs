@@ -11,12 +11,7 @@ fn a_glued_sign_after_a_space_is_a_list_by_default() {
 	take_assumptions();
 	warp::warp_parser::parse("1 -1");
 	let assumed = take_assumptions();
-	assert!(
-		assumed
-			.iter()
-			.any(|warning| warning.message.contains("taking the list")),
-		"{assumed:?}"
-	);
+	assert!(assumed.iter().any(|warning| warning.message.contains("taking the list")), "{assumed:?}");
 	is!("[1 -1]", ints(vec![1, -1]));
 	is!("[1 -1 2]", ints(vec![1, -1, 2]));
 	is!("[1 +1]", ints(vec![1, 1]));
@@ -45,8 +40,5 @@ fn each_reading_has_its_explicit_form() {
 
 #[test]
 fn under_strict_the_default_is_an_error() {
-	assert!(matches!(
-		with_warning_mode(WarningMode::Error, || warp::wasm_emitter::eval("1 -1")),
-		Node::Error(_)
-	));
+	assert!(matches!(with_warning_mode(WarningMode::Error, || warp::wasm_emitter::eval("1 -1")), Node::Error(_)));
 }

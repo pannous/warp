@@ -44,19 +44,13 @@ pub fn scoped<C: Swappable<T>, T: 'static, R>(key: &'static LocalKey<C>, value: 
 		}
 	}
 	let outer = key.with(|cell| cell.swap_value(value));
-	let _restore = Restore {
-		key,
-		outer: Some(outer),
-	};
+	let _restore = Restore { key, outer: Some(outer) };
 	run()
 }
 
 /// Fuel budget of the next runs on this thread: `with_fuel`, else `WARP_FUEL`, else `DEFAULT_FUEL`
 pub fn fuel_budget() -> u64 {
-	FUEL_OVERRIDE
-		.with(Cell::get)
-		.or_else(warp_runtime::fuel::fuel_from_environment)
-		.unwrap_or(DEFAULT_FUEL)
+	FUEL_OVERRIDE.with(Cell::get).or_else(warp_runtime::fuel::fuel_from_environment).unwrap_or(DEFAULT_FUEL)
 }
 
 /// Set the fuel budget for every later run on this thread (the CLI's `--fuel`)
@@ -110,9 +104,7 @@ pub fn show_type_name<T>(_: &T) {
 }
 
 pub fn dirs_home() -> std::path::PathBuf {
-	env::var("HOME")
-		.map(std::path::PathBuf::from)
-		.unwrap_or_else(|_| std::path::PathBuf::from("."))
+	env::var("HOME").map(std::path::PathBuf::from).unwrap_or_else(|_| std::path::PathBuf::from("."))
 }
 
 pub fn load_file(path: &str) -> String {
@@ -127,7 +119,5 @@ pub fn file_exists(path: &str) -> bool {
 }
 
 pub fn extract_after(s: &str, sep: &str) -> String {
-	s.split_once(sep)
-		.map(|(_, after)| after.to_string())
-		.unwrap_or_default()
+	s.split_once(sep).map(|(_, after)| after.to_string()).unwrap_or_default()
 }

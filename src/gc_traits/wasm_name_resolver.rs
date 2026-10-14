@@ -51,9 +51,7 @@ impl FieldNameRegistry {
 
 	fn lookup(&mut self, struct_type: &StructType, field_name: &str, module: Option<u64>) -> Result<usize> {
 		let mapping = self.ensure_mapping(struct_type, module)?;
-		mapping
-			.index_of(field_name)
-			.ok_or_else(|| unknown_field_error(field_name, &mapping))
+		mapping.index_of(field_name).ok_or_else(|| unknown_field_error(field_name, &mapping))
 	}
 
 	fn field_names(&mut self, struct_type: &StructType, module: Option<u64>) -> Result<Vec<Option<String>>> {
@@ -104,11 +102,7 @@ fn unknown_field_error(field_name: &str, mapping: &StructFieldMapping) -> anyhow
 	anyhow!(
 		"Unknown field '{}'. Available fields: {}",
 		field_name,
-		if available.is_empty() {
-			"<none>".to_string()
-		} else {
-			available.join(", ")
-		}
+		if available.is_empty() { "<none>".to_string() } else { available.join(", ") }
 	)
 }
 
@@ -152,11 +146,7 @@ impl StructFieldMapping {
 				lookup.insert(name.clone(), idx);
 			}
 		}
-		Self {
-			type_name: parsed.type_name.clone(),
-			names: parsed.field_names.clone(),
-			lookup,
-		}
+		Self { type_name: parsed.type_name.clone(), names: parsed.field_names.clone(), lookup }
 	}
 
 	fn index_of(&self, name: &str) -> Option<usize> {
@@ -317,11 +307,7 @@ impl ParsedStructType {
 			fields.push(ParsedField::from_parser(field, group_start)?);
 		}
 		let field_names = vec![None; fields.len()];
-		Ok(Self {
-			type_name: None,
-			fields,
-			field_names,
-		})
+		Ok(Self { type_name: None, fields, field_names })
 	}
 }
 
@@ -332,9 +318,7 @@ struct ParsedArrayType {
 
 impl ParsedArrayType {
 	fn from_parser(ty: wp::ArrayType, group_start: u32) -> Result<Self> {
-		Ok(Self {
-			field: ParsedField::from_parser(&ty.0, group_start)?,
-		})
+		Ok(Self { field: ParsedField::from_parser(&ty.0, group_start)? })
 	}
 }
 
@@ -346,16 +330,10 @@ struct ParsedFuncType {
 
 impl ParsedFuncType {
 	fn from_parser(ty: wp::FuncType, group_start: u32) -> Result<Self> {
-		let params = ty
-			.params()
-			.iter()
-			.map(|p| ParsedValType::from_parser(p, group_start))
-			.collect::<Result<Vec<_>>>()?;
-		let results = ty
-			.results()
-			.iter()
-			.map(|r| ParsedValType::from_parser(r, group_start))
-			.collect::<Result<Vec<_>>>()?;
+		let params =
+			ty.params().iter().map(|p| ParsedValType::from_parser(p, group_start)).collect::<Result<Vec<_>>>()?;
+		let results =
+			ty.results().iter().map(|r| ParsedValType::from_parser(r, group_start)).collect::<Result<Vec<_>>>()?;
 		Ok(Self { params, results })
 	}
 }
@@ -368,10 +346,7 @@ struct ParsedField {
 
 impl ParsedField {
 	fn from_parser(field: &wp::FieldType, group_start: u32) -> Result<Self> {
-		Ok(Self {
-			mutable: field.mutable,
-			storage: ParsedStorageType::from_parser(&field.element_type, group_start)?,
-		})
+		Ok(Self { mutable: field.mutable, storage: ParsedStorageType::from_parser(&field.element_type, group_start)? })
 	}
 }
 
@@ -424,10 +399,7 @@ struct ParsedRefType {
 
 impl ParsedRefType {
 	fn from_parser(ty: &wp::RefType, group_start: u32) -> Result<Self> {
-		Ok(Self {
-			nullable: ty.is_nullable(),
-			heap: ParsedHeapType::from_parser(&ty.heap_type(), group_start)?,
-		})
+		Ok(Self { nullable: ty.is_nullable(), heap: ParsedHeapType::from_parser(&ty.heap_type(), group_start)? })
 	}
 }
 
@@ -507,10 +479,7 @@ struct MatchContext<'a> {
 
 impl<'a> MatchContext<'a> {
 	fn new(module: &'a ParsedModule) -> Self {
-		Self {
-			module,
-			bindings: HashMap::new(),
-		}
+		Self { module, bindings: HashMap::new() }
 	}
 
 	fn match_struct(&mut self, idx: u32, ty: &StructType) -> bool {

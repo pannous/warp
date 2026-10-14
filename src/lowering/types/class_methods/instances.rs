@@ -23,11 +23,9 @@ pub(super) fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Nod
 		}
 		Node::Key(class, Op::Dot, member) if class_of(&class).is_some() && leading_name(&member) == FROM_JSON_WORD => {
 			let arguments = match member.drop_meta() {
-				Node::List(items, Bracket::Round, _) => items[1..]
-					.iter()
-					.cloned()
-					.map(|argument| with_objects_as_instances(argument, fields))
-					.collect(),
+				Node::List(items, Bracket::Round, _) => {
+					items[1..].iter().cloned().map(|argument| with_objects_as_instances(argument, fields)).collect()
+				}
 				_ => vec![],
 			};
 			let parsed = call(PARSE_JSON_WORD, arguments);
@@ -42,9 +40,7 @@ pub(super) fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Nod
 pub(super) fn checked_cast(object: Node, class: &str) -> Node {
 	let held = symbol(CAST_VALUE);
 	let message = format!("{} is no {class}", object.serialize());
-	let check = crate::warp_parser::parse(&format!(
-		"if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"
-	));
+	let check = crate::warp_parser::parse(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
 	let statements = vec![
 		key(held.clone(), Op::Assign, object),
 		crate::library_words::substitute(check, CAST_PLACEHOLDER, &held),
@@ -67,11 +63,7 @@ pub(super) fn built_instance(path: &Node, class: &str, fields: &ClassFields) -> 
 	let construction = instance_of(path, class, fields, &mut lists);
 	match lists.is_empty() {
 		true => construction,
-		false => Node::List(
-			[lists, vec![construction]].concat(),
-			Bracket::Round,
-			Separator::Semicolon,
-		),
+		false => Node::List([lists, vec![construction]].concat(), Bracket::Round, Separator::Semicolon),
 	}
 }
 
@@ -88,11 +80,7 @@ pub(super) fn instance_of(path: &Node, class: &str, fields: &ClassFields, lists:
 			(true, _) => instance_of(&value, field_type, fields, lists),
 			(false, Some(element_class)) => {
 				let elements = Node::Symbol(format!("{ELEMENTS_WORD}·{}", lists.len() + 1));
-				lists.push(key(
-					elements.clone(),
-					Op::Assign,
-					instances_of(value, element_class, fields),
-				));
+				lists.push(key(elements.clone(), Op::Assign, instances_of(value, element_class, fields)));
 				elements
 			}
 			(false, None) => value,
@@ -111,10 +99,7 @@ pub(super) fn instances_of(list: Node, class: &str, fields: &ClassFields) -> Nod
 /// The variables known to hold an instance of one of `classes`, with its class: assigned a construction or a call of a
 /// function returning one, annotated `p:Point`, or iterating a list of constructions `for p in ps`
 pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
-	let finder = InstanceFinder {
-		classes,
-		returned: returned_classes(node, classes),
-	};
+	let finder = InstanceFinder { classes, returned: returned_classes(node, classes) };
 	let mut instances: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 	node.visit(&mut |part| {
 		let Node::Key(target, op, value) = part else { return };
@@ -129,10 +114,7 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 		let Node::Symbol(variable) = target.drop_meta() else {
 			return;
 		};
-		if let Some(class) = finder
-			.assigned_class(op, value, &instances)
-			.filter(|class| classes.contains(class))
-		{
+		if let Some(class) = finder.assigned_class(op, value, &instances).filter(|class| classes.contains(class)) {
 			instances.insert(variable.clone(), class);
 		}
 	});
@@ -156,10 +138,7 @@ impl InstanceFinder<'_> {
 		match list.drop_meta() {
 			Node::List(items, Bracket::Square, _) if !items.is_empty() => {
 				let first = self.constructed_class(&items[0])?;
-				items
-					.iter()
-					.all(|item| self.constructed_class(item).as_ref() == Some(&first))
-					.then_some(first)
+				items.iter().all(|item| self.constructed_class(item).as_ref() == Some(&first)).then_some(first)
 			}
 			_ => None,
 		}
@@ -218,10 +197,9 @@ impl InstanceFinder<'_> {
 						.cloned()
 						.or_else(|| self.list_class(list))
 						.filter(|class| self.classes.contains(class));
-					if let (true, Some(class)) = (
-						for_word.drop_meta().name() == "for" && in_word.drop_meta().name() == "in",
-						class,
-					) {
+					if let (true, Some(class)) =
+						(for_word.drop_meta().name() == "for" && in_word.drop_meta().name() == "in", class)
+					{
 						instances.insert(item.drop_meta().name(), class);
 					}
 				}
@@ -231,8 +209,8 @@ impl InstanceFinder<'_> {
 }
 
 /// The functions whose value is an instance of one of `classes`, with its class: `make(n) := V(n)`, a body ending in
-/// a construction, or in a call of another such function
-pub(super) fn returned_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
+/// a construction, or in a call of another such function; a used module's such functions too (module_returned_classes)
+pub(crate) fn returned_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let mut definitions = vec![];
 	node.visit(&mut |part| {
 		if let Node::Key(head, Op::Define, body) = part {
@@ -241,7 +219,11 @@ pub(super) fn returned_classes(node: &Node, classes: &[String]) -> std::collecti
 			}
 		}
 	});
-	let mut returned = std::collections::HashMap::new();
+	let mut returned: std::collections::HashMap<String, String> =
+		crate::compiler::compile_context::read(|context| context.module_returned_classes.clone())
+			.into_iter()
+			.filter(|(function, class)| classes.contains(class) && !definitions.iter().any(|(own, _)| own == function))
+			.collect();
 	// a function returning another's result: until no function is added
 	loop {
 		let known = returned.len();

@@ -9,10 +9,7 @@ fn strlen_returns_a_size() {
 
 #[test]
 fn strlen_inside_a_program() {
-	is!(
-		"import abs from \"c\"\nabs(-42)\nimport strlen from \"c\"\nstrlen(\"hello\")\n7",
-		7
-	);
+	is!("import abs from \"c\"\nabs(-42)\nimport strlen from \"c\"\nstrlen(\"hello\")\n7", 7);
 }
 
 #[test]

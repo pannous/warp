@@ -9,14 +9,8 @@ fn html_of(code: &str) -> String {
 
 #[test]
 fn a_text_after_a_value_is_content() {
-	assert_eq!(
-		html_of("label{ for: missing \"L\" }"),
-		"<label for=\"missing\">L</label>"
-	);
-	assert_eq!(
-		html_of("label{ for: email \"Email\" b{ \"!\" } }"),
-		"<label for=\"email\">Email<b>!</b></label>"
-	);
+	assert_eq!(html_of("label{ for: missing \"L\" }"), "<label for=\"missing\">L</label>");
+	assert_eq!(html_of("label{ for: email \"Email\" b{ \"!\" } }"), "<label for=\"email\">Email<b>!</b></label>");
 }
 
 #[test]

@@ -10,11 +10,8 @@ impl WarpParser {
 		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
 		self.in_for_header = outer_header;
 		self.skip_spaces();
-		let body_word = if self.current_char() == ':' {
-			Some(":")
-		} else {
-			Some("do").filter(|word| self.matches_keyword(word))
-		};
+		let body_word =
+			if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
 		(iterable, body_word)
 	}
 
@@ -134,6 +131,9 @@ impl WarpParser {
 		self.key_variables.extend(key_variable.clone());
 		let body = match body_word {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
+			None if self.current_char() == ';' && self.closing_end_follows(&END_BLOCK_OPENERS) => {
+				self.semicolon_end_body(&variable, &iterable)
+			}
 			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
 		};
 		if key_variable.is_some() {
@@ -141,6 +141,18 @@ impl WarpParser {
 		}
 		// kept as written: lowering/control/for_loop/headers.rs gives `for int in xs`, `for chars in text` their meaning
 		Some(for_in_loop(variable, iterable, body))
+	}
+
+	/// Ruby's `for x in xs; print x; end` (card print-end): the statements up to `end`, with a hint naming the braces
+	fn semicolon_end_body(&mut self, variable: &Node, iterable: &Node) -> Node {
+		let head = format!("for {} in {}", variable.serialize(), crate::normalize::operand_text(iterable));
+		crate::normalize::hint(
+			&format!("{head}; … end"),
+			&format!("{head} {{ … }}"),
+			"a loop's body goes in braces; `; … end` is Ruby's form",
+		);
+		self.advance();
+		self.parse_end_block(false)
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
@@ -250,11 +262,7 @@ impl WarpParser {
 			_ if self.matches_keyword(DO_WORD) => self.colon_body(DO_WORD),
 			_ => self.indented_lines_below().unwrap_or_else(|| self.rest_of_statement()),
 		};
-		Node::List(
-			vec![call("for", vec![head]), as_block(body)],
-			Bracket::None,
-			Separator::None,
-		)
+		Node::List(vec![call("for", vec![head]), as_block(body)], Bracket::None, Separator::None)
 	}
 
 	pub(crate) fn finish_while_prefix(&mut self, rhs: Node) -> Node {
@@ -305,9 +313,7 @@ impl WarpParser {
 	/// `times [x]` fills a list, binding to the count right before it: `xs = 100 times [0]`
 	pub(crate) fn times_fills_list(&self) -> bool {
 		let after_word = TIMES_WORD.len();
-		let blanks = (after_word..)
-			.take_while(|&offset| self.peek_char(offset) == ' ')
-			.count();
+		let blanks = (after_word..).take_while(|&offset| self.peek_char(offset) == ' ').count();
 		self.peek_char(after_word + blanks) == '['
 	}
 
@@ -317,9 +323,8 @@ impl WarpParser {
 		if !self.matches_keyword(TIMES_WORD) {
 			return false;
 		}
-		let after = (TIMES_WORD.len()..)
-			.find(|at| !matches!(self.peek_char(*at), ' ' | '\t'))
-			.unwrap_or(TIMES_WORD.len());
+		let after =
+			(TIMES_WORD.len()..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(TIMES_WORD.len());
 		let next = self.peek_char(after);
 		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after)
 	}
@@ -343,11 +348,7 @@ impl WarpParser {
 			}
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
-		Node::List(
-			vec![count, Symbol(TIMES_WORD.to_string()), operand],
-			Bracket::None,
-			Separator::Space,
-		)
+		Node::List(vec![count, Symbol(TIMES_WORD.to_string()), operand], Bracket::None, Separator::Space)
 	}
 }
 
@@ -368,13 +369,7 @@ pub(crate) fn iterates_keys(iterable: &Node) -> bool {
 /// `for variable in iterable body`, the loop for_loop.rs lowers
 pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
 	Node::List(
-		vec![
-			Symbol("for".to_string()),
-			variable,
-			Symbol("in".to_string()),
-			iterable,
-			body,
-		],
+		vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body],
 		Bracket::None,
 		Separator::Space,
 	)

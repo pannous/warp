@@ -16,20 +16,14 @@ fn the_parsed_json_arrives_later() {
 	let url = serve("200 OK", USERS);
 	crate::is!(&program(&url, "users.loading"), true);
 	crate::is!(&program(&url, &format!("{UNTIL_ARRIVED}\nusers#2.name")), "Bo");
-	crate::is!(
-		&program(&url, &format!("{UNTIL_ARRIVED}\nusers.error")),
-		warp::node::Node::Empty
-	);
+	crate::is!(&program(&url, &format!("{UNTIL_ARRIVED}\nusers.error")), warp::node::Node::Empty);
 }
 
 #[test]
 fn on_change_sees_the_arrived_value() {
 	let url = serve("200 OK", USERS);
 	crate::is!(
-		&program(
-			&url,
-			&format!("seen = 0\non change users {{ seen = count(users) }}\n{UNTIL_ARRIVED}\nseen")
-		),
+		&program(&url, &format!("seen = 0\non change users {{ seen = count(users) }}\n{UNTIL_ARRIVED}\nseen")),
 		2
 	);
 }
@@ -37,13 +31,7 @@ fn on_change_sees_the_arrived_value() {
 #[test]
 fn a_failed_fetch_is_the_error() {
 	let url = serve("404 Not Found", "no such users");
-	crate::is!(
-		&program(
-			&url,
-			&format!("{UNTIL_ARRIVED}\ncontains(users.error, \"HTTP status 404\")")
-		),
-		true
-	);
+	crate::is!(&program(&url, &format!("{UNTIL_ARRIVED}\ncontains(users.error, \"HTTP status 404\")")), true);
 }
 
 #[test]

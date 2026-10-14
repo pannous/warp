@@ -33,19 +33,10 @@ pub(in crate::wasm_emitter) const REALLOC: &str = "cabi_realloc";
 const RETURN_AREA_BYTES: i32 = 8;
 const RETURN_AREA_ALIGNMENT: i32 = 4;
 const LENGTH_OFFSET: u64 = 4;
-const WORD: MemArg = MemArg {
-	offset: 0,
-	align: 2,
-	memory_index: 0,
-};
+const WORD: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
 /// The runtime functions the adapters call
-const ADAPTER_NEEDS: [&str; 5] = [
-	"new_text",
-	"new_int",
-	"new_float",
-	"get_int_value",
-	super::super::text::text_builtins::TEXT_OF,
-];
+const ADAPTER_NEEDS: [&str; 5] =
+	["new_text", "new_int", "new_float", "get_int_value", super::super::text::text_builtins::TEXT_OF];
 
 /// Does the program compile as a component crossing the boundary: exporting or importing a function
 fn crosses_the_boundary() -> bool {
@@ -110,10 +101,7 @@ pub(crate) fn imported_signatures() -> Vec<(String, FfiSignature)> {
 }
 
 fn core_scalar(wit: &str) -> Option<(ValType, bool)> {
-	CORE_TYPES
-		.iter()
-		.find(|(scalar, _, _)| *scalar == wit)
-		.map(|(_, core, signed)| (*core, *signed))
+	CORE_TYPES.iter().find(|(scalar, _, _)| *scalar == wit).map(|(_, core, signed)| (*core, *signed))
 }
 
 impl WasmGcEmitter {
@@ -136,25 +124,17 @@ impl WasmGcEmitter {
 		let int = ValType::I32;
 		let (old, old_size, align, size, address, padded) = (0, 1, 2, 3, 4, 5);
 		self.host_only_function(REALLOC, vec![int; 4], vec![int], vec![int; 2], |s, f| {
-			Self::emit_list(
-				f,
-				&[I::LocalGet(size), I::LocalGet(align), I::I32Add, I::LocalSet(padded)],
-			);
+			Self::emit_list(f, &[I::LocalGet(size), I::LocalGet(align), I::I32Add, I::LocalSet(padded)]);
 			s.emit_text_allocation(f, padded, address);
 			Self::emit_aligned_up(f, address, I::LocalGet(align));
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(old_size),
-					I::If(BlockType::Empty),
-					I::LocalGet(address),
-					I::LocalGet(old),
-					I::LocalGet(old_size),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(old_size), I::If(BlockType::Empty),
+					I::LocalGet(address), I::LocalGet(old), I::LocalGet(old_size),
 					I::MemoryCopy { src_mem: 0, dst_mem: 0 },
-					I::End,
-					I::LocalGet(address),
-				],
-			);
+				I::End,
+				I::LocalGet(address),
+			]);
 		});
 	}
 
@@ -207,9 +187,7 @@ impl WasmGcEmitter {
 			None => vec![],
 			Some(WIT_STRING) => vec![ValType::I32],
 			Some(wit) => vec![
-				core_scalar(wit)
-					.ok_or_else(|| format!("{name}: {wit} cannot cross the component boundary yet"))?
-					.0,
+				core_scalar(wit).ok_or_else(|| format!("{name}: {wit} cannot cross the component boundary yet"))?.0,
 			],
 		};
 		let target_kinds: Vec<_> = user_fn.params.iter().map(param_kind).collect();
@@ -308,11 +286,7 @@ impl WasmGcEmitter {
 		self.emit_call(f, super::super::text::text_builtins::TEXT_OF);
 		Self::emit_list(
 			f,
-			&[
-				I::LocalSet(text),
-				I::I32Const(RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT),
-				I::LocalSet(length),
-			],
+			&[I::LocalSet(text), I::I32Const(RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT), I::LocalSet(length)],
 		);
 		self.emit_text_allocation(f, length, address);
 		Self::emit_aligned_up(f, address, I::I32Const(RETURN_AREA_ALIGNMENT));
@@ -320,16 +294,7 @@ impl WasmGcEmitter {
 		self.emit_text_field(f, text, 0);
 		Self::emit_list(f, &[I::I32Store(WORD), I::LocalGet(address)]);
 		self.emit_text_field(f, text, 1);
-		Self::emit_list(
-			f,
-			&[
-				I::I32Store(MemArg {
-					offset: LENGTH_OFFSET,
-					..WORD
-				}),
-				I::LocalGet(address),
-			],
-		);
+		Self::emit_list(f, &[I::I32Store(MemArg { offset: LENGTH_OFFSET, ..WORD }), I::LocalGet(address)]);
 	}
 
 	/// A call of the imported function `name` when it is one (`host.time()`): its value as a Node, or as the number
@@ -345,11 +310,7 @@ impl WasmGcEmitter {
 			return false;
 		};
 		if arguments.len() != function.parameters.len() {
-			let reason = format!(
-				"{name} takes {} arguments, got {}",
-				function.parameters.len(),
-				arguments.len()
-			);
+			let reason = format!("{name} takes {} arguments, got {}", function.parameters.len(), arguments.len());
 			self.emit_type_error(f, reason);
 			return true;
 		}
@@ -371,24 +332,15 @@ impl WasmGcEmitter {
 		}
 		match (return_area, context) {
 			(Some(area), None) => {
-				Self::emit_list(
-					f,
-					&[
-						I::I32Const(area),
-						I::I32Load(WORD),
-						I::I32Const(area),
-						I::I32Load(MemArg {
-							offset: LENGTH_OFFSET,
-							..WORD
-						}),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I32Const(area), I::I32Load(WORD), I::I32Const(area),
+					I::I32Load(MemArg { offset: LENGTH_OFFSET, ..WORD }),
+				]);
 				self.emit_call(f, "new_text");
 			}
-			(Some(_), Some(kind)) => self.emit_type_error(
-				f,
-				format!("{name} gives a text, not {}", crate::analyzer::kind_with_article(kind)),
-			),
+			(Some(_), Some(kind)) => self
+				.emit_type_error(f, format!("{name} gives a text, not {}", crate::analyzer::kind_with_article(kind))),
 			(None, _) => self.emit_ffi_result(f, &signature, context),
 		}
 		true

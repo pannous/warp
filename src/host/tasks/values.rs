@@ -94,14 +94,9 @@ impl Builders {
 				functions.insert(name, function);
 			}
 		}
-		let memory = lookup("memory")
-			.and_then(|export| export.into_memory())
-			.ok_or_else(|| anyhow!("no memory export"))?;
-		Ok(Builders {
-			functions,
-			memory,
-			heap: lookup(TEXT_HEAP_EXPORT).and_then(|export| export.into_global()),
-		})
+		let memory =
+			lookup("memory").and_then(|export| export.into_memory()).ok_or_else(|| anyhow!("no memory export"))?;
+		Ok(Builders { functions, memory, heap: lookup(TEXT_HEAP_EXPORT).and_then(|export| export.into_global()) })
 	}
 
 	fn call(&self, name: &str, arguments: &[Val], store: &mut StoreContextMut<'_, HostState>) -> Result<Val> {
@@ -115,19 +110,14 @@ impl Builders {
 		result: Val,
 		store: &mut StoreContextMut<'_, HostState>,
 	) -> Result<Val> {
-		let function = self
-			.functions
-			.get(name)
-			.ok_or_else(|| anyhow!("the module exports no {name}"))?;
+		let function = self.functions.get(name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
 		let mut results = [result];
 		function.call(&mut *store, arguments, &mut results)?;
 		Ok(results[0])
 	}
 
 	fn int_operation(&self, name: &str, a: i64, b: i64, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
-		Ok(self
-			.call_into(name, &[Val::I64(a), Val::I64(b)], Val::I64(0), store)?
-			.unwrap_i64())
+		Ok(self.call_into(name, &[Val::I64(a), Val::I64(b)], Val::I64(0), store)?.unwrap_i64())
 	}
 
 	/// The Int handle of an integer: a fixnum as it is, a larger one composed from 32-bit limbs
@@ -196,11 +186,7 @@ impl Builders {
 			TaskValue::Char(c) => self.call("new_codepoint", &[Val::I32(*c as i32)], store),
 			TaskValue::Text(text) | TaskValue::Symbol(text) => {
 				let (pointer, length) = crate::host::write_bytes(&self.memory, self.heap, store, text.as_bytes())?;
-				let constructor = if matches!(value, TaskValue::Text(_)) {
-					"new_text"
-				} else {
-					"new_symbol"
-				};
+				let constructor = if matches!(value, TaskValue::Text(_)) { "new_text" } else { "new_symbol" };
 				self.call(constructor, &[Val::I32(pointer as i32), Val::I32(length as i32)], store)
 			}
 			TaskValue::Key(left, op, right) => {
@@ -240,10 +226,7 @@ impl Builders {
 
 	/// A value of the instance, a function value with its captured values, a list item by item (cells walked)
 	pub(super) fn read_value(&self, value: &Val, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
-		let Some(node) = value
-			.unwrap_anyref()
-			.and_then(|reference| reference.unwrap_struct(&*store).ok())
-		else {
+		let Some(node) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else {
 			return self.read(value, store);
 		};
 		let kind = node.field(&mut *store, KIND_FIELD)?.unwrap_i64();
@@ -252,9 +235,7 @@ impl Builders {
 				let name =
 					crate::run::wasm_reader::node_in(&node.field(&mut *store, VALUE_FIELD)?, store, self.memory).name();
 				let closure = node.field(&mut *store, DATA_FIELD)?;
-				let captured = match closure
-					.unwrap_anyref()
-					.and_then(|reference| reference.unwrap_struct(&*store).ok())
+				let captured = match closure.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok())
 				{
 					Some(closure) => self.read_value(&closure.field(&mut *store, CAPTURED_FIELD)?, store)?,
 					None => TaskValue::Empty,
@@ -269,14 +250,9 @@ impl Builders {
 						items.push(self.read_value(&first, store)?);
 					}
 					let rest = current.field(&mut *store, VALUE_FIELD)?;
-					cell = rest
-						.unwrap_anyref()
-						.and_then(|reference| reference.unwrap_struct(&*store).ok());
+					cell = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok());
 				}
-				Ok(TaskValue::List(
-					items,
-					((kind >> 8) & 0xFF) | ((kind & crate::type_kinds::SEPARATOR_MASK) >> 8),
-				))
+				Ok(TaskValue::List(items, ((kind >> 8) & 0xFF) | ((kind & crate::type_kinds::SEPARATOR_MASK) >> 8)))
 			}
 			_ => self.read(value, store),
 		}
@@ -285,9 +261,7 @@ impl Builders {
 	pub(super) fn read(&self, value: &Val, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
 		match value {
 			Val::I64(n) => self.integer(*n, store),
-			Val::F64(bits) => Ok(TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(
-				*bits,
-			)))),
+			Val::F64(bits) => Ok(TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(*bits)))),
 			Val::AnyRef(_) => TaskValue::of(&crate::run::wasm_reader::node_in(value, store, self.memory)),
 			other => Err(anyhow!("a task gave {other:?}")),
 		}
@@ -300,9 +274,7 @@ pub(crate) fn build_in(
 	value: &TaskValue,
 ) -> wasmtime::Result<Option<Rooted<AnyRef>>> {
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-	let built = builders
-		.build(value, &mut caller.as_context_mut())
-		.map_err(host_error)?;
+	let built = builders.build(value, &mut caller.as_context_mut()).map_err(host_error)?;
 	Ok(built.unwrap_anyref().copied())
 }
 

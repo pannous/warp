@@ -22,12 +22,8 @@ pub(super) fn quoted(answer: Node) -> Node {
 
 /// P230: symbols, `(State IO)`, `Pure`
 pub(super) fn effects_node(effects: EffectSet, events: &BTreeSet<String>) -> Node {
-	let mut names: Vec<Node> = effects
-		.iter()
-		.map(|effect| format!("{effect:?}"))
-		.chain(events.iter().cloned())
-		.map(Node::Symbol)
-		.collect();
+	let mut names: Vec<Node> =
+		effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).map(Node::Symbol).collect();
 	match names.len() {
 		0 => Node::Symbol(PURE.into()),
 		1 => names.remove(0),
@@ -37,11 +33,7 @@ pub(super) fn effects_node(effects: EffectSet, events: &BTreeSet<String>) -> Nod
 
 /// `IO, ask`, `Pure`
 pub(super) fn effect_names(effects: EffectSet, events: &BTreeSet<String>) -> String {
-	let names: Vec<String> = effects
-		.iter()
-		.map(|effect| format!("{effect:?}"))
-		.chain(events.iter().cloned())
-		.collect();
+	let names: Vec<String> = effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).collect();
 	if names.is_empty() {
 		PURE.to_string()
 	} else {

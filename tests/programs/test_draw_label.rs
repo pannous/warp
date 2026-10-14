@@ -16,9 +16,6 @@ fn a_label_covers_pixels_in_its_color() {
 #[test]
 fn text_coverage_grows_with_the_size_and_the_words() {
 	is!("text_coverage(\"Hi\", 32)[0] > text_coverage(\"Hi\", 16)[0]", true);
-	is!(
-		"text_coverage(\"Hi there\", 16)[0] > text_coverage(\"Hi\", 16)[0]",
-		true
-	);
+	is!("text_coverage(\"Hi there\", 16)[0] > text_coverage(\"Hi\", 16)[0]", true);
 	is!("c = text_coverage(\"Hi\", 16)\ncount(c) == 2 + c[0] * c[1]", true);
 }

@@ -7,16 +7,10 @@ fn a_one_letter_column_takes_rows() {
 		"class Cup{label: text; n: int}\nstored cups: [Cup] in \"cups_lettered\"\ncups.add(Cup(\"big\", 2))\ncups#1.n",
 		2
 	);
-	is!(
-		"class Cup{label: text; n: int}\nstored cups: [Cup] in \"cups_lettered\"\nc = cups#1\nc.n += 1\ncups#1.n",
-		3
-	);
+	is!("class Cup{label: text; n: int}\nstored cups: [Cup] in \"cups_lettered\"\nc = cups#1\nc.n += 1\ncups#1.n", 3);
 }
 
 #[test]
 fn a_one_letter_table_takes_rows() {
-	is!(
-		"class Pot{label: text}\nstored pots: [Pot] in \"p\"\npots.add(Pot(\"tea\"))\npots#1.label",
-		"tea"
-	);
+	is!("class Pot{label: text}\nstored pots: [Pot] in \"p\"\npots.add(Pot(\"tea\"))\npots#1.label", "tea");
 }

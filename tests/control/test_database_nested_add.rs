@@ -17,15 +17,6 @@ fn program(tables: &str, rest: &str) -> String {
 #[test]
 fn add_on_a_list_field_of_a_field() {
 	eval(&program("nested", SEED));
-	is!(
-		&program("nested", "d = people#1\nd.team.players.add(d)\nd.team.name"),
-		"Red"
-	);
-	is!(
-		&program(
-			"nested",
-			"f(p: Person) := p.team.players.add(p)\nf(people#1)\npeople#1.name"
-		),
-		"Bo"
-	);
+	is!(&program("nested", "d = people#1\nd.team.players.add(d)\nd.team.name"), "Red");
+	is!(&program("nested", "f(p: Person) := p.team.players.add(p)\nf(people#1)\npeople#1.name"), "Bo");
 }

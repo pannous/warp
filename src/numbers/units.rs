@@ -39,127 +39,27 @@ struct Unit {
 }
 
 const UNITS: [Unit; 20] = [
-	Unit {
-		name: "ms",
-		dimension: Dimension::Time,
-		factor: 1,
-		zero: 0,
-	},
-	Unit {
-		name: "s",
-		dimension: Dimension::Time,
-		factor: 1_000,
-		zero: 0,
-	},
-	Unit {
-		name: "min",
-		dimension: Dimension::Time,
-		factor: 60_000,
-		zero: 0,
-	},
-	Unit {
-		name: "h",
-		dimension: Dimension::Time,
-		factor: 3_600_000,
-		zero: 0,
-	},
-	Unit {
-		name: "mm",
-		dimension: Dimension::Length,
-		factor: 10,
-		zero: 0,
-	},
-	Unit {
-		name: "cm",
-		dimension: Dimension::Length,
-		factor: 100,
-		zero: 0,
-	},
-	Unit {
-		name: "m",
-		dimension: Dimension::Length,
-		factor: 10_000,
-		zero: 0,
-	},
-	Unit {
-		name: "km",
-		dimension: Dimension::Length,
-		factor: 10_000_000,
-		zero: 0,
-	},
+	Unit { name: "ms", dimension: Dimension::Time, factor: 1, zero: 0 },
+	Unit { name: "s", dimension: Dimension::Time, factor: 1_000, zero: 0 },
+	Unit { name: "min", dimension: Dimension::Time, factor: 60_000, zero: 0 },
+	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000, zero: 0 },
+	Unit { name: "mm", dimension: Dimension::Length, factor: 10, zero: 0 },
+	Unit { name: "cm", dimension: Dimension::Length, factor: 100, zero: 0 },
+	Unit { name: "m", dimension: Dimension::Length, factor: 10_000, zero: 0 },
+	Unit { name: "km", dimension: Dimension::Length, factor: 10_000_000, zero: 0 },
 	// `inch`, not `in`: `x in xs` and `100 cm in m` keep the word
-	Unit {
-		name: "inch",
-		dimension: Dimension::Length,
-		factor: 254,
-		zero: 0,
-	},
-	Unit {
-		name: "ft",
-		dimension: Dimension::Length,
-		factor: 3_048,
-		zero: 0,
-	},
-	Unit {
-		name: "yd",
-		dimension: Dimension::Length,
-		factor: 9_144,
-		zero: 0,
-	},
-	Unit {
-		name: "mi",
-		dimension: Dimension::Length,
-		factor: 16_093_440,
-		zero: 0,
-	},
-	Unit {
-		name: "mg",
-		dimension: Dimension::Mass,
-		factor: 100,
-		zero: 0,
-	},
-	Unit {
-		name: "g",
-		dimension: Dimension::Mass,
-		factor: 100_000,
-		zero: 0,
-	},
-	Unit {
-		name: "kg",
-		dimension: Dimension::Mass,
-		factor: 100_000_000,
-		zero: 0,
-	},
-	Unit {
-		name: "lb",
-		dimension: Dimension::Mass,
-		factor: 45_359_237,
-		zero: 0,
-	},
-	Unit {
-		name: "AD",
-		dimension: Dimension::Era,
-		factor: 1,
-		zero: 0,
-	},
-	Unit {
-		name: "K",
-		dimension: Dimension::Temperature,
-		factor: 900,
-		zero: 0,
-	},
-	Unit {
-		name: "°C",
-		dimension: Dimension::Temperature,
-		factor: 900,
-		zero: 245_835,
-	},
-	Unit {
-		name: "°F",
-		dimension: Dimension::Temperature,
-		factor: 500,
-		zero: 229_835,
-	},
+	Unit { name: "inch", dimension: Dimension::Length, factor: 254, zero: 0 },
+	Unit { name: "ft", dimension: Dimension::Length, factor: 3_048, zero: 0 },
+	Unit { name: "yd", dimension: Dimension::Length, factor: 9_144, zero: 0 },
+	Unit { name: "mi", dimension: Dimension::Length, factor: 16_093_440, zero: 0 },
+	Unit { name: "mg", dimension: Dimension::Mass, factor: 100, zero: 0 },
+	Unit { name: "g", dimension: Dimension::Mass, factor: 100_000, zero: 0 },
+	Unit { name: "kg", dimension: Dimension::Mass, factor: 100_000_000, zero: 0 },
+	Unit { name: "lb", dimension: Dimension::Mass, factor: 45_359_237, zero: 0 },
+	Unit { name: "AD", dimension: Dimension::Era, factor: 1, zero: 0 },
+	Unit { name: "K", dimension: Dimension::Temperature, factor: 900, zero: 0 },
+	Unit { name: "°C", dimension: Dimension::Temperature, factor: 900, zero: 245_835 },
+	Unit { name: "°F", dimension: Dimension::Temperature, factor: 500, zero: 229_835 },
 ];
 
 /// The sign before a temperature unit's letter: °C, °F
@@ -216,17 +116,42 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 	};
 	let singular = name.strip_suffix('s').unwrap_or(name);
 	unit_named(name).or_else(|| {
-		LONG_NAMES
-			.iter()
-			.find(|(long, _)| *long == singular || *long == name)
-			.and_then(|(_, short)| unit_named(short))
+		LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short))
 	})
 }
 
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
 	let program = lower_unit_aliases(program);
+	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
+		true => program,
+		false => with_quantity_casts(program),
+	};
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
+}
+
+/// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
+const QUANTITY_CAST_WORDS: [&str; 2] = [RUN_TIME_QUANTITY_WORD, "unit"];
+
+fn with_quantity_casts(node: Node) -> Node {
+	let node = node.map_children(with_quantity_casts);
+	let Node::Key(value, Op::As, target) = node.drop_meta() else {
+		return node;
+	};
+	let Some(word) = target.drop_meta().symbol_name().filter(|word| QUANTITY_CAST_WORDS.contains(word)) else {
+		return node;
+	};
+	if word != RUN_TIME_QUANTITY_WORD {
+		crate::normalize::set_position_of(&node);
+		crate::errors::diagnostic::note_alias(&format!("as {word}"), &format!("as {RUN_TIME_QUANTITY_WORD}"));
+	}
+	as_run_time_quantity(value).unwrap_or_else(|| {
+		Node::List(
+			vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), (**value).clone()],
+			Bracket::Round,
+			Separator::None,
+		)
+	})
 }
 
 /// `60 mi/h as km/h` parses `(60 mi/h as km)/h`: the unit after `as` regrouped whole, as after `in`, when it is one
@@ -302,27 +227,21 @@ pub(crate) fn joins_text(node: &Node) -> bool {
 /// `60 mph` as `60 mi/h`: each unit alias the program does not define read as its unit expression (not a field name:
 /// `r.mph`, `{mph: 3}`)
 fn lower_unit_aliases(program: Node) -> Node {
-	let aliases: Vec<(&str, &str)> = UNIT_ALIASES
-		.into_iter()
-		.filter(|(alias, _)| mentions_word(&program, alias))
-		.collect();
+	let aliases: Vec<(&str, &str)> =
+		UNIT_ALIASES.into_iter().filter(|(alias, _)| mentions_word(&program, alias)).collect();
 	if aliases.is_empty() {
 		return program;
 	}
 	let defined = defined_unit_names(&program);
-	let aliases: Vec<(&str, &str)> = aliases
-		.into_iter()
-		.filter(|(alias, _)| !defined.contains(*alias))
-		.collect();
+	let aliases: Vec<(&str, &str)> = aliases.into_iter().filter(|(alias, _)| !defined.contains(*alias)).collect();
 	with_unit_aliases(program, &aliases)
 }
 
 fn with_unit_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
 	let expansion = |unit: &Node| match unit.drop_meta() {
-		Node::Symbol(name) => aliases
-			.iter()
-			.find(|(alias, _)| alias == name)
-			.map(|(_, expression)| crate::warp_parser::parse(expression)),
+		Node::Symbol(name) => {
+			aliases.iter().find(|(alias, _)| alias == name).map(|(_, expression)| crate::warp_parser::parse(expression))
+		}
 		_ => None,
 	};
 	match node {
@@ -339,10 +258,7 @@ fn with_unit_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
 		Node::Type { name, body } if body.is_empty_node() && expansion(&name).is_some() => {
 			expansion(&name).expect("guarded")
 		}
-		Node::Type { name, body } => Node::Type {
-			name,
-			body: Box::new(with_unit_aliases(*body, aliases)),
-		},
+		Node::Type { name, body } => Node::Type { name, body: Box::new(with_unit_aliases(*body, aliases)) },
 		Node::Key(object, Op::Dot, field) => Node::Key(Box::new(with_unit_aliases(*object, aliases)), Op::Dot, field),
 		Node::Key(field, Op::Colon, value) => Node::Key(field, Op::Colon, Box::new(with_unit_aliases(*value, aliases))),
 		other => other.map_children(|child| with_unit_aliases(child, aliases)),
@@ -415,11 +331,7 @@ pub fn run_time_quantity_parts(node: &Node) -> Option<(&Node, &str)> {
 
 fn run_time_quantity(amount: Node, unit: String) -> Node {
 	Node::List(
-		vec![
-			Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()),
-			amount,
-			Node::Text(unit),
-		],
+		vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), amount, Node::Text(unit)],
 		Bracket::Round,
 		Separator::None,
 	)
@@ -462,27 +374,20 @@ fn run_time_tolerance(value: &Node, spread: &Node) -> Result<Node, String> {
 		(Some((amount, unit)), Some(_)) => {
 			let si = |quantity: &Node| match static_units::constant(quantity) {
 				Ok(Some((si_amount, signature))) => Ok((static_units::exact_amount(&si_amount), signature)),
-				_ => Err(format!(
-					"a tolerance applies to numbers and quantities: {}",
-					quantity.serialize()
-				)),
+				_ => Err(format!("a tolerance applies to numbers and quantities: {}", quantity.serialize())),
 			};
 			let ((value_si, value_signature), (spread_si, spread_signature)) = (si(value)?, si(spread)?);
 			if value_signature != spread_signature {
 				return Err("incompatible units".to_string());
 			}
 			let spread_in_unit = match (static_units::exact_amount(&amount), value_si, spread_si) {
-				(Some(amount), Some(value_si), Some(spread_si)) => value_si
-					.inverse()
-					.map(|per_value| amount.mul(&spread_si).mul(&per_value)),
+				(Some(amount), Some(value_si), Some(spread_si)) => {
+					value_si.inverse().map(|per_value| amount.mul(&spread_si).mul(&per_value))
+				}
 				_ => None,
 			}
 			.ok_or_else(|| {
-				format!(
-					"{} ± {}: write the spread in the value's unit",
-					value.serialize(),
-					spread.serialize()
-				)
+				format!("{} ± {}: write the spread in the value's unit", value.serialize(), spread.serialize())
 			})?;
 			(interval(amount, quotient_node(&spread_in_unit)), unit)
 		}
@@ -545,17 +450,12 @@ const UNIT_PRODUCT: &str = "·";
 /// `m·kg/s²`: the units with a positive power, then those with a negative one after a slash
 fn units_text(factors: &[Factor]) -> String {
 	let side = |positive: bool| {
-		let units = factors
-			.iter()
-			.filter(|factor| (factor.power > 0) == positive)
-			.map(|factor| match factor.power.unsigned_abs() {
+		let units = factors.iter().filter(|factor| (factor.power > 0) == positive).map(|factor| {
+			match factor.power.unsigned_abs() {
 				1 => factor.unit.name.to_string(),
-				power => format!(
-					"{}{}",
-					factor.unit.name,
-					crate::extensions::reals::superscript(power.into())
-				),
-			});
+				power => format!("{}{}", factor.unit.name, crate::extensions::reals::superscript(power.into())),
+			}
+		});
 		units.collect::<Vec<String>>().join(UNIT_PRODUCT)
 	};
 	match (side(true), side(false)) {
@@ -595,10 +495,7 @@ pub struct UncertainQuantity {
 
 impl UncertainQuantity {
 	pub(crate) fn new(amount: crate::numbers::uncertain::Uncertain, factors: &[Factor]) -> UncertainQuantity {
-		UncertainQuantity {
-			amount,
-			factors: factors.to_vec(),
-		}
+		UncertainQuantity { amount, factors: factors.to_vec() }
 	}
 }
 
@@ -620,10 +517,7 @@ impl Quantity {
 fn signature(factors: &[Factor]) -> Vec<(Dimension, i32)> {
 	let mut powers: Vec<(Dimension, i32)> = vec![];
 	for factor in factors {
-		match powers
-			.iter_mut()
-			.find(|(dimension, _)| *dimension == factor.unit.dimension)
-		{
+		match powers.iter_mut().find(|(dimension, _)| *dimension == factor.unit.dimension) {
 			Some((_, power)) => *power += factor.power,
 			None => powers.push((factor.unit.dimension, factor.power)),
 		}
@@ -680,11 +574,7 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					}
 				}
 				let duration = match bare {
-					true => Node::List(
-						vec![duration, Node::Symbol(SECOND.into())],
-						Bracket::None,
-						Separator::Space,
-					),
+					true => Node::List(vec![duration, Node::Symbol(SECOND.into())], Bracket::None, Separator::Space),
 					false => duration,
 				};
 				let sleeping = |milliseconds: Node| {
@@ -698,11 +588,9 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 						Op::Mul,
 						Box::new(Node::int(MILLISECONDS_PER_SECOND)),
 					)),
-					(None, _) => Node::List(
-						items.into_iter().map(|item| lower(item, shadowed)).collect(),
-						bracket,
-						separator,
-					),
+					(None, _) => {
+						Node::List(items.into_iter().map(|item| lower(item, shadowed)).collect(), bracket, separator)
+					}
 				}
 			}
 			other => other.map_children(|child| lower(child, shadowed)),
@@ -780,7 +668,9 @@ fn fold_comparisons(node: Node, constants: &Constants, clock: bool) -> Node {
 		return node.map_children(|child| fold_comparisons(child, constants, clock));
 	}
 	let is_clock = |side: &Node| clock && matches!(side.drop_meta(), Node::Symbol(name) if name == TIME_WORD);
-	if is_clock(left) || is_clock(right) {
+	// `x is time` tests the type (card anchor-time); `x == time` compares with the clock (the parser marks its operand)
+	let type_test = *op == Op::Eq && !crate::type_tests::is_equality_operand(right);
+	if is_clock(left) || (is_clock(right) && !type_test) {
 		let (duration, clock_left) = if is_clock(left) { (right, true) } else { (left, false) };
 		return match clock_milliseconds(&with_constants(duration, constants)) {
 			Ok(Some(amount)) => {
@@ -789,11 +679,8 @@ fn fold_comparisons(node: Node, constants: &Constants, clock: bool) -> Node {
 					crate::system_values::SYSTEM_PREFIX,
 					warp_runtime::host_words::TIME_OF_DAY
 				));
-				let (left, right) = if clock_left {
-					(time_of_day, Node::int(amount))
-				} else {
-					(Node::int(amount), time_of_day)
-				};
+				let (left, right) =
+					if clock_left { (time_of_day, Node::int(amount)) } else { (Node::int(amount), time_of_day) };
 				Node::Key(Box::new(left), *op, Box::new(right))
 			}
 			Ok(None) => node,
@@ -815,14 +702,10 @@ fn clock_milliseconds(duration: &Node) -> Result<Option<i64>, String> {
 		return Ok(Some(amount));
 	}
 	match static_units::constant(duration) {
-		Ok(Some((amount, signature))) if signature.is_empty() => Err(format!(
-			"the time of day is a duration: compare it with one, e.g. time < {}h",
-			amount.serialize()
-		)),
-		Ok(Some(_)) => Err(format!(
-			"DimensionError: the time of day is a duration, {} is none",
-			duration.serialize()
-		)),
+		Ok(Some((amount, signature))) if signature.is_empty() => {
+			Err(format!("the time of day is a duration: compare it with one, e.g. time < {}h", amount.serialize()))
+		}
+		Ok(Some(_)) => Err(format!("DimensionError: the time of day is a duration, {} is none", duration.serialize())),
 		_ => Ok(None),
 	}
 }
@@ -834,9 +717,7 @@ fn without_unread_constants(program: Node, constants: &Constants) -> Node {
 	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
 	let assigns = |statement: &Node, name: &str| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(assigned) if assigned == name));
 	let unread = |name: &str| {
-		statements
-			.iter()
-			.all(|statement| assigns(statement, name) || !crate::warp_parser::mentions(statement, name))
+		statements.iter().all(|statement| assigns(statement, name) || !crate::warp_parser::mentions(statement, name))
 	};
 	let last = statements.len().saturating_sub(1);
 	let kept: Vec<Node> = statements
@@ -867,9 +748,7 @@ fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
 /// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
 pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	if let Node::Data(data) = node.drop_meta() {
-		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms")
-			.ok()
-			.flatten();
+		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
 		Ok(Some((seconds, signature))) if signature == [(Dimension::Time, 1)] => {
@@ -930,10 +809,7 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		}
 		_ => {}
 	}
-	node.drop_meta()
-		.parts()
-		.into_iter()
-		.for_each(|child| collect_defined_unit_names(child, names));
+	node.drop_meta().parts().into_iter().for_each(|child| collect_defined_unit_names(child, names));
 }
 
 /// Main-level variables holding a constant quantity, and its value: `x = 2 km`

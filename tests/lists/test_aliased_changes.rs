@@ -17,8 +17,5 @@ fn a_pop_at_a_position_is_seen_through_an_alias() {
 fn a_clear_is_seen_through_an_alias() {
 	is!("xs = [1 2 3]; ys = xs; xs.clear(); count(ys)", 0);
 	is!("m = {a:1 b:2}; n = m; m.clear(); count(n)", 0);
-	is!(
-		"xs = [1 2 3]; ys = xs; xs.clear(); xs.add(4); ys#1 * 10 + count(ys)",
-		41
-	);
+	is!("xs = [1 2 3]; ys = xs; xs.clear(); xs.add(4); ys#1 * 10 + count(ys)", 41);
 }

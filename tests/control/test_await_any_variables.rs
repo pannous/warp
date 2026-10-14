@@ -9,8 +9,5 @@ fn await_any_of_task_variables_gives_the_first_to_finish() {
 	is!(&format!("{RACERS}await any [a, b]"), 20);
 	is!(&format!("{RACERS}await any [b, a]"), 20);
 	is!(&format!("{RACERS}r = await any [a, b]; r * 2"), 40);
-	is!(
-		&format!("{RACERS}started = clock(); r = await any [a, b]; clock() - started < 250"),
-		true
-	);
+	is!(&format!("{RACERS}started = clock(); r = await any [a, b]; clock() - started < 250"), true);
 }

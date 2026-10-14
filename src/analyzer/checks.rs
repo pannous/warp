@@ -35,14 +35,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_parameter_annotations(program))
 		.or_else(|| check_variable_annotations(program))
 		.or_else(|| check_union_fields(program))
-		.or_else(|| {
-			check_declared_types(
-				program,
-				&mut HashMap::new(),
-				&mut Scope::new(),
-				&declared_classes(program),
-			)
-		})
+		.or_else(|| check_declared_types(program, &mut HashMap::new(), &mut Scope::new(), &declared_classes(program)))
 		.or_else(|| super::list_views::check_widened_list_views(program))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new(), &list_variables(program)))

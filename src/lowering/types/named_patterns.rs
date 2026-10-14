@@ -24,17 +24,13 @@ pub fn lower(program: Node) -> Node {
 	if let Some(error) = statements.iter().find_map(pattern_without_keyword) {
 		return error;
 	}
-	let (definitions, statements): (Vec<Node>, Vec<Node>) = statements
-		.into_iter()
-		.partition(|statement| pattern_definition(statement).is_some());
+	let (definitions, statements): (Vec<Node>, Vec<Node>) =
+		statements.into_iter().partition(|statement| pattern_definition(statement).is_some());
 	if definitions.is_empty() {
 		return Node::List(statements, bracket, separator);
 	}
 	let patterns: Patterns = definitions.iter().filter_map(pattern_definition).collect();
-	let statements = statements
-		.into_iter()
-		.map(|statement| substituted(statement, &patterns))
-		.collect();
+	let statements = statements.into_iter().map(|statement| substituted(statement, &patterns)).collect();
 	Node::List(statements, bracket, separator)
 }
 
@@ -209,11 +205,7 @@ fn cast_to_schema(subject: Node, schema: &str, fields: &[SchemaField]) -> Node {
 			}
 		})
 		.collect();
-	let copied = key(
-		Node::Symbol(copy.clone()),
-		Op::Assign,
-		crate::lowering::nodes::call("copy", vec![subject]),
-	);
+	let copied = key(Node::Symbol(copy.clone()), Op::Assign, crate::lowering::nodes::call("copy", vec![subject]));
 	let mut statements = vec![copied];
 	statements.extend(crate::warp_parser::parse(&format!("{converted}{copy}")).as_items());
 	Node::List(statements, Bracket::Round, crate::node::Separator::Semicolon)
@@ -223,11 +215,9 @@ fn cast_to_schema(subject: Node, schema: &str, fields: &[SchemaField]) -> Node {
 fn with_case_keys(item: Node, patterns: &Patterns) -> Node {
 	match item {
 		Node::Key(arm, Op::Colon, body) => Node::Key(Box::new(resolved(*arm, patterns)), Op::Colon, body),
-		Node::List(items, bracket, separator) => Node::List(
-			items.into_iter().map(|item| with_case_keys(item, patterns)).collect(),
-			bracket,
-			separator,
-		),
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(|item| with_case_keys(item, patterns)).collect(), bracket, separator)
+		}
 		meta @ Node::Meta { .. } => meta.under_meta(|node| with_case_keys(node, patterns)),
 		other => other,
 	}

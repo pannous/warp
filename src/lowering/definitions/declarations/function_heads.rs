@@ -183,19 +183,11 @@ pub(super) fn typed_returns(body: Node, result_types: &Node) -> Node {
 	match body {
 		// `return a, b` parses as `(return a), b`
 		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
-			let Node::List(words, _, _) = items[0].drop_meta() else {
-				unreachable!("guarded")
-			};
-			let values: Vec<Node> = std::iter::once(words[1].clone())
-				.chain(items[1..].iter().cloned())
-				.collect();
+			let Node::List(words, _, _) = items[0].drop_meta() else { unreachable!("guarded") };
+			let values: Vec<Node> = std::iter::once(words[1].clone()).chain(items[1..].iter().cloned()).collect();
 			match converted(&values) {
 				Some(mut values) => {
-					let first = Node::List(
-						vec![words[0].clone(), values.remove(0)],
-						Bracket::None,
-						Separator::Space,
-					);
+					let first = Node::List(vec![words[0].clone(), values.remove(0)], Bracket::None, Separator::Space);
 					Node::List([vec![first], values].concat(), bracket, Separator::Colon)
 				}
 				None => Node::List(items, bracket, Separator::Colon),
@@ -253,17 +245,9 @@ pub(super) fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) 
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
 	// user 2026-10-06: warp names a parameter once, Swift's label and name are redundant; ported code still compiles
 	let written = format!("{label} {}", typed.serialize());
-	let preferred = if label == WILDCARD_LABEL {
-		typed.clone()
-	} else {
-		renamed_parameter(typed, label)
-	};
+	let preferred = if label == WILDCARD_LABEL { typed.clone() } else { renamed_parameter(typed, label) };
 	crate::normalize::set_position_of(&parameter);
-	crate::normalize::hint(
-		&written,
-		&preferred.serialize(),
-		"warp names a parameter once, no label",
-	);
+	crate::normalize::hint(&written, &preferred.serialize(), "warp names a parameter once, no label");
 	if label == WILDCARD_LABEL {
 		return preferred;
 	}
@@ -318,11 +302,7 @@ pub(super) fn end_definitions(node: Node) -> Node {
 	// one line: `def head body… end`
 	if let ([keyword, head, body @ .., end], Separator::Space) = (items.as_slice(), &separator) {
 		if is_function_keyword(&keyword.drop_meta().name()) && is_end(end) && !body.is_empty() {
-			return Node::List(
-				vec![keyword.clone(), function_head(head), block(body.to_vec())],
-				bracket,
-				separator,
-			);
+			return Node::List(vec![keyword.clone(), function_head(head), block(body.to_vec())], bracket, separator);
 		}
 	}
 	if !matches!(separator, Separator::Newline | Separator::Semicolon) || !items.iter().any(is_end) {

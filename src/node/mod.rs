@@ -89,10 +89,7 @@ impl Node {
 	}
 
 	pub fn meta(node: Node, meta: Node) -> Node {
-		Meta {
-			node: Box::new(node),
-			data: Box::new(meta),
-		}
+		Meta { node: Box::new(node), data: Box::new(meta) }
 	}
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
@@ -118,11 +115,7 @@ impl Node {
 		// let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
 		match self.drop_meta() {
 			Data(dada) => dada.clone(),
-			_ => DataValue {
-				data: Box::new(()),
-				type_name: "ø".to_string(),
-				data_type: DataType::None,
-			},
+			_ => DataValue { data: Box::new(()), type_name: "ø".to_string(), data_type: DataType::None },
 		}
 	}
 	/// Remove the children `from..=to` in place: `[a b c d].remove(1,2) == [a d]`.
@@ -351,11 +344,7 @@ impl Node {
 		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
 	}
 	pub fn keys(s: &str, v: &str) -> Self {
-		Key(
-			Box::new(Symbol(s.to_string())),
-			Op::Colon,
-			Box::new(Text(v.to_string())),
-		)
+		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(Text(v.to_string())))
 	}
 	pub fn text(s: &str) -> Self {
 		Text(s.to_string())
@@ -382,28 +371,18 @@ impl Node {
 		List(xs, Bracket::Square, Separator::None)
 	}
 	pub fn ints(xs: Vec<i32>) -> Self {
-		List(
-			map(xs, |x| Node::Number(Number::Int(x as i64))),
-			Bracket::Square,
-			Separator::None,
-		)
+		List(map(xs, |x| Node::Number(Number::Int(x as i64))), Bracket::Square, Separator::None)
 	}
 
 	pub fn with_meta_data<T: 'static + Clone + PartialEq>(self, data: T) -> Self {
 		// Store arbitrary MetaData as a Data node
 		let data_node = Node::data(data);
-		Meta {
-			node: Box::new(self),
-			data: Box::new(data_node),
-		}
+		Meta { node: Box::new(self), data: Box::new(data_node) }
 	}
 
 	/// Keep the source text of a literal whose value would print differently (`01234`, `1.10`)
 	pub fn with_source_literal(self, literal: &str) -> Self {
-		Meta {
-			node: Box::new(self),
-			data: Box::new(Node::key(SOURCE_LITERAL, Node::text(literal))),
-		}
+		Meta { node: Box::new(self), data: Box::new(Node::key(SOURCE_LITERAL, Node::text(literal))) }
 	}
 
 	pub fn source_literal(&self) -> Option<&str> {
@@ -418,18 +397,12 @@ impl Node {
 
 	pub fn with_comment(self, comment: String) -> Self {
 		let comment = Node::key("comment", Node::text(&comment));
-		Meta {
-			node: Box::new(self),
-			data: Box::new(comment),
-		}
+		Meta { node: Box::new(self), data: Box::new(comment) }
 	}
 
 	/// Annotate with `@name(value)`; the attribute key keeps its `@` so it never mixes with comments or line info
 	pub fn with_attribute(self, name: &str, value: Node) -> Self {
-		Meta {
-			node: Box::new(self),
-			data: Box::new(Node::key(&format!("{ATTRIBUTE_MARK}{name}"), value)),
-		}
+		Meta { node: Box::new(self), data: Box::new(Node::key(&format!("{ATTRIBUTE_MARK}{name}"), value)) }
 	}
 
 	/// The annotation this very Meta layer carries, if it is one
@@ -450,16 +423,9 @@ impl Node {
 
 	/// The value of the attribute `@name`: an annotation `@name(value) x`, else the meta entry `@name:value` of the literal
 	pub fn attribute(&self, name: &str) -> Option<&Node> {
-		let annotation = self
-			.attributes()
-			.into_iter()
-			.find(|(attribute_name, _)| *attribute_name == name)
-			.map(|(_, value)| value);
-		annotation.or_else(|| {
-			self.meta_entries()
-				.find(|(entry_name, _)| *entry_name == name)
-				.map(|(_, value)| value)
-		})
+		let annotation =
+			self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value);
+		annotation.or_else(|| self.meta_entries().find(|(entry_name, _)| *entry_name == name).map(|(_, value)| value))
 	}
 
 	/// The meta entries `@name:value` written inside this literal (`point{x:1 @source:"gps"}`), never fields
@@ -518,10 +484,7 @@ impl Node {
 					}
 					single => rewrite_code(single),
 				};
-				Type {
-					name,
-					body: Box::new(body),
-				}
+				Type { name, body: Box::new(body) }
 			}
 			other => children_rewritten(other, rewrite),
 		}
@@ -530,10 +493,7 @@ impl Node {
 	/// `rewrite` applied to the node under the Meta layers (comments, positions), which stay around its result
 	pub fn under_meta(self, rewrite: impl FnOnce(Node) -> Node) -> Node {
 		match self {
-			Meta { node, data } => Meta {
-				node: Box::new(node.under_meta(rewrite)),
-				data,
-			},
+			Meta { node, data } => Meta { node: Box::new(node.under_meta(rewrite)), data },
 			other => rewrite(other),
 		}
 	}
@@ -541,10 +501,7 @@ impl Node {
 	/// This node under the Meta layers (comments, positions) of `original`, which it replaces
 	pub fn with_meta_of(self, original: &Node) -> Node {
 		match original {
-			Meta { node, data } => Meta {
-				node: Box::new(self.with_meta_of(node)),
-				data: data.clone(),
-			},
+			Meta { node, data } => Meta { node: Box::new(self.with_meta_of(node)), data: data.clone() },
 			_ => self,
 		}
 	}
@@ -646,10 +603,9 @@ impl Node {
 			}
 			List(items, _, _) => items.iter().for_each(|item| item.visit(action)),
 			Type { body, .. } => match body.drop_meta() {
-				List(items, _, _) => items
-					.iter()
-					.filter(|item| is_class_code(item))
-					.for_each(|item| item.visit(action)),
+				List(items, _, _) => {
+					items.iter().filter(|item| is_class_code(item)).for_each(|item| item.visit(action))
+				}
 				single => {
 					if is_class_code(single) {
 						single.visit(action)
@@ -1066,11 +1022,7 @@ pub fn parens(xs: Vec<Node>) -> Node {
 
 /// `function(arguments…)`
 pub fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List(
-		[vec![symbol(function)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
+	Node::List([vec![symbol(function)], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 /// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
@@ -1084,10 +1036,7 @@ pub fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> 
 		Node::List(items, bracket, separator) => {
 			Node::List(items.into_iter().map(rewrite).collect(), bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(rewrite(*node)),
-			data,
-		},
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
 		other => other,
 	}
 }
@@ -1102,11 +1051,7 @@ pub fn leading_name(member: &Node) -> String {
 }
 
 pub fn ints(xs: Vec<i32>) -> Node {
-	List(
-		xs.into_iter().map(|x| int(x as i64)).collect(),
-		Bracket::Square,
-		Separator::None,
-	)
+	List(xs.into_iter().map(|x| int(x as i64)).collect(), Bracket::Square, Separator::None)
 }
 
 pub fn floats(xs: Vec<f64>) -> Node {

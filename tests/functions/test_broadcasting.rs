@@ -72,10 +72,7 @@ fn a_function_of_several_values_broadcasts_over_its_list_argument() {
 	assert_eq!(eval("add(a, b) := a + b; add [1, 2] 10").serialize(), "[11 12]");
 	assert_eq!(eval("add(a, b) := a + b; add(10, [1, 2])").serialize(), "[11 12]");
 	assert_eq!(eval("add(a, b) := a + b; add(all [1, 2], 10)").serialize(), "[11 12]");
-	assert_eq!(
-		eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(),
-		"[1 4]"
-	);
+	assert_eq!(eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(), "[1 4]");
 }
 
 #[test] // cards sqrt-square and square-error: a range broadcasts like a list literal

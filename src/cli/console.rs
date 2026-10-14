@@ -8,12 +8,7 @@ struct ConsoleSession {
 
 impl ConsoleSession {
 	fn source_with(&self, input: &str) -> String {
-		self.state
-			.iter()
-			.map(String::as_str)
-			.chain([input])
-			.collect::<Vec<_>>()
-			.join("\n")
+		self.state.iter().map(String::as_str).chain([input]).collect::<Vec<_>>().join("\n")
 	}
 
 	fn remember(&mut self, input: &str, value: &Node) {
@@ -22,6 +17,36 @@ impl ConsoleSession {
 		}
 	}
 }
+
+/// Tab after `receiver.` lists the receiver's members (card member-completion, lowering/data/members.rs), knowing the
+/// session's variables: `xs = [1 2]` then `xs.` Tab lists count, sum, map …
+impl rustyline::completion::Completer for ConsoleSession {
+	type Candidate = String;
+
+	fn complete(
+		&self,
+		line: &str,
+		position: usize,
+		_: &rustyline::Context<'_>,
+	) -> rustyline::Result<(usize, Vec<String>)> {
+		let typed = &line[..position];
+		let word_start =
+			typed.trim_end_matches(|character: char| character.is_alphanumeric() || character == '_').len();
+		let Some(receiver) = typed[..word_start].strip_suffix('.') else {
+			return Ok((position, vec![]));
+		};
+		let prefix = &typed[word_start..];
+		let names = warp::members::member_names(&self.source_with(receiver));
+		Ok((word_start, names.into_iter().filter(|name| name.starts_with(prefix)).collect()))
+	}
+}
+
+impl rustyline::hint::Hinter for ConsoleSession {
+	type Hint = String;
+}
+impl rustyline::highlight::Highlighter for ConsoleSession {}
+impl rustyline::validate::Validator for ConsoleSession {}
+impl rustyline::Helper for ConsoleSession {}
 
 pub(crate) fn console_state_line(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -38,10 +63,8 @@ pub(crate) fn console_state_line(node: &Node) -> bool {
 			items.iter().all(console_state_line)
 		}
 		Node::List(items, node::Bracket::None, node::Separator::Space) => {
-			matches!(
-				items.first().and_then(Node::symbol_name),
-				Some("let" | "var" | "const" | "global")
-			) && items.iter().skip(1).any(console_state_line)
+			matches!(items.first().and_then(Node::symbol_name), Some("let" | "var" | "const" | "global"))
+				&& items.iter().skip(1).any(console_state_line)
 		}
 		_ => false,
 	}
@@ -49,11 +72,13 @@ pub(crate) fn console_state_line(node: &Node) -> bool {
 
 pub(crate) fn console() {
 	use rustyline::error::ReadlineError;
-	use rustyline::DefaultEditor;
+	use rustyline::{CompletionType, Config, Editor};
 
 	println!("Interactive console (Ctrl+D to exit)");
 
-	let mut rl = match DefaultEditor::new() {
+	// one Tab lists the members, as bash does with show-all-if-ambiguous
+	let config = Config::builder().completion_type(CompletionType::List).completion_show_all_if_ambiguous(true).build();
+	let mut rl = match Editor::<ConsoleSession, rustyline::history::DefaultHistory>::with_config(config) {
 		Ok(editor) => editor,
 		Err(e) => {
 			eprintln!("Failed to initialize readline: {}", e);
@@ -66,7 +91,7 @@ pub(crate) fn console() {
 	let _ = rl.load_history(&history_path);
 
 	let mut interrupted = false; // a ctrl-c on an empty line twice in a row ends the console
-	let mut session = ConsoleSession::default();
+	rl.set_helper(Some(ConsoleSession::default()));
 	loop {
 		let read = rl.readline("🌀"); // warp language symbol for prompt
 		let interrupted_before = interrupted;
@@ -86,6 +111,7 @@ pub(crate) fn console() {
 					break;
 				}
 				let _ = rl.add_history_entry(input);
+				let session = rl.helper_mut().expect("the console's helper is set above");
 				let value = eval(&session.source_with(input));
 				session.remember(input, &value);
 				show(&value, RESULT_MARK);

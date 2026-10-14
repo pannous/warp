@@ -11,11 +11,7 @@ impl Exporter {
 		let (parameter, fields, parameter_type) = match parameters.as_slice() {
 			[parameter] => {
 				let inferred = parameter_type_word(parameter).is_none();
-				(
-					self.parameter_type(parameter)?.0,
-					vec![],
-					if inferred { "none".to_string() } else { declared },
-				)
+				(self.parameter_type(parameter)?.0, vec![], if inferred { "none".to_string() } else { declared })
 			}
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
 			parameters => (
@@ -29,10 +25,8 @@ impl Exporter {
 			.filter(|parameter| parameter_type_word(parameter).is_some_and(|word| self.cell_classes.contains(&word)))
 			.map(|parameter| parameter_word(parameter))
 			.collect();
-		let cells: Vec<String> = assigned_locals(body, &self.globals)
-			.into_iter()
-			.filter(|cell| !references.contains(cell))
-			.collect();
+		let cells: Vec<String> =
+			assigned_locals(body, &self.globals).into_iter().filter(|cell| !references.contains(cell)).collect();
 		// an assigned parameter's cell starts with the argument (read before the cell's name hides it)
 		let first_values: Vec<String> = cells
 			.iter()
@@ -42,11 +36,7 @@ impl Exporter {
 				_ => UNIT_TYPE.to_string(),
 			})
 			.collect();
-		self.cell_lists = cells
-			.iter()
-			.filter(|cell| first_value_is_list(body, cell))
-			.cloned()
-			.collect();
+		self.cell_lists = cells.iter().filter(|cell| first_value_is_list(body, cell)).cloned().collect();
 		self.cells = cells.iter().chain(&references).cloned().collect();
 		self.locals.push(parameter.clone());
 		self.argument_fields = fields.clone();
@@ -64,39 +54,32 @@ impl Exporter {
 		self.locals.pop();
 		self.argument_fields.clear();
 		self.cells.clear();
-		let body = cells
-			.iter()
-			.zip(&first_values)
-			.rev()
-			.fold(body?, |body, (cell, first_value)| {
-				let path = lean_strings(&[cell_class(name, cell)]);
-				let new_cell = match first_value.as_str() {
-					UNIT_TYPE => format!(".new {path}"),
-					_ => format!(
+		let body = cells.iter().zip(&first_values).rev().fold(body?, |body, (cell, first_value)| {
+			let path = lean_strings(&[cell_class(name, cell)]);
+			let new_cell = match first_value.as_str() {
+				UNIT_TYPE => format!(".new {path}"),
+				_ => format!(
 						".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))",
 						quoted(CELL_FIELD)
 					),
-				};
-				format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
-			});
+			};
+			format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
+		});
 		// a cell parameter among several is read from the arguments object once
-		let body = references
-			.iter()
-			.filter(|reference| fields.contains(reference))
-			.fold(body, |body, reference| {
-				let cell = parameters
-					.iter()
-					.find(|parameter| parameter_word(parameter) == **reference)
-					.and_then(|parameter| parameter_type_word(parameter))
-					.expect("a cell parameter");
-				let path = lean_strings(&[cell]);
-				format!(
-					".letIn {} (.cls {path}) (.get (.loc {}) {}) ({body})",
-					quoted(reference),
-					quoted(&parameter),
-					quoted(reference)
-				)
-			});
+		let body = references.iter().filter(|reference| fields.contains(reference)).fold(body, |body, reference| {
+			let cell = parameters
+				.iter()
+				.find(|parameter| parameter_word(parameter) == **reference)
+				.and_then(|parameter| parameter_type_word(parameter))
+				.expect("a cell parameter");
+			let path = lean_strings(&[cell]);
+			format!(
+				".letIn {} (.cls {path}) (.get (.loc {}) {}) ({body})",
+				quoted(reference),
+				quoted(&parameter),
+				quoted(reference)
+			)
+		});
 		let body = match definition.result {
 			Some(result) if crate::type_name_matching::is_checked_result(&result.name()) => {
 				self.checked_result(body, result)?
@@ -104,11 +87,7 @@ impl Exporter {
 			Some(result) => self.conversion_of(body, result)?,
 			None => body,
 		};
-		Ok(format!(
-			".function {} {} {parameter_type} ({body})",
-			quoted(name),
-			quoted(&parameter)
-		))
+		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
 
 	/// a function body: `{ a; b }` is the sequence
@@ -127,10 +106,7 @@ impl Exporter {
 	pub(super) fn sequence(&mut self, statements: &[Node]) -> Lean {
 		let mut statements = self.expressions(statements)?;
 		let last = statements.pop().expect("a statement");
-		Ok(statements
-			.iter()
-			.rev()
-			.fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
+		Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
 	}
 
 	pub(super) fn expressions(&mut self, items: &[Node]) -> Result<Vec<String>, String> {
@@ -139,12 +115,7 @@ impl Exporter {
 
 	pub(super) fn assignment(&mut self, name: &str, value: &Node) -> Lean {
 		if self.cells.iter().any(|cell| cell == name) {
-			return Ok(format!(
-				".set (.loc {}) {} ({})",
-				quoted(name),
-				quoted(CELL_FIELD),
-				self.expression(value)?
-			));
+			return Ok(format!(".set (.loc {}) {} ({})", quoted(name), quoted(CELL_FIELD), self.expression(value)?));
 		}
 		let declared = self.names.get(name).cloned().flatten();
 		let value = match place_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
@@ -208,15 +179,9 @@ impl Exporter {
 	/// `min(a, b)` is `b < a ? b : a`, `max(a, b)` is `a < b ? b : a`, a and b bound once
 	pub(super) fn extremum(&mut self, word: &str, a: &Node, b: &Node) -> Lean {
 		self.hidden_names += 1;
-		let (first, second) = (
-			quoted(&format!("·a{}", self.hidden_names)),
-			quoted(&format!("·b{}", self.hidden_names)),
-		);
-		let (left, right) = if word == EXTREMA[0] {
-			(&second, &first)
-		} else {
-			(&first, &second)
-		};
+		let (first, second) =
+			(quoted(&format!("·a{}", self.hidden_names)), quoted(&format!("·b{}", self.hidden_names)));
+		let (left, right) = if word == EXTREMUM_WORDS[0] { (&second, &first) } else { (&first, &second) };
 		let comparison = format!(".ite (.lt (.loc {left}) (.loc {right})) (.loc {second}) (.loc {first})");
 		Ok(format!(
 			".letIn {first} {ANY_TYPE} ({}) (.letIn {second} {ANY_TYPE} ({}) ({comparison}))",
@@ -301,11 +266,7 @@ impl Exporter {
 	}
 
 	pub(super) fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
-		Ok(format!(
-			"{constructor} ({}) ({})",
-			self.expression(left)?,
-			self.expression(right)?
-		))
+		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
 
 	/// `x as int`: warp's conversion to a scalar type (to a class or a list it is another operation)
@@ -343,10 +304,7 @@ impl Exporter {
 
 	pub(super) fn expression(&mut self, node: &Node) -> Lean {
 		if let Some(value) = returned(node) {
-			let event = self
-				.returning
-				.clone()
-				.ok_or("not in W0: a return outside a function body")?;
+			let event = self.returning.clone().ok_or("not in W0: a return outside a function body")?;
 			return Ok(format!(".emit {} ({})", quoted(&event), self.expression(&value)?));
 		}
 		match node.drop_meta() {
@@ -374,9 +332,9 @@ impl Exporter {
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => {
 				Ok(format!(".call {} .unit", quoted(name)))
 			}
-			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!(
-				"not in W0: {name} as a value (warp calls it; `function {name}` is the function)"
-			)),
+			Node::Symbol(name) if self.lambda_names.contains(name) => {
+				Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)"))
+			}
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
 			// a unit word is a quantity of one unit (`2 km` parses as `2 * km`)
 			Node::Symbol(name) if crate::numbers::units::is_unit(name) => Ok(quantity_literal(name)),
@@ -404,11 +362,7 @@ impl Exporter {
 			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(BREAK_KEYWORD) => {
 				Err("not in W0: a break".to_string())
 			}
-			Node::List(items, _, _)
-				if items
-					.first()
-					.is_some_and(|class| self.classes.contains_key(&class.name())) =>
-			{
+			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => {
 				self.construction(&items[0].name(), &items[1..])
 			}
 			Node::List(items, _, _) => match items.as_slice() {
@@ -432,7 +386,7 @@ impl Exporter {
 					Ok(truthiness(self.tally(list, Some(item), true)?))
 				}
 				[call, a, b]
-					if EXTREMA.iter().any(|word| call.is_symbol(word))
+					if EXTREMUM_WORDS.iter().any(|word| call.is_symbol(word))
 						&& !self.functions.contains_key(&call.name()) =>
 				{
 					self.extremum(&call.name(), a, b)
@@ -444,12 +398,7 @@ impl Exporter {
 					_ => outside_w0(node),
 				},
 				[call, value] if call.is_symbol(IS_ERROR_WORD) => Ok(format!(".failed ({})", self.expression(value)?)),
-				[call]
-					if self
-						.functions
-						.get(&call.name())
-						.is_some_and(|parameter| parameter == UNIT_TYPE) =>
-				{
+				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => {
 					Ok(format!(".call {} .unit", quoted(&call.name())))
 				}
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
@@ -457,9 +406,7 @@ impl Exporter {
 					if self.classes.contains_key(&arguments_class(&call.name()))
 						&& matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) =>
 				{
-					let Node::Key(first, _, second) = argument.drop_meta() else {
-						unreachable!("a `to` pair")
-					};
+					let Node::Key(first, _, second) = argument.drop_meta() else { unreachable!("a `to` pair") };
 					let arguments = self.construction(
 						&arguments_class(&call.name()),
 						&[first.as_ref().clone(), second.as_ref().clone()],
@@ -470,10 +417,8 @@ impl Exporter {
 					// an argument list that does not fit is a compile error in warp: W0 rejects a call given no arguments object
 					let class = arguments_class(&call.name());
 					let arguments = match self.field_values(&class, arguments) {
-						Ok(written) => self.instance(
-							&class,
-							written.iter().map(|(field, value)| (field.clone(), value)).collect(),
-						)?,
+						Ok(written) => self
+							.instance(&class, written.iter().map(|(field, value)| (field.clone(), value)).collect())?,
 						Err(_) => UNIT_TYPE.to_string(),
 					};
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
@@ -514,19 +459,18 @@ impl Exporter {
 				_ => outside_w0(node),
 			},
 			// `i++` and `++i` are `i = i + 1`, both giving the new value
-			Node::Key(left, op @ (Op::Inc | Op::Dec), right) => match [left, right]
-				.into_iter()
-				.find(|side| matches!(side.drop_meta(), Node::Symbol(_)))
-			{
-				Some(target) => {
-					let step = if *op == Op::Inc { Op::Add } else { Op::Sub };
-					self.assignment(
-						&target.name(),
-						&Node::Key(target.clone(), step, Box::new(Node::Number(Number::Int(1)))),
-					)
+			Node::Key(left, op @ (Op::Inc | Op::Dec), right) => {
+				match [left, right].into_iter().find(|side| matches!(side.drop_meta(), Node::Symbol(_))) {
+					Some(target) => {
+						let step = if *op == Op::Inc { Op::Add } else { Op::Sub };
+						self.assignment(
+							&target.name(),
+							&Node::Key(target.clone(), step, Box::new(Node::Number(Number::Int(1)))),
+						)
+					}
+					None => outside_w0(node),
 				}
-				None => outside_w0(node),
-			},
+			}
 			// `s += 2` is `s = s + 2`
 			Node::Key(target, op, value) if op.is_compound_assign() => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, &Node::Key(target.clone(), op.base_op(), value.clone())),
@@ -618,17 +562,15 @@ impl Exporter {
 				_ => outside_w0(node),
 			},
 			Node::Key(condition, Op::Then, then) => match condition.drop_meta() {
-				Node::Key(empty, Op::If, condition) if empty.is_nothing() => Ok(format!(
-					".ite ({}) ({}) .unit",
-					self.expression(condition)?,
-					self.expression(then)?
-				)),
+				Node::Key(empty, Op::If, condition) if empty.is_nothing() => {
+					Ok(format!(".ite ({}) ({}) .unit", self.expression(condition)?, self.expression(then)?))
+				}
 				_ => outside_w0(node),
 			},
 			Node::Key(condition, Op::Do, body) => match condition.drop_meta() {
-				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self
-					.binary(".loop", condition, body)
-					.map(|lean| format!("{lean} {UNIT_TYPE}")),
+				Node::Key(empty, Op::While, condition) if empty.is_nothing() => {
+					self.binary(".loop", condition, body).map(|lean| format!("{lean} {UNIT_TYPE}"))
+				}
 				_ => outside_w0(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => {
@@ -648,19 +590,11 @@ impl Exporter {
 			}
 			Node::Key(left, op @ (Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical), right) => {
 				let compared = self.binary(
-					if matches!(op, Op::Identical | Op::NotIdentical) {
-						".eq true"
-					} else {
-						".eq false"
-					},
+					if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" },
 					left,
 					right,
 				)?;
-				Ok(if matches!(op, Op::Ne | Op::NotIdentical) {
-					negation(compared)
-				} else {
-					compared
-				})
+				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { negation(compared) } else { compared })
 			}
 			Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => {
 				self.binary(".index", map, self.map_key(map, index).expect("a map key"))
@@ -685,11 +619,9 @@ impl Exporter {
 			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
 			Node::Key(left, Op::Coalesce, right) => self.binary(".orElse", left, right),
 			// `1 to 3` includes 3
-			Node::Key(from, Op::To, to) => Ok(format!(
-				".range ({}) (.add ({}) (.int 1))",
-				self.expression(from)?,
-				self.expression(to)?
-			)),
+			Node::Key(from, Op::To, to) => {
+				Ok(format!(".range ({}) (.add ({}) (.int 1))", self.expression(from)?, self.expression(to)?))
+			}
 			_ => outside_w0(node),
 		}
 	}

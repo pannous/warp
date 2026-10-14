@@ -19,10 +19,7 @@ fn check_passes_a_condition_that_holds() {
 	is!("check 1 == 1; 7", 7);
 	is!("check 1.1 + 2.2 == 3.3; 7", 7);
 	is!(&format!("{COMBINE}check combine 1.1 with 2.2 == 3.3; 7"), 7);
-	is!(
-		&format!("{COMBINE}check combine(1.1, 2.2) == 3.3; check combine(2, 3) == 6; 7"),
-		7
-	);
+	is!(&format!("{COMBINE}check combine(1.1, 2.2) == 3.3; check combine(2, 3) == 6; 7"), 7);
 	is!("def check(n, i) = n + i; check(1, 2)", 3);
 }
 

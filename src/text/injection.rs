@@ -58,9 +58,7 @@ impl Language {
 	}
 
 	fn runs(runner: &str) -> Option<Language> {
-		[Language::Sql, Language::Shell]
-			.into_iter()
-			.find(|language| language.runner() == runner)
+		[Language::Sql, Language::Shell].into_iter().find(|language| language.runner() == runner)
 	}
 }
 
@@ -94,13 +92,9 @@ impl Template {
 	pub fn to_node(&self) -> Node {
 		let mut holes = self.holes.iter();
 		let items = match self.language {
-			Language::Sql => self
-				.text
-				.iter()
-				.flatten()
-				.map(|text| Node::Text(text.clone()))
-				.chain(holes.cloned())
-				.collect(),
+			Language::Sql => {
+				self.text.iter().flatten().map(|text| Node::Text(text.clone())).chain(holes.cloned()).collect()
+			}
 			Language::Shell => self
 				.text
 				.iter()
@@ -230,11 +224,7 @@ fn sql(parts: Vec<Part>) -> Result<Template, TemplateError> {
 	if let Some(quote) = open_quote {
 		return Err(TemplateError(format!("unterminated {quote} in sql template")));
 	}
-	Ok(Template {
-		language: Language::Sql,
-		text: vec![Some(query)],
-		holes,
-	})
+	Ok(Template { language: Language::Sql, text: vec![Some(query)], holes })
 }
 
 /// Words split at whitespace; a hole is one whole argument, never re-split, globbed or parsed by a shell
@@ -276,14 +266,8 @@ fn shell(parts: Vec<Part>) -> Result<Template, TemplateError> {
 	}
 	match words.first() {
 		None => Err(TemplateError("empty sh command".into())),
-		Some(None) => Err(TemplateError(
-			"the program of a sh command must be literal, not a hole".into(),
-		)),
-		Some(Some(_)) => Ok(Template {
-			language: Language::Shell,
-			text: words,
-			holes,
-		}),
+		Some(None) => Err(TemplateError("the program of a sh command must be literal, not a hole".into())),
+		Some(Some(_)) => Ok(Template { language: Language::Shell, text: words, holes }),
 	}
 }
 
@@ -308,10 +292,7 @@ struct Lowering {
 impl Lowering {
 	fn node(&mut self, node: Node) -> Result<Node, Diagnostic> {
 		Ok(match node {
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.node(*node)?),
-				data,
-			},
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node)?), data },
 			Node::List(mut items, bracket, separator) => {
 				// braceless application nests to the left: `execute sql "…"` → ((execute sql) "…")
 				if let Some(Node::List(inner, Bracket::None, _)) = items.first().map(Node::drop_meta) {
@@ -439,11 +420,7 @@ pub(crate) fn literal_text(node: &Node) -> Option<String> {
 
 fn not_literal(language: Language, tag: &Node, argument: &Node) -> Diagnostic {
 	let tag_name = language.tag();
-	let got = if *argument == Node::Empty {
-		"nothing".to_string()
-	} else {
-		argument.serialize()
-	};
+	let got = if *argument == Node::Empty { "nothing".to_string() } else { argument.serialize() };
 	Diagnostic::at(
 		tag,
 		format!(

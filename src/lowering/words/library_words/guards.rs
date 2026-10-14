@@ -61,23 +61,13 @@ impl Lowering {
 	/// a message the error says the assertion failed
 	pub(super) fn lower_assert(&self, condition: Node, message: Node) -> Node {
 		let message = match message.drop_meta() {
-			Node::Empty => Node::Text(format!(
-				"{}: {}",
-				crate::warp_parser::ASSERTION_FAILED,
-				condition.serialize()
-			)),
+			Node::Empty => Node::Text(format!("{}: {}", crate::warp_parser::ASSERTION_FAILED, condition.serialize())),
 			_ => message,
 		};
 		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;
 		self.instantiate_template(
-			&format!(
-				"(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})",
-				RAISE_WORD
-			),
-			&[
-				(condition_placeholder, &condition),
-				(TRY_FALLBACK_PLACEHOLDER, &message),
-			],
+			&format!("(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})", RAISE_WORD),
+			&[(condition_placeholder, &condition), (TRY_FALLBACK_PLACEHOLDER, &message)],
 		)
 	}
 }

@@ -6,7 +6,6 @@
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts")?.split(",");
 importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "exact.js", "std.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
-reportUncaughtErrors("task Worker"); // host.js
 // the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
 let program;
 self.onmessage = ({ data }) => {
@@ -15,6 +14,14 @@ self.onmessage = ({ data }) => {
 	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
 	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)
 };
+
+// a promise failing without a reason (Firefox's WebGPU, card uncaught-exception-undefined) is said with where it failed,
+// not as the console's bare "uncaught exception: undefined"
+self.addEventListener("unhandledrejection", event => {
+	if (event.reason !== undefined) return;
+	event.preventDefault();
+	console.error("warp task Worker: a browser API failed without saying why", event.promise);
+});
 
 // what a task does for the page goes through the program's Worker (host-tasks.js relayed)
 const relay = (method, ...values) => program.postMessage({ relay: [method, ...values] });

@@ -32,13 +32,8 @@ impl WarpParser {
 		if keyword == "export" && defines_function {
 			return Some(declaration);
 		}
-		let global = |declaration: Node| {
-			Node::Key(
-				Box::new(Symbol(GLOBAL_WORD.to_string())),
-				Op::Colon,
-				Box::new(declaration),
-			)
-		};
+		let global =
+			|declaration: Node| Node::Key(Box::new(Symbol(GLOBAL_WORD.to_string())), Op::Colon, Box::new(declaration));
 		// `global a, b` (Python): one declaration per name
 		let mut names = vec![declaration];
 		while keyword == GLOBAL_WORD
@@ -51,11 +46,7 @@ impl WarpParser {
 		}
 		Some(match names.len() {
 			1 => global(names.remove(0)),
-			_ => Node::List(
-				names.into_iter().map(global).collect(),
-				Bracket::None,
-				Separator::Semicolon,
-			),
+			_ => Node::List(names.into_iter().map(global).collect(), Bracket::None, Separator::Semicolon),
 		})
 	}
 
@@ -86,11 +77,7 @@ impl WarpParser {
 			1 => names.remove(0),
 			_ => Node::List(names, Bracket::None, Separator::Colon),
 		};
-		Node::Key(
-			Box::new(Symbol(NONLOCAL_WORD.to_string())),
-			Op::Colon,
-			Box::new(declared),
-		)
+		Node::Key(Box::new(Symbol(NONLOCAL_WORD.to_string())), Op::Colon, Box::new(declared))
 	}
 
 	/// `, b` after a declared name: another name, not the next item of a list
@@ -144,39 +131,25 @@ impl WarpParser {
 			return Ok(());
 		}
 		let ends_value = |ch: &char| ch.is_whitespace() || matches!(ch, ';' | '(' | ')' | ']' | '}');
-		let rest: Vec<char> = self.chars[self.pos + 2..]
-			.iter()
-			.copied()
-			.skip_while(|ch| *ch == ' ')
-			.collect();
+		let rest: Vec<char> = self.chars[self.pos + 2..].iter().copied().skip_while(|ch| *ch == ' ').collect();
 		let token: String = rest.iter().take_while(|ch| !ends_value(ch)).collect();
-		let continues = rest
-			.get(token.chars().count())
-			.is_some_and(|ch| !matches!(ch, '\n' | ';' | ')' | ']' | '}'));
+		let continues = rest.get(token.chars().count()).is_some_and(|ch| !matches!(ch, '\n' | ';' | ')' | ']' | '}'));
 		let value = if continues { format!("{token} …") } else { token };
 		let name = target.serialize();
 		let assignment = format!("{name} = {value}");
 		let is_spaced = self.peek_char(2).is_whitespace();
 		let (written, readings, fallback) = match is_spaced {
-			true => (
-				format!("{name} <- {value}"),
-				vec![reading("the assignment", &assignment)],
-				Fallback::Warning,
-			),
+			true => (format!("{name} <- {value}"), vec![reading("the assignment", &assignment)], Fallback::Warning),
 			false => (
 				format!("{name}<-{value}"),
-				vec![
-					reading("the assignment", &assignment),
-					reading("the comparison", &format!("{name} < -{value}")),
-				],
+				vec![reading("the assignment", &assignment), reading("the comparison", &format!("{name} < -{value}"))],
 				Fallback::Error,
 			),
 		};
 		let forms: Vec<String> = readings.iter().map(|reading| reading.explicit_form.clone()).collect();
 		let question = format!("`{written}`: write {}", forms.join(" or "));
-		let question = Ask::new(LEFT_ARROW_TOPIC, question, readings, fallback)
-			.written(&written)
-			.at(self.line_nr, self.column);
+		let question =
+			Ask::new(LEFT_ARROW_TOPIC, question, readings, fallback).written(&written).at(self.line_nr, self.column);
 		ask(&question).map(|_| ())
 	}
 
@@ -184,11 +157,7 @@ impl WarpParser {
 	/// Code that could be divided ends right before: a name, a number, `)` or `]` (`xs[1] // 2`); after a text, a comma
 	/// or a brace `//` is plainly a comment
 	pub(crate) fn follows_operand_on_its_line(&self) -> bool {
-		let last = self.chars[..self.pos]
-			.iter()
-			.rev()
-			.take_while(|&&c| c != '\n')
-			.find(|c| !c.is_whitespace());
+		let last = self.chars[..self.pos].iter().rev().take_while(|&&c| c != '\n').find(|c| !c.is_whitespace());
 		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
@@ -231,22 +200,13 @@ impl WarpParser {
 		let column = self.column.saturating_sub(symbol.chars().count());
 		let message = format!("{symbol} is a constant");
 		self.assignment_follows().then(|| {
-			Diagnostic {
-				message,
-				line: self.line_nr,
-				column,
-				..Default::default()
-			}
-			.fix("another name")
-			.into_error()
+			Diagnostic { message, line: self.line_nr, column, ..Default::default() }.fix("another name").into_error()
 		})
 	}
 
 	/// `= …` or `:= …` after blanks, not the comparison `==` nor the arrow `=>`
 	fn assignment_follows(&self) -> bool {
-		let blanks = (0..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
 		let assigns = self.peek_char(blanks) == '=' && !matches!(self.peek_char(blanks + 1), '=' | '>'); // `None => 0` is a match arm
 		defines || assigns

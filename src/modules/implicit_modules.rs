@@ -11,7 +11,7 @@ pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "
 pub(crate) const AGENT_MODULE: &str = "agent";
 /// lib/sound.warp: `play(440Hz, 0.5s)`, `beep` (card basic-sound), loaded when a program calls one of its words
 pub(crate) const SOUND_MODULE: &str = "sound";
-pub(crate) const SOUND_WORDS: [&str; 17] = [
+pub(crate) const SOUND_WORDS: [&str; 19] = [
 	"pattern",
 	"live_loop",
 	"play",
@@ -19,6 +19,7 @@ pub(crate) const SOUND_WORDS: [&str; 17] = [
 	"tone",
 	"beep",
 	"play_file",
+	"play_sample",
 	"stop_sound",
 	"sound_queued",
 	"wait_sound",
@@ -27,6 +28,7 @@ pub(crate) const SOUND_WORDS: [&str; 17] = [
 	"midi_outputs",
 	"midi_receive",
 	"midi_on",
+	"midi_note",
 	"write_midi",
 	"read_midi",
 ];
@@ -35,12 +37,15 @@ pub(crate) const SOUND_WORDS: [&str; 17] = [
 pub(crate) const SOUND_SETUP_FREE_WORDS: [&str; 4] = ["play", "beep", "stop_sound", "wait_sound"];
 /// Whether a program needs a module
 pub(crate) type NeededBy = fn(&Node) -> bool;
-/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/web/page_html.rs),
+/// The standard modules a program needs without `use`: P183 a file URL → file, a page or a hosted page route → markup (lowering/web/page_html.rs, serve.rs answered_page),
 /// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/web/routes.rs), a call of quantity → units (run-time units),
 /// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
 pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
-	("markup", |_| crate::pipeline::compile_mode().renders_itself()),
+	("markup", |program| {
+		let mode = crate::pipeline::compile_mode();
+		mode.renders_itself() || mode.for_hosting && calls_undefined(program, crate::page_html::TO_HTML)
+	}),
 	("router", |program| {
 		defined(program, crate::routes::PAGE_ROUTES).is_some() || {
 			let called = called_names(statements_of(program));
@@ -53,25 +58,23 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	}),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
-	(SOUND_MODULE, |program| {
-		first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()
-	}),
+	(SOUND_MODULE, |program| first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()),
 	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
 ];
 
+/// units: `quantity("5 km")` gives a Quantity whose methods read the module's own number words (bound_of), which work
+/// only compiled as program code; the classes of the other implicit modules go in front alone (insert_module_classes)
+pub(crate) const MODULES_COMPILED_AS_PROGRAM: [&str; 1] = [UNITS_MODULE];
+
 /// The program with the standard modules' definitions it calls, and those they call, in front: a word nobody calls
-/// is never compiled (its parameters would have no kinds)
-/// An implicit module with classes (units: `quantity("5 km")` gives a Quantity) in front of the program, the definitions
-/// it needs only, before class_methods: the instances its functions give then take their class's operators and methods.
-/// The program defining them now, implicit_std_modules loads it no more, nor its own `use units`
+/// is never compiled (its parameters would have no kinds). For MODULES_COMPILED_AS_PROGRAM, before class_methods: the
+/// instances their functions give then take their class's operators and methods. The program defining them now,
+/// implicit_std_modules loads such a module no more, nor its own `use units`
 pub(crate) fn with_implicit_class_modules(mut program: Node) -> Node {
 	for (module, needed) in IMPLICIT_MODULES {
-		if !needed(&program) {
-			continue;
-		}
-		let source = std_module(module).expect("an implicit module is embedded");
-		let definitions = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
-		if definitions.iter().any(is_class) {
+		if MODULES_COMPILED_AS_PROGRAM.contains(&module) && needed(&program) {
+			let source = std_module(module).expect("an implicit module is embedded");
+			let definitions = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
 			program = with_needed_definitions(without_use_of(program, module), definitions);
 		}
 	}
@@ -111,16 +114,10 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	// `from list import zip` brings only zip: the module's other words stay out (test_from_import)
 	let imported =
 		|statement: &Node| used_module(statement).or_else(|| imported_words(statement).map(|(used, _, _)| used));
-	let used: HashSet<String> = statements_of(&program)
-		.iter()
-		.filter_map(imported)
-		.map(|used| used.name)
-		.collect();
+	let used: HashSet<String> = statements_of(&program).iter().filter_map(imported).map(|used| used.name).collect();
 	let type_modules = type_modules();
 	let is_module_name = |receiver: &Node| {
-		receiver
-			.symbol_name()
-			.is_some_and(|name| std_module(name).is_some() && !defined.contains(name))
+		receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name))
 	};
 	let only_provider = |method: &String| match type_modules
 		.iter()
@@ -141,30 +138,19 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	modules.dedup();
 	with_statements_first(
 		program,
-		modules
-			.into_iter()
-			.map(|module| WarpParser::parse(&format!("use {module}")))
-			.collect(),
+		modules.into_iter().map(|module| WarpParser::parse(&format!("use {module}"))).collect(),
 	)
 }
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
 	first_called_undefined(program, SOUND_WORDS).is_some()
-		|| statements_of(program)
-			.iter()
-			.filter_map(used_module)
-			.any(|used| used.name == SOUND_MODULE)
+		|| statements_of(program).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
 }
 
 /// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)
 pub(crate) fn rare_sound_word(program: &Node) -> Option<&'static str> {
-	first_called_undefined(
-		program,
-		SOUND_WORDS
-			.into_iter()
-			.filter(|word| !SOUND_SETUP_FREE_WORDS.contains(word)),
-	)
+	first_called_undefined(program, SOUND_WORDS.into_iter().filter(|word| !SOUND_SETUP_FREE_WORDS.contains(word)))
 }
 
 /// Whether the program calls `word` without defining it
@@ -175,9 +161,7 @@ pub(crate) fn calls_undefined(program: &Node, word: &str) -> bool {
 /// The first of `words` the program calls without defining it
 pub(crate) fn first_called_undefined<'a>(program: &Node, words: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
 	let called = called_names(statements_of(program));
-	words
-		.into_iter()
-		.find(|word| called.contains(*word) && defined(program, word).is_none())
+	words.into_iter().find(|word| called.contains(*word) && defined(program, word).is_none())
 }
 
 pub(crate) fn mentions_file_url(program: &Node) -> bool {

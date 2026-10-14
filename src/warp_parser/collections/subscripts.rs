@@ -63,9 +63,9 @@ pub(crate) fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	};
 	let end = match op {
 		Op::Colon | Op::Range => end.as_ref().clone(),
-		Op::To => unless_open(end, |end| {
-			Node::Key(Box::new(end.clone()), Op::Add, Box::new(Node::Number(Number::Int(1))))
-		}),
+		Op::To => {
+			unless_open(end, |end| Node::Key(Box::new(end.clone()), Op::Add, Box::new(Node::Number(Number::Int(1)))))
+		}
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
@@ -88,11 +88,11 @@ pub(crate) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) 
 		format!("({target}#{index}){written}{end}"),
 	);
 	let message = format!("{as_written} is the range from the value {target}#{index}: for the slice write {slice}, for the range write {range}");
-	Some(
-		Diagnostic::at(lhs, message)
-			.offer("the slice", &as_written, slice)
-			.offer("the range from the value", &as_written, range),
-	)
+	Some(Diagnostic::at(lhs, message).offer("the slice", &as_written, slice).offer(
+		"the range from the value",
+		&as_written,
+		range,
+	))
 }
 
 /// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
@@ -106,11 +106,7 @@ pub(crate) fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
 		return None;
 	};
 	let minus_one = |bound: &Node| Node::Key(Box::new(bound.clone()), Op::Sub, Box::new(Node::Number(Number::Int(1))));
-	let end = if *op == Op::To {
-		end.as_ref().clone()
-	} else {
-		unless_open(end, minus_one)
-	};
+	let end = if *op == Op::To { end.as_ref().clone() } else { unless_open(end, minus_one) };
 	Some((unless_open(start, minus_one), end))
 }
 
@@ -126,10 +122,7 @@ pub(crate) fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
 pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 	match one_based_index.drop_meta() {
 		Node::Key(key, Op::Add, one)
-			if matches!(
-				one.drop_meta(),
-				Node::Number(crate::extensions::numbers::Number::Int(1))
-			) =>
+			if matches!(one.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(1))) =>
 		{
 			Some(key)
 		}
@@ -212,13 +205,9 @@ impl WarpParser {
 			.iter()
 			.flat_map(attribute_items)
 			.map(|item| match item.drop_meta() {
-				Node::Key(key, Op::Assign | Op::Colon, value) if matches!(key.drop_meta(), Symbol(_)) => {
-					Some(Node::Key(
-						Box::new(Symbol(format!("{ATTRIBUTE_MARK}{}", key.name()))),
-						Op::Colon,
-						value.clone(),
-					))
-				}
+				Node::Key(key, Op::Assign | Op::Colon, value) if matches!(key.drop_meta(), Symbol(_)) => Some(
+					Node::Key(Box::new(Symbol(format!("{ATTRIBUTE_MARK}{}", key.name()))), Op::Colon, value.clone()),
+				),
 				_ => None,
 			})
 			.collect::<Option<_>>()?;
@@ -242,20 +231,11 @@ impl WarpParser {
 		let (op, chars) = SLICE_FROM_START
 			.iter()
 			.copied()
-			.find(|(written, _)| {
-				written
-					.chars()
-					.enumerate()
-					.all(|(offset, ch)| self.peek_char(offset) == ch)
-			})
+			.find(|(written, _)| written.chars().enumerate().all(|(offset, ch)| self.peek_char(offset) == ch))
 			.map(|(written, op)| (op, written.chars().count()))?;
 		self.advance_by(chars);
 		self.skip_whitespace();
-		let end = if self.current_char() == ']' {
-			Empty
-		} else {
-			self.parse_expr(0)
-		};
+		let end = if self.current_char() == ']' { Empty } else { self.parse_expr(0) };
 		Some(Node::Key(Box::new(Empty), op, Box::new(end)))
 	}
 }

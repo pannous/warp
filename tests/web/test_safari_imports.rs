@@ -21,10 +21,7 @@ fn the_page_never_asks_the_engine_for_import_or_export_descriptors() {
 		})
 		.map(|path| path.display().to_string())
 		.collect();
-	assert!(
-		callers.is_empty(),
-		"Safari 27 cannot describe GC-typed imports/exports: {callers:?}"
-	);
+	assert!(callers.is_empty(), "Safari 27 cannot describe GC-typed imports/exports: {callers:?}");
 }
 
 // Safari's own engine, where macOS has its shell: the page's import reader on a compiled task program
@@ -39,16 +36,8 @@ fn safaris_engine_reads_the_imports_of_a_task_program() {
 	let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
 	let source = directory.join("safari_threads.warp");
 	std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/threads.warp"), &source).unwrap();
-	let compiled = crate::common::warp_command()
-		.args(["compile", "--wasm"])
-		.arg(&source)
-		.output()
-		.unwrap();
-	assert!(
-		compiled.status.success(),
-		"{}",
-		String::from_utf8_lossy(&compiled.stderr)
-	);
+	let compiled = crate::common::warp_command().args(["compile", "--wasm"]).arg(&source).output().unwrap();
+	assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
 
 	let reader = std::fs::read_to_string(format!("{PLAYGROUND}/imports.js")).unwrap();
 	let script = directory.join("safari_imports.js");

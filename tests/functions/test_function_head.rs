@@ -45,10 +45,7 @@ fn the_keyword_forms() {
 	let (_, parameters, form, _, _) = viewed("fun f(x, y) { x }");
 	assert_eq!((parameters, form), (texts(&["x", "y"]), DefinitionForm::KeywordBlock));
 	let (_, _, form, result, _) = viewed("def f(x) -> int { x }");
-	assert_eq!(
-		(form, result.as_deref()),
-		(DefinitionForm::Keyword(Op::Arrow), Some("int"))
-	);
+	assert_eq!((form, result.as_deref()), (DefinitionForm::Keyword(Op::Arrow), Some("int")));
 	assert_eq!(viewed("def f(x): int { x }").3.as_deref(), Some("int"));
 	let (_, parameters, form, _, _) = viewed("def (f x) { x }");
 	assert_eq!((parameters, form), (texts(&["x"]), DefinitionForm::KeywordSpaced));

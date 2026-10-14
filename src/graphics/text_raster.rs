@@ -23,9 +23,7 @@ const SYSTEM_FONTS: [&str; 8] = [
 /// on one line from the top left, its height the font's ascent and descent
 pub fn coverage(words: &str, size: f32) -> Result<Vec<u32>, String> {
 	let font = font()?;
-	let font = font.as_scaled(PxScale::from(
-		size * font.height_unscaled() / font.units_per_em().unwrap_or(1.0),
-	));
+	let font = font.as_scaled(PxScale::from(size * font.height_unscaled() / font.units_per_em().unwrap_or(1.0)));
 	let mut glyphs = Vec::new();
 	let mut caret = 0.0;
 	let mut previous = None;
@@ -38,10 +36,7 @@ pub fn coverage(words: &str, size: f32) -> Result<Vec<u32>, String> {
 		caret += font.h_advance(id);
 		previous = Some(id);
 	}
-	let (width, height) = (
-		caret.ceil().max(1.0) as usize,
-		(font.ascent() - font.descent()).ceil().max(1.0) as usize,
-	);
+	let (width, height) = (caret.ceil().max(1.0) as usize, (font.ascent() - font.descent()).ceil().max(1.0) as usize);
 	let mut covered = vec![0u32; width * height];
 	for outlined in glyphs.into_iter().filter_map(|glyph| font.outline_glyph(glyph)) {
 		let bounds = outlined.px_bounds();
@@ -63,10 +58,7 @@ fn font() -> Result<&'static FontVec, String> {
 		let path = std::env::var(FONT_VARIABLE)
 			.ok()
 			.or_else(|| {
-				SYSTEM_FONTS
-					.iter()
-					.find(|path| std::path::Path::new(path).exists())
-					.map(|path| path.to_string())
+				SYSTEM_FONTS.iter().find(|path| std::path::Path::new(path).exists()).map(|path| path.to_string())
 			})
 			.ok_or_else(|| {
 				format!(

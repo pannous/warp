@@ -8,8 +8,5 @@ fn a_spaced_child_in_a_data_literal_is_a_child_node() {
 	is!("x = a{ b:2 c { d:3 } }; x.c.d", 3);
 	is!("x = a{ b:2 c{ d:3 } }; x.c.d", 3);
 	is!("x = a{ c { d { e:5 } } }; x.c.d.e", 5);
-	assert_eq!(
-		parse("a{ b:2 c { d:3 } }").serialize(),
-		parse("a{ b:2 c{ d:3 } }").serialize()
-	);
+	assert_eq!(parse("a{ b:2 c { d:3 } }").serialize(), parse("a{ b:2 c{ d:3 } }").serialize());
 }

@@ -16,14 +16,8 @@ pub fn queried(
 	}
 	let table = tables.tables.get(&subject.drop_meta().name())?;
 	let first_function = tables.functions.len();
-	let mut query = Query {
-		table,
-		variables,
-		parameters: vec![],
-		functions: vec![],
-		first_function,
-		mismatches: vec![],
-	};
+	let mut query =
+		Query { table, variables, parameters: vec![], functions: vec![], first_function, mismatches: vec![] };
 	let sql = query.sql(condition);
 	if let Some(mismatch) = query.mismatches.into_iter().next() {
 		return Some(Err(mismatch.into_error()));
@@ -33,16 +27,9 @@ pub fn queried(
 		return Some(Err(error));
 	}
 	tables.functions.extend(functions);
-	let parameters = if parameters.is_empty() {
-		parse("[]")
-	} else {
-		Node::List(parameters, Bracket::Square, Separator::Space)
-	};
-	let query = Node::List(
-		vec![symbol(FOUND_WORD), Node::Text(sql), parameters],
-		Bracket::None,
-		Separator::Space,
-	);
+	let parameters =
+		if parameters.is_empty() { parse("[]") } else { Node::List(parameters, Bracket::Square, Separator::Space) };
+	let query = Node::List(vec![symbol(FOUND_WORD), Node::Text(sql), parameters], Bracket::None, Separator::Space);
 	Some(Ok(key(subject.drop_meta().clone(), Op::Dot, query)))
 }
 
@@ -83,11 +70,7 @@ pub fn with_filter_functions(program: Node, tables: Tables) -> Node {
 		Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements,
 		program => vec![program],
 	};
-	Node::List(
-		[tables.functions, statements].concat(),
-		Bracket::None,
-		Separator::Newline,
-	)
+	Node::List([tables.functions, statements].concat(), Bracket::None, Separator::Newline)
 }
 
 /// One filter's condition as SQL: its `?` parameters and the functions it calls
@@ -186,9 +169,7 @@ impl Query<'_> {
 		let Node::Key(left, op @ (Op::Eq | Op::Ne), right) = node.drop_meta() else {
 			return None;
 		};
-		let field = self
-			.field_of_it(left)
-			.filter(|field| self.table.reference(field).is_some())?;
+		let field = self.field_of_it(left).filter(|field| self.table.reference(field).is_some())?;
 		if right.mentions(crate::words::IMPLICIT_PARAMETER) {
 			return None;
 		}
@@ -238,19 +219,13 @@ impl Query<'_> {
 		let body = with_arguments(with_si_amounts(node.clone()), self.table, &values, row_size);
 		let function = generated(
 			&format!("{FUNCTION_PLACEHOLDER}({ARGUMENTS}: any) := {BODY_PLACEHOLDER}"),
-			[
-				(FUNCTION_PLACEHOLDER, Node::Symbol(name.clone())),
-				(BODY_PLACEHOLDER, body),
-			],
+			[(FUNCTION_PLACEHOLDER, Node::Symbol(name.clone())), (BODY_PLACEHOLDER, body)],
 		);
 		self.functions.push(function);
 		let row: Vec<String> = std::iter::once(ID_FIELD.to_string())
 			.chain(columns_of(self.table).iter().map(|column| quote(column)))
 			.collect();
-		let values: Vec<String> = values
-			.into_iter()
-			.map(|value| self.parameter(Node::Symbol(value)))
-			.collect();
+		let values: Vec<String> = values.into_iter().map(|value| self.parameter(Node::Symbol(value))).collect();
 		format!("{WARP_CALL}('{name}', {})", [row, values].concat().join(", "))
 	}
 }
@@ -283,14 +258,9 @@ pub(super) fn with_arguments(node: Node, table: &Table, values: &[String], row_s
 	let argument = |index: usize| generated(&format!("{ARGUMENTS}#{index}"), []);
 	let columns = columns_of(table);
 	match node {
-		Node::Symbol(name) if name == crate::words::IMPLICIT_PARAMETER => generated(
-			&format!(
-				"{}({})",
-				table.class,
-				constructor_arguments(table, ARGUMENTS).join(", ")
-			),
-			[],
-		),
+		Node::Symbol(name) if name == crate::words::IMPLICIT_PARAMETER => {
+			generated(&format!("{}({})", table.class, constructor_arguments(table, ARGUMENTS).join(", ")), [])
+		}
 		Node::Symbol(name) if values.contains(&name) => {
 			argument(row_size + 1 + values.iter().position(|value| *value == name).unwrap_or_default())
 		}
@@ -304,11 +274,7 @@ pub(super) fn with_arguments(node: Node, table: &Table, values: &[String], row_s
 						None => argument(index),
 					}
 				}
-				_ => Node::Key(
-					Box::new(with_arguments(*element, table, values, row_size)),
-					Op::Dot,
-					field,
-				),
+				_ => Node::Key(Box::new(with_arguments(*element, table, values, row_size)), Op::Dot, field),
 			}
 		}
 		Node::Key(left, Op::Dot, right) => {
@@ -325,14 +291,12 @@ pub(super) fn constructor_arguments(table: &Table, row: &str) -> Vec<String> {
 		.fields
 		.iter()
 		.filter(|(name, _, _)| !table.is_members(name))
-		.map(
-			|(name, field_type, _)| match (name == ID_FIELD, table.reference(name)) {
-				(true, _) => format!("{row}#1"),
-				(false, Some(_)) => referenced(table, name, &column(name)),
-				_ if field_type == BOOL_TYPE => format!("({} != 0)", column(name)),
-				_ => column(name),
-			},
-		)
+		.map(|(name, field_type, _)| match (name == ID_FIELD, table.reference(name)) {
+			(true, _) => format!("{row}#1"),
+			(false, Some(_)) => referenced(table, name, &column(name)),
+			_ if field_type == BOOL_TYPE => format!("({} != 0)", column(name)),
+			_ => column(name),
+		})
 		.chain(implicit_id(table).then(|| format!("{row}#1")))
 		.collect()
 }
@@ -348,11 +312,7 @@ pub(super) fn key_id(instance: &str, field: &str, optional: bool) -> String {
 /// Each instance of `list` given the values of its row in `table_rows` again, as constructor_arguments reads them; id 0
 /// when its row is gone
 pub(super) fn restored_rows(table: &Table, arguments: &[String], list: &str) -> String {
-	let fields = table
-		.fields
-		.iter()
-		.filter(|(name, _, _)| !table.is_members(name))
-		.map(|(name, _, _)| name);
+	let fields = table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| name);
 	let restored: String = fields
 		.zip(arguments)
 		.filter(|(name, _)| *name != ID_FIELD)
@@ -369,11 +329,5 @@ if {MADE}.{ID_FIELD} in {KNOWN} {{
 
 /// The cell of column `name` in `row`, a row being `[id, column values…]`
 pub(super) fn column_cell(table: &Table, row: &str, name: &str) -> String {
-	format!(
-		"{row}#{}",
-		2 + columns_of(table)
-			.iter()
-			.position(|column| column == name)
-			.unwrap_or_default()
-	)
+	format!("{row}#{}", 2 + columns_of(table).iter().position(|column| column == name).unwrap_or_default())
 }

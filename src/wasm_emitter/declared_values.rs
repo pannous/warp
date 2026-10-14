@@ -68,13 +68,13 @@ impl WasmGcEmitter {
 			Some(Kind::Empty) => {
 				return crate::analyzer::union_parts(type_name.trim_end_matches('?'))
 					.and_then(|parts| {
-						parts
-							.iter()
-							.map(|part| self.admitted(&Node::Symbol(part.to_string())))
-							.try_fold(0, |mask, admitted| match admitted? {
+						parts.iter().map(|part| self.admitted(&Node::Symbol(part.to_string()))).try_fold(
+							0,
+							|mask, admitted| match admitted? {
 								Admitted::Kinds(kinds) => Some(mask | kinds),
 								Admitted::Bool => Some(mask | 1 << Kind::Int as i64),
-							})
+							},
+						)
 					})
 					.map(Admitted::Kinds)
 			}
@@ -115,10 +115,7 @@ impl WasmGcEmitter {
 						Node::Key(
 							field.clone(),
 							*op,
-							Box::new(Node::Meta {
-								node: value.clone(),
-								data: Box::new(data),
-							}),
+							Box::new(Node::Meta { node: value.clone(), data: Box::new(data) }),
 						)
 					}
 					None => entry.clone(),
@@ -138,17 +135,8 @@ impl WasmGcEmitter {
 		if let Some(type_node) = &local.type_node {
 			return Some(type_node.as_ref().clone());
 		}
-		let function = self
-			.ctx
-			.user_functions
-			.get(self.compiling.as_deref()?)
-			.filter(|_| local.is_param)?;
-		function
-			.params
-			.iter()
-			.find(|param| param.name == *name)?
-			.annotation
-			.clone()
+		let function = self.ctx.user_functions.get(self.compiling.as_deref()?).filter(|_| local.is_param)?;
+		function.params.iter().find(|param| param.name == *name)?.annotation.clone()
 	}
 
 	/// `value` stored into a place declared `declared` that holds a `kind`: checked at run time when its static kind leaves
@@ -225,10 +213,7 @@ impl WasmGcEmitter {
 			func.instruction(&I::I64Or);
 		}
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Empty)]);
-		self.emit_trap_detail(
-			func,
-			&Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))),
-		);
+		self.emit_trap_detail(func, &Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))));
 		self.emit_runtime_error(func, super::lists::list_ops::RETURNED_ERROR);
 		Self::emit_list(func, &[I::End, I::LocalGet(held), I::RefAsNonNull]);
 		if kind.is_float() {
@@ -247,25 +232,12 @@ impl WasmGcEmitter {
 				self.emit_kind_in(func, held, 1 << Kind::Int as i64);
 				Self::emit_list(
 					func,
-					&[
-						I::I32WrapI64,
-						I::If(BlockType::Result(ValType::I64)),
-						I::LocalGet(held),
-						I::RefAsNonNull,
-					],
+					&[I::I32WrapI64, I::If(BlockType::Result(ValType::I64)), I::LocalGet(held), I::RefAsNonNull],
 				);
 				self.emit_call(func, "get_int_value");
 				Self::emit_list(
 					func,
-					&[
-						I::I64Const(1),
-						I::I64LeU,
-						I::I64ExtendI32U,
-						I::Else,
-						I::I64Const(0),
-						I::End,
-						I::I64Or,
-					],
+					&[I::I64Const(1), I::I64LeU, I::I64ExtendI32U, I::Else, I::I64Const(0), I::End, I::I64Or],
 				);
 			}
 		}
@@ -287,11 +259,8 @@ pub(super) const LIST_ITEM_CHECK: &str = "list_item_check";
 pub(super) const LIST_ITEMS_CHECK: &str = "list_items_check";
 pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
 /// The in-place writers of a list, which check their items against its element mark
-const MARK_CHECKING_WRITERS: [&str; 3] = [
-	super::lists::list_ops::LIST_EXTEND,
-	crate::list_mutations::INSERT_AT_CALL,
-	"node_with_at",
-];
+const MARK_CHECKING_WRITERS: [&str; 3] =
+	[super::lists::list_ops::LIST_EXTEND, crate::list_mutations::INSERT_AT_CALL, "node_with_at"];
 
 /// Whether the program declares a list type anywhere (`names: texts`, its lowered form the type as the target's Meta, a
 /// field `items: [text]`); a program without one emits no element marks and no item checks
@@ -330,11 +299,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn require_list_marks(&mut self) {
-		if self.declares_list_types
-			&& MARK_CHECKING_WRITERS
-				.iter()
-				.any(|writer| self.should_emit_function(writer))
-		{
+		if self.declares_list_types && MARK_CHECKING_WRITERS.iter().any(|writer| self.should_emit_function(writer)) {
 			self.ctx.required_functions.extend([
 				crate::type_tests::NODE_KIND_IN,
 				LIST_MARK,
@@ -351,105 +316,49 @@ impl WasmGcEmitter {
 		}
 		let node_type = self.type_manager.node_type;
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
-		let is_list = [
-			I::I64Const(KIND_MASK),
-			I::I64And,
-			I::I64Const(Kind::List as i64),
-			I::I64Eq,
-		];
+		let is_list = [I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq];
+		#[rustfmt::skip]
 		let is_list_or_empty = [
-			I::I64Const(KIND_MASK),
-			I::I64And,
-			I::LocalTee(2),
-			I::I64Const(Kind::List as i64),
-			I::I64Eq,
-			I::LocalGet(2),
-			I::I64Const(Kind::Empty as i64),
-			I::I64Eq,
-			I::I32Or,
+			I::I64Const(KIND_MASK), I::I64And, I::LocalTee(2), I::I64Const(Kind::List as i64), I::I64Eq, I::LocalGet(2),
+			I::I64Const(Kind::Empty as i64), I::I64Eq, I::I32Or,
 		];
-		self.runtime_function(
-			LIST_MARK,
-			vec![node_ref, ValType::I64],
-			vec![node_ref],
-			vec![ValType::I64],
-			|s, f| {
-				let (list, mark) = (0, 1);
-				s.emit_field(f, list, 0);
-				Self::emit_list(f, &is_list_or_empty);
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list)]);
-				s.emit_field(f, list, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(mark),
-						I::I64Or,
-						I::StructSet {
-							struct_type_index: node_type,
-							field_index: 0,
-						},
-						I::End,
-						I::LocalGet(list),
-					],
-				);
-			},
-		);
-		self.runtime_function(
-			LIST_ITEM_CHECK,
-			vec![nullable, node_ref],
-			vec![],
-			vec![ValType::I64],
-			|s, f| {
-				let (list, item, mark) = (0, 1, 2);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(list),
-						I::RefIsNull,
-						I::If(BlockType::Empty),
-						I::Return,
-						I::End,
-					],
-				);
-				s.emit_field(f, list, 0);
-				Self::emit_list(f, &is_list_or_empty);
-				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Return, I::End]);
-				s.emit_field(f, list, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(ELEMENT_MARK_SHIFT),
-						I::I64ShrU,
-						I::LocalTee(mark),
-						I::I64Eqz,
-						I::If(BlockType::Empty),
-						I::Return,
-						I::End,
-					],
-				);
-				// the node_kind_in mask of the mark: its kind bits, its bool bit back at BOOL_MASK_BIT
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(item),
-						I::LocalGet(mark),
-						I::I64Const(MARK_KINDS_MASK),
-						I::I64And,
-						I::LocalGet(mark),
-						I::I64Const(MARK_BOOL_BIT),
-						I::I64ShrU,
-						I::I64Const(1),
-						I::I64And,
-						I::I64Const(BOOL_MASK_BIT),
-						I::I64Shl,
-						I::I64Or,
-					],
-				);
-				s.call(f, crate::type_tests::NODE_KIND_IN);
-				f.instruction(&I::I64Eqz);
-				s.emit_fail_if(f, LIST_CANNOT_HOLD);
-			},
-		);
+		self.runtime_function(LIST_MARK, vec![node_ref, ValType::I64], vec![node_ref], vec![ValType::I64], |s, f| {
+			let (list, mark) = (0, 1);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &is_list_or_empty);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list)]);
+			s.emit_field(f, list, 0);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(mark), I::I64Or, I::StructSet { struct_type_index: node_type, field_index: 0 },
+				I::End,
+				I::LocalGet(list),
+			]);
+		});
+		self.runtime_function(LIST_ITEM_CHECK, vec![nullable, node_ref], vec![], vec![ValType::I64], |s, f| {
+			let (list, item, mark) = (0, 1, 2);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Return, I::End]);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &is_list_or_empty);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Return, I::End]);
+			s.emit_field(f, list, 0);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(ELEMENT_MARK_SHIFT), I::I64ShrU, I::LocalTee(mark), I::I64Eqz, I::If(BlockType::Empty),
+					I::Return,
+				I::End,
+			]);
+			// the node_kind_in mask of the mark: its kind bits, its bool bit back at BOOL_MASK_BIT
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(item), I::LocalGet(mark), I::I64Const(MARK_KINDS_MASK), I::I64And, I::LocalGet(mark),
+				I::I64Const(MARK_BOOL_BIT), I::I64ShrU, I::I64Const(1), I::I64And, I::I64Const(BOOL_MASK_BIT),
+				I::I64Shl, I::I64Or,
+			]);
+			s.call(f, crate::type_tests::NODE_KIND_IN);
+			f.instruction(&I::I64Eqz);
+			s.emit_fail_if(f, LIST_CANNOT_HOLD);
+		});
 		self.runtime_function(LIST_ITEMS_CHECK, vec![nullable, nullable], vec![], vec![], |s, f| {
 			let (list, cell) = (0, 1);
 			s.emit_cell_walk(f, cell, |f| {

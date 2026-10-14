@@ -11,9 +11,7 @@ use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
 /// The words that separate a phrase's slots; `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
-pub(crate) const PREPOSITIONS: [&str; 11] = [
-	"to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each",
-];
+pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"];
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 17] = [
 	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if",
@@ -70,28 +68,17 @@ pub fn parameter_slots(
 				.map(|later| words[later])
 				.collect();
 			let head = noun[noun.len() - 1];
-			parameters.push(if is_known_type(head) {
-				typed(head, head)
-			} else {
-				symbol(head)
-			});
+			parameters.push(if is_known_type(head) { typed(head, head) } else { symbol(head) });
 			index += 1 + noun.len();
 		} else {
-			parameters.push(if is_known_type(word) {
-				typed(word, word)
-			} else {
-				symbol(word)
-			});
+			parameters.push(if is_known_type(word) { typed(word, word) } else { symbol(word) });
 			index += 1;
 		}
 	}
 	let body = body.clone();
 	let names: Vec<String> = parameters.iter().map(Node::name).collect();
-	if let Some(shared) = names
-		.iter()
-		.enumerate()
-		.find(|(index, name)| names[..*index].contains(name))
-		.map(|(_, name)| name)
+	if let Some(shared) =
+		names.iter().enumerate().find(|(index, name)| names[..*index].contains(name)).map(|(_, name)| name)
 	{
 		return Err(format!(
 			"two parameters are named {shared}: use one-word parameter names here (`first name`, `last name` need multi-word identifiers)"
@@ -109,10 +96,7 @@ pub fn parameter_slots(
 /// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
 /// word; None for `f x = …` without one, which keeps its old meaning (each word a parameter)
 pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node>, Node), String>> {
-	words
-		.iter()
-		.any(|word| is_kinded_type_or_any(word))
-		.then(|| parameter_slots(words, body, &is_kinded_type_or_any))
+	words.iter().any(|word| is_kinded_type_or_any(word)).then(|| parameter_slots(words, body, &is_kinded_type_or_any))
 }
 
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
@@ -154,11 +138,9 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 fn flat_head(head: &Node) -> Node {
 	match head.drop_meta() {
 		Node::List(items, bracket, separator) if items.len() == 2 => match items[1].drop_meta() {
-			Node::List(parameters, _, _) => Node::List(
-				[vec![items[0].clone()], parameters.clone()].concat(),
-				bracket.clone(),
-				separator.clone(),
-			),
+			Node::List(parameters, _, _) => {
+				Node::List([vec![items[0].clone()], parameters.clone()].concat(), bracket.clone(), separator.clone())
+			}
 			_ => head.clone(),
 		},
 		_ => head.clone(),
@@ -185,11 +167,7 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 			)
 		}
 		Node::Key(then, Op::Else, otherwise) if let Node::Key(head, Op::Then, chosen) = then.drop_meta() => {
-			let then = key(
-				head.as_ref().clone(),
-				Op::Then,
-				as_type(chosen.as_ref().clone(), type_name),
-			);
+			let then = key(head.as_ref().clone(), Op::Then, as_type(chosen.as_ref().clone(), type_name));
 			key(then, Op::Else, as_type(otherwise.as_ref().clone(), type_name))
 		}
 		_ if is_statement_block(&value) => converted_last(value, type_name),
@@ -218,16 +196,8 @@ pub(crate) fn is_checked_result(word: &str) -> bool {
 /// `{the result: int or text = value; the result}`: the value admitted as a variable declared of the type is, a
 /// literal when compiled, a fraction known at run time with "an int must be a whole number"
 fn checked_result(value: Node, type_name: &Node) -> Node {
-	let declared = key(
-		key(symbol(crate::analyzer::CHECKED_RESULT), Op::Colon, type_name.clone()),
-		Op::Assign,
-		value,
-	);
-	Node::List(
-		vec![declared, symbol(crate::analyzer::CHECKED_RESULT)],
-		Bracket::Curly,
-		Separator::Semicolon,
-	)
+	let declared = key(key(symbol(crate::analyzer::CHECKED_RESULT), Op::Colon, type_name.clone()), Op::Assign, value);
+	Node::List(vec![declared, symbol(crate::analyzer::CHECKED_RESULT)], Bracket::Curly, Separator::Semicolon)
 }
 
 /// `error "e"`
@@ -253,11 +223,7 @@ fn converted_last(body: Node, type_name: &Node) -> Node {
 	match body.drop_meta().clone() {
 		Node::List(mut items, Bracket::Curly, separator) if is_statement_block(&body) => {
 			let last = items.pop().expect("not empty");
-			items.push(if is_return_statement(&last) {
-				last
-			} else {
-				as_type(last, type_name)
-			});
+			items.push(if is_return_statement(&last) { last } else { as_type(last, type_name) });
 			Node::List(items, Bracket::Curly, separator)
 		}
 		body if is_return_statement(&body) => body,

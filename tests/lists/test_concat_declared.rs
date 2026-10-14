@@ -10,14 +10,8 @@ fn concatenation_checks_declared_element_type() {
 		"xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs",
 		"xs is declared ints, cannot hold an item that is no int",
 	);
-	fails_with(
-		"xs: ints = [1]; ys = [\"a\"]; xs = [2] + ys; xs",
-		"cannot hold an item that is no int",
-	);
-	fails_with(
-		"xs: ints = [1]; ys = [\"a\"]; xs += ys; xs",
-		"cannot hold an item that is no int",
-	);
+	fails_with("xs: ints = [1]; ys = [\"a\"]; xs = [2] + ys; xs", "cannot hold an item that is no int");
+	fails_with("xs: ints = [1]; ys = [\"a\"]; xs += ys; xs", "cannot hold an item that is no int");
 	is!("xs = [1]; ys = [\"a\"]; zs = xs + ys; zs#2 is int", false);
 	is!("xs: ints = [1]; ys = [2, 3]; xs = xs + ys; xs#3", 3);
 }
@@ -26,14 +20,8 @@ fn concatenation_checks_declared_element_type() {
 /// of `xs + ys` are of the union of both element types
 #[test]
 fn evident_other_items_are_a_compile_error() {
-	fails_with(
-		"xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs",
-		"the assigned items are int or codepoint",
-	);
-	fails_with(
-		"xs: ints = [1]; ys = [\"a\"]; xs = ys; xs",
-		"the assigned items are codepoint",
-	);
+	fails_with("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "the assigned items are int or codepoint");
+	fails_with("xs: ints = [1]; ys = [\"a\"]; xs = ys; xs", "the assigned items are codepoint");
 	is!("xs: numbers = [1]; ys = [2.5]; xs = xs + ys; xs#2", 2.5);
 	is!("xs = [1]; ys = [\"a\"]; zs = xs + ys; #zs", 2);
 }

@@ -94,12 +94,7 @@ pub(crate) struct Lambda {
 
 impl Lambda {
 	fn new(params: Vec<String>, body: Node) -> Self {
-		Lambda {
-			params,
-			body,
-			written: vec![],
-			result_type: None,
-		}
+		Lambda { params, body, written: vec![], result_type: None }
 	}
 }
 
@@ -118,19 +113,13 @@ pub fn lower_strict(node: Node) -> Node {
 fn lowering(node: Node, strict: bool) -> Node {
 	let context = crate::analyzer::function_context(&node);
 	let first_fresh = first_fresh_number(&node);
-	Lowering {
-		context,
-		counter: Counter::starting_at(first_fresh),
-		strict,
-	}
-	.expand(node)
+	Lowering { context, counter: Counter::starting_at(first_fresh), strict }.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
 /// the code around the function (`scale := xs.map(x => x * it)`)
 pub(crate) fn is_inlined_loop_variable(name: &str) -> bool {
-	name.strip_prefix(LOOP_ITEM_PREFIX)
-		.is_some_and(|number| number.parse::<usize>().is_ok())
+	name.strip_prefix(LOOP_ITEM_PREFIX).is_some_and(|number| number.parse::<usize>().is_ok())
 }
 
 /// The number after every `loop_out_3`, `loop_item_4·items` an earlier run left: an inner loop lowered by a later run
@@ -173,10 +162,7 @@ const OPERATOR_PARAMETERS: [&str; 2] = ["operator_left", "operator_right"];
 const OPERATOR_IDENTITIES: [(&str, i64); 2] = [("+", 0), ("*", 1)];
 
 fn operator_symbol(op: Op) -> Option<Node> {
-	OPERATOR_VALUES
-		.iter()
-		.find(|(known, _)| *known == op)
-		.map(|(_, text)| symbol(text))
+	OPERATOR_VALUES.iter().find(|(known, _)| *known == op).map(|(_, text)| symbol(text))
 }
 
 /// `+` as the function `(a b)->a+b`; also the operator with nothing on either side, as `by: >` parses
@@ -189,10 +175,7 @@ fn operator_lambda(node: &Node) -> Option<Lambda> {
 		_ => return None,
 	};
 	let [left, right] = OPERATOR_PARAMETERS.map(symbol);
-	Some(Lambda::new(
-		OPERATOR_PARAMETERS.map(String::from).to_vec(),
-		key(left, op, right),
-	))
+	Some(Lambda::new(OPERATOR_PARAMETERS.map(String::from).to_vec(), key(left, op, right)))
 }
 
 /// A function written as a value: a lambda, a block or an operator
@@ -364,15 +347,9 @@ fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
 		Node::List(items, _, _) => items.clone(),
 		other => vec![other.clone()],
 	};
-	let declares = written
-		.iter()
-		.any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon | Op::Assign, _)));
-	Some(Lambda {
-		params,
-		body,
-		written: if declares { written } else { vec![] },
-		result_type,
-	})
+	let declares =
+		written.iter().any(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon | Op::Assign, _)));
+	Some(Lambda { params, body, written: if declares { written } else { vec![] }, result_type })
 }
 
 /// PHP's `fn($x) => …` without its keyword, C#'s `(int x, int y) => …` as `(x: int, y: int)`
@@ -395,11 +372,7 @@ fn c_style_parameters(head: &Node) -> Node {
 		Node::List(_, Bracket::None, Separator::Space)
 			if keyword_and_names(head).is_some_and(|names| names.len() > 1) =>
 		{
-			Node::List(
-				keyword_and_names(head).expect("guarded"),
-				Bracket::Round,
-				Separator::Colon,
-			)
+			Node::List(keyword_and_names(head).expect("guarded"), Bracket::Round, Separator::Colon)
 		}
 		Node::List(words, Bracket::Round | Bracket::None, Separator::Space)
 			if words.len() == 2 && words.iter().any(is_kinded_type_word) && typed(head) != *head =>
@@ -434,26 +407,15 @@ pub(crate) fn flatten_phrase(node: &Node, words: &mut Vec<Node>) {
 /// asks for every block)
 fn shorthand_block_lambda(node: &Node, items: &[Node]) -> Option<Lambda> {
 	let is_shorthand = |symbol: &str| symbol.starts_with(SHORTHAND_MARK);
-	items
-		.iter()
-		.find_map(|item| symbol_outside_blocks(item, &is_shorthand))?;
-	block_lambda(node).filter(|lambda| {
-		lambda
-			.params
-			.first()
-			.is_some_and(|param| param.starts_with(SHORTHAND_MARK))
-	})
+	items.iter().find_map(|item| symbol_outside_blocks(item, &is_shorthand))?;
+	block_lambda(node).filter(|lambda| lambda.params.first().is_some_and(|param| param.starts_with(SHORTHAND_MARK)))
 }
 
 fn block_lambda(node: &Node) -> Option<Lambda> {
 	let Node::List(items, Bracket::Curly, separator) = node.drop_meta() else {
 		return None;
 	};
-	if items.is_empty()
-		|| items
-			.iter()
-			.any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)))
-	{
+	if items.is_empty() || items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) {
 		return None;
 	}
 	let body = match items.as_slice() {
@@ -513,13 +475,7 @@ fn bind_parameter(node: Node, name: &str, argument: &Node) -> Node {
 			Node::List(
 				items
 					.into_iter()
-					.map(|item| {
-						if binds_name(&item) {
-							item
-						} else {
-							bind_parameter(item, name, argument)
-						}
-					})
+					.map(|item| if binds_name(&item) { item } else { bind_parameter(item, name, argument) })
 					.collect(),
 				bracket,
 				separator,
@@ -541,19 +497,13 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	if !word.is_symbol(SWIFT_IN) || body.is_empty() {
 		return None;
 	}
-	let params: Vec<String> = leading
-		.iter()
-		.chain([name])
-		.map(|param| param.symbol_name().map(String::from))
-		.collect::<Option<_>>()?;
+	let params: Vec<String> =
+		leading.iter().chain([name]).map(|param| param.symbol_name().map(String::from)).collect::<Option<_>>()?;
 	let body = match body {
 		[single] => single.clone(),
 		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
 	};
-	params
-		.iter()
-		.any(|param| body.mentions(param))
-		.then(|| Lambda::new(params, body))
+	params.iter().any(|param| body.mentions(param)).then(|| Lambda::new(params, body))
 }
 
 /// Swift's trailing closure `xs.reduce(0) { $0 + $1 }`: the call's word and arguments, then the closure
@@ -577,10 +527,9 @@ fn trailing_closure(items: &[Node]) -> Option<Vec<Node>> {
 /// `reduce` given a start value is `fold`: Swift's `xs.reduce(0, +)`, JS's `xs.reduce(f, 0)` aside
 fn with_start(iteration: &'static Iteration, extras: usize) -> &'static Iteration {
 	match iteration.word {
-		REDUCE_WORD if extras == 1 => ITERATIONS
-			.iter()
-			.find(|fold| fold.word == FOLD_WORD)
-			.expect("fold is an iteration"),
+		REDUCE_WORD if extras == 1 => {
+			ITERATIONS.iter().find(|fold| fold.word == FOLD_WORD).expect("fold is an iteration")
+		}
 		_ => iteration,
 	}
 }
@@ -590,11 +539,7 @@ pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 	let lambda = block_lambda(node).filter(|lambda| !lambda.params.is_empty())?;
 	let parameters = match lambda.params.as_slice() {
 		[single] => Node::Symbol(single.clone()),
-		several => Node::List(
-			several.iter().cloned().map(Node::Symbol).collect(),
-			Bracket::Round,
-			Separator::Colon,
-		),
+		several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
 	};
 	Some(key(parameters, Op::Arrow, lambda.body))
 }
@@ -608,11 +553,8 @@ pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
 }
 
 fn definition(name: &str, lambda: Lambda) -> Node {
-	let parameters = if lambda.written.is_empty() {
-		lambda.params.into_iter().map(Node::Symbol).collect()
-	} else {
-		lambda.written
-	};
+	let parameters =
+		if lambda.written.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.written };
 	let head = call(name, parameters);
 	// a result type converts the body, as `f(a:number):number := …` is lowered before this pass runs
 	let body = match lambda.result_type {
@@ -663,25 +605,15 @@ impl Lowering {
 			Node::Key(target, Op::Assign | Op::Define, value)
 				if matches!(target.drop_meta(), Node::Symbol(_)) && arrow_lambda(&value).is_some() =>
 			{
-				let Node::Symbol(name) = target.drop_meta() else {
-					unreachable!("guarded")
-				};
+				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
 				let lambda = arrow_lambda(&value).expect("guarded");
-				definition(
-					name,
-					Lambda {
-						body: self.expand(lambda.body),
-						..lambda
-					},
-				)
+				definition(name, Lambda { body: self.expand(lambda.body), ..lambda })
 			}
 			// `sum := fold +`: the iteration word with only its function is a function of the list
 			Node::Key(target, Op::Assign | Op::Define, value)
 				if matches!(target.drop_meta(), Node::Symbol(_)) && self.partial_application(&value).is_some() =>
 			{
-				let Node::Symbol(name) = target.drop_meta() else {
-					unreachable!("guarded")
-				};
+				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
 				let body = self.partial_application(&value).expect("guarded");
 				definition(name, Lambda::new(vec![PARTIAL_LIST.to_string()], self.expand(body)))
 			}
@@ -692,11 +624,7 @@ impl Lowering {
 				let (receiver, function) = (self.expand(*receiver), self.expand(function));
 				match self.iterate(iteration, receiver.clone(), extras.clone(), function.clone()) {
 					Some(loop_node) => loop_node,
-					None => key(
-						receiver,
-						Op::Dot,
-						call(iteration.word, [extras, vec![function]].concat()),
-					),
+					None => key(receiver, Op::Dot, call(iteration.word, [extras, vec![function]].concat())),
 				}
 			}
 			Node::List(items, bracket, separator) => {
@@ -716,11 +644,7 @@ impl Lowering {
 				};
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				// in a list literal `[(x => x + 1) (x => x + 2)]` the functions are elements, never one applied to the next
-				let immediate = if bracket == Bracket::Square {
-					None
-				} else {
-					self.immediate_call(&items)
-				};
+				let immediate = if bracket == Bracket::Square { None } else { self.immediate_call(&items) };
 				immediate
 					.or_else(|| self.iteration_call(&items, &bracket, &separator))
 					.unwrap_or(Node::List(items, bracket, separator))
@@ -767,9 +691,7 @@ impl Lowering {
 		let [block, arguments] = items else { return None };
 		let lambda = block_lambda(block).or_else(|| arrow_lambda(block))?;
 		let is_function = |node: &Node| {
-			block_lambda(node)
-				.or_else(|| arrow_lambda(node))
-				.is_some_and(|lambda| !lambda.params.is_empty())
+			block_lambda(node).or_else(|| arrow_lambda(node)).is_some_and(|lambda| !lambda.params.is_empty())
 		};
 		let juxtaposed;
 		let entries = match arguments.drop_meta() {
@@ -864,10 +786,9 @@ impl Lowering {
 		}
 		let list = symbol(PARTIAL_LIST);
 		let identity = match function.drop_meta() {
-			Node::Symbol(text) => OPERATOR_IDENTITIES
-				.iter()
-				.find(|(known, _)| known == text)
-				.map(|(_, identity)| Node::int(*identity)),
+			Node::Symbol(text) => {
+				OPERATOR_IDENTITIES.iter().find(|(known, _)| known == text).map(|(_, identity)| Node::int(*identity))
+			}
 			_ => None,
 		};
 		Some(match (iteration.extra_arguments, identity) {
@@ -901,17 +822,11 @@ impl Lowering {
 				.params
 				.iter()
 				.zip(arguments)
-				.fold(lambda.body, |body, (param, argument)| {
-					bind_parameter(body, param, argument)
-				})),
+				.fold(lambda.body, |body, (param, argument)| bind_parameter(body, param, argument))),
 			// a block that does not use `it` takes no argument and is run for every item
 			Some(lambda) if lambda.params.is_empty() && arguments.len() == 1 => Ok(lambda.body),
 			Some(_) => {
-				let count = if iteration.function_arguments == 1 {
-					"one argument"
-				} else {
-					"two arguments"
-				};
+				let count = if iteration.function_arguments == 1 { "one argument" } else { "two arguments" };
 				Err(Some(
 					Diagnostic::at(function, format!("{} takes a function of {count}", iteration.word)).into_error(),
 				))
@@ -926,18 +841,9 @@ impl Lowering {
 					Ok(crate::closures::closure_call(function.clone(), arguments.to_vec()))
 				}
 				_ => {
-					let params = if iteration.function_arguments == 1 {
-						"x"
-					} else {
-						"(a b)"
-					};
+					let params = if iteration.function_arguments == 1 { "x" } else { "(a b)" };
 					let fix = format!("{} {} ({params} => …)", iteration.word, list.serialize());
-					Err(Some(crate::closures::needs_a_function(
-						iteration.word,
-						None,
-						function,
-						&fix,
-					)))
+					Err(Some(crate::closures::needs_a_function(iteration.word, None, function, &fix)))
 				}
 			},
 		}
@@ -953,22 +859,14 @@ impl Lowering {
 		pair: [Node; 2],
 	) -> Result<Node, Option<Node>> {
 		let compared = self.applied(iteration, list, function, &pair)?;
-		Ok(if self.compares(function) {
-			compared
-		} else {
-			key(compared, Op::Lt, Node::int(0))
-		})
+		Ok(if self.compares(function) { compared } else { key(compared, Op::Lt, Node::int(0)) })
 	}
 
 	fn parameter_count(&self, function: &Node) -> Option<usize> {
 		match literal_function(function) {
 			Some(lambda) => Some(lambda.params.len()),
 			None => match function.drop_meta() {
-				Node::Symbol(name) => self
-					.context
-					.user_functions
-					.get(name)
-					.map(|defined| defined.params.len()),
+				Node::Symbol(name) => self.context.user_functions.get(name).map(|defined| defined.params.len()),
 				_ => None,
 			},
 		}
@@ -979,11 +877,9 @@ impl Lowering {
 		match literal_function(function) {
 			Some(lambda) => is_boolean_body(&lambda.body),
 			None => match function.drop_meta() {
-				Node::Symbol(name) => self
-					.context
-					.user_functions
-					.get(name)
-					.is_some_and(|defined| is_boolean_body(&defined.body)),
+				Node::Symbol(name) => {
+					self.context.user_functions.get(name).is_some_and(|defined| is_boolean_body(&defined.body))
+				}
 				_ => false,
 			},
 		}
@@ -998,16 +894,8 @@ impl Lowering {
 		.into_iter()
 		.map(|name| (name, self.fresh(&format!("loop_{name}"))))
 		.collect();
-		let symbol = |name: &str| {
-			Node::Symbol(
-				names
-					.iter()
-					.find(|(prefix, _)| *prefix == name)
-					.expect("a loop name")
-					.1
-					.clone(),
-			)
-		};
+		let symbol =
+			|name: &str| Node::Symbol(names.iter().find(|(prefix, _)| *prefix == name).expect("a loop name").1.clone());
 		let sorting = iteration.word == SORT_WORD;
 		let function = if sorting { unlabeled(function) } else { function };
 		let by_key = sorting && self.parameter_count(&function) == Some(1);
@@ -1025,19 +913,11 @@ impl Lowering {
 			Ok(applied) => applied,
 			Err(error) => return error,
 		};
-		let mut template = if by_key {
-			key_sort_template()
-		} else {
-			iteration.template.to_string()
-		};
+		let mut template = if by_key { key_sort_template() } else { iteration.template.to_string() };
 		for (name, fresh) in &names {
 			template = replace_word(&template, name, fresh);
 		}
-		let mut program = substitute(
-			substitute(parse(&template), LIST_PLACEHOLDER, &list),
-			CALL_PLACEHOLDER,
-			&applied,
-		);
+		let mut program = substitute(substitute(parse(&template), LIST_PLACEHOLDER, &list), CALL_PLACEHOLDER, &applied);
 		if let Some(start) = extras.first() {
 			program = substitute(program, START_PLACEHOLDER, start);
 		}

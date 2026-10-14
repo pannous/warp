@@ -48,11 +48,7 @@ pub(super) fn static_reads(node: Node, statics: &[(String, String)]) -> Node {
 	let Node::Symbol(class) = object.drop_meta() else {
 		return key(recurse(*object), Op::Dot, recurse(*member));
 	};
-	let is_member = |name: &str| {
-		statics
-			.iter()
-			.any(|(owner, static_member)| owner == class && static_member == name)
-	};
+	let is_member = |name: &str| statics.iter().any(|(owner, static_member)| owner == class && static_member == name);
 	match member.drop_meta() {
 		Node::Symbol(name) if is_member(name) => Node::Symbol(static_name(class, name)),
 		_ => Node::Key(object, Op::Dot, Box::new(recurse(*member))),

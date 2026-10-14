@@ -66,7 +66,7 @@ Booleans are `yes` and `no`, with word operators `and`, `or`, `not`.
 x = 5; if x > 9 : "big" else if x > 3 : "medium" else "small"
 ```
 
-### Matching
+## Matching
 
 `match` (or `switch`) takes keys with alternatives, ranges, types and guards; `other`, `_`, `default` catch the rest.
 
@@ -217,9 +217,9 @@ Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cl
 
 `use draw` keeps a pixel canvas that `show()` paints; WGSL shaders color every pixel on the GPU (WebGPU in the page).
 
-## GPU
+## Acceleration
 
-Heavy float maps move to the GPU by themselves above a size threshold (notes/gpu.md); `@gpu` asks for it explicitly.
+Number lists run as SIMD loops; heavy float maps move to the GPU by themselves above a size threshold (notes/gpu.md); `@gpu` asks for it explicitly.
 
 ## Sound and music
 

@@ -43,11 +43,7 @@ pub fn lower(node: Node) -> Node {
 	if !functions.values().any(|function| !function.extras.is_empty()) && !has_named_call(&node, &functions) {
 		return node;
 	}
-	Rewrite {
-		functions,
-		temporaries: Counter::starting_at(1),
-	}
-	.node(node)
+	Rewrite { functions, temporaries: Counter::starting_at(1) }.node(node)
 }
 
 /// Defaults written as other languages do: Ruby's keyword parameter `def f(a, b: 2)` (a literal after the colon is no
@@ -86,9 +82,7 @@ fn maybe_parameters(parameters: Vec<Node>) -> Vec<Node> {
 			}
 			_ if is_maybe(&item) => {
 				let mut name = items.next();
-				if name
-					.as_ref()
-					.is_some_and(|word| crate::analyzer::type_word_kind(&word.drop_meta().name()).is_some())
+				if name.as_ref().is_some_and(|word| crate::analyzer::type_word_kind(&word.drop_meta().name()).is_some())
 					&& items.peek().is_some()
 				{
 					name = items.next(); // `maybe int x`
@@ -175,14 +169,9 @@ fn flag_arguments(node: Node, functions: &HashMap<String, Function>, bound: &Has
 		{
 			let function = &functions[&items[0].name()];
 			let is_flag = |name: &String| {
-				function
-					.parameters
-					.iter()
-					.zip(&function.defaults)
-					.any(|(parameter, default)| {
-						parameter == name
-							&& matches!(default.as_ref().map(Node::drop_meta), Some(Node::True | Node::False))
-					})
+				function.parameters.iter().zip(&function.defaults).any(|(parameter, default)| {
+					parameter == name && matches!(default.as_ref().map(Node::drop_meta), Some(Node::True | Node::False))
+				})
 			};
 			let items = items
 				.into_iter()
@@ -211,14 +200,7 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 				{
 					let parameters = items[1..].iter().map(parameter_word).collect();
 					let defaults = items[1..].iter().map(parameter_default).collect();
-					functions.insert(
-						items[0].name(),
-						Function {
-							parameters,
-							defaults,
-							extras: vec![],
-						},
-					);
+					functions.insert(items[0].name(), Function { parameters, defaults, extras: vec![] });
 				}
 				_ => {}
 			}
@@ -254,17 +236,13 @@ fn untyped_head(head: &Node) -> &Node {
 /// The head with its parameters rewritten, its result type kept
 fn with_parameters(head: Node, rewrite: &impl Fn(Vec<Node>) -> Vec<Node>) -> Node {
 	match head.drop_meta() {
-		Node::Key(inner, op @ (Op::Colon | Op::As), result) if is_function_head(inner) => Node::Key(
-			Box::new(with_parameters(inner.as_ref().clone(), rewrite)),
-			*op,
-			result.clone(),
-		),
+		Node::Key(inner, op @ (Op::Colon | Op::As), result) if is_function_head(inner) => {
+			Node::Key(Box::new(with_parameters(inner.as_ref().clone(), rewrite)), *op, result.clone())
+		}
 		Node::List(items, Bracket::Round, separator) if is_function_head(&head) => {
 			let (name, parameters) = items.split_first().expect("a name");
 			Node::List(
-				std::iter::once(name.clone())
-					.chain(rewrite(parameters.to_vec()))
-					.collect(),
+				std::iter::once(name.clone()).chain(rewrite(parameters.to_vec())).collect(),
 				Bracket::Round,
 				separator.clone(),
 			)
@@ -362,10 +340,7 @@ fn collect_extras(node: &Node, functions: &mut HashMap<String, Function>, unknow
 	node.visit(&mut |part| {
 		if let Some((name, arguments)) = call_of(part, functions) {
 			named.extend(
-				arguments
-					.iter()
-					.filter_map(named_argument)
-					.map(|(argument, _)| (name.clone(), argument, part.clone())),
+				arguments.iter().filter_map(named_argument).map(|(argument, _)| (name.clone(), argument, part.clone())),
 			);
 		}
 	});
@@ -386,9 +361,7 @@ fn collect_extras(node: &Node, functions: &mut HashMap<String, Function>, unknow
 			continue;
 		}
 		function.extras.push(argument);
-		function
-			.extras
-			.sort_by_key(|extra| used.iter().position(|symbol| symbol == extra));
+		function.extras.sort_by_key(|extra| used.iter().position(|symbol| symbol == extra));
 	}
 }
 
@@ -459,16 +432,9 @@ impl Rewrite {
 		let body = self.node(body);
 		match head.drop_meta() {
 			Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
-				let extras = self
-					.functions
-					.get(&items[0].name())
-					.map(|function| function.extras.clone())
-					.unwrap_or_default();
-				let items = items
-					.iter()
-					.cloned()
-					.chain(extras.into_iter().map(Node::Symbol))
-					.collect();
+				let extras =
+					self.functions.get(&items[0].name()).map(|function| function.extras.clone()).unwrap_or_default();
+				let items = items.iter().cloned().chain(extras.into_iter().map(Node::Symbol)).collect();
 				key(Node::List(items, Bracket::Round, separator.clone()), op, body)
 			}
 			Node::Symbol(name) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
@@ -507,17 +473,14 @@ impl Rewrite {
 				(None, Some(default)) => order.push(Err(default.clone())),
 				(None, None) => {
 					return Err(
-						Diagnostic::at(call, format!("{name} needs a value for parameter {parameter}")).into_error(),
+						Diagnostic::at(call, format!("{name} needs a value for parameter {parameter}")).into_error()
 					)
 				}
 			}
 		}
 		order.extend(positional.map(Ok));
 		order.extend(
-			function
-				.extras
-				.iter()
-				.map(|extra| named.get(extra).copied().ok_or_else(|| Node::Symbol(extra.clone()))),
+			function.extras.iter().map(|extra| named.get(extra).copied().ok_or_else(|| Node::Symbol(extra.clone()))),
 		);
 		let value = |position: usize| {
 			named_argument(&arguments[position]).map_or_else(|| arguments[position].clone(), |(_, value)| value.clone())
@@ -537,9 +500,7 @@ impl Rewrite {
 			name.to_string()
 		};
 		let ordered = std::iter::once(Node::Symbol(callee)).chain(
-			order
-				.into_iter()
-				.map(|slot| slot.map_or_else(|default| default, |position| values[position].clone())),
+			order.into_iter().map(|slot| slot.map_or_else(|default| default, |position| values[position].clone())),
 		);
 		Ok(with_bindings(bindings, parens(ordered.collect())))
 	}

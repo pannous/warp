@@ -54,10 +54,7 @@ fn test_paren_data_stays_data() {
 
 #[test]
 fn test_declared_type_constructs() {
-	assert_eq!(
-		eval("type P{x:int y:int}; P(1,2)").to_string(),
-		eval("type P{x:int y:int}; P{x:1 y:2}").to_string()
-	);
+	assert_eq!(eval("type P{x:int y:int}; P(1,2)").to_string(), eval("type P{x:int y:int}; P{x:1 y:2}").to_string());
 }
 
 #[test]

@@ -9,11 +9,7 @@ const LONG: &str = "xs = (100000 times \"a,\").split(\",\"); ";
 fn a_long_list_of_nodes_grows_without_exhausting_the_stack() {
 	is!(
 		&format!("{LONG}xs += [\"b\"]; [count(xs), xs#100002]"),
-		warp::Node::List(
-			vec![100002.into(), "b".into()],
-			warp::node::Bracket::Square,
-			warp::node::Separator::Space
-		)
+		warp::Node::List(vec![100002.into(), "b".into()], warp::node::Bracket::Square, warp::node::Separator::Space)
 	);
 	is!(&format!("{LONG}ys = xs + [\"b\"]; count(ys)"), 100002);
 	is!(
@@ -28,17 +24,8 @@ fn a_long_list_of_nodes_grows_without_exhausting_the_stack() {
 
 #[test]
 fn copies_keep_the_order_and_share_nothing_they_change() {
-	is!(
-		"xs = [\"a\", \"b\"]; ys = xs + [\"c\"]; [xs, ys]",
-		warp::parse("[[\"a\" \"b\"] [\"a\" \"b\" \"c\"]]")
-	);
-	is!(
-		"xs = [\"a\", \"c\"]; xs.insert(1, \"b\"); xs",
-		warp::parse("[\"a\" \"b\" \"c\"]")
-	);
-	is!(
-		"xs = [\"a\"]; xs.insert(0, \"z\"); xs.insert(-1, \"q\"); xs",
-		warp::parse("[\"z\" \"a\" \"q\"]")
-	);
+	is!("xs = [\"a\", \"b\"]; ys = xs + [\"c\"]; [xs, ys]", warp::parse("[[\"a\" \"b\"] [\"a\" \"b\" \"c\"]]"));
+	is!("xs = [\"a\", \"c\"]; xs.insert(1, \"b\"); xs", warp::parse("[\"a\" \"b\" \"c\"]"));
+	is!("xs = [\"a\"]; xs.insert(0, \"z\"); xs.insert(-1, \"q\"); xs", warp::parse("[\"z\" \"a\" \"q\"]"));
 	is!("xs = []; ys = xs + [\"a\"]; ys", warp::parse("[\"a\"]"));
 }

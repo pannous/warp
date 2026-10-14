@@ -42,11 +42,7 @@ impl Definition {
 		let Node::Symbol(name) = name.drop_meta() else {
 			return None;
 		};
-		Some(Definition {
-			name: name.clone(),
-			params: params.to_vec(),
-			body: body.as_ref().clone(),
-		})
+		Some(Definition { name: name.clone(), params: params.to_vec(), body: body.as_ref().clone() })
 	}
 
 	pub(crate) fn param_names(&self) -> Vec<String> {
@@ -103,9 +99,7 @@ fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<No
 		let Some((function, arguments)) = items.split_first() else {
 			return;
 		};
-		let Some(definition) = found
-			.iter()
-			.find(|definition| function.symbol_name() == Some(definition.name.as_str()))
+		let Some(definition) = found.iter().find(|definition| function.symbol_name() == Some(definition.name.as_str()))
 		else {
 			return;
 		};
@@ -124,9 +118,7 @@ fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<No
 			written.join(" ")
 		);
 		refused = Some(
-			crate::errors::diagnostic::Diagnostic::at(value, message)
-				.fix(format!("{name} := {partial}"))
-				.into_error(),
+			crate::errors::diagnostic::Diagnostic::at(value, message).fix(format!("{name} := {partial}")).into_error(),
 		);
 	});
 	refused
@@ -134,11 +126,7 @@ fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<No
 
 /// The parameters without a default: `add(a, b = 1)` needs only a
 fn required_parameters(definition: &Definition) -> usize {
-	definition
-		.params
-		.iter()
-		.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _)))
-		.count()
+	definition.params.iter().filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _))).count()
 }
 
 fn call_head(call: &Node) -> String {
@@ -159,15 +147,11 @@ fn nested_tail(definition: &Definition, found: &[Definition]) -> Option<String> 
 	}
 	let mut nested = Vec::new();
 	definitions(&definition.body, &mut nested);
-	let inner = nested
-		.iter()
-		.find(|inner| inner.name == *name && inner.params.is_empty())?;
+	let inner = nested.iter().find(|inner| inner.name == *name && inner.params.is_empty())?;
 	let inner_tail = crate::closures::tail(&inner.body);
 	let returns_function = crate::lambdas::arrow_lambda(inner_tail).is_some()
 		|| crate::closures::referenced_function(inner_tail).is_some()
-		|| found
-			.iter()
-			.any(|other| matches!(inner_tail.drop_meta(), Node::Symbol(called) if *called == other.name));
+		|| found.iter().any(|other| matches!(inner_tail.drop_meta(), Node::Symbol(called) if *called == other.name));
 	(!returns_function).then(|| name.clone())
 }
 
@@ -203,9 +187,7 @@ fn collect_assigned_results(node: &Node, returning: &HashMap<String, String>, re
 			collect_assigned_results(left, returning, results);
 			collect_assigned_results(right, returning, results);
 		}
-		Node::List(items, _, _) => items
-			.iter()
-			.for_each(|item| collect_assigned_results(item, returning, results)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_results(item, returning, results)),
 		_ => {}
 	}
 }
@@ -241,12 +223,7 @@ fn function_parameters(definition: &Definition, higher_order: &HashMap<String, V
 	let names = definition.param_names();
 	let mut used: HashSet<String> = HashSet::new();
 	collect_function_uses(&definition.body, &names, higher_order, &mut used);
-	names
-		.iter()
-		.enumerate()
-		.filter(|(_, name)| used.contains(*name))
-		.map(|(index, _)| index)
-		.collect()
+	names.iter().enumerate().filter(|(_, name)| used.contains(*name)).map(|(index, _)| index).collect()
 }
 
 fn collect_function_uses(
@@ -264,9 +241,9 @@ fn collect_function_uses(
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::words::SWITCH_WORDS.contains(&word.as_str())) => {
 			for item in &items[1..] {
 				match item.drop_meta() {
-					Node::List(pair, _, _) if pair.len() == 2 => pair
-						.iter()
-						.for_each(|part| collect_function_uses(part, names, higher_order, used)),
+					Node::List(pair, _, _) if pair.len() == 2 => {
+						pair.iter().for_each(|part| collect_function_uses(part, names, higher_order, used))
+					}
 					other => collect_function_uses(other, names, higher_order, used),
 				}
 			}
@@ -300,9 +277,7 @@ fn collect_function_uses(
 					}
 				}
 			}
-			items
-				.iter()
-				.for_each(|item| collect_function_uses(item, names, higher_order, used));
+			items.iter().for_each(|item| collect_function_uses(item, names, higher_order, used));
 		}
 		Node::Key(receiver, Op::Dot, method) => {
 			if let Node::List(items, _, _) = method.drop_meta() {
@@ -373,9 +348,7 @@ fn aliases(
 			aliases(left, functions, assigned, found, values);
 			aliases(right, functions, assigned, found, values);
 		}
-		Node::List(items, _, _) => items
-			.iter()
-			.for_each(|item| aliases(item, functions, assigned, found, values)),
+		Node::List(items, _, _) => items.iter().for_each(|item| aliases(item, functions, assigned, found, values)),
 		_ => {}
 	}
 }
@@ -404,9 +377,7 @@ fn bare_name<'a>(value: &'a Node, op: &Op) -> Option<&'a str> {
 fn replace_aliases(node: Node, found: &HashMap<String, String>, values: &HashSet<String>) -> Node {
 	let replaced = |node: Node| replace_aliases(node, found, values);
 	let called = |head: &Node| {
-		head.symbol_name()
-			.and_then(|name| found.get(name))
-			.map(|function| Node::Symbol(function.clone()))
+		head.symbol_name().and_then(|name| found.get(name)).map(|function| Node::Symbol(function.clone()))
 	};
 	match node {
 		Node::Symbol(name) if values.contains(&name) => crate::closures::function_reference(found[&name].clone()),
@@ -424,20 +395,13 @@ fn replace_aliases(node: Node, found: &HashMap<String, String>, values: &HashSet
 		// `h 4` of the alias h: the call of its function, which the earlier passes didn't know h for (card alias-chain)
 		Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && called(&items[0]).is_some() => {
 			let function = called(&items[0]).and_then(|function| function.symbol_name().map(String::from));
-			call(
-				&function.expect("guarded"),
-				items.into_iter().skip(1).map(replaced).collect(),
-			)
+			call(&function.expect("guarded"), items.into_iter().skip(1).map(replaced).collect())
 		}
 		// `h(4)`, read `(h 4)`: the call of its function
 		Node::List(items, Bracket::Round, separator) if items.len() > 1 && called(&items[0]).is_some() => {
 			let head = called(&items[0]).expect("guarded");
 			let arguments = items.into_iter().skip(1).map(replaced);
-			Node::List(
-				std::iter::once(head).chain(arguments).collect(),
-				Bracket::Round,
-				separator,
-			)
+			Node::List(std::iter::once(head).chain(arguments).collect(), Bracket::Round, separator)
 		}
 		other => children_rewritten(other, replaced),
 	}
@@ -477,12 +441,7 @@ impl FunctionArguments {
 		if may_be_function_value(argument) || matches!(argument.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 			return Ok(argument.clone());
 		}
-		Err(crate::closures::needs_a_function(
-			name,
-			Some(param),
-			argument,
-			"a lambda like x => …",
-		))
+		Err(crate::closures::needs_a_function(name, Some(param), argument, "a lambda like x => …"))
 	}
 
 	/// A library word given as a function (`f(is_letter)`, `twice(upper, t)`) is a function calling it with as many
@@ -554,12 +513,7 @@ fn round_calls(node: Node, function_params: &[String]) -> Node {
 			if items.len() > 1
 				&& matches!(items[0].drop_meta(), Node::Symbol(name) if function_params.contains(name)) =>
 		{
-			parens(
-				items
-					.into_iter()
-					.map(|item| round_calls(item, function_params))
-					.collect(),
-			)
+			parens(items.into_iter().map(|item| round_calls(item, function_params)).collect())
 		}
 		other => other.map_children(|child| round_calls(child, function_params)),
 	}
@@ -589,10 +543,8 @@ fn free_variables(definition: &Definition) -> Vec<String> {
 fn with_round_calls(node: Node, higher_order: &HashMap<String, Vec<usize>>) -> Node {
 	if let Some(definition) = Definition::from(&node) {
 		if let Some(indexes) = higher_order.get(&definition.name) {
-			let function_params: Vec<String> = indexes
-				.iter()
-				.filter_map(|index| definition.param_names().get(*index).cloned())
-				.collect();
+			let function_params: Vec<String> =
+				indexes.iter().filter_map(|index| definition.param_names().get(*index).cloned()).collect();
 			let body = round_calls(definition.body.clone(), &function_params);
 			return Definition { body, ..definition }.node();
 		}
@@ -616,10 +568,8 @@ pub fn lower(program: Node) -> Node {
 	if higher_order.is_empty() {
 		return program;
 	}
-	let params: HashMap<String, Vec<String>> = found
-		.iter()
-		.map(|definition| (definition.name.clone(), definition.param_names()))
-		.collect();
+	let params: HashMap<String, Vec<String>> =
+		found.iter().map(|definition| (definition.name.clone(), definition.param_names())).collect();
 	let mut arguments = FunctionArguments {
 		definitions: found.into_iter().map(|definition| definition.name).collect(),
 		higher_order,
@@ -639,13 +589,7 @@ fn aliases_replaced(program: Node, found: &[Definition]) -> Node {
 	let mut assigned_count = HashMap::new();
 	let mut alias_of = HashMap::new();
 	let mut alias_values = HashSet::new();
-	aliases(
-		&program,
-		&functions,
-		&mut assigned_count,
-		&mut alias_of,
-		&mut alias_values,
-	);
+	aliases(&program, &functions, &mut assigned_count, &mut alias_of, &mut alias_values);
 	// an alias assigned once only
 	alias_of.retain(|name, _| assigned_count.get(name) == Some(&1));
 	if alias_of.is_empty() {
@@ -681,16 +625,8 @@ fn with_lambda_definitions_first(program: Node, lambda_definitions: &[Node]) -> 
 		(false, Node::List(statements, bracket, separator))
 			if crate::variable_signals::is_statement_list(bracket, separator) =>
 		{
-			Node::List(
-				[lambda_definitions, statements].concat(),
-				bracket.clone(),
-				separator.clone(),
-			)
+			Node::List([lambda_definitions, statements].concat(), bracket.clone(), separator.clone())
 		}
-		(false, _) => Node::List(
-			[lambda_definitions, &[program]].concat(),
-			Bracket::Round,
-			Separator::Semicolon,
-		),
+		(false, _) => Node::List([lambda_definitions, &[program]].concat(), Bracket::Round, Separator::Semicolon),
 	}
 }

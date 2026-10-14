@@ -42,38 +42,26 @@ pub fn call(
 	};
 	let mut callback_on_values =
 		|index: usize, arguments: Value| callback(index, node_of(&arguments)).map(|node| json_of(&node));
-	warp_runtime::foreign::call(
-		runtime,
-		&module,
-		module_json,
-		member,
-		arguments,
-		&mut callback_on_values,
-	)
-	.map(|value| node_of(&value))
+	warp_runtime::foreign::call(runtime, &module, module_json, member, arguments, &mut callback_on_values)
+		.map(|value| node_of(&value))
 }
 
 /// `lib.f(x)` of a component (src/modules/components.rs), or `handle.method(x)` of a resource it gave: only calls
 fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node, String> {
 	let receiver = match module.drop_meta() {
 		Node::Text(path) | Node::Symbol(path) => path.clone(),
-		handle => json_of(handle)
-			.get("text")
-			.and_then(Value::as_str)
-			.map_or_else(|| handle.serialize(), str::to_string),
+		handle => {
+			json_of(handle).get("text").and_then(Value::as_str).map_or_else(|| handle.serialize(), str::to_string)
+		}
 	};
 	let Value::Array(arguments) = arguments else {
-		return Err(format!(
-			"wasm {receiver}: {member} is a function of the component, call it: {member}(…)"
-		));
+		return Err(format!("wasm {receiver}: {member} is a function of the component, call it: {member}(…)"));
 	};
 	let result = match module.drop_meta() {
 		Node::Text(path) | Node::Symbol(path) => crate::modules::components::call(path, member, arguments),
 		handle => crate::modules::components::call_method(&json_of(handle), member, arguments),
 	};
-	result
-		.map(|value| node_of(&value))
-		.map_err(|failure| format!("wasm {receiver}: {failure}"))
+	result.map(|value| node_of(&value)).map_err(|failure| format!("wasm {receiver}: {failure}"))
 }
 
 pub(crate) fn json_of(node: &Node) -> Value {
@@ -84,9 +72,7 @@ pub(crate) fn json_of(node: &Node) -> Value {
 		Node::Key(key, Op::Colon, value) => serde_json::json!({ key.name(): json_of(value) }),
 		// an object, a handle among them: `{$handle: 7, …}`
 		Node::List(items, Bracket::Curly, _)
-			if items
-				.iter()
-				.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+			if items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
 		{
 			Value::Object(
 				items
@@ -134,10 +120,7 @@ pub(crate) fn node_of(value: &Value) -> Node {
 		}
 		Value::Object(entries) if let Some(character) = codepoint_of(entries) => Node::Char(character),
 		Value::Object(entries) => Node::List(
-			entries
-				.iter()
-				.map(|(key, value)| Node::key(key, node_of(value)))
-				.collect(),
+			entries.iter().map(|(key, value)| Node::key(key, node_of(value))).collect(),
 			Bracket::Curly,
 			Separator::Space,
 		),
@@ -158,11 +141,7 @@ mod tests {
 			vec![
 				Node::key(
 					"items",
-					Node::List(
-						vec![Node::int(1), Node::from(1.25), Node::Empty],
-						Bracket::Square,
-						Separator::Space,
-					),
+					Node::List(vec![Node::int(1), Node::from(1.25), Node::Empty], Bracket::Square, Separator::Space),
 				),
 				Node::key("enabled", Node::int(1)),
 			],

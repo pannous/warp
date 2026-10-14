@@ -10,22 +10,10 @@ const OPEN_AND_PREPARE: &str =
 #[test]
 fn a_sqlite_session_runs_on_handles() {
 	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt)"), 100); // SQLITE_ROW
-	is!(
-		&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_column_int(stmt, 0)"),
-		3
-	);
-	is!(
-		&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_column_text(stmt, 1)"),
-		"warp"
-	);
-	is!(
-		&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_step(stmt)"),
-		101
-	); // SQLITE_DONE
-	is!(
-		&format!("{OPEN_AND_PREPARE}; sqlite3_finalize(stmt); sqlite3_close(db)"),
-		0
-	);
+	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_column_int(stmt, 0)"), 3);
+	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_column_text(stmt, 1)"), "warp");
+	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_step(stmt)"), 101); // SQLITE_DONE
+	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_finalize(stmt); sqlite3_close(db)"), 0);
 }
 
 #[test]
@@ -45,10 +33,7 @@ fn a_null_out_pointer_is_a_loud_error() {
 
 #[test]
 fn an_unknown_handle_is_a_loud_error() {
-	crate::common::fails_with(
-		"use sqlite3; sqlite3_step(42)",
-		"sqlite3_step: 42 is no C handle of this run",
-	);
+	crate::common::fails_with("use sqlite3; sqlite3_step(42)", "sqlite3_step: 42 is no C handle of this run");
 }
 
 // FILE and DIR are handles on every platform, whichever header declares them: glibc's FILE is in bits/types/FILE.h,

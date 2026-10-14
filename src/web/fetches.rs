@@ -31,13 +31,7 @@ thread_local! {
 pub fn start(id: i64, (url, body): Request, timeout: Duration) {
 	let (sender, receiver) = channel();
 	let awaited = format!("fetch {url}");
-	POSTED.with(|posted| {
-		if body.is_some() {
-			posted.borrow_mut().insert(id)
-		} else {
-			posted.borrow_mut().remove(&id)
-		}
-	});
+	POSTED.with(|posted| if body.is_some() { posted.borrow_mut().insert(id) } else { posted.borrow_mut().remove(&id) });
 	std::thread::spawn(move || {
 		sender.send(match body {
 			Some(body) => crate::extensions::utils::post_within(&url, &body, &[], timeout)

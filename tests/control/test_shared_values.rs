@@ -13,19 +13,13 @@ fn a_shared_value_reads_writes_and_adds() {
 
 #[test]
 fn a_go_block_writes_a_shared_value() {
-	is!(
-		"shared done = false; go { sleep(50ms); done = true }; sleep(500ms); done",
-		true
-	);
+	is!("shared done = false; go { sleep(50ms); done = true }; sleep(500ms); done", true);
 	is!("shared hits = 0; jobs = []; for i in 1..5 { jobs.add(go { for j in 1 to 100 { hits += 1 }; 0 }) }; await all jobs; hits", 400);
 }
 
 #[test]
 fn a_function_given_a_shared_value_shares_it() {
-	is!(
-		"shared n = 0; bump(c) := { c += 1; 0 }; await go bump(n); await go bump(n); n",
-		2
-	);
+	is!("shared n = 0; bump(c) := { c += 1; 0 }; await go bump(n); await go bump(n); n", 2);
 }
 
 /// `n = n + 1` on a shared value is the atomic add too: no update of a task is lost

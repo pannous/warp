@@ -4,8 +4,10 @@ use std::path::{Path, PathBuf};
 use warp_runtime::standalone::{embedded_machine_code, standalone_engine, without_machine_code};
 
 const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
-/// samples/quicksort.warp carried 198768 bytes of machine code before tree shaking and deflating (~45 KB after)
-const QUICKSORT_CARRIED_LIMIT: usize = 60_000;
+/// samples/quicksort.warp carried 198768 bytes of machine code before tree shaking and deflating (~45 KB after); it
+/// grew to ~60 KB, and the chunked big-int text (card out-fuel) took it to 60_000: raised to 62_000 by the user, card
+/// samples-quicksort finds what grew it
+const QUICKSORT_CARRIED_LIMIT: usize = 62_000;
 
 /// `warp build --exe` of `source` as <name>.warp; the executable's path
 fn built_executable(name: &str, source: &str) -> PathBuf {
@@ -39,22 +41,14 @@ fn test_executable_exports_only_what_the_stub_calls() {
 	assert_eq!(printed_by(&executable), "49\n");
 	let exports = carried_exports(&executable);
 	assert!(exports.contains(&"main".to_string()), "{exports:?}");
-	assert!(
-		!exports
-			.iter()
-			.any(|name| name == "square" || name == "get_kind" || name == "list_at"),
-		"{exports:?}"
-	);
+	assert!(!exports.iter().any(|name| name == "square" || name == "get_kind" || name == "list_at"), "{exports:?}");
 }
 
 #[test]
 fn test_executable_keeps_its_handlers() {
 	let executable = built_executable("size_on_exit", "on exit { print \"bye\" }\nprint \"hello\"");
 	let printed = printed_by(&executable);
-	assert!(
-		printed.starts_with("hello\n") && printed.ends_with("bye\n"),
-		"{printed}"
-	);
+	assert!(printed.starts_with("hello\n") && printed.ends_with("bye\n"), "{printed}");
 }
 
 #[test]

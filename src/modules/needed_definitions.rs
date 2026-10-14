@@ -68,14 +68,17 @@ pub(crate) fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -
 	if let Some((head, body, _)) = crate::type_tests::function_definition(node) {
 		let mut called_inside = HashSet::new();
 		collect_called_words(&body, is_module_name, &mut called_inside);
-		let mut locals: HashSet<String> = crate::lowering::memoization::head_parameters(&head)
-			.into_iter()
-			.collect();
+		let mut locals: HashSet<String> = crate::lowering::memoization::head_parameters(&head).into_iter().collect();
 		crate::library_words::collect_assigned_names(&body, &mut locals);
 		names.extend(called_inside.into_iter().filter(|name| !locals.contains(name)));
 		return;
 	}
 	let called = |call: &[Node]| call.first().and_then(Node::symbol_name).map(String::from);
+	// `function capitalize`, an item of `methods("hi")`: the function itself needs its definition as a call does
+	if let Some(name) = crate::closures::referenced_function(node) {
+		names.insert(name);
+		return;
+	}
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
 			collect_called_words(receiver, is_module_name, names);
@@ -83,9 +86,7 @@ pub(crate) fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -
 				if !is_module_name(receiver) {
 					names.extend(called(call));
 				}
-				call.iter()
-					.skip(1)
-					.for_each(|argument| collect_called_words(argument, is_module_name, names));
+				call.iter().skip(1).for_each(|argument| collect_called_words(argument, is_module_name, names));
 			}
 		}
 		Node::Key(left, _, right) => {
@@ -96,9 +97,7 @@ pub(crate) fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -
 			if matches!(bracket, Bracket::Round | Bracket::None) && items.len() > 1 {
 				names.extend(called(items));
 			}
-			items
-				.iter()
-				.for_each(|item| collect_called_words(item, is_module_name, names));
+			items.iter().for_each(|item| collect_called_words(item, is_module_name, names));
 		}
 		Node::Type { body, .. } => collect_called_words(body, is_module_name, names),
 		_ => {}
@@ -114,20 +113,24 @@ pub(crate) fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
 			Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator)
 		}
 		meta @ Node::Meta { .. } => meta.under_meta(|node| with_statements_first(node, first)),
-		single => Node::List(
-			first.into_iter().chain(std::iter::once(single)).collect(),
-			Bracket::None,
-			Separator::Newline,
-		),
+		single => {
+			Node::List(first.into_iter().chain(std::iter::once(single)).collect(), Bracket::None, Separator::Newline)
+		}
 	}
 }
 
 pub(crate) fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
-	if definitions.is_empty() {
-		return program;
-	}
+	let needed = needed_definitions(&program, &definitions);
+	with_statements_in_front(program, needed)
+}
+
+/// The definitions the program's calls reach, and those their calls reach in turn
+pub(crate) fn needed_definitions(program: &Node, definitions: &[Node]) -> Vec<Node> {
 	let mut needed: Vec<Node> = vec![];
-	let mut mentioned = called_names(std::slice::from_ref(&program));
+	if definitions.is_empty() {
+		return needed;
+	}
+	let mut mentioned = called_names(std::slice::from_ref(program));
 	loop {
 		let now_needed: Vec<Node> = definitions
 			.iter()
@@ -135,11 +138,15 @@ pub(crate) fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> 
 			.cloned()
 			.collect();
 		if now_needed.len() == needed.len() {
-			break;
+			return needed;
 		}
 		mentioned.extend(called_names(&now_needed));
 		needed = now_needed;
 	}
+}
+
+/// The program with the statements before its own
+pub(crate) fn with_statements_in_front(program: Node, needed: Vec<Node>) -> Node {
 	if needed.is_empty() {
 		return program;
 	}
@@ -161,27 +168,15 @@ pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
-	with_library_words(
-		mentioned_names(statements)
-			.into_iter()
-			.chain(method_names(statements))
-			.collect(),
-	)
+	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).collect())
 }
 
 /// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of
 /// those (`prelude·is_digit`): library_words, which writes them so, runs after the modules are resolved
 pub(crate) fn with_library_words(names: HashSet<String>) -> HashSet<String> {
-	let spelled: Vec<&str> = names
-		.iter()
-		.flat_map(|name| crate::library_words::words_spelled_by(name))
-		.collect();
-	let qualified: Vec<String> = names
-		.iter()
-		.map(String::as_str)
-		.chain(spelled.iter().copied())
-		.filter_map(prelude_name)
-		.collect();
+	let spelled: Vec<&str> = names.iter().flat_map(|name| crate::library_words::words_spelled_by(name)).collect();
+	let qualified: Vec<String> =
+		names.iter().map(String::as_str).chain(spelled.iter().copied()).filter_map(prelude_name).collect();
 	let spelled: Vec<String> = spelled.into_iter().map(str::to_string).collect();
 	names.into_iter().chain(spelled).chain(qualified).collect()
 }
@@ -211,11 +206,8 @@ pub(crate) fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>
 		.filter(|definition| is_global_declaration(definition))
 		.filter_map(name_declared_by)
 		.collect();
-	let shadowed: Vec<String> = declared
-		.iter()
-		.filter(|name| variables.contains(*name) && !settings.contains(name))
-		.cloned()
-		.collect();
+	let shadowed: Vec<String> =
+		declared.iter().filter(|name| variables.contains(*name) && !settings.contains(name)).cloned().collect();
 	renamed_apart(definitions, &shadowed)
 		.into_iter()
 		.map(|definition| {
@@ -246,9 +238,9 @@ pub(crate) fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Nod
 	definitions
 		.into_iter()
 		.map(|definition| {
-			names.iter().fold(definition, |node, name| {
-				renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}"))
-			})
+			names
+				.iter()
+				.fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))
 		})
 		.collect()
 }

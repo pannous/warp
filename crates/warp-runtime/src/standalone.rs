@@ -86,20 +86,11 @@ fn carried_range(executable: &[u8]) -> Option<Range<usize>> {
 
 /// The trailer at the end of `bytes` (after its zero padding): where it starts, and the length of the program it closes
 fn trailer_before(bytes: &[u8]) -> Option<(usize, usize)> {
-	let padding = bytes
-		.iter()
-		.rev()
-		.take(ALIGNMENT - 1)
-		.take_while(|&&byte| byte == 0)
-		.count();
+	let padding = bytes.iter().rev().take(ALIGNMENT - 1).take_while(|&&byte| byte == 0).count();
 	let trailer_start = (bytes.len() - padding).checked_sub(TRAILER_BYTES)?;
 	let trailer: &[u8; TRAILER_BYTES] = bytes[trailer_start..trailer_start + TRAILER_BYTES].try_into().ok()?;
-	(&trailer[8..] == TRAILER_MAGIC).then(|| {
-		(
-			trailer_start,
-			u64::from_le_bytes(trailer[..8].try_into().unwrap()) as usize,
-		)
-	})
+	(&trailer[8..] == TRAILER_MAGIC)
+		.then(|| (trailer_start, u64::from_le_bytes(trailer[..8].try_into().unwrap()) as usize))
 }
 
 /// The machine code the executable at `path` carries, reading only its load commands and end when it carries none
@@ -140,16 +131,9 @@ pub fn run_carried_program() -> Option<i32> {
 /// The carried site in a web view window titled as the executable; `--check` prints its text from a hidden one
 #[cfg(all(feature = "webview", target_os = "macos"))]
 fn show_site(executable: &Path, site: Vec<crate::site_files::SiteFile>) -> i32 {
-	let title = executable
-		.file_stem()
-		.map(|stem| stem.to_string_lossy().into_owned())
-		.unwrap_or_default();
+	let title = executable.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
 	let check = std::env::args().any(|argument| argument == CHECK_FLAG);
-	match crate::webview::show(
-		&title,
-		check,
-		Box::new(move |path| crate::site_files::served(&site, path)),
-	) {
+	match crate::webview::show(&title, check, Box::new(move |path| crate::site_files::served(&site, path))) {
 		Ok(()) => 0,
 		Err(failure) => {
 			eprintln!("{failure}");
@@ -205,9 +189,8 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 
 /// The imports a standalone executable provides: (module, name)
 pub fn provided_imports() -> impl Iterator<Item = (&'static str, &'static str)> {
-	let host_words = crate::host_words::BASIC_HOST_WORDS
-		.into_iter()
-		.map(|word| (crate::host_words::HOST_LIBRARY, word));
+	let host_words =
+		crate::host_words::BASIC_HOST_WORDS.into_iter().map(|word| (crate::host_words::HOST_LIBRARY, word));
 	let libm = crate::libm::libm_names().map(|name| (crate::libm::LIBM, name));
 	host_words.chain(libm).chain([
 		(crate::output::WASI_LIBRARY, crate::output::FD_WRITE),

@@ -45,15 +45,13 @@ impl TaskPool {
 		for number in 0..worker_count() {
 			let state = self.state.clone();
 			let table = table.clone();
-			let worker = std::thread::Builder::new()
-				.name(format!("warp-task-{number}"))
-				.spawn(move || {
-					IN_TASK_WORKER.with(|inside| inside.set(true));
-					while let Some(job) = TaskPool::next(&state, true) {
-						let Some(table) = table.upgrade() else { break };
-						table.run_job(job);
-					}
-				})?;
+			let worker = std::thread::Builder::new().name(format!("warp-task-{number}")).spawn(move || {
+				IN_TASK_WORKER.with(|inside| inside.set(true));
+				while let Some(job) = TaskPool::next(&state, true) {
+					let Some(table) = table.upgrade() else { break };
+					table.run_job(job);
+				}
+			})?;
 			workers.push(worker);
 		}
 		Ok(())

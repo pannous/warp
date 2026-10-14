@@ -24,10 +24,7 @@ pub struct Person {
 
 impl Person {
 	pub fn new(name: &str, age: i64) -> Self {
-		Self {
-			name: name.to_string(),
-			age,
-		}
+		Self { name: name.to_string(), age }
 	}
 }
 
@@ -59,9 +56,7 @@ fn read_string_field(val: &Val, store: &mut Store<()>, instance: &Instance) -> R
 		return Ok(String::new());
 	}
 
-	let memory = instance
-		.get_memory(&mut *store, "memory")
-		.ok_or_else(|| anyhow::anyhow!("no memory"))?;
+	let memory = instance.get_memory(&mut *store, "memory").ok_or_else(|| anyhow::anyhow!("no memory"))?;
 	let mut buf = vec![0u8; len as usize];
 	memory.read(&*store, ptr as usize, &mut buf)?;
 	Ok(String::from_utf8(buf)?)
@@ -73,14 +68,8 @@ fn person_type_def() -> TypeDef {
 		name: "Person".to_string(),
 		tag: 100, // arbitrary tag for testing
 		fields: vec![
-			FieldDef {
-				name: "name".to_string(),
-				type_name: "String".to_string(),
-			},
-			FieldDef {
-				name: "age".to_string(),
-				type_name: "i64".to_string(),
-			},
+			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
+			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
 		],
 		wasm_type_idx: None,
 	}
@@ -92,14 +81,8 @@ fn point_type_def() -> TypeDef {
 		name: "Point".to_string(),
 		tag: 101, // arbitrary tag for testing
 		fields: vec![
-			FieldDef {
-				name: "x".to_string(),
-				type_name: "i64".to_string(),
-			},
-			FieldDef {
-				name: "y".to_string(),
-				type_name: "i64".to_string(),
-			},
+			FieldDef { name: "x".to_string(), type_name: "i64".to_string() },
+			FieldDef { name: "y".to_string(), type_name: "i64".to_string() },
 		],
 		wasm_type_idx: None,
 	}
@@ -118,9 +101,7 @@ fn run_wasm_gc(wasm_bytes: &[u8]) -> Result<(Store<()>, Instance, Val)> {
 	let linker = Linker::new(&engine);
 	let instance = linker.instantiate(&mut store, &module)?;
 
-	let main = instance
-		.get_func(&mut store, "main")
-		.ok_or_else(|| anyhow::anyhow!("no main"))?;
+	let main = instance.get_func(&mut store, "main").ok_or_else(|| anyhow::anyhow!("no main"))?;
 
 	let mut results = vec![Val::I32(0)];
 	main.call(&mut store, &[], &mut results)?;
@@ -133,10 +114,8 @@ fn test_raw_person_struct() -> Result<()> {
 	let expected = Person::new("Alice", 30);
 
 	// Emit WASM using emitter
-	let wasm_bytes = WasmGcEmitter::emit_raw_struct(
-		&person_type_def(),
-		&[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)],
-	);
+	let wasm_bytes =
+		WasmGcEmitter::emit_raw_struct(&person_type_def(), &[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)]);
 
 	let (mut store, instance, result) = run_wasm_gc(&wasm_bytes)?;
 
@@ -154,10 +133,8 @@ fn test_class_instance_raw() -> Result<()> {
 	let alice = Person::new("Alice", 30);
 
 	// Emit via emitter
-	let wasm_bytes = WasmGcEmitter::emit_raw_struct(
-		&person_type_def(),
-		&[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)],
-	);
+	let wasm_bytes =
+		WasmGcEmitter::emit_raw_struct(&person_type_def(), &[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)]);
 
 	let (mut store, instance, result) = run_wasm_gc(&wasm_bytes)?;
 	let person = person_from_gc(&result, &mut store, &instance)?;
@@ -182,10 +159,8 @@ gc_struct! {
 #[test]
 fn test_gc_struct_macro() -> Result<()> {
 	// Emit WASM using emitter
-	let wasm_bytes = WasmGcEmitter::emit_raw_struct(
-		&point_type_def(),
-		&[RawFieldValue::from(10i64), RawFieldValue::from(20i64)],
-	);
+	let wasm_bytes =
+		WasmGcEmitter::emit_raw_struct(&point_type_def(), &[RawFieldValue::from(10i64), RawFieldValue::from(20i64)]);
 
 	let (store, instance, result) = run_wasm_gc(&wasm_bytes)?;
 
@@ -207,10 +182,8 @@ fn test_gc_struct_macro() -> Result<()> {
 #[test]
 fn test_gc_object_index_access() -> Result<()> {
 	// Emit WASM using emitter
-	let wasm_bytes = WasmGcEmitter::emit_raw_struct(
-		&point_type_def(),
-		&[RawFieldValue::from(42i64), RawFieldValue::from(99i64)],
-	);
+	let wasm_bytes =
+		WasmGcEmitter::emit_raw_struct(&point_type_def(), &[RawFieldValue::from(42i64), RawFieldValue::from(99i64)]);
 
 	let (store, instance, result) = run_wasm_gc(&wasm_bytes)?;
 

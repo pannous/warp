@@ -15,7 +15,7 @@ fn sharps_and_flats_are_notes() {
 fn every_octave_is_a_note() {
 	is!("use sound\nA0", 27.5);
 	is!("use sound\nC8", 4186.01);
-	is!("use sound\nround(note(\"G#7\") * 100) == round(G#7 * 100)", true);
+	is!("use sound\nround(note(\"G#7\").hertz() * 100) == round(G#7 * 100)", true);
 }
 
 #[test]

@@ -4,16 +4,9 @@
 
 /// The WAV paths a run of `program` reports on stderr (headless: `sound <seconds> s: <path>`)
 fn sound_paths(tmpdir: &std::path::Path, program: &str) -> Vec<String> {
-	let run = crate::common::warp_command()
-		.env("TMPDIR", tmpdir)
-		.args(["--no-ask", "eval", program])
-		.output()
-		.unwrap();
+	let run = crate::common::warp_command().env("TMPDIR", tmpdir).args(["--no-ask", "eval", program]).output().unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr).into_owned();
-	errors
-		.lines()
-		.filter_map(|line| line.split_once(" s: ").map(|(_, path)| path.to_string()))
-		.collect()
+	errors.lines().filter_map(|line| line.split_once(" s: ").map(|(_, path)| path.to_string())).collect()
 }
 
 #[test]
@@ -25,8 +18,5 @@ fn each_run_writes_wavs_of_its_own() {
 	assert_eq!((first.len(), second.len()), (2, 2), "{first:?} {second:?}");
 	assert_ne!(first[0], first[1]);
 	assert!(first.iter().all(|path| !second.contains(path)), "{first:?} {second:?}");
-	assert!(first
-		.iter()
-		.chain(&second)
-		.all(|path| std::path::Path::new(path).exists()));
+	assert!(first.iter().chain(&second).all(|path| std::path::Path::new(path).exists()));
 }

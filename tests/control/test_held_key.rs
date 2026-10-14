@@ -26,13 +26,8 @@ fn held_key_names_the_key_held_now() {
 fn held_key_compares_with_the_key_words() {
 	// whatever key another test's `emit key` holds now, each word reads as its name
 	is!(r#"held_key != ESC or held_key == "Escape""#, true);
-	let lowered = warp::pipeline::lower("held_key == LEFT or ESC == held_key")
-		.expect("lowers")
-		.serialize();
-	assert!(
-		lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#""Escape""#),
-		"{lowered}"
-	);
+	let lowered = warp::pipeline::lower("held_key == LEFT or ESC == held_key").expect("lowers").serialize();
+	assert!(lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#""Escape""#), "{lowered}");
 	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval("held_key == LEFTT");
 	let warned = warp::errors::diagnostic::take_warnings()

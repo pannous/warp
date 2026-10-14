@@ -25,11 +25,8 @@ const BODY_PLACEHOLDER: &str = "memo_body";
 pub fn lower(program: Node) -> Node {
 	let context = crate::analyzer::function_context(&program);
 	// the shape first: the effects and variables of the whole program only when some function has it
-	let candidates: Vec<&UserFunctionDef> = context
-		.user_functions
-		.values()
-		.filter(|function| has_memoizable_shape(function))
-		.collect();
+	let candidates: Vec<&UserFunctionDef> =
+		context.user_functions.values().filter(|function| has_memoizable_shape(function)).collect();
 	if candidates.is_empty() {
 		return program;
 	}
@@ -76,9 +73,7 @@ fn has_memoizable_shape(function: &UserFunctionDef) -> bool {
 
 /// A function of that shape that is pure (but for dividing) and reads no variable of main
 fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope) -> bool {
-	report
-		.effects_of(&function.name)
-		.is_some_and(|effects| effects.is_subset_of(EffectSet::of(&[Effect::Div])))
+	report.effects_of(&function.name).is_some_and(|effects| effects.is_subset_of(EffectSet::of(&[Effect::Div])))
 		&& captured_variables(function, main).is_empty()
 }
 
@@ -92,10 +87,7 @@ pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
 	match node {
 		Node::Meta { node: inner, data } => {
 			let data = data.clone();
-			wrapped(definition_parts(inner), move |node| Node::Meta {
-				node: Box::new(node),
-				data: data.clone(),
-			})
+			wrapped(definition_parts(inner), move |node| Node::Meta { node: Box::new(node), data: data.clone() })
 		}
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if *op == Op::Define || is_call_head(head) => {
 			key_parts(head, *op, body)
@@ -134,11 +126,7 @@ fn keyword_definition_parts(definition: &Node) -> Option<(Node, Node, Rebuild)> 
 }
 
 fn key_parts(head: &Node, op: Op, body: &Node) -> Option<(Node, Node, Rebuild)> {
-	Some((
-		head.clone(),
-		body.clone(),
-		Box::new(move |head, body| key(head, op, body)),
-	))
+	Some((head.clone(), body.clone(), Box::new(move |head, body| key(head, op, body))))
 }
 
 /// The parts of a definition rebuilt inside what `wrap` makes of it
@@ -170,9 +158,7 @@ fn rewritten(node: Node, memoized: &[String]) -> Node {
 fn cached(node: &Node, memoized: &[String]) -> Option<Node> {
 	if let Some((head, body, make)) = definition_parts(node) {
 		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
-			let id = items
-				.first()
-				.and_then(|name| memoized.iter().position(|memo| *memo == name.drop_meta().name()));
+			let id = items.first().and_then(|name| memoized.iter().position(|memo| *memo == name.drop_meta().name()));
 			if let ([_, param], Some(id)) = (items.as_slice(), id) {
 				let template = crate::warp_parser::parse(&format!(
 					"if {MEMO_KNOWN}({id}, {ARGUMENT_PLACEHOLDER}) then {MEMO_VALUE}({id}, {ARGUMENT_PLACEHOLDER}) else {MEMO_STORE}({id}, {ARGUMENT_PLACEHOLDER}, {BODY_PLACEHOLDER})"));
@@ -180,11 +166,8 @@ fn cached(node: &Node, memoized: &[String]) -> Option<Node> {
 					Node::Key(name, _, _) => name.drop_meta().name(), // `n: int`
 					other => other.name(),
 				});
-				let cached_body = substitute(
-					substitute(template, ARGUMENT_PLACEHOLDER, &argument),
-					BODY_PLACEHOLDER,
-					&body,
-				);
+				let cached_body =
+					substitute(substitute(template, ARGUMENT_PLACEHOLDER, &argument), BODY_PLACEHOLDER, &body);
 				return Some(make(head.clone(), cached_body));
 			}
 		}

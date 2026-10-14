@@ -7,9 +7,7 @@ use warp::errors::diagnostic::take_warnings;
 fn test_meaningless_modifiers_are_skipped_with_a_note() {
 	take_warnings();
 	is!("public static fun f(){3}; f()", 3);
-	assert!(take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("public has no meaning in warp")));
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("public has no meaning in warp")));
 	is!("private x = 4; x + 1", 5);
 	is!("public def g(x){x*2}; g(5)", 10);
 }

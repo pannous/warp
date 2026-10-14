@@ -4,10 +4,7 @@ use warp::*;
 
 #[test]
 fn a_list_keeps_its_empty_items() {
-	is!(
-		"[1, \"a\", ø, \"z\"]",
-		list(vec![int(1), text("a"), Node::Empty, text("z")])
-	);
+	is!("[1, \"a\", ø, \"z\"]", list(vec![int(1), text("a"), Node::Empty, text("z")]));
 	is!("[ø]", list(vec![Node::Empty]));
 }
 

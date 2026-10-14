@@ -124,11 +124,7 @@ struct Words {
 impl Words {
 	fn of(program: &Node, defined: &HashSet<String>) -> Words {
 		let module_words = crate::compiler::compile_context::read(|context| context.module_definitions.clone());
-		let mut words = Words {
-			help: BTreeMap::new(),
-			dump: BTreeMap::new(),
-			own_help: defined.contains(HELP_WORD),
-		};
+		let mut words = Words { help: BTreeMap::new(), dump: BTreeMap::new(), own_help: defined.contains(HELP_WORD) };
 		let used_modules = crate::modules::std_module_names().filter(|module| {
 			*module != crate::modules::PRELUDE_MODULE
 				&& crate::modules::std_module_definitions(module)
@@ -139,9 +135,7 @@ impl Words {
 				let docs = crate::modules::std_docs::word_help(module, name);
 				words.help.insert(name.clone(), docs.unwrap_or_else(|| name.clone()));
 				let definition = crate::modules::std_docs::word_definition(module, name);
-				words
-					.dump
-					.extend(definition.map(|definition| (name.clone(), definition)));
+				words.dump.extend(definition.map(|definition| (name.clone(), definition)));
 			}
 		}
 		for (name, function) in super::reflection::user_functions(program) {
@@ -164,10 +158,7 @@ impl Words {
 		}
 		if let Node::Key(subject, Op::Dot, word) = node.drop_meta() {
 			if word.symbol_name() == Some(DUMP_WORD) {
-				if let Some(answer) = self
-					.function_named(subject)
-					.and_then(|name| self.lookup(&self.dump, name))
-				{
+				if let Some(answer) = self.function_named(subject).and_then(|name| self.lookup(&self.dump, name)) {
 					return answer;
 				}
 			}
@@ -212,10 +203,7 @@ impl Words {
 		if table.is_empty() {
 			return None;
 		}
-		let entries = table
-			.iter()
-			.map(|(name, answer)| key(text(name), Op::Colon, text(answer)))
-			.collect();
+		let entries = table.iter().map(|(name, answer)| key(text(name), Op::Colon, text(answer))).collect();
 		let table = Node::List(entries, Bracket::Curly, Separator::Space);
 		Some(filled(LOOKUP_TEMPLATE, [("TABLE", table), ("NAME", name)]))
 	}

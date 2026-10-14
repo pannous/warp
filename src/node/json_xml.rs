@@ -52,9 +52,9 @@ impl Node {
 			False => Value::Bool(false),
 			Empty => Value::Null,
 			Node::Number(Number::Int(n)) => Value::Number((*n).into()),
-			Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f)
-				.map(Value::Number)
-				.unwrap_or(Value::Null),
+			Node::Number(Number::Float(f)) => {
+				serde_json::Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null)
+			}
 			Node::Number(n) => Value::String(n.to_string()),
 			Text(s) | Symbol(s) => Value::String(s.clone()),
 			Char(c) => Value::String(c.to_string()),
@@ -196,10 +196,5 @@ fn insert_json_entry(map: &mut Map<String, Value>, entry: &Node) {
 }
 
 fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value {
-	Value::Object(
-		entries
-			.into_iter()
-			.map(|(key, value)| (key.to_string(), value))
-			.collect(),
-	)
+	Value::Object(entries.into_iter().map(|(key, value)| (key.to_string(), value)).collect())
 }

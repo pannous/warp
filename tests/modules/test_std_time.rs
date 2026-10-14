@@ -4,14 +4,8 @@ use warp::warp_parser::parse;
 
 #[test]
 fn dates_of_milliseconds() {
-	is!(
-		"use time; d = date_of(0); [d.year, d.month, d.day]",
-		parse("[1970 1 1]")
-	);
-	is!(
-		"use time; d = date_of(951782400000); [d.year, d.month, d.day]",
-		parse("[2000 2 29]")
-	);
+	is!("use time; d = date_of(0); [d.year, d.month, d.day]", parse("[1970 1 1]"));
+	is!("use time; d = date_of(951782400000); [d.year, d.month, d.day]", parse("[2000 2 29]"));
 	is!("use time; weekday(0)", 4);
 }
 
@@ -22,10 +16,7 @@ fn today_is_a_date_after_2025() {
 
 #[test]
 fn date_arithmetic() {
-	is!(
-		"use time; d = date_of(add_days(0, 31)); [d.month, d.day]",
-		parse("[2 1]")
-	);
+	is!("use time; d = date_of(add_days(0, 31)); [d.month, d.day]", parse("[2 1]"));
 	is!("use time; days_between(0, 951782400000)", 11016);
 }
 
@@ -42,10 +33,7 @@ fn use_time_parses_dates() {
 	is!("use time; parse_date(\"1970-01-01\")", 0);
 	is!("use time; parse_date(\"2026-10-07\")", 1791331200000i64);
 	is!("use time; format_date(parse_date(\"2000-02-29\"))", "2000-02-29");
-	is!(
-		"use time; days_between(parse_date(\"2026-01-01\"), parse_date(\"2026-12-25\"))",
-		358
-	);
+	is!("use time; days_between(parse_date(\"2026-01-01\"), parse_date(\"2026-12-25\"))", 358);
 }
 
 #[test]
@@ -57,10 +45,7 @@ fn format_duration_in_the_largest_units() {
 
 #[test]
 fn use_time_knows_leap_years_and_month_lengths() {
-	is!(
-		"use time; [is_leap_year(2024), is_leap_year(1900), is_leap_year(2000)]",
-		warp::ints(vec![1, 0, 1])
-	);
+	is!("use time; [is_leap_year(2024), is_leap_year(1900), is_leap_year(2000)]", warp::ints(vec![1, 0, 1]));
 	is!(
 		"use time; [days_in_month(2024, 2), days_in_month(2023, 2), days_in_month(2024, 4), days_in_month(2024, 12)]",
 		warp::ints(vec![29, 28, 30, 31])

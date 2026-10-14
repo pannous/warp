@@ -1,15 +1,8 @@
 //! The command line's flags: hints and warning levels, strictness, the sandbox, compile flags
 use super::*;
 
-pub(crate) const COMPILE_FLAGS: [&str; 7] = [
-	EXE_FLAG,
-	WASM_FLAG,
-	AOT_FLAG,
-	SITE_FLAG,
-	WIT_FLAG,
-	COMPONENT_FLAG,
-	WAGI_FLAG,
-];
+pub(crate) const COMPILE_FLAGS: [&str; 7] =
+	[EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 /// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
 pub(crate) const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
@@ -28,9 +21,7 @@ pub(crate) const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WA
 /// program instead (card top-level)
 pub(crate) fn command_argument<'a>(arg_string: &'a str, command: &str) -> Option<&'a str> {
 	let argument = arg_string.strip_prefix(command.trim_end())?.strip_prefix(' ')?;
-	let assigned = ["=", ":="]
-		.iter()
-		.any(|operator| argument.trim_start().starts_with(operator));
+	let assigned = ["=", ":="].iter().any(|operator| argument.trim_start().starts_with(operator));
 	(!assigned).then_some(argument)
 }
 
@@ -39,10 +30,7 @@ pub(crate) fn command_argument<'a>(arg_string: &'a str, command: &str) -> Option
 pub(crate) fn apply_flags(args: &mut Vec<String>) {
 	// `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
 	if let Some(flag) = args.iter().position(|arg| arg == "--fuel") {
-		match args
-			.get(flag + 1)
-			.and_then(|steps| steps.replace('_', "").parse::<u64>().ok())
-		{
+		match args.get(flag + 1).and_then(|steps| steps.replace('_', "").parse::<u64>().ok()) {
 			Some(steps) => util::set_fuel_budget(steps),
 			None => {
 				eprintln!("--fuel needs a number of steps, e.g. --fuel 100000000000");
@@ -57,21 +45,11 @@ pub(crate) fn apply_flags(args: &mut Vec<String>) {
 		diagnostic::set_warning_mode(diagnostic::WarningMode::Strict(level));
 	}
 
-	let no_hints = args
-		.iter()
-		.position(|arg| arg == NO_HINTS_FLAG)
-		.map(|flag| args.remove(flag))
-		.is_some();
+	let no_hints = args.iter().position(|arg| arg == NO_HINTS_FLAG).map(|flag| args.remove(flag)).is_some();
 	let hints_variable = env::var(HINTS_VARIABLE).ok();
-	let hints_wanted = hints_variable
-		.as_deref()
-		.is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
+	let hints_wanted = hints_variable.as_deref().is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
 	let hints_shown = hints_wanted && !no_hints;
-	let fewest_shown = if hints_shown {
-		diagnostic::Level::Hint
-	} else {
-		diagnostic::Level::Weak
-	};
+	let fewest_shown = if hints_shown { diagnostic::Level::Hint } else { diagnostic::Level::Weak };
 	let shown = level_flag(args, WARNINGS_FLAG, fewest_shown).unwrap_or(fewest_shown);
 	diagnostic::show_from(shown);
 	if shown == diagnostic::Level::Hint && hints_variable.is_none() {
@@ -79,11 +57,7 @@ pub(crate) fn apply_flags(args: &mut Vec<String>) {
 	}
 
 	// "got it?" is asked on the terminal after a warning or note unless nobody is there to answer
-	let no_ask = args
-		.iter()
-		.position(|arg| arg == NO_ASK_FLAG)
-		.map(|flag| args.remove(flag))
-		.is_some();
+	let no_ask = args.iter().position(|arg| arg == NO_ASK_FLAG).map(|flag| args.remove(flag)).is_some();
 	if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
 		diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
 	}
@@ -98,18 +72,12 @@ pub(crate) fn apply_flags(args: &mut Vec<String>) {
 /// unknown level
 #[cfg(not(test))]
 pub(crate) fn level_flag(args: &mut Vec<String>, flag: &str, bare: diagnostic::Level) -> Option<diagnostic::Level> {
-	let at = args
-		.iter()
-		.position(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))?;
+	let at = args.iter().position(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))?;
 	let given = match args.remove(at).split_once('=') {
 		Some((_, name)) => Some(name.to_string()),
-		None => args
-			.get(at)
-			.filter(|name| diagnostic::Level::named(name).is_some())
-			.cloned()
-			.inspect(|_| {
-				args.remove(at);
-			}),
+		None => args.get(at).filter(|name| diagnostic::Level::named(name).is_some()).cloned().inspect(|_| {
+			args.remove(at);
+		}),
 	};
 	let Some(name) = given else {
 		return Some(bare);
@@ -139,10 +107,7 @@ pub(crate) fn tip_hiding_hints_at_exit() {
 /// The compile flags `arguments` start with, in any order, and the arguments after them
 pub(crate) fn leading_flags(mut arguments: String) -> (Vec<&'static str>, String) {
 	let mut flags = vec![];
-	while let Some(flag) = COMPILE_FLAGS
-		.into_iter()
-		.find(|flag| arguments.split_whitespace().next() == Some(flag))
-	{
+	while let Some(flag) = COMPILE_FLAGS.into_iter().find(|flag| arguments.split_whitespace().next() == Some(flag)) {
 		flags.push(flag);
 		arguments = arguments[flag.len()..].trim_start().to_string();
 	}

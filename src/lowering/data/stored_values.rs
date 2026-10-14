@@ -44,11 +44,7 @@ const VALUE_PLACEHOLDER: &str = "storage_value";
 
 pub fn lower(program: Node) -> Node {
 	let stores = stores_used(&program);
-	let program = if stores.is_empty() {
-		program
-	} else {
-		storage_accesses(program, &stores)
-	};
+	let program = if stores.is_empty() { program } else { storage_accesses(program, &stores) };
 	let stores = crate::warp_parser::mentions(&program, STORED_WORD)
 		&& !crate::soft_keywords::program_names(&program, STORED_WORD);
 	let dev = crate::pipeline::compile_mode().for_dev;
@@ -62,11 +58,7 @@ pub fn lower(program: Node) -> Node {
 	match program {
 		meta @ Node::Meta { .. } => meta.under_meta(lower),
 		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			let changed = if dev {
-				changed_names(&statements)
-			} else {
-				HashSet::new()
-			};
+			let changed = if dev { changed_names(&statements) } else { HashSet::new() };
 			let mut kept_names = HashSet::new();
 			let statements = statements
 				.into_iter()
@@ -147,9 +139,7 @@ fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
 		&format!("{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"),
 		[(DEFAULT_PLACEHOLDER, default.clone())],
 	);
-	let save = parse(&format!(
-		"on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"
-	));
+	let save = parse(&format!("on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"));
 	vec![load, save]
 }
 
@@ -188,10 +178,8 @@ fn changed_names(statements: &[Node]) -> HashSet<String> {
 /// The store words the program uses and does not name itself, with the file of each store
 fn stores_used(program: &Node) -> Vec<(&'static str, String)> {
 	let (local, database) = (store_file(), database_file());
-	let words = LOCAL_WORDS
-		.iter()
-		.map(|word| (*word, local.clone()))
-		.chain([(SESSION_WORD, SESSION_STORE.to_string())]);
+	let words =
+		LOCAL_WORDS.iter().map(|word| (*word, local.clone())).chain([(SESSION_WORD, SESSION_STORE.to_string())]);
 	let words = words.chain([(DATABASE_WORD, database)]);
 	words
 		.filter(|(word, _)| {
@@ -209,12 +197,7 @@ fn storage_access(node: &Node, stores: &[(&str, String)]) -> Option<Node> {
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign, value) => {
 			let (key, file) = entry_key(target, stores)?;
-			Some(store_call(
-				"save",
-				Some(key),
-				Some(storage_accesses(value.as_ref().clone(), stores)),
-				file,
-			))
+			Some(store_call("save", Some(key), Some(storage_accesses(value.as_ref().clone(), stores)), file))
 		}
 		Node::List(items, bracket, separator) => match items.as_slice() {
 			[word, target] if word.is_symbol(DELETE_WORD) => {
@@ -253,10 +236,7 @@ fn entry_key<'a>(target: &Node, stores: &'a [(&str, String)]) -> Option<(Node, &
 
 /// The file of the store a word names
 fn file_of<'a>(word: &Node, stores: &'a [(&str, String)]) -> Option<&'a str> {
-	stores
-		.iter()
-		.find(|(name, _)| word.is_symbol(name))
-		.map(|(_, file)| file.as_str())
+	stores.iter().find(|(name, _)| word.is_symbol(name)).map(|(_, file)| file.as_str())
 }
 
 /// `std_io("store", member, [key, value, file])`, the key and the value given
@@ -269,9 +249,6 @@ fn store_call(member: &str, key: Option<Node>, value: Option<Node>, file: &str) 
 		.chain([format!("{file:?}")])
 		.collect();
 	let call = parse(&format!("std_io(\"store\", \"{member}\", [{}])", arguments.join(", ")));
-	let values = given
-		.into_iter()
-		.filter_map(|(name, node)| Some((name.to_string(), node?)))
-		.collect();
+	let values = given.into_iter().filter_map(|(name, node)| Some((name.to_string(), node?))).collect();
 	crate::law::substitute(&call, &values)
 }

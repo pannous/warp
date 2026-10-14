@@ -71,10 +71,7 @@ fn test_law_catches_a_false_property() {
 
 #[test]
 fn test_hidden_side_effect_is_rejected() {
-	fails_with(
-		"log(x) := puts x\nsquare(x) := log(x) ! Pure\nsquare(3)",
-		"square → log → puts",
-	);
+	fails_with("log(x) := puts x\nsquare(x) := log(x) ! Pure\nsquare(3)", "square → log → puts");
 }
 
 #[test]
@@ -175,10 +172,7 @@ fn test_braceless_call_in_argument_is_ambiguous() {
 	// wiki/precedence.md: square(3 + square 3) or (square 3) + square 3
 	fails_with("square := it*it; square 3 + square 3", "ambiguous");
 	// wiki/Bad.md: would silently be fib(it-1 + fib(it-2)); was `Undefined variable: it`
-	fails_with(
-		"fib := it<2 ? it : fib it-1 + fib it-2; fib 10",
-		"fib(it - 1) + fib(it - 2)",
-	);
+	fails_with("fib := it<2 ? it : fib it-1 + fib it-2; fib 10", "fib(it - 1) + fib(it - 2)");
 	is!("fib := it<2 ? it : fib(it-1) + fib(it-2); fib 10", 55);
 }
 
@@ -519,67 +513,35 @@ fn test_no_implicit_time_zone() {
 fn test_repeated_local_time_needs_disambiguation() {
 	// Python: datetime(2030,10,27,2,30,tzinfo=ZoneInfo("Europe/Berlin")) silently takes fold=0; JS Date takes one silently
 	fails_with("2030-10-27T02:30[Europe/Berlin]", "occurs twice");
-	fails_with(
-		"2030-10-27T02:30[Europe/Berlin]",
-		"2030-10-27T02:30+02:00[Europe/Berlin] (earlier)",
-	); // fix-its name both instants
-	fails_with(
-		"2030-10-27T02:30[Europe/Berlin]",
-		"2030-10-27T02:30+01:00[Europe/Berlin] (later)",
-	);
+	fails_with("2030-10-27T02:30[Europe/Berlin]", "2030-10-27T02:30+02:00[Europe/Berlin] (earlier)"); // fix-its name both instants
+	fails_with("2030-10-27T02:30[Europe/Berlin]", "2030-10-27T02:30+01:00[Europe/Berlin] (later)");
 	is!("t=2030-10-27T02:30+02:00[Europe/Berlin]; t.offset", 7200); // the RFC 9557 offset picks one
-	is!(
-		"t=zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: earlier); t.offset",
-		7200
-	);
-	is!(
-		"t=zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: later); t.offset",
-		3600
-	);
-	fails_with(
-		"zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: reject)",
-		"occurs twice",
-	);
+	is!("t=zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: earlier); t.offset", 7200);
+	is!("t=zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: later); t.offset", 3600);
+	fails_with("zoned(2030-10-27T02:30, \"Europe/Berlin\", disambiguation: reject)", "occurs twice");
 }
 
 #[test]
 fn test_skipped_local_time_can_be_chosen_explicitly() {
-	fails_with(
-		"2030-03-31T02:30[Europe/Berlin]",
-		"skipped by a daylight saving transition",
-	); // Python: silently 01:30 UTC
-	is!(
-		"t=zoned(2030-03-31T02:30, \"Europe/Berlin\", disambiguation: earlier); t.hour",
-		1
-	); // Temporal: 01:30+01:00
-	is!(
-		"t=zoned(2030-03-31T02:30, \"Europe/Berlin\", disambiguation: later); t.hour",
-		3
-	); // Temporal: 03:30+02:00
+	fails_with("2030-03-31T02:30[Europe/Berlin]", "skipped by a daylight saving transition"); // Python: silently 01:30 UTC
+	is!("t=zoned(2030-03-31T02:30, \"Europe/Berlin\", disambiguation: earlier); t.hour", 1); // Temporal: 01:30+01:00
+	is!("t=zoned(2030-03-31T02:30, \"Europe/Berlin\", disambiguation: later); t.hour", 3);
+	// Temporal: 03:30+02:00
 }
 
 #[test]
 fn test_zoned_time_records_its_rules_version() {
 	is!("t=2030-07-01T10:00[Europe/Berlin]; t.tzdata", "warp-2026a");
-	is!(
-		"t=2030-07-01T10:00+02:00[Europe/Berlin][_tzdata=warp-2026a]; t.hour",
-		10
-	); // RFC 9557 suffix round-trips
+	is!("t=2030-07-01T10:00+02:00[Europe/Berlin][_tzdata=warp-2026a]; t.hour", 10);
+	// RFC 9557 suffix round-trips
 }
 
-static BERLIN_WITHOUT_DST: [warp::time::Zone; 1] = [warp::time::calendar::zone(
-	"Europe/Berlin",
-	3600,
-	warp::time::calendar::Dst::None,
-)];
+static BERLIN_WITHOUT_DST: [warp::time::Zone; 1] =
+	[warp::time::calendar::zone("Europe/Berlin", 3600, warp::time::calendar::Dst::None)];
 /// Simulated rule change: the EU abolishes daylight saving before 2030
 static RULES_WITHOUT_DST: warp::time::TzRules = warp::time::TzRules {
 	version: "sim-2031a",
-	published: warp::time::calendar::Date {
-		year: 2031,
-		month: 1,
-		day: 1,
-	},
+	published: warp::time::calendar::Date { year: 2031, month: 1, day: 1 },
 	zones: &BERLIN_WITHOUT_DST,
 };
 
@@ -603,18 +565,12 @@ fn test_calendar_day_is_not_24_hours() {
 	// Temporal: add({days:1}) keeps the wall time, add({hours:24}) the elapsed time; moment.js add(1,'day') likewise
 	is!("t=2030-03-30T12:00[Europe/Berlin] + 1 day; t.hour", 12);
 	is!("t=2030-03-30T12:00[Europe/Berlin] + 24 hours; t.hour", 13);
-	is!(
-		"(2030-03-30T12:00[Europe/Berlin] + 1 day) - 2030-03-30T12:00[Europe/Berlin] == 23 hours",
-		true
-	);
+	is!("(2030-03-30T12:00[Europe/Berlin] + 1 day) - 2030-03-30T12:00[Europe/Berlin] == 23 hours", true);
 	fails_with("1 day == 24 hours", "equal on some dates and not on others");
 	is!("1 hour == 60 minutes", true);
 	is!("1 day == 2 days", false);
 	fails_with("2030-10-26T02:30[Europe/Berlin] + 1 day", "occurs twice"); // lands in the repeated hour
-	is!(
-		"t=add(2030-10-26T02:30[Europe/Berlin], 1 day, disambiguation: later); t.offset",
-		3600
-	);
+	is!("t=add(2030-10-26T02:30[Europe/Berlin], 1 day, disambiguation: later); t.offset", 3600);
 }
 
 #[test]
@@ -744,14 +700,8 @@ fn test_sql_holes_are_parameters_not_text() {
 
 #[test]
 fn test_sql_from_built_text_is_rejected() {
-	fails_with(
-		"name=\"x\";sql(\"SELECT * FROM t WHERE name='\" + name + \"'\")",
-		"sql takes a literal template",
-	);
-	fails_with(
-		"name=\"x\";sql \"SELECT * FROM t WHERE name = '$name'\"",
-		"a parameter is a value",
-	);
+	fails_with("name=\"x\";sql(\"SELECT * FROM t WHERE name='\" + name + \"'\")", "sql takes a literal template");
+	fails_with("name=\"x\";sql \"SELECT * FROM t WHERE name = '$name'\"", "a parameter is a value");
 	fails_with("q=\"SELECT * FROM users\";execute q", "execute takes a sql template");
 }
 
@@ -769,10 +719,7 @@ fn test_shell_holes_are_whole_arguments() {
 
 #[test]
 fn test_running_queries_and_commands_needs_a_capability() {
-	is!(
-		"lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\"\neffects of lookup",
-		Node::Symbol("IO".into())
-	);
+	is!("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\"\neffects of lookup", Node::Symbol("IO".into()));
 	// P88 (user 2026-10-05): the capabilities are granted for now; no host runs execute yet: still loud
 	#[cfg(feature = "native")] // the browser runs no processes
 	is!("c=sh \"echo hi\";exec c", "hi"); // runs natively now (card read-chron)
@@ -822,10 +769,7 @@ fn test_modulo_and_remainder_are_both_named() {
 fn test_negative_modulo_is_linted() {
 	let warnings = warp::analyzer::lint(&warp::parse("-7 % 3"));
 	let message = &warnings.first().expect("a warning for a negative % operand").message;
-	assert!(
-		message.contains("`-7 % 3` is 2") && message.contains("give -1") && message.contains("rem"),
-		"{message}"
-	);
+	assert!(message.contains("`-7 % 3` is 2") && message.contains("give -1") && message.contains("rem"), "{message}");
 	assert!(!warp::analyzer::lint(&warp::parse("x=5; y=-x % 3")).is_empty());
 	assert!(warp::analyzer::lint(&warp::parse("7 % 3")).is_empty());
 	assert!(warp::analyzer::lint(&warp::parse("-7 rem 3")).is_empty());
@@ -862,10 +806,7 @@ fn test_addition_is_associative_by_default() {
 #[test] // IEEE floats are the explicit opt-in, and then the law is weaker
 fn test_fast_floats_are_not_associative() {
 	is!("fast a=0.1; fast b=0.2; fast c=0.3; (a+b)+c == a+(b+c)", false);
-	is!(
-		"a=0.1 as float; b=0.2 as float; c=0.3 as float; (a+b)+c == a+(b+c)",
-		false
-	);
+	is!("a=0.1 as float; b=0.2 as float; c=0.3 as float; (a+b)+c == a+(b+c)", false);
 }
 
 #[test] // user decision 2026-09-28: `as` converts the whole arithmetic expression to its left (C#, TypeScript), not
@@ -875,17 +816,9 @@ fn test_as_converts_the_whole_expression() {
 	is!("2 * (1.5 as int)", 2);
 	is!("x=3.3 as float; x", 3.3);
 	let sum = eval("0.1 as float + 0.2 as float");
-	assert!(
-		matches!(sum.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 0.30000000000000004),
-		"{sum:?}"
-	);
+	assert!(matches!(sum.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 0.30000000000000004), "{sum:?}");
 	let warnings = warp::analyzer::lint(&warp::parse("2 * 1.5 as int"));
-	assert!(
-		warnings
-			.iter()
-			.any(|w| w.fix.as_deref() == Some("(2*1.5) as int or 2 * 1.5:int")),
-		"{warnings:?}"
-	);
+	assert!(warnings.iter().any(|w| w.fix.as_deref() == Some("(2*1.5) as int or 2 * 1.5:int")), "{warnings:?}");
 	assert!(warp::analyzer::lint(&warp::parse("(2 * 1.5) as int")).is_empty());
 	assert!(warp::analyzer::lint(&warp::parse("x=3.3 as float")).is_empty());
 }
@@ -903,10 +836,7 @@ fn test_typed_literals_bind_tightly() {
 	is!("0.1l + 0.2l == 0.3", true); // C's long double suffix: exact, as without suffix
 	is!(".1L + .2L == .3", true);
 	is!("2 * 1.5:int", 2);
-	assert!(
-		warp::analyzer::lint(&warp::parse("2 * 1.5:int")).is_empty(),
-		"typed literals are not ambiguous"
-	);
+	assert!(warp::analyzer::lint(&warp::parse("2 * 1.5:int")).is_empty(), "typed literals are not ambiguous");
 }
 
 #[test] // real/exact and float/fast/f64 are aliases, prefix and suffix declarations mean the same
@@ -922,10 +852,7 @@ fn test_number_declaration_spellings_agree() {
 	];
 	for code in exact {
 		let result = eval(code);
-		assert!(
-			matches!(result.drop_meta(), Node::Number(warp::Number::Quotient(33, 10))),
-			"{code} → {result:?}"
-		);
+		assert!(matches!(result.drop_meta(), Node::Number(warp::Number::Quotient(33, 10))), "{code} → {result:?}");
 	}
 	let fast = [
 		"fast x=3.3;x",
@@ -938,10 +865,7 @@ fn test_number_declaration_spellings_agree() {
 	];
 	for code in fast {
 		let result = eval(code);
-		assert!(
-			matches!(result.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.3),
-			"{code} → {result:?}"
-		);
+		assert!(matches!(result.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.3), "{code} → {result:?}");
 	}
 }
 
@@ -1005,10 +929,7 @@ fn test_approximation_is_marked() {
 #[test]
 fn test_as_float_converts_exact_values() {
 	let pi = eval("π as float");
-	assert!(
-		matches!(pi.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == std::f64::consts::PI),
-		"{pi:?}"
-	);
+	assert!(matches!(pi.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == std::f64::consts::PI), "{pi:?}");
 }
 
 #[test]
@@ -1040,20 +961,13 @@ fn test_nan_bits_are_canonical() {
 		CANONICAL_NAN,
 		"NaN payloads do not leak"
 	);
-	assert_eq!(
-		wasm_divide_bits(1.0, 4.0),
-		0.25f64.to_bits(),
-		"ordinary results are untouched"
-	);
+	assert_eq!(wasm_divide_bits(1.0, 4.0), 0.25f64.to_bits(), "ordinary results are untouched");
 }
 
 #[test] // Truly impossible to decide (halting problem); at runtime a fuel budget turns a hang into a loud error
 fn test_infinite_loop_runs_out_of_fuel() {
 	match warp::util::with_fuel(1_000_000, || eval("while 1 {}")) {
-		Node::Error(message) => assert!(
-			format!("{message}").contains("out of fuel after 1000000 steps"),
-			"{message}"
-		),
+		Node::Error(message) => assert!(format!("{message}").contains("out of fuel after 1000000 steps"), "{message}"),
 		other => panic!("expected out of fuel, got {other:?}"),
 	}
 }
@@ -1062,10 +976,7 @@ fn test_infinite_loop_runs_out_of_fuel() {
 fn test_fuel_budget_can_be_raised() {
 	let counting = "i=0; while i<1000 { i++ }; i";
 	match warp::util::with_fuel(100, || eval(counting)) {
-		Node::Error(message) => assert!(
-			format!("{message}").contains("out of fuel after 100 steps"),
-			"{message}"
-		),
+		Node::Error(message) => assert!(format!("{message}").contains("out of fuel after 100 steps"), "{message}"),
 		other => panic!("expected out of fuel, got {other:?}"),
 	}
 	assert_eq!(eval(counting), 1000);
@@ -1085,12 +996,7 @@ fn test_shrinking_recursion_is_total() {
 		("up(n) := n>=10 ? n : up(n+1)", "up"),
 		("down(n) := n>0 ? down(n-1) : 0", "down"),
 	] {
-		assert_eq!(
-			effects(code, name),
-			EffectSet::PURE,
-			"{code} parsed as {:?}",
-			warp::parse(code)
-		);
+		assert_eq!(effects(code, name), EffectSet::PURE, "{code} parsed as {:?}", warp::parse(code));
 	}
 	is!("fib(n) := n<2 ? n : fib(n-1)+fib(n-2) ! Pure\nfib(10)", 55);
 }
@@ -1121,14 +1027,8 @@ fn test_while_loop_may_diverge() {
 #[test] // `effects of f` reports Div and `f ! Pure` rejects a function that may diverge
 fn test_pure_rejects_divergence() {
 	is!("f(n) := f(n)\neffects of f", Node::Symbol("Div".into()));
-	fails_with(
-		"f(n) := n==0 ? 0 : n*f(n-1) ! Pure\nf(3)",
-		"f is declared ! Pure but performs Div via f",
-	);
-	fails_with(
-		"spin(n) := spin(n)\ncaller(n) := spin(n)+1 ! Pure\ncaller(1)",
-		"caller → spin",
-	);
+	fails_with("f(n) := n==0 ? 0 : n*f(n-1) ! Pure\nf(3)", "f is declared ! Pure but performs Div via f");
+	fails_with("spin(n) := spin(n)\ncaller(n) := spin(n)+1 ! Pure\ncaller(1)", "caller → spin");
 	is!("f(n) := n==0 ? 1 : n*f(n-1) ! Div\nf(3)", 6); // declared divergence is allowed
 }
 
@@ -1151,23 +1051,14 @@ fn test_fetch_result_needs_a_check() {
 	fails_with(&code, "fix: if x {");
 	fails_with(&format!("x = fetch \"{UNREACHABLE}\"; x.size"), "x may be an error");
 	fails_with(&format!("1 + fetch \"{UNREACHABLE}\""), "may be an error"); // the fix binds it: result = fetch …; if result {…}
-	is!(
-		&format!("x = fetch \"{UNREACHABLE}\"; if x {{x}} else {{\"offline\"}}"),
-		"offline"
-	); // an error is falsy
+	is!(&format!("x = fetch \"{UNREACHABLE}\"; if x {{x}} else {{\"offline\"}}"), "offline"); // an error is falsy
 	let ok = serve("200 OK", "hello");
-	is!(
-		&format!("x = fetch \"{ok}\"; if x {{x}} else {{\"offline\"}}"),
-		"hello\n"
-	);
+	is!(&format!("x = fetch \"{ok}\"; if x {{x}} else {{\"offline\"}}"), "hello\n");
 }
 
 #[test] // browsers, curl, Python requests: no timeout by default, a stalled server hangs the caller forever
 fn test_fetch_times_out_loudly() {
-	assert!(
-		warp::host::FETCH_TIMEOUT <= std::time::Duration::from_secs(30),
-		"default timeout"
-	);
+	assert!(warp::host::FETCH_TIMEOUT <= std::time::Duration::from_secs(30), "default timeout");
 	let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); // the kernel accepts, nobody ever answers
 	let url = format!("http://{}/", silent.local_addr().unwrap());
 	fails_with(&format!("fetch \"{url}\" timeout 0.5"), "timeout after 500 ms");
@@ -1198,10 +1089,7 @@ fn test_polynomial_function_equality() {
 
 #[test] // a finite domain is compared input by input
 fn test_finite_domain_function_equality() {
-	is!(
-		"f(a:bool,b:bool):=not (a or b); g(a:bool,b:bool):=(not a) and (not b); f==g",
-		true
-	); // De Morgan
+	is!("f(a:bool,b:bool):=not (a or b); g(a:bool,b:bool):=(not a) and (not b); f==g", true); // De Morgan
 	is!("f(a:bool,b:bool):=a and b; g(a:bool,b:bool):=a or b; f==g", false);
 }
 

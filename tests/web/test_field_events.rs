@@ -29,8 +29,5 @@ fn a_field_event_is_no_markup_mistake() {
 	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval("x = 0\ninput{ aria-label: \"n\" on change { x = 1 } on focus { x = 2 } }");
 	let warnings = warp::errors::diagnostic::take_warnings();
-	assert!(
-		!warnings.iter().any(|warning| warning.message.contains("is no event")),
-		"{warnings:?}"
-	);
+	assert!(!warnings.iter().any(|warning| warning.message.contains("is no event")), "{warnings:?}");
 }

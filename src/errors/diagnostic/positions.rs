@@ -81,12 +81,7 @@ pub fn located_in_file(failure: &Node, file: &std::path::Path) -> Node {
 	let Some((at, _)) = places(text).find(|(_, place)| is_position(place)) else {
 		return failure.clone();
 	};
-	Node::Error(Box::new(Node::Text(format!(
-		"{}{}:{}",
-		&text[..at],
-		file.display(),
-		&text[at..]
-	))))
+	Node::Error(Box::new(Node::Text(format!("{}{}:{}", &text[..at], file.display(), &text[at..]))))
 }
 
 /// The words after each ` at ` of a message's description, the last first, with where each starts
@@ -94,10 +89,7 @@ fn places(message: &str) -> impl Iterator<Item = (usize, &str)> {
 	let description = described(message);
 	description.rmatch_indices(" at ").map(move |(at, word)| {
 		let start = at + word.len();
-		(
-			start,
-			description[start..].split_whitespace().next().unwrap_or_default(),
-		)
+		(start, description[start..].split_whitespace().next().unwrap_or_default())
 	})
 }
 
@@ -110,9 +102,7 @@ fn described_place(message: &str) -> Option<&str> {
 }
 
 fn position_number(digits: &str) -> Option<usize> {
-	(!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
-		.then(|| digits.parse().ok())
-		.flatten()
+	(!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| digits.parse().ok()).flatten()
 }
 
 /// Where a failed program's error is: the position its message names (also for an error no diagnostic made)
@@ -169,13 +159,8 @@ pub fn written_text(node: &Node) -> String {
 pub fn written_statement(node: &Node) -> Option<String> {
 	let source_line = |(line, column): (usize, usize)| {
 		compile_context::read(|context| {
-			let rest: String = context
-				.source
-				.lines()
-				.nth(line.checked_sub(1)?)?
-				.chars()
-				.skip(column.saturating_sub(1))
-				.collect();
+			let rest: String =
+				context.source.lines().nth(line.checked_sub(1)?)?.chars().skip(column.saturating_sub(1)).collect();
 			Some(statement_prefix(&rest).trim().to_string())
 		})
 	};

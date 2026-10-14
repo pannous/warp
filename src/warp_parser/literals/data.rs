@@ -27,10 +27,6 @@ impl WarpParser {
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
 			_ => parsed,
 		};
-		Some(Node::List(
-			vec![Symbol(DATA_KEYWORD.to_string()), data],
-			Bracket::None,
-			Separator::Space,
-		))
+		Some(Node::List(vec![Symbol(DATA_KEYWORD.to_string()), data], Bracket::None, Separator::Space))
 	}
 }

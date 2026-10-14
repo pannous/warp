@@ -53,10 +53,8 @@ pub fn mark_declarations(node: Node) -> Node {
 		return node;
 	}
 	let bound = assigned_or_declared_names(&node);
-	let free_type_words: Vec<&str> = [POSITION_TYPE, INDEX_TYPE]
-		.into_iter()
-		.filter(|word| !bound.contains(*word))
-		.collect();
+	let free_type_words: Vec<&str> =
+		[POSITION_TYPE, INDEX_TYPE].into_iter().filter(|word| !bound.contains(*word)).collect();
 	marked_declarations(node, &free_type_words)
 }
 
@@ -82,12 +80,8 @@ fn converted(node: Node, counted: &HashMap<String, Count>) -> Node {
 	if !matches!(node, Node::Meta { .. }) {
 		if let Some((head, body, rebuild)) = definition_parts(&node) {
 			let parameters = head.children();
-			let mut bindings: Vec<Binding> = parameters
-				.iter()
-				.skip(1)
-				.filter_map(parameter_name)
-				.map(Binding::Plain)
-				.collect();
+			let mut bindings: Vec<Binding> =
+				parameters.iter().skip(1).filter_map(parameter_name).map(Binding::Plain).collect();
 			collect_bindings(&head, &mut bindings);
 			let own = scope_counts(&body, bindings, counted);
 			return rebuild(head, converted(body, &own));
@@ -100,10 +94,7 @@ fn converted(node: Node, counted: &HashMap<String, Count>) -> Node {
 			if count_of(&left, counted).is_some() && count_of(&right, counted).is_some() =>
 		{
 			let sum = key(*left, Op::Add, *right);
-			let message = format!(
-				"{} adds two positions or indexes: subtract them for a count",
-				sum.serialize()
-			);
+			let message = format!("{} adds two positions or indexes: subtract them for a count", sum.serialize());
 			Diagnostic::at(&sum, message).into_error()
 		}
 		Node::List(items, Bracket::Round, Separator::None) if is_call(&items, INSERT_METHOD) => {
@@ -213,17 +204,11 @@ fn scope_counts(body: &Node, mut bindings: Vec<Binding>, outer: &HashMap<String,
 			.or_insert(count);
 	}
 	let inherited = outer.iter().filter(|(name, _)| !own.contains_key(*name));
-	inherited
-		.map(|(name, count)| (name.clone(), *count))
-		.chain(counted(&own))
-		.collect()
+	inherited.map(|(name, count)| (name.clone(), *count)).chain(counted(&own)).collect()
 }
 
 fn counted(names: &HashMap<String, Option<Count>>) -> HashMap<String, Count> {
-	names
-		.iter()
-		.filter_map(|(name, count)| Some((name.clone(), (*count)?)))
-		.collect()
+	names.iter().filter_map(|(name, count)| Some((name.clone(), (*count)?))).collect()
 }
 
 enum Binding {
@@ -264,19 +249,15 @@ fn collect_bindings(node: &Node, bindings: &mut Vec<Binding>) {
 }
 
 fn collect_parts(node: &Node, bindings: &mut Vec<Binding>) {
-	node.drop_meta()
-		.parts()
-		.into_iter()
-		.for_each(|part| collect_bindings(part, bindings));
+	node.drop_meta().parts().into_iter().for_each(|part| collect_bindings(part, bindings));
 }
 
 fn declared_count(annotation: &Node) -> Option<Count> {
 	match annotation {
 		Node::Meta { node, data } => match data.as_ref() {
-			Node::Data(dada) => dada
-				.downcast_ref::<DeclaredCount>()
-				.map(|DeclaredCount(count)| *count)
-				.or_else(|| declared_count(node)),
+			Node::Data(dada) => {
+				dada.downcast_ref::<DeclaredCount>().map(|DeclaredCount(count)| *count).or_else(|| declared_count(node))
+			}
 			_ => declared_count(node),
 		},
 		_ => None,
@@ -299,9 +280,5 @@ fn assignments(node: &Node) -> Vec<(String, Node)> {
 /// The names a program assigns or declares
 fn assigned_or_declared_names(node: &Node) -> HashSet<String> {
 	let declared: Vec<String> = node.assigned_names(|op| *op == Op::Colon);
-	assignments(node)
-		.into_iter()
-		.map(|(name, _)| name)
-		.chain(declared)
-		.collect()
+	assignments(node).into_iter().map(|(name, _)| name).chain(declared).collect()
 }

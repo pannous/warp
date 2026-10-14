@@ -8,11 +8,9 @@ use crate::words::IN_WORD;
 /// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
 pub(super) fn statement_block(block: Node) -> Node {
 	match block {
-		Node::List(items, Bracket::Curly, Separator::Colon) => Node::List(
-			vec![Node::List(items, Bracket::None, Separator::Colon)],
-			Bracket::Curly,
-			Separator::Semicolon,
-		),
+		Node::List(items, Bracket::Curly, Separator::Colon) => {
+			Node::List(vec![Node::List(items, Bracket::None, Separator::Colon)], Bracket::Curly, Separator::Semicolon)
+		}
 		block => block,
 	}
 }
@@ -42,8 +40,8 @@ impl WarpParser {
 		if !self.only_blanks_before_newline() {
 			return None;
 		}
-		self.with_equals_comparing(false, |parser| parser.parse_indented_block())
-			.map(statement_block) // its lines assign
+		self.with_equals_comparing(false, |parser| parser.parse_indented_block()).map(statement_block)
+		// its lines assign
 	}
 
 	pub(super) fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
@@ -71,12 +69,8 @@ impl WarpParser {
 	/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned variable
 	/// (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
 	pub(super) fn names_end(&self) -> bool {
-		let next_visible = |from: usize| {
-			self.chars[from..]
-				.iter()
-				.position(|ch| !ch.is_whitespace())
-				.map(|offset| from + offset)
-		};
+		let next_visible =
+			|from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
 		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
 		code_words(&self.chars, 0).any(|(word_start, word_end)| {
 			if self.chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
@@ -130,11 +124,8 @@ impl WarpParser {
 		let opened = self.chars[..self.pos].iter().rev().find(|ch| !is_blank(ch)) == Some(&'{');
 		let rest = &self.chars[self.pos..];
 		let operator: String = rest.iter().take_while(|ch| OPERATOR_CHARS.contains(**ch)).collect();
-		let length = operator.chars().count()
-			+ rest[operator.chars().count()..]
-				.iter()
-				.take_while(|ch| is_blank(ch))
-				.count();
+		let length =
+			operator.chars().count() + rest[operator.chars().count()..].iter().take_while(|ch| is_blank(ch)).count();
 		(opened && !operator.is_empty() && rest.get(length) == Some(&'}')).then_some((operator, length))
 	}
 
@@ -146,8 +137,7 @@ impl WarpParser {
 		if !self.only_blanks_before_newline() {
 			return self.rest_of_statement(); // `to mail x to address: print address`
 		}
-		self.parse_indented_block()
-			.unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
+		self.parse_indented_block().unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
 	}
 
 	pub(in crate::warp_parser) fn next_line_starts_with_tab(&self) -> bool {
@@ -226,11 +216,7 @@ pub(super) fn without_end_lines(body: Node) -> Node {
 	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(
-			items
-				.into_iter()
-				.filter(|item| !is_end(item))
-				.map(without_end_lines)
-				.collect(),
+			items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(),
 			bracket,
 			separator,
 		),
@@ -244,10 +230,8 @@ pub(super) fn without_end_lines(body: Node) -> Node {
 /// parameters and `=` on one line, closed by no `end`
 pub(super) fn is_endless_definition(chars: &[char], def_end: usize) -> bool {
 	let line: String = chars[def_end..].iter().take_while(|&&ch| ch != '\n').collect();
-	let head = line
-		.trim_start()
-		.trim_start_matches(|ch: char| is_identifier_char(ch) || ch == '?' || ch == '!')
-		.trim_start();
+	let head =
+		line.trim_start().trim_start_matches(|ch: char| is_identifier_char(ch) || ch == '?' || ch == '!').trim_start();
 	let after_parameters = match head.strip_prefix('(') {
 		Some(parameters) => parameters.find(')').map_or("", |close| &parameters[close + 1..]),
 		None => head,
@@ -286,11 +270,9 @@ pub(super) fn with_trailing_block(assignment: Node, block: Node) -> Node {
 		Node::Key(target, op, value) if assigned_method_call(&value) => {
 			Node::Key(target, op, Box::new(with_trailing_block(*value, block)))
 		}
-		Node::Key(target, op, value) => Node::Key(
-			target,
-			op,
-			Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)),
-		),
+		Node::Key(target, op, value) => {
+			Node::Key(target, op, Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)))
+		}
 		other => other,
 	}
 }

@@ -87,14 +87,8 @@ const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 21] = [
 	("expm1", expm1),
 ];
 #[cfg(feature = "native")]
-const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 6] = [
-	("fmin", fmin),
-	("fmax", fmax),
-	("fmod", fmod),
-	("pow", pow),
-	("atan2", atan2),
-	("hypot", hypot),
-];
+const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 6] =
+	[("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow), ("atan2", atan2), ("hypot", hypot)];
 
 #[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
@@ -151,9 +145,7 @@ fn link_libm_table(linker: &mut Linker<FfiState>) -> Result<()> {
 		linker.func_wrap("m", name, move |x: f64| unsafe { function(canonical_nan(x)) })?;
 	}
 	for (name, function) in LIBM_BINARY {
-		linker.func_wrap("m", name, move |x: f64, y: f64| unsafe {
-			function(canonical_nan(x), canonical_nan(y))
-		})?;
+		linker.func_wrap("m", name, move |x: f64, y: f64| unsafe { function(canonical_nan(x), canonical_nan(y)) })?;
 	}
 	Ok(())
 }
@@ -169,36 +161,23 @@ fn link_libc_functions(linker: &mut Linker<FfiState>) -> Result<()> {
 			.and_then(|data| data.get(ptr as usize..))
 			.map_or(0, |text| text.iter().take_while(|&&byte| byte != 0).count()) as i64
 	})?;
-	linker.func_wrap("c", "atoi", |mut caller: Caller, ptr: i32| {
-		parse_c_text(&mut caller, ptr, atoi).unwrap_or(0)
-	})?;
-	linker.func_wrap("c", "atol", |mut caller: Caller, ptr: i32| {
-		parse_c_text(&mut caller, ptr, atol).unwrap_or(0)
-	})?;
-	linker.func_wrap("c", "atof", |mut caller: Caller, ptr: i32| {
-		parse_c_text(&mut caller, ptr, atof).unwrap_or(0.0)
-	})?;
+	linker.func_wrap("c", "atoi", |mut caller: Caller, ptr: i32| parse_c_text(&mut caller, ptr, atoi).unwrap_or(0))?;
+	linker.func_wrap("c", "atol", |mut caller: Caller, ptr: i32| parse_c_text(&mut caller, ptr, atol).unwrap_or(0))?;
+	linker
+		.func_wrap("c", "atof", |mut caller: Caller, ptr: i32| parse_c_text(&mut caller, ptr, atof).unwrap_or(0.0))?;
 	// strcmp(ptr1, len1, ptr2, len2) and strncmp(…, n) compare two texts of the module's memory
-	linker.func_wrap(
-		"c",
-		"strcmp",
-		|mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32| {
-			text_pair(&mut caller, [ptr1, len1, ptr2, len2])
-				.map(|(first, second)| unsafe { strcmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8) })
-				.unwrap_or(0)
-		},
-	)?;
-	linker.func_wrap(
-		"c",
-		"strncmp",
-		|mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32, n: i64| {
-			text_pair(&mut caller, [ptr1, len1, ptr2, len2])
-				.map(|(first, second)| unsafe {
-					strncmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8, n as usize)
-				})
-				.unwrap_or(0)
-		},
-	)?;
+	linker.func_wrap("c", "strcmp", |mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32| {
+		text_pair(&mut caller, [ptr1, len1, ptr2, len2])
+			.map(|(first, second)| unsafe { strcmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8) })
+			.unwrap_or(0)
+	})?;
+	linker.func_wrap("c", "strncmp", |mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32, n: i64| {
+		text_pair(&mut caller, [ptr1, len1, ptr2, len2])
+			.map(|(first, second)| unsafe {
+				strncmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8, n as usize)
+			})
+			.unwrap_or(0)
+	})?;
 	linker.func_wrap("c", "rand", || unsafe { rand() })?;
 
 	// Add aliases: "libm" → "m", "libc" → "c"
@@ -223,9 +202,7 @@ fn parse_c_text<T>(
 	ptr: i32,
 	parse: unsafe extern "C" fn(*const i8) -> T,
 ) -> Option<T> {
-	let text = memory_bytes(caller)?
-		.get(ptr as usize..)
-		.filter(|text| !text.is_empty())?;
+	let text = memory_bytes(caller)?.get(ptr as usize..).filter(|text| !text.is_empty())?;
 	Some(unsafe { parse(text.as_ptr() as *const i8) })
 }
 
@@ -404,10 +381,8 @@ pub fn link_dynamic_library(
 	let mut linked_count = 0;
 
 	// all headers first: their struct types decide how pointers cross (is_struct_type)
-	let signatures: Vec<FfiHeaderSignature> = header_paths
-		.iter()
-		.flat_map(|path| parse_header_file(path, lib_name))
-		.collect();
+	let signatures: Vec<FfiHeaderSignature> =
+		header_paths.iter().flat_map(|path| parse_header_file(path, lib_name)).collect();
 	// only what the module imports: libc's headers declare hundreds of functions
 	for sig in signatures.iter().filter(|sig| imported.contains(&sig.name)) {
 		if link_single_function(linker, engine, import_name, &library, sig).is_ok() {
@@ -430,9 +405,8 @@ fn link_single_function(
 	let func_name = sig.name.clone();
 
 	let func_ptr: usize = unsafe {
-		let symbol: libloading::Symbol<*const ()> = library
-			.get(func_name.as_bytes())
-			.map_err(|e| anyhow::anyhow!("Symbol {} not found: {}", func_name, e))?;
+		let symbol: libloading::Symbol<*const ()> =
+			library.get(func_name.as_bytes()).map_err(|e| anyhow::anyhow!("Symbol {} not found: {}", func_name, e))?;
 		*symbol as usize
 	};
 
@@ -440,9 +414,8 @@ fn link_single_function(
 		return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
 	}
 
-	let wasm_params: Vec<ValType> = warp_parameters(&sig.param_types)
-		.filter_map(|t| c_type_to_wasm_valtype(t))
-		.collect();
+	let wasm_params: Vec<ValType> =
+		warp_parameters(&sig.param_types).filter_map(|t| c_type_to_wasm_valtype(t)).collect();
 
 	let param_types: Vec<ParamType> = sig.param_types.iter().map(|t| c_type_to_param_type(t)).collect();
 	let ret_type = c_type_to_ret_type(&sig.return_type);
@@ -454,34 +427,15 @@ fn link_single_function(
 			None => c_type_to_wasm_valtype(&sig.return_type).into_iter().collect(),
 		};
 		let func_type = FuncType::new(engine, wasm_params, wasm_results);
-		let out_pointee = sig
-			.param_types
-			.iter()
-			.find(|t| is_handle_out_pointer(t))
-			.map(|t| pointee(t));
-		let call = PointerCall {
-			name: func_name.clone(),
-			func_ptr,
-			param_types,
-			result,
-			ret_type,
-			out_pointee,
-		};
+		let out_pointee = sig.param_types.iter().find(|t| is_handle_out_pointer(t)).map(|t| pointee(t));
+		let call = PointerCall { name: func_name.clone(), func_ptr, param_types, result, ret_type, out_pointee };
 		return create_pointer_wrapper(linker, lib_name, func_type, call);
 	}
 
 	let wasm_results: Vec<ValType> = c_type_to_wasm_valtype(&sig.return_type).into_iter().collect();
 
 	let func_type = FuncType::new(engine, wasm_params, wasm_results);
-	create_ffi_wrapper(
-		linker,
-		lib_name,
-		&func_name,
-		func_type,
-		func_ptr,
-		&param_types,
-		ret_type,
-	)
+	create_ffi_wrapper(linker, lib_name, &func_name, func_type, func_ptr, &param_types, ret_type)
 }
 
 /// Link all dynamic libraries required by a WASM module's imports
@@ -500,14 +454,9 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 		let wasm_module = crate::modules::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
 		if !built_in_libc
 			&& !wasm_module
-			&& !matches!(
-				module_name,
-				"m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY
-			) {
-			libs_to_link
-				.entry(module_name.to_string())
-				.or_default()
-				.insert(import.name().to_string());
+			&& !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY)
+		{
+			libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
 		}
 	}
 
@@ -530,9 +479,7 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 #[cfg(feature = "native")]
 fn is_thread_safe(lib_name: &str) -> bool {
 	let name = lib_name.to_lowercase();
-	!NOT_THREAD_SAFE_LIBRARIES
-		.iter()
-		.any(|prefix| name.trim_start_matches("lib").starts_with(prefix))
+	!NOT_THREAD_SAFE_LIBRARIES.iter().any(|prefix| name.trim_start_matches("lib").starts_with(prefix))
 }
 
 /// Link a wrapper of a library function; one of a library that is not thread-safe holds the native call turn while it runs
@@ -569,25 +516,19 @@ fn create_ffi_wrapper(
 ) -> Result<()> {
 	let param_types = param_types.to_vec();
 
-	link_native(
-		linker,
-		lib_name,
-		func_name,
-		func_type,
-		move |mut caller, params, results| {
-			// lives through the call: a `char **` out-pointer (strtod's endptr) is written there
-			let mut out_slot: usize = 0;
-			let args = native_arguments(&mut caller, "", params, &param_types, &mut out_slot)?;
+	link_native(linker, lib_name, func_name, func_type, move |mut caller, params, results| {
+		// lives through the call: a `char **` out-pointer (strtod's endptr) is written there
+		let mut out_slot: usize = 0;
+		let args = native_arguments(&mut caller, "", params, &param_types, &mut out_slot)?;
 
-			let ret = unsafe { call_native_function(func_ptr, &args, ret_type) };
+		let ret = unsafe { call_native_function(func_ptr, &args, ret_type) };
 
-			if let Some(result) = results.first_mut() {
-				*result = native_result(ret, ret_type);
-			}
+		if let Some(result) = results.first_mut() {
+			*result = native_result(ret, ret_type);
+		}
 
-			Ok(())
-		},
-	)?;
+		Ok(())
+	})?;
 
 	Ok(())
 }
@@ -675,14 +616,10 @@ impl CHandles {
 		if pointer == 0 {
 			return 0;
 		}
-		let index = self
-			.pointers
-			.iter()
-			.position(|known| *known == pointer)
-			.unwrap_or_else(|| {
-				self.pointers.push(pointer);
-				self.pointers.len() - 1
-			});
+		let index = self.pointers.iter().position(|known| *known == pointer).unwrap_or_else(|| {
+			self.pointers.push(pointer);
+			self.pointers.len() - 1
+		});
 		index as i32 + 1
 	}
 
@@ -719,46 +656,35 @@ fn create_pointer_wrapper(
 	call: PointerCall,
 ) -> Result<()> {
 	let name = call.name.clone();
-	link_native(
-		linker,
-		lib_name,
-		&name,
-		func_type,
-		move |mut caller, params, results| {
-			let mut out_slot: usize = 0;
-			let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
-			let returned = unsafe { call_native_function(call.func_ptr, &args, call.ret_type) };
-			if let Some(pointee) = &call.out_pointee {
-				if out_slot == 0 {
-					return Err(wasmtime::Error::msg(format!(
-						"{} gave no {pointee} (C status {})",
-						call.name, returned as i32
-					)));
-				}
+	link_native(linker, lib_name, &name, func_type, move |mut caller, params, results| {
+		let mut out_slot: usize = 0;
+		let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
+		let returned = unsafe { call_native_function(call.func_ptr, &args, call.ret_type) };
+		if let Some(pointee) = &call.out_pointee {
+			if out_slot == 0 {
+				return Err(wasmtime::Error::msg(format!(
+					"{} gave no {pointee} (C status {})",
+					call.name, returned as i32
+				)));
 			}
-			let pointer = if call.out_pointee.is_some() {
-				out_slot
-			} else {
-				returned as usize
-			};
-			let Some(result) = results.first_mut() else {
-				return Ok(());
-			};
-			*result = match call.result {
-				Some(CPointer::Text) => {
-					// copied before anything else runs: a C string from getenv may change with the next call
-					let pointer = pointer as *const std::ffi::c_char;
-					let text =
-						(!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
-					text_node(&mut caller, text.as_deref())
-						.map_err(|failure| wasmtime::Error::msg(failure.to_string()))?
-				}
-				Some(_) => Val::I32(caller.data_mut().c_handles.id_of(pointer)),
-				None => native_result(returned, call.ret_type),
-			};
-			Ok(())
-		},
-	)?;
+		}
+		let pointer = if call.out_pointee.is_some() { out_slot } else { returned as usize };
+		let Some(result) = results.first_mut() else {
+			return Ok(());
+		};
+		*result = match call.result {
+			Some(CPointer::Text) => {
+				// copied before anything else runs: a C string from getenv may change with the next call
+				let pointer = pointer as *const std::ffi::c_char;
+				let text =
+					(!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
+				text_node(&mut caller, text.as_deref()).map_err(|failure| wasmtime::Error::msg(failure.to_string()))?
+			}
+			Some(_) => Val::I32(caller.data_mut().c_handles.id_of(pointer)),
+			None => native_result(returned, call.ret_type),
+		};
+		Ok(())
+	})?;
 	Ok(())
 }
 
@@ -778,38 +704,23 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
 #[cfg(feature = "native")]
 pub(crate) fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
 	let export = |caller: &mut wasmtime::Caller<'_, FfiState>, name: &str| {
-		caller
-			.get_export(name)
-			.ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"))
+		caller.get_export(name).ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"))
 	};
 	let mut result = [Val::AnyRef(None)];
 	let Some(bytes) = bytes else {
-		let new_empty = export(caller, "new_empty")?
-			.into_func()
-			.ok_or_else(|| anyhow::anyhow!("new_empty is no function"))?;
+		let new_empty =
+			export(caller, "new_empty")?.into_func().ok_or_else(|| anyhow::anyhow!("new_empty is no function"))?;
 		new_empty.call(&mut *caller, &[], &mut result)?;
 		return Ok(result[0]);
 	};
-	let memory = export(caller, "memory")?
-		.into_memory()
-		.ok_or_else(|| anyhow::anyhow!("memory is no memory"))?;
+	let memory = export(caller, "memory")?.into_memory().ok_or_else(|| anyhow::anyhow!("memory is no memory"))?;
 	let heap = export(caller, crate::host::TEXT_HEAP_EXPORT)?
 		.into_global()
 		.ok_or_else(|| anyhow::anyhow!("the text heap is no global"))?;
-	let new_text = export(caller, "new_text")?
-		.into_func()
-		.ok_or_else(|| anyhow::anyhow!("new_text is no function"))?;
-	let (pointer, length) = crate::host::write_to_heap(
-		&memory,
-		heap,
-		&mut wasmtime::AsContextMut::as_context_mut(caller),
-		bytes,
-	)?;
-	new_text.call(
-		&mut *caller,
-		&[Val::I32(pointer as i32), Val::I32(length as i32)],
-		&mut result,
-	)?;
+	let new_text = export(caller, "new_text")?.into_func().ok_or_else(|| anyhow::anyhow!("new_text is no function"))?;
+	let (pointer, length) =
+		crate::host::write_to_heap(&memory, heap, &mut wasmtime::AsContextMut::as_context_mut(caller), bytes)?;
+	new_text.call(&mut *caller, &[Val::I32(pointer as i32), Val::I32(length as i32)], &mut result)?;
 	Ok(result[0])
 }
 

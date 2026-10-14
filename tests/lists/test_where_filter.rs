@@ -15,9 +15,7 @@ fn where_filters_by_it() {
 
 #[test]
 fn a_where_condition_without_it_is_an_error() {
-	let Node::Error(message) = eval("xs = [1, 2, 3]; xs where x > 1") else {
-		panic!("should be an error")
-	};
+	let Node::Error(message) = eval("xs = [1, 2, 3]; xs where x > 1") else { panic!("should be an error") };
 	assert!(format!("{message}").contains("where it > 1"), "{message}");
 }
 
@@ -41,8 +39,5 @@ fn a_where_condition_of_a_bare_word_suggests_the_field() {
 #[test]
 fn an_assigned_filter_may_start_with_not() {
 	is!("xs = [yes, no, no]; waiting = xs where not it; count(waiting)", 2);
-	is!(
-		"todos = [{done: yes}, {done: no}]; open = todos where not it.done; count(open)",
-		1
-	);
+	is!("todos = [{done: yes}, {done: no}]; open = todos where not it.done; count(open)", 1);
 }

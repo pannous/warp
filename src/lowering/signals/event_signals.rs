@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
 /// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
-const FIRED_PREFIX: &str = "once_fired_";
+pub(crate) const FIRED_PREFIX: &str = "once_fired_";
 /// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
 const LISTENING_SUFFIX: &str = "_listening";
 const REMOVE_WORD: &str = "remove";
@@ -115,35 +115,19 @@ pub fn lower(program: Node) -> Node {
 	let listeners = Listeners::of(&statements, &handlers, named);
 	// `h = on alarm {…}`: h is its place among alarm's handlers, an entry of `listeners of alarm`
 	flags.extend(user_named.iter().filter_map(|(listener, event)| {
-		listeners
-			.place(listener, event)
-			.map(|place| (listener.clone(), Node::int(place as i64)))
+		listeners.place(listener, event).map(|place| (listener.clone(), Node::int(place as i64)))
 	}));
-	let statements: Vec<Node> = statements
-		.into_iter()
-		.map(|statement| reflected(statement, &listeners))
-		.collect();
+	let statements: Vec<Node> = statements.into_iter().map(|statement| reflected(statement, &listeners)).collect();
 	// a handler may remove itself (`if taken == 2 {remove h from listeners of tick}`)
-	let handlers: Vec<Handler> = handlers
-		.into_iter()
-		.map(|(index, name, body)| (index, name, reflected(body, &listeners)))
-		.collect();
-	if let Some(failure) = statements
-		.iter()
-		.chain(handlers.iter().map(|(_, _, body)| body))
-		.find_map(first_error)
-	{
+	let handlers: Vec<Handler> =
+		handlers.into_iter().map(|(index, name, body)| (index, name, reflected(body, &listeners))).collect();
+	if let Some(failure) = statements.iter().chain(handlers.iter().map(|(_, _, body)| body)).find_map(first_error) {
 		return failure;
 	}
-	let statements: Vec<Node> = flags
-		.iter()
-		.map(|(flag, initial)| assign(flag, initial.clone()))
-		.chain(statements)
-		.collect();
-	let handlers: Vec<Handler> = handlers
-		.into_iter()
-		.map(|(index, name, body)| (index + flags.len(), name, body))
-		.collect();
+	let statements: Vec<Node> =
+		flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
+	let handlers: Vec<Handler> =
+		handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
 	if let Err(error) = warn_unraised_page_event(&statements, &handlers, &raised) {
 		return error;
@@ -161,14 +145,9 @@ fn raised_and_flagged(
 	verbs: &[String],
 	variables: &HashSet<String>,
 ) -> (HashSet<String>, HashSet<String>) {
-	let listed: HashSet<String> = listed_events(program)
-		.into_iter()
-		.filter(|event| !variables.contains(event))
-		.collect();
-	let raised = emitted_names(program, verbs)
-		.into_iter()
-		.chain(listed.iter().cloned())
-		.collect();
+	let listed: HashSet<String> =
+		listed_events(program).into_iter().filter(|event| !variables.contains(event)).collect();
+	let raised = emitted_names(program, verbs).into_iter().chain(listed.iter().cloned()).collect();
 	let with_names = statements
 		.iter()
 		.filter_map(named_handler)
@@ -201,9 +180,7 @@ fn collected_handlers(
 			let body = if once { run_once(body, flags) } else { body };
 			user_named.extend(listener.iter().map(|listener| (listener.clone(), name.clone())));
 			let listener = listener.or_else(|| {
-				flagged
-					.contains(&name)
-					.then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_")))
+				flagged.contains(&name).then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_")))
 			});
 			let body = match listener {
 				Some(listener) => listening(body, &listener, &name, flags, named),
@@ -223,10 +200,8 @@ fn without_handlers(
 	bracket: Bracket,
 	separator: Separator,
 ) -> Node {
-	let statements: Vec<Node> = statements
-		.into_iter()
-		.map(|statement| emits_as_calls(statement, &HashMap::new(), verbs, shows_page))
-		.collect();
+	let statements: Vec<Node> =
+		statements.into_iter().map(|statement| emits_as_calls(statement, &HashMap::new(), verbs, shows_page)).collect();
 	if !statements.iter().any(defines_timer) {
 		return Node::List(statements, bracket, separator);
 	}
@@ -271,10 +246,8 @@ fn handlers_as_functions(
 		bodies.entry(name.clone()).or_default().push(body.clone());
 	}
 	if let Some(cycle) = emit_cycle(&bodies, verbs) {
-		let (index, _) = first_handler
-			.iter()
-			.find(|(_, name)| **name == cycle[0])
-			.expect("a cycle runs through handlers");
+		let (index, _) =
+			first_handler.iter().find(|(_, name)| **name == cycle[0]).expect("a cycle runs through handlers");
 		return endless_emit_loop(&statements[*index], &cycle);
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
@@ -285,10 +258,7 @@ fn handlers_as_functions(
 			Some(name) => Some(function_with_globals(
 				&handler_function_name(name),
 				reads_event(&bodies[name]),
-				&each_its_event(&bodies[name])
-					.iter()
-					.flat_map(Node::body_statements)
-					.collect::<Vec<_>>(),
+				&each_its_event(&bodies[name]).iter().flat_map(Node::body_statements).collect::<Vec<_>>(),
 				&main_variables,
 			)),
 			None if handler_lines.contains(&index) => None,
@@ -302,25 +272,15 @@ fn handlers_as_functions(
 		.map(|(event, body)| (handler_function_name(event), usize::from(reads_event(body))))
 		.collect();
 	let stays = !page_handlers.is_empty() || lowered.iter().any(defines_timer);
-	let lowered = if stays {
-		with_output_binding(lowered, &main_variables)
-	} else {
-		lowered
-	};
+	let lowered = if stays { with_output_binding(lowered, &main_variables) } else { lowered };
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
 }
 
 /// The error of handlers emitting each other in a circle, at the first of them
 fn endless_emit_loop(handler: &Node, cycle: &[String]) -> Node {
-	let steps: Vec<String> = cycle
-		.iter()
-		.zip(cycle.iter().cycle().skip(1))
-		.map(|(from, to)| format!("on {from} emits {to}"))
-		.collect();
-	let message = format!(
-		"endless emit loop: {}; emit one of them under a condition",
-		steps.join(", ")
-	);
+	let steps: Vec<String> =
+		cycle.iter().zip(cycle.iter().cycle().skip(1)).map(|(from, to)| format!("on {from} emits {to}")).collect();
+	let message = format!("endless emit loop: {}; emit one of them under a condition", steps.join(", "));
 	crate::errors::diagnostic::Diagnostic::at(handler, message).into_error()
 }
 
@@ -361,11 +321,7 @@ fn without_unraised(
 	if !warnings.is_empty() {
 		crate::errors::diagnostic::report(&warnings)?;
 	}
-	Ok(statements
-		.iter()
-		.filter(|statement| unraised(statement).is_none())
-		.cloned()
-		.collect())
+	Ok(statements.iter().filter(|statement| unraised(statement).is_none()).cloned().collect())
 }
 
 /// The output binding of a program the page keeps running (page events, timers): its last line, when that is a name,
@@ -380,9 +336,7 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 		.cloned();
 	if let Some(shown) = shown {
 		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
-		let holes = crate::web::markup::holes(&shown)
-			.into_iter()
-			.map(|(path, element)| (hole_name(&path), element));
+		let holes = crate::web::markup::holes(&shown).into_iter().map(|(path, element)| (hole_name(&path), element));
 		let text_holes = crate::web::markup::text_holes(&shown)
 			.into_iter()
 			.map(|hole| (text_hole_name(&hole.path, hole.after), hole.text));
@@ -399,9 +353,7 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 
 /// `page·hole·1·0`: the binding of the element at that path of the shown markup (worker.js reads the path back)
 pub(crate) fn hole_name(path: &[usize]) -> String {
-	path.iter().fold(PAGE_HOLE.to_string(), |name, index| {
-		format!("{name}{NAME_JOINER}{index}")
-	})
+	path.iter().fold(PAGE_HOLE.to_string(), |name, index| format!("{name}{NAME_JOINER}{index}"))
 }
 
 /// `page·hole·1·text·2`: the binding of the text after 2 children of the element at that path (card web-fine-text-nodes)
@@ -412,10 +364,7 @@ pub(crate) fn text_hole_name(path: &[usize], after: usize) -> String {
 /// `if c then a else b`, `c ? a : b`, `a ?? b`: a choice whose parts only read (no call, no write), so reading it anew
 /// changes nothing
 fn is_shown_choice(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Key(_, Op::Else | Op::Question | Op::Coalesce, _)
-	) && only_reads(node)
+	matches!(node.drop_meta(), Node::Key(_, Op::Else | Op::Question | Op::Coalesce, _)) && only_reads(node)
 }
 
 /// Names, literals, markup, operators that compute (no assignment, no ++), and data lists of these
@@ -474,9 +423,7 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 		let listener = format!("{}{SUBSCRIBER_SUFFIX}", event.replace(' ', "_"));
 		[
 			parse(&format!("{list} = []")),
-			parse(&format!(
-				"on {event} {{ for {listener} in {list} {{ {listener}(event) }} }}"
-			)),
+			parse(&format!("on {event} {{ for {listener} in {list} {{ {listener}(event) }} }}")),
 		]
 	});
 	started.chain(statements).collect()
@@ -499,11 +446,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 		}
 		let list = Node::Symbol(subscribers_name(&event));
 		let listener = key(symbol(EVENT_WORD), Op::Arrow, body);
-		let added = key(
-			list.clone(),
-			Op::Add,
-			Node::List(vec![listener], Bracket::Square, Separator::None),
-		);
+		let added = key(list.clone(), Op::Add, Node::List(vec![listener], Bracket::Square, Separator::None));
 		if !subscribed.contains(&event) {
 			subscribed.push(event);
 		}
@@ -521,9 +464,7 @@ pub(crate) fn is_loop(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Key(_, Op::While, _) => true,
 		Node::Key(head, Op::Do, _) => is_loop(head),
-		Node::List(items, _, _) => items
-			.first()
-			.is_some_and(|first| LOOP_WORDS.contains(&word(first).as_str())),
+		Node::List(items, _, _) => items.first().is_some_and(|first| LOOP_WORDS.contains(&word(first).as_str())),
 		_ => false,
 	}
 }
@@ -536,10 +477,7 @@ fn subscribers_name(event: &str) -> String {
 fn named_handler(statement: &Node) -> Option<(Option<String>, (String, Node, bool))> {
 	let listener = listeners::read_named(statement, &[ON_WORD, ONCE_WORD])?;
 	let words = listener.words();
-	if words
-		.first()
-		.is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str()))
-	{
+	if words.first().is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str())) {
 		return None;
 	}
 	let once = listener.keyword == ONCE_WORD;
@@ -581,10 +519,7 @@ impl Listeners {
 				- named.iter().filter(|(_, other)| other == event).count()
 		};
 		Listeners {
-			counts: handlers
-				.iter()
-				.map(|(_, name, _)| (name.clone(), unnamed(name)))
-				.collect(),
+			counts: handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect(),
 			// a handler nothing emits is gone: its name binds nothing
 			bound: statements.iter().flat_map(assigned_and_loop_names).collect(),
 			named,
@@ -592,11 +527,7 @@ impl Listeners {
 	}
 
 	fn flags(&self, event: &str) -> Vec<String> {
-		self.named
-			.iter()
-			.filter(|(_, other)| other == event)
-			.map(|(listener, _)| listening_flag(listener))
-			.collect()
+		self.named.iter().filter(|(_, other)| other == event).map(|(listener, _)| listening_flag(listener)).collect()
 	}
 
 	/// The place of a named handler among its event's handlers, from 1
@@ -630,11 +561,7 @@ impl Listeners {
 			if_then(condition, block(vec![assign(&flag, Node::False)]))
 		};
 		let removal = std::iter::once(assign(REMOVED_PLACE, reflected(removed.clone(), self)));
-		block(
-			removal
-				.chain(self.flags(event).into_iter().enumerate().map(at_place))
-				.collect(),
-		)
+		block(removal.chain(self.flags(event).into_iter().enumerate().map(at_place)).collect())
 	}
 
 	/// `listeners of alarm`: the places of its handlers still listening, `[1, 3]` once the second is removed
@@ -674,10 +601,7 @@ fn reflected(statement: Node, listeners: &Listeners) -> Node {
 		return statement.map_children(|child| reflected(child, listeners));
 	};
 	let words: Vec<String> = items.iter().map(word).collect();
-	match (
-		words.iter().map(String::as_str).collect::<Vec<_>>().as_slice(),
-		items.as_slice(),
-	) {
+	match (words.iter().map(String::as_str).collect::<Vec<_>>().as_slice(), items.as_slice()) {
 		(_, [target, rest @ ..]) if let Some(event) = event(target, rest) => listeners.list(&event),
 		([REMOVE_WORD, _, FROM_WORD, ..], [_, removed, _, target, rest @ ..])
 			if let Some(event) = event(target, rest) =>
@@ -704,15 +628,8 @@ fn reflected(statement: Node, listeners: &Listeners) -> Node {
 			)
 		}
 		([COUNT_WORD, ..], [_, target, rest @ ..]) if let Some(event) = event(target, rest) => {
-			let listening = listeners
-				.flags(&event)
-				.into_iter()
-				.map(|flag| format!(" + (if {flag} then 1 else 0)"));
-			parse(&format!(
-				"{}{}",
-				listeners.counts[&event],
-				listening.collect::<String>()
-			))
+			let listening = listeners.flags(&event).into_iter().map(|flag| format!(" + (if {flag} then 1 else 0)"));
+			parse(&format!("{}{}", listeners.counts[&event], listening.collect::<String>()))
 		}
 		_ => statement.map_children(|child| reflected(child, listeners)),
 	}
@@ -931,15 +848,9 @@ pub(crate) fn function_with_globals(
 	bodies: &[Node],
 	main_variables: &HashSet<String>,
 ) -> Node {
-	let statements: Vec<Node> = global_declarations(bodies, main_variables, &[EVENT_WORD])
-		.into_iter()
-		.chain(bodies.iter().cloned())
-		.collect();
-	let template = if takes_event {
-		FUNCTION_TEMPLATE
-	} else {
-		PARAMETERLESS_TEMPLATE
-	};
+	let statements: Vec<Node> =
+		global_declarations(bodies, main_variables, &[EVENT_WORD]).into_iter().chain(bodies.iter().cloned()).collect();
+	let template = if takes_event { FUNCTION_TEMPLATE } else { PARAMETERLESS_TEMPLATE };
 	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else {
 		unreachable!("the template is a definition")
 	};
@@ -999,9 +910,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 		});
 		changes
 	};
-	let changing_before_last = bodies
-		.split_last()
-		.is_some_and(|(_, earlier)| earlier.iter().any(changes_event));
+	let changing_before_last = bodies.split_last().is_some_and(|(_, earlier)| earlier.iter().any(changes_event));
 	if !changing_before_last {
 		return bodies.to_vec();
 	}
@@ -1012,12 +921,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 	};
 	let kept = assign(RAISED_EVENT, copy_of(EVENT_WORD));
 	std::iter::once(kept)
-		.chain(
-			bodies
-				.iter()
-				.enumerate()
-				.flat_map(|(index, body)| restored(index).into_iter().chain([body.clone()])),
-		)
+		.chain(bodies.iter().enumerate().flat_map(|(index, body)| restored(index).into_iter().chain([body.clone()])))
 		.collect()
 }
 
@@ -1043,9 +947,7 @@ fn emit_cycle(bodies: &HashMap<String, Vec<Node>>, verbs: &[String]) -> Option<V
 	let mut names: Vec<&String> = bodies.keys().collect();
 	names.sort();
 	let mut done = HashSet::new();
-	names
-		.into_iter()
-		.find_map(|name| cycle_from(name, &edges, &mut vec![], &mut done))
+	names.into_iter().find_map(|name| cycle_from(name, &edges, &mut vec![], &mut done))
 }
 
 fn cycle_from(
@@ -1072,10 +974,9 @@ fn unconditional_emits(body: &Node, verbs: &[String]) -> Vec<String> {
 		return vec![name];
 	}
 	match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) => statements
-			.iter()
-			.filter_map(|statement| emitted(statement, verbs).map(|(name, _)| name))
-			.collect(),
+		Node::List(statements, Bracket::Curly, _) => {
+			statements.iter().filter_map(|statement| emitted(statement, verbs).map(|(name, _)| name)).collect()
+		}
 		_ => vec![],
 	}
 }
@@ -1122,11 +1023,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		};
 		// `{ emit alarm }` is a block of one statement: it stays a block
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
-		return if braced {
-			Node::List(vec![call], Bracket::Curly, Separator::Semicolon)
-		} else {
-			call
-		};
+		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
 	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, shows_page))
 }

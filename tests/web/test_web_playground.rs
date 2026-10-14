@@ -16,10 +16,7 @@ fn evaluate_reports_the_value_the_cli_prints() {
 	let report = evaluate("3+3", HashSet::new());
 	assert_eq!(report["value"], "6");
 	assert_eq!(report["error"], false);
-	assert_eq!(
-		evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"],
-		"[1 2.5 \"x\" a:3]"
-	);
+	assert_eq!(evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"], "[1 2.5 \"x\" a:3]");
 	assert_eq!(evaluate("xs=[1 2]; xs#5", HashSet::new())["error"], true);
 }
 
@@ -67,18 +64,10 @@ fn a_trap_in_the_page_names_the_runtime_error() {
 	let trap = json!({"trap": "unreachable", "trace": "RuntimeError: unreachable\n    at index_out_of_range (wasm://wasm/1:1)"});
 	assert!(matches!(run_outcome(&trap), Node::Error(_)));
 	assert!(run_outcome(&trap).serialize().contains("index out of range"));
-	assert!(run_outcome(&json!({"failure": "link error"}))
-		.serialize()
-		.contains("could not run the program"));
-	assert_eq!(
-		run_outcome(&json!({"trap": "remainder by zero", "trace": ""})),
-		warp::wasm_emitter::eval("5%0")
-	);
+	assert!(run_outcome(&json!({"failure": "link error"})).serialize().contains("could not run the program"));
+	assert_eq!(run_outcome(&json!({"trap": "remainder by zero", "trace": ""})), warp::wasm_emitter::eval("5%0"));
 	run_outcome(&json!({"result": {"kind": "0"}, "warnings": ["careful"]}));
-	assert_eq!(
-		warp::errors::diagnostic::take_runtime_warnings(),
-		vec!["careful".to_string()]
-	);
+	assert_eq!(warp::errors::diagnostic::take_runtime_warnings(), vec!["careful".to_string()]);
 }
 
 #[test]

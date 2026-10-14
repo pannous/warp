@@ -5,8 +5,5 @@ use crate::is;
 
 #[test]
 fn mono_and_stereo_render_as_long_as_they_sound() {
-	is!(
-		"use sound\nplay(C4, 0.1s)\npan = 1.0\nplay(E4, 0.1s)\nround(render_sound(\"pan.wav\") * 10)",
-		2
-	);
+	is!("use sound\nplay(C4, 0.1s)\npan = 1.0\nplay(E4, 0.1s)\nround(render_sound(\"pan.wav\") * 10)", 2);
 }

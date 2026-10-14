@@ -28,10 +28,7 @@ fn spaced_elements(program: Node, defined: &HashSet<String>) -> Node {
 			if crate::variable_signals::is_statement_list(&bracket, &separator) =>
 		{
 			Node::List(
-				statements
-					.into_iter()
-					.map(|statement| spaced_element(statement, defined))
-					.collect(),
+				statements.into_iter().map(|statement| spaced_element(statement, defined)).collect(),
 				bracket,
 				separator,
 			)
@@ -58,11 +55,7 @@ fn spaced_element(node: Node, defined: &HashSet<String>) -> Node {
 				(element_head(head, defined), body.drop_meta())
 			{
 				content.extend(children.iter().cloned());
-				return key(
-					Node::Symbol(tag),
-					Op::Colon,
-					Node::List(content, Bracket::Curly, separator.clone()),
-				);
+				return key(Node::Symbol(tag), Op::Colon, Node::List(content, Bracket::Curly, separator.clone()));
 			}
 		}
 	}
@@ -185,10 +178,8 @@ fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Nod
 	let Node::Symbol(name) = name.drop_meta() else {
 		return None;
 	};
-	let all_pairs = !pairs.is_empty()
-		&& pairs
-			.iter()
-			.all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _)));
+	let all_pairs =
+		!pairs.is_empty() && pairs.iter().all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _)));
 	(all_pairs && !defined.contains(name)).then(|| (name.clone(), pairs.to_vec()))
 }
 
@@ -209,21 +200,16 @@ fn with_form_routes(node: Node) -> Node {
 		written.push(item);
 		if let [.., form, method, action, block] = written.as_slice() {
 			let method = method.drop_meta().name();
-			if let (FORM_TAG, true, Node::List(body, Bracket::Curly, body_separator)) = (
-				form.drop_meta().name().as_str(),
-				crate::serve::METHODS.contains(&method.as_str()),
-				block.drop_meta(),
-			) {
+			if let (FORM_TAG, true, Node::List(body, Bracket::Curly, body_separator)) =
+				(form.drop_meta().name().as_str(), crate::serve::METHODS.contains(&method.as_str()), block.drop_meta())
+			{
 				let (action, body, body_separator) = (action.clone(), body.clone(), body_separator.clone());
 				written.pop();
 				written.truncate(written.len() - 3);
 				let attribute = |name: &str, value: Node| key(symbol(name), Op::Colon, value);
-				let fields = [
-					attribute(METHOD_ATTRIBUTE, Node::Text(method)),
-					attribute(ACTION_ATTRIBUTE, action),
-				]
-				.into_iter()
-				.chain(body);
+				let fields = [attribute(METHOD_ATTRIBUTE, Node::Text(method)), attribute(ACTION_ATTRIBUTE, action)]
+					.into_iter()
+					.chain(body);
 				written.push(key(
 					symbol(FORM_TAG),
 					Op::Colon,
@@ -244,11 +230,9 @@ fn with_form_routes(node: Node) -> Node {
 /// definition; in an element any other `name = value` stays the assignment
 pub fn lower_html_attributes(node: Node) -> Node {
 	match node {
-		Node::Key(tag, Op::Colon, body) if is_element_name(&tag) => Node::Key(
-			tag,
-			Op::Colon,
-			Box::new(lower_html_attributes(attributes_of_group(*body))),
-		),
+		Node::Key(tag, Op::Colon, body) if is_element_name(&tag) => {
+			Node::Key(tag, Op::Colon, Box::new(lower_html_attributes(attributes_of_group(*body))))
+		}
 		Node::List(items, bracket, separator) if items.first().is_some_and(is_element_name) && items.len() > 1 => {
 			let mut items = items.into_iter();
 			let tag = items.next().into_iter();
@@ -320,13 +304,7 @@ fn loop_as_comprehension(item: Node) -> Node {
 		other => other.clone(),
 	};
 	let header = Node::List(
-		vec![
-			for_word.clone(),
-			variable.clone(),
-			in_word.clone(),
-			sequence.clone(),
-			Node::Empty,
-		],
+		vec![for_word.clone(), variable.clone(), in_word.clone(), sequence.clone(), Node::Empty],
 		Bracket::None,
 		Separator::Space,
 	);
@@ -375,17 +353,9 @@ fn tag_per_item(tag: String, values: Node) -> Node {
 		Bracket::None,
 		Separator::Space,
 	);
-	Node::List(
-		vec![tag_node(tag, vec![item]), header],
-		Bracket::Square,
-		Separator::Space,
-	)
+	Node::List(vec![tag_node(tag, vec![item]), header], Bracket::Square, Separator::Space)
 }
 
 fn tag_node(name: String, items: Vec<Node>) -> Node {
-	key(
-		Node::Symbol(name),
-		Op::Colon,
-		Node::List(items, Bracket::Curly, Separator::Space),
-	)
+	key(Node::Symbol(name), Op::Colon, Node::List(items, Bracket::Curly, Separator::Space))
 }

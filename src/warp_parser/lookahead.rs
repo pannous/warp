@@ -6,13 +6,8 @@ use super::*;
 pub(super) const FOURTH_ROOT: char = '∜';
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x` (card g-1pvQ: norm is a synonym of abs),
 /// `not x`
-pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 5] = [
-	("sqrt", Op::Sqrt),
-	("cbrt", Op::Cbrt),
-	("abs", Op::Abs),
-	("norm", Op::Abs),
-	("not", Op::Not),
-];
+pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 5] =
+	[("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs), ("not", Op::Not)];
 /// operators::OPERATOR_SPELLINGS, the longest first: `<=` before `<`, `is less than` before `is`
 static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync::LazyLock::new(|| {
 	let mut spellings: Vec<_> = crate::operators::all_spellings().collect();
@@ -54,18 +49,12 @@ impl WarpParser {
 		while matches!(self.peek_char(position), ' ' | '\t') {
 			position += 1;
 		}
-		!matches!(
-			self.peek_char(position),
-			'\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '='
-		)
+		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
 	}
 
 	/// `{from:1 to:2}`: an operator word directly before a key colon names the key; `else:` and `then:` open blocks
 	fn word_names_key(&self) -> bool {
-		let word: String = (0..)
-			.map(|offset| self.peek_char(offset))
-			.take_while(|&c| is_identifier_char(c))
-			.collect();
+		let word: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
 		let after = word.chars().count();
 		!word.is_empty()
 			&& !BLOCK_COLON_WORDS.contains(&word.as_str())
@@ -167,11 +156,7 @@ impl WarpParser {
 		if self.options.data_mode || !self.matches_keyword(AND_KEYWORD) {
 			return false;
 		}
-		let blanks = |from: usize| {
-			(from..)
-				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
-				.count()
-		};
+		let blanks = |from: usize| (from..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
 		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
 		let word = self.word_at(word_start);
 		if word.is_empty() || joins_operands(&word) || !self.peek_char(word_start).is_alphabetic() {
@@ -192,10 +177,7 @@ impl WarpParser {
 		if self.matches_keyword("while") {
 			return Some((Op::While, 5));
 		}
-		if let Some((word, op)) = PREFIX_OPERATOR_WORDS
-			.into_iter()
-			.find(|(word, _)| self.matches_keyword(word))
-		{
+		if let Some((word, op)) = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word)) {
 			return (!self.defines_named(word.len())).then_some((op, word.len()));
 		}
 		if self.matches_keyword("if") {
@@ -281,9 +263,7 @@ impl WarpParser {
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
 	/// one line is two optional fields, no ternary
 	pub(super) fn next_field_follows(&self, width: usize) -> bool {
-		let blanks = (width..)
-			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-			.count();
+		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
 		let name = self.word_at(width + blanks).chars().count();
 		let colon = width + blanks + name;
 		self.type_fields.is_some()
@@ -302,23 +282,15 @@ impl WarpParser {
 	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
 	/// `assignments`: C#'s object initializer `Point { X = 3 }` of a declared class sets its fields with `=` too
 	pub(super) fn block_after_blanks(&self, assignments: bool) -> bool {
-		let blanks_from = |start: usize| {
-			(start..)
-				.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-				.count()
-		};
+		let blanks_from = |start: usize| (start..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
 		let blanks = blanks_from(0);
 		if blanks == 0 || self.peek_char(blanks) != '{' {
 			return false;
 		}
 		// the block's first entry may start on the next line (`Person {⏎ name: "Alice" …}`)
-		let first = blanks
-			+ 1 + (blanks + 1..)
-			.take_while(|at| self.peek_char(*at).is_whitespace())
-			.count();
-		let name = (first..)
-			.take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_')
-			.count();
+		let first = blanks + 1 + (blanks + 1..).take_while(|at| self.peek_char(*at).is_whitespace()).count();
+		let name =
+			(first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
 		let after_name = first + name + blanks_from(first + name);
 		let assigns = assignments && self.peek_char(after_name) == '=' && self.peek_char(after_name + 1) != '=';
 		self.peek_char(first) == '}'
@@ -328,9 +300,7 @@ impl WarpParser {
 	/// Do blanks and then a closing bracket, `,`, `;`, an assignment `=`, a comment or the line end follow `offset`:
 	/// nothing a ternary could be followed by
 	pub(super) fn closes_after_blanks(&self, offset: usize) -> bool {
-		let blanks = (offset..)
-			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-			.count();
+		let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
 		let at = offset + blanks;
 		let comment_starts = self.peek_char(at) == '/' && matches!(self.peek_char(at + 1), '/' | '*');
 		blanks > 0 && (comment_starts || self.ends_optional_type(self.peek_char(at), self.peek_char(at + 1)))

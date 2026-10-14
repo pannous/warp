@@ -32,10 +32,7 @@ impl WarpParser {
 
 	/// `\x ->`, `\a b ->`: names and an arrow after the backslash (`\alpha` alone is an entity)
 	pub(crate) fn backslash_lambda_ahead(&self) -> bool {
-		let rest: String = self.chars[self.pos + 1..]
-			.iter()
-			.take_while(|ch| **ch != '\n')
-			.collect();
+		let rest: String = self.chars[self.pos + 1..].iter().take_while(|ch| **ch != '\n').collect();
 		let Some((names, _)) = rest.split_once("->") else {
 			return false;
 		};
@@ -117,9 +114,7 @@ impl WarpParser {
 		}
 		let start = self.pos + PYTHON_LAMBDA_KEYWORD.len();
 		let rest = &self.chars[start..];
-		let colon = rest
-			.iter()
-			.position(|ch| matches!(ch, ':' | '\n' | ';' | '{' | '[' | ')'))?;
+		let colon = rest.iter().position(|ch| matches!(ch, ':' | '\n' | ';' | '{' | '[' | ')'))?;
 		let parameters: String = rest[..colon].iter().collect();
 		let names_a_variable = parameters.trim_start().starts_with('=');
 		if rest[colon] != ':' || names_a_variable || rest.get(colon + 1) == Some(&'=') {

@@ -26,10 +26,7 @@ fn text_repeat_names_the_explicit_form() {
 	let (_, hints) = capture_hints(|| eval("g=\"ab\"; g*2"));
 	assert!(hints.iter().any(|hint| hint.canonical == "2 times g"), "{hints:?}");
 	let (_, hints) = capture_hints(|| eval("\"5\"*3"));
-	assert!(
-		hints.iter().any(|hint| hint.reason.contains("int(\"5\")*3")),
-		"{hints:?}"
-	);
+	assert!(hints.iter().any(|hint| hint.reason.contains("int(\"5\")*3")), "{hints:?}");
 }
 
 #[test]

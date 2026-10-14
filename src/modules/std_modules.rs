@@ -39,10 +39,8 @@ pub(crate) const PRELUDE_MODULE: &str = "prelude";
 /// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
 pub(crate) const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
-pub(crate) const PRELUDE_WORDS: [(&str, &[&str]); 2] = [
-	("file", &["write", "exists", "write_bytes", "read_bytes"]),
-	("os", &["exec"]),
-];
+pub(crate) const PRELUDE_WORDS: [(&str, &[&str]); 2] =
+	[("file", &["write", "exists", "write_bytes", "read_bytes"]), ("os", &["exec"])];
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
 /// a note, when a used module defines that word
 pub(crate) const STD_ALIASES: [(&str, &str); 27] = [
@@ -88,10 +86,7 @@ pub(super) fn is_embedded_std_file(path: &Path) -> bool {
 	if !cfg!(feature = "native") {
 		return folder == Path::new(STD_FOLDER);
 	}
-	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR"))
-		.join(STD_FOLDER)
-		.canonicalize()
-		.ok();
+	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
 	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
 		|| std::fs::read_to_string(path).is_ok_and(|text| text == source)
 }
@@ -110,9 +105,7 @@ pub(super) fn std_path(name: &str) -> PathBuf {
 
 /// Is `file` an embedded standard module as loaded (std_path): code the program's writer does not write
 pub fn is_std_source(file: &str) -> bool {
-	let name = file
-		.strip_prefix(STD_FOLDER)
-		.and_then(|rest| rest.strip_prefix('/')?.strip_suffix(".warp"));
+	let name = file.strip_prefix(STD_FOLDER).and_then(|rest| rest.strip_prefix('/')?.strip_suffix(".warp"));
 	name.is_some_and(|name| std_module(name).is_some())
 }
 
@@ -128,18 +121,12 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 
 pub(super) fn std_module(name: &str) -> Option<&'static str> {
 	let name = std_module_name(name);
-	STD_MODULES
-		.iter()
-		.find(|(module, _)| *module == name)
-		.map(|(_, source)| *source)
+	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
 
 /// A standard module's own name for one of its aliases (`graphics` → draw), so each is loaded once
 pub(super) fn std_module_name(name: &str) -> &str {
-	STD_MODULE_ALIASES
-		.iter()
-		.find(|(alias, _)| *alias == name)
-		.map_or(name, |(_, module)| *module)
+	STD_MODULE_ALIASES.iter().find(|(alias, _)| *alias == name).map_or(name, |(_, module)| *module)
 }
 
 /// The names the standard module at `index` of STD_MODULES defines, in their order; each module is parsed for them
@@ -166,10 +153,7 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 
 /// The names a standard module defines, in their order (`dir(time)`); None for no standard module
 pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
-	STD_MODULES
-		.iter()
-		.position(|(name, _)| *name == module)
-		.map(std_module_words)
+	STD_MODULES.iter().position(|(name, _)| *name == module).map(std_module_words)
 }
 
 /// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word
@@ -186,26 +170,27 @@ pub fn prelude_word_defaults(word: &str) -> usize {
 /// 1e-6)`), one left out is its default (`limit = 0`); unchanged for no prelude word
 pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 	let source = std_module(PRELUDE_MODULE).unwrap_or_default();
-	let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
-		.into_iter()
-		.find_map(|statement| match statement.drop_meta() {
-			Node::Key(head, Op::Define, _) if leftmost_symbol(head).as_deref() == Some(word) => {
-				match head.drop_meta() {
-					Node::List(items, _, _) => Some(
-						items[1..]
-							.iter()
-							.map(|item| match item.drop_meta() {
-								Node::Key(name, Op::Assign, default) => {
-									(name.drop_meta().name(), Some(default.as_ref().clone()))
-								}
-								other => (other.name(), None),
-							})
-							.collect::<Vec<_>>(),
-					),
-					_ => None,
+	let parameters =
+		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).into_iter().find_map(|statement| {
+			match statement.drop_meta() {
+				Node::Key(head, Op::Define, _) if leftmost_symbol(head).as_deref() == Some(word) => {
+					match head.drop_meta() {
+						Node::List(items, _, _) => Some(
+							items[1..]
+								.iter()
+								.map(|item| match item.drop_meta() {
+									Node::Key(name, Op::Assign, default) => {
+										(name.drop_meta().name(), Some(default.as_ref().clone()))
+									}
+									other => (other.name(), None),
+								})
+								.collect::<Vec<_>>(),
+						),
+						_ => None,
+					}
 				}
+				_ => None,
 			}
-			_ => None,
 		});
 	let Some(parameters) = parameters else { return arguments };
 	let mut slots: Vec<Option<Node>> = vec![None; parameters.len()];
@@ -217,22 +202,15 @@ pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 		_ => None,
 	};
 	for argument in arguments.iter() {
-		let (slot, value) = named_slot(argument).unwrap_or_else(|| {
-			(
-				slots.iter().position(Option::is_none).unwrap_or(slots.len()),
-				argument.clone(),
-			)
-		});
+		let (slot, value) = named_slot(argument)
+			.unwrap_or_else(|| (slots.iter().position(Option::is_none).unwrap_or(slots.len()), argument.clone()));
 		match slots.get_mut(slot) {
 			Some(empty @ None) => *empty = Some(value),
 			_ => return arguments, // too many, or one twice: the arity check names it
 		}
 	}
-	let filled: Option<Vec<Node>> = slots
-		.into_iter()
-		.zip(&parameters)
-		.map(|(slot, (_, default))| slot.or_else(|| default.clone()))
-		.collect();
+	let filled: Option<Vec<Node>> =
+		slots.into_iter().zip(&parameters).map(|(slot, (_, default))| slot.or_else(|| default.clone())).collect();
 	filled.unwrap_or(arguments)
 }
 
@@ -265,10 +243,7 @@ pub(super) fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 		READING_PRELUDE.set(false);
 		parameters
 	});
-	parameters
-		.iter()
-		.find(|(name, _, _)| name == word)
-		.map(|(_, arity, defaults)| (*arity, *defaults))
+	parameters.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or

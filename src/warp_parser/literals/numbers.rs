@@ -25,9 +25,7 @@ pub(crate) fn float_node(text: &str) -> Node {
 	if let Some(exact) = crate::extensions::numbers::long_decimal(text) {
 		return Node::Number(exact);
 	}
-	text.parse::<f64>()
-		.map(Node::float)
-		.unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
+	text.parse::<f64>().map(Node::float).unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
 }
 
 /// Numerator and denominator of a Unicode vulgar fraction character: ½ → (1, 2), ⅚ → (5, 6), ↉ → (0, 3)
@@ -86,10 +84,7 @@ impl WarpParser {
 		let number = self.parse_number_value();
 		let literal: String = self.chars[start..self.pos].iter().collect();
 		let number = self.keep_source_literal(number, &literal);
-		match self
-			.literal_type_suffix()
-			.or_else(|| self.scientific_float(&number, &literal))
-		{
+		match self.literal_type_suffix().or_else(|| self.scientific_float(&number, &literal)) {
 			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
 			None => self.with_juxtaposed_factor(number),
 		}
@@ -103,10 +98,7 @@ impl WarpParser {
 	}
 
 	pub(crate) fn at_ordinal_suffix(&self) -> bool {
-		let word: String = self.chars[self.pos..]
-			.iter()
-			.take_while(|c| is_identifier_char(**c))
-			.collect();
+		let word: String = self.chars[self.pos..].iter().take_while(|c| is_identifier_char(**c)).collect();
 		ORDINAL_SUFFIXES.contains(&word.as_str())
 	}
 
@@ -116,9 +108,7 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		let suffix = LITERAL_SUFFIXES
-			.iter()
-			.find(|(letter, _)| *letter == self.current_char());
+		let suffix = LITERAL_SUFFIXES.iter().find(|(letter, _)| *letter == self.current_char());
 		if let Some((_, number_type)) = suffix.filter(|_| !is_identifier_char(self.peek_char(1))) {
 			self.advance();
 			return Some(number_type.to_string());
@@ -126,10 +116,7 @@ impl WarpParser {
 		if self.current_char() != ':' {
 			return None;
 		}
-		let name: String = self.chars[self.pos + 1..]
-			.iter()
-			.take_while(|c| is_identifier_char(**c))
-			.collect();
+		let name: String = self.chars[self.pos + 1..].iter().take_while(|c| is_identifier_char(**c)).collect();
 		// `0.1:float`, `1.5:int`, `x:exact`: a number type binds tightly, unlike the loose `as`
 		if !crate::type_tests::is_number_type_word(&name) {
 			return None;
@@ -155,11 +142,7 @@ impl WarpParser {
 	fn read_number_value(&mut self) -> Node {
 		// RFC 3339 / RFC 9557 literal: 2024-01-31, 2024-01-31T10:00Z, 2024-01-31T10:00[Europe/Berlin]
 		// Not in data mode yet: the data path round-trips source text and has no date serialization
-		let literal_len = if self.options.data_mode {
-			0
-		} else {
-			crate::time::literal_len(&self.chars[self.pos..])
-		};
+		let literal_len = if self.options.data_mode { 0 } else { crate::time::literal_len(&self.chars[self.pos..]) };
 		if literal_len > 0 {
 			let literal = self.take_chars(literal_len);
 			return Node::data(crate::time::TimeLiteral(literal));
@@ -182,9 +165,7 @@ impl WarpParser {
 			&& matches!(self.peek_char(2), '0' | '1')
 		{
 			self.advance_by(2);
-			let bits: String = self
-				.take_while_char(|ch| matches!(ch, '0' | '1' | '_'))
-				.replace('_', "");
+			let bits: String = self.take_while_char(|ch| matches!(ch, '0' | '1' | '_')).replace('_', "");
 			return i64::from_str_radix(&format!("{num_str}{bits}"), 2)
 				.map(Node::int)
 				.unwrap_or_else(|_| error(&format!("Invalid binary: 0b{bits}")));
@@ -242,12 +223,8 @@ impl WarpParser {
 		let fraction = &self.chars[self.pos + 1..];
 		let (fixed, period, length) = overlined_fraction(fraction)?;
 		self.advance_by(1 + length);
-		let (negative, integer) = integer
-			.strip_prefix('-')
-			.map_or((false, integer), |digits| (true, digits));
-		Some(Node::Number(Number::repeating_decimal(
-			negative, integer, &fixed, &period,
-		)))
+		let (negative, integer) = integer.strip_prefix('-').map_or((false, integer), |digits| (true, digits));
+		Some(Node::Number(Number::repeating_decimal(negative, integer, &fixed, &period)))
 	}
 
 	/// `⅓` is the exact ratio 1/3; a number written directly after it multiplies: `⅓9` is 3
@@ -300,9 +277,6 @@ impl WarpParser {
 			self.advance();
 		}
 		self.push_digits(&mut exponent);
-		exponent
-			.parse::<i64>()
-			.map(Some)
-			.map_err(|_| format!("Invalid exponent: e{}", exponent))
+		exponent.parse::<i64>().map(Some).map_err(|_| format!("Invalid exponent: e{}", exponent))
 	}
 }

@@ -60,9 +60,7 @@ impl Acknowledger for PageAcknowledger {
 
 	/// The page answers later, with its "got it" buttons: this expression, or all of the kind
 	fn acknowledge(&self, topic: &str, written: &str) -> crate::errors::diagnostic::GotIt {
-		self.notes
-			.borrow_mut()
-			.push((topic.to_string(), diagnostic::expression_key(topic, written)));
+		self.notes.borrow_mut().push((topic.to_string(), diagnostic::expression_key(topic, written)));
 		crate::errors::diagnostic::GotIt::No
 	}
 }
@@ -75,19 +73,14 @@ impl Acknowledger for PageAcknowledger {
 /// holds topics and expression keys. Acknowledging silences a warning, never changes the value.
 pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	let notes = Rc::new(RefCell::new(Vec::new()));
-	let acknowledger = PageAcknowledger {
-		acknowledged,
-		notes: notes.clone(),
-	};
+	let acknowledger = PageAcknowledger { acknowledged, notes: notes.clone() };
 	diagnostic::take_warnings();
 	diagnostic::take_error_diagnostics();
 	diagnostic::take_runtime_warnings();
 	let (result, hints) =
 		diagnostic::with_acknowledger(acknowledger, || crate::normalize::capture_hints(|| run_shown(code)));
-	let warnings: Vec<Value> = diagnostic::take_warnings()
-		.iter()
-		.map(|warning| diagnostic_json(code, warning))
-		.collect();
+	let warnings: Vec<Value> =
+		diagnostic::take_warnings().iter().map(|warning| diagnostic_json(code, warning)).collect();
 	let is_error = matches!(result.drop_meta(), Node::Error(_));
 	let errors: Vec<Value> = unique(diagnostic::take_error_diagnostics())
 		.iter()
@@ -189,14 +182,10 @@ fn unique(diagnostics: Vec<diagnostic::Diagnostic>) -> Vec<diagnostic::Diagnosti
 /// acknowledged topics (its other keys were remembered Ask answers, which no longer exist)
 pub fn acknowledged_topics(json: &str) -> HashSet<String> {
 	match serde_json::from_str::<Value>(json).unwrap_or_default() {
-		Value::Array(topics) => topics
-			.iter()
-			.filter_map(|topic| topic.as_str().map(str::to_string))
-			.collect(),
-		Value::Object(answers) => answers
-			.keys()
-			.filter_map(|key| key.strip_prefix("ack:").map(str::to_string))
-			.collect(),
+		Value::Array(topics) => topics.iter().filter_map(|topic| topic.as_str().map(str::to_string)).collect(),
+		Value::Object(answers) => {
+			answers.keys().filter_map(|key| key.strip_prefix("ack:").map(str::to_string)).collect()
+		}
 		_ => HashSet::new(),
 	}
 }
@@ -211,34 +200,18 @@ pub fn acknowledged_topics(json: &str) -> HashSet<String> {
 /// `{"failure": message}` (the module did not compile, link or instantiate)
 pub fn run_outcome(outcome: &Value) -> Node {
 	RENDERED.with(|rendered| *rendered.borrow_mut() = outcome.get("html").and_then(Value::as_str).map(str::to_string));
-	for warning in outcome
-		.get("warnings")
-		.and_then(Value::as_array)
-		.into_iter()
-		.flatten()
-		.filter_map(Value::as_str)
-	{
+	for warning in outcome.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
 		diagnostic::report_runtime_warning(warning);
 	}
 	if let Some(tree) = outcome.get("result") {
 		return node_from_tree(tree);
 	}
 	if let Some(message) = outcome.get("trap").and_then(Value::as_str) {
-		let mut trace = outcome
-			.get("trace")
-			.and_then(Value::as_str)
-			.unwrap_or_default()
-			.to_string();
+		let mut trace = outcome.get("trace").and_then(Value::as_str).unwrap_or_default().to_string();
 		if let Some(detail) = outcome.get("detail").filter(|detail| !detail.is_null()) {
-			trace.push_str(&format!(
-				"\n{}",
-				crate::wasm_emitter::trap_detail_line(&node_from_tree(detail))
-			));
+			trace.push_str(&format!("\n{}", crate::wasm_emitter::trap_detail_line(&node_from_tree(detail))));
 		}
-		let position = outcome
-			.get("position")
-			.and_then(Value::as_str)
-			.and_then(|position| position.parse().ok());
+		let position = outcome.get("position").and_then(Value::as_str).and_then(|position| position.parse().ok());
 		if let Some(line) = position.and_then(crate::wasm_emitter::trap_position_line) {
 			trace.push_str(&format!("\n{line}"));
 		}
@@ -247,10 +220,7 @@ pub fn run_outcome(outcome: &Value) -> Node {
 	if let Some(message) = outcome.get("error").and_then(Value::as_str) {
 		return crate::node::error(message); // a host word failed with its own message (run_block)
 	}
-	let failure = outcome
-		.get("failure")
-		.and_then(Value::as_str)
-		.unwrap_or("the page sent no outcome");
+	let failure = outcome.get("failure").and_then(Value::as_str).unwrap_or("the page sent no outcome");
 	crate::node::error(&format!("could not run the program: {failure}"))
 }
 
@@ -261,13 +231,22 @@ pub fn shown(outcome: &Value) -> Value {
 	json!({ "value": value.serialize(), "html": html_of(&value) })
 }
 
-/// The playground's Deploy (deploy.js, notes/hosting.md): `{scripts, module_length}` (the host scripts' names, which
-/// warp-hosting takes as ?scripts=) and the program's module for a Worker, or `{error}` and no module
+/// The playground's Deploy (deploy.js, notes/hosting.md): `{query, scripts, site, module_length}` (the query naming the
+/// scripts warp-hosting composes the Worker of, those scripts, whether it serves a site) and the program's module, or
+/// `{error}` and no module
 pub fn worker_bundle(code: &str) -> (Value, Vec<u8>) {
-	match crate::host::host_parts::worker_parts(code) {
-		Ok((module, scripts)) => {
+	use crate::host::host_parts::Deployable;
+	match crate::host::host_parts::deployable(code) {
+		Ok(deployable) => {
+			let scripts = match &deployable {
+				Deployable::Server { scripts, .. } => scripts.clone(),
+				Deployable::Site { layout, .. } => layout.shipped(),
+			};
 			let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
-			(json!({ "scripts": names, "module_length": module.len() }), module)
+			let site = matches!(deployable, Deployable::Site { .. });
+			let module = deployable.module().to_vec();
+			let report = json!({ "query": deployable.hosting_query(), "scripts": names, "site": site, "module_length": module.len() });
+			(report, module)
 		}
 		Err(message) => (json!({ "error": message }), Vec::new()),
 	}
@@ -352,31 +331,19 @@ const TRAP_WORDS: [(&str, &str); 12] = [
 	("divide by zero", "integer divide by zero"),
 	("remainder by zero", "integer divide by zero"),
 	("divide result unrepresentable", "integer overflow"),
-	(
-		"float unrepresentable in integer range",
-		"invalid conversion to integer",
-	),
-	(
-		"null function or function signature mismatch",
-		"indirect call type mismatch",
-	),
+	("float unrepresentable in integer range", "invalid conversion to integer"),
+	("null function or function signature mismatch", "indirect call type mismatch"),
 	("dereferencing a null pointer", "null reference"),
 	("illegal cast", "cast failure"),
 	("array element access out of bounds", "out of bounds array access"),
-	(
-		"table index is out of bounds",
-		"undefined element: out of bounds table access",
-	),
+	("table index is out of bounds", "undefined element: out of bounds table access"),
 	("Maximum call stack size exceeded", "call stack exhausted"),
 ];
 const TRAP_PREFIX: &str = "wasm trap: ";
 
 /// The CLI's message for a trap the page reports in the browser engine's words
 fn engine_words(message: &str) -> String {
-	let words = TRAP_WORDS
-		.iter()
-		.find(|(engine, _)| message == *engine)
-		.map_or(message, |(_, wasmtime)| wasmtime);
+	let words = TRAP_WORDS.iter().find(|(engine, _)| message == *engine).map_or(message, |(_, wasmtime)| wasmtime);
 	format!("{TRAP_PREFIX}{words}")
 }
 
@@ -429,16 +396,11 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		tag if tag == Kind::Error as i64 => Node::Error(Box::new(Node::Text(text()))),
 		tag if tag == Kind::Symbol as i64 => Node::Symbol(text()),
 		tag if tag == Kind::Codepoint as i64 => Node::Char(
-			data.get("i31")
-				.and_then(Value::as_u64)
-				.and_then(|code| char::from_u32(code as u32))
-				.unwrap_or('\0'),
+			data.get("i31").and_then(Value::as_u64).and_then(|code| char::from_u32(code as u32)).unwrap_or('\0'),
 		),
-		tag if tag == Kind::Key as i64 => Node::Key(
-			Box::new(data_node()),
-			crate::operators::code_to_op(info),
-			Box::new(value_node()),
-		),
+		tag if tag == Kind::Key as i64 => {
+			Node::Key(Box::new(data_node()), crate::operators::code_to_op(info), Box::new(value_node()))
+		}
 		tag if tag == Kind::Block as i64 => list_node(
 			data.get("node").map(node_from_tree),
 			value,
@@ -460,10 +422,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			})
 		}
 		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
-		tag if tag == Kind::TypeDef as i64 => Node::Type {
-			name: Box::new(data_node()),
-			body: Box::new(value_node()),
-		},
+		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },
 		tag if tag == Kind::Uncertain as i64 => {
 			let floats = data.get("floats").and_then(Value::as_array);
 			crate::numbers::uncertain::Uncertain::read_node(
@@ -508,18 +467,9 @@ fn payload_number(payload: &Value) -> Option<Number> {
 		};
 	}
 	if let Some(big) = payload.get("big") {
-		let limbs: Vec<u32> = big
-			.get("limbs")?
-			.as_array()?
-			.iter()
-			.filter_map(Value::as_u64)
-			.map(|limb| limb as u32)
-			.collect();
-		let sign = if big.get("negative").and_then(Value::as_bool).unwrap_or(false) {
-			Sign::Minus
-		} else {
-			Sign::Plus
-		};
+		let limbs: Vec<u32> =
+			big.get("limbs")?.as_array()?.iter().filter_map(Value::as_u64).map(|limb| limb as u32).collect();
+		let sign = if big.get("negative").and_then(Value::as_bool).unwrap_or(false) { Sign::Minus } else { Sign::Plus };
 		return Some(Number::from_bigint(BigInt::from_slice(sign, &limbs)));
 	}
 	let [numerator, denominator] = payload.get("ratio")?.as_array()?.as_slice() else {
@@ -724,6 +674,13 @@ mod exports {
 		let (report, module) = worker_bundle(text(code, code_length));
 		MODULE.with(|kept| *kept.borrow_mut() = module);
 		kept(report.to_string().into_bytes())
+	}
+
+	/// The members to offer after the code and a dot (completion.js, lowering/data/members.rs), a JSON list of names;
+	/// returns its length, read at `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_member_names(code: *const u8, code_length: usize) -> usize {
+		kept(serde_json::to_vec(&crate::members::member_names(text(code, code_length))).unwrap_or_default())
 	}
 
 	#[no_mangle]

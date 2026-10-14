@@ -12,18 +12,9 @@ fn a_library_word_after_an_operator_takes_its_argument() {
 
 #[test]
 fn a_prefix_word_is_the_element_of_a_comprehension() {
-	is!(
-		"words = [\"ab\", \"cd\"]; join([upper w for w in words], \" \")",
-		"AB CD"
-	);
-	is!(
-		"s = \"banana\"; vowels = ['a', 'e']; [count v in s for v in vowels]#1",
-		3
-	);
-	is!(
-		"s = \"banana\"; vowels = ['a', 'e']; [count v in s for v in vowels]#2",
-		0
-	);
+	is!("words = [\"ab\", \"cd\"]; join([upper w for w in words], \" \")", "AB CD");
+	is!("s = \"banana\"; vowels = ['a', 'e']; [count v in s for v in vowels]#1", 3);
+	is!("s = \"banana\"; vowels = ['a', 'e']; [count v in s for v in vowels]#2", 0);
 }
 
 #[test]

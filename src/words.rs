@@ -64,6 +64,8 @@ pub const LIST_WORD: &str = "list";
 pub const NUMBER_WORD: &str = "number";
 /// `x is pair`: a `key: value` pair
 pub const PAIR_WORD: &str = "pair";
+/// The type of an operator node, `parse("1+1")`, `a<b` as data; a `key: value` pair stays a key (decision parse-type)
+pub const OPERATION_WORD: &str = "operation";
 pub const REAL_WORD: &str = "real";
 pub const SYMBOL_WORD: &str = "symbol";
 pub const TEXT_WORD: &str = "text";
@@ -99,3 +101,6 @@ pub const SPLIT_WORD: &str = "split";
 pub const LOG_WORD: &str = "log";
 /// `b = a.copy()`: values are never shared, so the copy is the value itself
 pub const COPY_WORD: &str = "copy";
+pub const STYLE_WORD: &str = "style";
+/// `min(a, b)` and `max(a, b)` of two values (lowering/collections/min_max.rs): a comparison, each argument computed once
+pub const EXTREMUM_WORDS: [&str; 2] = ["min", "max"];

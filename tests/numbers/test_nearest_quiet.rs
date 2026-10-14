@@ -9,17 +9,12 @@ fn nearest_warns_nothing_of_the_prelude() {
 	take_warnings();
 	is!("nearest(0.75, rational) == 3/4", true);
 	let warnings: Vec<String> = take_warnings().into_iter().map(|warning| warning.message).collect();
-	assert!(
-		warnings.iter().all(|warning| !warning.contains("compares floats")),
-		"{warnings:?}"
-	);
+	assert!(warnings.iter().all(|warning| !warning.contains("compares floats")), "{warnings:?}");
 }
 
 #[test]
 fn the_programs_own_float_equality_still_warns() {
 	take_warnings();
 	eval("0.1f + 0.2 == 0.3");
-	assert!(take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("compares floats exactly")));
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("compares floats exactly")));
 }

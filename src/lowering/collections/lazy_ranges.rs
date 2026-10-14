@@ -18,9 +18,8 @@ use crate::words::{COUNT_WORD, SUM_WORD};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Words a range variable may stand behind a dot for: they read the range without collecting it
-const READING_METHODS: [&str; 10] = [
-	COUNT_WORD, SUM_WORD, "map", "filter", "each", "fold", "find", "any", "all", "reduce",
-];
+const READING_METHODS: [&str; 10] =
+	[COUNT_WORD, SUM_WORD, "map", "filter", "each", "fold", "find", "any", "all", "reduce"];
 const START: &str = "range_start";
 const END: &str = "range_end";
 const INDEX: &str = "range_index";
@@ -37,11 +36,8 @@ pub fn lower(node: Node) -> Node {
 	}
 	let context = crate::analyzer::function_definitions(&node);
 	let own = |word: &str| context.user_functions.contains_key(word);
-	let mut lowering = Lowering {
-		counts: !own(COUNT_WORD),
-		sums: !own(SUM_WORD),
-		temporaries: Counter::starting_at(1),
-	};
+	let mut lowering =
+		Lowering { counts: !own(COUNT_WORD), sums: !own(SUM_WORD), temporaries: Counter::starting_at(1) };
 	let readers = range_readers(&node);
 	let node = replace_range_variables(node, &readers);
 	lowering.rewrite(pass_ranges_as_bounds(node, &readers))
@@ -76,11 +72,7 @@ fn range_parts(node: &Node) -> Option<(&Node, Node, Node)> {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => range_parts(&items[0]),
 		whole @ Node::Key(start, op @ (Op::Range | Op::To), end) => {
 			// `a to b` ends after b: its end is b + 1
-			let end = if *op == Op::To {
-				add_one(end)
-			} else {
-				end.drop_meta().clone()
-			};
+			let end = if *op == Op::To { add_one(end) } else { end.drop_meta().clone() };
 			Some((whole, start.drop_meta().clone(), end))
 		}
 		_ => None,
@@ -92,11 +84,7 @@ fn range_of(node: &Node) -> Option<Range> {
 	let Node::Key(written_start, _, written_end) = whole else {
 		return None;
 	};
-	(plain_bound(written_start) && plain_bound(written_end)).then(|| Range {
-		start,
-		end,
-		whole: whole.clone(),
-	})
+	(plain_bound(written_start) && plain_bound(written_end)).then(|| Range { start, end, whole: whole.clone() })
 }
 
 fn add_one(bound: &Node) -> Node {
@@ -156,10 +144,7 @@ impl Lowering {
 	}
 
 	fn temporary(&mut self, what: &str) -> Node {
-		Node::Symbol(format!(
-			"range{TEMPORARY_SEPARATOR}{}{TEMPORARY_SEPARATOR}{what}",
-			self.temporaries.next_number()
-		))
+		Node::Symbol(format!("range{TEMPORARY_SEPARATOR}{}{TEMPORARY_SEPARATOR}{what}", self.temporaries.next_number()))
 	}
 
 	/// `(t = value; body)` where body reads t
@@ -181,14 +166,8 @@ impl Lowering {
 	/// `r#i`: the number at i, or what the list would do there (the error `index out of range`)
 	fn element(&mut self, range: &Range, index: &Node) -> Node {
 		let length = self.length(range);
-		let picked = substitute(
-			substitute(self.bounds(INDEX_TEMPLATE, range), LENGTH, &length),
-			WHOLE,
-			&range.whole,
-		);
-		self.bound("index", index.drop_meta().clone(), &|index| {
-			substitute(picked.clone(), INDEX, index)
-		})
+		let picked = substitute(substitute(self.bounds(INDEX_TEMPLATE, range), LENGTH, &length), WHOLE, &range.whole);
+		self.bound("index", index.drop_meta().clone(), &|index| substitute(picked.clone(), INDEX, index))
 	}
 }
 
@@ -199,10 +178,8 @@ fn is_call(items: &[Node], separator: &Separator) -> bool {
 
 /// An index by position, not a key (`xs#"a"`) or a slice (`xs#(2..4)`)
 fn is_position(index: &Node) -> bool {
-	!matches!(
-		index.drop_meta(),
-		Node::Text(_) | Node::Char(_) | Node::Key(_, Op::Range | Op::To, _)
-	) && !matches!(index.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && range_of(&items[0]).is_some())
+	!matches!(index.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Key(_, Op::Range | Op::To, _))
+		&& !matches!(index.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && range_of(&items[0]).is_some())
 }
 
 /// In every statement list: `xs = a..b` that nothing changes and that is only read (count, index, sum, `for … in xs`,
@@ -250,14 +227,10 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 		return None;
 	}
 	let (before, after) = (&statements[..position], &statements[position + 1..]);
-	let bound_names: Vec<String> = [&range.start, &range.end]
-		.into_iter()
-		.flat_map(crate::variable_signals::symbols)
-		.collect();
+	let bound_names: Vec<String> =
+		[&range.start, &range.end].into_iter().flat_map(crate::variable_signals::symbols).collect();
 	let unchanged = |name: &str| !after.iter().any(|statement| changes(statement, name));
-	let read_only = before
-		.iter()
-		.all(|statement| has_parameter(statement, name) || !statement.mentions_any(&[name]))
+	let read_only = before.iter().all(|statement| has_parameter(statement, name) || !statement.mentions_any(&[name]))
 		&& after.iter().all(|statement| only_read(statement, name, readers));
 	(read_only
 		&& unchanged(name)
@@ -310,16 +283,13 @@ fn only_read(node: &Node, name: &str, readers: &RangeReaders) -> bool {
 		Node::List(items, bracket, separator)
 			if let Some(reading) = reading_parameters(items, bracket, separator, readers) =>
 		{
-			call_arguments(&items[1..])
-				.into_iter()
-				.zip(reading)
-				.all(|(argument, reads_range)| {
-					if is_name(argument) {
-						*reads_range
-					} else {
-						reads(argument)
-					}
-				})
+			call_arguments(&items[1..]).into_iter().zip(reading).all(|(argument, reads_range)| {
+				if is_name(argument) {
+					*reads_range
+				} else {
+					reads(argument)
+				}
+			})
 		}
 		Node::List(items, _, _) => items
 			.iter()
@@ -419,17 +389,11 @@ fn reading_parameters<'a>(
 /// The copy of `function` taking the ranges at `positions` as their start and end
 fn bounds_name(function: &str, positions: &[usize]) -> String {
 	let positions: Vec<String> = positions.iter().map(usize::to_string).collect();
-	format!(
-		"{function}{TEMPORARY_SEPARATOR}range{TEMPORARY_SEPARATOR}{}",
-		positions.join(TEMPORARY_SEPARATOR)
-	)
+	format!("{function}{TEMPORARY_SEPARATOR}range{TEMPORARY_SEPARATOR}{}", positions.join(TEMPORARY_SEPARATOR))
 }
 
 fn range_bound_names(parameter: &str) -> [String; 2] {
-	[
-		format!("{parameter}{TEMPORARY_SEPARATOR}start"),
-		format!("{parameter}{TEMPORARY_SEPARATOR}end"),
-	]
+	[format!("{parameter}{TEMPORARY_SEPARATOR}start"), format!("{parameter}{TEMPORARY_SEPARATOR}end")]
 }
 
 /// Every call passing a range to a reader of it calls its bounds copy, which follows the reader's definition
@@ -465,9 +429,7 @@ fn call_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut Copies) -
 		.iter()
 		.zip(reading)
 		.map(|(argument, reads_range)| {
-			range_parts(argument)
-				.filter(|_| *reads_range)
-				.map(|(_, start, end)| (start, end))
+			range_parts(argument).filter(|_| *reads_range).map(|(_, start, end)| (start, end))
 		})
 		.collect();
 	let positions: Vec<usize> = (0..ranges.len()).filter(|at| ranges[*at].is_some()).collect();

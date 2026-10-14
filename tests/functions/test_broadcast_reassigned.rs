@@ -10,14 +10,8 @@ fn printed(code: &str) -> String {
 fn a_list_reassigned_from_its_own_broadcast_stays_a_list() {
 	assert_eq!(printed("def moved(p){p+1}; ps=[1,2]; ps = moved ps"), "[2 3]");
 	assert_eq!(printed("def moved(p){p+1}; ps=[1,2]; ps = moved(ps); ps"), "[2 3]");
-	assert_eq!(
-		printed("def moved(p){p+1}; ps=[1,2]; ps = moved ps; ps = moved ps; ps"),
-		"[3 4]"
-	);
-	assert_eq!(
-		printed("def moved(p){p+1}; ps=[1,2]; for i in 0..3 { ps = moved ps }; ps"),
-		"[4 5]"
-	);
+	assert_eq!(printed("def moved(p){p+1}; ps=[1,2]; ps = moved ps; ps = moved ps; ps"), "[3 4]");
+	assert_eq!(printed("def moved(p){p+1}; ps=[1,2]; for i in 0..3 { ps = moved ps }; ps"), "[4 5]");
 }
 
 #[test]

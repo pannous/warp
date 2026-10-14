@@ -25,12 +25,7 @@ pub(in crate::wasm_emitter) fn held_elsewhere<'a>(
 	functions: &BTreeMap<String, UserFunctionDef>,
 	changes_arguments: &dyn Fn(&str) -> bool,
 ) -> Holds<'a> {
-	let mut walk = Holders {
-		functions,
-		changes_arguments,
-		passing: false,
-		holds: Holds::default(),
-	};
+	let mut walk = Holders { functions, changes_arguments, passing: false, holds: Holds::default() };
 	walk.value(program, true);
 	walk.holds
 }
@@ -152,10 +147,7 @@ fn is_reading(word: &Node) -> bool {
 
 /// Does the function change the list its parameter `index` holds: an item set, an append, a method that changes it
 fn changes_parameter(function: &UserFunctionDef, index: usize) -> bool {
-	function
-		.params
-		.get(index)
-		.is_some_and(|param| changes_list(&function.body, &param.name))
+	function.params.get(index).is_some_and(|param| changes_list(&function.body, &param.name))
 }
 
 /// May the function give back the list its parameter `index` holds: `f(a) := a`, `return a`

@@ -218,10 +218,7 @@ impl std::fmt::Debug for GcObject {
 				}
 
 				// Get field name if available
-				let field_name = field_names
-					.as_ref()
-					.and_then(|names| names.get(idx))
-					.and_then(|n| n.as_ref());
+				let field_name = field_names.as_ref().and_then(|names| names.get(idx)).and_then(|n| n.as_ref());
 
 				if let Some(name) = field_name {
 					write!(f, "{}:", name)?;
@@ -280,12 +277,7 @@ impl GcObject {
 	pub fn new(val: Val, store: Store<()>, instance: Option<Instance>) -> Result<Self> {
 		let anyref = anyref_of(&val)?;
 		let inner = anyref.unwrap_struct(&store)?;
-		Ok(Self {
-			inner,
-			store: Rc::new(RefCell::new(store)),
-			instance,
-			module: None,
-		})
+		Ok(Self { inner, store: Rc::new(RefCell::new(store)), instance, module: None })
 	}
 
 	/// Tie this object to the module it was produced by (see `register_gc_types_from_wasm`)
@@ -300,12 +292,7 @@ impl GcObject {
 		store: Rc<RefCell<Store<()>>>,
 		instance: Option<Instance>,
 	) -> Self {
-		Self {
-			inner: struct_ref,
-			store,
-			instance,
-			module: None,
-		}
+		Self { inner: struct_ref, store, instance, module: None }
 	}
 
 	/// Access the store mutably
@@ -349,9 +336,7 @@ impl GcObject {
 	/// Get a nested struct
 	pub fn get_struct<I: FieldIndex>(&self, index: I) -> Result<Rooted<StructRef>> {
 		self.with_field(index, |val, idx, store| {
-			let anyref = val
-				.unwrap_anyref()
-				.ok_or_else(|| anyhow!("field {} is not an anyref", idx))?;
+			let anyref = val.unwrap_anyref().ok_or_else(|| anyhow!("field {} is not an anyref", idx))?;
 			Ok(anyref.unwrap_struct(&*store)?)
 		})
 	}

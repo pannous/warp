@@ -12,10 +12,7 @@ fn using(code: &str) -> String {
 
 #[test]
 fn dropping_a_handle_runs_the_destructor() {
-	is!(
-		&using("a = r.counter(1)\nb = r.counter(2)\nbefore = r.live()\na.drop()\nbefore - r.live()"),
-		1
-	);
+	is!(&using("a = r.counter(1)\nb = r.counter(2)\nbefore = r.live()\na.drop()\nbefore - r.live()"), 1);
 	is!(&using("a = r.counter(1)\nb = r.counter(2)\na.drop()\nb.value()"), 2);
 }
 

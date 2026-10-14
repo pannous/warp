@@ -16,11 +16,8 @@ impl WasmGcEmitter {
 		sig: &crate::ffi::FfiSignature,
 	) {
 		// a text whose length the call leaves out crosses as (pointer, length): strcmp's, a module's `const void *, size_t`
-		let texts_with_lengths = if args.len() < sig.params.len() {
-			crate::modules::wasm_modules::texts_with_lengths(sig)
-		} else {
-			vec![]
-		};
+		let texts_with_lengths =
+			if args.len() < sig.params.len() { crate::modules::wasm_modules::texts_with_lengths(sig) } else { vec![] };
 		let mut args = args.iter();
 		let mut param_idx = 0;
 		while param_idx < sig.params.len() {
@@ -82,10 +79,9 @@ impl WasmGcEmitter {
 			ValType::F64 => func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits()))),
 			ValType::F32 => func.instruction(&I::F32Const(Ieee32::new(0.0f32.to_bits()))),
 			ValType::I64 => func.instruction(&I::I64Const(0)),
-			ValType::Ref(_) => func.instruction(&I::RefNull(HeapType::Abstract {
-				shared: false,
-				ty: AbstractHeapType::Any,
-			})),
+			ValType::Ref(_) => {
+				func.instruction(&I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }))
+			}
 			_ => func.instruction(&I::I32Const(0)),
 		};
 	}

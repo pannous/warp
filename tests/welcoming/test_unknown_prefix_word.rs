@@ -7,9 +7,7 @@ use warp::wasm_emitter::eval;
 fn warns_unknown_word(code: &str) -> bool {
 	take_warnings();
 	eval(code);
-	take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("is no function"))
+	take_warnings().iter().any(|warning| warning.message.contains("is no function"))
 }
 
 #[test]

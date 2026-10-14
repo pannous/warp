@@ -1,7 +1,9 @@
 mod test_angle;
+mod test_arrow_operators; // card easy-add
 mod test_as_compound_unit; // card compound-unit
 mod test_average; // card average-undefined
 mod test_bend_laws; // card bend-style
+mod test_big_int_text; // card out-fuel
 mod test_big_ratio;
 mod test_compound_accumulator; // card compound-accumulator
 mod test_counting_units;
@@ -17,6 +19,7 @@ mod test_exact_parameters;
 mod test_exponent_texts; // card int-text
 mod test_fixed_width_ints;
 mod test_float_accumulator; // card float-accumulator
+mod test_float_as_rational; // decision float-as-rational
 mod test_float_assignment;
 mod test_float_bit_operations;
 mod test_float_bits; // card f64-const
@@ -52,6 +55,7 @@ mod test_nearest_default; // card nearest-default-limit
 mod test_nearest_quiet; // card nearest-default-limit
 mod test_norm;
 mod test_number;
+mod test_number_methods; // card number-methods
 mod test_number_words;
 mod test_plus_minus;
 mod test_plus_minus_gaussian; // card plus-minus-gaussian
@@ -61,6 +65,7 @@ mod test_plus_minus_print;
 mod test_plus_minus_units; // card plus-minus-units
 mod test_printed_quantity; // P231
 mod test_quantities_in_one_text; // card text-join
+mod test_quantity_cast; // card unit-possible
 mod test_quantity_conversion; // card quantity-falls
 mod test_quantity_global; // card quantity-global
 mod test_quantity_tolerance; // card quantity-tolerance

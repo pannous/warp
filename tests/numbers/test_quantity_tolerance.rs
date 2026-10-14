@@ -30,32 +30,17 @@ fn quantities_with_tolerance_sum() {
 
 #[test]
 fn a_unit_field_takes_a_quantity_with_tolerance() {
-	assert_eq!(
-		shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nstr(r.length)"),
-		"5.000 ± 0.010m"
-	);
-	assert_eq!(
-		shown("class Rope{length: m}\nr = Rope{length: 5 m ± 1 cm}\nstr(r.length * 2)"),
-		"10.000 ± 0.020m"
-	);
+	assert_eq!(shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nstr(r.length)"), "5.000 ± 0.010m");
+	assert_eq!(shown("class Rope{length: m}\nr = Rope{length: 5 m ± 1 cm}\nstr(r.length * 2)"), "10.000 ± 0.020m");
 	fails_with("class Rope{length: m}\nRope(5 kg ± 1 g)", "Dimension");
 }
 
 #[test]
 fn a_field_type_with_tolerance_gives_its_values_the_tolerance() {
 	const PART: &str = "class Part{length: m ± 1 mm}\n";
-	assert_eq!(
-		shown(&format!("{PART}p = Part(5 m)\nstr(p.length)")),
-		"5.0000 ± 0.0010m"
-	);
-	assert_eq!(
-		shown(&format!("{PART}p = Part{{length: 5 m}}\nstr(p.length)")),
-		"5.0000 ± 0.0010m"
-	);
-	assert_eq!(
-		shown(&format!("{PART}p = Part(5 m ± 1 cm)\nstr(p.length)")),
-		"5.000 ± 0.010m"
-	);
+	assert_eq!(shown(&format!("{PART}p = Part(5 m)\nstr(p.length)")), "5.0000 ± 0.0010m");
+	assert_eq!(shown(&format!("{PART}p = Part{{length: 5 m}}\nstr(p.length)")), "5.0000 ± 0.0010m");
+	assert_eq!(shown(&format!("{PART}p = Part(5 m ± 1 cm)\nstr(p.length)")), "5.000 ± 0.010m");
 }
 
 #[test]
@@ -66,30 +51,15 @@ fn a_gaussian_quantity_shows_sigma_apart_from_its_unit() {
 // a final ± value of a unit field shows its unit, in the field's unit (card quantity-final)
 #[test]
 fn a_final_unit_field_with_tolerance_shows_its_unit() {
-	assert_eq!(
-		shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nr.length"),
-		"5.000 ± 0.010m"
-	);
-	assert_eq!(
-		shown("class Rope{length: cm}\nr = Rope(5 m ± 1 cm)\nr.length"),
-		"500.0 ± 1.0cm"
-	);
-	assert_eq!(
-		shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nr"),
-		"Rope{length:5.000 ± 0.010m}"
-	);
+	assert_eq!(shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nr.length"), "5.000 ± 0.010m");
+	assert_eq!(shown("class Rope{length: cm}\nr = Rope(5 m ± 1 cm)\nr.length"), "500.0 ± 1.0cm");
+	assert_eq!(shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nr"), "Rope{length:5.000 ± 0.010m}");
 }
 
 // the sum of run-time quantities is a quantity: its text, and a variable holding it computes on (card quantity-sum)
 #[test]
 fn a_sum_of_quantities_is_a_quantity() {
-	assert_eq!(
-		shown("use units\nstr(sum([quantity(\"5 m\"), quantity(\"3 m\")]))"),
-		"8m"
-	);
+	assert_eq!(shown("use units\nstr(sum([quantity(\"5 m\"), quantity(\"3 m\")]))"), "8m");
 	assert_eq!(shown("use units\nsum([quantity(\"5 m\"), quantity(\"3 m\")])"), "8m");
-	assert_eq!(
-		shown("use units\ns = sum([quantity(\"5 m\"), quantity(\"3 m\")])\ns * 2"),
-		"16m"
-	);
+	assert_eq!(shown("use units\ns = sum([quantity(\"5 m\"), quantity(\"3 m\")])\ns * 2"), "16m");
 }

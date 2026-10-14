@@ -48,10 +48,7 @@ fn a_while_without_a_body_loops() {
 	{
 		let watched = "x=10\non set x {print \"x changed to \" value}\nwhile x-->7";
 		let printed = crate::common::printed(watched);
-		assert!(
-			printed.starts_with("x changed to 9\nx changed to 8\nx changed to 7\n"),
-			"{printed}"
-		);
+		assert!(printed.starts_with("x changed to 9\nx changed to 8\nx changed to 7\n"), "{printed}");
 		assert_eq!(printed, crate::common::printed(&format!("{watched} {{}}")));
 	}
 }

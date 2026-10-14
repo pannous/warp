@@ -26,17 +26,10 @@ fn a_hello_world_site_stays_within_its_budget() {
 	let sizes: Vec<(String, usize)> = site
 		.files
 		.iter()
-		.map(|name| {
-			(
-				name.clone(),
-				gzipped_size(&std::fs::read(site.directory.join(name)).expect("a file")),
-			)
-		})
+		.map(|name| (name.clone(), gzipped_size(&std::fs::read(site.directory.join(name)).expect("a file"))))
 		.collect();
 	let total: usize = sizes.iter().map(|(_, size)| size).sum();
-	sizes
-		.iter()
-		.for_each(|(name, size)| println!("hello-world site: {name:<12} {size:>7} bytes gzipped"));
+	sizes.iter().for_each(|(name, size)| println!("hello-world site: {name:<12} {size:>7} bytes gzipped"));
 	println!("hello-world site: total        {total:>7} bytes gzipped (budget {BUDGET_GZIPPED_BYTES})");
 	assert!(
 		total <= BUDGET_GZIPPED_BYTES,
@@ -48,18 +41,12 @@ fn a_hello_world_site_stays_within_its_budget() {
 #[test]
 fn a_site_script_is_compacted() {
 	let script = "// what it does\nfunction f() {\n\t// a comment\n\treturn `a\n  // kept\n  b`;\n}\n\n";
-	assert_eq!(
-		warp::web::site::compacted(script),
-		"function f() {\nreturn `a\n  // kept\n  b`;\n}\n"
-	);
+	assert_eq!(warp::web::site::compacted(script), "function f() {\nreturn `a\n  // kept\n  b`;\n}\n");
 }
 
 // a comment after a statement goes too; a template literal's line keeps it
 #[test]
 fn a_site_script_loses_its_trailing_comments() {
 	let script = "const KEY = \"data-warp-key\"; // a list item's element\nconst LINES = `a; // kept\n b`;\n";
-	assert_eq!(
-		warp::web::site::compacted(script),
-		"const KEY = \"data-warp-key\";\nconst LINES = `a; // kept\n b`;\n"
-	);
+	assert_eq!(warp::web::site::compacted(script), "const KEY = \"data-warp-key\";\nconst LINES = `a; // kept\n b`;\n");
 }

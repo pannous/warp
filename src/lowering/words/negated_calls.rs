@@ -55,11 +55,8 @@ fn negate_calls(
 			if is_function(&function, op) && !(op == Op::Sub && is_spaced_minus(&function)) =>
 		{
 			let prefix = if op == Op::Sub { Op::Neg } else { Op::Hash };
-			let argument = Node::Key(
-				Box::new(Node::Empty),
-				prefix,
-				Box::new(negate_calls(*argument, functions, bound, locals)),
-			);
+			let argument =
+				Node::Key(Box::new(Node::Empty), prefix, Box::new(negate_calls(*argument, functions, bound, locals)));
 			parens(vec![*function, argument])
 		}
 		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),

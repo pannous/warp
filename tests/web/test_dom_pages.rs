@@ -22,13 +22,7 @@ fn serve_directory(directory: std::path::PathBuf) -> String {
 		let (server, directory) = (server.clone(), directory.clone());
 		std::thread::spawn(move || {
 			for request in server.incoming_requests() {
-				let name = request
-					.url()
-					.trim_start_matches('/')
-					.split('?')
-					.next()
-					.unwrap_or_default()
-					.to_string();
+				let name = request.url().trim_start_matches('/').split('?').next().unwrap_or_default().to_string();
 				let file = directory.join(if name.is_empty() { "index.html" } else { &name });
 				let _ = match std::fs::read(&file) {
 					Ok(bytes) => {
@@ -75,11 +69,7 @@ fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>
 	};
 	let browser = |arguments: &[&str]| {
 		let output = run(arguments);
-		assert!(
-			output.status.success(),
-			"agent-browser {arguments:?}: {}",
-			String::from_utf8_lossy(&output.stderr)
-		);
+		assert!(output.status.success(), "agent-browser {arguments:?}: {}", String::from_utf8_lossy(&output.stderr));
 		String::from_utf8_lossy(&output.stdout).trim().to_string()
 	};
 	// the browser first, then the page: a fresh browser asked for a page at once at times stays on about:blank
@@ -102,9 +92,7 @@ fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>
 	if let Some(button) = button {
 		browser(&["find", "text", button, "click"]);
 	}
-	let waited = run(&["wait", "--fn", TITLE_SET, "--timeout", CLICK_WAIT_MS])
-		.status
-		.success();
+	let waited = run(&["wait", "--fn", TITLE_SET, "--timeout", CLICK_WAIT_MS]).status.success();
 	let title = browser(&["eval", "document.title"]);
 	let console = browser(&["console"]);
 	browser(&["close"]);
@@ -142,16 +130,8 @@ fn main_sets_the_title_of_the_page() {
 	let folder = scratch_directory("main");
 	std::fs::create_dir_all(&folder).expect("a folder");
 	let program = folder.join("dom.warp");
-	std::fs::write(
-		&program,
-		"use js document\ndocument.title = \"main ran\"\ndiv{ p{ \"shown\" } }",
-	)
-	.expect("written");
-	let built = crate::common::warp_command()
-		.args(["build", "--site"])
-		.arg(&program)
-		.output()
-		.expect("warp runs");
+	std::fs::write(&program, "use js document\ndocument.title = \"main ran\"\ndiv{ p{ \"shown\" } }").expect("written");
+	let built = crate::common::warp_command().args(["build", "--site"]).arg(&program).output().expect("warp runs");
 	let warned = String::from_utf8_lossy(&built.stderr);
 	assert!(built.status.success() && warned.contains("rendered there"), "{warned}");
 	assert_eq!(title_on_page("main", folder.join("dom-site"), None), "main ran");

@@ -16,10 +16,7 @@ fn a_changed_wider_view_of_a_declared_list_is_a_compile_error() {
 		"names: texts = [\"hi\"]; ys: list = names; ys.add(420); names",
 		"ys: list changes names, which is declared texts",
 	);
-	fails_with(
-		"names: texts = [\"hi\"]; widen(xs: list) := { xs#1 = 420; xs }; widen(names); names",
-		"changes names",
-	);
+	fails_with("names: texts = [\"hi\"]; widen(xs: list) := { xs#1 = 420; xs }; widen(names); names", "changes names");
 	fails_with("class bag { items: texts }; b = bag([\"hi\"]); widen(xs: list) := { xs.add(420); xs }; widen(b.items); b.items", "changes b.items, which is declared texts");
 }
 
@@ -36,10 +33,7 @@ fn a_changed_parent_class_view_of_a_subclass_list_is_a_compile_error() {
 		"f(ys: [Shape]) changes xs, which is declared [Circle]",
 	);
 	is!(&format!("{SHAPES}xs: [Circle] = [c]; ys: [Shape] = xs; count ys"), 1);
-	is!(
-		&format!("{SHAPES}xs: [Circle] = [c]; f(ys: [Shape]) := count ys; f(xs)"),
-		1
-	);
+	is!(&format!("{SHAPES}xs: [Circle] = [c]; f(ys: [Shape]) := count ys; f(xs)"), 1);
 }
 
 /// Lists of instances declared `[Circle]` (cards class-list-add, class-list-param: they were held as an Int)
@@ -47,18 +41,12 @@ fn a_changed_parent_class_view_of_a_subclass_list_is_a_compile_error() {
 fn a_bracketed_class_list_is_a_list() {
 	is!(&format!("{SHAPES}xs: [Circle] = [c]; xs.add(Circle(5, 6)); xs#2.r"), 6);
 	is!(&format!("{SHAPES}ys: [Shape] = [c]; ys.add(Shape(3)); count ys"), 2);
-	is!(
-		&format!("{SHAPES}xs: [Circle] = [c]; f(ys: [Circle]) := count ys; f(xs)"),
-		1
-	);
+	is!(&format!("{SHAPES}xs: [Circle] = [c]; f(ys: [Circle]) := count ys; f(xs)"), 1);
 }
 
 #[test]
 fn a_reading_or_narrower_view_is_fine() {
 	is!("names: texts = [\"hi\"]; size(xs: list) := count xs; size(names)", 1);
 	is!("names: texts = [\"hi\"]; ys: list = names; count ys", 1);
-	is!(
-		"names: texts = [\"hi\"]; more(ys: texts) := { ys.add(\"ho\"); ys }; more(names); count names",
-		2
-	);
+	is!("names: texts = [\"hi\"]; more(ys: texts) := { ys.add(\"ho\"); ys }; more(names); count names", 2);
 }

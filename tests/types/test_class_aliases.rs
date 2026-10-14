@@ -14,10 +14,7 @@ fn alias_notes(code: &str) -> Vec<(String, String)> {
 
 fn assert_alias(code: &str, written: &str, warp_word: &str) {
 	let notes = alias_notes(code);
-	assert!(
-		notes.contains(&(written.to_string(), warp_word.to_string())),
-		"{written} → {warp_word} not in {notes:?}"
-	);
+	assert!(notes.contains(&(written.to_string(), warp_word.to_string())), "{written} → {warp_word} not in {notes:?}");
 }
 
 /// P162: `init` is the constructor; every common constructor name works as its alias
@@ -26,18 +23,9 @@ fn every_common_constructor_name_says_init() {
 	let aliases = [
 		("value", "class P { x=0; value(x) { self.x = x } }; P(3).x"),
 		("constructor", "class P { x=0; constructor(x) { self.x = x } }; P(3).x"),
-		(
-			"__init__",
-			"class P:\n    def __init__(self, x):\n        self.x = x\nP(3).x",
-		),
-		(
-			"initialize",
-			"class P { x=0; def initialize(x) { self.x = x } }; P(3).x",
-		),
-		(
-			"__construct",
-			"class P { x=0; function __construct(x) { self.x = x } }; P(3).x",
-		),
+		("__init__", "class P:\n    def __init__(self, x):\n        self.x = x\nP(3).x"),
+		("initialize", "class P { x=0; def initialize(x) { self.x = x } }; P(3).x"),
+		("__construct", "class P { x=0; function __construct(x) { self.x = x } }; P(3).x"),
 		("New", "class P { x=0; New(x) { self.x = x } }; P(3).x"),
 		("Create", "class P { x=0; Create(x) { self.x = x } }; P(3).x"),
 		("new", "class P { x=0; fn new(x) { self.x = x } }; P(3).x"),
@@ -68,11 +56,7 @@ fn new_before_a_construction_is_superfluous() {
 
 #[test]
 fn foreign_operator_methods_say_the_warp_name() {
-	assert_alias(
-		"class V{x:int; __add__(o) := V(x + o.x)}; (V(1) + V(2)).x",
-		"__add__",
-		"plus",
-	);
+	assert_alias("class V{x:int; __add__(o) := V(x + o.x)}; (V(1) + V(2)).x", "__add__", "plus");
 	assert_alias("class V{x:int; add(o) := V(x + o.x)}; (V(1) + V(2)).x", "add", "plus");
 }
 

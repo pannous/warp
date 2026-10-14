@@ -47,11 +47,7 @@ fn ungrouped_receivers(node: Node, variables: &HashSet<String>) -> Node {
 				Some(name) if variables.contains(name.symbol_name().unwrap_or_default()) => name.clone(),
 				_ => receiver,
 			};
-			Node::Key(
-				Box::new(receiver),
-				Op::Dot,
-				Box::new(ungrouped_receivers(*member, variables)),
-			)
+			Node::Key(Box::new(receiver), Op::Dot, Box::new(ungrouped_receivers(*member, variables)))
 		}
 		other => other.map_children(|child| ungrouped_receivers(child, variables)),
 	}

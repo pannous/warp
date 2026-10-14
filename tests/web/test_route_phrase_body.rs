@@ -13,11 +13,7 @@ get \"/api/users/:id:int\" { users#id.name }";
 /// The body of GET path
 fn fetched(path: &str) -> String {
 	let mut stream = std::net::TcpStream::connect(("127.0.0.1", PORT)).expect("the server");
-	write!(
-		stream,
-		"GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-	)
-	.expect("the request");
+	write!(stream, "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").expect("the request");
 	let mut answer = String::new();
 	stream.read_to_string(&mut answer).expect("the answer");
 	answer.split_once("\r\n\r\n").map_or("", |(_, body)| body).to_string()

@@ -5,11 +5,8 @@ use super::*;
 pub(crate) const MODULE_DIRECTORY: &str = "module_directory";
 /// Statements a module contributes; everything else in a module (expressions, calls) is its own business
 /// `use folder`, `use package`, `use project`: every definition of that scope is visible, looked up by name (D15)
-pub(crate) const SCOPE_WORDS: [(&str, Scope); 3] = [
-	("folder", Scope::Folder),
-	("package", Scope::Package),
-	("project", Scope::Project),
-];
+pub(crate) const SCOPE_WORDS: [(&str, Scope); 3] =
+	[("folder", Scope::Folder), ("package", Scope::Package), ("project", Scope::Project)];
 /// Folders a package or project scope never looks into, besides hidden ones and nested repositories
 pub(crate) const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 pub(crate) const PROJECT_MARKER: &str = ".git";
@@ -32,10 +29,7 @@ pub(super) enum Scope {
 }
 
 pub(super) fn scope_word(name: &str) -> Option<Scope> {
-	SCOPE_WORDS
-		.iter()
-		.find(|(word, _)| *word == name)
-		.map(|(_, scope)| *scope)
+	SCOPE_WORDS.iter().find(|(word, _)| *word == name).map(|(_, scope)| *scope)
 }
 
 /// The other module files of the scope around the program (the working directory for inline code)
@@ -52,21 +46,13 @@ pub(super) fn scope_files(scope: Scope, file: Option<&Path>) -> Result<Vec<Sibli
 	paths.sort();
 	Ok(paths
 		.into_iter()
-		.filter_map(|path| {
-			Some(Sibling {
-				source: std::fs::read_to_string(&path).ok()?,
-				path,
-				statements: None,
-			})
-		})
+		.filter_map(|path| Some(Sibling { source: std::fs::read_to_string(&path).ok()?, path, statements: None }))
 		.collect())
 }
 
 pub(super) fn is_module_file(path: &Path) -> bool {
 	path.is_file()
-		&& path
-			.extension()
-			.is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known))
+		&& path.extension().is_some_and(|extension| MODULE_EXTENSIONS.iter().any(|known| extension == *known))
 }
 
 pub(super) fn collect_module_files(directory: &Path, below: bool, paths: &mut Vec<PathBuf>) {
@@ -84,22 +70,14 @@ pub(super) fn collect_module_files(directory: &Path, below: bool, paths: &mut Ve
 
 /// Hidden folders, fetched packages, build output and nested repositories belong to no scope
 pub(super) fn is_scoped_directory(directory: &Path) -> bool {
-	let name = directory
-		.file_name()
-		.map(|name| name.to_string_lossy().to_string())
-		.unwrap_or_default();
+	let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
 	!name.starts_with('.') && !UNSCOPED_DIRECTORIES.contains(&name.as_str()) && !directory.join(PROJECT_MARKER).exists()
 }
 
 pub(super) fn package_root(folder: &Path) -> Result<PathBuf, Node> {
 	let holds_its_module = |directory: &Path| {
-		let name = directory
-			.file_name()
-			.map(|name| name.to_string_lossy().to_string())
-			.unwrap_or_default();
-		MODULE_EXTENSIONS
-			.iter()
-			.any(|extension| directory.join(format!("{name}.{extension}")).is_file())
+		let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+		MODULE_EXTENSIONS.iter().any(|extension| directory.join(format!("{name}.{extension}")).is_file())
 	};
 	enclosing_root(
 		folder,
@@ -121,8 +99,7 @@ pub(super) fn project_root(folder: &Path) -> Result<PathBuf, Node> {
 fn enclosing_root(folder: &Path, is_root: impl Fn(&Path) -> bool, missing: &str) -> Result<PathBuf, Node> {
 	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
 	let root = absolute.ancestors().find(|directory| is_root(directory));
-	root.map(Path::to_path_buf)
-		.ok_or_else(|| error(&missing.replace("{}", &folder.display().to_string())))
+	root.map(Path::to_path_buf).ok_or_else(|| error(&missing.replace("{}", &folder.display().to_string())))
 }
 
 impl Sibling {
@@ -234,11 +211,7 @@ impl<'a> Loader<'a> {
 
 	pub(super) fn resolve(&mut self, node: Node) -> Result<Node, Node> {
 		if let Some((used, statement, words)) = imported_words(&node) {
-			return Ok(Node::List(
-				self.import_words(&used, &statement, &words)?,
-				Bracket::None,
-				Separator::Semicolon,
-			));
+			return Ok(Node::List(self.import_words(&used, &statement, &words)?, Bracket::None, Separator::Semicolon));
 		}
 		if let Some(uses) = used_modules(&node) {
 			return Ok(match self.import_all(uses)? {
@@ -260,10 +233,7 @@ impl<'a> Loader<'a> {
 				}
 				Ok(Node::List(resolved, bracket, separator))
 			}
-			Node::Meta { node, data } => Ok(Node::Meta {
-				node: Box::new(self.resolve(*node)?),
-				data,
-			}),
+			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.resolve(*node)?), data }),
 			other => Ok(other),
 		}
 	}
@@ -283,11 +253,8 @@ impl<'a> Loader<'a> {
 		let first_std_definition = self.std_definitions.len();
 		let imported = self.import(used, statement)?;
 		let std_definitions = self.std_definitions.split_off(first_std_definition);
-		let module_words: HashSet<String> = imported
-			.iter()
-			.chain(&std_definitions)
-			.filter_map(name_declared_by)
-			.collect();
+		let module_words: HashSet<String> =
+			imported.iter().chain(&std_definitions).filter_map(name_declared_by).collect();
 		if module_words.is_empty() {
 			return Ok(imported);
 		}
@@ -338,18 +305,15 @@ impl<'a> Loader<'a> {
 		use crate::errors::diagnostic::{report, Diagnostic};
 		let shadows = |shadowed: String| Diagnostic::at(statement, format!("{} shadows {shadowed}", path.display()));
 		if let Some(repository) = package_repository(name).filter(|_| import == Import::Use) {
-			report(&[shadows(format!(
-				"the package {name} ({repository}): rename the file to use the package"
-			))])?;
+			report(&[shadows(format!("the package {name} ({repository}): rename the file to use the package"))])?;
 		}
 		if let Some(requirement) = &used.requirement {
 			check_version(name, &path, requirement)?;
 		}
 		if std_module(name).is_some() && !edited_since_build(&path) {
-			report(&[shadows(format!(
-				"the standard module {name}: its text differs from the one warp embeds"
-			))
-			.weak()])?;
+			report(
+				&[shadows(format!("the standard module {name}: its text differs from the one warp embeds")).weak()],
+			)?;
 		}
 		self.load(import, name, path)
 	}
@@ -403,19 +367,15 @@ impl<'a> Loader<'a> {
 		// a program's own `write(x, y)` wins
 		let own: HashSet<String> = statements_of(program).iter().filter_map(name_declared_by).collect();
 		for (module, words) in PRELUDE_WORDS {
-			let words: Vec<&str> = words
-				.iter()
-				.copied()
-				.filter(|word| mentioned.contains(*word) && !own.contains(*word))
-				.collect();
+			let words: Vec<&str> =
+				words.iter().copied().filter(|word| mentioned.contains(*word) && !own.contains(*word)).collect();
 			if !words.is_empty() {
 				let source = std_module(module).expect("a prelude module is embedded");
 				let definitions =
 					crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(module), source))?;
-				self.std_definitions
-					.extend(definitions.into_iter().filter(|definition| {
-						name_declared_by(definition).is_some_and(|name| words.contains(&name.as_str()))
-					}));
+				self.std_definitions.extend(definitions.into_iter().filter(|definition| {
+					name_declared_by(definition).is_some_and(|name| words.contains(&name.as_str()))
+				}));
 			}
 		}
 		self.use_prelude(program)
@@ -432,16 +392,20 @@ impl<'a> Loader<'a> {
 		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
 		let definitions =
 			crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
+		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
+		// n: int)` overloads it by parameter type (card easy-add)
+		let qualified_words: Vec<&String> =
+			prelude.iter().filter(|word| !word.starts_with(crate::operators::OPERATOR_FUNCTION_PREFIX)).collect();
 		let qualified = |definition: Node| {
-			prelude.iter().fold(definition, |node, word| {
-				renamed_word(node, word, &prelude_name(word).unwrap_or_default())
-			})
+			qualified_words
+				.iter()
+				.fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()))
 		};
 		self.std_definitions.extend(definitions.into_iter().map(qualified));
 		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
-			prelude.iter().for_each(|word| {
-				names.remove(word);
+			qualified_words.iter().for_each(|word| {
+				names.remove(*word);
 				names.extend(prelude_name(word));
 			});
 		});
@@ -490,10 +454,7 @@ impl<'a> Loader<'a> {
 		};
 		let module = match classes_early {
 			true => Node::List(
-				statements(module)
-					.into_iter()
-					.filter(|statement| !is_class(statement))
-					.collect(),
+				statements(module).into_iter().filter(|statement| !is_class(statement)).collect(),
 				Bracket::None,
 				Separator::Semicolon,
 			),
@@ -507,14 +468,10 @@ impl<'a> Loader<'a> {
 		let statements = statements(module?);
 		Ok(match import {
 			Import::Use => {
-				let declarations = shadowed_apart(
-					statements.into_iter().filter(is_declaration).collect(),
-					&self.program_variables,
-				);
+				let declarations =
+					shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_variables);
 				crate::compiler::compile_context::change(|context| {
-					context
-						.module_definitions
-						.extend(declarations.iter().filter_map(name_declared_by))
+					context.module_definitions.extend(declarations.iter().filter_map(name_declared_by))
 				});
 				declarations
 			}
@@ -548,15 +505,10 @@ impl<'a> Loader<'a> {
 	}
 
 	pub(super) fn candidates_with(&self, name: &str, extensions: &[&str]) -> Vec<PathBuf> {
-		let has_extension = extensions
-			.iter()
-			.any(|extension| name.ends_with(&format!(".{extension}")));
+		let has_extension = extensions.iter().any(|extension| name.ends_with(&format!(".{extension}")));
 		let file_names: Vec<String> = match has_extension {
 			true => vec![name.to_string()],
-			false => extensions
-				.iter()
-				.map(|extension| format!("{name}.{extension}"))
-				.collect(),
+			false => extensions.iter().map(|extension| format!("{name}.{extension}")).collect(),
 		};
 		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
 		if is_explicit_path(name) {
@@ -566,12 +518,8 @@ impl<'a> Loader<'a> {
 		if !is_plain_relative_path(name) {
 			return vec![];
 		}
-		let bases: Vec<PathBuf> = self
-			.including_directory
-			.iter()
-			.cloned()
-			.chain(std::iter::once(PathBuf::new()))
-			.collect();
+		let bases: Vec<PathBuf> =
+			self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {
@@ -589,10 +537,7 @@ impl<'a> Loader<'a> {
 		let mut own = statements(program.clone());
 		let mut known = HashSet::new();
 		program_bound_names(&program, &mut known);
-		let mut needed: Vec<String> = mentioned_names(&own)
-			.into_iter()
-			.filter(|name| !known.contains(name))
-			.collect();
+		let mut needed: Vec<String> = mentioned_names(&own).into_iter().filter(|name| !known.contains(name)).collect();
 		let mut imports = Vec::new();
 		let mut using_siblings = HashSet::new();
 		while let Some(name) = needed.pop() {
@@ -602,9 +547,7 @@ impl<'a> Loader<'a> {
 			let mut providers: Vec<(usize, Vec<Node>)> = Vec::new();
 			for (index, sibling) in siblings.iter_mut().enumerate() {
 				let declarations = sibling.declarations_of(&name)?;
-				let same_as_before = providers
-					.iter()
-					.any(|(_, earlier)| same_definitions(earlier, &declarations));
+				let same_as_before = providers.iter().any(|(_, earlier)| same_definitions(earlier, &declarations));
 				if !declarations.is_empty() && !same_as_before {
 					providers.push((index, declarations)); // the same definition in two files is no conflict
 				}
@@ -613,10 +556,8 @@ impl<'a> Loader<'a> {
 				0 => continue,
 				1 => providers.remove(0),
 				_ => {
-					let files: Vec<String> = providers
-						.iter()
-						.map(|(index, _)| siblings[*index].path.display().to_string())
-						.collect();
+					let files: Vec<String> =
+						providers.iter().map(|(index, _)| siblings[*index].path.display().to_string()).collect();
 					return Err(error(&format!(
 						"{name} is defined in more than one file of the scope: {}; rename one, or `use` the one you mean",
 						files.join(" and ")
@@ -627,15 +568,9 @@ impl<'a> Loader<'a> {
 				imports.extend(self.uses_of(&mut siblings[index])?);
 			}
 			let mut parameters = HashSet::new();
-			declarations
-				.iter()
-				.for_each(|declaration| program_bound_names(declaration, &mut parameters));
+			declarations.iter().for_each(|declaration| program_bound_names(declaration, &mut parameters));
 			parameters.remove(&name);
-			needed.extend(
-				mentioned_names(&declarations)
-					.into_iter()
-					.filter(|used| !parameters.contains(used)),
-			);
+			needed.extend(mentioned_names(&declarations).into_iter().filter(|used| !parameters.contains(used)));
 			imports.extend(declarations);
 		}
 		if imports.is_empty() {
@@ -647,17 +582,10 @@ impl<'a> Loader<'a> {
 
 	/// The modules a sibling file uses, resolved from its folder
 	pub(super) fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
-		let uses: Vec<Node> = sibling
-			.statements()?
-			.iter()
-			.filter(|statement| used_modules(statement).is_some())
-			.cloned()
-			.collect();
+		let uses: Vec<Node> =
+			sibling.statements()?.iter().filter(|statement| used_modules(statement).is_some()).cloned().collect();
 		let outer_directory = self.including_directory.replace(folder_of(&sibling.path));
-		let resolved = uses
-			.into_iter()
-			.map(|statement| self.resolve(statement))
-			.collect::<Result<Vec<Node>, Node>>();
+		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
 		Ok(resolved?.into_iter().flat_map(statements).collect())
 	}
@@ -665,23 +593,15 @@ impl<'a> Loader<'a> {
 	/// `import fourty_two` of `fourty_two.wasm` / `.wat`: `use "<its absolute path>"`, which the FFI imports from
 	/// (wasm_modules.rs); `include` also runs its entry point, whose value it is (P139)
 	pub(super) fn use_wasm_module(&mut self, module: &Path, statement: &Node, import: Import) -> Vec<Node> {
-		let path = module
-			.canonicalize()
-			.unwrap_or_else(|_| module.to_path_buf())
-			.display()
-			.to_string();
+		let path = module.canonicalize().unwrap_or_else(|_| module.to_path_buf()).display().to_string();
 		self.wasm_modules.push(path.clone());
 		let used = match as_use(statement) {
-			Node::List(_, bracket, separator) => Node::List(
-				vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path.clone())],
-				bracket,
-				separator,
-			),
+			Node::List(_, bracket, separator) => {
+				Node::List(vec![Node::Symbol(USE_KEYWORD.to_string()), Node::Text(path.clone())], bracket, separator)
+			}
 			other => other,
 		};
-		let entry = (import == Import::Include)
-			.then(|| crate::modules::wasm_modules::entry_call(&path))
-			.flatten();
+		let entry = (import == Import::Include).then(|| crate::modules::wasm_modules::entry_call(&path)).flatten();
 		std::iter::once(used).chain(entry).collect()
 	}
 
@@ -694,13 +614,7 @@ impl<'a> Loader<'a> {
 			.candidates(name)
 			.iter()
 			.map(|path| path.display().to_string())
-			.map(|path| {
-				if path.starts_with(['.', '/']) {
-					path
-				} else {
-					format!("./{path}")
-				}
-			})
+			.map(|path| if path.starts_with(['.', '/']) { path } else { format!("./{path}") })
 			.collect();
 		error(&format!("include not found: {name}; searched {}", searched.join(", ")))
 	}
@@ -708,7 +622,5 @@ impl<'a> Loader<'a> {
 
 /// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
 pub(crate) fn shown_path(path: &Path) -> PathBuf {
-	path.components()
-		.filter(|component| !matches!(component, std::path::Component::CurDir))
-		.collect()
+	path.components().filter(|component| !matches!(component, std::path::Component::CurDir)).collect()
 }

@@ -6,27 +6,18 @@ use warp::warp_parser::parse;
 #[test]
 fn use_json_parses_and_writes_json() {
 	is!("use json; parse_json(\"[1, 2, 3]\")", parse("[1 2 3]"));
-	is!(
-		"use json; data = parse_json(\"{\\\"name\\\": \\\"Ann\\\", \\\"age\\\": 30}\"); data.age",
-		30
-	);
+	is!("use json; data = parse_json(\"{\\\"name\\\": \\\"Ann\\\", \\\"age\\\": 30}\"); data.age", 30);
 	is!("use json; count(parse_json(\"[1, null, 2]\"))", 3);
 	is!("use json; count(parse_json(\"[1, null]\"))", 2);
 	is!("use json; to_json(parse_json(\"[null, 1]\"))", "[null,1]");
 	is!("use json; to_json([1, 2, 3])", "[1,2,3]");
-	is!(
-		"use json; to_json(parse_json(\"{\\\"a\\\": [true, null]}\"))",
-		"{\"a\":[true,null]}"
-	);
+	is!("use json; to_json(parse_json(\"{\\\"a\\\": [true, null]}\"))", "{\"a\":[true,null]}");
 	is!("use json; to_json({a: [1, 2, 3]})", "{\"a\":[1,2,3]}");
 }
 
 #[test]
 fn a_json_word_without_its_use_names_the_module() {
-	crate::common::fails_with(
-		"parse_json(\"[1]\")",
-		"parse_json is in the standard module json: write `use json`",
-	);
+	crate::common::fails_with("parse_json(\"[1]\")", "parse_json is in the standard module json: write `use json`");
 }
 
 #[test]

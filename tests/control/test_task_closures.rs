@@ -5,14 +5,8 @@ use crate::is;
 
 #[test]
 fn a_capturing_text_lambda_runs_in_a_task() {
-	is!(
-		"t = \"!\"; shout = s => s + t; apply(g, v) := g(v); job = go apply(shout, \"hey\"); await job",
-		"hey!"
-	);
-	is!(
-		"t = \"!\"; shout = s => \"x\" + t; apply(g, v) := g(v); apply(shout, \"hey\")",
-		"x!"
-	);
+	is!("t = \"!\"; shout = s => s + t; apply(g, v) := g(v); job = go apply(shout, \"hey\"); await job", "hey!");
+	is!("t = \"!\"; shout = s => \"x\" + t; apply(g, v) := g(v); apply(shout, \"hey\")", "x!");
 }
 
 #[test]

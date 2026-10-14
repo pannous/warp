@@ -22,9 +22,7 @@ fn a_status_line_names_the_real_reason() {
 		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	};
-	stream
-		.write_all(b"GET /teapot HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
-		.unwrap();
+	stream.write_all(b"GET /teapot HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").unwrap();
 	let mut answer = String::new();
 	stream.read_to_string(&mut answer).unwrap();
 	assert!(answer.starts_with("HTTP/1.1 418 I'm a teapot\r\n"), "{answer}");

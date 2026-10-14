@@ -4,6 +4,7 @@
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -24,8 +25,6 @@ const KEY: &str = "key";
 /// The value in place of the name `rendered`, assigned first: as an argument `ul: {…}` would name a parameter
 const RENDER_PROGRAM: &str = "use markup\nshown = rendered\nto_html(shown)";
 const RENDERED: &str = "rendered";
-/// the element of a style sheet and the attribute of an inline style (card web-styles)
-const STYLE: &str = "style";
 /// the attribute naming the component of an element, whose style sheets style only its elements (card web-scoped)
 pub const SCOPE_ATTRIBUTE: &str = "data-warp-scope";
 /// how deep holes go: a component showing itself inside would go on
@@ -189,11 +188,7 @@ impl<'a> Shapes<'a> {
 		let Node::List(items, Bracket::Round | Bracket::None, _) = child.drop_meta() else {
 			return child;
 		};
-		items
-			.first()
-			.and_then(Node::symbol_name)
-			.and_then(|name| self.components.get(name))
-			.unwrap_or(child)
+		items.first().and_then(Node::symbol_name).and_then(|name| self.components.get(name)).unwrap_or(child)
 	}
 
 	fn collect(&self, element: &'a Node, path: &mut Vec<usize>, holes: &mut Holes) {
@@ -251,18 +246,12 @@ impl<'a> Shapes<'a> {
 				continue;
 			}
 			let neighbours = [position.checked_sub(1), Some(position + 1)];
-			let alone = neighbours
-				.into_iter()
-				.flatten()
-				.filter_map(|neighbour| children.get(neighbour))
-				.all(is_element);
+			let alone =
+				neighbours.into_iter().flatten().filter_map(|neighbour| children.get(neighbour)).all(is_element);
 			if !is_computed_text(child) || !alone {
 				return None;
 			}
-			texts.push((
-				children[..position].iter().filter(|before| is_element(before)).count(),
-				*child,
-			));
+			texts.push((children[..position].iter().filter(|before| is_element(before)).count(), *child));
 		}
 		(children.iter().any(is_element)).then_some(texts)
 	}
@@ -306,10 +295,9 @@ fn is_computed_text(node: &Node) -> bool {
 fn is_literal(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Square, _) => items.iter().all(is_literal),
-		other => matches!(
-			other,
-			Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::True | Node::False | Node::Empty
-		),
+		other => {
+			matches!(other, Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::True | Node::False | Node::Empty)
+		}
 	}
 }
 
@@ -318,7 +306,7 @@ pub fn is_style_sheet(node: &Node) -> bool {
 	let Node::Key(name, Op::Colon, value) = node.drop_meta() else {
 		return false;
 	};
-	name.drop_meta().name() == STYLE && !is_declarations(value)
+	name.drop_meta().name() == STYLE_WORD && !is_declarations(value)
 }
 
 /// `{ color: theme padding: 8 }`: CSS properties with plain values

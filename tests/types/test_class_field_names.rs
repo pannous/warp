@@ -11,14 +11,8 @@ fn operator_words_name_fields() {
 
 #[test]
 fn field_beside_function_of_its_name() {
-	is!(
-		"class Line{start:int end:int}; start(l) := l.start * 10; start(Line(3,4))",
-		30
-	);
-	is!(
-		"class Line{start:int end:int}; start(l:Line) := l.start * 10; x = Line(3,4); start(x) + x.start",
-		33
-	);
+	is!("class Line{start:int end:int}; start(l) := l.start * 10; start(Line(3,4))", 30);
+	is!("class Line{start:int end:int}; start(l:Line) := l.start * 10; x = Line(3,4); start(x) + x.start", 33);
 }
 
 // card classes-function: without any class, `p.name` inside the function name(p) would call itself with the same

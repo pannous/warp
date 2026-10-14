@@ -25,10 +25,7 @@ fn a_hole_is_a_symbol_of_the_parse() {
 
 #[test]
 fn parse_matches_like_data() {
-	is!(
-		"match parse(\"n * 1\") { data(n * 1) => \"one\"; _ => \"other\" }",
-		"one"
-	);
+	is!("match parse(\"n * 1\") { data(n * 1) => \"one\"; _ => \"other\" }", "one");
 }
 
 #[test]
@@ -41,10 +38,7 @@ fn a_program_s_own_parse_wins() {
 fn parse_of_a_run_time_text_is_its_code_as_data() {
 	is!("t = \"n * \" + \"1\"; parse(t) == data (n * 1)", true);
 	is!("t = \"$a + 0\"; parse(t).key.name", "$a");
-	is!(
-		"t = \"n * 1\"; match parse(t) { data(n * 1) => \"one\"; _ => \"other\" }",
-		"one"
-	);
+	is!("t = \"n * 1\"; match parse(t) { data(n * 1) => \"one\"; _ => \"other\" }", "one");
 }
 
 #[test]

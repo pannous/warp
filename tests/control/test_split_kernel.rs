@@ -13,19 +13,13 @@ fn lowered(code: &str) -> String {
 fn a_go_map_of_a_float_kernel_splits_on_the_host() {
 	let program = format!("n = 1000000 + random_below(1)\n{FILL}ys = go xs.map(x => x * 0.5 + 1)\n[ys#1, ys#n, #ys]");
 	let code = lowered(&program);
-	assert!(
-		code.contains("task_split_mapf") && !code.contains("task_spawn_values"),
-		"{code}"
-	);
+	assert!(code.contains("task_split_mapf") && !code.contains("task_spawn_values"), "{code}");
 	is!(&program, list(vec![float(1.5), float(500001.0), int(1000000)]));
 }
 
 #[test]
 fn a_small_go_map_of_a_float_kernel_maps_on_one_thread() {
-	is!(
-		&format!("n = 5\n{FILL}ys = go xs.map(x => -sqrt(x) / 2)\n[ys#4, #ys]"),
-		list(vec![float(-1.0), int(5)])
-	);
+	is!(&format!("n = 5\n{FILL}ys = go xs.map(x => -sqrt(x) / 2)\n[ys#4, #ys]"), list(vec![float(-1.0), int(5)]));
 }
 
 #[test]

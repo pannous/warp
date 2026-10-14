@@ -6,10 +6,7 @@ use warp::wasm_emitter::eval;
 fn hints_of(code: &str) -> Vec<String> {
 	set_hint_mode(HintMode::Always);
 	let (_, hints) = capture_hints(|| eval(code));
-	hints
-		.into_iter()
-		.map(|hint| format!("{} → {}", hint.original, hint.canonical))
-		.collect()
+	hints.into_iter().map(|hint| format!("{} → {}", hint.original, hint.canonical)).collect()
 }
 
 #[test]

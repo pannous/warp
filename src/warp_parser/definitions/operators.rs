@@ -9,9 +9,7 @@ const INFIX_WORD_TOPIC: &str = "infix-operator-word";
 pub(crate) fn is_operator_glyph(glyph: &str) -> bool {
 	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
 	!glyph.is_empty()
-		&& glyph
-			.chars()
-			.all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace()))
+		&& glyph.chars().all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace()))
 		&& !glyph.is_ascii()
 }
 
@@ -34,10 +32,14 @@ pub(crate) fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Optio
 		[OPERATOR_WORD, head, ..] | [head, ..] if kind == UserOperatorKind::Infix && words.contains(&":=") => head,
 		_ => return None,
 	};
-	let word: String = head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+	// a word, or a glyph with its parameters: `infix operator ↑(x: number, n: number) := …` (card easy-add)
+	let word: String = match head.starts_with(char::is_alphabetic) {
+		true => head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect(),
+		false => head.chars().take_while(|c| *c != '(').collect(),
+	};
 	let parameters = &head[word.len()..];
-	let is_word = word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD;
-	(is_word && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
+	let is_operator = (word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD) || is_operator_glyph(&word);
+	(is_operator && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
 }
 
 /// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
@@ -55,14 +57,23 @@ pub(crate) fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	found
 }
 
-/// The operators a source itself declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
+/// The kind a declaration's first word declares: `prefix|suffix|infix operator ⊕`, and `operator ⊕` alone is infix (card
+/// operator-infix)
+fn declared_kind(word: &str) -> Option<UserOperatorKind> {
+	match word {
+		OPERATOR_WORD => Some(UserOperatorKind::Infix),
+		_ => OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word).map(|(_, kind)| *kind),
+	}
+}
+
+/// The operators a source itself declares: `[prefix|suffix|infix] operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
 pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let by_kind = words.split_first().and_then(|(word, rest)| {
-			let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| keyword == word)?;
-			Some((declared_operator(*kind, rest)?, *kind))
+			let kind = declared_kind(word)?;
+			Some((declared_operator(kind, rest)?, kind))
 		});
 		let declared = by_kind.or_else(|| match words.as_slice() {
 			[left, glyph, right, ":=", ..]
@@ -73,11 +84,7 @@ pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 			_ => None,
 		});
 		if let Some((glyph, kind)) = declared {
-			found.push(UserOperator {
-				glyph: glyph.chars().collect(),
-				kind,
-				level: kind.default_level(),
-			});
+			found.push(UserOperator { glyph: glyph.chars().collect(), kind, level: kind.default_level() });
 		}
 	}
 	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
@@ -110,38 +117,24 @@ pub(crate) fn precedence_declaration<'a>(
 		["operator", other] | [other] => *other,
 		_ => return Ok(None),
 	};
-	if !declared
-		.iter()
-		.any(|operator| operator.glyph.iter().collect::<String>() == *glyph)
-	{
+	if !declared.iter().any(|operator| operator.glyph.iter().collect::<String>() == *glyph) {
 		return Err(format!("operator {glyph} is built in: only a declared operator gets a precedence (`infix operator {glyph} := …` first)"));
 	}
-	let reference = match declared
-		.iter()
-		.find(|operator| operator.glyph.iter().collect::<String>() == other)
-	{
+	let reference = match declared.iter().find(|operator| operator.glyph.iter().collect::<String>() == other) {
 		Some(operator) => operator.level,
 		None => built_in_level(other).ok_or_else(|| {
 			format!("unknown operator {other} in `operator {glyph} has precedence {direction} {other}`")
 		})?,
 	};
-	let level = if *above {
-		reference.saturating_add(PRECEDENCE_STEP)
-	} else {
-		reference.saturating_sub(PRECEDENCE_STEP)
-	};
+	let level =
+		if *above { reference.saturating_add(PRECEDENCE_STEP) } else { reference.saturating_sub(PRECEDENCE_STEP) };
 	Ok(Some((glyph, level)))
 }
 
 /// The left binding power of a built-in infix operator written as `text` (`*`, `+`, `and`)
 pub(crate) fn built_in_level(text: &str) -> Option<u8> {
-	let parser = WarpParser::new_with_options(
-		text.to_string(),
-		ParserOptions {
-			data_mode: true,
-			..ParserOptions::default()
-		},
-	);
+	let parser =
+		WarpParser::new_with_options(text.to_string(), ParserOptions { data_mode: true, ..ParserOptions::default() });
 	match parser.peek_operator() {
 		Some((op, length)) if length == text.chars().count() => Some(op.binding_power().0),
 		_ => None,
@@ -150,11 +143,7 @@ pub(crate) fn built_in_level(text: &str) -> Option<u8> {
 
 pub(crate) fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
 	let name = format!("{OPERATOR_FUNCTION_PREFIX}{}", glyph.iter().collect::<String>());
-	Node::List(
-		[vec![Symbol(name)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
+	Node::List([vec![Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 impl WarpParser {
@@ -176,11 +165,7 @@ impl WarpParser {
 			Node::Empty => vec![],
 			parameter => vec![parameter],
 		};
-		Some(Node::List(
-			[vec![Symbol(op.to_string())], parameters].concat(),
-			Bracket::Round,
-			Separator::None,
-		))
+		Some(Node::List([vec![Symbol(op.to_string())], parameters].concat(), Bracket::Round, Separator::None))
 	}
 
 	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
@@ -208,9 +193,7 @@ impl WarpParser {
 		if self.current_char().is_alphabetic() {
 			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
 		}
-		let blanks = (chars..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
+		let blanks = (chars..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		// a pattern's rest `Point{x, ..}` (lowering/switch.rs rest_pattern) also ends a block
 		let ends_rest = matches!(op, Op::Range | Op::To) && self.peek_char(chars + blanks) == '}';
 		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') && !ends_rest {
@@ -276,10 +259,7 @@ impl WarpParser {
 		if !is_keyword || self.options != ParserOptions::default() {
 			return None;
 		}
-		let rest: String = self.chars[self.pos..]
-			.iter()
-			.take_while(|c| **c != '\n' && **c != ';')
-			.collect();
+		let rest: String = self.chars[self.pos..].iter().take_while(|c| **c != '\n' && **c != ';').collect();
 		let words: Vec<&str> = rest.split_whitespace().collect();
 		if word == "operator" && words.get(1) == Some(&"has") && words.get(2) == Some(&"precedence") {
 			while !matches!(self.current_char(), '\n' | ';' | '\0') {
@@ -296,14 +276,14 @@ impl WarpParser {
 				Err(message) => error(&message),
 			});
 		}
-		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
-		let glyph: Vec<char> = declared_operator(*kind, &words)?.chars().collect();
+		let kind = declared_kind(word)?;
+		let glyph: Vec<char> = declared_operator(kind, &words)?.chars().collect();
 		let has_operator_word = words.first() == Some(&OPERATOR_WORD);
 		self.skip_spaces();
 		if has_operator_word {
 			self.advance_by(OPERATOR_WORD.chars().count());
 			self.skip_spaces();
-		} else if is_operator_word(&glyph) {
+		} else if is_operator_word(&glyph) && word != OPERATOR_WORD {
 			self.set_hint_pos();
 			let name: String = glyph.iter().collect();
 			crate::errors::diagnostic::educate_once(
@@ -327,11 +307,8 @@ impl WarpParser {
 			},
 			// P48 names the operands `left` and `right`; `a` and `b` stay accepted
 			UserOperatorKind::Infix => {
-				let names = if mentions(&body, "left") || mentions(&body, "right") {
-					["left", "right"]
-				} else {
-					["a", "b"]
-				};
+				let names =
+					if mentions(&body, "left") || mentions(&body, "right") { ["left", "right"] } else { ["a", "b"] };
 				names.map(|name| Symbol(name.to_string())).to_vec()
 			}
 			_ => vec![Symbol(crate::words::IMPLICIT_PARAMETER.to_string())],

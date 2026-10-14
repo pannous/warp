@@ -38,10 +38,7 @@ fn ordinal_positions_slice() {
 #[test]
 fn a_bare_number_is_no_position() {
 	crate::common::fails_with(&sliced("xs up to 2"), "xs up to #2 or xs up to second");
-	crate::common::fails_with(
-		&sliced("xs from 2 to 4"),
-		"xs from #2 to #4 or xs from second to fourth",
-	);
+	crate::common::fails_with(&sliced("xs from 2 to 4"), "xs from #2 to #4 or xs from second to fourth");
 }
 
 /// other uses of from and to keep their meaning
@@ -49,8 +46,5 @@ fn a_bare_number_is_no_position() {
 #[test]
 fn other_from_and_to_stay() {
 	is!("count(1 to 3)", 3);
-	is!(
-		"to move x from a to b { print \"\\(x) \\(a)→\\(b)\" }; move 1 from 2 to 3; 7",
-		7
-	);
+	is!("to move x from a to b { print \"\\(x) \\(a)→\\(b)\" }; move 1 from 2 to 3; 7", 7);
 }

@@ -37,10 +37,7 @@ pub(crate) struct FilterLoop {
 pub fn lower(program: Node) -> Node {
 	let mut headers = Headers {
 		declared_types: crate::analyzer::declared_classes(&program),
-		functions: crate::analyzer::function_definitions(&program)
-			.user_functions
-			.into_keys()
-			.collect(),
+		functions: crate::analyzer::function_definitions(&program).user_functions.into_keys().collect(),
 		text_variables: HashSet::new(),
 	};
 	headers.lowered(program)
@@ -67,8 +64,7 @@ impl Headers {
 			{
 				let at = crate::errors::diagnostic::position(&node).unwrap_or_default();
 				let (variable, iterable, body) = (variable.clone(), iterable.clone(), body.clone());
-				self.loop_meaning(variable, iterable, body, at)
-					.unwrap_or_else(|error| error)
+				self.loop_meaning(variable, iterable, body, at).unwrap_or_else(|error| error)
 			}
 			_ => node,
 		}
@@ -97,10 +93,8 @@ impl Headers {
 		if let Some(condition) = self.loop_condition(&variable) {
 			let shown = crate::normalize::operand_text(&condition);
 			let collection = crate::normalize::operand_text(&iterable);
-			let header = (
-				format!("for ({shown}) in {collection}"),
-				format!("for it in {collection}.filter(it => {shown})"),
-			);
+			let header =
+				(format!("for ({shown}) in {collection}"), format!("for it in {collection}.filter(it => {shown})"));
 			let body = filtered_body(
 				&format!("for ({shown}) in …"),
 				&format!("for it in … {{ if {shown} {{ … }} }}"),
@@ -209,10 +203,8 @@ impl Headers {
 	/// between runs of spaces or lines (as lib/text.warp's words and lines); any other name walks the characters
 	fn walked_text_units(&self, variable: &Node, iterable: Node) -> Node {
 		let is_text = self.is_text(&iterable);
-		let unit = variable
-			.drop_meta()
-			.symbol_name()
-			.and_then(|name| TEXT_UNIT_NAMES.iter().find(|(unit, _)| *unit == name));
+		let unit =
+			variable.drop_meta().symbol_name().and_then(|name| TEXT_UNIT_NAMES.iter().find(|(unit, _)| *unit == name));
 		let (Some((unit, separator)), true) = (unit, is_text) else {
 			return iterable;
 		};
@@ -262,9 +254,7 @@ fn filter_question(written: &str, explicit: &str, header: Option<(String, String
 		Some((written, replacement)) => filter.replacing(written, replacement),
 		None => filter,
 	}];
-	Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning)
-		.written(written)
-		.at(at.0, at.1)
+	Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(at.0, at.1)
 }
 
 /// `for T in xs` of a type word T, which visits only the items of type T: the type test carries the loop, so the emitter
@@ -278,28 +268,15 @@ fn type_filtered_body(
 	body: Node,
 	at: (usize, usize),
 ) -> Node {
-	let question = filter_question(
-		&format!("for {name} in …"),
-		&format!("for x in … {{ if x is {name} {{ … }} }}"),
-		header,
-		at,
-	);
-	guarded_body(
-		test.with_meta_data(FilterLoop {
-			question,
-			iterable: iterable.clone(),
-		}),
-		body,
-	)
+	let question =
+		filter_question(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, at);
+	guarded_body(test.with_meta_data(FilterLoop { question, iterable: iterable.clone() }), body)
 }
 
 /// `{ if test then body }`, the body of a filtering loop
 fn guarded_body(test: Node, body: Node) -> Node {
-	let guarded = Node::Key(
-		Box::new(Node::Key(Box::new(Node::Empty), Op::If, Box::new(test))),
-		Op::Then,
-		Box::new(body),
-	);
+	let guarded =
+		Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
 	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }
 
@@ -310,10 +287,7 @@ fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(Strin
 		return None;
 	}
 	let collection = crate::normalize::operand_text(iterable);
-	Some((
-		format!("for {name} in {collection}"),
-		format!("for x in {collection}.filter(x => x is {name})"),
-	))
+	Some((format!("for {name} in {collection}"), format!("for x in {collection}.filter(x => x is {name})")))
 }
 
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
@@ -321,9 +295,7 @@ fn item_named(node: Node, name: &str, item: &Node) -> Node {
 	match node {
 		Node::Symbol(symbol) if symbol == name => item.clone(),
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == name) => {
-			arguments_rewritten(items, Bracket::Round, Separator::None, |part| {
-				item_named(part, name, item)
-			})
+			arguments_rewritten(items, Bracket::Round, Separator::None, |part| item_named(part, name, item))
 		}
 		other => other.map_children(|child| item_named(child, name, item)),
 	}
@@ -337,9 +309,7 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == crate::words::CODEPOINT,
 		_ => return false,
 	};
-	let spec = crate::analyzer::type_word_kind(type_name)
-		.map(|_| type_name)
-		.unwrap_or(type_name);
+	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
 	items.iter().all(|item| match item.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => {
 			crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec)
@@ -357,31 +327,15 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || body.mentions(word) {
 		return None;
 	}
-	let walked = if word == BYTES_WORD {
-		bytes_of(iterable)
-	} else {
-		call("chars", vec![iterable.clone()])
-	};
+	let walked = if word == BYTES_WORD { bytes_of(iterable) } else { call("chars", vec![iterable.clone()]) };
 	Some((Node::Symbol(IMPLICIT_PARAMETER.to_string()), walked))
 }
 
 /// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
 fn bytes_of(text: &Node) -> Node {
 	let offset = Node::Symbol("byte·offset".to_string());
-	let count = Node::Key(
-		Box::new(text.clone()),
-		Op::Dot,
-		Box::new(Node::Symbol(BYTES_WORD.to_string())),
-	);
+	let count = Node::Key(Box::new(text.clone()), Op::Dot, Box::new(Node::Symbol(BYTES_WORD.to_string())));
 	let offsets = Node::Key(Box::new(Node::int(0)), Op::Range, Box::new(count));
-	let byte = Node::Key(
-		Box::new(offset.clone()),
-		Op::Arrow,
-		Box::new(call("byte_at", vec![text.clone(), offset])),
-	);
-	Node::Key(
-		Box::new(parens(vec![offsets])),
-		Op::Dot,
-		Box::new(call("map", vec![byte])),
-	)
+	let byte = Node::Key(Box::new(offset.clone()), Op::Arrow, Box::new(call("byte_at", vec![text.clone(), offset])));
+	Node::Key(Box::new(parens(vec![offsets])), Op::Dot, Box::new(call("map", vec![byte])))
 }

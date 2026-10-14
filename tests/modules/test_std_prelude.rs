@@ -9,10 +9,7 @@ fn the_prelude_words_work_without_use() {
 	is!("last(\"abc\")", 'c');
 	is!("round(2.71828, 2)", 2.72);
 	is!("replace(\"a-b\", \"-\", \"+\")", "a+b");
-	is!(
-		"[is_digit('5'), is_alpha('x'), is_alphanumeric('_')]",
-		parse("[yes yes no]")
-	);
+	is!("[is_digit('5'), is_alpha('x'), is_alphanumeric('_')]", parse("[yes yes no]"));
 }
 
 #[test]
@@ -32,10 +29,7 @@ fn a_module_word_inside_an_interpolation_comes_along() {
 
 #[test]
 fn a_local_named_like_a_prelude_word_is_the_local() {
-	is!(
-		"def pop1(items) { first = items#1; [first, last(items)] }; pop1([4, 5])",
-		parse("[4 5]")
-	);
+	is!("def pop1(items) { first = items#1; [first, last(items)] }; pop1([4, 5])", parse("[4 5]"));
 }
 
 #[test]

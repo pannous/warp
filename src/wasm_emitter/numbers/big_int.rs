@@ -122,17 +122,11 @@ impl WasmGcEmitter {
 	}
 
 	fn limbs_ref(&self) -> ValType {
-		Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.type_manager.limbs_type),
-		})
+		Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.limbs_type) })
 	}
 
 	fn big_ref(&self) -> ValType {
-		Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.type_manager.big_int_type),
-		})
+		Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.big_int_type) })
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════
@@ -187,25 +181,14 @@ impl WasmGcEmitter {
 	}
 
 	fn unproven(&self, candidates: &[(u32, IntRange)]) -> Vec<u32> {
-		candidates
-			.iter()
-			.filter(|(_, range)| !is_fixnum_range(*range))
-			.map(|(local, _)| *local)
-			.collect()
+		candidates.iter().filter(|(_, range)| !is_fixnum_range(*range)).map(|(local, _)| *local).collect()
 	}
 
 	/// `a << n` and `a >> n` on exact Ints; a float operand is refused by the operand emitters
 	pub(crate) fn emit_shift(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		self.emit_numeric_value(func, left);
 		self.emit_numeric_value(func, right);
-		self.emit_call(
-			func,
-			if *op == Op::Shl {
-				"int_shift_left"
-			} else {
-				"int_shift_right"
-			},
-		);
+		self.emit_call(func, if *op == Op::Shl { "int_shift_left" } else { "int_shift_right" });
 	}
 
 	/// Stack [a, b] → [a op b] for + - * / % ^ xor on Ints
@@ -249,19 +232,12 @@ impl WasmGcEmitter {
 				);
 				let unproven = self.unproven(&[(r, result), (a, left), (b, right)]);
 				self.emit_fixnum_test(func, &unproven);
-				self.emit_fast_or_slow(
-					func,
-					&[I::LocalGet(r)],
-					if *op == Op::Add { "exact_add" } else { "exact_sub" },
-				);
+				self.emit_fast_or_slow(func, &[I::LocalGet(r)], if *op == Op::Add { "exact_add" } else { "exact_sub" });
 			}
 			Op::Mul => {
 				let small = |range| fits(range, -MUL_FAST_BIAS as i128, MUL_FAST_BIAS as i128 - 1);
-				let unproven: Vec<u32> = [(a, left), (b, right)]
-					.iter()
-					.filter(|(_, range)| !small(*range))
-					.map(|(l, _)| *l)
-					.collect();
+				let unproven: Vec<u32> =
+					[(a, left), (b, right)].iter().filter(|(_, range)| !small(*range)).map(|(l, _)| *l).collect();
 				Self::emit_mul_fast_test(func, &unproven);
 				self.emit_fast_or_slow(func, &[I::LocalGet(a), I::LocalGet(b), I::I64Mul], "exact_mul");
 			}
@@ -504,14 +480,9 @@ impl WasmGcEmitter {
 	pub(crate) fn emit_int_abs(&mut self, func: &mut Function, range: IntRange) {
 		let a = self.scratch(0);
 		func.instruction(&I::LocalSet(a));
+		#[rustfmt::skip]
 		let fast = [
-			I::I64Const(0),
-			I::LocalGet(a),
-			I::I64Sub,
-			I::LocalGet(a),
-			I::LocalGet(a),
-			I::I64Const(0),
-			I::I64LtS,
+			I::I64Const(0), I::LocalGet(a), I::I64Sub, I::LocalGet(a), I::LocalGet(a), I::I64Const(0), I::I64LtS,
 			I::Select,
 		];
 		if !self.int_runtime() || is_fixnum_range(range) {
@@ -538,13 +509,7 @@ impl WasmGcEmitter {
 		self.emit_fixnum_test(func, &unproven);
 		Self::emit_list(
 			func,
-			&[
-				I::If(BlockType::Result(ValType::I32)),
-				I::LocalGet(a),
-				I::LocalGet(b),
-				machine,
-				I::Else,
-			],
+			&[I::If(BlockType::Result(ValType::I32)), I::LocalGet(a), I::LocalGet(b), machine, I::Else],
 		);
 		self.emit_scratch_call(func, "exact_cmp");
 		Self::emit_list(func, &[I::I32Const(0), Self::i32_compare(op), I::End]);
@@ -650,13 +615,7 @@ impl WasmGcEmitter {
 		let a = self.scratch(0);
 		func.instruction(&I::LocalSet(a));
 		self.emit_fixnum_test(func, &[a]);
-		self.emit_fast_or_unary_slow(
-			func,
-			a,
-			&[I::LocalGet(a), I::F64ConvertI64S],
-			"exact_to_f64",
-			ValType::F64,
-		);
+		self.emit_fast_or_unary_slow(func, a, &[I::LocalGet(a), I::F64ConvertI64S], "exact_to_f64", ValType::F64);
 	}
 
 	/// `col + 0.5` where a float uses it (`col + 0.5 - x` of a float x): IEEE rounds an operation on exact f64 operands
@@ -684,18 +643,12 @@ impl WasmGcEmitter {
 		};
 		let held = self.scratch(0);
 		self.emit_numeric_value(func, variable);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalSet(held),
-				I::LocalGet(held),
-				I::I64Const(F64_EXACT_LIMIT),
-				I::I64Add,
-				I::I64Const(2 * F64_EXACT_LIMIT),
-				I::I64LeU,
-				I::If(BlockType::Result(ValType::F64)),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalSet(held),
+			I::LocalGet(held), I::I64Const(F64_EXACT_LIMIT), I::I64Add, I::I64Const(2 * F64_EXACT_LIMIT), I::I64LeU,
+			I::If(BlockType::Result(ValType::F64)),
+		]);
 		for side in [left, right] {
 			if std::ptr::eq(side, variable) {
 				Self::emit_list(func, &[I::LocalGet(held), I::F64ConvertI64S]);
@@ -720,9 +673,7 @@ impl WasmGcEmitter {
 		}
 		if !self.int_runtime() {
 			// Only reachable for i64 literals in programs without arithmetic: no handles exist
-			func.instruction(&I::I64Const(
-				i64::try_from(number).expect("big literal needs the Int runtime"),
-			));
+			func.instruction(&I::I64Const(i64::try_from(number).expect("big literal needs the Int runtime")));
 			return;
 		}
 		self.emit_number_constant(func, number, &BigInt::from(1));
@@ -742,10 +693,7 @@ impl WasmGcEmitter {
 		Self::emit_list(
 			func,
 			&[
-				I::ArrayNewFixed {
-					array_type_index: self.type_manager.limbs_type,
-					array_size: limbs.len() as u32,
-				},
+				I::ArrayNewFixed { array_type_index: self.type_manager.limbs_type, array_size: limbs.len() as u32 },
 				I::StructNew(self.type_manager.big_int_type),
 			],
 		);
@@ -761,30 +709,19 @@ impl WasmGcEmitter {
 		if !self.int_runtime() {
 			return;
 		}
-		let heap = RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.type_manager.big_heap_type),
-		};
-		self.int_heap_global = self.declare_global_of(
-			Ref(heap),
-			ConstExpr::ref_null(HeapType::Concrete(self.type_manager.big_heap_type)),
-		);
+		let heap = RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.big_heap_type) };
+		self.int_heap_global =
+			self.declare_global_of(Ref(heap), ConstExpr::ref_null(HeapType::Concrete(self.type_manager.big_heap_type)));
 		self.int_count_global = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
 	}
 
 	/// Push the anyref payload for the Int in `local`
 	pub(crate) fn emit_int_payload(&self, func: &mut Function, local: u32) {
 		if !self.int_runtime() {
-			Self::emit_list(
-				func,
-				&[I::LocalGet(local), I::StructNew(self.type_manager.i64_box_type)],
-			);
+			Self::emit_list(func, &[I::LocalGet(local), I::StructNew(self.type_manager.i64_box_type)]);
 			return;
 		}
-		let any = BlockType::Result(Ref(RefType {
-			nullable: true,
-			heap_type: crate::type_kinds::any_heap_type(),
-		}));
+		let any = BlockType::Result(Ref(RefType { nullable: true, heap_type: crate::type_kinds::any_heap_type() }));
 		let i64_box = self.type_manager.i64_box_type;
 		self.emit_fixnum_test(func, &[local]);
 		Self::emit_list(func, &[I::If(any), I::LocalGet(local), I::StructNew(i64_box), I::Else]);
@@ -793,14 +730,7 @@ impl WasmGcEmitter {
 		self.emit_inline_numerator(func, local);
 		func.instruction(&I::StructNew(i64_box));
 		self.emit_inline_denominator(func, local);
-		Self::emit_list(
-			func,
-			&[
-				I::StructNew(i64_box),
-				I::StructNew(self.type_manager.ratio_type),
-				I::Else,
-			],
-		);
+		Self::emit_list(func, &[I::StructNew(i64_box), I::StructNew(self.type_manager.ratio_type), I::Else]);
 		self.emit_heap_get(func, local);
 		Self::emit_list(func, &[I::End, I::End]);
 	}
@@ -809,36 +739,20 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_inline_ratio_test(&self, func: &mut Function, local: u32) {
 		Self::emit_list(
 			func,
-			&[
-				I::LocalGet(local),
-				I::I64Const(INLINE_RATIO_BASE),
-				I::I64Sub,
-				I::I64Const(INLINE_RATIO_SPAN),
-				I::I64LtU,
-			],
+			&[I::LocalGet(local), I::I64Const(INLINE_RATIO_BASE), I::I64Sub, I::I64Const(INLINE_RATIO_SPAN), I::I64LtU],
 		);
 	}
 
 	pub(in crate::wasm_emitter) fn emit_inline_numerator(&self, func: &mut Function, local: u32) {
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(local),
-				I::I64Const(INLINE_RATIO_BASE),
-				I::I64Sub,
-				I::I64Const(INLINE_DENOMINATOR_BITS),
-				I::I64ShrU,
-				I::I64Const(INLINE_NUMERATOR_BIAS),
-				I::I64Sub,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(local), I::I64Const(INLINE_RATIO_BASE), I::I64Sub, I::I64Const(INLINE_DENOMINATOR_BITS),
+			I::I64ShrU, I::I64Const(INLINE_NUMERATOR_BIAS), I::I64Sub,
+		]);
 	}
 
 	pub(in crate::wasm_emitter) fn emit_inline_denominator(&self, func: &mut Function, local: u32) {
-		Self::emit_list(
-			func,
-			&[I::LocalGet(local), I::I64Const(INLINE_NUMERATOR_BIAS - 1), I::I64And],
-		);
+		Self::emit_list(func, &[I::LocalGet(local), I::I64Const(INLINE_NUMERATOR_BIAS - 1), I::I64And]);
 	}
 
 	/// Push i32 1 when numerator and denominator (Int locals of a normalized ratio) fit inside a handle
@@ -848,38 +762,20 @@ impl WasmGcEmitter {
 		numerator: u32,
 		denominator: u32,
 	) {
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(numerator),
-				I::I64Const(INLINE_NUMERATOR_BIAS),
-				I::I64Add,
-				I::I64Const(INLINE_NUMERATOR_LIMIT),
-				I::I64LtU,
-				I::LocalGet(denominator),
-				I::I64Const(INLINE_NUMERATOR_BIAS),
-				I::I64LtU,
-				I::I32And,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(numerator), I::I64Const(INLINE_NUMERATOR_BIAS), I::I64Add, I::I64Const(INLINE_NUMERATOR_LIMIT),
+			I::I64LtU, I::LocalGet(denominator), I::I64Const(INLINE_NUMERATOR_BIAS), I::I64LtU, I::I32And,
+		]);
 	}
 
 	/// Push the handle of the ratio numerator/denominator that emit_inline_ratio_fits accepted
 	pub(in crate::wasm_emitter) fn emit_inline_ratio(&self, func: &mut Function, numerator: u32, denominator: u32) {
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(numerator),
-				I::I64Const(INLINE_NUMERATOR_BIAS),
-				I::I64Add,
-				I::I64Const(INLINE_DENOMINATOR_BITS),
-				I::I64Shl,
-				I::LocalGet(denominator),
-				I::I64Or,
-				I::I64Const(INLINE_RATIO_BASE),
-				I::I64Add,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(numerator), I::I64Const(INLINE_NUMERATOR_BIAS), I::I64Add, I::I64Const(INLINE_DENOMINATOR_BITS),
+			I::I64Shl, I::LocalGet(denominator), I::I64Or, I::I64Const(INLINE_RATIO_BASE), I::I64Add,
+		]);
 	}
 
 	/// new_int(Int) -> Int node whose payload is $i64box or the $BigInt behind a handle
@@ -898,17 +794,11 @@ impl WasmGcEmitter {
 	}
 
 	pub(in crate::wasm_emitter) fn emit_heap_get(&self, func: &mut Function, handle_local: u32) {
-		Self::emit_list(
-			func,
-			&[
-				I::GlobalGet(self.int_heap_global),
-				I::LocalGet(handle_local),
-				I::I64Const(HANDLE_BASE),
-				I::I64Sub,
-				I::I32WrapI64,
-				I::ArrayGet(self.type_manager.big_heap_type),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::GlobalGet(self.int_heap_global), I::LocalGet(handle_local), I::I64Const(HANDLE_BASE), I::I64Sub,
+			I::I32WrapI64, I::ArrayGet(self.type_manager.big_heap_type),
+		]);
 	}
 
 	fn emit_heap_get_big(&self, func: &mut Function, handle_local: u32) {
@@ -926,10 +816,7 @@ impl WasmGcEmitter {
 			func,
 			&[
 				I::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)),
-				I::StructGet {
-					struct_type_index: self.type_manager.i64_box_type,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: self.type_manager.i64_box_type, field_index: 0 },
 			],
 		);
 	}
@@ -971,13 +858,7 @@ impl WasmGcEmitter {
 	fn big_field(&self, func: &mut Function, local: u32, field_index: u32) {
 		Self::emit_list(
 			func,
-			&[
-				I::LocalGet(local),
-				I::StructGet {
-					struct_type_index: self.type_manager.big_int_type,
-					field_index,
-				},
-			],
+			&[I::LocalGet(local), I::StructGet { struct_type_index: self.type_manager.big_int_type, field_index }],
 		);
 	}
 
@@ -991,25 +872,17 @@ impl WasmGcEmitter {
 
 	/// `local += delta` for an i32 local
 	fn increment(func: &mut Function, local: u32, delta: i32) {
-		Self::emit_list(
-			func,
-			&[I::LocalGet(local), I::I32Const(delta), I::I32Add, I::LocalSet(local)],
-		);
+		Self::emit_list(func, &[I::LocalGet(local), I::I32Const(delta), I::I32Add, I::LocalSet(local)]);
 	}
 
 	/// `loop { if counter >= bound break; body; counter++ }` with i32 locals
 	fn count_up(func: &mut Function, counter: u32, bound: u32, body: impl FnOnce(&mut Function)) {
-		Self::emit_list(
-			func,
-			&[
-				I::Block(BlockType::Empty),
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::Block(BlockType::Empty),
 				I::Loop(BlockType::Empty),
-				I::LocalGet(counter),
-				I::LocalGet(bound),
-				I::I32GeU,
-				I::BrIf(1),
-			],
-		);
+					I::LocalGet(counter), I::LocalGet(bound), I::I32GeU, I::BrIf(1),
+		]);
 		body(func);
 		Self::increment(func, counter, 1);
 		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
@@ -1019,13 +892,7 @@ impl WasmGcEmitter {
 	fn count_down(func: &mut Function, counter: u32, body: impl FnOnce(&mut Function)) {
 		Self::emit_list(
 			func,
-			&[
-				I::Block(BlockType::Empty),
-				I::Loop(BlockType::Empty),
-				I::LocalGet(counter),
-				I::I32Eqz,
-				I::BrIf(1),
-			],
+			&[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(counter), I::I32Eqz, I::BrIf(1)],
 		);
 		Self::increment(func, counter, -1);
 		body(func);
@@ -1041,6 +908,7 @@ impl WasmGcEmitter {
 		self.emit_handle_functions();
 		self.emit_int_functions();
 		self.emit_exact_functions();
+		self.emit_float_as_exact();
 	}
 }
 

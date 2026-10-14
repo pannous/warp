@@ -10,9 +10,5 @@ fn the_warp_command_recurses_a_million_frames_deep() {
 		.output()
 		.unwrap();
 	let printed = String::from_utf8_lossy(&output.stdout);
-	assert!(
-		printed.contains("1000000"),
-		"{printed}{}",
-		String::from_utf8_lossy(&output.stderr)
-	);
+	assert!(printed.contains("1000000"), "{printed}{}", String::from_utf8_lossy(&output.stderr));
 }

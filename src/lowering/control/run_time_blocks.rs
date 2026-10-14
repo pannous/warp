@@ -89,9 +89,7 @@ fn occurrences(node: &Node, name: &str) -> usize {
 /// `run_block(e, "a b", [a, b], data [definitions])`: the main-level variables assigned before it (a snapshot the
 /// block reads) and the program's function definitions (the block may call them)
 pub fn lower_interpret(program: Node) -> Node {
-	lower_statements(program, &mentions_interpret, &|site: &Site, node: Node| {
-		site.interpreted(node)
-	})
+	lower_statements(program, &mentions_interpret, &|site: &Site, node: Node| site.interpreted(node))
 }
 
 /// `x!` that blocks.rs did not run (wiki/charged.md §5, user decision P73: `!` forces, the kind decides): a block known
@@ -100,9 +98,7 @@ pub fn lower_interpret(program: Node) -> Node {
 /// stays mutation.rs's unwrap, which keeps `x!` of an optional pure. The host gives a value that is no code back as it is.
 pub fn lower_run_time_bangs(program: Node) -> Node {
 	let holders = data_holders(&program);
-	lower_statements(program, &has_bang, &|site: &Site, node: Node| {
-		site.forced(node, &holders)
-	})
+	lower_statements(program, &has_bang, &|site: &Site, node: Node| site.forced(node, &holders))
 }
 
 fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn Fn(&Site, Node) -> Node) -> Node {
@@ -110,26 +106,14 @@ fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn 
 	if !statements.iter().any(applies) {
 		return program;
 	}
-	let all_variables = statements
-		.iter()
-		.filter_map(assigned_name)
-		.fold(vec![], |mut names: Vec<String>, name| {
-			if !names.contains(&name) {
-				names.push(name);
-			}
-			names
-		});
-	let definitions = statements
-		.iter()
-		.filter(|statement| defines_functions(statement))
-		.cloned()
-		.collect();
-	let mut site = Site {
-		blocks: vec![],
-		variables: vec![],
-		all_variables,
-		definitions,
-	};
+	let all_variables = statements.iter().filter_map(assigned_name).fold(vec![], |mut names: Vec<String>, name| {
+		if !names.contains(&name) {
+			names.push(name);
+		}
+		names
+	});
+	let definitions = statements.iter().filter(|statement| defines_functions(statement)).cloned().collect();
+	let mut site = Site { blocks: vec![], variables: vec![], all_variables, definitions };
 	let mut lowered = vec![];
 	for statement in statements {
 		lowered.push(lower(&site, statement.clone()));
@@ -139,10 +123,9 @@ fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn 
 		Node::List(_, bracket, separator) => Node::List(lowered, bracket, separator),
 		// LineInfo (and similar) may wrap a whole program; a bang mark must stay on the expression
 		// (`ø!` has no LineInfo, so the mutated Meta is outermost — do not promote it onto a list)
-		Node::Meta { data, .. } if crate::mutation::bang_target(&program).is_none() => Node::Meta {
-			node: Box::new(Node::List(lowered, Bracket::None, Separator::Newline)),
-			data,
-		},
+		Node::Meta { data, .. } if crate::mutation::bang_target(&program).is_none() => {
+			Node::Meta { node: Box::new(Node::List(lowered, Bracket::None, Separator::Newline)), data }
+		}
 		_ => lowered.into_iter().next().unwrap_or(Node::Empty),
 	}
 }
@@ -272,11 +255,7 @@ fn interpret_argument(node: &Node) -> Option<Node> {
 }
 
 fn as_data(node: Node) -> Node {
-	Node::List(
-		vec![symbol(crate::blocks::DATA_WORD), node],
-		Bracket::None,
-		Separator::Space,
-	)
+	Node::List(vec![symbol(crate::blocks::DATA_WORD), node], Bracket::None, Separator::Space)
 }
 
 impl Site {
@@ -319,9 +298,7 @@ impl Site {
 			};
 		}
 		if defines_functions(&node) {
-			return self
-				.in_body(&node)
-				.each_part(node, &|site, part| site.interpreted(part));
+			return self.in_body(&node).each_part(node, &|site, part| site.interpreted(part));
 		}
 		self.each_part(node, &|site, part| site.interpreted(part))
 	}
@@ -335,9 +312,7 @@ impl Site {
 		}
 		if defines_functions(&node) {
 			let with_parameters = [holders.to_vec(), parameters(&node, true)].concat();
-			return self
-				.in_body(&node)
-				.each_part(node, &|site, part| site.forced(part, &with_parameters));
+			return self.in_body(&node).each_part(node, &|site, part| site.forced(part, &with_parameters));
 		}
 		self.each_part(node, &|site, part| site.forced(part, holders))
 	}
@@ -347,11 +322,7 @@ impl Site {
 		let parameters = parameters(definition, false);
 		let variables = [
 			parameters.clone(),
-			self.all_variables
-				.iter()
-				.filter(|name| !parameters.contains(name))
-				.cloned()
-				.collect(),
+			self.all_variables.iter().filter(|name| !parameters.contains(name)).cloned().collect(),
 		]
 		.concat();
 		Site {
@@ -381,11 +352,7 @@ impl Site {
 			Node::List(items, bracket, separator) if for_in_variable(&items).is_some() => {
 				let mut site = self.clone();
 				site.bind(for_in_variable(&items).unwrap_or_default());
-				Node::List(
-					items.into_iter().map(|item| lower(&site, item)).collect(),
-					bracket,
-					separator,
-				)
+				Node::List(items.into_iter().map(|item| lower(&site, item)).collect(), bracket, separator)
 			}
 			other => other.map_children(|child| lower(self, child)),
 		}

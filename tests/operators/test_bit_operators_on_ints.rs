@@ -55,15 +55,10 @@ fn double_and_word_forms_stay_logical_on_numbers() {
 fn bits_as_a_condition_warn() {
 	common::warns_with("if 8 & 4 { 1 } else { 2 }", 2, "combines the bits");
 	common::warns_with("x = 8; while x & 12 { x = x - 1 }; x", 3, "combines the bits");
-	for unambiguous in [
-		"if (8 & 4) != 0 { 1 } else { 2 }",
-		"if 8 and 4 { 1 } else { 2 }",
-		"if yes & no { 1 } else { 2 }",
-	] {
+	for unambiguous in
+		["if (8 & 4) != 0 { 1 } else { 2 }", "if 8 and 4 { 1 } else { 2 }", "if yes & no { 1 } else { 2 }"]
+	{
 		let (_, warnings) = common::warnings_of(unambiguous);
-		assert!(
-			warnings.iter().all(|warning| !warning.contains("combines the bits")),
-			"{unambiguous}: {warnings:?}"
-		);
+		assert!(warnings.iter().all(|warning| !warning.contains("combines the bits")), "{unambiguous}: {warnings:?}");
 	}
 }

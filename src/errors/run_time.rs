@@ -6,8 +6,10 @@ use crate::operators::Op;
 pub(crate) const INDEX_OUT_OF_RANGE: &str = "index out of range";
 pub(crate) const UNWRAPPED_EMPTY: &str = "unwrapped ø";
 pub(crate) const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
+/// The word that raises an error, as hints write it
+pub(crate) const FAIL_WORD: &str = "fail";
 /// The words of an exception (library_words lowers them to the call raise(X)), unless the program defines one
-pub(crate) const RAISE_WORDS: [&str; 4] = ["raise", "throw", "fail", "panic"];
+pub(crate) const RAISE_WORDS: [&str; 4] = ["raise", "throw", FAIL_WORD, "panic"];
 
 pub(crate) fn has_exclusive_range(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -38,11 +40,7 @@ pub(crate) fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node
 			None => assumed.push((guess, vec![position])),
 		}
 	}
-	lines.extend(
-		assumed
-			.into_iter()
-			.map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))),
-	);
+	lines.extend(assumed.into_iter().map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))));
 	match lines.len() {
 		1 => result,
 		_ => crate::node::error(&lines.join("\n  ")),

@@ -250,11 +250,7 @@ fn talk(
 
 /// The child of `runtime` this thread holds, while a warp function is called back
 fn take_held(runtime: &str) -> Option<Runtime> {
-	HELD.with_borrow_mut(|held| {
-		held.iter()
-			.rposition(|(name, _)| *name == runtime)
-			.map(|index| held.remove(index).1)
-	})
+	HELD.with_borrow_mut(|held| held.iter().rposition(|(name, _)| *name == runtime).map(|index| held.remove(index).1))
 }
 
 /// The child of the interpreter for one call: started when there is none, waited for while another thread's call holds it
@@ -297,16 +293,9 @@ fn start(interpreter: &Interpreter) -> Result<Runtime, String> {
 		.stderr(Stdio::inherit())
 		.spawn()
 		.map_err(|failure| {
-			format!(
-				"cannot start {program} ({failure}); set {} to an interpreter",
-				interpreter.variable
-			)
+			format!("cannot start {program} ({failure}); set {} to an interpreter", interpreter.variable)
 		})?;
 	let input = child.stdin.take().ok_or("no stdin")?;
 	let output = BufReader::new(child.stdout.take().ok_or("no stdout")?);
-	Ok(Runtime {
-		_child: child,
-		input,
-		output,
-	})
+	Ok(Runtime { _child: child, input, output })
 }

@@ -10,10 +10,7 @@ const OPTIONAL_PREFIX: &str = "optional·";
 const OPTIONAL_MARK: char = '?';
 
 pub fn lower(node: Node) -> Node {
-	Optionals {
-		counter: Counter::default(),
-	}
-	.rewrite(node)
+	Optionals { counter: Counter::default() }.rewrite(node)
 }
 
 struct Optionals {

@@ -22,11 +22,7 @@ pub struct Reading {
 }
 
 pub fn reading(meaning: &str, explicit_form: &str) -> Reading {
-	Reading {
-		meaning: meaning.to_string(),
-		explicit_form: explicit_form.to_string(),
-		fix: None,
-	}
+	Reading { meaning: meaning.to_string(), explicit_form: explicit_form.to_string(), fix: None }
 }
 
 impl Reading {
@@ -70,10 +66,7 @@ impl Ask {
 	}
 
 	pub fn written(self, source_text: &str) -> Self {
-		Ask {
-			written: source_text.to_string(),
-			..self
-		}
+		Ask { written: source_text.to_string(), ..self }
 	}
 
 	pub fn at(self, line: usize, column: usize) -> Self {
@@ -90,10 +83,7 @@ impl Ask {
 		let (message, fix) = match self.fallback {
 			Fallback::Warning => {
 				let default = &self.readings[self.default];
-				(
-					format!("{} (taking {})", self.question, default.meaning),
-					default.explicit_form.clone(),
-				)
+				(format!("{} (taking {})", self.question, default.meaning), default.explicit_form.clone())
 			}
 			Fallback::Error => {
 				let forms: Vec<String> = self
@@ -101,21 +91,13 @@ impl Ask {
 					.iter()
 					.map(|reading| format!("`{}` for {}", reading.explicit_form, reading.meaning))
 					.collect();
-				(
-					format!("{} (too ambiguous to guess)", self.question),
-					forms.join(" or "),
-				)
+				(format!("{} (too ambiguous to guess)", self.question), forms.join(" or "))
 			}
 		};
 		// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
-		let diagnostic = Diagnostic {
-			message,
-			line: self.line,
-			column: self.column,
-			fix: Some(fix),
-			..Default::default()
-		}
-		.about(&self.topic, &self.question);
+		let diagnostic =
+			Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), ..Default::default() }
+				.about(&self.topic, &self.question);
 		let fixes = self.readings.iter().map(|reading| {
 			reading
 				.fix
@@ -167,11 +149,7 @@ impl Acknowledger for TerminalAcknowledger {
 	fn acknowledge(&self, _topic: &str, _written: &str) -> GotIt {
 		eprint!("      got it? [y = this expression, a = all of this kind, n/Enter = keep reminding] ");
 		let mut line = String::new();
-		match std::io::stdin()
-			.read_line(&mut line)
-			.map(|_| line.trim().to_lowercase())
-			.as_deref()
-		{
+		match std::io::stdin().read_line(&mut line).map(|_| line.trim().to_lowercase()).as_deref() {
 			Ok("y" | "yes") => GotIt::This,
 			Ok("a" | "all") => GotIt::All,
 			_ => GotIt::No,
@@ -191,11 +169,7 @@ const GOT_IT_COMMENT: &str = "// got it";
 pub(super) fn silenced_by_comment(line: usize) -> bool {
 	line > 0
 		&& compile_context::read(|context| {
-			context
-				.source
-				.lines()
-				.nth(line - 1)
-				.is_some_and(|text| text.to_lowercase().contains(GOT_IT_COMMENT))
+			context.source.lines().nth(line - 1).is_some_and(|text| text.to_lowercase().contains(GOT_IT_COMMENT))
 		})
 }
 
@@ -216,9 +190,7 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 	use crate::util::scoped;
 	scoped(&ACKNOWLEDGER, Some(std::rc::Rc::new(acknowledger)), || {
 		scoped(&ACKNOWLEDGED_TOPICS, Default::default(), || {
-			scoped(&ACKNOWLEDGEMENTS_FILE, None, || {
-				scoped(&NOTES_SHOWN, Default::default(), body)
-			})
+			scoped(&ACKNOWLEDGEMENTS_FILE, None, || scoped(&NOTES_SHOWN, Default::default(), body))
 		})
 	})
 }
@@ -244,11 +216,7 @@ pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>)
 	if adopted.is_empty() {
 		return;
 	}
-	let separator = if current.is_empty() || current.ends_with('\n') {
-		""
-	} else {
-		"\n"
-	};
+	let separator = if current.is_empty() || current.ends_with('\n') { "" } else { "\n" };
 	if let Err(failure) = std::fs::write(file, format!("{current}{separator}{}\n", adopted.join("\n"))) {
 		eprintln!("could not adopt the acknowledgements of {old_file}: {failure}");
 	}
@@ -262,11 +230,7 @@ pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 /// The topics acknowledged in the acknowledgements file, none without one
 fn load_acknowledgements() {
 	let saved = ACKNOWLEDGEMENTS_FILE
-		.with(|file| {
-			file.borrow()
-				.as_ref()
-				.and_then(|path| std::fs::read_to_string(path).ok())
-		})
+		.with(|file| file.borrow().as_ref().and_then(|path| std::fs::read_to_string(path).ok()))
 		.unwrap_or_default();
 	let topics = saved
 		.lines()
@@ -289,9 +253,7 @@ pub(crate) fn is_acknowledged(topic: &str, written: &str) -> bool {
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
 	[topic.to_string(), expression_key(topic, written)].iter().any(|key| {
 		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(key))
-			|| acknowledger
-				.as_ref()
-				.is_some_and(|acknowledger| acknowledger.has_acknowledged(key))
+			|| acknowledger.as_ref().is_some_and(|acknowledger| acknowledger.has_acknowledged(key))
 	})
 }
 
@@ -303,15 +265,9 @@ fn remember_acknowledged(topic: &str) {
 	let mut topics: Vec<String> =
 		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().iter().cloned().collect());
 	topics.sort();
-	let lines: String = topics
-		.iter()
-		.map(|topic| format!("{ACKNOWLEDGED_PREFIX}{topic} = {ACKNOWLEDGED}\n"))
-		.collect();
+	let lines: String = topics.iter().map(|topic| format!("{ACKNOWLEDGED_PREFIX}{topic} = {ACKNOWLEDGED}\n")).collect();
 	if let Err(problem) = std::fs::write(&path, lines) {
-		eprintln!(
-			"warning: could not remember \"got it\" in {}: {problem}",
-			path.display()
-		);
+		eprintln!("warning: could not remember \"got it\" in {}: {problem}", path.display());
 	}
 }
 
@@ -322,9 +278,7 @@ pub(crate) fn offer_acknowledgement(topic: &str, written: &str, level: Level) {
 		return;
 	}
 	// "got it?" about something nobody saw (below the shown level) is not asked
-	let acknowledger = ACKNOWLEDGER
-		.with(|current| current.borrow().clone())
-		.filter(|_| is_shown(level));
+	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone()).filter(|_| is_shown(level));
 	match acknowledger.map_or(GotIt::No, |acknowledger| acknowledger.acknowledge(topic, written)) {
 		GotIt::This => remember_acknowledged(&expression_key(topic, written)),
 		GotIt::All => remember_acknowledged(topic),

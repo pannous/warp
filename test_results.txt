@@ -221,6 +221,8 @@ PASSED:
   ✓ control::test_exit_signal::on_exit_runs_at_exit_and_keeps_its_code
   ✓ control::test_exit_signal::on_exit_runs_once
   ✓ control::test_exit_signal::on_exit_runs_when_main_returns
+  ✓ control::test_expect::a_program_defining_expect_keeps_its_word
+  ✓ control::test_expect::expect_is_a_soft_test
   ✓ control::test_field_of_elements::a_field_of_a_filtered_table_reads_only_its_rows
   ✓ control::test_field_of_elements::a_field_of_a_list_is_the_field_of_each_element
   ✓ control::test_field_of_elements::with_filters_a_list_of_instances
@@ -256,6 +258,8 @@ PASSED:
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
+  ✓ control::test_for_semicolon_end::the_semicolon_end_form_hints_the_braces
+  ✓ control::test_for_semicolon_end::the_statements_up_to_end_are_the_body
   ✓ control::test_for_underscore::a_loop_over_underscore_runs
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_for_unit_words::the_loop_variable_byte_walks_a_text_by_its_bytes
@@ -268,6 +272,22 @@ PASSED:
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
   ✓ control::test_function_dir::dir_of_a_function_lists_what_reflection_knows
   ✓ control::test_function_dir::the_type_of_a_function_is_function
+  ✓ control::test_function_objects::a_classes_methods_are_its_functions
+  ✓ control::test_function_objects::a_function_in_a_list_prints_by_its_name
+  ✓ control::test_function_objects::a_function_knows_its_name_and_return_type
+  ✓ control::test_function_objects::a_function_value_answers_at_run_time
+  ✓ control::test_function_objects::a_maps_own_description_stays_its_value
+  ✓ control::test_function_objects::a_modules_methods_are_its_functions
+  ✓ control::test_function_objects::a_printed_function_shows_its_doc_and_definition
+  ✓ control::test_function_objects::a_values_methods_are_its_types_functions
+  ✓ control::test_function_objects::description_is_doc
+  ✓ control::test_function_objects::full_is_the_doc_and_the_definition
+  ✓ control::test_function_objects::only_the_comment_directly_above_is_the_doc
+  ✓ control::test_function_objects::printing_a_function_without_parameters_calls_it_and_warns
+  ✓ control::test_function_objects::representation_is_dump
+  ✓ control::test_function_objects::returns_is_return_type
+  ✓ control::test_function_objects::the_type_of_a_function_names_its_signature
+  ✓ control::test_function_objects::the_words_of_a_function_reference
   ✓ control::test_glued_block_words::a_glued_do_runs_its_block
   ✓ control::test_glued_block_words::a_glued_loop_runs_its_block
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
@@ -410,6 +430,15 @@ PASSED:
   ✓ control::test_match_whole_value::match_names_its_subject
   ✓ control::test_match_whole_value::match_on_a_literal_in_a_body_or_an_arm
   ✓ control::test_match_whole_value::value_is_the_matched_value
+  ✓ control::test_member_completion::a_chain_and_a_call_receiver_are_one_receiver
+  ✓ control::test_member_completion::a_list_variable_offers_list_methods
+  ✓ control::test_member_completion::a_map_offers_its_keys_first
+  ✓ control::test_member_completion::a_standard_module_offers_its_words
+  ✓ control::test_member_completion::a_text_variable_offers_text_methods
+  ✓ control::test_member_completion::an_instance_offers_its_fields_and_methods
+  ✓ control::test_member_completion::an_unknown_receiver_offers_nothing
+  ✓ control::test_member_completion::every_offered_builtin_is_a_method_of_its_type
+  ✓ control::test_member_completion::literals_offer_their_type_s_methods
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
@@ -496,6 +525,10 @@ PASSED:
   ✓ control::test_reflect_inferred::a_field_named_type_is_read_as_written
   ✓ control::test_reflect_inferred::extension_methods_are_listed
   ✓ control::test_reflect_inferred::the_class_of_a_calls_result
+  ✓ control::test_reflection_mode::a_function_knows_what_made_it
+  ✓ control::test_reflection_mode::a_function_knows_where_it_was_written
+  ✓ control::test_reflection_mode::a_printed_function_says_where_it_was_made
+  ✓ control::test_reflection_mode::without_reflection_mode_a_function_has_no_line
   ✓ control::test_reflection_words::a_bindings_doc
   ✓ control::test_reflection_words::a_classes_methods
   ✓ control::test_reflection_words::a_functions_dump
@@ -1103,6 +1136,9 @@ PASSED:
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
+  ✓ functions::test_bare_calls::test_assigned_bare_name_holds_the_result
+  ✓ functions::test_bare_calls::test_bare_name_as_an_operand
+  ✓ functions::test_bare_calls::test_function_reference_stays_the_function
   ✓ functions::test_bare_function_name::a_loop_variable_named_like_a_function_is_the_variable
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
@@ -1561,6 +1597,9 @@ PASSED:
   ✓ functions::test_round8_call_forms::ruby_symbol_blocks_methods_and_block_sums
   ✓ functions::test_rounding_builtins::rounding_words_stay_ints_when_libm_is_used
   ✓ functions::test_runtime_function_equality::a_function_value_equals_itself
+  ✓ functions::test_runtime_function_equality::a_loop_variable_shadows_a_function_of_its_name
+  ✓ functions::test_runtime_function_equality::a_parameter_named_like_a_method_is_no_prefix_call
+  ✓ functions::test_runtime_function_equality::a_parameter_shadows_a_function_of_its_name
   ✓ functions::test_runtime_function_equality::closures_compare_their_captured_values
   ✓ functions::test_runtime_function_equality::different_definitions_are_different_functions
   ✓ functions::test_runtime_function_equality::equal_definitions_are_equal_functions
@@ -2057,6 +2096,8 @@ PASSED:
   ✓ modules::test_module_signals::a_stored_value_of_a_used_module_is_kept_by_the_program
   ✓ modules::test_netbase_package::a_query_is_a_url_path
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
+  ✓ modules::test_node_json::a_field_named_json_wins
+  ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_package_hints::a_package_s_style_gets_no_hints_the_program_s_does
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
@@ -2247,6 +2288,7 @@ PASSED:
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
   ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
   ✓ node::test_empty_operands::a_written_empty_value_stays
+  ✓ node::test_eval_word::test_eval_word
   ✓ node::test_float_node_text::a_float_node_writes_its_shortest_text
   ✓ node::test_grouped_parts::a_group_of_one_has_its_item_s_parts
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
@@ -2346,6 +2388,11 @@ PASSED:
   ✓ numbers::test_angle::test_switch
   ✓ numbers::test_angle::test_switch_evaluation
   ✓ numbers::test_angle::test_truthy_and
+  ✓ numbers::test_arrow_operators::a_canonical_glyph_gets_no_note
+  ✓ numbers::test_arrow_operators::a_class_overloads_the_up_arrow_beside_the_numbers
+  ✓ numbers::test_arrow_operators::a_glyph_operator_takes_typed_parameters
+  ✓ numbers::test_arrow_operators::the_down_arrow_is_the_log_to_a_base
+  ✓ numbers::test_arrow_operators::the_up_arrow_is_the_power
   ✓ numbers::test_as_compound_unit::a_compound_unit_after_as_is_the_target
   ✓ numbers::test_as_compound_unit::a_run_time_quantity_converts_to_a_compound_unit
   ✓ numbers::test_average::a_captured_float_stays_a_float
@@ -2356,6 +2403,7 @@ PASSED:
   ✓ numbers::test_bend_laws::a_violated_law_makes_the_gate_loud_and_red
   ✓ numbers::test_bend_laws::quantified_laws_still_reach_the_lean_prover
   ✓ numbers::test_bend_laws::the_project_laws_file_is_a_green_verification_gate
+  ✓ numbers::test_big_int_text::test_big_int_text
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
   ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
@@ -2399,6 +2447,9 @@ PASSED:
   ✓ numbers::test_float_accumulator::a_captured_node_local_is_set_before_its_first_value
   ✓ numbers::test_float_accumulator::a_function_accumulator_takes_floats_of_unknown_origin
   ✓ numbers::test_float_accumulator::sum_by_takes_a_float_lambda
+  ✓ numbers::test_float_as_rational::test_float_as_rational
+  ✓ numbers::test_float_as_rational::test_float_as_rational_alone
+  ✓ numbers::test_float_as_rational::test_infinite_float_as_rational
   ✓ numbers::test_float_assignment::test_as_float_promotes_and_never_truncates
   ✓ numbers::test_float_assignment::test_float_assignment_in_exact_context_is_refused_loudly
   ✓ numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value
@@ -2531,6 +2582,9 @@ PASSED:
   ✓ numbers::test_nearest::nearest_takes_two_to_four_arguments
   ✓ numbers::test_nearest::nearest_within_a_precision
   ✓ numbers::test_norm::norm_is_abs
+  ✓ numbers::test_number_methods::test_a_field_named_like_a_number_method_stays_a_field
+  ✓ numbers::test_number_methods::test_prefix_operator_words_as_methods
+  ✓ numbers::test_number_methods::test_rounding_methods_without_parentheses
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
   ✓ numbers::test_number_words::keys_and_texts_stay_words
@@ -2569,6 +2623,8 @@ PASSED:
   ✓ numbers::test_printed_quantity::str_and_the_result_keep_the_exact_quantity
   ✓ numbers::test_quantities_in_one_text::a_sum_of_quantities_still_adds
   ✓ numbers::test_quantities_in_one_text::two_quantities_join_one_text
+  ✓ numbers::test_quantity_cast::a_text_as_quantity_is_its_quantity
+  ✓ numbers::test_quantity_cast::as_unit_is_as_quantity
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
   ✓ numbers::test_quantity_global::a_function_reads_a_global_with_its_unit
@@ -2847,6 +2903,8 @@ PASSED:
   ✓ operators::test_operator_declarations::test_precedence_declarations_are_followed
   ✓ operators::test_operator_declarations::test_prefix_operator
   ✓ operators::test_operator_declarations::test_suffix_operator
+  ✓ operators::test_operator_default_infix::a_precedence_declaration_stays_one
+  ✓ operators::test_operator_default_infix::an_operator_without_a_kind_is_infix
   ✓ operators::test_operator_parsing::call_with_an_expression_argument_is_name_and_key
   ✓ operators::test_operator_parsing::equals_and_colon_make_keys_with_their_own_operator
   ✓ operators::test_operator_parsing::increment_suffix_and_while_condition_spacing
@@ -3223,14 +3281,21 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_midi::a_broken_file_fails_loudly
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
+  ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
+  ✓ programs::test_midi::at_places_a_message
   ✓ programs::test_midi::headless_messages_are_named
-  ✓ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
+  ✓ programs::test_midi::midi_notes_follow_one_another
   ✓ programs::test_midi::native_input_is_a_loud_error
   ✓ programs::test_midi::notes_survive_a_midi_file
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
   ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
   ✓ programs::test_music_values::the_tuning_tunes_every_note
   ✓ programs::test_music_values::transposing_moves_notes_by_semitones
+  ✓ programs::test_note_values::a_class_printing_method_keeps_is_text
+  ✓ programs::test_note_values::a_note_value_plays_as_its_frequency
+  ✓ programs::test_note_values::a_note_value_prints_as_its_name
+  ✓ programs::test_note_values::note_names_stay_with_play_alone
+  ✓ programs::test_note_values::semitones_move_a_note
   ✓ programs::test_paint_function::a_function_wgsl_cannot_compute_paints_on_the_cpu
   ✓ programs::test_paint_function::a_painted_function_becomes_a_fragment_shader
   ✓ programs::test_paint_function::a_painted_function_paints_on_the_gpu_what_the_cpu_paints
@@ -3305,6 +3370,8 @@ PASSED:
   ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
   ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
+  ✓ programs::test_shader_system_values::mouse_x_is_an_alias_of_mouse_dot_x_with_a_hint
+  ✓ programs::test_shader_system_values::the_shader_gets_the_pointer
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_sound_aliasing::square_and_sawtooth_do_not_alias
@@ -3354,12 +3421,23 @@ PASSED:
   ✓ programs::test_sound_patterns::a_cycle_lasts_its_seconds_whatever_its_steps
   ✓ programs::test_sound_patterns::a_live_loop_is_a_voice_that_repeats
   ✓ programs::test_sound_patterns::a_rest_is_silent
+  ✓ programs::test_sound_patterns::alternation_takes_one_per_cycle_in_turn
+  ✓ programs::test_sound_patterns::chance_drops_some_cycles_the_same_each_run
+  ✓ programs::test_sound_patterns::elongation_holds_a_step_longer
   ✓ programs::test_sound_patterns::euclid_spreads_three_notes_over_eight_steps
   ✓ programs::test_sound_patterns::live_loops_play_along
+  ✓ programs::test_sound_patterns::named_live_loops_are_awaited_each
+  ✓ programs::test_sound_patterns::nested_alternation_turns_on_its_own_visits
   ✓ programs::test_sound_patterns::pattern_samples_ends_each_event_at_its_cumulated_seconds
   ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
+  ✓ programs::test_sound_samples::a_rate_changes_speed_and_pitch
+  ✓ programs::test_sound_samples::a_render_mixes_rates
+  ✓ programs::test_sound_samples::a_wav_plays_back_as_recorded
+  ✓ programs::test_sound_samples::not_audio_fails_loudly
+  ✓ programs::test_sound_samples::other_formats_go_through_a_converter
+  ✓ programs::test_sound_samples::slices_and_loops
   ✓ programs::test_sound_signal::a_block_function_fills_the_samples_of_each_block
   ✓ programs::test_sound_signal::a_block_function_is_called_once_a_block
   ✓ programs::test_sound_signal::a_block_function_of_two_blocks_plays_in_stereo
@@ -3403,6 +3481,12 @@ PASSED:
   ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
+  ✓ programs::test_window_size::a_bare_width_is_the_canvas_width
+  ✓ programs::test_window_size::a_width_of_the_program_keeps_its_meaning
+  ✓ programs::test_window_size::canvas_size_is_a_property
+  ✓ programs::test_window_size::the_display_is_read_only
+  ✓ programs::test_window_size::the_viewer_reads_a_resize
+  ✓ programs::test_window_size::window_size_is_a_property
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
   ✓ scope::test_colon_body_assignment::test_if_colon_body_with_assignment
@@ -4079,6 +4163,9 @@ PASSED:
   ✓ types::test_number_keeps_exact::a_float_variable_still_converts
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_float
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_ratio
+  ✓ types::test_operation_type::a_pair_stays_a_key
+  ✓ types::test_operation_type::an_operation_is_a_key_and_an_expression
+  ✓ types::test_operation_type::an_operator_node_is_an_operation
   ✓ types::test_optional_casts::a_function_of_empty_returns_empty
   ✓ types::test_optional_casts::a_javascript_null_is_empty
   ✓ types::test_optional_casts::an_optional_cast_keeps_empty
@@ -4208,6 +4295,7 @@ PASSED:
   ✓ types::test_text_as_number::a_run_time_text_as_number_is_its_number
   ✓ types::test_text_of_text::text_of_a_text_conversion_is_its_value
   ✓ types::test_text_of_text::text_of_data_stays_its_source
+  ✓ types::test_time_kinds_are_types::test_time_kinds_are_types
   ✓ types::test_time_programs_run::a_duration_in_a_unit_is_its_quantity_in_a_running_program
   ✓ types::test_time_programs_run::a_placement_in_parentheses_has_fields
   ✓ types::test_time_programs_run::a_zoned_times_rules_version_is_read_at_run_time
@@ -4286,6 +4374,12 @@ PASSED:
   ✓ types::test_type_name_matching::test_lone_type_word_parameter_is_it
   ✓ types::test_type_name_matching::test_phrases_differing_only_by_unknown_nouns_are_a_redefinition
   ✓ types::test_type_name_matching::test_type_word_is_the_parameter_name
+  ✓ types::test_type_of_consistency::test_type_of_a_library_function
+  ✓ types::test_type_of_consistency::test_type_of_a_map
+  ✓ types::test_type_of_consistency::test_type_of_a_parameterless_function_calls_it
+  ✓ types::test_type_of_consistency::test_type_of_a_type_word
+  ✓ types::test_type_of_consistency::test_type_of_a_user_function
+  ✓ types::test_type_of_consistency::test_type_of_values_and_unknown_names_unchanged
   ✓ types::test_type_of_node_values::the_type_of_a_node_held_value_is_read_at_run_time
   ✓ types::test_type_of_real_variable::a_variable_holding_a_root_is_real_as_the_root_is
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
@@ -4408,6 +4502,7 @@ PASSED:
   ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_compiles_once_then_maps_the_compiled_module
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_compiled_programs
+  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_components
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
   ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
@@ -4625,8 +4720,13 @@ PASSED:
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_database_site::a_built_site_keeps_database_values
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
+  ✓ web::test_deploy::a_deployed_route_answers_its_status
+  ✓ web::test_deploy::a_painting_program_deploys_as_its_site
   ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
+  ✓ web::test_deploy::a_single_route_and_a_served_route_deploy
+  ✓ web::test_deploy::deploy_names_a_browser_only_feature
+  ✓ web::test_deploy::page_routes_deploy_as_rendered_pages
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_marks::a_failure_without_an_excerpt_is_its_text
   ✓ web::test_dev_marks::the_overlay_marks_the_failing_word
@@ -4673,6 +4773,9 @@ PASSED:
   ✓ web::test_gpu_functions::a_map_calls_a_function_of_one_expression_on_the_gpu
   ✓ web::test_gpu_functions::a_map_calls_functions_of_statements_on_the_gpu
   ✓ web::test_gpu_functions::a_small_map_calling_a_function_stays_exact
+  ✓ web::test_guide_heading_links::a_section_and_a_titled_chapter_have_githubs_slug
+  ✓ web::test_guide_heading_links::a_wiki_heading_link_is_a_markdown_heading_link
+  ✓ web::test_guide_heading_links::every_heading_link_of_the_guides_names_a_heading
   ✓ web::test_guide_sections::whole_lists_at_once_is_a_section_of_lists
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
@@ -4754,6 +4857,9 @@ PASSED:
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
   ✓ web::test_page_tests::passing_page_tests_are_counted
+  ✓ web::test_playground_get_routes::a_get_route_is_the_playground_page_at_its_path
+  ✓ web::test_playground_get_routes::a_page_of_a_route_with_headers_shows_its_value
+  ✓ web::test_playground_get_routes::get_and_page_routes_share_the_address_bar
   ✓ web::test_playground_paint::the_default_canvas_fills_the_output_pane
   ✓ web::test_playground_paint::the_playground_paints_a_canvas_of_its_size
   ✓ web::test_playground_paint::the_playground_paints_the_default_canvas
@@ -4957,6 +5063,8 @@ PASSED:
   ✓ welcoming::test_count_shadowed::a_global_count_does_not_hide_the_word_in_functions
   ✓ welcoming::test_count_shadowed::a_variable_named_count_applied_to_a_value_is_an_error
   ✓ welcoming::test_count_shadowed::count_stays_a_word_and_a_variable_name
+  ✓ welcoming::test_discarded_error_warning::a_discarded_error_warns
+  ✓ welcoming::test_discarded_error_warning::a_used_error_does_not_warn
   ✓ welcoming::test_discarded_pure_warning::a_discarded_pure_call_warns
   ✓ welcoming::test_discarded_pure_warning::an_assigned_mutating_call_warns
   ✓ welcoming::test_discarded_pure_warning::the_warned_program_still_runs
@@ -5328,6 +5436,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
 
 SUMMARY:
-13 ignored, 5325 passed, 0 failed, 5325 total tested
+13 ignored, 5433 passed, 1 failed, 5434 total tested

@@ -192,6 +192,50 @@ function fadedGain(fades, place) {
 	return ramped(...ramp, place);
 }
 
+// interleaved samples at another rate, each channel's linearly interpolated between its neighbours (src/sound/mod.rs at_rate)
+function atRate(samples, channels, from, to) {
+	if (from === to || samples.length < channels) return samples;
+	const frames = samples.length / channels;
+	const converted = Math.round(frames * to / from);
+	const out = new Array(converted * channels);
+	for (let frame = 0; frame < converted; frame++) {
+		const position = frame * from / to;
+		const before = Math.min(Math.floor(position), frames - 1), after = Math.min(before + 1, frames - 1), share = position - before;
+		for (let channel = 0; channel < channels; channel++) {
+			const a = Number(samples[before * channels + channel]), b = Number(samples[after * channels + channel]);
+			out[frame * channels + channel] = Math.round(a + (b - a) * share);
+		}
+	}
+	return out;
+}
+
+// a WAV's [rate, channels, offset 16-bit frames …] (src/sound/audio_files.rs decoded): PCM 8, 16, 24, 32 or float 32, 64
+function wavFrames(bytes, name) {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const ascii = (at, length) => String.fromCharCode(...bytes.subarray(at, at + length));
+	if (bytes.length < 12 || ascii(0, 4) !== "RIFF" || ascii(8, 4) !== "WAVE") throw new Error(`sample ${name}: the playground reads WAV samples only`);
+	let format;
+	for (let at = 12; at + 8 <= bytes.length;) {
+		const size = view.getUint32(at + 4, true);
+		if (ascii(at, 4) === "fmt ") format = at + 8;
+		if (ascii(at, 4) === "data") {
+			if (format === undefined) throw new Error(`sample ${name}: its data comes before its format`);
+			let tag = view.getUint16(format, true);
+			if (tag === 0xFFFE) tag = view.getUint16(format + 24, true);
+			const channels = view.getUint16(format + 2, true) || 1, rate = view.getUint32(format + 4, true), bits = view.getUint16(format + 14, true);
+			const scaled = amplitude => Math.round(Math.max(-1, Math.min(1, amplitude)) * 32767);
+			const amplitude = { "1 8": i => (view.getUint8(i) - 128) << 8, "1 16": i => view.getInt16(i, true), "1 24": i => view.getInt16(i + 1, true),
+				"1 32": i => view.getInt16(i + 2, true), "3 32": i => scaled(view.getFloat32(i, true)), "3 64": i => scaled(view.getFloat64(i, true)) }[`${tag} ${bits}`];
+			if (!amplitude) throw new Error(`sample ${name}: its format ${tag} with ${bits} bits is not supported (PCM 8, 16, 24, 32 or float 32, 64)`);
+			const width = bits / 8, end = Math.min(bytes.length, at + 8 + size), flat = [rate, channels];
+			for (let i = at + 8; i + width <= end; i += width) flat.push(amplitude(i) + SAMPLE_OFFSET);
+			return flat;
+		}
+		at += 8 + size + size % 2;
+	}
+	throw new Error(`sample ${name}: no audio data`);
+}
+
 function wavOf(samples, rate, channels = 1) {
 	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
 	const view = new DataView(bytes.buffer);
@@ -232,13 +276,14 @@ addHostPart({
 	},
 	adapters: {
 		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
-		// the Web MIDI access (playground.js sendMidi). A Worker cannot wait for the page's device list or its input
+		// the Web MIDI access (playground.js sendMidi), timed on the voice's clock. A Worker cannot wait for the page's device list or its input
 		midi: {
 			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
 			read_file: path => midiNotesOf(readBytes(contentText(path))),
 			send: (port, message) => {
 				if (!self.sendMidi) return null; // a run without a page (tests, node) has no devices, silent as sound is
-				self.sendMidi(contentText(port), wholeNumbers(message));
+				// at the voice's moment on the shared clock, after the sounds before it (card midi-clock)
+				self.sendMidi(contentText(port), wholeNumbers(message), self.voiceSounded?.(0).at);
 				return null;
 			},
 			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
@@ -274,8 +319,12 @@ addHostPart({
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
+			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			wait: () => null,
+			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
+			// decodes WAV only, a Worker has no decoder for the other formats
+			load: path => wavFrames(readBytes(contentText(path)), contentText(path)),
 			// play(hum, 2s): hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
 			signal(functions, seconds, rate) {
 				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));
@@ -301,10 +350,10 @@ addHostPart({
 			render(path) {
 				const sounds = this.holder.run.unrenderedSounds ?? [];
 				this.holder.run.unrenderedSounds = [];
-				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
-				const other = sounds.find(sound => sound.rate !== rate);
-				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
-				const { samples, channels } = mixed(sounds, rate, this.holder.run);
+				// the highest rate of the sounds, the others converted to it (src/sound/mod.rs render)
+				const rate = sounds.length ? Math.max(...sounds.map(sound => sound.rate)) : DEFAULT_SAMPLE_RATE;
+				const converted = sounds.map(sound => ({ ...sound, rate, samples: atRate(sound.samples, sound.channels ?? 1, sound.rate, rate) }));
+				const { samples, channels } = mixed(converted, rate, this.holder.run);
 				keepWritten(contentText(path), wavOf(samples, rate, channels));
 				return samples.length / channels / rate;
 			},

@@ -16,6 +16,12 @@ const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
+// a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
+// playground-turn); a quick run never flickers
+const STOP_GRACE_MS = 500;
+const RUN_LABEL = "Run ▶";
+const STOP_LABEL = "Stop ■";
+const STOPPED = "stopped";
 const LOADING_STALL_MS = 30000; // the compiler's download shows a note when it made no progress this long
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
@@ -201,6 +207,7 @@ function startWorker(restarts = 0) {
 		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
+			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -216,10 +223,11 @@ function startWorker(restarts = 0) {
 			if (data.type === "clipboard read") return pasteInto(data.shared);
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
+			if (data.type === "members") return answerMembers(data);
 			if (data.type === "sound") return playSound(data);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
-			if (data.type === "midi") return sendMidi(data.port, data.message);
+			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
 			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
@@ -245,6 +253,22 @@ function startWorker(restarts = 0) {
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
 	tellEnvironment();
+}
+
+// the members to offer after the code and a dot (completion.js), from the compiler (src/lowering/data/members.rs)
+const memberRequests = new Map(); // request id → its promise's resolve
+let memberRequestCount = 0;
+function askMembers(code) {
+	const id = ++memberRequestCount;
+	return new Promise(resolve => {
+		memberRequests.set(id, resolve);
+		worker.postMessage({ members: code, id });
+	});
+}
+
+function answerMembers({ id, names }) {
+	memberRequests.get(id)?.(names);
+	memberRequests.delete(id);
 }
 
 // the compiler's download (worker.js downloaded), beside the status; without progress for LOADING_STALL_MS it says so,
@@ -282,7 +306,7 @@ function notification(text) {
 // canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
 // `while window_open` drawing loop ends at once instead of waiting for input forever
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), ...viewSize() } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
@@ -359,17 +383,26 @@ function playSound({ samples, rate, channels, at, handle }) {
 // midi_send / midi_on (card midi-out): Web MIDI, asked for once and kept; a browser without it, a refusal or a port that
 // is not there reaches the console, as sound failures do. The first output when the port is "". Before the page's first
 // click or key press (the run on load, the CI tour) a message goes nowhere, as a sound stays silent: asking for Web MIDI
-// then is refused, and the refusal would land as a console error during whatever runs next
+// then is refused, and the refusal would land as a console error during whatever runs next. Only a granted access is
+// kept: after a refusal the next message asks again (card webmidi-requires)
 let midiAccess;
-async function sendMidi(port, message) {
+// Firefox refuses without asking ("WebMIDI requires a site permission add-on to activate") when it saw no MIDI device
+// at its start; only then does it offer the add-on that grants the site access
+const MIDI_REFUSED = "the browser refused Web MIDI. Firefox does so without asking when no MIDI device was connected as it started: connect the device, restart Firefox, then accept its site permission add-on. Otherwise allow MIDI in the site settings";
+// `at`: when on the clock the page and the Workers share (host-tasks.js soundClock, seconds); Web MIDI's own timestamp
+// sends it then, a past one at once (card midi-clock)
+async function sendMidi(port, message, at) {
 	if (beforeUserActivation()) return;
 	try {
 		if (!navigator.requestMIDIAccess) throw new Error("this browser has no Web MIDI");
-		midiAccess ??= navigator.requestMIDIAccess();
+		midiAccess ??= navigator.requestMIDIAccess().catch(error => {
+			midiAccess = undefined;
+			throw error.name === "SecurityError" ? new Error(`${MIDI_REFUSED} (${error.message})`) : error;
+		});
 		const outputs = [...(await midiAccess).outputs.values()];
 		const output = port ? outputs.find(candidate => candidate.name === port) : outputs[0];
 		if (!output) throw new Error(port ? `no MIDI output named ${port} (there are: ${outputs.map(candidate => candidate.name).join(", ") || "none"})` : "no MIDI output device");
-		output.send(message);
+		output.send(message, at ? at * 1000 - performance.timeOrigin : undefined);
 	} catch (error) {
 		console.error(`midi: ${error.message}`);
 	}
@@ -459,16 +492,35 @@ function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
-function stopRun(run, message) {
+function stopRun(run, message, failed = !run.animating) {
 	worker.terminate();
 	startWorker();
-	finish(run, { value: message, error: !run.animating, printed: run.printed, paintings: run.paintings,
+	finish(run, { value: message, error: failed, printed: run.printed, paintings: run.paintings,
 		warnings: [], runtime_warnings: [], hints: [], notes: [] });
+}
+
+// the Run button while a program runs: Stop (card playground-turn)
+function showStop(stoppable) {
+	$("run").textContent = stoppable ? STOP_LABEL : RUN_LABEL;
+	$("run").title = stoppable ? "stop the program" : "Ctrl/Cmd-Enter";
+	$("run").classList.toggle("stop", stoppable);
+}
+const showsStop = () => $("run").classList.contains("stop");
+
+// Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
+function stopPressed() {
+	if (pending) return stopRun(pending, STOPPED, false);
+	worker.terminate();
+	startWorker();
+	listenTo([]);
+	setStatus(STOPPED);
 }
 
 function finish(run, report) {
 	clearTimeout(run.timer);
+	clearTimeout(run.stopTimer);
 	if (pending === run) pending = undefined;
+	showStop(false); // the shown report's timers turn it back to Stop (listenTo)
 	run.resolve(report);
 }
 
@@ -485,8 +537,10 @@ async function runInWorker(code) {
 	return new Promise(resolve => {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
 		stopAfterTimeout(run);
+		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 		pending = run;
 		silence();
+		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
@@ -714,6 +768,8 @@ function listenTo(labels) {
 	$("listening").hidden = labels.length === 0;
 	const hint = listening.has("key") ? "; click here, then type" : listening.size ? "; click here" : "";
 	$("listening").textContent = `listening: ${labels.join(", ")}${hint}`;
+	// timers and channels go on by themselves: the program still runs (page events wait for the user)
+	showStop(labels.some(label => !PAGE_EVENT.test(label)));
 }
 
 // a click on the output (on a canvas: its pixel), a key typed while the output has the focus
@@ -883,6 +939,7 @@ function runChanged() {
 // Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
 // underlines and printed text go, so none is taken for the new run's (card g_oc54)
 function runPressed() {
+	if (showsStop()) return stopPressed();
 	showValue(PENDING_VALUE);
 	$("value").classList.remove("located");
 	$("value").onclick = null;
@@ -971,7 +1028,7 @@ function initialize() {
 	showReportButton();
 	fillExamples();
 	startWorker();
-	startAssistant(editor, tellEnvironment, startCompletion(editor));
+	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
 	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
@@ -981,7 +1038,15 @@ window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress,
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
-// an error nothing caught, said with where it came from: Firefox says only "uncaught exception: undefined" otherwise
-addEventListener("error", event => console.error(`the page: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
-addEventListener("unhandledrejection", event => console.error(`the page: unhandled rejection ${event.reason}`, event.reason?.stack));
+// a failure without a reason (Firefox's bare "uncaught exception: undefined") is said with where it happened
+addEventListener("error", event => {
+	if (event.error !== undefined) return;
+	console.error(`warp page: an error without a reason at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
+});
+addEventListener("unhandledrejection", event => {
+	if (event.reason !== undefined) return;
+	event.preventDefault();
+	console.error("warp page: a promise failed without a reason", event.promise, new Error("seen here").stack);
+});
+
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation

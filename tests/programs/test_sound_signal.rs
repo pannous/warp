@@ -27,17 +27,9 @@ fn rendered(program: &str, name: &str, last: &str, expected: &str) -> Vec<i16> {
 	std::fs::create_dir_all(FOLDER).expect("data folder");
 	let path = format!("{FOLDER}/{name}.wav");
 	let program = format!("use sound\n{program}\nrendered = round(render_sound(\"{path}\") * 100)\n{last}");
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", &program])
-		.output()
-		.expect("warp runs");
+	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().expect("warp runs");
 	let printed = String::from_utf8_lossy(&run.stdout);
-	assert_eq!(
-		printed.trim().trim_start_matches('»').trim(),
-		expected,
-		"{}",
-		String::from_utf8_lossy(&run.stderr)
-	);
+	assert_eq!(printed.trim().trim_start_matches('»').trim(), expected, "{}", String::from_utf8_lossy(&run.stderr));
 	rendered_samples(&path)
 }
 
@@ -55,20 +47,12 @@ fn assert_sine(samples: &[i16], gain: f64, frequency: f64) {
 
 #[test]
 fn a_signal_function_plays_sample_by_sample() {
-	assert_sine(
-		&played("hum(t: float) := 0.5 * sin(2 * pi * 441 * t)", "signal_typed"),
-		0.5,
-		441.0,
-	);
+	assert_sine(&played("hum(t: float) := 0.5 * sin(2 * pi * 441 * t)", "signal_typed"), 0.5, 441.0);
 }
 
 #[test]
 fn a_signal_parameter_is_the_time_in_seconds_untyped_too() {
-	assert_sine(
-		&played("hum(t) := 0.25 * sin(2 * pi * 220.5 * t)", "signal_untyped"),
-		0.25,
-		220.5,
-	);
+	assert_sine(&played("hum(t) := 0.25 * sin(2 * pi * 220.5 * t)", "signal_untyped"), 0.25, 220.5);
 }
 
 // DSP keeps state between samples: a one-pole filter gliding to 0.8 (its global a float: exact decimals would grow)
@@ -80,11 +64,7 @@ fn a_signal_keeps_its_state_between_samples() {
 	);
 	assert_eq!(
 		&samples[..3],
-		[
-			(0.4 * AMPLITUDE).round() as i16,
-			(0.6 * AMPLITUDE).round() as i16,
-			(0.7 * AMPLITUDE).round() as i16
-		]
+		[(0.4 * AMPLITUDE).round() as i16, (0.6 * AMPLITUDE).round() as i16, (0.7 * AMPLITUDE).round() as i16]
 	);
 	assert_eq!(samples.last(), Some(&((0.8 * AMPLITUDE).round() as i16)));
 }
@@ -107,11 +87,7 @@ fn a_block_function_fills_the_samples_of_each_block() {
 #[test]
 fn a_block_function_is_called_once_a_block() {
 	let samples = rendered(BLOCK_SINE, "signal_block_calls", "calls", "5");
-	assert_eq!(
-		samples.len(),
-		(RATE * 0.1) as usize,
-		"4 blocks of 512 samples and 157 of the fifth"
-	);
+	assert_eq!(samples.len(), (RATE * 0.1) as usize, "4 blocks of 512 samples and 157 of the fifth");
 }
 
 // stereo (sound layer 8): two functions of the time, left and right, or a block function of two blocks
@@ -141,22 +117,12 @@ fn a_block_function_of_two_blocks_plays_in_stereo() {
 #[test]
 fn play_of_a_function_plays_it_as_a_signal() {
 	assert_sine(
-		&rendered(
-			"hum(t) := 0.5 * sin(2 * pi * 441 * t)\nplay(hum, 0.1s)",
-			"play_function",
-			"rendered",
-			"10",
-		),
+		&rendered("hum(t) := 0.5 * sin(2 * pi * 441 * t)\nplay(hum, 0.1s)", "play_function", "rendered", "10"),
 		0.5,
 		441.0,
 	);
 	assert_sine(
-		&rendered(
-			&BLOCK_SINE.replace("play_blocks(hum, 0.1)", "play(hum, 0.1s)"),
-			"play_block_function",
-			"calls",
-			"5",
-		),
+		&rendered(&BLOCK_SINE.replace("play_blocks(hum, 0.1)", "play(hum, 0.1s)"), "play_block_function", "calls", "5"),
 		0.5,
 		441.0,
 	);

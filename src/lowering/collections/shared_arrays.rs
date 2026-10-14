@@ -124,9 +124,8 @@ fn lower_knowing_functions(node: Node) -> Node {
 		declared.extend(results);
 	}
 	// heavy maps of linear float arrays go to the GPU by themselves above a count (card gpu-auto), kept there as @gpu maps
-	let node = crate::gpu_maps::kept_on_gpu(crate::gpu_maps::automatic(node, &|list| {
-		is_linear_floats(list, &declared)
-	}));
+	let node =
+		crate::gpu_maps::kept_on_gpu(crate::gpu_maps::automatic(node, &|list| is_linear_floats(list, &declared)));
 	let node = crate::gpu_maps::warn_unapplied(node);
 	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
@@ -134,22 +133,13 @@ fn lower_knowing_functions(node: Node) -> Node {
 	// hinted unless paired in a way the compiler would not pick linear memory for
 	if let Some((linear, _, element)) = first_linear.filter(|(_, name, _)| pairs == 0 || picked.contains(name)) {
 		crate::normalize::set_position_of(&linear);
-		let array = if element == Element::Float {
-			FLOAT_WORDS[0]
-		} else {
-			"int"
-		};
+		let array = if element == Element::Float { FLOAT_WORDS[0] } else { "int" };
 		crate::errors::diagnostic::educate_once(LINEAR_TOPIC, &format!("linear xs = {array}[n]"), &format!("xs = {array}[n]"),
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);
-	Rewrite {
-		declared,
-		functions: &functions,
-		shared_parameters: &shared_parameters,
-	}
-	.node(node, None)
+	Rewrite { declared, functions: &functions, shared_parameters: &shared_parameters }.node(node, None)
 }
 
 /// Plain `xs = float[n]` arrays paired by dot or `.*` with another float array, or mapped by a numeric kernel, every
@@ -163,18 +153,12 @@ fn picked_linear(node: Node) -> (Node, HashSet<String>) {
 			*assignments.entry(name).or_default() += 1;
 		}
 	});
-	let mut picked: HashSet<String> = assignments
-		.into_iter()
-		.filter(|(_, count)| *count == 1)
-		.map(|(name, _)| name)
-		.collect();
+	let mut picked: HashSet<String> =
+		assignments.into_iter().filter(|(_, count)| *count == 1).map(|(name, _)| name).collect();
 	// dropping one array may leave its partner unpaired: until none is dropped
 	loop {
-		let kept: HashSet<String> = picked
-			.iter()
-			.filter(|name| only_linear_uses(&node, name, &picked))
-			.cloned()
-			.collect();
+		let kept: HashSet<String> =
+			picked.iter().filter(|name| only_linear_uses(&node, name, &picked)).cloned().collect();
 		if kept.len() == picked.len() {
 			break;
 		}
@@ -290,31 +274,11 @@ fn declaration(node: &Node) -> Option<(String, Node, Shared)> {
 	let Node::Key(element, Op::Hash, index) = value.drop_meta() else {
 		// a linear value would be a variable: only arrays are linear
 		return (storage == Storage::Host).then(|| {
-			(
-				name.clone(),
-				value.as_ref().clone(),
-				Shared {
-					element: value_element(value),
-					value: true,
-					storage,
-				},
-			)
+			(name.clone(), value.as_ref().clone(), Shared { element: value_element(value), value: true, storage })
 		});
 	};
-	let element = if FLOAT_WORDS.contains(&element.name().as_str()) {
-		Element::Float
-	} else {
-		Element::Int
-	};
-	Some((
-		name.clone(),
-		written_count(index),
-		Shared {
-			element,
-			value: false,
-			storage,
-		},
-	))
+	let element = if FLOAT_WORDS.contains(&element.name().as_str()) { Element::Float } else { Element::Int };
+	Some((name.clone(), written_count(index), Shared { element, value: false, storage }))
 }
 
 /// The type of a shared value from its first value: `false`, `0.5`, `-1.5`, else an Int
@@ -447,9 +411,7 @@ impl Rewrite<'_> {
 			names.retain(|name, _| !parameters.contains(name));
 			let indexes = self.shared_parameters.get(function).cloned().unwrap_or_default();
 			names.extend(
-				indexes
-					.iter()
-					.filter_map(|(index, kind)| parameters.get(*index).map(|name| (name.clone(), *kind))),
+				indexes.iter().filter_map(|(index, kind)| parameters.get(*index).map(|name| (name.clone(), *kind))),
 			);
 		}
 		names
@@ -490,9 +452,7 @@ impl Rewrite<'_> {
 			}
 			// `shared_writes(n)` (signal_values::poll_shared) takes the array, not its value
 			Node::List(ref items, _, _)
-				if items
-					.first()
-					.is_some_and(|head| head.name() == crate::host::SHARED_WRITES) =>
+				if items.first().is_some_and(|head| head.name() == crate::host::SHARED_WRITES) =>
 			{
 				node
 			}
@@ -515,16 +475,8 @@ impl Rewrite<'_> {
 
 	/// `shared xs = int[n]`: the array of n cells; a shared value one cell, set once the name holds it
 	fn declared(&self, name: String, first: Node, kind: Shared, function: Option<&str>) -> Node {
-		let count = if kind.value {
-			crate::node::int(VALUE_CELL)
-		} else {
-			self.node(first.clone(), function)
-		};
-		let created = key(
-			Node::Symbol(name.clone()),
-			Op::Assign,
-			builtin(kind.storage.new_and_count().0, vec![count]),
-		);
+		let count = if kind.value { crate::node::int(VALUE_CELL) } else { self.node(first.clone(), function) };
+		let created = key(Node::Symbol(name.clone()), Op::Assign, builtin(kind.storage.new_and_count().0, vec![count]));
 		if !kind.value {
 			return created;
 		}
@@ -630,17 +582,11 @@ impl Rewrite<'_> {
 		match (target, op) {
 			(Node::Key(array, Op::Hash, index), Op::Assign) => {
 				let [_, set, _] = element_words(shared(array, names)?);
-				Some(builtin(
-					set,
-					vec![array.as_ref().clone(), rewritten(index), rewritten(value)],
-				))
+				Some(builtin(set, vec![array.as_ref().clone(), rewritten(index), rewritten(value)]))
 			}
 			(Node::Key(array, Op::Hash, index), Op::AddAssign | Op::SubAssign) => {
 				let [_, _, add] = element_words(shared(array, names)?);
-				Some(builtin(
-					add,
-					vec![array.as_ref().clone(), rewritten(index), signed(rewritten(value), op)],
-				))
+				Some(builtin(add, vec![array.as_ref().clone(), rewritten(index), signed(rewritten(value), op)]))
 			}
 			(array, Op::Hash)
 				if !value.is_empty_node()
@@ -650,14 +596,12 @@ impl Rewrite<'_> {
 				Some(builtin(get, vec![array.clone(), rewritten(value)]))
 			}
 			// `#xs`, `xs.count`
-			(Node::Empty, Op::Hash) => Some(builtin(
-				shared(value, names)?.storage.new_and_count().1,
-				vec![value.clone()],
-			)),
-			(array, Op::Dot) if crate::analyzer::is_counting_word(&value.name()) => Some(builtin(
-				shared(array, names)?.storage.new_and_count().1,
-				vec![array.clone()],
-			)),
+			(Node::Empty, Op::Hash) => {
+				Some(builtin(shared(value, names)?.storage.new_and_count().1, vec![value.clone()]))
+			}
+			(array, Op::Dot) if crate::analyzer::is_counting_word(&value.name()) => {
+				Some(builtin(shared(array, names)?.storage.new_and_count().1, vec![array.clone()]))
+			}
 			_ => None,
 		}
 	}
@@ -670,9 +614,7 @@ impl Rewrite<'_> {
 		let passed = called_function(&Node::List(items.clone(), bracket.clone(), separator.clone()))
 			.and_then(|(callee, _)| self.shared_parameters.get(&callee).cloned())
 			.unwrap_or_default();
-		let starts_task = items
-			.first()
-			.is_some_and(|head| head.name() == crate::declarations::TASK_GO);
+		let starts_task = items.first().is_some_and(|head| head.name() == crate::declarations::TASK_GO);
 		let offset = if starts_task { 2 } else { 1 };
 		let linear_argument = items
 			.iter()
@@ -692,31 +634,21 @@ impl Rewrite<'_> {
 			_ => None,
 		};
 		if let Some((word, item, in_word, array, body, kind)) = over_cells {
-			let indexes = key(
-				crate::node::int(1),
-				Op::To,
-				builtin(kind.storage.new_and_count().1, vec![array.clone()]),
-			);
+			let indexes =
+				key(crate::node::int(1), Op::To, builtin(kind.storage.new_and_count().1, vec![array.clone()]));
 			let index = Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
 			let body = self.cells_looped(item, array, &index, kind, body, function);
-			return Node::List(
-				vec![word.clone(), index, in_word.clone(), indexes, body],
-				bracket,
-				separator,
-			);
+			return Node::List(vec![word.clone(), index, in_word.clone(), indexes, body], bracket, separator);
 		}
-		let arguments = items
-			.into_iter()
-			.enumerate()
-			.map(|(index, item)| match index.checked_sub(offset) {
-				Some(argument)
-					if passed.contains_key(&argument)
-						&& (shared_value(&item, &names).is_some() || shared(&item, &names).is_some()) =>
-				{
-					item
-				}
-				_ => self.node(item, function),
-			});
+		let arguments = items.into_iter().enumerate().map(|(index, item)| match index.checked_sub(offset) {
+			Some(argument)
+				if passed.contains_key(&argument)
+					&& (shared_value(&item, &names).is_some() || shared(&item, &names).is_some()) =>
+			{
+				item
+			}
+			_ => self.node(item, function),
+		});
 		Node::List(arguments.collect(), bracket, separator)
 	}
 
@@ -730,10 +662,9 @@ impl Rewrite<'_> {
 			{
 				Some(array.clone())
 			}
-			[word, array] if crate::analyzer::is_counting_word(&word.name()) => Some(builtin(
-				shared(array, names)?.storage.new_and_count().1,
-				vec![array.clone()],
-			)),
+			[word, array] if crate::analyzer::is_counting_word(&word.name()) => {
+				Some(builtin(shared(array, names)?.storage.new_and_count().1, vec![array.clone()]))
+			}
 			[word, left, right]
 				if word.name() == LINEAR_DOT && is_linear_floats(left, names) && is_linear_floats(right, names) =>
 			{
@@ -744,11 +675,7 @@ impl Rewrite<'_> {
 			{
 				Some(builtin(
 					crate::host::GPU_COMPUTE_LINEAR,
-					vec![
-						self.node(shader.clone(), function),
-						array.clone(),
-						self.node(workgroups.clone(), function),
-					],
+					vec![self.node(shader.clone(), function), array.clone(), self.node(workgroups.clone(), function)],
 				))
 			}
 			_ => None,
@@ -765,11 +692,7 @@ impl Rewrite<'_> {
 		body: &Node,
 		function: Option<&str>,
 	) -> Node {
-		let read = key(
-			item.clone(),
-			Op::Assign,
-			builtin(element_words(kind)[0], vec![array.clone(), index.clone()]),
-		);
+		let read = key(item.clone(), Op::Assign, builtin(element_words(kind)[0], vec![array.clone(), index.clone()]));
 		let statements = match self.node(body.clone(), function).drop_meta().clone() {
 			Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => statements,
 			Node::List(statement, Bracket::Curly, separator) => vec![Node::List(statement, Bracket::None, separator)],
@@ -790,12 +713,7 @@ fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Str
 		return None;
 	};
 	(is_linear_floats(array, names) && crate::wasm_emitter::lists::linear_arrays::is_float_kernel(parameter, body))
-		.then(|| {
-			(
-				array.clone(),
-				crate::wasm_emitter::lists::linear_arrays::kernel_name(parameter, body),
-			)
-		})
+		.then(|| (array.clone(), crate::wasm_emitter::lists::linear_arrays::kernel_name(parameter, body)))
 }
 
 /// `xs.map(f)` or `map(xs, f)`: xs and f
@@ -890,13 +808,7 @@ fn paired_linear(
 		paired_with_linear(receiver, names, defines_dot, pairs),
 		paired_with_linear(operand, names, defines_dot, pairs),
 	);
-	Some(paired_by(
-		receiver,
-		op,
-		operand,
-		template,
-		named_by(format!("linear_{pairs}")),
-	))
+	Some(paired_by(receiver, op, operand, template, named_by(format!("linear_{pairs}"))))
 }
 
 /// `sum(xs .* ys)` of two linear float arrays: their lengths checked, then linear_dotf over both blocks
@@ -935,11 +847,7 @@ fn reduces_on_gpu(node: &Node) -> bool {
 
 /// The program's numbers a kernel reads, as the list its host word takes
 fn outer_values(kernel: &crate::gpu_maps::Kernel) -> Node {
-	Node::List(
-		kernel.outer.iter().cloned().map(Node::Symbol).collect(),
-		Bracket::Square,
-		Separator::Space,
-	)
+	Node::List(kernel.outer.iter().cloned().map(Node::Symbol).collect(), Bracket::Square, Separator::Space)
 }
 
 /// `s = sum(xs.map(f) @gpu)`, min, max: the kernel leaves each workgroup's partial result in a new block, which the CPU
@@ -979,9 +887,7 @@ fn gpu_reduced(
 		("gpu_values", outer_values(kernel)),
 	]
 	.into_iter()
-	.fold(template, |node, (placeholder, value)| {
-		crate::library_words::substitute(node, placeholder, &value)
-	});
+	.fold(template, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, &value));
 	match copy {
 		Some(copy) => Node::List(vec![copy, reduced], Bracket::None, Separator::Semicolon),
 		None => reduced,
@@ -1005,9 +911,7 @@ fn copied_into_block(target: &Node, array: &Node) -> (Node, Node) {
 		("copy_items", array.clone()),
 	]
 	.into_iter()
-	.fold(copy, |node, (placeholder, value)| {
-		crate::library_words::substitute(node, placeholder, &value)
-	});
+	.fold(copy, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, &value));
 	(copy, block)
 }
 
@@ -1023,10 +927,7 @@ fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_map
 		array,
 		lambda,
 		&mapped,
-		&[
-			("gpu_shader", Node::Text(kernel.map_shader())),
-			("gpu_values", outer_values(&kernel)),
-		],
+		&[("gpu_shader", Node::Text(kernel.map_shader())), ("gpu_values", outer_values(&kernel))],
 	)
 }
 
@@ -1047,9 +948,7 @@ fn split_mapped(target: &Node, array: &Node, kernel: &str, mapped: Node) -> Node
 		("map_kernel_call", mapped),
 	]
 	.into_iter()
-	.fold(template, |node, (placeholder, value)| {
-		crate::library_words::substitute(node, placeholder, &value)
-	})
+	.fold(template, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, &value))
 }
 
 /// `ys = linear_new(count(xs))`, then `mapped` (`map_loop` in it the CPU's loop writing each cell of ys from xs's)
@@ -1070,22 +969,11 @@ fn block_mapped(target: &Node, array: &Node, lambda: &Node, mapped: &str, fills:
 	));
 	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
 	let index = Node::Symbol(format!("{}{separator}map{separator}index", target.name()));
-	let item = substitute(
-		body.as_ref().clone(),
-		&parameter.name(),
-		&builtin(get, vec![array.clone(), index.clone()]),
-	);
-	[
-		("map_target", target.clone()),
-		("map_source", array.clone()),
-		("map_index", index),
-		("map_item", item),
-	]
-	.into_iter()
-	.chain(fills.iter().cloned())
-	.fold(template, |node, (placeholder, value)| {
-		substitute(node, placeholder, &value)
-	})
+	let item = substitute(body.as_ref().clone(), &parameter.name(), &builtin(get, vec![array.clone(), index.clone()]));
+	[("map_target", target.clone()), ("map_source", array.clone()), ("map_index", index), ("map_item", item)]
+		.into_iter()
+		.chain(fills.iter().cloned())
+		.fold(template, |node, (placeholder, value)| substitute(node, placeholder, &value))
 }
 
 /// `gpu_compute(shader, xs, workgroups)` of a linear float array, which the shader updates in place
@@ -1110,11 +998,7 @@ fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap
 			}
 		}
 	});
-	let linear_floats = Shared {
-		element: Element::Float,
-		value: false,
-		storage: Storage::Linear,
-	};
+	let linear_floats = Shared { element: Element::Float, value: false, storage: Storage::Linear };
 	assignments
 		.into_iter()
 		.filter(|(name, (count, maps))| *count == 1 && *maps && !declared.contains_key(name))
@@ -1136,22 +1020,14 @@ fn collected(array: &Node, kind: Shared) -> Node {
 	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
 	let [get, _, _] = element_words(kind);
 	let count = kind.storage.new_and_count().1;
-	let element = if kind.element == Element::Float {
-		FLOAT_WORDS[0]
-	} else {
-		"int"
-	};
+	let element = if kind.element == Element::Float { FLOAT_WORDS[0] } else { "int" };
 	use crate::library_words::substitute;
 	let template = crate::warp_parser::parse(&format!(
 		"(linear_list = {element}[{count}(linear_array)]; for linear_index in 1 to {count}(linear_array) {{ linear_list#linear_index = {get}(linear_array, linear_index) }}; linear_list)"
 	));
 	let named = |suffix: &str| Node::Symbol(format!("{name}{separator}{suffix}"));
 	substitute(
-		substitute(
-			substitute(template, "linear_array", array),
-			"linear_list",
-			&named("list"),
-		),
+		substitute(substitute(template, "linear_array", array), "linear_list", &named("list")),
 		"linear_index",
 		&named("index"),
 	)
@@ -1168,10 +1044,9 @@ fn shared_value(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> 
 /// `n + v` or `n - v` as the value of `n`: the compound operator and v
 fn self_update(name: &Node, value: &Node) -> Option<(Op, Node)> {
 	match value.drop_meta() {
-		Node::Key(left, op @ (Op::Add | Op::Sub), right) if left.drop_meta() == name.drop_meta() => Some((
-			if *op == Op::Add { Op::AddAssign } else { Op::SubAssign },
-			right.as_ref().clone(),
-		)),
+		Node::Key(left, op @ (Op::Add | Op::Sub), right) if left.drop_meta() == name.drop_meta() => {
+			Some((if *op == Op::Add { Op::AddAssign } else { Op::SubAssign }, right.as_ref().clone()))
+		}
 		_ => None,
 	}
 }

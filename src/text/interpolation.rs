@@ -32,11 +32,8 @@ pub fn template_mentions(node: &Node, mentions: impl Fn(&Node) -> bool) -> bool 
 	let Node::Text(template) = node.drop_meta() else {
 		return false;
 	};
-	parts_with(template, false).is_ok_and(|parts| {
-		parts
-			.iter()
-			.any(|part| matches!(part, Part::Hole(expression) if mentions(expression)))
-	})
+	parts_with(template, false)
+		.is_ok_and(|parts| parts.iter().any(|part| matches!(part, Part::Hole(expression) if mentions(expression))))
 }
 
 /// The expressions in the holes of a template (`"a \(x.round(2))"` → x.round(2)); none for other nodes
@@ -66,9 +63,7 @@ pub fn interpolated_mentioning(node: &Node, mentions: impl Fn(&Node) -> bool) ->
 /// The first source pass: `sql "…"` / `sh "…"` templates become parameterized calls, every other template the
 /// concatenation of its pieces, so each later pass reads the holes as code (`"\(area.params)"`)
 pub fn lower_program(program: Node) -> Node {
-	crate::text::injection::lower_templates(program)
-		.map(lower)
-		.unwrap_or_else(|error| error)
+	crate::text::injection::lower_templates(program).map(lower).unwrap_or_else(|error| error)
 }
 
 /// Every template left after the sql/sh lowering becomes the concatenation of its pieces
@@ -78,10 +73,7 @@ pub fn lower(node: Node) -> Node {
 			Node::Text(template) => interpolated(template),
 			_ => *node,
 		},
-		Node::Type { name, body } => Node::Type {
-			name,
-			body: Box::new(lower(*body)),
-		},
+		Node::Type { name, body } => Node::Type { name, body: Box::new(lower(*body)) },
 		Node::Error(inner) => Node::Error(Box::new(lower(*inner))),
 		other => children_rewritten(other, lower),
 	}
@@ -94,11 +86,9 @@ fn interpolated(template: &str) -> Node {
 	};
 	let mut pieces = pieces.into_iter().map(|part| match part {
 		Part::Literal(text) => Node::Text(text),
-		Part::Hole(expression) => Node::List(
-			vec![Node::Symbol(TEXT_FORM.into()), lower(expression)],
-			Bracket::Round,
-			Separator::None,
-		),
+		Part::Hole(expression) => {
+			Node::List(vec![Node::Symbol(TEXT_FORM.into()), lower(expression)], Bracket::Round, Separator::None)
+		}
 	});
 	let first = pieces.next().unwrap_or(Node::Text(String::new()));
 	pieces.fold(first, |text, piece| Node::Key(Box::new(text), Op::Add, Box::new(piece)))

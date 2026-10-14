@@ -16,10 +16,7 @@ fn test_lambda_in_a_variable() {
 #[test]
 fn test_returned_closure() {
 	is!("make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)", 7);
-	is!(
-		"make_adder(n) := (x => x+n); add2 = make_adder(2); add3 = make_adder(3); add2(5) + add3(5)",
-		15
-	);
+	is!("make_adder(n) := (x => x+n); add2 = make_adder(2); add3 = make_adder(3); add2(5) + add3(5)", 15);
 	is!("make_adder(n) := x => x+n; make_adder(10)(1)", 11);
 }
 
@@ -37,58 +34,31 @@ fn test_capturing_lambda_passed_to_a_function() {
 
 #[test]
 fn test_closure_held_in_a_variable_passed_on() {
-	is!(
-		"apply(f, x):=f(x); make_adder(n) := (x => x+n); a = make_adder(4); apply(a, 1)",
-		5
-	);
+	is!("apply(f, x):=f(x); make_adder(n) := (x => x+n); a = make_adder(4); apply(a, 1)", 5);
 }
 
 #[test]
 fn test_map_and_reduce_with_a_closure_variable() {
-	assert_eq!(
-		printed("make_adder(n) := (x => x+n); a = make_adder(10); map [1 2 3] a"),
-		"[11 12 13]"
-	);
-	assert_eq!(
-		printed("k=2; scale = make(k); make(n) := (x => x*n); [1 2 3].map(scale)"),
-		"[2 4 6]"
-	);
-	is!(
-		"sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])",
-		6
-	);
+	assert_eq!(printed("make_adder(n) := (x => x+n); a = make_adder(10); map [1 2 3] a"), "[11 12 13]");
+	assert_eq!(printed("k=2; scale = make(k); make(n) := (x => x*n); [1 2 3].map(scale)"), "[2 4 6]");
+	is!("sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])", 6);
 }
 
 #[test]
 fn test_function_chosen_at_run_time() {
-	is!(
-		"twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = pick(1); f(5)",
-		10
-	);
-	is!(
-		"twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = pick(0); f(5)",
-		25
-	);
+	is!("twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = pick(1); f(5)", 10);
+	is!("twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = pick(0); f(5)", 25);
 }
 
 #[test]
 fn test_closures_returning_text() {
-	is!(
-		"greeter(g) := (name => g + \" \" + name); hi = greeter(\"hi\"); hi(\"bob\")",
-		"hi bob"
-	);
+	is!("greeter(g) := (name => g + \" \" + name); hi = greeter(\"hi\"); hi(\"bob\")", "hi bob");
 }
 
 #[test]
 fn test_not_a_function_stays_loud() {
-	fails_with(
-		"map [1 2 3] 5",
-		"map needs a function, got 5 (an Int); fix: map [1 2 3] (x => …)",
-	);
-	fails_with(
-		"apply(f, x):=f(x); apply(5, 2)",
-		"apply needs a function for parameter f, got 5 (an Int)",
-	);
+	fails_with("map [1 2 3] 5", "map needs a function, got 5 (an Int); fix: map [1 2 3] (x => …)");
+	fails_with("apply(f, x):=f(x); apply(5, 2)", "apply needs a function for parameter f, got 5 (an Int)");
 }
 
 #[test]
@@ -98,14 +68,8 @@ fn test_float_closure() {
 
 #[test]
 fn test_compose_returns_a_closure() {
-	is!(
-		"twice(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(twice, inc); h(3)",
-		8
-	);
-	is!(
-		"compose(f, g) := (x => f(g(x))); k=10; h = compose(y=>y+k, y=>y*2); h(3)",
-		16
-	);
+	is!("twice(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(twice, inc); h(3)", 8);
+	is!("compose(f, g) := (x => f(g(x))); k=10; h = compose(y=>y+k, y=>y*2); h(3)", 16);
 }
 
 #[test]
@@ -117,19 +81,13 @@ fn test_curried_closures() {
 fn per_site_result_kind_when_arity_mixes_function_and_int() {
 	// Without per-site kinds, closure_call_1 joins Function-returning (g(2)) and Int-returning (f / h(3))
 	// targets to Data; an exact Int binding then fails. Each callee's known targets keep the kind precise.
-	is!(
-		"add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); f = x => x + 1; x:int = h(3) + f(4); x",
-		11
-	);
+	is!("add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); f = x => x + 1; x:int = h(3) + f(4); x", 11);
 	is!("twice(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(twice, inc); f = x => x + 1; x:int = h(3) + f(2); x", 11);
 }
 
 #[test]
 fn test_a_closure_prints_as_its_function() {
-	assert_eq!(
-		printed("twice(x):=x*2; pick(c) := if c then twice else twice; pick(1)"),
-		"twice"
-	);
+	assert_eq!(printed("twice(x):=x*2; pick(c) := if c then twice else twice; pick(1)"), "twice");
 }
 
 #[test]
@@ -156,10 +114,7 @@ fn test_a_parameter_declared_a_function() {
 
 #[test]
 fn test_calling_a_non_function_or_the_wrong_arity_is_loud() {
-	fails_with(
-		"make_adder(n) := (x => x+n); a = make_adder(1); a(1, 2)",
-		"wrong number of arguments",
-	);
+	fails_with("make_adder(n) := (x => x+n); a = make_adder(1); a(1, 2)", "wrong number of arguments");
 	fails_with("apply(f, x):=f(x); n=3; apply(n, 1)", "not a function");
 }
 
@@ -185,10 +140,7 @@ fn a_function_value_out_of_try_or_a_block_is_called() {
 #[test]
 fn closures_of_ints_are_called_without_boxes() {
 	// 300000 calls through a closure parameter: seconds when every call boxed its argument and result
-	is!(
-		"apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 300000)",
-		300000
-	);
+	is!("apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 300000)", 300000);
 	is!("fs=[x=>x+1, x=>x*2.5]; fs#2(2)", 5);
 }
 
@@ -213,10 +165,7 @@ fn a_curried_call_as_a_value_and_an_argument() {
 	is!("add(a) := b => a + b; y = add(2)(5); y", 7);
 	is!("twice = f => x => f(f(x)); y = twice(x => x + 3)(1); y", 7);
 	is!("add(a) := b => a + b; xs = []; xs.push(add(2)(5)); xs#1", 7);
-	is!(
-		"twice = f => x => f(f(x)); checks = []; checks.push(twice(x => x + 3)(1) == 7); checks#1",
-		true
-	);
+	is!("twice = f => x => f(f(x)); checks = []; checks.push(twice(x => x + 3)(1) == 7); checks#1", true);
 }
 
 // card y-combinator: closure calls pass a function (`x(x)`) and an Int (`fact(10)`) to lambdas of one arity; the

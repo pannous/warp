@@ -31,10 +31,7 @@ fn a_sound_starts_at_its_frame_across_buffers() {
 	let mut mixer = Mixer::new(RATE, 2);
 	mixer.add(1, 7, &[LOUD; 4], RATE, 1);
 	let first = mixed(&mut mixer, 2 * 8);
-	assert!(
-		first[..14].iter().all(|&sample| sample == 0.0) && first[14..] == [HALF, HALF],
-		"{first:?}"
-	);
+	assert!(first[..14].iter().all(|&sample| sample == 0.0) && first[14..] == [HALF, HALF], "{first:?}");
 	assert_eq!(mixed(&mut mixer, 2 * 4), [HALF, HALF, HALF, HALF, HALF, HALF, 0.0, 0.0]);
 }
 
@@ -78,10 +75,7 @@ fn fade_sound_takes_a_handle_of_the_run() {
 			.env("WARP_NO_WINDOW", "1")
 			.output()
 			.unwrap();
-		String::from_utf8_lossy(&run.stdout)
-			.trim()
-			.trim_start_matches("» ")
-			.to_string()
+		String::from_utf8_lossy(&run.stdout).trim().trim_start_matches("» ").to_string()
 	};
 	assert_eq!(printed("h = play(C4, 5ms)\nfade_sound(h, 0, 0.002)\n7"), "7");
 	assert!(printed("play(C4, 5ms)\nfade_sound(9, 0)").contains("no sound 9 in this run"));
@@ -105,10 +99,7 @@ fn a_signals_blocks_join_seamlessly_at_another_rate() {
 		mixer.add(1, start.round() as u64, &samples, SIGNAL_RATE, 1);
 	}
 	let buffer = mixed(&mut mixer, (BLOCKS - 1) * BLOCK);
-	let largest_step = buffer
-		.windows(2)
-		.map(|pair| (pair[1] - pair[0]).abs())
-		.fold(0.0, f32::max);
+	let largest_step = buffer.windows(2).map(|pair| (pair[1] - pair[0]).abs()).fold(0.0, f32::max);
 	let smooth_step = 2.0 * std::f32::consts::PI * 440.0 / DEVICE_RATE as f32 * HALF;
 	assert!(
 		largest_step <= 1.1 * smooth_step,
@@ -135,8 +126,5 @@ fn one_voice_over_the_cap_steals_the_oldest() {
 		MAX_VOICES
 	);
 	mixer.stop(1);
-	assert!(
-		(mixed(&mut mixer, 1)[0] - MAX_VOICES as f32 * each).abs() < 1e-4,
-		"the stolen one is gone already"
-	);
+	assert!((mixed(&mut mixer, 1)[0] - MAX_VOICES as f32 * each).abs() < 1e-4, "the stolen one is gone already");
 }

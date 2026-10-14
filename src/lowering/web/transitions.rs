@@ -13,9 +13,9 @@ use super::nodes::{key, phrase_words};
 use crate::element_events::with_element_items;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 
 const TRANSITION: &str = "transition";
-const STYLE: &str = "style";
 const STARTING_STYLE: &str = "starting-style";
 pub const STARTING_STYLE_ATTRIBUTE: &str = "data-warp-starting-style";
 const ANIMATION: &str = "animation";
@@ -56,7 +56,7 @@ const DEFAULT_DURATION: &str = "200ms";
 pub fn lower(node: Node) -> Node {
 	let node = node.map_children(lower);
 	// `style: { transition: "opacity 1s" }` is an inline style, its transition the CSS property
-	if node.drop_meta().name() == STYLE {
+	if node.drop_meta().name() == STYLE_WORD {
 		return node;
 	}
 	with_element_items(node, |items| {
@@ -100,9 +100,7 @@ fn with_line_words(items: Vec<Node>) -> Vec<Node> {
 		let follows_transition = joined.last().is_some_and(|last| css_words_of(last).is_some());
 		if follows_transition && is_timing_word(&item) {
 			let last = joined.pop().expect("a transition");
-			let Node::Key(name, op, value) = last.drop_meta().clone() else {
-				unreachable!("a transition")
-			};
+			let Node::Key(name, op, value) = last.drop_meta().clone() else { unreachable!("a transition") };
 			let words = Node::List(vec![*value, item], Bracket::None, Separator::Space);
 			joined.push(Node::Key(name, op, Box::new(words)));
 		} else {
@@ -122,10 +120,7 @@ fn css_words_of(item: &Node) -> Option<(&'static str, Vec<Node>)> {
 		{
 			Some((Node::Key(name, Op::Colon, value), rest)) => Some((
 				css_word(name)?,
-				phrase_words(std::slice::from_ref(value))
-					.into_iter()
-					.chain(rest.iter().cloned())
-					.collect(),
+				phrase_words(std::slice::from_ref(value)).into_iter().chain(rest.iter().cloned()).collect(),
 			)),
 			_ => None,
 		},
@@ -135,9 +130,8 @@ fn css_words_of(item: &Node) -> Option<(&'static str, Vec<Node>)> {
 
 /// The spec as text and the children after its words: a text is taken as written
 fn spec_and_children(words: Vec<Node>) -> (String, Vec<Node>) {
-	if let Some((Node::Text(written), children)) = words
-		.split_first()
-		.map(|(first, children)| (first.drop_meta(), children))
+	if let Some((Node::Text(written), children)) =
+		words.split_first().map(|(first, children)| (first.drop_meta(), children))
 	{
 		return (written.clone(), children.to_vec());
 	}
@@ -181,22 +175,13 @@ fn made_up_kind(spec: &str) -> Option<&'static (&'static str, &'static [(&'stati
 /// `fade 1s ease-out` → `opacity 1s ease-out, transform 1s ease-out` (200ms when it names no duration)
 fn css_of_kind(spec: &str) -> String {
 	let timing: Vec<&str> = spec.split_whitespace().skip(1).collect();
-	let has_duration = timing
-		.iter()
-		.any(|word| word.starts_with(|first: char| first.is_ascii_digit()));
+	let has_duration = timing.iter().any(|word| word.starts_with(|first: char| first.is_ascii_digit()));
 	let timing = if has_duration {
 		timing.join(" ")
 	} else {
-		[DEFAULT_DURATION]
-			.iter()
-			.chain(&timing)
-			.copied()
-			.collect::<Vec<_>>()
-			.join(" ")
+		[DEFAULT_DURATION].iter().chain(&timing).copied().collect::<Vec<_>>().join(" ")
 	};
-	MADE_UP_PROPERTIES
-		.map(|property| format!("{property} {timing}"))
-		.join(", ")
+	MADE_UP_PROPERTIES.map(|property| format!("{property} {timing}")).join(", ")
 }
 
 /// `{ opacity: "0" }`: CSS declarations as an element's block holds them
@@ -212,13 +197,15 @@ fn declarations(pairs: &[(&str, &str)]) -> Node {
 fn advise_css(spec: &str, css: &str, starting: &[(&str, &str)], kind: &str) {
 	let starting: Vec<String> = starting
 		.iter()
-		.map(|(name, value)| {
-			if value.parse::<f64>().is_ok() {
-				format!("{name}: {value}")
-			} else {
-				format!("{name}: \"{value}\"")
-			}
-		})
+		.map(
+			|(name, value)| {
+				if value.parse::<f64>().is_ok() {
+					format!("{name}: {value}")
+				} else {
+					format!("{name}: \"{value}\"")
+				}
+			},
+		)
 		.collect();
 	let canonical = format!("transition: \"{css}\" starting-style: {{ {} }}", starting.join(" "));
 	let (written, reason) = (format!("transition: {spec}"), format!("{kind} is no CSS: a transition names CSS properties, the state an element enters from is its starting-style"));
@@ -232,32 +219,24 @@ fn advise_css(spec: &str, css: &str, starting: &[(&str, &str)], kind: &str) {
 
 /// The CSS transition, the style at `at`, joins the element's own inline style when it has one: its declarations or text
 fn with_style_declarations(mut items: Vec<Node>, at: usize, added: &[(&str, String)]) -> Vec<Node> {
-	let is_style = |item: &Node| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(STYLE));
-	let pairs: Vec<(&str, &str)> = added
-		.iter()
-		.map(|(property, spec)| (*property, spec.as_str()))
-		.collect();
+	let is_style =
+		|item: &Node| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(STYLE_WORD));
+	let pairs: Vec<(&str, &str)> = added.iter().map(|(property, spec)| (*property, spec.as_str())).collect();
 	let Some(own) = items.iter().position(is_style) else {
-		items.insert(at, css_pair(STYLE, declarations(&pairs)));
+		items.insert(at, css_pair(STYLE_WORD, declarations(&pairs)));
 		return items;
 	};
-	let Node::Key(_, _, value) = items[own].drop_meta() else {
-		unreachable!("a style")
-	};
-	let Node::List(added, _, _) = declarations(&pairs) else {
-		unreachable!("declarations")
-	};
+	let Node::Key(_, _, value) = items[own].drop_meta() else { unreachable!("a style") };
+	let Node::List(added, _, _) = declarations(&pairs) else { unreachable!("declarations") };
 	let joined = match value.drop_meta() {
-		Node::Text(written) => Node::Text(pairs.iter().fold(written.clone(), |joined, (property, spec)| {
-			format!("{joined}; {property}: {spec}")
-		})),
-		Node::List(own, bracket, separator) => Node::List(
-			own.iter().cloned().chain(added).collect(),
-			bracket.clone(),
-			separator.clone(),
+		Node::Text(written) => Node::Text(
+			pairs.iter().fold(written.clone(), |joined, (property, spec)| format!("{joined}; {property}: {spec}")),
 		),
+		Node::List(own, bracket, separator) => {
+			Node::List(own.iter().cloned().chain(added).collect(), bracket.clone(), separator.clone())
+		}
 		one => Node::List([vec![one.clone()], added].concat(), Bracket::Curly, Separator::Space), // `{ color: red }`, one declaration
 	};
-	items[own] = css_pair(STYLE, joined);
+	items[own] = css_pair(STYLE_WORD, joined);
 	items
 }

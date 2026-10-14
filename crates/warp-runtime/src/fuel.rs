@@ -7,7 +7,5 @@ pub const FUEL_VARIABLE: &str = "WARP_FUEL";
 
 /// The steps `WARP_FUEL` gives (underscores allowed: 1_000_000), if it is set to a number
 pub fn fuel_from_environment() -> Option<u64> {
-	std::env::var(FUEL_VARIABLE)
-		.ok()
-		.and_then(|steps| steps.trim().replace('_', "").parse().ok())
+	std::env::var(FUEL_VARIABLE).ok().and_then(|steps| steps.trim().replace('_', "").parse().ok())
 }

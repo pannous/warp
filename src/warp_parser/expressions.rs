@@ -102,19 +102,15 @@ impl WarpParser {
 
 			// a whole statement or assigned value, never an operand inside it: `ys = xs.map(f) @parallel` marks the map call
 			let whole_expression = min_bp <= Op::Assign.binding_power().1;
-			if let Some(annotated) = whole_expression
-				.then(|| self.try_parse_trailing_attribute(&lhs))
-				.flatten()
-			{
+			if let Some(annotated) = whole_expression.then(|| self.try_parse_trailing_attribute(&lhs)).flatten() {
 				lhs = annotated;
 				continue;
 			}
 
 			// Step 2: Suffix (led)
 			// P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
-			if let Some(updated) = self
-				.try_parse_user_suffix(&lhs, min_bp)
-				.or_else(|| self.try_parse_suffix(&lhs, min_bp))
+			if let Some(updated) =
+				self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp))
 			{
 				lhs = updated;
 				continue;
@@ -244,11 +240,8 @@ impl WarpParser {
 			// their `and`/`or` hint waits for the operands
 			let may_pipe = chars == 1 && self.current_char() == '|' && !self.options.data_mode;
 			let deferred_hint = may_pipe || (chars == 1 && self.current_char() == '&');
-			let written = if deferred_hint {
-				self.current_char().to_string()
-			} else {
-				self.hint_operator(chars, false)
-			};
+			let written =
+				if deferred_hint { self.current_char().to_string() } else { self.hint_operator(chars, false) };
 			// `a nand b` is `not (a and b)`, `x is not int` is `not (x is int)`
 			let negated = crate::operators::negated_spelling(&written);
 			let written = negated.map_or(written, str::to_string);
@@ -312,12 +305,7 @@ impl WarpParser {
 
 			if let Some(symbol) = bare_symbol {
 				if let Some(diagnostic) = logic_mixed_with_comparison(&lhs, symbol, &rhs) {
-					lhs = Diagnostic {
-						line: op_line,
-						column: op_column,
-						..diagnostic
-					}
-					.into_error();
+					lhs = Diagnostic { line: op_line, column: op_column, ..diagnostic }.into_error();
 					previous_comparand = None;
 					continue;
 				}
@@ -342,12 +330,7 @@ impl WarpParser {
 			}
 
 			if op.is_equality() && ungrouped_equality(&lhs) {
-				lhs = Diagnostic {
-					line: op_line,
-					column: op_column,
-					..chained_equality(&lhs, op, &rhs)
-				}
-				.into_error();
+				lhs = Diagnostic { line: op_line, column: op_column, ..chained_equality(&lhs, op, &rhs) }.into_error();
 				previous_comparand = None;
 				continue;
 			}
@@ -400,11 +383,7 @@ impl WarpParser {
 					continue;
 				}
 			}
-			let lhs_operand = if spaced_minus {
-				lhs.with_meta_data(super::SpacedMinus)
-			} else {
-				lhs
-			};
+			let lhs_operand = if spaced_minus { lhs.with_meta_data(super::SpacedMinus) } else { lhs };
 			lhs = combined(lhs_operand, op, &written, rhs.clone(), previous_comparand.take());
 			if negated.is_some() {
 				lhs = Node::Key(Box::new(Empty), Op::Not, Box::new(lhs));
@@ -488,23 +467,12 @@ fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
 		_ => left.clone(),
 	};
 	let symbol = op.as_str();
-	let (chained, grouped) = (
-		format!("{left} and {middle} {symbol} {right}"),
-		format!("({left}) {symbol} {right}"),
-	);
+	let (chained, grouped) = (format!("{left} and {middle} {symbol} {right}"), format!("({left}) {symbol} {right}"));
 	Diagnostic::default()
 		.fix(format!("{chained} or {grouped}"))
 		.message(format!("ambiguous: equality does not chain in {left} {symbol} {right}"))
-		.offer(
-			"both equalities, as Python chains them",
-			format!("{left} {symbol} {right}"),
-			chained,
-		)
-		.offer(
-			"compare the first result, as C does",
-			format!("{left} {symbol} {right}"),
-			grouped,
-		)
+		.offer("both equalities, as Python chains them", format!("{left} {symbol} {right}"), chained)
+		.offer("compare the first result, as C does", format!("{left} {symbol} {right}"), grouped)
 }
 
 /// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
@@ -518,31 +486,20 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 	let readings = match (comparison(lhs), comparison(rhs)) {
 		(None, Some((a, op, b))) => vec![
 			(COMPARISON_FIRST.to_string(), format!("{left} {symbol} ({a} {op} {b})")),
-			(
-				format!("`{symbol}` first, as Python"),
-				format!("({left} {symbol} {a}) {op} {b}"),
-			),
+			(format!("`{symbol}` first, as Python"), format!("({left} {symbol} {a}) {op} {b}")),
 		],
 		(Some((a, op, b)), None) => vec![
 			(COMPARISON_FIRST.to_string(), format!("({a} {op} {b}) {symbol} {right}")),
-			(
-				format!("`{symbol}` first, as Python"),
-				format!("{a} {op} ({b} {symbol} {right})"),
-			),
+			(format!("`{symbol}` first, as Python"), format!("{a} {op} ({b} {symbol} {right})")),
 		],
-		(Some(_), Some(_)) => vec![(
-			"both comparisons first".to_string(),
-			format!("({left}) {symbol} ({right})"),
-		)],
+		(Some(_), Some(_)) => vec![("both comparisons first".to_string(), format!("({left}) {symbol} ({right})"))],
 		(None, None) => return None,
 	};
 	let word = if symbol == '&' { "and" } else { "or" };
 	let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 	let written = format!("{left} {symbol} {right}");
-	let diagnostic = Diagnostic::default().fix(forms.join(" or ")).message(format!(
-		"ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"
-	));
-	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
-		diagnostic.offer(meaning, &written, form)
-	}))
+	let diagnostic = Diagnostic::default()
+		.fix(forms.join(" or "))
+		.message(format!("ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"));
+	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)))
 }

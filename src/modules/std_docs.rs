@@ -49,10 +49,7 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 		if let Some(signature) =
 			signature(line).filter(|signature| defined.iter().any(|word| word == word_of(signature)))
 		{
-			words.push(Word {
-				signature,
-				doc: (!comment.is_empty()).then(|| comment.join(" ")),
-			});
+			words.push(Word { signature, doc: (!comment.is_empty()).then(|| comment.join(" ")) });
 		}
 		comment.clear();
 		previous_comment_line = None;
@@ -61,9 +58,7 @@ fn module_index(module: &str) -> (String, Vec<Word>) {
 }
 
 fn comment_text(line: &str) -> Option<String> {
-	line.trim_start()
-		.strip_prefix(COMMENT)
-		.map(|text| text.trim().to_string())
+	line.trim_start().strip_prefix(COMMENT).map(|text| text.trim().to_string())
 }
 
 /// Whether a comment line goes on in the next one: it is long and ends no sentence
@@ -80,9 +75,8 @@ fn signature(line: &str) -> Option<String> {
 	}
 	let line = line.strip_prefix(GLOBAL).unwrap_or(line);
 	// `def hann_weighted(window) {`
-	let keyword_definition = crate::operators::FUNCTION_KEYWORDS
-		.iter()
-		.find_map(|keyword| line.strip_prefix(keyword)?.strip_prefix(' '));
+	let keyword_definition =
+		crate::operators::FUNCTION_KEYWORDS.iter().find_map(|keyword| line.strip_prefix(keyword)?.strip_prefix(' '));
 	if let Some(definition) = keyword_definition {
 		let head = definition.split(BLOCK_START).next().unwrap_or(definition);
 		return Some(head.split(DEFINE).next().unwrap_or(head).trim().to_string());
@@ -105,11 +99,7 @@ fn word_of(signature: &str) -> &str {
 
 /// A standard module word's head as its module writes it: `replace` of the prelude → `replace(t, old, new)`
 pub fn word_head(module: &str, word: &str) -> Option<String> {
-	module_index(module)
-		.1
-		.into_iter()
-		.map(|entry| entry.signature)
-		.find(|signature| word_of(signature) == word)
+	module_index(module).1.into_iter().map(|entry| entry.signature).find(|signature| word_of(signature) == word)
 }
 
 /// `help(midi)`: each head of a standard module word with the comment above it, one definition after the other
@@ -150,21 +140,12 @@ pub fn word_definition(module: &str, word: &str) -> Option<String> {
 pub fn module_help(module: &str) -> Option<String> {
 	crate::modules::std_module_source(module)?;
 	let (summary, words) = module_index(module);
-	let width = words
-		.iter()
-		.map(|word| word.signature.chars().count())
-		.max()
-		.unwrap_or(0);
+	let width = words.iter().map(|word| word.signature.chars().count()).max().unwrap_or(0);
 	let lines = words.iter().map(|word| match &word.doc {
 		Some(doc) => format!("  {:width$}  {doc}", word.signature),
 		None => format!("  {}", word.signature),
 	});
-	Some(
-		std::iter::once(format!("{module}: {summary}"))
-			.chain(lines)
-			.collect::<Vec<_>>()
-			.join("\n"),
-	)
+	Some(std::iter::once(format!("{module}: {summary}")).chain(lines).collect::<Vec<_>>().join("\n"))
 }
 
 /// `warp help`: the modules there are
@@ -178,13 +159,7 @@ pub fn standard_library_markdown() -> String {
 	let mut page = vec![MARKDOWN_TITLE.to_string(), String::new(), MARKDOWN_INTRO.to_string()];
 	for module in crate::modules::std_module_names() {
 		let (summary, words) = module_index(module);
-		page.extend([
-			String::new(),
-			format!("## {module}"),
-			String::new(),
-			summary,
-			String::new(),
-		]);
+		page.extend([String::new(), format!("## {module}"), String::new(), summary, String::new()]);
 		page.extend(words.iter().map(|word| match &word.doc {
 			Some(doc) => format!("- `{}`: {doc}", word.signature),
 			None => format!("- `{}`", word.signature),

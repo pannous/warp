@@ -29,9 +29,7 @@ impl Generator {
 				Node::Number(Number::Float((unit * 2.0 - 1.0) * RANDOM_INT_RANGE as f64))
 			}
 			_ if pick(EDGE_INTS.len()) => Node::Number(Number::Int(EDGE_INTS[trial])),
-			_ => Node::Number(Number::Int(
-				(self.next() % (2 * RANDOM_INT_RANGE as u64 + 1)) as i64 - RANDOM_INT_RANGE,
-			)),
+			_ => Node::Number(Number::Int((self.next() % (2 * RANDOM_INT_RANGE as u64 + 1)) as i64 - RANDOM_INT_RANGE)),
 		}
 	}
 }
@@ -41,11 +39,8 @@ pub fn property_test(lawful: &Lawful, law: &Law, trials: usize, code: &str) -> V
 	let mut generator = Generator(RANDOM_SEED);
 	let (mut run, mut too_deep) = (0, 0);
 	for trial in 0..trials {
-		let bindings: HashMap<String, Node> = law
-			.variables
-			.iter()
-			.map(|(name, kind)| (name.clone(), generator.value(*kind, trial)))
-			.collect();
+		let bindings: HashMap<String, Node> =
+			law.variables.iter().map(|(name, kind)| (name.clone(), generator.value(*kind, trial))).collect();
 		run += 1;
 		match check_instance(lawful, law, &bindings, code) {
 			Verdict::Holds => {}

@@ -12,10 +12,7 @@ pub fn lower_aliases(node: Node) -> Node {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = HOST_ALIASES
-		.into_iter()
-		.filter(|(alias, _, _)| !defined.contains(*alias))
-		.collect();
+	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
 	if aliases.is_empty() {
 		return node;
 	}

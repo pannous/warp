@@ -139,9 +139,9 @@ fn refers_back(node: &Node, enclosing: &mut Vec<String>) -> bool {
 fn followed_paths(node: Node, literals: &HashMap<String, Node>) -> Node {
 	if let Some((variable, fields)) = dot_chain(&node) {
 		if let Some(path) = literals.get(&variable).and_then(|literal| followed(literal, &fields)) {
-			return path.into_iter().fold(Node::Symbol(variable), |reader, field| {
-				key(reader, Op::Dot, Node::Symbol(field))
-			});
+			return path
+				.into_iter()
+				.fold(Node::Symbol(variable), |reader, field| key(reader, Op::Dot, Node::Symbol(field)));
 		}
 	}
 	node.map_children(|child| followed_paths(child, literals))
@@ -173,18 +173,14 @@ fn followed(literal: &Node, fields: &[String]) -> Option<Vec<String>> {
 	let mut followed_any = false;
 	for field in fields {
 		let (_, items) = named_body(nodes.last()?)?;
-		let entry = items
-			.iter()
-			.find(|item| matches!(item.drop_meta(), Node::Key(key, _, _) if key.name() == *field))?;
-		let Node::Key(_, _, value) = entry.drop_meta() else {
-			unreachable!("found a key")
-		};
+		let entry =
+			items.iter().find(|item| matches!(item.drop_meta(), Node::Key(key, _, _) if key.name() == *field))?;
+		let Node::Key(_, _, value) = entry.drop_meta() else { unreachable!("found a key") };
 		match value.drop_meta() {
 			Node::Symbol(word) if word.starts_with(REFERENCE_MARK) => {
 				let name = &word[REFERENCE_MARK.len_utf8()..];
-				let depth = nodes
-					.iter()
-					.rposition(|node| named_body(node).is_some_and(|(node_name, _)| node_name == name))?;
+				let depth =
+					nodes.iter().rposition(|node| named_body(node).is_some_and(|(node_name, _)| node_name == name))?;
 				nodes.truncate(depth + 1);
 				path.truncate(depth);
 				followed_any = true;

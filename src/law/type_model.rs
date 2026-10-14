@@ -4,11 +4,13 @@
 //! and answers `ok <type>` or `rejected`. Warp's own verdict is whether `pipeline::compile` accepts the program.
 //! Contract: W0 rejects ⇒ warp rejects; every exception is a known hole with a card.
 use super::lean::{lean_executable, run_with_timeout, LEAN_TIMEOUT};
+use crate::analyzer::UNION_JOINER;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::warp_parser::TRY_MARKER;
+use crate::words::EXTREMUM_WORDS;
 use crate::words::{COUNT_WORD, IN_WORD, LET_WORD, MAP_WORD};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -57,7 +59,6 @@ const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const RANGED_TYPE_PREFIX: &str = ".ranged ";
-const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
 /// An optional `int?`: its values and ø
 const OPTIONAL_TYPE_PREFIX: &str = ".opt ";
@@ -75,8 +76,6 @@ const RETURN_EVENT_SUFFIX: &str = "·return";
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
 const EVENT_CLASS_SUFFIX: &str = "·event";
-/// `min(a, b)` and `max(a, b)` of two values (lowering/collections/min_max.rs): a comparison, each argument computed once
-const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
 const TALLY_INDEX: &str = "·index";
 
@@ -156,10 +155,8 @@ impl Exporter {
 		if let Some(inner) = union.strip_suffix(OPTIONAL_MARK) {
 			return Ok(format!("{OPTIONAL_TYPE_PREFIX}({})", self.union_type(inner)?));
 		}
-		let alternatives = union
-			.split(UNION_JOINER)
-			.map(|part| self.type_of(part))
-			.collect::<Result<Vec<_>, String>>()?;
+		let alternatives =
+			union.split(UNION_JOINER).map(|part| self.type_of(part)).collect::<Result<Vec<_>, String>>()?;
 		Ok(match alternatives.as_slice() {
 			[single] => single.clone(),
 			_ => format!("{UNION_TYPE}[{}])", alternatives.join(", ")),
@@ -226,18 +223,13 @@ impl Exporter {
 	/// all fields of a class, its ancestors' first, the order its constructor takes them in
 	fn constructor_fields(&self, class: &str) -> Vec<String> {
 		let (path, _) = &self.classes[class];
-		path.iter()
-			.flat_map(|ancestor| self.classes[ancestor].1.iter().map(|(field, _)| field.clone()))
-			.collect()
+		path.iter().flat_map(|ancestor| self.classes[ancestor].1.iter().map(|(field, _)| field.clone())).collect()
 	}
 
 	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`
 	fn construction(&mut self, class: &str, arguments: &[Node]) -> Lean {
 		let written = self.field_values(class, arguments)?;
-		self.instance(
-			class,
-			written.iter().map(|(field, value)| (field.clone(), value)).collect(),
-		)
+		self.instance(class, written.iter().map(|(field, value)| (field.clone(), value)).collect())
 	}
 
 	/// The fields an argument list writes: a named argument `f(b=1, a=5)` goes to its field, the positional ones fill
@@ -280,11 +272,8 @@ impl Exporter {
 		let writes: Result<Vec<String>, String> = fields
 			.iter()
 			.map(|(field, value)| {
-				let field_type = self.classes[class]
-					.1
-					.iter()
-					.find(|(own, _)| own == field)
-					.and_then(|(_, word)| word.clone());
+				let field_type =
+					self.classes[class].1.iter().find(|(own, _)| own == field).and_then(|(_, word)| word.clone());
 				let value = self.argument(field_type.as_deref(), value)?;
 				Ok(format!(
 					".set (.loc {}) {} ({})",
@@ -297,13 +286,8 @@ impl Exporter {
 		let body = writes?
 			.iter()
 			.rev()
-			.fold(format!(".loc {}", quoted(&local)), |rest, write| {
-				format!(".seq ({write}) ({rest})")
-			});
-		Ok(format!(
-			".letIn {} (.cls {path}) (.new {path}) ({body})",
-			quoted(&local)
-		))
+			.fold(format!(".loc {}", quoted(&local)), |rest, write| format!(".seq ({write}) ({rest})"));
+		Ok(format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(&local)))
 	}
 
 	/// a value written to a field: a union field (`size: int | text`) checks it when it runs. W0 knows no object's
@@ -343,10 +327,7 @@ impl Exporter {
 		for (class, fields) in &keys {
 			self.classes.insert(
 				class.clone(),
-				(
-					vec![class.clone()],
-					fields.iter().map(|field| (field.clone(), None)).collect(),
-				),
+				(vec![class.clone()], fields.iter().map(|field| (field.clone(), None)).collect()),
 			);
 		}
 		keys.into_iter().map(|(class, _)| class).collect()
@@ -362,15 +343,13 @@ impl Exporter {
 
 	fn effect(&mut self, effect: Effect) -> Lean {
 		match effect {
-			Effect::On { event, .. } => Err(format!(
-				"not in W0: a program-wide handler of {event} inside an expression"
-			)),
+			Effect::On { event, .. } => {
+				Err(format!("not in W0: a program-wide handler of {event} inside an expression"))
+			}
 			Effect::Emit { event, payload } if payload.is_empty() => Ok(format!(".emit {} .unit", quoted(&event))),
-			Effect::Emit { event, payload } => Ok(format!(
-				".emit {} ({})",
-				quoted(&event),
-				self.instance(&event_class(&event), payload)?
-			)),
+			Effect::Emit { event, payload } => {
+				Ok(format!(".emit {} ({})", quoted(&event), self.instance(&event_class(&event), payload)?))
+			}
 		}
 	}
 
@@ -378,13 +357,7 @@ impl Exporter {
 		let fields: Result<Vec<String>, String> = self.classes[class]
 			.1
 			.iter()
-			.map(|(field, type_word)| {
-				Ok(format!(
-					"({}, {})",
-					quoted(field),
-					self.optional_type(type_word.as_deref())?
-				))
-			})
+			.map(|(field, type_word)| Ok(format!("({}, {})", quoted(field), self.optional_type(type_word.as_deref())?)))
 			.collect();
 		Ok(format!(".classDef {} [{}]", quoted(class), fields?.join(", ")))
 	}
@@ -416,10 +389,7 @@ impl Exporter {
 			};
 			for local in assigned_locals(definition.body, &self.globals) {
 				let class = cell_class(definition.name, &local);
-				self.classes.insert(
-					class.clone(),
-					(vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]),
-				);
+				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
 				declared_cells.push((
 					class.clone(),
 					definition
@@ -434,11 +404,7 @@ impl Exporter {
 		// an annotated parameter's cell keeps its type (P203); a cell parameter has none of its own
 		for (class, declared) in declared_cells {
 			let declared = declared.filter(|word| !self.cell_classes.contains(word));
-			cell_items.push(format!(
-				".cell {} {}",
-				quoted(&class),
-				self.optional_type(declared.as_deref())?
-			));
+			cell_items.push(format!(".cell {} {}", quoted(&class), self.optional_type(declared.as_deref())?));
 		}
 		for statement in &program {
 			let Some(definition) = function_definition(statement) else {
@@ -451,8 +417,7 @@ impl Exporter {
 			let parameter_type = match parameters.as_slice() {
 				[] => UNIT_TYPE.to_string(),
 				[parameter] => {
-					self.single_parameters
-						.insert(name.to_string(), parameter_word(parameter));
+					self.single_parameters.insert(name.to_string(), parameter_word(parameter));
 					self.parameter_type(parameter)?.1
 				}
 				parameters => {
@@ -478,33 +443,23 @@ impl Exporter {
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
 		program_node.visit(&mut |part| {
-			words_used |= [COUNT_WORD, IN_WORD]
-				.iter()
-				.chain(&crate::analyzer::COUNTING_WORDS)
-				.any(|word| part.is_symbol(word))
+			words_used |=
+				[COUNT_WORD, IN_WORD].iter().chain(&crate::analyzer::COUNTING_WORDS).any(|word| part.is_symbol(word))
 		});
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
-			self.classes.insert(
-				TALLY_CLASS.to_string(),
-				(vec![TALLY_CLASS.to_string()], fields.to_vec()),
-			);
+			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
 			argument_classes.push(TALLY_CLASS.to_string());
 		}
 		if let Some(keys) = map_keys(program_node) {
 			self.classes.insert(
 				MAP_WORD.to_string(),
-				(
-					vec![MAP_WORD.to_string()],
-					keys.into_iter().map(|key| (key, None)).collect(),
-				),
+				(vec![MAP_WORD.to_string()], keys.into_iter().map(|key| (key, None)).collect()),
 			);
 			argument_classes.push(MAP_WORD.to_string());
 		}
-		let mut items = argument_classes
-			.iter()
-			.map(|class| self.class_definition(class))
-			.collect::<Result<Vec<_>, String>>()?;
+		let mut items =
+			argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
 		items.extend(cell_items);
 		for (position, statement) in program.iter().enumerate() {
 			items.push(match global_declaration(statement) {
@@ -556,25 +511,19 @@ impl Exporter {
 				if items.len() == 2
 					&& matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) =>
 			{
-				let Node::Key(target, _, value) = items[1].drop_meta() else {
-					unreachable!("an assignment")
-				};
+				let Node::Key(target, _, value) = items[1].drop_meta() else { unreachable!("an assignment") };
 				match items[0].drop_meta() {
 					Node::Symbol(word) if word == LET_WORD => self.binding(target, ".const", value),
 					Node::Symbol(word) if word == SHARED_KEYWORD => self.binding(target, ".var", value),
-					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(
-						&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())),
-						".var",
-						value,
-					),
+					Node::Symbol(word) if self.type_of(word).is_ok() => {
+						self.binding(&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())), ".var", value)
+					}
 					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
 				}
 			}
 			// `a = b = 3`: `b = 3`, then `a = b`
 			Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Key(_, Op::Assign, _)) => {
-				let Node::Key(inner_target, _, _) = value.drop_meta() else {
-					unreachable!("an assignment")
-				};
+				let Node::Key(inner_target, _, _) = value.drop_meta() else { unreachable!("an assignment") };
 				Ok(format!(
 					"{},\n  {}",
 					self.item(value)?,
@@ -599,10 +548,7 @@ impl Exporter {
 			));
 		}
 		self.hidden_names += 1;
-		let (tuple, count) = (
-			format!("·tuple{}", self.hidden_names),
-			format!("·count{}", self.hidden_names),
-		);
+		let (tuple, count) = (format!("·tuple{}", self.hidden_names), format!("·count{}", self.hidden_names));
 		let mut items = vec![
 			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(list)?),
 			format!(".bind {} .var none (.int 0) false", quoted(&count)),
@@ -619,10 +565,7 @@ impl Exporter {
 			),
 		];
 		for (position, name) in names.iter().enumerate() {
-			items.push(self.store(
-				name,
-				format!(".index (.glob {}) (.int {})", quoted(&tuple), position + 1),
-			));
+			items.push(self.store(name, format!(".index (.glob {}) (.int {})", quoted(&tuple), position + 1)));
 		}
 		Ok(items.join(",\n  "))
 	}
@@ -638,16 +581,11 @@ impl Exporter {
 			));
 		}
 		self.hidden_names += 1;
-		let hidden: Vec<String> = (1..=values.len())
-			.map(|position| format!("·value{}_{position}", self.hidden_names))
-			.collect();
+		let hidden: Vec<String> =
+			(1..=values.len()).map(|position| format!("·value{}_{position}", self.hidden_names)).collect();
 		let mut items = Vec::new();
 		for (name, value) in hidden.iter().zip(values) {
-			items.push(format!(
-				".bind {} .var none ({}) false",
-				quoted(name),
-				self.expression(value)?
-			));
+			items.push(format!(".bind {} .var none ({}) false", quoted(name), self.expression(value)?));
 		}
 		for (name, value) in names.iter().zip(&hidden) {
 			items.push(self.store(name, format!(".glob {}", quoted(value))));
@@ -665,11 +603,7 @@ impl Exporter {
 			),
 			None => {
 				self.names.insert(name.to_string(), None);
-				format!(
-					".bind {} .var none ({value}) {}",
-					quoted(name),
-					self.globals.contains(&name.to_string())
-				)
+				format!(".bind {} .var none ({value}) {}", quoted(name), self.globals.contains(&name.to_string()))
 			}
 		}
 	}
@@ -695,26 +629,18 @@ impl Exporter {
 			self.map_names.push(name.clone());
 		}
 		let aliased_list = matches!(value.drop_meta(), Node::Symbol(other) if self.list_names.contains(other));
-		let optional = annotation
-			.as_deref()
-			.is_some_and(|lean| lean.starts_with(OPTIONAL_TYPE_PREFIX));
+		let optional = annotation.as_deref().is_some_and(|lean| lean.starts_with(OPTIONAL_TYPE_PREFIX));
 		if aliased_list
 			|| is_list_literal(value)
 			|| (value.is_empty_node() && !optional)
-			|| annotation
-				.as_deref()
-				.is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX))
+			|| annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX))
 		{
 			self.list_names.push(name.clone());
 		}
 		let value = self.shared_list(&name, annotation.as_deref(), value)?;
 		self.names.insert(name.clone(), annotation.clone());
 		let annotation = annotation.map_or("none".to_string(), |lean| format!("(some ({lean}))"));
-		Ok(format!(
-			".bind {} {mode} {annotation} ({value}) {}",
-			quoted(&name),
-			self.globals.contains(&name)
-		))
+		Ok(format!(".bind {} {mode} {annotation} ({value}) {}", quoted(&name), self.globals.contains(&name)))
 	}
 
 	/// A list stored in a list name is shared (P215): a new list, tagged with the declared element type (anything when
@@ -724,9 +650,7 @@ impl Exporter {
 		if !self.list_names.iter().any(|list| list == name) || matches!(value.drop_meta(), Node::Symbol(_)) {
 			return Ok(lean);
 		}
-		let tag = declared
-			.and_then(|declared| declared.strip_prefix(LIST_TYPE_PREFIX))
-			.unwrap_or(ANY_TYPE);
+		let tag = declared.and_then(|declared| declared.strip_prefix(LIST_TYPE_PREFIX)).unwrap_or(ANY_TYPE);
 		Ok(format!(".share ({lean}) {tag}"))
 	}
 
@@ -747,13 +671,10 @@ impl Exporter {
 
 	/// a field some class declares: other words after a dot are methods (`x.size`, `4.square`), outside W0
 	fn is_field(&self, word: &str) -> bool {
-		self.classes
-			.values()
-			.any(|(_, fields)| fields.iter().any(|(field, _)| field == word))
+		self.classes.values().any(|(_, fields)| fields.iter().any(|(field, _)| field == word))
 	}
 
 	fn is_call(&self, node: &Node) -> bool {
-		node.call_parts()
-			.is_some_and(|(name, _)| self.functions.contains_key(name))
+		node.call_parts().is_some_and(|(name, _)| self.functions.contains_key(name))
 	}
 }

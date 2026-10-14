@@ -65,10 +65,7 @@ fn shaped_head(head: &Node) -> Option<(String, Vec<Node>)> {
 	let Node::Symbol(name) = name.drop_meta() else {
 		return None;
 	};
-	parameters
-		.iter()
-		.any(|parameter| shape(parameter).is_some())
-		.then(|| (name.clone(), parameters.to_vec()))
+	parameters.iter().any(|parameter| shape(parameter).is_some()).then(|| (name.clone(), parameters.to_vec()))
 }
 
 /// The fields of `p:{name, title?}`
@@ -92,16 +89,8 @@ fn parameter_name(parameter: &Node) -> Node {
 /// `name?`, `phone text`, `phone: text`, `mutable status`
 fn field(written: &Node) -> Option<Field> {
 	let named = |word: &str, type_word: Option<String>| match word.strip_suffix(OPTIONAL_MARK) {
-		Some(name) => Field {
-			name: name.to_string(),
-			optional: true,
-			type_word,
-		},
-		None => Field {
-			name: word.to_string(),
-			optional: false,
-			type_word,
-		},
+		Some(name) => Field { name: name.to_string(), optional: true, type_word },
+		None => Field { name: word.to_string(), optional: false, type_word },
 	};
 	match written.drop_meta() {
 		Node::Symbol(word) => Some(named(word, None)),
@@ -145,21 +134,14 @@ fn refused_argument(call: &Node, shapes: &Shapes) -> Option<String> {
 	let Node::Symbol(name) = name.drop_meta() else {
 		return None;
 	};
-	shapes
-		.get(name)?
-		.iter()
-		.zip(constructions(arguments))
-		.find_map(|(fields, argument)| {
-			let given = object_entries(&argument)?;
-			fields
-				.as_ref()?
-				.iter()
-				.find_map(|field| match given.iter().find(|(key, _)| *key == field.name) {
-					None if !field.optional => Some(format!("missing argument field {}", field.name)),
-					None => None,
-					Some((_, value)) => wrong_type(field, value),
-				})
+	shapes.get(name)?.iter().zip(constructions(arguments)).find_map(|(fields, argument)| {
+		let given = object_entries(&argument)?;
+		fields.as_ref()?.iter().find_map(|field| match given.iter().find(|(key, _)| *key == field.name) {
+			None if !field.optional => Some(format!("missing argument field {}", field.name)),
+			None => None,
+			Some((_, value)) => wrong_type(field, value),
 		})
+	})
 }
 
 /// `phone:"899-573-5842"` for the field `phone number`: the type error
@@ -172,13 +154,7 @@ fn wrong_type(field: &Field, value: &Node) -> Option<String> {
 	let fits = given == wanted
 		|| is_number(wanted) && is_number(given) && !(wanted.is_int() && given.is_float())
 		|| wanted == Kind::Text && given == Kind::Codepoint;
-	(!fits).then(|| {
-		format!(
-			"type error: field {} is {type_word}, got {}",
-			field.name,
-			value.serialize()
-		)
-	})
+	(!fits).then(|| format!("type error: field {} is {type_word}, got {}", field.name, value.serialize()))
 }
 
 /// The arguments of a braceless call `call person {name:"Dick"}`: a word before an object constructs it, one argument
@@ -186,17 +162,11 @@ fn constructions(arguments: &[Node]) -> Vec<Node> {
 	let mut merged: Vec<Node> = Vec::new();
 	for argument in arguments {
 		let constructs = matches!(argument.drop_meta(), Node::List(_, Bracket::Curly, _))
-			&& merged
-				.last()
-				.is_some_and(|kind| matches!(kind.drop_meta(), Node::Symbol(_)));
+			&& merged.last().is_some_and(|kind| matches!(kind.drop_meta(), Node::Symbol(_)));
 		match constructs {
 			true => {
 				let kind = merged.pop().expect("guarded");
-				merged.push(Node::List(
-					vec![kind, argument.clone()],
-					Bracket::None,
-					Separator::Space,
-				));
+				merged.push(Node::List(vec![kind, argument.clone()], Bracket::None, Separator::Space));
 			}
 			false => merged.push(argument.clone()),
 		}

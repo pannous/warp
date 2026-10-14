@@ -60,10 +60,7 @@ fn test_a_lambda_that_captures_is_passed_as_a_closure() {
 
 #[test]
 fn test_a_function_argument_of_a_specialised_function_is_passed_on() {
-	is!(
-		"dbl(x):=x*2; apply(f, x):=f(x); outer(g, x):=apply(g, x)+1; outer(dbl, 4)",
-		9
-	);
+	is!("dbl(x):=x*2; apply(f, x):=f(x); outer(g, x):=apply(g, x)+1; outer(dbl, 4)", 9);
 	assert_eq!(printed("dbl(x):=x*2; run(f, xs):=map xs f; run(dbl, [1 2])"), "[2 4]");
 }
 

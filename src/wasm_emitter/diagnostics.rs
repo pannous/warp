@@ -4,10 +4,7 @@ use super::*;
 impl WasmGcEmitter {
 	/// The first type error found while emitting; the module must not run then
 	pub fn type_error(&self) -> Option<Node> {
-		self.type_errors
-			.first()
-			.or(self.type_manager.type_errors.first())
-			.map(|message| crate::node::error(message))
+		self.type_errors.first().or(self.type_manager.type_errors.first()).map(|message| crate::node::error(message))
 	}
 
 	/// A value used as a number that has none (ø, a list, a type…): an error value at its source position, not a panic
@@ -99,10 +96,7 @@ impl WasmGcEmitter {
 				let kind = self.get_type(operand);
 				self.emit_type_error(
 					func,
-					format!(
-						"type error: {kind} in arithmetic: {}",
-						lists::list_ops::CHARACTER_IS_NO_NUMBER
-					),
+					format!("type error: {kind} in arithmetic: {}", lists::list_ops::CHARACTER_IS_NO_NUMBER),
 				);
 			}
 			// an array of Ints or Floats holds no character: its fast read stays
@@ -116,10 +110,7 @@ impl WasmGcEmitter {
 					&[
 						I::LocalTee(held),
 						I::RefAsNonNull,
-						I::StructGet {
-							struct_type_index: self.type_manager.node_type,
-							field_index: 0,
-						},
+						I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
 					],
 				);
 				Self::emit_kind_test(func, Kind::Codepoint as i64, I::I64Eq);
@@ -133,15 +124,9 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
-		let unit_hint = if crate::numbers::units::is_unit(name) {
-			UNIT_AT_RUN_TIME
-		} else {
-			""
-		};
-		let diagnostic = self.offer_near_name(
-			self.diagnostic_here(format!("undefined variable: {name}{unit_hint}")),
-			name,
-		);
+		let unit_hint = if crate::numbers::units::is_unit(name) { UNIT_AT_RUN_TIME } else { "" };
+		let diagnostic =
+			self.offer_near_name(self.diagnostic_here(format!("undefined variable: {name}{unit_hint}")), name);
 		self.emit_type_error(func, diagnostic.remembered());
 	}
 

@@ -14,11 +14,7 @@ fn clash(code: &str) -> String {
 
 #[test]
 fn defining_a_function_named_like_a_type_word_is_an_error() {
-	for code in [
-		"double := it*2; double 4",
-		"double(x) := x*2; double(4)",
-		"int(x) := x+1; int(4)",
-	] {
+	for code in ["double := it*2; double 4", "double(x) := x*2; double(4)", "int(x) := x+1; int(4)"] {
 		let message = clash(code);
 		assert!(message.contains("is a type; rename your function"), "{code}: {message}");
 	}

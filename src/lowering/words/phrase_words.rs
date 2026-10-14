@@ -67,10 +67,6 @@ fn appended_to(argument: &Node) -> Option<Node> {
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let call = Node::List(
-		vec![symbol(ADD_WORD), element.as_ref().clone()],
-		Bracket::Round,
-		Separator::Space,
-	);
+	let call = Node::List(vec![symbol(ADD_WORD), element.as_ref().clone()], Bracket::Round, Separator::Space);
 	Some(Node::Key(list.clone(), Op::Dot, Box::new(call)))
 }

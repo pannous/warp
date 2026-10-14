@@ -33,17 +33,11 @@ pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 6] = [
 		super::super::super::numbers::casts::INVALID_CODE_POINT,
 		"a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF",
 	),
-	(
-		NOT_A_MAP,
-		"keys, values and entries are a map's; a list's positions are 1..count(xs)",
-	),
+	(NOT_A_MAP, "keys, values and entries are a map's; a list's positions are 1..count(xs)"),
 	(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX),
 	(COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX),
 	(INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
-	(
-		super::super::super::declared_values::LIST_CANNOT_HOLD,
-		"its declared element type does not admit it (P215)",
-	),
+	(super::super::super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)"),
 ];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
@@ -73,7 +67,7 @@ pub(in crate::wasm_emitter) const NOT_JOINABLE: &str = "not_a_joinable_item";
 /// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
 pub(super) const NOT_A_MAP: &str = "not_a_map";
 
-pub const RUNTIME_ERRORS: [&str; 31] = [
+pub const RUNTIME_ERRORS: [&str; 32] = [
 	"index_out_of_range",
 	INDEX_NOT_INTEGRAL,
 	"invalid_number",
@@ -105,6 +99,7 @@ pub const RUNTIME_ERRORS: [&str; 31] = [
 	super::super::super::numbers::uncertain::INTERVAL_AND_GAUSSIAN,
 	NOT_A_MAP,
 	super::super::super::numbers::casts::INVALID_CODE_POINT,
+	super::super::super::numbers::float_text::NOT_FINITE,
 ];
 
 impl WasmGcEmitter {
@@ -116,11 +111,7 @@ impl WasmGcEmitter {
 			.iter()
 			.map(|label| &*Box::leak(format!("{}{label}", crate::switch::NO_CASE_PREFIX).into_boxed_str()));
 		let overflow_errors = crate::numbers::fixed_width::FIXED_WIDTHS.iter().map(|width| width.trap);
-		RUNTIME_ERRORS
-			.into_iter()
-			.chain(no_case_errors)
-			.chain(overflow_errors)
-			.collect()
+		RUNTIME_ERRORS.into_iter().chain(no_case_errors).chain(overflow_errors).collect()
 	}
 
 	pub(in crate::wasm_emitter) fn emit_runtime_errors(&mut self) {
@@ -128,9 +119,7 @@ impl WasmGcEmitter {
 			self.declare_error_catching(); // the error functions throw while a `try` runs
 		}
 		for (error_id, name) in self.runtime_error_names().into_iter().enumerate() {
-			self.runtime_function(name, vec![], vec![], vec![], |s, f| {
-				s.emit_error_body(f, error_id as i32)
-			});
+			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
 		}
 	}
 
@@ -145,10 +134,7 @@ impl WasmGcEmitter {
 		let trap_detail = self.trap_detail_global();
 		self.emit_field(func, local, 0);
 		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
-		Self::emit_list(
-			func,
-			&[I::If(BlockType::Empty), I::LocalGet(local), I::GlobalSet(trap_detail)],
-		);
+		Self::emit_list(func, &[I::If(BlockType::Empty), I::LocalGet(local), I::GlobalSet(trap_detail)]);
 		self.call(func, RETURNED_ERROR);
 		func.instruction(&I::End);
 	}
@@ -172,18 +158,12 @@ impl WasmGcEmitter {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
 		let fixnum_offset = super::super::super::numbers::big_int::FIXNUM_OFFSET;
-		Self::emit_list(
-			func,
-			&[
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(local), I::I64Const(fixnum_offset), I::I64Add, I::I64Const(0), I::I64LtS,
+			I::If(BlockType::Empty),
 				I::LocalGet(local),
-				I::I64Const(fixnum_offset),
-				I::I64Add,
-				I::I64Const(0),
-				I::I64LtS,
-				I::If(BlockType::Empty),
-				I::LocalGet(local),
-			],
-		);
+		]);
 		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);
@@ -194,21 +174,15 @@ impl WasmGcEmitter {
 		let Some((dividend, divisor)) = divided_index(index) else {
 			return;
 		};
-		let (dividend_text, divisor_text) = (
-			crate::normalize::operand_text(dividend),
-			crate::normalize::operand_text(divisor),
-		);
+		let (dividend_text, divisor_text) =
+			(crate::normalize::operand_text(dividend), crate::normalize::operand_text(divisor));
 		crate::normalize::set_position_of(index);
 		crate::normalize::hint(
 			&format!("{dividend_text}/{divisor_text}"),
 			&format!("{dividend_text}//{divisor_text}"),
 			"an index must be an integer: floor division, or `as int`",
 		);
-		let remainder = Node::Key(
-			Box::new(dividend.clone()),
-			crate::operators::Op::Mod,
-			Box::new(divisor.clone()),
-		);
+		let remainder = Node::Key(Box::new(dividend.clone()), crate::operators::Op::Mod, Box::new(divisor.clone()));
 		self.emit_numeric_value(func, &remainder);
 		Self::emit_list(func, &[I::I64Const(0), I::I64Ne]);
 		self.emit_fail_if(func, INDEX_NOT_INTEGRAL);

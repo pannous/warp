@@ -26,10 +26,8 @@ fn text(bytes: &[u8]) -> String {
 
 #[test]
 fn test_build_exe_runs_the_program_and_prints_its_value() {
-	let (build, executable) = build_executable(
-		"standalone_value",
-		"print \"hello\"\nsquare(x) := x * x\nsquare(7) + floor(sqrt(16))",
-	);
+	let (build, executable) =
+		build_executable("standalone_value", "print \"hello\"\nsquare(x) := x * x\nsquare(7) + floor(sqrt(16))");
 	assert!(build.status.success(), "{}", text(&build.stderr));
 	let run = std::process::Command::new(&executable).output().unwrap();
 	assert!(run.status.success(), "{}", text(&run.stderr));
@@ -48,11 +46,7 @@ fn test_build_exe_prints_lists_as_print_does() {
 fn test_build_exe_refuses_imports_the_runtime_lacks() {
 	let (build, executable) = build_executable("standalone_fetch", "fetch \"https://example.com\"");
 	assert!(!build.status.success());
-	assert!(
-		text(&build.stderr).contains("fetch and files used runtime."),
-		"{}",
-		text(&build.stderr)
-	);
+	assert!(text(&build.stderr).contains("fetch and files used runtime."), "{}", text(&build.stderr));
 	assert!(!executable.exists());
 }
 
@@ -95,10 +89,8 @@ fn test_build_exe_signs_cleanly_on_macos() {
 fn test_build_makes_an_executable_by_default() {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_default.warp");
 	std::fs::write(&source_path, "6 * 7").unwrap();
-	let (executable, module) = (
-		source_path.with_extension(std::env::consts::EXE_EXTENSION),
-		source_path.with_extension("wasm"),
-	);
+	let (executable, module) =
+		(source_path.with_extension(std::env::consts::EXE_EXTENSION), source_path.with_extension("wasm"));
 	let _ = std::fs::remove_file(&executable);
 	let _ = std::fs::remove_file(&module);
 	let build = crate::common::warp_command()
@@ -110,11 +102,7 @@ fn test_build_makes_an_executable_by_default() {
 	assert!(build.status.success(), "{}", text(&build.stderr));
 	let run = std::process::Command::new(&executable).output().unwrap();
 	assert_eq!(text(&run.stdout), "42\n", "{}", text(&run.stderr));
-	let wasm_build = crate::common::warp_command()
-		.args(["build", "--wasm"])
-		.arg(&source_path)
-		.output()
-		.unwrap();
+	let wasm_build = crate::common::warp_command().args(["build", "--wasm"]).arg(&source_path).output().unwrap();
 	assert!(wasm_build.status.success(), "{}", text(&wasm_build.stderr));
 	assert!(module.exists());
 }
@@ -174,11 +162,7 @@ fn test_an_executable_the_runtime_cannot_carry_is_noted_once() {
 	assert!(text(&run().stderr).contains("no executable"));
 	let again = run();
 	assert_eq!(text(&again.stdout), "0\n");
-	assert!(
-		!text(&again.stderr).contains("no executable"),
-		"{}",
-		text(&again.stderr)
-	);
+	assert!(!text(&again.stderr).contains("no executable"), "{}", text(&again.stderr));
 }
 
 /// P105 (user): `warp run <file>` runs the program and leaves no executable

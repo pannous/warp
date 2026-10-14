@@ -4,10 +4,7 @@ use super::*;
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 pub(super) fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {
-		Node::Meta { data, .. } => Node::Meta {
-			node: Box::new(text(name)),
-			data: data.clone(),
-		},
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(text(name)), data: data.clone() },
 		_ => text(name),
 	};
 	crate::warp_parser::subscript(object.clone(), key)
@@ -34,10 +31,7 @@ pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
 		// a named tuple `(x: 10, y: 20)`: its entries are fields too
 		Node::List(items, Bracket::Round, _)
-			if items.len() > 1
-				&& items
-					.iter()
-					.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+			if items.len() > 1 && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
 		{
 			items
 		}
@@ -100,9 +94,7 @@ pub(super) fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjec
 				let literal = copied.or_else(|| object_entries(value).map(|_| value.as_ref().clone()));
 				let both_objects =
 					literal.is_some() && assigned.objects.get(name).is_none_or(|earlier| earlier.is_some());
-				assigned
-					.objects
-					.insert(name.clone(), if both_objects { literal } else { None });
+				assigned.objects.insert(name.clone(), if both_objects { literal } else { None });
 			}
 			collect_assigned_objects(value, assigned);
 		}
@@ -222,11 +214,7 @@ impl Lowering {
 		};
 		subscript_field(&index)?;
 		let read_back = Node::Key(Box::new(outer.clone()), Op::Assign, inner.clone());
-		Some(self.expand(Node::List(
-			vec![value.clone(), read_back],
-			Bracket::None,
-			Separator::Semicolon,
-		)))
+		Some(self.expand(Node::List(vec![value.clone(), read_back], Bracket::None, Separator::Semicolon)))
 	}
 
 	/// `place = value` for any place: a variable, an element `xs#i` of one (as written), a field (field_with on its
@@ -246,11 +234,8 @@ impl Lowering {
 		}
 		let held = Node::Symbol(format!("{PLACE_TEMPORARY}{}", self.next_temporary()));
 		let element = Node::Key(Box::new(held.clone()), Op::Hash, index.clone());
-		let statements = vec![
-			assigned(&held, base.as_ref().clone()),
-			assigned(&element, value),
-			self.stored(base, held)?,
-		];
+		let statements =
+			vec![assigned(&held, base.as_ref().clone()), assigned(&element, value), self.stored(base, held)?];
 		Some(Node::List(statements, Bracket::None, Separator::Semicolon))
 	}
 
@@ -265,22 +250,14 @@ impl Lowering {
 		};
 		let number = self.next_temporary();
 		let program = named_apart(parse(&format!("({SAFE_PREFIX}value={RECEIVER_PLACEHOLDER}; if {SAFE_PREFIX}value == ø then ø else {LOOKUP_PLACEHOLDER})")), SAFE_PREFIX, SAFE_BASE, number);
-		let lookup = field_lookup(
-			&Node::Symbol(temporary_name(&[SAFE_BASE, "value", &number.to_string()])),
-			name,
-			&word,
-		);
-		substitute(
-			substitute(program, RECEIVER_PLACEHOLDER, &receiver),
-			LOOKUP_PLACEHOLDER,
-			&lookup,
-		)
+		let lookup =
+			field_lookup(&Node::Symbol(temporary_name(&[SAFE_BASE, "value", &number.to_string()])), name, &word);
+		substitute(substitute(program, RECEIVER_PLACEHOLDER, &receiver), LOOKUP_PLACEHOLDER, &lookup)
 	}
 
 	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object
 	pub(super) fn object_literal(&self, node: &Node) -> Option<Node> {
-		self.written_object(node)
-			.or_else(|| self.instances.fields_template(node))
+		self.written_object(node).or_else(|| self.instances.fields_template(node))
 	}
 
 	pub(super) fn written_object(&self, node: &Node) -> Option<Node> {
@@ -288,9 +265,8 @@ impl Lowering {
 			Node::Symbol(name) => self.objects.get(name).cloned(),
 			Node::Key(base, Op::Hash, index) => {
 				let field = field_name(crate::warp_parser::subscript_key(index)?)?;
-				let (_, value) = object_entries(&self.object_literal(base)?)?
-					.into_iter()
-					.find(|(name, _)| *name == field)?;
+				let (_, value) =
+					object_entries(&self.object_literal(base)?)?.into_iter().find(|(name, _)| *name == field)?;
 				object_entries(&value).map(|_| value)
 			}
 			other => object_entries(other).map(|_| other.clone()),

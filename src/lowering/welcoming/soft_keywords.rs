@@ -15,20 +15,8 @@ pub const HARD_KEYWORDS: [&str; 26] = [
 	"use", "import", "include", // modules
 ];
 /// emit's aliases fire, trigger and signal stay out: a program may define them (P163, test_event_footguns; asked)
-pub const SOFT_KEYWORDS: [&str; 12] = [
-	"emit",
-	"send",
-	"broadcast",
-	"every",
-	"whenever",
-	"init",
-	"new",
-	"root",
-	"listeners",
-	"stored",
-	"undo",
-	"redo",
-];
+pub const SOFT_KEYWORDS: [&str; 12] =
+	["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners", "stored", "undo", "redo"];
 /// Keyword-like words in neither list: the playground editor colors them like soft keywords (web/playground/keywords.py
 /// makes keywords.js; it also colors every `const …_KEYWORD: &str` in src/, so a pass registers its word by that name). Display only: P165 gives them no meaning; moving one into a list above is a user decision
 pub const HIGHLIGHTED_WORDS: [&str; 62] = [
@@ -170,11 +158,7 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 					if let Some(name) = items.first().and_then(Node::symbol_name) {
 						found(name, "function");
 					}
-					items
-						.iter()
-						.skip(1)
-						.filter_map(parameter_name)
-						.for_each(|name| found(&name, "parameter"));
+					items.iter().skip(1).filter_map(parameter_name).for_each(|name| found(&name, "parameter"));
 				}
 				_ => {}
 			}

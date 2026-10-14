@@ -89,10 +89,7 @@ impl Diagnostic {
 	}
 
 	pub fn message(self, message: impl Into<String>) -> Self {
-		Diagnostic {
-			message: message.into(),
-			..self
-		}
+		Diagnostic { message: message.into(), ..self }
 	}
 
 	pub fn fix(mut self, replacement: impl Into<String>) -> Self {
@@ -115,11 +112,7 @@ impl Diagnostic {
 	/// A warning of the kind `topic` about the expression `written`: shown until the user says "got it" to it or to all
 	/// of the kind
 	pub fn about(self, topic: &str, written: &str) -> Self {
-		Diagnostic {
-			topic: Some(topic.to_string()),
-			expression_key: Some(expression_key(topic, written)),
-			..self
-		}
+		Diagnostic { topic: Some(topic.to_string()), expression_key: Some(expression_key(topic, written)), ..self }
 	}
 
 	/// The topic "got it" silences and the expression it names, for a warning that has them
@@ -132,9 +125,7 @@ impl Diagnostic {
 	/// Said "got it" to before, or on a line that says `// got it`
 	fn is_silenced(&self) -> bool {
 		silenced_by_comment(self.line)
-			|| self
-				.acknowledgeable()
-				.is_some_and(|(topic, written)| is_acknowledged(topic, written))
+			|| self.acknowledgeable().is_some_and(|(topic, written)| is_acknowledged(topic, written))
 	}
 
 	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
@@ -180,11 +171,7 @@ impl fmt::Display for Diagnostic {
 		write!(f, "{}", self.message)?;
 		// 0:0 is no position: a diagnostic of something written nowhere in the source
 		if self.line > 0 {
-			write!(
-				f,
-				" at {}",
-				crate::compiler::meta::place_text(self.file.as_deref(), self.line, self.column)
-			)?;
+			write!(f, " at {}", crate::compiler::meta::place_text(self.file.as_deref(), self.line, self.column))?;
 		}
 		if let Some(fix) = &self.fix {
 			write!(f, "; fix: {}", fix)?;
@@ -264,6 +251,8 @@ const SCRIPT_PRAGMA: &str = "script";
 const SCRIPT_MODULES: [&str; 3] = ["os", "file", "net"];
 /// `use comments`: a comment before a binding becomes its meta information (P114, lowering/data/meta_entries.rs)
 const COMMENTS_PRAGMA: &str = "comments";
+/// `use reflection` (or `use reflection mode`): function values answer where and how they were made
+const REFLECTION_PRAGMA: &str = "reflection";
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
 const ACKNOWLEDGED: &str = "acknowledged";
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
@@ -407,11 +396,7 @@ fn print(diagnostic: &Diagnostic) {
 			};
 			// a note about the text as written (`await job within 100 ms`) prefers nothing else
 			match preferred == written {
-				true => eprintln!(
-					"{}{position}: {}",
-					paint(Color::Cyan, "note"),
-					paint(Color::Green, written)
-				),
+				true => eprintln!("{}{position}: {}", paint(Color::Cyan, "note"), paint(Color::Green, written)),
 				false => eprintln!(
 					"{}{position}: prefer {} over {}",
 					paint(Color::Cyan, "hint"),
@@ -530,13 +515,7 @@ fn replaced_pragma(program: Node, word: &str, replacement: Option<&Node>) -> (No
 		}
 		Node::Meta { node, data } => {
 			let (inner, found) = replaced_pragma(*node, word, replacement);
-			(
-				Node::Meta {
-					node: Box::new(inner),
-					data,
-				},
-				found,
-			)
+			(Node::Meta { node: Box::new(inner), data }, found)
 		}
 		other => (other, false),
 	}
@@ -544,15 +523,8 @@ fn replaced_pragma(program: Node, word: &str, replacement: Option<&Node>) -> (No
 
 /// The program with its `use script` as `use os file net`, and whether it had one
 fn with_script_modules(program: Node) -> (Node, bool) {
-	let modules = [PRAGMA_WORD]
-		.into_iter()
-		.chain(SCRIPT_MODULES)
-		.map(|word| Node::Symbol(word.into()));
-	let uses = Node::List(
-		modules.collect(),
-		crate::node::Bracket::None,
-		crate::node::Separator::Space,
-	);
+	let modules = [PRAGMA_WORD].into_iter().chain(SCRIPT_MODULES).map(|word| Node::Symbol(word.into()));
+	let uses = Node::List(modules.collect(), crate::node::Bracket::None, crate::node::Separator::Space);
 	replaced_pragma(program, SCRIPT_PRAGMA, Some(&uses))
 }
 
@@ -583,17 +555,21 @@ fn relaxed_if<R>(relaxed: bool, body: impl FnOnce() -> R) -> R {
 
 /// The program without its top-level `use relaxed` statements (or an alias), and whether it had one
 fn without_relaxed_pragma(program: Node) -> (Node, bool) {
-	RELAXED_PRAGMAS
-		.into_iter()
-		.fold((program, false), |(program, found), word| {
-			let (program, here) = without_pragma(program, word);
-			(program, found || here)
-		})
+	RELAXED_PRAGMAS.into_iter().fold((program, false), |(program, found), word| {
+		let (program, here) = without_pragma(program, word);
+		(program, found || here)
+	})
 }
 
 /// Run `body` with warnings as errors when the program says `use strict`, and comments as meta information when it
-/// says `use comments`, and without hints when it says `use relaxed` or `use script`
+/// says `use comments`, and without hints when it says `use relaxed` or `use script`; `use reflection` turns on
+/// reflection mode
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
+	let (program, reflection) = without_pragma(program, REFLECTION_PRAGMA);
+	compile_context::scoped(|context| &mut context.reflection_mode, reflection, || in_written_mode(program, body))
+}
+
+fn in_written_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
 	let (program, script) = with_script_modules(program);
 	let (program, relaxed) = without_relaxed_pragma(program);

@@ -25,25 +25,13 @@ pub(super) const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 impl WasmGcEmitter {
 	/// A leading sign of the text at `pointer`: `negative` set for -, the pointer past a - or + (`digit` holds the byte)
 	fn emit_skip_sign(f: &mut Function, pointer: u32, digit: u32, negative: u32) {
-		Self::emit_list(
-			f,
-			&[
-				I::LocalGet(pointer),
-				I::I32Load8U(BYTE),
-				I::LocalTee(digit),
-				I32Const('-' as i32),
-				I::I32Eq,
-				I::LocalSet(negative),
-				I::LocalGet(negative),
-				I::LocalGet(digit),
-				I32Const('+' as i32),
-				I::I32Eq,
-				I::I32Or,
-				I::LocalGet(pointer),
-				I::I32Add,
-				I::LocalSet(pointer),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(digit), I32Const('-' as i32), I::I32Eq,
+			I::LocalSet(negative),
+			I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or, I::LocalGet(pointer),
+			I::I32Add, I::LocalSet(pointer),
+		]);
 	}
 
 	/// `x as int` of a text held in a variable, like the literal `"12" as int`; no digits is the runtime error invalid_number
@@ -61,38 +49,20 @@ impl WasmGcEmitter {
 			Self::emit_kind_test(f, Kind::Codepoint as i64, I::I64Eq);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.emit_codepoint_of_node(f);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const('0' as i64),
-					I::I64Sub,
-					I::LocalTee(value),
-					I::I64Const(9),
-					I::I64GtU,
-				],
-			);
+			Self::emit_list(f, &[I::I64Const('0' as i64), I::I64Sub, I::LocalTee(value), I::I64Const(9), I::I64GtU]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::LocalGet(value), I::Return, I::End]);
 			// a float truncates toward zero (`(x*x) as int` of a float parameter held as a Node)
 			let (node_type, float_box) = (s.type_manager.node_type, s.type_manager.f64_box_type);
 			s.emit_field(f, 0, 0);
 			Self::emit_kind_test(f, Kind::Float as i64, I::I64Eq);
-			Self::emit_list(
-				f,
-				&[
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::StructGet {
-						struct_type_index: node_type,
-						field_index: 1,
-					},
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::If(BlockType::Empty),
+					I::LocalGet(0), I::StructGet { struct_type_index: node_type, field_index: 1 },
 					I::RefCastNonNull(HeapType::Concrete(float_box)),
-					I::StructGet {
-						struct_type_index: float_box,
-						field_index: 0,
-					},
-				],
-			);
+					I::StructGet { struct_type_index: float_box, field_index: 0 },
+			]);
 			// a checked truncation: wasm-split and wasm-opt reject the saturating one without nontrapping-float-to-int
 			s.emit_truncating_cast_via(f, value);
 			Self::emit_list(f, &[I::Return, I::End]);
@@ -109,19 +79,12 @@ impl WasmGcEmitter {
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &at_end);
-			Self::emit_list(
-				f,
-				&[
-					I::BrIf(1),
-					I::LocalGet(pointer),
-					I::I32Load8U(BYTE),
-					I32Const('0' as i32),
-					I::I32Sub,
-					I::LocalTee(digit),
-					I32Const(9),
-					I::I32GtU,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::BrIf(1),
+				I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const('0' as i32), I::I32Sub, I::LocalTee(digit),
+				I32Const(9), I::I32GtU,
+			]);
 			s.emit_fail_if(f, "invalid_number");
 			// value = value*10 + digit, unbounded with the big-int runtime ("99999999999999999999" as int)
 			let unbounded = s.int_runtime();
@@ -137,21 +100,15 @@ impl WasmGcEmitter {
 			} else {
 				f.instruction(&I::I64Add);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(value),
-					I::LocalGet(pointer),
-					I32Const(1),
-					I::I32Add,
-					I::LocalSet(pointer),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::I64Const(0),
-					I::LocalGet(value),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(value),
+				I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::I64Const(0), I::LocalGet(value),
+			]);
 			if unbounded {
 				s.call(f, "exact_sub")
 			} else {
@@ -204,10 +161,7 @@ impl WasmGcEmitter {
 	/// runtime error not_an_int
 	pub(in crate::wasm_emitter) fn emit_node_arithmetic(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
-		let (int_kind, float_kind) = (
-			crate::type_kinds::Kind::Int as i64,
-			crate::type_kinds::Kind::Float as i64,
-		);
+		let (int_kind, float_kind) = (crate::type_kinds::Kind::Int as i64, crate::type_kinds::Kind::Float as i64);
 		for (index, (name, op, exact_op)) in NODE_ARITHMETIC.into_iter().enumerate() {
 			if !self.should_emit_function(name) {
 				continue;
@@ -229,16 +183,11 @@ impl WasmGcEmitter {
 							s.emit_field(f, operand, 0);
 							Self::emit_kind_test(f, Kind::Time as i64, I::I64Eq);
 						}
-						Self::emit_list(
-							f,
-							&[
-								I::I32Or,
-								I::If(BlockType::Empty),
-								I::LocalGet(0),
-								I::LocalGet(1),
-								I::I32Const(operator as i32),
-							],
-						);
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::I32Or, I::If(BlockType::Empty),
+								I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32),
+						]);
 						s.call(f, super::super::super::time::time_arithmetic::TIME_ARITHMETIC);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
@@ -253,37 +202,21 @@ impl WasmGcEmitter {
 						}
 						let is_list = |f: &mut Function, operand: u32| {
 							s.emit_field(f, operand, 0);
-							Self::emit_list(
-								f,
-								&[
-									I::I64Const(KIND_MASK),
-									I::I64And,
-									I::LocalTee(kind),
-									I::I64Const(Kind::List as i64),
-									I::I64Eq,
-									I::LocalGet(kind),
-									I::I64Const(Kind::Block as i64),
-									I::I64Eq,
-									I::I32Or,
-									I::LocalGet(kind),
-									I::I64Const(Kind::Empty as i64),
-									I::I64Eq,
-									I::I32Or,
-								],
-							);
+							#[rustfmt::skip]
+							Self::emit_list(f, &[
+								I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::List as i64),
+								I::I64Eq, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Eq, I::I32Or,
+								I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::I32Or,
+							]);
 						};
 						is_list(f, 0);
 						is_list(f, 1);
-						Self::emit_list(
-							f,
-							&[
-								I::I32And,
-								I::If(BlockType::Empty),
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::I32And, I::If(BlockType::Empty),
 								I::Block(BlockType::Result(node_ref)),
-								I::LocalGet(0),
-								I::LocalGet(1),
-							],
-						);
+									I::LocalGet(0), I::LocalGet(1),
+						]);
 						s.call(f, "list_concat");
 						Self::emit_list(f, &[I::BrOnNonNull(0)]);
 						s.call(f, "new_empty");
@@ -291,20 +224,11 @@ impl WasmGcEmitter {
 						// two texts (or characters): their concatenation, `await a + await b` of two text tasks
 						let is_text = |f: &mut Function, operand: u32| {
 							s.emit_field(f, operand, 0);
-							Self::emit_list(
-								f,
-								&[
-									I::I64Const(KIND_MASK),
-									I::I64And,
-									I::LocalTee(kind),
-									I::I64Const(Kind::Text as i64),
-									I::I64Eq,
-									I::LocalGet(kind),
-									I::I64Const(Kind::Codepoint as i64),
-									I::I64Eq,
-									I::I32Or,
-								],
-							);
+							#[rustfmt::skip]
+							Self::emit_list(f, &[
+								I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Text as i64),
+								I::I64Eq, I::LocalGet(kind), I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::I32Or,
+							]);
 						};
 						is_text(f, 0);
 						is_text(f, 1);
@@ -353,29 +277,15 @@ impl WasmGcEmitter {
 					// a text, a character or a list is no number here: "x" * 2 is no 240
 					for operand in [0, 1] {
 						s.emit_field(f, operand, 0);
-						Self::emit_list(
-							f,
-							&[
-								I::I64Const(KIND_MASK),
-								I::I64And,
-								I::LocalTee(kind),
-								I::I64Const(int_kind),
-								I::I64Ne,
-								I::LocalGet(kind),
-								I::I64Const(float_kind),
-								I::I64Ne,
-								I::I32And,
-							],
-						);
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(int_kind), I::I64Ne,
+							I::LocalGet(kind), I::I64Const(float_kind), I::I64Ne, I::I32And,
+						]);
 						if uncertain {
 							Self::emit_list(
 								f,
-								&[
-									I::LocalGet(kind),
-									I::I64Const(Kind::Uncertain as i64),
-									I::I64Ne,
-									I::I32And,
-								],
+								&[I::LocalGet(kind), I::I64Const(Kind::Uncertain as i64), I::I64Ne, I::I32And],
 							);
 						}
 						s.emit_fail_if(f, NOT_A_NUMBER);
@@ -397,12 +307,7 @@ impl WasmGcEmitter {
 					if op == Op::Pow {
 						Self::emit_list(
 							f,
-							&[
-								I::If(BlockType::Result(ValType::I32)),
-								I::I32Const(1),
-								I::Else,
-								I::LocalGet(1),
-							],
+							&[I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else, I::LocalGet(1)],
 						);
 						s.call(f, "get_int_value");
 						s.call(f, "is_ratio");
@@ -452,29 +357,15 @@ impl WasmGcEmitter {
 			kind(f);
 			Self::emit_list(f, &[I::I64Const(Kind::Float as i64), I::I64Eq, I::If(BlockType::Empty)]);
 			s.emit_field(f, 0, 1);
-			Self::emit_list(
-				f,
-				&[
-					I::RefCastNonNull(HeapType::Concrete(float_box)),
-					I::StructGet {
-						struct_type_index: float_box,
-						field_index: 0,
-					},
-					I::Return,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::RefCastNonNull(HeapType::Concrete(float_box)),
+				I::StructGet { struct_type_index: float_box, field_index: 0 }, I::Return,
+				I::End,
+			]);
 			// an exact number by its value (a ratio too), a digit character by its digit (text_as_int)
 			kind(f);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(Kind::Text as i64),
-					I::I64Ne,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-				],
-			);
+			Self::emit_list(f, &[I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, TEXT_AS_INT);
 			if s.int_runtime() {
 				s.call(f, "exact_to_f64")
@@ -494,38 +385,15 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &at_end);
 				f.instruction(&I::BrIf(1));
 				Self::emit_list(f, &byte);
-				Self::emit_list(
-					f,
-					&[
-						I32Const('0' as i32),
-						I::I32Sub,
-						I::LocalTee(digit),
-						I32Const(9),
-						I::I32GtU,
-						I::BrIf(1),
-						I::LocalGet(value),
-						I::F64Const(10.0.into()),
-						I::F64Mul,
-						I::LocalGet(digit),
-						I::F64ConvertI32U,
-						I::F64Add,
-						I::LocalSet(value),
-						I::LocalGet(digits),
-						I32Const(1),
-						I::I32Add,
-						I::LocalSet(digits),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I32Const('0' as i32), I::I32Sub, I::LocalTee(digit), I32Const(9), I::I32GtU, I::BrIf(1),
+					I::LocalGet(value), I::F64Const(10.0.into()), I::F64Mul, I::LocalGet(digit), I::F64ConvertI32U,
+					I::F64Add, I::LocalSet(value),
+					I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits),
+				]);
 				if after_point {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(scale_digits),
-							I32Const(1),
-							I::I32Add,
-							I::LocalSet(scale_digits),
-						],
-					);
+					Self::emit_list(f, &[I::LocalGet(scale_digits), I32Const(1), I::I32Add, I::LocalSet(scale_digits)]);
 				}
 				Self::emit_list(f, &advance);
 				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
@@ -545,13 +413,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &byte);
 			Self::emit_list(
 				f,
-				&[
-					I32Const(ASCII_LOWERCASE_BIT),
-					I::I32Or,
-					I32Const('e' as i32),
-					I::I32Eq,
-					I::If(BlockType::Empty),
-				],
+				&[I32Const(ASCII_LOWERCASE_BIT), I::I32Or, I32Const('e' as i32), I::I32Eq, I::If(BlockType::Empty)],
 			);
 			Self::emit_list(f, &advance);
 			Self::emit_list(f, &at_end);
@@ -559,37 +421,17 @@ impl WasmGcEmitter {
 			sign(f, exponent_negative);
 			Self::emit_list(
 				f,
-				&[
-					I32Const(0),
-					I::LocalSet(digits),
-					I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-				],
+				&[I32Const(0), I::LocalSet(digits), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)],
 			);
 			Self::emit_list(f, &at_end);
 			f.instruction(&I::BrIf(1));
 			Self::emit_list(f, &byte);
-			Self::emit_list(
-				f,
-				&[
-					I32Const('0' as i32),
-					I::I32Sub,
-					I::LocalTee(digit),
-					I32Const(9),
-					I::I32GtU,
-					I::BrIf(1),
-					I::LocalGet(exponent),
-					I32Const(10),
-					I::I32Mul,
-					I::LocalGet(digit),
-					I::I32Add,
-					I::LocalSet(exponent),
-					I::LocalGet(digits),
-					I32Const(1),
-					I::I32Add,
-					I::LocalSet(digits),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const('0' as i32), I::I32Sub, I::LocalTee(digit), I32Const(9), I::I32GtU, I::BrIf(1),
+				I::LocalGet(exponent), I32Const(10), I::I32Mul, I::LocalGet(digit), I::I32Add, I::LocalSet(exponent),
+				I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits),
+			]);
 			Self::emit_list(f, &advance);
 			Self::emit_list(f, &[I::Br(0), I::End, I::End, I::LocalGet(digits), I::I32Eqz]);
 			s.emit_fail_if(f, "invalid_number");
@@ -599,20 +441,11 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32Eqz]);
 			s.emit_fail_if(f, "invalid_number");
 			// the power of ten: the written exponent less the digits after the point, applied by repeated * or / 10
-			Self::emit_list(
-				f,
-				&[
-					I32Const(0),
-					I::LocalGet(exponent),
-					I::I32Sub,
-					I::LocalGet(exponent),
-					I::LocalGet(exponent_negative),
-					I::Select,
-					I::LocalGet(scale_digits),
-					I::I32Sub,
-					I::LocalSet(exponent),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const(0), I::LocalGet(exponent), I::I32Sub, I::LocalGet(exponent), I::LocalGet(exponent_negative),
+				I::Select, I::LocalGet(scale_digits), I::I32Sub, I::LocalSet(exponent),
+			]);
 			for (more, step, towards_zero) in [(I::I32GtS, I::F64Mul, I::I32Sub), (I::I32LtS, I::F64Div, I::I32Add)] {
 				Self::emit_list(
 					f,
@@ -638,17 +471,11 @@ impl WasmGcEmitter {
 					],
 				);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::F64Const(0.0.into()),
-					I::LocalGet(value),
-					I::F64Sub,
-					I::LocalGet(value),
-					I::LocalGet(negative),
-					I::Select,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::F64Const(0.0.into()), I::LocalGet(value), I::F64Sub, I::LocalGet(value), I::LocalGet(negative),
+				I::Select,
+			]);
 		});
 	}
 }
@@ -688,16 +515,9 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_text_repeat(&mut self, func: &mut Function, text: &Node, count: &Node) {
 		let copies = crate::filled_lists::filled_list(
 			count.clone(),
-			&Node::List(
-				vec![text.clone()],
-				crate::node::Bracket::Square,
-				crate::node::Separator::Space,
-			),
+			&Node::List(vec![text.clone()], crate::node::Bracket::Square, crate::node::Separator::Space),
 		);
-		self.emit_node_instructions(
-			func,
-			&super::super::super::join_call(copies.expect("a one-element list"), ""),
-		);
+		self.emit_node_instructions(func, &super::super::super::join_call(copies.expect("a one-element list"), ""));
 	}
 
 	/// `"ab"*2` repeats; the got-it warning names `2 times "ab"`, and for a text spelling a number how to multiply it
@@ -757,18 +577,11 @@ impl WasmGcEmitter {
 		}
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
 		if crate::analyzer::repeats_text(left_kind, op, right_kind) {
-			let (text, count) = if right_kind == Kind::Int {
-				(left, right)
-			} else {
-				(right, left)
-			};
+			let (text, count) = if right_kind == Kind::Int { (left, right) } else { (right, left) };
 			let fractional = matches!(count.drop_meta(), Node::Number(number) if f64::from(*number).fract() != 0.0);
 			if !fractional {
-				let written = format!(
-					"{}*{}",
-					crate::normalize::operand_text(left),
-					crate::normalize::operand_text(right)
-				);
+				let written =
+					format!("{}*{}", crate::normalize::operand_text(left), crate::normalize::operand_text(right));
 				Self::educate_text_multiplication(&written, text, count);
 				self.emit_text_repeat(func, text, count);
 				return true;

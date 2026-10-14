@@ -24,11 +24,7 @@ pub(crate) fn zero_element(type_word: &str) -> Option<Node> {
 	Some(match type_word_kind(element)? {
 		Kind::Int => Node::int(0),
 		// `0.0f`: a bare 0.0 is an exact decimal, so an Int
-		Kind::Float => Node::Key(
-			Box::new(Node::float(0.0)),
-			Op::As,
-			Box::new(Node::Symbol(FLOAT_WORD.to_string())),
-		),
+		Kind::Float => Node::Key(Box::new(Node::float(0.0)), Op::As, Box::new(Node::Symbol(FLOAT_WORD.to_string()))),
 		Kind::Text => Node::Text(String::new()),
 		Kind::Codepoint => Node::Char('\0'),
 		_ => return None,
@@ -49,21 +45,12 @@ pub fn lower_list_times(node: Node) -> Node {
 		|key: &Node, positioned: &Node| list_times(key, positioned).or_else(|| list_plus(key, positioned));
 	match node {
 		Node::Meta { node: inner, data } => {
-			let positioned = Node::Meta {
-				node: inner.clone(),
-				data: data.clone(),
-			};
-			list_arithmetic(&inner, &positioned).unwrap_or_else(|| Node::Meta {
-				node: Box::new(lower_list_times(*inner)),
-				data,
-			})
+			let positioned = Node::Meta { node: inner.clone(), data: data.clone() };
+			list_arithmetic(&inner, &positioned)
+				.unwrap_or_else(|| Node::Meta { node: Box::new(lower_list_times(*inner)), data })
 		}
 		Node::Key(left, op, right) => {
-			let key = Node::Key(
-				Box::new(lower_list_times(*left)),
-				op,
-				Box::new(lower_list_times(*right)),
-			);
+			let key = Node::Key(Box::new(lower_list_times(*left)), op, Box::new(lower_list_times(*right)));
 			list_arithmetic(&key, &key).unwrap_or(key)
 		}
 		Node::List(items, bracket, separator) => {
@@ -88,16 +75,10 @@ pub(crate) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 		_ => return None,
 	};
 	let written = key.drop_meta().serialize();
-	let (list_text, count_text) = (
-		crate::normalize::operand_text(list),
-		crate::normalize::operand_text(count),
-	);
+	let (list_text, count_text) = (crate::normalize::operand_text(list), crate::normalize::operand_text(count));
 	let readings = vec![
 		crate::errors::diagnostic::reading("repeat the list", &format!("{count_text} times {list_text}")),
-		crate::errors::diagnostic::reading(
-			"multiply each element",
-			&format!("{list_text}.map(x => x*{count_text})"),
-		),
+		crate::errors::diagnostic::reading("multiply each element", &format!("{list_text}.map(x => x*{count_text})")),
 	];
 	let question = crate::errors::diagnostic::Ask::new(
 		LIST_TIMES_TOPIC,
@@ -132,10 +113,7 @@ pub(crate) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 		_ => return None,
 	};
 	let written = key.drop_meta().serialize();
-	let (list_text, number_text) = (
-		crate::normalize::operand_text(list),
-		crate::normalize::operand_text(number),
-	);
+	let (list_text, number_text) = (crate::normalize::operand_text(list), crate::normalize::operand_text(number));
 	let (joining, joined) = match list_first {
 		true => ("append", format!("{list_text} + [{number_text}]")),
 		false => ("prepend", format!("[{number_text}] + {list_text}")),

@@ -3,10 +3,7 @@ use crate::is;
 
 #[test] // `result = parse_json(text); result.name` was "undefined function: name"
 fn test_field_of_a_call_result() {
-	is!(
-		"def make() := {name: \"Alice\", age: 30}; result = make(); result.name",
-		"Alice"
-	);
+	is!("def make() := {name: \"Alice\", age: 30}; result = make(); result.name", "Alice");
 	is!("def make() { m = {}; m[\"k\"] = 7; return m }; r = make(); r.k", 7);
 }
 
@@ -19,8 +16,5 @@ fn test_text_of_a_run_time_value() {
 
 #[test] // a function returning texts, lists or maps returns a Node of unknown kind, not a text
 fn test_mixed_returns_are_nodes() {
-	is!(
-		"def f(n) { if n == 1 { return \"a\" }; return [1, 2] }; x = f(2); count(x)",
-		2
-	);
+	is!("def f(n) { if n == 1 { return \"a\" }; return [1, 2] }; x = f(2); count(x)", 2);
 }

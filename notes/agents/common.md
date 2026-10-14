@@ -70,7 +70,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
   (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
   Never "take your side" on a conflict that also holds main's changes.
-- Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
+- Done = push the branch, SendMessage the Integrator and warp-reviewer together "branch, tip, new tests, filters"
+  (one message each, same text; notes/agents/reviewer.md), fix what they report (a reviewer veto like a gate failure), clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
 - Never retire with a card still yours (user, 2026-10-12: "cards disconnected from their agent"): before you stop, or
@@ -120,8 +121,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   warp-interviewer a fresh try line for exactly that change, the same moment you learn it merged; "X is on main"
   never goes out without its line. The Integrator's merge report names each user-visible branch, so its owner knows.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
-  the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06), and
-  cards related to your current task (user, 2026-10-12).
+  the board field Agent, moves the card to Now. Order: first every unassigned card in Now; then the user's own
+  cards, the drafts marked "(user)" that `todo list Next` puts on top (user, 2026-10-14: "the ones manually created
+  by me"); then other Next cards. Within that, prefer fresh, easy cards (user, 2026-10-06) related to your current
+  task (user, 2026-10-12).
   A session is named for its task (user, 2026-10-12: "whenever an agent picks a new ticket, that this will also
   trigger its rename"; "the agent can keep its name if the new ticket is related to the old task"): `todo take <card>`
   run in your own tmux session (the agent defaults to it) renames you warp-<card key> when the card is unrelated: no

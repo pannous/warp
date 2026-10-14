@@ -21,10 +21,7 @@ fn a_function_of_an_operator_word_stays_callable() {
 
 #[test]
 fn membership_ranges_and_loops() {
-	is!(
-		"item = 2; collection = [1, 2]; if item is in collection { 1 } else { 0 }",
-		1
-	);
+	is!("item = 2; collection = [1, 2]; if item is in collection { 1 } else { 0 }", 1);
 	is!("s = \"\"; for c in 'a' through 'c' { s = s + c }; s", "abc");
 	is!("total = 0; basket = [{price: 2}, {price: 3}]; for each item in basket { total = total plus item.price }; total", 5);
 	is!("s = 0; for each in [1, 2] { s = s + each }; s", 3);

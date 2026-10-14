@@ -1,13 +1,13 @@
 //! Atoms: symbols with suffixes, function calls, keyword forms and glued suffixes
 
 use super::*;
+use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
-const STYLE_WORD: &str = "style";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
 
@@ -83,9 +83,9 @@ impl WarpParser {
 				return Node::Number(Number::Inf);
 			} // the float infinity (P56)
 			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
-			crate::numbers::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| {
-				Node::Symbol(format!("{}{name}", crate::numbers::units::DEGREE))
-			}),
+			crate::numbers::units::DEGREE if self.peek_char(1).is_alphabetic() => {
+				self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::numbers::units::DEGREE)))
+			}
 			crate::numbers::units::DEGREE => {
 				self.advance();
 				Node::Symbol(crate::numbers::units::DEGREE.to_string())
@@ -100,10 +100,7 @@ impl WarpParser {
 			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
 			'@' if self.peek_char(1).is_ascii_digit() => {
 				self.advance(); // skip '@'
-				Node::Symbol(format!(
-					"{ATTRIBUTE_MARK}{}",
-					self.take_while_char(|ch| ch.is_ascii_digit())
-				))
+				Node::Symbol(format!("{ATTRIBUTE_MARK}{}", self.take_while_char(|ch| ch.is_ascii_digit())))
 			}
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
 			// `$0`, the first parameter
@@ -181,10 +178,7 @@ impl WarpParser {
 	/// The word of `length` characters just parsed is the first thing of its statement: nothing, a newline, `;` or `{` before it
 	pub(super) fn word_starts_statement(&self, length: usize) -> bool {
 		let word_start = self.pos.saturating_sub(length);
-		let before = self.chars[..word_start]
-			.iter()
-			.rev()
-			.find(|ch| !matches!(ch, ' ' | '\t' | '\r'));
+		let before = self.chars[..word_start].iter().rev().find(|ch| !matches!(ch, ' ' | '\t' | '\r'));
 		matches!(before, None | Some('\n' | ';' | '{'))
 	}
 
@@ -194,10 +188,7 @@ impl WarpParser {
 		while position > 0 && self.chars[position - 1].is_whitespace() {
 			position -= 1;
 		}
-		let line_start = self.chars[..position]
-			.iter()
-			.rposition(|ch| *ch == '\n')
-			.map_or(0, |newline| newline + 1);
+		let line_start = self.chars[..position].iter().rposition(|ch| *ch == '\n').map_or(0, |newline| newline + 1);
 		self.pos = position;
 		self.line_nr = 1 + self.chars[..position].iter().filter(|ch| **ch == '\n').count();
 		self.column = position - line_start + 1;
@@ -211,22 +202,15 @@ impl WarpParser {
 
 	/// ` name(`: blanks, a name and its parenthesis
 	fn named_call_follows(&self) -> bool {
-		let blanks = (0..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
-		let name = (blanks..)
-			.take_while(|&offset| is_identifier_char(self.peek_char(offset)))
-			.count();
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let name = (blanks..).take_while(|&offset| is_identifier_char(self.peek_char(offset))).count();
 		blanks > 0 && name > 0 && self.is_identifier_start(blanks) && self.peek_char(blanks + name) == '('
 	}
 
 	/// ` () {` after a name
 	fn empty_parameters_and_block_follow(&self) -> bool {
-		let blanks_from = |start: usize| {
-			(start..)
-				.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-				.count()
-		};
+		let blanks_from =
+			|start: usize| (start..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let blanks = blanks_from(0);
 		let inner = blanks_from(blanks + 1);
 		let closed = blanks + 1 + inner;
@@ -237,9 +221,7 @@ impl WarpParser {
 	}
 
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {
-		let blanks = (0..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
+		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		blanks > 0 && self.peek_char(blanks) == '('
 	}
 
@@ -303,9 +285,7 @@ impl WarpParser {
 			&& self.peek_char(2) == ' '
 			&& self.is_identifier_start(3)
 		{
-			return self.symbol_after(3, |field| {
-				Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field)))
-			});
+			return self.symbol_after(3, |field| Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field))));
 		}
 
 		// Optional type: `x:int?=ø`, `f(x:int?)`, the field `right? }` (wiki/null.md); a ternary `?` is followed by its branch instead
@@ -350,11 +330,7 @@ impl WarpParser {
 		// Rust's and C#'s `fn apply<F: Fn(i32) -> i32>(f: F)`, `id<T>(x: T)`: the type parameters say nothing warp needs
 		// P157 (user): no generics in warp; the name carries the type parameters' names (GENERIC_MARK), welcome_forms.rs
 		// drops their annotations: `fn id<T>(x: T) -> T` is `def id(x)`
-		if let Some(length) = if names_function {
-			self.generic_parameters_length()
-		} else {
-			None
-		} {
+		if let Some(length) = if names_function { self.generic_parameters_length() } else { None } {
 			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
 			self.advance_by(length);
 			self.generic_names = Some((symbol.to_string(), type_parameter_names(&written)));
@@ -435,11 +411,7 @@ impl WarpParser {
 			'{' if GLUED_BLOCK_KEYWORDS.contains(&symbol.as_str()) && self.in_code() => Node::symbol(&symbol),
 			'{' => {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
-				let op = if self.declared_types.contains(&symbol) {
-					Op::None
-				} else {
-					Op::Colon
-				};
+				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
 				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				// a rule `p { … }` of a style sheet is still the sheet
 				let in_style_sheet = op == Op::Colon && (symbol == STYLE_WORD || self.in_style_sheet);
@@ -496,11 +468,7 @@ impl WarpParser {
 				Symbol(format!("{symbol}{rest}"))
 			}
 			'@' if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |key| {
-				Node::Key(
-					Box::new(Symbol(symbol)),
-					Op::Dot,
-					Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}"))),
-				)
+				Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}"))))
 			}),
 			'(' => {
 				// `match f(3, 4) {…}`: the block holds the cases, no body of a definition of f

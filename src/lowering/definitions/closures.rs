@@ -19,12 +19,49 @@ use std::collections::{HashMap, HashSet};
 pub const CLOSURE_NEW: &str = "closure_new";
 /// The mark of `&add` / `function add`: the function itself, not its call (user decision P82)
 const FUNCTION_REFERENCE_MARK: &str = "function_reference";
+/// The class whose method a closure_new target is (class_method_target)
+const METHOD_CLASS_MARK: &str = "method_of";
 
 /// `&add`, `function add`: the name, marked as the function itself; passes that ignore marks see the name
 pub fn function_reference(name: String) -> Node {
-	Node::Meta {
-		node: Box::new(Node::Symbol(name)),
-		data: Box::new(Node::key(FUNCTION_REFERENCE_MARK, Node::True)),
+	Node::Meta { node: Box::new(Node::Symbol(name)), data: Box::new(Node::key(FUNCTION_REFERENCE_MARK, Node::True)) }
+}
+
+/// The method `name` of `class` itself (`P.methods`, card module-methods), marked with its class
+pub fn method_reference(name: String, class: &str) -> Node {
+	Node::Meta { node: Box::new(Node::Symbol(name)), data: Box::new(Node::key(FUNCTION_REFERENCE_MARK, symbol(class))) }
+}
+
+/// The class a method_reference names, through its own marks
+fn referenced_class(node: &Node) -> Option<String> {
+	let Node::Meta { node: inner, data } = node else {
+		return None;
+	};
+	match data.as_ref() {
+		Node::Key(key, _, class) if key.name() == FUNCTION_REFERENCE_MARK => class.symbol_name().map(String::from),
+		_ => referenced_class(inner),
+	}
+}
+
+/// The target of `closure_new` marked with the class whose method it is: a pass that renames the method (a trait's
+/// witness `sum·P`, traits.rs) renames the target too
+pub fn class_method_target(target: &str, class: Option<String>) -> Node {
+	match class {
+		Some(class) => Node::meta(symbol(target), Node::key(METHOD_CLASS_MARK, symbol(&class))),
+		None => symbol(target),
+	}
+}
+
+/// (method, class) of a closure_new target marked by class_method_target
+pub fn class_method(node: &Node) -> Option<(String, String)> {
+	match node {
+		Node::Meta { node: inner, data } => match data.as_ref() {
+			Node::Key(key, _, class) if key.name() == METHOD_CLASS_MARK => {
+				Some((inner.symbol_name()?.to_string(), class.symbol_name()?.to_string()))
+			}
+			_ => class_method(inner),
+		},
+		_ => None,
 	}
 }
 
@@ -60,10 +97,7 @@ pub fn closure_call_arity(name: &str) -> Option<usize> {
 
 /// The call of the function value `function` with `arguments`
 pub fn closure_call(function: Node, arguments: Vec<Node>) -> Node {
-	call(
-		&closure_call_name(arguments.len()),
-		[vec![function], arguments].concat(),
-	)
+	call(&closure_call_name(arguments.len()), [vec![function], arguments].concat())
 }
 
 fn closure_new(target: &str, captured: Vec<Node>) -> Node {
@@ -130,9 +164,7 @@ pub fn closure_call_arities(program: &Node) -> Vec<usize> {
 /// A value that cannot be a function where one is needed: `needer needs a function[ for parameter p], got 5 (an Int); fix: …`
 pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix: &str) -> Node {
 	let kind = crate::analyzer::infer_type(value, &crate::analyzer::Scope::new());
-	let parameter = parameter
-		.map(|name| format!(" for parameter {name}"))
-		.unwrap_or_default();
+	let parameter = parameter.map(|name| format!(" for parameter {name}")).unwrap_or_default();
 	let message = format!(
 		"{needer} needs a function{parameter}, got {} ({}); fix: {fix}",
 		value.serialize(),
@@ -225,7 +257,7 @@ fn lift_closures(program: Node) -> Node {
 		passing_through,
 		lifted: vec![],
 		enclosing: vec![],
-		locals: vec![],
+		locals: vec![crate::lowering::for_loop::loop_variables(&program).into_iter().collect()],
 	};
 	let program = lifting.walk(program, &HashSet::new());
 	if lifting.lifted.is_empty() {
@@ -236,11 +268,7 @@ fn lift_closures(program: Node) -> Node {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List([lifting.lifted, statements].concat(), Bracket::None, separator)
 		}
-		program => Node::List(
-			[lifting.lifted, vec![program]].concat(),
-			Bracket::Round,
-			Separator::Semicolon,
-		),
+		program => Node::List([lifting.lifted, vec![program]].concat(), Bracket::Round, Separator::Semicolon),
 	}
 }
 
@@ -296,10 +324,7 @@ pub fn capture_reader(name: &str) -> Option<(&str, usize)> {
 fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) -> Node {
 	match node {
 		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			let items: Vec<Node> = items
-				.into_iter()
-				.map(|item| with_capture_readers(item, hoisted))
-				.collect();
+			let items: Vec<Node> = items.into_iter().map(|item| with_capture_readers(item, hoisted)).collect();
 			let mut statements = Vec::with_capacity(items.len());
 			for (index, item) in items.iter().enumerate() {
 				statements.push(item.clone());
@@ -364,11 +389,9 @@ fn holder_path(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		Node::Key(object, Op::Dot, field) => Some(format!("{}.{}", holder_path(object)?, field_word(field)?)),
-		Node::Key(object, Op::Hash, index) => Some(format!(
-			"{}.{}",
-			holder_path(object)?,
-			field_word(crate::warp_parser::subscript_key(index)?)?
-		)),
+		Node::Key(object, Op::Hash, index) => {
+			Some(format!("{}.{}", holder_path(object)?, field_word(crate::warp_parser::subscript_key(index)?)?))
+		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => holder_path(&items[0]),
 		_ => None,
 	}
@@ -410,9 +433,7 @@ impl FunctionValues {
 			Node::List(items, Bracket::None, Separator::Space)
 				if items.len() > 1
 					&& self.is_function_value(&items[0])
-					&& items[1..]
-						.iter()
-						.all(|group| matches!(group.drop_meta(), Node::List(_, Bracket::Round, _))) =>
+					&& items[1..].iter().all(|group| matches!(group.drop_meta(), Node::List(_, Bracket::Round, _))) =>
 			{
 				true
 			}
@@ -452,9 +473,7 @@ impl FunctionValues {
 
 	/// `for f in fs {…}` over a list of function values: f holds one
 	fn loop_variable_over_functions<'a>(&self, node: &'a Node) -> Option<&'a str> {
-		for_loop_parts(node)
-			.filter(|(_, list)| self.is_function_list(list))
-			.map(|(variable, _)| variable)
+		for_loop_parts(node).filter(|(_, list)| self.is_function_list(list)).map(|(variable, _)| variable)
 	}
 
 	fn settle(&mut self, context: &Context, program: &Node) {
@@ -538,9 +557,7 @@ fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec
 			let Node::Symbol(name) = name.drop_meta() else {
 				return None;
 			};
-			functions
-				.contains(name)
-				.then(|| params.iter().filter_map(parameter_name).collect())
+			functions.contains(name).then(|| params.iter().filter_map(parameter_name).collect())
 		}
 		Node::Symbol(name) if functions.contains(name) => Some(vec![IMPLICIT_PARAMETER.to_string()]),
 		_ => None,
@@ -568,14 +585,8 @@ struct Lifting {
 impl Lifting {
 	/// A function name as written in the current body: the nested `outer·inner` before a top-level `inner`
 	fn function_named(&self, name: &str) -> Option<String> {
-		let nested = self
-			.enclosing
-			.iter()
-			.rev()
-			.map(|outer| crate::analyzer::qualify_nested_name(Some(outer), name));
-		nested
-			.chain(std::iter::once(name.to_string()))
-			.find(|candidate| self.functions.contains(candidate))
+		let nested = self.enclosing.iter().rev().map(|outer| crate::analyzer::qualify_nested_name(Some(outer), name));
+		nested.chain(std::iter::once(name.to_string())).find(|candidate| self.functions.contains(candidate))
 	}
 
 	/// A local of an enclosing body holding a plain value: `angle = 0.5; cos(angle)` beside math's angle(x, y) reads
@@ -599,9 +610,7 @@ impl Lifting {
 			return self.function_value(node, bound);
 		}
 		if let Some(params) = definition_parameters(&node, &self.functions) {
-			let Node::Key(head, op, body) = node.drop_meta().clone() else {
-				unreachable!("a definition")
-			};
+			let Node::Key(head, op, body) = node.drop_meta().clone() else { unreachable!("a definition") };
 			let has_parameters = !params.is_empty();
 			let inner: HashSet<String> = bound.iter().cloned().chain(params).collect();
 			let name = match head.drop_meta() {
@@ -612,11 +621,7 @@ impl Lifting {
 			self.enclosing.push(full_name);
 			self.locals.push(assigned_variables(&body));
 			// `g(a, b) := { $0 - $1 }`: with parameters the block is the body, its `$0` the first parameter, no closure
-			let body = if has_parameters {
-				self.walk_body_block(*body, &inner)
-			} else {
-				self.walk(*body, &inner)
-			};
+			let body = if has_parameters { self.walk_body_block(*body, &inner) } else { self.walk(*body, &inner) };
 			let body = self.function_value(body, &inner);
 			self.enclosing.pop();
 			self.locals.pop();
@@ -637,19 +642,12 @@ impl Lifting {
 				// P83: `g = add` is no alias, add needs its arguments (`g = function add` is one)
 				let bare_function = matches!(value.drop_meta(), Node::Symbol(name) if !bound.contains(name) && self.function_named(name).is_some())
 					&& crate::closures::referenced_function(&value).is_none();
-				let value = if bare_function {
-					value
-				} else {
-					self.function_value(value, bound)
-				};
+				let value = if bare_function { value } else { self.function_value(value, bound) };
 				Node::Key(target, op, Box::new(value))
 			}
 			Node::Key(list, Op::Hash, index) if self.indexed_call(&list, &index).is_some() => {
 				let (position, arguments) = self.indexed_call(&list, &index).expect("guarded");
-				let arguments = arguments
-					.into_iter()
-					.map(|argument| self.walk(argument, bound))
-					.collect();
+				let arguments = arguments.into_iter().map(|argument| self.walk(argument, bound)).collect();
 				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
 			Node::List(items, bracket, separator) => {
@@ -680,10 +678,8 @@ impl Lifting {
 			}
 		}
 		if let (true, Some(name)) = (is_call, &head_name) {
-			let arguments: Vec<Node> = items[1..]
-				.iter()
-				.map(|argument| self.function_value(argument.clone(), bound))
-				.collect();
+			let arguments: Vec<Node> =
+				items[1..].iter().map(|argument| self.function_value(argument.clone(), bound)).collect();
 			if self.may_hold_function(name, bound) {
 				let function = items[0].clone();
 				return super::variadic::run_time_spread(&arguments, |spread| closure_call(function.clone(), spread))
@@ -776,18 +772,16 @@ impl Lifting {
 	fn walk_body_block(&mut self, body: Node, bound: &HashSet<String>) -> Node {
 		match body {
 			meta @ Node::Meta { .. } => meta.under_meta(|node| self.walk_body_block(node, bound)),
-			Node::List(items, Bracket::Curly, separator) => Node::List(
-				items.into_iter().map(|item| self.walk(item, bound)).collect(),
-				Bracket::Curly,
-				separator,
-			),
+			Node::List(items, Bracket::Curly, separator) => {
+				Node::List(items.into_iter().map(|item| self.walk(item, bound)).collect(), Bracket::Curly, separator)
+			}
 			other => self.walk(other, bound),
 		}
 	}
 
 	fn function_value(&mut self, node: Node, bound: &HashSet<String>) -> Node {
 		if let Some(target) = referenced_function(&node).and_then(|name| self.function_named(&name)) {
-			return closure_new(&target, vec![]);
+			return call(CLOSURE_NEW, vec![class_method_target(&target, referenced_class(&node))]);
 		}
 		match node {
 			Node::Symbol(ref name)
@@ -796,11 +790,7 @@ impl Lifting {
 				closure_new(&self.function_named(name).expect("guarded"), vec![])
 			}
 			Node::Key(choice, op @ (Op::Then | Op::Else), chosen) => {
-				let choice = if op == Op::Else {
-					self.function_value(*choice, bound)
-				} else {
-					*choice
-				};
+				let choice = if op == Op::Else { self.function_value(*choice, bound) } else { *choice };
 				key(choice, op, self.function_value(*chosen, bound))
 			}
 			meta @ Node::Meta { .. } => meta.under_meta(|node| self.function_value(node, bound)),
@@ -862,8 +852,11 @@ impl Lifting {
 }
 
 /// The names a body assigns, `angle = 0.5`: its local variables, never a function of the same name
+/// `for sample in samples` too: a loop variable named like a function holds the item, never the function
 fn assigned_variables(body: &Node) -> HashSet<String> {
-	body.assigned_names(|op| *op == Op::Assign)
+	let mut assigned: HashSet<String> = body.assigned_names(|op| *op == Op::Assign);
+	assigned.extend(crate::lowering::for_loop::loop_variables(body));
+	assigned
 }
 
 /// A closure changing a captured variable would change its own copy (wiki/charged.md §3): a loud error naming `global`
@@ -894,10 +887,7 @@ pub fn register_closure_calls(context: &mut Context, program: &Node) {
 			return;
 		};
 		if capture_reader(name).is_some() {
-			let closure = Param {
-				used_as: Some(Kind::Function),
-				..Param::untyped("closure")
-			};
+			let closure = Param { used_as: Some(Kind::Function), ..Param::untyped("closure") };
 			let reader = UserFunctionDef {
 				name: name.clone(),
 				params: vec![closure],
@@ -911,14 +901,9 @@ pub fn register_closure_calls(context: &mut Context, program: &Node) {
 		}
 	});
 	for arity in closure_call_arities(program) {
-		let function = Param {
-			used_as: Some(Kind::Function),
-			..Param::untyped("function")
-		};
-		let values = (1..=arity).map(|index| Param {
-			used_as: Some(Kind::Data),
-			..Param::untyped(&format!("value{index}"))
-		});
+		let function = Param { used_as: Some(Kind::Function), ..Param::untyped("function") };
+		let values =
+			(1..=arity).map(|index| Param { used_as: Some(Kind::Data), ..Param::untyped(&format!("value{index}")) });
 		let name = closure_call_name(arity);
 		let params = std::iter::once(function).chain(values).collect();
 		context.user_functions.insert(
@@ -950,10 +935,7 @@ fn join_return_kinds(kinds: impl IntoIterator<Item = Kind>) -> Kind {
 /// The closures a call of `arity` values may call
 pub fn targets_of_arity(context: &Context, arity: usize) -> impl Iterator<Item = &UserFunctionDef> {
 	context.closure_targets.iter().filter_map(move |(target, captured)| {
-		context
-			.user_functions
-			.get(target)
-			.filter(|function| function.params.len() == captured + arity)
+		context.user_functions.get(target).filter(|function| function.params.len() == captured + arity)
 	})
 }
 
@@ -962,18 +944,14 @@ pub fn closure_call_kind(name: &str, context: &Context, kinds: &HashMap<String, 
 	// a capture reader gives the kind of the target's parameter it fills
 	if let Some((target, index)) = capture_reader(name) {
 		return Some(
-			context
-				.user_functions
-				.get(target)?
-				.params
-				.get(index)
-				.map_or(Kind::Data, crate::analyzer::param_kind),
+			context.user_functions.get(target)?.params.get(index).map_or(Kind::Data, crate::analyzer::param_kind),
 		);
 	}
 	let arity = closure_call_arity(name)?;
-	Some(join_return_kinds(targets_of_arity(context, arity).map(|function| {
-		kinds.get(&function.name).copied().unwrap_or(function.return_kind)
-	})))
+	Some(join_return_kinds(
+		targets_of_arity(context, arity)
+			.map(|function| kinds.get(&function.name).copied().unwrap_or(function.return_kind)),
+	))
 }
 
 /// Result kind of `closure_call_n(callee, …)`: join only the targets `callee` may hold when known; else arity-wide
@@ -1004,10 +982,9 @@ fn closure_targets_of_value(
 	returning: &HashMap<String, HashSet<String>>,
 ) -> HashSet<String> {
 	match node.drop_meta() {
-		Node::Symbol(name) => held
-			.get(name)
-			.cloned()
-			.unwrap_or_else(|| returning.get(name).cloned().unwrap_or_default()),
+		Node::Symbol(name) => {
+			held.get(name).cloned().unwrap_or_else(|| returning.get(name).cloned().unwrap_or_default())
+		}
 		other if as_closure_new(other).is_some() => {
 			let (target, _) = as_closure_new(other).expect("guarded");
 			HashSet::from([target.to_string()])
@@ -1027,19 +1004,15 @@ fn closure_targets_of_value(
 				};
 			};
 			if closure_call_arity(name).is_some() {
-				let callee = items
-					.get(1)
-					.map(|node| closure_targets_of_value(node, held, returning))
-					.unwrap_or_default();
+				let callee =
+					items.get(1).map(|node| closure_targets_of_value(node, held, returning)).unwrap_or_default();
 				return callee
 					.into_iter()
 					.flat_map(|target| returning.get(&target).cloned().unwrap_or_default())
 					.collect();
 			}
 			if name == CLOSURE_NEW {
-				return as_closure_new(node)
-					.map(|(target, _)| HashSet::from([target.to_string()]))
-					.unwrap_or_default();
+				return as_closure_new(node).map(|(target, _)| HashSet::from([target.to_string()])).unwrap_or_default();
 			}
 			returning.get(name).cloned().unwrap_or_default()
 		}
@@ -1048,16 +1021,14 @@ fn closure_targets_of_value(
 		}
 		Node::Key(list, Op::Hash, _) => match list.drop_meta() {
 			Node::Symbol(name) => held.get(name).cloned().unwrap_or_default(),
-			Node::List(items, Bracket::Square, _) => items
-				.iter()
-				.flat_map(|item| closure_targets_of_value(item, held, returning))
-				.collect(),
+			Node::List(items, Bracket::Square, _) => {
+				items.iter().flat_map(|item| closure_targets_of_value(item, held, returning)).collect()
+			}
 			_ => HashSet::new(),
 		},
-		Node::List(items, Bracket::Square, _) => items
-			.iter()
-			.flat_map(|item| closure_targets_of_value(item, held, returning))
-			.collect(),
+		Node::List(items, Bracket::Square, _) => {
+			items.iter().flat_map(|item| closure_targets_of_value(item, held, returning)).collect()
+		}
 		_ => HashSet::new(),
 	}
 }
@@ -1068,10 +1039,7 @@ fn settle_closure_variable_targets(context: &Context, program: &Node) -> HashMap
 		.user_functions
 		.iter()
 		.map(|(name, function)| {
-			(
-				name.clone(),
-				closure_targets_of_value(tail(&function.body), &HashMap::new(), &HashMap::new()),
-			)
+			(name.clone(), closure_targets_of_value(tail(&function.body), &HashMap::new(), &HashMap::new()))
 		})
 		.filter(|(_, targets)| !targets.is_empty())
 		.collect();
@@ -1141,12 +1109,7 @@ pub fn type_closure_calls(context: &mut Context) {
 		let numbers = signature.iter().all(|kind| matches!(kind, Kind::Int | Kind::Float));
 		if numbers && signatures.iter().all(|other| *other == signature) {
 			let helper = context.user_functions.get_mut(&name).expect("a closure call helper");
-			helper
-				.params
-				.iter_mut()
-				.skip(1)
-				.zip(&signature)
-				.for_each(|(param, kind)| param.used_as = Some(*kind));
+			helper.params.iter_mut().skip(1).zip(&signature).for_each(|(param, kind)| param.used_as = Some(*kind));
 			helper.return_kind = signature[arity];
 		}
 	}
@@ -1171,7 +1134,5 @@ fn known_param_kind(param: &crate::compiler::context::Param, body: &Node) -> Kin
 pub fn is_typed_closure_call(function: &UserFunctionDef) -> bool {
 	closure_call_arity(&function.name).is_some()
 		&& function.params.len() > 1
-		&& function.params[1..]
-			.iter()
-			.all(|param| matches!(param.used_as, Some(Kind::Int | Kind::Float)))
+		&& function.params[1..].iter().all(|param| matches!(param.used_as, Some(Kind::Int | Kind::Float)))
 }

@@ -10,9 +10,8 @@ impl WarpParser {
 	/// assignment's weaker binding would end the branch at `s` and assign to the whole if. The value stops at `else`.
 	pub(crate) fn branch_assignment(&mut self, target: Node, branch_bp: u8) -> Node {
 		self.skip_spaces();
-		let Some((assignment, chars)) = self
-			.peek_operator()
-			.filter(|(op, _)| *op == Op::Assign || op.is_compound_assign())
+		let Some((assignment, chars)) =
+			self.peek_operator().filter(|(op, _)| *op == Op::Assign || op.is_compound_assign())
 		else {
 			return target;
 		};
@@ -54,11 +53,8 @@ impl WarpParser {
 			let outer = std::mem::replace(&mut self.stops_at_else, true);
 			let then_expr = self.parse_expr(0);
 			self.stops_at_else = outer;
-			let if_then = Node::Key(
-				Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))),
-				Op::Then,
-				Box::new(then_expr),
-			);
+			let if_then =
+				Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
 		}
 
@@ -111,14 +107,9 @@ impl WarpParser {
 
 	/// Do line breaks and blanks, then the word `else`, follow the cursor
 	pub(crate) fn else_on_a_later_line(&self) -> bool {
-		let gap = (0..)
-			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t' | '\n' | '\r'))
-			.count();
+		let gap = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t' | '\n' | '\r')).count();
 		let crosses_line = (0..gap).any(|at| self.peek_char(at) == '\n');
-		let word = ELSE_KEYWORD
-			.chars()
-			.enumerate()
-			.all(|(i, c)| self.peek_char(gap + i) == c)
+		let word = ELSE_KEYWORD.chars().enumerate().all(|(i, c)| self.peek_char(gap + i) == c)
 			&& !is_identifier_char(self.peek_char(gap + ELSE_KEYWORD.len()));
 		crosses_line && word
 	}
@@ -182,10 +173,6 @@ impl WarpParser {
 		self.elvis_operands += 1;
 		let operand = Symbol(format!("{ELVIS_WORD}·{}", self.elvis_operands));
 		let store = Node::Key(Box::new(operand.clone()), Op::Assign, Box::new(lhs.clone()));
-		Some(Node::List(
-			vec![store, elvis(operand)],
-			Bracket::Round,
-			Separator::Semicolon,
-		))
+		Some(Node::List(vec![store, elvis(operand)], Bracket::Round, Separator::Semicolon))
 	}
 }

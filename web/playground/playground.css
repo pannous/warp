@@ -72,6 +72,7 @@ button, select {
 }
 button:hover { border-color: var(--accent); }
 #run { background: var(--accent); border-color: var(--accent); color: #1d1d1f; font-weight: 600; }
+#run.stop { background: var(--error); border-color: var(--error); color: #fff; } /* a running program: Stop (card playground-turn) */
 
 main { display: grid; grid-template-columns: var(--guide-width, minmax(16rem, 26rem)) 10px minmax(0, 1fr); gap: 0 6px; align-items: stretch; }
 .workspace { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

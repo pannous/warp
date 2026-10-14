@@ -15,10 +15,9 @@ fn contains(bytes: &[u8], text: &str) -> bool {
 fn a_page_leaves_the_seeding_of_server_data_to_the_server() {
 	let folder = std::path::Path::new("scratch").join("page_server_data");
 	std::fs::create_dir_all(&folder).expect("scratch folder");
-	let files = warp::modules::with_program_file(&folder.join("app.warp"), || {
-		warp::web::site::files(PROGRAM, "users", false)
-	})
-	.expect("the page builds");
+	let files =
+		warp::modules::with_program_file(&folder.join("app.warp"), || warp::web::site::files(PROGRAM, "users", false))
+			.expect("the page builds");
 	let module = &files.iter().find(|(name, _)| name == "app.wasm").expect("app.wasm").1;
 	assert!(!contains(module, "users_seeded"), "the table shipped in app.wasm");
 	let std_modules = warp::host::host_parts::std_modules_of(module).expect("the std modules");

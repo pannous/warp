@@ -14,10 +14,7 @@ fn hello_world_is_the_uniscript_world() {
 }
 
 #[test]
-#[cfg_attr(
-	not(feature = "native"),
-	ignore = "browser: fetches the uniscript package into scratch/"
-)]
+#[cfg_attr(not(feature = "native"), ignore = "browser: fetches the uniscript package into scratch/")]
 fn the_entity_table_is_the_pinned_uniscript_index() {
 	let packages = Path::new("scratch/entity_table");
 	std::fs::create_dir_all(packages).unwrap();
@@ -34,10 +31,7 @@ fn the_entity_table_is_the_pinned_uniscript_index() {
 fn spelled_name(name: &str) -> Option<String> {
 	let letters = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphabetic() || byte == b'-');
 	match name.split_once(' ') {
-		None => name
-			.bytes()
-			.all(|byte| byte.is_ascii_alphabetic())
-			.then(|| name.to_string()),
+		None => name.bytes().all(|byte| byte.is_ascii_alphabetic()).then(|| name.to_string()),
 		Some((block, member)) => {
 			(letters(block) && member.len() == 1 && member.bytes().all(|byte| byte.is_ascii_alphanumeric()))
 				.then(|| format!("{block}-{member}"))
@@ -53,20 +47,12 @@ fn entity_table(index: &[u8]) -> String {
 	let text = |at: usize, length: usize| std::str::from_utf8(&index[at..at + length]).unwrap();
 	let mut entities: Vec<(String, &str)> = (0..count)
 		.map(|record| records + record * RECORD_BYTES)
-		.map(|record| {
-			(
-				text(word(record + 4), word(record + 8)),
-				text(word(record + 12), word(record + 16)),
-			)
-		})
+		.map(|record| (text(word(record + 4), word(record + 8)), text(word(record + 12), word(record + 16))))
 		.filter(|(_, characters)| !characters.is_empty() && !characters.contains(['\t', '\n']))
 		.filter_map(|(name, characters)| Some((spelled_name(name)?, characters)))
 		.collect();
 	entities.sort();
-	entities
-		.iter()
-		.map(|(name, characters)| format!("{name}\t{characters}\n"))
-		.collect()
+	entities.iter().map(|(name, characters)| format!("{name}\t{characters}\n")).collect()
 }
 
 // uniscript 1.0.4: LaTeX glyphs win over the HTML entities, and the short math names of warp's former table are back

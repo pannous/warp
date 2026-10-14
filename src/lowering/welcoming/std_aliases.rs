@@ -26,13 +26,7 @@ const fn alias(
 	word: &'static str,
 	order: &'static [usize],
 ) -> StdAlias {
-	StdAlias {
-		module,
-		member,
-		std_module,
-		word,
-		order,
-	}
+	StdAlias { module, member, std_module, word, order }
 }
 
 const STD_ALIASES: [StdAlias; 21] = [
@@ -62,15 +56,14 @@ const STD_ALIASES: [StdAlias; 21] = [
 const WARP_FORMS: [StdAlias; 1] = [alias("json", "parse", "json", "parse_json", &[0])];
 /// Standard words called bare, `member(…)`, module "": `json(t)` is json.parse(t) (card json5-parse)
 const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])];
+/// Standard words read as a member of any value, `value.member`: `x.json` is to_json(x) (card node-json)
+const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
 const USE_WORD: &str = "use";
 
 pub fn lower(program: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&program);
-	let kept: Vec<&str> = STD_ALIASES
-		.iter()
-		.map(|alias| alias.module)
-		.filter(|module| names.contains(*module))
-		.collect();
+	let kept: Vec<&str> =
+		STD_ALIASES.iter().map(|alias| alias.module).filter(|module| names.contains(*module)).collect();
 	// `def parse_json(t) {…}` too: the program's own word gets no note (card hint-own-definition)
 	let defined = crate::library_words::defined_names(&program);
 	note_internal_words(&program, &names.union(&defined).cloned().collect());
@@ -106,9 +99,7 @@ fn in_module_file(node: &Node) -> bool {
 fn first_call_of<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _)
-			if items
-				.first()
-				.is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(name) if name == word)) =>
+			if items.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(name) if name == word)) =>
 		{
 			(!in_module_file(node)).then_some(node)
 		}
@@ -131,10 +122,7 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 			if !alias.std_module.is_empty() {
 				used.insert(alias.std_module);
 			}
-			let arguments = alias
-				.order
-				.iter()
-				.map(|&index| aliased(arguments[index].clone(), kept, used));
+			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), kept, used));
 			parens(std::iter::once(symbol(alias.word)).chain(arguments).collect())
 		}
 		None => node.map_children(|child| aliased(child, kept, used)),
@@ -144,7 +132,7 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 /// `module.member(arguments…)` of a known alias with as many arguments as it takes; a shape tuple stands for its items
 /// (`np.zeros((2, 3))` is zeros(2, 3))
 fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
-	if let Some(bare) = bare_call(node, kept) {
+	if let Some(bare) = bare_call(node, kept).or_else(|| member_read(node, kept)) {
 		return Some(bare);
 	}
 	let Node::Key(module, Op::Dot, call) = node.drop_meta() else {
@@ -187,8 +175,20 @@ fn bare_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'
 		.map(|form| (form, arguments))
 }
 
+/// `x.json`: a member form read off any value, where the program names no such word itself (a field `json` wins)
+fn member_read<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
+	let Node::Key(value, Op::Dot, member) = node.drop_meta() else {
+		return None;
+	};
+	let member = member.drop_meta().symbol_name()?;
+	MEMBER_FORMS
+		.iter()
+		.find(|form| form.member == member && !kept.contains(&form.member))
+		.map(|form| (form, std::slice::from_ref(value.as_ref())))
+}
+
 /// The program with `use module` first for each module an alias brought
-fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
+pub(crate) fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 	if used.is_empty() {
 		return program;
 	}
@@ -201,10 +201,6 @@ fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List(uses.chain(statements).collect(), Bracket::None, separator)
 		}
-		single => Node::List(
-			uses.chain(std::iter::once(single)).collect(),
-			Bracket::None,
-			Separator::Semicolon,
-		),
+		single => Node::List(uses.chain(std::iter::once(single)).collect(), Bracket::None, Separator::Semicolon),
 	}
 }

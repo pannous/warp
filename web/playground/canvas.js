@@ -14,6 +14,8 @@ const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "key"];
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
 const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9 };
 const TYPING_TARGETS = ".CodeMirror, input, textarea, [contenteditable]";
+// window.width = 800 (host.js set_system_value): the size in CSS pixels the run's paintings show at, scaled to fit
+let paintingWindow;
 const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuffer(POINTER_NAMES.length * Int32Array.BYTES_PER_ELEMENT)) : undefined;
 
 // paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
@@ -39,7 +41,21 @@ function paintingElement(painting) {
 	canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
 	canvas.style.imageRendering = "pixelated";
 	canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
+	framed(canvas);
 	return canvas;
+}
+
+// a painting in the window the run set, if it set one
+function framed(canvas) {
+	if (!paintingWindow) return;
+	canvas.style.width = `${paintingWindow.width}px`;
+	canvas.style.height = `${paintingWindow.height}px`;
+}
+
+// window.width = …: the paintings shown take that size, and the ones to come
+function resizeWindow({ width, height }, paintings) {
+	paintingWindow = { width, height };
+	paintings.querySelectorAll("canvas").forEach(framed);
 }
 
 const sameSize = (one, other) => one.width === other.width && one.height === other.height;

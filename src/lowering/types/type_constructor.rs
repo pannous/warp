@@ -43,14 +43,7 @@ pub fn lower(node: Node) -> Node {
 	collect_all_types(&mut registry, &node);
 	let constructors = defined_constructors(&node, &registry);
 	let node = conversion_calls(node.clone(), &node);
-	construct(
-		node,
-		&Classes {
-			registry: &registry,
-			constructors: &constructors,
-			defaulting: Default::default(),
-		},
-	)
+	construct(node, &Classes { registry: &registry, constructors: &constructors, defaulting: Default::default() })
 }
 
 /// A built-in type called as a function converts as in Python (card types-constructor): `hex(123)` is `123 as hex`,
@@ -143,11 +136,8 @@ fn unset_field(field: &crate::type_kinds::FieldDef) -> Node {
 
 /// The constructor functions the program defines, with the number of their parameters besides the instance
 fn defined_constructors(node: &Node, registry: &TypeRegistry) -> Vec<(String, usize)> {
-	let names: Vec<String> = registry
-		.types()
-		.iter()
-		.map(|type_def| crate::class_methods::constructor_name(&type_def.name))
-		.collect();
+	let names: Vec<String> =
+		registry.types().iter().map(|type_def| crate::class_methods::constructor_name(&type_def.name)).collect();
 	let mut defined = vec![];
 	node.visit(&mut |part| {
 		if let Node::Key(head, Op::Define, _) = part {
@@ -183,11 +173,8 @@ fn construct(node: Node, classes: &Classes) -> Node {
 				Some(type_def) => match field_error(type_def, registry, &name, &entries) {
 					Some(error) => error,
 					None => {
-						let fields = Node::List(
-							with_defaults(type_def, classes, entries),
-							Bracket::Curly,
-							Separator::Space,
-						);
+						let fields =
+							Node::List(with_defaults(type_def, classes, entries), Bracket::Curly, Separator::Space);
 						let class = name.drop_meta().name();
 						classes.constructed(
 							&class,
@@ -196,11 +183,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 					}
 				},
 				// the pre-scan of the parser can mistake a word for a type name: plain data
-				None => Node::Key(
-					name,
-					Op::Colon,
-					Box::new(Node::List(entries, Bracket::Curly, Separator::Space)),
-				),
+				None => Node::Key(name, Op::Colon, Box::new(Node::List(entries, Bracket::Curly, Separator::Space))),
 			}
 		}
 		other => children_rewritten(other, |child| construct(child, classes)),
@@ -216,20 +199,12 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, classes: &
 	let arguments = &items[1..];
 	let (positional, named): (Vec<&Node>, Vec<&Node>) =
 		arguments.iter().partition(|argument| !is_named(argument, type_def));
-	let required = type_def
-		.fields
-		.iter()
-		.filter(|field| registry.is_required(type_def, field))
-		.count();
+	let required = type_def.fields.iter().filter(|field| registry.is_required(type_def, field)).count();
 	if named.is_empty() && (arguments.len() < required || arguments.len() > type_def.fields.len()) {
 		let message = if required == type_def.fields.len() {
 			format!("{name} takes {} fields, got {}", type_def.fields.len(), arguments.len())
 		} else {
-			format!(
-				"{name} takes {required} to {} fields, got {}",
-				type_def.fields.len(),
-				arguments.len()
-			)
+			format!("{name} takes {required} to {} fields, got {}", type_def.fields.len(), arguments.len())
 		};
 		return Some(Diagnostic::at(&items[0], message).into_error());
 	}
@@ -299,9 +274,7 @@ fn with_defaults(type_def: &TypeDef, classes: &Classes, mut entries: Vec<Node>) 
 	let given: Vec<String> = entries.iter().filter_map(entry_name).collect();
 	for field in type_def.fields.iter().filter(|field| !given.contains(&field.name)) {
 		// a left out optional field `left?` is there, holding ø: reading it is no error, assigning it changes it
-		let value = classes
-			.default_of(type_def, field)
-			.or_else(|| field.is_optional().then_some(Node::Empty));
+		let value = classes.default_of(type_def, field).or_else(|| field.is_optional().then_some(Node::Empty));
 		if let Some(value) = value {
 			entries.push(key(Node::Symbol(field.name.clone()), Op::Colon, value));
 		}
@@ -314,43 +287,40 @@ fn with_defaults(type_def: &TypeDef, classes: &Classes, mut entries: Vec<Node>) 
 fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entries: &[Node]) -> Option<Node> {
 	let name = &type_def.name;
 	// a meta entry `@source:"gps"` is never a field
-	let wrong_entry = entries
-		.iter()
-		.filter(|entry| crate::node::meta_entry(entry).is_none())
-		.find_map(|entry| {
-			let Node::Key(field, Op::Colon | Op::Assign, value) = entry.drop_meta() else {
-				let message = format!("{name}{{…}} takes fields as name:value, got {}", entry.serialize());
-				return Some(Diagnostic::at(located, message).into_error());
-			};
-			let field = field.name();
-			let Some(declared) = type_def.fields.iter().find(|declared| declared.name == field) else {
-				let message = format!("{name} has no field {field}");
-				return Some(
-					Diagnostic::at(located, message)
-						.fix(format!("declare {field} in {name}, or write the data {name}:{{…}}"))
-						.into_error(),
-				);
-			};
-			let declared_type = declared.type_name.trim_end_matches('?');
-			// a list field `items: texts` takes a literal list of fitting items (card list-element-types)
-			if let Some(element) = list_element_type(declared_type) {
-				let (item, actual) = misfit_item(element, value)?;
-				let message = format!(
-					"{name}.{field} is {declared_type}, got the {} item {}",
-					format!("{actual:?}").to_lowercase(),
-					item.serialize()
-				);
-				return Some(Diagnostic::at(located, message).into_error());
-			}
-			let actual = literal_misfit(declared_type, value)?;
-			let message = format!(
-				"{name}.{field} is {declared_type}, got {} {}{}",
-				format!("{actual:?}").to_lowercase(),
-				value.serialize(),
-				not_whole_note(declared_type, actual)
+	let wrong_entry = entries.iter().filter(|entry| crate::node::meta_entry(entry).is_none()).find_map(|entry| {
+		let Node::Key(field, Op::Colon | Op::Assign, value) = entry.drop_meta() else {
+			let message = format!("{name}{{…}} takes fields as name:value, got {}", entry.serialize());
+			return Some(Diagnostic::at(located, message).into_error());
+		};
+		let field = field.name();
+		let Some(declared) = type_def.fields.iter().find(|declared| declared.name == field) else {
+			let message = format!("{name} has no field {field}");
+			return Some(
+				Diagnostic::at(located, message)
+					.fix(format!("declare {field} in {name}, or write the data {name}:{{…}}"))
+					.into_error(),
 			);
-			Some(Diagnostic::at(located, message).into_error())
-		});
+		};
+		let declared_type = declared.type_name.trim_end_matches('?');
+		// a list field `items: texts` takes a literal list of fitting items (card list-element-types)
+		if let Some(element) = list_element_type(declared_type) {
+			let (item, actual) = misfit_item(element, value)?;
+			let message = format!(
+				"{name}.{field} is {declared_type}, got the {} item {}",
+				format!("{actual:?}").to_lowercase(),
+				item.serialize()
+			);
+			return Some(Diagnostic::at(located, message).into_error());
+		}
+		let actual = literal_misfit(declared_type, value)?;
+		let message = format!(
+			"{name}.{field} is {declared_type}, got {} {}{}",
+			format!("{actual:?}").to_lowercase(),
+			value.serialize(),
+			not_whole_note(declared_type, actual)
+		);
+		Some(Diagnostic::at(located, message).into_error())
+	});
 	wrong_entry.or_else(|| {
 		let given: Vec<String> = entries.iter().filter_map(entry_name).collect();
 		let missing = type_def
@@ -360,10 +330,7 @@ fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entr
 		let message = format!("{name} needs field {}", missing.name);
 		Some(
 			Diagnostic::at(located, message)
-				.fix(format!(
-					"give {0}:…, or declare it {0}? or with a default",
-					missing.name
-				))
+				.fix(format!("give {0}:…, or declare it {0}? or with a default", missing.name))
 				.into_error(),
 		)
 	})

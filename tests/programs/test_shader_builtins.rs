@@ -5,13 +5,9 @@ const SHADER: &str = "s = shader {\n\t@fragment fn main(@builtin(position) at: v
 
 #[test]
 fn builtin_holes_are_left_to_the_host() {
-	let lowered = warp::pipeline::lower(&format!("{SHADER}paint(s, 4, 2)"))
-		.expect("lowers")
-		.serialize();
+	let lowered = warp::pipeline::lower(&format!("{SHADER}paint(s, 4, 2)")).expect("lowers").serialize();
 	assert!(lowered.contains("(paint s 4 2)"), "{lowered}");
-	let own = warp::pipeline::lower(&format!("width = 9.0\n{SHADER}paint(s, 4, 2)"))
-		.expect("lowers")
-		.serialize();
+	let own = warp::pipeline::lower(&format!("width = 9.0\n{SHADER}paint(s, 4, 2)")).expect("lowers").serialize();
 	assert!(own.contains("(paint s 4 2 {width:width})"), "{own}");
 }
 
@@ -19,18 +15,10 @@ fn builtin_holes_are_left_to_the_host() {
 #[test]
 fn the_host_fills_the_builtin_holes() {
 	let run = crate::common::warp_command()
-		.args([
-			"--no-ask",
-			"eval",
-			&format!("use graphics\n{SHADER}gpu_render(s, 4, 2)[0]"),
-		])
+		.args(["--no-ask", "eval", &format!("use graphics\n{SHADER}gpu_render(s, 4, 2)[0]")])
 		.output()
 		.unwrap();
-	let said = format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	);
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	if said.contains("no WebGPU adapter") {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
@@ -52,11 +40,7 @@ fn a_shader_reads_its_previous_frame() {
 		])
 		.output()
 		.unwrap();
-	let said = format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	);
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	if said.contains("no WebGPU adapter") {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
@@ -71,17 +55,9 @@ fn a_shader_reads_its_previous_frame() {
 fn a_word_for_the_previous_frame_hints_at_previous() {
 	let shader = "s = shader {\n\t@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n\t\treturn $last(at.xy);\n\t}\n}\n";
 	let run = crate::common::warp_command()
-		.args([
-			"--no-ask",
-			"eval",
-			&format!("use graphics\n{shader}gpu_render(s, 2, 2)"),
-		])
+		.args(["--no-ask", "eval", &format!("use graphics\n{shader}gpu_render(s, 2, 2)")])
 		.output()
 		.unwrap();
-	let said = format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	);
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	assert!(said.contains("$previous(at)"), "{said}");
 }

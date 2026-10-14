@@ -103,11 +103,7 @@ pub fn poll_shared(program: Node) -> Node {
 	let handler =
 		crate::event_signals::function_with_globals(crate::host::SHARED_HANDLER, false, &polls.checks, &globals);
 	let starts = polls.flags.iter().map(|flag| assign(flag, Node::False));
-	Node::List(
-		starts.chain(std::iter::once(handler)).chain(polls.lowered).collect(),
-		bracket,
-		separator,
-	)
+	Node::List(starts.chain(std::iter::once(handler)).chain(polls.lowered).collect(), bracket, separator)
 }
 
 /// poll_shared's main-level statements, the checks of on·shared and the flags and seen values they keep
@@ -143,10 +139,8 @@ impl SharedPolls {
 
 	/// `on set n` of a counted shared value: the body once per write since the last poll
 	fn each_write(&mut self, polling: String, name: &str, subject: &Node, body: &Node) {
-		let (writes, running) = (
-			format!("{WRITES_PREFIX}{}", self.flags.len()),
-			format!("{POLLING_PREFIX}{}_running", self.flags.len()),
-		);
+		let (writes, running) =
+			(format!("{WRITES_PREFIX}{}", self.flags.len()), format!("{POLLING_PREFIX}{}_running", self.flags.len()));
 		// the loop's start polls again: the running flag keeps that inner check out
 		let each_write = format!(
 			"if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}",
@@ -184,10 +178,7 @@ impl SharedPolls {
 			.map(|(name, last)| key(Node::Symbol(name.clone()), Op::Ne, Node::Symbol(last.clone())))
 			.reduce(|either, next| key(either, Op::Or, next))
 			.expect("a watched shared value");
-		let value = seen
-			.first()
-			.map(|(name, _)| Node::Symbol(name.clone()))
-			.expect("a watched value");
+		let value = seen.first().map(|(name, _)| Node::Symbol(name.clone())).expect("a watched value");
 		let check = self.check(listener_word, subject, body, &value);
 		let remember = seen.iter().map(|(name, last)| assign(last, Node::Symbol(name.clone())));
 		self.checks.push(if_then(
@@ -197,8 +188,7 @@ impl SharedPolls {
 		self.lowered.extend(remember);
 		self.lowered.push(assign(&polling, Node::True));
 		self.flags.push(polling);
-		self.main_variables
-			.extend(self.flags.iter().cloned().chain(seen.into_iter().map(|(_, last)| last)));
+		self.main_variables.extend(self.flags.iter().cloned().chain(seen.into_iter().map(|(_, last)| last)));
 	}
 
 	/// What the listener does on a change: whenever and once keep a flag of their own
@@ -227,10 +217,7 @@ impl SharedPolls {
 pub fn subscribe(program: Node) -> Node {
 	let (program, mut reflected) = reflections(with_function_listeners(program));
 	let main_variables = main_variables(&program);
-	let mut subscriptions = Subscriptions {
-		main_variables,
-		fired: 0,
-	};
+	let mut subscriptions = Subscriptions { main_variables, fired: 0 };
 	let program = subscriptions.rewrite(program);
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else {
 		return program;
@@ -242,10 +229,8 @@ pub fn subscribe(program: Node) -> Node {
 	// watched-cells); one on main-level writes only stays variable_signals' check after each write
 	let mut definitions = vec![];
 	collect_definitions(&program, &mut definitions);
-	let written_in_functions: HashSet<String> = definitions
-		.iter()
-		.flat_map(|definition| definition.body.declared_globals::<Vec<String>>())
-		.collect();
+	let written_in_functions: HashSet<String> =
+		definitions.iter().flat_map(|definition| definition.body.declared_globals::<Vec<String>>()).collect();
 	reflected.extend(
 		statements
 			.iter()
@@ -310,28 +295,19 @@ fn with_function_listeners(node: Node) -> Node {
 	let Node::Key(function, Op::Define, value) = head.drop_meta() else {
 		return node;
 	};
-	let listener = Node::List(
-		vec![value.as_ref().clone(), body.clone()],
-		Bracket::None,
-		Separator::Space,
-	);
+	let listener = Node::List(vec![value.as_ref().clone(), body.clone()], Bracket::None, Separator::Space);
 	if listener_parts(&listener).is_none() {
 		return node;
 	}
-	Node::Key(
-		function.clone(),
-		Op::Define,
-		Box::new(Node::List(vec![listener], Bracket::Curly, Separator::Semicolon)),
-	)
+	Node::Key(function.clone(), Op::Define, Box::new(Node::List(vec![listener], Bracket::Curly, Separator::Semicolon)))
 }
 
 /// The variables a listener watches: `on set x` and `on change x` the one, `whenever` and `once` those of the condition
 fn watched_names(listener_word: ListenerWord, subject: &Node) -> Vec<String> {
 	match (listener_word, subject.drop_meta()) {
-		(ListenerWord::Set | ListenerWord::Change, _) => Some(signal_name(subject))
-			.filter(|name| !name.is_empty())
-			.into_iter()
-			.collect(),
+		(ListenerWord::Set | ListenerWord::Change, _) => {
+			Some(signal_name(subject)).filter(|name| !name.is_empty()).into_iter().collect()
+		}
 		_ => unique(symbols(subject)),
 	}
 }
@@ -411,10 +387,7 @@ fn without_function() -> Node {
 /// reflected so
 fn reflections(program: Node) -> (Node, HashSet<String>) {
 	let mut reflected = HashSet::new();
-	let objects = main_object_literals(&program)
-		.into_iter()
-		.map(|(name, _)| name)
-		.collect();
+	let objects = main_object_literals(&program).into_iter().map(|(name, _)| name).collect();
 	let program = reflected_lists(program, &objects, &mut reflected);
 	(program, reflected)
 }
@@ -483,16 +456,11 @@ impl Subscriptions {
 					|| over_params.contains(name)
 					|| (self.main_variables.contains(name) && !locals.contains(name))
 			};
-			let fields = field_paths(&definition.body).into_iter().filter(|path| {
-				path.split(FIELD_JOINER)
-					.next()
-					.is_some_and(|object| subscribable(&object.to_string()))
-			});
-			let subscribable: HashSet<String> = symbols(&definition.body)
+			let fields = field_paths(&definition.body)
 				.into_iter()
-				.filter(subscribable)
-				.chain(fields)
-				.collect();
+				.filter(|path| path.split(FIELD_JOINER).next().is_some_and(|object| subscribable(&object.to_string())));
+			let subscribable: HashSet<String> =
+				symbols(&definition.body).into_iter().filter(subscribable).chain(fields).collect();
 			let body = self.subscriptions(definition.body.clone(), &subscribable);
 			return with_body(node, body);
 		}
@@ -514,10 +482,8 @@ impl Subscriptions {
 	/// one per watched variable; a once listener first makes its flag cell
 	fn subscription(&mut self, statement: &Node, subscribable: &HashSet<String>, name: Option<&str>) -> Option<Node> {
 		let (listener_word, subject, body) = listener_parts(statement)?;
-		let watched: Vec<String> = watched_names(listener_word, &subject)
-			.into_iter()
-			.filter(|name| subscribable.contains(name))
-			.collect();
+		let watched: Vec<String> =
+			watched_names(listener_word, &subject).into_iter().filter(|name| subscribable.contains(name)).collect();
 		if watched.is_empty() {
 			return None;
 		}
@@ -530,10 +496,8 @@ impl Subscriptions {
 		let check = self.listener_check(listener_word, subject, body, &mut statements);
 		// the listener shares the main-level variables it changes, as a named one does (P124)
 		// the watched cells it captures are no globals
-		let captured: Vec<&str> = [VALUE_WORD, OLD_WORD]
-			.into_iter()
-			.chain(watched.iter().map(String::as_str))
-			.collect();
+		let captured: Vec<&str> =
+			[VALUE_WORD, OLD_WORD].into_iter().chain(watched.iter().map(String::as_str)).collect();
 		let globals =
 			crate::event_signals::global_declarations(std::slice::from_ref(&check), &self.main_variables, &captured);
 		let listener = match name {
@@ -549,11 +513,7 @@ impl Subscriptions {
 			);
 			statements.push(call(SIGNAL_LISTENERS_SET, vec![signal, listeners]));
 		}
-		Some(if statements.len() == 1 {
-			statements.remove(0)
-		} else {
-			block(statements)
-		})
+		Some(if statements.len() == 1 { statements.remove(0) } else { block(statements) })
 	}
 
 	/// What the listener does with the new `value`; whenever and once first make their flag cell in `statements`
@@ -567,10 +527,9 @@ impl Subscriptions {
 		let value = symbol(VALUE_WORD);
 		match listener_word {
 			ListenerWord::Set => with_value(&body, &value),
-			ListenerWord::Change => if_then(
-				key(value.clone(), Op::Ne, symbol(OLD_WORD)),
-				block(vec![with_value(&body, &value)]),
-			),
+			ListenerWord::Change => {
+				if_then(key(value.clone(), Op::Ne, symbol(OLD_WORD)), block(vec![with_value(&body, &value)]))
+			}
 			// P156: when the condition becomes true; the cell holds whether it held at the last write
 			ListenerWord::Whenever => {
 				let held_cell = Node::Symbol(self.flag_cell(HELD_PREFIX, statements));
@@ -606,11 +565,7 @@ impl Subscriptions {
 /// `(value, signal·old) => {check; 0}`: every listener closure of one arity returns one kind (wasm_emitter/closures.rs)
 fn listener_closure(globals: Vec<Node>, check: Node) -> Node {
 	// a sequence, not a block: the declarations move to the main level, and a block of the check alone reads as data
-	let closure_check = Node::List(
-		globals.into_iter().chain([check]).collect(),
-		Bracket::Round,
-		Separator::Semicolon,
-	);
+	let closure_check = Node::List(globals.into_iter().chain([check]).collect(), Bracket::Round, Separator::Semicolon);
 	from_template(
 		&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"),
 		&[(CHECK_PLACEHOLDER, closure_check)],
@@ -639,33 +594,18 @@ fn listener_function(
 pub fn lower(program: Node) -> Node {
 	let mut definitions = vec![];
 	collect_definitions(&program, &mut definitions);
-	let Escaping {
-		signal_params,
-		list_params,
-		field_params,
-		signal_lists,
-		escaping,
-	} = escaping(&program, &definitions);
+	let Escaping { signal_params, list_params, field_params, signal_lists, escaping } =
+		escaping(&program, &definitions);
 	if signal_params.is_empty() && escaping.is_empty() && field_params.is_empty() {
 		return program;
 	}
-	let mut signals = Signals {
-		signal_params,
-		list_params,
-		field_params,
-		signal_lists,
-		escaping,
-		made: HashSet::new(),
-	};
+	let mut signals =
+		Signals { signal_params, list_params, field_params, signal_lists, escaping, made: HashSet::new() };
 	let program = signals.rewrite(program, &signals.escaping.clone(), true);
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else {
 		return program;
 	};
-	Node::List(
-		std::iter::once(set_function()).chain(statements).collect(),
-		bracket,
-		separator,
-	)
+	Node::List(std::iter::once(set_function()).chain(statements).collect(), bracket, separator)
 }
 
 struct Signals {
@@ -709,13 +649,7 @@ impl Signals {
 				let items = items
 					.into_iter()
 					.enumerate()
-					.map(|(index, item)| {
-						if index == 1 {
-							item
-						} else {
-							self.rewrite(item, signals, main)
-						}
-					})
+					.map(|(index, item)| if index == 1 { item } else { self.rewrite(item, signals, main) })
 					.collect();
 				Node::List(items, bracket, separator)
 			}
@@ -730,11 +664,7 @@ impl Signals {
 				if main {
 					self.made.extend(fields.iter().map(|field| field_path(&object, field)));
 				}
-				Node::Key(
-					target,
-					Op::Assign,
-					Box::new(self.fields_kept(*value, &fields, signals, main)),
-				)
+				Node::Key(target, Op::Assign, Box::new(self.fields_kept(*value, &fields, signals, main)))
 			}
 			Node::Key(target, op, value) if op.is_write() && signals.contains(&signal_name(&target)) => {
 				self.signal_written(*target, op, *value, signals, main)
@@ -743,11 +673,7 @@ impl Signals {
 			// a function changes an escaping variable's cell, never the variable: its `global x` goes
 			Node::List(items, bracket, separator) if items.iter().any(|item| declares_global_of(item, signals)) => {
 				let kept = items.into_iter().filter(|item| !declares_global_of(item, signals));
-				Node::List(
-					kept.map(|item| self.rewrite(item, signals, main)).collect(),
-					bracket,
-					separator,
-				)
+				Node::List(kept.map(|item| self.rewrite(item, signals, main)).collect(), bracket, separator)
 			}
 			Node::Key(left, op @ (Op::Dot | Op::Colon), right)
 				if !matches!(op, Op::Dot) || matches!(right.drop_meta(), Node::Symbol(_)) =>
@@ -814,11 +740,7 @@ impl Signals {
 				if op == Op::Inc { Op::Add } else { Op::Sub },
 				crate::node::int(1),
 			),
-			_ => key(
-				call(CELL_GET, vec![target.clone()]),
-				op.base_op(),
-				self.rewrite(value, signals, main),
-			),
+			_ => key(call(CELL_GET, vec![target.clone()]), op.base_op(), self.rewrite(value, signals, main)),
 		};
 		if main && self.escaping.contains(&name) && self.made.insert(name) {
 			return Node::Key(Box::new(target), Op::Assign, Box::new(call(SIGNAL_NEW, vec![value])));
@@ -873,9 +795,7 @@ impl Signals {
 		let Some(first) = items.first() else { return false };
 		let function = word(first);
 		let subscribes = (function == SIGNAL_LISTENERS_SET || function == SIGNAL_LISTENERS)
-			&& items
-				.get(1)
-				.is_some_and(|signal| signals.contains(&signal_name(signal)));
+			&& items.get(1).is_some_and(|signal| signals.contains(&signal_name(signal)));
 		let takes = |params: &HashSet<(String, usize)>| params.iter().any(|(name, _)| *name == function);
 		let takes_fields = self.field_params.iter().any(|(name, _, _)| *name == function);
 		subscribes || (items.len() > 1 && (takes(&self.signal_params) || takes(&self.list_params) || takes_fields))
@@ -968,9 +888,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 		found.escaping.extend(kept_in_fields);
 		visit_main_level(program, &mut |node| found.passed(None, node, &main_lists));
 		for definition in definitions {
-			definition
-				.body
-				.visit(&mut |node| found.passed(Some(definition), node, &main_lists));
+			definition.body.visit(&mut |node| found.passed(Some(definition), node, &main_lists));
 		}
 		if found.size() == before {
 			return found;
@@ -1005,17 +923,12 @@ impl Escaping {
 			let name = signal_name(&items[1]);
 			if let Some((object, field)) = name.split_once(FIELD_JOINER) {
 				match position(object) {
-					Some(index) => self
-						.field_params
-						.insert((definition.name.clone(), index, field.to_string())),
+					Some(index) => self.field_params.insert((definition.name.clone(), index, field.to_string())),
 					None => self.escaping.insert(name.clone()),
 				};
 				return;
 			}
-			let over = loops
-				.iter()
-				.find(|(variable, _)| *variable == name)
-				.map(|(_, list)| list.clone());
+			let over = loops.iter().find(|(variable, _)| *variable == name).map(|(_, list)| list.clone());
 			match (position(&name), over.and_then(|list| position(&list))) {
 				(Some(index), _) => self.signal_params.insert((definition.name.clone(), index)),
 				(None, Some(index)) => self.list_params.insert((definition.name.clone(), index)),
@@ -1117,10 +1030,9 @@ fn param_of(scope: Option<&Definition>, name: &str) -> Option<(String, usize)> {
 /// The variables a list literal names as its items: `[a, b]` → a, b
 fn named_items(list: &Node) -> Vec<String> {
 	match list.drop_meta() {
-		Node::List(items, Bracket::Square, _) => items
-			.iter()
-			.filter_map(|item| item.symbol_name().map(String::from))
-			.collect(),
+		Node::List(items, Bracket::Square, _) => {
+			items.iter().filter_map(|item| item.symbol_name().map(String::from)).collect()
+		}
 		_ => vec![],
 	}
 }
@@ -1265,10 +1177,7 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 		(WITHOUT_PLACEHOLDER, WITHOUT_FUNCTION),
 	];
 	let names = names.iter().map(|(placeholder, name)| (*placeholder, symbol(name)));
-	super::nodes::filled(
-		code,
-		names.chain(nodes.iter().map(|(placeholder, node)| (*placeholder, node.clone()))),
-	)
+	super::nodes::filled(code, names.chain(nodes.iter().map(|(placeholder, node)| (*placeholder, node.clone()))))
 }
 
 /// `f(a, b) := body`, `def f(a, b) {body}`, `def (f a b) {body}`

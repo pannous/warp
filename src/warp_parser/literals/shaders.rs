@@ -20,10 +20,7 @@ pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 			open += 1;
 		}
 		let start = open + 1;
-		let Some(length) = (chars.get(open) == Some(&'{'))
-			.then(|| closing_brace(&chars[start..]))
-			.flatten()
-		else {
+		let Some(length) = (chars.get(open) == Some(&'{')).then(|| closing_brace(&chars[start..])).flatten() else {
 			at = open;
 			continue;
 		};
@@ -44,9 +41,8 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		let word = SHADER_WORDS
-			.iter()
-			.find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
+		let word =
+			SHADER_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
 		let mut open = word.len();
 		if self.is_identifier_start(open) || self.peek_char(open).is_ascii_digit() {
 			return None;
@@ -68,8 +64,6 @@ impl WarpParser {
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);
-		Some(crate::graphics::shader_holes::shader_text(&without_common_indentation(
-			&source,
-		)))
+		Some(crate::graphics::shader_holes::shader_text(&without_common_indentation(&source)))
 	}
 }

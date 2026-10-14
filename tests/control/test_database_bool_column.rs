@@ -10,9 +10,7 @@ fn program(rest: &str) -> String {
 
 #[test]
 fn a_bool_column_reads_back_as_a_bool() {
-	eval(&program(
-		"todos.add(Todo(\"milk\", false))\ntodos.add(Todo(\"tea\", true))",
-	));
+	eval(&program("todos.add(Todo(\"milk\", false))\ntodos.add(Todo(\"tea\", true))"));
 	is!(&program("todos#1.done"), false);
 	is!(&program("todos#2.done"), true);
 	is!(&program("count(todos where not it.done)"), 1);

@@ -36,10 +36,7 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I32Const(ptr as i32), I32Const(-(len as i32))]);
 		}
 		let (len, ptr) = (self.scratch(0), self.scratch(1));
-		Self::emit_list(
-			func,
-			&[I::I64ExtendI32S, I::LocalSet(len), I::I64ExtendI32U, I::LocalSet(ptr)],
-		);
+		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(len), I::I64ExtendI32U, I::LocalSet(ptr)]);
 		self.emit_host_text_result(func, len, ptr);
 	}
 

@@ -31,10 +31,7 @@ fn test_dimension_errors_are_compile_errors() {
 #[test]
 fn test_unsupported_uses_stay_loud() {
 	// print since stage 3, list elements since stage 4, a whole list since stage 5, a list grown at run time since stage 6
-	assert_eq!(
-		shown("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total]; xs.add(1 m); sum(xs)"),
-		"11m"
-	);
+	assert_eq!(shown("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total]; xs.add(1 m); sum(xs)"), "11m");
 }
 
 #[test]
@@ -47,10 +44,7 @@ fn test_compiling_a_quantity_result_is_refused_until_output_is_supported() {
 #[test]
 fn test_a_word_before_a_unit_name_is_no_amount() {
 	// `use m` imports the libm module m: no metres (the static pass left `use` as an undefined variable)
-	assert!(!matches!(
-		eval("total = 0 m; for i in 1..3 { total += 5 m }; total"),
-		warp::Node::Error(_)
-	));
+	assert!(!matches!(eval("total = 0 m; for i in 1..3 { total += 5 m }; total"), warp::Node::Error(_)));
 	assert!(!eval("use m; 3").serialize().contains("undefined variable: use"));
 }
 

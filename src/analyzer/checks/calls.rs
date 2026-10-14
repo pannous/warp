@@ -28,25 +28,20 @@ pub(crate) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 					.iter()
 					.filter(|(function, _)| function == name)
 					.map(|(_, arity)| *arity);
-				let arities: Vec<usize> = libm
-					.chain(crate::wasm_emitter::text::text_builtins::text_builtin_arities(name))
-					.collect();
+				let arities: Vec<usize> =
+					libm.chain(crate::wasm_emitter::text::text_builtins::text_builtin_arities(name)).collect();
 				let given = items.len() - 1;
 				if !arities.is_empty() && !context.user_functions.contains_key(name) && !arities.contains(&given) {
-					return Some(Diagnostic::at(
-						node,
-						format!("{name} takes {}, got {given}", values(arities[0])),
-					));
+					return Some(Diagnostic::at(node, format!("{name} takes {}, got {given}", values(arities[0]))));
 				}
 			}
 			items.iter().find_map(|item| call_arity_error(item, context))
 		}
 		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs), operand) if empty.is_nothing() => {
 			match operand.drop_meta() {
-				Node::List(items, Bracket::Round, Separator::Colon) if items.len() > 1 => Some(Diagnostic::at(
-					node,
-					format!("{op} takes 1 value, got {}", operand.serialize()),
-				)),
+				Node::List(items, Bracket::Round, Separator::Colon) if items.len() > 1 => {
+					Some(Diagnostic::at(node, format!("{op} takes 1 value, got {}", operand.serialize())))
+				}
 				_ => call_arity_error(operand, context),
 			}
 		}
@@ -102,11 +97,7 @@ pub(crate) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 					Diagnostic::at(node, format!("ambiguous braceless call: {written}"))
 						.fix(format!("{first} or {whole}"))
 						.offer(format!("{head} of {} only", left.serialize()), &written, &first)
-						.offer(
-							format!("{head} of the whole {}", argument.drop_meta().serialize()),
-							&written,
-							&whole,
-						),
+						.offer(format!("{head} of the whole {}", argument.drop_meta().serialize()), &written, &whole),
 				);
 			}
 		}

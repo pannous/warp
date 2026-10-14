@@ -5,10 +5,7 @@ use crate::is;
 
 #[test]
 fn a_rest_binds_the_remaining_items() {
-	is!(
-		"xs=[1,2,3]; match xs { [first, ...rest] => first * 10 + count(rest); _ => 0 }",
-		12
-	);
+	is!("xs=[1,2,3]; match xs { [first, ...rest] => first * 10 + count(rest); _ => 0 }", 12);
 	is!("xs=[1,2,3,4]; match xs { [a, *rest] => count(rest); _ => 0 }", 3);
 	is!("xs=[1]; match xs { [a, ...rest] => count(rest); _ => 9 }", 0);
 	is!("xs=[]; match xs { [a, ...rest] => 1; _ => 9 }", 9);
@@ -16,10 +13,7 @@ fn a_rest_binds_the_remaining_items() {
 
 #[test]
 fn items_after_a_rest_count_from_the_end() {
-	is!(
-		"xs=[1,2,3,4]; match xs { [first, ...middle, last] => first + last * 10 + count(middle) * 100; _ => 0 }",
-		241
-	);
+	is!("xs=[1,2,3,4]; match xs { [first, ...middle, last] => first + last * 10 + count(middle) * 100; _ => 0 }", 241);
 	is!("xs=[5,6]; match xs { [.., last] => last; _ => 0 }", 6);
 	is!("xs=[5,6,7]; match xs { [a, ...] => a; _ => 0 }", 5);
 	is!("xs=[1,2,3]; match xs { [1, ..] => 1; _ => 0 }", 1);

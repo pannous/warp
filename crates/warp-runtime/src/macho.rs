@@ -57,19 +57,14 @@ fn load_commands(bytes: &[u8]) -> Vec<(u32, Range<usize>)> {
 
 /// Where the code signature starts, if the executable is a signed Mach-O
 pub fn signature_offset(bytes: &[u8]) -> Option<usize> {
-	let (_, signature) = load_commands(bytes)
-		.into_iter()
-		.find(|(command, _)| *command == CODE_SIGNATURE)?;
+	let (_, signature) = load_commands(bytes).into_iter().find(|(command, _)| *command == CODE_SIGNATURE)?;
 	u32_at(bytes, signature.start + DATA_OFFSET_AT).map(|offset| offset as usize)
 }
 
 /// The executable without its code signature: the signature's bytes and its load command removed
 pub fn unsigned(bytes: &[u8]) -> Vec<u8> {
 	let mut image = bytes.to_vec();
-	let Some((_, signature)) = load_commands(bytes)
-		.into_iter()
-		.find(|(command, _)| *command == CODE_SIGNATURE)
-	else {
+	let Some((_, signature)) = load_commands(bytes).into_iter().find(|(command, _)| *command == CODE_SIGNATURE) else {
 		return image;
 	};
 	let offset = signature_offset(bytes).expect("a signature command names its offset");
@@ -78,16 +73,8 @@ pub fn unsigned(bytes: &[u8]) -> Vec<u8> {
 	let removed = signature.len();
 	image.copy_within(signature.end..commands_end, signature.start);
 	image[commands_end - removed..commands_end].fill(0);
-	set_u32(
-		&mut image,
-		COMMAND_COUNT_AT,
-		u32_at(bytes, COMMAND_COUNT_AT).unwrap_or(1) - 1,
-	);
-	set_u32(
-		&mut image,
-		COMMANDS_SIZE_AT,
-		(commands_end - HEADER_BYTES - removed) as u32,
-	);
+	set_u32(&mut image, COMMAND_COUNT_AT, u32_at(bytes, COMMAND_COUNT_AT).unwrap_or(1) - 1);
+	set_u32(&mut image, COMMANDS_SIZE_AT, (commands_end - HEADER_BYTES - removed) as u32);
 	extend_last_segment_to_end(&mut image);
 	image
 }
@@ -102,9 +89,5 @@ pub fn extend_last_segment_to_end(image: &mut [u8]) {
 	let file_offset = u64_at(image, segment.start + SEGMENT_FILEOFF_AT).unwrap_or(0);
 	let file_size = image.len() as u64 - file_offset;
 	set_u64(image, segment.start + SEGMENT_FILESIZE_AT, file_size);
-	set_u64(
-		image,
-		segment.start + SEGMENT_VMSIZE_AT,
-		file_size.next_multiple_of(PAGE_BYTES),
-	);
+	set_u64(image, segment.start + SEGMENT_VMSIZE_AT, file_size.next_multiple_of(PAGE_BYTES));
 }

@@ -9,9 +9,7 @@ fn a_wisp_def_tells_the_parameters_from_the_body() {
 	};
 	assert_eq!(name.serialize(), "square");
 	assert_eq!(body.drop_meta().serialize(), "mul(it it)");
-	let Node::Meta { data, .. } = body.as_ref() else {
-		panic!("expected the parameters as metadata: {body:?}")
-	};
+	let Node::Meta { data, .. } = body.as_ref() else { panic!("expected the parameters as metadata: {body:?}") };
 	assert!(data.serialize().contains("params"), "{}", data.serialize());
 	assert_eq!(parse_wisp("(def square (mul it it))").serialize(), "square:=mul(it it)");
 }

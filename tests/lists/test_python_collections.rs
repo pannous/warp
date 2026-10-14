@@ -39,10 +39,7 @@ fn popitem_and_fromkeys() {
 // lowered to lib/prelude.warp's popped_item and popped_rest (by popped_position)
 #[test]
 fn pop_of_a_position_or_a_key() {
-	is!(
-		"xs = [5 6 7]; first = xs.pop(0); first * 100 + count(xs) * 10 + xs#1",
-		526
-	);
+	is!("xs = [5 6 7]; first = xs.pop(0); first * 100 + count(xs) * 10 + xs#1", 526);
 	is!("xs = [5 6 7]; xs.pop(-1) * 10 + count(xs)", 72);
 	is!("m = {a:1 b:2}; m.pop(\"b\") * 10 + count(m)", 21);
 }

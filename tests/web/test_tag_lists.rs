@@ -38,10 +38,7 @@ fn a_list_among_children_is_spliced_into_them() {
 		shown("fruits = [\"apple\" \"pear\"]\nul{ h2{ \"Fruit\" } li all fruits p{ \"end\" } }"),
 		"ul{h2:\"Fruit\" li:\"apple\" li:\"pear\" p:\"end\"}"
 	);
-	assert_eq!(
-		shown("fruits = []\nul{ h2{ \"Fruit\" } [li{ fruit } for fruit in fruits] }"),
-		"ul:h2:\"Fruit\""
-	);
+	assert_eq!(shown("fruits = []\nul{ h2{ \"Fruit\" } [li{ fruit } for fruit in fruits] }"), "ul:h2:\"Fruit\"");
 }
 
 #[test]

@@ -45,9 +45,7 @@ fn test_wasm_gc_node_reading_concept() {
 	println!("✓ Step 1: Loaded WASM module");
 
 	// Call a function (step 2 from rasm)
-	let make_number = instance
-		.get_typed_func::<i64, i32>(&mut store, "make_number")
-		.expect("Failed to get function");
+	let make_number = instance.get_typed_func::<i64, i32>(&mut store, "make_number").expect("Failed to get function");
 	let tag = make_number.call(&mut store, 42).expect("Failed to call function");
 
 	println!("✓ Step 2: Called WASM function");

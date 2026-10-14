@@ -1,4 +1,5 @@
 // R's words, for programs ported from R: `use R` (foreign-spellings, user 2026-10-13)
+
 sapply(xs, f) := map(xs, f)
 lapply(xs, f) := map(xs, f)
 vapply(xs, f) := map(xs, f)

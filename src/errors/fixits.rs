@@ -18,13 +18,7 @@ pub struct Fix {
 }
 
 pub fn fix(meaning: impl Into<String>, written: impl Into<String>, replacement: impl Into<String>) -> Fix {
-	Fix {
-		meaning: meaning.into(),
-		written: written.into(),
-		replacement: replacement.into(),
-		at: None,
-		also: vec![],
-	}
+	Fix { meaning: meaning.into(), written: written.into(), replacement: replacement.into(), at: None, also: vec![] }
 }
 
 /// A fix that adds `line` above the first line of the source: a missing `use math`
@@ -34,13 +28,7 @@ pub fn added_first_line(meaning: impl Into<String>, line: impl Into<String>) -> 
 
 /// A fix that adds `text` at `at` (line, column): a missing closing quote
 pub fn inserted(meaning: impl Into<String>, text: impl Into<String>, at: (usize, usize)) -> Fix {
-	Fix {
-		meaning: meaning.into(),
-		written: String::new(),
-		replacement: text.into(),
-		at: Some(at),
-		also: vec![],
-	}
+	Fix { meaning: meaning.into(), written: String::new(), replacement: text.into(), at: Some(at), also: vec![] }
 }
 
 /// The position after the last character of `line` (1-based) of `source`, trailing spaces aside
@@ -71,10 +59,7 @@ impl Fix {
 	}
 
 	pub fn at(self, line: usize, column: usize) -> Self {
-		Fix {
-			at: Some((line, column)),
-			..self
-		}
+		Fix { at: Some((line, column)), ..self }
 	}
 
 	/// The same reading also replaces `written` at `line`:`column` with `replacement`
@@ -84,8 +69,7 @@ impl Fix {
 		replacement: impl Into<String>,
 		(line, column): (usize, usize),
 	) -> Self {
-		self.also
-			.push(fix(self.meaning.clone(), written, replacement).at(line, column));
+		self.also.push(fix(self.meaning.clone(), written, replacement).at(line, column));
 		self
 	}
 
@@ -179,11 +163,7 @@ fn offset_of(source: &str, line: usize, column: usize) -> Option<usize> {
 		_ => source.match_indices('\n').nth(line - 2)?.0 + 1,
 	};
 	let line_text = source[line_start..].split('\n').next().unwrap_or_default();
-	let within = line_text
-		.char_indices()
-		.map(|(offset, _)| offset)
-		.chain([line_text.len()])
-		.nth(column - 1)?;
+	let within = line_text.char_indices().map(|(offset, _)| offset).chain([line_text.len()]).nth(column - 1)?;
 	Some(line_start + within)
 }
 
@@ -191,15 +171,10 @@ fn offset_of(source: &str, line: usize, column: usize) -> Option<usize> {
 pub fn edit(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Edit> {
 	let (line, column) = fix.at.unwrap_or((line, column));
 	if fix.is_insertion() {
-		return offset_of(source, line, column).map(|offset| Edit {
-			range: offset..offset,
-			replacement: fix.replacement.clone(),
-		});
+		return offset_of(source, line, column)
+			.map(|offset| Edit { range: offset..offset, replacement: fix.replacement.clone() });
 	}
-	locate(source, line, column, &fix.written).map(|range| Edit {
-		range,
-		replacement: fix.replacement.clone(),
-	})
+	locate(source, line, column, &fix.written).map(|range| Edit { range, replacement: fix.replacement.clone() })
 }
 
 /// Every edit of `fix` (its own and those it also needs), the last in the source first so each applies to the source
@@ -218,11 +193,7 @@ pub fn edits(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Vec<
 /// (a later `warp fix` and IDE quick fixes start here)
 pub fn fixed(source: &str, line: usize, column: usize, fix: &Fix) -> Option<String> {
 	let edits = edits(source, line, column, fix)?;
-	Some(
-		edits
-			.iter()
-			.fold(source.to_string(), |changed, edit| apply(&changed, edit)),
-	)
+	Some(edits.iter().fold(source.to_string(), |changed, edit| apply(&changed, edit)))
 }
 
 pub fn apply(source: &str, edit: &Edit) -> String {

@@ -14,10 +14,7 @@ fn a_class_defines_an_operator_by_its_name() {
 #[test]
 fn operators_as_python_and_kotlin_write_them() {
 	is!("class V:\n    def __init__(self, x):\n        self.x = x\n    def __add__(self, other):\n        return V(self.x + other.x)\n(V(1) + V(2)).x", 3);
-	is!(
-		"data class V(val x: Int) { operator fun plus(o: V) = V(x + o.x) }\n(V(1) + V(2)).x",
-		3
-	);
+	is!("data class V(val x: Int) { operator fun plus(o: V) = V(x + o.x) }\n(V(1) + V(2)).x", 3);
 }
 
 #[test]
@@ -31,10 +28,7 @@ fn a_class_defines_an_operator_by_its_glyph() {
 #[test]
 fn an_operator_on_a_value_of_unknown_class_dispatches_at_run_time() {
 	let classes = "class V{x:int; plus(o) := V(x + o.x)}; class W{y:int; plus(o) := W(y - o.y)}; ";
-	is!(
-		&format!("{classes}t = 0; for q in [V(1), W(9)] {{ r = q + q; t = t * 100 + (r is V ? r.x : r.y) }}; t"),
-		200
-	);
+	is!(&format!("{classes}t = 0; for q in [V(1), W(9)] {{ r = q + q; t = t * 100 + (r is V ? r.x : r.y) }}; t"), 200);
 	is!(&format!("{classes}t = 0; for n in [1, 2] {{ t = t + n + n }}; t"), 6);
 }
 

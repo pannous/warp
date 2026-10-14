@@ -58,10 +58,8 @@ fn inlinable(node: &Node) -> Option<(String, Inlinable)> {
 	};
 	let (name, parameters) = head_items.split_first()?;
 	let name = name.symbol_name()?.to_string();
-	let parameters: Vec<String> = parameters
-		.iter()
-		.map(|parameter| parameter.symbol_name().map(String::from))
-		.collect::<Option<_>>()?;
+	let parameters: Vec<String> =
+		parameters.iter().map(|parameter| parameter.symbol_name().map(String::from)).collect::<Option<_>>()?;
 	let mut statements = match body.drop_meta() {
 		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => items.clone(),
 		_ => return None,
@@ -107,19 +105,9 @@ fn inlinable(node: &Node) -> Option<(String, Inlinable)> {
 		});
 	}
 	for statement in statements.iter().chain(std::iter::once(&result)) {
-		movable &= words(statement)
-			.iter()
-			.all(|word| names.contains(word) || called.contains(word));
+		movable &= words(statement).iter().all(|word| names.contains(word) || called.contains(word));
 	}
-	movable.then_some((
-		name,
-		Inlinable {
-			parameters,
-			statements,
-			result,
-			names,
-		},
-	))
+	movable.then_some((name, Inlinable { parameters, statements, result, names }))
 }
 
 /// The names a statement reads or writes, not the keys of its entries or the fields it reads
@@ -142,10 +130,9 @@ fn names_outside(node: &Node, except: &Node) -> HashSet<String> {
 	}
 	match node {
 		Node::Symbol(word) => HashSet::from([word.clone()]),
-		Node::Key(left, _, right) => names_outside(left, except)
-			.union(&names_outside(right, except))
-			.cloned()
-			.collect(),
+		Node::Key(left, _, right) => {
+			names_outside(left, except).union(&names_outside(right, except)).cloned().collect()
+		}
 		Node::List(items, _, _) => items.iter().flat_map(|item| names_outside(item, except)).collect(),
 		Node::Meta { node, .. } => names_outside(node, except),
 		_ => HashSet::new(),
@@ -195,9 +182,8 @@ fn inlined_call(
 		.iter()
 		.zip(arguments)
 		.map(|(parameter, argument)| key(Node::Symbol(rename(parameter)), Op::Assign, argument.clone()));
-	let body = bindings
-		.chain(function.statements.iter().map(renamed))
-		.chain(std::iter::once(renamed(&function.result)));
+	let body =
+		bindings.chain(function.statements.iter().map(renamed)).chain(std::iter::once(renamed(&function.result)));
 	Some(Node::List(body.collect(), Bracket::Round, Separator::Semicolon))
 }
 
@@ -216,8 +202,6 @@ pub(crate) fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn
 /// Is the name one of the inliner's renamed parameters or locals (`swap·arr·1`), which only its inlined body reads
 pub fn is_temporary(name: &str) -> bool {
 	let mut parts = name.rsplit(NAME_SEPARATOR);
-	parts
-		.next()
-		.is_some_and(|number| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
+	parts.next().is_some_and(|number| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
 		&& name.matches(NAME_SEPARATOR).count() >= 2
 }

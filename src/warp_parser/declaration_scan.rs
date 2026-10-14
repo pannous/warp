@@ -26,12 +26,9 @@ impl UserOperatorKind {
 	}
 }
 
-pub(super) const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
-pub(super) const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [
-	("prefix", UserOperatorKind::Prefix),
-	("suffix", UserOperatorKind::Suffix),
-	("infix", UserOperatorKind::Infix),
-];
+pub(super) use crate::operators::OPERATOR_FUNCTION_PREFIX;
+pub(super) const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] =
+	[("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
 /// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
 pub(super) const USER_SUFFIX_BP: u8 = Op::Square.binding_power().0;
 pub(super) const USER_PREFIX_RIGHT_BP: u8 = Op::Neg.binding_power().1;
@@ -60,10 +57,7 @@ pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<Str
 		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
 		// `record = find(…)` declares nothing
 		.filter_map(|pair| {
-			let name: String = pair[1]
-				.chars()
-				.take_while(|ch| is_identifier_char(*ch) || *ch == '-')
-				.collect();
+			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch) || *ch == '-').collect();
 			let rest = &pair[1][name.len()..];
 			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
 		})
@@ -73,14 +67,8 @@ pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<Str
 }
 
 /// Words that stand between a type's name and its body, never part of the name: `class Dog extends Animal {`
-const WORDS_BEFORE_TYPE_BODY: [&str; 6] = [
-	EXTENDS_KEYWORD,
-	WITH_KEYWORD,
-	IMPLEMENTS_WORD,
-	GO_INTERFACE_WORD,
-	GC_WORD,
-	GO_STRUCT_WORD,
-];
+const WORDS_BEFORE_TYPE_BODY: [&str; 6] =
+	[EXTENDS_KEYWORD, WITH_KEYWORD, IMPLEMENTS_WORD, GO_INTERFACE_WORD, GC_WORD, GO_STRUCT_WORD];
 
 /// The type names of several words a source declares, by their words: `class full name {…}` declares `full name`, written
 /// `full-name` (card multi-word-class); only on one line, up to the body's `{`
@@ -160,9 +148,7 @@ pub fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
 pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
 	let (c, next) = (chars[at], chars.get(at + 1).copied());
 	let skip_until = |from: usize, end: &[char]| {
-		(from..chars.len())
-			.find(|&i| chars[i..].starts_with(end))
-			.map_or(chars.len(), |i| i + end.len())
+		(from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len())
 	};
 	let after = match (c, next) {
 		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => {
@@ -193,13 +179,11 @@ pub(crate) fn used_std_modules(source: &str) -> Vec<&'static str> {
 	source
 		.lines()
 		.flat_map(|line| line.split(';'))
-		.filter_map(
-			|statement| match statement.split_whitespace().collect::<Vec<_>>().as_slice() {
-				[keyword, module] if crate::modules::USE_KEYWORDS.contains(keyword) => {
-					crate::modules::std_module_source(module)
-				}
-				_ => None,
-			},
-		)
+		.filter_map(|statement| match statement.split_whitespace().collect::<Vec<_>>().as_slice() {
+			[keyword, module] if crate::modules::USE_KEYWORDS.contains(keyword) => {
+				crate::modules::std_module_source(module)
+			}
+			_ => None,
+		})
 		.collect()
 }

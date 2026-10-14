@@ -72,10 +72,7 @@ fn test_parse_all_samples() {
 
 		// Known problematic files that can fail
 		let known_issues = ["lib.warp", "errors.warp", "webgpu.warp"];
-		let unexpected_failures: Vec<_> = failed_files
-			.iter()
-			.filter(|f| !known_issues.contains(&f.as_str()))
-			.collect();
+		let unexpected_failures: Vec<_> = failed_files.iter().filter(|f| !known_issues.contains(&f.as_str())).collect();
 
 		if !unexpected_failures.is_empty() {
 			println!("\n⚠ Unexpected failures (not in known issues list):");

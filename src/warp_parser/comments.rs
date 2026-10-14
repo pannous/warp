@@ -30,11 +30,7 @@ pub(super) fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char
 						})
 						.sum::<i32>();
 					if spaced && depth > 0 && closes > 0 {
-						let closer = rest
-							.iter()
-							.find(|c| matches!(c, ')' | ']' | '}'))
-							.copied()
-							.unwrap_or(')');
+						let closer = rest.iter().find(|c| matches!(c, ')' | ']' | '}')).copied().unwrap_or(')');
 						return Some((line_index + 1, column + 1, closer));
 					}
 					break;
@@ -50,10 +46,7 @@ pub(super) fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char
 pub(super) fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column: usize) -> Diagnostic {
 	let text: Vec<char> = input.lines().nth(line - 1).unwrap_or_default().chars().collect();
 	let before = text[..column - 1].iter().rposition(|c| !c.is_whitespace());
-	let after = text[column + 1..]
-		.iter()
-		.position(|c| !c.is_whitespace())
-		.map(|offset| column + 1 + offset);
+	let after = text[column + 1..].iter().position(|c| !c.is_whitespace()).map(|offset| column + 1 + offset);
 	let (Some(before), Some(after)) = (before, after) else {
 		return diagnostic;
 	};
@@ -65,11 +58,7 @@ pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (us
 	let closer = closer.into();
 	Diagnostic::default()
 		.message(message)
-		.offering(crate::errors::fixits::inserted(
-			format!("the closing {closer}"),
-			closer,
-			at,
-		))
+		.offering(crate::errors::fixits::inserted(format!("the closing {closer}"), closer, at))
 		.into_error()
 }
 
@@ -80,10 +69,7 @@ impl WarpParser {
 		if matches!(self.peek_char(1), ' ' | '\t' | '\n' | '\r' | '\0' | '!' | '#') {
 			return true;
 		}
-		let word: String = (1..)
-			.map(|offset| self.peek_char(offset))
-			.take_while(|&c| is_identifier_char(c))
-			.collect();
+		let word: String = (1..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
 		crate::modules::is_import_keyword(&word)
 	}
 
@@ -210,12 +196,19 @@ impl WarpParser {
 		let mut had_newline = false;
 		let mut line_indent = 0;
 		let mut comments = Vec::new();
+		let mut after_line_comment = false;
 		loop {
 			let (newline, indent) = self.skip_whitespace();
 			had_newline |= newline;
 			if newline {
 				line_indent = indent;
 			}
+			// a blank line ends the comments above: only those directly above an item are its own (a file's header
+			// is no doc of its first function, card module-methods); a line comment's newline is consumed with it
+			if newline && after_line_comment {
+				comments.clear();
+			}
+			after_line_comment = false;
 
 			let c1 = self.current_char();
 
@@ -227,6 +220,7 @@ impl WarpParser {
 					comments.push(text);
 				}
 				had_newline = true;
+				after_line_comment = true;
 				continue;
 			}
 			// // line comment (but not :// URL scheme)
@@ -238,6 +232,7 @@ impl WarpParser {
 					comments.push(text);
 				}
 				had_newline = true;
+				after_line_comment = true;
 				continue;
 			}
 			// /* block comment */ and /# block comment #/
@@ -252,11 +247,7 @@ impl WarpParser {
 			}
 			break;
 		}
-		let comment = if comments.is_empty() {
-			None
-		} else {
-			Some(comments.join("\n"))
-		};
+		let comment = if comments.is_empty() { None } else { Some(comments.join("\n")) };
 		(had_newline, line_indent, comment)
 	}
 }

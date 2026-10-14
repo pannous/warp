@@ -8,10 +8,7 @@ fn a_loop_ending_in_an_if_gives_the_last_pass_value() {
 	is!("for x in [1 2 3] { if x > 2 then { \"big\" } }", "big");
 	is!("for x in [1 2 3] { if x < 2 then { \"small\" } }", Empty);
 	is!("for x in [1 2] { if x > 1 { \"y\" } else { \"n\" } }", 'y');
-	is!(
-		"out = []; for x in [1 2 3] { if x > 1 then { out = out + [x] } }",
-		ints(vec![2, 3])
-	);
+	is!("out = []; for x in [1 2 3] { if x > 1 then { out = out + [x] } }", ints(vec![2, 3]));
 }
 
 #[test]

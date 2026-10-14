@@ -126,10 +126,7 @@ pub(super) const NEGATIVE_MODULO_TOPIC: &str = "negative-modulo";
 
 /// `"done"`, `7`: a value written out that is never falsy
 pub(super) fn is_truthy_literal(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True
-	) && !node.is_falsy()
+	matches!(node.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True) && !node.is_falsy()
 }
 
 /// `x and y or z` yields z when y is falsy; none when y is written out and never falsy: `done and "done" or "open"`
@@ -161,9 +158,9 @@ pub(in crate::analyzer) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>
 				let readings = conversion_readings(left, right);
 				let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 				let diagnostic = diagnostic.fix(forms.join(" or "));
-				let diagnostic = readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
-					diagnostic.offer(meaning, &written, form)
-				});
+				let diagnostic = readings
+					.iter()
+					.fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form));
 				warnings.push(diagnostic.about(ARITHMETIC_CONVERSION_TOPIC, &written));
 			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {

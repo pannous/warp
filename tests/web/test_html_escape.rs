@@ -17,19 +17,8 @@ fn test_escaped_replaces_the_three_markup_characters() {
 
 #[test]
 fn test_one_html_escaper() {
-	let spelled_out: Vec<&str> = FILES_THAT_ESCAPE
-		.iter()
-		.filter(|(_, source)| source.contains("\"&lt;\""))
-		.map(|(path, _)| *path)
-		.collect();
-	assert_eq!(
-		spelled_out,
-		["src/web/markup.rs"],
-		"only markup::escaped spells out the entities"
-	);
-	assert_eq!(
-		FILES_THAT_ESCAPE[0].1.matches("\"&lt;\"").count(),
-		1,
-		"markup.rs escapes in one place"
-	);
+	let spelled_out: Vec<&str> =
+		FILES_THAT_ESCAPE.iter().filter(|(_, source)| source.contains("\"&lt;\"")).map(|(path, _)| *path).collect();
+	assert_eq!(spelled_out, ["src/web/markup.rs"], "only markup::escaped spells out the entities");
+	assert_eq!(FILES_THAT_ESCAPE[0].1.matches("\"&lt;\"").count(), 1, "markup.rs escapes in one place");
 }

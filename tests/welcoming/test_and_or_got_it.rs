@@ -8,10 +8,7 @@ const FALSY_MIDDLE: &str = "x = 1; x and 0 or 2";
 fn and_or_warnings(code: &str) -> usize {
 	take_warnings();
 	eval(code);
-	take_warnings()
-		.iter()
-		.filter(|warning| warning.message.contains("is falsy"))
-		.count()
+	take_warnings().iter().filter(|warning| warning.message.contains("is falsy")).count()
 }
 
 #[test]

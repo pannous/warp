@@ -19,20 +19,11 @@ fn a_package_tool_runs_in_the_package_directory() {
 #[test]
 fn a_package_tool_lives_in_the_package_build_directory() {
 	let tool = package_tool("uniscript").unwrap();
-	let pinned_build = format!(
-		"{}.build",
-		cached_package("uniscript", &pinned_version("uniscript").unwrap()).display()
-	);
-	let own_directories = [
-		Path::new(&pinned_build),
-		Path::new("packages/.build/uniscript"),
-		Path::new("packages/uniscript"),
-	];
-	assert!(
-		own_directories.iter().any(|directory| tool.parent() == Some(directory)),
-		"{}",
-		tool.display()
-	);
+	let pinned_build =
+		format!("{}.build", cached_package("uniscript", &pinned_version("uniscript").unwrap()).display());
+	let own_directories =
+		[Path::new(&pinned_build), Path::new("packages/.build/uniscript"), Path::new("packages/uniscript")];
+	assert!(own_directories.iter().any(|directory| tool.parent() == Some(directory)), "{}", tool.display());
 	assert!(std::fs::read(&tool).unwrap().starts_with(b"\0asm"));
 }
 

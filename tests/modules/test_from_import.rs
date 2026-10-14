@@ -12,10 +12,7 @@ fn from_import_brings_the_named_words() {
 
 #[test]
 fn from_import_leaves_the_other_words_out() {
-	fails_with(
-		"from list import zip; unique([1, 1])",
-		"unique is in the standard module list",
-	);
+	fails_with("from list import zip; unique([1, 1])", "unique is in the standard module list");
 }
 
 #[test]

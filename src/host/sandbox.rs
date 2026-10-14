@@ -60,15 +60,9 @@ pub fn check_write(path: &str) -> Result<(), String> {
 	{
 		return refusal("through a symbolic link");
 	}
-	let existing = absolute
-		.ancestors()
-		.find(|ancestor| ancestor.exists())
-		.unwrap_or(&absolute);
+	let existing = absolute.ancestors().find(|ancestor| ancestor.exists()).unwrap_or(&absolute);
 	let missing = absolute.strip_prefix(existing).unwrap_or(Path::new(""));
-	let resolved = existing
-		.canonicalize()
-		.map_err(|problem| problem.to_string())?
-		.join(missing);
+	let resolved = existing.canonicalize().map_err(|problem| problem.to_string())?.join(missing);
 	match resolved.starts_with(&folder) {
 		true => Ok(()),
 		false => refusal("outside it"),
@@ -78,7 +72,5 @@ pub fn check_write(path: &str) -> Result<(), String> {
 /// The folder a sandboxed program writes in, resolved
 fn state_folder() -> Result<PathBuf, String> {
 	let folder = std::env::var_os(STATE_FOLDER_VARIABLE).map_or_else(std::env::current_dir, |folder| Ok(folder.into()));
-	folder
-		.and_then(|folder| folder.canonicalize())
-		.map_err(|problem| format!("no state folder: {problem}"))
+	folder.and_then(|folder| folder.canonicalize()).map_err(|problem| format!("no state folder: {problem}"))
 }

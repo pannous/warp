@@ -32,6 +32,8 @@ pub struct CompileContext {
 	pub warning_mode: WarningMode,
 	/// the program said `use comments` (P114: off by default)
 	pub comments_as_meta: bool,
+	/// the program said `use reflection` (decision reflection): function values tell where and how they were made
+	pub reflection_mode: bool,
 	pub style: Style,
 	pub hint_mode: HintMode,
 	/// a stage that repeats work already hinted (the emitter's rerun) says nothing twice
@@ -47,6 +49,9 @@ pub struct CompileContext {
 	pub module_definitions: HashSet<String>,
 	/// the modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	pub early_class_modules: HashSet<PathBuf>,
+	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
+	/// class_methods reads `n + 2` of `n = note_value(C4)` as Note's plus before the module joins the program
+	pub module_returned_classes: HashMap<String, String>,
 	/// the unit words the program being lowered defines itself (`m = 2`): no units while it is lowered
 	pub shadowed_units: HashSet<String>,
 	/// the units of the last lowered program's final value, to convert its run-time amount back
@@ -79,6 +84,7 @@ impl Default for CompileContext {
 			source: String::new(),
 			warning_mode: WarningMode::default(),
 			comments_as_meta: false,
+			reflection_mode: false,
 			style: Style::default(),
 			hint_mode: HintMode::Always,
 			hints_muted: false,
@@ -88,6 +94,7 @@ impl Default for CompileContext {
 			module_files: vec![],
 			module_definitions: HashSet::new(),
 			early_class_modules: HashSet::new(),
+			module_returned_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
 			result_units: None,
 			declared_types: HashSet::new(),
@@ -128,9 +135,6 @@ pub fn scoped<T: 'static, R>(field: fn(&mut CompileContext) -> &mut T, value: T,
 		}
 	}
 	let outer = change(|context| std::mem::replace(field(context), value));
-	let _restore = Restore {
-		field,
-		outer: Some(outer),
-	};
+	let _restore = Restore { field, outer: Some(outer) };
 	run()
 }

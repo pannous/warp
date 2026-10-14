@@ -36,10 +36,7 @@ fn test_a_typed_declaration_picks_the_overload() {
 
 #[test]
 fn test_a_typed_parameter_picks_the_overload() {
-	is!(
-		&with(RENDER, "words(d:docx) := d.body; words(render(\"hi\"))"),
-		"<w:t>hi"
-	);
+	is!(&with(RENDER, "words(d:docx) := d.body; words(render(\"hi\"))"), "<w:t>hi");
 }
 
 #[test]
@@ -53,12 +50,7 @@ fn test_no_expected_type_takes_the_first_overload_with_a_warning() {
 	take_warnings();
 	is!(&with(RENDER, "x = render \"hi\"; x.body"), "%PDF hi");
 	let warnings = return_type_warnings();
-	assert!(
-		warnings
-			.iter()
-			.any(|warning| warning.contains("pdf, docx") && warning.contains("as pdf")),
-		"{warnings:?}"
-	);
+	assert!(warnings.iter().any(|warning| warning.contains("pdf, docx") && warning.contains("as pdf")), "{warnings:?}");
 }
 
 #[test]

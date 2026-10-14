@@ -28,16 +28,8 @@ pub use dispatch::*;
 
 /// The words that declare a trait: `trait`, the canonical one (user, 2026-10-03: "short"), then the names other languages
 /// use, each accepted with a hint toward `trait`
-pub const TRAIT_KEYWORDS: [&str; 8] = [
-	"trait",
-	"interface",
-	"protocol",
-	"typeclass",
-	"prototype",
-	"capability",
-	"aspect",
-	"feature",
-];
+pub const TRAIT_KEYWORDS: [&str; 8] =
+	["trait", "interface", "protocol", "typeclass", "prototype", "capability", "aspect", "feature"];
 pub const WITNESS_SEPARATOR: char = '·';
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
 const DEFAULT_PARAMETER: &str = "x";
@@ -93,13 +85,15 @@ impl Operation {
 			.parameters
 			.iter()
 			.enumerate()
-			.map(|(index, parameter)| {
-				if index == 0 || self.symmetric {
-					format!("{parameter}:{type_name}")
-				} else {
-					parameter.clone()
-				}
-			})
+			.map(
+				|(index, parameter)| {
+					if index == 0 || self.symmetric {
+						format!("{parameter}:{type_name}")
+					} else {
+						parameter.clone()
+					}
+				},
+			)
 			.collect();
 		format!("{}({})", self.name, parameters.join(", "))
 	}
@@ -121,14 +115,8 @@ fn builtin_traits() -> Vec<Trait> {
 		default: None,
 	};
 	vec![
-		Trait {
-			name: COMPARABLE.to_string(),
-			operations: vec![binary(COMPARE, "negative, 0 or positive")],
-		},
-		Trait {
-			name: EQUATABLE.to_string(),
-			operations: vec![binary(EQUALS, "true when equal")],
-		},
+		Trait { name: COMPARABLE.to_string(), operations: vec![binary(COMPARE, "negative, 0 or positive")] },
+		Trait { name: EQUATABLE.to_string(), operations: vec![binary(EQUALS, "true when equal")] },
 	]
 }
 
@@ -143,8 +131,7 @@ pub fn witness_name(operation: &str, type_name: &str) -> String {
 
 /// The operation of a witness name, `agent` for `agent·1`; a name that is none is its own
 pub fn witness_operation(name: &str) -> &str {
-	name.split_once(WITNESS_SEPARATOR)
-		.map_or(name, |(operation, _)| operation)
+	name.split_once(WITNESS_SEPARATOR).map_or(name, |(operation, _)| operation)
 }
 
 /// The declared type of a witness name, `person` for `compare·person`
@@ -191,10 +178,7 @@ impl Traits {
 
 	fn operation(&self, name: &str) -> Option<(&Trait, &Operation)> {
 		self.0.iter().find_map(|candidate| {
-			Some((
-				candidate,
-				candidate.operations.iter().find(|operation| operation.name == name)?,
-			))
+			Some((candidate, candidate.operations.iter().find(|operation| operation.name == name)?))
 		})
 	}
 
@@ -203,10 +187,7 @@ impl Traits {
 		if required.name == EQUATABLE {
 			return None;
 		}
-		required
-			.operations
-			.iter()
-			.find(|operation| !witnesses.contains(&witness_name(&operation.name, type_name)))
+		required.operations.iter().find(|operation| !witnesses.contains(&witness_name(&operation.name, type_name)))
 	}
 }
 
@@ -217,14 +198,8 @@ fn missing_conformance(
 	operation: &Operation,
 	needed_by: &str,
 ) -> Node {
-	let message = format!(
-		"{type_name} is not {}: {needed_by} needs {}",
-		required.name,
-		operation.signature(type_name)
-	);
-	Diagnostic::at(located, message)
-		.fix(operation.fix(type_name))
-		.into_error()
+	let message = format!("{type_name} is not {}: {needed_by} needs {}", required.name, operation.signature(type_name));
+	Diagnostic::at(located, message).fix(operation.fix(type_name)).into_error()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -310,11 +285,7 @@ fn untyped_call(call: Node, names: &[String]) -> Node {
 	match call.drop_meta().clone() {
 		Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
 			// `xs: shape list` keeps its type: the list annotation reads it (analyzer::with_list_annotation)
-			let is_list_word = |index: usize| {
-				items
-					.get(index)
-					.is_some_and(|next| next.drop_meta().name() == LIST_WORD)
-			};
+			let is_list_word = |index: usize| items.get(index).is_some_and(|next| next.drop_meta().name() == LIST_WORD);
 			let parameters = items.iter().enumerate().skip(1).map(|(index, parameter)| {
 				if is_list_word(index + 1) {
 					parameter.clone()
@@ -322,11 +293,7 @@ fn untyped_call(call: Node, names: &[String]) -> Node {
 					untyped(parameter.clone())
 				}
 			});
-			Node::List(
-				items[..1].iter().cloned().chain(parameters).collect(),
-				Bracket::Round,
-				separator,
-			)
+			Node::List(items[..1].iter().cloned().chain(parameters).collect(), Bracket::Round, separator)
 		}
 		_ => call,
 	}
@@ -342,34 +309,14 @@ fn with_default_methods(node: Node, traits: &[Trait]) -> Node {
 		let types: Vec<&String> = defined.iter().map(|(_, type_name)| type_name).collect();
 		for type_name in types.into_iter().collect::<std::collections::BTreeSet<_>>() {
 			let defines = |operation: &Operation| defined.contains(&(operation.name.clone(), type_name.clone()));
-			let conforms = declared
-				.operations
-				.iter()
-				.filter(|operation| operation.default.is_none())
-				.all(defines);
-			for operation in declared
-				.operations
-				.iter()
-				.filter(|operation| conforms && !defines(operation))
-			{
+			let conforms = declared.operations.iter().filter(|operation| operation.default.is_none()).all(defines);
+			for operation in declared.operations.iter().filter(|operation| conforms && !defines(operation)) {
 				let Some(body) = &operation.default else { continue };
-				let parameters = operation
-					.parameters
-					.iter()
-					.enumerate()
-					.map(|(index, parameter)| match index {
-						0 => key(
-							Node::Symbol(parameter.clone()),
-							Op::Colon,
-							Node::Symbol(type_name.clone()),
-						),
-						_ => Node::Symbol(parameter.clone()),
-					});
-				let head = parens(
-					std::iter::once(Node::Symbol(operation.name.clone()))
-						.chain(parameters)
-						.collect(),
-				);
+				let parameters = operation.parameters.iter().enumerate().map(|(index, parameter)| match index {
+					0 => key(Node::Symbol(parameter.clone()), Op::Colon, Node::Symbol(type_name.clone())),
+					_ => Node::Symbol(parameter.clone()),
+				});
+				let head = parens(std::iter::once(Node::Symbol(operation.name.clone())).chain(parameters).collect());
 				definitions.push(key(head, Op::Define, body.clone()));
 			}
 		}
@@ -446,11 +393,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 	if keyword_name != TRAIT_KEYWORDS[0] {
 		let written = format!("{keyword_name} {name}{{…}}");
 		crate::normalize::set_position_of(node);
-		crate::normalize::hint(
-			&written,
-			&format!("{} {name}{{…}}", TRAIT_KEYWORDS[0]),
-			"warp calls it a trait",
-		);
+		crate::normalize::hint(&written, &format!("{} {name}{{…}}", TRAIT_KEYWORDS[0]), "warp calls it a trait");
 	}
 	if is_builtin_trait(name) {
 		return Some(Err(Diagnostic::at(keyword, format!("{name} is a built-in trait"))
@@ -475,19 +418,14 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 			.or_else(|| foreign_signature(requirement))
 			.or_else(|| function_type_member(requirement))
 			.ok_or_else(|| {
-				let message = format!(
-					"trait {name} takes operations like `area` or `area(s)`, got {}",
-					requirement.serialize()
-				);
+				let message =
+					format!("trait {name} takes operations like `area` or `area(s)`, got {}", requirement.serialize());
 				Diagnostic::at(requirement, message)
 					.fix("define the operation for each type that conforms, e.g. area(s:square) := …")
 					.into_error()
 			})
 	});
-	Some(operations.collect::<Result<Vec<_>, _>>().map(|operations| Trait {
-		name: name.clone(),
-		operations,
-	}))
+	Some(operations.collect::<Result<Vec<_>, _>>().map(|operations| Trait { name: name.clone(), operations }))
 }
 
 fn operation(requirement: &Node) -> Option<Operation> {
@@ -497,21 +435,13 @@ fn operation(requirement: &Node) -> Option<Operation> {
 			let Node::Symbol(name) = items.first()?.drop_meta() else {
 				return None;
 			};
-			let parameters: Option<Vec<String>> = items[1..]
-				.iter()
-				.map(|parameter| parameter.symbol_name().map(String::from))
-				.collect();
+			let parameters: Option<Vec<String>> =
+				items[1..].iter().map(|parameter| parameter.symbol_name().map(String::from)).collect();
 			(name.clone(), parameters.filter(|parameters| !parameters.is_empty())?)
 		}
 		_ => return None,
 	};
-	Some(Operation {
-		name,
-		parameters,
-		symmetric: false,
-		contract: None,
-		default: None,
-	})
+	Some(Operation { name, parameters, symmetric: false, contract: None, default: None })
 }
 
 /// A method signature as other languages write it in an interface, its receiver implicit: Java's `double area()`,
@@ -523,10 +453,8 @@ fn foreign_signature(requirement: &Node) -> Option<Operation> {
 		parameter.is_symbol(SELF_WORD)
 			|| matches!(parameter.drop_meta(), Node::Key(_, _, word) if word.drop_meta().name() == SELF_WORD)
 	};
-	let names = parameters
-		.iter()
-		.filter(|parameter| !is_receiver(parameter))
-		.map(|parameter| match parameter.drop_meta() {
+	let names =
+		parameters.iter().filter(|parameter| !is_receiver(parameter)).map(|parameter| match parameter.drop_meta() {
 			Node::Key(name, Op::Colon, _) => Some(name.drop_meta().name()),
 			Node::Symbol(name) => Some(name.clone()),
 			// Java's `int n`, Go's `n int`: the word that is no type
@@ -536,16 +464,9 @@ fn foreign_signature(requirement: &Node) -> Option<Operation> {
 				.find(|word| crate::analyzer::type_word_kind(word).is_none()),
 			_ => None,
 		});
-	let names: Vec<String> = std::iter::once(Some(DEFAULT_PARAMETER.to_string()))
-		.chain(names)
-		.collect::<Option<_>>()?;
-	Some(Operation {
-		name,
-		parameters: names,
-		symmetric: false,
-		contract: None,
-		default: None,
-	})
+	let names: Vec<String> =
+		std::iter::once(Some(DEFAULT_PARAMETER.to_string())).chain(names).collect::<Option<_>>()?;
+	Some(Operation { name, parameters: names, symmetric: false, contract: None, default: None })
 }
 
 /// A member typed as a function, as WIT and TypeScript write an interface: `add: (i32, i32) -> i32` is the operation
@@ -566,13 +487,7 @@ fn function_type_member(requirement: &Node) -> Option<Operation> {
 		_ => 1,
 	};
 	let parameters = (1..=count).map(|position| format!("p{position}")).collect();
-	Some(Operation {
-		name: name.clone(),
-		parameters,
-		symmetric: false,
-		contract: None,
-		default: None,
-	})
+	Some(Operation { name: name.clone(), parameters, symmetric: false, contract: None, default: None })
 }
 
 /// The name and parameters of the first call in a signature, through its keyword, result type and modifiers
@@ -602,10 +517,7 @@ fn default_method(requirement: &Node) -> Option<Operation> {
 	let Node::Key(head, Op::Define | Op::Assign, body) = requirement.drop_meta() else {
 		return None;
 	};
-	Some(Operation {
-		default: Some(body.as_ref().clone()),
-		..operation(head)?
-	})
+	Some(Operation { default: Some(body.as_ref().clone()), ..operation(head)? })
 }
 
 /// `x is shape` for a declared trait is a type test, as `x is Comparable`
@@ -613,10 +525,7 @@ fn with_conformance_tests(node: Node, names: &[String]) -> Node {
 	match node {
 		Node::Key(subject, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(name) if names.contains(name)) => {
 			let subject = with_conformance_tests(*subject, names);
-			call(
-				crate::words::IS_TYPE,
-				vec![subject, Node::Text(right.drop_meta().name())],
-			)
+			call(crate::words::IS_TYPE, vec![subject, Node::Text(right.drop_meta().name())])
 		}
 		other => children_rewritten(other, |child| with_conformance_tests(child, names)),
 	}
@@ -639,12 +548,7 @@ pub fn lower_conformances(node: Node) -> Node {
 		return error;
 	}
 	let generics = generic_functions(&node, &registry, &traits);
-	let node = conform(
-		operation_calls(node, &registry, &traits, &generics),
-		&registry,
-		&traits,
-		&generics,
-	);
+	let node = conform(operation_calls(node, &registry, &traits, &generics), &registry, &traits, &generics);
 	let node = match generics.is_empty() {
 		true => node,
 		false => match generic_calls(node, generics) {
@@ -653,6 +557,7 @@ pub fn lower_conformances(node: Node) -> Node {
 		},
 	};
 	let witnesses = defined_functions(&node);
+	let node = witness_references(node, &witnesses);
 	match first_unkept_claim(&node, &traits, &witnesses) {
 		Some(error) => error,
 		None => without_claims(node, &traits),
@@ -667,9 +572,7 @@ fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generic
 		let name = crate::node::leading_name(member);
 		let reads_field = matches!(member.drop_meta(), Node::Symbol(_)) && is_declared_field(registry, &name);
 		!reads_field
-			&& (traits
-				.operation(&name)
-				.is_some_and(|(declared, _)| !is_builtin_trait(&declared.name))
+			&& (traits.operation(&name).is_some_and(|(declared, _)| !is_builtin_trait(&declared.name))
 				|| generics.contains_key(&name))
 	};
 	match node {
@@ -689,10 +592,7 @@ fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generic
 }
 
 fn is_declared_field(registry: &TypeRegistry, name: &str) -> bool {
-	registry
-		.types()
-		.iter()
-		.any(|type_def| type_def.fields.iter().any(|field| field.name == name))
+	registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
 }
 
 /// A warning per definition `size(b:Box)` where Box has a field size: `b.size` and `b.size()` then mean different things
@@ -710,10 +610,7 @@ fn field_method_warnings(node: &Node, registry: &TypeRegistry) -> Vec<Diagnostic
 					.is_some_and(|type_def| type_def.fields.iter().any(|field| field.name == name))
 				{
 					let fill = |template: &str| {
-						template
-							.replace("NAME", &name)
-							.replace("CLASS", &class)
-							.replace("PARAMETER", &parameter)
+						template.replace("NAME", &name).replace("CLASS", &class).replace("PARAMETER", &parameter)
 					};
 					warnings.push(Diagnostic::at(head, fill(FIELD_METHOD_WARNING)).fix(fill(FIELD_METHOD_FIX)));
 				}
@@ -809,10 +706,9 @@ fn typed_uses(node: Node, parameter: &str, type_name: &str) -> Node {
 fn typed_as(node: &Node) -> Option<String> {
 	match node {
 		Node::Meta { data, node } => match data.as_ref() {
-			Node::Data(dada) => dada
-				.downcast_ref::<TypedAs>()
-				.map(|TypedAs(type_name)| type_name.clone())
-				.or_else(|| typed_as(node)),
+			Node::Data(dada) => {
+				dada.downcast_ref::<TypedAs>().map(|TypedAs(type_name)| type_name.clone()).or_else(|| typed_as(node))
+			}
 			_ => typed_as(node),
 		},
 		_ => None,
@@ -847,9 +743,7 @@ fn witness_of(head: &Node, registry: &TypeRegistry, traits: &Traits) -> Option<S
 	let type_name = parameter_type(&parameters[0], registry)?;
 	let fits = !operation.symmetric
 		|| (parameters.len() == operation.parameters.len()
-			&& parameters
-				.iter()
-				.all(|parameter| parameter_type(parameter, registry) == Some(type_name)));
+			&& parameters.iter().all(|parameter| parameter_type(parameter, registry) == Some(type_name)));
 	fits.then(|| witness_name(name, type_name))
 }
 
@@ -859,6 +753,17 @@ fn renamed_head(head: Node, witness: String) -> Node {
 	};
 	items[0] = Node::Symbol(witness);
 	Node::List(items, bracket, separator)
+}
+
+/// A closure of a method that became a witness makes the witness: `sum` of P's `P.methods` is `sum·P`
+fn witness_references(node: Node, witnesses: &[String]) -> Node {
+	if let Some((method, class)) = crate::closures::class_method(&node) {
+		let witness = witness_name(&method, &class);
+		if witnesses.contains(&witness) {
+			return crate::closures::class_method_target(&witness, Some(class));
+		}
+	}
+	children_rewritten(node, |child| witness_references(child, witnesses))
 }
 
 fn defined_functions(node: &Node) -> Vec<String> {
@@ -891,16 +796,8 @@ fn claim_error(declaration: &Node, claimed: &Trait, traits: &Traits, witnesses: 
 	};
 	let type_name = name.name();
 	let operation = traits.missing(claimed, &type_name, witnesses)?;
-	let message = format!(
-		"{type_name} claims {} but defines no {}",
-		claimed.name,
-		operation.signature(&type_name)
-	);
-	Some(
-		Diagnostic::at(declaration, message)
-			.fix(operation.fix(&type_name))
-			.into_error(),
-	)
+	let message = format!("{type_name} claims {} but defines no {}", claimed.name, operation.signature(&type_name));
+	Some(Diagnostic::at(declaration, message).fix(operation.fix(&type_name)).into_error())
 }
 
 /// P177: `class Square implements Shape {…}`, `struct Square: Shape {…}`: the declared traits the parser put on the name
@@ -912,19 +809,15 @@ fn named_claims<'a>(node: &'a Node, traits: &'a Traits) -> Vec<&'a Trait> {
 	else {
 		return vec![];
 	};
-	claimed
-		.iter()
-		.filter_map(|claimed| traits.named(&claimed.drop_meta().name()))
-		.collect()
+	claimed.iter().filter_map(|claimed| traits.named(&claimed.drop_meta().name())).collect()
 }
 
 fn first_unkept_claim(node: &Node, traits: &Traits, witnesses: &[String]) -> Option<Node> {
 	if let Some((declaration, claimed)) = claim(node, traits) {
 		return claim_error(declaration, claimed, traits, witnesses);
 	}
-	if let Some(error) = named_claims(node, traits)
-		.into_iter()
-		.find_map(|claimed| claim_error(node, claimed, traits, witnesses))
+	if let Some(error) =
+		named_claims(node, traits).into_iter().find_map(|claimed| claim_error(node, claimed, traits, witnesses))
 	{
 		return Some(error);
 	}
@@ -932,9 +825,7 @@ fn first_unkept_claim(node: &Node, traits: &Traits, witnesses: &[String]) -> Opt
 		Node::Key(left, _, right) => {
 			first_unkept_claim(left, traits, witnesses).or_else(|| first_unkept_claim(right, traits, witnesses))
 		}
-		Node::List(items, _, _) => items
-			.iter()
-			.find_map(|item| first_unkept_claim(item, traits, witnesses)),
+		Node::List(items, _, _) => items.iter().find_map(|item| first_unkept_claim(item, traits, witnesses)),
 		_ => None,
 	}
 }
@@ -962,11 +853,7 @@ fn instance_signatures(
 			.filter(|type_name| names_classes(type_name, registry) || traits.element_trait(type_name).is_some())
 	};
 	let signature = |function: &crate::compiler::context::UserFunctionDef| {
-		function
-			.params
-			.iter()
-			.map(|param| (param.name.clone(), declared(param)))
-			.collect::<Vec<_>>()
+		function.params.iter().map(|param| (param.name.clone(), declared(param))).collect::<Vec<_>>()
 	};
 	context
 		.user_functions
@@ -982,11 +869,7 @@ fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
 	let symbol = |name: &str| symbol(name);
 	let (found, at, item) = (symbol(FOUND_VARIABLE), symbol(POSITION_VARIABLE), symbol(ITEM_VARIABLE));
 	let assign = |target: &Node, value: Node| key(target.clone(), Op::Assign, value);
-	let equal = key(
-		witness_call(EQUALS, type_name, vec![item.clone(), element.clone()]),
-		Op::Ne,
-		Node::int(0),
-	);
+	let equal = key(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()]), Op::Ne, Node::int(0));
 	let first = key(found.clone(), Op::Eq, Node::int(0));
 	let found_it = if_then(
 		key(first, Op::And, equal),
@@ -994,11 +877,8 @@ fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
 	);
 	let step = assign(&at, key(at.clone(), Op::Add, Node::int(1)));
 	let body = Node::List(vec![step, found_it], Bracket::Curly, Separator::Semicolon);
-	let search = Node::List(
-		vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body],
-		Bracket::None,
-		Separator::Space,
-	);
+	let search =
+		Node::List(vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body], Bracket::None, Separator::Space);
 	Node::List(
 		vec![assign(&found, Node::int(0)), assign(&at, Node::int(0)), search, found],
 		Bracket::Round,

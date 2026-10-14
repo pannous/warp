@@ -27,9 +27,7 @@ pub(super) fn lower_counts(node: Node, library_count: bool) -> Node {
 /// `count(y, x)` is `count x in y`
 pub(super) fn count_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
 	let [count, haystack, needle] = items else { return None };
-	(*bracket == Bracket::Round && count.is_symbol(COUNT_WORD))
-		.then(|| counted_in(count, needle, haystack))
-		.flatten()
+	(*bracket == Bracket::Round && count.is_symbol(COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
 }
 
 /// `y.count(x)` is `count x in y`
@@ -38,10 +36,7 @@ pub(super) fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
 		return None;
 	};
 	let [count, needle] = items.as_slice() else { return None };
-	count
-		.is_symbol(COUNT_WORD)
-		.then(|| counted_in(count, needle, receiver))
-		.flatten()
+	count.is_symbol(COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
 }
 
 pub(super) fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
@@ -69,22 +64,13 @@ pub(super) fn count_in(items: &[Node]) -> Option<Node> {
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
-	if let Some(unit) = matches!(needle.drop_meta(), Node::Symbol(_))
-		.then(|| crate::analyzer::text_unit(&needle.name()))
-		.flatten()
+	if let Some(unit) =
+		matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten()
 	{
 		return Some(key(haystack, Op::Dot, symbol(unit)));
 	}
 	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1)
 		&& !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
-	let template = if substring {
-		COUNT_SUBSTRING_TEMPLATE
-	} else {
-		COUNT_ITEM_TEMPLATE
-	};
-	Some(substitute(
-		substitute(parse(template), COUNT_HAYSTACK, &haystack),
-		COUNT_NEEDLE,
-		needle,
-	))
+	let template = if substring { COUNT_SUBSTRING_TEMPLATE } else { COUNT_ITEM_TEMPLATE };
+	Some(substitute(substitute(parse(template), COUNT_HAYSTACK, &haystack), COUNT_NEEDLE, needle))
 }

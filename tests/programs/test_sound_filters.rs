@@ -11,21 +11,9 @@ fn high_tone_share(settings: &str) -> String {
 
 #[test]
 fn a_lowpass_filter_quiets_high_notes() {
-	is!(
-		&format!("{} < 0.1", high_tone_share("filter = \"lowpass\"\ncutoff = 500")),
-		true
-	);
-	is!(
-		&format!("{} > 0.9", high_tone_share("filter = \"highpass\"\ncutoff = 500")),
-		true
-	);
-	is!(
-		&format!(
-			"{} > 0.9",
-			high_tone_share("filter = \"bandpass\"\ncutoff = 4000\nresonance = 2.0")
-		),
-		true
-	);
+	is!(&format!("{} < 0.1", high_tone_share("filter = \"lowpass\"\ncutoff = 500")), true);
+	is!(&format!("{} > 0.9", high_tone_share("filter = \"highpass\"\ncutoff = 500")), true);
+	is!(&format!("{} > 0.9", high_tone_share("filter = \"bandpass\"\ncutoff = 4000\nresonance = 2.0")), true);
 }
 
 #[test]
@@ -52,8 +40,5 @@ fn unison_voices_are_detuned() {
 fn a_program_variable_named_out_survives_the_filter() {
 	is!("use sound\nout = [1]\nfiltered([0.1, 0.2])\nout.push(2)\ncount(out)", 2);
 	is!("use sound\nout = 7\nchord_samples([440], 0.01, \"sine\")\nout + 1", 8);
-	is!(
-		"use sound\nout = {}\nout.x = 3\nchord_samples([440], 0.01, \"sine\")\nout.x",
-		3
-	);
+	is!("use sound\nout = {}\nout.x = 3\nchord_samples([440], 0.01, \"sine\")\nout.x", 3);
 }

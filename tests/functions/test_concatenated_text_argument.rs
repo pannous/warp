@@ -10,12 +10,6 @@ fn concatenated_text_fills_a_counted_parameter() {
 
 #[test]
 fn text_returned_by_a_call_fills_a_counted_parameter() {
-	is!(
-		"p(t) := (4 - count(t)) times \" \" + t; q(t) := t + \"!\"; p(q(\"a\"))",
-		"  a!"
-	);
-	is!(
-		"use text; \"[\" + pad_right(pad_left(\"ab\", 4), 6) + \"]\"",
-		"[  ab  ]"
-	);
+	is!("p(t) := (4 - count(t)) times \" \" + t; q(t) := t + \"!\"; p(q(\"a\"))", "  a!");
+	is!("use text; \"[\" + pad_right(pad_left(\"ab\", 4), 6) + \"]\"", "[  ab  ]");
 }

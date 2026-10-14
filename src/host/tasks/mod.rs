@@ -170,24 +170,19 @@ fn tick_while_running(table: Weak<TaskTable>) {
 
 /// Does the module call the task words
 pub fn imports_tasks(module: &Module) -> bool {
-	module
-		.imports()
-		.any(|import| import.module() == HOST_LIBRARY && TASK_WORDS.contains(&import.name()))
+	module.imports().any(|import| import.module() == HOST_LIBRARY && TASK_WORDS.contains(&import.name()))
 }
 
 /// Does the module (as bytes, before it is compiled) call the task words: its engine then checks epochs
 /// (util::task_engine)
 pub fn imports_tasks_in(bytes: &[u8]) -> bool {
-	wasmparser::Parser::new(0)
-		.parse_all(bytes)
-		.filter_map(Result::ok)
-		.any(|payload| match payload {
-			wasmparser::Payload::ImportSection(imports) => imports
-				.into_imports()
-				.filter_map(Result::ok)
-				.any(|import| import.module == HOST_LIBRARY && TASK_WORDS.contains(&import.name)),
-			_ => false,
-		})
+	wasmparser::Parser::new(0).parse_all(bytes).filter_map(Result::ok).any(|payload| match payload {
+		wasmparser::Payload::ImportSection(imports) => imports
+			.into_imports()
+			.filter_map(Result::ok)
+			.any(|import| import.module == HOST_LIBRARY && TASK_WORDS.contains(&import.name)),
+		_ => false,
+	})
 }
 
 impl TaskTable {
@@ -272,11 +267,9 @@ impl TaskTable {
 				Ok(status)
 			},
 		)?;
-		linker.func_wrap(
-			HOST_LIBRARY,
-			crate::host::TASK_INSIDE,
-			|caller: Caller<'_, HostState>| -> i64 { caller.data().in_task as i64 },
-		)?;
+		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_INSIDE, |caller: Caller<'_, HostState>| -> i64 {
+			caller.data().in_task as i64
+		})?;
 		let controller = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 {
 			controller.control(id, operation)
@@ -320,15 +313,7 @@ impl TaskTable {
 	fn alone_in(self: &Arc<Self>, caller: &Caller<'_, HostState>) -> impl Fn() -> bool + use<> {
 		let table = self.clone();
 		let in_task = caller.data().in_task;
-		move || {
-			!in_task
-				&& table
-					.slots
-					.lock()
-					.expect("task table")
-					.values()
-					.all(|slot| matches!(slot, Slot::Done(_)))
-		}
+		move || !in_task && table.slots.lock().expect("task table").values().all(|slot| matches!(slot, Slot::Done(_)))
 	}
 
 	fn deliver_to(&self, caller: &mut Caller<'_, HostState>) -> Result<()> {
@@ -392,22 +377,12 @@ impl TaskTable {
 
 	fn spawn(self: &Arc<Self>, function: String, arguments: Vec<TaskValue>, captured: Vec<(String, Captured)>) -> i64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let control = Arc::new(TaskControl {
-			state: Mutex::new(Control::Run),
-			changed: Condvar::new(),
-		});
+		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
 		self.controls.lock().expect("task controls").insert(id, control.clone());
 		let voice = crate::sound::voice(); // the task is a voice of its own, starting where this one stands
 		self.running.fetch_add(1, Ordering::Relaxed);
 		self.slots.lock().expect("task table").insert(id, Slot::Queued);
-		self.pool.submit(TaskJob {
-			id,
-			function,
-			arguments,
-			captured,
-			control,
-			voice,
-		});
+		self.pool.submit(TaskJob { id, function, arguments, captured, control, voice });
 		id
 	}
 
@@ -422,10 +397,7 @@ impl TaskTable {
 		}))
 		.unwrap_or_else(|_| Err("the task panicked".to_string()));
 		self.running.fetch_sub(1, Ordering::Relaxed);
-		self.slots
-			.lock()
-			.expect("task table")
-			.insert(job.id, Slot::Done(result));
+		self.slots.lock().expect("task table").insert(job.id, Slot::Done(result));
 		self.finished.notify_all();
 	}
 
@@ -476,11 +448,9 @@ impl TaskTable {
 				.zip(results.chunks_mut(slice_bytes))
 				.map(|(cells, results)| scope.spawn(|| self.map_slice(&kernel, cells, results)))
 				.collect();
-			slices.into_iter().try_for_each(|slice| {
-				slice
-					.join()
-					.unwrap_or_else(|_| Err(anyhow!("a slice of the map panicked")))
-			})
+			slices
+				.into_iter()
+				.try_for_each(|slice| slice.join().unwrap_or_else(|_| Err(anyhow!("a slice of the map panicked"))))
 		})?;
 		Ok((target - CELL_BYTES) as i64)
 	}
@@ -488,14 +458,9 @@ impl TaskTable {
 	/// The kernel's results for `cells` (f64s as bytes) into `results`, in an instance of their own
 	fn map_slice(self: &Arc<Self>, kernel: &str, cells: &[u8], results: &mut [u8]) -> Result<()> {
 		use crate::wasm_emitter::lists::linear_arrays::SPLIT_BLOCK_NEW;
-		let control = Arc::new(TaskControl {
-			state: Mutex::new(Control::Run),
-			changed: Condvar::new(),
-		});
+		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
 		let (mut store, instance) = self.instance(control)?;
-		let memory = instance
-			.get_memory(&mut store, "memory")
-			.ok_or_else(|| anyhow!("no exported memory"))?;
+		let memory = instance.get_memory(&mut store, "memory").ok_or_else(|| anyhow!("no exported memory"))?;
 		let new = instance.get_typed_func::<i64, i64>(&mut store, SPLIT_BLOCK_NEW)?;
 		let block = new.call(&mut store, (cells.len() / CELL_BYTES) as i64)? as usize + CELL_BYTES;
 		memory.data_mut(&mut store)[block..block + cells.len()].copy_from_slice(cells);
@@ -514,9 +479,8 @@ impl TaskTable {
 		control: Arc<TaskControl>,
 	) -> Result<TaskValue> {
 		let (mut store, instance) = self.instance(control)?;
-		let callee = instance
-			.get_func(&mut store, function)
-			.ok_or_else(|| anyhow!("no exported function {function}"))?;
+		let callee =
+			instance.get_func(&mut store, function).ok_or_else(|| anyhow!("no exported function {function}"))?;
 		let builders = Builders::of(&mut |export| instance.get_export(&mut store, export))
 			.map_err(|failure| anyhow!("{failure}"))?;
 		// what the spawning instance's closures captured, as it had it
@@ -609,10 +573,7 @@ impl TaskTable {
 			drop(slots);
 			if IN_TASK_WORKER.with(std::cell::Cell::get) {
 				if let Some(job) = self.pool.help() {
-					self.own
-						.upgrade()
-						.ok_or_else(|| "task pool ended".to_string())?
-						.run_job(job);
+					self.own.upgrade().ok_or_else(|| "task pool ended".to_string())?.run_job(job);
 					continue;
 				}
 			}
@@ -657,11 +618,7 @@ fn host_error(failure: anyhow::Error) -> wasmtime::Error {
 /// What went wrong in a task, in the words a failure of the main program gets (wasm_emitter::failed_run)
 /// The task's function as the program wrote it: `f`, not its wrapper `f·node`; a go block as `go block 1`
 fn task_name(function: &str) -> String {
-	crate::go_blocks::written_name(
-		function
-			.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX)
-			.unwrap_or(function),
-	)
+	crate::go_blocks::written_name(function.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX).unwrap_or(function))
 }
 
 pub(crate) fn failure_message(failure: anyhow::Error) -> String {
@@ -679,10 +636,7 @@ pub(crate) fn c_string(caller: &mut Caller<'_, HostState>, pointer: i32) -> Resu
 		.ok_or_else(|| anyhow!("no memory export"))?;
 	let bytes = memory.data(&*caller);
 	let start = pointer as usize;
-	let end = bytes[start..]
-		.iter()
-		.position(|byte| *byte == 0)
-		.map_or(bytes.len(), |length| start + length);
+	let end = bytes[start..].iter().position(|byte| *byte == 0).map_or(bytes.len(), |length| start + length);
 	Ok(String::from_utf8_lossy(&bytes[start..end]).into_owned())
 }
 
@@ -712,9 +666,8 @@ fn caller_memory(caller: &mut Caller<'_, HostState>) -> Result<Memory> {
 
 /// The count in the header of the linear array at `block`
 fn cell_count(memory: &[u8], block: i64) -> Result<usize> {
-	let header = memory
-		.get(block as usize..block as usize + CELL_BYTES)
-		.ok_or_else(|| anyhow!("no linear array at {block}"))?;
+	let header =
+		memory.get(block as usize..block as usize + CELL_BYTES).ok_or_else(|| anyhow!("no linear array at {block}"))?;
 	Ok(i64::from_le_bytes(header.try_into()?) as usize)
 }
 

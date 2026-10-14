@@ -21,18 +21,12 @@ fn a_text_for_a_boolean_attribute_warns() {
 		"input{ type: \"checkbox\" aria-label: \"a\" checked: \"no\" }",
 		"checked takes yes or no: the text \"no\" leaves it out",
 	);
-	warns(
-		"button{ disabled: \"yes\" \"b\" }",
-		"disabled takes yes or no: the text \"yes\" leaves it out",
-	);
+	warns("button{ disabled: \"yes\" \"b\" }", "disabled takes yes or no: the text \"yes\" leaves it out");
 }
 
 #[test]
 fn a_word_for_a_number_attribute_warns() {
-	warns(
-		"textarea{ aria-label: \"t\" rows: \"many\" }",
-		"rows takes a number, not \"many\"",
-	);
+	warns("textarea{ aria-label: \"t\" rows: \"many\" }", "rows takes a number, not \"many\"");
 }
 
 #[test]
@@ -49,10 +43,7 @@ fn values_of_the_right_kind_stay_quiet() {
 		"a{ href: \"/x\" \"go\" }",
 		"p{ id: 5 \"x\" }",
 	] {
-		let mistakes: Vec<String> = warnings_of(code)
-			.into_iter()
-			.filter(|warning| warning.contains("takes"))
-			.collect();
+		let mistakes: Vec<String> = warnings_of(code).into_iter().filter(|warning| warning.contains("takes")).collect();
 		assert_eq!(mistakes, Vec::<String>::new(), "{code}");
 	}
 }
@@ -61,8 +52,5 @@ fn values_of_the_right_kind_stay_quiet() {
 #[test]
 fn a_number_attribute_takes_its_keyword_and_dates() {
 	let warned = warnings_of("input{ type: \"number\" aria-label: \"x\" step: \"any\" min: \"2024-01-01\" }");
-	assert!(
-		warned.iter().all(|warning| !warning.contains("takes a number")),
-		"{warned:?}"
-	);
+	assert!(warned.iter().all(|warning| !warning.contains("takes a number")), "{warned:?}");
 }

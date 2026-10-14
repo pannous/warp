@@ -54,11 +54,7 @@ pub fn quotes(used: char, content: &str) {
 		_ => return,
 	};
 	let canonical_quote = text_quote();
-	hint(
-		&format!("{used}{content}{used}"),
-		&format!("{canonical_quote}{content}{canonical_quote}"),
-		reason,
-	);
+	hint(&format!("{used}{content}{used}"), &format!("{canonical_quote}{content}{canonical_quote}"), reason);
 }
 
 /// The operator as written in the source; `is_prefix` tells `!x` from an infix use
@@ -70,7 +66,8 @@ pub fn operator(written: &str, is_prefix: bool) {
 				"and" => logical_operator(written, "and", AND_SYMBOLS),
 				"or" => logical_operator(written, "or", OR_SYMBOLS),
 				"xor" => {}
-				canonical => hint(written, canonical, "standard spelling of the operator"),
+				canonical if canonical != written => hint(written, canonical, "standard spelling of the operator"),
+				_ => {}
 			}
 			return;
 		}
@@ -188,21 +185,13 @@ fn list_type_spelling(list_style: ListTypeStyle, element_words: &[&str]) -> Opti
 		(ListTypeStyle::Plural | ListTypeStyle::Any, _) => None,
 		(ListTypeStyle::Generic, words) => {
 			let (last, nested) = words.split_last()?;
-			let arguments = nested
-				.iter()
-				.rev()
-				.fold(last.to_string(), |inner, word| format!("{word}<{inner}>"));
+			let arguments = nested.iter().rev().fold(last.to_string(), |inner, word| format!("{word}<{inner}>"));
 			Some(format!("{LIST_WORD}<{arguments}>"))
 		}
 		(ListTypeStyle::Of, words) => Some(format!("{LIST_WORD} {OF_WORD} {}", words.join(" of "))),
 		(ListTypeStyle::Bracket, words) => {
 			let (last, nested) = words.split_last()?;
-			Some(
-				nested
-					.iter()
-					.rev()
-					.fold(format!("[{last}]"), |inner, _| format!("[{inner}]")),
-			)
+			Some(nested.iter().rev().fold(format!("[{last}]"), |inner, _| format!("[{inner}]")))
 		}
 	}
 }
@@ -212,10 +201,9 @@ pub fn list_type(used: ListTypeStyle, element_words: &[&str]) {
 	let Some(preferred) = style().list_type.instead_of(used) else {
 		return;
 	};
-	if let (Some(original), Some(canonical)) = (
-		list_type_spelling(used, element_words),
-		list_type_spelling(preferred, element_words),
-	) {
+	if let (Some(original), Some(canonical)) =
+		(list_type_spelling(used, element_words), list_type_spelling(preferred, element_words))
+	{
 		let reason = match preferred {
 			ListTypeStyle::Plural => "a plural type word is a list of that type",
 			ListTypeStyle::Generic => "angle brackets apply the list type to its element type",
@@ -270,11 +258,7 @@ pub fn function_keyword(used: &str, name: &str, params: &str, written_body: Body
 		FunctionStyle::Function => "'function' keyword preferred",
 		FunctionStyle::Any => return,
 	};
-	hint(
-		&spell(used_style, written_body),
-		&spell(preferred, conventional_body(preferred)),
-		reason,
-	);
+	hint(&spell(used_style, written_body), &spell(preferred, conventional_body(preferred)), reason);
 }
 
 /// `idx` shifted by `offset` for the other index base: `s[0]` is `s#1`, brackets count from 0 and `#` from 1

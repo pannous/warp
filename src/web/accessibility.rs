@@ -11,6 +11,7 @@
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 use std::collections::HashSet;
 
 const IMAGE: &str = "img";
@@ -18,8 +19,6 @@ const LINK: &str = "a";
 const BUTTON: &str = "button";
 const LABEL: &str = "label";
 const HTML: &str = "html";
-/// a style sheet's items are rules: `html { … }` there styles the element, it makes none
-const STYLE: &str = "style";
 const META: &str = "meta";
 /// Keys of html that are facts for the page's head, besides `meta: {…}` (decision html-meta, lib/markup.warp html_is_page_fact)
 const PAGE_FACTS: [&str; 2] = ["title", "description"];
@@ -40,9 +39,8 @@ const WARP_ELEMENT_WORDS: [&str; 2] = ["bind", "key"];
 const OWN_ATTRIBUTE_PREFIXES: [&str; 2] = ["data-", "aria-"];
 /// attributes whose value is a number (`rows: 3`, `cols: "40"` as a text of one), or a date or time (`min: "2024-01-01"`),
 /// or the attribute's keyword (NUMBER_KEYWORDS)
-const NUMBER_ATTRIBUTES: [&str; 10] = [
-	"min", "max", "step", "rows", "cols", "colspan", "rowspan", "tabindex", "width", "height",
-];
+const NUMBER_ATTRIBUTES: [&str; 10] =
+	["min", "max", "step", "rows", "cols", "colspan", "rowspan", "tabindex", "width", "height"];
 /// the words a number attribute takes besides numbers: `step: "any"`
 const NUMBER_KEYWORDS: [(&str, &str); 1] = [("step", crate::element_events::ANY_STEP)];
 /// attributes whose value is an address
@@ -120,29 +118,16 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 	if elements.is_empty() {
 		return vec![];
 	}
-	let defined: HashSet<String> = crate::analyzer::function_definitions(program)
-		.user_functions
-		.into_keys()
-		.collect();
+	let defined: HashSet<String> = crate::analyzer::function_definitions(program).user_functions.into_keys().collect();
 	let problems = problems(&elements, &defined);
 	// `divv{ "hi" }` comes back from the run as the attribute `divv: "hi"`: said once, as the unknown tag it is
 	let rendered_as_attributes = elements.iter().flat_map(|element| {
-		element
-			.blocks
-			.iter()
-			.filter(|tag| is_unknown_tag(tag))
-			.map(|tag| no_attribute(tag, &element.tag))
+		element.blocks.iter().filter(|tag| is_unknown_tag(tag)).map(|tag| no_attribute(tag, &element.tag))
 	});
-	let written: HashSet<String> = problems
-		.iter()
-		.map(|(_, message, _)| message.clone())
-		.chain(rendered_as_attributes)
-		.collect();
+	let written: HashSet<String> =
+		problems.iter().map(|(_, message, _)| message.clone()).chain(rendered_as_attributes).collect();
 	crate::compiler::compile_context::change(|context| context.written_problems = written);
-	problems
-		.into_iter()
-		.map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix))
-		.collect()
+	problems.into_iter().map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix)).collect()
 }
 
 /// The problems of the markup a run hands back that the markup as written did not show, as runtime warnings
@@ -170,15 +155,10 @@ fn computed_tags_named(node: Node) -> Node {
 
 /// `defined`: the program's own names, whose `card{…}` is a component, no unknown tag
 fn problems<'a>(elements: &[Element<'a>], defined: &HashSet<String>) -> Vec<Problem<'a>> {
-	let labeled_ids: HashSet<String> = elements
-		.iter()
-		.filter(|element| element.tag == LABEL)
-		.filter_map(|label| label.attribute("for"))
-		.collect();
-	let mut problems: Vec<Problem> = elements
-		.iter()
-		.filter_map(|element| element_problem(element, &labeled_ids))
-		.collect();
+	let labeled_ids: HashSet<String> =
+		elements.iter().filter(|element| element.tag == LABEL).filter_map(|label| label.attribute("for")).collect();
+	let mut problems: Vec<Problem> =
+		elements.iter().filter_map(|element| element_problem(element, &labeled_ids)).collect();
 	problems.extend(elements.iter().flat_map(|element| markup_mistakes(element, defined)));
 	problems.extend(elements.iter().flat_map(value_mistakes));
 	problems.extend(elements.iter().filter_map(nesting_mistake));
@@ -208,10 +188,7 @@ impl Element<'_> {
 	}
 
 	fn attribute(&self, name: &str) -> Option<String> {
-		self.attributes
-			.iter()
-			.find(|(attribute, _)| attribute == name)
-			.and_then(|(_, value)| plain_value(value))
+		self.attributes.iter().find(|(attribute, _)| attribute == name).and_then(|(_, value)| plain_value(value))
 	}
 
 	fn is_named(&self) -> bool {
@@ -295,10 +272,9 @@ fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 				(Some(text), _) if NUMBER_ATTRIBUTES.contains(&name.as_str()) && !is_number_value(name, &text) => {
 					mistake(format!("{name} takes a number, not {text:?}"), format!("{name}: 3"))
 				}
-				(None, Node::Number(number)) if ADDRESS_ATTRIBUTES.contains(&name.as_str()) => mistake(
-					format!("{name} takes an address, not the number {number}"),
-					format!("{name}: \"/page\""),
-				),
+				(None, Node::Number(number)) if ADDRESS_ATTRIBUTES.contains(&name.as_str()) => {
+					mistake(format!("{name} takes an address, not the number {number}"), format!("{name}: \"/page\""))
+				}
 				_ => None,
 			}
 		})
@@ -316,10 +292,7 @@ fn nesting_mistake<'a>(element: &Element<'a>) -> Option<Problem<'a>> {
 	let tag = element.tag.as_str();
 	let mistake = |reason: &str, fix: String| Some((element.node, format!("{tag} inside {parent}: {reason}"), fix));
 	match tag {
-		HTML => mistake(
-			"html is the page itself",
-			format!("drop html{{ … }} around the {parent}'s content"),
-		),
+		HTML => mistake("html is the page itself", format!("drop html{{ … }} around the {parent}'s content")),
 		_ if parent == "p" && BLOCK_ELEMENTS.contains(&tag) => {
 			mistake("the browser ends the p before it", "make the p a div".into())
 		}
@@ -388,14 +361,10 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 	};
 	let mut mistakes = vec![];
 	// a style sheet's items are rules, no attributes; `meta: {author: "Ann"}` of html names metas (page facts)
-	if element.tag == STYLE || names_metas(element) {
+	if element.tag == STYLE_WORD || names_metas(element) {
 		return mistakes;
 	}
-	for tag in element
-		.blocks
-		.iter()
-		.filter(|tag| is_unknown_tag(tag) && !defined.contains(*tag))
-	{
+	for tag in element.blocks.iter().filter(|tag| is_unknown_tag(tag) && !defined.contains(*tag)) {
 		let fix = near(tag, crate::web::markup::element_names().to_vec(), "div".to_string());
 		mistakes.push((element.node, format!("{tag} is no element: it shows as text"), fix));
 	}
@@ -410,55 +379,24 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 			|| crate::transitions::ELEMENT_WORDS.contains(&name.as_str())
 			|| OWN_ATTRIBUTE_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
 		if !renders {
-			let fix = near(
-				name,
-				crate::web::markup::attribute_names().to_vec(),
-				format!("data-{name}"),
-			);
+			let fix = near(name, crate::web::markup::attribute_names().to_vec(), format!("data-{name}"));
 			mistakes.push((element.node, no_attribute(name, &element.tag), fix));
 		}
 	}
-	let events = || {
-		crate::event_signals::element_events()
-			.map(|event| event.to_string())
-			.collect::<Vec<_>>()
-	};
-	for event in element
-		.events
-		.iter()
-		.filter(|event| !crate::event_signals::is_element_event(event))
-	{
+	let events = || crate::event_signals::element_events().map(|event| event.to_string()).collect::<Vec<_>>();
+	for event in element.events.iter().filter(|event| !crate::event_signals::is_element_event(event)) {
 		let message = format!("{event} is no event of {}: the handler shows as text", element.tag);
-		mistakes.push((
-			element.node,
-			message,
-			near(event, events(), format!("one of {}", events().join(", "))),
-		));
+		mistakes.push((element.node, message, near(event, events(), format!("one of {}", events().join(", ")))));
 	}
 	if element.tag == INPUT {
-		if let Some(kind) = element
-			.attribute(TYPE)
-			.filter(|kind| !INPUT_TYPES.contains(&kind.as_str()))
-		{
-			let fix = near(
-				&kind,
-				INPUT_TYPES.iter().map(|kind| kind.to_string()).collect(),
-				"text".to_string(),
-			);
-			mistakes.push((
-				element.node,
-				format!("{kind} is no input type: the browser shows a text field"),
-				fix,
-			));
+		if let Some(kind) = element.attribute(TYPE).filter(|kind| !INPUT_TYPES.contains(&kind.as_str())) {
+			let fix = near(&kind, INPUT_TYPES.iter().map(|kind| kind.to_string()).collect(), "text".to_string());
+			mistakes.push((element.node, format!("{kind} is no input type: the browser shows a text field"), fix));
 		}
 	}
 	if element.has_content && crate::web::markup::is_void_element(&element.tag) {
 		let fix = format!("the content beside {}, or an element that holds it", element.tag);
-		mistakes.push((
-			element.node,
-			format!("{} takes no content: it is dropped", element.tag),
-			fix,
-		));
+		mistakes.push((element.node, format!("{} takes no content: it is dropped", element.tag), fix));
 	}
 	mistakes
 }
@@ -479,10 +417,7 @@ fn names_metas(element: &Element) -> bool {
 	let meta_attributes = crate::web::markup::meta_attribute_names();
 	element.tag == META
 		&& element.parent.as_deref() == Some(HTML)
-		&& !element
-			.attributes
-			.iter()
-			.any(|(name, _)| meta_attributes.contains(name))
+		&& !element.attributes.iter().any(|(name, _)| meta_attributes.contains(name))
 }
 
 /// A block's name no element, attribute nor warp word: `divv` of `divv{ "hi" }`
@@ -542,34 +477,22 @@ fn collect<'a>(
 		found.push(Element {
 			node,
 			tag: tag.to_string(),
-			attributes: head_attributes
-				.iter()
-				.chain(items.iter().copied())
-				.filter_map(written_attribute)
-				.collect(),
-			has_content: items
-				.iter()
-				.any(|item| written_attribute(item).is_none() && says_something(item)),
+			attributes: head_attributes.iter().chain(items.iter().copied()).filter_map(written_attribute).collect(),
+			has_content: items.iter().any(|item| written_attribute(item).is_none() && says_something(item)),
 			inside_label,
 			parent: parent.map(str::to_string),
 			events,
 			blocks: items.iter().filter_map(|item| block_name(item)).collect(),
 		});
-		if tag == STYLE {
+		if tag == STYLE_WORD {
 			return;
 		}
 		let inside_label = inside_label || tag == LABEL;
-		items
-			.into_iter()
-			.for_each(|item| collect(item, classes, inside_label, Some(tag), found));
-		return handler_bodies
-			.into_iter()
-			.for_each(|body| collect(body, classes, inside_label, None, found));
+		items.into_iter().for_each(|item| collect(item, classes, inside_label, Some(tag), found));
+		return handler_bodies.into_iter().for_each(|body| collect(body, classes, inside_label, None, found));
 	}
 	match node.drop_meta() {
-		Node::List(items, _, _) => items
-			.iter()
-			.for_each(|item| collect(item, classes, inside_label, parent, found)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, classes, inside_label, parent, found)),
 		// the head of `add(a: i32) := …` holds parameters, the target of `a:V = …` a typed variable: not markup
 		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, classes, inside_label, parent, found),
 		// `c ? then : else`: the colon parts the branches, it makes no element
@@ -625,9 +548,7 @@ fn data_map_fields<'a>(node: &'a Node, parent: Option<&str>) -> Option<&'a [Node
 fn map_fields(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {
 		Node::List(fields, Bracket::Curly, _)
-			if fields
-				.iter()
-				.all(|field| matches!(field.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+			if fields.iter().all(|field| matches!(field.drop_meta(), Node::Key(_, Op::Colon, _))) =>
 		{
 			Some(fields)
 		}
@@ -638,8 +559,7 @@ fn map_fields(node: &Node) -> Option<&[Node]> {
 fn names_no_element(fields: &[Node]) -> bool {
 	fields.iter().any(|field| match field.drop_meta() {
 		Node::Key(name, _, value) => {
-			name.symbol_name()
-				.is_some_and(|name| !crate::web::markup::is_element_tag(name))
+			name.symbol_name().is_some_and(|name| !crate::web::markup::is_element_tag(name))
 				|| map_fields(value).is_some_and(names_no_element)
 		}
 		_ => false,
@@ -667,23 +587,19 @@ fn element_problem<'a>(element: &Element<'a>, labeled_ids: &HashSet<String>) -> 
 			"button without text: a screen reader announces just \"button\"",
 			"a text inside it, or aria-label: \"…\"",
 		),
-		LINK if !element.has("href") => warning(
-			"a without href: not reachable by keyboard",
-			"href: \"…\", or a button for an action",
-		),
-		LINK if !element.has_content && !element.is_named() => warning(
-			"a without text: a screen reader reads its address",
-			"a text inside it, or aria-label: \"…\"",
-		),
+		LINK if !element.has("href") => {
+			warning("a without href: not reachable by keyboard", "href: \"…\", or a button for an action")
+		}
+		LINK if !element.has_content && !element.is_named() => {
+			warning("a without text: a screen reader reads its address", "a text inside it, or aria-label: \"…\"")
+		}
 		HTML if !element.has("lang") => warning("html without lang: screen readers guess the language", "lang: \"en\""),
 		_ => None,
 	}
 }
 
 fn needs_label(field: &Element, labeled_ids: &HashSet<String>) -> bool {
-	let self_labeled = field
-		.attribute("type")
-		.is_some_and(|kind| SELF_LABELED_INPUTS.contains(&kind.as_str()));
+	let self_labeled = field.attribute("type").is_some_and(|kind| SELF_LABELED_INPUTS.contains(&kind.as_str()));
 	let labeled_by_id = field.attribute("id").is_some_and(|id| labeled_ids.contains(&id));
 	!(self_labeled || labeled_by_id || field.inside_label || field.is_named())
 }
@@ -693,11 +609,7 @@ fn skipped_headings<'a>(elements: &[Element<'a>]) -> Vec<Problem<'a>> {
 	let mut previous = 0;
 	let mut warnings = vec![];
 	for element in elements {
-		let Some(level) = HEADINGS
-			.iter()
-			.position(|heading| *heading == element.tag)
-			.map(|index| index + 1)
-		else {
+		let Some(level) = HEADINGS.iter().position(|heading| *heading == element.tag).map(|index| index + 1) else {
 			continue;
 		};
 		if previous > 0 && level > previous + 1 {

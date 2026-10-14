@@ -20,17 +20,7 @@ use ValType::Ref;
 /// node_part(node, part) -> the part (NODE_PARTS' index) of a node, null when it has none
 pub const NODE_PART: &str = "node_part";
 /// The parts node_part reads, by the field name that reads each
-pub const NODE_PARTS: [&str; 9] = [
-	"key",
-	"value",
-	"op",
-	"name",
-	"bracket",
-	"separator",
-	"line",
-	"column",
-	"comment",
-];
+pub const NODE_PARTS: [&str; 9] = ["key", "value", "op", "name", "bracket", "separator", "line", "column", "comment"];
 const KEY_PART: i32 = 0;
 const VALUE_PART: i32 = 1;
 const OP_PART: i32 = 2;
@@ -55,12 +45,8 @@ const KEY: &str = "key";
 const BRACKETED: &str = "bracketed";
 const SEPARATED: &str = "separated";
 /// name, number of arguments, result kind
-pub const NODE_BUILTINS: [(&str, usize, Kind); 4] = [
-	(SYMBOL_WORD, 1, Kind::Symbol),
-	(KEY, 3, Kind::Key),
-	(BRACKETED, 2, Kind::List),
-	(SEPARATED, 2, Kind::List),
-];
+pub const NODE_BUILTINS: [(&str, usize, Kind); 4] =
+	[(SYMBOL_WORD, 1, Kind::Symbol), (KEY, 3, Kind::Key), (BRACKETED, 2, Kind::List), (SEPARATED, 2, Kind::List)];
 /// The opening brackets by their bracket info in a list's kind field (Curly 0, Square 1, Round 2, Less 3, None 5)
 const BRACKETS: [(&str, i64); 5] = [("{", 0), ("[", 1), ("(", 2), ("<", 3), ("", 5)];
 /// The bracket info of a round group `(…)`
@@ -71,10 +57,7 @@ const UNKNOWN_SEPARATOR: &str = "unknown separator: ";
 
 /// The part a field name reads when the node has no field of that name
 pub fn node_part(field: &str) -> Option<i32> {
-	NODE_PARTS
-		.iter()
-		.position(|part| *part == field)
-		.map(|part| part as i32)
+	NODE_PARTS.iter().position(|part| *part == field).map(|part| part as i32)
 }
 
 /// Runtime functions the node words call
@@ -82,10 +65,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(NODE_PART) {
 		required.insert("new_text");
 	}
-	if [NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED]
-		.iter()
-		.any(|name| required.contains(name))
-	{
+	if [NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED].iter().any(|name| required.contains(name)) {
 		required.extend([
 			OPERATOR_CODE,
 			BRACKET_CODE,
@@ -126,15 +106,7 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let nullable_node_ref = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let kind_of = |node: u32| {
-			[
-				I::LocalGet(node),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 0,
-				},
-			]
-		};
+		let kind_of = |node: u32| [I::LocalGet(node), I::StructGet { struct_type_index: node_type, field_index: 0 }];
 
 		if self.should_emit_function(NODE_PART) {
 			let (node, part, kind, code) = (0, 1, 2, 3);
@@ -153,103 +125,56 @@ impl WasmGcEmitter {
 							I::I64Eq,
 						]
 					};
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(node),
-							I::RefIsNull,
-							I::If(BlockType::Empty),
-							I::RefNull(HeapType::Concrete(node_type)),
-							I::Return,
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(node), I::RefIsNull, I::If(BlockType::Empty),
+							I::RefNull(HeapType::Concrete(node_type)), I::Return,
+						I::End,
+					]);
 					s.emit_meta_part(f, node, part);
 					// `(a * 2)` in quoted code: a group of one item has its item's key, value, op and name (card data-op)
 					Self::emit_list(
 						f,
-						&[
-							I::Loop(BlockType::Empty),
-							I::LocalGet(part),
-							I::I32Const(BRACKET_PART),
-							I::I32LtS,
-						],
+						&[I::Loop(BlockType::Empty), I::LocalGet(part), I::I32Const(BRACKET_PART), I::I32LtS],
 					);
 					Self::emit_list(f, &kind_of(node));
 					f.instruction(&I::LocalSet(kind));
 					Self::emit_list(f, &is_kind(kind, Kind::List));
-					Self::emit_list(
-						f,
-						&[
-							I::I32And,
-							I::LocalGet(kind),
-							I::I64Const(KIND_BITS),
-							I::I64ShrU,
-							I::I64Const(0xFF),
-							I::I64And,
-							I::I64Const(ROUND_INFO),
-							I::I64Eq,
-							I::I32And,
-							I::LocalGet(node),
-							I::StructGet {
-								struct_type_index: node_type,
-								field_index: 2,
-							},
-							I::RefIsNull,
-							I::I32And,
-							I::If(BlockType::Empty),
-							I::LocalGet(node),
-							I::StructGet {
-								struct_type_index: node_type,
-								field_index: 1,
-							},
-							I::RefCastNullable(HeapType::Concrete(node_type)),
-							I::LocalSet(node),
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I32And, I::LocalGet(kind), I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(0xFF), I::I64And,
+						I::I64Const(ROUND_INFO), I::I64Eq, I::I32And, I::LocalGet(node),
+						I::StructGet { struct_type_index: node_type, field_index: 2 }, I::RefIsNull, I::I32And,
+						I::If(BlockType::Empty),
+							I::LocalGet(node), I::StructGet { struct_type_index: node_type, field_index: 1 },
+							I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(node),
 							I::Br(1),
-							I::End,
-							I::End,
-						],
-					);
+						I::End,
+						I::End,
+					]);
 					Self::emit_list(f, &kind_of(node));
-					Self::emit_list(
-						f,
-						&[
-							I::LocalTee(kind),
-							I::I64Const(KIND_BITS),
-							I::I64ShrU,
-							I::I32WrapI64,
-							I::I32Const(0xFF),
-							I::I32And,
-							I::LocalSet(code),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalTee(kind), I::I64Const(KIND_BITS), I::I64ShrU, I::I32WrapI64, I::I32Const(0xFF),
+						I::I32And, I::LocalSet(code),
+					]);
 					let part_is = |wanted: i32| [I::LocalGet(part), I::I32Const(wanted), I::I32Eq];
 					// a key's own parts
 					for (wanted, field_index) in [(KEY_PART, 1), (VALUE_PART, 2)] {
 						Self::emit_list(f, &part_is(wanted));
 						Self::emit_list(f, &is_kind(kind, Kind::Key));
-						Self::emit_list(
-							f,
-							&[
-								I::I32And,
-								I::If(BlockType::Empty),
-								I::LocalGet(node),
-								I::StructGet {
-									struct_type_index: node_type,
-									field_index,
-								},
-							],
-						);
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::I32And, I::If(BlockType::Empty),
+								I::LocalGet(node), I::StructGet { struct_type_index: node_type, field_index },
+						]);
 						if field_index == 1 {
 							f.instruction(&I::RefCastNullable(HeapType::Concrete(node_type)));
 						}
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
-					let written: Vec<(i64, &str)> = OP_CODES
-						.iter()
-						.enumerate()
-						.map(|(code, op)| (code as i64, op.as_str()))
-						.collect();
+					let written: Vec<(i64, &str)> =
+						OP_CODES.iter().enumerate().map(|(code, op)| (code as i64, op.as_str())).collect();
 					s.emit_part_text(f, &part_is(OP_PART), &is_kind(kind, Kind::Key), code, &written);
 					s.emit_part_text(
 						f,
@@ -258,94 +183,54 @@ impl WasmGcEmitter {
 						code,
 						&BRACKETS.map(|(bracket, info)| (info, bracket)),
 					);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(kind),
-							I::I64Const(SEPARATOR_MASK),
-							I::I64And,
-							I::I64Const(SEPARATOR_SHIFT),
-							I::I64ShrU,
-							I::I32WrapI64,
-							I::LocalSet(code),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(kind), I::I64Const(SEPARATOR_MASK), I::I64And, I::I64Const(SEPARATOR_SHIFT),
+						I::I64ShrU, I::I32WrapI64, I::LocalSet(code),
+					]);
 					let separators = super::super::separator_texts();
 					let separators: Vec<(i64, &str)> =
 						separators.iter().map(|(code, text)| (*code, text.as_str())).collect();
-					s.emit_part_text(
-						f,
-						&part_is(SEPARATOR_PART),
-						&is_kind(kind, Kind::List),
-						code,
-						&separators,
-					);
+					s.emit_part_text(f, &part_is(SEPARATOR_PART), &is_kind(kind, Kind::List), code, &separators);
 					// a word's name, or the name of a key's key (`x` of `x: 3`, of `x.y: 3` too)
 					Self::emit_list(f, &part_is(NAME_PART));
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::Loop(BlockType::Empty)]);
 					Self::emit_list(f, &is_kind(kind, Kind::Key));
-					Self::emit_list(
-						f,
-						&[
-							I::If(BlockType::Empty),
-							I::LocalGet(node),
-							I::StructGet {
-								struct_type_index: node_type,
-								field_index: 1,
-							},
-							I::RefCastNonNull(HeapType::Concrete(node_type)),
-							I::LocalTee(node),
-							I::StructGet {
-								struct_type_index: node_type,
-								field_index: 0,
-							},
-							I::LocalSet(kind),
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::If(BlockType::Empty),
+							I::LocalGet(node), I::StructGet { struct_type_index: node_type, field_index: 1 },
+							I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalTee(node),
+							I::StructGet { struct_type_index: node_type, field_index: 0 }, I::LocalSet(kind),
 							I::Br(1),
-							I::End,
-							I::End,
-						],
-					);
+						I::End,
+						I::End,
+					]);
 					Self::emit_list(f, &is_kind(kind, Kind::Symbol));
 					Self::emit_list(f, &is_kind(kind, Kind::Text));
 					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 					s.emit_text_field(f, node, 0);
 					s.emit_text_field(f, node, 1);
 					s.call(f, "new_text");
-					Self::emit_list(
-						f,
-						&[I::Return, I::End, I::End, I::RefNull(HeapType::Concrete(node_type))],
-					);
+					Self::emit_list(f, &[I::Return, I::End, I::End, I::RefNull(HeapType::Concrete(node_type))]);
 				},
 			);
 		}
 
 		// the type is there exactly when node_at is (emit_gc_types)
 		if let (true, Some(meta_node_type)) = (self.should_emit_function(NODE_AT), self.type_manager.meta_node_type) {
-			let field = |field_index| I::StructGet {
-				struct_type_index: node_type,
-				field_index,
-			};
+			let field = |field_index| I::StructGet { struct_type_index: node_type, field_index };
 			self.runtime_function(
 				NODE_AT,
 				vec![node_ref, ValType::I64, ValType::I64, nullable_node_ref],
 				vec![node_ref],
 				vec![],
 				|_, f| {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(0),
-							field(0),
-							I::LocalGet(0),
-							field(1),
-							I::LocalGet(0),
-							field(2),
-							I::LocalGet(1),
-							I::LocalGet(2),
-							I::LocalGet(3),
-							I::StructNew(meta_node_type),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(0), field(0), I::LocalGet(0), field(1), I::LocalGet(0), field(2), I::LocalGet(1),
+						I::LocalGet(2), I::LocalGet(3), I::StructNew(meta_node_type),
+					]);
 				},
 			);
 			// the host builds a run-time parse's positions with it (tasks.rs TaskValue::Positioned)
@@ -355,11 +240,7 @@ impl WasmGcEmitter {
 		if self.should_emit_function(NEW_KEY_OF) {
 			self.emit_code_of_text(
 				OPERATOR_CODE,
-				&OP_CODES
-					.iter()
-					.enumerate()
-					.map(|(code, op)| (code as i64, op.as_str()))
-					.collect::<Vec<_>>(),
+				&OP_CODES.iter().enumerate().map(|(code, op)| (code as i64, op.as_str())).collect::<Vec<_>>(),
 			);
 			// new_key_of(left, op, right): the key `left op right`, an Error for a text no operator is written as
 			let (left, op, right) = (0, 1, 2);
@@ -378,14 +259,7 @@ impl WasmGcEmitter {
 		}
 
 		let brackets = BRACKETS.map(|(bracket, info)| (info, bracket.to_string()));
-		self.emit_relisted(
-			NEW_BRACKETED,
-			BRACKET_CODE,
-			&brackets,
-			KIND_BITS,
-			KIND_MASK << KIND_BITS,
-			UNKNOWN_BRACKET,
-		);
+		self.emit_relisted(NEW_BRACKETED, BRACKET_CODE, &brackets, KIND_BITS, KIND_MASK << KIND_BITS, UNKNOWN_BRACKET);
 		let separators = super::super::separator_texts();
 		self.emit_relisted(
 			NEW_SEPARATED,
@@ -399,15 +273,7 @@ impl WasmGcEmitter {
 
 	/// In node_part: a $MetaNode's line or column (an Int) or comment (a Text or null), null from any other node
 	fn emit_meta_part(&mut self, f: &mut Function, node: u32, part: u32) {
-		Self::emit_list(
-			f,
-			&[
-				I::LocalGet(part),
-				I::I32Const(LINE_PART),
-				I::I32GeS,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_list(f, &[I::LocalGet(part), I::I32Const(LINE_PART), I::I32GeS, I::If(BlockType::Empty)]);
 		if let Some(meta_node_type) = self.type_manager.meta_node_type {
 			self.emit_meta_fields(f, node, part, meta_node_type);
 		}
@@ -420,28 +286,14 @@ impl WasmGcEmitter {
 			[
 				I::LocalGet(node),
 				I::RefCastNonNull(HeapType::Concrete(meta_node_type)),
-				I::StructGet {
-					struct_type_index: meta_node_type,
-					field_index,
-				},
+				I::StructGet { struct_type_index: meta_node_type, field_index },
 			]
 		};
-		let is_meta = [
-			I::LocalGet(node),
-			I::RefTestNullable(HeapType::Concrete(meta_node_type)),
-		];
+		let is_meta = [I::LocalGet(node), I::RefTestNullable(HeapType::Concrete(meta_node_type))];
 		Self::emit_list(f, &is_meta);
 		f.instruction(&I::If(BlockType::Empty));
 		for (wanted, field_index) in META_FIELDS {
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(part),
-					I::I32Const(wanted),
-					I::I32Eq,
-					I::If(BlockType::Empty),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(part), I::I32Const(wanted), I::I32Eq, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &meta_field(field_index));
 			if field_index != META_FIELDS[2].1 {
 				self.call(f, "new_int");
@@ -469,15 +321,7 @@ impl WasmGcEmitter {
 		self.emit_code_of_text(coder, &written);
 		let node_ref = Ref(self.node_ref(false));
 		let node_type = self.type_manager.node_type;
-		let kind_of = |node: u32| {
-			[
-				I::LocalGet(node),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 0,
-				},
-			]
-		};
+		let kind_of = |node: u32| [I::LocalGet(node), I::StructGet { struct_type_index: node_type, field_index: 0 }];
 		let nullable_node_ref = Ref(self.node_ref(true));
 		let (items, text) = (0, 1);
 		let relisted = self.next_func_idx;
@@ -493,44 +337,22 @@ impl WasmGcEmitter {
 				s.emit_fail_if(f, "not_a_list");
 				s.emit_code_or_error(f, text, code, coder, prefix);
 				Self::emit_list(f, &kind_of(items));
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(!mask),
-						I::I64And,
-						I::LocalGet(code),
-						I::I64Const(shift),
-						I::I64Shl,
-						I::I64Or,
-						I::LocalGet(items),
-						I::StructGet {
-							struct_type_index: node_type,
-							field_index: 1,
-						},
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(!mask), I::I64And, I::LocalGet(code), I::I64Const(shift), I::I64Shl, I::I64Or,
+					I::LocalGet(items), I::StructGet { struct_type_index: node_type, field_index: 1 },
+				]);
 				// the rest of the list is relisted too: a written list carries its info in every cell
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(items),
-						I::StructGet {
-							struct_type_index: node_type,
-							field_index: 2,
-						},
-						I::LocalTee(rest),
-						I::RefIsNull,
-						I::If(BlockType::Result(nullable_node_ref)),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(items), I::StructGet { struct_type_index: node_type, field_index: 2 },
+					I::LocalTee(rest), I::RefIsNull, I::If(BlockType::Result(nullable_node_ref)),
 						I::LocalGet(rest),
-						I::Else,
-						I::LocalGet(rest),
-						I::RefAsNonNull,
-						I::LocalGet(text),
-						I::Call(relisted),
-						I::End,
-						I::StructNew(node_type),
-					],
-				);
+					I::Else,
+						I::LocalGet(rest), I::RefAsNonNull, I::LocalGet(text), I::Call(relisted),
+					I::End,
+					I::StructNew(node_type),
+				]);
 			},
 		);
 	}
@@ -549,17 +371,11 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I32And, I::If(BlockType::Empty)]);
 		for (entry, text) in written {
 			let (pointer, length) = self.allocate_string(text);
-			Self::emit_list(
-				func,
-				&[
-					I::LocalGet(code),
-					I::I32Const(*entry as i32),
-					I::I32Eq,
-					I::If(BlockType::Empty),
-					I::I32Const(pointer as i32),
-					I::I32Const(length as i32),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty),
+					I::I32Const(pointer as i32), I::I32Const(length as i32),
+			]);
 			self.call(func, "new_text");
 			Self::emit_list(func, &[I::Return, I::End]);
 		}
@@ -570,51 +386,29 @@ impl WasmGcEmitter {
 	fn emit_code_of_text(&mut self, name: &'static str, written: &[(i64, &str)]) {
 		let node_ref = Ref(self.node_ref(false));
 		let written: Vec<(i64, String)> = written.iter().map(|(code, text)| (*code, text.to_string())).collect();
-		self.runtime_function(
-			name,
-			vec![node_ref],
-			vec![ValType::I64],
-			vec![ValType::I32, ValType::I32],
-			|s, f| {
-				let (pointer, length) = (1, 2);
-				s.emit_text_field(f, 0, 0);
-				f.instruction(&I::LocalSet(pointer));
-				s.emit_text_field(f, 0, 1);
-				f.instruction(&I::LocalSet(length));
-				for (code, text) in &written {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(length),
-							I::I32Const(text.len() as i32),
-							I::I32Eq,
-							I::If(BlockType::Empty),
-							I::I32Const(1),
-						],
-					);
-					for (offset, byte) in text.bytes().enumerate() {
-						Self::emit_list(
-							f,
-							&[
-								I::LocalGet(pointer),
-								I::I32Load8U(MemArg {
-									offset: offset as u64,
-									..BYTE
-								}),
-								I::I32Const(byte as i32),
-								I::I32Eq,
-								I::I32And,
-							],
-						);
-					}
-					Self::emit_list(
-						f,
-						&[I::If(BlockType::Empty), I::I64Const(*code), I::Return, I::End, I::End],
-					);
+		self.runtime_function(name, vec![node_ref], vec![ValType::I64], vec![ValType::I32, ValType::I32], |s, f| {
+			let (pointer, length) = (1, 2);
+			s.emit_text_field(f, 0, 0);
+			f.instruction(&I::LocalSet(pointer));
+			s.emit_text_field(f, 0, 1);
+			f.instruction(&I::LocalSet(length));
+			for (code, text) in &written {
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(length), I::I32Const(text.len() as i32), I::I32Eq, I::If(BlockType::Empty),
+						I::I32Const(1),
+				]);
+				for (offset, byte) in text.bytes().enumerate() {
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(pointer), I::I32Load8U(MemArg { offset: offset as u64, ..BYTE }),
+						I::I32Const(byte as i32), I::I32Eq, I::I32And,
+					]);
 				}
-				f.instruction(&I::I64Const(-1));
-			},
-		);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(*code), I::Return, I::End, I::End]);
+			}
+			f.instruction(&I::I64Const(-1));
+		});
 	}
 
 	/// The code of the text in Node local `text` by `coder`, in i64 local `code`; for none, return the Error `prefix` + the text
@@ -623,10 +417,7 @@ impl WasmGcEmitter {
 		self.call(func, TEXT_OF);
 		func.instruction(&I::LocalTee(text));
 		self.call(func, coder);
-		Self::emit_list(
-			func,
-			&[I::LocalTee(code), I::I64Const(-1), I::I64Eq, I::If(BlockType::Empty)],
-		);
+		Self::emit_list(func, &[I::LocalTee(code), I::I64Const(-1), I::I64Eq, I::If(BlockType::Empty)]);
 		let (pointer, length) = self.allocate_string(prefix);
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.call(func, "new_text");

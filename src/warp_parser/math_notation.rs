@@ -11,17 +11,11 @@ pub(crate) fn superscript_sign(ch: char) -> Option<i64> {
 }
 
 pub(crate) fn superscript_letter(ch: char) -> Option<char> {
-	SUPERSCRIPT_LETTERS
-		.iter()
-		.find(|(raised, _)| *raised == ch)
-		.map(|(_, letter)| *letter)
+	SUPERSCRIPT_LETTERS.iter().find(|(raised, _)| *raised == ch).map(|(_, letter)| *letter)
 }
 
 pub(crate) fn superscript_digit(ch: char) -> Option<i64> {
-	SUPERSCRIPT_DIGITS
-		.chars()
-		.position(|digit| digit == ch)
-		.map(|position| position as i64)
+	SUPERSCRIPT_DIGITS.chars().position(|digit| digit == ch).map(|position| position as i64)
 }
 
 impl WarpParser {
@@ -50,12 +44,7 @@ impl WarpParser {
 				None if length == 0 => 1,
 				None => break,
 			};
-			let sign_length = self
-				.chars
-				.get(self.pos + length)
-				.copied()
-				.and_then(superscript_sign)
-				.map_or(0, |_| 1);
+			let sign_length = self.chars.get(self.pos + length).copied().and_then(superscript_sign).map_or(0, |_| 1);
 			let digits: Vec<i64> = self
 				.chars
 				.iter()
@@ -65,9 +54,7 @@ impl WarpParser {
 			if digits.is_empty() {
 				break;
 			}
-			let run = digits
-				.iter()
-				.fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit));
+			let run = digits.iter().fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit));
 			exponent = exponent.saturating_add(sign * run);
 			signed |= sign_length > 0;
 			length += sign_length + digits.len();
@@ -83,23 +70,15 @@ impl WarpParser {
 		loop {
 			let sign = at(length).and_then(superscript_sign);
 			let start = length + usize::from(sign.is_some());
-			let letters: String = (start..)
-				.map_while(|offset| at(offset).and_then(superscript_letter))
-				.collect();
-			let digits: Vec<i64> = (start..)
-				.map_while(|offset| at(offset).and_then(superscript_digit))
-				.collect();
+			let letters: String = (start..).map_while(|offset| at(offset).and_then(superscript_letter)).collect();
+			let digits: Vec<i64> = (start..).map_while(|offset| at(offset).and_then(superscript_digit)).collect();
 			let term = if !letters.is_empty() {
 				has_letter = true;
 				length = start + letters.chars().count();
 				Node::Symbol(letters)
 			} else if !digits.is_empty() {
 				length = start + digits.len();
-				Node::int(
-					digits
-						.iter()
-						.fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit)),
-				)
+				Node::int(digits.iter().fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit)))
 			} else {
 				break;
 			};
@@ -125,11 +104,7 @@ impl WarpParser {
 			}
 			self.advance_by(length);
 			let power = Node::Key(Box::new(lhs.clone()), Op::Pow, Box::new(exponent));
-			return Some(if negative {
-				Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power))
-			} else {
-				power
-			});
+			return Some(if negative { Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power)) } else { power });
 		}
 		let (exponent, length, signed) = self.superscript_exponent()?;
 		let (op, right) = match (exponent, length, signed) {
@@ -142,10 +117,6 @@ impl WarpParser {
 		}
 		self.advance_by(length);
 		let power = Node::Key(Box::new(lhs.clone()), op, Box::new(right));
-		Some(if exponent < 0 {
-			Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power))
-		} else {
-			power
-		})
+		Some(if exponent < 0 { Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power)) } else { power })
 	}
 }

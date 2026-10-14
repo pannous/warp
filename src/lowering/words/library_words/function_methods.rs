@@ -7,11 +7,8 @@ use crate::node::parens;
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
 	let context = crate::analyzer::function_definitions(&node);
-	let arities: HashMap<String, usize> = context
-		.user_functions
-		.iter()
-		.map(|(name, function)| (name.clone(), function.params.len()))
-		.collect();
+	let arities: HashMap<String, usize> =
+		context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	crate::type_tests::collect_outer_assigned_names(&node, &mut defined);
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
@@ -61,17 +58,11 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 			let is_list_word = items[0].is_symbol(LIST_WORD);
 			match elements.is_empty() {
 				true => Node::Empty,
-				false if is_list_word => parens(
-					items
-						.into_iter()
-						.map(|item| list_constructor_calls(item, defined))
-						.collect(),
-				), // `list(x)` is `x as list`
+				false if is_list_word => {
+					parens(items.into_iter().map(|item| list_constructor_calls(item, defined)).collect())
+				} // `list(x)` is `x as list`
 				false => Node::List(
-					elements
-						.into_iter()
-						.map(|element| list_constructor_calls(element, defined))
-						.collect(),
+					elements.into_iter().map(|element| list_constructor_calls(element, defined)).collect(),
 					Bracket::Square,
 					Separator::Colon,
 				),
@@ -86,9 +77,9 @@ fn function_methods_as_calls(
 	defined: &HashSet<String>,
 	is_function: &dyn Fn(&str, usize, &HashSet<String>) -> bool,
 ) -> Node {
-	if let Some(scoped) = in_function_scope(&node, defined, |body, locals| {
-		function_methods_as_calls(body, locals, is_function)
-	}) {
+	if let Some(scoped) =
+		in_function_scope(&node, defined, |body, locals| function_methods_as_calls(body, locals, is_function))
+	{
 		return scoped;
 	}
 	let lowered = |node: Node| function_methods_as_calls(node, defined, is_function);
@@ -96,6 +87,13 @@ fn function_methods_as_calls(
 		Node::Key(receiver, Op::Dot, method) => {
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
+				Node::List(items, Bracket::Round, _)
+					if let [word] = items.as_slice()
+						&& let Some(name) = word.symbol_name().filter(|name| !defined.contains(*name))
+						&& let Some(operation) = prefix_operator_method(&receiver, name) =>
+				{
+					operation
+				}
 				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
 					parens([vec![items[0].clone(), receiver], items[1..].to_vec()].concat())
 				}

@@ -16,29 +16,19 @@ impl WarpParser {
 		if !self.in_style_sheet || self.current_char() != '#' {
 			return None;
 		}
-		let digits = (1..)
-			.take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit())
-			.count();
+		let digits = (1..).take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit()).count();
 		let after = self.peek_char(digits + 1);
 		if !CSS_COLOR_DIGITS.contains(&digits) || after.is_alphanumeric() || matches!(after, '_' | '-') {
 			return None;
 		}
-		let next = (digits + 1..)
-			.map(|offset| self.peek_char(offset))
-			.find(|ch| !ch.is_whitespace())
-			.unwrap_or('\0');
+		let next = (digits + 1..).map(|offset| self.peek_char(offset)).find(|ch| !ch.is_whitespace()).unwrap_or('\0');
 		(self.peek_char(1).is_ascii_digit() || !SELECTOR_FOLLOWERS.contains(&next)).then_some(digits + 1)
 	}
 
 	/// `:root { … }`, `:hover { … }` starting a rule of a style sheet: a selector, not the colon of a declaration (card
 	/// markup-style-block)
 	pub(crate) fn at_pseudo_class_selector(&self) -> bool {
-		let previous = self.chars[..self.pos]
-			.iter()
-			.rev()
-			.find(|ch| !ch.is_whitespace())
-			.copied()
-			.unwrap_or('\0');
+		let previous = self.chars[..self.pos].iter().rev().find(|ch| !ch.is_whitespace()).copied().unwrap_or('\0');
 		self.in_style_sheet
 			&& self.current_char() == ':'
 			&& self.is_identifier_start(1)

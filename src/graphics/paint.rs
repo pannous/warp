@@ -35,15 +35,10 @@ pub fn shade(value: u64) -> [u8; 3] {
 
 /// The warp binary's paint calls show windows, unless WARP_NO_WINDOW or CI is set (main.rs)
 pub fn allow_windows() {
-	let headless = [NO_WINDOW_VARIABLE, CI_VARIABLE]
-		.iter()
-		.any(|variable| std::env::var_os(variable).is_some());
+	let headless = [NO_WINDOW_VARIABLE, CI_VARIABLE].iter().any(|variable| std::env::var_os(variable).is_some());
 	WINDOWS.store(!headless, Ordering::Relaxed);
 	let chosen = std::env::var(DRAW_VARIABLE).ok().filter(|choice| !choice.is_empty());
-	if let Some(unknown) = chosen
-		.as_ref()
-		.filter(|choice| !DRAW_CHOICES.contains(&choice.as_str()))
-	{
+	if let Some(unknown) = chosen.as_ref().filter(|choice| !DRAW_CHOICES.contains(&choice.as_str())) {
 		eprintln!(
 			"warning: {DRAW_VARIABLE}={unknown} is neither {}: use draw draws as without it",
 			DRAW_CHOICES.join(" nor ")
@@ -56,6 +51,7 @@ pub fn allow_windows() {
 	warp_runtime::system_values::tell_gpu_drawing(on_gpu);
 	if !headless {
 		warp_runtime::system_values::tell_window_opener(open_blank_window);
+		warp_runtime::system_values::tell_window_resizer(crate::graphics::paint_window::resize);
 	}
 }
 
@@ -82,11 +78,7 @@ pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathB
 		return Ok(None); // nothing to show, as the playground's canvas (user 2026-10-10: defaults, no errors)
 	}
 	if pixels.len() < width * height {
-		return Err(format!(
-			"paint: {width}×{height} needs {} pixels, got {}",
-			width * height,
-			pixels.len()
-		));
+		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
 	shown_or_written(
 		|| crate::graphics::paint_window::frame_bytes(pixels, width, height),
@@ -185,11 +177,8 @@ fn png(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
 	]
 	.concat();
 	let mut file = PNG_SIGNATURE.to_vec();
-	for (kind, data) in [
-		(b"IHDR", header),
-		(b"IDAT", deflated.finish().expect("writing to memory")),
-		(b"IEND", vec![]),
-	] {
+	for (kind, data) in [(b"IHDR", header), (b"IDAT", deflated.finish().expect("writing to memory")), (b"IEND", vec![])]
+	{
 		file.extend((data.len() as u32).to_be_bytes());
 		let checked = [kind.as_slice(), &data].concat();
 		file.extend(&checked);

@@ -29,9 +29,7 @@ fn an_unknown_entity_is_an_error() {
 		!matches!(value, warp::Node::Error(_)) && warnings.iter().any(|warning| warning.contains("\\:alphabet")),
 		"{value:?} {warnings:?}"
 	);
-	with_warning_mode(WarningMode::Error, || {
-		crate::common::fails_with("\\:alphabet = 1", "\\:alphabet")
-	}); // strict
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("\\:alphabet = 1", "\\:alphabet")); // strict
 	crate::common::fails_with("\\alpha = 1", "\\:alpha");
 }
 

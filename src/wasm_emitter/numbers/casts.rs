@@ -4,14 +4,8 @@ use super::super::*;
 use crate::wasm_emitter::layout::BYTE;
 
 /// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = [
-	"ceil",
-	"floor",
-	"round",
-	"round_half_up",
-	"round_half_even",
-	crate::warp_parser::FLOOR_QUOTIENT,
-];
+pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] =
+	["ceil", "floor", "round", "round_half_up", "round_half_even", crate::warp_parser::FLOOR_QUOTIENT];
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 pub(crate) const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
 
@@ -57,9 +51,7 @@ impl WasmGcEmitter {
 		separator: &Separator,
 	) -> bool {
 		crate::analyzer::call_name(items, bracket, separator).is_some_and(|name| {
-			reflection::library_ops::LIBRARY_FUNCTIONS
-				.iter()
-				.any(|(word, _)| *word == name)
+			reflection::library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == name)
 				&& !self.ctx.user_functions.contains_key(name)
 		})
 	}
@@ -71,14 +63,11 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// An f64 has no exact value yet (nearest_hint): `x as exact` of a runtime float is refused instead of rounded silently
-	pub(in crate::wasm_emitter) fn emit_inexact_to_exact(&mut self, func: &mut Function, value: &Node) {
-		let value = value.serialize();
-		let message = format!(
-			"{value} is an IEEE float, `as exact` of a float is not supported yet: keep it exact from the start, {}",
-			nearest_hint(&value)
-		);
-		self.emit_type_error(func, message);
+	/// `x as rational` of a float: the exact fraction of its shortest printed digits (decision float-as-rational)
+	pub(in crate::wasm_emitter) fn emit_float_to_exact(&mut self, func: &mut Function, value: &Node) {
+		self.emit_float_value(func, value);
+		self.emit_call(func, super::float_text::FLOAT_AS_EXACT);
+		self.emit_call(func, "new_int");
 	}
 
 	/// `v as T` as a raw Int: `as float` has no exact value, `as exact` keeps it
@@ -92,12 +81,7 @@ impl WasmGcEmitter {
 			Kind::Int | Kind::Float => target_name == "list",
 			_ => false,
 		};
-		refused.then(|| {
-			format!(
-				"cannot cast {kind} to {target_name}: {} as {target_name}",
-				value.serialize()
-			)
-		})
+		refused.then(|| format!("cannot cast {kind} to {target_name}: {} as {target_name}", value.serialize()))
 	}
 
 	pub(in crate::wasm_emitter) fn emit_numeric_cast(
@@ -177,10 +161,9 @@ impl WasmGcEmitter {
 				let characters = text.chars().map(Node::Char).collect();
 				self.emit_node_instructions(func, &Node::List(characters, Bracket::Square, Separator::Space));
 			}
-			Node::Char(_) => self.emit_node_instructions(
-				func,
-				&Node::List(vec![value.clone()], Bracket::Square, Separator::Space),
-			),
+			Node::Char(_) => {
+				self.emit_node_instructions(func, &Node::List(vec![value.clone()], Bracket::Square, Separator::Space))
+			}
 			_ if self.get_type(value) == Kind::List => self.emit_node_instructions(func, value),
 			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => {
 				self.emit_node_instructions(func, value);
@@ -188,10 +171,7 @@ impl WasmGcEmitter {
 			}
 			_ => {
 				let kind = self.get_type(value);
-				self.emit_type_error(
-					func,
-					format!("cannot cast {kind} to list: {} as list", value.serialize()),
-				);
+				self.emit_type_error(func, format!("cannot cast {kind} to list: {} as list", value.serialize()));
 			}
 		}
 	}
@@ -219,10 +199,7 @@ impl WasmGcEmitter {
 			_ => {
 				self.emit_type_error(
 					func,
-					format!(
-						"cannot cast {kind} to string: `{} as string` has no runtime text yet",
-						value.serialize()
-					),
+					format!("cannot cast {kind} to string: `{} as string` has no runtime text yet", value.serialize()),
 				);
 				return;
 			}
@@ -234,20 +211,13 @@ impl WasmGcEmitter {
 	fn emit_error_message(&mut self, func: &mut Function, error: &Node) {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
 		self.emit_node_instructions(func, error);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalSet(held),
-				I::I64Const(Kind::Text as i64),
-				I::LocalGet(held),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 1,
-				},
-				I::RefNull(HeapType::Concrete(node_type)),
-				I::StructNew(node_type),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalSet(held),
+			I::I64Const(Kind::Text as i64), I::LocalGet(held),
+			I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefNull(HeapType::Concrete(node_type)),
+			I::StructNew(node_type),
+		]);
 	}
 
 	/// The text of a Node of unknown kind, as list_text writes the one item of a list: "[1 2]" for a list, "{a:1 b:2}" for
@@ -260,39 +230,42 @@ impl WasmGcEmitter {
 		let kind_is = |kind: Kind| {
 			[
 				I::LocalGet(held),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: node_type, field_index: 0 },
 				I::I64Const(crate::type_kinds::KIND_MASK),
 				I::I64And,
 				I::I64Const(kind as i64),
 				I::I64Eq,
 			]
 		};
+		// a function value on its own shows its definition (function_dump), in a list its function_text
+		let shows_definitions = self.should_emit_function(functions::closures::FUNCTION_DUMP);
+		if shows_definitions {
+			Self::emit_list(func, &kind_is(Kind::Function));
+			Self::emit_list(
+				func,
+				&[I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull],
+			);
+			self.emit_call(func, functions::closures::FUNCTION_DUMP);
+			func.instruction(&I::Else);
+		}
 		Self::emit_list(func, &kind_is(Kind::Text));
 		Self::emit_list(func, &kind_is(Kind::Codepoint));
 		Self::emit_list(
 			func,
-			&[
-				I::I32Or,
-				I::If(BlockType::Result(Ref(self.node_ref(false)))),
-				I::LocalGet(held),
-				I::RefAsNonNull,
-			],
+			&[I::I32Or, I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull],
 		);
 		self.emit_call(func, text::text_builtins::TEXT_OF);
 		Self::emit_list(func, &[I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND)]);
 		self.emit_entry_in_braces(func, held);
-		Self::emit_list(
-			func,
-			&[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)],
-		);
+		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 		let (pointer, length) = self.allocate_string("");
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_text");
 		self.emit_call(func, reflection::library_ops::LIST_TEXT);
 		func.instruction(&I::End);
+		if shows_definitions {
+			func.instruction(&I::End);
+		}
 		held
 	}
 
@@ -326,10 +299,7 @@ impl WasmGcEmitter {
 		};
 
 		let (written, value) = (value, value.drop_meta());
-		if let Some(refusal) = self
-			.unknown_word_refusal(value)
-			.or_else(|| self.cast_refusal(value, target_type))
-		{
+		if let Some(refusal) = self.unknown_word_refusal(value).or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;
 		}
@@ -416,7 +386,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), a runtime float is refused
+	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), so is a runtime float
 	pub(in crate::wasm_emitter) fn emit_cast_to_exact(
 		&mut self,
 		func: &mut Function,
@@ -430,7 +400,7 @@ impl WasmGcEmitter {
 			}
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
 			Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
-			_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
+			_ if self.get_type(value).is_float() => self.emit_float_to_exact(func, value),
 			_ => {
 				self.emit_numeric_value(func, value);
 				self.emit_call(func, "new_int");
@@ -525,38 +495,18 @@ impl WasmGcEmitter {
 	/// The i64 on the stack as an i32 code point: a digit its digit character, a number no character has a trap
 	fn emit_code_point_of_int(&mut self, func: &mut Function) {
 		let held = self.scratch(0);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalTee(held),
-				I::I64Const(0),
-				I::I64LtS,
-				I::LocalGet(held),
-				I::I64Const(LAST_CODE_POINT),
-				I::I64GtS,
-				I::I32Or,
-				I::LocalGet(held),
-				I::I64Const(FIRST_SURROGATE),
-				I::I64Sub,
-				I::I64Const(SURROGATE_COUNT),
-				I::I64LtU,
-				I::I32Or,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalTee(held), I::I64Const(0), I::I64LtS, I::LocalGet(held), I::I64Const(LAST_CODE_POINT), I::I64GtS,
+			I::I32Or, I::LocalGet(held), I::I64Const(FIRST_SURROGATE), I::I64Sub, I::I64Const(SURROGATE_COUNT),
+			I::I64LtU, I::I32Or,
+		]);
 		self.emit_fail_if(func, INVALID_CODE_POINT);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(held),
-				I::I32WrapI64,
-				I::LocalGet(held),
-				I::I64Const(10),
-				I::I64LtU,
-				I::I32Const('0' as i32),
-				I::I32Mul,
-				I::I32Add,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(held), I::I32WrapI64, I::LocalGet(held), I::I64Const(10), I::I64LtU, I::I32Const('0' as i32),
+			I::I32Mul, I::I32Add,
+		]);
 	}
 
 	/// `x as bool`, a bool: a literal's truth known at compile time, else non-zero is true
@@ -577,10 +527,8 @@ impl WasmGcEmitter {
 				use crate::lowering::nodes::call;
 				let falsy = FALSY_TEXTS.iter().map(|text| Node::Text(text.to_string())).collect();
 				let falsy = Node::List(falsy, Bracket::Square, Separator::Colon);
-				let spells_falsy = call(
-					crate::library_words::COLLECTION_CONTAINS,
-					vec![falsy, call("lower", vec![value.clone()])],
-				);
+				let spells_falsy =
+					call(crate::library_words::COLLECTION_CONTAINS, vec![falsy, call("lower", vec![value.clone()])]);
 				self.emit_node_instructions(func, &Node::Key(Box::new(Node::Empty), Op::Not, Box::new(spells_falsy)));
 			}
 			None => {
@@ -628,78 +576,43 @@ impl WasmGcEmitter {
 			};
 			is_kind(s, f, Kind::Text);
 			is_kind(s, f, Kind::Codepoint);
-			Self::emit_list(
-				f,
-				&[
-					I::I32Or,
-					I::I32Eqz,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::Return,
-					I::End,
-				],
-			);
+			Self::emit_list(f, &[I::I32Or, I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
 			// a text with a slash: the exact ratio of the integers before and after it ("1/x" is invalid_number)
 			s.emit_field(f, 0, 0);
 			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
 			Self::emit_list(f, &[I::If(BlockType::Empty)]);
 			s.emit_text_bounds(f, start, end);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(start),
-					I::LocalSet(slash),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(start), I::LocalSet(slash),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(slash),
-					I::LocalGet(end),
-					I::I32GeU,
-					I::BrIf(1),
-					I::LocalGet(slash),
-					I::I32Load8U(BYTE),
-					I::I32Const(RATIO_SLASH),
-					I::I32Eq,
-					I::If(BlockType::Empty),
-					I::LocalGet(start),
-					I::LocalGet(slash),
-					I::LocalGet(start),
-					I::I32Sub,
-				],
-			);
+						I::LocalGet(slash), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+						I::LocalGet(slash), I::I32Load8U(BYTE), I::I32Const(RATIO_SLASH), I::I32Eq,
+						I::If(BlockType::Empty),
+							I::LocalGet(start), I::LocalGet(slash), I::LocalGet(start), I::I32Sub,
+			]);
 			s.call(f, "new_text");
 			s.call(f, lists::list_ops::TEXT_AS_INT);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(slash),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalGet(end),
-					I::LocalGet(slash),
-					I::I32Sub,
-					I::I32Const(1),
-					I::I32Sub,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalGet(end), I::LocalGet(slash), I::I32Sub,
+				I::I32Const(1), I::I32Sub,
+			]);
 			s.call(f, "new_text");
 			s.call(f, lists::list_ops::TEXT_AS_INT);
 			s.call(f, "exact_div");
 			s.call(f, "new_int");
-			Self::emit_list(
-				f,
-				&[
-					I::Return,
-					I::End,
-					I::LocalGet(slash),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(slash),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Return,
+				I::End,
+				I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalSet(slash),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::End,
+			]);
 			// else its float: an Int when whole and in range
 			f.instruction(&I::LocalGet(0));
 			s.call(f, lists::list_ops::TEXT_AS_FLOAT);
@@ -710,16 +623,10 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &float);
 			Self::emit_list(f, &[I::F64Eq]);
 			Self::emit_list(f, &float);
-			Self::emit_list(
-				f,
-				&[
-					I::F64Abs,
-					I::F64Const(I64_RANGE_LIMIT.into()),
-					I::F64Lt,
-					I::I32And,
-					I::If(BlockType::Result(node_ref)),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32And, I::If(BlockType::Result(node_ref)),
+			]);
 			Self::emit_list(f, &float);
 			f.instruction(&I::I64TruncF64S);
 			s.emit_int_from_machine_in(f, bits);
@@ -791,17 +698,11 @@ impl WasmGcEmitter {
 	/// emit_truncating_cast through the i64 local `value_bits` (a runtime function has no scratch locals)
 	pub(crate) fn emit_truncating_cast_via(&mut self, func: &mut Function, value_bits: u32) {
 		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(value_bits),
-				I::F64ReinterpretI64,
-				I::F64Abs,
-				I::F64Const(I64_RANGE_LIMIT.into()),
-				I::F64Lt,
-				I::I32Eqz,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(value_bits), I::F64ReinterpretI64, I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt,
+			I::I32Eqz,
+		]);
 		self.emit_fail_if(func, "float_out_of_int_range");
 		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
 		self.emit_int_from_machine_in(func, value_bits);
@@ -832,9 +733,7 @@ pub(crate) fn is_called_conversion(type_name: &str) -> bool {
 	(converts_to(type_name) || type_name == super::super::numbers::exact::DECIMAL_WORD)
 		&& (crate::analyzer::type_word_kind(type_name).is_none()
 			|| super::super::numbers::radix::shown_radix(type_name).is_some())
-		&& !reflection::library_ops::LIBRARY_FUNCTIONS
-			.iter()
-			.any(|(word, _)| *word == type_name)
+		&& !reflection::library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == type_name)
 }
 
 /// `255 as hex`: a word that names no type, unit or class, which used to stay a silent `255 as hex` node

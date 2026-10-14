@@ -46,14 +46,12 @@ pub const AUTOMATIC_NOTICE: &str = "ran on the GPU by itself (f32, imprecise by 
 /// The lambda's parameter as the kernel names it (the user's name could be a WGSL keyword)
 const KERNEL_ITEM: &str = "item";
 /// The math words WGSL has under the same name and meaning (warp's log is the natural logarithm, as WGSL's)
-const KERNEL_FUNCTIONS: [&str; 15] = [
-	"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "sqrt", "abs", "floor", "ceil",
-];
+const KERNEL_FUNCTIONS: [&str; 15] =
+	["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "sqrt", "abs", "floor", "ceil"];
 const KERNEL_FUNCTIONS_OF_TWO: [&str; 3] = ["min", "max", "atan2"];
 /// The math words that cost the CPU tens of nanoseconds an item, so a lambda with one is worth the GPU
-const HEAVY_FUNCTIONS: [&str; 12] = [
-	"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "atan2",
-];
+const HEAVY_FUNCTIONS: [&str; 12] =
+	["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "atan2"];
 /// The kernel's count of items: `data` holds them, then the program's numbers the lambda reads; a private variable,
 /// which the program's functions the kernel calls read too
 const KERNEL_COUNT: &str = "count";
@@ -75,9 +73,7 @@ const LARGEST_MULTIPLIED_POWER: i64 = 8;
 /// `xs.map(f) @gpu` or `@gpu xs.map(f)`: xs and f; a chain `xs.map(f).map(g)` is xs and g after f, one kernel
 pub(crate) fn gpu_map(value: &Node) -> Option<(Node, Node)> {
 	let marked = crate::parallel::is_annotated(value, GPU_ATTRIBUTE) || value.attribute(AUTOMATIC_ATTRIBUTE).is_some();
-	let (list, function) = (marked && !switched_off())
-		.then(|| crate::parallel::map_call(value))
-		.flatten()?;
+	let (list, function) = (marked && !switched_off()).then(|| crate::parallel::map_call(value)).flatten()?;
 	Some(fused(list, function))
 }
 
@@ -137,9 +133,7 @@ fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> O
 	let [word, argument] = items.as_slice() else {
 		return None;
 	};
-	REDUCTIONS
-		.iter()
-		.find(|reduction| word.drop_meta().name() == reduction.word())?;
+	REDUCTIONS.iter().find(|reduction| word.drop_meta().name() == reduction.word())?;
 	let (map, wrapped) = match argument.drop_meta() {
 		Node::List(inner, crate::node::Bracket::Round, inner_separator) if inner.len() == 1 => {
 			(&inner[0], Some(inner_separator.clone()))
@@ -154,11 +148,7 @@ fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> O
 		Some(inner_separator) => Node::List(vec![marked], crate::node::Bracket::Round, inner_separator),
 		None => marked,
 	};
-	Some(Node::List(
-		vec![word.clone(), argument],
-		bracket.clone(),
-		separator.clone(),
-	))
+	Some(Node::List(vec![word.clone(), argument], bracket.clone(), separator.clone()))
 }
 
 /// The assignment with its value replaced
@@ -240,10 +230,7 @@ fn marked_kept(mut statements: Vec<Node>) -> Vec<Node> {
 			continue;
 		};
 		// a map of only arithmetic runs on the CPU and leaves no buffer on the GPU
-		if gpu_map(&value)
-			.and_then(|(_, function)| gpu_kernel(&function))
-			.is_none()
-		{
+		if gpu_map(&value).and_then(|(_, function)| gpu_kernel(&function)).is_none() {
 			continue;
 		}
 		let mut kept = false;
@@ -306,15 +293,11 @@ fn with_attribute_on_value(statement: Node, attribute: &str) -> Node {
 
 /// The flags of an @gpu map's value for the host word: KEEP_RESULT, SOURCE_KEPT
 pub(crate) fn keeping(value: &Node) -> i64 {
-	[
-		(KEEP_RESULT_ATTRIBUTE, KEEP_RESULT),
-		(SOURCE_KEPT_ATTRIBUTE, SOURCE_KEPT),
-		(AUTOMATIC_ATTRIBUTE, AUTOMATIC),
-	]
-	.iter()
-	.filter(|(attribute, _)| value.attribute(attribute).is_some())
-	.map(|(_, flag)| flag)
-	.sum()
+	[(KEEP_RESULT_ATTRIBUTE, KEEP_RESULT), (SOURCE_KEPT_ATTRIBUTE, SOURCE_KEPT), (AUTOMATIC_ATTRIBUTE, AUTOMATIC)]
+		.iter()
+		.filter(|(attribute, _)| value.attribute(attribute).is_some())
+		.map(|(_, flag)| flag)
+		.sum()
 }
 
 /// The statements with statement `index`, an @gpu map whose result only later @gpu maps read, folded into those
@@ -327,10 +310,7 @@ fn folded_into_consumers(statements: &[Node], index: usize, program: &Node) -> O
 			read.push(symbol.clone())
 		}
 	});
-	if later
-		.iter()
-		.any(|statement| read.iter().any(|symbol| writes(statement, symbol)))
-	{
+	if later.iter().any(|statement| read.iter().any(|symbol| writes(statement, symbol))) {
 		return None;
 	}
 	let uses = uses_of(program, &name);
@@ -349,15 +329,11 @@ fn folded_into_consumers(statements: &[Node], index: usize, program: &Node) -> O
 			_ => statement.clone(),
 		})
 		.collect();
-	let all_fold = rewritten
-		.iter()
-		.zip(later)
-		.filter(|(new, old)| new != old)
-		.all(|(new, _)| {
-			gpu_assignment(new)
-				.and_then(|(_, value)| gpu_map(&value))
-				.is_some_and(|(list, _)| crate::parallel::map_call(&list).is_none())
-		});
+	let all_fold = rewritten.iter().zip(later).filter(|(new, old)| new != old).all(|(new, _)| {
+		gpu_assignment(new)
+			.and_then(|(_, value)| gpu_map(&value))
+			.is_some_and(|(list, _)| crate::parallel::map_call(&list).is_none())
+	});
 	(consumers > 0 && uses == consumers + 1 && all_fold).then(|| [&statements[..index], &rewritten[..]].concat())
 }
 
@@ -454,14 +430,9 @@ fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::errors::diagnostic::
 			} else {
 				"@gpu runs only a map"
 			};
-			warn(
-				warnings,
-				format!("{assign}, `ys = xs.map(x => …) @gpu`, `s = sum(xs.map(x => …) @gpu)`"),
-			);
+			warn(warnings, format!("{assign}, `ys = xs.map(x => …) @gpu`, `s = sum(xs.map(x => …) @gpu)`"));
 		}
-		Node::Key(left, _, right) => [left, right]
-			.into_iter()
-			.for_each(|part| collect_unapplied(part, warnings)),
+		Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| collect_unapplied(part, warnings)),
 		Node::List(items, _, _) => items.iter().for_each(|item| collect_unapplied(item, warnings)),
 		_ => {}
 	}

@@ -20,10 +20,7 @@ fn glob_finds_the_written_files() {
 #[test]
 fn a_path_from_cwd_is_found() {
 	let _ = std::fs::create_dir_all(FOLDER);
-	is!(
-		&format!("use script; write(cwd + \"/{FOLDER}/here.txt\", \"x\"); exists(\"{FOLDER}/here.txt\")"),
-		true
-	);
+	is!(&format!("use script; write(cwd + \"/{FOLDER}/here.txt\", \"x\"); exists(\"{FOLDER}/here.txt\")"), true);
 }
 
 #[cfg(not(feature = "native"))]

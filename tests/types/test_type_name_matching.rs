@@ -13,10 +13,7 @@ fn test_type_then_name_parameter() {
 
 #[test]
 fn test_type_word_is_the_parameter_name() {
-	is!(
-		"fibonacci number = if number<2 : number else fibonacci(number - 1) + fibonacci(number - 2); fibonacci 10",
-		55
-	);
+	is!("fibonacci number = if number<2 : number else fibonacci(number - 1) + fibonacci(number - 2); fibonacci 10", 55);
 	is!("succ int := int+1; succ 3", 4);
 }
 
@@ -63,17 +60,11 @@ fn test_phrases_differing_only_by_unknown_nouns_are_a_redefinition() {
 		"to kill a person: 1; to kill a dog: 2; kill 0",
 		"kill is defined twice; declare class person and class dog",
 	);
-	is!(
-		"class person{name}; class dog{name}; to kill a person: 1; to kill a dog: 2; 3",
-		3
-	);
+	is!("class person{name}; class dog{name}; to kill a person: 1; to kill a dog: 2; 3", 3);
 }
 
 #[test]
 fn test_a_multi_word_noun_is_named_and_typed_by_its_head() {
 	is!("to call a phone number: number+1; call 41", 42);
-	crate::common::fails_with(
-		"to join a first name with a last name: name; 1",
-		"use one-word parameter names",
-	);
+	crate::common::fails_with("to join a first name with a last name: name; 1", "use one-word parameter names");
 }

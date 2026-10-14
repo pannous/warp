@@ -63,7 +63,13 @@ Natively a message goes to `sendmidi` (brew install gbevin/tools/sendmidi; missi
 `midi out <port>: 90 3c 64` on stderr. Browser: Web MIDI on the page (playground.js sendMidi, first output or by name,
 failures to the console). Open, each failing loudly today (card midi-receive): `midi_receive()` (no CoreMIDI binding natively: needs the midir
 crate or libloading CoreMIDI; in the browser the page's input would have to be handed to the Worker), `midi_outputs()` in the
-browser (a Worker cannot wait for the page's device list), clock-timed MIDI (messages are immediate, not scheduled with `at`; card midi-clock).
+browser (a Worker cannot wait for the page's device list), 
+Clock-timed built (card midi-clock): a message goes out at its voice's moment (sound.rs moment / on_clock): after the
+sounds queued before it, at an `at`'s time, in a task on its own voice; natively a thread sleeping until then (wait_sound
+and the process's end wait for it, stop_sound drops it), headless the line names the place (`midi out : 90 40 64 at 0.500 s`),
+in the browser Web MIDI's own timestamp (host-sound.js voiceSounded(0).at → playground.js output.send(message, time)).
+`midi_note(pitch, duration, velocity, channel)` is on, the voice resting the duration (std_io sound.rest: the voice goes on
+without a sound), off. Messages from task Workers in the browser still go nowhere (not relayed to the page).
 A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word ("not a list").
 
 ## Probes and quirks (from the warp-sound handover, 2026-10-10)
@@ -125,8 +131,18 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    == C5 to the hundredth) and multiplies any other frequency; `chord(root, kind)`, `scale(root, kind)` are lists of
    notes, kinds in lib chord_intervals / scale_intervals, written as a word the program doesn't define (only directly
    in the call: `f(major)` passes an undefined symbol) or as a text. Notes stay frequencies at run time; sound's
-   transpose/2 and matrix's transpose/1 coexist. Still to build: a `Note` value (pitch class, octave, cents) that
-   prints as its name, intervals as values, just intonation, velocity (card note-value).
+   transpose/2 and matrix's transpose/1 coexist.
+   Note values built (card note-value, tests/programs/test_note_values.rs): `note(pitch)` (alias note_value) is lib
+   `class Note {key, cents}` with text() (prints "C4", "A4+20c"), hertz(), octave(), name(), plus/minus semitones,
+   equals; `note("C#4")`: music_words lowers a note-name text in a call of note like the bare name; `interval(low,
+   high)` is semitones; play/melody take Notes (hertz_of). Bare names stay frequencies (user decision 2026-10-14: the
+   word note, `C4` stays 261.63; note(text) gave the frequency before, now note_hertz). Lib trap: test a pitch against
+   a class only after si_amount (a quantity `is Note` fails statically, card quantity-is-class), and typed overloads
+   can't see a module call's type (`note(midi_hertz(60))` fits no variant). How a std module's class with methods
+   works for a module that stays a used module: insert_module_classes puts the needed classes of used AND implicit
+   modules in front (units excepted: it still moves whole, MODULES_COMPILED_AS_PROGRAM, its methods need its number
+   words as program code), and records the module functions returning such a class (module_returned_classes) so
+   class_methods types `n = note(C4)` for `n + 7`. Still to build: just intonation, velocity, named intervals.
 3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
@@ -155,6 +171,16 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    nodes and buses as values, effects (delay, reverb, compressor, distortion, EQ), a mixer.
 5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points (card sound-samples); render offline to a file
    (`render 8 bars to "song.wav"`), which is also how tests check audio without speakers.
+   Samples built (card sound-samples, samples/sound_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
+   `class Sample {rate, channels, frames}`; `sample(path)` reads a file through the host word sound.load
+   (src/sound/audio_files.rs: WAV decoded in Rust, other formats converted by afconvert or ffmpeg first), then
+   sample_seconds, sample_slice(clip, from, to), sample_slices(clip, n), sample_looped(clip, seconds, from, to),
+   play_sample(clip, rate) and play(x) for `x is Sample`. The rate trick: play_sample hands the frames on with the host
+   sample rate scaled by rate (twice the rate = twice as fast, an octave up), and render_sound mixes all sounds at the
+   highest rate among them (at_rate, natively and in host-sound.js). The playground decodes WAV only (wavFrames).
+   Samples skip the effect chain: they sound as recorded. Trap: a lib parameter named `s` (a unit) shadows `0.5s`
+   program-wide, hence `clip`. A class with fields only (Sample) keeps sound a used module: with_implicit_class_modules
+   moves only modules whose classes have methods (units' Quantity), else note names stop lowering.
 6. Patterns and sequencing. Sonic Pi `live_loop`, Tidal mini-notation (`"c4 e4 [g4 b4]*2"`), Euclidean rhythms,
    swing, randomness with seeds; live coding: redefine a loop while it plays.
 7. MIDI and devices. MIDI in/out (CoreMIDI, Web MIDI), choosing the output device, channels, buffer size and latency.
@@ -215,8 +241,14 @@ their cumulated seconds reach (no drift), so the voice goes on after the cycle; 
 step of a group by swing·step/3 (1: triplet feel). `live_loop 4 { … }` is `live_voice = go { for … 0..4 { … } }`
 (music_words.rs lower_live_loops, before go_blocks): a voice of its own on the beat clock, so loops and `play` overlap; `await live_voice`
 waits for the last loop (renders after live loops need it: the task adds its sounds when it runs).
-Still open: seeded randomness (`?`), `<a b>` alternation per cycle, `_` elongation (card pattern-extras), an endless loop (card live-redefine) whose block is redefined while
-it plays (needs the playground's live reload and voice stealing), a loop name for several awaits.
+Built (card pattern-extras): `<a b c>` one item per cycle in turn (a nested `<>` turns on its own visits: `<c4 <~ e4>>` is
+c4 ~ c4 e4), `c4 _ e4` / `c4@2 e4` weights (c4 two steps of three), `c4?` / `c4?0.3` sounds in that share of cycles. A cycle is
+how often the voice played the same pattern text before (lib pattern_cycle, the texts kept in `patterns_played`; a task
+counts its own). The chance is a hash of `pattern_seed` (setting, 0), the cycle and the item's place, not random(): the same
+each run and each render, and the program's own random sequence stays untouched. `live_loop drums 4 { … }` names the voice
+(`await drums`), the unnamed form keeps `live_voice`.
+Still open: an endless loop (card live-redefine) whose block is redefined while it plays (needs the playground's live
+reload and voice stealing).
 
 ## Our own API or the platform's? (card our-sound)
 

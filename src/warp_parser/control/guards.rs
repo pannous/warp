@@ -34,11 +34,7 @@ impl WarpParser {
 		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
 			self.advance_by(ahead + word.len());
 			self.skip_spaces();
-			caught = if word == ELSE_KEYWORD {
-				None
-			} else {
-				self.parse_caught_name(word)
-			};
+			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
 			self.skip_python_colon();
 			// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
 			self.parse_guarded_phrase()
@@ -56,11 +52,7 @@ impl WarpParser {
 		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
 		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
 		let guard = Node::List(
-			[
-				vec![Symbol(marker.to_string()), guarded, fallback],
-				binding.into_iter().collect(),
-			]
-			.concat(),
+			[vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(),
 			Bracket::Round,
 			Separator::None,
 		);
@@ -74,11 +66,7 @@ impl WarpParser {
 		};
 		self.advance_by(ahead + FINALLY_KEYWORD.len());
 		self.skip_spaces();
-		let cleanup = if self.current_char() == ':' {
-			self.colon_body(":")
-		} else {
-			self.rest_of_statement()
-		};
+		let cleanup = if self.current_char() == ':' { self.colon_body(":") } else { self.rest_of_statement() };
 		self.finally_blocks += 1;
 		let value = Symbol(format!("{FINALLY_KEYWORD}·{}", self.finally_blocks));
 		let held = Node::Key(Box::new(value.clone()), Op::Assign, Box::new(guard));
@@ -87,22 +75,15 @@ impl WarpParser {
 
 	/// The blanks before a following `finally`, if one follows
 	fn finally_ahead(&self) -> Option<usize> {
-		let ahead = (0..)
-			.take_while(|&offset| self.peek_char(offset).is_whitespace())
-			.count();
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
 		(self.word_at(ahead) == FINALLY_KEYWORD).then_some(ahead)
 	}
 
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
 	/// with how many blanks (line breaks included) come before it
 	pub(crate) fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
-		let ahead = (0..)
-			.take_while(|&offset| self.peek_char(offset).is_whitespace())
-			.count();
-		FALLBACK_WORDS
-			.iter()
-			.find(|word| self.word_at(ahead) == **word)
-			.map(|word| (*word, ahead))
+		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
 	}
 
 	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to

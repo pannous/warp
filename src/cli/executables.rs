@@ -19,17 +19,11 @@ pub(crate) struct RuntimeStub {
 	features: &'static str,
 }
 
-pub(crate) const PROGRAM_STUB: RuntimeStub = RuntimeStub {
-	name: "warp-runtime",
-	variable: "WARP_RUNTIME_STUB",
-	features: "",
-};
+pub(crate) const PROGRAM_STUB: RuntimeStub =
+	RuntimeStub { name: "warp-runtime", variable: "WARP_RUNTIME_STUB", features: "" };
 // a page app's stub carries the web view (wry, winit), which plain executables do without (card build-links)
-pub(crate) const PAGE_STUB: RuntimeStub = RuntimeStub {
-	name: "warp-page-runtime",
-	variable: "WARP_PAGE_RUNTIME_STUB",
-	features: "webview",
-};
+pub(crate) const PAGE_STUB: RuntimeStub =
+	RuntimeStub { name: "warp-page-runtime", variable: "WARP_PAGE_RUNTIME_STUB", features: "webview" };
 
 pub(crate) fn wants_executable() -> bool {
 	env::var(EXECUTABLE_VARIABLE)
@@ -41,9 +35,7 @@ pub(crate) fn wants_executable() -> bool {
 pub(crate) fn leave_executable(path: &str) {
 	let modified = |file: &std::path::Path| fs::metadata(file).and_then(|metadata| metadata.modified()).ok();
 	let executable = standalone_output_path(path);
-	if modified(&executable)
-		.zip(modified(std::path::Path::new(path)))
-		.is_some_and(|(built, written)| built >= written)
+	if modified(&executable).zip(modified(std::path::Path::new(path))).is_some_and(|(built, written)| built >= written)
 	{
 		return;
 	}
@@ -95,10 +87,7 @@ pub(crate) fn write_standalone_executable(code: &str, target: &str) -> Result<St
 	let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
 	let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
 	let mut missing: Vec<String> = vec![];
-	for import in module
-		.imports()
-		.filter(|import| !provided.contains(&(import.module(), import.name())))
-	{
+	for import in module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))) {
 		let feature = feature_of(import.module(), import.name());
 		if !missing.contains(&feature) {
 			missing.push(feature);
@@ -129,10 +118,7 @@ pub(crate) fn builds_an_app(code: &str) -> bool {
 
 pub(crate) fn write_web_view_app(code: &str, target: &str) -> Result<String, String> {
 	let output = standalone_output_path(target);
-	let title = output
-		.file_stem()
-		.map(|stem| stem.to_string_lossy().into_owned())
-		.unwrap_or_default();
+	let title = output.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
 	let site = warp::web::site::files(code, &title, false)?;
 	let (stub, runtime) = runtime_stub(&PAGE_STUB)?;
 	let executable = warp_runtime::standalone::with_site(&runtime, &site);
@@ -164,11 +150,7 @@ pub(crate) fn write_executable(executable: &[u8], output: &std::path::Path) -> R
 	}
 	// macOS starts only signed executables: an ad-hoc signature, which `codesign --verify --strict` accepts
 	#[cfg(target_os = "macos")]
-	match std::process::Command::new("codesign")
-		.args(["--sign", "-", "--force"])
-		.arg(output)
-		.output()
-	{
+	match std::process::Command::new("codesign").args(["--sign", "-", "--force"]).arg(output).output() {
 		Ok(signed) if signed.status.success() => {}
 		Ok(signed) => {
 			return Err(format!(
@@ -223,11 +205,7 @@ pub(crate) fn runtime_stub_path(kind: &RuntimeStub) -> Result<std::path::PathBuf
 /// Whether `binary` lies in a cargo profile folder (debug/, release/, deps/ under them; cargo keeps its .fingerprint
 /// there): a development build, which may build its runtime stub from its source checkout
 pub(crate) fn in_cargo_target(binary: &std::path::Path) -> bool {
-	binary
-		.ancestors()
-		.skip(1)
-		.take(2)
-		.any(|folder| folder.join(".fingerprint").is_dir())
+	binary.ancestors().skip(1).take(2).any(|folder| folder.join(".fingerprint").is_dir())
 }
 
 /// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next
@@ -238,35 +216,19 @@ pub(crate) fn build_runtime_stub(kind: &RuntimeStub, expected: &std::path::Path)
 		return Err(format!("no runtime stub {}: put warp-runtime there or name one in {} (the warp source {} that would build it is gone)", expected.display(), kind.variable, source.display()));
 	}
 	// cargo runs every time (it keeps the stub current, quickly once built); the note only before the first build
-	let release_stub = expected
-		.parent()
-		.and_then(std::path::Path::parent)
-		.map(|target| target.join("release").join(kind.name));
+	let release_stub =
+		expected.parent().and_then(std::path::Path::parent).map(|target| target.join("release").join(kind.name));
 	if !release_stub.is_some_and(|stub| stub.is_file()) {
-		eprintln!(
-			"note: building the runtime stub {} once (cargo build -p {})",
-			kind.name, PROGRAM_STUB.name
-		);
+		eprintln!("note: building the runtime stub {} once (cargo build -p {})", kind.name, PROGRAM_STUB.name);
 	}
 	let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
 	build
-		.args([
-			"build",
-			"--release",
-			"--quiet",
-			"--message-format=json",
-			"-p",
-			PROGRAM_STUB.name,
-			"--bin",
-			kind.name,
-		])
+		.args(["build", "--release", "--quiet", "--message-format=json", "-p", PROGRAM_STUB.name, "--bin", kind.name])
 		.current_dir(source);
 	if !kind.features.is_empty() {
 		build.args(["--features", kind.features]);
 	}
-	let output = build
-		.output()
-		.map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
+	let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
 	if !output.status.success() {
 		return Err(format!(
 			"building the runtime stub {} failed (cargo build -p {} in {}): {}",
@@ -280,10 +242,7 @@ pub(crate) fn build_runtime_stub(kind: &RuntimeStub, expected: &std::path::Path)
 		.lines()
 		.filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
 		.find_map(|message| {
-			message["executable"]
-				.as_str()
-				.filter(|path| path.ends_with(kind.name))
-				.map(std::path::PathBuf::from)
+			message["executable"].as_str().filter(|path| path.ends_with(kind.name)).map(std::path::PathBuf::from)
 		})
 		.ok_or_else(|| format!("cargo built {} but named no executable", kind.name))
 }

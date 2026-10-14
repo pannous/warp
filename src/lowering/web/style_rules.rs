@@ -8,13 +8,12 @@
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 
-const STYLE: &str = "style";
 const SELECTOR_VALUE_PROPERTY: &str = "color";
 const CLASS_OR_ID: [char; 2] = ['.', '#'];
-const CSS_UNITS: [&str; 17] = [
-	"px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm",
-];
+const CSS_UNITS: [&str; 17] =
+	["px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm"];
 
 pub fn lower(node: Node) -> Node {
 	style_block(&node).unwrap_or_else(|| node.map_children(lower))
@@ -28,15 +27,11 @@ fn style_block(node: &Node) -> Option<Node> {
 	let Node::List(items, Bracket::Curly, separator) = body.drop_meta() else {
 		return None;
 	};
-	name.is_symbol(STYLE).then(|| {
+	name.is_symbol(STYLE_WORD).then(|| {
 		Node::Key(
 			name.clone(),
 			Op::Colon,
-			Box::new(Node::List(
-				styled(items.clone(), separator),
-				Bracket::Curly,
-				separator.clone(),
-			)),
+			Box::new(Node::List(styled(items.clone(), separator), Bracket::Curly, separator.clone())),
 		)
 	})
 }
@@ -68,11 +63,7 @@ fn style_items(
 	// Separator::Colon is the comma: `h1, h2 { … }`
 	let list_joiner = if *separator == Separator::Colon { ", " } else { " " };
 	for (index, item) in items.into_iter().flat_map(split_chained).enumerate() {
-		let joiner = if index == 0 {
-			leading_joiner.unwrap_or(list_joiner)
-		} else {
-			list_joiner
-		};
+		let joiner = if index == 0 { leading_joiner.unwrap_or(list_joiner) } else { list_joiner };
 		if let Node::List(group, Bracket::None, group_separator) = item.drop_meta() {
 			style_items(group.clone(), group_separator, Some(joiner), output, pending);
 		} else if let Some((selector, body)) = rule_parts(&item) {
@@ -81,10 +72,7 @@ fn style_items(
 			// `.card { … }`: a leading-dot name stays apart from its block
 			output.push(rule(joined_selector(pending, None), &item));
 		} else if let Some((selector, value)) = selector_value(&item) {
-			output.push(rule(
-				selector,
-				&key(symbol(SELECTOR_VALUE_PROPERTY), Op::Colon, value.clone()),
-			));
+			output.push(rule(selector, &key(symbol(SELECTOR_VALUE_PROPERTY), Op::Colon, value.clone())));
 		} else if let Some((name, value)) = declaration_value(&item) {
 			let value = css_length(value).map(Node::Text).unwrap_or_else(|| value.clone());
 			output.push(key(name.clone(), Op::Colon, value));
@@ -123,14 +111,8 @@ fn split_chained(node: Node) -> Vec<Node> {
 
 /// `ul li`, `h1, h2`: the selector words waiting for their block, joined with the last one
 fn joined_selector(pending: &mut Vec<PendingSelector>, last: Option<(String, &'static str)>) -> String {
-	let parts = pending
-		.drain(..)
-		.map(|selector| (selector.text, selector.joiner))
-		.chain(last);
-	parts
-		.enumerate()
-		.map(|(index, (text, joiner))| if index == 0 { text } else { format!("{joiner}{text}") })
-		.collect()
+	let parts = pending.drain(..).map(|selector| (selector.text, selector.joiner)).chain(last);
+	parts.enumerate().map(|(index, (text, joiner))| if index == 0 { text } else { format!("{joiner}{text}") }).collect()
 }
 
 fn rule(selector: String, body: &Node) -> Node {
@@ -142,11 +124,7 @@ fn styled_body(body: &Node) -> Node {
 		Node::List(items, Bracket::Curly, separator) => {
 			Node::List(styled(items.clone(), separator), Bracket::Curly, separator.clone())
 		}
-		single => Node::List(
-			styled(vec![single.clone()], &Separator::None),
-			Bracket::Curly,
-			Separator::None,
-		),
+		single => Node::List(styled(vec![single.clone()], &Separator::None), Bracket::Curly, Separator::None),
 	}
 }
 
@@ -167,10 +145,7 @@ fn selector_value(node: &Node) -> Option<(String, &Node)> {
 		return None;
 	};
 	let selector = selector_text(name).filter(|selector| selector.starts_with(CLASS_OR_ID))?;
-	let is_body = matches!(
-		value.drop_meta(),
-		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _)
-	);
+	let is_body = matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Colon, _));
 	(!is_body).then_some((selector, value.as_ref()))
 }
 
@@ -238,12 +213,9 @@ fn selector_text(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(text) | Node::Text(text) => Some(text.clone()),
 		Node::Empty => Some(String::new()),
-		Node::Key(left, op, right) => Some(format!(
-			"{}{}{}",
-			selector_text(left)?,
-			combinator(op)?,
-			selector_text(right)?
-		)),
+		Node::Key(left, op, right) => {
+			Some(format!("{}{}{}", selector_text(left)?, combinator(op)?, selector_text(right)?))
+		}
 		_ => None,
 	}
 }

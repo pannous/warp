@@ -63,19 +63,18 @@ const { socket, exited } = await startFirefox(profile);
 let nextId = 1;
 const pending = new Map();
 const messages = [];
+const realms = new Map();
 const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages.push({ level: level === "warn" ? "warning" : level, text, url });
 const events = {
-	"log.entryAdded": entry => /uncaught exception/.test(entry.text) && void send("script.getRealms", {}).then(({ result }) => console.error(`firefox_driver.mjs: ${entry.text} in ${JSON.stringify(result?.realms?.find(realm => realm.realm === entry.source?.realm))}`)) || report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? whereLogged(entry.stackTrace) : ""),
+	// an error without a stack (Firefox's bare "uncaught exception: undefined") still says the realm it came from: the
+	// page ("window") or which kind of Worker
+	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.stackTrace?.callFrames?.[0]?.url ?? realms.get(entry.source?.realm) ?? ""),
+	"script.realmCreated": ({ realm, type, origin }) => realms.set(realm, `${type} realm of ${origin}`),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
 	"network.beforeRequestSent": ({ isBlocked, request }) => isBlocked && send("network.continueRequest", {
 		request: request.request,
 		headers: [...request.headers.filter(({ name }) => name.toLowerCase() !== "authorization"), { name: "Authorization", value: { type: "string", value: `Bearer ${GITHUB_TOKEN}` } }],
 	}),
-};
-// where a console entry came from: its innermost frame's script, line and column (a thrown `undefined` says no more)
-const whereLogged = stack => {
-	const frame = stack?.callFrames?.[0];
-	return frame ? `${frame.url}:${frame.lineNumber + 1}:${frame.columnNumber + 1}${frame.functionName ? ` in ${frame.functionName}` : ""}` : "";
 };
 socket.onclose = () => {
 	console.error(`firefox_driver.mjs: Firefox closed its WebDriver BiDi connection; ${pending.size} commands unanswered`);

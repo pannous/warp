@@ -46,14 +46,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		if self.emit_inc_dec(func, left, op) {
-			self.emit_call(
-				func,
-				if self.is_float_variable(left) {
-					"new_float"
-				} else {
-					"new_int"
-				},
-			);
+			self.emit_call(func, if self.is_float_variable(left) { "new_float" } else { "new_int" });
 			return;
 		}
 		if self.emit_compound_assign(func, left, op, right, use_float) {
@@ -210,9 +203,7 @@ impl WasmGcEmitter {
 			}
 			// `x += 0.5` of an x that stays exact (`x: int`): refused as `x = x + 0.5` is
 			if self.scope.lookup(name).is_some_and(|local| local.kind == Kind::Int) && self.get_type(right).is_float() {
-				let declared = self
-					.declared_type_of(left)
-					.map_or("int".to_string(), |declared| declared.name());
+				let declared = self.declared_type_of(left).map_or("int".to_string(), |declared| declared.name());
 				let updated = Node::Key(Box::new(left.clone()), base_op, Box::new(right.clone())).serialize();
 				self.emit_type_error(func, format!("{updated} is a float where an exact {declared} is expected: declare {name} `number` to keep the float, or truncate with `as int`"));
 				return true;
@@ -246,10 +237,7 @@ impl WasmGcEmitter {
 			Op::Sqrt if self.get_type(right) == Kind::Codepoint => {
 				self.emit_type_error(
 					func,
-					format!(
-						"type error: √ of a codepoint: {}",
-						lists::list_ops::CHARACTER_IS_NO_NUMBER
-					),
+					format!("type error: √ of a codepoint: {}", lists::list_ops::CHARACTER_IS_NO_NUMBER),
 				);
 			}
 			root @ (Op::Sqrt | Op::Cbrt) => {
@@ -588,11 +576,7 @@ impl WasmGcEmitter {
 			return false;
 		}
 		self.emit_held_left_is_falsy(func, left, is_float);
-		func.instruction(&I::If(BlockType::Result(if is_float {
-			ValType::F64
-		} else {
-			ValType::I64
-		})));
+		func.instruction(&I::If(BlockType::Result(if is_float { ValType::F64 } else { ValType::I64 })));
 		self.emit_logical_branch(func, op == &Op::And, right, is_float);
 		func.instruction(&I::Else);
 		self.emit_logical_branch(func, op == &Op::Or, right, is_float);
@@ -611,16 +595,11 @@ impl WasmGcEmitter {
 		let held = self.scratch(LOGICAL_SCRATCH);
 		if is_float {
 			self.emit_float_value(func, left);
-			Self::emit_list(
-				func,
-				&[
-					I::I64ReinterpretF64,
-					I::LocalTee(held),
-					I::F64ReinterpretI64,
-					I::F64Const(Ieee64::new(0.0f64.to_bits())),
-					I::F64Eq,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::I64ReinterpretF64, I::LocalTee(held), I::F64ReinterpretI64,
+				I::F64Const(Ieee64::new(0.0f64.to_bits())), I::F64Eq,
+			]);
 		} else {
 			self.emit_numeric_value(func, left);
 			Self::emit_list(func, &[I::LocalTee(held), I::I64Eqz]);
@@ -817,11 +796,7 @@ impl WasmGcEmitter {
 		// (an element `xs#2` that is a character compares by its code point with a number, `x#2 > 50`)
 		let [left_kind, right_kind] = [left, right].map(|side| self.get_type(side));
 		let held = |kind: Kind| matches!(kind, Kind::Empty | Kind::Data);
-		if op.is_ordering()
-			&& [left_kind, right_kind]
-				.iter()
-				.any(|&kind| kind == Kind::Text || held(kind))
-		{
+		if op.is_ordering() && [left_kind, right_kind].iter().any(|&kind| kind == Kind::Text || held(kind)) {
 			for (side, kind, other_kind) in [(left, left_kind, right_kind), (right, right_kind, left_kind)] {
 				self.emit_node_instructions(func, side);
 				if held(kind)
@@ -851,11 +826,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// comparisons keep a character's code point (`c >= '0'`); arithmetic refuses it (P65)
-		let operand = if op.is_comparison() {
-			Self::emit_numeric_value
-		} else {
-			Self::emit_arithmetic_operand
-		};
+		let operand = if op.is_comparison() { Self::emit_numeric_value } else { Self::emit_arithmetic_operand };
 		operand(self, func, left);
 		// `x ^ 2` is x * x: the multiplication's fixnum fast path instead of a call to exact_pow per use (Mul's own
 		// scratch locals are 0 and 1)
@@ -908,10 +879,7 @@ impl WasmGcEmitter {
 		op: &Op,
 		right: &Node,
 	) {
-		let node_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(self.type_manager.node_type),
-		};
+		let node_ref = RefType { nullable: false, heap_type: HeapType::Concrete(self.type_manager.node_type) };
 
 		// A call of number kind is tested at run time like a numeric variable, and evaluated once
 		let is_call = matches!(left.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
@@ -942,12 +910,7 @@ impl WasmGcEmitter {
 			}
 			Self::emit_list(
 				func,
-				&[
-					I::If(BlockType::Result(Ref(node_ref))),
-					I::LocalGet(held),
-					I::RefAsNonNull,
-					I::Else,
-				],
+				&[I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(held), I::RefAsNonNull, I::Else],
 			);
 			self.emit_node_instructions(func, right);
 			func.instruction(&I::End);
@@ -980,26 +943,15 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_held_node_as_f64(&mut self, func: &mut Function) {
 		let (node_type, float_box) = (self.type_manager.node_type, self.type_manager.f64_box_type);
 		let held = self.emit_held_node_is_float(func);
-		Self::emit_list(
-			func,
-			&[
-				I::If(BlockType::Result(ValType::F64)),
-				I::LocalGet(held),
-				I::RefAsNonNull,
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 1,
-				},
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::If(BlockType::Result(ValType::F64)),
+				I::LocalGet(held), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: 1 },
 				I::RefCastNonNull(HeapType::Concrete(float_box)),
-				I::StructGet {
-					struct_type_index: float_box,
-					field_index: 0,
-				},
-				I::Else,
-				I::LocalGet(held),
-				I::RefAsNonNull,
-			],
-		);
+				I::StructGet { struct_type_index: float_box, field_index: 0 },
+			I::Else,
+				I::LocalGet(held), I::RefAsNonNull,
+		]);
 		self.emit_call(func, "get_int_value");
 		self.emit_int_to_f64(func, None);
 		func.instruction(&I::End);
@@ -1008,26 +960,14 @@ impl WasmGcEmitter {
 	/// The Node on the stack kept in the node scratch local, and whether it is a Float (an i32) on the stack
 	fn emit_held_node_is_float(&mut self, func: &mut Function) -> u32 {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalTee(held),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 0,
-				},
-			],
-		);
+		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
 		Self::emit_kind_test(func, Kind::Float as i64, I::I64Eq);
 		held
 	}
 
 	/// ‖x‖ of a number Node computed at run time: a Float's is a Float, an Int's stays exact
 	pub(in crate::wasm_emitter) fn emit_node_abs(&mut self, func: &mut Function, node: &Node) {
-		let node_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(self.type_manager.node_type),
-		};
+		let node_ref = RefType { nullable: false, heap_type: HeapType::Concrete(self.type_manager.node_type) };
 		self.emit_node_instructions(func, node);
 		let held = self.emit_held_node_is_float(func);
 		Self::emit_list(func, &[I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(held)]);
@@ -1044,29 +984,10 @@ impl WasmGcEmitter {
 	/// The Node on the stack, a character replaced by the Int of its code point: ordered against a number (`x#2 > 50`)
 	fn emit_codepoint_as_int_node(&mut self, func: &mut Function) {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
-		let node_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(node_type),
-		};
-		Self::emit_list(
-			func,
-			&[
-				I::LocalTee(held),
-				I::StructGet {
-					struct_type_index: node_type,
-					field_index: 0,
-				},
-			],
-		);
+		let node_ref = RefType { nullable: false, heap_type: HeapType::Concrete(node_type) };
+		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
 		Self::emit_kind_test(func, Kind::Codepoint as i64, I::I64Eq);
-		Self::emit_list(
-			func,
-			&[
-				I::If(BlockType::Result(Ref(node_ref))),
-				I::LocalGet(held),
-				I::RefAsNonNull,
-			],
-		);
+		Self::emit_list(func, &[I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(held), I::RefAsNonNull]);
 		self.emit_call(func, "get_int_value");
 		self.emit_call(func, "new_int");
 		Self::emit_list(func, &[I::Else, I::LocalGet(held), I::RefAsNonNull, I::End]);

@@ -42,11 +42,7 @@ pub struct WispParser {
 
 impl WispParser {
 	pub fn new(input: &str) -> Self {
-		WispParser {
-			chars: input.chars().collect(),
-			pos: 0,
-			problem: None,
-		}
+		WispParser { chars: input.chars().collect(), pos: 0, problem: None }
 	}
 
 	pub fn parse(input: &str) -> Node {
@@ -264,10 +260,7 @@ impl WispParser {
 
 	fn parse_meta_node(&mut self) -> Node {
 		let (node, data) = self.finish_two();
-		Meta {
-			node: Box::new(node),
-			data: Box::new(data),
-		}
+		Meta { node: Box::new(node), data: Box::new(data) }
 	}
 
 	/// `(def name body)` → name:=body; `(def name params body)`: the last part is the body, the parameter list before it
@@ -380,10 +373,7 @@ impl WispParser {
 		}
 		// hex
 		if s.starts_with("0x") || s.starts_with("0X") || s.starts_with("-0x") {
-			let hex_str = s
-				.trim_start_matches('-')
-				.trim_start_matches("0x")
-				.trim_start_matches("0X");
+			let hex_str = s.trim_start_matches('-').trim_start_matches("0x").trim_start_matches("0X");
 			if let Ok(n) = i64::from_str_radix(hex_str, 16) {
 				return Number(Number::Int(if s.starts_with('-') { -n } else { n }));
 			}
@@ -394,14 +384,9 @@ impl WispParser {
 			false => digits.parse::<num_bigint::BigInt>().ok().map(Number::from_bigint),
 		};
 		number.map(Number).unwrap_or_else(|| {
-			let found: String = self.chars[self.pos..]
-				.iter()
-				.take_while(|c| !c.is_whitespace() && **c != ')')
-				.collect();
-			self.complain(format!(
-				"expected a number, got {}",
-				if s.is_empty() { found } else { s }
-			));
+			let found: String =
+				self.chars[self.pos..].iter().take_while(|c| !c.is_whitespace() && **c != ')').collect();
+			self.complain(format!("expected a number, got {}", if s.is_empty() { found } else { s }));
 			Empty
 		})
 	}
@@ -449,11 +434,7 @@ impl WispParser {
 	fn expect(&mut self, ch: char) {
 		self.skip_whitespace();
 		if self.current() != ch {
-			let found = if self.end() {
-				"the end".to_string()
-			} else {
-				format!("{:?}", self.current())
-			};
+			let found = if self.end() { "the end".to_string() } else { format!("{:?}", self.current()) };
 			self.complain(format!("expected {ch:?}, got {found}"));
 		}
 		if self.current() == ch {
@@ -471,11 +452,7 @@ impl WispParser {
 
 /// `name(args…)`: the name keyed to its round argument list
 fn call_of(name: Node, args: Vec<Node>) -> Node {
-	Key(
-		Box::new(name),
-		Op::None,
-		Box::new(List(args, Bracket::Round, Separator::Space)),
-	)
+	Key(Box::new(name), Op::None, Box::new(List(args, Bracket::Round, Separator::Space)))
 }
 
 pub fn parse_wisp(input: &str) -> Node {
@@ -588,11 +565,7 @@ macro_rules! wisp {
 		let node = parse_wisp($input);
 		let emitted = emit_wisp(&node);
 		let reparsed = parse_wisp(&emitted);
-		assert_eq!(
-			node, reparsed,
-			"roundtrip failed:\n  input: {}\n  emitted: {}",
-			$input, emitted
-		);
+		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", $input, emitted);
 		node
 	}};
 	// Wisp eval: parse wisp -> Node -> compare to expected
@@ -810,18 +783,10 @@ mod tests {
 		let list = expression!["a", "b"];
 		wisp!("[a b]", list);
 
-		let key = Key(
-			Box::new(Symbol("x".into())),
-			Op::Colon,
-			Box::new(Number(Number::Int(1))),
-		);
+		let key = Key(Box::new(Symbol("x".into())), Op::Colon, Box::new(Number(Number::Int(1))));
 		wisp!("(key x (int 1))", &key);
 
-		let pair = Key(
-			Box::new(Symbol("y".into())),
-			Op::Assign,
-			Box::new(Number(Number::Int(2))),
-		);
+		let pair = Key(Box::new(Symbol("y".into())), Op::Assign, Box::new(Number(Number::Int(2))));
 		wisp!("(pair y (int 2))", &pair);
 	}
 
@@ -831,11 +796,7 @@ mod tests {
 		let node = parse_wisp(input);
 		let emitted = emit_wisp(&node);
 		let reparsed = parse_wisp(&emitted);
-		assert_eq!(
-			node, reparsed,
-			"roundtrip failed:\n  input: {}\n  emitted: {}",
-			input, emitted
-		);
+		assert_eq!(node, reparsed, "roundtrip failed:\n  input: {}\n  emitted: {}", input, emitted);
 	}
 
 	#[test]

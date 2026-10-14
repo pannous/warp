@@ -106,10 +106,14 @@ async function turnstileToken() {
 	await loadTurnstile();
 	const box = element("div", { className: "turnstile" });
 	document.body.append(box);
-	return new Promise((resolve, reject) => turnstile.render(box, {
+	// the widget is removed through Turnstile, then its box: a box removed alone left Turnstile looking for its widget
+	// ("Cannot find Widget cf-chl-widget-…", card failed-load)
+	let widget;
+	const done = () => { turnstile.remove(widget); box.remove(); };
+	return new Promise((resolve, reject) => widget = turnstile.render(box, {
 		sitekey: TURNSTILE_SITE_KEY, appearance: "interaction-only",
-		callback: token => { box.remove(); resolve(token); },
-		"error-callback": code => { box.remove(); reject(new Error(`The bot check (Cloudflare Turnstile) failed: ${code}.`)); },
+		callback: token => { done(); resolve(token); },
+		"error-callback": code => { done(); reject(new Error(`The bot check (Cloudflare Turnstile) failed: ${code}.`)); },
 	}));
 }
 

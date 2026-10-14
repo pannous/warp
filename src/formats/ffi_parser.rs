@@ -20,16 +20,8 @@ const SDL_HEADERS: [&str; 5] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_ti
 /// libc's headers: strings, conversions and memory, stdio, character classes (`toupper`). macOS declares much of them
 /// in the _stdlib.h, _stdio.h and _ctype.h that stdlib.h, stdio.h and ctype.h include (`getenv`, `fopen`, `toupper`); a header missing on Linux is skipped
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-const LIBC_HEADERS: [&str; 8] = [
-	"string.h",
-	"_string.h",
-	"stdlib.h",
-	"_stdlib.h",
-	"stdio.h",
-	"_stdio.h",
-	"ctype.h",
-	"_ctype.h",
-];
+const LIBC_HEADERS: [&str; 8] =
+	["string.h", "_string.h", "stdlib.h", "_stdlib.h", "stdio.h", "_stdio.h", "ctype.h", "_ctype.h"];
 /// the page's libc is libc.wasm, its functions declared in one header
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 const LIBC_HEADERS: [&str; 1] = ["libc.h"];
@@ -38,11 +30,7 @@ const LIBRARY_HEADERS: [(&str, &str); 1] = [("z", "zlib.h")];
 
 pub(crate) fn include_dirs() -> Vec<String> {
 	match std::env::var(INCLUDE_VARIABLE) {
-		Ok(list) => list
-			.split(':')
-			.filter(|dir| !dir.is_empty())
-			.map(str::to_string)
-			.collect(),
+		Ok(list) => list.split(':').filter(|dir| !dir.is_empty()).map(str::to_string).collect(),
 		#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 		Err(_) => vec![PAGE_INCLUDE.to_string()],
 		#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
@@ -52,9 +40,7 @@ pub(crate) fn include_dirs() -> Vec<String> {
 
 /// The path of `header` (`math.h`, `SDL2/SDL_render.h`) in the first of `dirs` that holds it
 pub fn find_header_in(header: &str, dirs: &[impl AsRef<str>]) -> Option<String> {
-	dirs.iter()
-		.map(|dir| format!("{}/{}", dir.as_ref(), header))
-		.find(|path| crate::web::file_exists(path))
+	dirs.iter().map(|dir| format!("{}/{}", dir.as_ref(), header)).find(|path| crate::web::file_exists(path))
 }
 
 /// The headers that declare a library's functions, each found once in the include directories
@@ -69,10 +55,7 @@ pub fn find_library_headers(library: &str) -> Vec<String> {
 		},
 	};
 	let dirs = include_dirs();
-	headers
-		.iter()
-		.filter_map(|header| find_header_in(header, &dirs))
-		.collect()
+	headers.iter().filter_map(|header| find_header_in(header, &dirs)).collect()
 }
 
 /// The one C header parser is ffi/header.rs (card cleanup-ffi-headers)

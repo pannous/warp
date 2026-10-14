@@ -22,20 +22,14 @@ fn seeded(tables: &str) {
 #[test]
 fn ten_thousand_rows_with_a_required_key_load_in_linear_time() {
 	seeded("linear_keys");
-	is!(
-		&program("linear_keys", &timed("s = 0; for p in people { s += p.team.id }", "s")),
-		ENTRIES * (ENTRIES + 1) / 2
-	);
+	is!(&program("linear_keys", &timed("s = 0; for p in people { s += p.team.id }", "s")), ENTRIES * (ENTRIES + 1) / 2);
 }
 
 #[test]
 fn a_loaded_table_filters_in_linear_time() {
 	seeded("linear_filter");
 	is!(
-		&program(
-			"linear_filter",
-			&timed("all = people; kept = people where it.age > 10", "count(kept)")
-		),
+		&program("linear_filter", &timed("all = people; kept = people where it.age > 10", "count(kept)")),
 		ENTRIES - 10
 	);
 }

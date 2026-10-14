@@ -22,10 +22,7 @@ pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
 					(name, signature)
 				})
 				.collect();
-			fields
-				.iter()
-				.any(|(_, signature)| !signature.is_empty())
-				.then_some((class, fields))
+			fields.iter().any(|(_, signature)| !signature.is_empty()).then_some((class, fields))
 		})
 		.collect()
 }
@@ -52,14 +49,10 @@ fn field_tolerances(program: &Node) -> Tolerances {
 			let class = name.drop_meta().name();
 			body.visit(&mut |member| {
 				if let Some((field, _, spread)) = tolerance_parts(member) {
-					let position = fields
-						.get(&class)
-						.and_then(|fields| fields.iter().position(|(name, _)| *name == field));
+					let position =
+						fields.get(&class).and_then(|fields| fields.iter().position(|(name, _)| *name == field));
 					if let Some(position) = position {
-						tolerances
-							.entry(class.clone())
-							.or_default()
-							.push((position, field, spread.clone()));
+						tolerances.entry(class.clone()).or_default().push((position, field, spread.clone()));
 					}
 				}
 			});
@@ -130,10 +123,7 @@ fn with_field_tolerances(node: Node, tolerances: &Tolerances) -> Node {
 /// The units the program's unit fields are written in: `distance: km` shows km like a written `5 km`
 pub(super) fn written_field_units(program: &Node) -> Vec<crate::numbers::units::Factor> {
 	let fields = crate::class_methods::class_fields(program).into_values().flatten();
-	fields
-		.filter_map(|(_, type_name)| field_units(&type_name))
-		.flatten()
-		.collect()
+	fields.filter_map(|(_, type_name)| field_units(&type_name)).flatten().collect()
 }
 
 /// The units of a field type that is a unit (`km`, `km/h`, an optional `km?`)
@@ -155,13 +145,10 @@ pub(super) fn stored_argument_units(
 		let Node::List(items, Bracket::Round, _) = node else {
 			return;
 		};
-		if let Some((_, arguments)) = items
-			.split_first()
-			.filter(|(head, _)| classes.contains_key(&head.drop_meta().name()))
+		if let Some((_, arguments)) =
+			items.split_first().filter(|(head, _)| classes.contains_key(&head.drop_meta().name()))
 		{
-			arguments
-				.iter()
-				.for_each(|argument| stored.extend(super::written_units(argument)));
+			arguments.iter().for_each(|argument| stored.extend(super::written_units(argument)));
 		}
 	});
 	stored
@@ -192,21 +179,14 @@ pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
 /// quantity-tolerance)
 fn written_quantity(argument: &Node) -> Node {
 	match crate::numbers::units::run_time_quantity_parts(argument) {
-		Some((amount, unit)) => Node::Key(
-			Box::new(amount.clone()),
-			Op::Mul,
-			Box::new(crate::warp_parser::parse(unit)),
-		),
+		Some((amount, unit)) => Node::Key(Box::new(amount.clone()), Op::Mul, Box::new(crate::warp_parser::parse(unit))),
 		None => argument.clone(),
 	}
 }
 
 fn with_instance_body(node: &Node, body: Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_instance_body(node, body)),
-			data: data.clone(),
-		},
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_instance_body(node, body)), data: data.clone() },
 		Node::Key(name, op, _) => Node::Key(name.clone(), *op, Box::new(body)),
 		other => other.clone(),
 	}
@@ -254,14 +234,8 @@ impl Inference {
 		let Node::List(items, Bracket::Square, _) = list.drop_meta() else {
 			return None;
 		};
-		let classes: Vec<String> = items
-			.iter()
-			.map(|item| self.instance_class(item))
-			.collect::<Option<_>>()?;
-		classes
-			.first()
-			.filter(|first| classes.iter().all(|class| class == *first))
-			.cloned()
+		let classes: Vec<String> = items.iter().map(|item| self.instance_class(item)).collect::<Option<_>>()?;
+		classes.first().filter(|first| classes.iter().all(|class| class == *first)).cloned()
 	}
 
 	/// The fields of the instances a list of a class holds (a final `runs` shows their units)
@@ -358,10 +332,7 @@ impl Inference {
 			}
 			lowered.push(argument);
 		}
-		Some(Ok((
-			Node::List(lowered, Bracket::Round, crate::node::Separator::None),
-			vec![],
-		)))
+		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), vec![])))
 	}
 
 	/// `Run` and the fields of a construction with named fields `Run{distance: 5 km}` of a class with unit fields; the
@@ -401,10 +372,7 @@ impl Inference {
 				Ok(inferred) => inferred,
 				Err(stop) => return Some(Err(stop)),
 			};
-			let held = fields
-				.iter()
-				.find(|(name, _)| *name == field.drop_meta().name())
-				.map(|(_, held)| held);
+			let held = fields.iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, held)| held);
 			if let Some(held) = held.filter(|held| **held != given && !value.is_empty_node()) {
 				return Some(Err(Stop::Error(format!(
 					"DimensionError: {class}.{} holds {}, is given {}",
@@ -415,10 +383,7 @@ impl Inference {
 			}
 			lowered.push(Node::Key(field.clone(), *op, Box::new(value)));
 		}
-		Some(Ok((
-			with_instance_body(node, Node::List(lowered, bracket.clone(), separator.clone())),
-			vec![],
-		)))
+		Some(Ok((with_instance_body(node, Node::List(lowered, bracket.clone(), separator.clone())), vec![])))
 	}
 
 	/// The class declaration with its unit fields declared numbers; a default value (`distance: km = 0 km`) has the unit
@@ -436,13 +401,7 @@ impl Inference {
 		});
 		match failure {
 			Some(stop) => Err(stop),
-			None => Ok((
-				Node::Type {
-					name,
-					body: Box::new(body),
-				},
-				vec![],
-			)),
+			None => Ok((Node::Type { name, body: Box::new(body) }, vec![])),
 		}
 	}
 
@@ -454,10 +413,7 @@ impl Inference {
 				.map(|(_, signature)| signature.clone())
 		};
 		match item {
-			Node::Meta { node, data } => Ok(Node::Meta {
-				node: Box::new(self.numeric_field(*node, fields)?),
-				data,
-			}),
+			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.numeric_field(*node, fields)?), data }),
 			Node::Key(field, Op::Colon, field_type) if unit_of(&field).is_some() => {
 				let number_type = |written: &Node| {
 					let optional = if written.drop_meta().name().ends_with(OPTIONAL_MARK) {
@@ -468,10 +424,7 @@ impl Inference {
 					Box::new(Node::Symbol(format!("{NUMBER_WORD}{optional}")))
 				};
 				let number = match field_type.drop_meta() {
-					Node::Type { name, body } => Node::Type {
-						name: number_type(name),
-						body: body.clone(),
-					},
+					Node::Type { name, body } => Node::Type { name: number_type(name), body: body.clone() },
 					other => *number_type(other),
 				};
 				Ok(Node::Key(field, Op::Colon, Box::new(number)))
@@ -493,11 +446,7 @@ impl Inference {
 						shown(&held)
 					)));
 				}
-				Ok(Node::Key(
-					Box::new(self.numeric_field(*declaration, fields)?),
-					Op::Assign,
-					Box::new(default),
-				))
+				Ok(Node::Key(Box::new(self.numeric_field(*declaration, fields)?), Op::Assign, Box::new(default)))
 			}
 			other => Ok(other),
 		}
@@ -509,11 +458,7 @@ impl Inference {
 		let class = self
 			.classes
 			.iter()
-			.find(|(_, fields)| {
-				fields
-					.iter()
-					.any(|(name, signature)| *name == field && !signature.is_empty())
-			})?
+			.find(|(_, fields)| fields.iter().any(|(name, signature)| *name == field && !signature.is_empty()))?
 			.0;
 		Some(Stop::Error(format!("{}.{field}: the unit of {class}.{field} is known of an instance declared so: `x: {class} = …`, a constructor call, an element of a list declared [{class}]", object.serialize().trim())))
 	}

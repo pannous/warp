@@ -11,6 +11,8 @@ pub use spellings::*;
 
 /// Keywords that introduce function definitions
 pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];
+/// `infix operator ⊕ := …` defines the function `operator_⊕`, which each use of ⊕ calls
+pub const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
 
 pub fn is_function_keyword(s: &str) -> bool {
 	FUNCTION_KEYWORDS.contains(&s)
@@ -171,10 +173,7 @@ impl Op {
 
 	/// Check if this is a binary arithmetic operator
 	pub fn is_arithmetic(&self) -> bool {
-		matches!(
-			self,
-			Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow
-		)
+		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow)
 	}
 
 	/// Check if this is a shift operator, defined on exact Ints only
@@ -184,10 +183,7 @@ impl Op {
 
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
-		matches!(
-			self,
-			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge
-		)
+		matches!(self, Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
 	}
 
 	/// A comparison or a similarity (≈, ~): `combine 1.1 with 2.2 ≈ 3.3` compares the phrase's value
@@ -202,6 +198,12 @@ impl Op {
 
 	pub fn is_equality(&self) -> bool {
 		matches!(self, Op::Eq | Op::Ne)
+	}
+
+	/// An operator the parser knows but the language gives no meaning of its own: a declaration gives it one,
+	/// `infix operator ↑(x: number, n: number) := …` (lib/prelude.warp), and its use is the call of that declaration
+	pub fn is_declared_only(&self) -> bool {
+		matches!(self, Op::ArrowUp | Op::ArrowDown)
 	}
 
 	/// Check if this is a logical operator (and, or, xor)
@@ -220,6 +222,18 @@ impl Op {
 
 	pub fn is_bitwise(&self) -> bool {
 		matches!(self, Op::BitAnd | Op::BitOr)
+	}
+
+	/// An operator computing a value from its operands, `1+1`, `a<b`, `-x`: a Key of it is an operation, while a pair
+	/// `a:1`, a binding `a=1`, a lookup `a.b` stay keys (decision parse-type)
+	pub fn is_operation(&self) -> bool {
+		self.is_arithmetic()
+			|| self.is_shift()
+			|| self.is_relation()
+			|| self.is_logical()
+			|| self.is_bitwise()
+			|| (self.is_prefix() || self.is_suffix()) && !self.is_write()
+			|| matches!(self, Op::LogBase | Op::LogOf | Op::PlusMinus | Op::Coalesce | Op::ArrowUp | Op::ArrowDown)
 	}
 
 	/// Check if this is a compound assignment operator (+=, -=, etc.)

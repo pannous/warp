@@ -57,10 +57,7 @@ pub(crate) fn split_step(body: &Node) -> (Node, Option<Node>) {
 	match body.drop_meta() {
 		Node::List(items, bracket, separator) if items.last().is_some_and(is_step) => {
 			let (step, statements) = items.split_last().expect("guarded");
-			(
-				Node::List(statements.to_vec(), bracket.clone(), separator.clone()),
-				Some(step.clone()),
-			)
+			(Node::List(statements.to_vec(), bracket.clone(), separator.clone()), Some(step.clone()))
 		}
 		// `{print x}` holds the words of its one statement: the body is the call `print x`, whose value is ø (P213)
 		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => {
@@ -118,10 +115,7 @@ pub(crate) fn open_frames(func: &Function) -> Vec<bool> {
 
 impl WasmGcEmitter {
 	pub(crate) fn enter_loop(&mut self, break_frame: usize, continue_frame: usize) {
-		self.loop_labels.push(LoopLabels {
-			break_frame,
-			continue_frame,
-		});
+		self.loop_labels.push(LoopLabels { break_frame, continue_frame });
 	}
 
 	pub(crate) fn leave_loop(&mut self) {
@@ -153,11 +147,7 @@ impl WasmGcEmitter {
 			);
 			return true;
 		};
-		let target = if jump == Jump::Break {
-			labels.break_frame
-		} else {
-			labels.continue_frame
-		};
+		let target = if jump == Jump::Break { labels.break_frame } else { labels.continue_frame };
 		let depth = open_control_frames(func) - target;
 		self.emit_leave_tries(func, target);
 		func.instruction(&I::Br(depth as u32));

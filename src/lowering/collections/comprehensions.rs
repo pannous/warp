@@ -31,10 +31,7 @@ const ELEMENT: &str = "comprehension_element";
 const LOOPS: &str = "comprehension_loops";
 
 pub fn lower(node: Node) -> Node {
-	Lowering {
-		count: Counter::default(),
-	}
-	.lower(node)
+	Lowering { count: Counter::default() }.lower(node)
 }
 
 /// `xs where it > 1` as the comprehension `[it for it in xs if it > 1]`; before welcome_forms reads `xs where …` as
@@ -61,10 +58,7 @@ impl Lists {
 			.map(|(class, body)| {
 				(
 					class,
-					crate::class_methods::field_declarations(&body)
-						.into_iter()
-						.map(|(field, _, _)| field)
-						.collect(),
+					crate::class_methods::field_declarations(&body).into_iter().map(|(field, _, _)| field).collect(),
 				)
 			})
 			.collect();
@@ -90,10 +84,9 @@ impl Lists {
 			}
 			Node::Key(target, Op::Assign | Op::Define, value) => {
 				variables.extend(comprehension_variables(target));
-				if let (Node::Symbol(list), Some(class_fields)) = (
-					target.drop_meta(),
-					instances_class(value).and_then(|class| classes.get(class)),
-				) {
+				if let (Node::Symbol(list), Some(class_fields)) =
+					(target.drop_meta(), instances_class(value).and_then(|class| classes.get(class)))
+				{
 					fields.insert(list.clone(), class_fields.clone());
 				}
 			}
@@ -102,11 +95,7 @@ impl Lists {
 			}
 			_ => {}
 		});
-		Lists {
-			fields,
-			variables,
-			tables: crate::database_tables::registered(program),
-		}
+		Lists { fields, variables, tables: crate::database_tables::registered(program) }
 	}
 
 	/// `age > 20` of `people where …` as `it.age > 20` where each person has a field age and no variable age is bound
@@ -123,9 +112,7 @@ fn instances_class(value: &Node) -> Option<&str> {
 	let Node::List(elements, Bracket::Square, _) = value.drop_meta() else {
 		return None;
 	};
-	let mut classes = elements
-		.iter()
-		.map(|element| element.call_parts().map(|(class, _)| class));
+	let mut classes = elements.iter().map(|element| element.call_parts().map(|(class, _)| class));
 	let first = classes.next()??;
 	classes.all(|class| class == Some(first)).then_some(first)
 }
@@ -143,11 +130,7 @@ pub(crate) fn comprehension_variables(target: &Node) -> Vec<String> {
 fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>) -> Node {
 	match condition {
 		Node::Symbol(name) if fields.contains(&name) => {
-			let field_of_it = key(
-				symbol(crate::words::IMPLICIT_PARAMETER),
-				Op::Dot,
-				Node::Symbol(name.clone()),
-			);
+			let field_of_it = key(symbol(crate::words::IMPLICIT_PARAMETER), Op::Dot, Node::Symbol(name.clone()));
 			if !variables.contains(&name) {
 				return field_of_it;
 			}
@@ -177,10 +160,7 @@ fn with_as_where(node: Node, lists: &Lists) -> Node {
 		return node;
 	};
 	for at in 1..items.len() {
-		let subject = phrase_words(&items[at - 1..at])
-			.pop()
-			.map(|word| word.drop_meta().name())
-			.unwrap_or_default();
+		let subject = phrase_words(&items[at - 1..at]).pop().map(|word| word.drop_meta().name()).unwrap_or_default();
 		if !lists.fields.contains_key(&subject) {
 			continue;
 		}
@@ -200,29 +180,16 @@ fn field_of_elements(node: &Node, lists: &Lists) -> Option<Node> {
 		return None;
 	};
 	let (name, list) = (field.symbol_name()?, first_word(subject)?);
-	if !lists
-		.fields
-		.get(list)
-		.is_some_and(|fields| fields.iter().any(|field| field == name))
-	{
+	if !lists.fields.get(list).is_some_and(|fields| fields.iter().any(|field| field == name)) {
 		return None;
 	}
 	let element = symbol(OF_ELEMENT);
 	let clause = Node::List(
-		vec![
-			symbol(FOR_WORD),
-			element.clone(),
-			symbol(IN_WORD),
-			subject.as_ref().clone(),
-		],
+		vec![symbol(FOR_WORD), element.clone(), symbol(IN_WORD), subject.as_ref().clone()],
 		Bracket::None,
 		Separator::Space,
 	);
-	Some(Node::List(
-		vec![key(element, Op::Dot, field.as_ref().clone()), clause],
-		Bracket::Square,
-		Separator::Space,
-	))
+	Some(Node::List(vec![key(element, Op::Dot, field.as_ref().clone()), clause], Bracket::Square, Separator::Space))
 }
 
 /// The word a phrase starts with: `people` of `(people where age > 20)`
@@ -254,11 +221,9 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 	};
 	let filtered = match items[at + 1].drop_meta() {
 		// Haskell's binding `x * 2 where x = 3`: the assignment, then the expression
-		Node::Key(_, Op::Assign, _) => Node::List(
-			vec![items[at + 1].clone(), items[at - 1].clone()],
-			Bracket::Round,
-			Separator::Semicolon,
-		),
+		Node::Key(_, Op::Assign, _) => {
+			Node::List(vec![items[at + 1].clone(), items[at - 1].clone()], Bracket::Round, Separator::Semicolon)
+		}
 		_ => {
 			let condition = match items[at].is_symbol(WHERE_NOT) {
 				true => key(Node::Empty, Op::Not, items[at + 1].clone()),
@@ -300,11 +265,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 		return None;
 	};
 	let condition = substitute(condition.clone(), name, &symbol(crate::words::IMPLICIT_PARAMETER));
-	let filter = Node::List(
-		vec![sequence.clone(), where_word.clone(), condition],
-		Bracket::None,
-		Separator::Space,
-	);
+	let filter = Node::List(vec![sequence.clone(), where_word.clone(), condition], Bracket::None, Separator::Space);
 	Some(vec![
 		for_word.clone(),
 		variable.clone(),
@@ -339,11 +300,8 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 	let condition = substitute(condition, name, &symbol(crate::words::IMPLICIT_PARAMETER));
 	let (Ok(found) | Err(found)) =
 		crate::database_tables::queried(sequence, &condition, &lists.variables, &mut lists.tables)?;
-	let clause = Node::List(
-		vec![for_word.clone(), variable.clone(), in_word.clone(), found],
-		Bracket::None,
-		Separator::Space,
-	);
+	let clause =
+		Node::List(vec![for_word.clone(), variable.clone(), in_word.clone(), found], Bracket::None, Separator::Space);
 	Some([&items[..at], &[clause]].concat())
 }
 
@@ -364,13 +322,7 @@ fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 	let condition = substitute(condition.clone(), crate::words::IMPLICIT_PARAMETER, &element);
 	let word = |word: &str| symbol(word);
 	let clause = Node::List(
-		vec![
-			word(FOR_WORD),
-			element.clone(),
-			word(IN_WORD),
-			subject.clone(),
-			word(IF_WORD),
-		],
+		vec![word(FOR_WORD), element.clone(), word(IN_WORD), subject.clone(), word(IF_WORD)],
 		Bracket::None,
 		Separator::Space,
 	);
@@ -388,10 +340,7 @@ fn field_condition(condition: &Node) -> Option<(String, String)> {
 	};
 	let it = symbol(crate::words::IMPLICIT_PARAMETER);
 	let field_of_it = Node::Key(Box::new(it), Op::Dot, field.clone());
-	Some((
-		name.clone(),
-		Node::Key(Box::new(field_of_it), *op, value.clone()).serialize(),
-	))
+	Some((name.clone(), Node::Key(Box::new(field_of_it), *op, value.clone()).serialize()))
 }
 
 /// `xs where it > 1` parses as `(xs where it) > 1`: the operators right of `where` join its condition,
@@ -453,9 +402,7 @@ fn where_flattened(node: Node) -> Node {
 
 /// The position of `where` in `[… subject, where, condition]`
 fn where_position(items: &[Node]) -> Option<usize> {
-	(items.len() >= 3)
-		.then(|| items.len() - 2)
-		.filter(|&at| is_where(&items[at]))
+	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| is_where(&items[at]))
 }
 
 fn is_where(word: &Node) -> bool {
@@ -485,9 +432,7 @@ impl Lowering {
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				match bracket {
-					Bracket::Square => self
-						.comprehension(&items)
-						.unwrap_or(Node::List(items, bracket, separator)),
+					Bracket::Square => self.comprehension(&items).unwrap_or(Node::List(items, bracket, separator)),
 					// Python's generator argument `sum(x * x for x in xs)`: the call of the comprehension's list
 					Bracket::Round if separator == Separator::None && items.len() > 1 => {
 						match self.comprehension(&items[1..]) {
@@ -506,10 +451,7 @@ impl Lowering {
 		let comprehension = Comprehension::of(items)?;
 		let number = self.count.next_number();
 		let made = format!("{MADE}_{number}");
-		Some(comprehension.looped(
-			&format!("(var {made} = []; {LOOPS}; {made})"),
-			&format!("{made} += [{ELEMENT}]"),
-		))
+		Some(comprehension.looped(&format!("(var {made} = []; {LOOPS}; {made})"), &format!("{made} += [{ELEMENT}]")))
 	}
 }
 
@@ -525,10 +467,7 @@ impl Comprehension {
 	pub(crate) fn of(items: &[Node]) -> Option<Self> {
 		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
 		let qualifiers = qualifiers(&items[at], &items[at + 1..])?;
-		Some(Comprehension {
-			element: phrase(&items[..at]),
-			qualifiers,
-		})
+		Some(Comprehension { element: phrase(&items[..at]), qualifiers })
 	}
 
 	/// `template` with LOOPS replaced by the clauses nested in order around `inner`, which reads ELEMENT

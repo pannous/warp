@@ -47,12 +47,6 @@ fn a_bare_flag_name_in_a_call_sets_it() {
 	is!("f(a, loud = false) := if loud then a * 10 else a; f(3)", 3);
 	is!("f(a, loud: false) := if loud then a * 10 else a; f(3, loud)", 30);
 	// a variable of that name is passed as it is
-	is!(
-		"f(a, loud = false) := if loud then a * 10 else a; loud = false; f(3, loud)",
-		3
-	);
-	is!(
-		"f(a, loud = false) := if loud then a * 10 else a; g(loud) := f(2, loud); g(false)",
-		2
-	);
+	is!("f(a, loud = false) := if loud then a * 10 else a; loud = false; f(3, loud)", 3);
+	is!("f(a, loud = false) := if loud then a * 10 else a; g(loud) := f(2, loud); g(false)", 2);
 }

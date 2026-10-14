@@ -28,10 +28,7 @@ fn zero_filled_lists_pair_too() {
 #[test]
 fn lists_of_different_lengths_are_an_error() {
 	let failed = eval("xs=[1 2 3]; ys=[1 2]; xs .* ys");
-	assert!(
-		matches!(&failed, Node::Error(message) if message.to_string().contains("length")),
-		"{failed:?}"
-	);
+	assert!(matches!(&failed, Node::Error(message) if message.to_string().contains("length")), "{failed:?}");
 }
 
 // sum of an element-wise expression is one loop adding the items (the list is never built), same values
@@ -41,20 +38,14 @@ fn a_sum_of_an_element_wise_expression_is_fused() {
 	is!("xs=[1 2]; sum((xs .* 2) .+ 1)", 8);
 	is!("sum(ø .* 2)", 0);
 	is!("xs=[1 2 3]; ys=[4 5 6]; dot(xs, ys)", 32);
-	assert!(warp::pipeline::lower("xs=[1 2 3]; sum(xs .* 2)")
-		.expect("lowered")
-		.serialize()
-		.contains("fused_sum"));
+	assert!(warp::pipeline::lower("xs=[1 2 3]; sum(xs .* 2)").expect("lowered").serialize().contains("fused_sum"));
 	is!("sum(xs) := 7; xs=[1 2]; sum(xs .* 2)", 7);
 }
 
 // card float-typed: an exact decimal stored in a float list keeps it a float list, its items floats in arithmetic
 #[test]
 fn a_float_list_given_a_decimal_stays_a_float_list() {
-	is!(
-		"xs = float[3]; xs#1 = 0.5; s = 0; for x in xs { s = s + x * 4 }; s",
-		2.0
-	);
+	is!("xs = float[3]; xs#1 = 0.5; s = 0; for x in xs { s = s + x * 4 }; s", 2.0);
 	is!("xs = float[3]; xs#1 = 0.5; s = 7; s = 1.5 + xs#1; s", 2.0);
 	is!("xs = float[3]; xs#1 = 0.5; sum(xs .* 4)", 2.0);
 }

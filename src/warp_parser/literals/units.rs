@@ -16,11 +16,7 @@ impl WarpParser {
 		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::numbers::units::DEGREE)
 			&& !self.at_ordinal_suffix();
 		// `1500 meters` stays the pair the unit lowering reads (`3010 meters`), joined so it binds tighter than `>`
-		if !tight
-			&& self
-				.spaced_word()
-				.is_some_and(|word| crate::numbers::units::is_long_unit_name(&word))
-		{
+		if !tight && self.spaced_word().is_some_and(|word| crate::numbers::units::is_long_unit_name(&word)) {
 			self.skip_spaces();
 			let unit = self.parse_atom();
 			return Node::List(vec![number, unit], Bracket::None, Separator::Space);
@@ -50,10 +46,7 @@ impl WarpParser {
 
 	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
 	fn hint_glued_unit(&self, number: &Node) {
-		let Some(unit) = self
-			.spaced_word()
-			.filter(|word| word != crate::numbers::uncertain::SIGMA)
-		else {
+		let Some(unit) = self.spaced_word().filter(|word| word != crate::numbers::uncertain::SIGMA) else {
 			return;
 		};
 		let amount = number.serialize();
@@ -101,11 +94,8 @@ impl WarpParser {
 	/// starts the next entry or assignment is no unit
 	fn time_unit_at(&self, offset: usize) -> Option<(crate::time::Duration, usize)> {
 		let (unit, length) = crate::time::unit_after(&self.chars[self.pos + offset..])?;
-		let after_word: String = self.chars[self.pos + offset + length..]
-			.iter()
-			.skip_while(|c| **c == ' ')
-			.take(2)
-			.collect();
+		let after_word: String =
+			self.chars[self.pos + offset + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
 		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
 		(!starts_entry).then_some((unit, length))
 	}

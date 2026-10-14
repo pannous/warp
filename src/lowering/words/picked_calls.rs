@@ -8,10 +8,7 @@ use crate::operators::Op;
 const PICKED_PREFIX: &str = "picked·";
 
 pub fn lower(node: Node) -> Node {
-	Picking {
-		counter: Counter::default(),
-	}
-	.rewrite(node)
+	Picking { counter: Counter::default() }.rewrite(node)
 }
 
 struct Picking {

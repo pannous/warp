@@ -21,20 +21,13 @@ fn the_ternary_hint_stays_away_once_acknowledged() {
 		assert_eq!(ternary_notes("x = 1; x > 0 ? 2 : 3"), 1);
 		assert_eq!(ternary_notes("x = 1; x > 0 ? 2 : 3"), 1, "not acknowledged yet");
 	});
-	with_acknowledger(
-		Acknowledging(vec![warp::normalize::CONDITIONAL_TOPIC.to_string()]),
-		|| {
-			use_acknowledgements_file(path);
-			assert_eq!(ternary_notes("x = 1; x > 0 ? 2 : 3"), 1, "shown once more, then got it");
-		},
-	);
+	with_acknowledger(Acknowledging(vec![warp::normalize::CONDITIONAL_TOPIC.to_string()]), || {
+		use_acknowledgements_file(path);
+		assert_eq!(ternary_notes("x = 1; x > 0 ? 2 : 3"), 1, "shown once more, then got it");
+	});
 	with_acknowledger(Acknowledging(vec![]), || {
 		use_acknowledgements_file(path);
-		assert_eq!(
-			ternary_notes("x = 1; x > 0 ? 2 : 3"),
-			0,
-			"acknowledged in an earlier run"
-		);
+		assert_eq!(ternary_notes("x = 1; x > 0 ? 2 : 3"), 0, "acknowledged in an earlier run");
 	});
 	let _ = std::fs::remove_file(path);
 }

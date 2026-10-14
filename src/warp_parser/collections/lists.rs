@@ -94,9 +94,8 @@ impl WarpParser {
 		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
 		let spaced_list = bracket_type == Bracket::Square && !self.group_holds_comma();
 		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, spaced_list);
-		let list = self.with_equals_comparing(compares, |parser| {
-			parser.parse_list_with_separators(Some(close), bracket_type)
-		});
+		let list =
+			self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
 		self.in_spaced_list = outer_spaced_list;
 		self.in_for_header = outer_header;
 		self.group_start = outer_start;
@@ -140,9 +139,8 @@ impl WarpParser {
 				.iter()
 				.rposition(|(_, separator)| *separator != Separator::Space)
 				.map_or(0, |last| last + 1);
-			let in_command = items_with_seps
-				.get(statement_start)
-				.is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
+			let in_command =
+				items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
 			let outer_command = std::mem::replace(&mut self.in_command, in_command);
 			// `square xs |> sum` is `sum(square xs)`: the call of a function on its one argument is the piped value
 			let calls_function = in_command
@@ -181,11 +179,7 @@ impl WarpParser {
 			let defines = items_with_seps
 				.get(statement_start)
 				.is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
-			let item = if defines {
-				self.with_definition_block(item)
-			} else {
-				item
-			};
+			let item = if defines { self.with_definition_block(item) } else { item };
 			let item = match self.take_trailing_comment() {
 				Some(comment) => item.with_comment(comment),
 				None => item,
@@ -278,11 +272,8 @@ impl WarpParser {
 
 	pub(crate) fn group_by_separators(&self, items_with_seps: Vec<(Node, Separator)>, bracket: Bracket) -> Node {
 		if items_with_seps.is_empty() {
-			return if bracket == Bracket::Curly {
-				Node::List(Vec::new(), bracket, Separator::None)
-			} else {
-				Empty
-			}; // an empty block is a value
+			return if bracket == Bracket::Curly { Node::List(Vec::new(), bracket, Separator::None) } else { Empty };
+			// an empty block is a value
 		}
 
 		// only implicit groupings unwrap a single item: explicit brackets like {x} or [x] keep the wrapper
@@ -290,11 +281,8 @@ impl WarpParser {
 			return only(items_with_seps).0;
 		}
 		// the loosest separator splits first, the groups between split by the tighter ones (None ends the list)
-		let Some(loosest) = items_with_seps
-			.iter()
-			.map(|(_, sep)| sep.precedence())
-			.filter(|&precedence| precedence < 255)
-			.max()
+		let Some(loosest) =
+			items_with_seps.iter().map(|(_, sep)| sep.precedence()).filter(|&precedence| precedence < 255).max()
 		else {
 			return grouped_list(
 				items_with_seps.into_iter().map(|(node, _)| node).collect(),

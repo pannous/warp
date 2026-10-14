@@ -18,10 +18,7 @@ fn a_pipeline_over_several_lines() {
 // (card square-numbers: the pipeline took only `numbers`); statement words keep the whole pipeline (`print xs |> sum`)
 #[test]
 fn a_braceless_call_is_the_piped_value() {
-	is!(
-		"square := it*it; numbers=[1 2 3 4]; square numbers |> filter(x => x > 5) |> sum",
-		25
-	);
+	is!("square := it*it; numbers=[1 2 3 4]; square numbers |> filter(x => x > 5) |> sum", 25);
 	is!("square := it*it; numbers=[1 2 3 4]; r = square numbers |> sum; r", 30);
 	is!("square(x) := x*x; square 3 |> str", "9");
 	is!("def square := it * it\nnumbers = [1, 2, 3, 4, 5]\nr = square numbers\n    |> filter(x => x > 5)\n    |> sum\nr", 50);

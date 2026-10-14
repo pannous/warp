@@ -7,10 +7,7 @@ const SIMPLIFY: &str =
 
 #[test]
 fn a_key_pattern_matches_after_a_call_was_passed() {
-	is!(
-		&format!("{SIMPLIFY}simplify(data (g(y, z))); simplify(data (n * 1)) == data n"),
-		true
-	);
+	is!(&format!("{SIMPLIFY}simplify(data (g(y, z))); simplify(data (n * 1)) == data n"), true);
 	is!(&format!("{SIMPLIFY}simplify(data (g(y, y))) == data twice"), true);
 }
 

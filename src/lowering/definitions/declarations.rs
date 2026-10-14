@@ -19,13 +19,8 @@ pub(crate) use function_heads::*;
 const THIS_WORD: &str = "this";
 /// `map data = {…}`: the collection words a typed declaration takes, as the annotation they mean (type() answers map,
 /// list, tuple); dict and array are other languages' words for map and list (card declaration-type)
-const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [
-	("map", "map"),
-	("list", "list"),
-	("tuple", "tuple"),
-	("dict", "map"),
-	("array", "list"),
-];
+const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] =
+	[("map", "map"), ("list", "list"), ("tuple", "tuple"), ("dict", "map"), ("array", "list")];
 
 /// `tuple`, the annotation `tuple t = (…)` lowers to, and the other collection words a declaration takes
 pub(crate) fn is_collection_type_word(word: &str) -> bool {
@@ -84,10 +79,7 @@ fn flags_declaration(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let (Node::Symbol(name), Node::List(members, Bracket::Curly, _)) = (name.drop_meta(), members.drop_meta()) else {
 		return None;
 	};
-	let members: Option<Vec<String>> = members
-		.iter()
-		.map(|member| member.symbol_name().map(String::from))
-		.collect();
+	let members: Option<Vec<String>> = members.iter().map(|member| member.symbol_name().map(String::from)).collect();
 	Some((name.clone(), members?))
 }
 
@@ -104,11 +96,7 @@ fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
 				key(Node::Symbol(member.clone()), Op::Colon, value)
 			})
 			.collect();
-		key(
-			name.clone(),
-			Op::Assign,
-			Node::List(entries, Bracket::Curly, Separator::Space),
-		)
+		key(name.clone(), Op::Assign, Node::List(entries, Bracket::Curly, Separator::Space))
 	};
 	match node {
 		Node::List(items, bracket, separator) => {
@@ -132,11 +120,7 @@ fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
 					}
 				}
 			}
-			Node::List(
-				items.into_iter().map(|item| rewrite_flags(item, types)).collect(),
-				bracket,
-				separator,
-			)
+			Node::List(items.into_iter().map(|item| rewrite_flags(item, types)).collect(), bracket, separator)
 		}
 		other => children_rewritten(other, |child| rewrite_flags(child, types)),
 	}
@@ -162,11 +146,8 @@ fn named_flags(value: &Node) -> Vec<String> {
 /// Only a fresh name: after `x = "5"`, `int x` is the conversion of x
 pub fn lower_bare_declarations(program: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&program);
-	let named: Vec<&str> = COLLECTION_DECLARATION_WORDS
-		.iter()
-		.map(|(word, _)| *word)
-		.filter(|word| names.contains(*word))
-		.collect();
+	let named: Vec<&str> =
+		COLLECTION_DECLARATION_WORDS.iter().map(|(word, _)| *word).filter(|word| names.contains(*word)).collect();
 	let program = collection_declarations(program, &named);
 	// a program of only `int n` is one statement
 	match zero_declaration(&program, &std::collections::HashSet::new()) {
@@ -215,11 +196,7 @@ fn declarations_in(node: Node) -> Node {
 				.into_iter()
 				.map(|item| {
 					let item = declarations_in(item);
-					let declared = if statements {
-						zero_declaration(&item, &assigned)
-					} else {
-						None
-					};
+					let declared = if statements { zero_declaration(&item, &assigned) } else { None };
 					crate::library_words::collect_assigned_names(&item, &mut assigned);
 					declared.unwrap_or(item)
 				})
@@ -299,11 +276,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		}
 		// `1…5 do print it` (wiki/range.md): a loop over the range, the item is `it`
 		Node::Key(range, Op::Do, body) if matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) => {
-			let block = Node::List(
-				vec![lower_spaced_definitions(*body)],
-				Bracket::Curly,
-				Separator::Semicolon,
-			);
+			let block = Node::List(vec![lower_spaced_definitions(*body)], Bracket::Curly, Separator::Semicolon);
 			Node::List(vec![symbol("for"), *range, block], Bracket::None, Separator::Space)
 		}
 		// a phrase `name p… = body`, never the items of a comma list (`(a, b = a * 2) => …` has a default)
@@ -328,11 +301,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		}
 		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let items = haskell_definitions(items);
-			Node::List(
-				items.into_iter().map(lower_spaced_definitions).collect(),
-				bracket,
-				separator,
-			)
+			Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator)
 		}
 		other => children_rewritten(other, lower_spaced_definitions),
 	}
@@ -346,11 +315,7 @@ fn haskell_definitions(statements: Vec<Node>) -> Vec<Node> {
 		.enumerate()
 		.map(|(index, statement)| haskell_definition(statement, &statements[index + 1..]))
 		.collect();
-	statements
-		.into_iter()
-		.zip(defined)
-		.map(|(statement, definition)| definition.unwrap_or(statement))
-		.collect()
+	statements.into_iter().zip(defined).map(|(statement, definition)| definition.unwrap_or(statement)).collect()
 }
 
 fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
@@ -371,9 +336,7 @@ fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
 		&& !crate::analyzer::is_declaration_word(function) // `let x = p.x; let y = …` declares x
 		&& !crate::library_words::is_library_word(function)
 		&& crate::analyzer::type_word_kind(function).is_none();
-	let is_used_later = later
-		.iter()
-		.any(|statement| crate::warp_parser::mentions(statement, function));
+	let is_used_later = later.iter().any(|statement| crate::warp_parser::mentions(statement, function));
 	if !is_free_name || !is_used_later || !parameters.iter().chain([last_name.as_ref()]).all(is_parameter) {
 		return None;
 	}
@@ -399,20 +362,13 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 	let (list, body) = match list.drop_meta() {
 		Node::Key(collection, op, value) if op.is_comparison() => {
 			let condition = Node::Key(Box::new(symbol(IMPLICIT_PARAMETER)), *op, value.clone());
-			let written = format!(
-				"{} {op} {}",
-				word.drop_meta().name(),
-				crate::normalize::operand_text(value)
-			);
+			let written = format!("{} {op} {}", word.drop_meta().name(), crate::normalize::operand_text(value));
 			let question = crate::errors::diagnostic::Ask::new(
 				crate::for_loop::headers::FILTER_LOOP_TOPIC,
 				format!("`{written}: …` visits only the items that pass its filter"),
 				vec![crate::errors::diagnostic::reading(
 					"filter the items",
-					&format!(
-						"for it in … {{ if it {op} {} {{ … }} }}",
-						crate::normalize::operand_text(value)
-					),
+					&format!("for it in … {{ if it {op} {} {{ … }} }}", crate::normalize::operand_text(value)),
 				)],
 				crate::errors::diagnostic::Fallback::Warning,
 			)
@@ -427,11 +383,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 		_ => (list, body),
 	};
 	let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
-	Some(Node::List(
-		vec![symbol("for"), list, block],
-		Bracket::None,
-		Separator::Space,
-	))
+	Some(Node::List(vec![symbol("for"), list, block], Bracket::None, Separator::Space))
 }
 
 /// `[1,2,3]: s += it`, parsed as `([1,2,3]: s) += it`: the part before the colon and the body after it
@@ -498,12 +450,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 				bind_it(item, parameter, true)
 			}
 		};
-		items
-			.next()
-			.map(|head| bind_it(head, parameter, false))
-			.into_iter()
-			.chain(items.map(bound))
-			.collect()
+		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(bound)).collect()
 	};
 	match node {
 		Node::Symbol(name) if name == IMPLICIT_PARAMETER => symbol(parameter),
@@ -667,10 +614,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	};
 	let typed_parameter =
 		|node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Colon, type_node) if is_type(type_node));
-	if arguments
-		.windows(2)
-		.any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1]))
-	{
+	if arguments.windows(2).any(|pair| is_placeholder(&pair[0]) && typed_parameter(&pair[1])) {
 		return None;
 	}
 	let mut parameters = vec![];
@@ -735,15 +679,10 @@ fn keyword_form(items: &[Node]) -> Option<(&Node, Node, Option<Node>)> {
 		[keyword, definition] => (keyword, definition.drop_meta().clone(), None),
 		// a tuple result type `-> (Int, Int) {…}` (Swift): the body's tuple as it is
 		[keyword, head, body] if tuple_result(head).is_some() => {
-			let Node::Key(_, _, result_types) = head.drop_meta() else {
-				unreachable!("guarded")
-			};
+			let Node::Key(_, _, result_types) = head.drop_meta() else { unreachable!("guarded") };
 			(
 				keyword,
-				parens(vec![
-					tuple_result(head).expect("guarded").clone(),
-					typed_returns(body.clone(), result_types),
-				]),
+				parens(vec![tuple_result(head).expect("guarded").clone(), typed_returns(body.clone(), result_types)]),
 				None,
 			)
 		}
@@ -755,26 +694,19 @@ fn keyword_form(items: &[Node]) -> Option<(&Node, Node, Option<Node>)> {
 			if let Node::Key(head, Op::As, result_type) = head.drop_meta()
 				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
-			let typed_body = Node::List(
-				vec![result_type.as_ref().clone(), body.clone()],
-				Bracket::None,
-				Separator::Space,
-			);
+			let typed_body =
+				Node::List(vec![result_type.as_ref().clone(), body.clone()], Bracket::None, Separator::Space);
 			(keyword, key(head.as_ref().clone(), Op::As, typed_body), None)
 		}
 		[keyword, head, body] => (keyword, parens(vec![head.clone(), body.clone()]), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
-		[keyword, head, result_type, body] if is_kinded_type_word(result_type) => (
-			keyword,
-			parens(vec![head.clone(), body.clone()]),
-			Some(result_type.clone()),
-		),
+		[keyword, head, result_type, body] if is_kinded_type_word(result_type) => {
+			(keyword, parens(vec![head.clone(), body.clone()]), Some(result_type.clone()))
+		}
 		// Go's `func divmod(a, b int) (int, int) {…}`: a tuple of result types, each returned value converted
-		[keyword, head, result_types, body] if is_type_tuple(result_types) => (
-			keyword,
-			parens(vec![head.clone(), typed_returns(body.clone(), result_types)]),
-			None,
-		),
+		[keyword, head, result_types, body] if is_type_tuple(result_types) => {
+			(keyword, parens(vec![head.clone(), typed_returns(body.clone(), result_types)]), None)
+		}
 		_ => return None,
 	})
 }
@@ -825,9 +757,7 @@ fn written_parameters(arguments: &[Node], is_swift: bool, labeled_names: &mut Ve
 	// Python's markers `*` (keyword-only after it) and `/` (positional-only before it) take no argument
 	.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(left, Op::Mul | Op::Div, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty))))
 	.map(name_then_type);
-	let parameters: Vec<Node> = parameters
-		.map(|parameter| labeled_parameter(parameter, labeled_names))
-		.collect();
+	let parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, labeled_names)).collect();
 	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type;
 	// a comma separates parameters, so `def f(p, number)` keeps two
 	let comma_separated = arguments
@@ -865,18 +795,11 @@ fn extension_definition(definition: Node) -> Node {
 
 /// The head `name(receiver:T, parameters…)` of a method on T whose call is `name(parameters…)`
 fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
-	let receiver = if body.mentions_any(&[SELF_WORD]) {
-		SELF_WORD
-	} else {
-		THIS_WORD
-	};
+	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
 	let receiver = key(symbol(receiver), Op::Colon, receiver_type.clone());
 	let parameters = call[1..].iter().flat_map(grouped_parameters);
 	Node::List(
-		std::iter::once(call[0].clone())
-			.chain(std::iter::once(receiver))
-			.chain(parameters)
-			.collect(),
+		std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(),
 		Bracket::Round,
 		separator.clone(),
 	)
@@ -906,13 +829,8 @@ fn smart_scope(items: &[Node]) -> Option<Node> {
 	}
 	let receiver = symbol(SELF_WORD);
 	let methods = definitions.iter().map(|definition| {
-		let Node::Key(name, _, body) = definition.drop_meta() else {
-			unreachable!("guarded")
-		};
-		let head = parens(vec![
-			name.as_ref().clone(),
-			key(receiver.clone(), Op::Colon, receiver_type.clone()),
-		]);
+		let Node::Key(name, _, body) = definition.drop_meta() else { unreachable!("guarded") };
+		let head = parens(vec![name.as_ref().clone(), key(receiver.clone(), Op::Colon, receiver_type.clone())]);
 		key(head, Op::Define, renamed_it(body.as_ref().clone(), &receiver))
 	});
 	Some(Node::List(methods.collect(), Bracket::None, Separator::Semicolon))
@@ -1025,11 +943,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 		};
 		Node::Key(Box::new(head), *op, body.clone())
 	};
-	Some(Node::List(
-		definitions.iter().map(method).collect(),
-		Bracket::None,
-		Separator::Semicolon,
-	))
+	Some(Node::List(definitions.iter().map(method).collect(), Bracket::None, Separator::Semicolon))
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
@@ -1078,11 +992,7 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 		_ => vec![argument.clone()],
 	});
 	let parameters: Option<Vec<Node>> = parameters.map(|parameter| c_parameter(&parameter)).collect();
-	let head = Node::List(
-		[vec![name.clone()], parameters?].concat(),
-		Bracket::Round,
-		Separator::Colon,
-	);
+	let head = Node::List([vec![name.clone()], parameters?].concat(), Bracket::Round, Separator::Colon);
 	Some(key(head, Op::Define, body.clone()))
 }
 

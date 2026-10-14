@@ -9,8 +9,5 @@ fn a_parameter_given_another_kind_in_its_body_holds_it() {
 	is!("f(n) := { n = \"xy\"; n }; f(5)", "xy");
 	is!("f(n) := { n = [1]; n }; f(5)", parse("[1]"));
 	is!("f(n) := { n = 2.5; n }; f(5)", 2.5);
-	is!(
-		"f(n) := { if n > 3 { n = \"big\" }; n }; [f(5), f(1)]",
-		parse("[\"big\" 1]")
-	);
+	is!("f(n) := { if n > 3 { n = \"big\" }; n }; [f(5), f(1)]", parse("[\"big\" 1]"));
 }

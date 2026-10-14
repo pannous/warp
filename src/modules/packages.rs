@@ -20,29 +20,21 @@ pub(super) struct Registered {
 }
 
 pub(super) fn registered(name: &str) -> Option<Registered> {
-	statements(WarpParser::parse(PACKAGE_REGISTRY))
-		.iter()
-		.find_map(|entry| {
-			let Node::Key(key, _, value) = entry.drop_meta() else {
-				return None;
-			};
-			if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
-				return None;
-			}
-			match value.drop_meta() {
-				Node::Text(url) => Some(Registered {
-					url: url.clone(),
-					pinned: None,
-				}),
-				pinned => match pinned["repository"].drop_meta() {
-					Node::Text(url) => Some(Registered {
-						url: url.clone(),
-						pinned: Some(version_of(&pinned["version"])?),
-					}),
-					_ => None,
-				},
-			}
-		})
+	statements(WarpParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
+		let Node::Key(key, _, value) = entry.drop_meta() else {
+			return None;
+		};
+		if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
+			return None;
+		}
+		match value.drop_meta() {
+			Node::Text(url) => Some(Registered { url: url.clone(), pinned: None }),
+			pinned => match pinned["repository"].drop_meta() {
+				Node::Text(url) => Some(Registered { url: url.clone(), pinned: Some(version_of(&pinned["version"])?) }),
+				_ => None,
+			},
+		}
+	})
 }
 
 /// The git url of a package in the registry
@@ -80,24 +72,13 @@ pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String
 pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<PathBuf, String> {
 	let url = registered_package(name)?.url;
 	let tags = package_version_tags(name, &url)?;
-	let Some((_, version)) = tags
-		.iter()
-		.filter(|(_, version)| requirement.allows(version))
-		.max_by(|a, b| a.1.cmp(&b.1))
+	let Some((_, version)) =
+		tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1))
 	else {
 		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
-		return Err(format!(
-			"package {name} has no {requirement} (tagged: {})",
-			versions.join(", ")
-		));
+		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
 	};
-	fetch_tagged(
-		Path::new(PACKAGES_DIRECTORY),
-		name,
-		&url,
-		version,
-		&format!("{name}@{version}"),
-	)
+	fetch_tagged(Path::new(PACKAGES_DIRECTORY), name, &url, version, &format!("{name}@{version}"))
 }
 
 /// packages/<link_name>, a link to the version's shallow clone in the machine's package cache: fetched once per machine,
@@ -140,10 +121,7 @@ pub(super) fn fetch_tagged(
 	}
 	make_package_directory(name, packages)?;
 	#[cfg(not(unix))]
-	return Err(format!(
-		"package {name}: not linked to {}: no symbolic links on this platform",
-		cached.display()
-	));
+	return Err(format!("package {name}: not linked to {}: no symbolic links on this platform", cached.display()));
 	#[cfg(unix)]
 	match std::os::unix::fs::symlink(&cached, &link) {
 		Err(failure) if !link.exists() => Err(format!("package {name}: not linked to {}: {failure}", cached.display())),
@@ -177,9 +155,8 @@ pub(super) fn is_real_directory(path: &Path) -> bool {
 pub(super) fn set_aside(packages: &Path, name: &str, version: &Version, clone: &Path) -> Result<(), String> {
 	let replaced = packages.join(REPLACED_DIRECTORY);
 	make_package_directory(name, &replaced)?;
-	let seconds = std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.map_or(0, |elapsed| elapsed.as_secs());
+	let seconds =
+		std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_secs());
 	let destination = replaced.join(format!(
 		"{}.{seconds}.{}",
 		clone.file_name().unwrap_or_default().to_string_lossy(),
@@ -193,10 +170,7 @@ pub(super) fn set_aside(packages: &Path, name: &str, version: &Version, clone: &
 		),
 		Err(_) if !is_real_directory(clone) => {} // another process moved it first
 		Err(failure) => {
-			return Err(format!(
-				"package {name}: {} not moved out of the pin's way: {failure}",
-				clone.display()
-			));
+			return Err(format!("package {name}: {} not moved out of the pin's way: {failure}", clone.display()));
 		}
 	}
 	Ok(())
@@ -298,13 +272,9 @@ pub(super) fn package_directory(name: &str) -> Result<PathBuf, String> {
 	#[cfg(not(feature = "native"))]
 	{
 		let package = registered_package(name)?;
-		let repository = package
-			.url
-			.trim_end_matches(".git")
-			.replace("https://github.com/", "https://raw.githubusercontent.com/");
-		let reference = package
-			.pinned
-			.map_or("HEAD".to_string(), |version| format!("v{version}"));
+		let repository =
+			package.url.trim_end_matches(".git").replace("https://github.com/", "https://raw.githubusercontent.com/");
+		let reference = package.pinned.map_or("HEAD".to_string(), |version| format!("v{version}"));
 		Ok(PathBuf::from(format!("{repository}/{reference}")))
 	}
 }
@@ -320,11 +290,7 @@ pub(super) fn module_version(path: &Path) -> Option<Version> {
 pub(super) fn check_version(name: &str, path: &Path, requirement: &Requirement) -> Result<(), Node> {
 	match module_version(path) {
 		Some(version) if requirement.allows(&version) => Ok(()),
-		Some(version) => Err(error(&format!(
-			"module {name} is version {version}, {requirement} required"
-		))),
-		None => Err(error(&format!(
-			"module {name} declares no version, {requirement} required"
-		))),
+		Some(version) => Err(error(&format!("module {name} is version {version}, {requirement} required"))),
+		None => Err(error(&format!("module {name} declares no version, {requirement} required"))),
 	}
 }

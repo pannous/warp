@@ -106,13 +106,7 @@ impl EffectSet {
 	pub fn named(names: &[&str]) -> Option<EffectSet> {
 		names
 			.iter()
-			.map(|name| {
-				if *name == PURE {
-					Some(Self::PURE)
-				} else {
-					Effect::named(name).map(|e| Self::of(&[e]))
-				}
-			})
+			.map(|name| if *name == PURE { Some(Self::PURE) } else { Effect::named(name).map(|e| Self::of(&[e])) })
 			.try_fold(Self::PURE, |all, one| one.map(|one| all.union(one)))
 	}
 }
@@ -250,10 +244,7 @@ impl EffectReport {
 			.functions
 			.iter()
 			.filter(|(name, function)| {
-				function
-					.calls
-					.iter()
-					.any(|callee| callee != *name && self.reaches(callee, name))
+				function.calls.iter().any(|callee| callee != *name && self.reaches(callee, name))
 			})
 			.map(|(name, _)| name.clone())
 			.collect();
@@ -271,12 +262,7 @@ impl EffectReport {
 				return true;
 			}
 			if seen.insert(current.clone()) {
-				queue.extend(
-					self.functions
-						.get(&current)
-						.into_iter()
-						.flat_map(|f| f.calls.iter().cloned()),
-				);
+				queue.extend(self.functions.get(&current).into_iter().flat_map(|f| f.calls.iter().cloned()));
 			}
 		}
 		false
@@ -287,12 +273,9 @@ impl EffectReport {
 			let mut changed = false;
 			let names: Vec<String> = self.functions.keys().cloned().collect();
 			for name in names {
-				let inferred = self.functions[&name]
-					.calls
-					.iter()
-					.fold(self.functions[&name].effects, |all, callee| {
-						all.union(self.effects_of(callee).unwrap_or_default())
-					});
+				let inferred = self.functions[&name].calls.iter().fold(self.functions[&name].effects, |all, callee| {
+					all.union(self.effects_of(callee).unwrap_or_default())
+				});
 				let function = self.functions.get_mut(&name).expect("known function");
 				changed |= function.effects != inferred;
 				function.effects = inferred;
@@ -317,13 +300,7 @@ impl EffectReport {
 					}
 					(None, None) => return None,
 				};
-				Some(EffectViolation {
-					function: name.clone(),
-					constraint,
-					excess,
-					excess_events,
-					chain,
-				})
+				Some(EffectViolation { function: name.clone(), constraint, excess, excess_events, chain })
 			})
 			.collect()
 	}
@@ -356,9 +333,7 @@ impl EffectReport {
 
 	/// Whether the module must import from this capability's module
 	pub fn needs(&self, capability: Capability) -> bool {
-		self.externals
-			.values()
-			.any(|external| external.capability == capability)
+		self.externals.values().any(|external| external.capability == capability)
 	}
 
 	/// First capability the module needs beyond `granted`, with the external that needs it
@@ -377,11 +352,7 @@ impl EffectReport {
 
 	/// Shortest call path from `from` to the external or function body that introduces `effect`
 	pub fn call_chain(&self, from: &str, effect: Effect) -> Vec<String> {
-		self.chain_to(
-			from,
-			|function| function.own.contains(effect),
-			|external| external.effects.contains(effect),
-		)
+		self.chain_to(from, |function| function.own.contains(effect), |external| external.effects.contains(effect))
 	}
 
 	/// Shortest call path from `from` to the function body (`in_body`) or external that introduces an effect
@@ -428,10 +399,7 @@ impl EffectReport {
 		}
 		let name = effects_query(last_statement(program))?;
 		// the query mentions f, which reads as a call of it: the top level without the query
-		EffectReport::of(&statements_before_last(program))
-			.entry_effects()
-			.is_pure()
-			.then(|| self.query_answer(&name))
+		EffectReport::of(&statements_before_last(program)).entry_effects().is_pure().then(|| self.query_answer(&name))
 	}
 
 	/// Every `effects of f` in the program as its constant answer (`IO`, `(IO ask)`), so it is a value anywhere: assigned,

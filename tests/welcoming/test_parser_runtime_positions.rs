@@ -8,10 +8,7 @@ fn an_unexpected_character_names_its_position() {
 
 #[test]
 fn an_index_out_of_range_names_its_line() {
-	fails_with(
-		"x = 1\nxs = [1, 2]\ny = xs#5\nprint y",
-		"index out of range: 5 not in 1…2 at 3:",
-	);
+	fails_with("x = 1\nxs = [1, 2]\ny = xs#5\nprint y", "index out of range: 5 not in 1…2 at 3:");
 }
 
 #[test]
@@ -24,8 +21,5 @@ fn an_index_after_a_call_names_the_caller_line() {
 
 #[test]
 fn an_index_in_a_function_names_its_line() {
-	fails_with(
-		"def f(xs){\n  z = 1\n  xs#5\n}\nprint f([1, 2])",
-		"index out of range: 5 not in 1…2 at 3:",
-	);
+	fails_with("def f(xs){\n  z = 1\n  xs#5\n}\nprint f([1, 2])", "index out of range: 5 not in 1…2 at 3:");
 }

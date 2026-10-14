@@ -69,21 +69,12 @@ const SUM_NOT_FIXNUM: i64 = i64::MIN;
 /// for ø a new list from (0, items) and `new_list_tail`
 fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'static>> {
 	let grown = 2;
-	let length = || I::StructGet {
-		struct_type_index: list,
-		field_index: 0,
-	};
-	let items = || I::StructGet {
-		struct_type_index: list,
-		field_index: 1,
-	};
+	let length = || I::StructGet { struct_type_index: list, field_index: 0 };
+	let items = || I::StructGet { struct_type_index: list, field_index: 1 };
+	#[rustfmt::skip]
 	let mut body = vec![
-		I::LocalGet(0),
-		I::RefIsNull,
-		I::If(BlockType::Empty),
-		I::I32Const(0),
-		I::I32Const(FIRST_CAPACITY),
-		I::ArrayNewDefault(array),
+		I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
+			I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array),
 	];
 	body.extend_from_slice(new_list_tail);
 	body.extend([
@@ -111,17 +102,11 @@ fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'
 		I::I32Const(0),
 		I::LocalGet(0),
 		length(),
-		I::ArrayCopy {
-			array_type_index_dst: array,
-			array_type_index_src: array,
-		},
+		I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 		I::LocalGet(0),
 		I::LocalGet(grown),
 		I::RefAsNonNull,
-		I::StructSet {
-			struct_type_index: list,
-			field_index: 1,
-		},
+		I::StructSet { struct_type_index: list, field_index: 1 },
 		I::End,
 		I::LocalGet(0),
 		items(),
@@ -134,10 +119,7 @@ fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'
 		length(),
 		I::I32Const(1),
 		I::I32Add,
-		I::StructSet {
-			struct_type_index: list,
-			field_index: 0,
-		},
+		I::StructSet { struct_type_index: list, field_index: 0 },
 		I::LocalGet(0),
 	]);
 	body
@@ -337,10 +319,7 @@ impl WasmGcEmitter {
 		};
 		match self.scope.lookup(name) {
 			Some(local) => Some((Slot::Local(local.position), *self.typed_lists.get(name)?)),
-			None => self
-				.typed_globals
-				.get(name)
-				.map(|&(global, list)| (Slot::Global(global), list)),
+			None => self.typed_globals.get(name).map(|&(global, list)| (Slot::Global(global), list)),
 		}
 	}
 
@@ -364,10 +343,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(in crate::wasm_emitter) fn typed_list_ref(&self, element: ElementType) -> RefType {
-		RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.typed_list_types(element).1),
-		}
+		RefType { nullable: true, heap_type: HeapType::Concrete(self.typed_list_types(element).1) }
 	}
 
 	/// How the local of a variable is stored: a typed list as its list struct, anything else by its kind
@@ -408,14 +384,7 @@ impl WasmGcEmitter {
 				let (_, list_type) = self.typed_list_types(list.element);
 				Self::emit_list(
 					func,
-					&[
-						slot.get(),
-						I::StructGet {
-							struct_type_index: list_type,
-							field_index: 0,
-						},
-						I::I64ExtendI32U,
-					],
+					&[slot.get(), I::StructGet { struct_type_index: list_type, field_index: 0 }, I::I64ExtendI32U],
 				);
 			}
 			_ => {
@@ -450,8 +419,7 @@ impl WasmGcEmitter {
 
 	/// A typed array of Ints or Floats: its elements are numbers, never characters (P65)
 	pub(in crate::wasm_emitter) fn holds_only_numbers(&self, target: &Node) -> bool {
-		self.typed_list(target)
-			.is_some_and(|(_, list)| list.element != ElementType::Node)
+		self.typed_list(target).is_some_and(|(_, list)| list.element != ElementType::Node)
 	}
 
 	pub(in crate::wasm_emitter) fn is_typed_list(&self, target: &Node) -> bool {
@@ -496,24 +464,14 @@ impl WasmGcEmitter {
 	fn emit_typed_element(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		let (slot, list) = self.typed_list(target).expect("typed backend");
 		func.instruction(&slot.get());
-		if let Some(counter) = self
-			.walking_counter(target, index)
-			.filter(|_| list.element != ElementType::Node)
-		{
+		if let Some(counter) = self.walking_counter(target, index).filter(|_| list.element != ElementType::Node) {
 			// `x·items#(x·index + 1)` of a for loop: the counter is below the count, read the array directly
 			let (array, list_type) = self.typed_list_types(list.element);
-			Self::emit_list(
-				func,
-				&[
-					I::StructGet {
-						struct_type_index: list_type,
-						field_index: TYPED_LIST_ITEMS,
-					},
-					I::LocalGet(counter),
-					I::I32WrapI64,
-					I::ArrayGet(array),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::StructGet { struct_type_index: list_type, field_index: TYPED_LIST_ITEMS }, I::LocalGet(counter),
+				I::I32WrapI64, I::ArrayGet(array),
+			]);
 			return;
 		}
 		self.emit_numeric_value(func, index);
@@ -530,10 +488,8 @@ impl WasmGcEmitter {
 			return None;
 		};
 		let walked = counter.strip_suffix(crate::for_loop::INDEX_SUFFIX)?;
-		let is_walk = matches!(
-			one.drop_meta(),
-			Node::Number(crate::extensions::numbers::Number::Int(1))
-		) && *list == format!("{walked}{}", crate::for_loop::ITEMS_SUFFIX);
+		let is_walk = matches!(one.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(1)))
+			&& *list == format!("{walked}{}", crate::for_loop::ITEMS_SUFFIX);
 		(is_walk && self.bounded_counters.contains(counter) && !self.typed_lists[list].updated)
 			.then(|| self.scope.lookup(counter).map(|local| local.position))
 			.flatten()
@@ -615,11 +571,7 @@ impl WasmGcEmitter {
 		let runtime = list.element.runtime();
 		match value.drop_meta() {
 			// the one list both variables hold (P200b)
-			Node::Symbol(_)
-				if self
-					.typed_list(value)
-					.is_some_and(|(_, source)| source.element == list.element) =>
-			{
+			Node::Symbol(_) if self.typed_list(value).is_some_and(|(_, source)| source.element == list.element) => {
 				let (source_slot, _) = self.typed_list(value).expect("guarded");
 				func.instruction(&source_slot.get());
 			}
@@ -642,11 +594,8 @@ impl WasmGcEmitter {
 			}
 			// `xs + ys + [4]` of arrays of this element type: copied in bulk, no Node made of an item
 			_ if list.element != ElementType::Node && self.concatenated_arrays(value, list.element).is_some() => {
-				for (index, part) in self
-					.concatenated_arrays(value, list.element)
-					.expect("guarded")
-					.into_iter()
-					.enumerate()
+				for (index, part) in
+					self.concatenated_arrays(value, list.element).expect("guarded").into_iter().enumerate()
 				{
 					match part.drop_meta() {
 						Node::List(items, _, _) => self.emit_typed_list_of(func, items, list.element),
@@ -724,10 +673,7 @@ impl WasmGcEmitter {
 		for item in items {
 			self.emit_element_value(func, item, element);
 		}
-		func.instruction(&I::ArrayNewFixed {
-			array_type_index: array,
-			array_size: items.len() as u32,
-		});
+		func.instruction(&I::ArrayNewFixed { array_type_index: array, array_size: items.len() as u32 });
 		if element == ElementType::Node {
 			func.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
 		}
@@ -754,9 +700,7 @@ impl WasmGcEmitter {
 		let Node::Symbol(name) = target.drop_meta() else {
 			return None;
 		};
-		self.typed_list(target)
-			.and(extended_items(value))
-			.map(|items| (name.clone(), items.to_vec()))
+		self.typed_list(target).and(extended_items(value)).map(|items| (name.clone(), items.to_vec()))
 	}
 
 	/// Push a typed list variable as the Node list it stands for; false for any other variable
@@ -779,10 +723,7 @@ impl WasmGcEmitter {
 
 	/// The $IntList itself of a typed int list variable, as a host word reads it (list_to_ints); false for any other value
 	pub(in crate::wasm_emitter) fn emit_typed_int_list(&mut self, func: &mut Function, value: &Node) -> bool {
-		let Some((slot, _)) = self
-			.typed_list(value)
-			.filter(|(_, list)| list.element == ElementType::Int)
-		else {
+		let Some((slot, _)) = self.typed_list(value).filter(|(_, list)| list.element == ElementType::Int) else {
 			return false;
 		};
 		func.instruction(&slot.get());
@@ -806,12 +747,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, INT_RUNTIME.sum);
 				Self::emit_list(
 					func,
-					&[
-						I::LocalTee(sum),
-						I::I64Const(SUM_NOT_FIXNUM),
-						I::I64Eq,
-						I::If(BlockType::Result(ValType::I64)),
-					],
+					&[I::LocalTee(sum), I::I64Const(SUM_NOT_FIXNUM), I::I64Eq, I::If(BlockType::Result(ValType::I64))],
 				);
 				self.emit_numeric_value(func, sum_loop);
 				Self::emit_list(func, &[I::Else, I::LocalGet(sum), I::End]);

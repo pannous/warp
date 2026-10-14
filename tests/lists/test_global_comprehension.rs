@@ -5,18 +5,9 @@ use warp::warp_parser::parse;
 
 #[test]
 fn a_global_comprehension_list_takes_writes() {
-	is!(
-		"global hb = [random() * 0.0 + 0.5 for j in 0..2]; hb[1] = 0.25; hb[1] + 1",
-		1.25
-	);
-	is!(
-		"global hb = [random() * 0.0 + 0.5 for j in 0..2]; hb[1] = hb[1] + 0.5; hb[1]",
-		1.0
-	);
-	is!(
-		"hb = [random() * 0.0 + 0.5 for j in 0..2]; def g() { global hb; hb[1] = 0.25 }; g(); hb",
-		parse("[0.5 0.25]")
-	);
+	is!("global hb = [random() * 0.0 + 0.5 for j in 0..2]; hb[1] = 0.25; hb[1] + 1", 1.25);
+	is!("global hb = [random() * 0.0 + 0.5 for j in 0..2]; hb[1] = hb[1] + 0.5; hb[1]", 1.0);
+	is!("hb = [random() * 0.0 + 0.5 for j in 0..2]; def g() { global hb; hb[1] = 0.25 }; g(); hb", parse("[0.5 0.25]"));
 }
 
 // card float-into-nodes: a function writing a machine float into a global list held as Nodes (node_with_at takes an

@@ -66,6 +66,7 @@ mod test_event_handler_lists;
 mod test_event_signals;
 mod test_exit_in_handler; // card key-app
 mod test_exit_signal;
+mod test_expect; // card expect-make
 mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
 mod test_filter_loop_over_variable;
 mod test_filter_loops;
@@ -74,12 +75,14 @@ mod test_for_implicit_it;
 mod test_for_it;
 mod test_for_loop;
 mod test_for_over_a_number;
+mod test_for_semicolon_end; // card print-end
 mod test_for_underscore;
 mod test_for_unit_words;
 mod test_frame_event; // card frame-event
 mod test_fresh_names; // card cleanup-fresh-names
 mod test_function_body; // card g_X_3s
 mod test_function_dir; // card dir-function
+mod test_function_objects; // card module-methods
 mod test_glued_block_words; // card glued-loop
 mod test_go_blocks;
 mod test_go_heavy_map; // card go-heavy-map
@@ -125,6 +128,7 @@ mod test_match_ranges;
 mod test_match_tuples;
 mod test_match_type_arms;
 mod test_match_whole_value;
+mod test_member_completion;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;
@@ -146,6 +150,7 @@ mod test_quoted_data_untouched; // card data-quote-lowered
 mod test_raise;
 mod test_reactive_ports;
 mod test_reflect_inferred; // card reflect-inferred
+mod test_reflection_mode; // card use-reflection
 mod test_reflection_words; // card reflection
 mod test_relational_arms;
 mod test_rest_patterns;
@@ -244,4 +249,4 @@ mod test_while_value;
 mod test_window_clicks; // card native-window
 #[cfg(feature = "native")] // the warp binary's window opener
 mod test_window_opens; // card window-loop
-mod test_word_statements; // card error-beep // card rest-patterns
+mod test_word_statements; // card error-beep // card rest-patterns // card member-completion

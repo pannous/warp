@@ -97,11 +97,7 @@ impl Repeat {
 	fn first(self, now: Instant) -> Instant {
 		match self {
 			Repeat::Every(period) => now + period,
-			Repeat::Clock {
-				minute_of_day,
-				weekdays,
-				..
-			} => {
+			Repeat::Clock { minute_of_day, weekdays, .. } => {
 				let (weekday, second_of_day) = local_time();
 				now + Duration::from_secs(seconds_until_on(minute_of_day, weekdays, weekday, second_of_day) as u64)
 			}
@@ -121,29 +117,15 @@ impl Repeat {
 	fn spoken(self) -> String {
 		match self {
 			Repeat::Every(period) => format!("every {}", spoken(period)),
-			Repeat::Clock {
-				minute_of_day,
-				once: true,
-				..
-			} => format!("at {}", clock_time(minute_of_day)),
-			Repeat::Clock {
-				minute_of_day,
-				weekdays,
-				once: false,
-			} => format!("every {} at {}", spoken_days(weekdays), clock_time(minute_of_day)),
+			Repeat::Clock { minute_of_day, once: true, .. } => format!("at {}", clock_time(minute_of_day)),
+			Repeat::Clock { minute_of_day, weekdays, once: false } => {
+				format!("every {} at {}", spoken_days(weekdays), clock_time(minute_of_day))
+			}
 		}
 	}
 }
 
-const WEEKDAY_NAMES: [&str; 7] = [
-	"sunday",
-	"monday",
-	"tuesday",
-	"wednesday",
-	"thursday",
-	"friday",
-	"saturday",
-];
+const WEEKDAY_NAMES: [&str; 7] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 pub const EVERY_DAY: i64 = 0b111_1111;
 
 fn spoken_days(weekdays: i64) -> String {
@@ -164,12 +146,7 @@ fn clock_time(minute_of_day: i64) -> String {
 }
 
 fn add_timer(handler: String, repeat: Repeat, trigger: Trigger) {
-	let timer = Timer {
-		handler,
-		repeat,
-		due: Some(repeat.first(Instant::now())),
-		trigger,
-	};
+	let timer = Timer { handler, repeat, due: Some(repeat.first(Instant::now())), trigger };
 	TIMERS.with(|timers| timers.borrow_mut().push(timer));
 }
 
@@ -217,13 +194,8 @@ impl std::error::Error for ExitRequest {}
 
 /// Whether the run ended by `exit`: the code is kept for take_exit_code
 pub fn ended_by_exit<R>(outcome: &Result<R>) -> bool {
-	let code = outcome
-		.as_ref()
-		.err()
-		.and_then(|error| error.downcast_ref::<ExitRequest>())
-		.map(|request| request.0);
-	code.inspect(|code| EXIT_CODE.with(|kept| kept.set(Some(*code))))
-		.is_some()
+	let code = outcome.as_ref().err().and_then(|error| error.downcast_ref::<ExitRequest>()).map(|request| request.0);
+	code.inspect(|code| EXIT_CODE.with(|kept| kept.set(Some(*code)))).is_some()
 }
 
 /// The code of the `exit` that ended the last run on this thread (once)
@@ -261,11 +233,7 @@ pub fn listen(kind: i64, id: i64, argument: i64) {
 /// replaces a timer of that handler still waiting (a fetch started anew)
 pub fn await_ready(handler: String, awaited: String, ready: impl FnMut() -> bool + 'static) {
 	TIMERS.with(|timers| timers.borrow_mut().retain(|timer| timer.handler != handler));
-	add_timer(
-		handler,
-		Repeat::Every(AWAIT_CHECK_PERIOD),
-		Trigger::Ready(awaited, Box::new(ready)),
-	);
+	add_timer(handler, Repeat::Every(AWAIT_CHECK_PERIOD), Trigger::Ready(awaited, Box::new(ready)));
 }
 
 const DAY: Duration = Duration::from_secs(24 * 3600);
@@ -290,18 +258,12 @@ pub fn seconds_until_on(minute_of_day: i64, weekdays: i64, weekday: i64, second_
 
 /// The local weekday (0 Sunday) and seconds since local midnight (UTC where the platform gives no time zone)
 fn local_time() -> (i64, i64) {
-	local_time_at(
-		SystemTime::now()
-			.duration_since(SystemTime::UNIX_EPOCH)
-			.unwrap_or_default(),
-	)
+	local_time_at(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default())
 }
 
 /// The local time of day in milliseconds since midnight (system value "time of day", the word `time`)
 pub fn millisecond_of_day() -> i64 {
-	let since = SystemTime::now()
-		.duration_since(SystemTime::UNIX_EPOCH)
-		.unwrap_or_default();
+	let since = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
 	local_time_at(since).1 * 1000 + since.subsec_millis() as i64
 }
 
@@ -332,11 +294,7 @@ pub fn local_offset_at(milliseconds: i64) -> i64 {
 pub fn watch_file(id: i64, path: String) {
 	let path = PathBuf::from(path);
 	let seen = stamp(&path);
-	add_timer(
-		format!("{FILE_HANDLER_PREFIX}{id}"),
-		Repeat::Every(FILE_CHECK_PERIOD),
-		Trigger::FileChange(path, seen),
-	);
+	add_timer(format!("{FILE_HANDLER_PREFIX}{id}"), Repeat::Every(FILE_CHECK_PERIOD), Trigger::FileChange(path, seen));
 }
 
 /// Modification time and size: a rewrite within one tick of a coarse clock still changes the size, mostly
@@ -467,11 +425,7 @@ pub fn sleep_with_handlers<S: AsContextMut>(
 	let checks_shared = export(store, SHARED_HANDLER).is_some();
 	loop {
 		let wake = next_due().map_or(end, |due| due.min(end));
-		let wake = if checks_shared {
-			wake.min(Instant::now() + SHARED_CHECK_PERIOD)
-		} else {
-			wake
-		};
+		let wake = if checks_shared { wake.min(Instant::now() + SHARED_CHECK_PERIOD) } else { wake };
 		let interrupted = interrupt::wait_until(wake);
 		run_due_handlers(store, &mut export)?;
 		if interrupted || Instant::now() >= end {
@@ -575,12 +529,7 @@ mod interrupt {
 	#[cfg(unix)]
 	mod platform {
 		pub fn install() {
-			unsafe {
-				libc::signal(
-					libc::SIGINT,
-					on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t,
-				)
-			};
+			unsafe { libc::signal(libc::SIGINT, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t) };
 		}
 
 		/// async-signal-safe (atomics, clock_gettime, _exit)

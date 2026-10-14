@@ -2,12 +2,8 @@
 use super::*;
 
 /// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
-pub(crate) const DECLARATION_KEYWORDS: [&str; 4] = [
-	"let",
-	"var",
-	crate::words::GLOBAL_WORD,
-	crate::stored_values::STORED_WORD,
-];
+pub(crate) const DECLARATION_KEYWORDS: [&str; 4] =
+	["let", "var", crate::words::GLOBAL_WORD, crate::stored_values::STORED_WORD];
 
 pub(crate) fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword)
@@ -21,10 +17,7 @@ pub(crate) fn is_class(statement: &Node) -> bool {
 
 /// The program's main-level definition of `name`
 pub(crate) fn defined(program: &Node, name: &str) -> Option<Node> {
-	statements_of(program)
-		.iter()
-		.find(|statement| name_declared_by(statement).as_deref() == Some(name))
-		.cloned()
+	statements_of(program).iter().find(|statement| name_declared_by(statement).as_deref() == Some(name)).cloned()
 }
 
 /// The statements of a module, borrowed (statements takes them)
@@ -88,11 +81,7 @@ pub(crate) fn binds_names(keyword: &str) -> bool {
 pub(crate) fn header(definition: &Node) -> &Node {
 	match definition.drop_meta() {
 		Node::Key(header, Op::Colon | Op::Assign | Op::Define, _) => header,
-		Node::List(items, _, _)
-			if items
-				.first()
-				.is_some_and(|first| matches!(first.drop_meta(), Node::List(..))) =>
-		{
+		Node::List(items, _, _) if items.first().is_some_and(|first| matches!(first.drop_meta(), Node::List(..))) => {
 			&items[0]
 		}
 		_ => definition,

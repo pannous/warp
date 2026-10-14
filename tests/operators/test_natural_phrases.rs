@@ -14,10 +14,7 @@ fn modulo_is_mod() {
 #[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 fn sort_by_a_prefix_function() {
 	is!("numbers = [3, -5, 2]; numbers.sort by abs", warp::ints(vec![2, 3, -5]));
-	is!(
-		"numbers = [3, -5, 2]; numbers sorted by abs",
-		warp::ints(vec![2, 3, -5])
-	);
+	is!("numbers = [3, -5, 2]; numbers sorted by abs", warp::ints(vec![2, 3, -5]));
 	is!("numbers = [9, 1, 4]; numbers sorted by sqrt", warp::ints(vec![1, 4, 9]));
 }
 
@@ -26,10 +23,7 @@ fn sort_by_a_prefix_function() {
 fn number_word_hint_is_where_it_is_written() {
 	warp::normalize::clear_shown_hints();
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval("x = 1\ny = two"));
-	let two = hints
-		.iter()
-		.find(|hint| hint.original == "two")
-		.expect("a hint for two");
+	let two = hints.iter().find(|hint| hint.original == "two").expect("a hint for two");
 	assert!(two.position.starts_with("2:"), "{}", two.position);
 }
 
@@ -37,10 +31,7 @@ fn number_word_hint_is_where_it_is_written() {
 #[test]
 #[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 fn glued_chain_after_a_prefix_function() {
-	is!(
-		"xs = [3, -1, 2]; xs.keep only positive.sort by abs.take first 1",
-		warp::ints(vec![2])
-	);
+	is!("xs = [3, -1, 2]; xs.keep only positive.sort by abs.take first 1", warp::ints(vec![2]));
 	is!("xs = [3, -5, 2]; xs.sort by abs.take first 2", warp::ints(vec![2, 3]));
 	is!("xs = [9, 1, 4]; xs.sort by sqrt.take first 1", warp::ints(vec![1]));
 }

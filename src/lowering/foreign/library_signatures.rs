@@ -90,10 +90,7 @@ fn positional(arity: usize, parameter_type: Option<&str>, result: Kind) -> Strin
 
 /// `(t:text, separator:text) -> …` → `[t separator]`, `(x, limit = 0)` → `[x limit]`
 fn parameter_names(signature: &str) -> Vec<String> {
-	let inside = signature
-		.strip_prefix('(')
-		.and_then(|rest| rest.split(')').next())
-		.unwrap_or_default();
+	let inside = signature.strip_prefix('(').and_then(|rest| rest.split(')').next()).unwrap_or_default();
 	inside
 		.split(',')
 		.filter_map(|parameter| parameter.split([':', '=']).next())

@@ -22,17 +22,11 @@ fn a_page_keeping_values_ships_no_sound() {
 #[test]
 fn a_page_with_a_table_ships_no_sound() {
 	let parts = part_files("class User{name: text}\nstored users: [User] in \"users_parts\"\np{ count(users) }");
-	assert!(
-		parts.contains(&"host-files.js") && !parts.contains(&"host-sound.js"),
-		"{parts:?}"
-	);
+	assert!(parts.contains(&"host-files.js") && !parts.contains(&"host-sound.js"), "{parts:?}");
 }
 
 #[test]
 fn a_page_playing_a_file_ships_the_sound_part() {
 	let parts = part_files("use sound\nplay \"song.mp3\"\np{ \"playing\" }");
-	assert!(
-		parts.contains(&"host-sound.js") && parts.contains(&"host-files.js"),
-		"{parts:?}"
-	);
+	assert!(parts.contains(&"host-sound.js") && parts.contains(&"host-files.js"), "{parts:?}");
 }

@@ -152,9 +152,8 @@ impl WasmGcEmitter {
 		let Some(name) = call_name(items, bracket, separator) else {
 			return false;
 		};
-		let Some((_, function)) = super::super::reflection::library_ops::LIBRARY_FUNCTIONS
-			.iter()
-			.find(|(word, _)| *word == name)
+		let Some((_, function)) =
+			super::super::reflection::library_ops::LIBRARY_FUNCTIONS.iter().find(|(word, _)| *word == name)
 		else {
 			return false;
 		};
@@ -260,10 +259,7 @@ impl WasmGcEmitter {
 					repeated.serialize(),
 					crate::analyzer::kind_with_article(kind)
 				);
-				self.emit_type_error(
-					func,
-					crate::errors::diagnostic::Diagnostic::at(repeated, reason).to_string(),
-				);
+				self.emit_type_error(func, crate::errors::diagnostic::Diagnostic::at(repeated, reason).to_string());
 			}
 		}
 		true
@@ -404,10 +400,7 @@ impl WasmGcEmitter {
 		}
 
 		// Check for type constructor calls: int('123'), str(123), char(0x41), etc.
-		let is_typed_decl = matches!(
-			items.get(1).map(Node::drop_meta),
-			Some(Node::Key(_, Op::Assign | Op::Define, _))
-		);
+		let is_typed_decl = matches!(items.get(1).map(Node::drop_meta), Some(Node::Key(_, Op::Assign | Op::Define, _)));
 		if !is_typed_decl
 			&& crate::analyzer::type_cast_of(items, bracket, separator, &|name| self.scope.lookup(name).is_some())
 				.is_some()
@@ -496,9 +489,8 @@ impl WasmGcEmitter {
 			}
 		}
 		if let Some((Node::Symbol(call), arguments)) = items.split_first() {
-			if let Some((name, _)) = NODE_ARGUMENT_CALLS
-				.iter()
-				.find(|(name, count)| name == call && *count == arguments.len())
+			if let Some((name, _)) =
+				NODE_ARGUMENT_CALLS.iter().find(|(name, count)| name == call && *count == arguments.len())
 			{
 				for argument in arguments {
 					self.emit_node_instructions(func, argument);
@@ -552,15 +544,11 @@ impl WasmGcEmitter {
 			// whatever they compute
 			let is_tuple = *separator == Separator::Colon && items.len() > 1;
 			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
-			let has_field = items.len() > 1
-				&& items
-					.iter()
-					.any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
+			let has_field =
+				items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
 			let has_arithmetic = *bracket != Bracket::Square
 				&& !is_tuple && !has_field
-				&& items
-					.iter()
-					.any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
+				&& items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
 			if has_arithmetic {
 				let node = Node::List(items.to_vec(), bracket.clone(), Separator::None);
 				if self.get_type(&node).is_float() {
@@ -612,7 +600,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
-	/// number of Int kind), a Key that may be an instance of a declared type
+	/// number of Int kind), a Key that may be an instance of a declared type or an operation
 	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
 		if crate::analyzer::is_boolean(subject, &self.scope)
 			|| matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
@@ -623,7 +611,8 @@ impl WasmGcEmitter {
 		match self.get_type(subject) {
 			crate::Kind::Empty | crate::Kind::Data => true,
 			crate::Kind::Int => self.int_runtime(),
-			crate::Kind::Key => !self.ctx.type_registry.types().is_empty(),
+			// a key may be an instance of a declared type or an operation (`parse("1+1")`)
+			crate::Kind::Key => true,
 			crate::Kind::List => self.may_be_map(subject),
 			_ => false,
 		}
@@ -640,21 +629,7 @@ impl WasmGcEmitter {
 		if self.get_type(subject) != crate::Kind::Symbol || crate::type_tests::type_matches(SYMBOL_WORD, spec) {
 			return None;
 		}
-		let names_type = |name: &str| {
-			Node::Key(
-				Box::new(subject.clone()),
-				Op::Eq,
-				Box::new(Node::Symbol(name.to_string())),
-			)
-		};
-		let tests = crate::type_tests::builtin_types_matching(spec)
-			.into_iter()
-			.map(names_type);
-		Some(
-			tests
-				.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test)))
-				.unwrap_or(Node::False),
-		)
+		Some(names_covered_type(subject, spec))
 	}
 
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
@@ -703,7 +678,10 @@ impl WasmGcEmitter {
 		// `s#1 is char`: an item of a text is typed text but is a code point at run time
 		let item_of_text = self.static_type_name(subject) == TEXT_WORD
 			&& crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
-		let unknown = spec == ERROR_WORD || item_of_text || self.has_unknown_static_type(subject);
+		// only the run time tells an operation from a pair
+		let operation_of_key = self.get_type(subject) == Kind::Key
+			&& crate::type_tests::canonical_spec_word(spec) == crate::words::OPERATION_WORD;
+		let unknown = spec == ERROR_WORD || item_of_text || operation_of_key || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == MAP_WORD;
 		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
@@ -761,6 +739,15 @@ impl WasmGcEmitter {
 				);
 				self.emit_numeric_value(func, &instance_test);
 			}
+			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s name
+			None if unknown && crate::type_tests::is_builtin_type_word(spec) => {
+				let type_value = Node::List(
+					vec![Node::Symbol(crate::type_tests::TYPE_WORD.to_string()), subject.clone()],
+					Bracket::Round,
+					Separator::None,
+				);
+				self.emit_numeric_value(func, &names_covered_type(&type_value, spec));
+			}
 			// `x = 2.5; x is int`: an exact ratio is an Int at run time, only is_ratio tells it from a whole number
 			None if self.whole_only_at_run_time(subject, spec) => {
 				self.emit_numeric_value(func, subject);
@@ -789,10 +776,7 @@ impl WasmGcEmitter {
 		let Some(name) = call_name(items, bracket, separator).filter(|_| items.len() >= 2) else {
 			return false;
 		};
-		let holds_plain_value = self
-			.scope
-			.lookup(name)
-			.is_some_and(|local| PLAIN_VALUE_KINDS.contains(&local.kind))
+		let holds_plain_value = self.scope.lookup(name).is_some_and(|local| PLAIN_VALUE_KINDS.contains(&local.kind))
 			&& !self.ctx.user_functions.contains_key(name);
 		if holds_plain_value {
 			let arguments: Vec<String> = items[1..].iter().map(crate::normalize::operand_text).collect();
@@ -844,9 +828,7 @@ impl WasmGcEmitter {
 				let Node::Symbol(extremum) = arg.drop_meta() else {
 					return false;
 				};
-				let Some((_, error)) = crate::min_max::EMPTY_LIST_ERRORS
-					.iter()
-					.find(|(name, _)| name == extremum)
+				let Some((_, error)) = crate::min_max::EMPTY_LIST_ERRORS.iter().find(|(name, _)| name == extremum)
 				else {
 					return false;
 				};
@@ -884,25 +866,12 @@ impl WasmGcEmitter {
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				Self::emit_list(
-					func,
-					&[
-						I::I64ReinterpretF64,
-						I::LocalTee(bits),
-						I::F64ReinterpretI64,
-						I::F64Floor,
-						I::LocalGet(bits),
-						I::F64ReinterpretI64,
-						I::LocalGet(bits),
-						I::F64ReinterpretI64,
-						I::F64Floor,
-						I::F64Sub,
-						I::F64Const(0.5f64.into()),
-						I::F64Ge,
-						I::F64ConvertI32U,
-						I::F64Add,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(func, &[
+					I::I64ReinterpretF64, I::LocalTee(bits), I::F64ReinterpretI64, I::F64Floor, I::LocalGet(bits),
+					I::F64ReinterpretI64, I::LocalGet(bits), I::F64ReinterpretI64, I::F64Floor, I::F64Sub,
+					I::F64Const(0.5f64.into()), I::F64Ge, I::F64ConvertI32U, I::F64Add,
+				]);
 				self.emit_integral_float_as_int(func);
 				true
 			}
@@ -930,16 +899,11 @@ impl WasmGcEmitter {
 		let instance_local = self.node_scratch();
 		func.instruction(&I::LocalSet(instance_local));
 		self.emit_field(func, instance_local, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(crate::type_kinds::KIND_MASK),
-				I::I64And,
-				I::I64Const(crate::Kind::Key as i64),
-				I::I64Eq,
-				I::If(BlockType::Result(ValType::I64)),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(crate::Kind::Key as i64), I::I64Eq,
+			I::If(BlockType::Result(ValType::I64)),
+		]);
 		self.emit_field(func, instance_local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
 		let (pointer, length) = self.allocate_string(type_name);
@@ -966,33 +930,17 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		Self::emit_list(
-			func,
-			&[
-				I::I64ReinterpretF64,
-				I::LocalTee(divisor_bits),
-				I::F64ReinterpretI64,
-				I::F64Div,
-				I::I64ReinterpretF64,
-				I::LocalSet(quotient),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64ReinterpretF64, I::LocalTee(divisor_bits), I::F64ReinterpretI64, I::F64Div, I::I64ReinterpretF64,
+			I::LocalSet(quotient),
+		]);
 		// a negative divisor rounds the quotient up, a positive one down
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(quotient),
-				I::F64ReinterpretI64,
-				I::F64Ceil,
-				I::LocalGet(quotient),
-				I::F64ReinterpretI64,
-				I::F64Floor,
-				I::LocalGet(divisor_bits),
-				I::I64Const(0),
-				I::I64LtS,
-				I::Select,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil, I::LocalGet(quotient), I::F64ReinterpretI64,
+			I::F64Floor, I::LocalGet(divisor_bits), I::I64Const(0), I::I64LtS, I::Select,
+		]);
 		self.emit_truncating_cast(func);
 	}
 
@@ -1010,11 +958,8 @@ impl WasmGcEmitter {
 		bracket: &Bracket,
 		separator: &Separator,
 	) {
-		let rest: Vec<Node> = items
-			.iter()
-			.filter(|item| !matches!(item.drop_meta(), Node::Type { .. }))
-			.cloned()
-			.collect();
+		let rest: Vec<Node> =
+			items.iter().filter(|item| !matches!(item.drop_meta(), Node::Type { .. })).cloned().collect();
 		match rest.as_slice() {
 			[] => self.emit_call(func, "new_empty"),
 			[only] => self.emit_node_instructions(func, only),
@@ -1073,10 +1018,7 @@ impl WasmGcEmitter {
 			return Some((first, second));
 		}
 		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
-		let (a, b) = (
-			crate::normalize::operand_text(first),
-			crate::normalize::operand_text(second),
-		);
+		let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
 		match (is_int(self.get_type(first)), is_int(self.get_type(second))) {
 			(true, false) => Some((first, second)),
 			(false, true) => Some((second, first)),
@@ -1124,10 +1066,8 @@ impl WasmGcEmitter {
 		bracket: &Bracket,
 		separator: &Separator,
 	) -> Option<String> {
-		let in_code = matches!(
-			(bracket, separator),
-			(Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _)
-		);
+		let in_code =
+			matches!((bracket, separator), (Bracket::None | Bracket::Round, Separator::Space) | (Bracket::Square, _));
 		// an argument: a value or a name the program defines (`cube x`); unknown words alone are symbols (`[red green]`)
 		let is_value = |item: &Node| match item.drop_meta() {
 			Node::Symbol(name) => self.unknown_word(item).is_none() && !name.is_empty(),
@@ -1155,14 +1095,15 @@ impl WasmGcEmitter {
 		}
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = crate::errors::diagnostic::written_text(&written);
-		let Some(name) = items
-			.iter()
-			.find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))
+		let Some(name) =
+			items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))
 		else {
 			let assigned = crate::errors::diagnostic::written_text(assigned?);
 			let dropped =
 				crate::errors::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
-			let message = format!("`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement");
+			let message = format!(
+				"`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement"
+			);
 			return Some(crate::errors::diagnostic::Diagnostic::at(&written, message).remembered());
 		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
@@ -1199,10 +1140,7 @@ impl WasmGcEmitter {
 		let question = Ask::new(
 			NEAR_MISS_TOPIC,
 			format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
-			vec![
-				reading("the symbol", &format!("data {word}")),
-				reading(&format!("the name {near}"), &near),
-			],
+			vec![reading("the symbol", &format!("data {word}")), reading(&format!("the name {near}"), &near)],
 			Fallback::Warning,
 		)
 		.written(word);
@@ -1213,13 +1151,8 @@ impl WasmGcEmitter {
 
 	/// The name of the program or the language `word` is a typo of: `pirnt` → print
 	fn near_name(&self, word: &str) -> Option<String> {
-		let mut names: Vec<String> = self
-			.ctx
-			.user_functions
-			.keys()
-			.chain(self.ctx.user_globals.keys())
-			.cloned()
-			.collect();
+		let mut names: Vec<String> =
+			self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
 		names.extend(self.scope.local_names());
 		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
 		crate::extensions::strings::near_miss(word, names)
@@ -1310,9 +1243,7 @@ impl WasmGcEmitter {
 			// `S1 = -0.16, S2 = 0.0083`: assignments separated by commas are statements too, each of its own kind
 			Node::List(items, bracket, Separator::Colon)
 				if *bracket != Bracket::Square
-					&& items
-						.iter()
-						.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) =>
+					&& items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) =>
 			{
 				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
 				return;
@@ -1517,11 +1448,7 @@ impl WasmGcEmitter {
 		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) =
 			(start.drop_meta(), end.drop_meta())
 		else {
-			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) {
-				end
-			} else {
-				start
-			};
+			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) { end } else { start };
 			self.emit_malformed(func, bound, "a constant integer as range bound");
 			return;
 		};
@@ -1579,10 +1506,7 @@ impl WasmGcEmitter {
 /// The loop `for T in xs` a type test filters, carried from its header (for_loop/headers.rs FilterLoop)
 fn filter_loop_of(test: &Node) -> Option<crate::for_loop::headers::FilterLoop> {
 	let Node::Meta { data, node } = test else { return None };
-	data.data_value()
-		.downcast_ref::<crate::for_loop::headers::FilterLoop>()
-		.cloned()
-		.or_else(|| filter_loop_of(node))
+	data.data_value().downcast_ref::<crate::for_loop::headers::FilterLoop>().cloned().or_else(|| filter_loop_of(node))
 }
 
 /// The wasm instruction rounding an f64 like `floor`, `ceil` or `round` (half even, IEEE 754's default)
@@ -1600,4 +1524,15 @@ fn names_whole_numbers_only(spec: &str) -> bool {
 	let int = crate::Kind::Int.to_string();
 	crate::type_tests::type_matches(&int, spec)
 		&& !crate::type_tests::type_matches(crate::analyzer::RATIONAL_WORD, spec)
+}
+
+/// `t == int or t == rational or …`: the type value t names one of the built-in types spec covers
+fn names_covered_type(type_value: &Node, spec: &str) -> Node {
+	let names_type =
+		|name: &str| Node::Key(Box::new(type_value.clone()), Op::Eq, Box::new(Node::Symbol(name.to_string())));
+	crate::type_tests::builtin_types_matching(spec)
+		.into_iter()
+		.map(names_type)
+		.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test)))
+		.unwrap_or(Node::False)
 }
