@@ -659,23 +659,29 @@ impl WarpParser {
 		if !PRINT_SPELLINGS.contains(&symbol.as_str()) || !self.in_code() || named {
 			return symbol;
 		}
-		crate::diagnostic::note_alias(&symbol, PRINT_WORD);
+		note_alias_at(self.start_of(&symbol), &symbol, PRINT_WORD);
 		PRINT_WORD.to_string()
+	}
+
+	/// Where the symbol just read starts: line and column
+	fn start_of(&self, symbol: &str) -> (usize, usize) {
+		(self.line_nr, self.column.saturating_sub(symbol.chars().count()))
 	}
 
 	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,
 	/// `operator +`, Kotlin's `enum class` and `data class`, `mixin Name {…}`
 	fn foreign_form(&mut self, symbol: &str) -> Option<Node> {
+		let start = self.start_of(symbol);
 		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
 		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
 			self.skip_blanks();
 			let construction = self.parse_atom();
 			let class = crate::node::leading_name(&construction);
-			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
+			note_alias_at(start, &format!("{NEW_WORD} {class}"), &class);
 			return Some(construction);
 		}
 		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
-			crate::diagnostic::note_alias(CONSTANT_ALIAS, CONST_WORD);
+			note_alias_at(start, CONSTANT_ALIAS, CONST_WORD);
 			return Some(Symbol(CONST_WORD.to_string()));
 		}
 		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
@@ -693,7 +699,7 @@ impl WarpParser {
 				.all(|name| !name.is_empty() && name.chars().all(is_identifier_char))
 			{
 				self.advance_by(line.chars().count());
-				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
+				note_alias_at(start, &format!("{symbol}{line}"), &names.join("; "));
 				return Some(Node::List(
 					names.into_iter().map(Symbol).collect(),
 					Bracket::None,
@@ -704,7 +710,8 @@ impl WarpParser {
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
 			self.skip_blanks();
 			if let Some(head) = self.try_parse_operator_method_head() {
-				crate::diagnostic::note_alias(
+				note_alias_at(
+					start,
 					&format!("{OPERATOR_WORD} {}", head.first().name()),
 					&head.first().name(),
 				);
@@ -715,13 +722,13 @@ impl WarpParser {
 		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
 			self.skip_blanks();
 			self.advance_by("class".len());
-			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
+			note_alias_at(start, &format!("{ENUM_WORD} class"), ENUM_WORD);
 			return Some(Symbol(symbol.to_string()));
 		}
 		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol) {
 			if let Some(keyword) = self.class_keyword_after_blanks() {
-				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
+				note_alias_at(start, &format!("{symbol} {keyword}"), keyword);
 				self.skip_blanks();
 				self.advance_by(keyword.len());
 				return Some(self.parse_type_declaration());
@@ -935,4 +942,10 @@ fn argument_group(arguments: Node) -> Node {
 		Node::Empty => Node::List(vec![], Bracket::Round, Separator::None),
 		other => Node::List(vec![other], Bracket::Round, Separator::None),
 	}
+}
+
+/// A got-it note on another language's word, pointing at where the word starts
+fn note_alias_at((line, column): (usize, usize), written: &str, warp_word: &str) {
+	crate::normalize::set_hint_position(line, column);
+	crate::diagnostic::note_alias(written, warp_word);
 }
