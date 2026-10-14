@@ -141,3 +141,25 @@ fn a_single_route_and_a_served_route_deploy() {
 		assert_eq!(&module[..4], b"\0asm");
 	}
 }
+
+/// cards program-answers, host-available: a program of page routes deploys, each route the page at its path as HTML
+/// rendered by the Worker (before: "the program answers no request", then "host.page_path is not available")
+#[test]
+fn page_routes_deploy_as_rendered_pages() {
+	let program = "route \"/\" { a{href:'/square/3' 'try it'} }\nroute \"/square/:n:int\" { n*n }";
+	let (_running, base, directory) = running_worker(program, "page-routes");
+	let (status, content_type, body) = answer(&base, "/");
+	assert_eq!((status, body.as_str()), (200, "<a href=\"/square/3\">try it</a>"));
+	assert!(content_type.starts_with("text/html"), "{content_type}");
+	assert_eq!(answer(&base, "/square/3").2, "9");
+	assert_eq!(answer(&base, "/nope").0, 404);
+	std::fs::remove_dir_all(directory).ok();
+}
+
+/// samples/route_headers.warp deployed: a route's `status 418` is its answer's status in the Worker too
+#[test]
+fn a_deployed_route_answers_its_status() {
+	let (_running, base, directory) = running_worker(include_str!("../../samples/route_headers.warp"), "route-headers");
+	assert_eq!(answer(&base, "/teapot"), (418, "text/plain; charset=utf-8".into(), "short and stout".into()));
+	std::fs::remove_dir_all(directory).ok();
+}

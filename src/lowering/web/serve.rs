@@ -25,6 +25,9 @@ const SERVER_WORD: &str = "server";
 /// `header "name" "value"` and `status 418` in a route's body (with_answer_headers)
 const HEADER_WORD: &str = "header";
 const STATUS_WORD: &str = "status";
+/// a hosted page route's answer (answered_page)
+const CONTENT_TYPE_HEADER: &str = "Content-Type";
+const HTML_TYPE: &str = "text/html; charset=utf-8";
 const RPC_PREFIX: &str = "/rpc/";
 const RPC_METHOD: &str = "POST";
 /// `f·rpc·0`: the value of the page's first call of the server function f
@@ -171,6 +174,10 @@ pub fn with_default_routes(program: Node) -> Node {
 		}
 		_ => (vec![program.clone()], Separator::Newline),
 	};
+	if statements.iter().any(crate::routes::is_route) {
+		statements = statements.into_iter().map(|statement| answered_page(&statement).unwrap_or(statement)).collect();
+		return Node::List(statements, Bracket::None, separator);
+	}
 	if statements.iter().any(is_serving_statement) {
 		return program;
 	}
@@ -240,6 +247,21 @@ pub fn with_page_routes(program: Node) -> Node {
 
 fn reads_the_request(body: &Node) -> bool {
 	body.mentions_where(|name| name == REQUEST_WORD || name.starts_with(FIELD_MARK))
+}
+
+/// A hosted page route answers GET at its path with its page's HTML, rendered by the Worker (cards program-answers,
+/// host-available): `route "/" { a{…} }` → `get "/" { header "Content-Type" "text/html…"; to_html(a{…}) }`; links
+/// load the next page from the Worker. A route holding routes or a layout's outlet stays a route
+fn answered_page(statement: &Node) -> Option<Node> {
+	let (pattern, mut body) = crate::routes::route(statement)?;
+	if body.iter().any(|item| crate::routes::is_route(item) || item.mentions_any(&[crate::routes::OUTLET])) {
+		return None;
+	}
+	let shown = body.pop()?;
+	body.push(crate::warp_parser::parse(&format!("{HEADER_WORD} {CONTENT_TYPE_HEADER:?} {HTML_TYPE:?}")));
+	body.push(call(super::page_html::TO_HTML, vec![shown]));
+	let block = Node::List(body, Bracket::Curly, Separator::Newline);
+	Some(Node::List(vec![symbol(QUERY_METHOD), text(&pattern), block], Bracket::None, Separator::Space))
 }
 
 /// `square(n) := n*n` → ("/square/:n", "square(n)"); `twice := it * 2` → ("/twice/:value", "twice(value)")
