@@ -480,7 +480,7 @@ signal family are warp-list-pattern's and left out. Samples = files in samples/,
 | traits (traits, traits/dispatch, traits/instance_types) | `trait shape{area}`, `compare(a:person, b:person) := …` | 1901 | 1 | 0 | 1 | instance `<`/`==` via compare witnesses rides on it; declared traits barely used |
 | database tables, ORM (database_tables/) | `people: [Person] = database.people` | 1889 | 4 | 0 | 0 | none; big and recent (orm cards) |
 | gpu maps (gpu_maps) | `ys = xs.map(x => x*2) @gpu` | 1306 | 1 | 0 | 0 | shader blocks (WGSL) and data parallelism do GPU/parallel work |
-| shared arrays (shared_arrays) | `shared xs = int[n]` | 1180 | 3 | 0 | 8 | channels and atomics share between tasks |
+| shared arrays (shared_arrays) | `shared xs = int[n]` | 1180 | 3 | 0 | 8 | channels and atomics share between tasks; KEPT (decision cleanup-cuts): `shared` for any atomic variable is the general form for later |
 | web server (serve) | `serve 8080 { get "/api" { users } }` | 1143 | 0–2 | 1 | 6 | none in warp; routes.rs is the page side |
 | generators (generators, generator_objects, generator_consumers) | `count_to(n) := { … yield i … }` | 1114 | 0 | 0 | 4 | lazy ranges; a go task writing a channel |
 | reflection dot words (reflection) | `f.effects` | 886 | 2 | 0 | 5 | the word forms `effects of f` |
