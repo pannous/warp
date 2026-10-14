@@ -652,9 +652,11 @@ pub fn describe(data: &DataValue) -> Option<String> {
 
 /// The unit of a bare number of sleep (decision sleep-seconds)
 const SECOND: &str = "s";
+/// what the host word sleep takes per second of a run-time number
+const MILLISECONDS_PER_SECOND: i64 = 1000;
 
 /// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`, `sleep 2`: a constant duration is its milliseconds, what the host
-/// word takes
+/// word takes; a run-time number counts seconds as a bare one does, so `sleep(t)` sleeps `t * 1000` milliseconds
 /// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
 pub fn lower_sleep_durations(program: Node) -> Node {
 	// a duration whose unit word is one of the program's names (`s = 1; sleep 5 s`) stays as written; `m = 2` leaves
@@ -685,13 +687,18 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					),
 					false => duration,
 				};
-				match milliseconds(&duration).filter(|_| !shadows) {
-					Some(amount) => Node::List(
-						vec![items[0].clone(), Node::int(amount)],
-						Bracket::Round,
-						Separator::None,
-					),
-					None => Node::List(
+				let sleeping = |milliseconds: Node| {
+					Node::List(vec![items[0].clone(), milliseconds], Bracket::Round, Separator::None)
+				};
+				match (milliseconds(&duration).filter(|_| !shadows), &items[1..]) {
+					(Some(amount), _) => sleeping(Node::int(amount)),
+					// a number at run time counts seconds too (decision sleep-seconds): `f(t) := sleep(t)`
+					(None, [seconds]) => sleeping(Node::Key(
+						Box::new(lower(seconds.clone(), shadowed)),
+						Op::Mul,
+						Box::new(Node::int(MILLISECONDS_PER_SECOND)),
+					)),
+					(None, _) => Node::List(
 						items.into_iter().map(|item| lower(item, shadowed)).collect(),
 						bracket,
 						separator,
@@ -866,7 +873,7 @@ pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
 		Ok(Some((seconds, signature))) if signature == [(Dimension::Time, 1)] => {
-			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(1000)))
+			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
 		}
 		_ => None,
 	}

@@ -4,7 +4,7 @@
 use crate::is;
 use std::time::{Duration, Instant};
 
-const SLEEPER: &str = "f(ms) := { sleep(ms); ms }; ";
+const SLEEPER: &str = "f(ms) := { sleep(ms / 1000); ms }; ";
 /// Three tasks of a second each: overlapping they take about one second, one after the other three
 const OVERLAPPING_LIMIT: Duration = Duration::from_millis(2500);
 

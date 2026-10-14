@@ -90,7 +90,7 @@ fn a_site_with_routes_is_one_page_for_every_path() {
 fn a_site_starting_tasks_runs_its_program_in_a_worker() {
 	let directory = scratch_directory("tasks-site");
 	let site = warp::web::site::build(
-		"nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\np{ \"naps: \" + await first }",
+		"nap(ms) := { sleep(ms / 1000); 1 }\nfirst = go nap(1)\np{ \"naps: \" + await first }",
 		"tasks",
 		&directory,
 	)
@@ -129,7 +129,7 @@ fn a_site_starting_tasks_runs_its_program_in_a_worker() {
 #[test]
 fn a_site_with_routes_starting_tasks_runs_its_program_in_a_worker() {
 	let directory = scratch_directory("routed-tasks-site");
-	let program = "nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\nnaps = await first\nroute \"/\" { p{ \"naps: \" + naps } }\nroute \"/other\" { p{ \"other\" } }";
+	let program = "nap(ms) := { sleep(ms / 1000); 1 }\nfirst = go nap(1)\nnaps = await first\nroute \"/\" { p{ \"naps: \" + naps } }\nroute \"/other\" { p{ \"other\" } }";
 	let site = warp::web::site::build(program, "routed", &directory).expect("the site is built");
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
 	assert!(

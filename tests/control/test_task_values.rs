@@ -30,7 +30,7 @@ fn the_failure_of_a_task_is_caught_by_try() {
 /// for shared memory), not one after the other a second apart (user, g-qUvY: prove the overlap, not the wall time)
 #[test]
 fn two_tasks_overlap() {
-	is!("f(ms) := { started = clock(); sleep(ms); started }; a = go f(1000); b = go f(1000); if abs(await a - await b) < 1000 then 2000 else -1", 2000);
+	is!("f(ms) := { started = clock(); sleep(ms / 1000); started }; a = go f(1000); b = go f(1000); if abs(await a - await b) < 1000 then 2000 else -1", 2000);
 }
 
 #[test]
