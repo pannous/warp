@@ -8,7 +8,7 @@ use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 
-use super::super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
+use super::super::{items_info, WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
 /// Runtime functions called from lowered code with their node arguments, and how many those are
@@ -1484,6 +1484,70 @@ impl WasmGcEmitter {
 			_ => None,
 		};
 		name.filter(|name| self.ctx.user_functions.contains_key(name))
+	}
+
+	/// Emit a range as a list of integers
+	/// inclusive: true for .../ (0...3 = [0,1,2,3]), false for .. (0..3 = [0,1,2])
+	pub(crate) fn emit_range(&mut self, func: &mut Function, start: &Node, end: &Node, inclusive: bool) {
+		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) =
+			(start.drop_meta(), end.drop_meta())
+		else {
+			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) {
+				end
+			} else {
+				start
+			};
+			self.emit_malformed(func, bound, "a constant integer as range bound");
+			return;
+		};
+		let (start_val, end_val) = (*start_val, *end_val);
+		let actual_end = if inclusive { end_val + 1 } else { end_val };
+		let items: Vec<Node> = (start_val..actual_end).map(|i| Node::Number(Number::Int(i))).collect();
+		if items.is_empty() {
+			self.emit_call(func, "new_empty");
+			return;
+		}
+		self.emit_list_structure(func, &items, &Bracket::Square, &Separator::None);
+	}
+
+	/// Emit a list as linked cons cells
+	pub(crate) fn emit_list_structure(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) {
+		self.emit_list_structure_with(
+			func,
+			items,
+			&items_info(items, bracket, separator),
+			Self::emit_node_instructions,
+		);
+	}
+
+	pub(crate) fn emit_list_structure_with(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		info: &i64,
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
+		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself
+		emit(self, func, &items[0]);
+		if items.len() > 1 {
+			self.emit_list_structure_with(func, &items[1..], info, emit);
+		} else {
+			self.emit_node_null(func);
+		}
+
+		func.instruction(&I::I64Const(*info));
+		if self.ctx.func_registry.contains("new_list") {
+			self.emit_call(func, "new_list");
+		} else {
+			// new_list is always emitted; reaching this is a compiler bug, reported as an error value
+			self.emit_type_error(func, "internal error: new_list is not available".to_string());
+		}
 	}
 }
 

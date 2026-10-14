@@ -1199,3 +1199,9 @@ pub(crate) fn write_debug_module(bytes: &[u8]) {
 		warn!("could not write {}: {failure}", path.display());
 	}
 }
+
+/// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)
+pub(crate) fn items_info(items: &[Node], bracket: &Bracket, separator: &Separator) -> i64 {
+	let separator = if items.len() > 1 { separator } else { &Separator::None };
+	list_info(bracket, separator)
+}
