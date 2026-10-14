@@ -1,9 +1,9 @@
 //! Timers (notes/system_signals.md): `on every 5 seconds {body}` at the main level is the handler function
-//! `on·every·0() := {global …; body}` and the call `signal_every(0, 5000)` where it is written, which starts the timer;
+//! `on·every·0() := {global …; body}` and the call `signal_listen(0, 0, 5000)` (LISTEN_EVERY) where it is written, which starts the timer;
 //! the runtime runs the handler at the program's check points (crates/warp-runtime/src/system_signals.rs) and, in
 //! `warp run`, after main while the timer lives. The duration is constant (`50 ms`, `5 seconds`, `1 min`).
 //! `on file "notes.txt" change {body}` likewise is `on·file·0() := {…}` and `signal_watch(0, "notes.txt")`.
-//! Frames (card frame-event): `on frame {body}` is the handler `on·every·N` started by `signal_frame(N, 16)`, which
+//! Frames (card frame-event): `on frame {body}` is the handler `on·every·N` started by `signal_listen(1, N, 16)` (LISTEN_FRAME), which
 //! runs it each frame while the paint window shows and ends with it (once without a window). Natively, `on key {…}`
 //! (card native-keys) gets the keys pressed over the paint window: a frame handler reads each press
 //! (`system_value("key_pressed")`) and emits `key{key: "a"}` as the playground page does, arrows and Enter by name;
@@ -11,7 +11,7 @@
 //! `exit` and `exit()` as statements are `exit(0)` (P121: the host word ends the run with that code).
 //! Channels (src/channels.rs): `on message from "chat" {body}` (`on message {body}` for the channel "warp") is the timer
 //! handler `on·every·0() := {global …; while channel_pending(0) > 0 { event = channel_next(0); body }}`, started by
-//! `channel_listen(0, "chat")` and `signal_every(0, 20)`, so a program listening stays like one with a timer;
+//! `channel_listen(0, "chat")` and `signal_listen(0, 0, 20)`, so a program listening stays like one with a timer;
 //! `broadcast value on "chat"` (`broadcast value`) is `channel_send("chat", value)`, and so is `send value to "chat"`.
 //! Named events across programs (P129b): `broadcast stop the machine{reason: "heat"} on "chat"` is
 //! `channel_send("chat/stop the machine", {reason: "heat"})`, heard by `on stop the machine from "chat" {…}`, a message
@@ -27,6 +27,7 @@ use crate::extensions::numbers::Number;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FROM_WORD, ON_WORD};
+use warp_runtime::host_words::{CLOCK_WEEKDAYS, LISTEN_CLOCK, LISTEN_EVERY, LISTEN_FRAME};
 
 const EVERY_WORD: &str = "every";
 const FRAME_WORD: &str = "frame";
@@ -166,34 +167,6 @@ fn lower_timers(program: Node) -> Node {
 	let mut lowered = vec![];
 	let (mut count, mut watches) = (0, 0);
 	for statement in statements {
-		if let Some((channel, body)) = message_listener(&statement) {
-			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
-			let id = Node::int(count as i64);
-			let messages = super::nodes::filled(MESSAGES_TEMPLATE, [("ID", id.clone()), ("BODY", body)]);
-			lowered.push(function_with_globals(
-				&handler,
-				false,
-				&[messages.drop_meta().clone()],
-				&main_variables,
-			));
-			lowered.push(call(crate::host::CHANNEL_LISTEN, vec![id.clone(), channel]));
-			lowered.push(call(
-				crate::host::SIGNAL_EVERY,
-				vec![id, Node::int(CHANNEL_CHECK_MILLISECONDS)],
-			));
-			count += 1;
-			continue;
-		}
-		if let Some(body) = event_listener(&statement, FRAME_WORD) {
-			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
-			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-			lowered.push(call(
-				crate::host::SIGNAL_FRAME,
-				vec![Node::int(count as i64), Node::int(FRAME_MILLISECONDS)],
-			));
-			count += 1;
-			continue;
-		}
 		if let Some((path, body)) = file_watch(&statement) {
 			let handler = format!("{}{watches}", crate::host::FILE_HANDLER_PREFIX);
 			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
@@ -202,65 +175,64 @@ fn lower_timers(program: Node) -> Node {
 			watches += 1;
 			continue;
 		}
-		if let Some((time, body)) = one_shot(&statement) {
+		let id = Node::int(count as i64);
+		let mut channel_listen = None;
+		let (body, kind, argument) = if let Some((channel, body)) = message_listener(&statement) {
+			channel_listen = Some(call(crate::host::CHANNEL_LISTEN, vec![id.clone(), channel]));
+			let messages = super::nodes::filled(MESSAGES_TEMPLATE, [("ID", id.clone()), ("BODY", body)]);
+			(messages.drop_meta().clone(), LISTEN_EVERY, CHANNEL_CHECK_MILLISECONDS)
+		} else if let Some(body) = event_listener(&statement, FRAME_WORD) {
+			(body, LISTEN_FRAME, FRAME_MILLISECONDS)
+		} else if let Some((time, body)) = one_shot(&statement) {
 			let Some(minute_of_day) = time else {
 				return no_time_of_day(&statement, AT_WORD);
 			};
-			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
-			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-			lowered.push(call(
-				crate::host::SIGNAL_AT,
-				vec![Node::int(count as i64), Node::int(minute_of_day)],
-			));
-			count += 1;
-			continue;
-		}
-		let Some((duration, body)) = timer(&statement) else {
+			(body, LISTEN_CLOCK, minute_of_day)
+		} else if let Some((duration, body)) = timer(&statement) {
+			match timer_start(&statement, &duration) {
+				Ok((kind, argument)) => (body, kind, argument),
+				Err(error) => return error,
+			}
+		} else {
 			lowered.push(statement);
 			continue;
 		};
-		if let Some(schedule) = clock_schedule(&duration) {
-			let (minute_of_day, weekdays) = match schedule {
-				Ok(schedule) => schedule,
-				Err(ClockError::Days(days)) => {
-					return Diagnostic::at(
-						&statement,
-						format!("on every … at needs day, a weekday (monday … sunday), weekday or weekend, got {days}"),
-					)
-					.into_error();
-				}
-				Err(ClockError::Time) => return no_time_of_day(&statement, "on every day at"),
-			};
-			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
-			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-			lowered.push(call(
-				crate::host::SIGNAL_DAILY,
-				vec![Node::int(count as i64), Node::int(minute_of_day), Node::int(weekdays)],
-			));
-			count += 1;
-			continue;
-		}
-		let Some(milliseconds) = crate::units::milliseconds(&duration) else {
-			return Diagnostic::at(
-				&statement,
-				format!(
-					"on every needs a constant duration like `on every 5 seconds {{…}}`, got {}",
-					duration.serialize().trim()
-				),
-			)
-			.into_error();
-		};
 		let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 		lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-		let start = [
-			symbol(crate::host::SIGNAL_EVERY),
-			Node::int(count as i64),
-			Node::int(milliseconds),
-		];
-		lowered.push(Node::List(start.to_vec(), Bracket::Round, Separator::None));
+		lowered.extend(channel_listen);
+		lowered.push(call(
+			crate::host::SIGNAL_LISTEN,
+			vec![Node::int(kind), id, Node::int(argument)],
+		));
 		count += 1;
 	}
 	Node::List(lowered, bracket, separator)
+}
+
+/// The kind and argument of signal_listen that start `on every <duration> {…}`: a time of day on some days, or a
+/// constant duration
+fn timer_start(statement: &Node, duration: &Node) -> Result<(i64, i64), Node> {
+	match clock_schedule(duration) {
+		Some(Ok((minute_of_day, weekdays))) => Ok((LISTEN_CLOCK, weekdays * CLOCK_WEEKDAYS + minute_of_day)),
+		Some(Err(ClockError::Days(days))) => Err(Diagnostic::at(
+			statement,
+			format!("on every … at needs day, a weekday (monday … sunday), weekday or weekend, got {days}"),
+		)
+		.into_error()),
+		Some(Err(ClockError::Time)) => Err(no_time_of_day(statement, "on every day at")),
+		None => crate::units::milliseconds(duration)
+			.map(|milliseconds| (LISTEN_EVERY, milliseconds))
+			.ok_or_else(|| {
+				Diagnostic::at(
+					statement,
+					format!(
+						"on every needs a constant duration like `on every 5 seconds {{…}}`, got {}",
+						duration.serialize().trim()
+					),
+				)
+				.into_error()
+			}),
+	}
 }
 
 /// `on message {body}`, `on message from "chat" {body}`, and named events from other programs:

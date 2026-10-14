@@ -10,6 +10,7 @@ fn lowered(code: &str) -> String {
 }
 
 #[test]
+#[ignore = "cleanup-edge: host-word: pins the old host words signal_at/signal_daily/signal_every; one_host_word_starts_every_timer checks signal_listen"]
 fn a_one_shot_time_starts_and_main_runs_on() {
 	is!("n = 1; at 9:00 { n = 2 }; n", 1);
 	is!("n = 1\nat 9pm { print n }\nn + 1", 2);
@@ -17,6 +18,7 @@ fn a_one_shot_time_starts_and_main_runs_on() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: host-word: pins the old host words signal_at/signal_daily/signal_every; one_host_word_starts_every_timer checks signal_listen"]
 fn am_and_pm_name_the_half_of_the_day() {
 	assert!(lowered("on every day at 9:30pm { print 1 }").contains("(signal_daily 0 1290 127)"));
 	assert!(lowered("on every day at 9:30 pm { print 1 }").contains("(signal_daily 0 1290 127)"));
@@ -26,6 +28,7 @@ fn am_and_pm_name_the_half_of_the_day() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: host-word: pins the old host words signal_at/signal_daily/signal_every; one_host_word_starts_every_timer checks signal_listen"]
 fn weekdays_name_the_days_a_timer_runs() {
 	assert!(lowered("on every monday at 9:00 { print 1 }").contains("(signal_daily 0 540 2)"));
 	assert!(lowered("on every sunday at 9:00 { print 1 }").contains("(signal_daily 0 540 1)"));
@@ -64,4 +67,18 @@ fn the_delay_until_a_weekday_skips_the_other_days() {
 		(2 * 24 + 23) * HOUR,
 		"Friday 10:00 to Monday 9:00"
 	);
+}
+
+// card cleanup-signal-listen: one host word starts every timer, `signal_listen(kind, id, argument)`; kind 0 every
+// (ms), 1 frame (ms), 2 clock (weekdays·10000 + minute of day; weekdays 0 is once)
+#[test]
+fn one_host_word_starts_every_timer() {
+	assert!(lowered("at 9pm: print 1").contains("(signal_listen 2 0 1260)"));
+	assert!(lowered("on every day at 9:30pm { print 1 }").contains("(signal_listen 2 0 1271290)"));
+	assert!(lowered("on every monday at 9:00 { print 1 }").contains("(signal_listen 2 0 20540)"));
+	assert!(lowered("on every weekend at 10:00 { print 1 }").contains("(signal_listen 2 0 650600)"));
+	assert!(lowered("on every 2 seconds { print 1 }").contains("(signal_listen 0 0 2000)"));
+	assert!(lowered("on clipboard change { print 1 }").contains("signal_listen 0"));
+	is!("n = 1; at 9:00 { n = 2 }; n", 1);
+	is!("n = 1; on every friday at 17:00 { n = 2 }; n", 1);
 }

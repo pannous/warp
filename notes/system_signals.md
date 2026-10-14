@@ -138,7 +138,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   (it sleeps in 10 ms slices once watching) and runs the handler. Test: tests/control/test_system_signals.rs
   (a real `warp run` gets a real SIGINT). The playground's host.js has `signal_poll` as a no-op.
 - Timers (P120, 2026-10-06): `on every 50 ms {…}` (src/lowering/system_signals.rs) is the handler `on·every·N()` and
-  `signal_every(N, ms)` where it is written; the runtime (crates/warp-runtime/src/system_signals.rs) runs due handlers
+  `signal_listen(0, N, ms)` (one host word starts every timer, kind 0 every / 1 frame / 2 clock) where it is written; the runtime (crates/warp-runtime/src/system_signals.rs) runs due handlers
   at every check point (loop starts, sleeps, which wake for them, main's start and end). `warp run`, `warp <file>` and
   executables stay after main while a timer lives and say so once on stderr ("listening: every 5 seconds (ctrl-c to
   stop)"); in-process eval and tests never wait. Only a program with `on interrupt` watches ctrl-c: any other ends at
@@ -160,8 +160,8 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   host.js withExitHandler in the page. `event` is ø for now (the exit code would need a host-built Int).
   Test: tests/control/test_exit_signal.rs.
 - Times of day (P135, user: `on every day at 9:00 {…}`, and `at 9:00 {…}` runs once; card time-day): the timer
-  handler `on·every·N` started by `signal_daily(N, minute_of_day, weekdays)` or, for `at 9:00 {…}`,
-  `signal_at(N, minute_of_day)`. `weekdays` is a mask, bit 0 Sunday … bit 6 Saturday (C's tm_wday): `day` 127,
+  handler `on·every·N` started by `signal_listen(2, N, weekdays·10000 + minute_of_day)`, weekdays 0 for
+  `at 9:00 {…}` (once). `weekdays` is a mask, bit 0 Sunday … bit 6 Saturday (C's tm_wday): `day` 127,
   `monday` (or `mondays`) 2, `weekday` Monday to Friday 62, `weekend` 65. Times are `21:30`, `9:30pm`, `9:30 pm`,
   `9pm`, `9 pm` (12am is 0:00, 12pm noon); `at 13pm`, `25:00` are "needs a time of day", an unknown day word names the
   day words. Each next time is computed from the local clock anew (libc localtime_r, UTC without it), so summer time
@@ -169,7 +169,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   "listening: every monday at 9:00"). Tests: tests/control/test_daily_timer.rs, test_time_of_day.rs.
   Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings.
 - Frames (card frame-event, user TODOs in samples/shader_brush.warp, 2026-10-12): `on frame {…}` is the handler
-  `on·every·N` started by `signal_frame(N, 16)` (Trigger::WindowShows): it runs every 16 ms while the paint window
+  `on·every·N` started by `signal_listen(1, N, 16)` (Trigger::WindowShows): it runs every 16 ms while the paint window
   shows and the timer ends as the window closes, so `warp run` ends with the window; without a window (headless) it
   runs once, one paint = one PNG. "listening: …" leaves frames out. The page (host-timers.js) runs it every 16 ms until
   the next run: its canvas always shows. Replaces `while window_open { …; sleep 16ms }`.
@@ -224,8 +224,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   ctrl-break; the rule shared with Unix is `ctrl_c_ends_run` (tests/control/test_ctrl_c_rule.rs); checked by
   `cargo check --target x86_64-pc-windows-gnu -p warp-runtime`, never run on Windows yet.
 - Not yet: directories and `created` / `deleted` as separate events, `stop listening`.
-- Timers in the playground (2026-10-06, branch web-showcase): host.js records `signal_every` / `signal_daily` /
-  `signal_at` while main runs, worker.js starts them after it (setInterval, setTimeout to the next local time) until
+- Timers in the playground (2026-10-06, branch web-showcase): host.js records the `signal_listen` timers while main runs, worker.js starts them after it (setInterval, setTimeout to the next local time) until
   the next run; each tick runs `on·every·N` and shows the output binding `page·value` (event_signals.rs makes it for
   programs with timers too). A host without a page loop (test-worker.js) still only warns.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the

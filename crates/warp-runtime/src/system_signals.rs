@@ -3,12 +3,15 @@
 //! with such handlers) and `sleep`, which wakes for them. `on interrupt {…}` is `on·interrupt`, run after a ctrl-c:
 //! the first poll installs the ctrl-c handler (Unix SIGINT, Windows SetConsoleCtrlHandler), which only sets a flag; a
 //! second ctrl-c within a second, or before the handler ran, ends the run at once (exit code 130), so a handler that
-//! ignores ctrl-c never makes a program unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_every(0, 5000)` where the handler is
+//! ignores ctrl-c never makes a program unstoppable. `on every 5 seconds {…}` is `on·every·0`, started by `signal_listen(0, 0, 5000)` where the handler is
 //! declared. `on file "notes.txt" change {…}` is `on·file·0`, started by `signal_watch(0, "notes.txt")`: a timer of
 //! FILE_CHECK_PERIOD that fires only when the file's modification time or size changed (it appeared, was written, or went).
 //! `users := fetch url` runs on·fetch·0 once the reply arrived (await_ready, src/web/fetches.rs).
 //! A run that allows it (`warp run`, built executables) stays after main while a timer or watch lives.
-use crate::host_words::{EXIT_HANDLER, FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, SHARED_HANDLER, TIMER_HANDLER_PREFIX};
+use crate::host_words::{
+	CLOCK_WEEKDAYS, EXIT_HANDLER, FILE_HANDLER_PREFIX, INTERRUPT_HANDLER, LISTEN_CLOCK, LISTEN_FRAME, SHARED_HANDLER,
+	TIMER_HANDLER_PREFIX,
+};
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -233,50 +236,25 @@ pub fn forget_timers() {
 	TIMERS.with(|timers| timers.borrow_mut().clear());
 }
 
-/// `signal_every(id, milliseconds)`: the handler on·every·id runs every that many milliseconds from now on
-pub fn start_timer(id: i64, milliseconds: i64) {
-	add_timer(
-		format!("{TIMER_HANDLER_PREFIX}{id}"),
-		Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)),
-		Trigger::Always,
-	);
-}
-
-/// `signal_daily(id, minute_of_day, weekdays)`: the handler on·every·id runs at that local time of day on the
-/// weekdays of the mask (bit 0 Sunday … bit 6 Saturday)
-pub fn start_daily_timer(id: i64, minute_of_day: i64, weekdays: i64) {
-	add_timer(
-		format!("{TIMER_HANDLER_PREFIX}{id}"),
-		Repeat::Clock {
-			minute_of_day,
-			weekdays,
-			once: false,
-		},
-		Trigger::Always,
-	);
-}
-
-/// `signal_frame(id, milliseconds)`: the handler on·every·id runs each frame (that many milliseconds) while the paint
-/// window shows, once without one
-pub fn start_frame_timer(id: i64, milliseconds: i64) {
-	add_timer(
-		format!("{TIMER_HANDLER_PREFIX}{id}"),
-		Repeat::Every(Duration::from_millis(milliseconds.max(1) as u64)),
-		Trigger::WindowShows { ran: false },
-	);
-}
-
-/// `signal_at(id, minute_of_day)`: the handler on·every·id runs once, at the next such local time of day
-pub fn start_one_shot_timer(id: i64, minute_of_day: i64) {
-	add_timer(
-		format!("{TIMER_HANDLER_PREFIX}{id}"),
-		Repeat::Clock {
-			minute_of_day,
-			weekdays: EVERY_DAY,
-			once: true,
-		},
-		Trigger::Always,
-	);
+/// `signal_listen(kind, id, argument)`: the handler on·every·id runs every `argument` milliseconds (LISTEN_EVERY), each
+/// frame of that many milliseconds while the paint window shows, once without one (LISTEN_FRAME), or at a local time
+/// of day (LISTEN_CLOCK: weekdays · CLOCK_WEEKDAYS + minute of day, weekdays a mask with bit 0 Sunday, 0 once)
+pub fn listen(kind: i64, id: i64, argument: i64) {
+	let every = Repeat::Every(Duration::from_millis(argument.max(1) as u64));
+	let (repeat, trigger) = match kind {
+		LISTEN_FRAME => (every, Trigger::WindowShows { ran: false }),
+		LISTEN_CLOCK => {
+			let weekdays = argument / CLOCK_WEEKDAYS;
+			let clock = Repeat::Clock {
+				minute_of_day: argument % CLOCK_WEEKDAYS,
+				weekdays: if weekdays == 0 { EVERY_DAY } else { weekdays },
+				once: weekdays == 0,
+			};
+			(clock, Trigger::Always)
+		}
+		_ => (every, Trigger::Always),
+	};
+	add_timer(format!("{TIMER_HANDLER_PREFIX}{id}"), repeat, trigger);
 }
 
 /// The handler `handler` runs once, at the first check point after `ready()` holds (a fetch's reply arrived); it
