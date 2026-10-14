@@ -252,7 +252,7 @@ fn written_attribute(item: &Node) -> Option<(String, &Node)> {
 	let Node::Symbol(name) = name.drop_meta() else {
 		return None;
 	};
-	if crate::web::markup::is_element_tag(name) {
+	if crate::web::markup::is_element_tag(name) || crate::web::markup::is_custom_element(name) {
 		return None;
 	}
 	Some((name.clone(), value.drop_meta()))

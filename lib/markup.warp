@@ -40,7 +40,12 @@ html_render(value:any, scope:any, chosen:any) := {
 	html_escaped(html_plain(value))
 }
 
-html_is_element(value:any) := value is pair and contains(html_elements, keys(value)#1)
+html_is_element(value:any) := html_is_listed_element(value) or (value is pair and html_is_custom_element(keys(value)#1))
+
+html_is_listed_element(value:any) := value is pair and contains(html_elements, keys(value)#1)
+
+// `my-card{…}`: a page's own element is named with a dash, unlike data-, aria- and the listed attributes (decision unknown-tag)
+html_is_custom_element(name:any) := name is text and contains(name, "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag:any, content:any, scope:any, chosen:any) := {
 	let items = html_items(content)
@@ -140,9 +145,10 @@ html_attribute(item:any) := {
 // `li{ key: todo.id … }` names a list item: the attribute data-warp-key, by which the page moves its element
 html_attribute_name(name:any) := if name == "key" then "data-warp-key" else name
 
-// `{ color: theme padding: 8 }`: a block of CSS properties with plain values
+// `{ color: theme padding: 8 }`: a block of CSS properties with plain values; a dashed one (`color-scheme: dark`) is
+// no custom element
 html_is_declarations(value:any) := {
-	if html_is_element(value) { return false }
+	if html_is_listed_element(value) { return false }
 	let items = html_items(value)
 	if count(items) == 0 { return false }
 	for item in items {

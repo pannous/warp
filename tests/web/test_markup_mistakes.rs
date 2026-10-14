@@ -124,3 +124,15 @@ fn a_nested_data_map_is_no_markup() {
 	let code = "response = {status: 200, body: {user: {age: 31}}}\nif response is {body: {user: {age}}} then age";
 	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
 }
+
+/// card dash-element (decision unknown-tag): a custom element is named with a dash and renders as one, without a warning
+#[test]
+fn a_custom_element_with_a_dash_renders() {
+	warp::diagnostic::take_runtime_warnings();
+	let html = warp::web::markup::to_html(&eval("div{ my-thing{ \"x\" } }"));
+	assert_eq!(html, "<div><my-thing>x</my-thing></div>");
+	let at_run_time = warp::diagnostic::take_runtime_warnings();
+	assert!(at_run_time.is_empty(), "{at_run_time:?}");
+	let attributes = warp::web::markup::to_html(&eval("div{ data-x: 1 aria-label: \"l\" \"hi\" }"));
+	assert_eq!(attributes, "<div data-x=\"1\" aria-label=\"l\">hi</div>");
+}
