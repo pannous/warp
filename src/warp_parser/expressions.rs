@@ -296,13 +296,6 @@ impl WarpParser {
 		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
 			return None;
 		}
-		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
-		// dividend, as C)
-		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
-			if self.matches_keyword(word) {
-				return Some((SpecialInfix::Keyword(op), word.len(), op.binding_power()));
-			}
-		}
 		// Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`;
 		// `div{…}` and `div {…}` are the html tag, and data never computes
 		let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
