@@ -103,13 +103,6 @@ pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = [
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
-/// The int scratch local that holds the left operand of `and`/`or` between its test and the branch that returns it
-const LOGICAL_SCRATCH: u32 = 2;
-
-/// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
-const LIBM_POW: &str = "m.pow";
-/// ffi_imports key of libm's cbrt for ∛ of a run-time value
-const LIBM_CBRT: &str = "m.cbrt";
 
 /// The condition and the then-branch of `if condition then branch`
 /// The call `join(list, separator)`: the items' text forms with the separator between them
@@ -127,16 +120,6 @@ pub(super) fn join_call(list: Node, separator: &str) -> Node {
 
 pub(super) fn joined_text(items: &[Node], separator: &str) -> Node {
 	join_call(Node::List(items.to_vec(), Bracket::Square, Separator::Space), separator)
-}
-
-fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
-	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else {
-		return None;
-	};
-	let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else {
-		return None;
-	};
-	Some((condition, then_branch))
 }
 
 pub use config::EmitterConfig;
@@ -506,53 +489,6 @@ impl WasmGcEmitter {
 			// For other nodes, use analyzer's infer_type
 			_ => infer_type(node, &self.scope),
 		}
-	}
-
-	/// Check if an expression is numeric (int, float, or bool)
-	fn is_numeric(&self, node: &Node) -> bool {
-		let node = node.drop_meta();
-		match node {
-			Node::Number(_) | Node::True | Node::False => true,
-			// `"a"*n` repeats and `"a"+"b"` joins texts: arithmetic that is no number
-			Node::Key(_left, op, _right) if op.is_arithmetic() => {
-				!matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
-			}
-			Node::Key(_left, op, _right) if op.is_shift() || op.is_comparison() => true,
-			Node::Key(left, op, right) if op.is_logical() || op.is_bitwise() => {
-				self.is_numeric(left) && self.is_numeric(right)
-			}
-			// `not x` is always 1 or 0
-			Node::Key(left, Op::Not, _) if left.is_empty_node() => true,
-			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
-			// grouping: `(1==2)` is the number it computes
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_numeric(&items[0]),
-			Node::Symbol(name) => {
-				// Check if symbol is a known numeric variable
-				if let Some(local) = self.scope.lookup(name) {
-					matches!(local.kind, Kind::Int | Kind::Float)
-				} else if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
-					matches!(kind, Kind::Int | Kind::Float)
-				} else {
-					false
-				}
-			}
-			_ => false, // Empty, Text, Char, List, etc. are not numeric
-		}
-	}
-
-	/// Emit comparison operator for f64 (result is i32, extended to i64)
-	fn emit_float_comparison(&self, func: &mut Function, op: &Op) {
-		let cmp = match op {
-			Op::Eq => I::F64Eq,
-			Op::Ne => I::F64Ne,
-			Op::Lt => I::F64Lt,
-			Op::Gt => I::F64Gt,
-			Op::Le => I::F64Le,
-			Op::Ge => I::F64Ge,
-			_ => unreachable!("Not a comparison op: {:?}", op),
-		};
-		func.instruction(&cmp);
-		func.instruction(&I::I64ExtendI32U);
 	}
 
 	/// The linear memory, exported as `memory`: defined, or imported with a function table by `use { memory, table } from "env"`

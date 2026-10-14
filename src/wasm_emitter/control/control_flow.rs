@@ -469,3 +469,13 @@ fn last_statement(node: &Node) -> &Node {
 		_ => node,
 	}
 }
+
+pub(crate) fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
+	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else {
+		return None;
+	};
+	let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else {
+		return None;
+	};
+	Some((condition, then_branch))
+}
