@@ -83,16 +83,12 @@ impl WasmGcEmitter {
 	/// the trapping function)
 	pub(in crate::wasm_emitter) fn emit_error_body(&self, func: &mut Function, error_id: i32) {
 		if let Some(catching) = self.error_catching {
-			Self::emit_list(
-				func,
-				&[
-					I::GlobalGet(catching.depth_global),
-					I::If(BlockType::Empty),
-					I::I32Const(error_id),
-					I::Throw(catching.tag),
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::GlobalGet(catching.depth_global), I::If(BlockType::Empty),
+					I::I32Const(error_id), I::Throw(catching.tag),
+				I::End,
+			]);
 		}
 		func.instruction(&I::Unreachable);
 	}
@@ -105,15 +101,11 @@ impl WasmGcEmitter {
 		let Some(catching) = self.error_catching.filter(|_| left > 0) else {
 			return;
 		};
-		Self::emit_list(
-			func,
-			&[
-				I::GlobalGet(catching.depth_global),
-				I::I32Const(left as i32),
-				I::I32Sub,
-				I::GlobalSet(catching.depth_global),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::GlobalGet(catching.depth_global), I::I32Const(left as i32), I::I32Sub,
+			I::GlobalSet(catching.depth_global),
+		]);
 	}
 
 	/// `ran_without_error{statement}` as i64: 1 when the statement finished, 0 when a runtime error was thrown in it.
@@ -146,15 +138,11 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(node_ref))]);
 		let names = self.runtime_error_names();
 		for (id, name) in names.iter().enumerate() {
-			Self::emit_list(
-				func,
-				&[
-					I::GlobalGet(catching.caught_global),
-					I::I32Const(id as i32),
-					I::I32Eq,
-					I::If(BlockType::Result(node_ref)),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::GlobalGet(catching.caught_global), I::I32Const(id as i32), I::I32Eq,
+				I::If(BlockType::Result(node_ref)),
+			]);
 			if *name == super::super::lists::list_ops::RETURNED_ERROR {
 				let detail = self.trap_detail_global();
 				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);

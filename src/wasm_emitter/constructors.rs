@@ -52,43 +52,23 @@ impl WasmGcEmitter {
 		let node = Ref(self.node_ref(false));
 		let (node_type, i64_box) = (self.type_manager.node_type, self.type_manager.i64_box_type);
 		self.exported_function(NEW_BOOL, vec![ValType::I64], vec![node], vec![], |_, func| {
-			Self::emit_list(
-				func,
-				&[
-					I::I64Const(type_kinds::BOOL_KIND),
-					I::LocalGet(0),
-					I::I64Const(0),
-					I::I64Ne,
-					I::I64ExtendI32U,
-					I::StructNew(i64_box),
-					I::RefNull(HeapType::Concrete(node_type)),
-					I::StructNew(node_type),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::I64Const(type_kinds::BOOL_KIND), I::LocalGet(0), I::I64Const(0), I::I64Ne, I::I64ExtendI32U,
+				I::StructNew(i64_box), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+			]);
 		});
 		let node_ref = Ref(self.node_ref(false));
 		self.runtime_function(AS_BOOL, vec![node_ref], vec![node_ref], vec![], |s, func| {
 			let field = |index: u32| I::StructGet { struct_type_index: node_type, field_index: index };
-			Self::emit_list(
-				func,
-				&[
-					I::LocalGet(0),
-					field(0),
-					I::I64Const(type_kinds::KIND_MASK),
-					I::I64And,
-					I::I64Const(Kind::Int as i64),
-					I::I64Eq,
-					I::LocalGet(0),
-					field(1),
-					I::RefTestNonNull(HeapType::Concrete(i64_box)),
-					I::I32And,
-					I::If(BlockType::Result(node_ref)),
-					I::LocalGet(0),
-					field(1),
-					I::RefCastNonNull(HeapType::Concrete(i64_box)),
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::LocalGet(0), field(0), I::I64Const(type_kinds::KIND_MASK), I::I64And, I::I64Const(Kind::Int as i64),
+				I::I64Eq, I::LocalGet(0), field(1), I::RefTestNonNull(HeapType::Concrete(i64_box)), I::I32And,
+				I::If(BlockType::Result(node_ref)),
+					I::LocalGet(0), field(1), I::RefCastNonNull(HeapType::Concrete(i64_box)),
 					I::StructGet { struct_type_index: i64_box, field_index: 0 },
-				],
-			);
+			]);
 			s.call(func, NEW_BOOL);
 			Self::emit_list(func, &[I::Else, I::LocalGet(0), I::End]);
 		});

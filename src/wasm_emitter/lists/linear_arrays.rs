@@ -234,52 +234,30 @@ impl WasmGcEmitter {
 		);
 		Self::emit_list(func, &[I::Block(wasm_encoder::BlockType::Empty), I::Loop(wasm_encoder::BlockType::Empty)]);
 		Self::emit_list(func, &[I::LocalGet(reading_left), I::LocalGet(pairs_end), I::I32GeU, I::BrIf(1)]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(lanes),
-				I::LocalGet(reading_left),
-				I::V128Load(PAIR_ALIGNED),
-				I::LocalGet(reading_right),
-				I::V128Load(PAIR_ALIGNED),
-				I::F64x2Mul,
-				I::F64x2Add,
-				I::LocalSet(lanes),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(lanes), I::LocalGet(reading_left), I::V128Load(PAIR_ALIGNED), I::LocalGet(reading_right),
+			I::V128Load(PAIR_ALIGNED), I::F64x2Mul, I::F64x2Add, I::LocalSet(lanes),
+		]);
 		for cursor in [reading_left, reading_right] {
 			Self::emit_list(func, &[I::LocalGet(cursor), I::I32Const(PAIR_BYTES), I::I32Add, I::LocalSet(cursor)]);
 		}
 		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(lanes),
-				I::F64x2ExtractLane(0),
-				I::LocalGet(lanes),
-				I::F64x2ExtractLane(1),
-				I::F64Add,
-				I::LocalSet(sum),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(lanes), I::F64x2ExtractLane(0), I::LocalGet(lanes), I::F64x2ExtractLane(1), I::F64Add,
+			I::LocalSet(sum),
+		]);
 		// an odd count: the last pair
 		Self::emit_list(func, &count);
 		Self::emit_list(func, &[I::I64Const(1), I::I64And, I::I32WrapI64, I::If(wasm_encoder::BlockType::Empty)]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(sum),
-				I::LocalGet(reading_left),
-				I::F64Load(CELL),
-				I::LocalGet(reading_right),
-				I::F64Load(CELL),
-				I::F64Mul,
-				I::F64Add,
-				I::LocalSet(sum),
-				I::End,
-				I::LocalGet(sum),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(sum), I::LocalGet(reading_left), I::F64Load(CELL), I::LocalGet(reading_right), I::F64Load(CELL),
+			I::F64Mul, I::F64Add, I::LocalSet(sum),
+			I::End,
+			I::LocalGet(sum),
+		]);
 	}
 
 	/// linear_new(count) -> address: a zeroed block (fresh pages, never reused) with its count in the header
@@ -288,32 +266,17 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(0), I::I64Const(0), I::I64LtS]);
 		self.emit_fail_if(func, "index_out_of_range");
 		// header + cells + room to align the start to 8
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(0),
-				I::I64Const(CELL_BYTES),
-				I::I64Mul,
-				I::I64Const(2 * CELL_BYTES - 1),
-				I::I64Add,
-				I::I32WrapI64,
-				I::LocalSet(length),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(0), I::I64Const(CELL_BYTES), I::I64Mul, I::I64Const(2 * CELL_BYTES - 1), I::I64Add,
+			I::I32WrapI64, I::LocalSet(length),
+		]);
 		self.emit_text_allocation(func, length, address);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(address),
-				I::I32Const(CELL_BYTES as i32 - 1),
-				I::I32Add,
-				I::I32Const(-(CELL_BYTES as i32)),
-				I::I32And,
-				I::LocalTee(address),
-				I::LocalGet(0),
-				I::I64Store(CELL),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(address), I::I32Const(CELL_BYTES as i32 - 1), I::I32Add, I::I32Const(-(CELL_BYTES as i32)),
+			I::I32And, I::LocalTee(address), I::LocalGet(0), I::I64Store(CELL),
+		]);
 		Self::emit_list(func, &[I::LocalGet(address), I::I64ExtendI32U]);
 	}
 

@@ -164,30 +164,18 @@ impl WasmGcEmitter {
 				vec![ValType::I64],
 				|_, func| {
 					let (base, exponent, result) = (0, 1, 2);
-					Self::emit_list(
-						func,
-						&[
-							I::I64Const(1),
-							I::LocalSet(result),
-							I::Block(BlockType::Empty),
+					#[rustfmt::skip]
+					Self::emit_list(func, &[
+						I::I64Const(1), I::LocalSet(result),
+						I::Block(BlockType::Empty),
 							I::Loop(BlockType::Empty),
-							I::LocalGet(exponent),
-							I::I64Eqz,
-							I::BrIf(1),
-							I::LocalGet(result),
-							I::LocalGet(base),
-							I::I64Mul,
-							I::LocalSet(result),
-							I::LocalGet(exponent),
-							I::I64Const(1),
-							I::I64Sub,
-							I::LocalSet(exponent),
-							I::Br(0),
-							I::End,
-							I::End,
-							I::LocalGet(result),
-						],
-					);
+								I::LocalGet(exponent), I::I64Eqz, I::BrIf(1),
+								I::LocalGet(result), I::LocalGet(base), I::I64Mul, I::LocalSet(result),
+								I::LocalGet(exponent), I::I64Const(1), I::I64Sub, I::LocalSet(exponent),
+								I::Br(0),
+						I::End, I::End,
+						I::LocalGet(result),
+					]);
 				},
 			);
 		}

@@ -127,19 +127,14 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(size), I::LocalGet(align), I::I32Add, I::LocalSet(padded)]);
 			s.emit_text_allocation(f, padded, address);
 			Self::emit_aligned_up(f, address, I::LocalGet(align));
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(old_size),
-					I::If(BlockType::Empty),
-					I::LocalGet(address),
-					I::LocalGet(old),
-					I::LocalGet(old_size),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(old_size), I::If(BlockType::Empty),
+					I::LocalGet(address), I::LocalGet(old), I::LocalGet(old_size),
 					I::MemoryCopy { src_mem: 0, dst_mem: 0 },
-					I::End,
-					I::LocalGet(address),
-				],
-			);
+				I::End,
+				I::LocalGet(address),
+			]);
 		});
 	}
 
@@ -337,15 +332,11 @@ impl WasmGcEmitter {
 		}
 		match (return_area, context) {
 			(Some(area), None) => {
-				Self::emit_list(
-					f,
-					&[
-						I::I32Const(area),
-						I::I32Load(WORD),
-						I::I32Const(area),
-						I::I32Load(MemArg { offset: LENGTH_OFFSET, ..WORD }),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I32Const(area), I::I32Load(WORD), I::I32Const(area),
+					I::I32Load(MemArg { offset: LENGTH_OFFSET, ..WORD }),
+				]);
 				self.emit_call(f, "new_text");
 			}
 			(Some(_), Some(kind)) => self

@@ -211,17 +211,13 @@ impl WasmGcEmitter {
 	fn emit_error_message(&mut self, func: &mut Function, error: &Node) {
 		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
 		self.emit_node_instructions(func, error);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalSet(held),
-				I::I64Const(Kind::Text as i64),
-				I::LocalGet(held),
-				I::StructGet { struct_type_index: node_type, field_index: 1 },
-				I::RefNull(HeapType::Concrete(node_type)),
-				I::StructNew(node_type),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalSet(held),
+			I::I64Const(Kind::Text as i64), I::LocalGet(held),
+			I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefNull(HeapType::Concrete(node_type)),
+			I::StructNew(node_type),
+		]);
 	}
 
 	/// The text of a Node of unknown kind, as list_text writes the one item of a list: "[1 2]" for a list, "{a:1 b:2}" for
@@ -499,38 +495,18 @@ impl WasmGcEmitter {
 	/// The i64 on the stack as an i32 code point: a digit its digit character, a number no character has a trap
 	fn emit_code_point_of_int(&mut self, func: &mut Function) {
 		let held = self.scratch(0);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalTee(held),
-				I::I64Const(0),
-				I::I64LtS,
-				I::LocalGet(held),
-				I::I64Const(LAST_CODE_POINT),
-				I::I64GtS,
-				I::I32Or,
-				I::LocalGet(held),
-				I::I64Const(FIRST_SURROGATE),
-				I::I64Sub,
-				I::I64Const(SURROGATE_COUNT),
-				I::I64LtU,
-				I::I32Or,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalTee(held), I::I64Const(0), I::I64LtS, I::LocalGet(held), I::I64Const(LAST_CODE_POINT), I::I64GtS,
+			I::I32Or, I::LocalGet(held), I::I64Const(FIRST_SURROGATE), I::I64Sub, I::I64Const(SURROGATE_COUNT),
+			I::I64LtU, I::I32Or,
+		]);
 		self.emit_fail_if(func, INVALID_CODE_POINT);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(held),
-				I::I32WrapI64,
-				I::LocalGet(held),
-				I::I64Const(10),
-				I::I64LtU,
-				I::I32Const('0' as i32),
-				I::I32Mul,
-				I::I32Add,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(held), I::I32WrapI64, I::LocalGet(held), I::I64Const(10), I::I64LtU, I::I32Const('0' as i32),
+			I::I32Mul, I::I32Add,
+		]);
 	}
 
 	/// `x as bool`, a bool: a literal's truth known at compile time, else non-zero is true
@@ -606,62 +582,37 @@ impl WasmGcEmitter {
 			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
 			Self::emit_list(f, &[I::If(BlockType::Empty)]);
 			s.emit_text_bounds(f, start, end);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(start),
-					I::LocalSet(slash),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(start), I::LocalSet(slash),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(slash),
-					I::LocalGet(end),
-					I::I32GeU,
-					I::BrIf(1),
-					I::LocalGet(slash),
-					I::I32Load8U(BYTE),
-					I::I32Const(RATIO_SLASH),
-					I::I32Eq,
-					I::If(BlockType::Empty),
-					I::LocalGet(start),
-					I::LocalGet(slash),
-					I::LocalGet(start),
-					I::I32Sub,
-				],
-			);
+						I::LocalGet(slash), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+						I::LocalGet(slash), I::I32Load8U(BYTE), I::I32Const(RATIO_SLASH), I::I32Eq,
+						I::If(BlockType::Empty),
+							I::LocalGet(start), I::LocalGet(slash), I::LocalGet(start), I::I32Sub,
+			]);
 			s.call(f, "new_text");
 			s.call(f, lists::list_ops::TEXT_AS_INT);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(slash),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalGet(end),
-					I::LocalGet(slash),
-					I::I32Sub,
-					I::I32Const(1),
-					I::I32Sub,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalGet(end), I::LocalGet(slash), I::I32Sub,
+				I::I32Const(1), I::I32Sub,
+			]);
 			s.call(f, "new_text");
 			s.call(f, lists::list_ops::TEXT_AS_INT);
 			s.call(f, "exact_div");
 			s.call(f, "new_int");
-			Self::emit_list(
-				f,
-				&[
-					I::Return,
-					I::End,
-					I::LocalGet(slash),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(slash),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Return,
+				I::End,
+				I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalSet(slash),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::End,
+			]);
 			// else its float: an Int when whole and in range
 			f.instruction(&I::LocalGet(0));
 			s.call(f, lists::list_ops::TEXT_AS_FLOAT);
@@ -672,16 +623,10 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &float);
 			Self::emit_list(f, &[I::F64Eq]);
 			Self::emit_list(f, &float);
-			Self::emit_list(
-				f,
-				&[
-					I::F64Abs,
-					I::F64Const(I64_RANGE_LIMIT.into()),
-					I::F64Lt,
-					I::I32And,
-					I::If(BlockType::Result(node_ref)),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32And, I::If(BlockType::Result(node_ref)),
+			]);
 			Self::emit_list(f, &float);
 			f.instruction(&I::I64TruncF64S);
 			s.emit_int_from_machine_in(f, bits);
@@ -753,17 +698,11 @@ impl WasmGcEmitter {
 	/// emit_truncating_cast through the i64 local `value_bits` (a runtime function has no scratch locals)
 	pub(crate) fn emit_truncating_cast_via(&mut self, func: &mut Function, value_bits: u32) {
 		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(value_bits),
-				I::F64ReinterpretI64,
-				I::F64Abs,
-				I::F64Const(I64_RANGE_LIMIT.into()),
-				I::F64Lt,
-				I::I32Eqz,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(value_bits), I::F64ReinterpretI64, I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt,
+			I::I32Eqz,
+		]);
 		self.emit_fail_if(func, "float_out_of_int_range");
 		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
 		self.emit_int_from_machine_in(func, value_bits);
