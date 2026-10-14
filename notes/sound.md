@@ -215,8 +215,14 @@ their cumulated seconds reach (no drift), so the voice goes on after the cycle; 
 step of a group by swing·step/3 (1: triplet feel). `live_loop 4 { … }` is `live_voice = go { for … 0..4 { … } }`
 (music_words.rs lower_live_loops, before go_blocks): a voice of its own on the beat clock, so loops and `play` overlap; `await live_voice`
 waits for the last loop (renders after live loops need it: the task adds its sounds when it runs).
-Still open: seeded randomness (`?`), `<a b>` alternation per cycle, `_` elongation (card pattern-extras), an endless loop (card live-redefine) whose block is redefined while
-it plays (needs the playground's live reload and voice stealing), a loop name for several awaits.
+Built (card pattern-extras): `<a b c>` one item per cycle in turn (a nested `<>` turns on its own visits: `<c4 <~ e4>>` is
+c4 ~ c4 e4), `c4 _ e4` / `c4@2 e4` weights (c4 two steps of three), `c4?` / `c4?0.3` sounds in that share of cycles. A cycle is
+how often the voice played the same pattern text before (lib pattern_cycle, the texts kept in `patterns_played`; a task
+counts its own). The chance is a hash of `pattern_seed` (setting, 0), the cycle and the item's place, not random(): the same
+each run and each render, and the program's own random sequence stays untouched. `live_loop drums 4 { … }` names the voice
+(`await drums`), the unnamed form keeps `live_voice`.
+Still open: an endless loop (card live-redefine) whose block is redefined while it plays (needs the playground's live
+reload and voice stealing).
 
 ## Our own API or the platform's? (card our-sound)
 
