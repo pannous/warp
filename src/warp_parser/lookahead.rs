@@ -2,15 +2,16 @@
 
 use super::*;
 
-/// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
-/// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
 /// `∜x`, read as `√√x`
 pub(super) const FOURTH_ROOT: char = '∜';
-pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [
+/// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x` (card g-1pvQ: norm is a synonym of abs),
+/// `not x`
+pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 5] = [
 	("sqrt", Op::Sqrt),
 	("cbrt", Op::Cbrt),
 	("abs", Op::Abs),
 	("norm", Op::Abs),
+	("not", Op::Not),
 ];
 /// operators::OPERATOR_SPELLINGS, the longest first: `<=` before `<`, `is less than` before `is`
 static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync::LazyLock::new(|| {
@@ -582,9 +583,6 @@ impl WarpParser {
 			.find(|(word, _)| self.matches_keyword(word))
 		{
 			return (!self.defines_named(word.len())).then_some((op, word.len()));
-		}
-		if self.matches_keyword("not") {
-			return Some((Op::Not, 3));
 		}
 		if self.matches_keyword("if") {
 			return Some((Op::If, 2));
