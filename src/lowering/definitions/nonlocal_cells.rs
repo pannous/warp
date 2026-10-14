@@ -144,7 +144,7 @@ fn main_lambdas(node: &Node, action: &mut impl FnMut(Vec<String>, &Node)) {
 		return;
 	}
 	match node.drop_meta() {
-		Node::Key(params, Op::FatArrow, body) => action(lambda_parameters(params), body),
+		Node::Key(params, Op::Arrow, body) => action(lambda_parameters(params), body),
 		Node::Key(left, _, right) => {
 			main_lambdas(left, action);
 			main_lambdas(right, action);
@@ -190,12 +190,12 @@ fn in_enclosing(node: Node, locals: &[String], count: &mut usize, hoisted: &mut 
 		return nonlocal_lambdas(key(head.clone(), op, shared).with_meta_of(&node), count);
 	}
 	match node {
-		Node::Key(lambda_params, Op::FatArrow, body) => {
+		Node::Key(lambda_params, Op::Arrow, body) => {
 			let params = lambda_parameters(&lambda_params);
 			let shared = shared_declarations(&body, &params, locals);
 			let body = nonlocal_lambdas(with_first(shared, *body), count);
 			if declared_nonlocals(&body).is_empty() {
-				return Node::Key(lambda_params, Op::FatArrow, Box::new(body));
+				return Node::Key(lambda_params, Op::Arrow, Box::new(body));
 			}
 			*count += 1;
 			let name = format!("{LAMBDA_PREFIX}{count}");
@@ -222,7 +222,7 @@ fn collect_locals(node: &Node, locals: &mut Vec<String>) {
 		return;
 	}
 	match node.drop_meta() {
-		Node::Key(_, Op::FatArrow, _) => {}
+		Node::Key(_, Op::Arrow, _) => {}
 		Node::Key(target, op, value) if *op == Op::Assign || op.is_compound_assign() => {
 			if let Node::Symbol(name) = target.drop_meta() {
 				if !locals.contains(name) {

@@ -14,10 +14,13 @@ use control::control_flow::LoopValues;
 mod declared_values;
 pub mod functions;
 mod values;
-pub use functions::closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub use functions::closures::{CAPTURE_EXPORT_PREFIX, CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub(crate) use host::wasi_emitter::{OUTPUT_CALLS, OUTPUT_WORDS};
+pub(crate) use lists::list_sharing::reads_collection;
+pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
 pub use constructors::NEW_BOOL;
-pub(crate) use numbers::casts::is_called_conversion;
+pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
 mod config;
 mod function_builder;
 mod import_manager;
@@ -35,7 +38,6 @@ pub(crate) mod text;
 mod type_manager;
 pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 pub(crate) mod host;
-const WASI_START: &str = "_start";
 
 pub use numbers::big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
 
@@ -71,85 +73,6 @@ const MEMORY: MemoryType = MemoryType {
 	shared: false,
 	page_size_log2: None,
 };
-/// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
-/// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
-pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
-/// The WASI output words besides print: each gives an Int (analyzer)
-pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
-/// Words that read a list or map without holding on to it, besides the counting words: `print m`, `type(xs)`, `m has k`
-const COLLECTION_READING_WORDS: [&str; 7] = ["print", "put", "string", "text", "type", "has", "contains"];
-
-/// `count(xs)`, `print m`, `xs has v`: a word given a collection variable reads it, the variable is not shared
-pub(super) fn reads_collection(word: &str) -> bool {
-	crate::analyzer::is_counting_word(word) || COLLECTION_READING_WORDS.contains(&word)
-}
-pub(crate) const OUTPUT_CALLS: [&str; 5] = [
-	"print",
-	OUTPUT_WORDS[0],
-	OUTPUT_WORDS[1],
-	OUTPUT_WORDS[2],
-	OUTPUT_WORDS[3],
-];
-
-/// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = [
-	"ceil",
-	"floor",
-	"round",
-	"round_half_up",
-	"round_half_even",
-	crate::warp_parser::FLOOR_QUOTIENT,
-];
-
-/// 2^63: floats with a magnitude at or beyond it do not fit an i64
-const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
-/// The int scratch local that holds the left operand of `and`/`or` between its test and the branch that returns it
-const LOGICAL_SCRATCH: u32 = 2;
-
-/// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
-const LIBM_POW: &str = "m.pow";
-/// ffi_imports key of libm's cbrt for ∛ of a run-time value
-const LIBM_CBRT: &str = "m.cbrt";
-
-/// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
-const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
-	("int_shift_", "a shift needs an integer and a count from 0 to 65536"),
-	("exact_pow", "an exact power needs an integer exponent"),
-];
-
-/// An index out of range in a program with an exclusive range is often an end the writer meant to include
-/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
-pub const TRAP_DETAIL: &str = "trap_detail";
-/// How a trapped run carries that value into its error: `trap detail: <value>`
-pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
-
-/// The condition and the then-branch of `if condition then branch`
-/// The call `join(list, separator)`: the items' text forms with the separator between them
-pub(super) fn join_call(list: Node, separator: &str) -> Node {
-	Node::List(
-		vec![
-			Node::Symbol("join".to_string()),
-			list,
-			Node::Text(separator.to_string()),
-		],
-		Bracket::Round,
-		Separator::None,
-	)
-}
-
-pub(super) fn joined_text(items: &[Node], separator: &str) -> Node {
-	join_call(Node::List(items.to_vec(), Bracket::Square, Separator::Space), separator)
-}
-
-fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
-	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else {
-		return None;
-	};
-	let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else {
-		return None;
-	};
-	Some((condition, then_branch))
-}
 
 pub use config::EmitterConfig;
 pub use import_manager::ImportManager;
@@ -520,53 +443,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Check if an expression is numeric (int, float, or bool)
-	fn is_numeric(&self, node: &Node) -> bool {
-		let node = node.drop_meta();
-		match node {
-			Node::Number(_) | Node::True | Node::False => true,
-			// `"a"*n` repeats and `"a"+"b"` joins texts: arithmetic that is no number
-			Node::Key(_left, op, _right) if op.is_arithmetic() => {
-				!matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
-			}
-			Node::Key(_left, op, _right) if op.is_shift() || op.is_comparison() => true,
-			Node::Key(left, op, right) if op.is_logical() || op.is_bitwise() => {
-				self.is_numeric(left) && self.is_numeric(right)
-			}
-			// `not x` is always 1 or 0
-			Node::Key(left, Op::Not, _) if left.is_empty_node() => true,
-			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
-			// grouping: `(1==2)` is the number it computes
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_numeric(&items[0]),
-			Node::Symbol(name) => {
-				// Check if symbol is a known numeric variable
-				if let Some(local) = self.scope.lookup(name) {
-					matches!(local.kind, Kind::Int | Kind::Float)
-				} else if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
-					matches!(kind, Kind::Int | Kind::Float)
-				} else {
-					false
-				}
-			}
-			_ => false, // Empty, Text, Char, List, etc. are not numeric
-		}
-	}
-
-	/// Emit comparison operator for f64 (result is i32, extended to i64)
-	fn emit_float_comparison(&self, func: &mut Function, op: &Op) {
-		let cmp = match op {
-			Op::Eq => I::F64Eq,
-			Op::Ne => I::F64Ne,
-			Op::Lt => I::F64Lt,
-			Op::Gt => I::F64Gt,
-			Op::Le => I::F64Le,
-			Op::Ge => I::F64Ge,
-			_ => unreachable!("Not a comparison op: {:?}", op),
-		};
-		func.instruction(&cmp);
-		func.instruction(&I::I64ExtendI32U);
-	}
-
 	/// The linear memory, exported as `memory`: defined, or imported with a function table by `use { memory, table } from "env"`
 	fn emit_memory(&mut self) {
 		let imported = |emitter: &Self, entity: &str| {
@@ -837,39 +713,6 @@ impl WasmGcEmitter {
 		self.string_table.allocate(s)
 	}
 
-	/// f64 on the stack → exact Int, truncated toward zero: the explicit casts `as int` and `int(x)`, and the
-	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
-	fn emit_truncating_cast(&mut self, func: &mut Function) {
-		self.emit_truncating_cast_via(func, self.scratch(0));
-	}
-
-	/// emit_truncating_cast through the i64 local `value_bits` (a runtime function has no scratch locals)
-	pub(super) fn emit_truncating_cast_via(&mut self, func: &mut Function, value_bits: u32) {
-		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(value_bits),
-				I::F64ReinterpretI64,
-				I::F64Abs,
-				I::F64Const(I64_RANGE_LIMIT.into()),
-				I::F64Lt,
-				I::I32Eqz,
-			],
-		);
-		self.emit_fail_if(func, "float_out_of_int_range");
-		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
-		self.emit_int_from_machine_in(func, value_bits);
-	}
-
-	/// A float has no implicit exact value: reading it as an Int is refused instead of truncated
-	fn emit_float_in_exact_context(&mut self, func: &mut Function, what: &str) {
-		let message = format!(
-			"{what} is a float where an exact Int is expected: use it in float arithmetic or truncate with `as int`"
-		);
-		self.emit_type_error(func, message);
-	}
-
 	/// Node locals not first assigned by a statement of the body itself (`if c { n = "a" } else { n = "b" }; n`) start
 	/// as ø: wasm reads a non-nullable local only after a set on every path, and a set inside a block ends with it.
 	/// So do Node locals a nested function captures: each call refreshes the captures, also one in the local's own
@@ -988,30 +831,8 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `_start`: main without its value, the entry WASI commands and WAGI (`warp build --wagi`) call
-	fn emit_wagi_start(&mut self) {
-		let start_type = self.type_manager.function_type(vec![], vec![]);
-		self.functions.function(start_type);
-		let mut func = Function::new(vec![]);
-		Self::emit_list(
-			&mut func,
-			&[I::Call(self.main_index.expect("main before _start")), I::Drop, I::End],
-		);
-		self.code.function(&func);
-		self.exports.export(WASI_START, ExportKind::Func, self.next_func_idx);
-		self.next_func_idx += 1;
-	}
-
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
 		self.string_table.collect_from_node(node, &mut self.scope);
-	}
-
-	/// A Key of its two sides on the stack, joined by `op` (list_text writes the op as written, a need when it is new)
-	fn emit_new_key(&mut self, func: &mut Function, op: &crate::operators::Op) {
-		let code = crate::operators::op_to_code(op);
-		self.discovered_needs.insert(Need::KeyOperator(code));
-		func.instruction(&I::I64Const(code));
-		self.emit_call(func, "new_key");
 	}
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
@@ -1320,4 +1141,10 @@ pub(crate) fn write_debug_module(bytes: &[u8]) {
 	if let Err(failure) = written {
 		warn!("could not write {}: {failure}", path.display());
 	}
+}
+
+/// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)
+pub(crate) fn items_info(items: &[Node], bracket: &Bracket, separator: &Separator) -> i64 {
+	let separator = if items.len() > 1 { separator } else { &Separator::None };
+	list_info(bracket, separator)
 }

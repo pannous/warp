@@ -29,7 +29,7 @@ build switch, silenced hints) sit in the header's ⋯ menu; the run time is a sm
 - Completion as you type (completion.js, card g_oQgw, like the Sublime packages Warp and Uniscript): words from the
   second letter (the words of the whole code first, then keywords, then examples and samples, by use), the standard modules after
   `use` (keywords.js `modules`, from src/modules.rs), uniscript entities after `\:` and `<:` (entities.tsv, a copy of
-  src/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
+  src/text/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
   Tab and Enter take the chosen one (the first unless Up/Down chose another); Enter after a word that is whole
   already (a keyword, a name of the code) is a new line. Tab after a word with no list open lists its completions from
   the first letter, or takes the only one; Claude's gray continuation goes before both (cards code-completion-must,

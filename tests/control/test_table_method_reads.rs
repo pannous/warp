@@ -3,7 +3,7 @@ use crate::is;
 
 // each program its own table: an in-memory database lives as long as its thread
 fn people(table: &str, rest: &str) -> String {
-	format!("class Person{{name: text; age: int}}\npeople: [Person] = database.{table}\npeople.add(Person(\"Al\", 40))\npeople.add(Person(\"Bo\", 30))\n{rest}")
+	format!("class Person{{name: text; age: int}}\nstored people: [Person] in \"{table}\"\npeople.add(Person(\"Al\", 40))\npeople.add(Person(\"Bo\", 30))\n{rest}")
 }
 
 #[test]

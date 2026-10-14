@@ -21,7 +21,7 @@ fn a_page_keeping_values_ships_no_sound() {
 
 #[test]
 fn a_page_with_a_table_ships_no_sound() {
-	let parts = part_files("class User{name: text}\nusers: [User] = database.users_parts\np{ count(users) }");
+	let parts = part_files("class User{name: text}\nstored users: [User] in \"users_parts\"\np{ count(users) }");
 	assert!(
 		parts.contains(&"host-files.js") && !parts.contains(&"host-sound.js"),
 		"{parts:?}"

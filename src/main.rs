@@ -5,6 +5,7 @@ use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
+use warp::util::{dirs_home, extract_after, file_exists, load_file};
 use warp::{
 	diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser, wasm_emitter,
 	web::markup,
@@ -95,8 +96,6 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
-/// `warp register`: Finder and `open` run .warp files (macOS, src/run/file_type.rs)
-const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -293,22 +292,6 @@ fn tip_hiding_hints_at_exit() {
 	unsafe { atexit(tip) };
 }
 
-#[cfg(all(not(test), target_os = "macos"))]
-fn register_file_type() {
-	match warp::run::file_type::register() {
-		Ok(app) => println!(
-			"registered .warp files: {} runs them in Terminal (Open With offers editors)",
-			app.display()
-		),
-		Err(failure) => fail(format!("warp register: {failure}")),
-	}
-}
-
-#[cfg(all(not(test), not(target_os = "macos")))]
-fn register_file_type() {
-	fail("warp register: only macOS so far");
-}
-
 /// `warp [run] prog.warp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
 #[cfg(not(test))]
 fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
@@ -437,8 +420,6 @@ fn run_command(args: &[String]) {
 		) {
 			fail(failure);
 		}
-	} else if args[1] == REGISTER_COMMAND {
-		register_file_type();
 	} else if args[1] == SERVE_COMMAND {
 		match served_program(&args[2..]) {
 			Ok((path, port)) => serve_file(path, port, "", false),
@@ -1307,27 +1288,4 @@ fn console() {
 
 	// Save history
 	let _ = rl.save_history(&history_path);
-}
-
-fn dirs_home() -> std::path::PathBuf {
-	env::var("HOME")
-		.map(std::path::PathBuf::from)
-		.unwrap_or_else(|_| std::path::PathBuf::from("."))
-}
-
-fn load_file(path: &str) -> String {
-	fs::read_to_string(path).unwrap_or_else(|_| {
-		eprintln!("Error: Could not read file '{}'", path);
-		String::new()
-	})
-}
-
-fn file_exists(path: &str) -> bool {
-	std::path::Path::new(path).exists()
-}
-
-fn extract_after(s: &str, sep: &str) -> String {
-	s.split_once(sep)
-		.map(|(_, after)| after.to_string())
-		.unwrap_or_default()
 }

@@ -7,7 +7,9 @@ use warp::wasm_emitter::eval;
 const CLASSES: &str = "class Team{name: text}\nclass Person{name: text; age: int; team: Team}";
 
 fn program(tables: &str, rest: &str) -> String {
-	format!("{CLASSES}\nteams: [Team] = database.teams_{tables}\npeople: [Person] = database.people_{tables}\n{rest}")
+	format!(
+		"{CLASSES}\nstored teams: [Team] in \"teams_{tables}\"\nstored people: [Person] in \"people_{tables}\"\n{rest}"
+	)
 }
 
 fn seeded(tables: &str) {

@@ -3,7 +3,7 @@
 //! `error message` makes an Error value of a text, the way a failed `read` reports.
 //! Offsets are bytes, not characters: code that scans UTF-8 itself (a parser, a binary index) needs them.
 
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
@@ -1309,4 +1309,21 @@ impl WasmGcEmitter {
 			s.call(f, "new_text");
 		});
 	}
+}
+
+/// The call `join(list, separator)`: the items' text forms with the separator between them
+pub(crate) fn join_call(list: Node, separator: &str) -> Node {
+	Node::List(
+		vec![
+			Node::Symbol("join".to_string()),
+			list,
+			Node::Text(separator.to_string()),
+		],
+		Bracket::Round,
+		Separator::None,
+	)
+}
+
+pub(crate) fn joined_text(items: &[Node], separator: &str) -> Node {
+	join_call(Node::List(items.to_vec(), Bracket::Square, Separator::Space), separator)
 }

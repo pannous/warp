@@ -11,6 +11,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use super::super::maps::map_backend::is_update;
 use crate::compiler::context::UserFunctionDef;
 
+/// Words that read a list or map without holding on to it, besides the counting words: `print m`, `type(xs)`, `m has k`
+pub(crate) const COLLECTION_READING_WORDS: [&str; 7] = ["print", "put", "string", "text", "type", "has", "contains"];
+
 /// Words that read a list without holding on to it, besides those reading any collection (reads_collection)
 const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, crate::words::RETURN_WORD];
 
@@ -228,4 +231,9 @@ fn root(place: &Node) -> String {
 		Node::Key(base, Op::Hash | Op::Dot, _) => root(base),
 		_ => String::new(),
 	}
+}
+
+/// `count(xs)`, `print m`, `xs has v`: a word given a collection variable reads it, the variable is not shared
+pub(crate) fn reads_collection(word: &str) -> bool {
+	crate::analyzer::is_counting_word(word) || COLLECTION_READING_WORDS.contains(&word)
 }

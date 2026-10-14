@@ -7,7 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{call, children_rewritten, is_type_word, key};
+use super::nodes::{call, children_rewritten, is_kinded_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
@@ -179,7 +179,7 @@ fn forms(node: Node) -> Node {
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => {
 			lambda(lambda_parameters(&left).expect("guarded"), forms(*body))
 		}
-		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
+		Node::Key(parameters, Op::Arrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(
 				parameters,
@@ -378,7 +378,7 @@ fn colon_case(case: &Node) -> Node {
 			words[1].clone()
 		}
 		// Kotlin's arms `1 -> a; else -> b` too
-		Node::Key(pattern, Op::FatArrow | Op::Arrow, body) => {
+		Node::Key(pattern, Op::Arrow, body) => {
 			let pattern = if pattern.is_symbol(WILDCARD) || pattern.is_symbol(ELSE_WORD) {
 				symbol(DEFAULT_CASE)
 			} else {
@@ -495,7 +495,7 @@ fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
 }
 
 fn lambda(parameters: Node, body: Node) -> Node {
-	key(parameters, Op::FatArrow, body)
+	key(parameters, Op::Arrow, body)
 }
 
 /// `[function (a, b)] {body}`: a function keyword with parameters and no name, then its body
@@ -609,12 +609,12 @@ fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
 	let mut merged: Vec<Node> = Vec::new();
 	for item in items {
 		// Go's function type `f func(int) int` is no lambda: its parameters and result are type words
-		let is_body = !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) && !is_type_word(&item);
+		let is_body = !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) && !is_kinded_type_word(&item);
 		let parameters = merged
 			.last()
 			.filter(|head| is_body && matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)))
 			.and_then(function_parameters);
-		match parameters.filter(|parameters| !is_type_word(parameters)) {
+		match parameters.filter(|parameters| !is_kinded_type_word(parameters)) {
 			Some(parameters) => {
 				merged.pop();
 				merged.push(lambda(parameters, item));
@@ -761,7 +761,7 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 fn without_result_type(rest: &[Node]) -> &[Node] {
 	match rest {
 		[result_type, body]
-			if is_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if is_kinded_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
 			&rest[1..]
 		}
@@ -827,7 +827,7 @@ fn ruby_lambda(items: &[Node]) -> Option<Node> {
 }
 
 fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
-	let Node::Key(parameters, Op::FatArrow, body) = value.drop_meta() else {
+	let Node::Key(parameters, Op::Arrow, body) = value.drop_meta() else {
 		return None;
 	};
 	let parameters = match parameters.drop_meta() {
@@ -945,8 +945,8 @@ fn function_parameters(head: &Node) -> Option<Node> {
 		// Go's `func(x int)`, `func(a, b int)`: the names, the types after them dropped
 		several => {
 			let names: Vec<Node> = several.iter().filter_map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(_) if !is_type_word(parameter) => Some(parameter.clone()),
-				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && !is_type_word(name)) => Some(words[0].clone()),
+				Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
+				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
 				_ => None,
 			}).collect();
 			match names.as_slice() {

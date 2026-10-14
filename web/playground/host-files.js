@@ -228,7 +228,7 @@ function takeDatabaseValue(name, value) {
 const byRowId = entries => entries.map(entry => [entry, Number(entry[0].match(ROW_KEY)?.[2] ?? 0)])
 	.sort((first, second) => first[1] - second[1]).map(([entry]) => entry);
 
-// `people: [Person] = database.people` (src/lowering/data/database_tables.rs): a table of the browser, kept in the database
+// `stored people: [Person]` (src/lowering/data/database_tables.rs): a table of the browser, kept in the database
 // store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/host/database.rs): its column types under the
 // table's key, each row, an object with its id, under its own (`table people.database.json people #3`), so a change
 // writes only its row. In memory a table holds its rows. Filters stay list comprehensions over the rows (no SQL here).

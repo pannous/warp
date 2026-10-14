@@ -5,7 +5,7 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
-use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment, Counter};
+use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
 use crate::analyzer::call_name;
 use crate::compiler::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -229,7 +229,7 @@ pub(crate) fn it_function(node: &Node) -> Option<Node> {
 	let is_bare = matches!(node.drop_meta(), Node::Symbol(_));
 	let it = || Box::new(symbol(IMPLICIT_PARAMETER));
 	(!is_bare && mentions_outside_blocks(node, IMPLICIT_PARAMETER))
-		.then(|| Node::Key(it(), Op::FatArrow, Box::new(node.clone())))
+		.then(|| Node::Key(it(), Op::Arrow, Box::new(node.clone())))
 }
 
 /// `a > b`, also as the one statement of a block, and any other bool: `a < b or a == b and c`, `if … then a < b else …`
@@ -247,7 +247,7 @@ fn unlabeled(function: Node) -> Node {
 	let is_label = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()));
 	match function.drop_meta() {
 		Node::Key(label, Op::Colon | Op::Assign, inner) if is_label(label) => inner.as_ref().clone(),
-		Node::Key(head, arrow @ (Op::Arrow | Op::FatArrow), body) => match head.drop_meta() {
+		Node::Key(head, arrow @ Op::Arrow, body) => match head.drop_meta() {
 			Node::Key(label, Op::Colon, parameters) if is_label(label) => {
 				Node::Key(parameters.clone(), *arrow, body.clone())
 			}
@@ -309,7 +309,7 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 /// `x=>body`, `(x y)->body` and the same in a group `(x=>body)` or a block
 pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
-		Node::Key(head, Op::Arrow | Op::FatArrow, body) => arrow_parts(head, body),
+		Node::Key(head, Op::Arrow, body) => arrow_parts(head, body),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
 		// Kotlin `{ x -> x*2 }`, `{ a: Int, b: Int -> a + b }`, Ruby `{ |x| x*2 }`, Swift `{ x in x*2 }` and `{ $0 * 2 }`
 		Node::List(items, Bracket::Curly, _) => match items.as_slice() {
@@ -382,10 +382,10 @@ fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
 fn c_style_parameters(head: &Node) -> Node {
 	// C#'s `int x`, Go's `x int`
 	let typed = |parameter: &Node| match parameter.drop_meta() {
-		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [kind, name] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_))) => {
+		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [kind, name] if is_kinded_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_))) => {
 			key(words[1].clone(), Op::Colon, words[0].clone())
 		}
-		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_)) && !is_type_word(name)) => {
+		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_)) && !is_kinded_type_word(name)) => {
 			key(words[0].clone(), Op::Colon, words[1].clone())
 		}
 		_ => parameter.clone(),
@@ -405,7 +405,7 @@ fn c_style_parameters(head: &Node) -> Node {
 			)
 		}
 		Node::List(words, Bracket::Round | Bracket::None, Separator::Space)
-			if words.len() == 2 && words.iter().any(is_type_word) && typed(head) != *head =>
+			if words.len() == 2 && words.iter().any(is_kinded_type_word) && typed(head) != *head =>
 		{
 			Node::List(vec![typed(head)], Bracket::Round, Separator::Colon)
 		}
@@ -491,7 +491,7 @@ fn mentions_outside_blocks(node: &Node, name: &str) -> bool {
 fn symbol_outside_blocks<'a>(node: &'a Node, wanted: &dyn Fn(&str) -> bool) -> Option<&'a Node> {
 	match node.drop_meta() {
 		Node::Symbol(symbol) if wanted(symbol) => Some(node),
-		Node::Key(_, Op::FatArrow, _) | Node::List(_, Bracket::Curly, _) => None,
+		Node::Key(_, Op::Arrow, _) | Node::List(_, Bracket::Curly, _) => None,
 		Node::Key(left, _, right) => {
 			symbol_outside_blocks(left, wanted).or_else(|| symbol_outside_blocks(right, wanted))
 		}
@@ -599,7 +599,7 @@ pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 			Separator::Colon,
 		),
 	};
-	Some(key(parameters, Op::FatArrow, lambda.body))
+	Some(key(parameters, Op::Arrow, lambda.body))
 }
 
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
@@ -827,7 +827,7 @@ impl Lowering {
 			// Python's `any(xs)`, `all(xs)`: the items themselves are the conditions
 			if let ([list], true) = (rest.as_slice(), is_call && TRUTH_WORDS.contains(&iteration.word)) {
 				let item = symbol(TRUTH_ITEM);
-				return self.iterate(iteration, list.clone(), vec![], key(item.clone(), Op::FatArrow, item));
+				return self.iterate(iteration, list.clone(), vec![], key(item.clone(), Op::Arrow, item));
 			}
 			let [list, extras @ .., function] = rest.as_slice() else {
 				return None;

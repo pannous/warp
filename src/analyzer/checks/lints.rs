@@ -147,7 +147,7 @@ pub(in crate::analyzer) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>
 			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
 				warnings.extend(and_or_warning(node, condition, then, right));
 			}
-			if *op == Op::As && is_arithmetic(left) {
+			if *op == Op::As && is_ungrouped_arithmetic(left) {
 				let diagnostic = Diagnostic::at(node, conversion_of_arithmetic_warning(left, right));
 				let written = format!("{} as {}", left.serialize(), right.serialize());
 				let readings = conversion_readings(left, right);
@@ -209,7 +209,7 @@ pub(super) fn is_float_literal_value(node: &Node) -> bool {
 	!matches!(node.drop_meta(), Node::Symbol(_)) && infer_type(node, &Scope::new()) == Kind::Float
 }
 
-/// `0.1 + 0.2 == 0.3` is no: decimals are floats, which `==` compares bit for bit (decision exact-default)
+/// `0.1f + 0.2 == 0.3` is false: decimals are floats, which `==` compares bit for bit (decision exact-default)
 pub(super) fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic {
 	let (a, b) = (left.serialize(), right.serialize());
 	let (a, b) = (a.trim(), b.trim());
@@ -219,9 +219,9 @@ pub(super) fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &N
 	};
 	Diagnostic::at(
 		node,
-		format!("`{written}` compares floats exactly: rounding makes 0.1 + 0.2 == 0.3 no"),
+		format!("`{written}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"),
 	)
-	.fix("use ≈")
+	.fix("use ≈ or exact numbers")
 	.offer("equal within rounding", written, similar)
 }
 
@@ -291,8 +291,8 @@ pub(in crate::analyzer) fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(
 }
 
 /// An ungrouped binary arithmetic expression: `2 * 1.5`, not `(2 * 1.5)`
-pub(in crate::analyzer) fn is_arithmetic(node: &Node) -> bool {
-	matches!(node, Node::Key(_, op, _) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow))
+pub(in crate::analyzer) fn is_ungrouped_arithmetic(node: &Node) -> bool {
+	matches!(node, Node::Key(_, op, _) if op.is_arithmetic())
 }
 
 pub(in crate::analyzer) fn conversion_of_arithmetic_warning(left: &Node, right: &Node) -> String {

@@ -773,7 +773,7 @@ impl Rewrite<'_> {
 /// the kernel's name (wasm_emitter/linear_arrays.rs, f64x2 lanes)
 fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, String)> {
 	let (array, lambda) = map_parts(value)?;
-	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else {
+	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {
 		return None;
 	};
 	let Node::Symbol(parameter) = parameter.drop_meta() else {

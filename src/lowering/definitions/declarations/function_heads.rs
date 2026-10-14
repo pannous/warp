@@ -35,7 +35,7 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 
 /// A built-in type, or `any`: a Node of whatever kind the paths return (`def f(w) as any`, card def)
 fn is_result_type(result_type: &Node) -> bool {
-	is_type_word(result_type) || result_type.is_symbol(crate::type_kinds::UNTYPED_FIELD)
+	is_kinded_type_word(result_type) || result_type.is_symbol(crate::type_kinds::UNTYPED_FIELD)
 }
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
@@ -87,7 +87,7 @@ pub(super) fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
 		return None;
 	};
 	let second = match second.drop_meta() {
-		Node::Key(group, Op::Colon, result_type) if is_type_word(result_type) => group.as_ref(),
+		Node::Key(group, Op::Colon, result_type) if is_kinded_type_word(result_type) => group.as_ref(),
 		other => other,
 	};
 	let Node::List(_, Bracket::Round, _) = second.drop_meta() else {
@@ -99,7 +99,7 @@ pub(super) fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
 	if !matches!(head_items.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
 		return None;
 	}
-	let lambda = Node::Key(Box::new(second.clone()), Op::FatArrow, body.clone());
+	let lambda = Node::Key(Box::new(second.clone()), Op::Arrow, body.clone());
 	Some(key(head.clone(), Op::Define, lambda))
 }
 
@@ -142,8 +142,8 @@ pub(super) fn function_typed_result(definition: Node) -> Node {
 	};
 	match parts.as_slice() {
 		[result_type, body]
-			if types.iter().all(is_type_word)
-				&& is_type_word(result_type)
+			if types.iter().all(is_kinded_type_word)
+				&& is_kinded_type_word(result_type)
 				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
 			Node::List(
@@ -209,7 +209,7 @@ pub(super) fn typed_returns(body: Node, result_types: &Node) -> Node {
 
 /// `(Int, Int)`
 pub(super) fn is_type_tuple(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(types, Bracket::Round, _) if types.len() > 1 && types.iter().all(is_type_word))
+	matches!(node.drop_meta(), Node::List(types, Bracket::Round, _) if types.len() > 1 && types.iter().all(is_kinded_type_word))
 }
 
 /// Swift's `label name: T`: the label (`_` for none)
@@ -224,7 +224,7 @@ pub(super) fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a st
 pub(super) fn typed_parameter_name(typed: &Node) -> Option<&Node> {
 	match typed.drop_meta() {
 		Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name),
-		Node::Key(parameter, Op::Arrow | Op::FatArrow, _) => typed_parameter_name(parameter),
+		Node::Key(parameter, Op::Arrow, _) => typed_parameter_name(parameter),
 		_ => None,
 	}
 }
@@ -301,7 +301,9 @@ pub(super) fn name_then_type(parameter: Node) -> Node {
 			parts[0].clone()
 		}
 		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_type_word(&parts[1]) =>
+			if parts.len() == 2
+				&& matches!(parts[0].drop_meta(), Node::Symbol(_))
+				&& is_kinded_type_word(&parts[1]) =>
 		{
 			key(parts[0].clone(), Op::Colon, parts[1].clone())
 		}

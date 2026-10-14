@@ -10,6 +10,8 @@
 //! starts where its starter stands: voices sound together. render_sound mixes the sounds since the last render as
 //! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
+// TODO turn this into a module, albeit built-in one
+
 pub mod midi;
 pub mod sound_engine;
 

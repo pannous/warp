@@ -1,4 +1,4 @@
-//! Plain classes as database tables (card orm, notes/orm.md step 1): `people: [Person] = database.people` registers the
+//! Plain classes as database tables (card orm, notes/orm.md step 1): `stored people: [Person]` registers the
 //! table people for the class Person. Registering creates the table or migrates it to the class's fields
 //! (`std_io("table", "migrate", …)`); the list loads the rows at its first read (`people·load()`, notes/orm.md
 //! Loading), `people.add(p)` inserts p and gives it its row's id, and a field change
@@ -10,7 +10,7 @@ use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::numbers::units::static_units::si_quantity;
 use crate::operators::Op;
-use crate::stored_values::DATABASE_WORDS;
+use crate::stored_values::DATABASE_WORD;
 use crate::warp_parser::parse;
 use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -250,10 +250,7 @@ pub fn lower(program: Node) -> Node {
 		}
 		false => program,
 	};
-	if !DATABASE_WORDS
-		.iter()
-		.any(|word| crate::warp_parser::mentions(&program, word))
-	{
+	if !crate::warp_parser::mentions(&program, DATABASE_WORD) {
 		return program;
 	}
 	let tables = registrations(&program);
@@ -344,9 +341,7 @@ pub struct Tables {
 
 pub fn registered(program: &Node) -> Tables {
 	let registers = crate::warp_parser::mentions(program, crate::stored_values::STORED_WORD)
-		|| DATABASE_WORDS
-			.iter()
-			.any(|word| crate::warp_parser::mentions(program, word));
+		|| crate::warp_parser::mentions(program, DATABASE_WORD);
 	let tables = match registers {
 		true => registrations(&with_stored_tables(program.clone(), &class_bodies(program))),
 		false => BTreeMap::new(),
@@ -364,23 +359,65 @@ fn quote(name: &str) -> String {
 	format!("\"{}\"", name.replace('"', "\"\""))
 }
 
-/// `stored people: [Person]`, the short form of `people: [Person] = database.people` (user, 2026-10-08)
-fn with_stored_tables(node: Node, classes: &HashMap<String, Node>) -> Node {
-	if let Node::List(items, _, _) = node.drop_meta() {
-		if let [word, declaration] = items.as_slice() {
-			if let Node::Key(variable, Op::Colon, list_type) = declaration.drop_meta() {
-				let class = match list_type.drop_meta() {
-					Node::List(element, Bracket::Square, _) if element.len() == 1 => element[0].drop_meta().name(),
-					_ => String::new(),
-				};
-				if word.drop_meta().name() == crate::stored_values::STORED_WORD && classes.contains_key(&class) {
-					let table = key(symbol(DATABASE_WORDS[0]), Op::Dot, variable.drop_meta().clone());
-					return key(declaration.drop_meta().clone(), Op::Assign, table);
-				}
-			}
-		}
+/// A table declaration, `stored people: [Person]` (the table people) or `stored people: [Person] in "people_v2"`
+/// (user, 2026-10-08, 2026-10-14)
+pub struct StoredTable {
+	pub variable: String,
+	pub class: String,
+	pub table: String,
+}
+
+pub fn stored_table(statement: &Node) -> Option<StoredTable> {
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let [word, declaration] = items.as_slice() else {
+		return None;
+	};
+	let Node::Key(variable, Op::Colon, declared) = declaration.drop_meta() else {
+		return None;
+	};
+	if !word.is_symbol(crate::stored_values::STORED_WORD) {
+		return None;
 	}
-	node.map_children(|child| with_stored_tables(child, classes))
+	let variable = variable.drop_meta().name();
+	let (list_type, table) = match declared.drop_meta() {
+		Node::List(parts, _, _)
+			if let [list_type, in_word, table] = parts.as_slice()
+				&& in_word.is_symbol(IN_WORD) =>
+		{
+			(list_type, table.drop_meta().name())
+		}
+		_ => (declared.as_ref(), variable.clone()),
+	};
+	match list_type.drop_meta() {
+		Node::List(element, Bracket::Square, _) if let [class] = element.as_slice() => Some(StoredTable {
+			variable,
+			class: class.drop_meta().name(),
+			table,
+		}),
+		_ => None,
+	}
+}
+
+/// The table `database.t`, the store a registration reads its rows from
+pub fn table_store(table: &str) -> Node {
+	key(symbol(DATABASE_WORD), Op::Dot, symbol(table))
+}
+
+/// `stored people: [Person]` of a class of the program as the registration `people: [Person] = database.people`
+fn with_stored_tables(node: Node, classes: &HashMap<String, Node>) -> Node {
+	match stored_table(&node) {
+		Some(stored) if classes.contains_key(&stored.class) => {
+			let list_type = Node::List(vec![symbol(&stored.class)], Bracket::Square, Separator::None);
+			key(
+				key(symbol(&stored.variable), Op::Colon, list_type),
+				Op::Assign,
+				table_store(&stored.table),
+			)
+		}
+		_ => node.map_children(|child| with_stored_tables(child, classes)),
+	}
 }
 
 /// Each class's body by name
@@ -432,9 +469,7 @@ fn database_table(source: &Node) -> Option<String> {
 	let Node::Key(store, Op::Dot, table) = source.drop_meta() else {
 		return None;
 	};
-	DATABASE_WORDS
-		.contains(&store.drop_meta().name().as_str())
-		.then(|| table.drop_meta().name())
+	store.is_symbol(DATABASE_WORD).then(|| table.drop_meta().name())
 }
 
 /// Each registered class with the field `id: int = 0` unless it has one (0 until the instance has a row), and its

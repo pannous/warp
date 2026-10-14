@@ -30,3 +30,11 @@ fn a_parameter_tested_for_membership_is_no_function() {
 		0
 	);
 }
+
+#[test] // a comma separates parameters, so a type word after one is a parameter of its own (card def-number)
+fn a_comma_keeps_a_type_named_parameter() {
+	is!("def f(p, number) { p + number }\nf(2, 3)", 5);
+	is!("def g(x, text) { x }\ng(1, \"a\")", 1);
+	is!("def f(p number) { p + 1 }\nf(2)", 3);
+	is!("func add1(x int) int { return x + 1 }\nadd1(2)", 3);
+}

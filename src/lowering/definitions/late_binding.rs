@@ -437,7 +437,8 @@ fn note_charging(
 			main.is_global(word)
 		}
 	});
-	if !reads_variables {
+	// `risky() := 1/0` fails only when called (inside a try): as a value it would fail at once
+	if !reads_variables && !can_fail(&function.body) {
 		crate::normalize::set_position_of(statement);
 		crate::diagnostic::educate_once(
 			NEEDLESS_CHARGING_TOPIC,
@@ -447,6 +448,17 @@ fn note_charging(
 		);
 	}
 	Ok(())
+}
+
+/// A body that may raise: an error it raises, or a division by anything but a nonzero number (`1/0`, `n % k`)
+fn can_fail(body: &Node) -> bool {
+	let mut fails = false;
+	body.visit(&mut |part| {
+		fails |= crate::pipeline::returned_error_message(part).is_some()
+			|| matches!(part, Node::Key(_, Op::Div | Op::Mod | Op::Rem, divisor)
+				if !matches!(divisor.drop_meta(), Node::Number(number) if !number.zero()))
+	});
+	fails
 }
 
 /// `t := clock()`: the clock is read at every `t`, which may be meant, or `t = clock()` for one reading

@@ -135,3 +135,14 @@ fn fetched_content_is_announced() {
 			&& !warp::web::markup::to_html(&eval(&own)).contains("polite")
 	);
 }
+
+// compared values and patterns are never rendered: `{a: 2} is {a: h}` holds no `a` element (card markup-lint)
+#[test]
+fn compared_values_are_no_elements() {
+	assert!(warnings_of("{a: 2} is {a: h}")
+		.iter()
+		.all(|warning| !warning.contains("a without href")));
+	assert!(warnings_of("x = {img: 1}\nx == {img: 1}")
+		.iter()
+		.all(|warning| !warning.contains("img without alt")));
+}

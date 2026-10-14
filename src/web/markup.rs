@@ -12,6 +12,7 @@ const MARKUP_MODULE: &str = "markup";
 /// and the attributes
 const ELEMENTS_LIST: &str = "html_elements";
 const ATTRIBUTES_LIST: &str = "html_attributes";
+const META_ATTRIBUTES_LIST: &str = "html_meta_attributes";
 const VOID_ELEMENTS_LIST: &str = "html_void_elements";
 const BOOLEAN_ATTRIBUTES_LIST: &str = "html_boolean_attributes";
 const HEAD: &str = "head";
@@ -61,6 +62,12 @@ fn is_attribute_name(word: &str) -> bool {
 pub fn attribute_names() -> &'static [String] {
 	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
 	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST))
+}
+
+/// A meta element's own attributes: `meta{ charset: "utf-8" }` is the element, `meta: { author: "Ann" }` names metas
+pub fn meta_attribute_names() -> &'static [String] {
+	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
+	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, META_ATTRIBUTES_LIST))
 }
 
 /// An attribute present or absent (`checked: done`), set by yes or no

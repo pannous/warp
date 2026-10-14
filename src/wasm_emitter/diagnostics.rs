@@ -59,7 +59,7 @@ impl WasmGcEmitter {
 	/// A name that is no variable, global, function or `$n` parameter here
 	pub(super) fn is_unbound(&self, name: &str) -> bool {
 		!name.starts_with('$')
-			&& !crate::type_tests::is_type_word(name)
+			&& !crate::type_tests::is_builtin_type_word(name)
 			&& self.scope.lookup(name).is_none()
 			&& !self.ctx.user_globals.contains_key(name)
 			&& !self.ctx.user_functions.contains_key(name)

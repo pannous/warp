@@ -6,7 +6,7 @@ use warp::wasm_emitter::eval;
 const PERSON: &str = "class Person{name: text; age: int}";
 
 fn program(rest: &str) -> String {
-	format!("{PERSON}\npeople: [Person] = database.people_where_comprehended\n{rest}")
+	format!("{PERSON}\nstored people: [Person] in \"people_where_comprehended\"\n{rest}")
 }
 
 #[cfg(feature = "native")]
