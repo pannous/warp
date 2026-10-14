@@ -24,7 +24,7 @@ const SETTER_PREFIX: &str = "set ";
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
 const COMPONENT_EXTENSION: &str = ".wasm";
-/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/modules/cargo_crates.rs)
+/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/modules/cargo_crates/)
 pub const CRATE_RUNTIMES: [&str; 2] = ["cargo", "crate"];
 /// The version after `\0asm` in a core module's header; a component's names another layer
 const CORE_MODULE_VERSION: [u8; 4] = [1, 0, 0, 0];
@@ -119,7 +119,7 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 	}))
 }
 
-/// `use cargo regex`, `use crate "regex" as re`: the component src/modules/cargo_crates.rs builds of the crate, `as` the crate's
+/// `use cargo regex`, `use crate "regex" as re`: the component src/modules/cargo_crates/ builds of the crate, `as` the crate's
 /// name by default
 fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node, String>> {
 	if !word.is_symbol(USE_WORD)
