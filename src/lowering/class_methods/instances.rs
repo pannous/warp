@@ -65,7 +65,7 @@ pub(super) fn checked_cast(object: Node, class: &str) -> Node {
 pub(super) fn instance_from(object: Node, class: &str, fields: &ClassFields) -> Node {
 	let source = Node::Symbol(format!("{class}{FROM_SUFFIX}"));
 	let mut statements = vec![key(source.clone(), Op::Assign, object)];
-	statements.extend(statements_of(built_instance(&source, class, fields)));
+	statements.extend(built_instance(&source, class, fields).body_statements());
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 

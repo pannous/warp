@@ -76,6 +76,20 @@ impl Node {
 		}
 	}
 
+	/// The statements of a body: `{a;b}`, `{a⏎b}`, `(a; b)` and an unbracketed `a; b` hold several; `{x}` and
+	/// `{for i in xs {…}}` (words in braces) one
+	pub fn body_statements(&self) -> Vec<Node> {
+		match self.drop_meta() {
+			List(items, Bracket::Round, separator) if separator.separates_statements() => items.clone(),
+			List(items, Bracket::Curly, separator) if items.len() > 1 && !separator.separates_statements() => {
+				vec![List(items.clone(), Bracket::None, separator.clone())]
+			}
+			List(items, Bracket::Curly, _) if items.len() == 1 => items[0].sequence_statements().to_vec(),
+			List(items, Bracket::Curly, _) => items.clone(),
+			_ => self.sequence_statements().to_vec(),
+		}
+	}
+
 	pub fn meta(node: Node, meta: Node) -> Node {
 		Meta {
 			node: Box::new(node),

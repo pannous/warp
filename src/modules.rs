@@ -978,12 +978,7 @@ fn statements_of(module: &Node) -> &[Node] {
 }
 
 fn statements(module: Node) -> Vec<Node> {
-	match module {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items,
-		Node::Meta { node, .. } => statements(*node),
-		Node::Empty => vec![],
-		single => vec![single],
-	}
+	statements_of(&module).to_vec()
 }
 
 pub(crate) fn is_declaration(statement: &Node) -> bool {

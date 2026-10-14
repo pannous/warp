@@ -76,18 +76,6 @@ pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 	variables
 }
 
-/// The statements of a body: `{a;b}` and `{a⏎b}` hold several, `{x}` and `{for i in xs {…}}` one
-pub(crate) fn block_items(body: &Node) -> Vec<Node> {
-	match body.drop_meta() {
-		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => items.clone(),
-		Node::List(items, Bracket::Curly, separator) if items.len() > 1 => {
-			vec![Node::List(items.clone(), Bracket::None, separator.clone())]
-		}
-		Node::List(items, Bracket::Curly, _) => items.clone(),
-		single => vec![single.clone()],
-	}
-}
-
 /// `for(init;test;step){body}`, parsed as `((for (init;test;step)) {body})`
 fn classic_for(items: &[Node]) -> Option<Node> {
 	let [header, body] = items else { return None };
@@ -106,7 +94,7 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	if !keyword.is_symbol(FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
-	let mut statements = block_items(body);
+	let mut statements = body.body_statements();
 	statements.push(mark_step(step.clone()));
 	Some(statement_list(
 		vec![init.clone(), while_do(test.clone(), block(statements))],
@@ -136,7 +124,7 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		},
 		_ => return None,
 	};
-	let mut body = block_items(&body);
+	let mut body = body.body_statements();
 	// `for word in text: print it`: it is the loop variable too
 	if matches!(names.as_slice(), [name] if name != IMPLICIT_VARIABLE && !crate::lambdas::is_inlined_loop_variable(&name.name()))
 	{
@@ -400,7 +388,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 			key(iterator.clone(), Op::Dot, call(NEXT_METHOD, vec![])),
 		)
 	};
-	let mut statements_of_body = block_items(body);
+	let mut statements_of_body = body.body_statements();
 	statements_of_body.push(mark_step(next()));
 	let more = key(variable.clone(), Op::Ne, Node::Empty);
 	statement_list(

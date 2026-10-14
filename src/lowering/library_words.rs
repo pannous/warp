@@ -912,7 +912,7 @@ impl Lowering {
 					Box::new(crate::warp_parser::subscript(map.clone(), key.clone())),
 				);
 				Node::List(
-					[vec![lookup], crate::for_loop::block_items(&body)].concat(),
+					[vec![lookup], body.body_statements()].concat(),
 					Bracket::Curly,
 					Separator::Semicolon,
 				)

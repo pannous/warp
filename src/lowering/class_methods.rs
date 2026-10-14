@@ -1117,7 +1117,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 			// an early `return v` gives the pair too: `if n <= 0 { return 0 }; n -= 1; n`
 			let paired = |value: Node| Node::List(vec![value, receiver.clone()], Bracket::Square, Separator::Space);
 			// the statements before the value run first: `x = items#1; items = …; x` gives x, not the block
-			let mut statements = statements_of(with_returns(body, &paired));
+			let mut statements = with_returns(body, &paired).body_statements();
 			let value = statements.pop().unwrap_or(Node::Empty);
 			let result = Node::Symbol(format!("{method}{VALUE_SUFFIX}"));
 			let pair = Node::List(vec![result.clone(), receiver], Bracket::Square, Separator::Space);
@@ -1160,7 +1160,7 @@ enum Change {
 
 /// Does a method body that changes its object end in a value of its own: `items.pop()`, not `n += 1` or `items.add(x)`
 fn gives_value(body: &Node) -> bool {
-	let Some(last) = statements_of(body.clone()).pop() else {
+	let Some(last) = body.body_statements().pop() else {
 		return false;
 	};
 	match last.drop_meta() {
@@ -1179,17 +1179,6 @@ fn gives_value(body: &Node) -> bool {
 				|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| GIVING_MUTATIONS.contains(&word.drop_meta().name().as_str())))
 		}
 		_ => true,
-	}
-}
-
-/// The statements of a block `{a; b}` or sequence `a; b`, or the one statement of any other body
-fn statements_of(body: Node) -> Vec<Node> {
-	match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _)
-		| Node::List(statements, Bracket::None | Bracket::Round, Separator::Semicolon | Separator::Newline) => {
-			statements.clone()
-		}
-		_ => vec![body],
 	}
 }
 

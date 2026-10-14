@@ -136,7 +136,7 @@ fn check_definitions(
 /// The functions defined directly in the body of `function` read its parameters and variables at call time too: a
 /// change of one after such a definition is an error once a later call in the body could observe it (card g-qUrk)
 fn check_function_body(function: &UserFunctionDef) -> Result<(), Node> {
-	let statements = body_statements(&function.body);
+	let statements = function.body.body_statements();
 	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner`: outer checks its nonlocal declarations
 	if let Some(name) = declared_nonlocals(&function.body).first().filter(|_| !nested) {
 		return Err(nonlocal_without_enclosing_error(function, name));
@@ -183,7 +183,7 @@ fn check_function_body(function: &UserFunctionDef) -> Result<(), Node> {
 /// The names a function body declares `nonlocal` in its own statements (`nonlocal y`, `nonlocal a, b`), not those of
 /// the functions defined in it
 pub(crate) fn declared_nonlocals(body: &Node) -> Vec<String> {
-	body_statements(body).iter().flat_map(nonlocal_names).collect()
+	body.body_statements().iter().flat_map(nonlocal_names).collect()
 }
 
 /// `nonlocal y` → [y]; `nonlocal a, b` → [a, b]; any other node → []
@@ -220,7 +220,7 @@ fn without_nonlocal_declarations(program: Node) -> Node {
 
 /// The statement `nonlocal name` of the body, for the position of an error
 fn declaration_of(body: &Node, name: &str) -> Node {
-	body_statements(body)
+	body.body_statements()
 		.into_iter()
 		.find(|statement| nonlocal_names(statement).iter().any(|declared| declared == name))
 		.unwrap_or_else(|| body.clone())
@@ -289,15 +289,6 @@ fn written_names(enclosing: Option<&UserFunctionDef>, name: &str) -> Vec<String>
 				format!("{}{NESTED_DEF_SEPARATOR}{short}", outer.name),
 			]
 		}
-	}
-}
-
-/// The statements of a function body: `{a; b}`, `a\nb` or the single expression
-fn body_statements(body: &Node) -> Vec<Node> {
-	match body.drop_meta() {
-		Node::List(items, Bracket::Curly | Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		Node::List(items, Bracket::Curly, _) if items.len() == 1 => body_statements(&items[0]),
-		_ => vec![body.clone()],
 	}
 }
 
