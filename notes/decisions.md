@@ -9,6 +9,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 (2026-09-29/30).
 
 ## Priorities and process
+- reviewer-role (2026-10-15, user: "definitely yes"): warp-reviewer reviews each merge request's diff in parallel with
+  the Integrator's gate, polishes small things itself in a follow-up commit, vetoes unsound changes before the push,
+  and sends structural findings to the Refactorer as cards.
 - matching-first (2026-10-13): the matching roadmap (card matching-create) comes before any further self-hosting.
 - self-hosting (2026-10-12): for dogfooding, independence from Rust and as a showcase; parser first, each warp part a
   twin of its Rust part with a differential test over every sample; gaps are fixed in the language (notes/self_hosting.md).
@@ -62,8 +65,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   function printed on its own shows doc + definition (reflection).
 - function-type (2026-10-14): `type(gcd)` prints `function: (a, b) -> int`, the kind followed by the signature;
   `gcd is function` is yes.
-- parse-type (2026-10-14, from the user's draft "key !?!?!"): an operator node reports type `operation`
-  (`parse("1+1").type`, `a<b`; alias `expression`), a pair `a:1` stays `key`; `.op` keeps the operator.
+- parse-type (2026-10-14, from the user's draft "key !?!?!"; refined by body-code): `parse("1+1").type` is `code`,
+  not `key`; `.op` keeps the operator.
 - time-word (2026-10-14): a bare `time` is always the type (`print time` prints `class time`, as every type value
   prints `class int`, `class Person`: type-print; not `type time`, which pasted back evaluates to `type`; `class int` without
   a body is the reference to that class, like `function f`, so the printout reads back); the class member
@@ -73,8 +76,22 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   goes: an error with the fix `now > 18h`.
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
+- dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
+  `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
+  submitted field's value.
+- call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
+  naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
+- uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
+  (malloc/free, uniscript_error, uniscript_warnings) and release v1.0.8 ships uniscript_c.wasm + uniscript_c.h;
+  `use uniscript` imports the prebuilt module (1.45–2.9 s → 0.27–0.57 s per run).
+  Default: warp's uniscript tests follow the released uniscript (`<:red 𓀀>` keeps red as color meta with a warning;
+  any uniscript.org/vN header is read without a warning, backwards compatible).
 - chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
-  printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes.
+  printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes. A one-character text is a character, so
+  `["a" "b"]` prints `['a' 'b']` and `["a" "bc"]` prints `['a' "bc"]`.
+- body-code (2026-10-14, the user's draft "body should be block/code type?"): `type f.body` is `code` for any quoted
+  program part (`f.body is code`); printing shows its source; `{x; x+1}` never types as map. No `.kind` member for now
+  (parked: a body iterated as a list of statements, each with its kind).
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - float-as-rational (2026-10-14): `x as rational` / `rational(x)` of a float is the exact fraction of its shortest
