@@ -981,4 +981,6 @@ window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress,
 // an error nothing caught, said with where it came from: Firefox says only "uncaught exception: undefined" otherwise
 addEventListener("error", event => console.error(`the page: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 addEventListener("unhandledrejection", event => console.error(`the page: unhandled rejection ${event.reason}`, event.reason?.stack));
+// PROBE (card shaders-firefox): the page asks WebGPU first, before a task Worker does
+navigator.gpu?.requestAdapter().then(adapter => console.warn("gpu trace page adapter", String(adapter)), failure => console.warn("gpu trace page adapter failed", String(failure)));
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
