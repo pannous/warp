@@ -99,7 +99,7 @@ const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 6] = [
 #[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
 	link_libm(linker, engine, &libm_header_signatures())?;
-	link_libc_functions(linker, engine)
+	link_libc_functions(linker)
 }
 
 /// The import module of libm
@@ -140,35 +140,19 @@ pub fn link_libm(
 	if linked > 0 {
 		return Ok(LibmSource::Headers(linked));
 	}
-	link_libm_table(linker, engine)?;
+	link_libm_table(linker)?;
 	Ok(LibmSource::Table)
 }
 
 #[cfg(feature = "native")]
-fn link_libm_table(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
-	use wasmtime::ValType;
-
+fn link_libm_table(linker: &mut Linker<FfiState>) -> Result<()> {
+	use warp_runtime::floats::canonical_nan;
 	for (name, function) in LIBM_UNARY {
-		let unary = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-		linker.func_new("m", name, unary, move |_caller, params, results| {
-			results[0] =
-				Val::F64(unsafe { function(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())) }.to_bits());
-			Ok(())
-		})?;
+		linker.func_wrap("m", name, move |x: f64| unsafe { function(canonical_nan(x)) })?;
 	}
 	for (name, function) in LIBM_BINARY {
-		let binary = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-		linker.func_new("m", name, binary, move |_caller, params, results| {
-			results[0] = Val::F64(
-				unsafe {
-					function(
-						warp_runtime::floats::canonical_nan(params[0].unwrap_f64()),
-						warp_runtime::floats::canonical_nan(params[1].unwrap_f64()),
-					)
-				}
-				.to_bits(),
-			);
-			Ok(())
+		linker.func_wrap("m", name, move |x: f64, y: f64| unsafe {
+			function(canonical_nan(x), canonical_nan(y))
 		})?;
 	}
 	Ok(())
@@ -176,96 +160,46 @@ fn link_libm_table(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()>
 
 /// The hand-linked libc functions under the import module "c"
 #[cfg(feature = "native")]
-fn link_libc_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
-	use wasmtime::ValType::{F64, I32, I64};
-
-	linker.func_new(
-		"c",
-		"abs",
-		FuncType::new(engine, [I32], [I32]),
-		|_caller, params, results| {
-			results[0] = Val::I32(unsafe { abs(params[0].unwrap_i32()) });
-			Ok(())
-		},
-	)?;
-
+fn link_libc_functions(linker: &mut Linker<FfiState>) -> Result<()> {
+	type Caller<'a> = wasmtime::Caller<'a, FfiState>;
+	linker.func_wrap("c", "abs", |x: i32| unsafe { abs(x) })?;
 	// strlen, atoi, atol and atof get a pointer to a null-terminated string in the module's memory
-	linker.func_new(
-		"c",
-		"strlen",
-		FuncType::new(engine, [I32], [I64]),
-		|mut caller, params, results| {
-			let ptr = params[0].unwrap_i32() as usize;
-			let len = memory_bytes(&mut caller)
-				.and_then(|data| data.get(ptr..))
-				.map_or(0, |text| text.iter().take_while(|&&byte| byte != 0).count());
-			results[0] = Val::I64(len as i64);
-			Ok(())
-		},
-	)?;
-	linker.func_new(
-		"c",
-		"atoi",
-		FuncType::new(engine, [I32], [I32]),
-		|mut caller, params, results| {
-			results[0] = Val::I32(parse_c_text(&mut caller, &params[0], atoi).unwrap_or(0));
-			Ok(())
-		},
-	)?;
-	linker.func_new(
-		"c",
-		"atol",
-		FuncType::new(engine, [I32], [I64]),
-		|mut caller, params, results| {
-			results[0] = Val::I64(parse_c_text(&mut caller, &params[0], atol).unwrap_or(0));
-			Ok(())
-		},
-	)?;
-	linker.func_new(
-		"c",
-		"atof",
-		FuncType::new(engine, [I32], [F64]),
-		|mut caller, params, results| {
-			results[0] = Val::F64(parse_c_text(&mut caller, &params[0], atof).unwrap_or(0.0).to_bits());
-			Ok(())
-		},
-	)?;
-
+	linker.func_wrap("c", "strlen", |mut caller: Caller, ptr: i32| -> i64 {
+		memory_bytes(&mut caller)
+			.and_then(|data| data.get(ptr as usize..))
+			.map_or(0, |text| text.iter().take_while(|&&byte| byte != 0).count()) as i64
+	})?;
+	linker.func_wrap("c", "atoi", |mut caller: Caller, ptr: i32| {
+		parse_c_text(&mut caller, ptr, atoi).unwrap_or(0)
+	})?;
+	linker.func_wrap("c", "atol", |mut caller: Caller, ptr: i32| {
+		parse_c_text(&mut caller, ptr, atol).unwrap_or(0)
+	})?;
+	linker.func_wrap("c", "atof", |mut caller: Caller, ptr: i32| {
+		parse_c_text(&mut caller, ptr, atof).unwrap_or(0.0)
+	})?;
 	// strcmp(ptr1, len1, ptr2, len2) and strncmp(…, n) compare two texts of the module's memory
-	linker.func_new(
+	linker.func_wrap(
 		"c",
 		"strcmp",
-		FuncType::new(engine, [I32, I32, I32, I32], [I32]),
-		|mut caller, params, results| {
-			let compared = text_pair(&mut caller, params)
-				.map(|(first, second)| unsafe { strcmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8) });
-			results[0] = Val::I32(compared.unwrap_or(0));
-			Ok(())
+		|mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32| {
+			text_pair(&mut caller, [ptr1, len1, ptr2, len2])
+				.map(|(first, second)| unsafe { strcmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8) })
+				.unwrap_or(0)
 		},
 	)?;
-	linker.func_new(
+	linker.func_wrap(
 		"c",
 		"strncmp",
-		FuncType::new(engine, [I32, I32, I32, I32, I64], [I32]),
-		|mut caller, params, results| {
-			let n = params[4].unwrap_i64() as usize;
-			let compared = text_pair(&mut caller, params).map(|(first, second)| unsafe {
-				strncmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8, n)
-			});
-			results[0] = Val::I32(compared.unwrap_or(0));
-			Ok(())
+		|mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32, n: i64| {
+			text_pair(&mut caller, [ptr1, len1, ptr2, len2])
+				.map(|(first, second)| unsafe {
+					strncmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8, n as usize)
+				})
+				.unwrap_or(0)
 		},
 	)?;
-
-	linker.func_new(
-		"c",
-		"rand",
-		FuncType::new(engine, [], [I32]),
-		|_caller, _params, results| {
-			results[0] = Val::I32(unsafe { rand() });
-			Ok(())
-		},
-	)?;
+	linker.func_wrap("c", "rand", || unsafe { rand() })?;
 
 	// Add aliases: "libm" → "m", "libc" → "c"
 	// This allows both (import "m" "fmin" ...) and (import "libm" "fmin" ...)
@@ -286,24 +220,21 @@ fn memory_bytes<'caller>(caller: &'caller mut wasmtime::Caller<'_, FfiState>) ->
 #[cfg(feature = "native")]
 fn parse_c_text<T>(
 	caller: &mut wasmtime::Caller<'_, FfiState>,
-	ptr: &Val,
+	ptr: i32,
 	parse: unsafe extern "C" fn(*const i8) -> T,
 ) -> Option<T> {
 	let text = memory_bytes(caller)?
-		.get(ptr.unwrap_i32() as usize..)
+		.get(ptr as usize..)
 		.filter(|text| !text.is_empty())?;
 	Some(unsafe { parse(text.as_ptr() as *const i8) })
 }
 
-/// The UTF-8 texts (ptr1, len1, ptr2, len2) of the first four parameters, null-terminated for C
+/// The UTF-8 texts at (ptr1, len1, ptr2, len2), null-terminated for C
 #[cfg(feature = "native")]
-fn text_pair(caller: &mut wasmtime::Caller<'_, FfiState>, params: &[Val]) -> Option<(Vec<u8>, Vec<u8>)> {
+fn text_pair(caller: &mut wasmtime::Caller<'_, FfiState>, places: [i32; 4]) -> Option<(Vec<u8>, Vec<u8>)> {
 	let data = memory_bytes(caller)?;
 	let text = |index: usize| {
-		let (ptr, len) = (
-			params[index].unwrap_i32() as usize,
-			params[index + 1].unwrap_i32() as usize,
-		);
+		let (ptr, len) = (places[index] as usize, places[index + 1] as usize);
 		let bytes = data.get(ptr..ptr + len)?;
 		std::str::from_utf8(bytes).ok()?;
 		Some([bytes, &[0]].concat())
