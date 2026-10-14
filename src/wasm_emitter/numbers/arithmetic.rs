@@ -341,7 +341,10 @@ impl WasmGcEmitter {
 			}
 		}
 		// Rounding and counting builtins build a node: its Int is the number
-		if self.emit_integer_builtin(func, items) || self.reject_unresolved_call(func, items, bracket, separator) {
+		if self.reject_variable_applied(func, items, bracket, separator)
+			|| self.emit_integer_builtin(func, items)
+			|| self.reject_unresolved_call(func, items, bracket, separator)
+		{
 			return;
 		}
 		// `puti x`, `print x`: the emitter's own builtins give a node whose Int is the number
@@ -420,6 +423,9 @@ impl WasmGcEmitter {
 					);
 				}
 			}
+		}
+		if self.reject_variable_applied(func, items, bracket, separator) {
+			return;
 		}
 		if self.emit_integer_builtin(func, items) {
 			self.emit_int_to_f64(func, None);

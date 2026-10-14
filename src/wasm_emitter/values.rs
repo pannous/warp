@@ -236,10 +236,7 @@ impl WasmGcEmitter {
 		let Node::Symbol(fn_name) = word.drop_meta() else {
 			return false;
 		}; // `count xs` without parentheses keeps its position
-		if self.emit_shadowed_counting(func, fn_name, argument) {
-			return true;
-		}
-		// floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
+	 // floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
 		if fn_name == "floor"
 			&& !self.ctx.ffi_imports.contains_key(fn_name)
 			&& !self.ctx.user_functions.contains_key(fn_name)

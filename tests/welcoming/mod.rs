@@ -53,6 +53,7 @@ mod test_ternary_hint_got_it; // card hint-dismiss
 mod test_undefined_in_text_sum; // card compile-path
 mod test_unknown_prefix_word;
 mod test_unknown_word_error;
+mod test_variable_applied; // card error-local
 mod test_warning_levels; // card warning-levels
 mod test_warning_mode;
 mod test_welcoming_ask;
