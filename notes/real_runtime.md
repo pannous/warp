@@ -72,7 +72,12 @@ Risks:
 - Compare cost: needs the fixed-point series in wasm.
 - Browser parity: everything is emitted wasm, so no host imports are needed.
 
-## Open questions (for the user, via the interviewer)
+## Parked (user 2026-10-14: "park a generalized exact mechanism for later")
+
+Not built for now: real.rs stays as it is, card cleanup-real-answer is in Later. The open questions below are parked
+with it (3 was for later anyway).
+
+## Open questions (parked)
 1. Is a sum in a denominator, `1/(1+√2)`, an f64 with a warning, or should it be rationalized (conjugates) at run time?
 2. An undecidable comparison at run time: a trap with a message, or an Error value?
 3. Should ⅈ be allowed at run time (complex reals) in step 1, or only real generators first?
