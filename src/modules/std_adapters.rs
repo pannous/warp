@@ -234,6 +234,7 @@ fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		}
 		("at", [seconds]) => crate::sound::at(number_of(seconds)?),
 		("at_end", []) => crate::sound::at_end(),
+		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),
 		("last", []) => return Ok(Node::int(crate::sound::last_handle() as i64)),
 		("queued", []) => return Ok(Node::float(crate::sound::queued_seconds())),

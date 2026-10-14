@@ -20,6 +20,10 @@ pub const FLOAT_SCALED: &str = "float_scaled";
 const SPLITTER: f64 = 134217729.0;
 /// float_digits(x): the shortest digits of a positive float and their shift: digits · 10^-shift reads back as x
 pub const FLOAT_DIGITS: &str = "float_digits";
+/// float_as_exact(x): `x as rational` of a run-time float
+pub const FLOAT_AS_EXACT: &str = "float_as_exact";
+/// The runtime error of float_as_exact for ∞ and NaN
+pub const NOT_FINITE: &str = "not_a_finite_number";
 /// Powers of ten up to 10^22 are exact floats: float_scaled scales by one a step
 const EXACT_POWER: i32 = 22;
 /// A mantissa in [1, 10) times 10^MANTISSA_SHIFT is a whole number with 17 digits, from FEWEST_17 up to MOST_17
@@ -39,8 +43,7 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(FLOAT_TEXT) {
 			return;
 		}
-		self.emit_float_scaled();
-		self.emit_float_digits();
+		self.emit_float_shortest_digits();
 		self.emit_text_heap_global();
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let [zero, infinity, negative_infinity, not_a_number] =
@@ -220,6 +223,79 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(position), I::End]);
 
 			s.emit_new_text_to(f, address, position);
+		});
+	}
+
+	/// float_digits and the float_scaled it calls, once for float_text and float_as_exact
+	fn emit_float_shortest_digits(&mut self) {
+		if !self.ctx.func_registry.contains(FLOAT_DIGITS) {
+			self.emit_float_scaled();
+			self.emit_float_digits();
+		}
+	}
+
+	/// float_as_exact(x): the exact value of a float's shortest digits, `x as rational` (decision float-as-rational):
+	/// 1.4142135623730951 is 14142135623730951/10^16, reduced by exact_div; ∞ and NaN have no fraction
+	pub(in crate::wasm_emitter) fn emit_float_as_exact(&mut self) {
+		if !self.should_emit_function(FLOAT_AS_EXACT) {
+			return;
+		}
+		self.emit_float_shortest_digits();
+		let i64t = ValType::I64;
+		self.runtime_function(FLOAT_AS_EXACT, vec![ValType::F64], vec![i64t], vec![i64t, ValType::I32], |s, f| {
+			let (x, digits, shift) = (0, 1, 2);
+			// x - x is 0 for every finite x, NaN for ∞ and NaN
+			Self::emit_list(f, &[I::LocalGet(x), I::LocalGet(x), I::F64Sub, I::F64Const(0.0.into()), I::F64Ne]);
+			s.emit_fail_if(f, NOT_FINITE);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(x),
+					I::F64Const(0.0.into()),
+					I::F64Eq,
+					I::If(BlockType::Empty),
+					I::I64Const(0),
+					I::Return,
+					I::End,
+					I::LocalGet(x),
+					I::F64Abs,
+				],
+			);
+			s.call(f, FLOAT_DIGITS);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalSet(shift),
+					I::LocalSet(digits),
+					I::LocalGet(x),
+					I::F64Const(0.0.into()),
+					I::F64Lt,
+					I::If(BlockType::Empty),
+					I::I64Const(0),
+					I::LocalGet(digits),
+					I::I64Sub,
+					I::LocalSet(digits),
+					I::End,
+					I::LocalGet(digits),
+				],
+			);
+			s.call(f, "int_from_i64");
+			// digits · 10^-shift: divided by 10^shift, or multiplied by 10^-shift
+			let power_of_ten = |f: &mut Function, exponent: &[I<'static>]| {
+				Self::emit_list(f, &[I::LocalGet(digits), I::I64Const(10)]);
+				Self::emit_list(f, exponent);
+				s.call(f, "int_pow");
+			};
+			Self::emit_list(
+				f,
+				&[I::LocalSet(digits), I::LocalGet(shift), I::I32Const(0), I::I32GeS, I::If(BlockType::Result(i64t))],
+			);
+			power_of_ten(f, &[I::LocalGet(shift), I::I64ExtendI32S]);
+			s.call(f, "exact_div");
+			f.instruction(&I::Else);
+			power_of_ten(f, &[I::I32Const(0), I::LocalGet(shift), I::I32Sub, I::I64ExtendI32S]);
+			s.call(f, "int_mul");
+			f.instruction(&I::End);
 		});
 	}
 

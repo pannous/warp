@@ -74,6 +74,11 @@ pub(crate) fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -
 		return;
 	}
 	let called = |call: &[Node]| call.first().and_then(Node::symbol_name).map(String::from);
+	// `function capitalize`, an item of `methods("hi")`: the function itself needs its definition as a call does
+	if let Some(name) = crate::closures::referenced_function(node) {
+		names.insert(name);
+		return;
+	}
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
 			collect_called_words(receiver, is_module_name, names);

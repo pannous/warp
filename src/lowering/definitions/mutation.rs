@@ -8,7 +8,7 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{DELETE_WORD, POP_WORD, UNWRAP};
+use crate::words::{DELETE_WORD, ERROR_WORD, POP_WORD, UNWRAP};
 
 /// Meta key on a name written `x!`
 const MUTATED_MARK: &str = "mutated";
@@ -18,7 +18,7 @@ const MUTATED_MARK: &str = "mutated";
 const COPY_WORDS: [&str; 7] = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"];
 
 /// wiki/mutable.md: a statement dropping a copy word's result (`uppercase x`), and an assignment of a mutating call
-/// (`y = x.upper!`, which changes x too), warn with the forms meant
+/// (`y = x.upper!`, which changes x too), warn with the forms meant; so does a dropped `error "…"` (card error-if)
 pub fn warn_discarded(program: Node) -> Node {
 	let mut warnings = vec![];
 	program.visit(&mut |node| match node.drop_meta() {
@@ -28,6 +28,9 @@ pub fn warn_discarded(program: Node) -> Node {
 					let message = format!("unused value of {word} {variable}: assign it (y = {word} {variable}) or write {variable}.{word}! to change {variable}");
 					warnings.push(Diagnostic::at(statement, message).offer(format!("change {variable}"), format!("{word} {variable}"), format!("{variable}.{word}!")));
 				}
+				let mut dropped = vec![];
+				discarded_errors(statement, &mut dropped);
+				warnings.extend(dropped.into_iter().map(discarded_error_warning));
 			}
 		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
@@ -42,6 +45,35 @@ pub fn warn_discarded(program: Node) -> Node {
 		Err(error) => error,
 		Ok(()) => program,
 	}
+}
+
+/// The `error "…"` calls whose value a dropped statement drops: the statement itself, the branches of an `if`, the
+/// last statement of a block or sequence
+fn discarded_errors<'a>(statement: &'a Node, dropped: &mut Vec<&'a Node>) {
+	match statement.drop_meta() {
+		Node::List(items, _, Separator::Space | Separator::None)
+			if items.len() == 2 && items[0].is_symbol(ERROR_WORD) =>
+		{
+			dropped.push(statement)
+		}
+		Node::Key(_, Op::Then, branch) => discarded_errors(branch, dropped),
+		Node::Key(then, Op::Else, otherwise) => {
+			discarded_errors(then, dropped);
+			discarded_errors(otherwise, dropped);
+		}
+		Node::List(items, Bracket::Curly, _) | Node::List(items, _, Separator::Semicolon | Separator::Newline) => {
+			items.iter().last().into_iter().for_each(|last| discarded_errors(last, dropped))
+		}
+		_ => {}
+	}
+}
+
+/// `error "?"` only makes an error value; `fail "?"` raises it
+fn discarded_error_warning(call: &Node) -> Diagnostic {
+	let written = crate::normalize::operand_text(call);
+	let raised = written.replacen(ERROR_WORD, crate::errors::run_time::FAIL_WORD, 1);
+	let message = format!("`{written}` makes an error value nothing uses: `{raised}` raises it");
+	Diagnostic::at(call, message).offer("raise the error", written, raised)
 }
 
 /// A copy word called on a variable, as written (`upper x`, `upper(x)`, `x.upper`, `x.upper()`), and whether a `!`

@@ -306,6 +306,42 @@ pub fn at_end() {
 	}
 }
 
+/// A moment on this voice (card midi-clock): where the sounds queued before it end, or an `at`'s time; its place on
+/// the voice. Nothing is queued, the voice stays where it stands
+pub fn moment() -> (Instant, f64) {
+	scheduled(0.0)
+}
+
+/// `run` at this voice's moment: at once when that is now, else on a thread of its own sleeping until then (the
+/// process's end and wait_sound wait for it, stop_sound drops it as it drops a queued sound; its failure goes to stderr)
+pub fn on_clock(run: impl FnOnce() -> Result<(), String> + Send + 'static) -> Result<(), String> {
+	let (start, _) = moment();
+	if start <= Instant::now() {
+		return run();
+	}
+	wait_at_exit();
+	PENDING.fetch_add(1, Ordering::Relaxed);
+	let stops = STOPS.load(Ordering::Relaxed);
+	std::thread::spawn(move || {
+		std::thread::sleep(start.saturating_duration_since(Instant::now()));
+		if STOPS.load(Ordering::Relaxed) == stops {
+			if let Err(failure) = run() {
+				eprintln!("{failure}");
+			}
+		}
+		PENDING.fetch_sub(1, Ordering::Relaxed);
+	});
+	Ok(())
+}
+
+/// The voice goes on that many seconds without a sound (midi_note's length); heard, paced as a sound is
+pub fn rest(seconds: f64) {
+	if crate::graphics::paint::shows_windows() && BEFORE_AT.with(|before| before.borrow().is_empty()) {
+		paced(PLAY_AHEAD);
+	}
+	scheduled(seconds.max(0.0));
+}
+
 /// The sound's seconds added to its voice behind the sounds queued there before it: when it starts in real time, and
 /// its place among the voice's sounds. stop_sound since the voice's last sound starts the voice anew, now
 fn scheduled(seconds: f64) -> (Instant, f64) {

@@ -1,13 +1,15 @@
 //! Doc strings (card doc-strings, decision reflection): a text literal as the first of several statements of a function
 //! body is the function's doc and is not evaluated, as in Python; the comment right above a definition is its doc too.
 //! Both become the `doc` meta entry of the body, which user_function reads into UserFunctionDef::doc for `f.doc` and
-//! `help(f)` (reflection.rs)
+//! `help(f)` (reflection.rs). In reflection mode (`use reflection`) the body carries where the definition was written
+//! too, the `written_at` entry: a function value's .line, .column and .file
 
 use crate::node::{symbol, Bracket, Node};
 use crate::operators::Op;
 
 pub const DOC_KEY: &str = "doc";
 const COMMENT_KEY: &str = "comment";
+const WRITTEN_AT_KEY: &str = "written_at";
 
 pub fn lower(node: Node) -> Node {
 	match node {
@@ -31,13 +33,24 @@ fn documented(statement: Node) -> Node {
 		return statement.map_children(inner_statements_documented);
 	}
 	let comment = leading_comment(&statement).map(str::to_string);
+	let position = crate::compiler::compile_context::read(|context| context.reflection_mode)
+		.then(|| first_position(&statement))
+		.flatten();
 	functions.into_iter().fold(statement, |statement, function| {
 		let (text, body) = leading_text(&function.body);
 		let doc: Vec<String> = comment.iter().cloned().chain(text).collect();
-		match doc.is_empty() {
-			true => statement,
-			false => replaced(statement, &function.body, &with_doc(body, &doc.join("\n"))),
+		if doc.is_empty() && position.is_none() {
+			return statement;
 		}
+		let body = match doc.is_empty() {
+			true => body,
+			false => with_doc(body, &doc.join("\n")),
+		};
+		let body = match &position {
+			Some(position) => Node::meta(body, Node::key(WRITTEN_AT_KEY, Node::data(position.clone()))),
+			None => body,
+		};
+		replaced(statement, &function.body, &body)
 	})
 }
 
@@ -79,6 +92,30 @@ fn with_doc(body: Node, doc: &str) -> Node {
 pub fn doc_of(body: &Node) -> Option<String> {
 	match body {
 		Node::Meta { node, data } => entry_text(data, DOC_KEY).map(str::to_string).or_else(|| doc_of(node)),
+		_ => None,
+	}
+}
+
+/// The first position the parser recorded in a statement, through its Meta layers
+fn first_position(statement: &Node) -> Option<crate::compiler::meta::LineInfo> {
+	statement.get_lineinfo().or_else(|| match statement {
+		Node::Meta { node, .. } => first_position(node),
+		Node::Key(left, _, right) => first_position(left).or_else(|| first_position(right)),
+		Node::List(items, _, _) => items.iter().find_map(first_position),
+		_ => None,
+	})
+}
+
+/// Where a function body's definition was written, in reflection mode (doc_strings::lower)
+pub fn written_at(body: &Node) -> Option<crate::compiler::meta::LineInfo> {
+	match body {
+		Node::Meta { node, data } => match data.as_ref() {
+			Node::Key(name, _, value) if name.symbol_name() == Some(WRITTEN_AT_KEY) => match value.as_ref() {
+				Node::Data(dada) => dada.downcast_ref::<crate::compiler::meta::LineInfo>().cloned(),
+				_ => None,
+			},
+			_ => written_at(node),
+		},
 		_ => None,
 	}
 }

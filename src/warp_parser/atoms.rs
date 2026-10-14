@@ -1,13 +1,13 @@
 //! Atoms: symbols with suffixes, function calls, keyword forms and glued suffixes
 
 use super::*;
+use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
-const STYLE_WORD: &str = "style";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
 

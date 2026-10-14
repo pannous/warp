@@ -276,13 +276,14 @@ addHostPart({
 	},
 	adapters: {
 		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
-		// the Web MIDI access (playground.js sendMidi). A Worker cannot wait for the page's device list or its input
+		// the Web MIDI access (playground.js sendMidi), timed on the voice's clock. A Worker cannot wait for the page's device list or its input
 		midi: {
 			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
 			read_file: path => midiNotesOf(readBytes(contentText(path))),
 			send: (port, message) => {
 				if (!self.sendMidi) return null; // a run without a page (tests, node) has no devices, silent as sound is
-				self.sendMidi(contentText(port), wholeNumbers(message));
+				// at the voice's moment on the shared clock, after the sounds before it (card midi-clock)
+				self.sendMidi(contentText(port), wholeNumbers(message), self.voiceSounded?.(0).at);
 				return null;
 			},
 			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
@@ -318,6 +319,7 @@ addHostPart({
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
+			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			wait: () => null,
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground

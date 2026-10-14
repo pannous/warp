@@ -48,6 +48,8 @@ mod test_glued_attribute_content; // card words-glue
 mod test_gpu_auto; // card gpu-auto
 mod test_gpu_functions; // card gpu-functions
 mod test_guide; // the language guide on the playground page
+#[cfg(feature = "native")] // runs node
+mod test_guide_heading_links; // card heading-links
 mod test_guide_sections; // card guide-lists
 mod test_headless_pages;
 #[cfg(feature = "native")] // src/web/site.rs is native

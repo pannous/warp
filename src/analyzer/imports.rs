@@ -112,8 +112,7 @@ fn subscript_required(ctx: &mut Context, key: &Node, value: &Node) {
 			"list_at",
 		]);
 		if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
-			let fallbacks = crate::wasm_emitter::lists::list_ops::FIELD_FALLBACKS.iter();
-			if let Some((_, fallback)) = fallbacks.into_iter().find(|(field, _)| *field == name) {
+			if let Some(fallback) = crate::wasm_emitter::lists::list_ops::field_fallback(&name) {
 				ctx.required_functions.insert(fallback);
 			}
 			ctx.missing_field_names.insert(name);

@@ -15,10 +15,11 @@ custom section, `warp.meta`, kept unstripped.
 | `x.type`, `type(x)` | any value | its type name (`int`, `P`) | works; `p.type` of a known instance since step 2 |
 | `x.class` | instance | its class, `P` | step 2: known instances (`type(p)`) |
 | `x.fields` (`attributes`, `members`) | instance, class, map | field names, in declared order | step 2: inherited fields first; a map's keys at run time |
-| `x.methods` | instance, class | method names | step 2: without constructors and derived methods |
+| `x.methods`, `methods(x)`, `methods of x` | module, instance, class, value | the functions themselves (`function sq` each; decision reflection) | step 2: without constructors and derived methods; card module-methods (2026-10-14): function objects, a std module's words (introspection.rs), a value's type module (one when the literal type is known, else a type dispatch); an imported .wasm module's class still gives names |
 | `x.keys` | map, object | keys | works (library word) |
 | `x.meta`, `x.@key` | any binding | meta entries (meta_entries.rs) | works, `x.meta` under `use comments` |
 | `f.params` (`parameters`), `f.signature` | function | parameter names / `(a:int, b:int) -> int` | step 3: user functions |
+| `f.name`, `f.return_type`, `type(f)` | function, function value | `gcd` / `int` / `function: (a, b) -> int` | card module-methods: compile time in reflection.rs; on a function value at run time `.name .doc .signature .return_type .dump` are field fallbacks over the closure targets (wasm_emitter closures.rs FUNCTION_WORDS); `print f` alone shows the doc as `#` lines and the definition (function_dump), in a list its name |
 | `f.dump` | function | the whole definition, to copy and paste: `area(width:int, height:int) := width*height` (Node::serialize spacing) | card reflection-area |
 | `f.effects` (= `effects of f`) | function | effect set as texts (`"IO"`, `["IO" "ask"]`) | a value anywhere (card effects-value); a program whose top level does nothing answers at compile time |
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |

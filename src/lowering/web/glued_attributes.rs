@@ -6,13 +6,11 @@ use super::element_events::{element_items, with_element_items};
 use super::nodes::key;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-
-/// A style sheet's items are rules: `font: 12px "Arial"` is one value
-const STYLE: &str = "style";
+use crate::words::STYLE_WORD;
 
 pub fn lower(program: Node) -> Node {
 	let program = program.map_children(lower);
-	let is_style = matches!(&program, Node::Key(tag, _, _) if tag.is_symbol(STYLE));
+	let is_style = matches!(&program, Node::Key(tag, _, _) if tag.is_symbol(STYLE_WORD));
 	if is_style || element_items(&program).is_none() {
 		return program;
 	}

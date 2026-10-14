@@ -18,9 +18,20 @@ pub const ERROR_MESSAGE: &str = "error_message";
 /// The field every Error has
 pub const MESSAGE_FIELD: &str = "message";
 /// What a field read answers when the value has no such field or key, before the missing field's error: an Error's
-/// `message`, any value's `type` (field → meta → reflection word, notes/reflection.md "Rule"; card type-non)
-pub const FIELD_FALLBACKS: [(&str, &str); 2] =
+/// `message`, any value's `type` (field → meta → reflection word, notes/reflection.md "Rule"; card type-non), a function
+/// value's reflection words (closures.rs FUNCTION_WORDS)
+const FIELD_FALLBACKS: [(&str, &str); 2] =
 	[(MESSAGE_FIELD, ERROR_MESSAGE), (crate::type_tests::TYPE_WORD, crate::type_tests::NODE_TYPE_NAME)];
+
+/// The function a field read of `name` falls back to (FIELD_FALLBACKS)
+pub fn field_fallback(name: &str) -> Option<&'static str> {
+	let name = crate::lowering::reflection::canonical_word(name).unwrap_or(name);
+	FIELD_FALLBACKS
+		.into_iter()
+		.chain(crate::wasm_emitter::functions::closures::function_words())
+		.find(|(field, _)| *field == name)
+		.map(|(_, fallback)| fallback)
+}
 pub(super) const KEY_KIND: i64 = Kind::Key as i64;
 pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
@@ -133,7 +144,7 @@ impl WasmGcEmitter {
 						self.emit_call(func, super::super::super::reflection::node_api::NODE_PART);
 						func.instruction(&I::BrOnNonNull(0));
 					}
-					if let Some((_, fallback)) = FIELD_FALLBACKS.iter().find(|(field, _)| *field == name) {
+					if let Some(fallback) = field_fallback(&name) {
 						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
 						self.emit_call(func, fallback);
 						func.instruction(&I::BrOnNonNull(0));
