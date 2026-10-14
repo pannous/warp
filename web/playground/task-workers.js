@@ -12,7 +12,7 @@ function serveTaskWorkers(programWorker) {
 		if (taskWorker === undefined && endTaskWorker === undefined) return;
 		event.stopImmediatePropagation();
 		if (endTaskWorker !== undefined) {
-			stopQuietly(taskWorkers.get(endTaskWorker));
+			taskWorkers.get(endTaskWorker)?.terminate();
 			return taskWorkers.delete(endTaskWorker);
 		}
 		const made = new Worker(taskWorker.url);
@@ -25,8 +25,7 @@ function serveTaskWorkers(programWorker) {
 	reportBareErrors(programWorker, "the program's Worker");
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {
-		taskWorkers.forEach(stopQuietly);
-		muteErrors(programWorker);
+		taskWorkers.forEach(made => made.terminate());
 		terminate();
 	};
 	return programWorker;
@@ -38,15 +37,6 @@ const reportBareErrors = (target, label) => target.addEventListener("error", eve
 	if (event.error instanceof Error) return;
 	console.error(`warp ${label}: an error without an Error (${event.error}) at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
 });
-
-// a Worker stopped on purpose (Stop, a run's timeout): Firefox reports one stopped while it still loads its scripts as a
-// bare "uncaught exception: undefined" on the page, now and then (playground-turn's tour check), which is no failure
-const muteErrors = worker => worker.addEventListener("error", event => event.preventDefault());
-function stopQuietly(worker) {
-	if (!worker) return;
-	muteErrors(worker);
-	worker.terminate();
-}
 
 // `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer. A browser that reads
 // the clipboard only right after the user acted (Firefox; Chrome when the page has no focus) refuses a run's read: a
