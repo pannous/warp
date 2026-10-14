@@ -17,6 +17,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
   Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
+  When the roadmaps resume, the first card is standalone-math-units (user, 2026-10-14): lib/math.warp and
+  lib/units.warp become complete standalone warp, and the parser reads its special functions and operators from them.
 - weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
   new cleanup cards go into the current week's topic (`todo add "…" --topic cleanup-w42`). Older roadmaps stay as
   they are, solved cards Done in them. Chores that should run regularly get `todo repeat <card> <days>`, and the
