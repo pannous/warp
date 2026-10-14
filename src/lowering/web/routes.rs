@@ -17,7 +17,7 @@ use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use std::collections::HashMap;
 
-const ROUTE_WORD: &str = "route";
+pub(crate) const ROUTE_WORD: &str = "route";
 const ROUTE_PREFIX: &str = "page·route·";
 /// An inner route's own block, which its layout shows at its outlet
 const PART_PREFIX: &str = "page·part·";
@@ -30,7 +30,7 @@ pub const PAGE_ROUTE_INDEX: &str = "page·route_index";
 /// brings regex when page·route_index calls it, router when the program has page·routes
 pub const REGEX_MATCH: &str = "matches";
 /// Where a layout shows the matched route
-const OUTLET: &str = "outlet";
+pub(crate) const OUTLET: &str = "outlet";
 pub const PARAMETER_MARK: &str = ":";
 /// The types a parameter may declare (lib/router.warp route_fits)
 const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];

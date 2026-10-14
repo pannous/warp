@@ -34,6 +34,7 @@ mod test_shader_blocks; // card g_oFJc
 mod test_shader_builtins; // card shader-builtins
 mod test_shader_errors; // card wgsl-error
 mod test_shader_holes; // card shader-holes
+mod test_shader_system_values;
 mod test_small_samples; // cards text-samples, error-examples
 mod test_sound;
 mod test_sound_aliasing; // card reason-beep
@@ -60,4 +61,4 @@ mod test_sound_use; // card bizarre-global
 pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves scope too
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
-mod test_warp_command; // card midi-out
+mod test_warp_command; // card midi-out // card values-number

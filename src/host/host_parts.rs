@@ -183,11 +183,33 @@ pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 	// the reflection getters the JavaScript host reads values with
 	let module = crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
 		.map_err(|failure| compile_failure(code, &failure))?;
+	if let Some(feature) = browser_only_feature(&module.bytes)? {
+		return Err(format!(
+			"{feature} runs in a browser page, and Deploy runs the program on a server, which answers requests: \
+			 deploying browser programs as a site is still to come (card deploy-browser-site); run it in the playground meanwhile"
+		));
+	}
 	if !exports(&module.bytes, crate::lowering::serve::PAGE_SUBMITTED) {
 		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
 	}
 	let scripts = host_scripts_of(&module.bytes)?;
 	Ok((module.bytes, scripts))
+}
+
+/// The first feature of the module that needs a browser page (a canvas, the GPU, sound, frames, the clipboard), which
+/// a Worker answering requests does not have, as the program says it
+fn browser_only_feature(module: &[u8]) -> Result<Option<&'static str>, String> {
+	let feature_of = |name: &str| match name {
+		PAINT => Some("paint"),
+		DRAW_SHAPE | DRAW_SHOW => Some("drawing (use draw)"),
+		SOUND => Some("sound"),
+		TEXT_COVERAGE => Some("text on a canvas"),
+		CLIPBOARD_TEXT => Some("the clipboard"),
+		SIGNAL_LISTEN => Some("`on frame` and other page events"),
+		name if GPU_WORDS.contains(&name) => Some("the GPU"),
+		_ => None,
+	};
+	Ok(imports_of(module)?.iter().filter(|(library, _)| library == HOST_LIBRARY).find_map(|(_, name)| feature_of(name)))
 }
 
 /// The text of an error, else the value written out

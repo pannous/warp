@@ -14,5 +14,5 @@ expect() { # program, expected result
 }
 expect 'x:int = agent "33/3"; x + 1' 12
 expect 'float y = agent "half of 5"; y * 2' 5
-expect 'agent "is 7 a prime number" as bool' yes
+expect '(agent "is 7 a prime number") as bool' yes
 exit $failures

@@ -22,6 +22,8 @@ pub const HEX_INFO: i64 = 2;
 pub const BINARY_INFO: i64 = 3;
 /// The bit of a bool in the kind masks of run-time type tests (node_kind_in): no Kind is that high
 pub const BOOL_MASK_BIT: i64 = 62;
+/// The bit of an operation, a key of an operator other than `:` (`1+1` as data), in those masks (decision parse-type)
+pub const OPERATION_MASK_BIT: i64 = 61;
 /// P215: the head cell of a declared list carries the run-time kinds its element type admits, its element mark, in the
 /// kind field above the bracket byte; everything that reads the bracket masks it with KIND_MASK
 pub const ELEMENT_MARK_SHIFT: i64 = 16;

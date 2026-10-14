@@ -105,6 +105,7 @@ mod test_nested_type_calls; // text hex 255 is text(hex(255))
 mod test_number_converts; // card number-converts
 mod test_number_field; // card number-field
 mod test_number_keeps_exact; // card number-keeps-exact
+mod test_operation_type; // card parse-type
 mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
@@ -163,6 +164,7 @@ mod test_type_model;
 mod test_type_name_definition_forms;
 mod test_type_name_matching;
 mod test_type_of;
+mod test_type_of_consistency; // card type-of-consistency
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
 mod test_type_static;

@@ -70,7 +70,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
   (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
   Never "take your side" on a conflict that also holds main's changes.
-- Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
+- Done = push the branch, SendMessage the Integrator and warp-reviewer together "branch, tip, new tests, filters"
+  (one message each, same text; notes/agents/reviewer.md), fix what they report (a reviewer veto like a gate failure), clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
 - Never retire with a card still yours (user, 2026-10-12: "cards disconnected from their agent"): before you stop, or
