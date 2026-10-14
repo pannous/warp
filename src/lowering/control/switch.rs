@@ -13,7 +13,7 @@ use super::nodes::{
 };
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::optional_field;
@@ -660,7 +660,7 @@ pub fn check_unit_names(program: Node) -> Node {
 			unit_names(pattern, &program, &mut warnings);
 		}
 	});
-	match crate::diagnostic::report(&warnings) {
+	match crate::errors::diagnostic::report(&warnings) {
 		Err(error) => error,
 		Ok(()) => program,
 	}

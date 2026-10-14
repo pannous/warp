@@ -16,7 +16,7 @@ use super::nodes::children_rewritten;
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
 use crate::compiler::context::{Context, UserFunctionDef};
-use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -440,7 +440,7 @@ fn note_charging(
 	// `risky() := 1/0` fails only when called (inside a try): as a value it would fail at once
 	if !reads_variables && !can_fail(&function.body) {
 		crate::normalize::set_position_of(statement);
-		crate::diagnostic::educate_once(
+		crate::errors::diagnostic::educate_once(
 			NEEDLESS_CHARGING_TOPIC,
 			&written,
 			&format!("{name} = {value}"),

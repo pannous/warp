@@ -93,7 +93,7 @@ fn note_internal_words(program: &Node, names: &HashSet<String>) {
 	for form in WARP_FORMS.iter().filter(|form| !names.contains(form.word)) {
 		if let Some(call) = first_call_of(program, form.word) {
 			crate::normalize::set_position_of(call);
-			crate::diagnostic::note_alias(form.word, &warp_form(form.word));
+			crate::errors::diagnostic::note_alias(form.word, &warp_form(form.word));
 		}
 	}
 }
@@ -123,7 +123,10 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 		Some((alias, arguments)) => {
 			crate::normalize::set_position_of(&node);
 			if !alias.module.is_empty() && !WARP_FORMS.iter().any(|form| std::ptr::eq(form, alias)) {
-				crate::diagnostic::note_alias(&format!("{}.{}", alias.module, alias.member), &warp_form(alias.word));
+				crate::errors::diagnostic::note_alias(
+					&format!("{}.{}", alias.module, alias.member),
+					&warp_form(alias.word),
+				);
 			}
 			if !alias.std_module.is_empty() {
 				used.insert(alias.std_module);

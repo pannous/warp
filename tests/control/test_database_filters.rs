@@ -36,9 +36,9 @@ fn a_bare_field_name_in_a_filter_is_the_field_of_each_element() {
 /// a variable of the same name wins, with a warning naming the field form
 #[test]
 fn a_variable_wins_over_a_field_of_the_same_name_with_a_warning() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	is!(&format!("{PERSON}\npeople: [Person] = [Person(\"Bo\", 30), Person(\"Cy\", 10)]\nname = \"Bo\"\ncount(people where it.name == name)"), 1);
-	let warnings = warp::diagnostic::take_warnings();
+	let warnings = warp::errors::diagnostic::take_warnings();
 	assert!(
 		warnings.iter().any(|warning| warning.message.contains("it.name")),
 		"{warnings:?}"
@@ -96,7 +96,7 @@ fn a_filtered_row_is_the_same_instance() {
 #[test]
 fn a_function_with_side_effects_in_a_table_filter_is_warned_about() {
 	filled("filter_effects");
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	is!(
 		&table(
 			"filter_effects",
@@ -104,7 +104,7 @@ fn a_function_with_side_effects_in_a_table_filter_is_warned_about() {
 		),
 		2
 	);
-	let warnings = warp::diagnostic::take_warnings();
+	let warnings = warp::errors::diagnostic::take_warnings();
 	assert!(
 		warnings
 			.iter()
@@ -112,7 +112,7 @@ fn a_function_with_side_effects_in_a_table_filter_is_warned_about() {
 		"{warnings:?}"
 	);
 	is!(&table("filter_effects", "count(people where is_prime(age))"), 2);
-	let warnings = warp::diagnostic::take_warnings();
+	let warnings = warp::errors::diagnostic::take_warnings();
 	assert!(
 		!warnings.iter().any(|warning| warning.message.contains("once per row")),
 		"{warnings:?}"

@@ -17,6 +17,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
   Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
+- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
+  new cleanup cards go into the current week's topic (`todo add "…" --topic cleanup-w42`). Older roadmaps stay as
+  they are, solved cards Done in them. Chores that should run regularly get `todo repeat <card> <days>`, and the
+  daily `todo recur` brings them back to Next; they are not copied into each new roadmap.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.

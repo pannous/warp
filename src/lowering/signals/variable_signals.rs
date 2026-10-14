@@ -250,20 +250,21 @@ impl Signals {
 			let never_fires = format!("{keyword} {} never fires", condition.serialize().trim());
 			let value_text = value.serialize().trim().to_string();
 			let warning = match symbols(value).is_empty() {
-				true => {
-					crate::diagnostic::Diagnostic::at(statement, format!("{never_fires}: nothing writes {name} again"))
-				}
+				true => crate::errors::diagnostic::Diagnostic::at(
+					statement,
+					format!("{never_fires}: nothing writes {name} again"),
+				),
 				false => {
 					let derived = format!("{name} := {value_text}");
 					let message = format!(
 						"{never_fires}: {name} is a copy of {value_text} that nothing writes again; did you mean {derived}?"
 					);
-					crate::diagnostic::Diagnostic::at(statement, message)
+					crate::errors::diagnostic::Diagnostic::at(statement, message)
 						.fix(derived.clone())
 						.offer("a derived value", format!("{name} = {value_text}"), derived)
 				}
 			};
-			if let Err(error) = crate::diagnostic::report(&[warning.severe()]) {
+			if let Err(error) = crate::errors::diagnostic::report(&[warning.severe()]) {
 				return Some(error);
 			}
 		}

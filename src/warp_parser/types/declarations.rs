@@ -323,7 +323,7 @@ impl WarpParser {
 					if words.len() == 2 && FIELD_KEYWORDS.contains(&words[0].drop_meta().name().as_str()) =>
 				{
 					let field = crate::node::leading_name(&words[1]);
-					crate::diagnostic::note_alias(&format!("{} {field}", words[0].drop_meta().name()), &field);
+					crate::errors::diagnostic::note_alias(&format!("{} {field}", words[0].drop_meta().name()), &field);
 					words[1].clone()
 				}
 				// C#'s `int X`: the field X of type int

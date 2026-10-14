@@ -19,9 +19,9 @@ fn program(tables: &str, team_type: &str, rest: &str) -> String {
 #[test]
 fn a_required_key_without_its_row_leaves_the_row_out_with_a_warning() {
 	seeded("required");
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	is!(&program("required", "Team", "count(people)"), 0);
-	let warnings = warp::diagnostic::take_runtime_warnings();
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
 		warnings
 			.iter()

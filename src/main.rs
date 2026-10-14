@@ -7,8 +7,8 @@ use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
 use warp::{
-	diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser, wasm_emitter,
-	web::markup,
+	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser,
+	wasm_emitter, web::markup,
 };
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
 use wasm_emitter::eval;
@@ -145,7 +145,7 @@ fn command_argument<'a>(arg_string: &'a str, command: &str) -> Option<&'a str> {
 #[cfg(not(test))]
 fn main() {
 	let mut args: Vec<String> = env::args().collect();
-	warp::crash_card::install();
+	warp::errors::crash_card::install();
 	end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
 	warp::graphics::paint::allow_windows();
 	warp_runtime::engine::give_main_stack_to_wasm();

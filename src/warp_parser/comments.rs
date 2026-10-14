@@ -65,7 +65,11 @@ pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (us
 	let closer = closer.into();
 	Diagnostic::default()
 		.message(message)
-		.offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at))
+		.offering(crate::errors::fixits::inserted(
+			format!("the closing {closer}"),
+			closer,
+			at,
+		))
 		.into_error()
 }
 
@@ -135,7 +139,7 @@ impl WarpParser {
 			&& self.comment_reads_like_divisor()
 		{
 			self.set_hint_pos();
-			crate::diagnostic::educate_once(
+			crate::errors::diagnostic::educate_once(
 				SLASH_COMMENT_TOPIC,
 				"a // b",
 				"a//b",

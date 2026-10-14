@@ -1,7 +1,7 @@
 // Ask and educate state belongs to one compilation: two evals on one thread (a test thread reused by the harness, a
 // REPL) must not see each other's assumptions or shown notes, and the hint configuration of one
 // thread is not another's (found on Linux CI 2026-10-03: one program's "assumed at …" in another test's error).
-use warp::diagnostic::{take_warnings, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{take_warnings, with_acknowledger, Acknowledging};
 use warp::normalize::{capture_hints, hint_mode, set_hint_mode, HintMode};
 use warp::wasm_emitter::eval;
 use warp::Node;

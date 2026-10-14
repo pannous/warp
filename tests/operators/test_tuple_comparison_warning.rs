@@ -1,7 +1,7 @@
 // `(a, b) == x, y` compares the tuple with x only (the comma binds looser than ==): a strong warning suggests
 // parentheses (user, P42); since P227 (user, 2026-10-09) it is an error asking for them
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 
 fn warns_about_parentheses(code: &str) -> bool {
 	take_warnings();

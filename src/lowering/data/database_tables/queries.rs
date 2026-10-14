@@ -29,7 +29,7 @@ pub fn queried(
 		return Some(Err(mismatch.into_error()));
 	}
 	let (parameters, functions) = (query.parameters, query.functions);
-	if let Err(error) = crate::diagnostic::report(&effectful_calls(&functions, tables.effects.as_ref())) {
+	if let Err(error) = crate::errors::diagnostic::report(&effectful_calls(&functions, tables.effects.as_ref())) {
 		return Some(Err(error));
 	}
 	tables.functions.extend(functions);
@@ -56,7 +56,7 @@ pub(crate) fn is_filter_query(node: &Node) -> bool {
 pub(super) fn effectful_calls(
 	functions: &[Node],
 	effects: Option<&crate::analyzer::effects::EffectReport>,
-) -> Vec<crate::diagnostic::Diagnostic> {
+) -> Vec<crate::errors::diagnostic::Diagnostic> {
 	let Some(effects) = effects else { return vec![] };
 	let mut warned: Vec<String> = vec![];
 	let mut warnings = vec![];
@@ -66,7 +66,7 @@ pub(super) fn effectful_calls(
 				.filter(|effect| SIDE_EFFECTS.contains(effect)).map(|effect| format!("{effect:?}")).collect();
 			if !side_effects.is_empty() && !warned.contains(name) {
 				warned.push(name.clone());
-				warnings.push(crate::diagnostic::Diagnostic::at(node, format!(
+				warnings.push(crate::errors::diagnostic::Diagnostic::at(node, format!(
 					"{name} has side effects ({}): a table filter runs it once per row inside its query; keep filters pure", side_effects.join(", "))));
 			}
 		});
@@ -98,7 +98,7 @@ pub(super) struct Query<'a> {
 	pub(super) functions: Vec<Node>,
 	pub(super) first_function: usize,
 	/// a unit column compared with another kind of quantity: `it.distance > 5 s`
-	pub(super) mismatches: Vec<crate::diagnostic::Diagnostic>,
+	pub(super) mismatches: Vec<crate::errors::diagnostic::Diagnostic>,
 }
 
 impl Query<'_> {
@@ -153,7 +153,7 @@ impl Query<'_> {
 		match column_unit.zip(si_quantity(node)) {
 			Some((unit, (amount, quantity))) if quantity == unit => self.parameter(crate::node::float(amount)),
 			Some((unit, (_, quantity))) => {
-				self.mismatches.push(crate::diagnostic::Diagnostic::at(
+				self.mismatches.push(crate::errors::diagnostic::Diagnostic::at(
 					node,
 					format!("DimensionError: a column of {unit} compared with {quantity}"),
 				));

@@ -5,6 +5,8 @@ move_module.py <module> <folder>                 e.g. move_module.py real number
 move_module.py <parent>/<module> <folder>        e.g. move_module.py wasm_emitter/arithmetic numbers
 move_module.py <module> <folder> --keep-paths    every use stays: `pub use <folder>::<module>;` keeps the old path
 
+move_module.py <module> <folder> --paths-only    the quiet window after --keep-paths: every use names the folder
+
 --keep-paths is for a module with many users, until a quiet window rewrites them (notes/restructuring.md).
 
 src/<parent>/<module>.rs (and src/<parent>/<module>/) go to src/<parent>/<folder>/; the `mod` line with its attributes
@@ -262,8 +264,13 @@ def kept_path(parent_text, folder, module, declaration):
 
 def main():
 	keep_paths = "--keep-paths" in sys.argv
-	target_argument, folder = [argument for argument in sys.argv[1:] if argument != "--keep-paths"]
+	paths_only = "--paths-only" in sys.argv
+	target_argument, folder = [argument for argument in sys.argv[1:] if not argument.startswith("--")]
 	parent, module = split_target(target_argument)
+	if paths_only:
+		rewrite_paths(parent, module, folder)
+		print(f"{target_argument}: uses now name {folder}; drop its re-export from {module_file(parent)}")
+		return
 	parent_file = module_file(parent)
 	parent_text, declaration, line = take_declaration(read(parent_file), module)
 	public = any(re.match(r"^pub mod ", text) for text in declaration)

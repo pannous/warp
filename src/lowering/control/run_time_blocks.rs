@@ -5,7 +5,7 @@
 //! A block known only at run time runs through the host (run_block, notes/runtime_eval.md step 2).
 
 use super::nodes::{call, for_in_variable};
-use crate::diagnostic::{ask, reading, Ask, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 

@@ -75,7 +75,10 @@ fn a_trap_in_the_page_names_the_runtime_error() {
 		warp::wasm_emitter::eval("5%0")
 	);
 	run_outcome(&json!({"result": {"kind": "0"}, "warnings": ["careful"]}));
-	assert_eq!(warp::diagnostic::take_runtime_warnings(), vec!["careful".to_string()]);
+	assert_eq!(
+		warp::errors::diagnostic::take_runtime_warnings(),
+		vec!["careful".to_string()]
+	);
 }
 
 #[test]

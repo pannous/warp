@@ -18,9 +18,9 @@ fn a_page_build_takes_a_server_function() {
 // longer warns that it does
 #[test]
 fn a_page_build_warns_that_a_server_function_ships() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let files = warp::web::site::files(PROGRAM, "users", false).expect("the page builds");
-	let warnings = warp::diagnostic::take_warnings();
+	let warnings = warp::errors::diagnostic::take_warnings();
 	assert!(
 		!warnings
 			.iter()

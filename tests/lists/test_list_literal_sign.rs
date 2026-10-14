@@ -1,7 +1,7 @@
 //! list-sign (user, 2026-10-12, refines D13): in a list literal a space plus a glued sign starts a new item after
 //! anything; spaced or glued operators, indexes and code outside brackets keep subtracting
 use crate::is;
-use warp::diagnostic::{with_warning_mode, WarningMode};
+use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 use warp::node::ints;
 
 #[test]

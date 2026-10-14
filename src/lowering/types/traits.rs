@@ -8,7 +8,7 @@
 
 use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key};
 use crate::analyzer::{call_name, collect_all_types};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_constructor::{instance_parts, Instance};
@@ -644,7 +644,7 @@ pub fn lower_conformances(node: Node) -> Node {
 		return node;
 	}
 	let traits = Traits::of(&node);
-	if let Err(error) = crate::diagnostic::report(&field_method_warnings(&node, &registry)) {
+	if let Err(error) = crate::errors::diagnostic::report(&field_method_warnings(&node, &registry)) {
 		return error;
 	}
 	let generics = generic_functions(&node, &registry, &traits);

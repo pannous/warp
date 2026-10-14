@@ -45,18 +45,18 @@ impl WarpParser {
 		let (first, sign, number) = (lhs.serialize(), self.current_char(), &signed[1..]);
 		let written = format!("{first} {signed}");
 		let readings = vec![
-			crate::diagnostic::reading("the list", &format!("{first} ({signed})")), // also inside brackets: `[1 (-1) 2]`
-			crate::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
+			crate::errors::diagnostic::reading("the list", &format!("{first} ({signed})")), // also inside brackets: `[1 (-1) 2]`
+			crate::errors::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
 		];
-		let question = crate::diagnostic::Ask::new(
+		let question = crate::errors::diagnostic::Ask::new(
 			SIGNED_OPERAND_TOPIC,
 			format!("is `{written}` a list or arithmetic?"),
 			readings,
-			crate::diagnostic::Fallback::Warning,
+			crate::errors::diagnostic::Fallback::Warning,
 		)
 		.written(&written)
 		.at(self.line_nr, self.column);
-		let is_list = crate::diagnostic::ask(&question)? == 0;
+		let is_list = crate::errors::diagnostic::ask(&question)? == 0;
 		if is_list {
 			self.signed_list_element = Some(self.pos);
 		}
@@ -126,7 +126,7 @@ impl WarpParser {
 					let message = format!(
 						"`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input"
 					);
-					return missing_closer(message, closer, crate::fixits::end_of_source(&self.input));
+					return missing_closer(message, closer, crate::errors::fixits::end_of_source(&self.input));
 				}
 				if close.is_some() {
 					self.advance(); // consume closing bracket

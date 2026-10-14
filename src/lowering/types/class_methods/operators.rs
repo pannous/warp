@@ -16,7 +16,7 @@ pub(super) fn operator_calls(node: Node) -> Node {
 				{
 					if method != names[0] {
 						crate::normalize::set_position_of(part);
-						crate::diagnostic::note_alias(&method, names[0]);
+						crate::errors::diagnostic::note_alias(&method, names[0]);
 					}
 					methods.push((name.drop_meta().name(), *op, method));
 				}

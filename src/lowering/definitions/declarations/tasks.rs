@@ -174,7 +174,7 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 					let first = all_word.name() == FIRST_WORD;
 					if first {
 						crate::normalize::set_position_of(list);
-						crate::diagnostic::educate_once(
+						crate::errors::diagnostic::educate_once(
 							FIRST_TOPIC,
 							"await first […]",
 							"await any […]",
@@ -583,7 +583,7 @@ impl Tasks<'_> {
 			|| "it fails with timeout".to_string(),
 			|value| format!("the result is {}", value.serialize().trim()),
 		);
-		crate::diagnostic::educate_once(
+		crate::errors::diagnostic::educate_once(
 			WITHIN_TOPIC,
 			&written,
 			&written,
@@ -1275,24 +1275,24 @@ pub(super) fn unsaid_wait(read: &str, items: &[Node], path: &dyn Fn(&str) -> Tas
 	{
 		return None; // it ran where it started: nothing to wait for
 	}
-	let written = crate::diagnostic::written_text(&items[1]);
+	let written = crate::errors::diagnostic::written_text(&items[1]);
 	let (all, verb) = if read == TASK_LIST {
 		("all ", "waits for every task in it")
 	} else {
 		("", "waits for the task")
 	};
-	let question = crate::diagnostic::Ask::new(
+	let question = crate::errors::diagnostic::Ask::new(
 		IMPLICIT_WAIT_TOPIC,
 		format!("{written} is used as its value: the program {verb} here; write `await {all}{written}` to say so"),
-		vec![crate::diagnostic::reading(
+		vec![crate::errors::diagnostic::reading(
 			"wait here",
 			&format!("await {all}{written}"),
 		)],
-		crate::diagnostic::Fallback::Warning,
+		crate::errors::diagnostic::Fallback::Warning,
 	)
 	.written(&written)
 	.at_node(&items[1]);
-	crate::diagnostic::ask(&question).err()
+	crate::errors::diagnostic::ask(&question).err()
 }
 
 /// `event: body`; `event: x = 7` parses as `(event: x) = 7`
@@ -1359,7 +1359,9 @@ pub(super) fn control_operation(control: &str) -> i64 {
 /// A warning about task control that cannot happen on one thread, and the statement's value ø (an error under
 /// `use strict`)
 pub(super) fn never_happens(located: &Node, message: &str) -> Node {
-	match crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(located, message.to_string()).severe()]) {
+	match crate::errors::diagnostic::report(&[
+		crate::errors::diagnostic::Diagnostic::at(located, message.to_string()).severe()
+	]) {
 		Ok(()) => Node::Empty,
 		Err(error) => error,
 	}

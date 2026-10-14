@@ -1,5 +1,5 @@
 // User issue #17: `sleep(1)` warns that sleep needs a unit (second or millisecond); `sleep 1 s` does not
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {

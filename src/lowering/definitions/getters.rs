@@ -6,7 +6,7 @@
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
 use super::nodes::{call, children_rewritten, is_binding, key};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 

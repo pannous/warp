@@ -48,9 +48,9 @@ fn an_element_statement_takes_its_attributes_in_parentheses() {
 #[test]
 fn rendering_markup_warns_nothing_more() {
 	let shown = eval("html{ p{ \"x\" } }");
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	assert_eq!(warp::web::markup::to_html(&shown), "<html><p>x</p></html>");
-	assert_eq!(warp::diagnostic::take_warnings().len(), 0);
+	assert_eq!(warp::errors::diagnostic::take_warnings().len(), 0);
 }
 
 // card g-_bGo, user decision P176: in a named tag's block a repeated `key: value` is a child, as repeated elements in

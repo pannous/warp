@@ -4,7 +4,7 @@
 
 use super::nodes::{children_rewritten, key};
 use crate::analyzer::{call_name, collect_all_types, list_element_type, literal_misfit, misfit_item, not_whole_note};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::{TypeDef, TypeRegistry};

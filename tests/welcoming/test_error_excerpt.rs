@@ -1,7 +1,7 @@
 // An error or warning shows where it is: the CLI prints the source line with `^^` under the word at its position,
 // the web demo underlines it in the editor (card g-_ZNg)
 use std::collections::HashSet;
-use warp::diagnostic::{excerpt, message_position};
+use warp::errors::diagnostic::{excerpt, message_position};
 use warp::web::evaluate;
 
 const CONSTANT_PROGRAM: &str = "x = 1\npi = 4\n2 * pi";

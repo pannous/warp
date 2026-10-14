@@ -5,7 +5,7 @@
 //! another type than its field's, is a compile error.
 
 use super::nodes::key;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;

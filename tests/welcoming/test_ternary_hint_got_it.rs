@@ -1,6 +1,6 @@
 // card hint-dismiss: the hint "prefer if x then y else z over x ? y : z" is a got-it note: shown until acknowledged,
 // never again after
-use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::normalize::capture_hints;
 
 fn ternary_notes(code: &str) -> usize {

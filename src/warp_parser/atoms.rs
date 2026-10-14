@@ -584,5 +584,5 @@ fn argument_group(arguments: Node) -> Node {
 /// A got-it note on another language's word, pointing at where the word starts
 pub(crate) fn note_alias_at((line, column): (usize, usize), written: &str, warp_word: &str) {
 	crate::normalize::set_hint_position(line, column);
-	crate::diagnostic::note_alias(written, warp_word);
+	crate::errors::diagnostic::note_alias(written, warp_word);
 }
