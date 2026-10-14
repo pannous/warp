@@ -35,11 +35,7 @@ fn mentions(program: &Node, word: &str) -> bool {
 fn evaluated(node: Node) -> Node {
 	match word_argument(&node, EVAL_WORD).cloned() {
 		Some(argument) => {
-			let code = Node::List(
-				vec![symbol(PARSE_WORD), evaluated(argument)],
-				Bracket::None,
-				Separator::Space,
-			);
+			let code = Node::List(vec![symbol(PARSE_WORD), evaluated(argument)], Bracket::None, Separator::Space);
 			parens(vec![symbol(INTERPRET_WORD), parens(vec![code])])
 		}
 		None => crate::node::children_rewritten(node, evaluated),
