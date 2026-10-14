@@ -478,14 +478,16 @@ impl WasmGcEmitter {
 				},
 			]
 		};
+		let nullable_node_ref = Ref(self.node_ref(true));
 		let (items, text) = (0, 1);
+		let relisted = self.next_func_idx;
 		self.runtime_function(
 			name,
 			vec![node_ref, node_ref],
 			vec![node_ref],
-			vec![ValType::I64],
+			vec![ValType::I64, nullable_node_ref],
 			|s, f| {
-				let code = 2;
+				let (code, rest) = (2, 3);
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_list(
 					f,
@@ -513,11 +515,27 @@ impl WasmGcEmitter {
 							struct_type_index: node_type,
 							field_index: 1,
 						},
+					],
+				);
+				// the rest of the list is relisted too: a written list carries its info in every cell
+				Self::emit_list(
+					f,
+					&[
 						I::LocalGet(items),
 						I::StructGet {
 							struct_type_index: node_type,
 							field_index: 2,
 						},
+						I::LocalTee(rest),
+						I::RefIsNull,
+						I::If(BlockType::Result(nullable_node_ref)),
+						I::LocalGet(rest),
+						I::Else,
+						I::LocalGet(rest),
+						I::RefAsNonNull,
+						I::LocalGet(text),
+						I::Call(relisted),
+						I::End,
 						I::StructNew(node_type),
 					],
 				);
