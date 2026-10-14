@@ -12,29 +12,58 @@ pub(crate) const REPLACED_DIRECTORY: &str = ".replaced";
 /// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
 pub(crate) static FETCHING: Mutex<()> = Mutex::new(());
 
+/// The owner of a package written as a bare name (card packages, user: `uniscript` just works)
+pub(crate) const DEFAULT_PACKAGE_OWNER: &str = "pannous";
+const GITHUB_PREFIX: &str = "github:";
+
 /// A package of the registry: `name: "git url"` follows the default branch,
-/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version
-pub(super) struct Registered {
-	pub(super) url: String,
-	pub(super) pinned: Option<Version>,
+/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version.
+/// Short forms (card packages): `name`, `name: owner/repo`, `name: "github:owner/repo"`, `version: latest`
+pub struct Registered {
+	pub url: String,
+	pub pinned: Option<Version>,
 }
 
 pub(super) fn registered(name: &str) -> Option<Registered> {
-	statements(WarpParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
-		let Node::Key(key, _, value) = entry.drop_meta() else {
-			return None;
-		};
-		if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
-			return None;
+	package_in(PACKAGE_REGISTRY, name)
+}
+
+/// The package `name` of a registry text written like packages.warp
+pub fn package_in(registry: &str, name: &str) -> Option<Registered> {
+	statements(WarpParser::parse(registry)).iter().find_map(|entry| match entry.drop_meta() {
+		Node::Symbol(key) if key == name => Some(Registered { url: repository_url(name), pinned: None }),
+		Node::Key(key, _, value) if matches!(key.drop_meta(), Node::Symbol(key) if key == name) => {
+			match value.drop_meta() {
+				Node::List(_, Bracket::Curly, _) => Some(Registered {
+					url: repository_url(&spelled(&value["repository"])?),
+					pinned: version_of(&value["version"]),
+				}),
+				written => Some(Registered { url: repository_url(&spelled(written)?), pinned: None }),
+			}
 		}
-		match value.drop_meta() {
-			Node::Text(url) => Some(Registered { url: url.clone(), pinned: None }),
-			pinned => match pinned["repository"].drop_meta() {
-				Node::Text(url) => Some(Registered { url: url.clone(), pinned: Some(version_of(&pinned["version"])?) }),
-				_ => None,
-			},
-		}
+		_ => None,
 	})
+}
+
+/// A repository as written: a text, a word, or `owner/repo` without quotes
+fn spelled(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Text(text) | Node::Symbol(text) => Some(text.clone()),
+		Node::Key(owner, Op::Div, repository) => Some(format!("{}/{}", spelled(owner)?, spelled(repository)?)),
+		_ => None,
+	}
+}
+
+/// The git url of a written repository: a url, ssh address or path stays; `github:owner/repo`, `owner/repo` and a
+/// bare `repo` (of DEFAULT_PACKAGE_OWNER) are GitHub repositories
+fn repository_url(written: &str) -> String {
+	let is_url = written.contains("://") || written.starts_with("git@") || written.starts_with(['/', '.', '~']);
+	if is_url {
+		return written.to_string();
+	}
+	let path = written.strip_prefix(GITHUB_PREFIX).unwrap_or(written).trim_start_matches('/').trim_end_matches(".git");
+	let path = if path.contains('/') { path.to_string() } else { format!("{DEFAULT_PACKAGE_OWNER}/{path}") };
+	format!("https://github.com/{path}.git")
 }
 
 /// The git url of a package in the registry
