@@ -154,9 +154,6 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
-const IS_IN_PHRASE: &str = "is in";
-/// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
-const CONTAINMENT_WORDS: [&str; 3] = ["contains", "has", "includes"];
 /// `for each item in basket` is `for item in basket`
 const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
@@ -368,47 +365,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	items
 }
 
-/// The infix operators continue_expr reads apart from the operator table
-enum SpecialInfix {
-	/// `xs |> f(a)`
-	Pipeline,
-	/// `xs .+ 4`
-	ElementWise(Op),
-	/// `x in xs` and `xs contains x`: the list [lhs word operand]
-	Membership(&'static str),
-	/// Julia's dot call `f.(xs)`, `add.(xs, 10)`: f mapped over the first argument
-	DotCall,
-}
-
-impl SpecialInfix {
-	fn applied(self, lhs: Node, operand: Node) -> Node {
-		match self {
-			SpecialInfix::Pipeline => piped(lhs, operand),
-			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
-			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
-				crate::normalize::hint(
-					&format!("{}.*", lhs.serialize()),
-					&lhs.serialize(),
-					"warp imports a module whole",
-				);
-				lhs
-			}
-			// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
-			SpecialInfix::ElementWise(op) => Node::List(
-				vec![lhs, Symbol(crate::operators::element_wise_word(op)), operand],
-				Bracket::None,
-				Separator::Space,
-			),
-			SpecialInfix::Membership(word) => Node::List(
-				vec![lhs, Symbol(word.to_string()), operand],
-				Bracket::None,
-				Separator::Space,
-			),
-			SpecialInfix::DotCall => dot_call(lhs, operand),
-		}
-	}
-}
-
 /// `f.(xs, a)` → `map(xs, broadcast_item => f(broadcast_item, a))`
 fn dot_call(function: Node, arguments: Node) -> Node {
 	let mut arguments = match arguments.drop_meta() {
@@ -456,12 +412,12 @@ const AND_KEYWORD: &str = "and";
 /// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
 /// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
 const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
-/// Words between two operands besides the operator words (operators::is_operator_word): membership, `div`, `of`
-const JOINING_WORDS: [&str; 4] = [IN_KEYWORD, "div", OF_WORD, "matches"];
+/// Words between two operands besides the operator words (operators::is_operator_word): `of`, `matches`
+const JOINING_WORDS: [&str; 2] = [OF_WORD, "matches"];
 
 /// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
 pub(crate) fn joins_operands(word: &str) -> bool {
-	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word) || CONTAINMENT_WORDS.contains(&word)
+	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word)
 }
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
@@ -669,7 +625,6 @@ const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
 /// `|>` binds below range and arithmetic, above `as` and comparisons
-const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
 
 /// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
 /// `square xs |> filter(p)` → `filter((square xs), p)`

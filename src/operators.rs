@@ -13,7 +13,7 @@ const PREFIX_BP: u8 = 162;
 /// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 132] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -140,6 +140,18 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
 	("…", Op::To),
 	("through", Op::To),
 	("as", Op::As),
+	// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
+	(".+", Op::Add),
+	(".-", Op::Sub),
+	(".*", Op::Mul),
+	("./", Op::Div),
+	(".^", Op::Pow),
+	("|>", Op::Pipe),
+	("in", Op::In),
+	("is in", Op::In), // `item is in basket` reads as `item in basket`
+	("contains", Op::In),
+	("has", Op::In),
+	("includes", Op::In),
 ];
 
 /// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
@@ -334,6 +346,11 @@ pub enum Op {
 
 	PlusMinus, // ±  +-  a value with tolerance
 
+	// Parsed only, the parser builds their nodes: the pipeline `xs |> f` is the call `f(xs)`, the membership `x in xs`
+	// and `xs contains x` the list [x in xs]
+	Pipe, // |>
+	In,   // in
+
 	// User(Node), allow user defined operators, name==symbol
 	None, // implicit/unknown
 }
@@ -380,7 +397,9 @@ impl Op {
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
 
 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
-			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar | Op::Rough => (115, 116),
+			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar | Op::Rough | Op::In => (115, 116),
+			// below arithmetic, above comparison: `xs |> sum > 3` is `sum(xs) > 3`
+			Op::Pipe => (127, 128),
 
 			// Logical not binds weaker than comparison: not a==b → not (a==b)
 			Op::Not => (0, 105),
@@ -449,6 +468,8 @@ impl Op {
 			Op::Add => "+",
 			Op::Sub => "-",
 			Op::PlusMinus => "±",
+			Op::Pipe => "|>",
+			Op::In => "in",
 			Op::Mul => "*",
 			Op::Div => "/",
 			Op::Mod => "%",

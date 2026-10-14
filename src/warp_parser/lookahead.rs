@@ -215,6 +215,8 @@ impl WarpParser {
 			"//" | "//=" => self.at_floor_division(), // `x // note` stays a comment
 			// `div{…}` and `div {…}` are the html tag, and data never computes
 			"div" => !self.options.data_mode && !self.word_opens_block("div"),
+			// `xs contains x` in code only, data keeps the words as they are
+			"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
 			// `a .5` is a list of two values, `a.5` a member access
 			"." => !(prev.is_whitespace() && self.number_starts_at(0)),
 			"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`

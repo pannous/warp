@@ -288,43 +288,6 @@ impl WarpParser {
 		))
 	}
 
-	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
-	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
-		// `def contains(a,b) = …`: the word after a function keyword is the name, never an operator
-		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
-			return None;
-		}
-		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
-		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
-		if self.at_pipeline() {
-			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
-		}
-		// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
-		let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
-		if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
-			return Some((SpecialInfix::DotCall, 1, Op::Dot.binding_power()));
-		}
-		// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
-		if let Some(op) = self.element_wise_operator() {
-			return Some((SpecialInfix::ElementWise(op), 2, op.binding_power()));
-		}
-		// membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`;
-		// a unit word stays in the flat counting phrase: `number of chars in t`
-		let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
-		// `item is in basket` reads as `item in basket`
-		let membership = [IS_IN_PHRASE, IN_KEYWORD]
-			.into_iter()
-			.find(|word| self.matches_keyword(word));
-		if let (Some(word), false) = (membership, counts_units) {
-			return Some((SpecialInfix::Membership(IN_KEYWORD), word.len(), Op::Eq.binding_power()));
-		}
-		// `xs contains x` binds like `x in xs`, in code only (data keeps the words as they are)
-		let containment = CONTAINMENT_WORDS
-			.into_iter()
-			.find(|word| !self.options.data_mode && self.matches_keyword(word) && self.operand_after(word.len()));
-		containment.map(|word| (SpecialInfix::Membership(word), word.len(), Op::Eq.binding_power()))
-	}
-
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
 	pub(super) fn at_pipeline(&self) -> bool {
 		self.current_char() == '|' && self.peek_char(1) == '>'
@@ -406,12 +369,13 @@ impl WarpParser {
 			if self.pipe_takes_call && self.at_pipeline() {
 				break;
 			}
-			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
-			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
-				let Some(operand) = self.special_operand(width, binding, min_bp) else {
+			// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
+			let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
+			if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
+				let Some(arguments) = self.special_operand(1, Op::Dot.binding_power(), min_bp) else {
 					break;
 				};
-				lhs = infix.applied(lhs, operand);
+				lhs = dot_call(lhs, arguments);
 				previous_comparand = None;
 				continue;
 			}
@@ -448,12 +412,17 @@ impl WarpParser {
 			};
 
 			let (l_bp, r_bp) = op.binding_power();
+			// a unit word stays in the flat counting phrase `number of chars in t`; `def contains(a,b) = …` names the
+			// function after its keyword
+			let membership_word = op == Op::In
+				&& matches!(lhs.drop_meta(), Node::Symbol(word)
+					if crate::analyzer::text_unit(word).is_some() || crate::operators::is_function_keyword(word));
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
 			let ends_command =
 				op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
@@ -891,6 +860,21 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 		}
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
+		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
+		_ if op == Op::In => {
+			let word = if written.ends_with(IN_KEYWORD) { IN_KEYWORD } else { written };
+			Node::List(vec![lhs, Symbol(word.to_string()), rhs], Bracket::None, Separator::Space)
+		}
+		_ if op == Op::Pipe => piped(lhs, rhs),
+		// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+		_ if written == ".*" && matches!(rhs, Empty) => {
+			crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "warp imports a module whole");
+			lhs
+		}
+		// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+		_ if crate::operators::element_wise_operator(written).is_some() => {
+			Node::List(vec![lhs, Symbol(written.to_string()), rhs], Bracket::None, Separator::Space)
+		}
 		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
 		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
 			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
