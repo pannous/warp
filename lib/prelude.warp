@@ -15,6 +15,7 @@ replace(t, old, new) := join(split(t, old), new)
 is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
+is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 // x as a fraction, by its continued fraction (src/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator), neither the first convergent that is the same float; 0 means not given

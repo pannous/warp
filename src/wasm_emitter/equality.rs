@@ -34,6 +34,8 @@ impl WasmGcEmitter {
 			}
 			// an indexed element is a Node of any kind: 'héllo'#2 is a codepoint
 			Node::Key(indexed, Op::Hash, _) => !matches!(indexed.drop_meta(), Node::Empty),
+			// `data n*1`: code as a Node, compared as written (`parse("n * 1") == data (n * 1)`)
+			Node::List(..) if crate::blocks::quoted_data(node).is_some() => true,
 			Node::Symbol(name) => {
 				let bound = self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name);
 				bound && self.get_type(node).is_ref()
@@ -79,10 +81,13 @@ impl WasmGcEmitter {
 
 	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text) or symbol
 	/// (`type(2) == type(3)`, card type-equal), and a value held as a Node whose kind shows only at run time (a cell's,
-	/// `cell_get(c) == 5`; a call giving a Node that holds a float)
+	/// `cell_get(c) == 5`; a call giving a Node that holds a float), and a function value (`make(1) == make(2)`)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
 		let by_value = |node: &Node| {
-			matches!(self.get_type(node), Kind::Text | Kind::Symbol | Kind::Empty) || self.is_held_cell_value(node)
+			matches!(
+				self.get_type(node),
+				Kind::Text | Kind::Symbol | Kind::Empty | Kind::Function
+			) || self.is_held_cell_value(node)
 		};
 		matches!(op, Op::Eq | Op::Ne)
 			&& (self.is_structural_operand(left)
@@ -184,6 +189,7 @@ impl WasmGcEmitter {
 		condition: &Node,
 		emit_number: fn(&mut Self, &mut Function, &Node),
 	) {
+		self.warn_bits_as_truth(condition);
 		if self.is_structural_operand(condition)
 			|| self.is_held_cell_value(condition)
 			|| self.holds_run_time_kind(condition)
@@ -197,6 +203,34 @@ impl WasmGcEmitter {
 			emit_number(self, func, condition);
 			func.instruction(&I::I64Const(0));
 			func.instruction(&I::I64Ne); // not I32WrapI64: 2^32 is truthy
+		}
+	}
+
+	/// `if 8 & 4` tests the bits 8 and 4 share (none: false), never whether both are truthy (user 2026-10-13)
+	fn warn_bits_as_truth(&mut self, condition: &Node) {
+		let Node::Key(left, op, right) = condition.drop_meta() else {
+			return;
+		};
+		if !op.is_bitwise() || self.logical_reading(left, op, right).is_some() {
+			return;
+		}
+		let (a, b) = (left.serialize(), right.serialize());
+		let (a, b, logical) = (a.trim(), b.trim(), op.logical_twin());
+		let written = format!("{a} {op} {b}");
+		let warning = crate::diagnostic::Diagnostic::at(
+			condition,
+			format!(
+				"`{written}` combines the bits of two whole numbers, true when the result is not 0; write `{a} {logical} {b}` for \
+				 the logical {logical} or `({written}) != 0` for the bits"
+			),
+		)
+		.offer(format!("the logical {logical}"), &written, format!("{a} {logical} {b}"))
+		.offer("a test of the bits", &written, format!("({written}) != 0"));
+		if crate::diagnostic::warned_before(&warning) {
+			return;
+		}
+		if crate::diagnostic::report(std::slice::from_ref(&warning)).is_err() {
+			self.type_errors.push(self.located(warning.to_string()));
 		}
 	}
 
@@ -635,6 +669,9 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32And, I::I32Eqz]);
 				Self::return_if(f, 0);
 				f.instruction(&I::End);
+				if !s.ctx.closure_targets.is_empty() {
+					s.emit_closures_equal(f, recurse);
+				}
 				// `{…}` objects are maps: their entries may come in any order
 				for kind in [2, 3] {
 					Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Eq]);

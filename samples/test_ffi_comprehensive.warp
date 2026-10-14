@@ -1,5 +1,4 @@
 #!/usr/bin/env warp
-#!/usr/bin/env warp
 // Comprehensive FFI Test Suite
 // Demonstrates various parameter type combinations with native library imports
 

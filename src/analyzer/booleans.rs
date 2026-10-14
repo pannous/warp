@@ -5,9 +5,10 @@ use super::*;
 
 pub const BOOL_TYPE: &str = "bool";
 /// Calls whose value is a bool
-const BOOL_CALLS: [&str; 7] = [
-	crate::type_tests::IS_TYPE,
-	crate::traits::INSTANCE_OF,
+const BOOL_CALLS: [&str; 8] = [
+	crate::library_words::COLLECTION_CONTAINS,
+	crate::words::IS_TYPE,
+	crate::words::INSTANCE_OF,
 	crate::wasm_emitter::text_builtins::IS_ERROR,
 	crate::library_words::VALUES_SIMILAR,
 	crate::library_words::VALUES_ROUGH,
@@ -41,7 +42,8 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::contex
 
 /// The body ends in a bool and every `return` in it returns one
 fn gives_bool(function: &crate::context::UserFunctionDef) -> bool {
-	let scope = parameter_scope(function);
+	let mut scope = parameter_scope(function);
+	define_bool_locals(function, &mut scope);
 	let mut returns_bool = true;
 	function.body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node.drop_meta() {
@@ -67,6 +69,37 @@ fn parameter_scope(function: &crate::context::UserFunctionDef) -> Scope {
 	scope
 }
 
+/// The locals of the body that only ever store bools (`hit = no; … hit = yes`, the flag `any` inlines to), also
+/// through each other (`b = a`); a parameter or a local updated in place (`n += 1`) is none
+fn define_bool_locals(function: &crate::context::UserFunctionDef, scope: &mut Scope) {
+	let mut stored: HashMap<String, Vec<Node>> = HashMap::new();
+	let mut updated: HashSet<String> = function.params.iter().map(|param| param.name.clone()).collect();
+	function.body.visit(&mut |node| {
+		let Node::Key(left, op, value) = node.drop_meta() else {
+			return;
+		};
+		let Node::Symbol(name) = left.drop_meta() else {
+			return;
+		};
+		match op {
+			Op::Assign | Op::Define => stored.entry(name.clone()).or_default().push(value.as_ref().clone()),
+			_ if op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) => {
+				updated.insert(name.clone());
+			}
+			_ => {}
+		}
+	});
+	stored.retain(|name, _| !updated.contains(name));
+	while let Some(name) = stored
+		.iter()
+		.find(|(_, values)| values.iter().all(|value| is_boolean(value, scope)))
+		.map(|(name, _)| name.clone())
+	{
+		stored.remove(&name);
+		scope.define(name, Some(Box::new(Node::Symbol(BOOL_TYPE.to_string()))), Kind::Int);
+	}
+}
+
 pub fn is_bool_function(name: &str) -> bool {
 	BOOL_FUNCTIONS.with(|known| known.borrow().contains(name))
 }
@@ -80,7 +113,7 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 			Op::Not => matches!(left.drop_meta(), Node::Empty),
 			// `2 as bool`, also a function's declared `-> bool` result (card bool-conversion)
 			Op::As => is_bool_type(&right.drop_meta().name()),
-			Op::And | Op::Or => is_boolean(left, scope) && is_boolean(right, scope),
+			Op::And | Op::Or | Op::BitAnd | Op::BitOr => is_boolean(left, scope) && is_boolean(right, scope),
 			// `c ? yes : f(n)`, `if c then yes else f(n)`: both branches
 			Op::Question => {
 				matches!(right.drop_meta(), Node::Key(then, Op::Colon, otherwise) if is_boolean(then, scope) && is_boolean(otherwise, scope))

@@ -8,6 +8,7 @@ mod test_comprehension_beside_own_push; // card prefix-count-field
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
+mod test_counting_word_operands; // card count-xs
 mod test_counting_word_variables;
 mod test_counting_words;
 mod test_decimal_list_elements;
@@ -48,6 +49,7 @@ mod test_linear_hint; // card linear-hint
 mod test_list_arithmetic;
 mod test_list_compound_add;
 mod test_list_identity; // card w0-list-writes
+mod test_list_literal_sign; // decision list-sign
 mod test_list_methods; // card list-methods
 mod test_list_number_comparison;
 mod test_list_of_objects;

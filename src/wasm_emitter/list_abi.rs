@@ -1,5 +1,5 @@
 //! The array calling convention for lists (notes/typed_lists.md): a function that works on a list parameter through its
-//! array copy (`arr·list = arr`, analyzer::indexed_parameter_copies) takes that parameter as a `$NodeList` and copies it
+//! array copy (`arr·list = arr`, declaration_forms::indexed_parameter_copies) takes that parameter as a `$NodeList` and copies it
 //! with one array.copy, instead of a Node list the caller rebuilds and the callee converts back; a function whose every
 //! result is such an array, or a call of another such function, returns the `$NodeList` itself. Callers convert only
 //! where they need a Node: recursive list algorithms (quicksort_partitioned) stop converting at every call.
@@ -51,7 +51,7 @@ fn list_parameters(function: &UserFunctionDef) -> Vec<Option<String>> {
 }
 
 /// What a body gives back: its last statement (or what its final `return` returns) and every `return` value
-fn results(body: &Node) -> Vec<&Node> {
+pub(super) fn results(body: &Node) -> Vec<&Node> {
 	let mut found = vec![];
 	body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
@@ -85,7 +85,7 @@ pub(super) fn body_statements(body: &Node) -> Vec<Node> {
 }
 
 /// The last value of a block `(…; x)`
-fn last_value(node: &Node) -> &Node {
+pub(super) fn last_value(node: &Node) -> &Node {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline)
 			if !items.is_empty() =>

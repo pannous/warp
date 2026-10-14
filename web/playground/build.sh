@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web.rs) in two
+# Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web/mod.rs) in two
 # builds, samples.js (samples/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
 # version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)

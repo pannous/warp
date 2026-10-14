@@ -1,0 +1,54 @@
+# Structural tree matching: design examples (card tree-patterns, notes/matching.md "Tree patterns")
+# None of this works yet; each block names what it should give.
+
+# 1. Deep partial map patterns: unnamed fields are ignored, nested maps match by shape
+response = {status: 200, body: {user: {name: "Ann", email: "ann@x.org", age: 31}}}
+match response {
+	{status: 200, body: {user: {name, email}}} => name + " <" + email + ">"
+	{status: 404} => "missing"
+	{error: message} => message
+}
+# "Ann <ann@x.org>"
+
+# 2. Conditions inside the tree: relational, alternatives, ranges and types at any depth
+match response {
+	{body: {user: {age: >= 18, name: text}}} => "adult"
+	{body: {user: {age: 13 to 17}}} => "teen"
+	_ => "child"
+}
+# "adult"
+
+# 3. Lists inside maps: a pattern for every item collects the bindings as lists
+order = {id: 7, items: [{sku: "a1", qty: 2}, {sku: "b2", qty: 1}]}
+match order { {items: [{sku}...]} => sku }
+# ["a1", "b2"]
+
+# 4. Named patterns are values: reuse them, test with is, filter with where
+Adult = {age: >= 18}
+Admin = {roles: [.., "admin", ..]}
+people = [{name: "Ann", age: 31, roles: ["admin"]}, {name: "Bo", age: 12, roles: []}]
+people where it is Adult and Admin
+# [{name: "Ann", age: 31, roles: ["admin"]}]
+
+# 5. Matching anywhere in the tree (descendants, like XPath // or jq ..)
+page = {header: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+page find {type: "image", src}
+# ["logo.png", "cat.jpg"]
+
+# 6. Rewriting a tree by pattern: every match replaced, the rest kept
+page replace {type: "image", src} with {type: "image", src, alt: ""}
+
+# 7. Shape check of untrusted JSON: a pattern as a schema
+Config = {port: int, host: text, debug?: bool}
+if json(read "config.json") is Config then "ok" else "bad config"
+
+# 8. Code is a tree too: quoted code patterns with holes, quoted as data(…) (backticks are template text;
+# notes/parse_word.md). A hole $a binds the subtree, a repeated hole must be equal; in a result, data(…) fills the holes
+simplify(code) := match code {
+	data($a + 0) => a
+	data($a * 1) => a
+	data($f($x, $x)) => data(twice $f $x)
+	_ => code
+}
+simplify(parse("n * 1"))
+# n

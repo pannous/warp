@@ -147,7 +147,8 @@ pub fn rows_read() -> usize {
 /// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| {
-		crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
+		node.text_value()
+			.ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
 	};
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
@@ -601,7 +602,10 @@ fn list(items: Vec<Node>) -> Node {
 fn connection(file: &str) -> Result<Handle, String> {
 	let path = match file {
 		crate::database_tables::TABLES_FILE => IN_MEMORY.to_string(),
-		file => test_thread_copy(file).unwrap_or_else(|| file.to_string()),
+		file => {
+			crate::sandbox::check_write(file)?;
+			test_thread_copy(file).unwrap_or_else(|| file.to_string())
+		}
 	};
 	if let Some(handle) = CONNECTIONS.with(|connections| connections.borrow().get(file).copied()) {
 		return Ok(handle as Handle);

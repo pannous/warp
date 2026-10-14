@@ -58,7 +58,7 @@ fn range_end_fixes() {
 #[test]
 fn signed_operand_fixes() {
 	assert_fix("1 -1", "the list", "1 -1"); // `1 (-1)`: a list without brackets prints so
-	assert_fix("[1 -1 2]", "the list", "[1 -1 2]");
+	assert!(diagnostics("[1 -1 2]").is_empty()); // list-sign (user 2026-10-12): inside a list literal no question
 	assert_fix("1 -1", "arithmetic", "0");
 }
 
@@ -286,4 +286,20 @@ fn declared_type_mismatch_fixes() {
 #[test]
 fn unused_copy_fix() {
 	assert_fix("x = [3, 1, 2]; sort x; x", "change x", "[1 2 3]");
+}
+
+#[test]
+fn missing_kebab_field_fix() {
+	// field-or-minus (user 2026-10-12): "I meant: p.phone - number"
+	assert_fix("p = {phone: 7}; number = 2; p.phone-number", "subtraction", "5");
+}
+
+#[test]
+fn int_for_enum_parameter_fix() {
+	// card coin-errors, decision enum-case B: an int becomes a case explicitly, so f(1) for f(c: Coin) offers f(1 as Coin)
+	assert_fix(
+		"enum Coin { Penny, Nickel, Dime }; f(c: Coin) := c; f(1)",
+		"the Coin case at index 1",
+		"Nickel",
+	);
 }

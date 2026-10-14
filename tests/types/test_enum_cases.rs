@@ -36,5 +36,5 @@ fn swift_case_lines_with_values() {
 
 #[test]
 fn an_enum_without_values_stays_numbered() {
-	is!("enum Color { red, green }; Color::green", 1);
+	is!("enum Color { red, green }; Color::green as int", 1);
 }

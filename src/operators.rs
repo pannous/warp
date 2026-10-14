@@ -40,6 +40,42 @@ pub fn glyph_operator(glyph: char) -> Option<(Op, &'static str)> {
 		.map(|(_, op, canonical)| (*op, *canonical))
 }
 
+/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
+pub const ELEMENT_WISE_OPERATORS: [Op; 5] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Pow];
+
+/// The word the parser keeps an element-wise operator as, `.*` of `*`
+pub fn element_wise_word(op: Op) -> String {
+	format!(".{}", op.as_str())
+}
+
+/// The operator an element-wise word applies to each element, `*` of `.*`
+pub fn element_wise_operator(word: &str) -> Option<Op> {
+	ELEMENT_WISE_OPERATORS
+		.into_iter()
+		.find(|op| element_wise_word(*op) == word)
+}
+
+/// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
+pub const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
+	(Op::Add, &["plus", "add", "__add__"]),
+	(Op::Sub, &["minus", "subtract", "__sub__"]),
+	(Op::Mul, &["times", "multiply", "__mul__"]),
+	(Op::Div, &["divide", "div", "__truediv__"]),
+	(Op::Mod, &["mod", "modulo", "__mod__"]),
+	(Op::Lt, &["less", "smaller", "__lt__"]),
+	(Op::Gt, &["more", "bigger", "__gt__"]),
+	(Op::Similar, &["approximately"]),
+	(Op::Rough, &["similar"]),
+];
+
+/// The method an operator on an instance calls, `plus` for `+`
+pub fn operator_method(op: Op) -> Option<&'static str> {
+	OPERATOR_METHODS
+		.iter()
+		.find(|(known, _)| *known == op)
+		.map(|(_, names)| names[0])
+}
+
 pub fn is_function_keyword(s: &str) -> bool {
 	FUNCTION_KEYWORDS.contains(&s)
 }
@@ -115,6 +151,9 @@ pub enum Op {
 	Or,  // or   ||  ⋁
 	Xor, // xor  ⊻
 	Not, // not  !  ¬
+	// `&` and `|`: the bits of two whole numbers, else the logical and/or (card operator-shall)
+	BitAnd, // &
+	BitOr,  // |
 
 	// Prefix operators (unary)
 	Neg,  // - (unary minus)
@@ -202,9 +241,9 @@ impl Op {
 			Op::Not => (0, 105),
 
 			// Logical (left-assoc with and > or)
-			Op::And => (100, 101),
+			Op::And | Op::BitAnd => (100, 101),
 			Op::Xor => (95, 96),
-			Op::Or => (90, 91),
+			Op::Or | Op::BitOr => (90, 91),
 			Op::Coalesce => (93, 92), // right-assoc: a ?? b ?? c → a ?? (b ?? c)
 
 			// Ternary: ? needs lower right bp so : can bind within
@@ -303,6 +342,8 @@ impl Op {
 			Op::Or => "or",
 			Op::Xor => "xor",
 			Op::Not => "not",
+			Op::BitAnd => "&",
+			Op::BitOr => "|",
 
 			// Prefix
 			Op::Neg => "-",
@@ -410,6 +451,19 @@ impl Op {
 		matches!(self, Op::And | Op::Or | Op::Xor)
 	}
 
+	/// `&` and `|` as the logical and/or they are on anything but two whole numbers; every other operator itself
+	pub fn logical_twin(&self) -> Op {
+		match self {
+			Op::BitAnd => Op::And,
+			Op::BitOr => Op::Or,
+			_ => *self,
+		}
+	}
+
+	pub fn is_bitwise(&self) -> bool {
+		matches!(self, Op::BitAnd | Op::BitOr)
+	}
+
 	/// Check if this is a compound assignment operator (+=, -=, etc.)
 	pub fn is_compound_assign(&self) -> bool {
 		matches!(
@@ -424,6 +478,11 @@ impl Op {
 				| Op::OrAssign
 				| Op::XorAssign
 		)
+	}
+
+	/// `=`, `+=` and the like, `++`, `--`: an operator that writes its variable
+	pub fn is_write(&self) -> bool {
+		*self == Op::Assign || self.is_compound_assign() || matches!(self, Op::Inc | Op::Dec)
 	}
 
 	/// Get the base operator for a compound assignment (AddAssign -> Add, etc.)
@@ -451,7 +510,7 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-pub const OP_CODES: [Op; 63] = [
+pub const OP_CODES: [Op; 65] = [
 	Op::None,
 	Op::Colon,
 	Op::Assign,
@@ -515,6 +574,8 @@ pub const OP_CODES: [Op; 63] = [
 	Op::Rough,
 	Op::LogBase,
 	Op::LogOf,
+	Op::BitAnd,
+	Op::BitOr,
 ];
 
 /// Encode Op as i64 for storage in kind field

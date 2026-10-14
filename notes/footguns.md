@@ -2,8 +2,6 @@
 
 - The file is `Footguns.md` (capital F). The checkout is case-insensitive (`core.ignorecase=true`):
   `git add footguns.md` silently stages nothing for the untracked file; use the real name.
-- `probes/footguns/footguns.sh` rebuilds warp and evaluates every case in `probes/footguns/cases.warp`
-  (cases separated by `---` lines) into `probes/footguns/results.txt`. Rerun it after compiler changes and diff.
 - `tests/welcoming/test_footguns.rs`: passing tests = Solved entries; `#[ignore = "next"]` = NOT YET entries with a clear answer.
   When a NOT YET bug gets fixed, un-ignore its test and move the entry to Solved.
 - `warp eval` and `is!` use the same `wasm_emitter::eval`, so CLI output is representative.
@@ -24,15 +22,11 @@
   (`test_proof_model_matches_unbounded_int`). Explicit `as i64` proof terms remain future work.
 
 ## Inspiration notes ("Solved elsewhere")
-- Research agents write one file per topic group to `probes/footguns/inspiration/<group>.md` (brief: `BRIEF.md`),
-  never Footguns.md directly; `python3 probes/footguns/merge_inspiration.py` appends them under matching headings
-  (idempotent: entries that already have "Solved elsewhere:" are skipped). Diff for deleted lines after merging.
-- Group `injection-time-effects` was sent to the cloud session "footgun.md (cloud)" on 2026-09-26: delivery reported
-  success but the route is one-way and the session stayed idle (likely awaiting approval). Once it pushes
-  `probes/footguns/inspiration/injection-time-effects.md`, rerun the merge script.
+- The 2026-09 research rounds (one file per topic group, merged under "Solved elsewhere:" headings) are done; their
+  scripts went with the untracked probes on 2026-09-30.
 
 ## Work area "literals" (2026-09-27, 9682281d)
-- Fixed in `src/warp_parser.rs` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
+- Fixed in `src/warp_parser/` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
   mantissa with `.` or negative exponent → Float; `_` accepted only between two digits; `.5`/`-.5` start a number
   (`number_starts_at`), a space before `.5` makes it a new list item instead of `Op::Dot`.
 - `‖x‖`: the closing bar used to be re-read as a new prefix Abs with an empty operand ("Unexpected character"); now
@@ -110,7 +104,7 @@
   (`x=ø; x+1` → Error, narrowed inside `if x {…}`), `a and b or c` lint (stderr warning + `analyzer::lint`), float and
   >32-bit conditions (`if 0.5`, `if 2^32` were falsy), parser now consumes `ø` in `parse_atom` (`if ø {…}` was garbage).
 - Mechanism: `src/diagnostic.rs` (`Diagnostic::at(node,…).fix(…)` → "msg at line:col; fix: …"), `analyzer::diagnose` runs
-  before emission in `eval_parsed`, `analyzer::lower_declarations` turns `x:T=v` into a typed local (type kept as Meta on x).
+  before emission in `eval_parsed`, `declaration_forms::lower_declarations` turns `x:T=v` into a typed local (type kept as Meta on x).
   Truthiness rides on the strings-equality agent's `emit_condition`/`is_truthy`; I added the float/i64 != 0 branch.
 - Decided: empty values falsy, uniformly (Footguns.md → Empty values, with alternatives).
 - Left open: `T?` syntax (`x:int?=ø` parse error) and locals first assigned `ø` panic in the emitter
@@ -169,7 +163,7 @@
 - Left open: no WASM runtime representation of dates (functions/loops over dates are an explicit "not supported yet" error);
   `now` is the compiler's clock and is not an effect yet; no historical or southern-hemisphere zone rules; the parse-only
   data path (`data_mode`) does not lex dates or durations yet (it round-trips source text and has no date serialization).
-- Noticed: `Node == bool` ignores `Node::True`/`Node::False` (`PartialEq<bool>` in src/node.rs has no arm for them), so
+- Noticed: `Node == bool` ignores `Node::True`/`Node::False` (`PartialEq<bool>` in src/node/ has no arm for them), so
   `is!(…, true)` only works for Int 1/0 results; the time evaluator returns Int 1/0 like the rest of eval.
 
 ## Work area "number decisions" (2026-09-28)
@@ -205,7 +199,7 @@
 ## Work area "syntax decisions" (2026-09-28)
 - Decided and fixed: `&`/`|` vs comparison. `&`/`|` stay logical and/or (wiki/&.md); the parser turns a single-char `&`/`|`
   next to an ungrouped comparison into an error value with both groupings as fix-it (`logic_mixed_with_comparison` in
-  src/warp_parser.rs). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
+  src/warp_parser/). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
 - Decided and fixed: braceless calls. The argument takes arithmetic and stops at ranges/comparisons (ARGUMENT_BP 140), in operand
   position and, for functions of the implicit `it`, at statement level: `1 + f 3-1` → 21, `f 3-1 > 15` → true. This matches the
   legacy wasp tests (`3 + id 3+3` → 9, test_wasm.rs, ignored). A braceless call inside a braceless argument is rejected by
@@ -400,7 +394,7 @@ test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_
 - Implemented: `number of X in t` for the text units `byte(s)`, `char(s)`, `codepoint(s)`, `grapheme(s)` (singular or
   plural, `count of`/`length of` too), and the unit views `#(byte in t)`, `#(t as bytes)`; on literals and variables.
   `number of chars in "héllo"` → 5, `number of graphemes in "👍🏽"` → 1, `number of bytes in "héllo"` → 6,
-  `number of codepoints in "👍🏽"` → 2. Lowered in `analyzer::lower_declarations` (`counting_phrase`, `unit_count`) onto
+  `number of codepoints in "👍🏽"` → 2. Lowered in `declaration_forms::lower_declarations` (`counting_phrase`, `unit_count`) onto
   the existing `t.bytes`/`t.chars`/`t.graphemes` methods; `number of pixels` keeps lowering to `count pixels`.
   The parser no longer takes `#(` at line start as a shell comment (`#x` already counted after a statement).
 - Decided: a `char` is a code point (as `x.chars`, the `char` type, Rust's `chars()`); the user-perceived character is a

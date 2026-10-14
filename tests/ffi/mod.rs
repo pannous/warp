@@ -1,3 +1,5 @@
+#[cfg(feature = "native")] // cargo builds the crate: native only
+mod test_cargo_crates; // card use-cargo
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_component_drop;
 mod test_component_exports_anywhere; // card reflect-page-meta
@@ -11,17 +13,29 @@ mod test_components_anywhere;
 mod test_download;
 mod test_fetch_computed_url;
 mod test_ffi;
+#[cfg(feature = "native")] // the C headers: not in the browser build
+mod test_ffi_float_results; // card raylib-float
 mod test_ffi_gaps;
 mod test_ffi_handles;
 mod test_ffi_import_group;
+#[cfg(all(feature = "native", target_os = "macos"))] // pinned on the C headers of macOS
+mod test_ffi_one_parser; // card cleanup-ffi-headers
+#[cfg(all(feature = "native", target_os = "macos"))] // libc's sranddev and the C headers of macOS
+mod test_ffi_signatures; // card cleanup-ffi-f32
+#[cfg(feature = "native")] // the C headers: not in the browser build
+mod test_ffi_text_out_pointers; // card ffi-header
 mod test_ffi_text_results;
 mod test_ffi_warning_once;
+#[cfg(feature = "native")] // a python3 child process: not in the browser build
+mod test_foreign_bools; // card booleans-foreign
 mod test_foreign_handles;
 mod test_foreign_js;
 mod test_foreign_member_assignment;
 mod test_foreign_operators;
 #[cfg(feature = "native")] // a python3 child process: not in the browser build
 mod test_foreign_python;
+#[cfg(feature = "native")] // a python3 child process: not in the browser build
+mod test_foreign_type_tests; // card int-bool
 mod test_glibc_math_header;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;

@@ -49,7 +49,7 @@ impl WarpParser {
 		if node == Empty {
 			return node;
 		}
-		let node = node.with_meta_data(LineInfo::at(line_nr, column, || self.current_line.s()));
+		let node = node.with_meta_data(LineInfo::at(line_nr, column, &self.current_line));
 		// Attach preceding comment as metadata
 		if let Some(comment_text) = comment {
 			node.with_comment(comment_text)
@@ -59,6 +59,10 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_string(&mut self) -> Node {
+		self.reading_atom(AtomKind::Text, Self::read_text)
+	}
+
+	fn read_text(&mut self) -> Node {
 		let quote = self.current_char();
 		// «text» closes with », every other quote with itself
 		let closing = if quote == '«' { '»' } else { quote };
@@ -127,6 +131,7 @@ impl WarpParser {
 				let escaped = self.current_char();
 				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
 				match escaped {
+					'\0' => continue, // `"\` ends the source: the loop reports the unterminated text
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
 						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
 						else {
@@ -184,7 +189,7 @@ impl WarpParser {
 		{
 			Some(number_type) => {
 				let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
-				let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
+				let explicit = format!("{}('{c}') as {number_type}", crate::words::CODEPOINT);
 				Diagnostic {
 					message,
 					line,
@@ -263,7 +268,9 @@ impl WarpParser {
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);
-		Some(crate::shader_holes::shader_text(&without_common_indentation(&source)))
+		Some(crate::graphics::shader_holes::shader_text(&without_common_indentation(
+			&source,
+		)))
 	}
 
 	/// `\x1b` after the backslash: the character of the two hex digits, left at the second
@@ -500,6 +507,10 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_number_value(&mut self) -> Node {
+		self.reading_atom(AtomKind::Number, Self::read_number_value)
+	}
+
+	fn read_number_value(&mut self) -> Node {
 		// RFC 3339 / RFC 9557 literal: 2024-01-31, 2024-01-31T10:00Z, 2024-01-31T10:00[Europe/Berlin]
 		// Not in data mode yet: the data path round-trips source text and has no date serialization
 		let literal_len = if self.options.data_mode {
@@ -524,6 +535,18 @@ impl WarpParser {
 			self.advance();
 		}
 
+		if self.current_char() == '0'
+			&& matches!(self.peek_char(1), 'b' | 'B')
+			&& matches!(self.peek_char(2), '0' | '1')
+		{
+			self.advance_by(2);
+			let bits: String = self
+				.take_while_char(|ch| matches!(ch, '0' | '1' | '_'))
+				.replace('_', "");
+			return i64::from_str_radix(&format!("{num_str}{bits}"), 2)
+				.map(Node::int)
+				.unwrap_or_else(|_| error(&format!("Invalid binary: 0b{bits}")));
+		}
 		if self.current_char() == '0' && matches!(self.peek_char(1), 'x' | 'X') {
 			self.advance_by(2);
 			let hex_str = self.take_while_char(|ch| ch.is_ascii_hexdigit());
@@ -780,21 +803,86 @@ fn closing_brace(chars: &[char]) -> Option<usize> {
 
 /// The lines without the indentation all non-blank ones share, without the blank lines around them
 fn without_common_indentation(source: &str) -> String {
-	let lines: Vec<&str> = source.trim_matches(|ch| ch == '\n' || ch == '\r').lines().collect();
-	let indentation = |line: &&str| line.len() - line.trim_start().len();
-	let common = lines
-		.iter()
-		.filter(|line| !line.trim().is_empty())
-		.map(indentation)
-		.min()
-		.unwrap_or(0);
-	lines
-		.iter()
-		.map(|line| line.get(common..).unwrap_or("").trim_end())
+	dedented_lines(source)
+		.into_iter()
+		.map(|line| line.text)
 		.collect::<Vec<_>>()
 		.join("\n")
-		.trim()
-		.to_string()
+}
+
+/// A line of a shader block's text: which line of the block it is (0: the one of its `{`), how many characters before
+/// it the text dropped, and the text
+pub struct DedentedLine {
+	pub line: usize,
+	pub dropped: usize,
+	pub text: String,
+}
+
+/// The lines of `source` without the indentation all non-blank ones share, without the blank lines around them, and
+/// the first without any
+fn dedented_lines(source: &str) -> Vec<DedentedLine> {
+	let lines: Vec<&str> = source.lines().collect();
+	let is_blank = |line: &&str| line.trim().is_empty();
+	let common = lines
+		.iter()
+		.filter(|line| !is_blank(line))
+		.map(|line| line.len() - line.trim_start().len())
+		.min()
+		.unwrap_or(0);
+	let first = lines.iter().position(|line| !is_blank(line)).unwrap_or(lines.len());
+	let end = lines
+		.iter()
+		.rposition(|line| !is_blank(line))
+		.map_or(first, |last| last + 1);
+	let mut kept: Vec<DedentedLine> = (first..end)
+		.map(|line| DedentedLine {
+			line,
+			dropped: common,
+			text: lines[line].get(common..).unwrap_or("").trim_end().to_string(),
+		})
+		.collect();
+	if let Some(opening) = kept.first_mut() {
+		let text = opening.text.trim_start().to_string();
+		opening.dropped += opening.text.chars().count() - text.chars().count();
+		opening.text = text;
+	}
+	kept
+}
+
+/// Each `shader { … }` (or `wgsl { … }`) block of `code`: the line and column right after its `{`, and its text's lines
+pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
+	let chars: Vec<char> = code.chars().collect();
+	let is_name_part = |at: usize| chars.get(at).is_some_and(|ch| ch.is_alphanumeric() || *ch == '_');
+	let mut blocks = vec![];
+	let mut at = 0;
+	while at < chars.len() {
+		let word = SHADER_WORDS.iter().find(|word| {
+			!is_name_part(at.wrapping_sub(1)) && chars[at..].starts_with(&word.chars().collect::<Vec<_>>())
+		});
+		let Some(word) = word.filter(|word| !is_name_part(at + word.len())) else {
+			at += 1;
+			continue;
+		};
+		let mut open = at + word.len();
+		while matches!(chars.get(open), Some(' ' | '\t')) {
+			open += 1;
+		}
+		let start = open + 1;
+		let Some(length) = (chars.get(open) == Some(&'{'))
+			.then(|| closing_brace(&chars[start..]))
+			.flatten()
+		else {
+			at = open;
+			continue;
+		};
+		let before = &chars[..start];
+		let line = 1 + before.iter().filter(|&&ch| ch == '\n').count();
+		let column = 1 + before.iter().rev().take_while(|&&ch| ch != '\n').count();
+		let source: String = chars[start..start + length].iter().collect();
+		blocks.push(((line, column), dedented_lines(&source)));
+		at = start + length;
+	}
+	blocks
 }
 
 /// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an

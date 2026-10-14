@@ -36,6 +36,49 @@ impl WarpParser {
 		}
 	}
 
+	/// `full name` of a declared `class full name {…}` is the one name `full-name`, any other word itself
+	pub(super) fn joined_type_name(&mut self, word: String) -> String {
+		let found = self.multi_word_types.iter().find_map(|words| {
+			(words[0] == word)
+				.then(|| self.words_ahead_length(&words[1..]))
+				.flatten()
+				.map(|length| (words.join("-"), length))
+		});
+		match found {
+			Some((name, length)) => {
+				self.advance_by(length);
+				name
+			}
+			None => word,
+		}
+	}
+
+	/// The length of the blanks and `words` right ahead, each a whole word: ` name` of `full name`
+	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
+		let mut offset = 0;
+		for word in words {
+			let blanks = (offset..)
+				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
+				.count() - offset;
+			if blanks == 0 {
+				return None;
+			}
+			offset += blanks;
+			if !word
+				.chars()
+				.enumerate()
+				.all(|(index, ch)| self.peek_char(offset + index) == ch)
+			{
+				return None;
+			}
+			offset += word.chars().count();
+			if is_identifier_char(self.peek_char(offset)) || self.peek_char(offset) == '-' {
+				return None;
+			}
+		}
+		Some(offset)
+	}
+
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
 	/// Length of the `<int>`, `<list<int>>`, `<text, int>`, `<int(int)>` directly at the cursor when everything inside is a type word;
 	/// `a<b`, `a<<b` and `a<b>c` are not type applications
@@ -93,9 +136,12 @@ impl WarpParser {
 																		 // `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
 		let inner_header = self.in_for_header && bracket_type == Bracket::Round;
 		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
+		let spaced_list = bracket_type == Bracket::Square && !self.group_holds_comma();
+		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, spaced_list);
 		let list = self.with_equals_comparing(compares, |parser| {
 			parser.parse_list_with_separators(Some(close), bracket_type)
 		});
+		self.in_spaced_list = outer_spaced_list;
 		self.in_for_header = outer_header;
 		self.group_start = outer_start;
 		list
@@ -184,6 +230,10 @@ impl WarpParser {
 			} else {
 				item
 			};
+			let item = match self.take_trailing_comment() {
+				Some(comment) => item.with_comment(comment),
+				None => item,
+			};
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 
@@ -222,6 +272,10 @@ impl WarpParser {
 					let (previous, _) = items_with_seps.pop().expect("guarded");
 					with_trailing_block(previous, item)
 				}
+				Some((previous, Separator::Space)) if self.takes_assigned_list(previous, &item) => {
+					let (previous, _) = items_with_seps.pop().expect("guarded");
+					with_applied_word(previous, item)
+				}
 				_ => item,
 			};
 			match declarations_of_several_globals(&item) {
@@ -244,6 +298,24 @@ impl WarpParser {
 			None => list,
 		}
 	}
+	/// `found = [[1, 2]] find [1, x]`: the assignment of a list literal followed by a tree walk (with_applied_word)
+	fn takes_assigned_list(&self, previous: &Node, item: &Node) -> bool {
+		let Node::Key(_, Op::Assign, value) = previous.drop_meta() else {
+			return false;
+		};
+		let starts_walk = match item.drop_meta() {
+			Node::List(words, Bracket::None, _) => words.first().is_some_and(crate::lowering::tree_walks::is_walk_word),
+			word => crate::lowering::tree_walks::is_walk_word(word),
+		};
+		let is_list_literal = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Square, _));
+		match value.drop_meta() {
+			Node::List(items, Bracket::None, Separator::Space) => {
+				matches!(items.as_slice(), [list, word, ..] if is_list_literal(list) && crate::lowering::tree_walks::is_walk_word(word))
+			}
+			literal => is_list_literal(literal) && starts_walk,
+		}
+	}
+
 	/// The lines of a definition `def f(n)` indented below it by spaces, as `def f(n):` (by tabs the indentation rule of
 	/// parse_list_with_separators takes them); Ruby's `def f(n) … end` is read by its end
 	fn with_definition_block(&mut self, definition: Node) -> Node {
@@ -569,6 +641,32 @@ fn with_trailing_block(assignment: Node, block: Node) -> Node {
 			op,
 			Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)),
 		),
+		other => other,
+	}
+}
+
+/// `found = [[1, 2]] find [1, x]` is `found = ([[1, 2]] find [1, x])`, as after a list variable: the value is a list
+/// literal and a walk word follows, or it already took one and this is its argument
+fn with_applied_word(assignment: Node, item: Node) -> Node {
+	match assignment {
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(with_applied_word(*node, item)),
+			data,
+		},
+		Node::Key(target, op, value) => {
+			let applied = match *value {
+				Node::List(mut items, Bracket::None, Separator::Space) => {
+					items.push(item);
+					items
+				}
+				value => vec![value, item],
+			};
+			Node::Key(
+				target,
+				op,
+				Box::new(Node::List(applied, Bracket::None, Separator::Space)),
+			)
+		}
 		other => other,
 	}
 }

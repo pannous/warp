@@ -6,7 +6,8 @@
 //! Frames (card frame-event): `on frame {body}` is the handler `on·every·N` started by `signal_frame(N, 16)`, which
 //! runs it each frame while the paint window shows and ends with it (once without a window). Natively, `on key {…}`
 //! (card native-keys) gets the keys pressed over the paint window: a frame handler reads each press
-//! (`system_value("key_pressed")`) and emits `key{key: "a"}` as the playground page does, arrows and Enter by name.
+//! (`system_value("key_pressed")`) and emits `key{key: "a"}` as the playground page does, arrows and Enter by name;
+//! `on click {…}` (card native-window) likewise gets the clicks, `click{x: 30, y: 40}` in the painted frame's pixels.
 //! `exit` and `exit()` as statements are `exit(0)` (P121: the host word ends the run with that code).
 //! Channels (src/channels.rs): `on message from "chat" {body}` (`on message {body}` for the channel "warp") is the timer
 //! handler `on·every·0() := {global …; while channel_pending(0) > 0 { event = channel_next(0); body }}`, started by
@@ -17,14 +18,15 @@
 //! listener of that sub-channel; `send "file system full"` alone is that named event on "warp" without data, heard by
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
+use super::listeners;
 use super::nodes::call;
-use super::words::{FROM_WORD, ON_WORD};
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
-use crate::event_signals::{function_with_globals, main_level_variables};
+use crate::event_signals::{event_name, function_with_globals, main_level_variables};
 use crate::extensions::numbers::Number;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FROM_WORD, ON_WORD};
 
 const EVERY_WORD: &str = "every";
 const FRAME_WORD: &str = "frame";
@@ -37,17 +39,22 @@ const KEY_EVENT: &str = "key";
 const KEYS_TEMPLATE: &str = "on frame {
 	CODE = system_value(\"key_pressed\")
 	while CODE != 0 {
-		NAME = \"\" + chr(CODE)
-		NAMED
-		emit key{key: NAME}
+		emit key{key: NAMED}
 		CODE = system_value(\"key_pressed\")
 	}
 }";
+/// Each click over the paint window, where the button went down
 #[cfg(feature = "native")]
-const NAMED_KEY_TEMPLATE: &str = "if CODE == NUMBER { NAME = KEY_NAME }";
-/// The keys the page names (src/paint_window.rs key_code gives these codes)
+const CLICK_EVENT: &str = "click";
 #[cfg(feature = "native")]
-const KEY_NAMES: [(i64, &str); 8] = [
+const CLICKS_TEMPLATE: &str = "on frame {
+	while system_value(\"click_pressed\") != 0 {
+		emit click{x: system_value(\"click_x\"), y: system_value(\"click_y\")}
+	}
+}";
+/// The keys the page names (src/graphics/paint_window.rs key_code, canvas.js KEY_CODES give these codes); 0 is none
+const KEY_NAMES: [(i64, &str); 9] = [
+	(0, ""),
 	(0xF700, "ArrowUp"),
 	(0xF701, "ArrowDown"),
 	(0xF702, "ArrowLeft"),
@@ -88,45 +95,59 @@ pub fn lower(program: Node) -> Node {
 		.filter(|verb| !defines(&program, verb))
 		.collect();
 	let program = broadcasts(program, &verbs);
-	lower_timers(with_window_keys(program))
+	lower_timers(with_window_events(program))
 }
 
-/// Natively, a program with `on key {…}` gets the paint window's key presses (KEYS_TEMPLATE); a page raises key itself
+/// Natively, a program with `on key {…}` or `on click {…}` gets the paint window's key presses (KEYS_TEMPLATE) and
+/// clicks (CLICKS_TEMPLATE); a page raises them itself
 #[cfg(feature = "native")]
-fn with_window_keys(program: Node) -> Node {
+fn with_window_events(program: Node) -> Node {
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
-	let listener = statements
-		.iter()
-		.position(|statement| event_listener(statement, KEY_EVENT).is_some());
-	let Some(listener) = listener else { return program };
-	if crate::pipeline::is_for_a_page() || crate::event_signals::serves_its_page(&statements) {
+	if crate::pipeline::compile_mode().for_a_page || crate::event_signals::serves_its_page(&statements) {
 		return program;
 	}
-	let mut bindings = std::collections::HashMap::from([
-		("CODE".to_string(), symbol("key·code")),
-		("NAME".to_string(), symbol("key·name")),
-	]);
-	let named: Vec<Node> = KEY_NAMES
-		.iter()
-		.map(|(code, key_name)| {
-			bindings.insert("NUMBER".to_string(), Node::int(*code));
-			bindings.insert("KEY_NAME".to_string(), Node::Text(key_name.to_string()));
-			crate::law::substitute(&crate::warp_parser::parse(NAMED_KEY_TEMPLATE), &bindings)
-		})
-		.collect();
-	bindings.insert(
-		"NAMED".to_string(),
-		Node::List(named, Bracket::None, Separator::Newline),
-	);
-	let reader = crate::law::substitute(&crate::warp_parser::parse(KEYS_TEMPLATE), &bindings);
-	// right after the listener: the program's last statement stays its value
-	statements.insert(listener + 1, reader.drop_meta().clone());
+	let mut listened = false;
+	for (event, reader) in [(KEY_EVENT, keys_reader as fn() -> Node), (CLICK_EVENT, clicks_reader)] {
+		let listener = statements
+			.iter()
+			.position(|statement| event_listener(statement, event).is_some());
+		if let Some(listener) = listener {
+			// right after the listener: the program's last statement stays its value
+			statements.insert(listener + 1, reader().drop_meta().clone());
+			listened = true;
+		}
+	}
+	if !listened {
+		return program;
+	}
 	Node::List(statements, bracket, separator)
 }
 
-/// The browser compiler's programs are for a page, which raises key itself
+#[cfg(feature = "native")]
+fn keys_reader() -> Node {
+	super::nodes::filled(
+		KEYS_TEMPLATE,
+		[("CODE", symbol("key·code")), ("NAMED", key_named(symbol("key·code")))],
+	)
+}
+
+/// The name of the key with that code, as the page's KeyboardEvent.key: a key's name (KEY_NAMES), else its character
+pub fn key_named(code: Node) -> Node {
+	let choices: String = KEY_NAMES
+		.iter()
+		.map(|(number, name)| format!("if CODE == {number} then \"{name}\" else "))
+		.collect();
+	super::nodes::filled(&format!("{choices}\"\" + chr(CODE)"), [("CODE", code)])
+}
+
+#[cfg(feature = "native")]
+fn clicks_reader() -> Node {
+	crate::warp_parser::parse(CLICKS_TEMPLATE)
+}
+
+/// The browser compiler's programs are for a page, which raises key and click itself
 #[cfg(not(feature = "native"))]
-fn with_window_keys(program: Node) -> Node {
+fn with_window_events(program: Node) -> Node {
 	program
 }
 
@@ -148,10 +169,7 @@ fn lower_timers(program: Node) -> Node {
 		if let Some((channel, body)) = message_listener(&statement) {
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			let id = Node::int(count as i64);
-			let messages = crate::law::substitute(
-				&crate::warp_parser::parse(MESSAGES_TEMPLATE),
-				&std::collections::HashMap::from([("ID".to_string(), id.clone()), ("BODY".to_string(), body)]),
-			);
+			let messages = super::nodes::filled(MESSAGES_TEMPLATE, [("ID", id.clone()), ("BODY", body)]);
 			lowered.push(function_with_globals(
 				&handler,
 				false,
@@ -248,14 +266,8 @@ fn lower_timers(program: Node) -> Node {
 /// `on message {body}`, `on message from "chat" {body}`, and named events from other programs:
 /// `on stop the machine from "chat" {body}`, `on "file system full" {body}`: the channel (a text) and the body
 fn message_listener(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (on, rest) = items.split_first()?;
-	if word(on) != ON_WORD {
-		return None;
-	}
-	let (words, body) = words_and_body(rest)?;
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	let words = listener.words();
 	let (name, channel) = match words.as_slice() {
 		[name @ .., from, channel] if word(from) == FROM_WORD && !name.is_empty() => (name, text(channel)?),
 		name => (name, DEFAULT_CHANNEL.to_string()),
@@ -264,10 +276,10 @@ fn message_listener(statement: &Node) -> Option<(Node, Node)> {
 	let channel = match name {
 		[message] if word(message) == MESSAGE_WORD => channel,
 		[event] if text(event).is_some() => event_channel(&channel, &text(event)?),
-		words if from_written => event_channel(&channel, &event_name(words)?),
+		words if from_written => event_channel(&channel, &event_name(words.iter())?),
 		_ => return None,
 	};
-	Some((Node::Text(channel), body))
+	Some((Node::Text(channel), listener.body))
 }
 
 fn text(node: &Node) -> Option<String> {
@@ -275,12 +287,6 @@ fn text(node: &Node) -> Option<String> {
 		Node::Text(text) => Some(text.clone()),
 		_ => None,
 	}
-}
-
-/// The words of an event joined by spaces; None unless all are plain words
-fn event_name(words: &[Node]) -> Option<String> {
-	let words: Vec<String> = words.iter().map(word).collect();
-	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
 }
 
 /// The channel of a named event: its own sub-channel, so a listener hears only that event
@@ -301,7 +307,7 @@ fn named_event(value: &[Node]) -> Option<(String, Node)> {
 	if words.is_empty() && data.is_none() {
 		return None;
 	}
-	let name = event_name(&[words, &[last_word]].concat())?;
+	let name = event_name(words.iter().chain([&last_word]))?;
 	Some((name, data.unwrap_or(Node::Empty)))
 }
 
@@ -334,13 +340,7 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 		let channel = channel.unwrap_or(DEFAULT_CHANNEL.to_string());
 		let (channel, value) = match named {
 			Some((name, data)) => (event_channel(&channel, &name), data),
-			None => (
-				channel,
-				match value.as_slice() {
-					[single] => single.clone(),
-					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-				},
-			),
+			None => (channel, listeners::row(value)),
 		};
 		Some(call(
 			crate::host::CHANNEL_SEND,
@@ -355,83 +355,39 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 
 /// `on frame {body}`, `on frame: body` (the event `name`): the body
 fn event_listener(statement: &Node, name: &str) -> Option<Node> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (on, rest) = items.split_first()?;
-	if word(on) != ON_WORD {
-		return None;
-	}
-	match words_and_body(rest)? {
-		(words, body) if matches!(words.as_slice(), [only] if word(only) == name) => Some(body),
-		_ => None,
-	}
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	listener.trigger.is_symbol(name).then_some(listener.body)
 }
 
 /// `on file "notes.txt" change {body}`: the path (a text) and the body
 fn file_watch(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let [on, file, path, change, body] = items.as_slice() else {
-		return None;
-	};
-	let watched = word(on) == ON_WORD && word(file) == FILE_WORD && CHANGE_WORDS.contains(&word(change).as_str());
-	let path_is_text = matches!(path.drop_meta(), Node::Text(_));
-	(watched && path_is_text && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
-		.then(|| (path.clone(), body.clone()))
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	match listener.words().as_slice() {
+		[file, path, change]
+			if word(file) == FILE_WORD && text(path).is_some() && CHANGE_WORDS.contains(&word(change).as_str()) =>
+		{
+			Some((path.clone(), listener.body))
+		}
+		_ => None,
+	}
 }
 
 /// `on every 50 ms {body}`, `on every 5 seconds: body`: the duration and the body
 fn timer(statement: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let [on, every, rest @ ..] = items.as_slice() else {
-		return None;
-	};
-	if word(on) != ON_WORD || word(every) != EVERY_WORD {
-		return None;
+	let listener = listeners::read(statement, &[ON_WORD])?;
+	match listener.words().as_slice() {
+		[every, duration @ ..] if word(every) == EVERY_WORD && !duration.is_empty() => {
+			Some((listeners::row(duration.to_vec()), listener.body))
+		}
+		_ => None,
 	}
-	let (words, body) = words_and_body(rest)?;
-	let duration = match words.as_slice() {
-		[] => return None,
-		[single] => single.clone(),
-		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-	};
-	Some((duration, body))
-}
-
-/// The words before the body of `… {body}` or `…: body`, and the body
-fn words_and_body(rest: &[Node]) -> Option<(Vec<Node>, Node)> {
-	let (last, words) = rest.split_last()?;
-	if matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _)) {
-		return Some((words.to_vec(), last.clone()));
-	}
-	// `on every 5 seconds: print n` arrives as `on every (5 seconds: print) n`: the words after the colon are the body's
-	let colon = rest
-		.iter()
-		.position(|item| crate::declarations::handler_parts(item).is_some())?;
-	let (end, body) = crate::declarations::handler_parts(&rest[colon])?;
-	let body = match &rest[colon + 1..] {
-		[] => body,
-		after => Node::List([vec![body], after.to_vec()].concat(), Bracket::None, Separator::Space),
-	};
-	Some((rest[..colon].iter().cloned().chain([end]).collect(), body))
 }
 
 /// `at 9:00 {body}`, `at 9pm: body`: the minute of the day (None for a time that is no time of day) and the body;
 /// None for any other use of `at`
 fn one_shot(statement: &Node) -> Option<(Option<i64>, Node)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (at, rest) = items.split_first()?;
-	if word(at) != AT_WORD {
-		return None;
-	}
-	let (words, body) = words_and_body(rest)?;
-	Some((minute_of_day(&words)?, body))
+	let listener = listeners::read(statement, &[AT_WORD])?;
+	Some((minute_of_day(&listener.words())?, listener.body))
 }
 
 fn no_time_of_day(statement: &Node, form: &str) -> Node {

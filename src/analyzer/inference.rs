@@ -44,25 +44,12 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if node_arithmetic(left, op, right).is_some() {
 		return Kind::Data; // Int or Float, decided at run time
 	}
-	if *op == Op::Add
-		&& [left, right]
-			.iter()
-			.all(|kind| matches!(kind, Kind::List | Kind::Empty))
-		&& [left, right].contains(&Kind::List)
-	{
-		Kind::List // concatenation
-	} else if *op == Op::Add
-		&& (crate::wasm_emitter::text_builtins::concatenates(left, right)
-			|| [left, right]
-				.iter()
-				.any(|kind| matches!(kind, Kind::Empty | Kind::Data))
-				&& [left, right]
-					.iter()
-					.any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
-		|| repeats_text(left, op, right)
-	{
-		// concatenation; a value held as a Node (a map value, an element of one, a number of run-time kind) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
-		Kind::Text
+	match concatenation_kind(left, right) {
+		Some(kind) if *op == Op::Add => return kind,
+		_ => {}
+	}
+	if repeats_text(left, op, right) {
+		Kind::Text // `"ab"*2`, see WasmGcEmitter::emit_text_repeat
 	} else if [left, right].iter().any(|kind| {
 		matches!(
 			kind,
@@ -74,6 +61,20 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 		Kind::Float
 	} else {
 		Kind::Int
+	}
+}
+
+/// `a + b` joining lists or texts: lists (an empty one too) are a list; a text with anything but a function, a value held
+/// as a Node too (a map value, a number of run-time kind), is a text
+fn concatenation_kind(left: Kind, right: Kind) -> Option<Kind> {
+	if [left, right]
+		.iter()
+		.all(|kind| matches!(kind, Kind::List | Kind::Empty))
+		&& [left, right].contains(&Kind::List)
+	{
+		Some(Kind::List)
+	} else {
+		crate::wasm_emitter::text_builtins::concatenates(left, right).then_some(Kind::Text)
 	}
 }
 
@@ -193,16 +194,13 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let left_kind = infer_type(left, scope);
 			let right_kind = infer_type(right, scope);
-			// a text joined with a text, a character or a value held as a Node: as `s + x` (arithmetic_kind)
-			let joins_text = matches!(left_kind, Kind::Text | Kind::Codepoint)
-				&& arithmetic_kind(left_kind, &Op::Add, right_kind) == Kind::Text;
-			if op.base_op() == Op::Add
-				&& (joins_text || crate::wasm_emitter::text_builtins::concatenates(left_kind, right_kind))
-			{
-				Kind::Text
-			} else if op.base_op() == Op::Add && (left_kind == Kind::List || right_kind == Kind::List) {
-				Kind::List // `xs += [v]`, what `xs.add(v)` lowers to
-			} else if left_kind == Kind::Empty {
+			// as `s + x` (arithmetic_kind); `xs += v` is what `xs.add(v)` lowers to
+			let any_list = [left_kind, right_kind].contains(&Kind::List);
+			match concatenation_kind(left_kind, right_kind).or(any_list.then_some(Kind::List)) {
+				Some(kind) if op.base_op() == Op::Add => return kind,
+				_ => {}
+			}
+			if left_kind == Kind::Empty {
 				Kind::Empty // a variable held as a Node stays one: `total += event.value` of a global widened by it
 			} else if left_kind == Kind::Float || right_kind == Kind::Float {
 				Kind::Float
@@ -230,16 +228,18 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an
 		// Int, a float operand refused in that exact context
-		Node::Key(left, Op::And | Op::Or, right) => match (infer_type(left, scope), infer_type(right, scope)) {
-			(left, right)
-				if [left, right]
-					.iter()
-					.any(|kind| kind.is_ref() || *kind == Kind::Codepoint) =>
-			{
-				branches_kind(left, right)
+		Node::Key(left, Op::And | Op::Or | Op::BitAnd | Op::BitOr, right) => {
+			match (infer_type(left, scope), infer_type(right, scope)) {
+				(left, right)
+					if [left, right]
+						.iter()
+						.any(|kind| kind.is_ref() || *kind == Kind::Codepoint) =>
+				{
+					branches_kind(left, right)
+				}
+				_ => Kind::Int,
 			}
-			_ => Kind::Int,
-		},
+		}
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64; of a value held as a Node maybe an interval, which it maps (a Node)
@@ -299,8 +299,8 @@ fn conversion_kind(target: &str) -> Option<Kind> {
 	match crate::type_tests::canonical_spec_word(target) {
 		"codepoint" => Some(Kind::Codepoint),
 		"list" => Some(Kind::List),
-		crate::wasm_emitter::hex::HEX_WORD => Some(Kind::Int),
 		"text" | crate::wasm_emitter::exact::DECIMAL_WORD => Some(Kind::Text),
+		radix if crate::wasm_emitter::radix::named_radix(radix).is_some() => Some(Kind::Int),
 		_ => None,
 	}
 }
@@ -378,7 +378,7 @@ pub(super) fn infer_list_type(
 			return Kind::List;
 		}
 		// `now`, `2024-02-29`: a time, a kind the node operations meet at run time (wasm_emitter/times.rs)
-		if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&name) {
+		if crate::time::TIME_CALLS.contains(&name) {
 			return Kind::Data;
 		}
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {
@@ -412,7 +412,7 @@ pub(super) fn infer_list_type(
 				};
 			}
 		}
-		if let Some(kind) = scope.function_kind(name) {
+		if let Some(kind) = scope.function_kind(name).filter(|_| !scope.is_parameter(name)) {
 			return kind;
 		}
 		if name == crate::closures::CLOSURE_NEW {
@@ -486,7 +486,7 @@ pub(super) fn infer_list_type(
 	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
 	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Colon {
 		if let Some(name) = head {
-			if name == crate::library_words::SLICE || name == "reverse" || name == "sort" {
+			if name == crate::words::SLICE || name == "reverse" || name == "sort" {
 				// a slice, reversal or sort of a text is a text, of a Node (known at runtime only) a Node, of anything else a list
 				return match infer_type(&items[1], scope) {
 					Kind::Text | Kind::Codepoint => Kind::Text,
@@ -508,7 +508,7 @@ pub(super) fn infer_list_type(
 				// a list, or a text when it sorts a text's characters
 				return Kind::Empty;
 			}
-			if name == crate::analyzer::LIST_BECOME || name == crate::one_entry_maps::MAP_OF_ENTRY {
+			if name == crate::declaration_forms::LIST_BECOME || name == crate::one_entry_maps::MAP_OF_ENTRY {
 				// the place itself, changed; the map of `{a:1}` a node as the pair is
 				return infer_type(&items[1], scope);
 			}
@@ -575,7 +575,7 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 }
 
 /// A branch `{a; b}` is worth its last statement
-/// A branch that is `error(…)` (or a block ending in it): the bottom kind, it never gives a value to its if
+/// A branch that is `error …` (or a block ending in it): the bottom kind, it never gives a value to its if
 pub(crate) fn raises_error(branch: &Node) -> bool {
 	match branch.drop_meta() {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => {
@@ -597,7 +597,7 @@ pub(crate) fn block_result(block: &Node) -> Option<Node> {
 	}
 }
 
-/// `if c then error("…") else x`: τ or error (Decided #1, errors are values), a Node keeping the error until a use
+/// `if c then error "…" else x`: τ or error (Decided #1, errors are values), a Node keeping the error until a use
 /// wants a number; a number is held as a Node of run-time kind
 fn error_or(kind: Kind) -> Kind {
 	if matches!(kind, Kind::Int | Kind::Float) {
@@ -607,7 +607,7 @@ fn error_or(kind: Kind) -> Kind {
 	}
 }
 
-/// The kind of a choice between two branches; an `error(…)` branch raises its error, so the other branch decides the
+/// The kind of a choice between two branches; an `error …` branch raises its error, so the other branch decides the
 /// kind (bottom kind)
 fn choice_kind(then_expr: &Node, else_expr: &Node, scope: &Scope) -> Kind {
 	match (raises_error(then_expr), raises_error(else_expr)) {

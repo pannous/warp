@@ -67,7 +67,7 @@ fn on_mount_runs_once_per_new_instance() {
 #[cfg(feature = "native")]
 fn a_bound_field_in_a_component_binds_its_instance() {
 	let greeter = "def Greeter(start) {\n\tname = start\n\tdiv{ input{ bind: name placeholder: \"name\" } p{ \"Hi \" + name } }\n}\n";
-	let mut page = warp::headless::Page::render(&format!("{greeter}div{{ Greeter(\"you\") Greeter(\"there\") }}"))
+	let mut page = warp::web::headless::Page::render(&format!("{greeter}div{{ Greeter(\"you\") Greeter(\"there\") }}"))
 		.expect("the page");
 	page.type_into("name", "Ann").expect("typed");
 	assert!(
@@ -83,7 +83,7 @@ fn a_bound_field_in_a_component_binds_its_instance() {
 #[cfg(feature = "native")]
 fn a_component_handler_changes_state_outside_it() {
 	let counter = "step = 2\ntotal = 0\ndef Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += step; total += 1 } \"+\" } p{ \"n \" + count } }\n}\n";
-	let mut page = warp::headless::Page::render(&format!(
+	let mut page = warp::web::headless::Page::render(&format!(
 		"{counter}div{{ Counter(0) Counter(10) p{{ \"total \" + total }} }}"
 	))
 	.expect("the page");
@@ -102,7 +102,7 @@ fn a_component_handler_changes_state_outside_it() {
 fn a_handler_outside_a_component_reads_its_state() {
 	let counter = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += 1 } \"+\" } p{ \"n \" + count } }\n}\n";
 	let page_markup = "div{ Counter(0) Counter(10) button{ on click { Counter.count#1 = 0 } \"Reset\" } p{ \"sum \" + sum(Counter.count) } }";
-	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	let mut page = warp::web::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
 	page.click("+").expect("clicked");
 	assert!(page.text().contains("sum 11"), "{}", page.html());
 	page.click("Reset").expect("reset");
@@ -120,7 +120,7 @@ fn a_handler_outside_a_component_reads_its_state() {
 fn keyed_component_state_survives_reordering() {
 	let counter = "def Counter(name) {\n\tcount = 0\n\tdiv{ button{ on click { count += 1 } \"+\" } p{ name + \" \" + count } }\n}\nitems = [\"a\", \"b\"]\n";
 	let page_markup = "div{ button{ on click { items = [items#2, items#1] } \"Swap\" } [Counter(item, key: item) for item in items] }";
-	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	let mut page = warp::web::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
 	page.click("+").expect("clicked");
 	page.click("Swap").expect("swapped");
 	let text = page.text();
@@ -137,7 +137,7 @@ fn keyed_component_state_survives_reordering() {
 fn keyed_component_state_survives_a_removal() {
 	let counter = "def Counter(name) {\n\tcount = 0\n\tdiv{ button{ on click { count += 1 } name } p{ name + \" \" + count } }\n}\nitems = [\"a\", \"b\", \"c\"]\n";
 	let page_markup = "div{ button{ on click { items = [items#2, items#3] } \"Drop a\" } [Counter(item, key: item) for item in items] }";
-	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	let mut page = warp::web::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
 	page.click("b").expect("clicked");
 	page.click("Drop a").expect("dropped");
 	let text = page.text();
@@ -155,7 +155,7 @@ fn keyed_component_state_survives_a_removal() {
 fn a_components_plural_names_its_instances() {
 	let counter = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on click { count += 1 } \"+\" } p{ \"n \" + count } }\n}\n";
 	let page_markup = "div{ Counter(0) Counter(10) button{ on click { counters#1.count = 0 } \"Reset\" } p{ \"sum \" + sum(counters.count) } p{ \"last \" + Counter.instances#2.count } }";
-	let mut page = warp::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
+	let mut page = warp::web::headless::Page::render(&format!("{counter}{page_markup}")).expect("the page");
 	page.click("+").expect("clicked");
 	assert!(
 		page.text().contains("sum 11") && page.text().contains("last 10"),

@@ -66,6 +66,29 @@ Booleans are `yes` and `no`, with word operators `and`, `or`, `not`.
 x = 5; if x > 9 : "big" else if x > 3 : "medium" else "small"
 ```
 
+### Matching
+
+`match` (or `switch`) takes keys with alternatives, ranges, types and guards; `other`, `_`, `default` catch the rest.
+
+```warp => "small"
+match 2 { 1 | 2 => "small"; 3 to 9 => "medium"; n if n < 0 => "negative"; other => "big" }
+```
+
+Patterns destructure lists (`[first, ...rest]`), tuples and maps at any depth; `is` tests one pattern and binds.
+
+```warp => "Ann"
+r = {status: 200, data: {user: {name: "Ann"}}}
+match r { {status: 200, data: {user: {name}}} => name; _ => "?" }
+```
+
+A match on an enum must name every case: missing one is a compile error.
+
+```warp => 10
+enum Coin { Penny, Nickel, Dime }
+cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }
+cents(Dime)
+```
+
 ## Lists
 
 Space-separated, 1-based `#i`, `#xs` counts; comprehensions filter with `where`.
@@ -151,6 +174,9 @@ Errors are values; `raise` makes one; ambiguous lines are questions, not guesses
 ```warp => Error("divide by zero")
 1 / 0
 ```
+
+Warnings have levels hint < weak < normal < severe: `--warnings=<level>` shows from a level, `--no-hints` from weak,
+and `use strict` or `--strict[=<level>]` makes warnings from normal (or that level) up errors.
 
 ## Modules
 

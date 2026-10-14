@@ -78,7 +78,7 @@ One map path for every spelling (tests/welcoming/test_welcoming_maps.rs, probes/
 # Typed and fixed arrays
 
 `x : 100 int`, `x : 100 * int`, `pixel:int[100]`, `letters = char[3]`, `upcases = 26 * char` (also `x = int[4]`) are zero-filled
-lists (`analyzer::typed_array_value`, `zero_list`). `x:[number]` is `x:list of number`, `numbers x = [1 2]` declares a list
+lists (`declaration_forms::typed_array_value`, `zero_list`). `x:[number]` is `x:list of number`, `numbers x = [1 2]` declares a list
 (a plural type word before a name is a declaration). The bracket spelling `[number]` hints the plural `numbers`
 (`ListTypeStyle::Bracket`); the fixed-array spellings have no canonical form yet (both are decided as valid), so they get no hint.
 
@@ -150,7 +150,7 @@ Not aliased, on purpose or open:
 - `xs.sort()` / `xs.reverse()` stay copies with the unused-value warning; warp's in-place form is `xs.sort!` (wiki/mutable.md).
 - `xs.insert(i, v)` is the ambiguity error naming both readings (decided earlier).
 - Card python-aliases: `x.pop(k)` (0-based position of a list, -1 the last; key of a map) and `x.clear()` of a variable lower
-  in declaration_lowering (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
+  in declaration_forms (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
   dispatch with `x is map` at run time; library_words::LOWERED_TO_PRELUDE makes modules load them. `m.popitem()` (lib/map.warp),
   `fromkeys(ks, v)` (prelude), `dict.fromkeys(ks, v)` (library_words method_call drops the `dict` receiver).
 - pop, pop(i) and clear() change the list in place like append/remove (card aliased-list): pop(i) and clear() wrap the

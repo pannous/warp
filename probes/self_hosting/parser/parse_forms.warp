@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+// The parser written in warp (lib/compiler/parser.warp): a few forms as trees, written as the Rust parser's node_view
+use "lib/compiler/parser.warp"
+print tree("x = 1 + 2 * 3")
+print tree("if 'A' in v { 1 } else { 2 }")
+print tree("for k in m.keys() { print k }")
+print tree("3 times { a.push(true) }")
+print tree("y = abs(c - col) == 2")

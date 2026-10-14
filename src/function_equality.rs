@@ -9,6 +9,10 @@
 //! 3. finite parameter types (bool): every input is enumerated
 //! 4. everything else: `Error("undecidable: f == g …")`, with a counterexample if a quick property test
 //!    (src/law.rs) finds one
+//!
+//! Function values only the run time knows (`xs#1 == xs#2`, `make(1) == make(2)`) compare by rule 1 alone: a closure's
+//! kind carries the class of its target's written form (written_form, wasm_emitter/closures.rs function_kind), equal
+//! classes compare the captured values; different forms are different functions there (card runtime-function)
 use crate::extensions::numbers::Number;
 use crate::law::{self, FunctionDefinition, Law, Lawful, Verdict};
 use crate::node::{Bracket, Node};
@@ -70,16 +74,8 @@ impl Function {
 			.collect()
 	}
 
-	/// The body with parameters renamed to their positions and self-reference to `$self`.
 	fn normal_body(&self) -> Node {
-		let mut names: HashMap<String, String> = self
-			.parameter_names()
-			.into_iter()
-			.enumerate()
-			.map(|(i, name)| (name, format!("${i}")))
-			.collect();
-		names.insert(self.name().to_string(), SELF.to_string());
-		canonical(&self.definition.body, &names)
+		normal_body(self.name(), &self.parameter_names(), &self.definition.body)
 	}
 
 	fn canonical_form(&self) -> String {
@@ -92,6 +88,28 @@ impl Function {
 		self.canonical_form().hash(&mut hasher);
 		hasher.finish()
 	}
+}
+
+/// The body with parameters renamed to their positions and self-reference to `$self`.
+fn normal_body(name: &str, parameters: &[String], body: &Node) -> Node {
+	let mut names: HashMap<String, String> = parameters
+		.iter()
+		.enumerate()
+		.map(|(i, parameter)| (parameter.clone(), format!("${i}")))
+		.collect();
+	names.insert(name.to_string(), SELF.to_string());
+	canonical(body, &names)
+}
+
+/// A definition as dump shows it, without its own name and its parameters' names: the same text for two functions
+/// written alike (`x => x + 1`, `y => y + 1`), what the run time compares function values by (card runtime-function)
+pub fn written_form(name: &str, parameters: &[(String, Option<Node>)], body: &Node) -> String {
+	let names: Vec<String> = parameters.iter().map(|(name, _)| name.clone()).collect();
+	let types: Vec<String> = parameters
+		.iter()
+		.map(|(_, annotation)| annotation.as_ref().map(Node::serialize).unwrap_or_default())
+		.collect();
+	format!("{types:?} {:?}", normal_body(name, &names, body))
 }
 
 fn canonical(node: &Node, names: &HashMap<String, String>) -> Node {

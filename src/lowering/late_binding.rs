@@ -14,10 +14,9 @@
 //! needs no code of its own: the declaration only lifts the check and is dropped here. Writing y from inner waits.
 
 use super::nodes::children_rewritten;
-use crate::analyzer::{
-	captured_variables, collect_variables, declare_global, find_assignments, is_list_mutating_method, param_kind, Scope,
-};
+use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
+use crate::declaration_forms::is_list_mutating_method;
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::effects::EffectReport;
 use crate::node::{Bracket, Node, Separator};
@@ -34,7 +33,7 @@ const QUOTED_BODY_LENGTH: usize = 24;
 const GENERATED_NAME_MARK: char = '·';
 
 pub fn lower(program: Node) -> Result<Node, Node> {
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	if let Some(declaration) = statements.iter().find(|statement| is_nonlocal_declaration(statement)) {
 		return Err(nonlocal_at_main_level_error(declaration));
 	}
@@ -43,7 +42,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	let declared = declared_global_reads(&statements, &main, false);
 	// a `global y` read of a variable main declares global already goes too (a lambda's, made global by nonlocal_cells)
 	let program = without_global_reads(program, &declared_global_reads(&statements, &main, true));
-	let statements = statements_of(&program);
+	let statements = program.sequence_statements().to_vec();
 	let definitions = definitions(&statements);
 	let report = EffectReport::of(&program);
 	for definition in &definitions {
@@ -319,13 +318,6 @@ struct Change<'a> {
 	node: &'a Node,
 }
 
-pub(crate) fn statements_of(program: &Node) -> Vec<Node> {
-	match program.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		_ => vec![program.clone()],
-	}
-}
-
 pub(crate) fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> Node) -> Node {
 	match program {
 		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
@@ -469,9 +461,7 @@ fn symbols_read(node: &Node) -> HashSet<&str> {
 }
 
 fn reads_any(node: &Node, names: &dyn Fn(&str) -> bool) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if names(name)));
-	found
+	node.mentions_where(names)
 }
 
 /// `3*4` for the body, `clock()` for the call `(clock)`, as it was written

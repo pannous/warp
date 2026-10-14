@@ -1,0 +1,12 @@
+// the text cursor of lib/text.warp: ab 1 12 yes yes c d no 3
+c = Cursor("ab12 cd")
+print c.take_while(is_letter)
+print c.peek()
+print c.take_while(is_digit)
+print c.skip(" ")
+print c.looking_at("cd")
+print c.advance()
+print c.rest()
+print c.at_end()
+blank = Cursor(" \t\nx")
+print blank.skip_while(is_space)

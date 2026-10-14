@@ -120,11 +120,12 @@ fn the_mouse_is_a_system_value_of_the_page() {
 	);
 }
 
-// card native-system: natively the pointer over the paint window (src/paint_window.rs follow_input) in the painted
+// card native-system: natively the pointer over the paint window (src/graphics/paint_window.rs follow_input) in the painted
 // frame's pixels, as the page's canvas
 #[test]
 #[cfg(feature = "native")]
 fn the_mouse_is_the_pointer_over_the_paint_window() {
+	let _window = crate::common::window_input_held();
 	warp_runtime::system_values::tell_window_input([12.0, 7.0, 1.0, 0.0]);
 	is!("mouse_x * 100 + mouse_y", 1207);
 	is!("if mouse_down { 1 } else { 0 }", 1);
@@ -147,4 +148,16 @@ fn window_open_is_no_without_a_window() {
 		.trim(),
 		"» 7"
 	);
+}
+
+/// the timer that keeps a listening `warp run` alive is generated code: it is written as the hints want it, so no hint
+/// points at a line the program does not have (the tour's "system values" showed `prefer 1000ms over 1000 ms` at 1:14)
+#[test]
+fn listening_to_a_system_value_gives_no_hint_about_generated_code() {
+	let (_, hints) = warp::normalize::capture_hints(|| warp::pipeline::lower("on change online { print 1 }\n2"));
+	let shown: Vec<String> = hints
+		.iter()
+		.map(|hint| format!("{} {}", hint.position, hint.original))
+		.collect();
+	assert!(shown.is_empty(), "{shown:?}");
 }

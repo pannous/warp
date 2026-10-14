@@ -3,7 +3,7 @@
 //! A program that binds the name itself (`online = 3`, `f(online) := …`, a field `{battery: 5}`) keeps its own.
 //! `name` (before signal_values::poll_shared) marks each read as the symbol `system·battery`, so poll_shared turns a
 //! main-level listener on one (`whenever battery < 20% {…}`, `on change online {…}`) into a check of `on·shared`, like
-//! a listener on a shared value, and adds a timer `on every 1000 ms {}` so a `warp run` stays and looks once a second.
+//! a listener on a shared value, and adds a timer `on every 1000ms {}` so a `warp run` stays and looks once a second.
 //! `read` (after poll_shared) makes each marked symbol the host call.
 //! `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: a percent compared with the battery is that number.
 //! The clipboard: `on clipboard change {…}` is `on change` of its change count (`clipboard count`), which reads no
@@ -13,16 +13,19 @@
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
 use super::nodes::{call, key};
-use super::words::ON_WORD;
 use crate::declarations::word;
-use crate::node::{symbol, Bracket, Node};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
+use crate::words::ON_WORD;
 use std::collections::HashSet;
 use warp_runtime::host_words::{
-	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, MOUSE_X, MOUSE_Y, SYSTEM_VALUE, SYSTEM_VALUES,
+	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, HELD_KEY, KEY_CODE_HELD, MOUSE_X, MOUSE_Y, SYSTEM_VALUE,
+	SYSTEM_VALUES,
 };
 
+/// `held_key` reads the held key's code once and names it (card held-key)
+const HELD_CODE: &str = "held·code";
 /// The mark of a system value read between the two passes
 pub const SYSTEM_PREFIX: &str = "system·";
 /// Host readings that are measurements, not counts: float sources (decision exact-decimals), so the exact decimals
@@ -32,7 +35,7 @@ const FLOAT_TYPE: &str = "float";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
-const KEEP_LISTENING: &str = "on every 1000 ms {}";
+const KEEP_LISTENING: &str = "on every 1000ms {}";
 const CLIPBOARD_READ: &str = "read";
 const CLIPBOARD_WRITE: &str = "write";
 /// stands for the text in the template of a clipboard write
@@ -42,7 +45,7 @@ pub fn name(program: Node) -> Node {
 	let bound = bound_names(&program);
 	let names: Vec<(&str, bool)> = SYSTEM_VALUES
 		.into_iter()
-		.chain([(CLIPBOARD, false), (NOW_WORD, false)])
+		.chain([(CLIPBOARD, false), (NOW_WORD, false), (HELD_KEY, false)])
 		.filter(|(name, _)| !bound.contains(*name))
 		.collect();
 	if names.is_empty() {
@@ -108,12 +111,24 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	bound
 }
 
+/// `held_key`: the name of the key held now, as `on key` names a press (system_signals.rs key_named)
+fn held_key() -> Node {
+	let read = key(
+		symbol(HELD_CODE),
+		Op::Assign,
+		call(SYSTEM_VALUE, vec![Node::Text(KEY_CODE_HELD.to_string())]),
+	);
+	let named = crate::system_signals::key_named(symbol(HELD_CODE));
+	Node::List(vec![read, named], Bracket::Curly, Separator::Semicolon)
+}
+
 /// Each read of a system value as its mark; a field name (`{battery: 5}`, `p.battery`) is no read
 fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 	let marked = |name: &str| match names.iter().any(|(system, _)| *system == name) {
 		false => None,
 		true if name == CLIPBOARD => Some(call(CLIPBOARD_TEXT, vec![])),
 		true if name == NOW_WORD => Some(crate::time::now_call()),
+		true if name == HELD_KEY => Some(held_key()),
 		true => Some(Node::Symbol(format!("{SYSTEM_PREFIX}{name}"))),
 	};
 	match node {
@@ -132,6 +147,9 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) => {
 			let right = if op == Op::Dot {
 				method_arguments_marked(*right, names)
+			} else if is_bare_word(&right) {
+				// data stays data: `{created: now}` keeps the word, `now!` reads the clock (decision data-stays-data)
+				*right
 			} else {
 				mark(*right, names)
 			};
@@ -300,4 +318,9 @@ fn clipboard_write(text: Node) -> Node {
 		"std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"
 	));
 	crate::law::substitute(&call, &[(TEXT_PLACEHOLDER.to_string(), text)].into_iter().collect())
+}
+
+/// A word alone as a field's value, not forced with `!`
+fn is_bare_word(value: &Node) -> bool {
+	matches!(value.drop_meta(), Node::Symbol(_)) && crate::mutation::bang_target(value).is_none()
 }

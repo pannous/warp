@@ -1,0 +1,5 @@
+// gap (card write-bytes): a module is bytes written to a file, the wasm magic first; `write` takes a text only
+// 8
+bytes = [0, 97, 115, 109, 1, 0, 0, 0]
+write_bytes("probes/self_hosting/next_phase/empty.wasm", bytes)
+print(#read_bytes("probes/self_hosting/next_phase/empty.wasm"))

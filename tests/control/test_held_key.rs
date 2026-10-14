@@ -1,0 +1,43 @@
+// card held-key: `held_key` names the key held now, as `on key` names each press ("a", "ArrowUp", "Enter"), "" while
+// none is, so a drawing loop can steer: `if held_key == "ArrowLeft" { x -= 1 }`. Only "none held" is checked running
+// (holding a key here would queue a press other tests' `on key` handlers hear); the naming runs on given codes
+use crate::is;
+use warp::node::Node;
+
+fn named(code: i64) -> String {
+	let program = warp::system_signals::key_named(Node::int(code)).serialize();
+	warp::wasm_emitter::eval(&program).serialize()
+}
+
+#[test]
+fn held_key_names_the_key_held_now() {
+	let lowered = warp::pipeline::lower(r#"held_key == "a""#).expect("lowers").serialize();
+	assert!(lowered.contains("system_value"), "{lowered}");
+	is!(r#"held_key == """#, true);
+	assert_eq!(named(0), r#""""#);
+	assert_eq!(named('a' as i64), r#""a""#);
+	assert_eq!(named(0xF702), r#""ArrowLeft""#);
+	assert_eq!(named(13), r#""Enter""#);
+}
+
+// the key words compare with `held_key` as with `key` in a key handler (card key-if): `held_key == LEFT` is
+// `held_key == "ArrowLeft"`, and a word that names nothing warns, as there
+#[test]
+fn held_key_compares_with_the_key_words() {
+	// whatever key another test's `emit key` holds now, each word reads as its name
+	is!(r#"held_key != ESC or held_key == "Escape""#, true);
+	let lowered = warp::pipeline::lower("held_key == LEFT or ESC == held_key")
+		.expect("lowers")
+		.serialize();
+	assert!(
+		lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#""Escape""#),
+		"{lowered}"
+	);
+	warp::diagnostic::take_warnings();
+	warp::wasm_emitter::eval("held_key == LEFTT");
+	let warned = warp::diagnostic::take_warnings()
+		.into_iter()
+		.filter(|warning| warning.message.contains("LEFTT names nothing"))
+		.count();
+	assert_eq!(warned, 1);
+}

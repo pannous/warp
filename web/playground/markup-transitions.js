@@ -3,7 +3,7 @@
 // (`starting-style: { opacity: 0 }`, CSS's @starting-style, which an inline style cannot hold) is what it enters from
 // when it appears and leaves towards before it is removed; a keyed element whose transition covers transform glides to
 // its new place (FLIP). `leave: pop 400ms reverse` (data-warp-leave) is the CSS animation an element plays before it is
-// removed (card web-keyframes): what CSS lacks is a removal that waits. Loaded after markup.js only by pages that have transitions (src/site.rs), it replaces
+// removed (card web-keyframes): what CSS lacks is a removal that waits. Loaded after markup.js only by pages that have transitions (src/web/site.rs), it replaces
 // markup.js's transitionPlaces, enter, leave and moveFrom.
 
 const STARTING_STYLE_ATTRIBUTE = "data-warp-starting-style";

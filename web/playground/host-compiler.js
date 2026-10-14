@@ -41,7 +41,7 @@ function compilerFromUrl(hooks) {
 // a compiler entry point whose runs may wait for promises (warpHost `awaited`), as an async function where JSPI is
 const awaitedEntry = entry => JSPI ? WebAssembly.promising(entry) : entry;
 
-// the report of src/web.rs eval_block_report: {result: tree} or {error: message}
+// the report of src/web/mod.rs eval_block_report: {result: tree} or {error: message}
 function evalBlock(hooks, request) {
 	const compiler = blockCompiler(hooks);
 	const bytes = utf8.encode(request);
@@ -108,6 +108,13 @@ addHostPart({
 				holder.blockError = report.error;
 				throw new Error(report.error);
 			}
+			return buildValue(module, report.result);
+		},
+		// the code of a text known only at run time (src/host.rs parse_code): parsed by the same compiler instance
+		parse_code: text => {
+			const module = program();
+			const report = evalBlock(hooks, JSON.stringify({ parse: readNode(module, text) }));
+			if (report.error !== undefined) return errorInProgram(module, report.error);
 			return buildValue(module, report.result);
 		},
 	}),

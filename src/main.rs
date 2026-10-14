@@ -14,14 +14,14 @@ const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 const AOT_FLAG: &str = "--aot";
 /// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs the program and leaves the standalone
 /// executable `hello` next to it (`hello.exe` on Windows), the warp-runtime stub with the program's machine code appended.
-/// `warp build <file>` / `warp compile <file>` (not in the help any more) only make it; `--exe` still says so, `--wasm`
-/// (and `--aot`) write the module instead
+/// `warp build <file>` / `warp compile <file>` (not in the help any more) only make it, and the module <file>.wasm
+/// (card build-should); `--exe` only the executable, `--wasm` (and `--aot`) only the module
 const EXE_FLAG: &str = "--exe";
 const WASM_FLAG: &str = "--wasm";
 /// `warp help list`: a standard module's words; `warp help --markdown`: all of them as wiki/standard-library.md
 const HELP_PREFIX: &str = "help ";
 const HELP_MARKDOWN: &str = "help --markdown";
-/// `warp build --site app.warp`: the directory app-site/ a web server serves (src/site.rs, card web-ssr)
+/// `warp build --site app.warp`: the directory app-site/ a web server serves (src/web/site.rs, card web-ssr)
 const SITE_FLAG: &str = "--site";
 const SITE_SUFFIX: &str = "-site";
 /// The site of inline code
@@ -52,8 +52,23 @@ const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
 const RUN_PREFIX: &str = "run ";
 const TEST_WORD: &str = "test";
-const RUNTIME_STUB_NAME: &str = "warp-runtime";
-const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
+/// The prebuilt runtimes executables are made of: a stub's binary, the variable naming another, its cargo features
+struct RuntimeStub {
+	name: &'static str,
+	variable: &'static str,
+	features: &'static str,
+}
+const PROGRAM_STUB: RuntimeStub = RuntimeStub {
+	name: "warp-runtime",
+	variable: "WARP_RUNTIME_STUB",
+	features: "",
+};
+// a page app's stub carries the web view (wry, winit), which plain executables do without (card build-links)
+const PAGE_STUB: RuntimeStub = RuntimeStub {
+	name: "warp-page-runtime",
+	variable: "WARP_PAGE_RUNTIME_STUB",
+	features: "webview",
+};
 /// WARP_EXECUTABLE=1 (or true/yes/on): `warp <file>` also leaves the standalone executable next to the file, off by
 /// default (card executable-flag, user 2026-10-12, replaces P103's default); `warp build` always makes it
 const EXECUTABLE_VARIABLE: &str = "WARP_EXECUTABLE";
@@ -67,12 +82,12 @@ const STANDALONE_NOTES_CACHE: &str = ".cache/warp/standalone_notes";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
-/// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
+/// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/web/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
-/// `warp app page.warp`: the program's page in a window (src/webview.rs, card read-chron)
+/// `warp app page.warp`: the program's page in a window (src/web/webview.rs, card read-chron)
 const APP_COMMAND: &str = "app";
 const APP_CHECK: &str = "--check";
-/// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/deploy.rs)
+/// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/web/deploy.rs)
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
@@ -91,9 +106,14 @@ const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMEN
 const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
 const NO_HINTS_FLAG: &str = "--no-hints";
-/// Run the program with no C, shell or other runtime (Capability::GRANTED_SANDBOXED), as warp-lambda hosts programs
+/// Run the program with no C, shell or other runtime (Capability::GRANTED_SANDBOXED), writing files only in its state
+/// folder (src/sandbox.rs), as warp-lambda hosts programs
 const SANDBOX_FLAG: &str = "--sandbox";
 const HINTS_VARIABLE: &str = "WARP_HINTS";
+/// `--warnings=<level>`: print diagnostics from that level up (hint, weak, normal, severe); `--no-hints` is weak
+const WARNINGS_FLAG: &str = "--warnings";
+/// `--strict` (normal and severe warnings are errors, as `use strict`), `--strict=<level>` from another level
+const STRICT_FLAG: &str = "--strict";
 /// The last line of a run that showed hints while nobody chose to see them (neither the flag nor WARP_HINTS was given)
 const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WARP_HINTS=0)";
 /// What the console and `warp <code>` put before a program's value
@@ -115,11 +135,13 @@ fn main() {
 	let mut args: Vec<String> = env::args().collect();
 	warp::crash_card::install();
 	end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
-	warp::paint::allow_windows();
+	warp::graphics::paint::allow_windows();
+	warp_runtime::engine::give_main_stack_to_wasm();
 	apply_flags(&mut args);
 	match args.iter().position(|arg| arg == SANDBOX_FLAG) {
 		Some(flag) => {
 			args.remove(flag);
+			warp::sandbox::confine_process();
 			warp::pipeline::sandboxed(|| run_command(&args))
 		}
 		None => run_command(&args),
@@ -174,10 +196,9 @@ fn apply_flags(args: &mut Vec<String>) {
 		args.drain(flag..flag + 2);
 	}
 
-	// `--strict`: warnings are errors (as `use strict` in the program)
-	if let Some(flag) = args.iter().position(|arg| arg == "--strict") {
-		diagnostic::set_warning_mode(diagnostic::WarningMode::Error);
-		args.remove(flag);
+	// `--strict[=level]`: warnings of that level and up are errors (as `use strict` in the program)
+	if let Some(level) = level_flag(args, STRICT_FLAG, diagnostic::STRICT_LEVEL) {
+		diagnostic::set_warning_mode(diagnostic::WarningMode::Strict(level));
 	}
 
 	let no_hints = args
@@ -189,8 +210,15 @@ fn apply_flags(args: &mut Vec<String>) {
 	let hints_wanted = hints_variable
 		.as_deref()
 		.is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
-	warp::normalize::print_hints(hints_wanted && !no_hints);
-	if hints_wanted && !no_hints && hints_variable.is_none() {
+	let hints_shown = hints_wanted && !no_hints;
+	let fewest_shown = if hints_shown {
+		diagnostic::Level::Hint
+	} else {
+		diagnostic::Level::Weak
+	};
+	let shown = level_flag(args, WARNINGS_FLAG, fewest_shown).unwrap_or(fewest_shown);
+	diagnostic::show_from(shown);
+	if shown == diagnostic::Level::Hint && hints_variable.is_none() {
 		tip_hiding_hints_at_exit();
 	}
 
@@ -210,11 +238,38 @@ fn apply_flags(args: &mut Vec<String>) {
 	diagnostic::use_acknowledgements_file(acknowledgements);
 }
 
+/// The level of `--flag=<level>` or `--flag <level>`, `bare` for the flag alone, taken out of the arguments; exits on an
+/// unknown level
+#[cfg(not(test))]
+fn level_flag(args: &mut Vec<String>, flag: &str, bare: diagnostic::Level) -> Option<diagnostic::Level> {
+	let at = args
+		.iter()
+		.position(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))?;
+	let given = match args.remove(at).split_once('=') {
+		Some((_, name)) => Some(name.to_string()),
+		None => args
+			.get(at)
+			.filter(|name| diagnostic::Level::named(name).is_some())
+			.cloned()
+			.inspect(|_| {
+				args.remove(at);
+			}),
+	};
+	let Some(name) = given else {
+		return Some(bare);
+	};
+	diagnostic::Level::named(&name).or_else(|| {
+		let names: Vec<&str> = diagnostic::Level::ALL.iter().map(|level| level.name()).collect();
+		eprintln!("{flag} takes a level: {}", names.join(", "));
+		std::process::exit(2);
+	})
+}
+
 /// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
 #[cfg(not(test))]
 fn tip_hiding_hints_at_exit() {
 	extern "C" fn tip() {
-		if warp::normalize::any_hint_printed() {
+		if diagnostic::any_hint_printed() {
 			eprintln!("{}", diagnostic::paint(diagnostic::Color::Gray, HIDE_HINTS_TIP));
 		}
 	}
@@ -276,14 +331,20 @@ fn served_program(arguments: &[String]) -> Result<(&str, u16), String> {
 	Ok((file, port))
 }
 
-/// The program served at the port until it is stopped; `reason` says why a plain `warp app.warp` serves
+/// The program served at the port until it is stopped; `reason` says why a plain `warp app.warp` serves, which opens
+/// its page in the browser from a terminal (`warp serve` doesn't)
 #[cfg(not(test))]
-fn serve_file(path: &str, port: u16, reason: &str) -> ! {
+fn serve_file(path: &str, port: u16, reason: &str, open: bool) -> ! {
 	let code = source_of(path);
 	if !warp::serve::serves_itself(&code) {
 		println!("serving http://localhost:{port} ({reason}`warp run {path}` runs it once without serving)");
 	}
 	diagnostic::show_lines_of(&code);
+	if open && opens_browser() {
+		warp::web::web_server::when_listening(|address| {
+			warp::web::dev_server::open_in_browser(address);
+		});
+	}
 	print_and_exit(warp::pipeline::serving_at(port, || eval(path)))
 }
 
@@ -356,20 +417,22 @@ fn run_command(args: &[String]) {
 			}
 			Err(failure) => fail(failure),
 		}
-	} else if args[1] == warp::paint_window::COMMAND {
-		if let Err(failure) = warp::paint_window::run(args.get(2).is_some_and(|flag| flag == warp::paint_window::CHECK))
-		{
+	} else if args[1] == warp::graphics::paint_window::COMMAND {
+		if let Err(failure) = warp::graphics::paint_window::run(
+			args.get(2)
+				.is_some_and(|flag| flag == warp::graphics::paint_window::CHECK),
+		) {
 			fail(failure);
 		}
 	} else if args[1] == REGISTER_COMMAND {
 		register_file_type();
 	} else if args[1] == SERVE_COMMAND {
 		match served_program(&args[2..]) {
-			Ok((path, port)) => serve_file(path, port, ""),
+			Ok((path, port)) => serve_file(path, port, "", false),
 			Err(failure) => fail(format!("warp serve: {failure}")),
 		}
 	} else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
-		use warp::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
+		use warp::web::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
 		let deployment = match args[2].as_str() {
 			DEV_FLAG => Deployment::Local,
 			DRY_RUN_FLAG => Deployment::DryRun,
@@ -381,16 +444,18 @@ fn run_command(args: &[String]) {
 				"warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp"
 			));
 		};
-		if let Err(failure) = warp::deploy::deploy(std::path::Path::new(program), deployment) {
+		if let Err(failure) = warp::web::deploy::deploy(std::path::Path::new(program), deployment) {
 			fail(format!("warp deploy: {failure}"));
 		}
 	} else if args[1] == DEV_COMMAND && args.len() >= 3 {
 		let port = args
 			.get(3)
-			.map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
+			.map_or(Ok(warp::web::dev_server::DEV_PORT), |port| port.parse::<u16>());
 		let served = port
 			.map_err(|_| format!("warp dev: the port is a number, not {}", args[3]))
-			.and_then(|port| warp::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser()));
+			.and_then(|port| {
+				warp::web::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser())
+			});
 		if let Err(failure) = served {
 			fail(failure);
 		}
@@ -422,23 +487,18 @@ fn run_command(args: &[String]) {
 		if flags.contains(&WAGI_FLAG) {
 			return write_wagi(&code, &target);
 		}
+		// `warp build` writes both (card build-should), `--exe` too, `--wasm` and `--aot` only the module
+		write_module(&code, &target, ahead_of_time);
 		if standalone {
-			match write_standalone_executable(&code, &target) {
+			let written = if builds_an_app(&code) {
+				write_web_view_app(&code, &target)
+			} else {
+				write_standalone_executable(&code, &target)
+			};
+			match written {
 				Ok(report) => println!("{report}"),
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
-			return;
-		}
-		match warp::pipeline::for_any_host(|| wasm_emitter::compile(&code)) {
-			Ok(module) => {
-				let output_path = compiled_output_path(&target);
-				fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
-				println!("compiled {} bytes to {}", module.bytes.len(), output_path);
-				if ahead_of_time {
-					write_machine_code(&module.bytes, &output_path);
-				}
-			}
-			Err(final_value) => fail(format!("nothing to compile: {}", final_value.serialize())),
 		}
 	} else if let Some(path) = test_file(args) {
 		// P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
@@ -448,7 +508,7 @@ fn run_command(args: &[String]) {
 		match result.drop_meta() {
 			Node::Text(summary) => println!("{summary}"),
 			Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => {
-				println!("{}", summary.drop_meta().serialize().trim_matches('"'))
+				println!("{}", summary.drop_meta())
 			}
 			other => show(other, ""),
 		}
@@ -461,7 +521,7 @@ fn run_command(args: &[String]) {
 		}
 		warp_runtime::system_signals::allow_staying(); // a program with a live timer stays after main
 		if !only_run && warp::serve::serves(&source_of(path)) {
-			serve_file(path, SERVE_PORT, "routes found; ");
+			serve_file(path, SERVE_PORT, "routes found; ", true);
 		}
 		// a page shows in a window, as `warp app` shows it; piped or redirected it prints its HTML
 		if shows_in_window(&source_of(path)) {
@@ -495,7 +555,7 @@ fn run_command(args: &[String]) {
 		println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
-		warp::dev_server::open_in_browser("https://github.com/pannous/warp/");
+		warp::web::dev_server::open_in_browser("https://github.com/pannous/warp/");
 	} else if arg_string.starts_with("eval ") {
 		let code = arg_string.strip_prefix("eval ").unwrap_or("");
 		diagnostic::show_lines_of(code);
@@ -599,7 +659,7 @@ fn show_and_fail_on_error(result: &Node, mark: &str) {
 /// A program that ended well keeps its painted window up until the user closes it; exit() or a failure closes it
 fn ended_well(result: &Node) {
 	if !matches!(result.drop_meta(), Node::Error(_)) {
-		warp::paint_window::wait_until_closed();
+		warp::graphics::paint_window::wait_until_closed();
 	}
 }
 
@@ -633,6 +693,22 @@ fn source_of(target: &str) -> String {
 }
 
 /// `dir/program.warp` compiles to `dir/program.wasm`; inline code compiles to `out.wasm`
+/// `warp build`: the WebAssembly module next to the program file (out.wasm for inline code), with `--aot` its machine
+/// code too
+fn write_module(code: &str, target: &str, ahead_of_time: bool) {
+	match warp::pipeline::for_any_host(|| wasm_emitter::compile(code)) {
+		Ok(module) => {
+			let output_path = compiled_output_path(target);
+			fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
+			println!("compiled {} bytes to {}", module.bytes.len(), output_path);
+			if ahead_of_time {
+				write_machine_code(&module.bytes, &output_path);
+			}
+		}
+		Err(final_value) => fail(format!("nothing to compile: {}", final_value.serialize())),
+	}
+}
+
 fn compiled_output_path(target: &str) -> String {
 	if file_exists(target) {
 		std::path::Path::new(target)
@@ -751,23 +827,65 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 		return Err(format!("{} used runtime.", missing.join(", ")));
 	}
 	let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
-	let stub = runtime_stub_path()?;
-	let runtime =
-		fs::read(&stub).map_err(|failure| format!("cannot read the runtime {}: {failure}", stub.display()))?;
+	let (stub, runtime) = runtime_stub(&PROGRAM_STUB)?;
 	let output = standalone_output_path(target);
 	let executable = warp_runtime::standalone::with_machine_code(&runtime, &machine_code);
-	fs::write(&output, &executable).map_err(|failure| format!("cannot write {}: {failure}", output.display()))?;
+	write_executable(&executable, &output)?;
+	Ok(format!(
+		"wrote {} ({} bytes: runtime {}, machine code {})",
+		output.display(),
+		executable.len(),
+		stub.display(),
+		machine_code.len()
+	))
+}
+
+/// `warp build page.warp` of a program showing a page, as `warp page.warp` opens it in a window: an app, the stub
+/// carrying the page's site, which it shows in the system's web view (card build-links); macOS only for now
+fn builds_an_app(code: &str) -> bool {
+	cfg!(target_os = "macos") && warp::serve::shows_page(code)
+}
+
+fn write_web_view_app(code: &str, target: &str) -> Result<String, String> {
+	let output = standalone_output_path(target);
+	let title = output
+		.file_stem()
+		.map(|stem| stem.to_string_lossy().into_owned())
+		.unwrap_or_default();
+	let site = warp::web::site::files(code, &title, false)?;
+	let (stub, runtime) = runtime_stub(&PAGE_STUB)?;
+	let executable = warp_runtime::standalone::with_site(&runtime, &site);
+	write_executable(&executable, &output)?;
+	Ok(format!(
+		"wrote {} ({} bytes: runtime {}, the page in a web view window)",
+		output.display(),
+		executable.len(),
+		stub.display()
+	))
+}
+
+/// The runtime stub's path and bytes
+fn runtime_stub(kind: &RuntimeStub) -> Result<(std::path::PathBuf, Vec<u8>), String> {
+	let stub = runtime_stub_path(kind)?;
+	let runtime =
+		fs::read(&stub).map_err(|failure| format!("cannot read the runtime {}: {failure}", stub.display()))?;
+	Ok((stub, runtime))
+}
+
+/// The executable written, runnable and (macOS) signed
+fn write_executable(executable: &[u8], output: &std::path::Path) -> Result<(), String> {
+	fs::write(output, executable).map_err(|failure| format!("cannot write {}: {failure}", output.display()))?;
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::PermissionsExt;
-		fs::set_permissions(&output, fs::Permissions::from_mode(EXECUTABLE_MODE))
+		fs::set_permissions(output, fs::Permissions::from_mode(EXECUTABLE_MODE))
 			.map_err(|failure| failure.to_string())?;
 	}
 	// macOS starts only signed executables: an ad-hoc signature, which `codesign --verify --strict` accepts
 	#[cfg(target_os = "macos")]
 	match std::process::Command::new("codesign")
 		.args(["--sign", "-", "--force"])
-		.arg(&output)
+		.arg(output)
 		.output()
 	{
 		Ok(signed) if signed.status.success() => {}
@@ -780,13 +898,7 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 		}
 		Err(failure) => return Err(format!("cannot run codesign for {}: {failure}", output.display())),
 	}
-	Ok(format!(
-		"wrote {} ({} bytes: runtime {}, machine code {})",
-		output.display(),
-		executable.len(),
-		stub.display(),
-		machine_code.len()
-	))
+	Ok(())
 }
 
 /// What an import the standalone runtime lacks is for, in the user's words (card g-13Vk: "tasks need runtime."): the
@@ -799,6 +911,7 @@ fn feature_of(module: &str, name: &str) -> String {
 		_ if name.starts_with("shared_") => "shared arrays",
 		"fetch_start" | "fetch_reply" => "async fetch",
 		"run_block" | "block·value" => "run-time blocks",
+		"parse_code" => "run-time parse",
 		"foreign_call" => "foreign calls",
 		_ => return format!("{module}.{name}"),
 	};
@@ -843,7 +956,7 @@ fn write_wagi(code: &str, target: &str) {
 		Ok(module) => {
 			fs::write(&module_path, &module.bytes).expect("could not write the WAGI module");
 			let source = module_path.file_name().unwrap_or_default().to_string_lossy();
-			fs::write(&manifest_path, warp::deploy::spin_manifest(&name, &source))
+			fs::write(&manifest_path, warp::web::deploy::spin_manifest(&name, &source))
 				.expect("could not write the Spin manifest");
 			println!(
 				"wrote {} ({} bytes) and {}",
@@ -862,33 +975,33 @@ fn write_wagi(code: &str, target: &str) {
 /// A program ending in markup (`html{…}`, `div{…}`, card div-opens-app) run with a terminal for its output: shown in a
 /// window as `warp app` shows it; piped, redirected or under WARP_NO_WINDOW it prints its HTML
 fn shows_in_window(code: &str) -> bool {
-	io::stdout().is_terminal() && warp::paint::shows_windows() && warp::serve::shows_page(code)
+	io::stdout().is_terminal() && warp::graphics::paint::shows_windows() && warp::serve::shows_page(code)
 }
 
-/// `warp dev` run from a terminal opens its page (card dev-opens-browser); piped, under WARP_NO_WINDOW or CI it doesn't
+/// `warp dev` and a served program run from a terminal open their page (cards dev-opens-browser, samples-serving); piped, under WARP_NO_WINDOW or CI it doesn't
 fn opens_browser() -> bool {
-	io::stdout().is_terminal() && warp::paint::shows_windows()
+	io::stdout().is_terminal() && warp::graphics::paint::shows_windows()
 }
 
 fn is_html_file(target: &str) -> bool {
 	target.ends_with(".html") || target.ends_with(".htm")
 }
 
-/// `warp page.html`, `warp app [--check] page.warp`: the page in a web view window (src/webview.rs); --check prints
+/// `warp page.html`, `warp app [--check] page.warp`: the page in a web view window (src/web/webview.rs); --check prints
 /// its text from a hidden window instead
 fn show_in_webview(target: &str, check: bool) {
-	if !check && !warp::paint::shows_windows() {
-		fail(format!("warp {APP_COMMAND}: no window under {} or CI; `warp {APP_COMMAND} {APP_CHECK} {target}` prints the page's text", warp::paint::NO_WINDOW_VARIABLE));
+	if !check && !warp::graphics::paint::shows_windows() {
+		fail(format!("warp {APP_COMMAND}: no window under {} or CI; `warp {APP_COMMAND} {APP_CHECK} {target}` prints the page's text", warp::graphics::paint::NO_WINDOW_VARIABLE));
 	}
 	#[cfg(target_os = "macos")]
 	let shown = if is_html_file(target) {
-		warp::webview::show_file(std::path::Path::new(target), check)
+		warp::web::webview::show_file(std::path::Path::new(target), check)
 	} else {
 		let title = std::path::Path::new(target)
 			.file_stem()
 			.filter(|_| file_exists(target))
 			.map_or(DEFAULT_SITE_NAME.into(), |stem| stem.to_string_lossy());
-		warp::webview::show_program(&source_of(target), &title, check)
+		warp::web::webview::show_program(&source_of(target), &title, check)
 	};
 	#[cfg(not(target_os = "macos"))]
 	let shown: Result<(), String> = Err(format!(
@@ -912,7 +1025,7 @@ fn write_site(code: &str, target: &str) {
 			std::path::PathBuf::from(DEFAULT_SITE_NAME),
 		),
 	};
-	match warp::site::build(code, &name, &directory) {
+	match warp::web::site::build(code, &name, &directory) {
 		Ok(site) => println!(
 			"built the site {} ({})",
 			site.directory.display(),
@@ -933,23 +1046,30 @@ fn standalone_output_path(target: &str) -> std::path::PathBuf {
 /// The runtime an executable is built from: `WARP_RUNTIME_STUB`, else `warp-runtime` next to this warp (or next to the
 /// file a link to warp points to), else built once from warp's own source checkout (issue #10: it just works). P104
 /// (user): never a copy of warp itself (~120 MB); without a stub nothing is written
-fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
-	if let Ok(path) = env::var(RUNTIME_STUB_VARIABLE) {
+fn runtime_stub_path(kind: &RuntimeStub) -> Result<std::path::PathBuf, String> {
+	if let Ok(path) = env::var(kind.variable) {
 		return Ok(std::path::PathBuf::from(path));
 	}
 	let warp = env::current_exe().map_err(|failure| failure.to_string())?;
 	let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
-	let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
+	let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(kind.name));
 	let neighbour = next_to_warp.iter().find(|stub| stub.is_file());
 	if !in_cargo_target(&resolved) {
 		// an installed warp (brew, a release tarball, ~/dev/bin) uses the prebuilt stub shipped next to it and never
 		// builds one (user 2026-10-09)
-		return neighbour.cloned().ok_or_else(|| format!("no runtime stub {}: warp-runtime ships next to warp (brew, the release tarball); put it there or name one in {RUNTIME_STUB_VARIABLE}", next_to_warp[0].display()));
+		return neighbour.cloned().ok_or_else(|| {
+			format!(
+				"no runtime stub {}: {} ships next to warp (brew, the release tarball); put it there or name one in {}",
+				next_to_warp[0].display(),
+				kind.name,
+				kind.variable
+			)
+		});
 	}
 	// a debug warp's neighbour in a cargo target is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one
 	match neighbour.filter(|_| !cfg!(debug_assertions)) {
 		Some(stub) => Ok(stub.clone()),
-		None => build_runtime_stub(&next_to_warp[0]),
+		None => build_runtime_stub(kind, &next_to_warp[0]),
 	}
 }
 
@@ -965,18 +1085,21 @@ fn in_cargo_target(binary: &std::path::Path) -> bool {
 
 /// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next
 /// to a release warp built there; its path as cargo reports it
-fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
+fn build_runtime_stub(kind: &RuntimeStub, expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
 	let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
 	if !source.join(RUNTIME_STUB_CRATE).is_dir() {
-		return Err(format!("no runtime stub {}: put warp-runtime there or name one in {RUNTIME_STUB_VARIABLE} (the warp source {} that would build it is gone)", expected.display(), source.display()));
+		return Err(format!("no runtime stub {}: put warp-runtime there or name one in {} (the warp source {} that would build it is gone)", expected.display(), kind.variable, source.display()));
 	}
 	// cargo runs every time (it keeps the stub current, quickly once built); the note only before the first build
 	let release_stub = expected
 		.parent()
 		.and_then(std::path::Path::parent)
-		.map(|target| target.join("release").join(RUNTIME_STUB_NAME));
+		.map(|target| target.join("release").join(kind.name));
 	if !release_stub.is_some_and(|stub| stub.is_file()) {
-		eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+		eprintln!(
+			"note: building the runtime stub {} once (cargo build -p {})",
+			kind.name, PROGRAM_STUB.name
+		);
 	}
 	let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
 	build
@@ -986,17 +1109,22 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
 			"--quiet",
 			"--message-format=json",
 			"-p",
-			RUNTIME_STUB_NAME,
+			PROGRAM_STUB.name,
 			"--bin",
-			RUNTIME_STUB_NAME,
+			kind.name,
 		])
 		.current_dir(source);
+	if !kind.features.is_empty() {
+		build.args(["--features", kind.features]);
+	}
 	let output = build
 		.output()
 		.map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
 	if !output.status.success() {
 		return Err(format!(
-			"building the runtime stub failed (cargo build -p {RUNTIME_STUB_NAME} in {}): {}",
+			"building the runtime stub {} failed (cargo build -p {} in {}): {}",
+			kind.name,
+			PROGRAM_STUB.name,
 			source.display(),
 			String::from_utf8_lossy(&output.stderr).trim()
 		));
@@ -1007,10 +1135,10 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
 		.find_map(|message| {
 			message["executable"]
 				.as_str()
-				.filter(|path| path.ends_with(RUNTIME_STUB_NAME))
+				.filter(|path| path.ends_with(kind.name))
 				.map(std::path::PathBuf::from)
 		})
-		.ok_or_else(|| format!("cargo built {RUNTIME_STUB_NAME} but named no executable"))
+		.ok_or_else(|| format!("cargo built {} but named no executable", kind.name))
 }
 
 /// Parse tree as s-expression: `(op left right)` for keys, `[items]` for lists
@@ -1052,12 +1180,16 @@ fn usage() {
 	println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
 	println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
 	println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
-	println!("  --sandbox            No C, shell or other runtime for the program (as hosted programs run)");
+	println!("  --warnings=<level>   Show diagnostics from hint (default), weak, normal or severe up");
+	println!("  --strict[=<level>]   Warnings from normal (or the level) up are errors, as `use strict`");
+	println!("  --sandbox            No C, shell or other runtime, files written only in the working folder (as hosted programs run)");
 	println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
 	println!(
 		"  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running"
 	);
 	println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
+	println!("  warp build <file.warp>  The standalone executable <file> and <file>.wasm (--exe: only the executable, --wasm: only the module)");
+	println!("  warp {APP_COMMAND} <file.warp>    Show the program's page in a window of its own (macOS web view; {APP_CHECK}: print its text)");
 	println!("  warp test            Run tests");
 	println!("  warp docs            Open documentation");
 	println!("  warp version         Show version");

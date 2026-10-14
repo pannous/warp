@@ -20,9 +20,56 @@ pub struct Diagnostic {
 	pub topic: Option<String>,
 	/// What "got it" for this expression only remembers: `topic@expression` (expression_key)
 	pub expression_key: Option<String>,
+	/// How much it matters: what is shown (show_from) and what fails under `use strict` (WarningMode::Strict)
+	pub level: Level,
+	/// A hint's text as written, and the form it prefers (the same for a note about the text itself)
+	pub written: Option<String>,
+	pub preferred: Option<String>,
+}
+
+/// How much a diagnostic matters (user, 2026-10-13: hint < weak < normal < severe; errors are no level, they stop the
+/// program). A hint prefers another form, a weak warning notices how the program runs (`@gpu` maps on the CPU), a
+/// normal warning a likely mistake, a severe one code that can never do what it says (a handler nothing emits)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Level {
+	Hint,
+	Weak,
+	#[default]
+	Normal,
+	Severe,
+}
+
+impl Level {
+	pub const ALL: [Level; 4] = [Level::Hint, Level::Weak, Level::Normal, Level::Severe];
+
+	pub fn name(self) -> &'static str {
+		match self {
+			Level::Hint => "hint",
+			Level::Weak => "weak",
+			Level::Normal => "normal",
+			Level::Severe => "severe",
+		}
+	}
+
+	/// The level of its name (`--warnings=weak`, `--strict=severe`)
+	pub fn named(name: &str) -> Option<Level> {
+		Level::ALL.into_iter().find(|level| level.name() == name)
+	}
 }
 
 impl Diagnostic {
+	pub fn level(self, level: Level) -> Self {
+		Diagnostic { level, ..self }
+	}
+
+	pub fn weak(self) -> Self {
+		self.level(Level::Weak)
+	}
+
+	pub fn severe(self) -> Self {
+		self.level(Level::Severe)
+	}
+
 	/// A diagnostic at the source position of `node`, else of its first part that has one (0:0 if the parser recorded none)
 	pub fn at(node: &Node, message: impl Into<String>) -> Self {
 		let position = line_info(node).unwrap_or_default();
@@ -94,7 +141,7 @@ impl Diagnostic {
 		let text = self.to_string();
 		if !self.fixes.is_empty() {
 			note_said();
-			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
+			diagnostics(|diagnostics| diagnostics.errors.push(self));
 		}
 		text
 	}
@@ -119,6 +166,49 @@ pub fn paint(color: Color, text: &str) -> String {
 		format!("\x1b[{}m{text}\x1b[0m", color as u8)
 	} else {
 		text.to_string()
+	}
+}
+
+/// The position a diagnostic without a recorded one names (Diagnostic::at)
+const UNKNOWN_POSITION: &str = " at 0:0";
+/// Between a diagnostic's message and its fix
+const FIX_SEPARATOR: &str = "; fix: ";
+
+/// `message` at `position`, before its fix, unless it names a position already
+pub fn located_at(message: String, position: &crate::meta::LineInfo) -> String {
+	let at = format!(" at {}", position.place());
+	if message.contains(UNKNOWN_POSITION) {
+		return message.replacen(UNKNOWN_POSITION, &at, 1);
+	}
+	if names_position(&message) {
+		return message;
+	}
+	match message.split_once(FIX_SEPARATOR) {
+		Some((what, fix)) => format!("{what}{at}{FIX_SEPARATOR}{fix}"),
+		None => format!("{message}{at}"),
+	}
+}
+
+/// The first Error in the tree, its message located at the nearest position around it: a parser error is wrapped in
+/// the position where it was read
+pub fn first_located_error(node: &Node) -> Option<Node> {
+	located_error_below(node, None)
+}
+
+fn located_error_below(node: &Node, around: Option<&crate::meta::LineInfo>) -> Option<Node> {
+	let own = node.get_lineinfo();
+	let around = own.as_ref().or(around);
+	let below = |part: &Node| located_error_below(part, around);
+	match node {
+		Node::Error(message) => Some(match (message.drop_meta(), around) {
+			(Node::Text(text), Some(position)) => crate::node::error(&located_at(text.clone(), position)),
+			_ => node.clone(),
+		}),
+		Node::Key(left, _, right) => below(left).or_else(|| below(right)),
+		Node::List(items, _, _) => items.iter().find_map(below),
+		Node::Meta { node, .. } => below(node),
+		Node::Type { name, body } => below(name).or_else(|| below(body)),
+		_ => None,
 	}
 }
 
@@ -317,9 +407,58 @@ impl fmt::Display for Diagnostic {
 pub enum WarningMode {
 	#[default]
 	Warn,
+	/// Every warning is an error, weak ones too
 	Error,
+	/// The warnings of this level and above are errors: `use strict` and `--strict` (STRICT_LEVEL), `--strict=<level>`
+	Strict(Level),
 	/// Neither shown nor errors: a compile repeating one whose warnings were shown already
 	Quiet,
+}
+
+impl WarningMode {
+	/// The lowest level that is an error; hints never are
+	fn failing_from(self) -> Option<Level> {
+		match self {
+			WarningMode::Error => Some(Level::Weak),
+			WarningMode::Strict(level) => Some(level.max(Level::Weak)),
+			WarningMode::Warn | WarningMode::Quiet => None,
+		}
+	}
+
+	pub fn fails(self, level: Level) -> bool {
+		self.failing_from().is_some_and(|from| level >= from)
+	}
+
+	/// `use strict` inside a mode: the stricter of the two
+	fn strictened(self) -> WarningMode {
+		match self.failing_from() {
+			Some(from) if from <= STRICT_LEVEL => self,
+			_ => WarningMode::Strict(STRICT_LEVEL),
+		}
+	}
+}
+
+/// What `use strict` and `--strict` make errors: normal and severe warnings (user default, 2026-10-13)
+pub const STRICT_LEVEL: Level = Level::Normal;
+
+/// The lowest level printed, process-wide (Hint: everything); lower ones are still recorded for hosts and tests
+static SHOWN_FROM: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(Level::Hint as u8);
+/// Whether this process printed a hint: the CLI then ends with how to hide them
+static ANY_HINT_PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Print the diagnostics of `level` and above (`--warnings=<level>`; `--no-hints` is Weak)
+pub fn show_from(level: Level) {
+	SHOWN_FROM.store(level as u8, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether diagnostics of `level` are printed
+pub fn is_shown(level: Level) -> bool {
+	level as u8 >= SHOWN_FROM.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Whether this process printed a hint or note
+pub fn any_hint_printed() -> bool {
+	ANY_HINT_PRINTED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// `use strict` in warp source makes warnings errors for that program
@@ -334,8 +473,31 @@ const ACKNOWLEDGED_PREFIX: &str = "ack:";
 thread_local! {
 	static WARNING_MODE: std::cell::Cell<WarningMode> = const { std::cell::Cell::new(WarningMode::Warn) };
 	static RUNTIME_WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
-	static COMPILE_WARNINGS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
-	static ERROR_DIAGNOSTICS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
+	static DIAGNOSTICS: std::cell::RefCell<Diagnostics> = std::cell::RefCell::new(Diagnostics::default());
+}
+
+/// What compiles on this thread said, kept for the hosts that take it (take_warnings, take_error_diagnostics,
+/// take_assumptions, capture_hints)
+#[derive(Default)]
+struct Diagnostics {
+	/// How many diagnostics were said (warnings, errors with fixes, assumptions, hints): a step that says something must
+	/// run again to say it again (analysis_memo.rs remembers only silent analyses)
+	said: u64,
+	/// The compile-time warnings, every level but hints
+	warnings: Vec<Diagnostic>,
+	/// The errors with fixes
+	errors: Vec<Diagnostic>,
+	/// The defaults unanswered Asks took
+	assumptions: Vec<Diagnostic>,
+	/// How many capture_hints scopes are open: hints are recorded only for them (nobody else reads them)
+	hint_captures: usize,
+	captured_hints: Vec<Diagnostic>,
+	/// Under HintMode::Once, the hints shown already
+	shown_hints: std::collections::HashSet<String>,
+}
+
+fn diagnostics<R>(use_them: impl FnOnce(&mut Diagnostics) -> R) -> R {
+	DIAGNOSTICS.with(|diagnostics| use_them(&mut diagnostics.borrow_mut()))
 }
 
 /// The program the CLI runs: its warnings and errors print the line they name (show_lines_of); process-wide, as a
@@ -353,10 +515,7 @@ pub fn warning_mode() -> WarningMode {
 
 /// Run `body` in another warning mode, then restore the previous one
 pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
-	let previous = WARNING_MODE.with(|current| current.replace(mode));
-	let result = body();
-	set_warning_mode(previous);
-	result
+	crate::util::scoped(&WARNING_MODE, mode, body)
 }
 
 /// Run `body` saying nothing (no warnings, hints or "got it?"): the compile of the executable a run leaves repeats the
@@ -369,64 +528,153 @@ fn is_quiet() -> bool {
 	warning_mode() == WarningMode::Quiet
 }
 
-thread_local! {
-	/// How many diagnostics this thread has said (warnings, errors with fixes, assumptions, hints): a step that says
-	/// something must run again to say it again (analysis_memo.rs remembers only silent analyses)
-	static SAID: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-}
-
 pub fn said() -> u64 {
-	SAID.with(|said| said.get())
+	diagnostics(|diagnostics| diagnostics.said)
 }
 
 pub(crate) fn note_said() {
-	SAID.with(|said| said.set(said.get() + 1));
+	diagnostics(|diagnostics| diagnostics.said += 1);
 }
 
-/// Compile-time warnings: printed in Warn mode, but those said "got it" to, each followed by its "got it?"; the first
-/// one is the error in Error mode
-pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
-	if !warnings.is_empty() {
+/// Compile-time diagnostics: the first one the warning mode fails at is the error; otherwise each is said (say), but
+/// those said "got it" to
+pub fn report(diagnostics: &[Diagnostic]) -> Result<(), Node> {
+	if !diagnostics.is_empty() {
 		note_said();
 	}
-	match (warning_mode(), warnings.first()) {
-		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
-		(WarningMode::Quiet, _) => Ok(()),
-		_ => {
-			let shown: Vec<Diagnostic> = warnings
-				.iter()
-				.filter(|warning| !warning.is_silenced())
-				.cloned()
-				.collect();
-			for warning in &shown {
-				eprintln!("warning: {warning}");
-				if let Some(excerpt) = shown_excerpt(warning.line, warning.column) {
-					eprintln!("{excerpt}");
-				}
-				if let Some((topic, written)) = warning.acknowledgeable() {
-					offer_acknowledgement(topic, written);
-				}
+	let mode = warning_mode();
+	if let Some(failing) = diagnostics.iter().find(|diagnostic| mode.fails(diagnostic.level)) {
+		return Err(failing.clone().into_error());
+	}
+	if mode != WarningMode::Quiet {
+		for diagnostic in diagnostics.iter().filter(|diagnostic| !diagnostic.is_silenced()) {
+			say(diagnostic.clone());
+		}
+	}
+	Ok(())
+}
+
+/// The one way a diagnostic of any level reaches the user: recorded for hosts (take_warnings, capture_hints), printed
+/// to stderr from the shown level up (show_from), and followed by its "got it?" when printed. Under HintMode::Once a
+/// diagnostic said before is not said again. Whether it was printed
+pub fn say(diagnostic: Diagnostic) -> bool {
+	if said_before(&diagnostic) {
+		return false;
+	}
+	note_said();
+	let printed = is_shown(diagnostic.level);
+	if printed {
+		print(&diagnostic);
+	}
+	if let Some((topic, written)) = diagnostic.acknowledgeable() {
+		offer_acknowledgement(topic, written, diagnostic.level);
+	}
+	diagnostics(|diagnostics| match diagnostic.level {
+		Level::Hint if diagnostics.hint_captures > 0 => diagnostics.captured_hints.push(diagnostic),
+		Level::Hint => {}
+		_ => diagnostics.warnings.push(diagnostic),
+	});
+	printed
+}
+
+/// Under HintMode::Once: whether this diagnostic was said before on this thread (remembers it otherwise)
+fn said_before(diagnostic: &Diagnostic) -> bool {
+	let key = match (&diagnostic.written, &diagnostic.preferred) {
+		(Some(written), Some(preferred)) => format!("{written}|{preferred}"),
+		_ => format!("{}@{}:{}", diagnostic.message, diagnostic.line, diagnostic.column),
+	};
+	crate::normalize::hint_mode() == crate::normalize::HintMode::Once
+		&& !diagnostics(|diagnostics| diagnostics.shown_hints.insert(key))
+}
+
+/// Clear shown hints (useful for testing)
+pub fn clear_shown_hints() {
+	diagnostics(|diagnostics| diagnostics.shown_hints.clear());
+}
+
+/// A hint `prefer <preferred> over <written>` (a note when they are the same) with its reason below; a warning with the
+/// source line it names
+fn print(diagnostic: &Diagnostic) {
+	match (&diagnostic.written, &diagnostic.preferred) {
+		(Some(written), Some(preferred)) => {
+			ANY_HINT_PRINTED.store(true, std::sync::atomic::Ordering::Relaxed);
+			let position = match diagnostic.line {
+				0 => String::new(),
+				line => format!(
+					" {}",
+					paint(
+						Color::Gray,
+						&crate::meta::place_text(diagnostic.file.as_deref(), line, diagnostic.column)
+					)
+				),
+			};
+			// a note about the text as written (`await job within 100 ms`) prefers nothing else
+			match preferred == written {
+				true => eprintln!(
+					"{}{position}: {}",
+					paint(Color::Cyan, "note"),
+					paint(Color::Green, written)
+				),
+				false => eprintln!(
+					"{}{position}: prefer {} over {}",
+					paint(Color::Cyan, "hint"),
+					paint(Color::Green, preferred),
+					paint(Color::Yellow, written)
+				),
 			}
-			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend(shown));
-			Ok(())
+			eprintln!("      {}", diagnostic.message);
+		}
+		_ => {
+			let label = match diagnostic.level {
+				Level::Normal => "warning".to_string(),
+				level => format!("warning ({})", level.name()),
+			};
+			eprintln!("{label}: {diagnostic}");
+			if let Some(excerpt) = shown_excerpt(diagnostic.line, diagnostic.column) {
+				eprintln!("{excerpt}");
+			}
 		}
 	}
 }
 
-/// The compile-time warnings reported on this thread since the last call (a host without a terminal shows them)
+/// Whether this warning was said on this thread since the last take_warnings: a step emitted twice (an if's
+/// condition) says its warning once
+pub fn warned_before(warning: &Diagnostic) -> bool {
+	diagnostics(|diagnostics| diagnostics.warnings.contains(warning))
+}
+
+/// The compile-time warnings (every level but hints) said on this thread since the last call (a host without a
+/// terminal shows them)
 pub fn take_warnings() -> Vec<Diagnostic> {
-	COMPILE_WARNINGS.with(|reported| std::mem::take(&mut *reported.borrow_mut()))
+	diagnostics(|diagnostics| std::mem::take(&mut diagnostics.warnings))
+}
+
+/// Run `body` and return it with the hints said meanwhile on this thread (still printed as always)
+pub fn capture_hints<T>(body: impl FnOnce() -> T) -> (T, Vec<Diagnostic>) {
+	let start = diagnostics(|diagnostics| {
+		diagnostics.hint_captures += 1;
+		diagnostics.captured_hints.len()
+	});
+	let result = body();
+	let hints = diagnostics(|diagnostics| {
+		diagnostics.hint_captures -= 1;
+		let start = start.min(diagnostics.captured_hints.len());
+		diagnostics.captured_hints.split_off(start)
+	});
+	(result, hints)
 }
 
 /// The errors with fixes made on this thread since the last call (the page offers their fixes when the program fails)
 pub fn take_error_diagnostics() -> Vec<Diagnostic> {
-	ERROR_DIAGNOSTICS.with(|errors| std::mem::take(&mut *errors.borrow_mut()))
+	diagnostics(|diagnostics| std::mem::take(&mut diagnostics.errors))
 }
 
 /// A warning the running program reports with `warning(message)`
 pub fn report_runtime_warning(message: &str) {
 	note_said();
-	eprintln!("warning: {message}");
+	if is_shown(Level::Normal) {
+		eprintln!("warning: {message}");
+	}
 	RUNTIME_WARNINGS.with(|warnings| warnings.borrow_mut().push(message.to_string()));
 }
 
@@ -684,7 +932,6 @@ thread_local! {
 	static ACKNOWLEDGED_TOPICS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
 	static ACKNOWLEDGEMENTS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
 	static NOTES_SHOWN: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
-	static ASSUMPTIONS: std::cell::RefCell<Vec<Diagnostic>> = const { std::cell::RefCell::new(Vec::new()) };
 	/// The source of the program being compiled, for its `// got it` comments
 	static SOURCE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
@@ -696,16 +943,14 @@ pub fn set_acknowledger(acknowledger: Option<std::rc::Rc<dyn Acknowledger>>) {
 
 /// Run `body` with another acknowledger and fresh acknowledgement and note memory, then restore all three
 pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: impl FnOnce() -> R) -> R {
-	let previous = ACKNOWLEDGER.with(|current| current.replace(Some(std::rc::Rc::new(acknowledger))));
-	let acknowledged = ACKNOWLEDGED_TOPICS.with(|topics| std::mem::take(&mut *topics.borrow_mut()));
-	let file = ACKNOWLEDGEMENTS_FILE.with(|file| file.borrow_mut().take());
-	let shown = NOTES_SHOWN.with(|notes| std::mem::take(&mut *notes.borrow_mut()));
-	let result = body();
-	ACKNOWLEDGER.with(|current| *current.borrow_mut() = previous);
-	ACKNOWLEDGED_TOPICS.with(|topics| *topics.borrow_mut() = acknowledged);
-	ACKNOWLEDGEMENTS_FILE.with(|current| *current.borrow_mut() = file);
-	NOTES_SHOWN.with(|notes| *notes.borrow_mut() = shown);
-	result
+	use crate::util::scoped;
+	scoped(&ACKNOWLEDGER, Some(std::rc::Rc::new(acknowledger)), || {
+		scoped(&ACKNOWLEDGED_TOPICS, Default::default(), || {
+			scoped(&ACKNOWLEDGEMENTS_FILE, None, || {
+				scoped(&NOTES_SHOWN, Default::default(), body)
+			})
+		})
+	})
 }
 
 /// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
@@ -764,7 +1009,7 @@ fn load_acknowledgements() {
 /// A new program (eval, compile) starts with no assumptions, no notes shown and only the acknowledgements of the
 /// file: what one program assumed or showed never reaches the next one on the same thread
 pub fn begin_program() {
-	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().clear());
+	diagnostics(|diagnostics| diagnostics.assumptions.clear());
 	NOTES_SHOWN.with(|notes| notes.borrow_mut().clear());
 	load_acknowledgements();
 }
@@ -802,14 +1047,14 @@ fn remember_acknowledged(topic: &str) {
 
 /// After a warning or note of `topic` was shown, once per run: does the user say "got it", for this expression or all of
 /// the kind? Then it is not shown again
-pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
+pub(crate) fn offer_acknowledgement(topic: &str, written: &str, level: Level) {
 	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
 		return;
 	}
-	// "got it?" about a hint nobody saw (hints not printed) is not asked
+	// "got it?" about something nobody saw (below the shown level) is not asked
 	let acknowledger = ACKNOWLEDGER
 		.with(|current| current.borrow().clone())
-		.filter(|_| crate::normalize::hints_printed());
+		.filter(|_| is_shown(level));
 	match acknowledger.map_or(GotIt::No, |acknowledger| acknowledger.acknowledge(topic, written)) {
 		GotIt::This => remember_acknowledged(&expression_key(topic, written)),
 		GotIt::All => remember_acknowledged(topic),
@@ -820,34 +1065,18 @@ pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || {
-		crate::normalize::show_hint(
-			written,
-			preferred,
-			reason,
-			Some(crate::normalize::rewrite(written, preferred, reason)),
-		)
-	});
+	let fix = crate::normalize::rewrite(written, preferred, reason);
+	advise_once(topic, written, preferred, reason, Some(fix));
 }
 
 /// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
-	noted_once(topic, written, || {
-		crate::normalize::show_hint(written, preferred, reason, fix)
-	});
-}
-
-fn noted_once(topic: &str, written: &str, show: impl FnOnce() -> bool) {
-	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off || is_quiet();
-	if hints_off
+	let silenced = is_quiet()
 		|| is_acknowledged(topic, written)
 		|| silenced_by_comment(crate::normalize::hint_line())
-		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic))
-	{
-		return;
-	}
-	if show() {
-		offer_acknowledgement(topic, written);
+		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
+	if !silenced {
+		crate::normalize::show_hint(written, preferred, reason, fix, topic);
 	}
 }
 
@@ -871,13 +1100,12 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 		return Err(diagnostic.into_error());
 	}
 	// a pass that runs twice (the emitter) asks the same question at the same place once
-	let asked_before = ASSUMPTIONS.with(|assumptions| {
-		let mut assumptions = assumptions.borrow_mut();
-		let asked_before = assumptions.contains(&diagnostic);
-		assumptions.push(diagnostic.clone());
+	let asked_before = diagnostics(|diagnostics| {
+		let asked_before = diagnostics.assumptions.contains(&diagnostic);
+		diagnostics.assumptions.push(diagnostic.clone());
 		asked_before
 	});
-	if warning_mode() == WarningMode::Error {
+	if warning_mode().fails(diagnostic.level) {
 		return Err(diagnostic.into_error());
 	}
 	if asked_before {
@@ -890,7 +1118,7 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 /// The defaults unanswered Asks took on this thread since the last call: a later runtime error names them,
 /// since a wrong guess there typically fails far away from the ambiguous source
 pub fn take_assumptions() -> Vec<Diagnostic> {
-	ASSUMPTIONS.with(|assumptions| std::mem::take(&mut *assumptions.borrow_mut()))
+	diagnostics(|diagnostics| std::mem::take(&mut diagnostics.assumptions))
 }
 
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,
@@ -898,7 +1126,7 @@ pub fn take_assumptions() -> Vec<Diagnostic> {
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 	SOURCE.with(|source| *source.borrow_mut() = code.to_string());
 	match code.lines().any(|line| line.split_whitespace().eq(STRICT_PRAGMA)) {
-		true => with_warning_mode(WarningMode::Error, body),
+		true => with_warning_mode(warning_mode().strictened(), body),
 		false => body(),
 	}
 }
@@ -907,13 +1135,10 @@ pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 /// says `use comments`
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
-	let previous = COMMENTS_AS_META.with(|flag| flag.replace(comments));
-	let result = match without_strict_pragma(program) {
-		(program, true) => with_warning_mode(WarningMode::Error, || body(program)),
+	crate::util::scoped(&COMMENTS_AS_META, comments, || match without_strict_pragma(program) {
+		(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
 		(program, false) => body(program),
-	};
-	COMMENTS_AS_META.with(|flag| flag.set(previous));
-	result
+	})
 }
 
 thread_local! {

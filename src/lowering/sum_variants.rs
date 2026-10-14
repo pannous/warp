@@ -3,21 +3,66 @@
 //! P178: Rust's path `Shape::Circle(r)` of a variant is the variant `Circle(r)`, in a match its type test and binding.
 
 use super::nodes::key;
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::VARIANTS_MARK;
 use std::collections::HashMap;
 
-/// The parser's attribute on a sum type's name: its variants without payload
-pub const VARIANTS_MARK: &str = "variants";
-
 /// A sum type's variants: those without payload by name, the classes extending it
-#[derive(Default)]
-struct Variants {
+#[derive(Default, Clone)]
+pub(crate) struct Variants {
 	bare: Vec<Node>,
 	classes: Vec<String>,
 }
 
+impl Variants {
+	/// The names of all variants, those with payload (classes) first, as declared
+	pub(crate) fn names(&self) -> Vec<String> {
+		let bare = self.bare.iter().map(|name| name.drop_meta().name());
+		self.classes.iter().cloned().chain(bare).collect()
+	}
+
+	/// No variant carries a payload: a plain enum, whose case at an index is `n as Coin` (plain_enums.rs)
+	pub(crate) fn is_plain(&self) -> bool {
+		self.classes.is_empty()
+	}
+}
+
+/// The sum type's declarations: the type itself, its variants without payload stay symbols, members of the type by name
+/// (`red is Color`, P179), then the classes of the variants with payload
+pub(crate) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations: Vec<Node>) -> Node {
+	let name = Node::Symbol(type_name).with_attribute(
+		VARIANTS_MARK,
+		Node::List(bare_variants, Bracket::None, Separator::Space),
+	);
+	let sum_type = Node::Type {
+		name: Box::new(name),
+		body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)),
+	};
+	Node::List(
+		[vec![sum_type], declarations].concat(),
+		Bracket::None,
+		Separator::Semicolon,
+	)
+}
+
 pub fn lower(program: Node) -> Node {
+	let mut sum_types = sum_types(&program);
+	if sum_types.is_empty() {
+		return program;
+	}
+	// `type Paint = Color`: `c is Paint` tests the variants of Color too
+	for (alias, target) in super::type_aliases::resolved_aliases(&program) {
+		if let Some(variants) = sum_types.get(&target).cloned() {
+			sum_types.insert(alias, variants);
+		}
+	}
+	with_variant_tests(program, &sum_types)
+}
+
+/// The sum types the program declares by name, `enum Shape { Circle(r), Dot }` read as `type @variants(Dot) Shape`
+/// and the classes extending it
+pub(crate) fn sum_types(program: &Node) -> HashMap<String, Variants> {
 	let mut sum_types: HashMap<String, Variants> = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
@@ -27,7 +72,7 @@ pub fn lower(program: Node) -> Node {
 		}
 	});
 	if sum_types.is_empty() {
-		return program;
+		return sum_types;
 	}
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
@@ -39,7 +84,7 @@ pub fn lower(program: Node) -> Node {
 			}
 		}
 	});
-	with_variant_tests(program, &sum_types)
+	sum_types
 }
 
 /// `x is Color` → `x is Color or x == red or x == green`; a literal variant `red is Color` is true; `Shape::Circle(2)` →
@@ -69,8 +114,25 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 				key(test, Op::Or, equals)
 			})
 		}
+		// `Dot == x`: a variant is a value on either side, so it compares from the right, where an unbound name on the
+		// left would be taken for a definition written with `is` (P61); two variants compare by name
+		Node::Key(variant, Op::Eq, other) if is_bare_variant(&variant, sum_types) => {
+			let other = with_variant_tests(*other, sum_types);
+			match is_bare_variant(&other, sum_types) {
+				true if variant.drop_meta() == other.drop_meta() => Node::True,
+				true => Node::False,
+				false => Node::Key(Box::new(other), Op::Eq, variant),
+			}
+		}
 		other => other.map_children(|child| with_variant_tests(child, sum_types)),
 	}
+}
+
+fn is_bare_variant(node: &Node, sum_types: &HashMap<String, Variants>) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(_))
+		&& sum_types
+			.values()
+			.any(|variants| variants.bare.iter().any(|bare| bare.drop_meta() == node.drop_meta()))
 }
 
 /// `Shape::Circle(2)`, `Shape::Dot`: a variant of the sum type Shape, by its name or the head of its call

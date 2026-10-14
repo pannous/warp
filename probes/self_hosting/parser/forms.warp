@@ -1,0 +1,65 @@
+f(x)
+f(x, y)
+f()
+m.has(1)
+g[1]
+g#1
+not x
+-x
+a - -b
+x++
+if a then b else c
+fun add(a, b) { a + b }
+while i < 3 { i = i + 1 }
+f x
+a and b or c
+a => b
+a ? b : c
+x += 1
+a..b
+graph#A#B
+f(x).y
+return a + b
+{ return }
+return = 3
+done = false
+x = [yes, nil, True]
+if 'A' in v { 1 } else { 2 }
+for k in m.keys() { print k }
+for i in 1..3 { x }
+def f(x) := x * 2
+def f(x) { x }
+fun f() { 1 }
+print "hi"
+use "lib/x.warp"
+x = f y
+a.b.c = 3
+a = "x" + 'yz'
+[1, 2, 3].map(x => x * 2)
+x: int = 3
+y := it * 2
+x = 7 mod 3
+y = 7 rem 2 + 1
+for (k, v) in m { s = s + k }
+for k, v in m { n = n + v }
+number of chars in "héllo"
+for i in 0 to (#t) { n += i }
+p = [#s]
+prev#(#b + 1)
+for j in 0...#b { prev.push(j) }
+y = abs(c - col) == 2
+f = abs
+sqrt 16 + 1
+q = 7//2
+x //= 2
+r = 7 div 2
+3 times { a.push(true) }
+x = 100 times [0]
+n times: s += 2
+for r in 0..size: x += 1
+for i in 1..n do s += i
+for c in s: print ord c
+print ord c
+for i in 1 upto 4 { sum += i }
+while i < count(items) { i += 1 }
+if f(x) { 1 } else { 2 }

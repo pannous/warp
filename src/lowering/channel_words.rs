@@ -7,7 +7,7 @@
 //! `chat = channel "chat"` is the machine-wide channel (src/channels.rs) with the same words: it listens from its
 //! assignment on, `chat.send(v)` and `send v to chat` are `channel_send(chat, v)`, `chat.receive()` waits for a message.
 
-use super::nodes::{call, key};
+use super::nodes::{call, filled, key};
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -94,14 +94,6 @@ fn with_listeners(node: Node, machine: &HashMap<String, i64>) -> Node {
 	Node::List(items.collect(), bracket.clone(), separator.clone())
 }
 
-fn filled(template: &str, bindings: &[(&str, Node)]) -> Node {
-	let bindings: HashMap<String, Node> = bindings
-		.iter()
-		.map(|(name, node)| (name.to_string(), node.clone()))
-		.collect();
-	crate::law::substitute(crate::warp_parser::parse(template).drop_meta(), &bindings)
-}
-
 /// The variables assigned `channel()`, then the parameters of the functions called with a channel, until none is new
 fn channel_names(program: &Node) -> HashSet<String> {
 	let mut channels = HashSet::new();
@@ -179,7 +171,7 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 				(Some(RECEIVE_WORD), []) => match listener(channel) {
 					Some(id) => Some(filled(
 						RECEIVE_TEMPLATE,
-						&[("ID", id), ("CHECK", Node::int(RECEIVE_CHECK_MILLISECONDS))],
+						[("ID", id), ("CHECK", Node::int(RECEIVE_CHECK_MILLISECONDS))],
 					)),
 					None => is_local(channel).then(|| call(TAKE, vec![channel.as_ref().clone()])),
 				},
@@ -205,7 +197,7 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 			{
 				filled(
 					FOR_TEMPLATE,
-					&[
+					[
 						("CHANNEL", channel.clone()),
 						("ITEM", item.clone()),
 						("BODY", body.clone()),

@@ -1,0 +1,17 @@
+// card held-key: hold the arrow keys to move the dot, Escape ends (the playground: click the canvas first)
+use draw
+canvas(320, 240)
+x = 160
+y = 120
+// headless (no window) the loop never starts
+while window_open and held_key != ESC {
+	if held_key == LEFT { x -= 4 }
+	if held_key == RIGHT { x += 4 }
+	if held_key == UP { y -= 4 }
+	if held_key == DOWN { y += 4 }
+	clear(white)
+	circle(x, y, 10, red)
+	label(10, 20, "held: " + held_key, black)
+	show()
+	sleep 16ms
+}

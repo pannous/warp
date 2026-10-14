@@ -6,6 +6,7 @@
 
 use super::nodes::{call, children_rewritten, key};
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
+use crate::lowering::{function_head, FunctionHead};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET};
@@ -26,21 +27,14 @@ pub fn lower(node: Node) -> Node {
 
 /// `f(a, b) := body`: its head, operator, parameter names and body
 fn definition(node: &Node) -> Option<(&Node, Op, Vec<String>, &Node)> {
-	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = node.drop_meta() else {
-		return None;
-	};
-	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
-		return None;
-	};
-	let (name, params) = items.split_first()?;
-	matches!(name.drop_meta(), Node::Symbol(_)).then(|| {
-		(
-			head.as_ref(),
-			*op,
-			params.iter().map(|param| param.drop_meta().name()).collect(),
-			body.as_ref(),
-		)
-	})
+	let definition = function_head(node).filter(FunctionHead::is_glued_head)?;
+	let op = definition.plain_operator()?;
+	let params = definition
+		.written_parameters
+		.iter()
+		.map(|param| param.drop_meta().name())
+		.collect();
+	Some((definition.head, op, params, definition.body))
 }
 
 /// The definitions directly in a body (not those inside them)

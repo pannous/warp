@@ -23,3 +23,15 @@ fn a_trailing_block_parameter_takes_the_rest_of_the_call() {
 	is!("twice(body:block) := { body!; body! }; n = 0; twice(n += 1); n", 2);
 	is!("twice(body:block) := { body!; body! }; n = 0; twice(n += 2 * 3); n", 12);
 }
+
+/// card parameter-named: a parameter named code or block that the body never runs is a value (self-hosting's lexers
+/// read a `code` text), `second(s.code)` had given "code"+1
+#[test]
+fn a_parameter_named_code_the_body_never_runs_is_a_value() {
+	is!("def second(code) := code[1]; second(\"abc\")", 'b');
+	is!(
+		"class Source { code: text }; s = Source{code: \"xyz\"}; def second(code) := code[1]; second(s.code)",
+		'y'
+	);
+	is!("def size(block) := count(block); size([1, 2, 3])", 3);
+}

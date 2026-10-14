@@ -1,15 +1,20 @@
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
-use crate::extensions::strings::StringExtensions;
-use crate::lowering::nodes::call;
 use crate::meta::LineInfo;
+use crate::node::call;
 use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
 use log::warn;
 use std::fs::read_to_string;
+
+use crate::node::ATTRIBUTE_MARK;
+mod declaration_scan;
+pub use declaration_scan::*;
+mod subscripts;
+pub use subscripts::*;
 
 /// The value of a `Result<_, String>`; an error returns from the parse function as an error node
 macro_rules! or_return_error {
@@ -30,21 +35,14 @@ mod atoms;
 mod expressions;
 mod lists;
 mod literals;
+pub use literals::shader_blocks;
 mod statements;
 mod suffixes;
 use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
-/// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
 /// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
 const URL_MARK: &str = "://";
-const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
-const BYTES_WORD: &str = "bytes";
-const WORD_UNIT: &str = "word";
-/// The loop variable names that walk a text by a unit other than the character, and the text between two units
-const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
-const SPLIT_WORD: &str = "split";
-const FILTER_WORD: &str = "filter";
 pub const IT_WORD: &str = "it";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
@@ -103,14 +101,6 @@ const NONLOCAL_WORD: &str = "nonlocal";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
-/// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [
-	('+', Op::Add),
-	('-', Op::Sub),
-	('*', Op::Mul),
-	('/', Op::Div),
-	('^', Op::Pow),
-];
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
@@ -230,7 +220,6 @@ const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 const PRINT_WORD: &str = "print";
-const CODEPOINT_TYPE: &str = "codepoint";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
@@ -407,44 +396,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	items
 }
 
-/// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
-/// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
-fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
-	let Node::Symbol(word) = variable.drop_meta() else {
-		return None;
-	};
-	let mentions = |name: &str| {
-		let mut found = false;
-		body.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
-		found
-	};
-	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || mentions(word) {
-		return None;
-	}
-	let walked = if word == BYTES_WORD {
-		let offset = Symbol("byte·offset".to_string());
-		let count = Node::Key(
-			Box::new(iterable.clone()),
-			Op::Dot,
-			Box::new(Symbol(BYTES_WORD.to_string())),
-		);
-		let offsets = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		let byte = Node::Key(
-			Box::new(offset.clone()),
-			Op::FatArrow,
-			Box::new(call("byte_at", vec![iterable.clone(), offset])),
-		);
-		Node::Key(
-			Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)),
-			Op::Dot,
-			Box::new(call("map", vec![byte])),
-		)
-	} else {
-		call("chars", vec![iterable.clone()])
-	};
-	Some((Symbol(IT_WORD.to_string()), walked))
-}
-
 /// The infix operators continue_expr reads apart from the operator table
 enum SpecialInfix {
 	/// `a mod b`, `a rem b`
@@ -483,7 +434,12 @@ impl SpecialInfix {
 				);
 				lhs
 			}
-			SpecialInfix::ElementWise(op) => crate::analyzer::element_wise(lhs, op, operand),
+			// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+			SpecialInfix::ElementWise(op) => Node::List(
+				vec![lhs, Symbol(crate::operators::element_wise_word(op)), operand],
+				Bracket::None,
+				Separator::Space,
+			),
 			SpecialInfix::Membership(word) => Node::List(
 				vec![lhs, Symbol(word.to_string()), operand],
 				Bracket::None,
@@ -515,19 +471,6 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 	call(MAP_WORD, vec![list, each])
 }
 
-/// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
-/// names the item by the type word (then the body would change too)
-fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(String, String)> {
-	if mentions(body, name) {
-		return None;
-	}
-	let collection = crate::normalize::operand_text(iterable);
-	Some((
-		format!("for {name} in {collection}"),
-		format!("for x in {collection}.filter(x => x is {name})"),
-	))
-}
-
 fn is_unindexable_keyword(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
 }
@@ -555,8 +498,9 @@ const AND_KEYWORD: &str = "and";
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 /// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
 const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
-/// Words a condition follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm)
-const CLAUSE_WORDS: [&str; 1] = ["where"];
+/// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
+/// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
+const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
 /// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
 const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
 pub const ASSERT_MARKER: &str = "assert·else";
@@ -569,49 +513,9 @@ const UNCAUGHT_ERROR: &str = "uncaught·error";
 /// `check C` is `assert C` (user, card check-assert)
 const GUARD_MARKERS: [(&str, &str); 3] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER), ("check", ASSERT_MARKER)];
 pub const ASSERTION_FAILED: &str = "assertion failed";
-/// `nand` and its glyph pair, both `not (a and b)`
-/// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
-fn item_named(node: Node, name: &str, item: &Node) -> Node {
-	match node {
-		Symbol(symbol) if symbol == name => item.clone(),
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Symbol(head)) if head == name) =>
-		{
-			let mut items = items.into_iter();
-			let head = items.next().expect("a head");
-			Node::List(
-				std::iter::once(head)
-					.chain(items.map(|part| item_named(part, name, item)))
-					.collect(),
-				Bracket::Round,
-				Separator::None,
-			)
-		}
-		other => other.map_children(|child| item_named(child, name, item)),
-	}
-}
-
-/// A list literal whose items all are literals of the type: `[1, 2]` for `number`
-fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
-	let items = match iterable.drop_meta() {
-		Node::List(items, Bracket::Square, _) => items,
-		// `for char in "abc"`: every item of a text is a char
-		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == CODEPOINT_TYPE,
-		_ => return false,
-	};
-	let spec = crate::analyzer::type_word_kind(type_name)
-		.map(|_| type_name)
-		.unwrap_or(type_name);
-	items.iter().all(|item| match item.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) => {
-			crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec)
-		}
-		_ => false,
-	})
-}
-
 /// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
 fn iterates_keys(iterable: &Node) -> bool {
-	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::library_words::MAP_KEYS);
+	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::words::MAP_KEYS);
 	let is_keys_call = |call: &Node| {
 		is_keys_word(call)
 			|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word))
@@ -622,29 +526,20 @@ fn iterates_keys(iterable: &Node) -> bool {
 	}
 }
 
-/// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
-pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
-
-/// The type test of a loop `for T in xs` carries its loop: the iterable and the got-it question announcing the filter
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct FilterLoop {
-	pub question: crate::diagnostic::Ask,
-	pub iterable: Node,
-}
-/// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
-const EVEN_WORD: &str = "even";
-const ODD_WORD: &str = "odd";
 /// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
+/// `nand` and its glyph pair, both `not (a and b)`
 const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
 /// `to greet p do …`: the word between a `to` definition's parameters and its body
 const DO_WORD: &str = "do";
+/// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
+const RESULT_TYPE_WORD: &str = "as";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
-const SLICE_WORD: &str = crate::library_words::SLICE;
-const TIMES_WORD: &str = "times";
+const SLICE_WORD: &str = crate::words::SLICE;
+pub(crate) const TIMES_WORD: &str = "times";
 /// The call `n times text` is parsed to: the text repeated n times
 pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
@@ -902,7 +797,8 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 	if !spells_number {
 		return None;
 	}
-	match WarpParser::parse(text).drop_meta() {
+	// read as data: code marks `2.5e-2` `as float` (scientific_float), a text spells just the number
+	match parse_data(text).drop_meta() {
 		Node::Number(number) => Some(*number),
 		_ => None,
 	}
@@ -913,9 +809,12 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
 	for (line_index, line) in input.lines().enumerate() {
 		let chars: Vec<char> = line.chars().collect();
-		let (mut depth, mut quote): (i32, Option<char>) = (0, None);
+		let (mut depth, mut quote, mut escaped): (i32, Option<char>, bool) = (0, None, false);
 		for (column, &c) in chars.iter().enumerate() {
 			match (quote, c) {
+				// `\"` inside a text leaves it open
+				(Some(_), _) if escaped => escaped = false,
+				(Some(_), '\\') => escaped = true,
 				(Some(open), _) if c == open => quote = None,
 				(Some(_), _) => {}
 				(None, '"' | '\'') => quote = Some(c),
@@ -966,7 +865,7 @@ fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column
 
 /// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
 /// `for variable in iterable body`, the loop for_loop.rs lowers
-pub(super) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
+pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
 	Node::List(
 		vec![
 			Symbol("for".to_string()),
@@ -1035,6 +934,9 @@ pub struct WarpParser {
 	branch_bp: Option<u8>,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
 	signed_list_element: Option<usize>,
+	/// Directly inside a list literal `[…]` without commas: a space and a glued sign start the next item (`[a -1]`,
+	/// decision list-sign)
+	in_spaced_list: bool,
 	/// Inside `do … end`: the `end` keyword closes the statement list
 	stops_at_end: bool,
 	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
@@ -1055,8 +957,9 @@ pub struct WarpParser {
 	in_style_sheet: bool,
 	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
 	pipe_takes_call: bool,
-	/// `N times` loops parsed so far, numbering their hidden counters
-	times_loops: usize,
+	/// The atoms read so far, in source order: the lexer's view of the source (read_atoms); a rewind forgets those read
+	/// after its mark
+	atoms: Vec<Atom>,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
@@ -1077,241 +980,10 @@ pub struct WarpParser {
 	user_operators: Vec<UserOperator>,
 	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
 	declared_types: std::collections::HashSet<String>,
+	/// The words of the declared types of several words (`class full name {…}`), longest first: read as one name `full-name`
+	multi_word_types: Vec<Vec<String>>,
 	/// The parameters of each `to` phrase defined so far, to catch a second phrase that differs only by untyped nouns
 	phrase_definitions: std::collections::HashMap<String, Vec<Node>>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum UserOperatorKind {
-	Prefix,
-	Suffix,
-	Infix,
-}
-
-#[derive(Clone, Debug)]
-struct UserOperator {
-	glyph: Vec<char>,
-	kind: UserOperatorKind,
-	/// How tight it binds: a suffix's power, a prefix's right power, an infix's left power (its right one is one more)
-	level: u8,
-}
-
-impl UserOperatorKind {
-	fn default_level(self) -> u8 {
-		match self {
-			UserOperatorKind::Suffix => USER_SUFFIX_BP,
-			UserOperatorKind::Prefix => USER_PREFIX_RIGHT_BP,
-			UserOperatorKind::Infix => USER_INFIX_BP.0,
-		}
-	}
-}
-
-const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
-use crate::node::ATTRIBUTE_MARK;
-const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] = [
-	("prefix", UserOperatorKind::Prefix),
-	("suffix", UserOperatorKind::Suffix),
-	("infix", UserOperatorKind::Infix),
-];
-/// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
-const USER_SUFFIX_BP: u8 = Op::Square.binding_power().0;
-const USER_PREFIX_RIGHT_BP: u8 = Op::Neg.binding_power().1;
-const USER_INFIX_BP: (u8, u8) = Op::Add.binding_power();
-/// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
-const PRECEDENCE_STEP: u8 = 2;
-const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", false)];
-
-/// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
-/// Superscript digits and signs too (P48, user-decided) (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
-fn is_operator_glyph(glyph: &str) -> bool {
-	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
-	!glyph.is_empty()
-		&& glyph
-			.chars()
-			.all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace()))
-		&& !glyph.is_ascii()
-}
-
-/// `suffix operator ⁰ := …` and the short `suffix ⁰ := …` (P48): the glyph and the words after `:=`
-fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
-	match words {
-		["operator", glyph, ":=", ..] | [glyph, ":=", ..] => Some(glyph),
-		_ => None,
-	}
-}
-
-/// The operator a `prefix|suffix|infix` declaration declares: a glyph (`infix operator ⊕ := …`), or for infix a word with
-/// optional parameters, `infix operator divides(d:int, n:int) := …` (card g_mnvA); `infix divides(d, n) := …` is the
-/// alias without `operator`
-fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Option<String> {
-	if let Some(glyph) = declared_glyph(words).filter(|glyph| is_operator_glyph(glyph)) {
-		return Some(glyph.to_string());
-	}
-	let head = match words {
-		[OPERATOR_WORD, head, ..] | [head, ..] if kind == UserOperatorKind::Infix && words.contains(&":=") => head,
-		_ => return None,
-	};
-	let word: String = head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-	let parameters = &head[word.len()..];
-	let is_word = word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD;
-	(is_word && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
-}
-
-/// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
-fn is_operator_word(glyph: &[char]) -> bool {
-	glyph.first().is_some_and(|c| c.is_alphabetic())
-}
-
-fn is_plain_name(word: &str) -> bool {
-	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
-}
-
-/// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`),
-/// outside comments and texts (`// the type end` declares nothing)
-fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
-	let source = code_only(source);
-	let words: Vec<&str> = source.split_whitespace().collect();
-	words
-		.windows(2)
-		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
-		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
-		// `record = find(…)` declares nothing
-		.filter_map(|pair| {
-			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch)).collect();
-			let rest = &pair[1][name.len()..];
-			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
-		})
-		.filter(|name| is_plain_name(name))
-		.collect()
-}
-
-/// The source with its comments (`// …`, `/* … */`) and texts (`"…"`, `'…'`) blanked out
-fn code_only(source: &str) -> String {
-	let chars: Vec<char> = source.chars().collect();
-	let mut code = String::with_capacity(source.len());
-	let mut at = 0;
-	while at < chars.len() {
-		match text_or_comment_end(&chars, at) {
-			Some(end) => {
-				code.push(' ');
-				at = end;
-			}
-			None => {
-				code.push(chars[at]);
-				at += 1;
-			}
-		}
-	}
-	code
-}
-
-/// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
-pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
-	let (c, next) = (chars[at], chars.get(at + 1).copied());
-	let skip_until = |from: usize, end: &[char]| {
-		(from..chars.len())
-			.find(|&i| chars[i..].starts_with(end))
-			.map_or(chars.len(), |i| i + end.len())
-	};
-	let after = match (c, next) {
-		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => {
-			(at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len())
-		}
-		('/', Some('*')) => skip_until(at + 2, &['*', '/']),
-		('"' | '\'', _) => skip_until(at + 1, &[c]),
-		_ => return None,
-	};
-	Some(after.max(at + 1))
-}
-
-/// The operators a source declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
-fn scan_user_operators(source: &str) -> Vec<UserOperator> {
-	let mut found: Vec<UserOperator> = Vec::new();
-	for statement in source.lines().flat_map(|line| line.split(';')) {
-		let words: Vec<&str> = statement.split_whitespace().collect();
-		let by_kind = words.split_first().and_then(|(word, rest)| {
-			let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| keyword == word)?;
-			Some((declared_operator(*kind, rest)?, *kind))
-		});
-		let declared = by_kind.or_else(|| match words.as_slice() {
-			[left, glyph, right, ":=", ..]
-				if is_plain_name(left) && is_plain_name(right) && is_operator_glyph(glyph) =>
-			{
-				Some((glyph.to_string(), UserOperatorKind::Infix))
-			}
-			_ => None,
-		});
-		if let Some((glyph, kind)) = declared {
-			found.push(UserOperator {
-				glyph: glyph.chars().collect(),
-				kind,
-				level: kind.default_level(),
-			});
-		}
-	}
-	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
-	for statement in source.lines().flat_map(|line| line.split(';')) {
-		let words: Vec<&str> = statement.split_whitespace().collect();
-		if let Ok(Some((glyph, level))) = precedence_declaration(&words, &found) {
-			found
-				.iter_mut()
-				.filter(|operator| operator.glyph == glyph.chars().collect::<Vec<char>>())
-				.for_each(|operator| operator.level = level);
-		}
-	}
-	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
-	found
-}
-
-/// `operator ⊕ has precedence above|below [operator] Y`: the glyph ⊕ and its new level; Ok(None) for any other statement,
-/// Err for a precedence declaration that cannot be followed (a built-in ⊕, an unknown Y)
-fn precedence_declaration<'a>(words: &[&'a str], declared: &[UserOperator]) -> Result<Option<(&'a str, u8)>, String> {
-	let ["operator", glyph, "has", "precedence", direction, rest @ ..] = words else {
-		return Ok(None);
-	};
-	let Some((_, above)) = PRECEDENCE_DIRECTIONS.iter().find(|(word, _)| word == direction) else {
-		return Ok(None);
-	};
-	let other = match rest {
-		["operator", other] | [other] => *other,
-		_ => return Ok(None),
-	};
-	if !declared
-		.iter()
-		.any(|operator| operator.glyph.iter().collect::<String>() == *glyph)
-	{
-		return Err(format!("operator {glyph} is built in: only a declared operator gets a precedence (`infix operator {glyph} := …` first)"));
-	}
-	let reference = match declared
-		.iter()
-		.find(|operator| operator.glyph.iter().collect::<String>() == other)
-	{
-		Some(operator) => operator.level,
-		None => built_in_level(other).ok_or_else(|| {
-			format!("unknown operator {other} in `operator {glyph} has precedence {direction} {other}`")
-		})?,
-	};
-	let level = if *above {
-		reference.saturating_add(PRECEDENCE_STEP)
-	} else {
-		reference.saturating_sub(PRECEDENCE_STEP)
-	};
-	Ok(Some((glyph, level)))
-}
-
-/// The left binding power of a built-in infix operator written as `text` (`*`, `+`, `and`)
-fn built_in_level(text: &str) -> Option<u8> {
-	let parser = WarpParser::new_with_options(
-		text.to_string(),
-		ParserOptions {
-			data_mode: true,
-			..ParserOptions::default()
-		},
-	);
-	match parser.peek_operator() {
-		Some((op, length)) if length == text.chars().count() => Some(op.binding_power().0),
-		_ => None,
-	}
 }
 
 /// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
@@ -1336,8 +1008,8 @@ fn typed_parameter(arguments: Node) -> Node {
 			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
 			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => {
 				match name.drop_meta() {
-					Symbol(name) => Symbol(format!("{}{name}", crate::tuples::STARRED)),
-					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::tuples::STARRED, name.name())),
+					Symbol(name) => Symbol(format!("{}{name}", crate::words::STARRED)),
+					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::words::STARRED, name.name())),
 					_ => arguments,
 				}
 			}
@@ -1407,14 +1079,15 @@ impl WarpParser {
 		} else {
 			Vec::new()
 		};
-		let declared_types = if options == ParserOptions::default() {
-			scan_declared_types(&input)
+		let (declared_types, multi_word_types) = if options == ParserOptions::default() {
+			(scan_declared_types(&input), scan_multi_word_types(&input))
 		} else {
 			Default::default()
 		};
 		WarpParser {
 			user_operators,
 			declared_types,
+			multi_word_types,
 			phrase_definitions: Default::default(),
 			input,
 			chars,
@@ -1438,6 +1111,7 @@ impl WarpParser {
 			type_fields: None,
 			branch_bp: None,
 			signed_list_element: None,
+			in_spaced_list: false,
 			stops_at_end: false,
 			brace_holes: false,
 			generic_names: None,
@@ -1446,7 +1120,7 @@ impl WarpParser {
 			tag_block: false,
 			in_style_sheet: false,
 			pipe_takes_call: false,
-			times_loops: 0,
+			atoms: vec![],
 			pending_comment: None,
 			after_function_keyword: false,
 			continues_definition_head: false,
@@ -1484,6 +1158,29 @@ impl WarpParser {
 			program
 		}
 	}
+}
+
+/// What the lexer reads (card self-lexer, lib/compiler/lexer.warp is its warp twin)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AtomKind {
+	Number,
+	Text,
+}
+
+/// An atom the parser read: where it starts (line and column from 1, a column per character) and what was written
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Atom {
+	pub kind: AtomKind,
+	pub line: usize,
+	pub column: usize,
+	pub written: String,
+}
+
+/// The atoms the parser reads in a source, in order, as code: the token stream of this scannerless parser
+pub fn read_atoms(source: &str) -> Vec<Atom> {
+	let mut parser = WarpParser::new_with_options(source.to_string(), ParserOptions::default());
+	parser.parse_list_with_separators(None, Bracket::None);
+	parser.atoms
 }
 
 /// The one element of `items`, moved out (cloning it copied a whole subtree, the whole program at the top)
@@ -1612,7 +1309,6 @@ fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
 }
 
 const COMPARISON_FIRST: &str = "the comparison first, as C";
-
 /// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
 /// The word forms `and`/`or` read unambiguously and are not affected: `x==1 and y==2`.
 fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<Diagnostic> {
@@ -1651,134 +1347,6 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
 		diagnostic.offer(meaning, &written, form)
 	}))
-}
-
-/// The name before a minus written apart, `f - 2`: the subtraction, where `f -2` applies a callable f to -2, as the
-/// math words do (`abs - 2`, `abs -2`; analyzer::lower_negated_calls)
-#[derive(Clone, Debug, PartialEq)]
-pub struct SpacedMinus;
-
-/// The number a subscript was written with, `1` of `d[1]`, kept on its shifted index `d#2`: a map keyed by numbers
-/// reads it (number_keys.rs, P34)
-#[derive(Clone, Debug, PartialEq)]
-pub struct WrittenIndex(pub Number);
-
-/// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time.
-/// A slice `target[start:end]`, `target[start..end]`, `target[start...last]` is the call `slice(target, start, end)`.
-/// A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md).
-pub fn subscript(target: Node, index: Node) -> Node {
-	let positions = match index.drop_meta() {
-		Node::Key(start, _, end) if slice_bounds(&index).is_some() => vec![start.as_ref(), end.as_ref()],
-		_ => vec![&index],
-	};
-	if let Some(negative) = positions.into_iter().find(|position| counts_from_the_end(position)) {
-		let message = format!(
-			"index out of range: negative index {} does not wrap around, the last element is last({})",
-			negative.serialize(),
-			target.serialize()
-		);
-		return Diagnostic::at(negative, message).into_error();
-	}
-	if let Some((start, end)) = slice_bounds(&index) {
-		return call(SLICE_WORD, vec![target, start, end]);
-	}
-	let one = Node::Number(Number::Int(1));
-	let one_based = match index.drop_meta() {
-		Node::Number(n) => Node::meta(Node::Number(*n + Number::Int(1)), Node::data(WrittenIndex(*n))),
-		_ => Node::Key(Box::new(index), Op::Add, Box::new(one)),
-	};
-	Node::Key(Box::new(target), Op::Hash, Box::new(one_based))
-}
-
-/// A negative number or a negated expression: `-1`, `-k`
-fn counts_from_the_end(index: &Node) -> bool {
-	match index.drop_meta() {
-		Node::Number(n) => f64::from(*n) < 0.0,
-		Node::Key(empty, Op::Sub, _) => matches!(empty.drop_meta(), Empty),
-		_ => false,
-	}
-}
-
-/// The 0-based start and exclusive end of a slice index, ø where omitted (Python's `a[1:]`, `a[:2]`);
-/// an inclusive range `start...last` ends after last
-fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
-	let Node::Key(start, op, end) = index.drop_meta() else {
-		return None;
-	};
-	let end = match op {
-		Op::Colon | Op::Range => end.as_ref().clone(),
-		Op::To => unless_open(end, |end| {
-			Node::Key(Box::new(end.clone()), Op::Add, Box::new(Node::Number(Number::Int(1))))
-		}),
-		_ => return None,
-	};
-	Some((start.as_ref().clone(), end))
-}
-
-/// `xs#a..b` reads as the range from the value xs#a; P58 (user: "create a strong warning"): a warning naming the slice
-/// `xs#(a..b)` and the range `(xs#a)..b`
-fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
-	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else {
-		return None;
-	};
-	if !matches!(op, Op::Range | Op::To) {
-		return None;
-	}
-	let (target, index, end) = (target.serialize(), index.serialize(), rhs.serialize());
-	let (target, index, end) = (target.trim(), index.trim(), end.trim());
-	let (as_written, slice, range) = (
-		format!("{target}#{index}{written}{end}"),
-		format!("{target}#({index}{written}{end})"),
-		format!("({target}#{index}){written}{end}"),
-	);
-	let message = format!("{as_written} is the range from the value {target}#{index}: for the slice write {slice}, for the range write {range}");
-	Some(
-		Diagnostic::at(lhs, message)
-			.offer("the slice", &as_written, slice)
-			.offer("the range from the value", &as_written, range),
-	)
-}
-
-/// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
-/// parentheses, `xs#a..b` stays the range from the value xs#a
-fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
-	let Node::List(items, Bracket::Round, _) = index.drop_meta() else {
-		return None;
-	};
-	let [range] = items.as_slice() else { return None };
-	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else {
-		return None;
-	};
-	let minus_one = |bound: &Node| Node::Key(Box::new(bound.clone()), Op::Sub, Box::new(Node::Number(Number::Int(1))));
-	let end = if *op == Op::To {
-		end.as_ref().clone()
-	} else {
-		unless_open(end, minus_one)
-	};
-	Some((unless_open(start, minus_one), end))
-}
-
-/// A slice bound shifted by `shift`; an open bound (`s[2…]`, `s[…3]`) stays open, ø
-fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
-	match bound.drop_meta() {
-		Node::Empty => Node::Empty,
-		_ => shift(bound),
-	}
-}
-
-/// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)
-pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
-	match one_based_index.drop_meta() {
-		Node::Key(key, Op::Add, one)
-			if matches!(
-				one.drop_meta(),
-				Node::Number(crate::extensions::numbers::Number::Int(1))
-			) =>
-		{
-			Some(key)
-		}
-		_ => None,
-	}
 }
 
 /// `while condition body`: the loop head `ø while condition` applied `do` to its body

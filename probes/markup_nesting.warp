@@ -1,0 +1,5 @@
+// card markup-content: each misplaced element warns where it is written
+p{ div{ "a block ends the paragraph" } }
+ul{ p{ "a list holds li items" } }
+div{ td{ "a cell belongs in a row" } }
+table{ tr{ td{ "this one is right" } } }

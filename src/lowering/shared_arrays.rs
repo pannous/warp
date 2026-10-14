@@ -14,9 +14,9 @@
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
 use super::nodes::{call, key};
-use super::words::{MAP_WORD, SUM_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `shared xs = int[n]` and its synonym `atomic` (P44)
@@ -86,6 +86,14 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 }
 
 pub fn lower(node: Node) -> Node {
+	// a kernel may call the program's functions (card gpu-functions)
+	let program = node.clone();
+	crate::gpu_maps::with_program_functions(&program, || {
+		lower_knowing_functions(crate::gpu_maps::painted_functions(node))
+	})
+}
+
+fn lower_knowing_functions(node: Node) -> Node {
 	let node = crate::gpu_maps::kept_on_gpu(node);
 	// the first array the program itself declares linear, before the compiler picks any
 	let mut first_linear: Option<(Node, String, Element)> = None;
@@ -219,7 +227,7 @@ fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usi
 	}
 	// a numeric kernel maps a linear array as one loop into a new block (f64x2 lanes where it can)
 	if let Some((_, lambda)) = map_parts(part).filter(|(array, _)| is_name(array)) {
-		let kernel = usize::from(crate::gpu_maps::kernel(lambda).is_some());
+		let kernel = usize::from(crate::gpu_maps::linear_kernel(lambda).is_some());
 		return (kernel, kernel);
 	}
 	let single = match part.drop_meta() {
@@ -804,7 +812,7 @@ fn map_parts(value: &Node) -> Option<(&Node, &Node)> {
 fn numeric_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node)> {
 	let (array, lambda) = map_parts(value)?;
 	let (array, lambda) = crate::gpu_maps::fused(array.clone(), lambda.clone());
-	(is_linear_floats(&array, names) && crate::gpu_maps::kernel(&lambda).is_some()).then_some((array, lambda))
+	(is_linear_floats(&array, names) && crate::gpu_maps::linear_kernel(&lambda).is_some()).then_some((array, lambda))
 }
 
 fn is_linear_floats(array: &Node, names: &HashMap<String, Shared>) -> bool {
@@ -834,7 +842,7 @@ fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: 
 				&& items[0].name() == DOT_WORD
 				&& items[1..].iter().any(|list| is_linear_list(list, names)) =>
 		{
-			let product = crate::analyzer::element_wise(items[1].clone(), Op::Mul, items[2].clone());
+			let product = crate::broadcasting::element_wise(items[1].clone(), Op::Mul, items[2].clone());
 			call(SUM_WORD, vec![product])
 		}
 		_ => node,
@@ -891,8 +899,7 @@ fn linear_dot(left: Node, right: Node) -> Node {
 	let template = format!("({}; {LINEAR_DOT}(LEFT, RIGHT))", crate::broadcasting::PAIRED_COUNT)
 		.replace("LEFT", "dot_left")
 		.replace("RIGHT", "dot_right");
-	let bindings = HashMap::from([("dot_left".to_string(), left), ("dot_right".to_string(), right)]);
-	crate::law::substitute(&crate::warp_parser::parse(&template), &bindings)
+	super::nodes::filled(&template, [("dot_left", left), ("dot_right", right)])
 }
 
 /// A linear array, or an element-wise expression of one: `ys`, `(ys .* 2)`
@@ -909,9 +916,7 @@ fn is_linear_list(node: &Node, names: &HashMap<String, Shared>) -> bool {
 
 /// Whether a name of `names` occurs in node
 fn mentions_any(node: &Node, names: &HashMap<String, Shared>) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part.drop_meta(), Node::Symbol(name) if names.contains_key(name)));
-	found
+	node.mentions_where(|name| names.contains_key(name))
 }
 
 /// Whether the program has a `s = sum(xs.map(f) @gpu)` that may run on the GPU, of any list of floats

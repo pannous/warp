@@ -1,0 +1,3 @@
+f(i) := [1,2,3]#i
+job = go f(5)
+await job

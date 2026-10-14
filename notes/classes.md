@@ -21,7 +21,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
    - Calls: `p.greet()`, `greet(p)`, and `p.area` for a method without parameters (`area := side*side`, a getter).
    - The class keeps only its fields, so construction counts fields as before.
    - A method that assigns a field of its receiver is a loud error until step 2.
-   - Pass: lowering/class_methods.rs, early in SOURCE_PASSES.
+   - Pass: lowering/class_methods.rs, early in SOURCE_PHASES.
 2. **Mutating methods** (P116): `inc() := n += 1`; `c.inc()` updates the variable c, like `xs.add(v)` does (objects
    are values, wiki/class.md).
 3. **Constructors and required fields** (wiki/constructor.md): `init{…}` / `init(name){…}` blocks (P162; `value` was the
@@ -39,7 +39,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
   Traits (`is shape`) stay as they are (step 5).
 
 ## Step 1 as built
-- lowering/class_methods.rs (early in SOURCE_PASSES): each `:=` definition in a class body becomes
+- lowering/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
   `name(self:class, params…) := body`, and the class keeps its fields. The parser keeps a `:=` body as code, not as a
   field type (lists.rs `transform_fields_to_types`).
 - A method name that two or more classes define is declared as the implicit trait `trait has·name{name}`. traits.rs
@@ -91,7 +91,7 @@ Batch 2 (branch classes-2):
   a default.
 - A field with a default (`x:int=1`, `k = 3`) is read from self in methods too (it gave the bare symbol before).
 - `p.items.add(v)` / `.insert(…)` of a field path update the field like `xs.add(v)` updates a variable
-  (declaration_lowering is_place); a method doing it changes its object, so a Stack's `push` works.
+  (declaration_forms is_place); a method doing it changes its object, so a Stack's `push` works.
 - Convention (P123 follow-up): new tests name classes with a capital, `Point{x:1 y:2}`.
 Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
 - key_emitter emit_default_key: an instance keeps its curly bracket info (it was turned into a `[…]` list, so the
@@ -103,7 +103,8 @@ Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
 - P126 (user): a text inside a container prints quoted (`P{x:1 name:"a"}`, `["a" "b"]`, `{a:"x"}`) in print,
   interpolation and string(); a text on its own still prints bare. list_text quotes text and character items;
   emit_dynamic_text passes a lone text or character through unquoted; `string([...])` of a literal list of numbers and
-  texts takes the same runtime text. A `"` inside such a text is not escaped yet.
+  texts takes the same runtime text. A `"` or `\\` inside such a text is escaped, including in computed texts,
+  and Node::serialize escapes them the same (list-text-quotes).
 
 ## Representation: GC structs (classes-4, wasm_emitter/struct_backend.rs)
 Generic form: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` entries (type_constructor.rs, the
@@ -152,7 +153,7 @@ object, so every holder sees it: aliases (`q = p; q.x = 7`), list items (`xs = [
 functions, for instances and maps alike. struct_backend.rs and map_backend.rs keep a variable on the struct or hash-table
 backend only while it is never used as a whole value (used_whole: `q = p`, `[p]`, print(p), an argument to a non-struct
 parameter make it the shared Node); field writes and a bare final `p` do not count. A map parameter becomes a hash-table
-copy (`m·map = m`, declaration_lowering.rs keys) only when the function never sets an entry of it. The old
+copy (`m·map = m`, declaration_forms.rs keys) only when the function never sets an entry of it. The old
 copy-in/copy-out pass (lowering/shared_instances.rs) is gone.
 Copies (P205/P207, runtime instance_copy(object, shallow)): `x.copy()` is deep (deep_copy with a memo of
 `original:copy` pairs, so a part held twice or a cycle is copied once; numbers, texts, closures and data are shared),
@@ -208,7 +209,7 @@ pair `[pop·value, self]`; `s.pop()` of a variable is `(pop·result = pop(s); s 
 (class_methods Change::GivingValue; a changing method ends in a value unless its last statement assigns or appends).
 A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `method·pop` like a type-word
 method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
-body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_lowering
+body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_forms
 popped_list takes any place, as add/insert did).
 
 Instances held as Nodes (classes-17): a field read by name of an instance that is no struct variable (`for p in ps
@@ -311,12 +312,12 @@ questions (`age:{date - 1996}` getters of data, setters): nothing ported from it
 Interfaces (classes-32): class methods satisfy traits, trait-typed parameters, foreign interface/protocol forms and
 `implements`/`: Shape` lists: notes/traits.md "Classes and foreign interfaces".
 
-Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a warp enum is the object of its cases
-numbered from 0 (declarations::enum_object). Ported: Swift's `enum Direction { case north, south }` and
-`switch d { case .north: 1 }` (welcome_forms arrow_cases strips `case`; declarations::enum_paths reads `.north` as
-`Direction.north` when one enum has the case), Kotlin's `enum class` (a note), `when (c) { A -> 1; 1, 2 -> …; is T -> …;
+Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a warp enum is the sum type of its cases,
+each case its own value (lowering/plain_enums.rs, below). Ported: Swift's `enum Direction { case north, south }` and
+`switch d { case .north: 1 }` (plain_enums reads `.north` and the arm `case.north` as `north` when one enum has the
+case), Kotlin's `enum class` (a note), `when (c) { A -> 1; 1, 2 -> …; is T -> …;
 else -> … }` (welcome_forms when_chain: an if chain, `is T` the type test; also without a subject), Rust's
-`Color::Green` (enum_paths). Kotlin's `sealed class Shape` (a class without fields: a bodiless class is `{}` now) and
+`Color::Green` (plain_enums). Kotlin's `sealed class Shape` (a class without fields: a bodiless class is `{}` now) and
 `class Circle(val r: Int) : Shape()` (the superclass with `()` is the parent, as extends). Open (a design question):
 cases with values, Rust's `Circle(f64)`, Swift's `case circle(Double)` and their destructuring patterns.
 
@@ -378,7 +379,12 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
   `red is Color` is true; `Shape::Circle(2)` → `Circle(2)` for any variant, also in match patterns.
 - `enum Shape { Circle(r), Rect(w, h), Dot }` and Swift's `case circle(radius: Double)` lines: as soon as one case has
   values the enum IS that sum type (parser parse_enum_with_values, same sum_type builder). An enum without values
-  stays the numbered object `Color={red:0 green:1}` (declarations::enum_object).
+  is the sum type of its cases too (user decision enum-case B, lowering/plain_enums.rs, test_plain_enum.rs):
+  `Coin.Dime` is `Dime`, `Dime is Coin`; `Coin.Dime as int` its index 2 (counting from 0, as C does; warp's
+  positions `x in xs`, `c#1` are 1-based), `as index` the same, `as position` 3 (spec: wiki/enum.md); `2 as Coin` and `Coin(2)` the case, "9 is no Coin case" past the cases;
+  `f(1)` for `f(c: Coin)` is a type error offering `f(1 as Coin)` (card coin-errors, test_fixits). Enums with
+  written values (`Penny = 1`) are on hold (user: WIT enums carry no values, FFI can work around it; branch enum-coin). A match on a declared enum or sum type that misses
+  a case does not compile (match_exhaustive.rs).
 - Open: a match on a subject statically known as a bare variant (`s = Dot; match s {Circle(r) => r*r …}`) types the
   dead arm and fails (card match-static); inside a function it works.
 - Emitter fix found on the way: `((a) or b) or c` took the parenthesized operation as a truthy literal and dropped c

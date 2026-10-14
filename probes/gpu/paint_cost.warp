@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // paint's cost apart from the shader: a one-line shader over the visualizer's 640×360
 use graphics
 flat = shader {

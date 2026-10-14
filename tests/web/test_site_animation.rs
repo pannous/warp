@@ -10,7 +10,7 @@ fn built_in_time(code: &'static str, name: &'static str) -> Vec<String> {
 	let (sent, built) = mpsc::channel();
 	std::thread::spawn(move || {
 		let directory = scratch_directory(name);
-		let site = warp::site::build(code, name, &directory).map(|site| site.files);
+		let site = warp::web::site::build(code, name, &directory).map(|site| site.files);
 		let _ = std::fs::remove_dir_all(&directory);
 		sent.send(site)
 	});

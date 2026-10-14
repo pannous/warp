@@ -67,7 +67,7 @@ User decisions from that round:
 - "Got it" is the educate_once machinery, shared by Ask warnings and educating notes (`educate_once(topic, written,
   preferred, reason)`): `trait Acknowledger` (`has_acknowledged` for a host's own list, `acknowledge` asked once per run
   after the warning or note), `set_acknowledger` / `with_acknowledger`; `TerminalAcknowledger` (`got it? [y …]`),
-  `Acknowledging(topics)` for tests, the playground's page list (src/web.rs `PageAcknowledger`, report `notes`).
+  `Acknowledging(topics)` for tests, the playground's page list (src/web/mod.rs `PageAcknowledger`, report `notes`).
   Remembered as `ack:<topic> = acknowledged` in `.warp-acknowledged` (CLI, working directory). Non-interactive runs
   just show the warning, never block; `--no-ask` never prompts.
 - Scope (user, 2026-10-05): the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"
@@ -75,7 +75,7 @@ User decisions from that round:
   expression; educate_once by its written text); "all" the topic. A `// got it` comment on a line silences the
   warnings and notes of that line (diagnostic::silenced_by_comment). The playground still acknowledges whole topics.
 - Users: `a upto b` (topic `upto`) and the for-header bound `0..n-1` (topic `kotlin-range`, Kotlin's `..` is inclusive),
-  both default exclusive, fallback Warning (src/warp_parser.rs `range_reading`); `local-or-global` (src/analyzer.rs
+  both default exclusive, fallback Warning (src/warp_parser/ `range_reading`); `local-or-global` (src/analyzer/
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
   `1 -1` (default the list `[1 -1]`). Error fallback: `list-times` `[x]*n`, `insert-order`, `list-plus` `[1 2 3]+4`,
   `bare-list` `a=1 2 3`, `suffix-precedence` `1+2 squared`. Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+`
@@ -126,3 +126,13 @@ Control flow as other languages write it (samples/control_flow.warp, tests/contr
   Open (asked): number words (`one plus two`, then `three times four` multiplies like `3 times 4`).
 - a comparison without its left side is a relational pattern in a match arm (`> 100 => "big"`, C#), elsewhere the
   error "`> 100` compares nothing".
+
+## Warning levels (decisions warning-levels, hints-are-warnings, 2026-10-13; worker defaults, undoable)
+Shown from hint; `--no-hints` / `WARP_HINTS=0` show from weak; `--warnings=<level>` and the playground's "show … and
+up" select set it. `use strict` / `--strict` fail from normal, `--strict=<level>` from that level; Rust's
+`WarningMode::Error` fails on every warning, weak too. Hints never fail. HintMode::Once dedups every level.
+- Severe: a key name that names nothing, an event nothing emits, a signal that never fires, a task that never
+  happens, a variable updated in a parallel loop.
+- Weak: @parallel running in sequence, a GPU map running on the CPU, a std module shadowed, an event from the
+  playground page, run-time blocks needing the host.
+- Every other warning is normal; the CLI labels weak and severe ones `warning (weak):`.

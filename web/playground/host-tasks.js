@@ -4,9 +4,9 @@
 
 // the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
-const SOCKET_ADDRESS = /^wss?:\/\//; // src/web_sockets.rs SOCKET_SCHEMES
-const TEXT_REPLY_TYPE = "text/plain"; // src/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
-const SERVER_REPLIES_ID = "warp-replies"; // src/site.rs REPLIES_ID
+const SOCKET_ADDRESS = /^wss?:\/\//; // src/web/web_sockets.rs SOCKET_SCHEMES
+const TEXT_REPLY_TYPE = "text/plain"; // src/web/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
+const SERVER_REPLIES_ID = "warp-replies"; // src/web/site.rs REPLIES_ID
 const ROUTE_DATA_URL = "/rpc/route·data·"; // src/lowering/serve.rs RPC_PREFIX + ROUTE_DATA_PREFIX
 
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
@@ -27,6 +27,9 @@ const TASK_CHECK_MS = 100; // how often a run waiting for a task looks after its
 const TASK_WORKER = "task-worker.js";
 const TASK_WORKER_READY = "ready"; // a task Worker's first message: loaded
 const FETCH_DONE = "fetched"; // a task Worker's message after a fetch it made (startFetch)
+const INDEX_OUT_OF_RANGE = "index out of range"; // src/wasm_emitter list_ops runtime_error_message("index_out_of_range")
+const EMPTY_RANGE = "an empty list"; // src/wasm_emitter EMPTY_RANGE
+const POSITION_COLUMN_BITS = 12; // src/wasm_emitter COLUMN_BITS: trap_position is line << 12 | column
 const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its result into, grown as needed
 const TASK_RESULT_LIMIT = 1 << 28;
 const TASK_HEADER = 8; // [state, length] as Int32, then the result's JSON
@@ -72,7 +75,7 @@ function addTaskWorker(loaded) {
 	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
 }
 
-// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end on the clock the
+// a voice (card playground-go, natively src/sound/mod.rs Voice): when this Worker's queued sounds end on the clock the
 // page and every Worker share, the seconds of sound it made in all (its sounds' places for render_sound) and the
 // clock's time of place 0 (where `at 2 beats` counts from). A task's voice starts where its starter's stands
 let voice = {};
@@ -218,7 +221,7 @@ function unlockChannels(table, changed) {
 // its starting program, which could never answer either
 function waitsAlone(holder) {
 	if (holder.inTask) return !holder.control;
-	return ![...holder.run.tasks.values()].some(task => isRunningOnWorker(task) && !isDone(task));
+	return ![...holder.run.tasks.values()].some(task => isPending(task) && !isDone(task));
 }
 
 // wait on channel id until `ready` answers ({value} or {error}), under the lock; it may change the channel. The run's
@@ -312,24 +315,56 @@ function sayTasksInline(run, holder, hooks) {
 
 // a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run), the Int arguments as
 // they are or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node. On a Worker of the pool
-// (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer; else at once, here
+// (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer. With every Worker
+// busy the task is queued until one frees, as natively it waits for a free thread (src/tasks.rs); run inline here
+// instead, a task the program waits for (a channel's sender) could never answer it (card primer-channel-flake). Inline
+// only without Workers, or in a task (whose Worker has no pool) or a run holding none (no Worker would ever free)
 function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
 	const captured = capturedValues(holder.exports);
 	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels)));
-	if (taskPool.length > 0) {
-		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
-		const worker = taskPool.pop();
-		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
-		const files = self.writtenFilesForTask?.();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice });
-		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
+	const shared = takeAnswerBuffer();
+	const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)); // a queued task's too: `pause job` holds before it starts
+	const message = { module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice } };
+	const task = { name, shared, control, inline, message };
+	if (taskPool.length > 0) startOnWorker(task, run);
+	else if (!holder.inTask && holdsAWorker(run)) {
+		task.queued = true;
+		run.queued = (run.queued ?? 0) + 1;
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
+		returnAnswerBuffer(shared);
 		run.tasks.set(id, inline());
+		return id;
 	}
+	run.tasks.set(id, task);
 	return id;
+}
+
+function startOnWorker(task, run) {
+	if (task.queued) run.queued--;
+	task.queued = false;
+	task.worker = taskPool.pop();
+	task.started = performance.now();
+	task.worker.postMessage({ ...task.message, files: self.writtenFilesForTask?.() });
+}
+
+const holdsAWorker = run => [...run.tasks.values()].some(task => isRunningOnWorker(task) && !task.released);
+
+// a finished task's Worker back to the pool, once, whether or not its record was read yet
+function releaseWorker(task) {
+	if (task.released) return;
+	task.released = true;
+	taskPool.push(task.worker);
+}
+
+// the queued tasks onto the Workers that finished theirs, in the order they were started; at every check point and
+// loop start of the program, as natively a free thread takes the next task by itself
+function startQueuedTasks(run) {
+	if (!run.queued) return;
+	for (const task of run.tasks.values()) if (isRunningOnWorker(task) && isDone(task)) releaseWorker(task);
+	for (const task of run.tasks.values()) if (isQueued(task) && taskPool.length > 0) startOnWorker(task, run);
 }
 
 // the task's function as the program wrote it (src/tasks.rs task_name): `f`, not `f·node`; `go block 1`, not `go·block·1`
@@ -355,7 +390,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : portableInt(instance.exports, result), signals, sounds };
 	} catch (trap) {
 		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
-		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
+		return { failure: `task ${taskName(name)}: ${taskFailure(instance?.exports, trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
 	}
 }
 
@@ -363,13 +398,19 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 // read from its shared buffer, its output printed then. Meanwhile the run's stalled tasks run here, since the awaited
 // one may wait for them (`after done` waits for the go block that sets done)
 function finishedTask(run, hooks, id) {
-	while (isRunningOnWorker(run.tasks.get(id)) && !isWritten(run.tasks.get(id), TASK_CHECK_MS)) runStalledTasks(run, hooks);
+	for (;;) {
+		const waited = run.tasks.get(id);
+		if (isQueued(waited)) isWritten(waited, TASK_CHECK_MS); // never written before it starts: a pause
+		else if (!isRunningOnWorker(waited) || isWritten(waited, TASK_CHECK_MS)) break;
+		runStalledTasks(run, hooks);
+	}
 	const task = run.tasks.get(id);
 	if (!task.worker) return queuedSignals(run, task);
 	let record = withTaskSounds(run, readShared(task.shared));
+	returnAnswerBuffer(task.shared);
 	if (record.output) hooks.print(record.output, 1);
 	record.files?.forEach(([path, content]) => self.keepWritten?.(path, content.bytes ? Uint8Array.from(content.bytes) : content));
-	taskPool.push(task.worker); // free for the next task
+	releaseWorker(task); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints && record.value.data.int !== undefined) record.value = BigInt(record.value.data.int);
 	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
 	// Workers, and only the isolate that dropped an instance collects it, so the dead instances of this one (the
@@ -381,6 +422,8 @@ function finishedTask(run, hooks, id) {
 }
 
 const isRunningOnWorker = task => Boolean(task.worker);
+const isQueued = task => Boolean(task.queued); // waits for a free Worker (startQueuedTasks)
+const isPending = task => isQueued(task) || isRunningOnWorker(task);
 const isDone = task => Atomics.load(new Int32Array(task.shared, 0, 1), 0) !== 0; // its Worker wrote the record
 const isWritten = (task, milliseconds = 0) => Atomics.wait(new Int32Array(task.shared, 0, 1), 0, 0, milliseconds) !== "timed-out";
 const isTaken = task => Atomics.load(task.control, TASK_TAKEN_SLOT) !== 0;
@@ -388,6 +431,7 @@ const isTaken = task => Atomics.load(task.control, TASK_TAKEN_SLOT) !== 0;
 // the run's tasks that cannot go on by themselves, here: one whose Worker could not instantiate it (out of Wasm memory,
 // see finishedTask) or did not take it in time (card task-hang)
 function runStalledTasks(run, hooks) {
+	startQueuedTasks(run);
 	for (const [id, task] of run.tasks) {
 		if (!isRunningOnWorker(task) || task.checked) continue;
 		if (isWritten(task)) {
@@ -451,7 +495,7 @@ function joinTasks(run, hooks) {
 // running, finished or failed, without waiting (src/host.rs task status codes)
 function taskStatus(run, id) {
 	const task = run.tasks.get(id);
-	if (isRunningOnWorker(task) && !isDone(task)) return Atomics.load(task.control, 0) === CONTROL_PAUSED ? TASK_PAUSED : 0n;
+	if (isPending(task) && !isDone(task)) return Atomics.load(task.control, 0) === CONTROL_PAUSED ? TASK_PAUSED : 0n;
 	const record = isRunningOnWorker(task) ? readShared(task.shared) : task;
 	if (!record.failure) return TASK_FINISHED;
 	return record.failure.endsWith(TASK_STOPPED) ? TASK_STOPPED_CODE : TASK_FAILED;
@@ -460,14 +504,17 @@ function taskStatus(run, id) {
 // `stop job` ends a Worker; `pause job` / `resume job` set its control word, which the task reads where a loop starts
 function controlTask(run, id, operation) {
 	const task = run.tasks.get(id);
-	if (!isRunningOnWorker(task) || isDone(task)) return 0n;
+	if (!isPending(task) || isDone(task)) return 0n;
 	if (operation === TASK_PAUSE || operation === TASK_RESUME) {
 		Atomics.store(task.control, 0, operation === TASK_PAUSE ? CONTROL_PAUSED : CONTROL_RUNNING);
 		Atomics.notify(task.control, 0);
 		return 1n;
 	}
-	task.worker.terminate();
-	addTaskWorker(); // the pool's replacement, loaded once this run returns to its event loop
+	if (isQueued(task)) run.queued--;
+	if (isRunningOnWorker(task)) {
+		task.worker.terminate();
+		addTaskWorker(); // the pool's replacement, loaded once this run returns to its event loop
+	}
 	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
 	return 1n;
 }
@@ -478,6 +525,32 @@ function raisedText(exports) {
 	if (!detail) return null;
 	const tree = readNode(exports, detail);
 	return tree.data?.text ?? tree.data?.node?.data?.text ?? null;
+}
+
+// what a task's trap means, as the compiler words a run's (src/wasm_emitter trap_error): the raised text, else the
+// runtime error with an index error's range, then where it happened; a task stopped at the program's end says only that
+function taskFailure(exports, trap, name) {
+	const raised = raisedText(exports);
+	const runtime = raised ?? trapMessage(trap, name);
+	if (runtime === TASK_STOPPED) return runtime;
+	const range = !raised && runtime === INDEX_OUT_OF_RANGE ? indexRange(exports) : "";
+	return `${runtime}${range}${trapPosition(exports)}`;
+}
+
+// ": 7 not in 1…3" of index_out_of_range_of's detail 7:3, the index asked for and the list's count (src/wasm_emitter
+// index_range_message)
+function indexRange(exports) {
+	const detail = exports?.[TRAP_DETAIL_EXPORT]?.value;
+	if (!detail) return "";
+	const [index, count] = [exports.reflect_data(detail), exports.reflect_value(detail)].map(side => side && readNode(exports, side).data?.int);
+	if (index === undefined || count === undefined) return "";
+	return `: ${index} not in ${count === "0" ? EMPTY_RANGE : `1…${count}`}`;
+}
+
+// " at line:column" of the statement the task trapped in (src/diagnostic.rs located_at), from its trap_position
+function trapPosition(exports) {
+	const position = exports?.[TRAP_POSITION_EXPORT]?.value;
+	return position ? ` at ${position >> POSITION_COLUMN_BITS}:${position & ((1 << POSITION_COLUMN_BITS) - 1)}` : "";
 }
 
 // the runtime error a trap means: the first runtime error function on its stack (`index_out_of_range` reads "index out
@@ -539,13 +612,13 @@ function taskTree(value) {
 	return value ?? { kind: "0", data: null, chain: [] };
 }
 
-// `users := fetch url` (src/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting. A Worker
+// `users := fetch url` (src/web/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting. A Worker
 // of the task pool fetches into shared memory, so a running main sees the reply at its check points (sleep, loop
 // starts: deliverFetches runs on·fetch·<id> there, as natively); else, and for a reply that comes after main returned,
 // the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before, going
 // to another page (navigate) the pending ones, a run that ended all.
 const FETCH_HANDLER_PREFIX = "on·fetch·";
-// the replies of the server calls of a page a server rendered for its path (src/site.rs replies_script): each answers
+// the replies of the server calls of a page a server rendered for its path (src/web/site.rs replies_script): each answers
 // the first fetch of its request, so the page starts showing what the server rendered (P221)
 const serverReplies = JSON.parse(globalThis.document?.getElementById(SERVER_REPLIES_ID)?.textContent ?? "[]");
 function serverReply(url, body) {
@@ -578,7 +651,7 @@ function startFetch(holder, hooks, id, request) {
 	if (rendered) return void queueMicrotask(() => arrive({ body: rendered.body, text: rendered.text }));
 	if (taskPool.length === 0) return void fetchReplyOf(url, body).then(reply => arrive(reply.error ? failed(reply.error) : reply));
 	const worker = taskPool.pop();
-	started.shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	started.shared = takeAnswerBuffer();
 	started.failed = failed;
 	// the Worker is free once it wrote the reply: taken at a check point or here, whichever comes first
 	started.release = () => {
@@ -624,13 +697,26 @@ function writeShared(shared, record) {
 function askPage(what, ask) {
 	if (!ask) throw new Error(`${what}: this page has no way to answer its Worker`);
 	if (!self.crossOriginIsolated) throw new Error(`${what}: the page is not cross-origin isolated, so its Worker cannot wait for it`);
-	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	const shared = takeAnswerBuffer();
 	ask(shared);
 	if (Atomics.wait(new Int32Array(shared, 0, 2), 0, 0, PAGE_ANSWER_MS) === "timed-out") throw new Error(`${what}: the page did not answer in ${PAGE_ANSWER_MS / 1000} s`);
 	const { error, ...answer } = readShared(shared);
+	returnAnswerBuffer(shared);
 	if (error) throw new Error(`${what}: ${error}`);
 	return answer;
 }
+
+// The shared buffers Workers answer in (a task's record, a fetch's reply, the page's or a GPU job's answer), each
+// handed back once its answer is read and emptied for the next: a growable one reserves TASK_RESULT_LIMIT, and Safari
+// ran out of memory with ~200 alive (cards webgpu-safari, safari-shared-buffers; notes/web_playground.md). One whose
+// writer may still come (a timed-out question, a stopped run's task) is never handed back
+const freeAnswerBuffers = [];
+function takeAnswerBuffer() {
+	const shared = freeAnswerBuffers.pop() ?? new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	Atomics.store(new Int32Array(shared, 0, 2), 0, 0);
+	return shared;
+}
+const returnAnswerBuffer = shared => void freeAnswerBuffers.push(shared);
 
 // the record a task Worker wrote into a shared buffer (writeShared), undefined while none is there yet
 function readShared(shared) {
@@ -641,8 +727,10 @@ function readShared(shared) {
 
 // the reply a task Worker wrote into the fetch's shared buffer, once: undefined while none is there or it was taken
 function sharedFetchReply(started) {
-	const answer = started.reply ? undefined : readShared(started.shared);
+	const answer = started.reply || !started.shared ? undefined : readShared(started.shared);
 	if (!answer) return undefined;
+	returnAnswerBuffer(started.shared);
+	started.shared = undefined;
 	return answer.error ? started.failed(answer.error) : answer;
 }
 
@@ -657,12 +745,12 @@ function deliverFetches(holder) {
 	}
 }
 
-// [value, error] as src/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
+// [value, error] as src/web/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
 function fetchReply(holder, id) {
 	const { reply, posted } = holder.fetches?.get(id) ?? {};
 	if (!reply) return [null, `fetch ${id} has no reply yet`];
 	if (reply.error) return [null, reply.error];
-	// a server function's reply (src/lowering/serve.rs) is a text as text/plain, JSON of any other value (src/web_server.rs)
+	// a server function's reply (src/lowering/serve.rs) is a text as text/plain, JSON of any other value (src/web/web_server.rs)
 	if (posted && reply.text) return [reply.body, null];
 	if (posted) try { return [JSON.parse(reply.body), null]; } catch (failure) { return [null, `the server's reply is no JSON: ${failure.message}`]; }
 	const structure = structureOf(reply.body);
@@ -670,7 +758,7 @@ function fetchReply(holder, id) {
 	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // warp convention (src/host.rs fetch)
 }
 
-// a JSON object or array of the text, undefined for any other text (src/web_server.rs value_of_body)
+// a JSON object or array of the text, undefined for any other text (src/web/web_server.rs value_of_body)
 function structureOf(text) {
 	try {
 		const value = JSON.parse(text);
@@ -679,7 +767,7 @@ function structureOf(text) {
 	return undefined;
 }
 
-// a channel named by a ws:// or wss:// address is a WebSocket (src/web_sockets.rs): one connection per address in a
+// a channel named by a ws:// or wss:// address is a WebSocket (src/web/web_sockets.rs): one connection per address in a
 // run, its listeners share what arrives; a message sent before it is open waits for it
 function webSocket(holder, hooks, address) {
 	const sockets = holder.sockets ??= new Map();
@@ -788,6 +876,7 @@ addHostPart({
 		// where a loop starts: a task paused from its starting program waits (its control word, set by controlTask)
 		task_poll: () => {
 			deliverSignals(holder);
+			startQueuedTasks(holder.run);
 			const control = holder.control;
 			if (!control) return;
 			while (Atomics.load(control, 0) === CONTROL_PAUSED) Atomics.wait(control, 0, CONTROL_PAUSED);
@@ -821,6 +910,7 @@ addHostPart({
 	}),
 	started: run => Object.assign(run, { tasks: new Map(), shared: [], channels: channelTable(run.bytes) }),
 	poll: holder => {
+		startQueuedTasks(holder.run);
 		checkShared(holder);
 		deliverFetches(holder);
 	},

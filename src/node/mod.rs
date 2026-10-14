@@ -70,6 +70,14 @@ pub enum Node {
 }
 
 impl Node {
+	/// The statements of an unbracketed `a; b` or newline sequence, else this node as the one statement
+	pub fn sequence_statements(&self) -> &[Node] {
+		match self.drop_meta() {
+			List(items, Bracket::None, separator) if separator.separates_statements() => items,
+			_ => std::slice::from_ref(self),
+		}
+	}
+
 	pub fn meta(node: Node, meta: Node) -> Node {
 		Meta {
 			node: Box::new(node),
@@ -90,9 +98,8 @@ impl Node {
 	pub fn data_value(&self) -> DataValue {
 		// 💡use via
 		// let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
-		match self {
+		match self.drop_meta() {
 			Data(dada) => dada.clone(),
-			Meta { node, .. } => node.data_value(),
 			_ => DataValue {
 				data: Box::new(()),
 				type_name: "ø".to_string(),
@@ -103,7 +110,7 @@ impl Node {
 	/// Remove the children `from..=to` in place: `[a b c d].remove(1,2) == [a d]`.
 	/// A negative `to` means up to the end, `to` is clamped to the last child.
 	pub fn remove(&mut self, from: i32, to: i32) {
-		match self {
+		match self.innermost_mut() {
 			List(items, _, _) => {
 				let last = items.len() as i32 - 1;
 				let to = if to < 0 { last } else { to.max(from).min(last) };
@@ -111,40 +118,25 @@ impl Node {
 					items.drain(from as usize..=to as usize);
 				}
 			}
-			Meta { node, .. } => node.remove(from, to),
-			_ => panic!("can't remove without children: {self:?}"),
+			other => panic!("can't remove without children: {other:?}"),
 		}
 	}
 	pub fn strings(p0: Vec<&str>) -> Node {
 		List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
 	}
 	pub fn first(&self) -> Node {
-		match self {
-			List(xs, _, _) => {
-				if let Some(first) = xs.first() {
-					first.clone()
-				} else {
-					Empty
-				}
-			}
+		match self.drop_meta() {
+			List(xs, _, _) => xs.first().cloned().unwrap_or(Empty),
 			Key(k, _, _v) => k.drop_meta().clone(), // first part of key-value pair is the key
-			Meta { node, .. } => node.first(),
 			_ => Empty,
 		}
 	}
 	pub fn last_item(&self) -> Node {
 		// last() belongs to iterator trade!!
-		match self {
+		match self.drop_meta() {
 			// Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
-			List(xs, _, _) => {
-				if let Some(last) = xs.last() {
-					last.clone()
-				} else {
-					Empty
-				}
-			}
+			List(xs, _, _) => xs.last().cloned().unwrap_or(Empty),
 			Key(_k, _, v) => v.as_ref().clone(), // last part of key-value pair is the value
-			Meta { node, .. } => node.last_item(),
 			_ => Empty,
 		}
 	}
@@ -168,9 +160,8 @@ impl Node {
 		}
 	}
 	pub fn children(&self) -> Vec<Node> {
-		match self {
+		match self.drop_meta() {
 			List(xs, _, _) => xs.clone(),
-			Meta { node, .. } => node.children(),
 			_ => vec![],
 		}
 	}
@@ -195,17 +186,16 @@ impl Node {
 	}
 
 	pub fn values(&self) -> &Node {
-		match self {
+		match self.drop_meta() {
 			Key(_, _, v) => v.as_ref(),
-			Meta { node, .. } => node.values(),
-			List(_, _, _) => self,
+			list @ List(_, _, _) => list,
 			_ => &Empty,
 		}
 	}
 
 	/// Returns the Kind for this node (Meta unwraps to inner node's tag)
 	pub fn kind(&self) -> Kind {
-		match self {
+		match self.drop_meta() {
 			Empty => Kind::Empty,
 			Text(_) => Kind::Text,
 			Char(_) => Kind::Codepoint,
@@ -214,9 +204,9 @@ impl Node {
 			List(_, Bracket::Curly, _) => Kind::Block,
 			List(_, _, _) => Kind::List,
 			Data(_) => Kind::Data,
-			Meta { node, .. } => node.kind(),
 			Type { .. } => Kind::TypeDef,
 			Error(_) => Kind::Error,
+			Meta { .. } => unreachable!("drop_meta removes every Meta layer"),
 			False | True => Kind::Int,
 			Node::Number(num) => match num {
 				Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_) => Kind::Int, // exact numbers
@@ -225,10 +215,9 @@ impl Node {
 		}
 	}
 	pub fn length(&self) -> i32 {
-		match self {
+		match self.drop_meta() {
 			List(items, _, _) => items.len() as i32,
 			Key(_, _, v) => v.length(),
-			Meta { node, .. } => node.length(),
 			_ => 0,
 		}
 	}
@@ -266,6 +255,14 @@ impl Node {
 		}
 	}
 
+	/// `f(args)` / `f args` / `f()`: the callee and the arguments of a list headed by a symbol
+	pub fn call_parts(&self) -> Option<(&str, &[Node])> {
+		match self.drop_meta() {
+			List(items, _, _) => Some((items.first()?.symbol_name()?, &items[1..])),
+			_ => None,
+		}
+	}
+
 	/// The name of a symbol, through its metadata
 	pub fn symbol_name(&self) -> Option<&str> {
 		match self.drop_meta() {
@@ -280,14 +277,13 @@ impl Node {
 	}
 
 	pub fn name(&self) -> String {
-		match self {
+		match self.drop_meta() {
 			Symbol(name) | Text(name) => name.clone(),
 			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.clone(),
 				Number(n) => n.to_string(),
 				_ => String::new(),
 			},
-			Meta { node, .. } => node.name(),
 			List(items, _, _) => {
 				if let Some(first) = items.first() {
 					let first_name = first.name();
@@ -321,22 +317,13 @@ impl Node {
 	/// - Empty, False, 0, "", [] -> false
 	/// - Everything else -> true
 	pub fn to_bool(&self) -> bool {
-		match self {
-			False => false,
-			True => true,
-			Empty => false,
-			Node::Number(ref n) if n.zero() => false,
-			Node::Number(_) => true,
-			Text(ref s) if s.is_empty() => false,
-			Text(_) => true,
-			Symbol(ref s) if s.is_empty() => false,
-			Symbol(_) => true,
-			Char(c) if c == &'\0' => false,
-			Char(_) => true,
-			List(ref items, _, _) if items.is_empty() => false,
-			List(_, _, _) => true,
-			Meta { node, .. } => node.to_bool(),
-			_ => true, // Other types (Data, Key, Pair, Tag) are truthy
+		match self.drop_meta() {
+			False | Empty => false,
+			Node::Number(n) => !n.zero(),
+			Text(s) | Symbol(s) => !s.is_empty(),
+			Char(c) => *c != '\0',
+			List(items, _, _) => !items.is_empty(),
+			_ => true, // True and the other types (Data, Key, Pair, Tag) are truthy
 		}
 	}
 }
@@ -553,9 +540,32 @@ impl Node {
 	/// Whether one of `words` occurs as a symbol anywhere in the tree: a pass about these words has nothing to do
 	/// without one, and can skip working out the program's functions
 	pub fn mentions_any(&self, words: &[&str]) -> bool {
+		self.mentions_where(|name| words.contains(&name))
+	}
+
+	/// Whether the symbol `word` occurs anywhere in the tree (as `visit` walks it: class code, no texts)
+	pub fn mentions(&self, word: &str) -> bool {
+		self.mentions_where(|name| name == word)
+	}
+
+	/// Whether a symbol the predicate holds for occurs anywhere in the tree
+	pub fn mentions_where(&self, wanted: impl Fn(&str) -> bool) -> bool {
 		let mut found = false;
-		self.visit(&mut |node| found |= matches!(node, Symbol(name) if words.contains(&name.as_str())));
+		self.visit(&mut |node| found |= matches!(node, Symbol(name) if wanted(name)));
 		found
+	}
+
+	/// `x` of every `x = …` (or whichever operators `binds` accepts) anywhere in this node, in order of appearance
+	pub fn assigned_names<Names: FromIterator<String>>(&self, binds: impl Fn(&Op) -> bool) -> Names {
+		let mut names = vec![];
+		self.visit(&mut |node| {
+			if let Key(target, op, _) = node {
+				if binds(op) {
+					names.extend(target.symbol_name().map(String::from));
+				}
+			}
+		});
+		names.into_iter().collect()
 	}
 
 	/// Call `action` on this node and every descendant (pre-order, Meta dropped)
@@ -604,6 +614,27 @@ impl Node {
 		}
 	}
 
+	/// Where the Meta layers around this node say it was written: line and column (0 when unknown) and the comment
+	/// before it, or None when they say neither (card data-meta: `n.line`, `n.column`, `n.comment`)
+	pub fn written_at(&self) -> Option<(i64, i64, Option<String>)> {
+		let (mut position, mut comment) = (None, None);
+		let mut layer = self;
+		while let Meta { node: inner, data } = layer {
+			position = position.or_else(|| layer.get_lineinfo());
+			if let Key(word, _, text) = data.as_ref() {
+				if word.is_symbol("comment") {
+					comment = comment.or_else(|| text.text_value());
+				}
+			}
+			layer = inner;
+		}
+		if position.is_none() && comment.is_none() {
+			return None;
+		}
+		let (line, column) = position.map_or((0, 0), |at| (at.line_nr as i64, at.column as i64));
+		Some((line, column, comment))
+	}
+
 	// member functions taking self
 	/// The number of elements (P40: size counts elements, byte_size gives bytes): `len`
 	pub fn size(&self) -> usize {
@@ -611,44 +642,32 @@ impl Node {
 	}
 
 	pub fn get(&self, i: usize) -> &Node {
-		match self {
+		match self.drop_meta() {
 			List(elements, _, _) => elements.get(i).unwrap(),
-			Meta { node, .. } => node.get(i),
 			_ => &Empty,
 		}
 	}
 
 	pub fn get_key(&self) -> &str {
-		match self {
+		match self.drop_meta() {
 			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.as_str(),
 				_ => "",
 			},
-			Meta { node, .. } => node.get_key(),
 			_ => "",
 		}
 	}
 
-	pub fn get_op(&self) -> Op {
-		match self {
-			Key(_, op, _) => *op,
-			Meta { node, .. } => node.get_op(),
-			_ => Op::None,
-		}
-	}
-
 	pub fn get_value(&self) -> Node {
-		match self {
+		match self.drop_meta() {
 			Key(_, _, v) => v.as_ref().clone(),
-			Meta { node, .. } => node.get_value(),
 			_ => Empty,
 		}
 	}
 
 	pub fn iter(&self) -> NodeIter {
-		match self {
+		match self.drop_meta() {
 			List(items, _, _) => NodeIter::new(items.clone()),
-			Meta { node, .. } => node.iter(),
 			_ => NodeIter::new(vec![]),
 		}
 	}
@@ -656,9 +675,8 @@ impl Node {
 	/// The number of elements of a list (0 for anything else). Comments are never elements: the parser attaches them
 	/// as metadata to the neighbouring element (`a // note` is one element), so no variant needs to count them.
 	pub fn len(&self) -> usize {
-		match self {
+		match self.drop_meta() {
 			List(items, _, _) => items.len(),
-			Meta { node, .. } => node.len(),
 			_ => 0,
 		}
 	}
@@ -666,13 +684,21 @@ impl Node {
 		self.len() == 0 || self == &Empty
 	}
 
+	/// The text a value holds: a one-character text is a Char (`"n"` parses as 'n')
+	pub fn text_value(&self) -> Option<String> {
+		match self.drop_meta() {
+			Text(text) => Some(text.clone()),
+			Char(character) => Some(character.to_string()),
+			_ => None,
+		}
+	}
+
 	/// The first Error node in the tree, e.g. a parse diagnostic
 	pub fn first_error(&self) -> Option<&Node> {
-		match self {
-			Error(_) => Some(self),
+		match self.drop_meta() {
+			error @ Error(_) => Some(error),
 			Key(left, _, right) => left.first_error().or_else(|| right.first_error()),
 			List(items, _, _) => items.iter().find_map(Node::first_error),
-			Meta { node, .. } => node.first_error(),
 			Type { name, body } => name.first_error().or_else(|| body.first_error()),
 			_ => None,
 		}
@@ -867,9 +893,8 @@ impl fmt::Display for Separator {
 impl fmt::Display for Node {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Node::Number(Number::Int(n)) => write!(f, "{}", n),
-			Node::Number(Number::Float(fl)) => write!(f, "{}", fl),
-			Node::Number(Number::Real(real)) => write!(f, "{}", real),
+			// a float as its shortest exact text (decision float-text), as Number writes it
+			Node::Number(number @ (Number::Int(_) | Number::Float(_) | Number::Real(_))) => write!(f, "{}", number),
 			Node::Number(n) => write!(f, "{:?}", n),
 			Text(s) | Symbol(s) => write!(f, "{}", s),
 			Char(c) => write!(f, "{}", c),
@@ -895,10 +920,6 @@ impl fmt::Display for Node {
 
 pub fn print(p0: String) {
 	println!("{}", p0);
-}
-
-pub fn text_node(p0: String) -> Node {
-	Text(p0)
 }
 
 pub fn node(p0: &str) -> Node {
@@ -932,10 +953,6 @@ pub fn error(s: &str) -> Node {
 	Error(Box::new(Text(s.to_string())))
 }
 
-pub fn error_node(n: Node) -> Node {
-	Error(Box::new(n))
-}
-
 pub fn codepoint(c: char) -> Node {
 	Char(c)
 }
@@ -947,10 +964,6 @@ pub fn key(k: &str, v: Node) -> Node {
 pub fn types(name: &str) -> Node {
 	// Returns a Symbol with the type name, matching what type() introspection returns
 	Symbol(name.to_string())
-}
-
-pub fn key_op(k: Node, op: Op, v: Node) -> Node {
-	Key(Box::new(k), op, Box::new(v))
 }
 
 pub fn key_ops(k: String, op: Op, v: Node) -> Node {
@@ -967,6 +980,43 @@ pub fn block(xs: Vec<Node>) -> Node {
 
 pub fn parens(xs: Vec<Node>) -> Node {
 	List(xs, Bracket::Round, Separator::None)
+}
+
+/// `function(arguments…)`
+pub fn call(function: &str, arguments: Vec<Node>) -> Node {
+	Node::List(
+		[vec![symbol(function)], arguments].concat(),
+		Bracket::Round,
+		Separator::None,
+	)
+}
+
+/// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
+/// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone
+pub fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> Node {
+	match node {
+		Node::Key(left, op, right) => {
+			let left = rewrite(*left);
+			Key(Box::new(left), op, Box::new(rewrite(*right)))
+		}
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(rewrite).collect(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta {
+			node: Box::new(rewrite(*node)),
+			data,
+		},
+		other => other,
+	}
+}
+
+/// The name a member starts with: `count` of `count = 0`, `up` of `up() {…}`
+pub fn leading_name(member: &Node) -> String {
+	match member.drop_meta() {
+		Node::Key(left, _, _) => leading_name(left),
+		Node::List(items, _, _) => items.first().map(leading_name).unwrap_or_default(),
+		other => other.name(),
+	}
 }
 
 pub fn ints(xs: Vec<i32>) -> Node {

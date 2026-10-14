@@ -21,6 +21,7 @@ mod test_module_function_dir; // card use-math
 mod test_module_meta; // card reflection-foreign-meta
 mod test_module_signals;
 mod test_netbase_package;
+mod test_package_hints; // card hints-fire
 mod test_package_pin;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
@@ -30,9 +31,11 @@ mod test_std_args; // card std-args
 mod test_std_collections;
 #[cfg(feature = "native")] // reads lib/, tests/ and src/: not in the browser build
 mod test_std_coverage; // card std-word
+mod test_std_docs_comment_association; // card help-markdown
 #[cfg(feature = "native")] // runs a process: not in the browser
 mod test_std_exec;
 mod test_std_file;
+mod test_std_file_bytes; // card path-list
 mod test_std_file_copy; // card std-file
 mod test_std_hash;
 mod test_std_implicit_use; // card std-implicit

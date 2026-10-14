@@ -1,0 +1,5 @@
+// emitter: LEB128 needs shifts and masks on ints; `&` and `|` are logical (wiki/Footguns.md), bit_and and bit_or are bitwise
+// [229 142 38]
+use math
+leb(n) := { out = []; while n >= 128 { out += [bit_or(bit_and(n, 127), 128)]; n = n >> 7 }; out += [n]; out }
+print(leb(624485))

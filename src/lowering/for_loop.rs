@@ -11,6 +11,8 @@ use crate::operators::Op;
 use crate::warp_parser::while_do;
 use crate::wasm_emitter::{is_step, mark_step};
 
+pub mod headers;
+
 const FOR_KEYWORD: &str = "for";
 const IN_KEYWORD: &str = "in";
 const IMPLICIT_VARIABLE: &str = "it";
@@ -304,7 +306,7 @@ fn walked_units(iterable: Node) -> Node {
 	}
 }
 
-fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
+pub(crate) fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	let name = variable.name();
 	let (items, index) = (
 		symbol(&format!("{name}{ITEMS_SUFFIX}")),

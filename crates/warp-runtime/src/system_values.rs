@@ -5,17 +5,19 @@
 //! macOS asks `pmset` and `defaults`, Linux /sys and `gsettings`; `online` is whether a route to the internet exists
 //! (a UDP connect sends nothing). A value the platform cannot give is a loud error, never a made-up reading.
 //! `mouse_x`, `mouse_y`, `mouse_down`: natively the pointer over the paint window (window_input), read each time;
-//! `window_open` whether that window shows.
+//! `key_down` whether a key is held over it, `key code held` which (lowering/system_values.rs names it `held_key`);
+//! `window_open` whether that window shows; read before any paint, it opens the window (blank) where one can show.
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
-	BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE,
-	SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN,
+	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, KEY_CODE_HELD,
+	KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH,
+	WINDOW_OPEN,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const NOTIFICATION_TITLE: &str = "warp";
@@ -25,11 +27,11 @@ const NATIVE_VIEW: (i64, i64) = (640, 480);
 /// Any public address: connecting a UDP socket only asks the routing table
 const INTERNET_ADDRESS: &str = "1.1.1.1:53";
 
-/// The last input over the paint window (src/paint_window.rs follow_input), each an f32's bits: pointer x, y in the
+/// The last input over the paint window (src/graphics/paint_window.rs follow_input), each an f32's bits: pointer x, y in the
 /// painted frame's pixels, a button down (1), the key held; all 0 before a window
 static WINDOW_INPUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 
-/// Whether the paint window shows: set as it gets its first frame, cleared when it closes (src/paint_window.rs)
+/// Whether the paint window shows: set as it gets its first frame, cleared when it closes (src/graphics/paint_window.rs)
 static WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
 pub fn tell_window_open(open: bool) {
@@ -40,13 +42,42 @@ pub fn window_shows() -> bool {
 	WINDOW_SHOWN.load(Ordering::Relaxed)
 }
 
+/// Opens the paint window before any frame: the warp binary's (src/graphics/paint.rs allow_windows), none headless
+static WINDOW_OPENER: OnceLock<fn()> = OnceLock::new();
+/// Whether window_open asked the opener: once a run, so a window the user closed stays closed (card window-loop)
+static WINDOW_ASKED: AtomicBool = AtomicBool::new(false);
+
+pub fn tell_window_opener(open: fn()) {
+	let _ = WINDOW_OPENER.set(open);
+}
+
+/// `while window_open { … }` before any paint: the window opens as the loop asks, else the loop would never run
+fn window_open() -> bool {
+	if let Some(open) = WINDOW_OPENER.get() {
+		if !window_shows() && !WINDOW_ASKED.swap(true, Ordering::Relaxed) {
+			open();
+		}
+	}
+	window_shows()
+}
+
+/// view_width × view_height before any window shows a picture
+pub fn native_view() -> (i64, i64) {
+	NATIVE_VIEW
+}
+
 /// The keys pressed over the paint window not read yet (KEY_PRESSED), oldest first; a program that never reads them
 /// keeps the last KEYS_KEPT
 static KEY_PRESSES: Mutex<VecDeque<i64>> = Mutex::new(VecDeque::new());
 const KEYS_KEPT: usize = 64;
 const KEY_INPUT: usize = 3;
+const BUTTON_INPUT: usize = 2;
+/// The clicks over the paint window not read yet (CLICK_PRESSED), each where the button went down, oldest first, the
+/// last KEYS_KEPT; and the click read last, which CLICK_X and CLICK_Y tell
+static CLICKS: Mutex<VecDeque<(f32, f32)>> = Mutex::new(VecDeque::new());
+static CLICK_READ: Mutex<(f32, f32)> = Mutex::new((0.0, 0.0));
 
-/// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/paint.rs allow_windows)
+/// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/graphics/paint.rs allow_windows)
 static DRAWING_ON_GPU: AtomicBool = AtomicBool::new(false);
 
 pub fn tell_gpu_drawing(on_gpu: bool) {
@@ -61,20 +92,28 @@ pub fn window_input() -> [f32; 4] {
 
 pub fn tell_window_input(input: [f32; 4]) {
 	tell_window_key(input[KEY_INPUT]);
+	// a click: the button down that was up
+	if input[BUTTON_INPUT] != 0.0 && window_input()[BUTTON_INPUT] == 0.0 {
+		kept_push(&mut CLICKS.lock().unwrap(), (input[0], input[1]));
+	}
 	for (value, number) in WINDOW_INPUT.iter().zip(input) {
 		value.store(number.to_bits(), Ordering::Relaxed);
 	}
+}
+
+/// A press queued, the oldest dropped beyond KEYS_KEPT: a program that never reads them keeps the last ones
+fn kept_push<T>(presses: &mut VecDeque<T>, press: T) {
+	if presses.len() == KEYS_KEPT {
+		presses.pop_front();
+	}
+	presses.push_back(press);
 }
 
 /// The key held over the paint window alone, the pointer left as it is
 pub fn tell_window_key(key: f32) {
 	// a press: a key held that was not held before (another key, or none)
 	if key != 0.0 && key != window_input()[KEY_INPUT] {
-		let mut presses = KEY_PRESSES.lock().unwrap();
-		if presses.len() == KEYS_KEPT {
-			presses.pop_front();
-		}
-		presses.push_back(key as i64);
+		kept_push(&mut KEY_PRESSES.lock().unwrap(), key as i64);
 	}
 	WINDOW_INPUT[KEY_INPUT].store(key.to_bits(), Ordering::Relaxed);
 }
@@ -90,7 +129,24 @@ pub fn read(name: &str) -> Result<i64, String> {
 		return Ok(crate::system_signals::millisecond_of_day());
 	}
 	if name == WINDOW_OPEN {
-		return Ok(window_shows() as i64);
+		return Ok(window_open() as i64);
+	}
+	if name == KEY_DOWN {
+		return Ok((window_input()[KEY_INPUT] != 0.0) as i64);
+	}
+	if name == KEY_CODE_HELD {
+		return Ok(window_input()[KEY_INPUT] as i64);
+	}
+	if name == CLICK_PRESSED {
+		let click = CLICKS.lock().unwrap().pop_front();
+		if let Some(click) = click {
+			*CLICK_READ.lock().unwrap() = click;
+		}
+		return Ok(click.is_some() as i64);
+	}
+	if name == CLICK_X || name == CLICK_Y {
+		let (x, y) = *CLICK_READ.lock().unwrap();
+		return Ok(if name == CLICK_X { x } else { y } as i64);
 	}
 	if name == KEY_PRESSED {
 		return Ok(KEY_PRESSES.lock().unwrap().pop_front().unwrap_or(0));

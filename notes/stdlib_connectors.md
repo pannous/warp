@@ -43,7 +43,7 @@ step 3.
 | Python (browser) | `use python` in the playground: worker.js loads Pyodide 0.29.5 from jsdelivr before the run (a host call cannot wait), host.js pythonCall answers foreign_call with the same bridge (web/playground/foreign_python.py, shared with the native child). Pyodide 314.x fails importScripts in a classic worker (2026-10-06), hence 0.29 | JSON, $int for big integers, handles stay in Pyodide | done | the stdlib and Pyodide's packages |
 | JavaScript (native) | the same loop under `node`/`deno`/`bun` | JSON | S once Python exists (same protocol) | npm |
 | JavaScript (browser) | the JS host calls `globalThis[module][function](...args)` directly | JS values ↔ Nodes in host.js | S | DOM, Math, fetch, anything on the page |
-| Rust crates | no ABI to call into dynamically. Options: (a) a crate compiled into warp as host words (what host.rs does, per crate, by hand); (b) a crate built as a wasm32-wasip1 component and linked as a second module (the package-tool path, needs cross-module GC types); (c) a crate exposing `extern "C"` and used through the C FFI | (a) Nodes, (c) C types | M per crate (a); L general (b) | curated |
+| Rust crates | done (card use-cargo): `use cargo regex` generates a wrapper component from rustdoc JSON, notes/cargo_crates.md. Before: no ABI to call into dynamically. Options: (a) a crate compiled into warp as host words (what host.rs does, per crate, by hand); (b) a crate built as a wasm32-wasip1 component and linked as a second module (the package-tool path, needs cross-module GC types); (c) a crate exposing `extern "C"` and used through the C FFI | (a) Nodes, (c) C types | M per crate (a); L general (b) | curated |
 | Embedded CPython (pyo3) | in-process, faster calls, true object handles | Python objects | M-L, adds libpython to warp's link, not offline-registry friendly | same as subprocess |
 | WASI components / WIT | the long-term general answer: any language compiled to a component with a WIT interface; warp already parses WIT | WIT types ↔ Nodes | L (component model is turned off in the engines today) | everything that targets components |
 
@@ -76,7 +76,7 @@ step 3.
   (`AttributeError: module 'math' has no attribute 'nope'`). The result is built with tasks::Builders like run_block's
   (host::VALUE_GIVING_WORDS: the module exports its constructors and exact builders).
 - Values: exact rationals cross as floats (`2.5` is 5/2 in warp), integers beyond 64 bits come back exact
-  (`{"$int": "digits"}`: `math.factorial(25)` → 15511210043330985984000000), booleans 1/0, None ø, dicts objects,
+  (`{"$int": "digits"}`: `math.factorial(25)` → 15511210043330985984000000), booleans yes/no (warp bools, card booleans-foreign), None ø, dicts objects,
   tuples/sets lists, numpy arrays via tolist(), anything else its repr text.
 - Capability: foreign_call is a host word linked like an FFI import, so it needs Ffi: eval grants it, eval_untrusted
   refuses it. eval_untrusted used to check only the parsed program, before lowering added calls of its own; its grant

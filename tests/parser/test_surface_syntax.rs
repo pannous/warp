@@ -69,7 +69,8 @@ fn similarity_combines_and_takes_any_operand() {
 	is!("π ≈ 3.14159265358979", true);
 	is!("π ≈ 3.14", false);
 	is!("x=0; x ≈ 0", true);
-	is!("x=0; x ≈ 1e-12", false);
+	is!("x=0; x ≈ 1e-12", true); // decision approx-zero: an absolute floor of 1e-12 near zero
+	is!("x=0; x ≈ 1e-11", false);
 	is!("xs=[1 2]; xs#2 ≈ 2.0000000001", true);
 	is!("1 ~~ 1.0000000001", true);
 	is!("1 ⋍ 1.0000000001", true);

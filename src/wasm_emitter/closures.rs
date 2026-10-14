@@ -26,6 +26,9 @@ pub const CLOSURE_CAPTURED: &str = "closure_captured";
 /// closure_apply(f, arguments): f called with the items of the list `arguments`, as many as f takes (missing ones ø,
 /// extra ones dropped, as JavaScript calls a function): how a foreign runtime calls back a warp function it was given
 pub const CLOSURE_APPLY: &str = "closure_apply";
+/// function_text(f): how print and a list's text show a function value: a named function by its name, a lambda as
+/// written (`x => x + n`) (card print-closure)
+pub const FUNCTION_TEXT: &str = "function_text";
 /// Runtime errors of a closure call: the value called is no closure, or a closure of another arity
 pub(super) const NOT_A_FUNCTION: &str = "not_a_function";
 pub(super) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
@@ -35,6 +38,11 @@ const CAPTURE_VALUE_PREFIX: &str = "·capture·";
 const CAPTURED_FIELD: u32 = 1;
 const NODE_DATA_FIELD: u32 = 1;
 const NODE_VALUE_FIELD: u32 = 2;
+/// A closure's kind carries the class of its target's written form above the kind bits, so == compares definitions
+/// (card runtime-function); class 0: one of too many to count, compared by name
+pub(super) const FUNCTION_CLASS_SHIFT: i64 = 8;
+const FUNCTION_CLASSES: usize = (1 << (crate::type_kinds::ELEMENT_MARK_SHIFT - FUNCTION_CLASS_SHIFT)) - 1;
+pub(super) const FUNCTION_CLASS_MASK: i64 = (FUNCTION_CLASSES as i64) << FUNCTION_CLASS_SHIFT;
 
 /// The types and entry functions of the closures in a module
 #[derive(Default, Clone)]
@@ -48,6 +56,8 @@ pub(super) struct ClosureTypes {
 	carriers: Option<(u32, u32)>,
 	/// closure_apply, for a program that calls foreign code
 	apply: Option<u32>,
+	/// The written forms of the closure targets (function_equality::written_form), class n at n - 1
+	written_forms: Vec<String>,
 }
 
 impl ClosureTypes {
@@ -76,6 +86,29 @@ impl ClosureTypes {
 impl WasmGcEmitter {
 	fn nullable_node(&self) -> ValType {
 		Ref(self.node_ref(true))
+	}
+
+	/// The kind of a closure of `target`: Function with the class of its written form
+	fn function_kind(&mut self, target: &str) -> i64 {
+		let class = self.ctx.user_functions.get(target).map_or(0, |function| {
+			let parameters: Vec<_> = function
+				.params
+				.iter()
+				.map(|param| (param.name.clone(), param.annotation.clone()))
+				.collect();
+			let form = crate::function_equality::written_form(target, &parameters, &function.body);
+			let forms = &mut self.closures.written_forms;
+			let index = forms.iter().position(|known| *known == form).unwrap_or_else(|| {
+				forms.push(form);
+				forms.len() - 1
+			});
+			if index < FUNCTION_CLASSES {
+				index + 1
+			} else {
+				0
+			}
+		});
+		((class as i64) << FUNCTION_CLASS_SHIFT) | Kind::Function as i64
 	}
 
 	fn closure_type(&mut self) -> u32 {
@@ -216,14 +249,10 @@ impl WasmGcEmitter {
 						.user_functions
 						.get(&crate::closures::closure_call_name(arity))
 						.cloned();
+					s.emit_closure_entry(func, closure_local, closure);
 					Self::emit_list(
 						func,
 						&[
-							I::LocalGet(closure_local),
-							I::StructGet {
-								struct_type_index: closure,
-								field_index: ENTRY_FIELD,
-							},
 							I::RefTestNonNull(HeapType::Concrete(entry)),
 							I::If(BlockType::Empty),
 							I::LocalGet(closure_local),
@@ -240,18 +269,8 @@ impl WasmGcEmitter {
 							s.emit_node_as_kind(func, param_kind(&helper.params[1 + index]));
 						}
 					}
-					Self::emit_list(
-						func,
-						&[
-							I::LocalGet(closure_local),
-							I::StructGet {
-								struct_type_index: closure,
-								field_index: ENTRY_FIELD,
-							},
-							I::RefCastNonNull(HeapType::Concrete(entry)),
-							I::CallRef(entry),
-						],
-					);
+					s.emit_closure_entry(func, closure_local, closure);
+					Self::emit_list(func, &[I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry)]);
 					if let Some(helper) = helper.filter(|_| typed) {
 						s.emit_primitive_as_node(func, helper.return_kind);
 					}
@@ -259,6 +278,19 @@ impl WasmGcEmitter {
 				}
 				s.emit_runtime_error(func, WRONG_ARGUMENT_COUNT);
 			},
+		);
+	}
+
+	fn emit_closure_entry(&self, func: &mut Function, closure: u32, closure_type: u32) {
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(closure),
+				I::StructGet {
+					struct_type_index: closure_type,
+					field_index: ENTRY_FIELD,
+				},
+			],
 		);
 	}
 
@@ -304,19 +336,18 @@ impl WasmGcEmitter {
 				s.emit_string_call(rebuild, &target, "new_symbol");
 				s.emit_call(rebuild, super::equality::VALUES_EQUAL);
 				rebuild.instruction(&I::If(BlockType::Empty));
-				s.emit_kind(rebuild, Kind::Function);
 				Self::emit_list(
 					rebuild,
 					&[
+						I::I64Const(s.function_kind(&target)),
 						I::RefFunc(entry),
 						I::LocalGet(1),
 						I::StructNew(closure),
-						I::LocalGet(0),
-						I::StructNew(node_type),
-						I::Return,
-						I::End,
 					],
 				);
+				// the name from this module's string table, as closure_new makes it (function_text finds it there)
+				s.emit_string_call(rebuild, &target, "new_symbol");
+				Self::emit_list(rebuild, &[I::StructNew(node_type), I::Return, I::End]);
 			}
 			s.emit_call(rebuild, "new_empty");
 		});
@@ -516,14 +547,11 @@ impl WasmGcEmitter {
 							field_index: NODE_DATA_FIELD,
 						},
 						I::RefCastNonNull(HeapType::Concrete(closure)),
-						I::LocalTee(closure_local),
-						I::StructGet {
-							struct_type_index: closure,
-							field_index: ENTRY_FIELD,
-						},
-						I::RefTestNonNull(HeapType::Concrete(entry)),
+						I::LocalSet(closure_local),
 					],
 				);
+				s.emit_closure_entry(func, closure_local, closure);
+				func.instruction(&I::RefTestNonNull(HeapType::Concrete(entry)));
 				s.emit_fail_unless(func, WRONG_ARGUMENT_COUNT);
 				Self::emit_list(
 					func,
@@ -538,18 +566,8 @@ impl WasmGcEmitter {
 				for argument in 1..=arity {
 					func.instruction(&I::LocalGet(argument as u32));
 				}
-				Self::emit_list(
-					func,
-					&[
-						I::LocalGet(closure_local),
-						I::StructGet {
-							struct_type_index: closure,
-							field_index: ENTRY_FIELD,
-						},
-						I::RefCastNonNull(HeapType::Concrete(entry)),
-						I::CallRef(entry),
-					],
-				);
+				s.emit_closure_entry(func, closure_local, closure);
+				Self::emit_list(func, &[I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry)]);
 				if !s.typed_entry(arity) {
 					func.instruction(&I::RefAsNonNull);
 					s.emit_node_as_kind(func, function.return_kind);
@@ -729,8 +747,8 @@ impl WasmGcEmitter {
 			true => self.nested_captures_now(func, target),
 			false => captured.to_vec(),
 		};
-		self.emit_kind(func, Kind::Function);
-		func.instruction(&I::RefFunc(entry_function));
+		let kind = self.function_kind(target);
+		Self::emit_list(func, &[I::I64Const(kind), I::RefFunc(entry_function)]);
 		if captured.is_empty() {
 			self.emit_node_null(func);
 		} else {
@@ -742,5 +760,144 @@ impl WasmGcEmitter {
 		func.instruction(&I::StructNew(closure));
 		self.emit_string_call(func, target, "new_symbol");
 		func.instruction(&I::StructNew(self.type_manager.node_type));
+	}
+}
+
+impl WasmGcEmitter {
+	/// In values_equal, two closures of the same kind (so of the same class, Self::function_kind): equal when they
+	/// captured equal values; of class 0 only of the same function
+	pub(super) fn emit_closures_equal(&mut self, f: &mut Function, recurse: u32) {
+		let (node, closure) = (self.type_manager.node_type, self.closure_type());
+		let (left, right, left_kind) = (0, 1, 2);
+		Self::emit_list(
+			f,
+			&[
+				I::LocalGet(left_kind),
+				I::I64Const(crate::type_kinds::KIND_MASK),
+				I::I64And,
+				I::I64Const(Kind::Function as i64),
+				I::I64Eq,
+				I::If(BlockType::Empty),
+				I::LocalGet(left_kind),
+				I::I64Const(FUNCTION_CLASS_MASK),
+				I::I64And,
+				I::I64Eqz,
+				I::If(BlockType::Empty),
+			],
+		);
+		Self::field(f, left, node, NODE_VALUE_FIELD);
+		Self::field(f, right, node, NODE_VALUE_FIELD);
+		Self::emit_list(f, &[I::Call(recurse), I::I32Eqz]);
+		Self::return_if(f, 0);
+		f.instruction(&I::End);
+		for side in [left, right] {
+			Self::field(f, side, node, NODE_DATA_FIELD);
+			Self::emit_list(
+				f,
+				&[
+					I::RefCastNonNull(HeapType::Concrete(closure)),
+					I::StructGet {
+						struct_type_index: closure,
+						field_index: CAPTURED_FIELD,
+					},
+				],
+			);
+		}
+		Self::emit_list(f, &[I::Call(recurse), I::Return, I::End]);
+	}
+}
+
+impl WasmGcEmitter {
+	/// A program whose function values may be shown needs function_text
+	pub(super) fn require_function_text(&mut self) {
+		let required = &mut self.ctx.required_functions;
+		let shows_values = [
+			super::wasi_emitter::PRINT_VALUE,
+			super::wasi_emitter::PUT_VALUE,
+			"list_join",
+		]
+		.iter()
+		.any(|name| required.contains(name));
+		if shows_values && !self.ctx.closure_targets.is_empty() {
+			required.insert(FUNCTION_TEXT);
+		}
+	}
+
+	/// The text of a closure target: a named function's name (without its enclosing function's), a lambda's
+	/// parameters and body
+	fn function_text_of(&self, target: &str, captured: usize) -> String {
+		let Some(function) = self
+			.ctx
+			.user_functions
+			.get(target)
+			.filter(|_| crate::closures::is_lambda_function(target))
+		else {
+			return target.rsplit('·').next().unwrap_or(target).to_string();
+		};
+		let params: Vec<&str> = function
+			.params
+			.iter()
+			.skip(captured)
+			.map(|param| param.name.as_str())
+			.collect();
+		let params = match params.as_slice() {
+			[one] => one.to_string(),
+			more => format!("({})", more.join(", ")),
+		};
+		format!("{params} => {}", function.body.serialize())
+	}
+
+	/// Whether function_text is emitted: a program that shows values and has function values (an emit without a
+	/// program, which emits everything, has none to show)
+	pub(super) fn shows_functions(&self) -> bool {
+		!self.ctx.closure_targets.is_empty() && self.should_emit_function(FUNCTION_TEXT)
+	}
+
+	pub(super) fn emit_function_text(&mut self) {
+		if !self.shows_functions() {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		let texts: Vec<((u32, u32), String)> = self
+			.ctx
+			.closure_targets
+			.clone()
+			.into_iter()
+			.map(|(target, captured)| (self.allocate_string(&target), self.function_text_of(&target, captured)))
+			.collect();
+		let name = 1;
+		let locals = vec![Ref(RefType {
+			nullable: true,
+			heap_type: HeapType::Concrete(string),
+		})];
+		self.runtime_function(FUNCTION_TEXT, vec![node_ref], vec![node_ref], locals, |s, f| {
+			// a closure's name is the string table's text of its target (closure_new, closure_rebuild): one place each
+			Self::field(f, 0, node, NODE_VALUE_FIELD);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node))]);
+			f.instruction(&I::StructGet {
+				struct_type_index: node,
+				field_index: NODE_DATA_FIELD,
+			});
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(string)), I::LocalSet(name)]);
+			for ((pointer, length), text) in &texts {
+				Self::field(f, name, string, 0);
+				Self::emit_list(f, &[I::I32Const(*pointer as i32), I::I32Eq]);
+				Self::field(f, name, string, 1);
+				Self::emit_list(
+					f,
+					&[
+						I::I32Const(*length as i32),
+						I::I32Eq,
+						I::I32And,
+						I::If(BlockType::Empty),
+					],
+				);
+				s.emit_string_call(f, text, "new_text");
+				Self::emit_list(f, &[I::Return, I::End]);
+			}
+			s.emit_string_call(f, crate::type_kinds::Kind::Function.to_string().as_str(), "new_text");
+			// none of this module's
+		});
 	}
 }

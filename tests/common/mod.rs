@@ -1,3 +1,5 @@
+#[cfg(feature = "native")]
+pub mod twins; // card self-differential
 use warp::wasm_emitter::eval;
 use warp::Node;
 
@@ -39,7 +41,7 @@ pub const LEAN: Resource = Resource {
 	name: "the Lean toolchain (disabled in cloud sessions)",
 	available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true"),
 };
-/// binaryen's wasm-split, which splits a built site's module by route (src/route_split.rs)
+/// binaryen's wasm-split, which splits a built site's module by route (src/web/route_split.rs)
 #[cfg(feature = "native")]
 pub const WASM_SPLIT: Resource = Resource {
 	name: "binaryen's wasm-split",
@@ -117,6 +119,14 @@ macro_rules! requires {
 			return;
 		}
 	};
+}
+
+/// The paint window's input is one per process (warp_runtime::system_values): a test that tells it holds this until it
+/// has read back what it told, so no other test's pointer or click comes between
+#[cfg(feature = "native")]
+pub fn window_input_held() -> std::sync::MutexGuard<'static, ()> {
+	static WINDOW_INPUT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+	WINDOW_INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Written to the stderr handle itself: libtest captures `eprintln!` of passing tests, which would hide the skip
@@ -318,40 +328,43 @@ pub fn printed(code: &str) -> String {
 #[cfg(feature = "native")]
 pub fn runtime_stub() -> &'static std::path::Path {
 	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-	STUB.get_or_init(|| {
-		let built = std::process::Command::new(env!("CARGO"))
-			.args([
-				"build",
-				"--offline",
-				"--quiet",
-				"-p",
-				"warp-runtime",
-				"--bin",
-				"warp-runtime",
-			])
-			.current_dir(env!("CARGO_MANIFEST_DIR"))
-			.status()
-			.expect("cargo runs");
-		assert!(built.success(), "cargo build -p warp-runtime failed");
-		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
-		let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("crates")
-			.join("warp-runtime");
-		let build = checkout_build(
-			&shared,
-			"warp_runtime-",
-			&runtime_manifest.to_string_lossy(),
-			Some(env!("CARGO_PKG_VERSION")),
+	STUB.get_or_init(|| built_stub("warp-runtime", &[]))
+}
+
+/// The stub of page apps (card build-links): the runtime with the web view, as runtime_stub keeps the plain one
+#[cfg(all(feature = "native", target_os = "macos"))]
+pub fn page_runtime_stub() -> &'static std::path::Path {
+	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	STUB.get_or_init(|| built_stub("warp-page-runtime", &["--features", "webview"]))
+}
+
+#[cfg(feature = "native")]
+fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
+	let built = std::process::Command::new(env!("CARGO"))
+		.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
+		.args(features)
+		.current_dir(env!("CARGO_MANIFEST_DIR"))
+		.status()
+		.expect("cargo runs");
+	assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name(name);
+	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+		.join("crates")
+		.join("warp-runtime");
+	let build = checkout_build(
+		&shared,
+		&format!("{}-", name.replace('-', "_")),
+		&runtime_manifest.to_string_lossy(),
+		Some(env!("CARGO_PKG_VERSION")),
+	)
+	.unwrap_or_else(|| {
+		panic!(
+			"target/debug/deps holds no {name} {} built from {}",
+			env!("CARGO_PKG_VERSION"),
+			runtime_manifest.display()
 		)
-		.unwrap_or_else(|| {
-			panic!(
-				"target/debug/deps holds no warp-runtime {} built from {}",
-				env!("CARGO_PKG_VERSION"),
-				runtime_manifest.display()
-			)
-		});
-		own_copy(&build, "warp-runtime").expect("copy the warp-runtime stub")
-	})
+	});
+	own_copy(&build, name).expect("copy the runtime stub")
 }
 
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
@@ -398,8 +411,8 @@ pub fn warp_command() -> std::process::Command {
 	// hints chosen explicitly (card hints-toggle): the tests read them without the closing "hide hints with" line
 	let mut command = std::process::Command::new(binary);
 	command.env("WARP_HINTS", "1");
-	// a sample that paints writes PNGs here, no window (src/paint.rs)
-	command.env(warp::paint::NO_WINDOW_VARIABLE, "1");
+	// a sample that paints writes PNGs here, no window (src/graphics/paint.rs)
+	command.env(warp::graphics::paint::NO_WINDOW_VARIABLE, "1");
 	command
 }
 

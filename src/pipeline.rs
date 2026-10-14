@@ -1,4 +1,4 @@
-//! The compile pipeline: parse → the lowering passes (`SOURCE_PASSES`, `MEANING_PASSES`) → analysis and diagnostics →
+//! The compile pipeline: parse → the lowering passes (`SOURCE_PHASES`, `MEANING_PASSES`) → analysis and diagnostics →
 //! the WASM GC emitter (wasm_emitter) → run. `eval`, `compile` and `lower` are the entry points; wasm_emitter
 //! re-exports them.
 
@@ -28,14 +28,15 @@ pub fn eval(code: &str) -> Node {
 }
 
 fn eval_source(code: &str) -> Node {
-	if let Some(outcome) = crate::page_tests::answer(code) {
+	if let Some(outcome) = crate::web::page_tests::answer(code) {
 		return outcome;
 	}
 	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
 	match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
-			explain_runtime_error(eval_parsed(program, code), exclusive_range)
+			let result = crate::graphics::shader_errors::relocated(eval_parsed(program, code), code);
+			explain_runtime_error(result, exclusive_range)
 		}
 		Err(violation) => violation,
 	}
@@ -113,138 +114,155 @@ thread_local! {
 
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
-	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, run)
+	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, || {
+		crate::sandbox::confined(run)
+	})
 }
 
 /// `run` with the program granted only `granted`
 fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
-	let before = GRANTED.with(|current| current.replace(granted));
-	let result = run();
-	GRANTED.with(|current| current.set(before));
-	result
+	crate::util::scoped(&GRANTED, granted, run)
+}
+
+/// What the program compiled on this thread is compiled for: set by the `for_*` wrappers around a compile, read by the
+/// lowering passes and (through wasm_emitter/config.rs) the emitter
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CompileMode {
+	/// for a page (`warp build --site`), where page events happen
+	pub for_a_page: bool,
+	/// for `warp dev`, whose page keeps the program's state across reloads
+	pub for_dev: bool,
+	/// a program that renders its own markup (rendering_itself)
+	pub rendering_itself: bool,
+	/// for WAGI (`warp build --wagi`): its routes answer the one request in its environment
+	pub for_wagi: bool,
+	/// the program ends in the print of its value that compile_printing_result added: that print shows nothing for ø (a
+	/// loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's own prints ø
+	pub prints_result: bool,
+	/// the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
+	pub prerendering: bool,
+	/// a module for any host (`warp compile --wasm`): a browser's host reads its values too
+	pub for_any_host: bool,
+	/// hosted (`warp deploy`): a program without routes gets them (lowering/serve.rs with_default_routes)
+	pub for_hosting: bool,
+	/// it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
+	pub for_tests: bool,
+}
+
+impl CompileMode {
+	/// a plain run: none of the flags
+	pub const PLAIN: CompileMode = CompileMode {
+		for_a_page: false,
+		for_dev: false,
+		rendering_itself: false,
+		for_wagi: false,
+		prints_result: false,
+		prerendering: false,
+		for_any_host: false,
+		for_hosting: false,
+		for_tests: false,
+	};
+
+	/// Whether the program exports its renderer: a page's, or one rendering itself
+	pub fn renders_itself(&self) -> bool {
+		self.for_a_page || self.rendering_itself
+	}
 }
 
 thread_local! {
-	/// whether the program compiled on this thread is for a page (`warp build --site`), where page events happen
-	static FOR_A_PAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
-	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it is for WAGI (`warp build --wagi`): its routes answer the one request in its environment
-	static FOR_WAGI: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether the program compiled now ends in the print of its value that compile_printing_result added
-	static PRINTS_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
-	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	static COMPILE_MODE: std::cell::Cell<CompileMode> = const { std::cell::Cell::new(CompileMode::PLAIN) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
 	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
 	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
-	/// whether it is a module for any host (`warp compile --wasm`): a browser's host reads its values too
-	static FOR_ANY_HOST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it is hosted (`warp deploy`): a program without routes gets them (lowering/serve.rs with_default_routes)
-	static FOR_HOSTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
-	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// `run` with `flag` set on this thread
-fn with_flag<T>(flag: &'static std::thread::LocalKey<std::cell::Cell<bool>>, run: impl FnOnce() -> T) -> T {
-	let before = flag.with(|set| set.replace(true));
-	let result = run();
-	flag.with(|set| set.set(before));
-	result
+/// What the program compiled now is compiled for
+pub fn compile_mode() -> CompileMode {
+	COMPILE_MODE.with(std::cell::Cell::get)
+}
+
+fn set_mode_flag(flag: fn(&mut CompileMode) -> &mut bool, value: bool) -> bool {
+	COMPILE_MODE.with(|current| {
+		let mut mode = current.get();
+		let before = std::mem::replace(flag(&mut mode), value);
+		current.set(mode);
+		before
+	})
+}
+
+/// `run` with one flag of the compile mode set, then that flag as it was (the others keep what `run` set)
+fn with_flag<T>(flag: fn(&mut CompileMode) -> &mut bool, run: impl FnOnce() -> T) -> T {
+	struct Restore(fn(&mut CompileMode) -> &mut bool, bool);
+	impl Drop for Restore {
+		fn drop(&mut self) {
+			set_mode_flag(self.0, self.1);
+		}
+	}
+	let _restore = Restore(flag, set_mode_flag(flag, true));
+	run()
 }
 
 thread_local! {
 	/// The functions the component compiled on this thread exports and imports (`warp build --component`)
-	static COMPONENT_FUNCTIONS: std::cell::RefCell<crate::component_worlds::WorldFunctions> = std::cell::RefCell::new(Default::default());
+	static COMPONENT_FUNCTIONS: std::cell::RefCell<crate::lowering::component_worlds::WorldFunctions> = std::cell::RefCell::new(Default::default());
 }
 
 /// `run` compiling a program as a component exporting and importing `functions`: the emitter adds the canonical-ABI
 /// adapters of the exports and imports the imports from the core modules the world names
-pub fn for_a_component<T>(functions: crate::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
-	let before = COMPONENT_FUNCTIONS.with(|current| current.replace(functions));
-	let result = run();
-	COMPONENT_FUNCTIONS.with(|current| *current.borrow_mut() = before);
-	result
+pub fn for_a_component<T>(functions: crate::lowering::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
+	crate::util::scoped(&COMPONENT_FUNCTIONS, functions, run)
 }
 
 /// The functions the component being compiled exports, none for a program
-pub fn component_exports() -> Vec<(String, crate::component_worlds::Signature)> {
+pub fn component_exports() -> Vec<(String, crate::lowering::component_worlds::Signature)> {
 	COMPONENT_FUNCTIONS.with(|current| current.borrow().exports.clone())
 }
 
 /// The functions the component being compiled imports, none for a program
-pub fn component_imports() -> Vec<(String, crate::component_worlds::Signature)> {
+pub fn component_imports() -> Vec<(String, crate::lowering::component_worlds::Signature)> {
 	COMPONENT_FUNCTIONS.with(|current| current.borrow().imports.clone())
 }
 
-/// `run` compiling a program for a page: its page event handlers are expected, not warned about
+/// `run` compiling a program for a page: its page event handlers are expected, not warned about; it exports the
+/// reflection getters the page's host reads values with
 pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_A_PAGE, run)
+	with_flag(|mode| &mut mode.for_a_page, run)
 }
 
 /// `run` compiling a program for WAGI (Spin, Akamai Functions): lowering/serve.rs ends it in the answer of its routes
 /// to the request (lib/wagi.warp), and it exports `_start`
 pub fn for_wagi<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_WAGI, run)
-}
-
-pub fn is_for_wagi() -> bool {
-	FOR_WAGI.with(|wagi| wagi.get())
-}
-
-/// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
-pub fn is_for_a_page() -> bool {
-	FOR_A_PAGE.with(|page| page.get())
+	with_flag(|mode| &mut mode.for_wagi, run)
 }
 
 /// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
 /// field access (the browser) reads values with, so a browser program importing it copies values in and out
 pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_ANY_HOST, run)
-}
-
-pub fn is_for_any_host() -> bool {
-	FOR_ANY_HOST.with(|any| any.get())
+	with_flag(|mode| &mut mode.for_any_host, run)
 }
 
 /// `run` compiling a hosted program (`warp deploy`): without routes of its own, its value is the page at / and each of
 /// its functions a route
 pub fn for_hosting<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_HOSTING, run)
-}
-
-pub fn is_for_hosting() -> bool {
-	FOR_HOSTING.with(|hosting| hosting.get())
+	with_flag(|mode| &mut mode.for_hosting, run)
 }
 
 /// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
 /// first HTML, rendered at build time
 pub fn prerendering<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&PRERENDERING, run)
-}
-
-pub fn is_prerendering() -> bool {
-	PRERENDERING.with(|prerendering| prerendering.get())
+	with_flag(|mode| &mut mode.prerendering, run)
 }
 
 /// `run` compiling the shipped page, whose calls of server functions start as `values`
 pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
-	let before = SERVER_VALUES.with(|current| current.replace(values));
-	let result = run();
-	SERVER_VALUES.with(|current| current.replace(before));
-	result
+	crate::util::scoped(&SERVER_VALUES, values, run)
 }
 
 /// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
 /// and its page, without a `serve PORT {…}` statement
 pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
-	let before = SERVING_PORT.with(|current| current.replace(Some(port)));
-	let result = run();
-	SERVING_PORT.with(|current| current.set(before));
-	result
+	crate::util::scoped(&SERVING_PORT, Some(port), run)
 }
 
 pub fn serving_port() -> Option<u16> {
@@ -259,30 +277,17 @@ pub fn server_value(index: usize) -> Node {
 /// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
 /// and page·render as a page does (lowering/page_html.rs); nothing else of a page changes (it may still serve)
 pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&RENDERS_ITSELF, run)
-}
-
-/// Whether the program compiled now exports its renderer: a page's, or one rendering itself
-pub fn renders_itself() -> bool {
-	is_for_a_page() || RENDERS_ITSELF.with(|renders| renders.get())
+	with_flag(|mode| &mut mode.rendering_itself, run)
 }
 
 /// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
 pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_DEV, run)
-}
-
-pub fn is_for_dev() -> bool {
-	FOR_DEV.with(|dev| dev.get())
+	with_flag(|mode| &mut mode.for_dev, run)
 }
 
 /// `run` a program under `warp test`: its `test` lines and blocks run, its value is their summary (P209, P210)
 pub fn for_tests<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(&FOR_TESTS, run)
-}
-
-pub fn is_for_tests() -> bool {
-	FOR_TESTS.with(|tests| tests.get())
+	with_flag(|mode| &mut mode.for_tests, run)
 }
 
 /// A compiled program and the host capabilities its imports need.
@@ -295,69 +300,112 @@ pub struct CompiledModule {
 	pub(crate) needs_ffi: bool,
 }
 
+type Pass = fn(Node) -> Node;
+
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
-/// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: &[fn(Node) -> Node] = &[
+/// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved; one phase after the other
+const SOURCE_PHASES: [&[Pass]; 5] = [
+	SUGAR_PASSES,
+	DECLARATION_PASSES,
+	MODULE_PASSES,
+	SIGNAL_PASSES,
+	FUNCTION_PASSES,
+];
+/// The phases a used module's source runs before it joins the program (lower_module_source)
+const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
+
+/// The written forms as the parser keeps them: sugar, markup and web words, blocks, before any pass reads a declaration
+const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
+	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
+	crate::lowering::times_phrases::lower,
+	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
+	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
-	crate::shader_holes::lower,
-	crate::analyzer::lower_inline_unions,
+	crate::graphics::shader_holes::lower,
+	crate::lowering::declaration_forms::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
-	crate::scoped_handlers::lower,
+	crate::lowering::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
-	crate::component_worlds::lower,
+	crate::lowering::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
-	crate::channel_words::lower,
+	crate::lowering::channel_words::lower,
 	// `input{type="text"}`: HTML's attribute form is the attribute (markup_tags.rs), before soft_keywords refuses `class = …`
 	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
 	// `post "/todos" { … }` as a route
-	crate::markup_tags::lower_form_routes,
-	crate::markup_tags::lower_html_attributes,
+	crate::lowering::markup_tags::lower_form_routes,
+	crate::lowering::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
-	crate::soft_keywords::lower,
+	crate::lowering::soft_keywords::lower,
+	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
+	crate::lowering::parameter_patterns::lower,
+	// `fib(0) := 0; fib(n) := …`: a second definition of one shape is an error with a match as its fix
+	crate::lowering::definition_cases::lower,
+	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
+	crate::lowering::index_positions::mark_declarations,
 	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
-	crate::type_name_matching::lower_prefixed_declarations,
+	crate::lowering::type_name_matching::lower_prefixed_declarations,
 	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
 	crate::lowering::test_blocks::lower,
+	// card plain-enum: `enum Coin { Penny, Dime }` is the sum type of its cases, `Coin.Dime` is Dime, before sum_variants
+	crate::lowering::plain_enums::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
 	crate::lowering::sum_variants::lower,
+	// card match-exhaustive: a match on a declared sum type or enum that misses a case, while its arms are as written
+	crate::lowering::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
-	crate::late_binding::split_global_assignments,
+	crate::lowering::late_binding::split_global_assignments,
 	// `xs from #2 to #4`, `xs up to second`: a slice by position (word_slices.rs), before a pass reads `to` as a range
-	crate::word_slices::lower,
+	crate::lowering::word_slices::lower,
 	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
-	crate::list_phrases::lower,
+	crate::lowering::list_phrases::lower,
 	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
-	crate::serve::with_default_routes,
+	crate::lowering::serve::with_default_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
-	crate::serve::bind_path_parameters,
+	crate::lowering::serve::bind_path_parameters,
+	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
+	crate::lowering::named_patterns::lower,
+	// `x is {host: h}`: h is the unit hour, a weak warning while it is still the word (card pattern-unit-name)
+	crate::lowering::switch::check_unit_names,
+	// `tree find {type: "image", src}` and `tree replace p with q`: each a recursive walker of its own (tree_walks.rs)
+	crate::lowering::tree_walks::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
-	crate::comprehensions::lower_where,
+	crate::lowering::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
-	crate::music_words::lower_live_loops,
-	crate::go_blocks::lower,
+	crate::lowering::music_words::lower_live_loops,
+	crate::lowering::go_blocks::lower,
 	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
-	crate::references::lower,
+	crate::lowering::references::lower,
 	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call
-	crate::serve::lower,
+	crate::lowering::serve::lower,
 	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
 	// reads `p.note{…}` as a tag
-	crate::style_rules::lower,
+	crate::lowering::style_rules::lower,
+	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options
+	// of a select are read
+	crate::lowering::glued_attributes::lower,
+	// `select{ bind: fruit; ["apple" "pear"] }`: its options spelled out (select_options.rs), before markup_tags makes the
+	// loop over a list variable's options a comprehension and any pass reads the bind
+	crate::lowering::select_options::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
-	crate::markup_tags::lower,
+	crate::lowering::markup_tags::lower,
 	// `li{ transition: fade 200ms }`: words as data, the attribute data-warp-transition (transitions.rs), before any pass
 	// reads fade as a variable
-	crate::transitions::lower,
+	crate::lowering::transitions::lower,
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
-	crate::introspection::lower,
+	crate::lowering::introspection::lower,
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
-	crate::reflection::lower,
+	crate::lowering::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
-	crate::word_operators::lower,
+	crate::lowering::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
-	crate::pipes::lower,
+	crate::lowering::pipes::lower,
+];
+
+/// Declarations: files, units, type aliases, traits, classes and their methods, foreign modules, the used modules' words
+const DECLARATION_PASSES: &[Pass] = &[
 	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
 	// `class Foo;` takes in the definitions after it before any pass reads class bodies (wiki/type.md)
 	crate::lowering::file_declarations::lower,
@@ -369,166 +417,201 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
-	crate::type_aliases::lower,
+	crate::lowering::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
-	crate::traits::lower_trait_parameters,
+	crate::lowering::traits::lower_trait_parameters,
 	// `people: [Person] = database.people`: the table's rows, inserts and field changes written through
 	// (database_tables.rs), before class_methods lowers the class (its row id) and stored_values reads `database.people`
-	crate::database_tables::lower,
+	crate::lowering::database_tables::lower,
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
-	crate::reflection::lower_objects,
+	crate::lowering::reflection::lower_objects,
 	// `y certainly < x` is `certainly(y < x)` before class_methods compares the amounts of run-time quantities
 	crate::uncertain::lower_certainty,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	// `for x in c` of an object with next() (generators.rs) before class_methods lowers the next() calls
-	crate::generators::lower_iterators,
-	crate::class_methods::lower,
+	crate::lowering::generators::lower_iterators,
+	crate::lowering::class_methods::lower,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
-	crate::reflection::lower_component_words,
+	crate::lowering::reflection::lower_component_words,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
-	crate::foreign_modules::lower,
+	crate::lowering::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
-	crate::optional_casts::lower,
-	crate::phrase_calls::lower,
-	crate::std_aliases::lower,
-	crate::class_methods::lower_json_classes,
-	crate::welcome_forms::lower,
-	crate::analyzer::lower_kebab_members,
-	crate::number_keys::lower,
+	crate::lowering::optional_casts::lower,
+	crate::lowering::phrase_calls::lower,
+	crate::lowering::std_aliases::lower,
+	crate::lowering::class_methods::lower_json_classes,
+	crate::lowering::welcome_forms::lower,
+	crate::lowering::kebab_names::lower_kebab_members,
+	crate::lowering::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
-	crate::object_groups::lower,
+	crate::lowering::object_groups::lower,
 	// `{a:1}` becomes the map of its one entry where a map is needed (one_entry_maps.rs), before a pass lowers m.pop(k)
-	crate::one_entry_maps::lower,
+	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
-	crate::music_words::lower,
-	crate::routes::lower,
-	crate::page_html::use_markup,
+	crate::lowering::music_words::lower,
+	crate::lowering::routes::lower,
+	crate::lowering::page_html::use_markup,
+];
+
+/// The used modules join the program (modules::resolve), then the passes that read their words again
+const MODULE_PASSES: &[Pass] = &[
 	crate::modules::resolve,
 	// again: a used module's phrases, `play 440Hz for 0.5s` of lib/sound.warp's `to play x for d:`
-	crate::phrase_calls::lower,
+	crate::lowering::phrase_calls::lower,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
-	crate::reflection::lower_module_words,
+	crate::lowering::reflection::lower_module_words,
 	// again: `dir(is_square)`, `is_square.params` of a used module's function, which joined the program in resolve
-	crate::reflection::lower,
+	crate::lowering::reflection::lower,
+];
+
+/// Stored values, system values, signals and events, pages
+const SIGNAL_PASSES: &[Pass] = &[
 	crate::units::lower_sleep_durations,
 	crate::units::lower_quantity_comparisons,
-	crate::stored_values::lower,
-	crate::mutation::lower_deletes,
-	crate::undo_history::lower,
-	crate::declarations::lower_tasks,
-	crate::reflection::lower_unknown_dir,
-	crate::system_values::name,
-	crate::signal_values::poll_shared,
-	crate::system_values::read,
-	crate::shared_arrays::lower,
-	crate::fetch_signals::lower,
-	crate::system_signals::lower,
-	crate::element_events::lower_binds,
-	crate::component_state::lower,
-	crate::element_events::lower,
-	crate::event_signals::lower,
-	crate::page_html::lower,
-	crate::signal_values::subscribe,
-	crate::variable_signals::lower,
-	crate::signal_values::lower,
-	crate::declarations::lower_c_functions,
-	crate::declarations::lower_bare_declarations,
-	crate::declarations::lower_spaced_definitions,
+	crate::lowering::stored_values::lower,
+	crate::lowering::mutation::lower_deletes,
+	crate::lowering::undo_history::lower,
+	crate::lowering::declarations::lower_tasks,
+	crate::lowering::reflection::lower_unknown_dir,
+	// `held_key == LEFT`: the key words, before system_values reads `held_key`
+	crate::lowering::key_names::lower_held_comparisons,
+	crate::lowering::system_values::name,
+	crate::lowering::signal_values::poll_shared,
+	crate::lowering::system_values::read,
+	crate::lowering::shared_arrays::lower,
+	crate::lowering::fetch_signals::lower,
+	// `on key { if key == ESC … }`: the pressed key and the key words, before system_signals reads the key handlers
+	crate::lowering::key_names::lower,
+	crate::lowering::system_signals::lower,
+	crate::lowering::element_events::lower_binds,
+	crate::lowering::component_state::lower,
+	crate::lowering::element_events::lower,
+	crate::lowering::event_signals::lower,
+	crate::lowering::page_html::lower,
+	crate::lowering::signal_values::subscribe,
+	crate::lowering::variable_signals::lower,
+	crate::lowering::signal_values::lower,
+];
+
+/// Functions and their calls: declarations, parameters, blocks, mutation, getters
+const FUNCTION_PASSES: &[Pass] = &[
+	crate::lowering::declarations::lower_c_functions,
+	crate::lowering::declarations::lower_bare_declarations,
+	crate::lowering::declarations::lower_spaced_definitions,
 	crate::lowering::number_words::lower,
-	crate::parameter_shapes::lower,
-	crate::ruby_blocks::lower,
-	crate::generators::lower,
-	crate::declarations::lower_sized_arrays,
-	crate::result_word::lower,
-	crate::picked_calls::lower,
-	crate::variadic::lower,
-	crate::nonlocal_cells::lower_lambdas,
-	crate::named_arguments::lower,
-	crate::comprehensions::lower,
-	crate::library_words::lower_function_methods,
-	crate::tuples::lower,
-	crate::run_time_blocks::warn_unresolved,
-	crate::run_time_blocks::lower_interpret,
-	crate::blocks::lower,
-	crate::getters::lower,
-	crate::run_time_blocks::lower_run_time_bangs,
-	crate::mutation::warn_discarded,
-	crate::mutation::lower,
-	crate::nested_index::lower,
-	crate::field_elements::lower,
+	crate::lowering::parameter_shapes::lower,
+	crate::lowering::ruby_blocks::lower,
+	crate::lowering::generators::lower,
+	crate::lowering::declarations::lower_sized_arrays,
+	crate::lowering::result_word::lower,
+	crate::lowering::picked_calls::lower,
+	crate::lowering::variadic::lower,
+	crate::lowering::nonlocal_cells::lower_lambdas,
+	crate::lowering::named_arguments::lower,
+	crate::lowering::comprehensions::lower,
+	crate::lowering::library_words::lower_function_methods,
+	crate::lowering::tuples::lower,
+	// `parse("n * 1")` of a constant text is `data (n * 1)` (card parse-word), before blocks.rs reads data
+	crate::lowering::parse_word::lower,
+	crate::lowering::run_time_blocks::warn_unresolved,
+	crate::lowering::run_time_blocks::lower_interpret,
+	crate::lowering::blocks::lower,
+	// again for the `data e` that parse_word and blocks made (lower_for_emission unseals them)
+	crate::lowering::blocks::seal_quoted,
+	crate::lowering::getters::lower,
+	crate::lowering::run_time_blocks::lower_run_time_bangs,
+	crate::lowering::mutation::warn_discarded,
+	crate::lowering::mutation::lower,
+	crate::lowering::nested_index::lower,
+	crate::lowering::field_elements::lower,
 	crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
-	crate::getters::lower,
-	crate::type_name_matching::lower,
-	crate::meta_entries::lower,
-	crate::versions::lower_versions,
-	crate::analyzer::lower_negated_calls,
+	crate::lowering::getters::lower,
+	crate::lowering::type_name_matching::lower,
+	crate::lowering::meta_entries::lower,
+	crate::lowering::versions::lower_versions,
+	crate::lowering::negated_calls::lower_negated_calls,
 	// `lo(a:number) := a.low; lo(5 ± 1)`: a number parameter of a program with ± values holds one (uncertain.rs)
 	crate::uncertain::lower_interval_parameters,
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: &[fn(Node) -> Node] = &[
+const MEANING_PASSES: &[Pass] = &[
 	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
 	crate::lowering::list_element_checks::lower,
-	crate::lazy_ranges::lower,
-	crate::declarations::resolve_tasks,
-	crate::traits::lower_declarations,
-	crate::type_tests::lower,
-	crate::ambiguous_forms::lower,
-	crate::analyzer::lower_list_times,
+	crate::lowering::lazy_ranges::lower,
+	crate::lowering::declarations::resolve_tasks,
+	crate::lowering::traits::lower_declarations,
+	crate::lowering::type_tests::lower,
+	crate::lowering::ambiguous_forms::lower,
+	crate::lowering::declaration_forms::lower_list_times,
 	// before any pass reads a call's arity: `square square 2` nests, `f(a)` and `f(a, b)` become `f·1`, `f·2`
-	crate::broadcasting::lower_scalar_element_wise,
-	crate::broadcasting::lower_prefix_calls,
-	crate::overloads::lower_arity_overloads,
-	crate::broadcasting::lower,
-	crate::library_words::lower_count_in,
-	crate::lambdas::lower,
-	crate::function_values::lower,
-	crate::closures::lower,
-	crate::lambdas::lower_strict,
-	crate::broadcasting::lower_several_arguments,
+	crate::lowering::broadcasting::lower_scalar_element_wise,
+	crate::lowering::broadcasting::lower_prefix_calls,
+	crate::lowering::overloads::lower_arity_overloads,
+	crate::lowering::broadcasting::lower,
+	crate::lowering::library_words::lower_count_in,
+	crate::lowering::lambdas::lower,
+	crate::lowering::function_values::lower,
+	crate::lowering::closures::lower,
+	crate::lowering::lambdas::lower_strict,
+	crate::lowering::broadcasting::lower_several_arguments,
 	crate::real::lower,
-	crate::type_constructor::lower,
-	crate::printable::lower,
-	crate::overloads::lower,
-	crate::traits::lower_conformances,
-	crate::min_max::lower,
-	crate::declarations::lower,
-	crate::switch::lower,
-	crate::phrase_words::lower,
-	crate::library_words::lower,
-	crate::number_keys::lower_key_words,
-	crate::traits::lower_dispatch,
-	crate::memoization::lower,
+	crate::lowering::type_constructor::lower,
+	crate::lowering::printable::lower,
+	crate::lowering::overloads::lower,
+	crate::lowering::traits::lower_conformances,
+	crate::lowering::min_max::lower,
+	crate::lowering::declarations::lower,
+	crate::lowering::switch::lower,
+	crate::lowering::variadic::lower_list_spreads,
+	crate::lowering::phrase_words::lower,
+	crate::lowering::library_words::lower,
+	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
+	crate::lowering::index_positions::lower,
+	crate::lowering::number_keys::lower_key_words,
+	crate::lowering::traits::lower_dispatch,
+	crate::lowering::memoization::lower,
 ];
 
-/// A module's source after the passes the program ran before its `use` was resolved (those before modules::resolve):
+/// A module's source after the passes the program ran before its `use` was resolved (MODULE_SOURCE_PHASES):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
 /// become calls) and serve::with_default_routes (a module's functions are no routes of a hosted program).
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	type Pass = fn(Node) -> Node;
-	let program_only: [Pass; 2] = [crate::getters::lower, crate::serve::with_default_routes];
-	let resolved_at = SOURCE_PASSES
+	let program_only: [Pass; 2] = [
+		crate::lowering::getters::lower,
+		crate::lowering::serve::with_default_routes,
+	];
+	MODULE_SOURCE_PHASES
 		.iter()
-		.position(|pass| std::ptr::fn_addr_eq(*pass, crate::modules::resolve as Pass))
-		.expect("modules::resolve is a source pass");
-	SOURCE_PASSES[..resolved_at]
-		.iter()
+		.flat_map(|phase| phase.iter())
 		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(module, |module, pass| pass(module))
+		.fold(crate::lowering::for_loop::headers::lower(module), |module, pass| {
+			pass(module)
+		})
 }
 
-fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {
+fn run_passes(node: Node, passes: &[Pass]) -> Node {
 	passes.iter().fold(node, |node, pass| pass(node))
 }
 
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
 /// (a constant answer, an error, a denied capability).
 fn lower_for_emission(node: Node) -> Result<Node, Node> {
+	use crate::lowering::blocks::unsealed;
+	crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node))
+		.map(unsealed)
+		.map_err(unsealed)
+}
+
+fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
+	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
+	let node = crate::lowering::for_loop::headers::lower(node);
+	// `data e` as written: no sugar pass rewrites inside e
+	let node = crate::lowering::blocks::seal_quoted(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
@@ -539,13 +622,16 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
 		return Err(misread.into_error());
 	}
+	if let Some(unfillable) = crate::lowering::class_methods::check_self_typed_fields(&node) {
+		return Err(unfillable.into_error());
+	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = run_passes(node, SOURCE_PASSES);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	let node = SOURCE_PHASES.iter().fold(node, |node, phase| run_passes(node, phase));
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
@@ -558,9 +644,6 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(node);
 	}
 	let node = crate::time::lower(node);
-	if let Some(answer) = crate::units::answer(&node) {
-		return Err(answer);
-	}
 	// quantities in loops and branches: SI amounts at run time, the units checked here (static units, stage 1)
 	let node = match crate::units::static_units::lower(&node) {
 		Some(lowered) => lowered?,
@@ -570,32 +653,39 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = run_passes(node, MEANING_PASSES);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
 	let node = effects.answer_queries(node);
-	if let Some(error) = node.first_error() {
-		return Err(error.clone());
+	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
-		return Err(crate::node::error(&format!(
-			"capability denied: {name} needs the {} capability, which eval does not grant",
-			capability.name()
-		)));
+		return Err(crate::node::error(&if crate::sandbox::is_sandboxed() {
+			crate::sandbox::denial(&name, capability.name())
+		} else {
+			format!(
+				"capability denied: {name} needs the {} capability, which eval does not grant",
+				capability.name()
+			)
+		}));
 	}
-	let node =
-		crate::analyzer::resolve_main_variable_assignments(crate::late_binding::lower(without_constraints(node))?)?;
+	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
+		without_constraints(node),
+	)?)?;
 	if let Some(error) = crate::analyzer::diagnose(&node) {
 		return Err(error);
 	}
 	crate::diagnostic::report(&crate::analyzer::lint(&node))?;
-	Ok(crate::analyzer::indexed_parameter_copies(crate::inlining::lower(
-		crate::analyzer::lower_declarations(crate::analyzer::resolve_data_scope(node)),
-	)))
+	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(
+		crate::lowering::inlining::lower(crate::lowering::declaration_forms::lower_declarations(
+			crate::lowering::kebab_names::resolve_data_scope(node),
+		)),
+	))
 }
 
 /// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value
@@ -614,26 +704,21 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 /// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
-	PRINTS_RESULT.with(|prints| prints.set(false));
+	set_mode_flag(|mode| &mut mode.prints_result, false);
 	// the routes first: a program ending with a route prints the page its path shows, not the route statement
-	let compiled = compile_program(code, |program| printing_result(crate::routes::lower(program)));
-	PRINTS_RESULT.with(|prints| prints.set(false));
+	let compiled = compile_program(code, |program| printing_result(crate::lowering::routes::lower(program)));
+	set_mode_flag(|mode| &mut mode.prints_result, false);
 	compiled
-}
-
-/// Whether the program compiled now ends in the print of its value that compile_printing_result added: that print
-/// shows nothing for ø (a loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's
-/// own prints ø
-pub fn prints_result() -> bool {
-	PRINTS_RESULT.with(|prints| prints.get())
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let source = program.clone();
-		let node = crate::folding::precompute(lower_for_emission(program)?);
-		let reflected = crate::reflection::meta_entries(&source, &node, code);
+		let node = crate::lowering::folding::precompute(crate::lowering::folding::refuse_result_misfits(
+			lower_for_emission(program)?,
+		)?);
+		let reflected = crate::lowering::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
 		let entries: Vec<_> = crate::units::static_units::result_units_entry()
@@ -665,7 +750,7 @@ fn printing_result(program: Node) -> Node {
 			statement
 		}
 		value => {
-			PRINTS_RESULT.with(|prints| prints.set(true));
+			set_mode_flag(|mode| &mut mode.prints_result, true);
 			crate::warp_parser::print_call([value])
 		}
 	}
@@ -678,7 +763,7 @@ fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
 	}
 	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, format!(
 		"this module runs blocks known only at run time: its host must provide host.{} (the warp CLI, or web/playground/host.js, which loads warp.wasm on first use)",
-		crate::host::RUN_BLOCK))])
+		crate::host::RUN_BLOCK)).weak()])
 }
 
 /// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.
@@ -738,8 +823,8 @@ fn checked_markup(result: Node) -> Node {
 	result
 }
 
-/// The words of an exception (library_words lowers them to the call raise(X))
-pub(crate) const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
+/// The words of an exception (library_words lowers them to the call raise(X)), unless the program defines one
+pub(crate) const RAISE_WORDS: [&str; 4] = ["raise", "throw", "fail", "panic"];
 
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
 /// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
@@ -791,10 +876,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 			None => run_block_program(bound, program_of),
 		};
 	match result.drop_meta() {
-		Node::Error(message) => Err(format!(
-			"the block {written} failed: {}",
-			message.serialize().trim_matches('"')
-		)),
+		Node::Error(message) => Err(format!("the block {written} failed: {}", message.drop_meta())),
 		_ => Ok(result),
 	}
 }
@@ -808,7 +890,7 @@ fn as_written(value: Node) -> Node {
 	match value.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
 		_ => Node::List(
-			vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), value],
+			vec![Node::Symbol(crate::lowering::blocks::DATA_WORD.to_string()), value],
 			Bracket::None,
 			Separator::Space,
 		),
@@ -944,7 +1026,7 @@ pub fn cannot_hand_back(value: &Node) -> String {
 	)
 }
 
-/// The message of `error("…")`, or of `raise …`, which always fails the run
+/// The message of `error "…"`, or of `raise …`, which always fails the run
 pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Round, _)

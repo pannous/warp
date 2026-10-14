@@ -6,25 +6,31 @@
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
 use super::nodes::{call, children_rewritten, key, Counter};
-use super::words::SUM_WORD;
-use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
+use crate::analyzer::{call_name, counting_method};
 use crate::context::Context;
+use crate::declaration_forms::is_list_mutating_method;
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
+use crate::words::SUM_WORD;
+use crate::words::{CODEPOINT, MAP_KEYS, SLICE};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
+mod objects;
+pub(crate) use objects::*;
+mod counts;
+pub use counts::*;
+
 /// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
 /// JavaScript's spellings too) and `m.get(k)`/`m.get(k, default)`. A key is found by its letters, quoted or not.
-pub const MAP_KEYS: &str = "map_keys";
 pub const MAP_VALUES: &str = "map_values";
 /// map_entries(xs): the `key:value` entries of a map as a list (a one-entry map `{a:1}` is the entry itself), else xs
 pub const MAP_ENTRIES: &str = "map_entries";
 pub const COLLECTION_CONTAINS: &str = "collection_contains";
-/// collection_position(xs, x): `x in xs`, the 1-based position of x in a list (0 when absent), 1/0 for a map key
+/// collection_position(xs, x): `xs.index_of(x)`, the 1-based position of x in a list (0 when absent), 1/0 for a map key
 pub const COLLECTION_POSITION: &str = "collection_position";
 pub const MAP_GET_OR: &str = "map_get_or";
 /// map_without(map, key): the map without the key's entry, what `m.remove(k)` stores in m (analyzer removed_key)
@@ -57,7 +63,8 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 29] = [
+const SYNONYMS: [(&str, &[&str]); 31] = [
+	(crate::wasm_emitter::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
 	(MAP_KEYS, &["keys"]),
@@ -65,7 +72,7 @@ const SYNONYMS: [(&str, &[&str]); 29] = [
 	(MAP_ENTRIES, &[]),
 	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
 	(MAP_GET_OR, &["get"]),
-	// P35 default: `xs.index_of(x)` is the 1-based position, as `x in xs` (0 when absent)
+	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
 	("chars", &[]),
 	("upper", &["uppercase"]),
@@ -86,11 +93,12 @@ const SYNONYMS: [(&str, &[&str]); 29] = [
 	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
+	("is_space", &["is_whitespace", "isspace"]),
 	("nearest", &[]),
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
 	(DICT_WORD, &[]),
 	(FROMKEYS, &[]),
-	(crate::mutation::UNWRAP, &[]),
+	(crate::words::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
@@ -122,10 +130,6 @@ pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 /// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
 /// compiler it is `ord`, since `codepoint` is also a type word
 pub const ORD: &str = "ord";
-/// P74 (user, 2026-10-05): "make codepoint the default name": the spelling hints, fixes and docs use
-pub const CODEPOINT: &str = "codepoint";
-/// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
-pub const SLICE: &str = "slice";
 /// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
 /// `s.split` splits at spaces (left_out_argument)
 const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT, 1)];
@@ -174,9 +178,9 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(
-		crate::mutation::UNWRAP,
+		crate::words::UNWRAP,
 		1,
-		"if hidden_value == ø then error(\"unwrapped ø\") else hidden_value",
+		"if hidden_value == ø then error \"unwrapped ø\" else hidden_value",
 	),
 ];
 const IS_DIGIT: &str = "is_digit";
@@ -196,7 +200,7 @@ const ARITY_VARIANTS: [(&str, usize, &str); 3] = [
 	("last", 2, "last_items"),
 ];
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
-/// and popped_rest, `x.clear()` to cleared (declaration_lowering removed_key, cleared_collection)
+/// and popped_rest, `x.clear()` to cleared (declaration_forms removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
 const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
 	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
@@ -278,6 +282,16 @@ pub fn is_field_update_of(name: &str, value: &Node) -> bool {
 		return false;
 	};
 	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
+}
+
+/// Library words of a list, text or map that refuse a number (`sum(5)`, `sort(5)`): a user's typed method of one is
+/// what a number would call (traits/generics.rs)
+const COLLECTION_WORDS: [&str; 9] = [
+	SUM_WORD, "sort", "reverse", "first", "last", "keys", "values", "chars", "upper",
+];
+
+pub fn takes_no_number(name: &str) -> bool {
+	COLLECTION_WORDS.contains(&canonical_spelling(name))
 }
 
 pub fn is_runtime_word(name: &str) -> bool {
@@ -364,7 +378,7 @@ pub fn lower(node: Node) -> Node {
 		.map(|(operation, _)| operation.to_string())
 		.collect();
 	shadowed.extend(variants);
-	collect_assigned_names(&node, &mut shadowed);
+	crate::type_tests::collect_outer_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);
 
@@ -378,7 +392,7 @@ pub fn lower(node: Node) -> Node {
 	let call_results = call_results(&node, &context);
 	Lowering {
 		context,
-		shadowed,
+		shadowed: RefCell::new(shadowed),
 		objects,
 		plain,
 		instances,
@@ -405,10 +419,12 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 	names
 }
 
-/// `raise X`, `throw X`, `raise(X)`: the call `raise(X)`; `raise error("m")` raises the message m
-fn raise_call(items: &[Node]) -> Option<Node> {
+/// `raise X`, `throw X`, `fail X`, `panic X`, `raise(X)`: the call `raise(X)`; `raise error "m"` raises the message m.
+/// A word the program defines (`shadowed`) is its own
+fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 	let [word, raised] = items else { return None };
-	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| word.is_symbol(raise)) {
+	let is_raise_word = |raise: &&str| word.is_symbol(raise) && !shadowed.contains(*raise);
+	if !crate::pipeline::RAISE_WORDS.iter().any(is_raise_word) {
 		return None;
 	}
 	let message = crate::pipeline::returned_error_message(raised)
@@ -422,94 +438,6 @@ fn raise_call(items: &[Node]) -> Option<Node> {
 	Some(call(crate::wasm_emitter::text_builtins::RAISE, vec![message]))
 }
 
-/// The pass of `count x in y` (count_in), before the lambdas its rewrite uses are lowered and before `x in y` is membership;
-/// also `y.count(x)` and `count(y, x)` (card banana-count) unless the program defines its own count
-pub fn lower_count_in(node: Node) -> Node {
-	let mut found = Vec::new();
-	crate::function_values::definitions(&node, &mut found);
-	let library_count = !found.iter().any(|definition| definition.name == COUNT_WORD);
-	lower_counts(node, library_count)
-}
-
-fn lower_counts(node: Node, library_count: bool) -> Node {
-	let counted = |node: &Node| match node {
-		Node::List(items, bracket, _) => {
-			count_in(items).or_else(|| library_count.then(|| count_call(items, bracket)).flatten())
-		}
-		Node::Key(receiver, Op::Dot, call) if library_count => count_method(receiver, call),
-		_ => None,
-	};
-	if let Some(occurrences) = counted(&node) {
-		return lower_counts(occurrences, library_count);
-	}
-	children_rewritten(node, |child| lower_counts(child, library_count))
-}
-
-/// `count(y, x)` is `count x in y`
-fn count_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
-	let [count, haystack, needle] = items else { return None };
-	(*bracket == Bracket::Round && count.is_symbol(COUNT_WORD))
-		.then(|| counted_in(count, needle, haystack))
-		.flatten()
-}
-
-/// `y.count(x)` is `count x in y`
-fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
-	let Node::List(items, _, _) = call.drop_meta() else {
-		return None;
-	};
-	let [count, needle] = items.as_slice() else { return None };
-	count
-		.is_symbol(COUNT_WORD)
-		.then(|| counted_in(count, needle, receiver))
-		.flatten()
-}
-
-fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
-	count_in(&[count.clone(), needle.clone(), symbol(IN_WORD), haystack.clone()])
-}
-
-/// `count x in y`: how often x occurs in y. A text of several characters counts as a substring of a text (`count "an"
-/// in "banana"` → 2), anything else as an item of a list or a character of a text; `count bytes in t` is `t.bytes`
-fn count_in(items: &[Node]) -> Option<Node> {
-	// `count 'a' in s` arrives as the words or as `count ('a' in s)`
-	let phrase: Vec<Node> = match items {
-		[count, phrase] => match phrase.drop_meta() {
-			Node::List(rest, Bracket::None, _) => [vec![count.clone()], rest.clone()].concat(),
-			_ => return None,
-		},
-		_ => items.to_vec(),
-	};
-	let [count, needle, in_word, haystack @ ..] = phrase.as_slice() else {
-		return None;
-	};
-	if !count.is_symbol(COUNT_WORD) || !in_word.is_symbol(IN_WORD) || haystack.is_empty() {
-		return None;
-	}
-	let haystack = match haystack {
-		[single] => single.clone(),
-		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-	};
-	if let Some(unit) = matches!(needle.drop_meta(), Node::Symbol(_))
-		.then(|| crate::analyzer::text_unit(&needle.name()))
-		.flatten()
-	{
-		return Some(key(haystack, Op::Dot, symbol(unit)));
-	}
-	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1)
-		&& !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
-	let template = if substring {
-		COUNT_SUBSTRING_TEMPLATE
-	} else {
-		COUNT_ITEM_TEMPLATE
-	};
-	Some(substitute(
-		substitute(parse(template), COUNT_HAYSTACK, &haystack),
-		COUNT_NEEDLE,
-		needle,
-	))
-}
-
 /// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding, extremum,
 /// text or libm function the program does not define. Runs first, so the passes that know these calls see their plain form; user
 /// functions are called so later, in `method_call`
@@ -521,7 +449,7 @@ pub fn lower_function_methods(node: Node) -> Node {
 		.map(|(name, function)| (name.clone(), function.params.len()))
 		.collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
-	collect_assigned_names(&node, &mut defined);
+	crate::type_tests::collect_outer_assigned_names(&node, &mut defined);
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
 	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
 	let is_builtin = |name: &str, arguments: usize| {
@@ -535,14 +463,29 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// are specialised (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
 	let node = list_constructor_calls(node, &defined);
-	function_methods_as_calls(node, &|name, arguments| {
+	function_methods_as_calls(node, &defined, &|name, arguments, defined| {
 		(is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments)
 	})
+}
+
+/// A function definition rewritten in its own scope: the names its body assigns join the defined ones there only
+fn in_function_scope(
+	node: &Node,
+	defined: &HashSet<String>,
+	rewrite: impl Fn(Node, &HashSet<String>) -> Node,
+) -> Option<Node> {
+	let (head, body, rebuild) = crate::type_tests::function_definition(node)?;
+	let mut locals = defined.clone();
+	collect_assigned_names(&body, &mut locals);
+	Some(rebuild(head, rewrite(body, &locals)))
 }
 
 /// Python's `list()`: the empty list, as `[]` parses; Kotlin's `listOf(1, 2)`, `arrayOf`, `mutableListOf`: the list
 /// `[1, 2]` (`listOf()` is `[]` too); a word the program defines keeps its call
 fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
+	if let Some(scoped) = in_function_scope(&node, defined, list_constructor_calls) {
+		return scoped;
+	}
 	let is_constructor = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if (name == LIST_WORD || LIST_CONSTRUCTORS.contains(&name.as_str())) && !defined.contains(name));
 	match node {
 		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(is_constructor) => {
@@ -575,13 +518,22 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 	}
 }
 
-fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bool) -> Node {
-	let lowered = |node: Node| function_methods_as_calls(node, is_function);
+fn function_methods_as_calls(
+	node: Node,
+	defined: &HashSet<String>,
+	is_function: &dyn Fn(&str, usize, &HashSet<String>) -> bool,
+) -> Node {
+	if let Some(scoped) = in_function_scope(&node, defined, |body, locals| {
+		function_methods_as_calls(body, locals, is_function)
+	}) {
+		return scoped;
+	}
+	let lowered = |node: Node| function_methods_as_calls(node, defined, is_function);
 	match node {
 		Node::Key(receiver, Op::Dot, method) => {
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
-				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1)) => {
+				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
 					Node::List(
 						[vec![items[0].clone(), receiver], items[1..].to_vec()].concat(),
 						Bracket::Round,
@@ -620,214 +572,11 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 	key(place, update, Node::int(1))
 }
 
-/// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
-fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
-	let key = match position {
-		Node::Meta { data, .. } => Node::Meta {
-			node: Box::new(text(name)),
-			data: data.clone(),
-		},
-		_ => text(name),
-	};
-	crate::warp_parser::subscript(object.clone(), key)
-}
-
-/// A field lookup by a name, as `field_lookup` builds it: its value is an object whenever the field holds one
-/// A field read by name (`p.x`, `p["x"]`), an element of one (`company.employees#2`), or either in parentheses: the
-/// value may be an object
-fn is_field_lookup(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Key(_, Op::Hash, index) if crate::warp_parser::subscript_key(index).and_then(field_name).is_some() => {
-			true
-		}
-		Node::Key(list, Op::Hash, _) => is_field_lookup(list),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_field_lookup(&items[0]),
-		_ => false,
-	}
-}
-
-/// The entries of an object literal `{a:1 b:2}` (or `{a:1}`): every item is a `key:value`
-pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
-	let single;
-	let items: &[Node] = match node.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
-		// a named tuple `(x: 10, y: 20)`: its entries are fields too
-		Node::List(items, Bracket::Round, _)
-			if items.len() > 1
-				&& items
-					.iter()
-					.all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
-		{
-			items
-		}
-		Node::Key(_, Op::Colon, _) => {
-			single = [node.clone()];
-			&single
-		}
-		_ => return None,
-	};
-	items
-		.iter()
-		.map(|item| match item.drop_meta() {
-			Node::Key(key, Op::Colon, value) => Some((field_name(key)?, value.as_ref().clone())),
-			_ => None,
-		})
-		.collect()
-}
-
-/// The field name of a subscript `p["name"]`, as `p.name` lowers: None for an element `xs#i`
-fn subscript_field(index: &Node) -> Option<String> {
-	match crate::warp_parser::subscript_key(index)?.drop_meta() {
-		Node::Text(name) => Some(name.clone()),
-		Node::Char(letter) => Some(letter.to_string()),
-		_ => None,
-	}
-}
-
-fn field_name(key: &Node) -> Option<String> {
-	match key.drop_meta() {
-		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),
-		Node::Char(letter) => Some(letter.to_string()), // `{"A": 1}`: a quoted one-letter key
-		_ => None,
-	}
-}
-
-/// Variables that are only ever assigned an object literal, with that literal (`None` for a variable assigned anything
-/// else too), and the variables assigned a plain value (`plain`: a number, text or character, or a list of them)
-#[derive(Default)]
-struct AssignedObjects {
-	objects: HashMap<String, Option<Node>>,
-	plain: HashSet<String>,
-	/// variables also bound to what may hold an object, so not plain: a loop's `for item in basket`, `p = people#1`
-	rebound: HashSet<String>,
-}
-
-fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
-	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			if let Node::Symbol(name) = target.drop_meta() {
-				if is_plain_literal(value) {
-					assigned.plain.insert(name.clone());
-				}
-				if may_hold_object(value) {
-					assigned.rebound.insert(name.clone());
-				}
-				let copied = match value.drop_meta() {
-					Node::Symbol(other) => assigned.objects.get(other).cloned().flatten(), // `q=p` is the same object
-					_ => None,
-				};
-				let literal = copied.or_else(|| object_entries(value).map(|_| value.as_ref().clone()));
-				let both_objects =
-					literal.is_some() && assigned.objects.get(name).is_none_or(|earlier| earlier.is_some());
-				assigned
-					.objects
-					.insert(name.clone(), if both_objects { literal } else { None });
-			}
-			collect_assigned_objects(value, assigned);
-		}
-		Node::Key(left, _, right) => {
-			collect_assigned_objects(left, assigned);
-			collect_assigned_objects(right, assigned);
-		}
-		Node::List(items, _, _) => {
-			if let Some(variable) = loop_variable(items) {
-				assigned.rebound.insert(variable);
-			}
-			items.iter().for_each(|item| collect_assigned_objects(item, assigned))
-		}
-		_ => {}
-	}
-}
-
-/// An element, a field, a call's result or an object literal
-fn may_hold_object(value: &Node) -> bool {
-	match value.drop_meta() {
-		Node::Key(_, Op::Hash | Op::Dot, _) => true,
-		Node::List(items, Bracket::Round, Separator::None) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-		}
-		other => object_entries(other).is_some(),
-	}
-}
-
-/// The variable `item` of a loop `for item in basket {…}`, `for each item in basket {…}`
-fn loop_variable(words: &[Node]) -> Option<String> {
-	let words: Vec<String> = words.iter().take(4).map(|word| word.drop_meta().name()).collect();
-	match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
-		["for", "each", variable, "in"] | ["for", variable, "in", ..] => Some(variable.to_string()),
-		_ => None,
-	}
-}
-
-/// A number, text or character literal, or a list literal of them
-fn is_plain_literal(value: &Node) -> bool {
-	match value.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => true,
-		Node::List(items, Bracket::Square, _) => !items.is_empty() && items.iter().all(is_plain_literal),
-		_ => false,
-	}
-}
-
-/// `person: {name: "Alice"}` among the statements of a program that reads `person` later binds it like
-/// `person = {…}`: `person.name` is then a field of a variable (a data key nothing reads stays data)
-fn bind_read_data_objects(program: Node) -> Node {
-	let Node::List(items, bracket @ (Bracket::None | Bracket::Curly), separator) = program else {
-		return program;
-	};
-	let mut read = HashSet::new();
-	for item in &items {
-		item.visit(&mut |part| {
-			if let Node::Key(receiver, Op::Dot | Op::Hash, _) = part {
-				if let Node::Symbol(name) = receiver.drop_meta() {
-					read.insert(name.clone());
-				}
-			}
-		});
-	}
-	let items = items
-		.into_iter()
-		.map(|item| match item.drop_meta() {
-			Node::Key(name, Op::Colon, value)
-				if matches!(name.drop_meta(), Node::Symbol(symbol) if read.contains(symbol))
-					&& object_entries(value).is_some() =>
-			{
-				Node::Key(name.clone(), Op::Assign, value.clone())
-			}
-			_ => item,
-		})
-		.collect();
-	Node::List(items, bracket, separator)
-}
-
-/// The names the program defines, as variables or functions: an alias word never shadows one (P142)
-pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
-	let mut defined = HashSet::new();
-	collect_assigned_names(node, &mut defined);
-	let context = crate::analyzer::function_definitions(node);
-	defined.extend(context.user_functions.into_keys());
-	defined
-}
-
-pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
-	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.insert(name.clone());
-			}
-			collect_assigned_names(value, names);
-		}
-		Node::Key(left, _, right) => {
-			collect_assigned_names(left, names);
-			collect_assigned_names(right, names);
-		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_names(item, names)),
-		_ => {}
-	}
-}
-
 struct Lowering {
 	context: Context,
-	shadowed: HashSet<String>,
+	/// The names the program defines where the lowering is: its functions, the variables outside functions and those
+	/// the function being lowered assigns (a local in one function hides no library word in another)
+	shadowed: RefCell<HashSet<String>>,
 	objects: HashMap<String, Node>,
 	/// Variables assigned plain values (AssignedObjects::plain)
 	plain: HashSet<String>,
@@ -845,6 +594,8 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
+			// `data (a.b)` stays the code as written, the Node the run-time `parse("a.b")` gives (card data-quote-lowered)
+			quoted if crate::blocks::quoted_data(&quoted).is_some() => quoted,
 			Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].is_symbol(TRY_MARKER) => {
 				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
@@ -933,7 +684,16 @@ impl Lowering {
 			Node::List(items, Bracket::Round, _) => items.first().map(Node::name),
 			_ => None,
 		};
-		self.within_function(name, parameters, || self.expand(self.body_statement(head, right)))
+		let mut locals = self.shadowed.borrow().clone();
+		collect_assigned_names(&right, &mut locals);
+		let outer = self.shadowed.replace(locals);
+		let lowered = self.within_function(name, parameters, || self.expand(self.body_statement(head, right)));
+		self.shadowed.replace(outer);
+		lowered
+	}
+
+	fn shadows(&self, name: &str) -> bool {
+		self.shadowed.borrow().contains(name)
 	}
 
 	/// `lower` with the parameters of a definition in scope, and its function's name when it has one
@@ -994,11 +754,7 @@ impl Lowering {
 			.iter()
 			.find(|(level, ..)| *level == op)
 			.expect("a similarity operator");
-		let tolerance = if self.shadowed.contains(*variable) {
-			variable
-		} else {
-			default
-		};
+		let tolerance = if self.shadows(variable) { variable } else { default };
 		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
@@ -1044,7 +800,7 @@ impl Lowering {
 	}
 
 	fn library_word(&self, name: &str) -> Option<&'static str> {
-		canonical_word(name).filter(|word| !self.shadowed.contains(name) && !self.shadowed.contains(*word))
+		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(word))
 	}
 
 	/// The library word a call of `name` with that many arguments (receiver included) means
@@ -1059,7 +815,7 @@ impl Lowering {
 			.iter()
 			.find(|(word, count, _)| *word == name && *count == argument_count)
 			.map(|(_, _, variant)| *variant);
-		variant.filter(|_| !self.shadowed.contains(name))
+		variant.filter(|_| !self.shadows(name))
 	}
 
 	/// `word(x, args)` and `word x args`
@@ -1076,7 +832,7 @@ impl Lowering {
 		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
 			return Some(membership);
 		}
-		if let Some(raised) = raise_call(items) {
+		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
 			return Some(raised);
 		}
 		if let Err(error) = self.ask_braceless_argument(items, bracket, separator) {
@@ -1088,7 +844,7 @@ impl Lowering {
 		};
 		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument (unless the program defines its own log)
 		if let (LOG_WORD, [_, value, base]) = (head.as_str(), items) {
-			if self.shadowed.contains(LOG_WORD) {
+			if self.shadows(LOG_WORD) {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
@@ -1148,8 +904,7 @@ impl Lowering {
 			matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
 		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
 		// (a bare word that names no variable keeps the list data: `[first last]`)
-		let is_value =
-			|argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadowed.contains(name));
+		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadows(name));
 		let is_element = *bracket == Bracket::Square
 			&& *separator == Separator::Space
 			&& items.len() == arity(word) + 1
@@ -1254,7 +1009,8 @@ impl Lowering {
 		crate::diagnostic::ask(&question).map(|_| ())
 	}
 
-	/// `x in xs`: whether a map has the key x or a list the element x; `byte in t` and `"äb" in bytes` count text units
+	/// `x in xs`: yes/no whether a map has the key x or a list the element x (decision in-bool; its position is
+	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units
 	fn membership(&self, items: &[Node]) -> Option<Node> {
 		let [element, in_word, collection] = items else {
 			return None;
@@ -1267,7 +1023,7 @@ impl Lowering {
 			return None;
 		}
 		Some(self.call(
-			COLLECTION_POSITION,
+			COLLECTION_CONTAINS,
 			in_word,
 			vec![collection.clone(), element.clone()],
 			false,
@@ -1319,6 +1075,10 @@ impl Lowering {
 		}
 		// `x.chars` stays the count of characters; `chars x`, `chars(x)` and the call `x.chars()` are the list
 		let is_called = matches!(method.drop_meta(), Node::List(..));
+		// `n.first` of a person with a field first reads the field, not the library word first
+		if !is_called && self.instances.is_instance_field(receiver, name) {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if let Some(word) = self
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())
@@ -1372,7 +1132,16 @@ impl Lowering {
 		}
 		// a variable of unknown value (`o` of `for o in people.filter(…)`), or an element of one (`xs[1]`), may hold an
 		// object: its field is looked up at run time
-		let variable = match receiver.drop_meta() {
+		// a parenthesized receiver is what it holds: `(x#2).name` is `x#2.name` (card name-quoted); `f()` stays a call
+		let inner = match receiver.drop_meta() {
+			Node::List(items, Bracket::Round, _)
+				if items.len() == 1 && !matches!(items[0].drop_meta(), Node::Symbol(_)) =>
+			{
+				items[0].drop_meta()
+			}
+			other => other,
+		};
+		let variable = match inner {
 			Node::Key(list, Op::Hash, _) => list.drop_meta(),
 			other => other,
 		};
@@ -1380,17 +1149,17 @@ impl Lowering {
 			Node::Symbol(variable) => {
 				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
 			}
-			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call), or a parenthesized object `({a:1}).a`
+			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call)
 			Node::List(items, Bracket::Round, Separator::None)
 				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
 			{
 				true
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => {
-				matches!(items[0].drop_meta(), Node::List(_, Bracket::Curly, _))
-			}
+			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
+			Node::List(_, Bracket::Curly, _) => true,
+			_ if crate::blocks::quoted_data(variable).is_some() => true,
 			// an element of a computed list: `users.filter(…)#1.name`
-			_ => matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
+			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		};
 		if may_hold_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
@@ -1409,127 +1178,6 @@ impl Lowering {
 		);
 		let call = key(receiver.clone(), Op::Dot, method.clone());
 		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
-	}
-
-	/// `object.name = value` is `object = field_with(object, "name", value)`; a nested path updates the objects on the way
-	/// (`p.b.c = 4` is `p = field_with(p, "b", field_with(p.b, "c", 4))`), an element on the way is stored back
-	/// (`bags#1.n = 5` is `bags#1 = field_with(bags#1, "n", 5)`)
-	fn field_assignment(&self, target: &Node, value: &Node) -> Option<Node> {
-		let Node::Key(_, Op::Hash, index) = target.drop_meta() else {
-			return None;
-		};
-		subscript_field(index)?;
-		self.stored(target, value.clone())
-	}
-
-	/// `a = p.x = 5` is `p.x = 5; a = p.x`: the value of a field assignment is the field's new value, not the object
-	/// field_with gives (card chain-field)
-	fn chained_field_assignment(&self, outer: &Node, value: &Node) -> Option<Node> {
-		let Node::Key(inner, Op::Assign, _) = value.drop_meta() else {
-			return None;
-		};
-		let Node::Key(_, Op::Hash, index) = self.expand(inner.as_ref().clone()).drop_meta().clone() else {
-			return None;
-		};
-		subscript_field(&index)?;
-		let read_back = Node::Key(Box::new(outer.clone()), Op::Assign, inner.clone());
-		Some(self.expand(Node::List(
-			vec![value.clone(), read_back],
-			Bracket::None,
-			Separator::Semicolon,
-		)))
-	}
-
-	/// `place = value` for any place: a variable, an element `xs#i` of one (as written), a field (field_with on its
-	/// object, stored back), an element of anything else through a temporary (`p.items#1 = v` is
-	/// `place·0 = p.items; place·0#1 = v; p.items = place·0`)
-	fn stored(&self, place: &Node, value: Node) -> Option<Node> {
-		let assigned = |place: &Node, value: Node| key(place.clone(), Op::Assign, value);
-		let Node::Key(base, Op::Hash, index) = place.drop_meta() else {
-			return matches!(place.drop_meta(), Node::Symbol(_)).then(|| assigned(place, value));
-		};
-		if let Some(name) = subscript_field(index) {
-			let updated = call(FIELD_WITH, vec![base.as_ref().clone(), Node::Text(name), value]);
-			return self.stored(base, updated);
-		}
-		if matches!(base.drop_meta(), Node::Symbol(_)) {
-			return Some(assigned(place, value));
-		}
-		let held = Node::Symbol(format!("{PLACE_TEMPORARY}{}", self.next_temporary()));
-		let element = Node::Key(Box::new(held.clone()), Op::Hash, index.clone());
-		let statements = vec![
-			assigned(&held, base.as_ref().clone()),
-			assigned(&element, value),
-			self.stored(base, held)?,
-		];
-		Some(Node::List(statements, Bracket::None, Separator::Semicolon))
-	}
-
-	fn next_temporary(&self) -> usize {
-		self.temporaries.next_number()
-	}
-
-	/// `receiver?.name`: ø when the receiver is ø, else the field
-	fn safe_lookup(&self, receiver: Node, word: Node) -> Node {
-		let Node::Symbol(name) = word.drop_meta() else {
-			return Diagnostic::at(&word, "?. needs a field name after it").into_error();
-		};
-		let number = self.next_temporary();
-		let program = named_apart(parse(&format!("({SAFE_PREFIX}value={RECEIVER_PLACEHOLDER}; if {SAFE_PREFIX}value == ø then ø else {LOOKUP_PLACEHOLDER})")), SAFE_PREFIX, SAFE_BASE, number);
-		let lookup = field_lookup(
-			&Node::Symbol(temporary_name(&[SAFE_BASE, "value", &number.to_string()])),
-			name,
-			&word,
-		);
-		substitute(
-			substitute(program, RECEIVER_PLACEHOLDER, &receiver),
-			LOOKUP_PLACEHOLDER,
-			&lookup,
-		)
-	}
-
-	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object
-	fn object_literal(&self, node: &Node) -> Option<Node> {
-		self.written_object(node)
-			.or_else(|| self.instances.fields_template(node))
-	}
-
-	fn written_object(&self, node: &Node) -> Option<Node> {
-		match node.drop_meta() {
-			Node::Symbol(name) => self.objects.get(name).cloned(),
-			Node::Key(base, Op::Hash, index) => {
-				let field = field_name(crate::warp_parser::subscript_key(index)?)?;
-				let (_, value) = object_entries(&self.object_literal(base)?)?
-					.into_iter()
-					.find(|(name, _)| *name == field)?;
-				object_entries(&value).map(|_| value)
-			}
-			other => object_entries(other).map(|_| other.clone()),
-		}
-	}
-
-	/// `word of object`, `c of b of p`: the lookup of a field, when the object is one; `None` for anything else
-	fn of_lookup(&self, items: &[Node]) -> Option<Node> {
-		let [word_node, of, rest @ ..] = items else { return None };
-		let Node::Symbol(name) = word_node.drop_meta() else {
-			return None;
-		};
-		if !is_of(of) || rest.is_empty() {
-			return None;
-		}
-		let object = match rest {
-			[single] => single.clone(),
-			[_, next_of, ..] if is_of(next_of) => self.of_lookup(rest)?,
-			_ => return None,
-		};
-		let literal = self.object_literal(&object);
-		let is_field = literal
-			.as_ref()
-			.and_then(object_entries)
-			.is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
-		let is_object = literal.is_some() || is_field_lookup(&object);
-		let is_other_word = self.library_word(name).is_some() || counting_method(name, &self.context).is_some();
-		(is_object && (is_field || !is_other_word)).then(|| field_lookup(&object, name, word_node))
 	}
 
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form
@@ -1585,7 +1233,8 @@ impl Lowering {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) {
 					head.clone()
 				} else {
-					symbol(word)
+					// the written spelling's position: `warn "x"` errs where warn is
+					symbol(word).with_meta_of(head)
 				};
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
 			}

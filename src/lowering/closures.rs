@@ -6,7 +6,6 @@
 //! notes/closures.md describes the representation.
 
 use super::nodes::{call, children_rewritten, key, parameter_name};
-use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -14,6 +13,8 @@ use crate::library_words::collect_assigned_names;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
+use crate::words::IMPLICIT_PARAMETER;
+use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{HashMap, HashSet};
 
 pub const CLOSURE_NEW: &str = "closure_new";
@@ -43,7 +44,11 @@ const CLOSURE_CALL_PREFIX: &str = "closure_call_";
 const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
-const IMPLICIT_PARAMETER: &str = "it";
+
+/// A function the compiler made of a lambda (`x => x + n`), no name the program wrote
+pub fn is_lambda_function(name: &str) -> bool {
+	name.starts_with(LIFTED_PREFIX) || name.starts_with(crate::function_values::LAMBDA_PREFIX)
+}
 
 pub fn closure_call_name(arity: usize) -> String {
 	format!("{CLOSURE_CALL_PREFIX}{arity}")
@@ -465,7 +470,8 @@ impl FunctionValues {
 				if let Node::Key(list, Op::Dot, call) = node {
 					if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
 						if let [method, value] = items.as_slice() {
-							if crate::analyzer::appends(&method.drop_meta().name(), 1) && self.is_function_value(value)
+							if crate::declaration_forms::appends(&method.drop_meta().name(), 1)
+								&& self.is_function_value(value)
 							{
 								lists.insert(name.clone());
 							}
@@ -584,6 +590,10 @@ impl Lifting {
 	}
 
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
+		// `&g` wherever it stands: the function itself (a bare `g` needs its arguments, P83)
+		if referenced_function(&node).is_some() {
+			return self.function_value(node, bound);
+		}
 		if let Some(params) = definition_parameters(&node, &self.functions) {
 			let Node::Key(head, op, body) = node.drop_meta().clone() else {
 				unreachable!("a definition")
@@ -853,15 +863,7 @@ impl Lifting {
 
 /// The names a body assigns, `angle = 0.5`: its local variables, never a function of the same name
 fn assigned_variables(body: &Node) -> HashSet<String> {
-	let mut assigned = HashSet::new();
-	body.visit(&mut |node| {
-		if let Node::Key(target, Op::Assign, _) = node {
-			if let Node::Symbol(name) = target.drop_meta() {
-				assigned.insert(name.clone());
-			}
-		}
-	});
-	assigned
+	body.assigned_names(|op| *op == Op::Assign)
 }
 
 /// The names a body declares `global n`: the closure reads and changes the program's own n

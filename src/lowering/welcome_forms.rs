@@ -8,12 +8,13 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, key};
-use super::words::IN_WORD;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::GENERIC_MARK;
+use crate::words::{IN_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
-use crate::switch::SWITCH_WORDS;
+use crate::words::SWITCH_WORDS;
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_KEYWORD: &str = "loop";
@@ -25,8 +26,6 @@ const LET_WORD: &str = "let";
 const MUTABLE_MODIFIERS: [&str; 2] = ["mut", "mutable"];
 const VAR_WORD: &str = "var";
 const DESTRUCTURED_OBJECT: &str = "object·";
-/// The Meta key the parser puts on the name of a function written with type parameters `fn id<T>(…)`: their names
-pub const GENERIC_MARK: &str = "generic";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
 /// Swift's and C's case label `case .north:` in a switch
@@ -35,8 +34,6 @@ const CASE_WORD: &str = "case";
 const WHEN_KEYWORD: &str = "when";
 const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
-const ON_WORD: &str = "on";
-const WHENEVER_WORD: &str = "whenever";
 const WHEN_CONDITION_TOPIC: &str = "when-condition";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
@@ -106,7 +103,7 @@ pub fn lower(node: Node) -> Node {
 	} else {
 		r_vectors(node)
 	};
-	let node = qualified_module_calls(module_aliases(node));
+	let node = qualified_module_calls(module_aliases(named_switch_subjects(node)));
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -361,20 +358,80 @@ fn split_at_in(value: &Node) -> (Node, Option<Node>) {
 
 /// `[match, subject, {k => v …}]`, or `[match, (subject {k => v …})]` as an assigned match parses: the cases as `k: v`,
 /// `_ => v` as `default: v`
-fn arrow_cases(mut items: Vec<Node>) -> Vec<Node> {
-	if !items
-		.first()
-		.is_some_and(|word| SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
-	{
+fn arrow_cases(items: Vec<Node>) -> Vec<Node> {
+	with_match_cases(items, colon_cases)
+}
+
+fn is_switch_word(word: &Node) -> bool {
+	SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch))
+}
+
+/// `match alle = f(3) {…}` names its subject (user, card match-binding-arm) but parses as `match (alle = (f(3) {…}))`,
+/// after `r =` as `r = ((match alle) = (f(3) {…}))`: as `match (alle = f(3)) {…}`, the assignment the subject
+fn named_switch_subjects(node: Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			let mut result: Vec<Node> = Vec::with_capacity(items.len() + 1);
+			for item in items.into_iter().map(named_switch_subjects) {
+				match named_subject(&item).filter(|_| result.last().is_some_and(is_switch_word)) {
+					Some((subject, cases)) => result.extend([subject, cases]),
+					None => result.push(item),
+				}
+			}
+			Node::List(result, bracket, separator)
+		}
+		Node::Key(left, Op::Assign, right) => match left.drop_meta() {
+			Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0]) => {
+				named_switch_subjects(Node::List(
+					vec![words[0].clone(), key(words[1].clone(), Op::Assign, *right)],
+					Bracket::None,
+					Separator::Space,
+				))
+			}
+			_ => key(named_switch_subjects(*left), Op::Assign, named_switch_subjects(*right)),
+		},
+		other => children_rewritten(other, named_switch_subjects),
+	}
+}
+
+/// `alle = (f(3) {cases})`: the assignment `alle = f(3)` and the case block
+fn named_subject(item: &Node) -> Option<(Node, Node)> {
+	let Node::Key(name, Op::Assign, value) = item.drop_meta() else {
+		return None;
+	};
+	let Node::List(parts, bracket, separator) = value.drop_meta() else {
+		return None;
+	};
+	let (cases, expression) = parts.split_last()?;
+	if !matches!(name.drop_meta(), Node::Symbol(_)) || !super::nodes::is_block(cases) || expression.is_empty() {
+		return None;
+	}
+	let expression = match expression {
+		[single] => single.clone(),
+		many => Node::List(many.to_vec(), bracket.clone(), separator.clone()),
+	};
+	Some((key(name.as_ref().clone(), Op::Assign, expression), cases.clone()))
+}
+
+/// The items of a match, `[match, subject, cases]`, `[match, (subject cases)]` or, as a body or an arm parses it,
+/// `[(match subject), cases]`, with `convert` of its cases block; other items as they are
+pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> Node) -> Vec<Node> {
+	if let [head, cases] = items.as_slice() {
+		if matches!(head.drop_meta(), Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0])) {
+			items[1] = convert(cases);
+			return items;
+		}
+	}
+	if !items.first().is_some_and(is_switch_word) {
 		return items;
 	}
 	match items.len() {
-		3 => items[2] = colon_cases(&items[2]),
+		3 => items[2] = convert(&items[2]),
 		2 => {
 			if let Node::List(pair, bracket, separator) = items[1].drop_meta() {
 				if let [subject, cases] = pair.as_slice() {
 					items[1] = Node::List(
-						vec![subject.clone(), colon_cases(cases)],
+						vec![subject.clone(), convert(cases)],
 						bracket.clone(),
 						separator.clone(),
 					);
@@ -390,20 +447,44 @@ fn colon_cases(block: &Node) -> Node {
 	let Node::List(cases, Bracket::Curly, separator) = block.drop_meta() else {
 		return block.clone();
 	};
-	let cases = cases.iter().map(|case| match case.drop_meta() {
-		// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
-		Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if word.is_symbol(CASE_WORD)) => {
-			let Node::Key(_, _, member) = label.drop_meta() else { unreachable!("guarded") };
-			Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())), Op::Colon, body.clone())
+	Node::List(
+		cases.iter().map(colon_case).collect(),
+		Bracket::Curly,
+		separator.clone(),
+	)
+}
+
+fn colon_case(case: &Node) -> Node {
+	match case.drop_meta() {
+		// `1, 2 => …`: the alternatives and the case
+		Node::List(items, Bracket::None, Separator::Colon) => {
+			Node::List(items.iter().map(colon_case).collect(), Bracket::None, Separator::Colon)
 		}
-		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => words[1].clone(),
+		// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
+		Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if word.is_symbol(CASE_WORD)) =>
+		{
+			let Node::Key(_, _, member) = label.drop_meta() else {
+				unreachable!("guarded")
+			};
+			Node::Key(
+				Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())),
+				Op::Colon,
+				body.clone(),
+			)
+		}
+		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => {
+			words[1].clone()
+		}
 		Node::Key(pattern, Op::FatArrow, body) => {
-			let pattern = if pattern.is_symbol(WILDCARD) { symbol(DEFAULT_CASE) } else { pattern.as_ref().clone() };
+			let pattern = if pattern.is_symbol(WILDCARD) {
+				symbol(DEFAULT_CASE)
+			} else {
+				pattern.as_ref().clone()
+			};
 			Node::Key(Box::new(pattern), Op::Colon, body.clone())
 		}
 		_ => case.clone(),
-	});
-	Node::List(cases.collect(), Bracket::Curly, separator.clone())
+	}
 }
 
 /// Kotlin's `when (x) { 1, 2 -> a; is Circle -> b; else -> c }` (or `when { x > 0 -> a … }` without a subject): the
@@ -437,8 +518,7 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		(Some(subject), pattern) => key(subject.clone(), Op::Eq, pattern),
 		(None, pattern) => pattern,
 	};
-	let chain = arms
-		.into_iter()
+	arms.into_iter()
 		.rev()
 		.fold(None, |otherwise: Option<Node>, (patterns, value)| {
 			let condition = patterns
@@ -451,17 +531,8 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 				("VALUE", forms(value)),
 				("OTHERWISE", otherwise.unwrap_or(Node::Empty)),
 			];
-			let bindings = bindings
-				.into_iter()
-				.map(|(placeholder, node)| (placeholder.to_string(), node))
-				.collect();
-			Some(
-				crate::law::substitute(&crate::warp_parser::parse(template), &bindings)
-					.drop_meta()
-					.clone(),
-			)
-		});
-	chain
+			Some(super::nodes::filled(template, bindings))
+		})
 }
 
 /// `when click {…}` is `on click {…}`, `when x > 3 {…}` is `whenever x > 3 {…}` (card signals-shape, user 2026-10-08):
@@ -619,9 +690,11 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 
 /// `T`, `Vec<T>` (the parser's symbol `Vec of T`), `[T]` of a type parameter T
 fn mentions_type_parameter(kind: &Node, names: &[String]) -> bool {
-	let mut found = false;
-	kind.visit(&mut |node| found |= matches!(node, Node::Symbol(words) if words.split_whitespace().any(|word| names.iter().any(|name| name == word))));
-	found
+	kind.mentions_where(|words| {
+		words
+			.split_whitespace()
+			.any(|word| names.iter().any(|name| name == word))
+	})
 }
 
 /// `x: T`, `xs: Vec<T>` of a type parameter T
@@ -1018,12 +1091,13 @@ fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 	))
 }
 
-/// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`
+/// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`.
+/// The parentheses are needed, as in JS: a bare `{a, b} => …` is a map pattern arm (card map-patterns)
 fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
-	let (items, separator) = match parameters.drop_meta() {
-		Node::List(items, Bracket::Round, separator) => (items.clone(), separator.clone()),
-		single => (vec![single.clone()], Separator::Colon),
+	let Node::List(items, Bracket::Round, separator) = parameters.drop_meta() else {
+		return None;
 	};
+	let (items, separator) = (items.clone(), separator.clone());
 	let mut fields = Vec::new();
 	let parameters: Vec<Node> = items
 		.into_iter()
@@ -1058,7 +1132,7 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 		Node::List(items, Bracket::Round, _) => items.clone(),
 		single => vec![single.clone()],
 	};
-	let is_starred = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word.starts_with(crate::tuples::STARRED) && word.len() > 1);
+	let is_starred = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word.starts_with(crate::words::STARRED) && word.len() > 1);
 	if !matches!(name.drop_meta(), Node::Symbol(_)) || !parameters.iter().any(is_starred) {
 		return None;
 	}
@@ -1098,7 +1172,7 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	node.visit(&mut |part| match part {
 		Node::Key(head, Op::Define, _) => {
-			names.insert(crate::lowering::class_methods::leading_name(head));
+			names.insert(crate::node::leading_name(head));
 		}
 		Node::List(words, _, _)
 			if words.first().is_some_and(
@@ -1109,7 +1183,7 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 				Some(Node::List(_, Bracket::Round, _)) if words.len() > 2 => words.get(2),
 				_ => words.get(1),
 			};
-			names.extend(name.map(crate::lowering::class_methods::leading_name));
+			names.extend(name.map(crate::node::leading_name));
 		}
 		_ => {}
 	});

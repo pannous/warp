@@ -3,6 +3,7 @@ mod test_all_calls;
 mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
+mod test_any_result; // card def
 mod test_argument_kinds;
 mod test_argument_labels;
 mod test_arity_overloads;
@@ -33,11 +34,13 @@ mod test_constant_free_variables;
 mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
+mod test_deep_recursion;
 mod test_def_bool_result;
 mod test_def_forms;
 mod test_def_without_parameters;
 mod test_default_parameters;
 mod test_definition_bodies;
+mod test_definition_cases; // card definition-cases
 mod test_definition_value;
 mod test_destructuring_in_a_body;
 mod test_deterministic_inference;
@@ -58,10 +61,13 @@ mod test_folding_in_bodies;
 mod test_foreign_modifiers;
 mod test_free_var_if_arms;
 mod test_function_aliases;
+mod test_function_head; // card cleanup-definition-view
 mod test_function_keyword;
+mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_values;
 mod test_functions;
+mod test_gap_feeding; // card gap-feeding
 mod test_generator_arguments;
 mod test_generators; // card generators-function
 mod test_getter_warning_text;
@@ -70,6 +76,7 @@ mod test_go_functions;
 mod test_inlining;
 mod test_it_arguments; // card map-it
 mod test_kebab_members;
+mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
 mod test_lambda_spaced_body;
 mod test_lambda_spellings;
@@ -84,6 +91,7 @@ mod test_map_phrase;
 mod test_memoization;
 mod test_method_syntax_calls;
 mod test_method_words;
+mod test_mixed_number_returns; // card function-returning
 mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;
@@ -104,7 +112,9 @@ mod test_parameter_any;
 mod test_parameter_assignment;
 mod test_parameter_call_kinds;
 mod test_parameter_codepoint_calls;
+mod test_parameter_map_patterns; // cards param-map-pattern, param-pattern-local-warning
 mod test_parameter_overloads;
+mod test_parameter_patterns; // card parameter-patterns
 mod test_parameter_retype;
 mod test_parameter_shapes;
 mod test_parens_getter_warning;
@@ -117,23 +127,27 @@ mod test_phrase_slot_words;
 mod test_picked_calls;
 mod test_ported_calls;
 mod test_precomputed;
+mod test_print_closure; // card print-closure
 mod test_property_access;
 mod test_property_assign;
 mod test_property_words;
 mod test_python_higher_order;
 mod test_python_ruby_definitions;
 mod test_recursive_list_functions;
+mod test_render_as;
 mod test_return_type_dispatch;
 mod test_return_type_forms;
 mod test_returned_blocks;
 mod test_returned_function_names;
 mod test_round8_call_forms;
 mod test_rounding_builtins;
+mod test_runtime_function_equality; // card runtime-function
 mod test_runtime_kind_arithmetic;
 mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;
 mod test_soft_keywords;
+mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
 mod test_spaced_assign_definition;
 mod test_specialised_variants;
@@ -155,4 +169,4 @@ mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
 mod test_whole_float_to_int_parameter;
-mod test_words_in_phrases; // card arctan-allow
+mod test_words_in_phrases; // card arctan-allow // card render-as

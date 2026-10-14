@@ -52,7 +52,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      starts from those values (pipeline::with_server_values), so hydration shows the same text and the ø check is
      satisfied. headless.rs prerenders too.
    - `x := fetch url ?? default` (lowering/fetch_signals.rs) is the general form: the default until the reply is in,
-     and in place of a failed one. A POSTed reply is JSON of any value, a number or a text too (src/fetches.rs,
+     and in place of a failed one. A POSTed reply is JSON of any value, a number or a text too (src/web/fetches.rs,
      host-tasks.js fetchReply); a GET reply stays as before (objects and arrays parsed, else the text).
    - Refused, loudly: an argument the page only knows inside a function (`def show(k) { p{ doubled(k) } }`). The page
      asks before its code runs, so it sends main-level values only. A synchronous call would need site-worker's
@@ -95,9 +95,11 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    - Probe of both: probes/route_data/server_calls.sh counts the POSTs through probes/route_data/counting_proxy.py (the
      browser's network log misses a Worker's fetches): app.warp's links home, first, second, home, first, second ask
      "/users/1" and "/users/2" once each; worker_app.warp's direct visit of /users/2 asks nothing (one call before).
-   - Left: (c) A main-level statement of the page that reads server data (`if count(users) == 0
-     { users.add(…) }`) fails loudly in the browser ("table.open: no such word in the browser"; card web-page-server-data). (d) Access rules: card
-     route-access.
+   - A main-level statement that only changes server data (`if count(users) == 0 { users.add(…) }`: reads it, defines
+     nothing, shows no markup) runs on the server, which runs main; the shipped page leaves it out (serve.rs
+     changes_server_data_only, card web-page-server-data, 2026-10-12). Before, the page kept the table and failed with
+     "table.open: no such word in the browser". Test tests/web/test_page_server_data.rs, probe probes/page_server_data/app.warp.
+   - Left: (d) Access rules: card route-access.
    - Found on the way: route functions now stand where the first route stood instead of before everything, because a
      function reads a typed main-level list from where it is defined (cards typed-global-capture, route-typed-list).
      loadRouteModule loads app-route-N.wasm from the page's base as loaded (a link followed from / asked

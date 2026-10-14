@@ -1,25 +1,18 @@
 //! The standard library's adapters (notes/stdlib.md section 7, adapter A): the words of lib/<module>.warp that warp
 //! cannot write itself call the host words std_pure / std_io (module, member, arguments), answered here natively and
 //! by host.js's twin in the browser. Nodes in, a Node out; a failure is the error naming module.member. JSON crosses as
-//! for the foreign runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain): null ø, booleans 1/0.
+//! for the foreign runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain): null ø, booleans yes/no.
 
 use crate::node::Node;
-
-/// The text a host word's argument holds: a one-character text arrives as a Char (`"n"` parses as 'n')
-pub(crate) fn text_value(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Text(text) => Some(text.clone()),
-		Node::Char(character) => Some(character.to_string()),
-		_ => None,
-	}
-}
 
 /// module.member applied to the arguments (a list node)
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
 	let arguments = arguments.as_items();
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
-	let text_of =
-		|node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
+	let text_of = |node: &Node| {
+		node.text_value()
+			.ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())))
+	};
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 	#[cfg(feature = "native")]
 	let number_of = |node: &Node| match node.drop_meta() {
@@ -47,11 +40,16 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				without_class_tags(crate::foreign::json_of(value), &classes).to_string(),
 			))
 		}
-		("file", "write", [path, text]) => std::fs::write(text_of(path)?, content_of(text)?)
-			.map(|_| Node::Empty)
+		("file", "write", [path, text]) => write_file(&text_of(path)?, content_of(text)?).map_err(failure),
+		("file", "write_bytes", [path, bytes]) => {
+			write_file(&text_of(path)?, bytes_of(bytes).map_err(failure)?).map_err(failure)
+		}
+		("file", "read_bytes", [path]) => std::fs::read(text_of(path)?)
+			.map(|bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte.into()))))
 			.map_err(|problem| failure(problem.to_string())),
 		("file", "append", [path, text]) => {
 			use std::io::Write;
+			crate::sandbox::check_write(&text_of(path)?).map_err(failure)?;
 			let mut file = std::fs::OpenOptions::new()
 				.append(true)
 				.create(true)
@@ -61,8 +59,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				.map(|_| Node::Empty)
 				.map_err(|problem| failure(problem.to_string()))
 		}
-		// a truth value crosses as 1 or 0, as booleans are encoded
-		("file", "exists", [path]) => Ok(Node::int(i64::from(std::path::Path::new(&text_of(path)?).exists()))),
+		("file", "exists", [path]) => Ok(Node::from(std::path::Path::new(&text_of(path)?).exists())),
 		("file", "list", [folder]) => {
 			let entries = std::fs::read_dir(text_of(folder)?).map_err(|problem| failure(problem.to_string()))?;
 			let mut names: Vec<String> = entries
@@ -84,7 +81,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		("regex", member, [text, pattern, rest @ ..]) => {
 			let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?).map_err(failure)?);
 			match (member, rest) {
-				("matches", []) => Ok(Node::int(i64::from(pattern.is_match(&text)))),
+				("matches", []) => Ok(Node::from(pattern.is_match(&text))),
 				("first", []) => Ok(pattern
 					.find(&text)
 					.map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
@@ -210,19 +207,17 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		}
 		#[cfg(feature = "native")]
 		("sound", "render", [path]) => crate::sound::render(&text_of(path)?).map(Node::float).map_err(failure),
-		// MIDI (card midi-out, src/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
+		// MIDI (card midi-out, src/sound/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
 		#[cfg(feature = "native")]
 		("midi", "write_file", [path, notes]) => {
-			let encoded = crate::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
-			std::fs::write(text_of(path)?, encoded)
-				.map(|_| Node::Empty)
-				.map_err(|problem| failure(problem.to_string()))
+			let encoded = crate::sound::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
+			write_file(&text_of(path)?, encoded).map_err(failure)
 		}
 		#[cfg(feature = "native")]
 		("midi", "read_file", [path]) => {
 			let path = text_of(path)?;
 			let bytes = std::fs::read(&path).map_err(|problem| failure(format!("cannot read {path}: {problem}")))?;
-			crate::midi::decode(&bytes)
+			crate::sound::midi::decode(&bytes)
 				.map(|notes| Node::list(notes.into_iter().map(Node::int).collect()))
 				.map_err(failure)
 		}
@@ -233,14 +228,14 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				.into_iter()
 				.map(|byte| u8::try_from(byte).map_err(|_| failure(format!("{byte} is no MIDI byte (0 to 255)"))))
 				.collect::<Result<Vec<_>, _>>()?;
-			crate::midi::send(&text_of(port)?, &bytes)
+			crate::sound::midi::send(&text_of(port)?, &bytes)
 				.map(|_| Node::Empty)
 				.map_err(failure)
 		}
 		#[cfg(feature = "native")]
-		("midi", "outputs", []) => crate::midi::outputs().map(texts).map_err(failure),
+		("midi", "outputs", []) => crate::sound::midi::outputs().map(texts).map_err(failure),
 		#[cfg(feature = "native")]
-		("midi", "receive", []) => crate::midi::receive().map(|_| Node::Empty).map_err(failure),
+		("midi", "receive", []) => crate::sound::midi::receive().map(|_| Node::Empty).map_err(failure),
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
@@ -298,11 +293,25 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 	}
 }
 
+/// writes a file, creating its missing folders first
+fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
+	crate::sandbox::check_write(path)?;
+	let folder = std::path::Path::new(path)
+		.parent()
+		.filter(|folder| !folder.as_os_str().is_empty());
+	folder
+		.map_or(Ok(()), std::fs::create_dir_all)
+		.and_then(|_| std::fs::write(path, contents))
+		.map(|_| Node::Empty)
+		.map_err(|problem| format!("{path}: {problem}"))
+}
+
 fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 	if let Some(store) = unfiled_store(file) {
 		UNFILED_STORES.with(|stores| stores.borrow_mut().insert(store, values));
 		return Ok(());
 	}
+	crate::sandbox::check_write(file)?;
 	let text = serde_json::to_string_pretty(&values).map_err(|problem| problem.to_string())?;
 	std::fs::write(file, text).map_err(|problem| format!("{file}: {problem}"))
 }
@@ -314,6 +323,7 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 /// a command that fails is an error with what it printed to stderr
 #[cfg(feature = "native")]
 fn executed(command: &[String]) -> Result<String, String> {
+	crate::sandbox::check_process("os.exec")?;
 	let (program, arguments) = command.split_first().ok_or("needs a command")?;
 	let output = std::process::Command::new(program)
 		.args(arguments)
@@ -344,11 +354,29 @@ fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 }
 
 fn texts(items: impl IntoIterator<Item = String>) -> Node {
+	list_of(items.into_iter().map(Node::Text))
+}
+
+fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
 	Node::List(
-		items.into_iter().map(Node::Text).collect(),
+		items.into_iter().collect(),
 		crate::node::Bracket::Square,
 		crate::node::Separator::Space,
 	)
+}
+
+/// The bytes a list of ints 0 to 255 stands for
+fn bytes_of(list: &Node) -> Result<Vec<u8>, String> {
+	list.as_items()
+		.iter()
+		.map(|item| {
+			match item.drop_meta() {
+				Node::Number(crate::extensions::numbers::Number::Int(value)) => u8::try_from(*value).ok(),
+				_ => None,
+			}
+			.ok_or_else(|| format!("{} is no byte (0 to 255)", item.serialize().trim()))
+		})
+		.collect()
 }
 
 /// The pattern, if both engines read it alike: Rust's regex has no look-around or backreferences, so JS RegExp may not

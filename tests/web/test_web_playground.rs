@@ -18,7 +18,7 @@ fn evaluate_reports_the_value_the_cli_prints() {
 	assert_eq!(report["error"], false);
 	assert_eq!(
 		evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"],
-		"[1 2.5 'x' a:3]"
+		"[1 2.5 \"x\" a:3]"
 	);
 	assert_eq!(evaluate("xs=[1 2]; xs#5", HashSet::new())["error"], true);
 }

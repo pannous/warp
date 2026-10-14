@@ -11,16 +11,10 @@ use crate::warp_parser::{print_arguments_of, print_call, starts_print};
 const RESULT_WORD: &str = "result";
 
 pub fn lower(node: Node) -> Node {
-	if !mentions(&node) || assigns_result(&node) {
+	if !node.mentions(RESULT_WORD) || assigns_result(&node) {
 		return node;
 	}
 	with_results(node)
-}
-
-fn mentions(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if name == RESULT_WORD));
-	found
 }
 
 fn assigns_result(node: &Node) -> bool {
@@ -45,7 +39,7 @@ fn with_results(node: Node) -> Node {
 			let items: Vec<Node> = items.into_iter().map(with_results).collect();
 			let mut out: Vec<Node> = Vec::with_capacity(items.len());
 			for item in items {
-				if mentions(&item) {
+				if item.mentions(RESULT_WORD) {
 					if let Some(previous) = out.pop() {
 						out.extend(remembered(previous));
 					}

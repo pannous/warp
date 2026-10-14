@@ -4,7 +4,7 @@
 
 use super::WasmGcEmitter;
 use crate::node::{Bracket, Node};
-use crate::tuples::{call_parts, destructuring, returned_values, unstarred};
+use crate::tuples::{destructuring, returned_values, unstarred};
 use crate::type_kinds::Kind;
 use wasm_encoder::{Function, Instruction as I, ValType};
 
@@ -48,7 +48,7 @@ impl WasmGcEmitter {
 	fn emit_tuple_return(&mut self, func: &mut Function, values: &[Node]) {
 		let kinds = self.returned_tuple.clone();
 		if kinds.is_empty() {
-			self.emit_list_structure(func, values, &Bracket::Square);
+			self.emit_list_structure(func, values, &Bracket::Square, &crate::node::Separator::None);
 		} else {
 			for (value, kind) in values.iter().zip(kinds) {
 				self.emit_value_of_kind(func, value, kind);
@@ -79,7 +79,7 @@ impl WasmGcEmitter {
 					return;
 				}
 				Some((function, kinds)) => {
-					let (_, arguments) = call_parts(call).expect("a tuple call");
+					let (_, arguments) = call.call_parts().expect("a tuple call");
 					let user_fn = self.ctx.user_functions[&function].clone();
 					self.emit_user_function_values(func, &user_fn, arguments);
 					kinds
@@ -144,7 +144,7 @@ impl WasmGcEmitter {
 
 	/// A call of a function returning several values: its name and their kinds
 	fn tuple_call(&self, call: &Node) -> Option<(String, Vec<Kind>)> {
-		let (name, _) = call_parts(call)?;
+		let (name, _) = call.call_parts()?;
 		let function = self
 			.ctx
 			.user_functions

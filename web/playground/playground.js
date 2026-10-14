@@ -4,11 +4,13 @@
 // might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
-const HINTS_KEY = "warp-playground-hints"; // the hints checkbox, on by default (card hints-toggle)
+const SHOWN_FROM_KEY = "warp-playground-shown-from"; // the least diagnostic level shown, hint by default (card warning-levels)
+const HINTS_KEY = "warp-playground-hints"; // the former hints checkbox: "off" now means showing from weak
+const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostic.rs Level, least first
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
-// the most sounds sounding at once and how fast a stolen one fades out (src/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
+// the most sounds sounding at once and how fast a stolen one fades out (src/sound/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
 const MAX_VOICES = 32;
 const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
@@ -36,12 +38,20 @@ const STALLED_START_MS = 60_000;
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
+const PAINTING_MARGIN = 10, PAINTING_BORDERS = 2; // playground.css .painting: its margin above, its border on both sides
+const MIN_VIEW_HEIGHT = 160; // the view's height when the pane's text reaches the window's bottom
 const STDOUT = 1;
 const NOTIFICATION_TITLE = "warp";
+// card report-button: ?report turns the report button on in this browser, ?report=off off; only for who knows it
+const REPORT_PARAMETER = "report";
+const REPORT_KEY = "warp-playground-report";
+const REPORT_OFF = "off";
+const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
+const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
-const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
+const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
-const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound.rs SAMPLE_OFFSET)
+const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound/mod.rs SAMPLE_OFFSET)
 
 const $ = id => document.getElementById(id);
 
@@ -277,12 +287,15 @@ darkMode.addEventListener("change", tellSystemValues);
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 
-// view_width, view_height (use draw's default canvas): the room below the output pane's text, in CSS pixels; none while
-// the pane is folded away, so host.js's defaults stand
+// view_width, view_height (use draw's default canvas, paint(shader) without a size): the room below the output pane's
+// text, in CSS pixels: the pane's width, down to the window's bottom; none while the pane is folded away, so host.js's
+// defaults stand. Never measured from the paintings: the pane grows with them, so a view-sized painting made the next
+// view taller each frame, until Safari ran out of memory (card webgpu-safari)
 function viewSize() {
-	const pane = $("output").getBoundingClientRect(), painted = $("painted").getBoundingClientRect();
-	const width = Math.floor(painted.width), height = Math.floor(pane.bottom - painted.top);
-	return width > 0 && height > 0 ? { view_width: width, view_height: height } : {};
+	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
+	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
+	const room = innerHeight - Math.max(painted.top, 0) - parseFloat(style.paddingBottom) - PAINTING_MARGIN - PAINTING_BORDERS;
+	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
 // `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
@@ -376,7 +389,7 @@ function silenced(handle) {
 	playingFiles = playingFiles.filter(player => player.handle !== handle);
 }
 
-// room for one more sound sounding at that time (src/sound_engine.rs MAX_VOICES): the oldest of MAX_VOICES sounding then
+// room for one more sound sounding at that time (src/sound/sound_engine.rs MAX_VOICES): the oldest of MAX_VOICES sounding then
 // fades out in STEAL_SECONDS and stops
 function stealFor(time) {
 	const playing = sounding.filter(source => !source.stolen && source.startsAt <= time && time < source.endsAt);
@@ -449,7 +462,7 @@ function finish(run, report) {
 	run.resolve(report);
 }
 
-// evaluate code in the worker: the report of src/web.rs evaluate plus `printed` [{text, stream}]. The worker runs one
+// evaluate code in the worker: the report of src/web/mod.rs evaluate plus `printed` [{text, stream}]. The worker runs one
 // program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several)
 function evaluate(code) {
 	const run = runs.then(() => runInWorker(code));
@@ -493,13 +506,16 @@ function positionLink(position) {
 	return element("button", { className: "position", title: "go there", onclick: () => jumpTo(Number(line), Number(column)) }, position);
 }
 
+// a warning's label as the CLI prints it: "warning", or "warning (weak)" and "warning (severe)"
+const warningKind = level => !level || level === "normal" ? "warning" : `warning (${level})`;
+
 function diagnostic(kind, position, ...content) {
-	return element("li", { className: kind }, element("span", { className: "label" }, kind), position ? positionLink(position) : "", ...content);
+	return element("li", { className: kind.split(" ")[0] }, element("span", { className: "label" }, kind), position ? positionLink(position) : "", ...content);
 }
 
 const code = text => element("code", {}, text);
 
-// apply a fix's edits to the editor's text (UTF-16 ranges, src/web.rs fixes_json) and run the changed code
+// apply a fix's edits to the editor's text (UTF-16 ranges, src/web/mod.rs fixes_json) and run the changed code
 function applyFix(fix) {
 	// every edit of the fix, the last in the text first, so the earlier offsets stay valid
 	for (const edit of fix.edits) editor.replaceRange(edit.replacement, editor.posFromIndex(edit.start), editor.posFromIndex(edit.end));
@@ -557,7 +573,8 @@ function showReport(report) {
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
 	showAddress(report.address);
-	const hints = $("hints").checked ? report.hints : [];
+	const isShown = level => LEVELS.indexOf(level ?? "normal") >= LEVELS.indexOf($("shown-from").value);
+	const hints = isShown("hint") ? report.hints : [];
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -565,11 +582,12 @@ function showReport(report) {
 		problem.fix ? element("span", { className: "fix" }, "fix: ", code(problem.fix)) : "", fixButtons(problem.fixes), extra);
 	const items = [
 		...(report.errors ?? []).map(error => shown("error", error)),
-		...report.warnings.map(warning => shown("warning", warning, inline.has(warning.topic) ? gotIt(warning.topic, warning.expression_key, warning.line) : "")),
-		...report.runtime_warnings.map(message => diagnostic("warning", "runtime", message)),
+		...report.warnings.filter(warning => isShown(warning.level)).map(warning => shown(warningKind(warning.level), warning,
+			inline.has(warning.topic) ? gotIt(warning.topic, warning.expression_key, warning.line) : "")),
+		...(isShown("normal") ? report.runtime_warnings : []).map(message => diagnostic("warning", "runtime", message)),
 		...hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
-		...notes.filter(topic => !inline.has(topic) && $("hints").checked).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
+		...notes.filter(topic => !inline.has(topic) && isShown("hint")).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
 	$("diagnostics").replaceChildren(...items);
 	markPositions(report);
@@ -579,7 +597,7 @@ function showReport(report) {
 
 let positionMarks = []; // the editor's underlines of the shown report
 
-// the word at each error and warning position underlined in the editor, its message on hover (src/web.rs error_at is
+// the word at each error and warning position underlined in the editor, its message on hover (src/web/mod.rs error_at is
 // the position of an error no diagnostic made); hints are not marked: their positions can lag behind (card hint-positions)
 function markPositions(report) {
 	positionMarks.forEach(mark => mark.clear());
@@ -608,23 +626,20 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-// the HTML as a fragment of DOM, not in the page
-function parsedHtml(html) {
-	const template = document.createElement("template");
-	template.innerHTML = html;
-	return template.content;
-}
-
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
 	const root = host.attachShadow({ mode: "open" });
 	root.addEventListener("submit", submitForm);
+	// change is not composed either: it stays inside the shadow root
+	for (const [event, type] of Object.entries(FIELD_EVENT_TYPES)) {
+		root.addEventListener(type, happened => sendElementEvent(event, happened, inputDetail(happened.composedPath()[0])));
+	}
 	return root;
 }
 
 // a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
 // route (lowering/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
-// GET (src/web_server.rs request_node), not a request leaving here
+// GET (src/web/web_server.rs request_node), not a request leaving here
 function submitForm(submitted) {
 	submitted.preventDefault();
 	const form = submitted.target;
@@ -747,16 +762,7 @@ function showEventOutput(data) {
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) showValue(data.value, data.error, data.html);
 	if (data.html !== undefined) showRendered(data.html);
-	(data.patches ?? []).forEach(showPatch);
-}
-
-// one element of the shown markup anew (card web-fine-holes): `path` its element indices from the root down
-function showPatch({ path, html }) {
-	const root = $("rendered").shadowRoot;
-	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
-	const wanted = parsedHtml(html).children[0];
-	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
-	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
+	(data.patches ?? []).forEach(patch => showPatch($("rendered").shadowRoot, patch));
 }
 
 async function show(code) {
@@ -800,6 +806,23 @@ function showBuildSwitch() {
 
 // the commit the page was built from and the build time in the viewer's time zone (build.sh version.js), linked to
 // the commit on GitHub
+function showReportButton() {
+	const asked = new URLSearchParams(location.search).get(REPORT_PARAMETER);
+	if (asked !== null) store(REPORT_KEY, asked === REPORT_OFF ? null : "on");
+	$("report").hidden = stored(REPORT_KEY) !== "on";
+	$("report").onclick = () => window.open(reportAddress(), "_blank", "noopener");
+}
+
+// a new GitHub issue holding the program, what it showed and the playground's version, for its reporter to submit
+function reportAddress() {
+	const code = editor.getValue();
+	const fenced = (text, limit, language = "") => "```" + language + "\n" + text.slice(0, limit) + (text.length > limit ? "\n…" : "") + "\n```";
+	const title = `playground: ${code.split("\n").find(line => line.trim()) ?? "empty program"}`;
+	const body = [fenced(code, REPORT_LIMITS.code, "warp"), "Output:", fenced($("output").innerText.trim(), REPORT_LIMITS.output),
+		$("version").textContent || "unversioned build"].join("\n\n");
+	return `${ISSUE_URL}?${new URLSearchParams({ title, body })}`;
+}
+
 function showVersion() {
 	if (!PLAYGROUND_VERSION) return;
 	const { commit, date, built } = PLAYGROUND_VERSION;
@@ -913,9 +936,10 @@ function initialize() {
 	});
 	$("run").onclick = runPressed;
 	$("full-screen").onclick = toggleFullScreen;
-	$("hints").checked = stored(HINTS_KEY) !== "off";
-	$("hints").onchange = () => {
-		store(HINTS_KEY, $("hints").checked ? "on" : "off");
+	$("shown-from").value = stored(SHOWN_FROM_KEY) ?? (stored(HINTS_KEY) === "off" ? "weak" : "hint");
+	store(HINTS_KEY, null);
+	$("shown-from").onchange = () => {
+		store(SHOWN_FROM_KEY, $("shown-from").value);
 		runNow();
 	};
 	$("address").onkeydown = goToAddress;
@@ -928,6 +952,7 @@ function initialize() {
 	startResizers();
 	showBuildSwitch();
 	showVersion();
+	showReportButton();
 	fillExamples();
 	startWorker();
 	startAssistant(editor, tellEnvironment, startCompletion(editor));
@@ -936,7 +961,7 @@ function initialize() {
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 

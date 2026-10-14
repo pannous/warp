@@ -1,7 +1,7 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
 
 use super::*;
-use crate::lowering::event_signals::{EMIT_ALIASES, EMIT_WORDS};
+use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
@@ -9,6 +9,16 @@ const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
 const TEXT_TYPE_WORDS: [&str; 3] = ["text", "string", "str"];
 
 impl WarpParser {
+	/// The head of a definition, `f`, `f x` or `f(x)`, makes f a function the rest of the source calls
+	fn register_defined_function(&mut self, head: &Node) {
+		if let Some(name) = defined_function_name(head) {
+			if matches!(head.drop_meta(), Node::List(..)) {
+				self.functions_with_parameters.insert(name.clone());
+			}
+			self.functions.insert(name);
+		}
+	}
+
 	/// Pratt parser: parse expression with given minimum binding power
 	/// Handles prefix, infix, and suffix operators
 	pub(super) fn parse_expr(&mut self, min_bp: u8) -> Node {
@@ -87,7 +97,7 @@ impl WarpParser {
 	/// unary plus
 	pub(super) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
 		let (op, chars) = self.peek_operator()?;
-		crate::lowering::class_methods::operator_method(op)?;
+		crate::operators::operator_method(op)?;
 		let mut offset = chars + self.parenthesis_length(chars)?;
 		while matches!(self.peek_char(offset), ' ' | '\t') {
 			offset += 1;
@@ -445,8 +455,9 @@ impl WarpParser {
 					// - lhs is a Symbol or a function call (List with Bracket::None)
 					// - NOT parenthesized expressions (List with Bracket::Round)
 					// - Argument conditions vary by context:
-					//   - In assignment (min_bp <= 60): allow ANY argument (including identifiers)
-					//   - In colon/comparison (min_bp > 60): only non-identifier args
+					//   - In assignment (min_bp <= 60) and in an operand of or/and/comparison/arithmetic: ANY argument
+					//     (including identifiers), `1 + count xs` is `1 + count(xs)`
+					//   - In colon and the like (between): only non-identifier args
 					//   This allows `fetch url` but prevents `a: b c d` from chaining
 					if let Some(updated) =
 						self.try_parse_implicit_application(&lhs, min_bp, ARGUMENT_BP, MAX_BP_FOR_APPLICATION)
@@ -495,10 +506,12 @@ impl WarpParser {
 			}
 
 			// Consume the operator
-			// a single `|` may pipe into a function (pipes.rs): its `or` hint waits for the operand
+			// a single `|` may pipe into a function (pipes.rs), a single `&` or `|` may combine bits (may_be_whole_number):
+			// their `and`/`or` hint waits for the operands
 			let may_pipe = chars == 1 && self.current_char() == '|' && !self.options.data_mode;
-			let written = if may_pipe {
-				PIPE_GLYPH.to_string()
+			let deferred_hint = may_pipe || (chars == 1 && self.current_char() == '&');
+			let written = if deferred_hint {
+				self.current_char().to_string()
 			} else {
 				self.hint_operator(chars, false)
 			};
@@ -513,13 +526,18 @@ impl WarpParser {
 				&& matches!(lhs.drop_meta(), Node::Symbol(_));
 			// `for:email "Email"`: the glued pair is for:email, the text the next item (card parser-tag)
 			let glued_pair = op == Op::Colon && glued_before && !self.current_char().is_whitespace();
+			// `def foo: …` defines foo by what follows, its body may call foo like the body of `foo := …`
+			let colon_defines = op == Op::Colon && heads_definition && !glued_pair && !self.result_type_follows();
+			if colon_defines {
+				self.register_defined_function(&lhs);
+			}
 			let block_body = match op {
 				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
 					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
 				}
 				// `def foo: hi=2*2` defines foo by the rest of the line, no `(foo: hi) = 2*2`; Scala's `def f(x: Int): Int = …`
 				// declares its result type
-				Op::Colon if heads_definition && !glued_pair && !self.result_type_follows() => {
+				Op::Colon if colon_defines => {
 					self.skip_spaces();
 					Some(self.with_equals_comparing(false, |parser| parser.rest_of_statement()))
 				}
@@ -533,12 +551,7 @@ impl WarpParser {
 				self.skip_whitespace();
 			}
 			if op == Op::Define {
-				if let Some(name) = defined_function_name(&lhs) {
-					if matches!(lhs.drop_meta(), Node::List(..)) {
-						self.functions_with_parameters.insert(name.clone());
-					}
-					self.functions.insert(name);
-				}
+				self.register_defined_function(&lhs);
 			}
 
 			// Parse right-hand side with appropriate binding power
@@ -599,10 +612,22 @@ impl WarpParser {
 				continue;
 			}
 
-			let rhs = if may_pipe {
-				self.pipe_operand(rhs, op_line, op_column)
-			} else {
-				rhs
+			let bitwise = deferred_hint
+				&& crate::lowering::nodes::may_be_whole_number(&lhs)
+				&& crate::lowering::nodes::may_be_whole_number(&rhs);
+			let rhs = match bare_symbol.filter(|_| deferred_hint) {
+				Some(_) if self.in_arm_key() => rhs, // `1 | 2 =>`: alternatives, no pipe, no bit hint
+				Some(_) if may_pipe && crate::pipes::may_be_stage(&rhs) => self.pipe_operand(rhs, op_line, op_column),
+				// any operand after `|` may be a pipe stage (`n | f(x)` or `xs | sort`): pipes.rs decides, by the functions
+				Some(_) if bitwise && may_pipe => crate::pipes::pipe_stage(rhs),
+				Some(_) if bitwise => rhs,
+				Some(_) if may_pipe => self.pipe_operand(rhs, op_line, op_column),
+				Some(symbol) => {
+					set_hint_position(op_line, op_column);
+					norm::operator(&symbol.to_string(), false);
+					rhs
+				}
+				None => rhs,
 			};
 			// a type word compares as its type on either side of == and != (`int != integer` is no)
 			let rhs = if op.is_equality() && written != IS_WORD {
@@ -619,6 +644,12 @@ impl WarpParser {
 			let op = if op == Op::Assign && is_function_block(&lhs, &rhs) {
 				self.functions.insert(lhs.name());
 				Op::Define
+			} else if bitwise && !crate::pipes::is_pipe_stage(&rhs) {
+				if op == Op::And {
+					Op::BitAnd
+				} else {
+					Op::BitOr
+				}
 			} else {
 				op
 			};
@@ -656,6 +687,9 @@ impl WarpParser {
 			let value = self.parse_expr(r_bp);
 			self.glued_pair_bp = outer;
 			value
+		} else if matches!(op, Op::Range | Op::To) && self.peek_operator().is_some_and(|(next, _)| next == Op::FatArrow)
+		{
+			Empty // the match arm `65.. => "senior"`: a range without end
 		} else if matches!(op, Op::And | Op::Or) && self.take_braceless_print() {
 			// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
 			print_call([self.rest_of_statement()])

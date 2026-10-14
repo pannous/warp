@@ -1,0 +1,4 @@
+// card enum-case-after-statement: a bare case as a statement keeps the later type test working; prints yes
+enum Coin { Penny, Nickel, Dime }
+Coin.Nickel
+Dime is Coin

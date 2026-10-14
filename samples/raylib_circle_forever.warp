@@ -1,5 +1,4 @@
 #!/usr/bin/env warp
-#!/usr/bin/env warp
 // Raylib FFI Example - Draw a circle in a window
 // Demonstrates using raylib graphics library via FFI
 // Note: This creates a window and displays a static circle
@@ -28,7 +27,7 @@ SetTargetFPS(60)
 // NOTE: Full event loops with while(!WindowShouldClose()) don't work yet due to WASM compiler issue
 // Simple approach: draw a few frames with small delays between them
 # while(1>0){
-while(!WindowShouldClose()){
+while not WindowShouldClose() {
     BeginDrawing()
     ClearBackground(0xFFF5F5F5)  // RAYWHITE
     DrawText("Warp Raylib FFI Demo", 250, 20, 30, 0xFF505050)  // DARKGRAY

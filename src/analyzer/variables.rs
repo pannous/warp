@@ -61,9 +61,9 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 		// `x = 255 as hex`, `x = 255 as byte`: x shows in hex too (card hex-printing), without the byte's range
 		Kind::Int
 			if let Node::Key(_, Op::As, target) = value.drop_meta()
-				&& crate::wasm_emitter::hex::shows_in_hex(&target.name()) =>
+				&& let Some(radix) = crate::wasm_emitter::radix::shown_radix(&target.name()) =>
 		{
-			Some(crate::wasm_emitter::hex::HEX_WORD.to_string())
+			Some(radix.word.to_string())
 		}
 		_ => None,
 	};
@@ -653,7 +653,8 @@ fn given_kind(
 /// The kind of the `index`-th name of `x, y = …`: the tuple function's value kind, or that of the value in that position
 pub(super) fn destructured_kind(values: &[Node], index: usize, scope: &Scope) -> Kind {
 	match values {
-		[call] => crate::tuples::call_parts(call)
+		[call] => call
+			.call_parts()
 			.and_then(|(function, _)| {
 				scope
 					.function_kinds
@@ -691,8 +692,12 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 	match type_name.strip_suffix('?') {
 		Some(_) => Some(Kind::Empty),
 		None if super::user_functions::names_empty_type(type_node) => Some(Kind::Empty),
+		// `y: any`: any value, held as a Node, never the kind of the first value given (card yes-stores)
+		None if type_name == crate::type_kinds::UNTYPED_FIELD => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
+		// `number` keeps whatever number it is given, an exact 1/3 or a float (card number-keeps-exact)
+		None if crate::type_tests::holds_any_number(type_name) => Some(Kind::Empty),
 		None => builtin_type_kind(type_name),
 	}
 }
@@ -1038,17 +1043,6 @@ impl Scope {
 		Scope::default()
 	}
 
-	pub fn child(&self) -> Self {
-		Scope {
-			locals: HashMap::new(),
-			function_kinds: HashMap::new(),
-			closure_variable_targets: HashMap::new(),
-			globals: HashMap::new(),
-			widened_bindings: HashMap::new(),
-			parent: Some(Box::new(self.clone())),
-		}
-	}
-
 	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
 		Scope {
 			function_kinds,
@@ -1096,6 +1090,11 @@ impl Scope {
 			.get(name)
 			.copied()
 			.or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
+	}
+
+	/// A parameter here: it shadows a function of its name (`g(f, b) := [f, b]` lists f)
+	pub fn is_parameter(&self, name: &str) -> bool {
+		self.lookup(name).is_some_and(|local| local.is_param)
 	}
 
 	/// Look up a variable by name, checking parent scopes

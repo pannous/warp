@@ -106,13 +106,8 @@ impl StringTable {
 		&self.data_section
 	}
 
-	/// Get the current data offset (for tracking memory usage)
+	/// The bytes the texts take: the module's memory holds at least these
 	pub fn next_offset(&self) -> u32 {
 		self.next_offset
-	}
-
-	/// Get a reference to the underlying table
-	pub fn table(&self) -> &HashMap<String, u32> {
-		&self.table
 	}
 }

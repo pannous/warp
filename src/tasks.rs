@@ -43,7 +43,7 @@ const CHANNEL_CHECK: Duration = Duration::from_millis(20);
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
-const CONSTRUCTORS: [&str; 10] = [
+const CONSTRUCTORS: [&str; 11] = [
 	"new_empty",
 	"new_int",
 	crate::wasm_emitter::NEW_BOOL,
@@ -54,8 +54,10 @@ const CONSTRUCTORS: [&str; 10] = [
 	"new_key",
 	"new_list",
 	crate::wasm_emitter::CLOSURE_REBUILD,
+	NODE_AT,
 ];
 use crate::wasm_emitter::EXACT_BUILDERS;
+use crate::wasm_emitter::NODE_AT;
 const LIMB_BITS: i64 = 32;
 /// The node fields (CLAUDE.md "Serialization") and the closure's captured values (wasm_emitter/closures.rs)
 const KIND_FIELD: usize = 0;
@@ -74,7 +76,7 @@ pub enum TaskValue {
 	Char(char),
 	Text(String),
 	Symbol(String),
-	/// the items and the bracket's code (wasm_emitter::bracket_info)
+	/// the items and the list's info: its bracket and separator (wasm_emitter::list_info)
 	List(Vec<TaskValue>, i64),
 	/// left, the operator's code, right
 	Key(Box<TaskValue>, i64, Box<TaskValue>),
@@ -82,11 +84,17 @@ pub enum TaskValue {
 	Closure(String, Box<TaskValue>),
 	/// an exact number beyond the fixnums: numerator and denominator (1 for an integer)
 	Exact(num_bigint::BigInt, num_bigint::BigInt),
+	/// a value with where it was written: line, column and the comment before it (Node::written_at, card parse-word)
+	Positioned(Box<TaskValue>, i64, i64, Option<String>),
 }
 
 impl TaskValue {
 	pub(crate) fn of(node: &Node) -> Result<TaskValue> {
 		use crate::extensions::numbers::Number;
+		if let Some((line, column, comment)) = node.written_at() {
+			let value = TaskValue::of(node.drop_meta())?;
+			return Ok(TaskValue::Positioned(Box::new(value), line, column, comment));
+		}
 		Ok(match node.drop_meta() {
 			Node::Empty => TaskValue::Empty,
 			Node::True | Node::False => TaskValue::Bool(matches!(node.drop_meta(), Node::True)),
@@ -99,9 +107,9 @@ impl TaskValue {
 			Node::Char(c) => TaskValue::Char(*c),
 			Node::Text(text) => TaskValue::Text(text.clone()),
 			Node::Symbol(name) => TaskValue::Symbol(name.clone()),
-			Node::List(items, bracket, _) => TaskValue::List(
+			Node::List(items, bracket, separator) => TaskValue::List(
 				items.iter().map(TaskValue::of).collect::<Result<_>>()?,
-				crate::wasm_emitter::bracket_info(bracket),
+				crate::wasm_emitter::list_info(bracket, separator),
 			),
 			Node::Key(left, op, right) => TaskValue::Key(
 				Box::new(TaskValue::of(left)?),
@@ -212,6 +220,7 @@ impl Builders {
 		match value {
 			TaskValue::Int(n) => Ok(*n),
 			TaskValue::Exact(numerator, denominator) => self.exact_handle(numerator, denominator, store),
+			TaskValue::Positioned(value, ..) => self.int_of(value, store),
 			other => Err(anyhow!("the task gave {other:?}, not an Int")),
 		}
 	}
@@ -220,6 +229,10 @@ impl Builders {
 		match value {
 			TaskValue::Empty => self.call("new_empty", &[], store),
 			TaskValue::Int(n) => self.call("new_int", &[Val::I64(*n)], store),
+			// a module that has no bools (a page reading form JSON) takes a truth as the Int 1/0 its code reads
+			TaskValue::Bool(truth) if !self.functions.contains_key(crate::wasm_emitter::NEW_BOOL) => {
+				self.call("new_int", &[Val::I64(*truth as i64)], store)
+			}
 			TaskValue::Bool(truth) => self.call(crate::wasm_emitter::NEW_BOOL, &[Val::I64(*truth as i64)], store),
 			TaskValue::Float(x) => self.call("new_float", &[Val::F64(x.to_bits())], store),
 			TaskValue::Char(c) => self.call("new_codepoint", &[Val::I32(*c as i32)], store),
@@ -253,6 +266,16 @@ impl Builders {
 					values => self.build(values, store)?,
 				};
 				self.call(crate::wasm_emitter::CLOSURE_REBUILD, &[name, captured], store)
+			}
+			// a module without node_at has no positions to keep (it quotes no code)
+			TaskValue::Positioned(value, ..) if !self.functions.contains_key(NODE_AT) => self.build(value, store),
+			TaskValue::Positioned(value, line, column, comment) => {
+				let node = self.build(value, store)?;
+				let comment = match comment {
+					Some(comment) => self.build(&TaskValue::Text(comment.clone()), store)?,
+					None => Val::AnyRef(None),
+				};
+				self.call(NODE_AT, &[node, Val::I64(*line), Val::I64(*column), comment], store)
 			}
 		}
 	}
@@ -292,7 +315,10 @@ impl Builders {
 						.unwrap_anyref()
 						.and_then(|reference| reference.unwrap_struct(&*store).ok());
 				}
-				Ok(TaskValue::List(items, (kind >> 8) & 0xFF))
+				Ok(TaskValue::List(
+					items,
+					((kind >> 8) & 0xFF) | ((kind & crate::type_kinds::SEPARATOR_MASK) >> 8),
+				))
 			}
 			_ => self.read(value, store),
 		}
@@ -1224,7 +1250,7 @@ fn task_name(function: &str) -> String {
 
 pub(crate) fn failure_message(failure: anyhow::Error) -> String {
 	match crate::wasm_emitter::failed_run(failure) {
-		crate::node::Node::Error(message) => message.serialize().trim_matches('"').to_string(),
+		crate::node::Node::Error(message) => message.drop_meta().to_string(),
 		other => other.serialize(),
 	}
 }

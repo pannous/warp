@@ -8,11 +8,10 @@ use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::UNWRAP;
 
 /// Meta key on a name written `x!`
 const MUTATED_MARK: &str = "mutated";
-/// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
-pub const UNWRAP: &str = "unwrap";
 const DELETE_WORD: &str = "delete";
 const POP_WORD: &str = "pop";
 
@@ -225,6 +224,10 @@ fn unwrapped(name: Node) -> Node {
 	// `ø!`: P73 force — Empty unwraps like a name holding ø
 	if matches!(name.drop_meta(), Node::Empty) {
 		return call(UNWRAP, vec![name]);
+	}
+	// `now!`: the time the run reads where it stands (card data-run-now)
+	if crate::time::is_time_call(&name) {
+		return name;
 	}
 	if !is_name(&name) {
 		let written = crate::normalize::operand_text(&name);

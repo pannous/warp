@@ -1,12 +1,12 @@
 //! Which of the playground's host scripts a module needs (card web-bundle): reader.js and host.js always, and the parts
-//! of host.js it imports words of (HOST_PARTS), with the parts they need. A built site (src/site.rs) and a Worker
-//! (src/deploy.rs) ship their texts; the playground's Deploy (src/web.rs web_worker_bundle) only names them for
+//! of host.js it imports words of (HOST_PARTS), with the parts they need. A built site (src/web/site.rs) and a Worker
+//! (src/web/deploy.rs) ship their texts; the playground's Deploy (src/web/mod.rs web_worker_bundle) only names them for
 //! warp-hosting, so the wasm32 compiler carries the names without the texts.
 
 use crate::host::{
-	CLIPBOARD_TEXT, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR,
-	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, RUN_BLOCK, SIGNAL_SEND, SOUND,
-	STD_IO, STD_PURE, TEXT_COVERAGE,
+	ANY_STD_MODULE, CLIPBOARD_TEXT, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE,
+	GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, PARSE_CODE,
+	RUN_BLOCK, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR, STD_PURE, TEXT_COVERAGE,
 };
 use crate::node::Node;
 use warp_runtime::host_words::{
@@ -52,15 +52,20 @@ pub struct HostPart {
 }
 
 /// The parts of host.js, in load order (host.js HOST_PART_FILES); the tasks and routes parts start with imports.js, which they
-/// read their module's imports with; the tasks, foreign and compiler parts with exact.js, the exact numbers they carry; the files and hashes parts with std.js, the std words. std_pure and std_io are coarse: they carry every std
-/// module's words, so a program using json (std_pure) also gets the hashes
-pub const HOST_PARTS: [HostPart; 10] = [
+/// read their module's imports with; the tasks, foreign and compiler parts with exact.js, the exact numbers they carry; the files and hashes parts with std.js, the std words. std_pure and std_io carry every std
+/// module's words: the std modules a program calls (STD_MODULES_SECTION) choose the parts of their adapters, as if
+/// imported from STD_MODULES_SECTION (std_module), so a page keeping values gets no sound code. The pure modules share
+/// one part: a program using json also gets the hashes
+pub const HOST_PARTS: [HostPart; 11] = [
 	HostPart {
 		script: ("host-files.js", script_text!("std.js", "host-files.js")),
-		gives: |module, name| {
-			module == HOST_LIBRARY && ["fetch", "fetch_within", "read", SOUND, STD_IO].contains(&name)
-		},
+		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
 		needs: &[],
+	},
+	HostPart {
+		script: ("host-sound.js", script_text!("host-sound.js")),
+		gives: |module, name| (module == HOST_LIBRARY && name == SOUND) || std_module(module, name, &["sound", "midi"]),
+		needs: &["host-files.js"],
 	},
 	HostPart {
 		script: ("host-hashes.js", script_text!("std.js", "host-hashes.js")),
@@ -79,13 +84,14 @@ pub const HOST_PARTS: [HostPart; 10] = [
 	HostPart {
 		script: ("host-foreign.js", script_text!("exact.js", "host-foreign.js")),
 		gives: |module, name| {
-			(module == HOST_LIBRARY && name == FOREIGN_CALL) || ![HOST_LIBRARY, WASI_LIBRARY].contains(&module)
+			(module == HOST_LIBRARY && name == FOREIGN_CALL)
+				|| ![HOST_LIBRARY, WASI_LIBRARY, STD_MODULES_SECTION].contains(&module)
 		},
 		needs: &["host-files.js"],
 	},
 	HostPart {
 		script: ("host-compiler.js", script_text!("exact.js", "host-compiler.js")),
-		gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK,
+		gives: |module, name| module == HOST_LIBRARY && [RUN_BLOCK, PARSE_CODE].contains(&name),
 		needs: &["host-files.js"],
 	},
 	HostPart {
@@ -114,7 +120,7 @@ pub const HOST_PARTS: [HostPart; 10] = [
 		gives: |module, name| module == HOST_LIBRARY && [RANDOM, RANDOM_BELOW, RANDOM_SEED].contains(&name),
 		needs: &[],
 	},
-	// sound_samples is a word of host-files.js, which reads its samples with host-media.js intsOfList
+	// sound_samples is a word of host-sound.js, which reads its samples with host-media.js intsOfList
 	HostPart {
 		script: ("host-media.js", script_text!("host-media.js")),
 		gives: |module, name| module == HOST_LIBRARY && [PAINT, TEXT_COVERAGE, SOUND].contains(&name),
@@ -124,7 +130,10 @@ pub const HOST_PARTS: [HostPart; 10] = [
 
 /// host.js with reader.js and the parts of the host a module imports words of, with the parts they need
 pub fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
-	let imports = imports_of(module)?;
+	let std_imports = std_modules_of(module)?
+		.into_iter()
+		.map(|name| (STD_MODULES_SECTION.to_string(), name));
+	let imports: Vec<(String, String)> = imports_of(module)?.into_iter().chain(std_imports).collect();
 	let imported = |part: &HostPart| imports.iter().any(|(module, name)| (part.gives)(module, name));
 	let needed: Vec<&str> = HOST_PARTS
 		.iter()
@@ -136,6 +145,30 @@ pub fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 		.map(|part| part.script)
 		.filter(|(name, _)| needed.contains(name));
 	Ok(HOST_SCRIPTS.into_iter().chain(parts).collect())
+}
+
+/// Is (module, name) one of these std modules, as host_scripts_of gives the modules a program calls
+fn std_module(module: &str, name: &str, adapters: &[&str]) -> bool {
+	module == STD_MODULES_SECTION && (name == ANY_STD_MODULE || adapters.contains(&name))
+}
+
+/// The std modules a module calls through std_pure / std_io (its STD_MODULES_SECTION), ANY_STD_MODULE for one it
+/// names at run time
+pub fn std_modules_of(module: &[u8]) -> Result<Vec<String>, String> {
+	section_names(module, STD_MODULES_SECTION, STD_MODULES_SEPARATOR)
+}
+
+/// The names a custom section of the module lists, joined by the separator; none without that section
+pub fn section_names(module: &[u8], section_name: &str, separator: &str) -> Result<Vec<String>, String> {
+	for payload in wasmparser::Parser::new(0).parse_all(module) {
+		if let wasmparser::Payload::CustomSection(section) = payload.map_err(|failure| failure.to_string())? {
+			if section.name() == section_name {
+				let names = std::str::from_utf8(section.data()).map_err(|failure| failure.to_string())?;
+				return Ok(names.split(separator).map(str::to_string).collect());
+			}
+		}
+	}
+	Ok(Vec::new())
 }
 
 /// The (module, name) of each import of a module
@@ -169,7 +202,7 @@ pub fn exports(module: &[u8], name: &str) -> bool {
 pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 	// the reflection getters the JavaScript host reads values with
 	let module = crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
-		.map_err(|failure| format!("nothing to compile: {}", with_excerpt(code, message_of(&failure))))?;
+		.map_err(|failure| compile_failure(code, &failure))?;
 	if !exports(&module.bytes, crate::lowering::serve::PAGE_SUBMITTED) {
 		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
 	}
@@ -178,6 +211,16 @@ pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 }
 
 /// The text of an error, else the value written out
+/// Why `code` gave no module: its error with the excerpt, as the CLI says it; a program whose value is all it has
+/// (no error) has nothing to compile
+pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
+	let message = with_excerpt(code, message_of(failure));
+	match failure.drop_meta() {
+		Node::Error(_) => message,
+		_ => format!("nothing to compile: {message}"),
+	}
+}
+
 pub(crate) fn message_of(failure: &Node) -> String {
 	match failure.drop_meta() {
 		Node::Error(message) => match message.drop_meta() {

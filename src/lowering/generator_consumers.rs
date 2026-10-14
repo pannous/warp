@@ -6,13 +6,12 @@
 //! A call inside a `while` condition stays as it is: computed once before the loop it would not change per test.
 
 use super::nodes::{assign, block, call, int, statement_list, symbol, Counter};
-use super::words::OF_WORD;
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
 use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
-use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::{parse, while_do};
+use crate::warp_parser::while_do;
+use crate::words::OF_WORD;
 use std::collections::{HashMap, HashSet};
 
 const TAKE_WORD: &str = "take";
@@ -109,13 +108,10 @@ fn is_while(node: &Node) -> bool {
 
 /// The statements of a template with its placeholders filled in
 pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
-	let filled = bindings.iter().fold(parse(text), |node, (placeholder, value)| {
-		substitute(node, placeholder, value)
-	});
-	match filled.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		single => vec![single.clone()],
-	}
+	let bindings = bindings
+		.iter()
+		.map(|(placeholder, value)| (*placeholder, (*value).clone()));
+	super::nodes::filled(text, bindings).sequence_statements().to_vec()
 }
 
 impl Consumers<'_> {
@@ -174,10 +170,6 @@ impl Consumers<'_> {
 				});
 				Node::List(items.collect(), bracket, separator)
 			}
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.hoisted(*node)),
-				data,
-			},
 			other => other.map_children(|child| self.hoisted(child)),
 		}
 	}

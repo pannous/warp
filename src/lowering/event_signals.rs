@@ -9,18 +9,19 @@
 //! nothing, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
+use super::listeners;
 use super::nodes::{block, call, children_rewritten, if_then, key};
-use super::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
-use crate::declarations::{handler_parts, word};
+use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
 use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
+use crate::words::{COUNT_WORD, FROM_WORD, OF_WORD, ONCE_WORD, ON_WORD};
+use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 use std::collections::{HashMap, HashSet};
 
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
-const ONCE_WORD: &str = "once";
 /// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
 const FIRED_PREFIX: &str = "once_fired_";
 /// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
@@ -37,15 +38,8 @@ const SUBSCRIBERS_SUFFIX: &str = "_listeners";
 const SUBSCRIBER_SUFFIX: &str = "_listener";
 const LOOP_WORDS: [&str; 4] = ["for", "while", "repeat", "loop"];
 const LOOP_SUBSCRIPTION_TOPIC: &str = "handler-in-loop";
-/// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
-/// without `to` is the same; `raise` and `throw` are errors only
-pub(crate) const EMIT_WORDS: [&str; 2] = ["emit", "send"];
-/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it);
-/// `ask` reads as asking a handler for a value: `net * (1 + ask tax_rate)` (card price-net)
-pub(crate) const EMIT_ALIASES: [&str; 4] = ["fire", "trigger", "signal", "ask"];
 const EMIT_TOPIC: &str = "emit-word";
 const UNHANDLED_TOPIC: &str = "unhandled-emit";
-const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
 /// `remove (listeners of alarm)#1 from listeners of alarm`: the place removed, evaluated once
 const REMOVED_PLACE: &str = "removed·listener";
 /// `on set x` and `on change x` are variable listeners (variable_signals.rs)
@@ -62,17 +56,32 @@ const RAISED_EVENT: &str = "raised_event";
 /// The events of the page that call their handlers from outside the program
 /// `form{ on submit { … event.fields … } }`: a form sent, its named fields in event.fields (card web-submit)
 pub const PAGE_EVENTS: [&str; 4] = ["click", "key", "input", "submit"];
+/// The events only an element raises (card click-key): `input{ on change {…} }`, a field's value committed, and its
+/// focus gained or lost
+const FIELD_EVENTS: [&str; 3] = ["change", "focus", "blur"];
 /// `click·1`: the page event of one element's handler (element_events.rs), the page event and the element's number
 pub const ELEMENT_EVENT_JOINER: char = '·';
 
-/// A page event (`click`), or one element's (`click·1`)
+/// A page event (`click`), or one element's (`click·1`, `change·2`)
 pub fn is_page_event(name: &str) -> bool {
-	PAGE_EVENTS.contains(&name.split(ELEMENT_EVENT_JOINER).next().unwrap_or(name))
+	let event = name.split(ELEMENT_EVENT_JOINER).next().unwrap_or(name);
+	PAGE_EVENTS.contains(&event) || (event != name && FIELD_EVENTS.contains(&event))
+}
+
+/// The events an element handles: `on click {…}`, `on change {…}`
+pub fn element_events() -> impl Iterator<Item = &'static str> {
+	PAGE_EVENTS.into_iter().chain(FIELD_EVENTS)
+}
+
+pub fn is_element_event(word: &str) -> bool {
+	element_events().any(|event| event == word)
 }
 /// The output binding of a program with page events: its last line when that is a name, read anew after each handler
 pub const PAGE_VALUE: &str = "page·value";
 /// The bindings of the elements of shown markup that hold computed parts, `page·hole·<path>` (card web-fine-holes)
 const PAGE_HOLE: &str = "page·hole";
+/// `page·hole·0·text·1`: a text hole (card web-fine-text-nodes), the text node after that many children of the element
+const TEXT_HOLE: &str = "text";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
 pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
@@ -115,7 +124,7 @@ pub fn lower(program: Node) -> Node {
 		&statements,
 		&raised,
 		&variables,
-		&emitted_names(&program, &RAISE_WORDS.map(String::from)),
+		&emitted_names(&program, &crate::pipeline::RAISE_WORDS.map(String::from)),
 	) {
 		Ok(kept) => kept,
 		Err(error) => return error,
@@ -205,16 +214,19 @@ pub fn lower(program: Node) -> Node {
 		.into_iter()
 		.map(|(index, name, body)| (index + flags.len(), name, body))
 		.collect();
+	// an element's handler (`input·1`, written or made by `bind:`) goes with the markup it shows: only the program's own
+	// `on submit {…}` waits in vain
 	#[cfg(feature = "native")]
 	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| {
 		is_page_event(name)
+			&& !name.contains(ELEMENT_EVENT_JOINER)
 			&& !raised.contains(name)
-			&& !crate::pipeline::is_for_a_page()
+			&& !crate::pipeline::compile_mode().for_a_page
 			&& !serves_its_page(&statements)
 	}) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
 		if let Err(error) =
-			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning)])
+			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning).weak()])
 		{
 			return error;
 		}
@@ -308,6 +320,7 @@ fn without_unraised(
 					statement,
 					format!("on {name}: nothing emits {name}, so this handler never runs{hint}"),
 				)
+				.severe()
 			})
 		})
 		.collect();
@@ -335,8 +348,13 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
 		let holes = crate::markup::holes(&shown)
 			.into_iter()
-			.map(|(path, element)| function_with_globals(&hole_name(&path), false, &[element], main_variables));
+			.map(|(path, element)| (hole_name(&path), element));
+		let text_holes = crate::markup::text_holes(&shown)
+			.into_iter()
+			.map(|hole| (text_hole_name(&hole.path, hole.after), hole.text));
 		let bindings: Vec<Node> = holes
+			.chain(text_holes)
+			.map(|(name, part)| function_with_globals(&name, false, &[part], main_variables))
 			.chain([function_with_globals(PAGE_VALUE, false, &[shown], main_variables)])
 			.collect();
 		let last = statements.len() - 1;
@@ -346,10 +364,15 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 }
 
 /// `page·hole·1·0`: the binding of the element at that path of the shown markup (worker.js reads the path back)
-fn hole_name(path: &[usize]) -> String {
+pub(crate) fn hole_name(path: &[usize]) -> String {
 	path.iter().fold(PAGE_HOLE.to_string(), |name, index| {
 		format!("{name}{NAME_JOINER}{index}")
 	})
+}
+
+/// `page·hole·1·text·2`: the binding of the text after 2 children of the element at that path (card web-fine-text-nodes)
+pub(crate) fn text_hole_name(path: &[usize], after: usize) -> String {
+	format!("{}{NAME_JOINER}{TEXT_HOLE}{NAME_JOINER}{after}", hole_name(path))
 }
 
 /// `if c then a else b`, `c ? a : b`, `a ?? b`: a choice whose parts only read (no call, no write), so reading it anew
@@ -407,7 +430,7 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 	let mut subscribed: Vec<String> = vec![];
 	let statements: Vec<Node> = statements
 		.into_iter()
-		.map(|statement| match handler(&statement) {
+		.map(|statement| match named_handler(&statement) {
 			Some(_) => statement,
 			None => statement.map_children(|child| subscriptions(child, raised, &mut subscribed, false)),
 		})
@@ -477,24 +500,16 @@ fn subscribers_name(event: &str) -> String {
 
 /// `h = on alarm {body}` (Node's emitter.on returning a handle, P128): the handler and the name it can be removed by
 fn named_handler(statement: &Node) -> Option<(Option<String>, (String, Node, bool))> {
-	match statement.drop_meta() {
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) => {
-			handler(&flattened(value)).map(|parts| (Some(word(target)), parts))
-		}
-		_ => handler(statement).map(|parts| (None, parts)),
+	let listener = listeners::read_named(statement, &[ON_WORD, ONCE_WORD])?;
+	let words = listener.words();
+	if words
+		.first()
+		.is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str()))
+	{
+		return None;
 	}
-}
-
-/// The value of `h = on alarm {…}` arrives nested, `on (alarm {…})`, `(on stop) (the (machine {…}))`: its words in
-/// one row
-fn flattened(node: &Node) -> Node {
-	fn words(node: &Node) -> Vec<Node> {
-		match node.drop_meta() {
-			Node::List(items, Bracket::None, Separator::Space) => items.iter().flat_map(words).collect(),
-			_ => vec![node.clone()],
-		}
-	}
-	Node::List(words(node), Bracket::None, Separator::Space)
+	let once = listener.keyword == ONCE_WORD;
+	Some((listener.name, (event_name(words.iter())?, listener.body, once)))
 }
 
 /// A named handler runs while its flag `h_listening` holds: `remove h from listeners of alarm` clears it
@@ -776,28 +791,7 @@ fn bound_names(program: &Node) -> HashSet<String> {
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`, `once alarm {body}`: the event's name, the body
 /// and whether it runs once
 fn handler(statement: &Node) -> Option<(String, Node, bool)> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let (on, rest) = items.split_first()?;
-	let (last, words) = rest.split_last()?;
-	let once = word(on) == ONCE_WORD;
-	if !(once || word(on) == ON_WORD)
-		|| words
-			.first()
-			.is_some_and(|first| VARIABLE_LISTENER_WORDS.contains(&word(first).as_str()))
-	{
-		return None;
-	}
-	let (last_word, body) = match last.drop_meta() {
-		Node::List(_, Bracket::Curly, _) if !words.is_empty() => (None, last.clone()),
-		_ => {
-			let (event, body) = handler_parts(last)?;
-			(Some(event), body)
-		}
-	};
-	let name = event_name(words.iter().chain(last_word.as_ref()))?;
-	Some((name, body, once))
+	named_handler(statement).and_then(|(name, parts)| name.is_none().then_some(parts))
 }
 
 /// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
@@ -836,7 +830,7 @@ pub(crate) fn emitted(node: &Node, verbs: &[String]) -> Option<(String, Node)> {
 }
 
 /// The words of an event, joined by spaces; None unless all are plain words
-fn event_name<'a>(words: impl Iterator<Item = &'a Node>) -> Option<String> {
+pub(crate) fn event_name<'a>(words: impl Iterator<Item = &'a Node>) -> Option<String> {
 	let words: Vec<String> = words.map(word).collect();
 	(!words.is_empty() && words.iter().all(|word| !word.is_empty())).then(|| words.join(" "))
 }
@@ -969,10 +963,7 @@ pub(crate) fn last_statement(block: &Node) -> std::borrow::Cow<'_, Node> {
 
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
 pub(crate) fn global_declaration(name: &str) -> Node {
-	crate::law::substitute(
-		&parse(&format!("global {TEMPLATE_NAME}")),
-		&HashMap::from([(TEMPLATE_NAME.to_string(), symbol(name))]),
-	)
+	super::nodes::filled(&format!("global {TEMPLATE_NAME}"), [(TEMPLATE_NAME, symbol(name))])
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body
@@ -985,7 +976,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 				changes |= crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			Node::Key(target, Op::Dot, call) => {
-				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::analyzer::is_list_mutating_method(&word(method))));
+				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::declaration_forms::is_list_mutating_method(&word(method))));
 				changes |= mutating && crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			_ => {}
@@ -1101,7 +1092,7 @@ fn emits_as_calls(
 				call(&handler_function_name(&name), arguments)
 			}
 			// card page-custom-event: in a page it reaches the page, as a CustomEvent of its name with the data as detail
-			None if crate::pipeline::renders_itself() && !block_handled.contains(&name) => {
+			None if crate::pipeline::compile_mode().renders_itself() && !block_handled.contains(&name) => {
 				call(crate::host::DISPATCH_EVENT, vec![Node::Text(name.clone()), data])
 			}
 			None => {

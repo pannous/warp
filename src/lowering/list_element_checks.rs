@@ -9,8 +9,9 @@
 use super::nodes::{assign, key, Counter};
 use crate::analyzer::{
 	added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list,
-	insert_position, inserted_item, list_element_type, of_type_declaration,
+	inserted_item, list_element_type,
 };
+use crate::declaration_forms::{insert_position, of_type_declaration};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -25,6 +26,7 @@ const CHECK_PLACEHOLDER: &str = "item_check_placeholder";
 const CHECKED_PREFIX: &str = "checked·";
 /// A float or number list takes ints too, as a declared float does
 const NUMBER_WORD: &str = "number";
+const FLOAT_WORD: &str = "float";
 
 pub fn lower(node: Node) -> Node {
 	let class_fields = crate::class_methods::class_fields(&node);
@@ -56,6 +58,8 @@ struct ElementTest {
 	/// the instance `b` and the class `bag` of `b is bag`: the test applies only to an instance of that class, for a field
 	/// of an instance whose class is unknown
 	guard: Option<(Node, String)>,
+	/// a list of floats stores an exact number as a float, as its initial items (card floats-add-exact)
+	stores_floats: bool,
 }
 
 impl ElementTest {
@@ -79,7 +83,7 @@ impl ElementChecks {
 	fn lower(&mut self, node: Node) -> Node {
 		match node {
 			// `names: list of text = f()` still arrives as the items `names:list`, `of`, `text=f()`: normalized to
-			// `names:"list of text"=f()` here (as declaration_lowering would later), else type_tests reads the `text` of a
+			// `names:"list of text"=f()` here (as declaration_forms would later), else type_tests reads the `text` of a
 			// check `v is text` as the variable this form seems to assign
 			Node::List(items, bracket, separator) => match of_type_declaration(&items, &bracket, &separator) {
 				Some(normalized) => self.lower(normalized),
@@ -195,26 +199,36 @@ impl ElementChecks {
 		self.with_checks(checks, Node::Key(list.clone(), Op::Dot, Box::new(call)))
 	}
 
-	/// The items as stored, each run-time one checked first; a call's item is held in a temporary so it runs once
+	/// The items as stored, each run-time one checked first; a call's item is held in a temporary so it runs once.
+	/// A list of floats stores each number as a float (`xs.add(1/3)` adds 0.333…)
 	fn checked_items(&mut self, items: Vec<Node>, tests: &[ElementTest], checks: &mut Vec<Node>) -> Vec<Node> {
+		let stores_floats = tests.iter().any(|test| test.stores_floats && test.guard.is_none());
 		items
 			.into_iter()
 			.map(|item| {
-				if checked_at_compile_time(&item, tests) {
-					return item;
+				let item = self.checked_item(item, tests, checks);
+				match stores_floats && !is_other_literal_than_number(&item) {
+					true => as_float(&item),
+					false => item,
 				}
-				let held = match item.drop_meta() {
-					Node::Symbol(_) => item,
-					_ => {
-						let temporary = self.temporary();
-						checks.push(assign(temporary.clone(), item));
-						temporary
-					}
-				};
-				checks.extend(tests.iter().map(|test| item_check(&held, test)));
-				held
 			})
 			.collect()
+	}
+
+	fn checked_item(&mut self, item: Node, tests: &[ElementTest], checks: &mut Vec<Node>) -> Node {
+		if checked_at_compile_time(&item, tests) {
+			return item;
+		}
+		let held = match item.drop_meta() {
+			Node::Symbol(_) => item,
+			_ => {
+				let temporary = self.temporary();
+				checks.push(assign(temporary.clone(), item));
+				temporary
+			}
+		};
+		checks.extend(tests.iter().map(|test| item_check(&held, test)));
+		held
 	}
 
 	fn declared_test(&self, name: &str) -> Option<ElementTest> {
@@ -299,7 +313,22 @@ fn element_test(name: &str, type_name: &str) -> Option<ElementTest> {
 		type_word,
 		message,
 		guard: None,
+		stores_floats: crate::type_tests::is_float_type_word(element),
 	})
+}
+
+/// `"a"`: a literal no number, refused by the compile-time check, not converted
+fn is_other_literal_than_number(item: &Node) -> bool {
+	computed_literal_kind(item).is_some_and(|kind| !matches!(kind, Kind::Int | Kind::Float))
+}
+
+/// `item as float`
+fn as_float(item: &Node) -> Node {
+	substitute(
+		crate::warp_parser::parse(&format!("{ITEM_PLACEHOLDER} as {FLOAT_WORD}")),
+		ITEM_PLACEHOLDER,
+		item,
+	)
 }
 
 /// `if not (v is text) { raise "…" }`

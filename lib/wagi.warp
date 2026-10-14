@@ -1,8 +1,21 @@
 // The standard library module wagi (card fermyon-hosting, notes/hosting.md "Fermyon"): `warp build --wagi` makes a
 // program's routes answer one request the WAGI way (Spin's wagi executor, Akamai Functions): the request comes in the
 // environment (REQUEST_METHOD, PATH_INFO, QUERY_STRING), the answer goes CGI-style to stdout: headers, a blank line, the
-// body. A text answers as text, anything else as JSON, as `warp serve` answers (src/web_server.rs Answer::of).
-// Not yet: request bodies (stdin), percent-decoded query values.
+// body. A text answers as text, anything else as JSON, as `warp serve` answers (src/web/web_server.rs Answer::of).
+// A route's `status 418` and `header "name" "value"` (card wagi-build, lowering/serve.rs with_answer_headers) are
+// wagi_header calls: the answer carries them. Not yet: request bodies (stdin), percent-decoded query values.
+
+// the answer's status and its other header lines, as the route set them; a set Content-Type replaces the answer's own
+global wagi_status = 200
+global wagi_content_type = ""
+global wagi_header_lines = ""
+
+wagi_header(name:any, value:any) := {
+	let field = lower(str(name))
+	if field == "status" { wagi_status = value }
+	else if field == "content-type" { wagi_content_type = str(value) }
+	else { wagi_header_lines = wagi_header_lines + "\n" + str(name) + ": " + str(value) }
+}
 
 wagi_variable(name:any) := {
 	for entry in split(wasi_environment(), chr(0)) {
@@ -53,7 +66,7 @@ wagi_json_fields(value:any) := {
 wagi_json(value:any) := {
 	if value == ø { return "null" }
 	if value is bool { return if value then "true" else "false" }
-	if value is int or value is float { return str(value) }
+	if value is number { return str(value) }
 	if value is text { return wagi_json_text(value) }
 	if value is pair or wagi_holds_pairs(value) { return wagi_json_fields(value) }
 	if value is list or value is map { return "[" + join([wagi_json(item) for item in value], ",") + "]" }
@@ -62,9 +75,12 @@ wagi_json(value:any) := {
 
 wagi_reply(status:any, content_type:any, body:any) := puts "Status: " + str(status) + "\nContent-Type: " + content_type + "\n\n" + body
 
+// the route's value with the status and headers it set
 wagi_answer(value:any) := {
-	if value is text { return wagi_reply(200, "text/plain; charset=utf-8", value) }
-	wagi_reply(200, "application/json", wagi_json(value))
+	let own_type = if value is text then "text/plain; charset=utf-8" else "application/json"
+	let content_type = if wagi_content_type == "" then own_type else wagi_content_type
+	let body = if value is text then value else wagi_json(value)
+	puts "Status: " + str(wagi_status) + "\nContent-Type: " + content_type + wagi_header_lines + "\n\n" + body
 }
 
 // lowering/serve.rs page·submitted throws "no route answers …" for a request no route takes

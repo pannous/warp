@@ -3,7 +3,7 @@
 //! when it runs: it has the declared type, else the error "not a <type>". Unannotated places stay lax.
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
-use crate::node::Node;
+use crate::node::{Bracket, Node};
 use crate::type_kinds::{Kind, BOOL_MASK_BIT};
 use wasm_encoder::*;
 use Instruction as I;
@@ -28,6 +28,33 @@ pub(super) fn declared_field_value(node: &Node) -> Option<(&Node, &Node)> {
 	match data.as_ref() {
 		Node::Key(key, _, declared) if key.name() == DECLARED_TYPE => Some((node, declared)),
 		_ => None,
+	}
+}
+
+/// A literal list given to a list of floats, each item marked with the element type (as with_declared_field_types marks
+/// a field's value); None for any other place or value, and for a list already marked
+fn with_float_items(declared: &Node, value: &Node) -> Option<Node> {
+	let element = crate::analyzer::declared_element_type(declared)
+		.filter(|element| crate::type_tests::is_float_type_word(element))?;
+	let Node::List(items, bracket @ Bracket::Square, separator) = value.drop_meta() else {
+		return None;
+	};
+	if items.iter().any(|item| declared_field_value(item).is_some()) {
+		return None;
+	}
+	let marked = items.iter().map(|item| Node::Meta {
+		node: Box::new(item.clone()),
+		data: Box::new(Node::key(DECLARED_TYPE, Node::Symbol(element.to_string()))),
+	});
+	Some(Node::List(marked.collect(), bracket.clone(), separator.clone()))
+}
+
+/// An int place takes a bool held as a Node as its Int 1 or 0, as it takes a bool known when compiled (`x: int = yes`)
+fn with_bools_as_ints(mask: i64) -> i64 {
+	if mask & (1 << Kind::Int as i64) != 0 {
+		mask | 1 << BOOL_MASK_BIT
+	} else {
+		mask
 	}
 }
 
@@ -59,7 +86,7 @@ impl WasmGcEmitter {
 			Some(Kind::Float) => "real", // an int fits a float, a ± value does not
 			_ => &type_name,
 		};
-		crate::type_tests::runtime_kind_mask(spec).map(Admitted::Kinds)
+		crate::type_tests::runtime_kind_mask(spec).map(|mask| Admitted::Kinds(with_bools_as_ints(mask)))
 	}
 
 	/// The static kind of `value` leaves open whether it fits: held as a Node, or of a kind the type does not admit
@@ -133,6 +160,17 @@ impl WasmGcEmitter {
 		value: &Node,
 		kind: Kind,
 	) {
+		// an exact number given to a float place held as a Node is a float, as one given to a float variable or parameter
+		// (card number-converts): a field `v: float`, the items of a literal list `xs: floats = [1/3]`
+		if kind.is_ref() {
+			if declared.is_some_and(|declared| crate::type_tests::is_float_type_word(&declared.name())) {
+				self.emit_declared_value(func, declared, value, Kind::Float);
+				return self.emit_call(func, "new_float");
+			}
+			if let Some(items) = declared.and_then(|declared| with_float_items(declared, value)) {
+				return self.emit_declared_value(func, declared, &items, kind);
+			}
+		}
 		// a decimal written for an exact place (`exact x = 0.1`, `x: rational = 0.5`, `real x = 3.3`) is the fraction it spells
 		if let (Some(declared), Node::Number(Number::Float(decimal))) = (declared, value.drop_meta()) {
 			if crate::type_tests::spells_decimals_exactly(&declared.name()) && !kind.is_float() {
@@ -251,7 +289,7 @@ pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
 /// The in-place writers of a list, which check their items against its element mark
 const MARK_CHECKING_WRITERS: [&str; 3] = [
 	super::list_ops::LIST_EXTEND,
-	crate::analyzer::INSERT_AT_CALL,
+	crate::declaration_forms::INSERT_AT_CALL,
 	"node_with_at",
 ];
 

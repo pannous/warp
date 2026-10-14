@@ -2,9 +2,11 @@
 
 Roadmap card: fast-numbers (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 
+In general, once we enter the regime of GPUs, we are no longer interested in precision (especially for neural nets it has been shown that less precision is even better). 
+
 User: list arithmetic on large number lists runs as WebGPU compute (wgpu natively, WebGPU in the playground) above a
 size threshold, on the CPU below it and without an adapter; tests compare GPU and CPU results. The GPU path reuses the
-gpu_compute / gpu_render plumbing (src/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
+gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
 
 ## Where the language stands (2026-10-08, measured on main)
 - `xs * 2` is an error by decision (D3: repeat or multiply?), `xs + ys` concatenates. Element-wise is the dotted form
@@ -37,6 +39,8 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
   sum/min/max, without @gpu or @cpu, Kernel.heavy) goes to the GPU from GPU_AUTO_MIN_COUNT = 10 × GPU_MAP_MIN_COUNT
   (327680 items: one order of magnitude of room for other architectures), checked at run time (flag AUTOMATIC = 4 in
   the keeping argument). Without an adapter it stays on the CPU silently (no warning, unlike @gpu).
+  `go xs.map(x => sin(x))` is that plain map too (parallel.rs kernel_map, card go-heavy-map): tasks copying Node slices
+  took 50 s for 10 maps of 300k items, the CPU loop 1 s (probes/perf/go_heavy_map.warp).
 - Exactness on demand: `@cpu` on a map (`xs.map(f) @cpu`, `@cpu xs.map(f)`), a block, a function or the program keeps
   it on the CPU in f64 and overrides the switch; `@gpu` with `@cpu` on one map is a compile error. `WARP_GPU=off`
   pins a whole run (tests, benchmarks) to the CPU, @gpu included.
@@ -212,7 +216,7 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
    Headless Chrome, samples/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
 
 ## Painting a shader every frame (samples/gpu_visualizer.warp, 2026-10-10)
-- src/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js
+- src/graphics/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js
   MOST_COMPILED): before, every paint compiled the pipeline anew, 10–20 ms for the raymarching sample on Metal plus
   driver work, now only the uniform's bind group is made per frame. Test: test_webgpu a_kept_shader_reads_each_frames_values.
 - Measured (debug build, M-series, WARP_NO_WINDOW): the raymarcher's draw + readback 9 ms at 640×360; a paint is
@@ -247,8 +251,18 @@ into a new texture and keeps it per shader text (native gpu.rs PREVIOUS_FRAMES, 
 previousFrames); a canvas paint then copies it into the canvas texture (configured COPY_DST). Kept as 8 bits per
 channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
 
+## WGSL errors at their place in the program (card wgsl-error, user 2026-10-13)
+WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). Both hosts report a
+shader that does not compile as `<word>: line:column: why` in the shader's text (native gpu.rs compile_errors, browser
+host-gpu.js checkedModule, `gpu_paint: …` there). pipeline::eval_source passes the failed program through
+shader_errors::relocated: it finds the program's shader blocks again in the source (warp_parser shader_blocks, the
+same dedent as the block's text: lines dropped around it, characters dropped before each line) and, when exactly one
+block has that place, says `<word>: why at line:column` in the program, which the CLI and the playground underline.
+Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
+GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
+
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
-- src/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
+- src/graphics/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
   `input x y down key` lines on stdout, which warp-runtime system_values.rs window_input keeps (system values and
   shader built-ins both read it). $key holds only the last key pressed.
 - Default canvas: lib/draw.warp sizes it from system values view_width / view_height (the playground's output pane
@@ -260,3 +274,57 @@ channel, so small fades round: subtract a step (≥ 1/255) rather than multiply 
   to $TMPDIR/warp-paint, shared by every session (filter frames by size and mtime). A headless 1080p animation is
   bound by PNG writing; the window path isn't. A shader built-in is skipped when the program assigns a variable of
   that name (gpu_visualizer keeps its own `time`, the song's clock). `sleep 16ms` takes a unit on its number.
+
+## Warp functions on the GPU (card gpu-functions, plan 2026-10-13)
+Step (a), card paint-keeps: a shader painted in a window renders in the paint-window process; per frame only the
+shader text and its values cross (~6 KB, not an 8 MB readback), and the window draws the newest frame. Step (b), this
+plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), a map's helper functions) runs there too.
+
+- **The subset that compiles.** It's the kernel translation of gpu_maps.rs (`Translation::expression`), widened from
+  one lambda expression to a function body:
+  - numbers in f32 (P240: imprecise by design), i32 for ints; vectors of 2–4 numbers as vec2f…vec4f
+  - local variables, `if`/`else`, `for i in a..b`, `while`
+  - the math words (sin cos tan sqrt exp log pow atan2 min max abs floor fract round clamp)
+  - calls of other functions in the subset, each emitted as its own WGSL `fn`
+  - Refused, with the reason named: texts, lists of variable length, maps, closures, allocation, host words,
+    exceptions, recursion (WGSL has none).
+- **Types.** A parameter's type comes from the call site that sends it to the GPU: an f32 item, a program number, a
+  pixel coordinate. One WGSL function is made per signature (shares the specialization with card untyped-parameters).
+- **Which functions go to the GPU.**
+  1. A map kernel may call user functions. Today its lambda may only use operators and math words.
+     `xs.map(x => shade(x))` translates shade() and its callees; the threshold rule stays (heavy kernels auto
+     from GPU_AUTO_MIN_COUNT, `@gpu` forces).
+  2. `paint(f, width, height)` with a warp function `f(x, y) -> color` instead of a WGSL text: f becomes the fragment
+     shader; the program's numbers it reads become `values` (uniforms, as for text shaders).
+  3. `@gpu` on a function: every call from a heavy map or a paint function compiles it, and a function outside the
+     subset is a warning that names the construct (an error under strict).
+- **Precision** (user 2026-10-13: "Math is exact by default, except when doing lots of computation. GPU should be
+  F32 too by default. With a little warning. It's only applied for mass calculations, anyways."): P240 stands. Small
+  computations stay exact in f64; mass work (a heavy map from GPU_AUTO_MIN_COUNT items) goes to the GPU in f32 by
+  itself, with the one-time notice. The functions such a map calls go with it, in f32 under the same notice.
+  `@gpu` and paint ask for the GPU outright; `@cpu` and WARP_GPU=off keep f64.
+  On the GPU itself precision doesn't matter (user 2026-10-13): every number is an f32, ints and `x as float`
+  included, with no effort spent on exactness. Colors are the one exception and stay exact: a packed 0xAARRGGBB int
+  in an f32 would garble its channels (alpha pushes it past 2^24). So a function giving rgb(…) (hsv and other callers
+  of rgb too) becomes a WGSL fn returning a vec4f, a packed color literal is unpacked at compile time, and any other
+  number a painted function gives is ink unless 0, as in paint(pixels, …).
+- **Fallback.** As for maps:
+  - not translatable: runs on the CPU as written, warned once
+  - no adapter: the CPU, silently
+  - `@cpu` / WARP_GPU=off: the CPU in f64
+  - the browser runs the same WGSL through host-gpu.js
+- **Steps**, each with its test under tests/wasm/ or tests/programs/:
+  1. Translate statements: let, assignment, if, for over a range, return.
+  2. Calls of user functions, with a callee closure and a recursion check.
+  3. Map kernels calling user functions.
+  4. paint(f, …) of a warp function.
+  5. Acceptance: samples/gpu_visualizer.warp's tunnel shader written in warp gives the same frame as the WGSL one.
+- **Progress.** Done 2026-10-13: steps 1–3 (gpu_maps.rs `Translation::function`, tests/web/test_gpu_functions.rs; 1M items of
+  a function with a loop of cos: 324 ms @cpu → 29 ms on the GPU). Step 4: `paint(f, width, height)` lowers to a
+  fragment shader of f (gpu_maps.rs `painted_functions`, tests/programs/test_paint_function.rs), the program's
+  numbers f reads as its values; f outside the subset, `@cpu` or WARP_GPU=off: f of each pixel on the CPU
+  (probes/gpu/paint_mandelbrot.warp, full HD, debug build: 18.4 s on the CPU → 1.6 s, mostly the PNG). Open: no
+  adapter falls back to the CPU only for maps, a painted function fails like a shader text (card paint-function).
+  Next, after the Rust cleanup (user decision cleanup-only, 2026-10-13): step 5, the tunnel shader of
+  samples/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
+  values (`levels`).

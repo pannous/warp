@@ -420,7 +420,7 @@ fn finish_tasks<R>(
 	Ok((result, store, instance))
 }
 
-/// Run main, then call the parameterless export `name` (a page's page·html, src/site.rs): its value
+/// Run main, then call the parameterless export `name` (a page's page·html, src/web/site.rs): its value
 pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Result<Node> {
 	Ok(read_exports_after_main(bytes, imports, &[name])?.remove(0))
 }
@@ -450,7 +450,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::wasm_emitter::{trap_detail_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX};
+pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX, TRAP_POSITION};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
@@ -459,7 +459,10 @@ pub(crate) fn with_trap_detail<T, R>(
 	instance: &Instance,
 ) -> Result<R> {
 	outcome.map_err(|failure| {
-		let failure = anyhow::Error::from(failure);
+		let position = instance
+			.get_global(&mut *store, TRAP_POSITION)
+			.map(|global| global.get(&mut *store));
+		let failure = with_trap_position(anyhow::Error::from(failure), position);
 		let detail = instance
 			.get_global(&mut *store, TRAP_DETAIL)
 			.map(|global| global.get(&mut *store));
@@ -471,6 +474,18 @@ pub(crate) fn with_trap_detail<T, R>(
 			None => failure,
 		}
 	})
+}
+
+/// A trapped run with the source position the program left in `trap_position` (its value) as the error's context
+pub(crate) fn with_trap_position(failure: anyhow::Error, position: Option<Val>) -> anyhow::Error {
+	match position
+		.and_then(|value| value.i32())
+		.map(i64::from)
+		.and_then(trap_position_line)
+	{
+		Some(line) => failure.context(line),
+		None => failure,
+	}
 }
 
 /// Convert a `main` result (primitive or GC Node struct) into a Node, for any store state
@@ -551,13 +566,15 @@ fn struct_node<T>(
 			Ok(Number::Int(0)) => Node::False,
 			_ => Node::True,
 		},
-		t if t == Kind::Int as u8 && high_byte == crate::type_kinds::HEX_INFO => match read_payload(store, &data) {
-			Ok(Number::Int(value)) => {
-				Node::Number(Number::Int(value)).with_source_literal(&crate::wasm_emitter::hex::hex_literal(value))
+		t if t == Kind::Int as u8 && crate::wasm_emitter::radix::radix_of_info(high_byte).is_some() => {
+			match read_payload(store, &data) {
+				Ok(Number::Int(value)) => Node::Number(Number::Int(value)).with_source_literal(
+					&crate::wasm_emitter::radix::marked_literal(high_byte, value).expect("a radix mark"),
+				),
+				Ok(number) => Node::Number(number),
+				Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
 			}
-			Ok(number) => Node::Number(number),
-			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
-		},
+		}
 		t if t == Kind::Int as u8 => match read_payload(store, &data) {
 			Ok(number) => Node::Number(number),
 			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
@@ -578,11 +595,20 @@ fn struct_node<T>(
 			crate::operators::code_to_op(high_byte),
 			Box::new(node(&child)),
 		),
-		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory, path),
+		t if t == Kind::Block as u8 => list_in(
+			data,
+			child,
+			Bracket::Curly,
+			crate::wasm_emitter::separator_of_kind(kind),
+			store,
+			memory,
+			path,
+		),
 		t if t == Kind::List as u8 => list_in(
 			data,
 			child,
 			crate::wasm_emitter::bracket_of_info(high_byte),
+			crate::wasm_emitter::separator_of_kind(kind),
 			store,
 			memory,
 			path,
@@ -618,6 +644,7 @@ fn list_in<T>(
 	mut first: Val,
 	mut rest: Val,
 	bracket: crate::node::Bracket,
+	separator: crate::node::Separator,
 	store: &mut StoreContextMut<'_, T>,
 	memory: wasmtime::Memory,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
@@ -651,7 +678,7 @@ fn list_in<T>(
 		}
 		(first, rest) = (data, child);
 	}
-	Node::List(items, bracket, crate::node::Separator::None)
+	Node::List(items, bracket, separator)
 }
 
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {

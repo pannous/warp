@@ -54,7 +54,7 @@ function nextLive(node) {
 }
 
 // without transitions an element just comes and goes; markup-transitions.js, loaded after this script by pages whose
-// elements have a CSS transition (src/site.rs), replaces these four
+// elements have a CSS transition (src/web/site.rs), replaces these four
 function transitionPlaces() { return new Map(); }
 function enter() {}
 function leave(node) { node.remove(); }
@@ -84,6 +84,10 @@ function elementEvent(event, happened, detail) {
 	const instance = path.find(node => node.getAttribute?.(INSTANCE_ATTRIBUTE))?.getAttribute(INSTANCE_ATTRIBUTE);
 	return element && { event: `${event}·${element.getAttribute(attribute)}`, detail: instance ? { ...detail, instance: Number(instance) } : detail };
 }
+
+// the element events that are no page events (card click-key, event_signals.rs FIELD_EVENTS), by the DOM event that
+// raises each: focus and blur do not bubble, their focusin and focusout do
+const FIELD_EVENT_TYPES = { change: "change", focus: "focusin", blur: "focusout" };
 
 // what a form field holds now: `input{ bind: name }` sets name to event.value (a number from a number or range field)
 function inputDetail(field) {
@@ -123,4 +127,31 @@ function keepValue(name, value, file) {
 	} catch (failure) {
 		console.error(`${name} could not be kept:`, failure);
 	}
+}
+
+// the HTML as a fragment of DOM, not in the page
+function parsedHtml(html) {
+	const template = document.createElement("template");
+	template.innerHTML = html;
+	return template.content;
+}
+
+// one hole of the markup shown in `root` anew (card web-fine-holes; the playground, built sites: card web-fine-rest):
+// the element at `path`, its element indices from the root down, morphed to `html`; or the text node after `after`
+// children of that element set to `text` (card web-fine-text-nodes)
+function showPatch(root, { path, html, text, after }) {
+	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
+	if (text !== undefined) return shown ? showText(shown, after, text) : console.error(`markup hole ${path.join("·")}: no element there`);
+	const wanted = parsedHtml(html).children[0];
+	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
+	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
+}
+
+// the text node after `after` children of the element set to `text`; an empty text has none, so one is made or dropped
+function showText(element, after, text) {
+	const next = after === 0 ? element.firstChild : element.children[after - 1]?.nextSibling;
+	const node = next?.nodeType === Node.TEXT_NODE ? next : null;
+	if (node && text) node.data = text;
+	else if (node) node.remove();
+	else if (text) element.insertBefore(document.createTextNode(text), after === 0 ? element.firstChild : next ?? null);
 }

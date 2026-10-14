@@ -13,7 +13,7 @@ pub(crate) const PREPOSITIONS: [&str; 11] = [
 	"to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each",
 ];
 const IT: &str = "it";
-/// The word that makes an error value, `error("e")`
+/// The word that makes an error value, `error "e"`
 const ERROR_WORD: &str = "error";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 17] = [
@@ -27,12 +27,13 @@ pub(crate) fn names_a_function(name: &str) -> bool {
 		&& !PREPOSITIONS.contains(&name)
 		&& !STATEMENT_WORDS.contains(&name)
 		&& !crate::modules::is_import_keyword(name)
-		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name)
+		&& !crate::words::CONSTANT_KEYWORDS.contains(&name)
 		&& !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 
+/// A known type word of a head: `fib int i`, `foo of any`
 fn is_type_word(word: &str) -> bool {
-	type_word_kind(word).is_some()
+	type_word_kind(word).is_some() || word == crate::words::ANY_TYPE
 }
 
 fn typed(name: &str, type_name: &str) -> Node {
@@ -56,7 +57,7 @@ pub fn phrase_words(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) ->
 			&& more_in_slot
 			&& !ARTICLES.contains(&word)
 			&& !is_known_type(word)
-			&& !uses_name(body, word);
+			&& !body.mentions(word);
 	}
 	in_phrase
 }
@@ -89,7 +90,7 @@ pub fn parameter_slots(
 		let next = (!ends_slot(index + 1)).then(|| words[index + 1]);
 		if in_phrase[index] {
 			index += 1;
-		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !uses_name(body, word)) {
+		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !body.mentions(word)) {
 			let noun: Vec<&str> = (index + 1..words.len())
 				.take_while(|later| !ends_slot(*later) && !ARTICLES.contains(&words[*later]))
 				.map(|later| words[later])
@@ -130,7 +131,7 @@ pub fn parameter_slots(
 	}
 	if let [Node::Key(name, Op::Colon, type_name)] = parameters.as_slice() {
 		// `fibonacci number := … number … it …` uses both: the parameter keeps its name and `it` is the same value
-		if name == type_name && uses_it(&body) && !uses_name(&body, &name.name()) {
+		if name == type_name && uses_it(&body) && !body.mentions(&name.name()) {
 			parameters = vec![typed(IT, &type_name.name())];
 		}
 	}
@@ -191,14 +192,8 @@ fn numbered_type_reads(body: &Node, parameters: &[Node]) -> Node {
 	rewrite(body, &names)
 }
 
-fn uses_name(node: &Node, wanted: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if name == wanted));
-	found
-}
-
 pub fn uses_it(node: &Node) -> bool {
-	uses_name(node, IT)
+	node.mentions(IT)
 }
 
 /// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
@@ -261,8 +256,8 @@ fn flat_head(head: &Node) -> Node {
 }
 
 /// The value converted to the declared result type; an arithmetic value is grouped, `(x*2) as int`, as written it
-/// would be the ambiguous `x*2 as int`. The branches of a choice convert each, so an `error(…)` branch stays the
-/// error (card braced-body: `def f(x) -> text { error("e") }` fails with e; `as text` would give the text "(error 'e')")
+/// would be the ambiguous `x*2 as int`. The branches of a choice convert each, so an `error …` branch stays the
+/// error (card braced-body: `def f(x) -> text { error "e" }` fails with e; `as text` would give the text "(error 'e')")
 fn as_type(value: Node, type_name: &Node) -> Node {
 	match value.drop_meta() {
 		_ if is_error_value(&value) => value,
@@ -329,7 +324,7 @@ fn checked_result(value: Node, type_name: &Node) -> Node {
 	)
 }
 
-/// `error("e")`
+/// `error "e"`
 fn is_error_value(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Error(_) => true,
@@ -394,6 +389,10 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 			(head, symbol(&crate::analyzer::union_of_types(&union, &|_| true)?))
 		}
 	};
+	// `f(w) as any := …`: a value of any kind converts to nothing (card def); `y: any = yes` stays a declaration
+	if type_name.is_symbol(crate::type_kinds::UNTYPED_FIELD) && is_call_head(&head) {
+		return Some(Node::Key(Box::new(head), *op, body.clone()));
+	}
 	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()))
 }
 

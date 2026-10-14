@@ -1,0 +1,7 @@
+use "lib/compiler/serializer.warp"
+// small floats keep their exponent, as Rust's Node::serialize writes them (card writes-node)
+// 2.7557313707070068e-6  -0.0015  -2e-7  3.25
+print(serialize(2.7557313707070068e-6))
+print(serialize(-1.5e-3))
+print(serialize(-2e-7))
+print(serialize(3.25))

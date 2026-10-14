@@ -4,11 +4,11 @@
 //! `xs.take first 10` is `xs.slice(0, 10)`. The parser reads a chain `xs.keep only positive.sort by size` as one list
 //! `[xs.keep, only, positive.sort, by, size]`: each `.method` binds to the word before it.
 
-use super::nodes::{call, key, symbol};
+use super::nodes::{call, key, phrase_words as words, symbol};
 use crate::context::Context;
-use crate::library_words::SLICE;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::SLICE;
 
 const KEEP: (&str, &str) = ("keep", "only");
 const SORT: (&str, &str) = ("sort", "by");
@@ -81,7 +81,7 @@ fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
 
 /// The key of `sort by it.age` as `it => it.age`, of `sort by size` as key names it
 fn sort_key(written: &Node, context: &Context) -> Option<Node> {
-	let it = crate::lambdas::IMPLICIT_PARAMETER;
+	let it = crate::words::IMPLICIT_PARAMETER;
 	match crate::lambdas::mentions(written, it) {
 		true => Some(key(symbol(it), Op::Arrow, written.clone())),
 		false => key_function(written, context),
@@ -148,17 +148,6 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 	phrased.then_some(receiver)
 }
 
-/// The words of a phrase, flat: `cheapest = items sorted by price` reads as `[[items, [sorted, by]], price]`
-pub(crate) fn words(items: &[Node]) -> Vec<Node> {
-	items
-		.iter()
-		.flat_map(|item| match item.drop_meta() {
-			Node::List(inner, Bracket::None, Separator::Space) => words(inner),
-			_ => vec![item.clone()],
-		})
-		.collect()
-}
-
 fn canonical(method: &str) -> String {
 	METHOD_ALIASES
 		.iter()
@@ -209,7 +198,7 @@ fn condition(argument: &Node, context: &Context) -> Option<Node> {
 	context
 		.user_functions
 		.contains_key(name)
-		.then(|| call(name, vec![symbol(crate::lambdas::IMPLICIT_PARAMETER)]))
+		.then(|| call(name, vec![symbol(crate::words::IMPLICIT_PARAMETER)]))
 }
 
 /// The key `sort by <argument>` names: `element => f(element)` of a function, else `element => element.field`

@@ -6,19 +6,24 @@
 //! `x:int = agent_as("33/3", "int")` (card int-let, lib/agent.warp).
 
 use super::nodes::{
-	call, children_rewritten, in_block_as_written, is_assigned_data, is_words_call, key, with_parts_rewritten,
+	call, children_rewritten, in_block_as_written, is_assigned_data, is_call_head, is_words_call, key,
+	with_parts_rewritten,
 };
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
+use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, witness_operation, InstanceTypes, Shape};
 use crate::type_kinds::{Kind, TypeRegistry};
+use crate::words::ANY_TYPE;
 use std::collections::{HashMap, HashSet};
 
 const TOPIC: &str = "return-type";
 /// `agent_as`: the companion of `agent` that takes the expected result type as its last argument
 const COMPANION_SUFFIX: &str = "_as";
+/// How well a value fits `any`: worse than every typed fit, so the untyped variant is the fallback
+const ANY_FIT: u32 = 100;
 
 /// The function f whose companion f_as is `name`
 pub fn companion_of(name: &str) -> Option<&str> {
@@ -33,26 +38,20 @@ struct Definition<'a> {
 }
 
 fn definition(node: &Node) -> Option<Definition<'_>> {
-	let Node::Key(target, Op::Assign | Op::Define, body) = node.drop_meta() else {
+	let definition = function_head(node)
+		.filter(|definition| matches!(definition.form, DefinitionForm::Operator(_)) && is_call_head(definition.head))?;
+	let written_result = match definition.result {
+		Some(result) => Some(result.drop_meta().symbol_name()?.to_string()),
+		None => None,
+	};
+	let Node::List(head, _, _) = definition.head.drop_meta() else {
 		return None;
 	};
-	let (head, written_result) = match target.drop_meta() {
-		Node::Key(head, Op::Colon | Op::As, result) => match result.drop_meta() {
-			Node::Symbol(result) => (head.drop_meta(), Some(result.clone())),
-			_ => return None,
-		},
-		head => (head, None),
-	};
-	match head {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			Some(Definition {
-				head: items,
-				written_result,
-				body,
-			})
-		}
-		_ => None,
-	}
+	Some(Definition {
+		head,
+		written_result,
+		body: definition.body,
+	})
 }
 
 pub fn lower(node: Node) -> Node {
@@ -63,12 +62,14 @@ pub fn lower(node: Node) -> Node {
 		registry,
 		types: InstanceTypes::of(&node),
 		overloads: HashMap::new(),
+		single_results: HashMap::new(),
 		parameter_types: HashMap::new(),
 		companions: HashSet::new(),
 	};
 	let mut results: Vec<(String, Option<String>)> = vec![];
 	lowering.collect(&node, &mut results);
 	lowering.overloads = overloads(&results);
+	lowering.single_results = single_results(&results);
 	// by operation: the arity variants agent·1 and agent·2 are agent (lower_arity_overloads ran before)
 	let defined: HashSet<&str> = results.iter().map(|(name, _)| witness_operation(name)).collect();
 	lowering.companions = defined
@@ -107,6 +108,15 @@ fn named_call<'a>(node: &'a Node, named: &dyn Fn(&str) -> bool) -> Option<(&'a N
 		return None;
 	};
 	(is_call(items, bracket, separator) && !arguments.is_empty() && named(&head.name())).then_some((head, arguments))
+}
+
+/// `f x`, `(f x)`
+fn written_with_spaces(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => written_with_spaces(&items[0]),
+		Node::List(_, bracket, separator) => is_words_call(bracket, separator),
+		_ => false,
+	}
 }
 
 /// `f(x)`, `f x`, `(f x)`, `{f x}`
@@ -148,10 +158,21 @@ fn overloads(results: &[(String, Option<String>)]) -> HashMap<String, Vec<String
 		.collect()
 }
 
+/// Names defined once with a known result type: that type
+fn single_results(results: &[(String, Option<String>)]) -> HashMap<String, String> {
+	results
+		.iter()
+		.filter(|(name, _)| results.iter().filter(|(other, _)| other == name).count() == 1)
+		.filter_map(|(name, result)| Some((name.clone(), result.clone()?)))
+		.collect()
+}
+
 struct Lowering {
 	registry: TypeRegistry,
 	types: InstanceTypes,
 	overloads: HashMap<String, Vec<String>>,
+	/// functions defined once, with a known result type: `render "x" as pdf` names their result, no conversion
+	single_results: HashMap<String, String>,
 	parameter_types: HashMap<String, Vec<Option<String>>>,
 	/// the functions f (by operation, witness_operation) with a companion f_as (COMPANION_SUFFIX)
 	companions: HashSet<String>,
@@ -202,6 +223,13 @@ impl Lowering {
 		if self.overloads.contains_key(&head.name()) {
 			return self.call(head, result, arguments);
 		}
+		if self.single_results.contains_key(&head.name()) {
+			return Node::List(
+				[vec![head.clone()], arguments].concat(),
+				Bracket::Round,
+				Separator::None,
+			);
+		}
 		let companion = call(
 			&format!("{}{COMPANION_SUFFIX}", witness_operation(&head.name())),
 			[arguments, vec![Node::Text(result.to_string())]].concat(),
@@ -217,6 +245,12 @@ impl Lowering {
 		if let Some(rewritten) = self.rewrite_definition(&node) {
 			return rewritten;
 		}
+		// `render "x" as pdf` reads as `render ("x" as pdf)`: the `as` names the result of the call, also after
+		// lower_arity_overloads wrote it `agent·1("x" as bool)`
+		if let Some((head, argument, result)) = self.as_result(&node) {
+			let argument = self.rewrite(argument.clone(), None);
+			return in_block_as_written(&bracket_of(&node), self.typed_call(head, &result, vec![argument]));
+		}
 		if let Some((head, arguments)) = self.overloaded_call(&node) {
 			return in_block_as_written(&bracket_of(&node), self.resolve(&node, head, arguments, expected));
 		}
@@ -228,15 +262,6 @@ impl Lowering {
 			return in_block_as_written(&bracket_of(&node), self.typed_call(head, expected, arguments));
 		}
 		match node {
-			// `render "x" as pdf` reads as `render ("x" as pdf)`: the `as` names the result of an overloaded call, also
-			// after lower_arity_overloads wrote it `agent·1("x" as bool)`
-			Node::List(items, bracket, separator)
-				if is_call(&items, &bracket, &separator) && self.as_result(&items).is_some() =>
-			{
-				let (head, argument, result) = self.as_result(&items).expect("checked");
-				let argument = self.rewrite(argument.clone(), None);
-				self.typed_call(head, &result, vec![argument])
-			}
 			// `(render "x") as pdf`
 			Node::Key(value, Op::As, result) if self.picks(&value, &result.drop_meta().name()) => {
 				self.rewrite(*value, Some(&result.drop_meta().name()))
@@ -335,27 +360,35 @@ impl Lowering {
 			})
 	}
 
-	/// `render ("x" as pdf)` as the parser groups it: the overloaded function, its argument and the result type
-	fn as_result<'a>(&self, items: &'a [Node]) -> Option<(&'a Node, &'a Node, String)> {
-		let [head, argument] = items else { return None };
+	/// `render ("x" as pdf)` as the parser groups it: the function, its argument and the result type
+	fn as_result<'a>(&self, node: &'a Node) -> Option<(&'a Node, &'a Node, String)> {
+		let (head, [argument]) = named_call(node, &|_| true)? else {
+			return None;
+		};
 		let Node::Key(value, Op::As, result) = argument.drop_meta() else {
 			return None;
 		};
 		let result = result.drop_meta().name();
-		let gives = self
-			.overloads
-			.get(&head.name())
-			.map_or(self.companions.contains(witness_operation(&head.name())), |results| {
-				results.contains(&result)
-			});
-		gives.then_some((head, value.as_ref(), result))
+		// `square(2.7 as int)` converts its argument: only a spaced call `render "x" as pdf` names the result of a single definition
+		let names_result = self.gives(&head.name(), &result)
+			&& (!self.single_results.contains_key(&head.name()) || written_with_spaces(node));
+		names_result.then_some((head, value.as_ref(), result))
 	}
 
+	/// Whether the function `name` can give a `result`: an overload of it, its companion or its only definition does
+	fn gives(&self, name: &str, result: &str) -> bool {
+		match self.overloads.get(name) {
+			Some(results) => results.iter().any(|candidate| candidate == result),
+			None => {
+				self.companions.contains(witness_operation(name))
+					|| self.single_results.get(name).is_some_and(|single| single == result)
+			}
+		}
+	}
+
+	/// `(render "x") as pdf`: the call already gives the type
 	fn picks(&self, value: &Node, result: &str) -> bool {
-		self.companion_call(value).is_some()
-			|| self
-				.overloaded_call(value)
-				.is_some_and(|(head, _)| self.overloads[&head.name()].iter().any(|candidate| candidate == result))
+		named_call(value, &|name| self.gives(name, result)).is_some()
 	}
 
 	/// `docx d = …`: the type word of a typed declaration
@@ -422,8 +455,14 @@ fn lower_parameter_overloads(node: Node) -> Node {
 		.filter_map(|(name, variants)| {
 			let variants: Vec<Vec<String>> = variants
 				.into_iter()
-				.map(|types| types.into_iter().collect::<Option<_>>())
-				.collect::<Option<_>>()?;
+				.map(|types| {
+					types
+						.into_iter()
+						.map(|type_name| type_name.unwrap_or(ANY_TYPE.to_string()))
+						.collect()
+				})
+				.collect();
+			let typed = variants.iter().flatten().any(|type_name| type_name != ANY_TYPE);
 			let distinct = variants
 				.iter()
 				.enumerate()
@@ -432,8 +471,8 @@ fn lower_parameter_overloads(node: Node) -> Node {
 			let builtin = variants
 				.iter()
 				.flatten()
-				.all(|type_name| type_word_kind(type_name).is_some());
-			(distinct && builtin).then_some((name, variants))
+				.all(|type_name| type_name == ANY_TYPE || type_word_kind(type_name).is_some());
+			(distinct && builtin && typed).then_some((name, variants))
 		})
 		.collect();
 	if overloaded.is_empty() {
@@ -685,6 +724,9 @@ fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> 
 /// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float or any
 /// number to the wider `number`
 fn fit(kind: Kind, type_name: &str) -> Option<u32> {
+	if type_name == ANY_TYPE {
+		return Some(ANY_FIT);
+	}
 	if type_name == "number" {
 		return matches!(kind, Kind::Int | Kind::Float).then_some(1);
 	}

@@ -8,11 +8,12 @@
 
 use super::list_dispatch::Slot;
 use super::WasmGcEmitter;
+use crate::context::UserFunctionDef;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
@@ -22,7 +23,7 @@ pub(super) const NODE_MAP_SET: &str = "node_map_set";
 pub(super) const NODE_MAP_LOOKUP: &str = "node_map_lookup";
 pub(super) const NODE_MAP_AS_NODE: &str = "node_map_as_node";
 pub(super) const NODE_MAP_OF: &str = "node_map_of";
-/// The hash-table copy of a map parameter, `m·map = m` (analyzer::indexed_parameter_copies)
+/// The hash-table copy of a map parameter, `m·map = m` (declaration_forms::indexed_parameter_copies)
 pub const MAP_COPY_SUFFIX: &str = "·map";
 const NODE_MAP_HASH: &str = "node_map_hash";
 const NODE_MAP_SLOT: &str = "node_map_slot";
@@ -40,8 +41,8 @@ pub(super) const NODE_MAP_FUNCTIONS: [&str; 6] = [
 /// Words that read a map without holding on to it, besides those reading any collection (reads_collection): a map
 /// variable given to them stays a hash table
 const MAP_READING_WORDS: [&str; 5] = [
-	crate::analyzer::REMOVED_VALUE_CALL,
-	crate::library_words::MAP_KEYS,
+	crate::declaration_forms::REMOVED_VALUE_CALL,
+	crate::words::MAP_KEYS,
 	crate::library_words::MAP_VALUES,
 	COLLECTION_CONTAINS,
 	COLLECTION_POSITION,
@@ -126,7 +127,10 @@ impl WasmGcEmitter {
 		// a map is a reference (P200b): one used whole (`n = m`, `[m]`, an argument) is the one Node every holder shares
 		let mut used_whole = vec![];
 		super::struct_backend::used_whole(
-			&without_reads(super::struct_backend::without_final_variable(program)),
+			&without_reads(
+				super::struct_backend::without_final_variable(program),
+				&self.ctx.user_functions,
+			),
 			&Default::default(),
 			&mut used_whole,
 		);
@@ -179,10 +183,11 @@ impl WasmGcEmitter {
 	}
 
 	/// `collection_contains(m, key)` and `collection_position(m, key)` (`key in m`, `m has key`) of a hash table with a
-	/// name key: 1 when it holds the key, else 0; false for any other call
+	/// name key: yes/no (contains) or 1/0 (position) whether it holds the key; false for any other call
 	pub(super) fn emit_typed_map_membership(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, map, key] = items else { return false };
-		let is_membership = matches!(word.drop_meta(), Node::Symbol(word) if word == COLLECTION_CONTAINS || word == COLLECTION_POSITION);
+		let word = word.drop_meta().name();
+		let is_membership = word == COLLECTION_CONTAINS || word == COLLECTION_POSITION;
 		let Some(slot) = self.typed_map(map).filter(|_| is_membership && self.is_name_key(key)) else {
 			return false;
 		};
@@ -190,7 +195,14 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, key);
 		self.emit_call(func, NODE_MAP_LOOKUP);
 		Self::emit_list(func, &[I::RefIsNull, I::I32Eqz, I::I64ExtendI32U]);
-		self.emit_call(func, "new_int");
+		self.emit_call(
+			func,
+			if word == COLLECTION_CONTAINS {
+				super::NEW_BOOL
+			} else {
+				"new_int"
+			},
+		);
 		true
 	}
 
@@ -992,15 +1004,16 @@ fn is_empty_map(value: &Node) -> bool {
 }
 
 /// The program without the variables only read by a reading word or a comparison (`count(m)`, `m.count`, `m == n`):
-/// what is left of a variable is a use that may share it
-fn without_reads(node: Node) -> Node {
+/// what is left of a variable is a use that may share it. A user function named like a reading word (`def size(m)`)
+/// is no reading word: it may change the map (card user-defined-size)
+fn without_reads(node: Node, functions: &BTreeMap<String, UserFunctionDef>) -> Node {
 	let is_variable = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
-	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if super::reads_collection(word) || MAP_READING_WORDS.contains(&word.as_str()));
+	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !functions.contains_key(word) && (super::reads_collection(word) || MAP_READING_WORDS.contains(&word.as_str())));
 	let read = |node: Node| {
 		if is_variable(&node) {
 			Node::Empty
 		} else {
-			without_reads(node)
+			without_reads(node, functions)
 		}
 	};
 	match node {
@@ -1020,6 +1033,6 @@ fn without_reads(node: Node) -> Node {
 		Node::Key(object, Op::Dot, member) if is_reading_word(&member) => {
 			Node::Key(Box::new(read(*object)), Op::Dot, member)
 		}
-		other => other.map_children(without_reads),
+		other => other.map_children(|child| without_reads(child, functions)),
 	}
 }

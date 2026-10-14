@@ -50,7 +50,7 @@ pub(super) fn rest_of(items: &[Node], skip: usize, bracket: &Bracket, separator:
 }
 
 /// A text seen in one unit, `byte in t` or `t as bytes`: counting it counts that unit, `t.bytes`
-pub(super) fn unit_count(node: &Node) -> Option<Node> {
+pub(crate) fn unit_count(node: &Node) -> Option<Node> {
 	let count_of = |text: Node, unit: &Node| {
 		let Node::Symbol(word) = unit.drop_meta() else {
 			return None;
@@ -79,7 +79,7 @@ pub(super) fn unit_count(node: &Node) -> Option<Node> {
 }
 
 /// `#bytes in t`, parsed as the items `#bytes`, `in`, `t`: the count of that unit, `t.bytes`
-pub(super) fn hashed_unit_count(items: &[Node]) -> Option<Node> {
+pub(crate) fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 	let [hashed, keyword, _, ..] = items else { return None };
 	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else {
 		return None;
@@ -119,7 +119,7 @@ pub(super) fn property_of_name(items: &[Node], separator: &Separator, variables:
 /// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
 /// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
 /// `print chars in "hello"`: a name no variable has, in a collection, prints each item as `for chars in "hello": print it`
-pub(super) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
+pub(crate) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
 	let [print, phrase] = items else { return None };
 	let Node::List(phrase, Bracket::None | Bracket::Round, _) = phrase.drop_meta() else {
 		return None;
@@ -161,7 +161,7 @@ pub(super) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 	))
 }
 
-pub(super) fn counting_phrase(
+pub(crate) fn counting_phrase(
 	items: &[Node],
 	bracket: &Bracket,
 	separator: &Separator,
@@ -240,10 +240,10 @@ pub(crate) fn range_elements(range: &Node) -> Option<Node> {
 }
 
 /// The name a range of computed bounds collects its list under where no variable is assigned (`print a..b`)
-pub(super) const RANGE_VALUE: &str = "range_value";
+pub(crate) const RANGE_VALUE: &str = "range_value";
 
 /// `xs = a..b` of computed bounds: `(xs·range = ø; for xs·item in a..b { xs·range = xs·range + [xs·item] }; xs·range)`
-pub(super) fn computed_range(target: &Node, range: &Node) -> Option<Node> {
+pub(crate) fn computed_range(target: &Node, range: &Node) -> Option<Node> {
 	let Node::Symbol(name) = target.drop_meta() else {
 		return None;
 	};

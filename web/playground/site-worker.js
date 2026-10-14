@@ -2,9 +2,9 @@
 // thread, so a blocking `await` may wait (Atomics.wait) and its tasks run on the pool of task Workers (host-tasks.js).
 // The page (site.js) keeps the DOM: it sends the module's URL, the kept values (the session's apart), the page's path, the
 // server's replies of a rendered page and each element event;
-// this worker answers with the page's markup anew (its export page·html, as site.js show() renders it) after main, each
-// handler, each timer and each path the page went to (a link or the back button: its route, its module loaded first).
-// Its scripts come as ?scripts=…, resolved against this file, the site's root (src/site.rs).
+// this worker answers with the page's markup anew (its export page·html, as site.js show() renders it) after main and
+// each path the page went to, with its holes anew (host.js holePatches, card web-fine-rest) after each handler and timer (a link or the back button: its route, its module loaded first).
+// Its scripts come as ?scripts=…, resolved against this file, the site's root (src/web/site.rs).
 
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts").split(",");
 importScripts(...SITE_SCRIPTS);
@@ -29,13 +29,19 @@ const hooks = {
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
 };
 
-// what main or a handler left: the page's markup anew, or the failure (which stops the timers)
-function showAfter(outcome) {
+// what main or a handler left: the page's markup anew (a handler's: its holes), or the failure (which stops the timers)
+function showAfter(outcome, shown = changedMarkup) {
 	if (outcome.result === undefined) {
 		site?.stopTimers?.();
 		return post({ failure: outcome.failure ?? outcome.trap ?? outcome.error });
 	}
-	post({ ...pageMarkup(), exited: outcome.exited });
+	post({ ...shown(), exited: outcome.exited });
+}
+
+// the holes of the page's markup anew, the whole markup when it has none
+function changedMarkup() {
+	const patches = holePatches(site.exports);
+	return patches ? { patches } : pageMarkup();
 }
 
 // the page's markup anew, as a message to the page
@@ -56,7 +62,7 @@ async function start({ module, stored, session, path, replies }) {
 	const holder = instantiateProgram(bytes, hooks);
 	if (holder.failure) return post({ failure: holder.failure });
 	await globalThis.loadRouteModule?.(holder);
-	showAfter(runMain(holder, hooks));
+	showAfter(runMain(holder, hooks), pageMarkup);
 }
 
 // the page went to `path` (host-routes.js followSiteLinks): its route shown, the page told to move the focus there

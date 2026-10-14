@@ -5,10 +5,11 @@
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.
 
 use super::nodes::{call, children_rewritten, key};
-use super::words::{FOR_WORD, IN_WORD};
+use crate::lowering::function_head;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
+use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::HashSet;
 
 const TEXT_OPERATION: &str = "text";
@@ -204,19 +205,14 @@ fn defines_function(node: &Node, name: &str) -> bool {
 
 /// `operation(p:T) := body` of a declared type T: T, the parameter and the body
 fn definition(node: &Node, declared: &HashSet<String>, operation: &str) -> Option<(String, Node, Node)> {
-	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else {
-		return None;
-	};
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	let [word, parameter] = items.as_slice() else {
+	let definition = function_head(node).filter(|definition| definition.plain_operator().is_some())?;
+	let [parameter] = definition.written_parameters else {
 		return None;
 	};
 	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else {
 		return None;
 	};
 	let type_name = type_node.drop_meta().name();
-	(word.name() == operation && declared.contains(&type_name))
-		.then(|| (type_name, parameter.clone(), body.as_ref().clone()))
+	(definition.name == operation && declared.contains(&type_name))
+		.then(|| (type_name, parameter.clone(), definition.body.clone()))
 }

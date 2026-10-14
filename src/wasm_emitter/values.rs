@@ -102,6 +102,9 @@ impl WasmGcEmitter {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			Node::Key(left, op, right) if op.is_shift() => self.emit_shift(func, left, op, right),
+			Node::Key(left, op, right) if let Some(logical) = self.logical_reading(left, op, right) => {
+				self.emit_numeric_value(func, &Node::Key(left.clone(), logical, right.clone()))
+			}
 			// Logical operators (and, or) use truthy semantics, xor uses bitwise
 			Node::Key(left, Op::And, right) => {
 				// Truthy and: if left is 0, return 0; else return right
@@ -133,7 +136,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if self.orders_a_list(op, left, right) => {
 				self.emit_unordered_list_error(func, left, op, right)
 			}
-			Node::Key(left, op, right) if *op == Op::Xor || op.is_comparison() => {
+			Node::Key(left, op, right) if *op == Op::Xor || op.is_bitwise() || op.is_comparison() => {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)
@@ -194,7 +197,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_integer_builtin(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		if let [word, instance, type_name] = items {
 			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
-				if name == crate::traits::INSTANCE_OF {
+				if name == crate::words::INSTANCE_OF {
 					self.emit_instance_of(func, instance, type_name);
 					return true;
 				}
@@ -291,36 +294,7 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			Node::Number(num) => {
-				match num {
-					Number::Int(_) | Number::BigInt(_) => {
-						let value: f64 = (*num).into();
-						func.instruction(&I::F64Const(Ieee64::new(value.to_bits())));
-					}
-					Number::Float(f) => {
-						func.instruction(&I::F64Const(Ieee64::new(f.to_bits())));
-					}
-					Number::Quotient(n, d) => {
-						func.instruction(&I::F64Const(Ieee64::new((*n as f64 / *d as f64).to_bits())));
-					}
-					Number::BigQuotient(q) => {
-						func.instruction(&I::F64Const(Ieee64::new(q.to_f64().to_bits())));
-					}
-					Number::Complex(r, _i) => {
-						func.instruction(&I::F64Const(Ieee64::new(r.to_bits())));
-					}
-					Number::Real(r) => {
-						func.instruction(&I::F64Const(Ieee64::new(r.to_f64().to_bits())));
-					}
-					Number::Nan => {
-						func.instruction(&I::F64Const(Ieee64::new(f64::NAN.to_bits())));
-					}
-					Number::Inf => {
-						func.instruction(&I::F64Const(Ieee64::new(f64::INFINITY.to_bits())));
-					}
-					Number::NegInf => {
-						func.instruction(&I::F64Const(Ieee64::new(f64::NEG_INFINITY.to_bits())));
-					}
-				};
+				func.instruction(&I::F64Const(Ieee64::new(f64::from(*num).to_bits())));
 			}
 			// `xs#i = 0.5`: the element's value after the assignment
 			Node::Key(left, Op::Assign, right) if matches!(left.drop_meta(), Node::Key(_, Op::Hash, _)) => {
@@ -373,19 +347,6 @@ impl WasmGcEmitter {
 					return;
 				}
 				self.emit_float_operation(func, left, op, right);
-			}
-			// Suffix operators: x² = x*x, x³ = x*x*x (returns f64)
-			Node::Key(left, Op::Square, _) => {
-				self.emit_float_value(func, left);
-				self.emit_float_value(func, left);
-				func.instruction(&I::F64Mul);
-			}
-			Node::Key(left, Op::Cube, _) => {
-				self.emit_float_value(func, left);
-				self.emit_float_value(func, left);
-				func.instruction(&I::F64Mul);
-				self.emit_float_value(func, left);
-				func.instruction(&I::F64Mul);
 			}
 			// Prefix operators: √x, ∛x (return f64)
 			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if matches!(left.drop_meta(), Node::Empty) => {
@@ -476,12 +437,23 @@ impl WasmGcEmitter {
 			self.emit_call(func, "new_empty");
 			return;
 		}
-		self.emit_list_structure(func, &items, &Bracket::Square);
+		self.emit_list_structure(func, &items, &Bracket::Square, &Separator::None);
 	}
 
 	/// Emit a list as linked cons cells
-	pub(super) fn emit_list_structure(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) {
-		self.emit_list_structure_with(func, items, bracket, Self::emit_node_instructions);
+	pub(super) fn emit_list_structure(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) {
+		self.emit_list_structure_with(
+			func,
+			items,
+			&items_info(items, bracket, separator),
+			Self::emit_node_instructions,
+		);
 	}
 
 	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b
@@ -493,32 +465,45 @@ impl WasmGcEmitter {
 				self.emit_literal(func, right);
 				self.emit_new_key(func, op);
 			}
-			Node::List(items, bracket, _) if !items.is_empty() => {
-				self.emit_list_structure_with(func, items, bracket, Self::emit_literal)
+			Node::List(items, bracket, separator) if !items.is_empty() => {
+				self.emit_list_structure_with(func, items, &items_info(items, bracket, separator), Self::emit_literal)
 			}
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),
 			other => self.emit_node_instructions(func, other),
 		}
+		self.emit_written_at(func, node);
+	}
+
+	/// A quoted node keeps where it was written and its comment: `n.line`, `n.column`, `n.comment` (card data-meta)
+	fn emit_written_at(&mut self, func: &mut Function, node: &Node) {
+		let Some((line, column, comment)) = node.written_at() else {
+			return;
+		};
+		func.instruction(&I::I64Const(line));
+		func.instruction(&I::I64Const(column));
+		match comment {
+			Some(comment) => self.emit_node_instructions(func, &Node::Text(comment)),
+			None => self.emit_node_null(func),
+		}
+		self.emit_call(func, super::node_api::NODE_AT);
 	}
 
 	pub(super) fn emit_list_structure_with(
 		&mut self,
 		func: &mut Function,
 		items: &[Node],
-		bracket: &Bracket,
+		info: &i64,
 		emit: fn(&mut Self, &mut Function, &Node),
 	) {
-		let bracket_info = bracket_info(bracket);
-
 		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself
 		emit(self, func, &items[0]);
 		if items.len() > 1 {
-			self.emit_list_structure_with(func, &items[1..], bracket, emit);
+			self.emit_list_structure_with(func, &items[1..], info, emit);
 		} else {
 			self.emit_node_null(func);
 		}
 
-		func.instruction(&I::I64Const(bracket_info));
+		func.instruction(&I::I64Const(*info));
 		if self.ctx.func_registry.contains("new_list") {
 			self.emit_call(func, "new_list");
 		} else {
@@ -532,4 +517,10 @@ impl WasmGcEmitter {
 pub(super) fn is_int_type_word(target: &Node) -> bool {
 	let word = target.drop_meta().name().to_lowercase();
 	crate::type_tests::canonical_spec_word(&word) == "int" && !super::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
+}
+
+/// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)
+fn items_info(items: &[Node], bracket: &Bracket, separator: &Separator) -> i64 {
+	let separator = if items.len() > 1 { separator } else { &Separator::None };
+	list_info(bracket, separator)
 }

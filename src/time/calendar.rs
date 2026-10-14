@@ -131,14 +131,7 @@ pub fn rules() -> &'static TzRules {
 
 /// Resolve times with other rules while `body` runs, e.g. to simulate a rule change in a test
 pub fn with_rules<R>(rules: &'static TzRules, body: impl FnOnce() -> R) -> R {
-	struct Restore(&'static TzRules);
-	impl Drop for Restore {
-		fn drop(&mut self) {
-			CURRENT_RULES.with(|current| current.set(self.0));
-		}
-	}
-	let _restore = Restore(CURRENT_RULES.with(|current| current.replace(rules)));
-	body()
+	crate::util::scoped(&CURRENT_RULES, rules, body)
 }
 
 pub const fn zone(name: &'static str, standard: i64, dst: Dst) -> Zone {

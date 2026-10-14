@@ -9,22 +9,20 @@ pub const TEXT_AS_NUMBER: &str = "text_as_number";
 /// `x as i64`: the whole number wrapped to 64 bits, not the unbounded int the other int words convert to
 pub(super) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
+/// `n as codepoint` of a number no character has: below 0, above U+10FFFF or a UTF-16 surrogate
+pub const INVALID_CODE_POINT: &str = "invalid_code_point";
+const LAST_CODE_POINT: i64 = 0x10FFFF;
+const FIRST_SURROGATE: i64 = 0xD800;
+const SURROGATE_COUNT: i64 = 0x800;
 /// The words emit_cast converts to besides the number types (int, float, rational …)
-const CONVERSION_WORDS: [&str; 6] = [
-	"text",
-	"list",
-	"codepoint",
-	crate::analyzer::BOOL_TYPE,
-	"number",
-	super::hex::HEX_WORD,
-];
+const CONVERSION_WORDS: [&str; 5] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number"];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
 	/// `'7' as int` is 7; `'x' as int` is no number (invalid_number, which `try` catches), hinted toward `codepoint('x')`
 	pub(super) fn emit_character_cast(&mut self, func: &mut Function, character: char, target_type: &Node) {
 		if !character.is_ascii_digit() {
-			let (target, codepoint) = (target_type.name(), crate::library_words::CODEPOINT);
+			let (target, codepoint) = (target_type.name(), crate::words::CODEPOINT);
 			crate::normalize::hint(
 				&format!("'{character}' as {target}"),
 				&format!("{codepoint}('{character}') as {target}"),
@@ -79,7 +77,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
-		if let Some(computed) = super::hex::computed_type(target) {
+		if let Some(computed) = super::radix::computed_type(target) {
 			return self.emit_numeric_cast(func, located, value, &computed);
 		}
 		if let Some(refusal) = self.cast_refusal(value, target) {
@@ -103,12 +101,10 @@ impl WasmGcEmitter {
 				self.emit_decimal_literal(func, decimal_literal(value).expect("guarded"))
 			}
 			// a character held unboxed is its code point
-			"codepoint" => match value.drop_meta() {
-				Node::Char(character) => {
-					func.instruction(&I::I64Const(*character as i64));
-				}
-				_ => self.emit_numeric_value(func, value),
-			},
+			"codepoint" => {
+				self.emit_code_point(func, value);
+				func.instruction(&I::I64ExtendI32U);
+			}
 			// `n = "4" as number`, `"4.5" as number`: held as an exact Int (card number-variable)
 			"number" if crate::analyzer::literal_number(value).is_some() => {
 				self.emit_numeric_value(func, &crate::analyzer::literal_number(value).expect("guarded"));
@@ -287,7 +283,7 @@ impl WasmGcEmitter {
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
 	pub(super) fn emit_cast(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
-		if let Some(computed) = super::hex::computed_type(target_type) {
+		if let Some(computed) = super::radix::computed_type(target_type) {
 			return self.emit_cast(func, value, &computed);
 		}
 		let type_name = match target_type.drop_meta() {
@@ -486,26 +482,70 @@ impl WasmGcEmitter {
 		found
 	}
 
-	/// `x as char`: a digit 0…9 is its character, another number its code point
+	/// `x as char`, `n as codepoint`: a digit 0…9 is its digit character, as `'5' as int` is 5; any other number is the
+	/// character of that code point, a number no character has is the error invalid_code_point
 	pub(super) fn emit_cast_to_char(&mut self, func: &mut Function, value: &Node) {
-		match value {
-			Node::Number(Number::Int(n)) => {
-				let c = if (0..=9).contains(n) {
-					char::from_digit(*n as u32, 10)
-				} else {
-					char::from_u32(*n as u32)
-				};
-				func.instruction(&I32Const(c.unwrap_or('?') as i32));
+		self.emit_code_point(func, value);
+		self.emit_call(func, "new_codepoint");
+	}
+
+	/// The i32 code point `value as codepoint` holds
+	fn emit_code_point(&mut self, func: &mut Function, value: &Node) {
+		let known = match value.drop_meta() {
+			Node::Number(Number::Int(n)) if (0..=9).contains(n) => char::from_digit(*n as u32, 10),
+			Node::Number(Number::Int(n)) => match u32::try_from(*n).ok().and_then(char::from_u32) {
+				None => return self.emit_runtime_error(func, INVALID_CODE_POINT),
+				character => character,
+			},
+			Node::Char(c) => Some(*c),
+			_ => None,
+		};
+		match known {
+			Some(character) => {
+				func.instruction(&I32Const(character as i32));
 			}
-			Node::Char(c) => {
-				func.instruction(&I32Const(*c as i32));
-			}
-			_ => {
+			None => {
 				self.emit_numeric_value(func, value);
-				func.instruction(&I::I32WrapI64);
+				self.emit_code_point_of_int(func);
 			}
 		}
-		self.emit_call(func, "new_codepoint");
+	}
+
+	/// The i64 on the stack as an i32 code point: a digit its digit character, a number no character has a trap
+	fn emit_code_point_of_int(&mut self, func: &mut Function) {
+		let held = self.scratch(0);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalTee(held),
+				I::I64Const(0),
+				I::I64LtS,
+				I::LocalGet(held),
+				I::I64Const(LAST_CODE_POINT),
+				I::I64GtS,
+				I::I32Or,
+				I::LocalGet(held),
+				I::I64Const(FIRST_SURROGATE),
+				I::I64Sub,
+				I::I64Const(SURROGATE_COUNT),
+				I::I64LtU,
+				I::I32Or,
+			],
+		);
+		self.emit_fail_if(func, INVALID_CODE_POINT);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(held),
+				I::I32WrapI64,
+				I::LocalGet(held),
+				I::I64Const(10),
+				I::I64LtU,
+				I::I32Const('0' as i32),
+				I::I32Mul,
+				I::I32Add,
+			],
+		);
 	}
 
 	/// `x as bool`, a bool: a literal's truth known at compile time, else non-zero is true
@@ -521,6 +561,17 @@ impl WasmGcEmitter {
 		};
 		match literal_truth {
 			Some(truth) => self.emit_node_instructions(func, &if truth { Node::True } else { Node::False }),
+			// a text known at run time: false when it spells a falsy word, as a literal's (card yes-print)
+			None if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+				use crate::lowering::nodes::call;
+				let falsy = FALSY_TEXTS.iter().map(|text| Node::Text(text.to_string())).collect();
+				let falsy = Node::List(falsy, Bracket::Square, Separator::Colon);
+				let spells_falsy = call(
+					crate::library_words::COLLECTION_CONTAINS,
+					vec![falsy, call("lower", vec![value.clone()])],
+				);
+				self.emit_node_instructions(func, &Node::Key(Box::new(Node::Empty), Op::Not, Box::new(spells_falsy)));
+			}
 			None => {
 				self.emit_numeric_value(func, value);
 				self.emit_call(func, "new_bool");
@@ -715,12 +766,14 @@ fn is_plain_data(node: &Node) -> bool {
 /// compute, not data that reads as written (card str-inline)
 fn computes_value(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= match part {
-		Node::Key(_, Op::Hash, _) => true,
-		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
-		// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
-		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&head.as_str())),
-		_ => false,
+	node.visit(&mut |part| {
+		found |= match part {
+			Node::Key(_, Op::Hash, _) => true,
+			Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
+			// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
+			Node::List(..) => crate::time::is_time_call(part),
+			_ => false,
+		}
 	});
 	found
 }
@@ -768,6 +821,7 @@ impl WasmGcEmitter {
 fn converts_to(type_name: &str) -> bool {
 	let word = crate::type_tests::canonical_spec_word(type_name);
 	CONVERSION_WORDS.contains(&word)
+		|| super::radix::named_radix(word).is_some()
 		|| crate::type_tests::is_exact_fraction_type(word)
 		|| crate::type_tests::spells_decimals_exactly(word)
 		|| crate::analyzer::builtin_type_kind(word).is_some()
@@ -777,7 +831,7 @@ fn converts_to(type_name: &str) -> bool {
 /// built-in types have their calls (`int("12")`, analyzer::type_cast_of), a library word its function (`codepoint(c)`)
 pub(crate) fn is_called_conversion(type_name: &str) -> bool {
 	(converts_to(type_name) || type_name == super::exact::DECIMAL_WORD)
-		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::hex::shows_in_hex(type_name))
+		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::radix::shown_radix(type_name).is_some())
 		&& !library_ops::LIBRARY_FUNCTIONS
 			.iter()
 			.any(|(word, _)| *word == type_name)

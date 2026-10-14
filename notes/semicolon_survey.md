@@ -5,7 +5,7 @@ LAST `;`/newline item (`1;2;3` → 3, `'hello';(1 2 3 4);10` → 10). `(…)`, `
 (`(1;2;3)`, `[1;2;3]` → `(1 2 3)`; `(1 2, 3 4; 5 6, 7 8)` is a tensor). Space and comma always form value lists.
 Block values are checked with `is!("1;2;3", 3)`.
 
-Method: the rule was applied experimentally (`is_semicolon_sequence` in src/analyzer.rs, `;` and newline,
+Method: the rule was applied experimentally (`is_semicolon_sequence` in src/analyzer/, `;` and newline,
 `Bracket::None | Bracket::Curly`) in a separate git worktree, then the full `cargo test --no-fail-fast` suite was run.
 Nothing was changed in the main checkout; the current heuristic from de18c3bb is still in place.
 
@@ -46,7 +46,7 @@ Parsing (`parse`, `parse_data`, `warp data`) is unaffected; only eval/emit is.
 
 ## Implementation plan once approved
 
-1. Replace `is_semicolon_sequence` (src/analyzer.rs, used in src/wasm_emitter/list_emitter.rs and the analyzer's
+1. Replace `is_semicolon_sequence` (src/analyzer/, used in src/wasm_emitter/list_emitter.rs and the analyzer's
    `is_data_node`/`infer_type`) by the bracket rule: `Semicolon | Newline` and `Bracket::None | Bracket::Curly`.
 2. Add tests: `is!("1;2;3", 3)`, `is!("'hello';(1 2 3 4);10", 10)`.
 3. The three assertions in the table conflict with the new rule; they need the owner's decision.

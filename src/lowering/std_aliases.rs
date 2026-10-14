@@ -71,7 +71,9 @@ pub fn lower(program: Node) -> Node {
 		.map(|alias| alias.module)
 		.filter(|module| names.contains(*module))
 		.collect();
-	note_internal_words(&program, &names);
+	// `def parse_json(t) {…}` too: the program's own word gets no note (card hint-own-definition)
+	let defined = super::welcome_forms::defined_names(&program);
+	note_internal_words(&program, &names.union(&defined).cloned().collect());
 	let mut used = HashSet::new();
 	let program = aliased(program, &kept, &mut used);
 	with_uses(program, used)
@@ -86,7 +88,7 @@ fn warp_form(word: &str) -> String {
 }
 
 /// `parse_json(t)` written by hand, where the program defines no parse_json of its own: a got-it note naming
-/// `json.parse`
+/// `json.parse`; a library's own calls are no business of the program
 fn note_internal_words(program: &Node, names: &HashSet<String>) {
 	for form in WARP_FORMS.iter().filter(|form| !names.contains(form.word)) {
 		if let Some(call) = first_call_of(program, form.word) {
@@ -96,6 +98,11 @@ fn note_internal_words(program: &Node, names: &HashSet<String>) {
 	}
 }
 
+/// Written in a module's file (`use netbase`), not in the program
+fn in_module_file(node: &Node) -> bool {
+	node.get_lineinfo().is_some_and(|at| at.file.is_some())
+}
+
 fn first_call_of<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _)
@@ -103,7 +110,7 @@ fn first_call_of<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 				.first()
 				.is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(name) if name == word)) =>
 		{
-			Some(node)
+			(!in_module_file(node)).then_some(node)
 		}
 		Node::List(items, _, _) => items.iter().find_map(|item| first_call_of(item, word)),
 		Node::Key(left, _, right) => first_call_of(left, word).or_else(|| first_call_of(right, word)),

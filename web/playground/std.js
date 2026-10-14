@@ -1,9 +1,9 @@
 // std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the adapters the
-// parts add (host-hashes.js hash, json and regex; host-files.js file, net, store and os). It starts both parts, so it
+// parts add (host-hashes.js hash, json and regex; host-files.js file, net, store, os and table; host-sound.js sound and midi). It starts both parts, so it
 // holds function declarations only: a site loading both gets it twice (card web-bundle-growth)
 
 // an adapter reports a runtime warning with this.warn(message) (host-files.js openTable) and reaches its run's state as
-// this.holder (host-files.js sound.render)
+// this.holder (host-sound.js sound.render)
 function stdCall(program_, module, member, argumentList, holder) {
 	const [moduleName, memberName, given] = [module, member, argumentList].map(node => plainOfTree(readNode(program_, node)));
 	const adapter = STD_ADAPTERS[moduleName]?.[memberName];

@@ -4,7 +4,7 @@
 // left; given a map of named arrays, it binds each where the shader declares the storage array of that name and gives
 // them back by name. gpu_render(shader, width, height, values) runs the fragment shader `main` over every pixel of the image and gives
 // the pixels as paint takes them, 0xFFRRGGBB row by row; the shader reads the map `values` as a uniform,
-// `values.<name>` (src/gpu.rs does both natively). WebGPU only answers
+// `values.<name>` (src/graphics/gpu.rs does both natively). WebGPU only answers
 // asynchronously, so a task Worker (host-tasks.js) does the GPU work while the program's worker waits for its answer in
 // shared memory, as a task's result. In the playground, paint of a shader renders straight into the page's canvas: the
 // page hands the canvas's OffscreenCanvas to the task Worker, which draws through its GPUCanvasContext, and no pixels
@@ -13,7 +13,7 @@
 const GPU_ENTRY_POINT = "main";
 const NO_GPU_DRAWING = "use draw draws through pixels on a page (gpu_drawing is no here), so draw_shape and draw_show never run";
 const GPU_BINDING = 0;
-// `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type (src/gpu.rs STORAGE_ARRAY)
+// `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type (src/graphics/gpu.rs STORAGE_ARRAY)
 const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\s+(\w+)\s*:\s*array<(\w+)/g;
 const ELEMENT_ARRAYS = { i32: Int32Array, u32: Uint32Array };
 // appended to gpu_render's shader (after it, so its line numbers stay the user's): one triangle covering the image
@@ -29,7 +29,7 @@ const OPAQUE = 0xFF000000;
 const VALUES_NAME = "values"; // gpu_render's values as the shader names them
 const VALUES_BINDING = 0;
 // `$previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size, black
-// before the first, kept on the GPU (src/gpu.rs PREVIOUS_FRAME)
+// before the first, kept on the GPU (src/graphics/gpu.rs PREVIOUS_FRAME)
 const PREVIOUS_HOLE = "previous";
 const PREVIOUS_FUNCTION = "warp_previous";
 const PREVIOUS_FRAME_BINDING = 1;
@@ -39,12 +39,12 @@ fn ${PREVIOUS_FUNCTION}(at: vec2f) -> vec4f {
 	let last = vec2i(textureDimensions(warp_previous_frame)) - vec2i(1);
 	return textureLoad(warp_previous_frame, clamp(vec2i(at), vec2i(0), last), 0);
 }`;
-const PREVIOUS_WORDS = ["last", "feedback", "before"]; // a value missing under these hints at $previous (src/shader_holes.rs)
+const PREVIOUS_WORDS = ["last", "feedback", "before"]; // a value missing under these hints at $previous (src/graphics/shader_holes.rs)
 const previousFrames = new Map(); // the task Worker's: shader → the texture it drew last
 const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte rows
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
-const VECTOR_FLOATS = 4; // the floats of one vector in an array value, `values.<name>[i]` (src/gpu.rs)
+const VECTOR_FLOATS = 4; // the floats of one vector in an array value, `values.<name>[i]` (src/graphics/gpu.rs)
 let gpuDevice;
 // a shader painted every frame compiles once, not each frame (card playground-tour: the tour's page crashed in a
 // shader animation on a Mac): the task Worker's last MOST_COMPILED modules and pipelines, by their WGSL
@@ -53,7 +53,7 @@ const compiledModules = new Map();
 const compiledPipelines = new Map();
 const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit words, floats or pixels (writeShared's JSON is state 1)
 // kept buffers (src/lowering/gpu_maps.rs marked_kept): a map result read on the CPU stays on the GPU for the next map of
-// it, by block, the last MOST_KEPT of them (src/gpu.rs KEPT); flags as gpu_map_linear's last argument
+// it, by block, the last MOST_KEPT of them (src/graphics/gpu.rs KEPT); flags as gpu_map_linear's last argument
 const KEEP_RESULT = 1n;
 const SOURCE_KEPT = 2n;
 // a map the compiler switched to the GPU (gpu_maps.rs AUTOMATIC, card gpu-auto): silent without an adapter, else said once
@@ -115,7 +115,7 @@ function keepBuffer(block, buffer) {
 	}
 }
 
-// the holes every shader has (src/shader_holes.rs BUILTIN_HOLES), filled here when the shader reads them and the
+// the holes every shader has (src/graphics/shader_holes.rs BUILTIN_HOLES), filled here when the shader reads them and the
 // program gave none: the image's size, seconds since the first render, the renders before, the pointer and key over
 // the canvas (canvas.js, self.pagePointer)
 const BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key"];
@@ -196,7 +196,7 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 }
 
 // the WGSL declaring `values` (appended, so the shader's line numbers stay the user's) and the uniform's bytes, laid out
-// as WGSL aligns its members (src/gpu.rs uniform_layout)
+// as WGSL aligns its members (src/graphics/gpu.rs uniform_layout)
 function uniformLayout(values) {
 	const entries = Object.entries(values ?? {});
 	if (!entries.length) return { declarations: "", bytes: new ArrayBuffer(0) };
@@ -390,17 +390,19 @@ function writeSharedWords(shared, words) {
 	Atomics.notify(header, 0);
 }
 
-// the program's side: hand the job to a task Worker and wait for the values it gives, raw words as `Words`
+// the program's side: hand the job to a task Worker and wait for the values it gives, raw words as `Words` (a copy:
+// the shared buffer takes the next answer)
 function gpuJob(word, job, transfer = [], Words = Float32Array) {
 	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
 	const worker = gpuTaskWorker();
 	if (!worker) throw new Error(`${word}: every task Worker is busy`);
-	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	Atomics.wait(header, 0, 0);
-	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]) } : readShared(shared);
+	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
+	returnAnswerBuffer(shared);
 	if (error) throw new Error(`${word}: ${error}`);
 	return values;
 }
@@ -543,7 +545,7 @@ addHostPart({
 				const pixels = holder.gpuRendered(plain(shader), width, height, values);
 				return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
 			},
-			// use draw on the GPU (src/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
+			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 		};

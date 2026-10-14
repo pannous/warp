@@ -11,7 +11,6 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
 pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
-use std::collections::HashMap;
 
 pub const NOW_WORD: &str = "now";
 /// instant_at(milliseconds since 1970): the instant node `now` is at run time
@@ -21,6 +20,14 @@ pub const INSTANT_AT: &str = "instant_at";
 pub const TIME_OF: &str = "time_of";
 /// time_in_zone(time, zone index, choice): `t in "Europe/Berlin"` of a time only the run knows
 pub use crate::wasm_emitter::time_zones::TIME_IN_ZONE;
+
+/// The calls that build a time node at run time
+pub const TIME_CALLS: [&str; 3] = [INSTANT_AT, TIME_OF, TIME_IN_ZONE];
+
+/// `instant_at(clock)`, `time_of(…)`, `time_in_zone(…)`: a time the run builds
+pub fn is_time_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, ..) if items.first().and_then(Node::symbol_name).is_some_and(|head| TIME_CALLS.contains(&head)))
+}
 /// The one field of an instant that needs no time zone
 pub const EPOCH_SECONDS: &str = "epoch_seconds";
 
@@ -144,11 +151,7 @@ enum Value {
 	Symbol(String),
 	/// a duration in a unit, `2 hours in minutes` (units::duration_in)
 	Converted(Node),
-	/// `time := now` (a getter since P71, getters.rs: `(time) := now`): its body, evaluated at every read
-	Getter(Node),
 }
-
-type Scope = HashMap<String, Value>;
 
 fn form_of(info: i64) -> Option<TimeForm> {
 	TIME_FORMS
@@ -210,7 +213,7 @@ pub fn lower(program: Node) -> Node {
 /// The largest expressions of time literals and time words alone, folded: what remains runs
 fn fold_constants(node: Node) -> Node {
 	if mentions_time(&node) && only_time_words(&node) {
-		match evaluate(&node, &mut Scope::new()) {
+		match evaluate(&node) {
 			// a quantity, `2 hours in minutes`: written as `120min` for the units' lowering
 			Ok(Value::Converted(quantity)) if !matches!(quantity, Node::Error(_)) => {
 				return crate::warp_parser::parse(&quantity.serialize())
@@ -231,10 +234,6 @@ fn fold_constants(node: Node) -> Node {
 			let number = |n: i64| Node::Number(Number::Int(n));
 			crate::lowering::nodes::call(TIME_IN_ZONE, vec![fold_constants(time), number(zone), number(choice)])
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(fold_constants(*node)),
-			data,
-		},
 		other => other.map_children(fold_constants),
 	}
 }
@@ -287,7 +286,7 @@ fn only_time_words(node: &Node) -> bool {
 		// a duration in a unit of the units module: `1 day in h`
 		Node::List(items, _, _) if converted_to_unit(items) => only_time_words(&items[0]),
 		Node::List(items, _, _) => items.iter().all(only_time_words),
-		Node::Number(_) | Node::Text(_) | Node::True | Node::False | Node::Data(_) => true,
+		Node::Number(_) | Node::Text(_) | Node::Data(_) => true,
 		_ => false,
 	}
 }
@@ -374,21 +373,6 @@ fn mentions_time(node: &Node) -> bool {
 	}
 }
 
-/// `(time)`, the head of a getter definition
-fn getter_name(head: &Node) -> Option<&str> {
-	match head.drop_meta() {
-		Node::List(items, crate::node::Bracket::Round, _) => match items.as_slice() {
-			[Node::Symbol(name)] => Some(name),
-			[single] => match single.drop_meta() {
-				Node::Symbol(name) => Some(name),
-				_ => None,
-			},
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 /// The start of what the evaluator does not know: the run time takes those programs
 const UNSUPPORTED: &str = "not evaluated at compile time:";
 
@@ -407,7 +391,7 @@ fn now() -> Time {
 	Time::Instant(since_epoch)
 }
 
-fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
+fn evaluate(node: &Node) -> Result<Value, String> {
 	match node.drop_meta() {
 		Node::Data(data) => {
 			if let Some(TimeLiteral(text)) = data.downcast_ref::<TimeLiteral>() {
@@ -419,56 +403,40 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
 			}
 		}
 		Node::Number(Number::Int(n)) => Ok(Value::Int(*n)),
-		Node::True => Ok(Value::Bool(true)),
-		Node::False => Ok(Value::Bool(false)),
 		Node::Text(text) => Ok(Value::Text(text.clone())),
-		Node::Symbol(name) => Ok(match scope.get(name) {
-			Some(Value::Getter(body)) => return evaluate(&body.clone(), scope),
-			Some(value) => value.clone(),
-			None if is_time_word(name) => Value::Symbol(name.clone()),
-			// a variable this evaluator does not know: the run knows it
-			None => return Err(unsupported(node)),
-		}),
-		Node::Key(left, op, right) => binary(left, *op, right, scope),
-		Node::List(items, _, separator) => list(node, items, separator.clone(), scope),
-		Node::Error(message) => Err(message.to_string()),
+		Node::Symbol(name) if is_time_word(name) => Ok(Value::Symbol(name.clone())),
+		Node::Key(left, op, right) => binary(left, *op, right),
+		Node::List(items, _, separator) => list(node, items, separator.clone()),
 		_ => Err(unsupported(node)),
 	}
 }
 
-fn list(node: &Node, items: &[Node], separator: Separator, scope: &mut Scope) -> Result<Value, String> {
+fn list(node: &Node, items: &[Node], separator: Separator) -> Result<Value, String> {
 	match items {
 		[head, ..] if head.is_symbol(INSTANT_AT) => Ok(Value::Time(now())),
 		[head, ..] if head.is_symbol(TIME_OF) => Err(unsupported(node)),
-		[single] => evaluate(single, scope),
-		[time, keyword, zone] if keyword.is_symbol("in") => place_in_zone(time, zone, scope),
-		[head, args @ ..] if separator == Separator::None && head.is_symbol("date") => construct_date(args, scope),
-		[head, args @ ..] if separator == Separator::None && head.is_symbol("add") => add(args, scope),
-		[head, args @ ..] if separator == Separator::None && head.is_symbol("zoned") => zoned(args, scope),
-		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
-			let mut last = Err(unsupported(node));
-			for statement in items {
-				last = Ok(evaluate(statement, scope)?);
-			}
-			last
-		}
+		[single] => evaluate(single),
+		[time, keyword, zone] if keyword.is_symbol("in") => place_in_zone(time, zone),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("date") => construct_date(args),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("add") => add(args),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("zoned") => zoned(args),
 		_ => Err(unsupported(node)),
 	}
 }
 
 /// `t in "Europe/Berlin"`: the only way an instant gets a wall clock
-fn place_in_zone(time: &Node, zone: &Node, scope: &mut Scope) -> Result<Value, String> {
-	let time = match evaluate(time, scope)? {
+fn place_in_zone(time: &Node, zone: &Node) -> Result<Value, String> {
+	let time = match evaluate(time)? {
 		Value::Time(time) => time,
 		Value::Duration(duration) => return converted(&duration, zone),
 		other => return Err(format!("`in` places a time in a zone, got {}", other.kind())),
 	};
-	time.in_zone(zone_argument("`in`", zone, scope)?).map(Value::Time)
+	time.in_zone(zone_argument("`in`", zone)?).map(Value::Time)
 }
 
 /// The zone a word's argument names: "Europe/Berlin"
-fn zone_argument(word: &str, zone: &Node, scope: &mut Scope) -> Result<&'static calendar::Zone, String> {
-	match evaluate(zone, scope)? {
+fn zone_argument(word: &str, zone: &Node) -> Result<&'static calendar::Zone, String> {
+	match evaluate(zone)? {
 		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name),
 		other => Err(format!(
 			"{word} needs a zone name like \"Europe/Berlin\", got {}",
@@ -477,34 +445,30 @@ fn zone_argument(word: &str, zone: &Node, scope: &mut Scope) -> Result<&'static 
 	}
 }
 
-fn int_argument(node: &Node, scope: &mut Scope) -> Result<i64, String> {
-	match evaluate(node, scope)? {
+fn int_argument(node: &Node) -> Result<i64, String> {
+	match evaluate(node)? {
 		Value::Int(n) => Ok(n),
 		other => Err(format!("expected an integer, got {}", other.kind())),
 	}
 }
 
 /// `date(2024,2,29)`: fields are validated, never rolled over
-fn construct_date(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
+fn construct_date(args: &[Node]) -> Result<Value, String> {
 	let [year, month, day] = args else {
 		return Err(format!("date(year, month, day) takes 3 arguments, got {}", args.len()));
 	};
-	let date = calendar::Date::new(
-		int_argument(year, scope)?,
-		int_argument(month, scope)?,
-		int_argument(day, scope)?,
-	)?;
+	let date = calendar::Date::new(int_argument(year)?, int_argument(month)?, int_argument(day)?)?;
 	Ok(Value::Time(Time::Date(date)))
 }
 
 /// Options of `add` and `zoned`: `overflow: clamp`, `disambiguation: earlier`; both reject by default
-fn options(function: &str, options: &[Node], scope: &mut Scope) -> Result<(Overflow, Disambiguation), String> {
+fn options(function: &str, options: &[Node]) -> Result<(Overflow, Disambiguation), String> {
 	let (mut overflow, mut choice) = (Overflow::Reject, Disambiguation::Reject);
 	for option in options {
 		let Node::Key(name, Op::Colon, value) = option.drop_meta() else {
 			return Err(unsupported(option));
 		};
-		let mode = match evaluate(value, scope)? {
+		let mode = match evaluate(value)? {
 			Value::Symbol(mode) | Value::Text(mode) => mode,
 			other => return Err(format!("{name} takes a word like reject, got {}", other.kind())),
 		};
@@ -530,12 +494,12 @@ fn options(function: &str, options: &[Node], scope: &mut Scope) -> Result<(Overf
 
 /// `add(2024-01-31, 1 month, overflow: clamp)`: calendar overflow spelled out,
 /// `add(t, 1 day, disambiguation: later)` when the day lands on a repeated or skipped wall time
-fn add(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
+fn add(args: &[Node]) -> Result<Value, String> {
 	let (time, duration, rest) = match args {
-		[time, duration, rest @ ..] => (evaluate(time, scope)?, evaluate(duration, scope)?, rest),
+		[time, duration, rest @ ..] => (evaluate(time)?, evaluate(duration)?, rest),
 		_ => return Err("add(time, duration, overflow: clamp) takes a time and a duration".to_string()),
 	};
-	let (overflow, choice) = options("add", rest, scope)?;
+	let (overflow, choice) = options("add", rest)?;
 	match (time, duration) {
 		(Value::Time(time), Value::Duration(duration)) => time.add(duration, overflow, choice).map(Value::Time),
 		(time, duration) => Err(format!(
@@ -547,15 +511,15 @@ fn add(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 }
 
 /// `zoned(2030-10-27T02:30, "Europe/Berlin", disambiguation: earlier)`: a local time in a zone, the choice spelled out
-fn zoned(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
+fn zoned(args: &[Node]) -> Result<Value, String> {
 	let [time, zone, rest @ ..] = args else {
 		return Err(
 			"zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string(),
 		);
 	};
-	let zone = zone_argument("zoned", zone, scope)?;
-	let (_, choice) = options("zoned", rest, scope)?;
-	match evaluate(time, scope)? {
+	let zone = zone_argument("zoned", zone)?;
+	let (_, choice) = options("zoned", rest)?;
+	match evaluate(time)? {
 		Value::Time(Time::Local(date, clock)) => zone
 			.resolve(date, clock, choice)
 			.map(|zoned| Value::Time(Time::Zoned(zoned))),
@@ -564,26 +528,13 @@ fn zoned(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 	}
 }
 
-fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value, String> {
+fn binary(left: &Node, op: Op, right: &Node) -> Result<Value, String> {
 	match op {
-		Op::Define if getter_name(left).is_some() => {
-			let getter = Value::Getter(right.clone());
-			scope.insert(getter_name(left).expect("guarded").to_string(), getter.clone());
-			Ok(getter)
-		}
-		Op::Assign | Op::Define => {
-			let Node::Symbol(name) = left.drop_meta() else {
-				return Err(unsupported(left));
-			};
-			let value = evaluate(right, scope)?;
-			scope.insert(name.clone(), value.clone());
-			Ok(value)
-		}
 		Op::Dot => {
 			let Node::Symbol(field) = right.drop_meta() else {
 				return Err(unsupported(right));
 			};
-			match evaluate(left, scope)? {
+			match evaluate(left)? {
 				// The time zone rules version a zoned time was resolved with
 				Value::Time(Time::Zoned(zoned)) if field == TZDATA_FIELD => {
 					Ok(Value::Text(zoned.rules.version.to_string()))
@@ -596,8 +547,8 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 			}
 		}
 		_ => {
-			let left = evaluate(left, scope)?;
-			let right = evaluate(right, scope)?;
+			let left = evaluate(left)?;
+			let right = evaluate(right)?;
 			apply(left, op, right)
 		}
 	}
@@ -624,14 +575,6 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		}
 		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
 		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
-		(Value::Int(a), op, Value::Int(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.cmp(&b)))),
-		(Value::Int(a), Op::Add, Value::Int(b)) => Ok(Value::Int(a + b)),
-		(Value::Int(a), Op::Sub, Value::Int(b)) => Ok(Value::Int(a - b)),
-		(Value::Int(a), Op::Mul, Value::Int(b)) => Ok(Value::Int(a * b)),
-		(Value::Bool(a), Op::And, Value::Bool(b)) => Ok(Value::Bool(a && b)),
-		(Value::Bool(a), Op::Or, Value::Bool(b)) => Ok(Value::Bool(a || b)),
-		(Value::Bool(a), Op::Eq, Value::Bool(b)) => Ok(Value::Bool(a == b)),
-		(Value::Bool(a), Op::Ne, Value::Bool(b)) => Ok(Value::Bool(a != b)),
 		(Value::Duration(duration), Op::As, Value::Symbol(unit)) => converted(&duration, &Node::Symbol(unit)),
 		// `"on " + 2024-02-29`: a text joins the other's text, as list_join does at run time
 		(left, Op::Add, right) if matches!(left, Value::Text(_)) || matches!(right, Value::Text(_)) => {
@@ -640,6 +583,8 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 				_ => Err(format!("cannot apply + to a {} and a {}", left.kind(), right.kind())),
 			}
 		}
+		// numbers and truths the run computes, the times in them folded
+		(left, _, right) if !left.is_temporal() && !right.is_temporal() => Err(UNSUPPORTED.to_string()),
 		(left, op, right) => Err(format!("cannot apply {op} to a {} and a {}", left.kind(), right.kind())),
 	}
 }
@@ -676,8 +621,11 @@ impl Value {
 			Value::Text(_) => "text",
 			Value::Symbol(_) => "symbol",
 			Value::Converted(_) => "quantity",
-			Value::Getter(_) => "getter",
 		}
+	}
+
+	fn is_temporal(&self) -> bool {
+		matches!(self, Value::Time(_) | Value::Duration(_))
 	}
 
 	fn into_node(self) -> Node {
@@ -689,7 +637,6 @@ impl Value {
 			Value::Text(text) => Node::Text(text),
 			Value::Symbol(name) => Node::Symbol(name),
 			Value::Converted(node) => node,
-			Value::Getter(_) => Node::Empty, // a definition as the last statement
 		}
 	}
 }

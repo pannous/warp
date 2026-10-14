@@ -109,7 +109,7 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_empty");
 	}
 
-	/// The print of the program's value an executable ends with (pipeline::prints_result): as emit_print, but a value
+	/// The print of the program's value an executable ends with (CompileMode::prints_result): as emit_print, but a value
 	/// only known at run time shows nothing when it is ø, as `warp <file>` shows nothing then
 	pub(super) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
 		if !matches!(
@@ -159,7 +159,7 @@ impl WasmGcEmitter {
 	fn emit_written_value(&mut self, func: &mut Function, value: &Node, writer: &'static str, word: &str) {
 		match self.get_type(value) {
 			// Data: a number whose Int or Float shows at run time (node arithmetic), held as a Node
-			Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data => {
+			Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data | Kind::Function => {
 				let held = self.emit_dynamic_text(func, value);
 				self.emit_call(func, writer);
 				Self::emit_list(func, &[I::Drop, I::LocalGet(held), I::RefAsNonNull]);

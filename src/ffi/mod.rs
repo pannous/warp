@@ -172,6 +172,11 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 			"{name} is in the standard module {module}: write `use {module}`"
 		));
 	}
+	if let Some(c_type) = unlinkable_header_function(name) {
+		return Some(format!(
+			"{name} is a C function using {c_type}, which wasm has no type for: no warp program can call it"
+		));
+	}
 	if get_ffi_signature_from_lib(name, "c").is_some() {
 		return Some(format!(
 			"{name} is a C function: write `use c` or `import {name} from \"c\"`"
@@ -182,6 +187,21 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 	get_ffi_signature_from_lib(name, "m").map(|_| {
 		format!("{name} is a libm function with a parameter other than a float: write `import {name} from \"m\"`")
 	})
+}
+
+/// The type wasm lacks of a libc or libm function its headers declare (`sqrtl`: long double); headers read again,
+/// only for the error
+fn unlinkable_header_function(name: &str) -> Option<&'static str> {
+	implicit_header_libraries(name)
+		.iter()
+		.flat_map(|library| {
+			get_library_header_paths(library)
+				.into_iter()
+				.map(move |path| (path, library))
+		})
+		.flat_map(|(path, library)| parse_header_file(&path, library))
+		.find(|declared| declared.name == name)
+		.and_then(|declared| unlinkable_type(&declared))
 }
 
 /// What a C pointer type crosses as (notes/ffi_handles.md)
@@ -224,6 +244,12 @@ pub fn pointer_kind(c_type: &str) -> Option<CPointer> {
 	}
 }
 
+/// An out-pointer whose filled-in pointer is the call's result, a handle: `sqlite3 **ppDb`; a `char **` (strtod's endptr)
+/// is not one, the C function's own result stays
+pub(crate) fn is_handle_out_pointer(c_type: &str) -> bool {
+	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char"
+}
+
 /// The C parameters a warp call passes: all but the out-pointers
 fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
 	param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
@@ -232,7 +258,7 @@ fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
 /// What a C function's result crosses as: a text, a handle (a pointer result or the first out-pointer), else None for
 /// its number
 pub(crate) fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
-	let has_out_pointer = hsig.param_types.iter().any(|t| pointer_kind(t) == Some(CPointer::Out));
+	let has_out_pointer = hsig.param_types.iter().any(|t| is_handle_out_pointer(t));
 	match pointer_kind(&hsig.return_type) {
 		Some(CPointer::Text) => Some(CPointer::Text),
 		Some(_) => Some(CPointer::Handle),
@@ -298,42 +324,15 @@ fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature>
 	sigs
 }
 
-/// Get known FFI function signatures by parsing system header files, once per process
-/// Uses unified Kind/Signature types from ffi_parser module
+/// The signatures warp links by hand, once per process: the libc functions it adapts (strcmp of two texts), libm's f64
+/// functions, `ln`, the host words and the linear-array words. Every other C function is as its header declares it
 pub fn get_ffi_signatures() -> &'static HashMap<String, FfiSignature> {
 	static PARSED: OnceLock<HashMap<String, FfiSignature>> = OnceLock::new();
-	PARSED.get_or_init(parse_ffi_signatures)
+	PARSED.get_or_init(hand_linked_signatures)
 }
 
-fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
-	use crate::ffi_parser::get_all_signatures;
-	use crate::function::kind_to_valtype;
-
+fn hand_linked_signatures() -> HashMap<String, FfiSignature> {
 	let mut sigs = HashMap::new();
-
-	for (name, func) in get_all_signatures() {
-		let params = func
-			.signature
-			.parameters
-			.iter()
-			.map(|p| kind_to_valtype(p.kind))
-			.collect();
-		let results = func
-			.signature
-			.return_types
-			.iter()
-			.map(|k| kind_to_valtype(*k))
-			.collect();
-		let library = match func.library.as_str() {
-			"m" => "m",
-			"c" => "c",
-			"SDL2" => "SDL2",
-			library => Box::leak(library.to_string().into_boxed_str()),
-		};
-		let signature = FfiSignature::new(Box::leak(name.clone().into_boxed_str()), library, params, results);
-		sigs.insert(name, signature);
-	}
-
 	for (name, params, result) in LIBC_SIGNATURES {
 		sigs.insert(
 			name.to_string(),
@@ -360,10 +359,10 @@ fn parse_ffi_signatures() -> HashMap<String, FfiSignature> {
 			vec![wasm_encoder::ValType::F64],
 		),
 	);
-	for (name, params, results) in crate::host::host_word_signatures() {
+	for (name, params, results) in crate::host::HOST_WORD_SIGNATURES {
 		sigs.insert(
 			name.to_string(),
-			FfiSignature::new(name, crate::host::HOST_LIBRARY, params, results),
+			FfiSignature::new(name, crate::host::HOST_LIBRARY, params.to_vec(), results.to_vec()),
 		);
 	}
 	use crate::wasm_emitter::linear_arrays::{linear_word_signatures, LINEAR_LIBRARY};
@@ -385,21 +384,12 @@ pub fn is_ffi_function(name: &str) -> bool {
 /// Get FFI signature for a function by name
 /// Searches well-known libraries (m, c, SDL2) via dynamic header discovery
 pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
-	let declared = |lib: &&str| get_signatures_from_headers(lib).get(name).cloned();
-	// a C string result as its header declares it (getenv's text), where the cached table has it as a number
-	let text_result = |sig: &FfiSignature| matches!(sig.results.first(), Some(wasm_encoder::ValType::Ref(_)));
-	if let Some(sig) = implicit_header_libraries(name)
-		.iter()
-		.filter_map(declared)
-		.find(text_result)
-	{
-		return Some(sig);
-	}
-	// the cached signatures of well-known libraries first (warp's own `random` is no libc random), then the headers
-	get_ffi_signatures()
-		.get(name)
-		.cloned()
-		.or_else(|| implicit_header_libraries(name).iter().find_map(declared))
+	// the hand-linked signatures first (warp's own `random` is no libc random), then the headers
+	get_ffi_signatures().get(name).cloned().or_else(|| {
+		implicit_header_libraries(name)
+			.iter()
+			.find_map(|library| get_signatures_from_headers(library).get(name).cloned())
+	})
 }
 
 /// The libraries whose headers an undeclared call `name(…)` is looked up in: libm and libc, SDL2 only for SDL_ names,

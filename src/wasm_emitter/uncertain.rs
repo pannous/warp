@@ -413,16 +413,7 @@ impl WasmGcEmitter {
 
 	/// gaussian_new(value, σ): a Gaussian of its own, the one contribution σ under a new id
 	fn emit_gaussian_new(&mut self) {
-		self.globals.global(
-			GlobalType {
-				val_type: ValType::F64,
-				mutable: true,
-				shared: false,
-			},
-			&ConstExpr::f64_const(0.0.into()),
-		);
-		self.next_global_idx += 1;
-		let last_id = self.next_global_idx - 1;
+		let last_id = self.declare_global_of(ValType::F64, ConstExpr::f64_const(0.0.into()));
 		let (value, deviation) = (0, 1);
 		let node_ref = ValType::Ref(self.node_ref(false));
 		self.runtime_function(GAUSSIAN_NEW, vec![ValType::F64; 2], vec![node_ref], vec![], |s, f| {
@@ -1028,16 +1019,7 @@ impl WasmGcEmitter {
 				put(f, byte);
 			}
 			f.instruction(&I::End);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 
@@ -1256,18 +1238,7 @@ impl WasmGcEmitter {
 			.func_registry
 			.get(super::text_builtins::HOST_WARN)
 			.map(|function| function.call_index as u32);
-		let warned = host_warn.map(|_| {
-			self.globals.global(
-				GlobalType {
-					val_type: ValType::I32,
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::i32_const(0),
-			);
-			self.next_global_idx += 1;
-			self.next_global_idx - 1
-		});
+		let warned = host_warn.map(|_| self.declare_global_of(ValType::I32, ConstExpr::i32_const(0)));
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let params = vec![
 			node_ref,

@@ -1,5 +1,5 @@
-//! Static units, stage 1 (notes/units_runtime.md): a program with quantities that `units::answer` cannot evaluate at compile
-//! time (loops, branches) runs with plain exact numbers. Each expression's unit signature (dimension → power) is inferred
+//! Static units, stage 1 (notes/units_runtime.md): a program with quantities runs with plain exact numbers; a temperature's
+//! amount counts from absolute zero, its unit's zero is added where it is written and taken off where it shows. Each expression's unit signature (dimension → power) is inferred
 //! here and checked (`+ - ==` of different signatures is a DimensionError at compile time), each unit literal becomes its
 //! amount in SI base units (`5 km` → 5000, `5 cm` → 1/20), and the program's final value is converted back to the finest
 //! written unit after the run (`RESULT_UNITS`). Stage 2: a function called with quantities (or whose body has unit
@@ -15,6 +15,9 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
+use crate::lowering::function_head;
+
+mod function_units;
 
 mod unit_fields;
 use crate::declarations;
@@ -83,12 +86,6 @@ enum Stop {
 	Recursive,
 }
 
-fn mentions_si_amount(program: &Node) -> bool {
-	let mut found = false;
-	program.visit(&mut |node| found |= matches!(node.drop_meta(), Node::Symbol(name) if name == SI_AMOUNT_WORD));
-	found
-}
-
 /// `si_amount(x)` is x once the units are checked: the calls output_form did not meet, or all of a program without units
 fn without_si_amounts(node: Node) -> Node {
 	match node.drop_meta() {
@@ -106,7 +103,9 @@ fn without_si_amounts(node: Node) -> Node {
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 	match super::shadowing(program, || lower_shadowed(program)) {
 		Some(lowered) => Some(lowered.map(without_si_amounts)),
-		None => mentions_si_amount(program).then(|| Ok(without_si_amounts(program.clone()))),
+		None => program
+			.mentions(SI_AMOUNT_WORD)
+			.then(|| Ok(without_si_amounts(program.clone()))),
 	}
 }
 
@@ -128,6 +127,14 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 		.chain(unit_fields::written_field_units(program))
 		.collect::<Vec<_>>();
 	let display = finest_units(&written);
+	let mut temperatures: Vec<&'static Unit> = vec![];
+	for factor in &written {
+		if factor.unit.dimension == Dimension::Temperature
+			&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
+		{
+			temperatures.push(factor.unit)
+		}
+	}
 	let mut definitions = HashMap::new();
 	program.visit(&mut |node| {
 		if let Some((name, definition)) = function_definition(node) {
@@ -149,6 +156,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 		numbered: 0,
 		new_definitions: vec![],
 		display: display.clone(),
+		temperatures,
 		returns: vec![],
 		at_top: true,
 		in_host_call: false,
@@ -308,7 +316,7 @@ pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
 	};
 	if let Some(amount) = exact_amount(&value) {
 		return Node::data(Quantity {
-			amount: amount.mul(&per_unit),
+			amount: amount.add(&shown_zero(units).neg()).mul(&per_unit),
 			factors: units.to_vec(),
 		});
 	}
@@ -354,15 +362,17 @@ fn display_unit(display: &[&'static Unit], dimension: Dimension) -> &'static Uni
 		.unwrap_or_else(|| base_unit(dimension))
 }
 
-/// A signature in the units it shows in: the finest written unit of each dimension
+/// A signature in the units it shows in: the finest written unit of each dimension, in the order they are written
 fn display_factors(display: &[&'static Unit], signature: &Signature) -> Vec<Factor> {
-	signature
+	let mut factors: Vec<Factor> = signature
 		.iter()
 		.map(|(dimension, power)| Factor {
 			unit: display_unit(display, *dimension),
 			power: *power,
 		})
-		.collect()
+		.collect();
+	factors.sort_by_key(|factor| display.iter().position(|unit| unit.dimension == factor.unit.dimension));
+	factors
 }
 
 /// A unit's amount in SI base units as a literal: km → 1000, cm → 1/20 of 5 cm
@@ -374,6 +384,41 @@ fn si_literal(unit: &'static Unit) -> Option<Node> {
 	number_node(&amount)
 }
 
+/// An amount in `unit` as an SI amount: `40 °C` is 40 + 273.15 (kelvin)
+fn si_amount(amount: Node, unit: &'static Unit) -> Option<Node> {
+	let scaled = folded(amount, Op::Mul, si_literal(unit)?);
+	let zero = si_zero(unit);
+	if zero.is_zero() {
+		return Some(scaled);
+	}
+	match exact_amount(&scaled) {
+		Some(amount) => number_node(&amount.add(&zero)),
+		None => Some(Node::Key(Box::new(scaled), Op::Add, Box::new(number_node(&zero)?))),
+	}
+}
+
+/// Where a unit's 0 lies in SI amounts: 273.15 for °C, 0 for a unit without a zero of its own
+fn si_zero(unit: &Unit) -> Rational {
+	Rational::new(BigInt::from(unit.zero), BigInt::from(base_unit(unit.dimension).factor))
+}
+
+/// The zero of the units a quantity shows in: only a lone temperature unit has one
+fn shown_zero(units: &[Factor]) -> Rational {
+	match units {
+		[Factor { unit, power: 1 }] => si_zero(unit),
+		_ => Rational::integer(0),
+	}
+}
+
+/// `²`, `³` and `^ 2`: the power a quantity is raised to, a whole number written
+fn written_power(op: Op, exponent: &Node) -> Option<i32> {
+	match (op, exponent.drop_meta()) {
+		(Op::Square | Op::Cube, Node::Empty) => Some(exponent_of(op)),
+		(Op::Pow, Node::Number(Number::Int(power))) => i32::try_from(*power).ok(),
+		_ => None,
+	}
+}
+
 fn number_node(amount: &Rational) -> Option<Node> {
 	let numerator = amount.numerator.to_i64()?;
 	Some(match amount.denominator.to_i64()? {
@@ -382,7 +427,7 @@ fn number_node(amount: &Rational) -> Option<Node> {
 	})
 }
 
-fn combined(left: &Signature, right: &Signature, sign: i32) -> Signature {
+fn combined(left: &[(Dimension, i32)], right: &[(Dimension, i32)], sign: i32) -> Signature {
 	let factors: Vec<Factor> = left
 		.iter()
 		.map(|(d, p)| (*d, *p))
@@ -449,7 +494,7 @@ fn globals_declared_in(body: &Node) -> Vec<String> {
 
 fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 	Stop::Error(format!(
-		"DimensionError: {} {op} {}: the units do not match",
+		"DimensionError: {} {op} {}: incompatible units",
 		shown(left),
 		shown(right)
 	))
@@ -463,17 +508,10 @@ struct Definition {
 }
 
 fn function_definition(node: &Node) -> Option<(String, Definition)> {
-	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else {
-		return None;
-	};
-	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
-		return None;
-	};
-	let (name, parameters) = items.split_first()?;
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
-	let parameters = parameters
+	let definition =
+		function_head(node).filter(|definition| definition.is_glued_head() && definition.plain_operator().is_some())?;
+	let parameters = definition
+		.written_parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
@@ -482,10 +520,10 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 		})
 		.collect::<Option<Vec<_>>>()?;
 	Some((
-		name.clone(),
+		definition.name.to_string(),
 		Definition {
 			parameters,
-			body: body.as_ref().clone(),
+			body: definition.body.clone(),
 		},
 	))
 }
@@ -543,6 +581,8 @@ struct Inference {
 	new_definitions: Vec<Node>,
 	/// The finest written unit of each dimension: the unit a quantity shows in unless converted
 	display: Vec<&'static Unit>,
+	/// The temperature units written, each once
+	temperatures: Vec<&'static Unit>,
 	/// The signatures of the `return`s of each function being specialised
 	returns: Vec<Vec<Signature>>,
 	/// Inferring the program's own statements (its last one may be a whole list of quantities)
@@ -572,7 +612,12 @@ fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
 /// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`, a fraction in parentheses
 fn quantity_text(quantity: Node, units: &[Factor], amount_text: &str) -> Option<Node> {
 	let per_unit = number_node(&super::scale(units, |factor| base_unit(factor.unit.dimension)))?;
-	let amount = Node::Key(Box::new(quantity), Op::Div, Box::new(per_unit));
+	let zero = shown_zero(units);
+	let above_zero = match zero.is_zero() {
+		true => quantity,
+		false => Node::Key(Box::new(quantity), Op::Sub, Box::new(number_node(&zero)?)),
+	};
+	let amount = Node::Key(Box::new(above_zero), Op::Div, Box::new(per_unit));
 	let text =
 		crate::lowering::library_words::substitute(crate::warp_parser::parse(amount_text), AMOUNT_PLACEHOLDER, &amount);
 	Some(Node::Key(
@@ -605,7 +650,7 @@ fn method_of(call: &Node) -> Option<(&str, &[Node])> {
 	let Node::Symbol(method) = head.drop_meta() else {
 		return None;
 	};
-	(TEXT_WORDS.contains(&method.as_str()) || crate::analyzer::appends(method, arguments.len()))
+	(TEXT_WORDS.contains(&method.as_str()) || crate::declaration_forms::appends(method, arguments.len()))
 		.then_some((method.as_str(), arguments))
 }
 
@@ -729,19 +774,39 @@ impl Inference {
 					))),
 				}
 			}
+			Node::Key(amount, Op::Mul, unit) if self.unit_word(&unit).is_some() => {
+				self.amount_in(*amount, self.unit_word(&unit).expect("guarded"))
+			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
 				let signature = self.arithmetic(op, &left_signature, &right_signature)?;
-				Ok((folded(left, op, right), signature))
+				let computed = self.with_one_zero(folded(left, op, right), op, &signature)?;
+				Ok((computed, signature))
 			}
-			Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
+			// `-3m`: the quantity keeps its units; `-20°C` counts from the zero of °C
+			Node::Key(nothing, Op::Neg, operand) if is_nothing(&nothing) => {
+				let (operand, signature) = self.infer(*operand)?;
+				let negated = Node::Key(nothing, Op::Neg, Box::new(operand));
+				let twice_zero = self
+					.temperature_zero(&signature)
+					.add(&self.temperature_zero(&signature));
+				match twice_zero.is_zero() {
+					true => Ok((negated, signature)),
+					false => {
+						let zero = number_node(&twice_zero).ok_or(Stop::Unsupported)?;
+						Ok((Node::Key(Box::new(zero), Op::Add, Box::new(negated)), signature))
+					}
+				}
+			}
+			Node::Key(base, op, exponent) if written_power(op, &exponent).is_some() => {
+				let power = written_power(op, &exponent).expect("guarded");
 				let (base, signature) = self.infer(*base)?;
 				let signature = signature
 					.iter()
-					.map(|(dimension, power)| (*dimension, power * exponent_of(op)))
+					.map(|(dimension, base_power)| (*dimension, base_power * power))
 					.collect();
-				Ok((Node::Key(Box::new(base), op, nothing), signature))
+				Ok((Node::Key(Box::new(base), op, exponent), signature))
 			}
 			// `if c then a else b`: both branches have one signature
 			Node::Key(if_then, Op::Else, otherwise) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
@@ -1005,7 +1070,7 @@ impl Inference {
 				.lists
 				.get(list)
 				.cloned()
-				.filter(|_| crate::analyzer::appends(method, 1))
+				.filter(|_| crate::declaration_forms::appends(method, 1))
 			{
 				let (argument, given) = self.infer(argument.clone())?;
 				if given != element {
@@ -1047,14 +1112,51 @@ impl Inference {
 
 	/// The source of a quantity's text at run time, `amount` an SI amount: `str(amount / (1/100)) + " cm"`
 	fn quantity_source(&self, amount: &str, signature: &Signature, amount_text: &str) -> Result<String, Stop> {
-		let units = display_factors(&self.display, signature);
-		let per_unit =
-			number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
-		let amount_text = amount_text.replace(
-			AMOUNT_PLACEHOLDER,
-			&format!("({amount} / ({}))", per_unit.serialize().trim()),
-		);
-		Ok(format!("{amount_text} + \"{}\"", super::unit_suffix(&units)))
+		let text = self.as_text(crate::warp_parser::parse(amount), signature, None, amount_text)?;
+		Ok(format!("({})", text.serialize()))
+	}
+
+	/// `km` in `5 km` and `5km`: a unit word no variable shadows
+	fn unit_word(&self, node: &Node) -> Option<&'static Unit> {
+		match node.drop_meta() {
+			Node::Symbol(name) if !self.variables.contains_key(name) => unit_named(name),
+			_ => None,
+		}
+	}
+
+	/// `40°C`: an amount in a unit as an SI amount, counted from the unit's zero
+	fn amount_in(&mut self, amount: Node, unit: &'static Unit) -> Result<(Node, Signature), Stop> {
+		let (amount, given) = self.infer(amount)?;
+		let signature = combined(&given, &[(unit.dimension, 1)], 1);
+		Ok((si_amount(amount, unit).ok_or(Stop::Unsupported)?, signature))
+	}
+
+	/// The zero of the unit a temperature shows in, 0 for any other signature
+	fn temperature_zero(&self, signature: &Signature) -> Rational {
+		match signature.as_slice() {
+			[(Dimension::Temperature, 1)] => si_zero(display_unit(&self.display, Dimension::Temperature)),
+			_ => Rational::integer(0),
+		}
+	}
+
+	/// A sum of temperatures counts one zero, of the one unit they are written in: 20 °C + 5 °C is 25 °C
+	fn with_one_zero(&self, computed: Node, op: Op, signature: &Signature) -> Result<Node, Stop> {
+		let zero = self.temperature_zero(signature);
+		if !matches!(op, Op::Add | Op::Sub) || zero.is_zero() {
+			return Ok(computed);
+		}
+		if let [first, second, ..] = self.temperatures.as_slice() {
+			return Err(Stop::Error(format!(
+				"DimensionError: temperatures add in one unit only, given {} and {}",
+				first.name, second.name
+			)));
+		}
+		let undo = if op == Op::Add { Op::Sub } else { Op::Add };
+		Ok(Node::Key(
+			Box::new(computed),
+			undo,
+			Box::new(number_node(&zero).ok_or(Stop::Unsupported)?),
+		))
 	}
 
 	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
@@ -1201,7 +1303,7 @@ impl Inference {
 		}
 		let (parameter, body) = match function.drop_meta() {
 			Node::Key(parameter, Op::FatArrow, body) => (parameter.drop_meta().name(), body.as_ref()),
-			body => (crate::lambdas::IMPLICIT_PARAMETER.to_string(), body),
+			body => (crate::words::IMPLICIT_PARAMETER.to_string(), body),
 		};
 		if let Some(class) = self.class_lists.get(&source_name).cloned() {
 			self.declare_instance(parameter, class);
@@ -1216,455 +1318,5 @@ impl Inference {
 			let call = Node::List(vec![method.clone(), function], Bracket::Round, separator.clone());
 			(Node::Key(source.clone(), Op::Dot, Box::new(call)), element)
 		}))
-	}
-
-	/// `print q`, `q in km`, `return q`: the forms of stage 3 written as lists; None for any other list
-	fn output_form(
-		&mut self,
-		items: &[Node],
-		bracket: &Bracket,
-		separator: &Separator,
-	) -> Option<Result<(Node, Signature), Stop>> {
-		// a one-line block `{ print r.distance }` is its words too
-		let call_or_words = matches!(
-			(bracket, separator),
-			(Bracket::None | Bracket::Curly, Separator::Space) | (Bracket::Round, Separator::None)
-		);
-		let word = |node: &Node, wanted: &str| matches!(node.drop_meta(), Node::Symbol(w) if w == wanted);
-		if call_or_words {
-			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
-				if let Some(found) = self.list_word(name, &items[1..]) {
-					return Some(found.map(|(arguments, signature)| {
-						(
-							Node::List(
-								[vec![items[0].clone()], arguments].concat(),
-								bracket.clone(),
-								separator.clone(),
-							),
-							signature,
-						)
-					}));
-				}
-			}
-		}
-		// `for x in xs` of a list of quantities: x has the element signature
-		if let [for_word, variable, in_word, list, body] = items {
-			if word(for_word, "for") && word(in_word, super::IN_WORD) {
-				if let (Node::Symbol(name), Node::Symbol(list_name)) = (variable.drop_meta(), list.drop_meta()) {
-					if let Some(element) = self.lists.get(list_name).cloned() {
-						self.variables.insert(name.clone(), element);
-						return Some(self.infer(body.clone()).map(|(body, _)| {
-							(
-								Node::List(
-									vec![for_word.clone(), variable.clone(), in_word.clone(), list.clone(), body],
-									bracket.clone(),
-									separator.clone(),
-								),
-								vec![],
-							)
-						}));
-					}
-				}
-			}
-		}
-		match items {
-			[head, value]
-				if call_or_words
-					&& TEXT_WORDS.iter().any(|text| word(head, text))
-					&& self.whole_text(value, AMOUNT_TEXT).is_some() =>
-			{
-				self.whole_text(value, AMOUNT_TEXT)
-					.map(|text| text.map(|text| (text, vec![])))
-			}
-			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) => Some((|| {
-				let (value, signature) = self.infer(value.clone())?;
-				if signature.is_empty() {
-					return Ok((
-						Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()),
-						vec![],
-					));
-				}
-				Ok((self.as_text(value, &signature, None, AMOUNT_TEXT)?, vec![]))
-			})()),
-			[head, value]
-				if call_or_words && word(head, PRINT_WORD) && self.whole_text(value, PRINTED_AMOUNT_TEXT).is_some() =>
-			{
-				self.whole_text(value, PRINTED_AMOUNT_TEXT).map(|text| {
-					text.map(|text| {
-						(
-							Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
-							vec![],
-						)
-					})
-				})
-			}
-			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
-				let shown_units = conversion_target(value);
-				let (value, signature) = self.infer(value.clone())?;
-				let text = self.as_text(value, &signature, shown_units, PRINTED_AMOUNT_TEXT)?;
-				Ok((
-					Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
-					vec![],
-				))
-			})()),
-			[head, value] if call_or_words && word(head, SI_AMOUNT_WORD) => {
-				Some(self.infer(value.clone()).map(|(value, _)| (value, vec![])))
-			}
-			[head, value] if *bracket == Bracket::None && word(head, RETURN_WORD) => Some((|| {
-				let (value, signature) = self.infer(value.clone())?;
-				if let Some(returns) = self.returns.last_mut() {
-					returns.push(signature.clone());
-				}
-				Ok((
-					Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()),
-					signature,
-				))
-			})()),
-			[quantity, in_word, unit]
-				if *bracket == Bracket::None
-					&& word(in_word, super::IN_WORD)
-					&& super::unit_expression(unit).is_some() =>
-			{
-				Some((|| {
-					let target = signature(&super::unit_expression(unit).expect("guarded"));
-					let (quantity, given) = self.infer(quantity.clone())?;
-					if given != target {
-						return Err(Stop::Error(format!(
-							"DimensionError: {} cannot be converted to {}",
-							shown(&given),
-							shown(&target)
-						)));
-					}
-					Ok((quantity, given))
-				})())
-			}
-			_ => None,
-		}
-	}
-
-	/// `task·go(f, args)` of a function with quantities starts its specialisation (the job holds its result in SI amounts)
-	fn task_start(
-		&mut self,
-		items: &[Node],
-		bracket: &Bracket,
-		separator: &Separator,
-	) -> Option<Result<(Node, Signature), Stop>> {
-		let (head, call) = items.split_first()?;
-		if declarations::word(head) != declarations::TASK_GO {
-			return None;
-		}
-		let started = match self.specialised_call(call)? {
-			Ok((Node::List(started, _, _), _)) => started,
-			Ok(_) => return None,
-			Err(stop) => return Some(Err(stop)),
-		};
-		self.started
-			.insert(declarations::word(&call[0]), declarations::word(&started[0]));
-		Some(Ok((
-			Node::List(
-				[vec![head.clone()], started].concat(),
-				bracket.clone(),
-				separator.clone(),
-			),
-			vec![],
-		)))
-	}
-
-	/// The reads and controls of a task (`await job`: `task·value(job, f)`) name the specialisation it started
-	fn with_started_names(&self, items: Vec<Node>) -> Vec<Node> {
-		if !items
-			.first()
-			.is_some_and(|head| declarations::is_task_marker(&declarations::word(head)))
-		{
-			return items;
-		}
-		items
-			.into_iter()
-			.map(|part| match self.started.get(&declarations::word(&part)) {
-				Some(specialised) => Node::Symbol(specialised.clone()),
-				None => part,
-			})
-			.collect()
-	}
-
-	/// `f(a, b)` of a user function with quantities (or units in its body): the call of its specialisation
-	fn specialised_call(&mut self, items: &[Node]) -> Option<Result<(Node, Signature), Stop>> {
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
-		let definition = self.definitions.get(&(name.clone(), arguments.len()))?.clone();
-		let mut lowered = vec![];
-		let mut signatures = vec![];
-		for argument in arguments {
-			match self.infer(argument.clone()) {
-				Ok((argument, signature)) => {
-					lowered.push(argument);
-					signatures.push(signature);
-				}
-				Err(stop) => return Some(Err(stop)),
-			}
-		}
-		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition.body) {
-			return None;
-		}
-		Some(
-			self.specialise(name, &definition, signatures)
-				.map(|(specialised, result)| {
-					(
-						Node::List(
-							[vec![Node::Symbol(specialised)], lowered].concat(),
-							Bracket::Round,
-							Separator::None,
-						),
-						result,
-					)
-				}),
-		)
-	}
-
-	/// The specialisation of a function for the unit signatures of its arguments: its name and result signature
-	fn specialise(
-		&mut self,
-		name: &str,
-		definition: &Definition,
-		signatures: Vec<Signature>,
-	) -> Result<(String, Signature), Stop> {
-		let key = (name.to_string(), signatures.clone());
-		if let Some(done) = self.specialised.get(&key) {
-			return Ok(done.clone());
-		}
-		if let Some(progressing) = self.in_progress.iter_mut().find(|progressing| progressing.key == key) {
-			progressing.recursive = true;
-			return progressing
-				.result
-				.clone()
-				.map(|result| (progressing.name.clone(), result))
-				.ok_or(Stop::Recursive);
-		}
-		if self
-			.in_progress
-			.iter()
-			.any(|progressing| progressing.key.0 == name && progressing.key.1.len() == signatures.len())
-		{
-			return Err(Stop::Unsupported); // recursion that changes the arguments' units
-		}
-		let specialised = format!("{name}{SPECIALISATION_SEPARATOR}{}", self.numbered);
-		self.numbered += 1;
-		self.in_progress.push(InProgress {
-			key: key.clone(),
-			name: specialised.clone(),
-			recursive: false,
-			result: None,
-		});
-		let mut inferred = self.infer_body(name, definition, &signatures);
-		// a recursive function: its recursive calls give the result of the first pass, which the second pass must confirm
-		if let (Ok((_, result)), Some(progressing)) = (
-			&inferred,
-			self.in_progress.last_mut().filter(|progressing| progressing.recursive),
-		) {
-			progressing.result = Some(result.clone());
-			let provisional = result.clone();
-			inferred = self.infer_body(name, definition, &signatures);
-			if let Ok((_, result)) = &inferred {
-				if *result != provisional {
-					inferred = Err(Stop::Error(format!(
-						"DimensionError: {name} returns {} and {}",
-						shown(&provisional),
-						shown(result)
-					)));
-				}
-			}
-		}
-		self.in_progress.pop();
-		let (body, result) = inferred?;
-		let parameters = definition
-			.parameters
-			.iter()
-			.map(|parameter| Node::Symbol(parameter.clone()));
-		let head = Node::List(
-			std::iter::once(Node::Symbol(specialised.clone()))
-				.chain(parameters)
-				.collect(),
-			Bracket::Round,
-			Separator::None,
-		);
-		self.new_definitions
-			.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
-		self.specialised.insert(key, (specialised.clone(), result.clone()));
-		Ok((specialised, result))
-	}
-
-	/// A function body with unit literals or one reading a global that holds a quantity
-	fn has_units(&self, body: &Node) -> bool {
-		let holds_quantity = |name: &String| {
-			self.globals
-				.get(name)
-				.or_else(|| self.variables.get(name))
-				.is_some_and(|signature| !signature.is_empty())
-		};
-		mentions_units(body)
-			|| globals_declared_in(body).iter().any(holds_quantity)
-			|| self
-				.globals
-				.iter()
-				.any(|(name, signature)| !signature.is_empty() && super::mentions_word(body, name))
-	}
-
-	/// The body of a function lowered for the unit signatures of its parameters, and its result signature
-	fn infer_body(
-		&mut self,
-		name: &str,
-		definition: &Definition,
-		signatures: &[Signature],
-	) -> Result<(Node, Signature), Stop> {
-		// the globals it writes keep their signatures: main's `global` ones and those it declares `global x` itself
-		let mut scope = self.globals.clone();
-		for name in globals_declared_in(&definition.body) {
-			if let Some(signature) = self.variables.get(&name) {
-				scope.insert(name, signature.clone());
-			}
-		}
-		scope.extend(definition.parameters.iter().cloned().zip(signatures.iter().cloned()));
-		let outer = std::mem::replace(&mut self.variables, scope);
-		self.returns.push(vec![]);
-		let inferred = self.infer(definition.body.clone());
-		let returns = self.returns.pop().unwrap_or_default();
-		self.variables = outer;
-		let (body, result) = inferred?;
-		// every `return` gives the result's units: the first one decides, the others and the last statement agree
-		let result = returns.first().cloned().unwrap_or(result);
-		if let Some(other) = returns.iter().find(|signature| **signature != result) {
-			return Err(Stop::Error(format!(
-				"DimensionError: {name} returns {} and {}",
-				shown(&result),
-				shown(other)
-			)));
-		}
-		Ok((body, result))
-	}
-
-	fn infer_list(
-		&mut self,
-		items: Vec<Node>,
-		bracket: Bracket,
-		separator: Separator,
-	) -> Result<(Node, Signature), Stop> {
-		if let Some(output) = self.output_form(&items, &bracket, &separator) {
-			return output;
-		}
-		if let Some(task) = self.task_start(&items, &bracket, &separator) {
-			return task;
-		}
-		let items = self.with_started_names(items);
-		// `(q as km)`: parentheses around one expression keep its signature
-		if let ([inner], Bracket::Round) = (items.as_slice(), &bracket) {
-			if matches!(inner.drop_meta(), Node::Key(..)) || conversion_target(inner).is_some() {
-				let (inner, signature) = self.infer(inner.clone())?;
-				return Ok((Node::List(vec![inner], bracket, separator), signature));
-			}
-		}
-		// a written object `{dist:500m name:"run"}` (only `:` entries: `{x = 1 m}` is a block); as the program's value its
-		// fields' units go into `warp.units`
-		let list = Node::List(items.clone(), bracket.clone(), separator.clone());
-		let is_written_object =
-			object_entries(&list).is_some_and(|entries| entries.iter().all(|(_, op, _)| *op == Op::Colon));
-		if let Some(object) = self.object_literal(&list).filter(|_| is_written_object) {
-			let (object, fields) = object?;
-			if self.at_top {
-				self.result_fields = Some(
-					fields
-						.into_iter()
-						.filter(|(_, signature)| !signature.is_empty())
-						.collect(),
-				);
-			}
-			return Ok((object, vec![]));
-		}
-		if bracket == Bracket::Round {
-			if let Some(call) = self.constructed(&items) {
-				return call;
-			}
-		}
-		if bracket == Bracket::Round && separator == Separator::None {
-			if let Some(call) = self.specialised_call(&items) {
-				return call;
-			}
-		}
-		let statements = matches!(separator, Separator::Semicolon | Separator::Newline) || bracket == Bracket::Curly;
-		let is_loop = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if LOOP_WORDS.contains(&word.as_str()));
-		if is_loop {
-			self.loop_instance(&items);
-		}
-		// `5 km`: an amount and a unit
-		// the amount is a value: a number, an expression or a variable, never a word like `use` in `use m` (the libm module)
-		let is_amount = |item: &Node| match item.drop_meta() {
-			Node::Symbol(name) => self.variables.contains_key(name),
-			Node::Text(_) | Node::Char(_) => false,
-			_ => true,
-		};
-		let is_amount_and_unit = items.len() == 2
-			&& bracket == Bracket::None
-			&& separator == Separator::Space
-			&& is_amount(&items[0])
-			&& matches!(items[1].drop_meta(), Node::Symbol(name) if unit_named(name).is_some() && !self.variables.contains_key(name));
-		let is_host_call = bracket == Bracket::Round
-			&& matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HOST_CALL);
-		// `(r.distance)`, `(a + b)`: parentheses around one expression group it (a lone word `(f)` may be a call)
-		let grouping = bracket == Bracket::Round
-			&& matches!(items.as_slice(), [single] if !matches!(single.drop_meta(), Node::Symbol(_)));
-		let in_host_call = self.in_host_call || is_host_call;
-		let outer_host_call = std::mem::replace(&mut self.in_host_call, in_host_call);
-		let mut lowered = vec![];
-		let mut signatures = vec![];
-		let count = items.len();
-		for (index, item) in items.into_iter().enumerate() {
-			// the program's last statement may show a whole list of quantities
-			if statements && index + 1 == count && self.at_top {
-				// a final object: its fields' units go into the `units` entry
-				let fields = self
-					.objects
-					.get(&item.name())
-					.cloned()
-					.or_else(|| self.list_instance_fields(&item));
-				if let Some(fields) = fields.filter(|_| matches!(item.drop_meta(), Node::Symbol(_))) {
-					self.result_fields = Some(
-						fields
-							.iter()
-							.filter(|(_, signature)| !signature.is_empty())
-							.cloned()
-							.collect(),
-					);
-					lowered.push(item);
-					signatures.push(vec![]);
-					continue;
-				}
-				if let Some(text) = self.final_list(&item) {
-					lowered.push(text?);
-					signatures.push(vec![]);
-					continue;
-				}
-			}
-			let outer = std::mem::replace(&mut self.at_top, false);
-			let inferred = self.infer(item);
-			self.at_top = outer;
-			let (item, signature) = inferred?;
-			lowered.push(item);
-			signatures.push(signature);
-		}
-		if is_amount_and_unit {
-			let signature = combined(&signatures[0], &signatures[1], 1);
-			let product = Node::Key(Box::new(lowered[0].clone()), Op::Mul, Box::new(lowered[1].clone()));
-			return Ok((product, signature));
-		}
-		let in_host_call = std::mem::replace(&mut self.in_host_call, outer_host_call);
-		let signature = if statements || grouping {
-			signatures.last().cloned().unwrap_or_default()
-		} else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
-			vec![]
-		} else {
-			return Err(Stop::Unsupported); // a call, print, a list literal or interpolation of a quantity
-		};
-		Ok((Node::List(lowered, bracket, separator), signature))
 	}
 }

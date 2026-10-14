@@ -58,3 +58,14 @@ fn a_bare_for_walks_a_method_chain() {
 	assert_eq!(printed("for (1…3) {print it}"), "1\n2\n3\n");
 	assert_eq!(printed("for(i=0;i<2;i++){print i}"), "0\n1\n");
 }
+
+/// card two-ints: bit_and and bit_or take two's-complement bits of any whole numbers, as a warp-written emitter needs
+/// for LEB128 (`bit_and(n, 127)` of a negative n)
+#[test]
+fn bit_words_take_the_bits_of_negative_numbers_too() {
+	is!("use math; bit_and(-129, 127)", 127);
+	is!("use math; bit_and(-1, 255)", 255);
+	is!("use math; bit_or(-128, 1)", -127);
+	is!("use math; bit_and(624485, 127)", 101);
+	is!("use math; bit_or(101, 128)", 229);
+}

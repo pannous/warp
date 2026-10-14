@@ -1,4 +1,5 @@
 mod test_add_to_text;
+mod test_ascii_index_costs;
 mod test_backtick_templates;
 mod test_brace_hole; // card brace-hole
 mod test_case_table;
@@ -16,6 +17,7 @@ mod test_for_each_char;
 mod test_guillemet_strings;
 mod test_interpolated_source_forms;
 mod test_interpolation;
+mod test_large_text_literals; // card self-serializer
 mod test_library_unicode;
 mod test_map_text;
 mod test_nested_list_text;
@@ -30,6 +32,7 @@ mod test_print_type_error;
 mod test_print_walk;
 mod test_put_runtime_values;
 mod test_quote_output;
+mod test_quoted_computed_container_text;
 mod test_quoted_container_texts;
 mod test_repeat_typed; // card repeat-int
 mod test_runtime_kind_texts;
@@ -41,13 +44,17 @@ mod test_str_computed; // card str-inline
 mod test_string;
 mod test_terminal_escapes;
 mod test_text_as_float;
+mod test_text_builders; // card self-byte-buffer
 mod test_text_building;
 mod test_text_bytes;
 mod test_text_casts;
 mod test_text_concat;
+mod test_text_cursor;
 mod test_text_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_text_getters;
+#[cfg(feature = "native")] // reads a file
+mod test_text_parameter_copy; // card self-lexer
 mod test_text_plus_anything; // card print-oldest
 mod test_text_plus_float_call;
 mod test_text_plus_printable; // card print-oldest

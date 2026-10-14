@@ -106,10 +106,7 @@ pub fn lower_run_time_bangs(program: Node) -> Node {
 }
 
 fn lower_statements(program: Node, applies: &dyn Fn(&Node) -> bool, lower: &dyn Fn(&Site, Node) -> Node) -> Node {
-	let statements = match program.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		_ => vec![program.clone()],
-	};
+	let statements = program.sequence_statements().to_vec();
 	if !statements.iter().any(applies) {
 		return program;
 	}
@@ -242,6 +239,8 @@ fn run_time_bang(node: &Node, holders: &[String]) -> Option<Node> {
 		Node::Symbol(name) => holders.contains(name).then_some(inner),
 		Node::Key(_, Op::Dot, _) => None,
 		Node::Empty => None,
+		// `now!`: the run reads the clock where it stands, a block could not hand the time back (card data-run-now)
+		_ if crate::time::is_time_call(&inner) => None,
 		_ => Some(inner),
 	}
 }
@@ -258,9 +257,7 @@ fn has_bang(node: &Node) -> bool {
 }
 
 fn mentions_interpret(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == INTERPRET));
-	found
+	node.mentions(INTERPRET)
 }
 
 /// `interpret e` / `interpret(e)`: e; `interpret(data n+k)`: the phrase `data n+k`

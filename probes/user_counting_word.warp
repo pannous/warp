@@ -1,0 +1,6 @@
+// card user-defined-size: the user's size(m) changes the caller's map: 2
+m = {}
+m["a"] = 1
+def size(m) { m.z = 2; 0 }
+size(m)
+m.z

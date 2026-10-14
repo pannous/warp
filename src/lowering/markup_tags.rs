@@ -4,9 +4,9 @@
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
 use super::nodes::key;
-use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::HashSet;
 
 const ALL_WORD: &str = "all";
@@ -97,10 +97,6 @@ fn tag<'a>(node: &'a Node, defined: &HashSet<String>) -> Option<&'a [Node]> {
 /// A tag whose items, and their items in turn, read `name(key:value…)` as the tag `name{key:value…}`
 fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(tag_with_attributes(*node, defined)),
-			data,
-		},
 		Node::Key(name, Op::Colon, body) => match *body {
 			Node::List(items, Bracket::Curly, separator) => {
 				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag));
@@ -249,10 +245,6 @@ fn with_form_routes(node: Node) -> Node {
 /// definition; in an element any other `name = value` stays the assignment
 pub fn lower_html_attributes(node: Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower_html_attributes(*node)),
-			data,
-		},
 		Node::Key(tag, Op::Colon, body) if is_element_name(&tag) => Node::Key(
 			tag,
 			Op::Colon,

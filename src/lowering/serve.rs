@@ -1,9 +1,9 @@
 //! `serve 8080 { get "/api/users" { users } post "/echo" { request.body } }` (card web-server): each route becomes the
 //! function `route·N(request:any) := body` and the statement the host call `serve_routes(8080, [["GET",
-//! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web_server.rs natively; the playground says
+//! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web/web_server.rs natively; the playground says
 //! loudly that it cannot serve). `server def f(a, b) {…}` (typed RPC, notes/web_framework.md "Server and page") is f,
 //! and also the route POST /rpc/f calling it with the request's JSON array of arguments. A program file whose last line
-//! shows a page serves that page too, at / (src/site.rs); its page build leaves the serving out and asks the server
+//! shows a page serves that page too, at / (src/web/site.rs); its page build leaves the serving out and asks the server
 //! for a server function's value (without_serving).
 
 use super::nodes::{call, key};
@@ -56,6 +56,8 @@ const NAME_DOT: &str = "_dot_";
 /// What a WAGI build (`warp build --wagi`, lib/wagi.warp, which the build uses) ends in: the routes' answer to the request
 const WAGI_ANSWER: &str =
 	"try { wagi_answer(page·submitted(wagi_request())) } catch error { wagi_failed(error.message) }";
+/// A WAGI build's routes set their answer's headers in lib/wagi.warp, not through the host (no host there, only WASI)
+const WAGI_HEADER: &str = "wagi_header";
 
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
@@ -68,7 +70,7 @@ type Route = (String, Node, Node);
 
 pub fn lower(program: Node) -> Node {
 	let program = with_route_data(program);
-	if crate::pipeline::is_for_a_page() {
+	if crate::pipeline::compile_mode().for_a_page {
 		return without_serving(program);
 	}
 	let port = crate::pipeline::serving_port();
@@ -166,7 +168,7 @@ fn is_serving_statement(statement: &Node) -> bool {
 /// each function the route calling it, `square(n) := n*n` answering /square/3 with 9 (an untyped path parameter is a
 /// number when it is digits, lib/router.warp). A program of functions only lists their routes at /
 pub fn with_default_routes(program: Node) -> Node {
-	if !crate::pipeline::is_for_hosting() {
+	if !crate::pipeline::compile_mode().for_hosting {
 		return program;
 	}
 	let (mut statements, separator) = match program.drop_meta() {
@@ -254,10 +256,10 @@ pub fn serves_itself(code: &str) -> bool {
 
 /// The program's statements, read quietly: running it says its hints and warnings
 fn top_level_statements(code: &str) -> Vec<Node> {
-	match crate::diagnostic::quietly(|| crate::warp_parser::parse(code)).drop_meta() {
-		Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.clone(),
-		single => vec![single.clone()],
-	}
+	crate::diagnostic::quietly(|| crate::warp_parser::parse(code))
+		.drop_meta()
+		.sequence_statements()
+		.to_vec()
 }
 
 /// `serve PORT {…}` or a top-level `get "/api" {…}`: the server's alone, the page leaves it out
@@ -325,7 +327,8 @@ fn with_route_data(program: Node) -> Node {
 		.unwrap_or(lowered.len());
 	lowered.splice(first_route..first_route, data_functions);
 	// the shipped page asks the server, so the server data's definitions stay on the server
-	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
+	if crate::pipeline::compile_mode().for_a_page && !crate::pipeline::compile_mode().prerendering {
+		lowered.retain(|statement| !changes_server_data_only(statement, &reads_server_data));
 		let page_reads = |name: &String| {
 			lowered
 				.iter()
@@ -350,6 +353,21 @@ fn with_route_data(program: Node) -> Node {
 			.collect();
 	}
 	Node::List(lowered, bracket, separator)
+}
+
+/// A main-level statement that only changes server data (`if count(users) == 0 { users.add(…) }`): it defines nothing
+/// and shows nothing, so it runs on the server, which runs main, and the shipped page leaves it out (card
+/// web-page-server-data); in the browser it would open a table of the page's own
+fn changes_server_data_only(statement: &Node, reads_server_data: &dyn Fn(&Node) -> bool) -> bool {
+	let mut shows = false;
+	statement.visit(&mut |node| shows |= crate::markup::is_markup(node));
+	reads_server_data(statement)
+		&& !shows
+		&& server_variable(statement).is_none()
+		&& server_definition(statement).is_none()
+		&& !is_serving(statement)
+		&& !crate::routes::is_route(statement)
+		&& crate::event_signals::main_level_variables(std::slice::from_ref(statement)).is_empty()
 }
 
 /// `stored todos: [Todo]` or `todos: [Todo] = database.todos`: the class of the table's rows
@@ -705,7 +723,7 @@ fn with_local_routes(program: Node) -> Node {
 		"{PAGE_SUBMITTED}(request:any) := {{\n{}\n{unanswered}\n}}",
 		answers.join("\n")
 	)));
-	if crate::pipeline::is_for_wagi() {
+	if crate::pipeline::compile_mode().for_wagi {
 		statements.push(parse_named(WAGI_ANSWER));
 	}
 	// where the first route stands: a page route written last stays the program's value
@@ -723,20 +741,21 @@ fn route_function(name: &str, body: Node) -> Node {
 /// In a route's body `header "name" "value"` and `status 418` are response_header calls, which the route's HTTP answer
 /// carries (card web-route-header; `status` is the CGI header Status); `header{…}` stays the markup tag
 fn with_answer_headers(node: Node) -> Node {
+	let setter = match crate::pipeline::compile_mode().for_wagi {
+		true => WAGI_HEADER,
+		false => crate::host::RESPONSE_HEADER,
+	};
 	let is_operand = |item: &Node| !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
 	match node.drop_meta() {
 		Node::List(items, Bracket::None | Bracket::Round, _)
 			if items.len() == 3 && word(&items[0]) == HEADER_WORD && items[1..].iter().all(is_operand) =>
 		{
-			call(crate::host::RESPONSE_HEADER, items[1..].to_vec())
+			call(setter, items[1..].to_vec())
 		}
 		Node::List(items, Bracket::None | Bracket::Round, _)
 			if items.len() == 2 && word(&items[0]) == STATUS_WORD && is_operand(&items[1]) =>
 		{
-			call(
-				crate::host::RESPONSE_HEADER,
-				vec![text(crate::host::STATUS_HEADER), items[1].clone()],
-			)
+			call(setter, vec![text(crate::host::STATUS_HEADER), items[1].clone()])
 		}
 		_ => node.map_children(with_answer_headers),
 	}
@@ -777,7 +796,7 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 		.collect();
 	let calls = server_calls(&page_code, servers);
 	// a page calling no server function needs none of them, prerendered or not
-	let prerendering = crate::pipeline::is_prerendering() && !calls.is_empty();
+	let prerendering = crate::pipeline::compile_mode().prerendering && !calls.is_empty();
 	let main_variables = crate::event_signals::main_level_variables(&page_code);
 	let functions: HashSet<String> = statements
 		.iter()
@@ -922,18 +941,18 @@ fn server_calls(page_code: &[Node], servers: &[String]) -> Vec<Node> {
 /// `f(a, b)` / `f a` of a server function f
 fn is_server_call(node: &Node, servers: &[String]) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Round | Bracket::None, _))
-		&& crate::tuples::call_parts(node).is_some_and(|(name, _)| servers.iter().any(|server| server == name))
+		&& node
+			.call_parts()
+			.is_some_and(|(name, _)| servers.iter().any(|server| server == name))
 }
 
 fn callee(call: &Node) -> String {
-	crate::tuples::call_parts(call)
-		.map(|(name, _)| name.to_string())
-		.unwrap_or_default()
+	call.call_parts().map(|(name, _)| name.to_string()).unwrap_or_default()
 }
 
 /// The callee and the arguments of a call, `f(a, b)` written either way
 fn call_items(call: &Node) -> Vec<Node> {
-	let Some((name, arguments)) = crate::tuples::call_parts(call) else {
+	let Some((name, arguments)) = call.call_parts() else {
 		return vec![call.clone()];
 	};
 	let arguments = match arguments {
@@ -992,7 +1011,7 @@ fn local_argument(call: &Node, main_variables: &HashSet<String>, functions: &Has
 	let mut heads = HashSet::new();
 	for argument in &items[1..] {
 		argument.visit(&mut |node| {
-			if let Some((name, _)) = crate::tuples::call_parts(node) {
+			if let Some((name, _)) = node.call_parts() {
 				heads.insert(name.to_string());
 			}
 		});

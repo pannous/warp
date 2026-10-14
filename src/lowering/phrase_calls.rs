@@ -4,6 +4,8 @@
 //! the parser marks a `to` phrase with its pattern (PHRASE_MARK), a spaced definition still shows its words.
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
+//! Gap feeding (wiki/call.md, card gap-feeding): a call that leaves out a slot after a phrase word takes the variable
+//! named like that word, `from = 1; to = 3; integrate sin` of `to integrate a function from a to b`, and says so.
 
 use super::nodes::{
 	call, children_rewritten, in_block_as_written, is_assigned_data, is_words_call, key, spaced_statement,
@@ -12,12 +14,8 @@ use super::nodes::{
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
-use std::collections::HashMap;
-
-/// The Meta key the parser puts on the head of a `to` phrase: its pattern as text, `_ to _`
-pub const PHRASE_MARK: &str = "phrase";
-/// A parameter slot in a pattern
-pub const SLOT: &str = "_";
+use crate::words::{PHRASE_MARK, SLOT};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, PartialEq)]
 enum Part {
@@ -25,7 +23,7 @@ enum Part {
 	Word(String),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum Token {
 	Value(Node),
 	Word(String),
@@ -58,13 +56,24 @@ fn parts_of(pattern: &str) -> Vec<Part> {
 		.collect()
 }
 
+/// Every phrase's patterns, and the variables the program assigns, which feed a left-out slot of their word
+struct Phrases {
+	forms: HashMap<String, Vec<Vec<Part>>>,
+	variables: HashSet<String>,
+}
+
 pub fn lower(program: Node) -> Node {
-	let mut patterns = HashMap::new();
-	collect_patterns(&program, &mut patterns);
-	if patterns.is_empty() {
+	let mut forms = HashMap::new();
+	collect_patterns(&program, &mut forms);
+	if forms.is_empty() {
 		return program;
 	}
-	rewrite(program, &patterns)
+	let variables = assigned_names(&program);
+	rewrite(program, &Phrases { forms, variables })
+}
+
+fn assigned_names(program: &Node) -> HashSet<String> {
+	program.assigned_names(|op| *op == Op::Assign)
 }
 
 /// Patterns with a preposition: from the parser's mark on a `to` phrase and from spaced definitions `name words… = body`
@@ -85,6 +94,10 @@ fn collect_patterns(node: &Node, patterns: &mut HashMap<String, Vec<Vec<Part>>>)
 }
 
 fn marked_pattern(head: &Node) -> Option<(String, Vec<Part>)> {
+	// `to render text as pdf: …`: the head before its result type
+	if let Node::Key(head, Op::As, _) = head {
+		return marked_pattern(head);
+	}
 	let Node::Meta { node, data } = head else { return None };
 	let Node::Key(mark, Op::Colon, pattern) = data.as_ref() else {
 		return None;
@@ -123,11 +136,12 @@ fn tokens(node: &Node, words: &[Part], found: &mut Vec<Token>) {
 }
 
 /// The values of a call that follows the pattern, in slot order
-fn matched(arguments: &[Node], pattern: &[Part]) -> Option<Vec<Node>> {
+fn matched(name: &str, arguments: &[Node], pattern: &[Part], variables: &HashSet<String>) -> Option<Vec<Node>> {
 	let mut found = vec![];
 	arguments
 		.iter()
 		.for_each(|argument| tokens(argument, pattern, &mut found));
+	let found = with_gaps_fed(found, pattern, variables, (name, arguments));
 	if found.len() != pattern.len() {
 		return None;
 	}
@@ -142,14 +156,75 @@ fn matched(arguments: &[Node], pattern: &[Part]) -> Option<Vec<Node>> {
 	Some(values)
 }
 
+/// The written tokens with each left-out `word _` of the pattern fed the variable named word, when the program has it
+/// `call` is the phrase's name and written arguments, the hint's text; a trial match (no name) says nothing
+fn with_gaps_fed(
+	found: Vec<Token>,
+	pattern: &[Part],
+	variables: &HashSet<String>,
+	call: (&str, &[Node]),
+) -> Vec<Token> {
+	if found.len() >= pattern.len() {
+		return found;
+	}
+	let (mut fed, mut fed_words) = (vec![], vec![]);
+	let mut written = found.iter().cloned().peekable();
+	let mut parts = pattern.iter().peekable();
+	while let Some(part) = parts.next() {
+		let is_written = |token: Option<&Token>| matches!((part, token), (Part::Word(word), Some(Token::Word(given))) if given == word);
+		match part {
+			Part::Word(word)
+				if !is_written(written.peek()) && parts.peek() == Some(&&Part::Slot) && variables.contains(word) =>
+			{
+				parts.next();
+				fed.extend([Token::Word(word.clone()), Token::Value(symbol(word))]);
+				fed_words.push(word.as_str());
+			}
+			_ => match written.next() {
+				Some(token) => fed.push(token),
+				None => return found,
+			},
+		}
+	}
+	if written.next().is_some() || fed_words.is_empty() {
+		return found;
+	}
+	if !call.0.is_empty() {
+		said_fed(call, &fed_words);
+	}
+	fed
+}
+
+/// Gap feeding is no silent default: the hint names the variables and the written form
+fn said_fed((name, arguments): (&str, &[Node]), words: &[&str]) {
+	if let Some(first) = arguments.first() {
+		crate::normalize::set_position_of(first);
+	}
+	let written: Vec<String> = arguments
+		.iter()
+		.map(|argument| argument.serialize().trim().to_string())
+		.collect();
+	let written = format!("{name} {}", written.join(" "));
+	let spelled: Vec<String> = words.iter().map(|word| format!("{word} {word}")).collect();
+	crate::normalize::advise(
+		&written,
+		&format!("{written} {}", spelled.join(" ")),
+		&format!(
+			"the left-out slots take the variables {} (gap feeding)",
+			words.join(", ")
+		),
+		None,
+	);
+}
+
 /// `x = f [1] by 5`: an assigned value nests its words in pairs, `[[f, [1]], [by, 5]]`, and `y = add 1 to 2` reads
 /// `(add 1) to 2`; a phrase call reads them flat
-fn assigned_words(value: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
+fn assigned_words(value: Node, phrases: &Phrases) -> Node {
 	// `y = add 1 to 2 == 3` compares the phrase's value
 	if let Node::Key(left, op, right) = value.drop_meta() {
 		if op.is_relation() {
 			return Node::Key(
-				Box::new(assigned_words(left.as_ref().clone(), patterns)),
+				Box::new(assigned_words(left.as_ref().clone(), phrases)),
 				*op,
 				right.clone(),
 			);
@@ -161,11 +236,11 @@ fn assigned_words(value: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> No
 	};
 	let calls_a_phrase = head
 		.symbol_name()
-		.and_then(|name| patterns.get(name))
+		.and_then(|name| phrases.forms.get(name))
 		.is_some_and(|forms| {
 			forms
 				.iter()
-				.any(|pattern| phrase_call("", arguments, pattern).is_some())
+				.any(|pattern| phrase_call("", arguments, pattern, &phrases.variables).is_some())
 		});
 	if calls_a_phrase && flat.len() > 1 {
 		Node::List(flat, Bracket::None, Separator::Space)
@@ -190,19 +265,20 @@ fn spaced_words(items: &[Node]) -> Vec<Node> {
 		.collect()
 }
 
-fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
+fn rewrite(node: Node, phrases: &Phrases) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(|item| rewrite(item, patterns)).collect();
+			let items: Vec<Node> = items.into_iter().map(|item| rewrite(item, phrases)).collect();
 			let call = match items.split_first() {
 				// a spaced definition (`foo of int = …`) has the shape of a call but defines the phrase
 				Some((head, arguments)) if is_words_call(&bracket, &separator) && spaced_pattern(&items).is_none() => {
 					let name = head.symbol_name();
 					let call = name.and_then(|name| {
-						patterns
+						phrases
+							.forms
 							.get(name)?
 							.iter()
-							.find_map(|pattern| phrase_call(name, arguments, pattern))
+							.find_map(|pattern| phrase_call(name, arguments, pattern, &phrases.variables))
 					});
 					call.map(|call| in_block_as_written(&bracket, call))
 				}
@@ -213,30 +289,30 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 		Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(
 			*left,
 			Op::Assign,
-			with_parts_rewritten(*right, &mut |part| rewrite(part, patterns)),
+			with_parts_rewritten(*right, &mut |part| rewrite(part, phrases)),
 		),
 		Node::Key(left, Op::Assign, right) => key(
-			rewrite(*left, patterns),
+			rewrite(*left, phrases),
 			Op::Assign,
-			rewrite(assigned_words(*right, patterns), patterns),
+			rewrite(assigned_words(*right, phrases), phrases),
 		),
-		other => children_rewritten(other, |child| rewrite(child, patterns)),
+		other => children_rewritten(other, |child| rewrite(child, phrases)),
 	}
 }
 
 /// The call `name(values…)` of arguments that follow the pattern
-fn phrase_call(name: &str, arguments: &[Node], pattern: &[Part]) -> Option<Node> {
+fn phrase_call(name: &str, arguments: &[Node], pattern: &[Part], variables: &HashSet<String>) -> Option<Node> {
 	// `square of x is 9`, `add 1 to 2 == 3`: the phrase's slots are nouns (`a number`), the comparison is about its
 	// value (P149)
 	let (mut values, mut compared) = match (
-		matched(arguments, pattern),
+		matched(name, arguments, pattern, variables),
 		arguments
 			.split_last()
 			.map(|(last, leading)| (last.drop_meta(), leading)),
 	) {
 		(Some(values), _) => (values, None),
 		(None, Some((Node::Key(value, op, other), leading))) if op.is_relation() => (
-			matched(&[leading, &[value.as_ref().clone()]].concat(), pattern)?,
+			matched(name, &[leading, &[value.as_ref().clone()]].concat(), pattern, variables)?,
 			Some((*op, other.clone())),
 		),
 		_ => return None,

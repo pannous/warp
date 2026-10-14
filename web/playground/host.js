@@ -1,10 +1,12 @@
-// What a host gives the warp compiler built without the native feature (src/web.rs `page`): `warp_host` runs the modules
+// What a host gives the warp compiler built without the native feature (src/web/mod.rs `page`): `warp_host` runs the modules
 // it compiles. A compiled program's imports mirror what the CLI's wasmtime runner links (src/host.rs, WASI fd_write,
 // libm). Shared by the playground (worker.js), the browser test runner (test-worker.js) and built sites (site.js);
 // needs reader.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
+// the position of the statement a trapped run was in, line << 32 | column (src/wasm_emitter/globals.rs emit_trap_position)
+const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_ROUTES_EXPORT = "page·routes";
 const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/serve.rs PAGE_SUBMITTED
@@ -49,16 +51,16 @@ function errorInProgram(program, reason) {
 }
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
-// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
+// host-files.js, host-sound.js (needs host-files.js), host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
 // host-gpu.js (needs host-media.js), host-timers.js, host-random.js, host-media.js. A built site
-// ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
+// ships a part only when its module imports one of the part's words or calls one of its std modules (src/host_parts.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
 // name) an import module by its name (a .wasm path), else undefined; adapters, std modules for STD_ADAPTERS;
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
-const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
+const HOST_PART_FILES = ["host-files.js", "host-sound.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -108,7 +110,7 @@ function programImports(holder, hooks) {
 					return errorInProgram(module, "call stack exhausted");
 				}
 			},
-			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
+			// `serve 8080 {…}` (src/web/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// `header "name" "value"` in a route the page itself answers (a form without a server): no HTTP answer to carry it
 			response_header: () => {},
@@ -125,6 +127,10 @@ function programImports(holder, hooks) {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
 				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
+				// key_down: whether the page's held key (canvas.js trackKey) is any; "key code held" which (held_key names it)
+				const heldKey = self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) : 0;
+				if (value === "key_down") return BigInt(heldKey !== 0);
+				if (value === "key code held") return BigInt(heldKey);
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
@@ -185,6 +191,14 @@ const KIND_LIST = 8n;
 // the inverse of reader.js readNode for the values a task carries (src/tasks.rs TaskValue): built through the module's
 // constructors; a list from its cons cells, the first item in data, the next cells in the chain
 function buildValue(module, tree) {
+	// where it was written (src/web/mod.rs tree_of): kept by node_at, which only a module quoting or parsing code has
+	if (tree.at !== undefined) {
+		const { at: [line, column, comment], ...bare } = tree;
+		const node = buildValue(module, bare);
+		if (!module.node_at) return node;
+		const text = comment === null ? null : buildValue(module, { kind: "3", data: { text: comment }, chain: [] });
+		return module.node_at(node, BigInt(line), BigInt(column), text);
+	}
 	if (tree.closure !== undefined) {
 		const name = buildValue(module, { kind: "5", data: { text: tree.closure }, chain: [] });
 		return module.closure_rebuild(name, tree.captured === null ? null : buildValue(module, tree.captured));
@@ -196,6 +210,8 @@ function buildValue(module, tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
 		case 1: {
+			// a module without bools (no new_bool) takes a truth as its Int 1/0, as src/tasks.rs does
+			if (payload.int !== undefined && String(kind) === BOOL_KIND && module.new_bool) return module.new_bool(BigInt(payload.int));
 			if (payload.int !== undefined) return module.new_int(BigInt(payload.int));
 			// beyond the fixnums: exact.js starts the parts that carry such numbers (tasks, foreign calls, run blocks)
 			const exact = typeof exactOfPayload === "function" ? exactOfPayload(payload) : undefined;
@@ -231,6 +247,7 @@ function plainOfTree(tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return null;
 		case 1:
+			if (String(kind) === BOOL_KIND) return Number(payload.int) !== 0;
 			if (payload.ratio) return Number(payload.ratio[0].int) / Number(payload.ratio[1].int);
 			return payload.int === undefined ? null : Number(payload.int);
 		case 2: return Number(payload.float);
@@ -243,7 +260,7 @@ function plainOfTree(tree) {
 		}
 		case 7: case 8: {
 			const values = items();
-			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
+			const isObject = ((kind >> 8n) & KIND_MASK) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
 		// its value the function's name (src/wasm_emitter/closures.rs), kept for a host word calling the export itself
@@ -265,7 +282,9 @@ const handleOf = value => ({ $handle: foreignHandles.push(value), type: value?.c
 const unhandled = value => value !== null && typeof value === "object" && "$handle" in value ? foreignHandles[value.$handle - 1] : value;
 const isPlainObject = value => [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
-// a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans 1/0
+// a plain JavaScript value as a tree buildValue builds: arrays square lists, objects `{key:value …}`, booleans warp's
+// bools, an Int marked BOOL_INFO above the kind bits (src/type_kinds.rs BOOL_KIND, card booleans-foreign)
+const BOOL_KIND = String((1n << 8n) | 1n); // BOOL_INFO above Kind::Int
 const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
 const CURLY_LIST = String(KIND_LIST);
 const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: Colon is 1
@@ -274,7 +293,7 @@ const KIND_CODEPOINT = "4";
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
 function treeOfPlain(value) {
 	if (value === null || value === undefined) return { kind: "0", data: null, chain: [] };
-	if (typeof value === "boolean") return { kind: KIND_INT, data: { int: value ? "1" : "0" }, chain: [] };
+	if (typeof value === "boolean") return { kind: BOOL_KIND, data: { int: value ? "1" : "0" }, chain: [] };
 	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
 	if (typeof value === "number") return Number.isSafeInteger(value) ? { kind: KIND_INT, data: { int: String(value) }, chain: [] } : { kind: KIND_FLOAT, data: { float: value }, chain: [] };
 	if (typeof value === "string") return textTree(value);
@@ -300,7 +319,7 @@ const JSPI = typeof WebAssembly.Suspending === "function" && typeof WebAssembly.
 // next(value), once value settles when it is a promise
 const whenSettled = (value, next) => value instanceof Promise ? value.then(next) : next(value);
 
-// run a compiled program: the outcome src/web.rs run_outcome reads
+// run a compiled program: the outcome src/web/mod.rs run_outcome reads
 function runProgram(bytes, hooks, awaited = false) {
 	const holder = instantiateProgram(bytes, hooks, undefined, awaited && JSPI);
 	return holder.failure ? holder : runMain(holder, hooks);
@@ -311,7 +330,7 @@ function runProgram(bytes, hooks, awaited = false) {
 // `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js);
 // `awaited`: main may wait for promises (JSPI)
 function instantiateProgram(bytes, hooks, compiled, awaited = false) {
-	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
+	// the runtime warnings go back to the compiler, which reports them (src/web/mod.rs); the page's path is the page's own
 	const holder = { warnings: [], pagePath: hooks.pagePath?.(), awaited };
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
@@ -343,19 +362,52 @@ function runMain(holder, hooks) {
 	});
 }
 
-// the last run that handles page events, for the compiler's warp_host.page_event (src/headless.rs in the browser tests)
+// the last run that handles page events, for the compiler's warp_host.page_event (src/web/headless.rs in the browser tests)
 let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
 const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
 
 // the HTML of a value by the program's own renderer (lib/markup.warp's to_html, exported as page·render by a program
 // holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
-// renders the value itself, src/web.rs html_of)
+// renders the value itself, src/web/mod.rs html_of)
 function renderedHtml(exports, value) {
 	const render = exports[PAGE_RENDER_EXPORT];
 	if (!render || value === null || typeof value !== "object") return undefined;
 	try {
 		return plainOfTree(readNode(exports, render(value)));
+	} catch {
+		return undefined;
+	}
+}
+
+const PAGE_HOLE = "page·hole"; // page·hole·<path>: an element of the shown markup holding computed parts (card web-fine-holes)
+const PAGE_HOLES = "page·holes"; // a page with components renders once, its holes are parts of that rendering (card web-fine-components)
+const PATH_JOINER = "·";
+const TEXT_HOLE = "text"; // page·hole·<path>·text·<n>: the text after n children of that element (card web-fine-text-nodes)
+
+// the holes of a page's markup (src/lowering/event_signals.rs hole_name): each binding's name and where it shows, its
+// element's path from the root and, for a text, the element's children before it
+function pageHoles(exports) {
+	return Object.keys(exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER)).map(name => {
+		const [element, after] = name.split(PATH_JOINER + TEXT_HOLE + PATH_JOINER);
+		const path = element.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number);
+		return { name, path, after: after === undefined ? undefined : Number(after) };
+	});
+}
+
+// a built site's holes anew after a handler (card web-fine-rest, as worker.js showHoles for the playground): markup.js
+// showPatch shows each; undefined when it has none or one fails, so the whole page·html shows (and its failure)
+function holePatches(exports) {
+	const holes = pageHoles(exports);
+	if (!holes.length) return undefined;
+	try {
+		exports[PAGE_HOLES]?.();
+		const patches = holes.map(({ name, path, after }) => {
+			const value = exports[name]();
+			if (after !== undefined) return { path, after, text: String(plainOfTree(readNode(exports, value))) };
+			return { path, html: renderedHtml(exports, value) };
+		});
+		return patches.every(patch => patch.text !== undefined || patch.html !== undefined) ? patches : undefined;
 	} catch {
 		return undefined;
 	}
@@ -392,7 +444,7 @@ function withExitHandler(holder, exports, call) {
 	return result;
 }
 
-// the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
+// the outcome of a call into a run's instance (main, or a page event's handler), as src/web/mod.rs run_outcome reads it
 function outcomeOf(holder, hooks, call) {
 	const { warnings, exports } = holder;
 	const finished = result => {
@@ -407,7 +459,8 @@ function outcomeOf(holder, hooks, call) {
 		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
-		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, warnings };
+		const position = exports[TRAP_POSITION_EXPORT]?.value;
+		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, position: position ? String(position) : null, warnings };
 	};
 	try {
 		const result = call();
@@ -417,8 +470,9 @@ function outcomeOf(holder, hooks, call) {
 	}
 }
 
-// the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS): `on click {…}` exports on·click·node
-const PAGE_EVENT_HANDLER = /^on·((?:click|key|input)(?:·\d+)?)·node$/;
+// the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS, and an element's FIELD_EVENTS):
+// `on click {…}` exports on·click·node
+const PAGE_EVENT_HANDLER = /^on·((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)·node$/;
 function pageEvents(exports) {
 	return Object.keys(exports).map(name => name.match(PAGE_EVENT_HANDLER)?.[1]).filter(Boolean);
 }

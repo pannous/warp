@@ -5,6 +5,8 @@ mod test_algo_queens;
 mod test_algo_sieve;
 mod test_algo_sorting;
 mod test_all_samples;
+#[cfg(feature = "native")] // the paint window's input
+mod test_brush_ripples; // card shader-click-ripples
 mod test_calculator_fixes;
 mod test_cli_help;
 mod test_code_golf; // card code-golf
@@ -18,6 +20,8 @@ mod test_kitchensink;
 mod test_midi;
 mod test_music_values; // card music-values
 mod test_paint;
+mod test_paint_function; // card gpu-functions
+mod test_paint_in_window; // card paint-keeps
 mod test_paint_lists;
 mod test_paint_shader; // P234
 mod test_paint_window_ends; // card exit-key
@@ -27,11 +31,13 @@ mod test_samples;
 mod test_samples_run_cleanly;
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_builtins; // card shader-builtins
+mod test_shader_errors; // card wgsl-error
 mod test_shader_holes; // card shader-holes
 mod test_small_samples; // cards text-samples, error-examples
 mod test_sound;
 mod test_sound_aliasing; // card reason-beep
 mod test_sound_at; // card sample-accurate
+mod test_sound_at_in_blocks; // card inside-loop
 mod test_sound_clock; // card sound-pro
 mod test_sound_effects; // card signal-graph
 mod test_sound_engine; // card native-sound
@@ -47,6 +53,7 @@ mod test_sound_signal; // card real-time
 mod test_sound_spectrum; // card winamp-like
 mod test_sound_synth; // card sound-pro
 mod test_sound_tempo; // card sound-pro
+mod test_sound_tempo_float; // card exact-tempo-growth
 mod test_sound_use; // card bizarre-global
 pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves scope too
 mod test_sound_wavs; // card sound-wavs

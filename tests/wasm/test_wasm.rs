@@ -1359,8 +1359,8 @@ fn test_sinus() {
 	is!(
 		r#"double sin(double x){
     x = x % tau
-    let z : tdouble = x*x
-    let w : tdouble = z*z
+    let z : double = x*x
+    let w : double = z*z
     S1  = -1.66666666666666324348e-01, /* 0xBFC55555, 0x55555549 */
     S2  =  8.33333333332248946124e-03, /* 0x3F811111, 0x1110F8A6 */
     S3  = -1.98412698298579493134e-04, /* 0xBF2A01A0, 0x19C161D5 */
@@ -1369,7 +1369,7 @@ fn test_sinus() {
     S6  =  1.58969099521155010221e-10  /* 0x3DE5D93A, 0x5ACFD57C */
     //	            tau =  6.283185307179586 // 2π
     if(x >= PI) return -sin(x % PI)
-    let r : tdouble = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
+    let r : double = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
     return x + z*x*(S1 + z*r)
     };sin π/2"#,
 		1

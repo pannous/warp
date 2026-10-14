@@ -1,6 +1,6 @@
 //! Text as UTF-8 bytes: `a + b` concatenates texts and characters, `read(path)` loads a file,
 //! `byte_at(text, offset)` and `byte_slice(text, start, end)` address bytes by 0-based offset, end exclusive.
-//! `error(message)` makes an Error value of a text, the way a failed `read` reports.
+//! `error message` makes an Error value of a text, the way a failed `read` reports.
 //! Offsets are bytes, not characters: code that scans UTF-8 itself (a parser, a binary index) needs them.
 
 use crate::node::Node;
@@ -13,6 +13,8 @@ use Instruction as I;
 use ValType::Ref;
 
 pub const TEXT_CONCAT: &str = "text_concat";
+/// text_concat for a text held in a variable, which may be built up (`t += x`): it grows into rooms (text_rooms.rs)
+pub const TEXT_APPEND: &str = "text_append";
 pub const TEXT_OF: &str = "text_of";
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
@@ -39,6 +41,9 @@ const TEXT_TRIM: &str = "text_trim";
 pub const TEXT_ROUGH_TRIM: &str = "text_rough_trim";
 /// `chr(n)`: the character of a code point, the inverse of `ord(c)`
 const CHR: &str = "chr";
+/// `float_bits(x)`: the IEEE 754 bits of a float as an Int, `bits_float(n)` the float of them (an `f64.const` to emit)
+pub const FLOAT_BITS: &str = "float_bits";
+pub const BITS_FLOAT: &str = "bits_float";
 /// `starts_with(text, prefix)`, `ends_with(text, suffix)`: 1 or 0
 const STARTS_WITH: &str = "starts_with";
 const ENDS_WITH: &str = "ends_with";
@@ -63,7 +68,7 @@ pub const RAISE: &str = "raise";
 pub const IS_ERROR: &str = "is_error";
 /// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
 pub const ERROR_OF: &str = "error_of";
-const WARNING: &str = "warning";
+pub const WARNING: &str = "warning";
 const WARN_TEXT: &str = "warn_text";
 pub(super) const HOST_WARN: &str = "host_warn";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
@@ -72,7 +77,7 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 25] = [
 	(MEMORY_BYTE, 1, Kind::Int),
 	(MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int),
@@ -91,6 +96,8 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(STARTS_WITH, 2, Kind::Int),
 	(ENDS_WITH, 2, Kind::Int),
 	(CHR, 1, Kind::Codepoint),
+	(FLOAT_BITS, 1, Kind::Int),
+	(BITS_FLOAT, 1, Kind::Float),
 	(crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
 	(RAN_WITHOUT_ABORT, 2, Kind::Int),
 	(ABORT_TO, 1, Kind::Int),
@@ -308,6 +315,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	let calls_text_of = [
 		crate::wasm_emitter::VALUES_EQUAL,
 		TEXT_CONCAT,
+		TEXT_APPEND,
 		BYTE_AT,
 		BYTE_SLICE,
 		TEXT_TRIM,
@@ -350,10 +358,12 @@ impl WasmGcEmitter {
 				let reason = format!("read {} failed: host imports are not available", path.serialize());
 				self.emit_runtime_error_value(func, &reason);
 			}
-			// warnings are errors: the message is an Error value, which text concatenation propagates
-			(WARNING, [message]) if crate::diagnostic::warning_mode() == crate::diagnostic::WarningMode::Error => {
-				self.emit_node_instructions(func, message);
-				self.emit_call(func, ERROR_OF);
+			// warnings are errors: the run stops as at `raise`, also where the warning's value is dropped (card under-use)
+			(WARNING | RAISE, [message])
+				if name == RAISE || crate::diagnostic::warning_mode().fails(crate::diagnostic::Level::Normal) =>
+			{
+				self.emit_trap_detail(func, message);
+				self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
 			}
 			(WARNING, [message]) if self.ctx.func_registry.get(HOST_WARN).is_some() => {
 				self.emit_node_instructions(func, message);
@@ -371,10 +381,6 @@ impl WasmGcEmitter {
 				self.emit_call(func, ERROR_OF);
 			}
 			(crate::wasm_emitter::CAUGHT_ERROR, [finished, value]) => self.emit_caught_error(func, finished, value),
-			(RAISE, [message]) => {
-				self.emit_trap_detail(func, message);
-				self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
-			}
 			// a hole names a variable: a word that names nothing is loud, never its own spelling
 			(TEXT_FORM, [value]) => match value.drop_meta() {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
@@ -390,6 +396,7 @@ impl WasmGcEmitter {
 				| ABORT_TO
 				| STARTS_WITH
 				| ENDS_WITH
+				| FLOAT_BITS
 				| crate::memoization::MEMO_KNOWN
 				| crate::memoization::MEMO_VALUE
 				| crate::memoization::MEMO_STORE
@@ -415,6 +422,10 @@ impl WasmGcEmitter {
 				func.instruction(&I::I32WrapI64);
 				self.emit_call(func, "new_codepoint");
 			}
+			(BITS_FLOAT, [_]) => {
+				self.emit_float_builtin(func, name, arguments);
+				self.emit_call(func, "new_float");
+			}
 			_ if super::node_api::NODE_BUILTINS
 				.iter()
 				.any(|(builtin, arity, _)| *builtin == name && *arity == arguments.len()) =>
@@ -434,8 +445,25 @@ impl WasmGcEmitter {
 	}
 
 	/// `byte_at(text, offset)` and `is_error(x)` as raw i64
+	/// `bits_float(n)` as raw f64
+	pub(super) fn emit_float_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
+		match (name, arguments) {
+			(BITS_FLOAT, [bits]) => {
+				self.emit_numeric_value(func, bits);
+				self.emit_int_to_machine(func);
+				func.instruction(&I::F64ReinterpretI64);
+			}
+			_ => unreachable!("{name} with {} arguments is no float builtin", arguments.len()),
+		}
+	}
+
 	pub(super) fn emit_integer_text_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
 		match (name, arguments) {
+			(FLOAT_BITS, [value]) => {
+				self.emit_float_value(func, value);
+				func.instruction(&I::I64ReinterpretF64);
+				self.emit_int_from_machine(func);
+			}
 			(BYTE_AT, [text, offset]) => {
 				self.emit_text_argument(func, text);
 				self.emit_numeric_value(func, offset);
@@ -519,18 +547,8 @@ impl WasmGcEmitter {
 			nullable: true,
 			heap_type: HeapType::Concrete(array),
 		});
-		let new_global = |emitter: &mut Self| {
-			emitter.globals.global(
-				GlobalType {
-					val_type: array_ref,
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::ref_null(HeapType::Concrete(array)),
-			);
-			emitter.next_global_idx += 1;
-			emitter.next_global_idx - 1
-		};
+		let new_global =
+			|emitter: &mut Self| emitter.declare_global_of(array_ref, ConstExpr::ref_null(HeapType::Concrete(array)));
 		let (values, known) = match self.memo_caches.get(id) {
 			Some(globals) => *globals,
 			None => {
@@ -593,7 +611,8 @@ impl WasmGcEmitter {
 	pub(super) fn emit_text_concat(&mut self, func: &mut Function, left: &Node, right: &Node) {
 		self.emit_concatenated(func, left);
 		self.emit_concatenated(func, right);
-		self.emit_call(func, TEXT_CONCAT);
+		let builds_a_variable = matches!(left.drop_meta(), Node::Symbol(_));
+		self.emit_call(func, if builds_a_variable { TEXT_APPEND } else { TEXT_CONCAT });
 	}
 
 	/// A value whose kind is known only at run time (a map value, arithmetic of an any value, a stored error), not ø itself
@@ -620,7 +639,7 @@ impl WasmGcEmitter {
 
 	/// A value held as a Node (a map value, arithmetic of an any value) may be a number at run time: joined, a number
 	/// takes its text form; a stored error stays itself, for text_concat to give it on, never joined as its message
-	/// (`r = error("b"); "a" + r`, card error-value-kind)
+	/// (`r = error "b"; "a" + r`, card error-value-kind)
 	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
 		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
 		let node_type = self.type_manager.node_type;
@@ -1144,123 +1163,8 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// text_concat(left, right): a fresh text, left's bytes then right's; an Error operand is the result, errors propagate
-		if self.should_emit_function(TEXT_CONCAT) {
-			self.emit_text_heap_global();
-			let (left_length, right_length, length, copy) = (2, 3, 4, 5);
-			self.runtime_function(
-				TEXT_CONCAT,
-				vec![node_ref, node_ref],
-				vec![node_ref],
-				vec![int; 4],
-				|s, f| {
-					for side in 0..2 {
-						s.emit_field(f, side, 0);
-						Self::emit_list(
-							f,
-							&[
-								I::I64Const(Kind::Error as i64),
-								I::I64Eq,
-								I::If(BlockType::Empty),
-								I::LocalGet(side),
-								I::Return,
-								I::End,
-							],
-						);
-					}
-					for side in 0..2 {
-						f.instruction(&I::LocalGet(side));
-						s.call(f, TEXT_OF);
-						f.instruction(&I::LocalSet(side));
-					}
-					s.emit_text_field(f, 0, 1);
-					f.instruction(&I::LocalTee(left_length));
-					s.emit_text_field(f, 1, 1);
-					Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
-					let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-					let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
-					// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
-					// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
-					// bytes) already follows left: nothing to copy
-					s.emit_text_field(f, 0, 0);
-					Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(f, &[I::I32Eq]);
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(right_length),
-							I::I32Add,
-							I::GlobalGet(heap),
-							I::I32Eq,
-							I::I32And,
-							I::LocalGet(left_length),
-							I::I32Const(0),
-							I::I32Ne,
-							I::I32And,
-						],
-					);
-					Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(copy),
-							I::LocalGet(left_length),
-							I::I32Add,
-							I::GlobalGet(heap),
-							I::I32Eq,
-							I::LocalGet(left_length),
-							I::I32Const(0),
-							I::I32Ne,
-							I::I32And,
-						],
-					);
-					f.instruction(&I::If(BlockType::Empty));
-					s.emit_memory_room(f, heap, right_length);
-					f.instruction(&I::GlobalGet(heap));
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(right_length),
-							copy_bytes.clone(),
-							I::GlobalGet(heap),
-							I::LocalGet(right_length),
-							I::I32Add,
-							I::GlobalSet(heap),
-						],
-					);
-					f.instruction(&I::Else);
-					s.emit_text_allocation(f, length, copy);
-					f.instruction(&I::LocalGet(copy));
-					s.emit_text_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(left_length),
-							copy_bytes.clone(),
-							I::LocalGet(copy),
-							I::LocalGet(left_length),
-							I::I32Add,
-						],
-					);
-					s.emit_text_field(f, 1, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(right_length),
-							copy_bytes,
-							I::End,
-							I::End,
-							I::LocalGet(copy),
-							I::LocalGet(length),
-						],
-					);
-					s.call(f, "new_text");
-				},
-			);
-		}
+		self.emit_text_joiner(TEXT_CONCAT, false);
+		self.emit_text_joiner(TEXT_APPEND, true);
 
 		// read_text(path): the file's bytes as text, or an Error node with the reason
 		if self.should_emit_function(READ_TEXT) {
@@ -1284,5 +1188,121 @@ impl WasmGcEmitter {
 				});
 			}
 		}
+	}
+
+	/// text_concat(left, right): a fresh text, left's bytes then right's; an Error operand is the result, errors
+	/// propagate. text_append, called for a variable's text, also grows texts into rooms (text_rooms.rs)
+	fn emit_text_joiner(&mut self, name: &'static str, grows_in_rooms: bool) {
+		if !self.should_emit_function(name) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let int = ValType::I32;
+		self.emit_text_heap_global();
+		let (left_length, right_length, length, copy, room) = (2, 3, 4, 5, 6);
+		self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![int; 5], |s, f| {
+			for side in 0..2 {
+				s.emit_field(f, side, 0);
+				Self::emit_list(
+					f,
+					&[
+						I::I64Const(Kind::Error as i64),
+						I::I64Eq,
+						I::If(BlockType::Empty),
+						I::LocalGet(side),
+						I::Return,
+						I::End,
+					],
+				);
+			}
+			for side in 0..2 {
+				f.instruction(&I::LocalGet(side));
+				s.call(f, TEXT_OF);
+				f.instruction(&I::LocalSet(side));
+			}
+			s.emit_text_field(f, 0, 1);
+			f.instruction(&I::LocalTee(left_length));
+			s.emit_text_field(f, 1, 1);
+			Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
+			let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
+			let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
+			// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
+			// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
+			// bytes) already follows left: nothing to copy
+			s.emit_text_field(f, 0, 0);
+			Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(f, &[I::I32Eq]);
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(right_length),
+					I::I32Add,
+					I::GlobalGet(heap),
+					I::I32Eq,
+					I::I32And,
+					I::LocalGet(left_length),
+					I::I32Const(0),
+					I::I32Ne,
+					I::I32And,
+				],
+			);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(copy),
+					I::LocalGet(left_length),
+					I::I32Add,
+					I::GlobalGet(heap),
+					I::I32Eq,
+					I::LocalGet(left_length),
+					I::I32Const(0),
+					I::I32Ne,
+					I::I32And,
+				],
+			);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_memory_room(f, heap, right_length);
+			f.instruction(&I::GlobalGet(heap));
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(right_length),
+					copy_bytes.clone(),
+					I::GlobalGet(heap),
+					I::LocalGet(right_length),
+					I::I32Add,
+					I::GlobalSet(heap),
+				],
+			);
+			// a left text ending where its room is used up grows there (text_rooms.rs); else both are copied
+			Self::emit_list(f, &[I::Else, I::Block(BlockType::Empty)]);
+			if grows_in_rooms {
+				s.emit_grow_in_room(f, copy, left_length, right_length, room, 0);
+			}
+			s.emit_text_allocation(f, length, copy);
+			f.instruction(&I::LocalGet(copy));
+			s.emit_text_field(f, 0, 0);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(left_length),
+					copy_bytes.clone(),
+					I::LocalGet(copy),
+					I::LocalGet(left_length),
+					I::I32Add,
+				],
+			);
+			s.emit_text_field(f, 1, 0);
+			Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes]);
+			if grows_in_rooms {
+				s.emit_room_behind(f, copy, length, room);
+			}
+			Self::emit_list(f, &[I::End, I::End, I::End, I::LocalGet(copy), I::LocalGet(length)]);
+			s.call(f, "new_text");
+		});
 	}
 }

@@ -1,6 +1,6 @@
 //! Machine-applicable fixes (notes/fixits.md): a warning or an ambiguity error offers each reading the user might have
 //! meant as a `Fix` (the text as written, its replacement), and a host turns it into an `Edit` of the source (byte
-//! range + replacement): the playground's "I meant: …" buttons (src/web.rs), later `warp fix` and IDE quick fixes.
+//! range + replacement): the playground's "I meant: …" buttons (src/web/mod.rs), later `warp fix` and IDE quick fixes.
 //! A replacement is an explicit form, which never warns, so applying a fix also ends its warning.
 
 use std::ops::Range;

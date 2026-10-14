@@ -23,14 +23,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Symbol(name) if crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()) => ctx
 			.required_functions
 			.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
-		// `as hex`, `byte b`: values shown in hex (card hex-printing)
-		Node::Symbol(name) if crate::wasm_emitter::hex::shows_in_hex(name) => {
-			ctx.required_functions.extend([
-				crate::wasm_emitter::hex::AS_HEX,
-				crate::wasm_emitter::hex::HEX_TEXT,
-				"list_join",
-				"new_text",
-			]);
+		// `as hex`, `byte b`, `as binary`: values shown in hex or binary (cards hex-printing, binary-int)
+		Node::Symbol(name) if let Some(radix) = crate::wasm_emitter::radix::shown_radix(name) => {
+			ctx.required_functions
+				.extend([radix.as_function, radix.text_function, "list_join", "new_text"]);
 		}
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
@@ -161,6 +157,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Type { name, body } => {
 			ctx.required_functions.insert("new_type");
 			ctx.type_registry.register_from_node(node);
+			if let Some(Node::List(variants, _, _)) = name.attribute(crate::words::VARIANTS_MARK).map(Node::drop_meta) {
+				ctx.variant_names
+					.extend(variants.iter().map(|variant| variant.drop_meta().name()));
+			}
 			analyze_required_functions(ctx, name);
 			analyze_required_functions(ctx, body);
 		}
@@ -212,6 +212,7 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
 		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		Op::Xor => &[INT_RUNTIME],
+		Op::BitAnd | Op::BitOr => &[INT_RUNTIME, IS_TRUTHY],
 		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
 		op if op.is_arithmetic() || op.is_compound_assign() => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		op if op.is_shift() => &[INT_RUNTIME],
@@ -238,12 +239,16 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			crate::wasm_emitter::list_ops::RETURNED_ERROR,
 		],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
-		crate::analyzer::LIST_BECOME => &[crate::analyzer::LIST_BECOME],
+		crate::declaration_forms::LIST_BECOME => &[crate::declaration_forms::LIST_BECOME],
 		crate::wasm_emitter::library_ops::LIST_SORTED_BY => &[crate::wasm_emitter::library_ops::LIST_SORTED_BY],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
-		crate::type_tests::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
+		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
 		crate::wasm_emitter::text_builtins::TEXT_FORM => &["list_join"],
+		// IEEE bits beyond the fixnums are BigInts
+		crate::wasm_emitter::text_builtins::FLOAT_BITS | crate::wasm_emitter::text_builtins::BITS_FLOAT => {
+			&[crate::wasm_emitter::INT_RUNTIME]
+		}
 		FIELD_WITH => &[FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL],
 		INSTANCE_COPY => &[INSTANCE_COPY],
 		_ => &[],
@@ -512,8 +517,15 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
-					// the host builds a caught stack overflow's or a failed adapter's Error with the module's own error_of
-					if [crate::host::GUARDED_CALL, crate::host::STD_PURE, crate::host::STD_IO].contains(&name.as_str())
+					// the host builds a caught stack overflow's, a failed adapter's or a failed parse's Error with the
+					// module's own error_of
+					if [
+						crate::host::GUARDED_CALL,
+						crate::host::STD_PURE,
+						crate::host::STD_IO,
+						crate::host::PARSE_CODE,
+					]
+					.contains(&name.as_str())
 					{
 						ctx.required_functions
 							.insert(crate::wasm_emitter::text_builtins::ERROR_OF);

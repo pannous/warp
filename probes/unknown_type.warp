@@ -1,0 +1,3 @@
+// card unknown-type: a declared type naming no type is an error, with the near type as its fix
+x: flaot = 2.5
+x

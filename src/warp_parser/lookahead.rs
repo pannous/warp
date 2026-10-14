@@ -68,7 +68,7 @@ impl WarpParser {
 			.map(|at| self.peek_char(at))
 			.take_while(|ch| is_identifier_char(*ch))
 			.collect::<String>()
-			== crate::lowering::words::ON_WORD;
+			== crate::words::ON_WORD;
 		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !on_follows {
 			return None;
 		}
@@ -181,7 +181,7 @@ impl WarpParser {
 		if self.matches_keyword("then") {
 			return Some((Op::Then, 4));
 		}
-		if self.matches_keyword("else") {
+		if self.matches_keyword("else") && !self.else_arm_key() {
 			return Some((Op::Else, 4));
 		}
 
@@ -210,7 +210,7 @@ impl WarpParser {
 
 		// 2-char operators
 		match (c1, c2) {
-			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
+			('a', 's') if !is_identifier_char(c3) => return Some((Op::As, 2)),
 			('?', '?') => return Some((Op::Coalesce, 2)),
 			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
 			(':', '=') => return Some((Op::Define, 2)),
@@ -459,6 +459,26 @@ impl WarpParser {
 		Some(call(AFTER_MARKER, vec![condition, value]))
 	}
 
+	/// At an opening bracket: a comma separates the group's own items (`[a -1, 2]`), not one of a nested group or text
+	pub(super) fn group_holds_comma(&self) -> bool {
+		let (mut depth, mut quote) = (0i32, None);
+		for offset in 1.. {
+			let ch = self.peek_char(offset);
+			match (quote, ch) {
+				(_, '\0') => return false,
+				(Some(open), _) if ch == open => quote = None,
+				(Some(_), _) => {}
+				(None, '"' | '\'') => quote = Some(ch),
+				(None, '(' | '[' | '{') => depth += 1,
+				(None, ')' | ']' | '}') if depth == 0 => return false,
+				(None, ')' | ']' | '}') => depth -= 1,
+				(None, ',') if depth == 0 => return true,
+				_ => {}
+			}
+		}
+		false
+	}
+
 	/// Is there a `return` word later on this statement, outside brackets
 	fn return_ahead(&self) -> bool {
 		let mut depth = 0i32;
@@ -555,6 +575,8 @@ impl WarpParser {
 				.chain([&FINALLY_KEYWORD])
 				.any(|word| self.matches_keyword(word))
 				|| matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',')
+				// `try X else 7 // note`: the comment ends the phrase, the next line is not part of it
+				|| self.at_line_comment()
 			{
 				break;
 			}

@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+// card gpu-functions step 4: paint(f, width, height) of a warp function f(x, y) giving each pixel's color
+width = 64
+height = 48
+stripes(x, y) := (x + y) % 8 < 4
+paint(stripes, width, height)

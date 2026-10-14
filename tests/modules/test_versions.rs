@@ -51,3 +51,19 @@ fn tagged_version_literals() {
 	is!("v2 = 7; v2", 7);
 	is!("use uniscript >= v1.0.0; uniscript(\"<:alpha>\")", "α");
 }
+
+/// card use-version-twice: a program uses one version of a package; a second `use` its version satisfies uses it again,
+/// one asking for another version is the error naming both
+#[test]
+fn a_package_used_twice_is_loaded_once() {
+	is!(
+		"use uniscript version 1.0.0; use uniscript from 1.0; uniscript(\"<:alpha>\")",
+		"α"
+	);
+	is!("use uniscript; use uniscript >= 1.0; uniscript(\"<:alpha>\")", "α");
+	let clash = warp::wasm_emitter::eval("use uniscript; use uniscript version 1.0.0; 1").serialize();
+	assert!(
+		clash.contains("use uniscript version 1.0.0: uniscript ") && clash.contains(" is used already"),
+		"{clash}"
+	);
+}

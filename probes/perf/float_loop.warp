@@ -1,0 +1,24 @@
+// card visualizer-speed: a multiply-add loop over 8192 floats at top level and inside a function, its accumulator exact
+// (0.0) or a float
+xs = [i * 0.001 as float for i in 0..8192]
+def untyped_sum(values) {
+	last = 0.0
+	for x in values { last = x + 0.5 * last }
+	last
+}
+def float_sum(values) {
+	last = 0.0 as float
+	for x in values { last = x + 0.5 * last }
+	last
+}
+t0 = clock()
+last = 0.0
+for x in xs { last = x + 0.5 * last }
+t1 = clock()
+a = untyped_sum(xs)
+t2 = clock()
+b = float_sum(xs)
+t3 = clock()
+print("top level ms: " + (t1 - t0))
+print("untyped function ms: " + (t2 - t1))
+print("float accumulator function ms: " + (t3 - t2))

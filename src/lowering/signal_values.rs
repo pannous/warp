@@ -12,16 +12,16 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
+use super::listeners;
 use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
-use super::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
 use crate::declarations::word;
+use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::{
-	assign, defines_function, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord,
-};
+use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
-use std::collections::{HashMap, HashSet};
+use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
+use std::collections::HashSet;
 
 /// `signal·set(s, v)`: store v in the signal s, then call its listeners
 const SET_FUNCTION: &str = "signal·set";
@@ -105,10 +105,7 @@ pub fn poll_shared(program: Node) -> Node {
 			// the loop's start polls again: the running flag keeps that inner check out
 			let each_write = format!("if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}", crate::host::SHARED_WRITES);
 			let body = with_value(&body, &subject);
-			checks.push(crate::law::substitute(
-				crate::warp_parser::parse(&each_write).drop_meta(),
-				&HashMap::from([("BODY".to_string(), body)]),
-			));
+			checks.push(super::nodes::filled(&each_write, [("BODY", body)]));
 			lowered.push(
 				crate::warp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES))
 					.drop_meta()
@@ -236,25 +233,10 @@ pub fn subscribe(program: Node) -> Node {
 /// `alarm = on change t {…}`, `alarm = whenever t > 30 {…}` (which arrives as `(alarm = (whenever t) > 30) {…}`): the
 /// name and the listener
 fn named_listener(statement: &Node) -> Option<(String, Node)> {
-	if let Node::Key(name, Op::Assign, listener) = statement.drop_meta() {
-		let Node::Symbol(name) = name.drop_meta() else {
-			return None;
-		};
-		return listener_parts(listener).map(|_| (name.clone(), listener.as_ref().clone()));
-	}
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let [head, body] = items.as_slice() else { return None };
-	let Node::Key(name, Op::Assign, condition) = head.drop_meta() else {
-		return None;
-	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
-	let (keyword, condition) = without_leading_word(condition)?;
-	let listener = Node::List(vec![keyword, condition, body.clone()], Bracket::None, Separator::Space);
-	listener_parts(&listener).map(|_| (name.clone(), listener))
+	let listener = listeners::read_named(statement, &[ON_WORD, ONCE_WORD, WHENEVER_WORD])?;
+	let unnamed = listener.unnamed();
+	listener_parts(&unnamed)?;
+	Some((listener.name?, unnamed))
 }
 
 /// `watch(s) := whenever s > 5 {…}` arrives as `(watch(s) := (whenever s) > 5) {…}`, its block a statement of its own:
@@ -268,10 +250,11 @@ fn with_function_listeners(node: Node) -> Node {
 	let Node::Key(function, Op::Define, value) = head.drop_meta() else {
 		return node;
 	};
-	let Some((keyword, condition)) = without_leading_word(value) else {
-		return node;
-	};
-	let listener = Node::List(vec![keyword, condition, body.clone()], Bracket::None, Separator::Space);
+	let listener = Node::List(
+		vec![value.as_ref().clone(), body.clone()],
+		Bracket::None,
+		Separator::Space,
+	);
 	if listener_parts(&listener).is_none() {
 		return node;
 	}
@@ -280,24 +263,6 @@ fn with_function_listeners(node: Node) -> Node {
 		Op::Define,
 		Box::new(Node::List(vec![listener], Bracket::Curly, Separator::Semicolon)),
 	)
-}
-
-/// `(whenever t) > 30` → `whenever`, `t > 30`: the word the leftmost operand starts with, and the rest
-fn without_leading_word(node: &Node) -> Option<(Node, Node)> {
-	match node.drop_meta() {
-		Node::Key(left, op, right) => {
-			without_leading_word(left).map(|(keyword, left)| (keyword, Node::Key(Box::new(left), *op, right.clone())))
-		}
-		Node::List(items, Bracket::None, separator) if items.len() >= 2 => {
-			let rest = if items.len() == 2 {
-				items[1].clone()
-			} else {
-				Node::List(items[1..].to_vec(), Bracket::None, separator.clone())
-			};
-			Some((items[0].clone(), rest))
-		}
-		_ => None,
-	}
 }
 
 /// The variables a listener watches: `on set x` and `on change x` the one, `whenever` and `once` those of the condition
@@ -720,7 +685,7 @@ impl Signals {
 					Box::new(self.fields_kept(*value, &fields, signals, main)),
 				)
 			}
-			Node::Key(target, op, value) if is_write(op) && signals.contains(&signal_name(&target)) => {
+			Node::Key(target, op, value) if op.is_write() && signals.contains(&signal_name(&target)) => {
 				let name = signal_name(&target);
 				let value = match op {
 					Op::Assign => self.rewrite(*value, signals, main),
@@ -878,7 +843,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 		escaping: HashSet::new(),
 	};
 	// the main level subscribes or reflects (`listeners of x`) too
-	without_definitions(program).visit(&mut |node| {
+	visit_main_level(program, &mut |node| {
 		let Node::List(items, _, _) = node else { return };
 		if items.len() >= 2 && [SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET].contains(&word(&items[0]).as_str()) {
 			found.escaping.insert(signal_name(&items[1]));
@@ -1027,7 +992,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 				}
 			}
 		};
-		without_definitions(program).visit(&mut |node| passed(None, node));
+		visit_main_level(program, &mut |node| passed(None, node));
 		for definition in definitions {
 			definition.body.visit(&mut |node| passed(Some(definition), node));
 		}
@@ -1058,7 +1023,7 @@ fn named_items(list: &Node) -> Vec<String> {
 /// The main-level `xs = [a, b]` assignments: each variable and its list literal
 fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 	let mut lists = vec![];
-	without_definitions(program).visit(&mut |node| {
+	visit_main_level(program, &mut |node| {
 		if let Node::Key(target, Op::Assign, value) = node {
 			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (target.drop_meta(), value.drop_meta()) {
 				lists.push((name.clone(), value.as_ref().clone()));
@@ -1071,7 +1036,7 @@ fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 /// The main-level `x = {…}` assignments: each variable and its object literal
 fn main_object_literals(program: &Node) -> Vec<(String, Node)> {
 	let mut objects = vec![];
-	without_definitions(program).visit(&mut |node| {
+	visit_main_level(program, &mut |node| {
 		if let Node::Key(target, Op::Assign, value) = node {
 			if let (Node::Symbol(name), Some(literal)) = (target.drop_meta(), object_literal(value)) {
 				objects.push((name.clone(), literal.clone()));
@@ -1189,53 +1154,30 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 		(LISTENER_PLACEHOLDER, LISTENER_WORD),
 		(WITHOUT_PLACEHOLDER, WITHOUT_FUNCTION),
 	];
-	let bindings = names
-		.iter()
-		.map(|(placeholder, name)| (placeholder.to_string(), symbol(name)))
-		.chain(
-			nodes
-				.iter()
-				.map(|(placeholder, node)| (placeholder.to_string(), node.clone())),
-		)
-		.collect();
-	crate::law::substitute(&crate::warp_parser::parse(code), &bindings)
-		.drop_meta()
-		.clone()
+	let names = names.iter().map(|(placeholder, name)| (*placeholder, symbol(name)));
+	super::nodes::filled(
+		code,
+		names.chain(nodes.iter().map(|(placeholder, node)| (*placeholder, node.clone()))),
+	)
 }
 
-fn is_write(op: Op) -> bool {
-	op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
-}
-
-/// `f(a, b) := body`, `def f(a, b) {body}`
+/// `f(a, b) := body`, `def f(a, b) {body}`, `def (f a b) {body}`
 fn definition(node: &Node) -> Option<Definition> {
-	let (head, body) = match node.drop_meta() {
-		Node::Key(head, Op::Define, body) if is_call_head(head) => (head.as_ref().clone(), body.as_ref().clone()),
-		Node::List(items, _, _) if defines_function(items) => {
-			let parts = keyword_definition_parts(&items[1..]);
-			let (head, body) = (parts.first()?.clone(), parts.last()?.clone());
-			matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)).then_some(())?;
-			(head, body)
+	let definition = function_head(node)?;
+	let is_block = matches!(definition.body.drop_meta(), Node::List(_, Bracket::Curly, _));
+	let read = match definition.form {
+		DefinitionForm::Operator(Op::Define) => definition.result.is_none() && is_round_head(definition.head),
+		DefinitionForm::KeywordBlock => {
+			matches!(definition.block_bracket, Some(Bracket::None | Bracket::Round)) && is_block
 		}
-		_ => return None,
+		DefinitionForm::KeywordSpaced => is_block,
+		_ => false,
 	};
-	let Node::List(head_items, _, _) = head.drop_meta() else {
-		return None;
-	};
-	let name = word(head_items.first()?);
-	let params = head_items[1..].iter().flat_map(parameter_names).collect();
-	Some(Definition { name, params, body })
-}
-
-/// `def ((f (x)) {body})` arrives as one list after the keyword: its head and body
-fn keyword_definition_parts(rest: &[Node]) -> Vec<Node> {
-	match rest {
-		[only] => match only.drop_meta() {
-			Node::List(items, Bracket::None | Bracket::Round, _) if items.len() == 2 => items.clone(),
-			_ => rest.to_vec(),
-		},
-		_ => rest.to_vec(),
-	}
+	read.then(|| Definition {
+		name: definition.name.to_string(),
+		params: definition.written_parameters.iter().flat_map(parameter_names).collect(),
+		body: definition.body.clone(),
+	})
 }
 
 /// `x`, `(x, y)`, `ø`
@@ -1285,12 +1227,24 @@ fn collect_definitions(node: &Node, definitions: &mut Vec<Definition>) {
 	}
 }
 
-/// The program without its function definitions: what runs at the main level
-fn without_definitions(node: &Node) -> Node {
+/// Visit what runs at the main level: the program without its function definitions (no copy of it: a big literal
+/// copied at every level took gigabytes, card big-literals)
+fn visit_main_level<'a>(node: &'a Node, action: &mut dyn FnMut(&'a Node)) {
 	if definition(node).is_some() {
-		return Node::Empty;
+		return;
 	}
-	children_rewritten(node.clone(), |child| without_definitions(&child))
+	match node.drop_meta() {
+		Node::Key(left, _, right) => {
+			action(node.drop_meta());
+			visit_main_level(left, action);
+			visit_main_level(right, action);
+		}
+		Node::List(items, _, _) => {
+			action(node.drop_meta());
+			items.iter().for_each(|item| visit_main_level(item, action));
+		}
+		other => other.visit(action),
+	}
 }
 
 /// The names the main level assigns
@@ -1306,9 +1260,9 @@ fn main_variables(program: &Node) -> HashSet<String> {
 /// The names a function body assigns (its locals, unless declared global), not those of the functions nested in it
 fn assigned_names(body: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	without_definitions(body).visit(&mut |node| {
+	visit_main_level(body, &mut |node| {
 		if let Node::Key(target, op, _) = node {
-			if let (true, Node::Symbol(name)) = (is_write(*op), target.drop_meta()) {
+			if let (true, Node::Symbol(name)) = (op.is_write(), target.drop_meta()) {
 				names.insert(name.clone());
 			}
 		}

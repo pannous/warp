@@ -7,10 +7,10 @@
 //! parallel while cores are free. notes/go_blocks.md
 
 use super::go_blocks::AWAIT_WORD;
-use super::nodes::key;
-use super::words::{FOR_WORD, IN_WORD, MAP_WORD};
+use super::nodes::{is_call_head, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD, MAP_WORD};
 
 /// How many slices a parallel map or loop splits its items into: tasks are threads with an instance each, so never one
 /// per item; a later backend (SIMD, GPU) may choose its own split
@@ -52,21 +52,30 @@ pub(crate) fn parallel_map(node: &Node) -> Option<(Node, Node)> {
 
 /// `go xs.map(x => x * 0.5 + 1)` of a float kernel (linear_arrays.rs is_float_kernel): the map marked SPLIT_ATTRIBUTE,
 /// which picks linear memory for xs and splits on the host (shared_arrays.rs, card go-split-kernel); tasks copying
-/// slices of Nodes would cost a thousand times the kernel's work
+/// slices of Nodes would cost a thousand times the kernel's work. `go xs.map(x => sin(x))` of a heavy kernel is the
+/// plain map, which the GPU takes from a count (gpu_maps.rs automatic, card go-heavy-map), else the CPU's loop: tasks
+/// were fifty times slower than either
 pub(crate) fn kernel_map(list: &Node, function: &Node) -> Option<Node> {
 	let Node::Key(parameter, Op::FatArrow, body) = function.drop_meta() else {
 		return None;
 	};
-	let kernel = matches!(list.drop_meta(), Node::Symbol(_))
-		&& crate::wasm_emitter::linear_arrays::is_float_kernel(&parameter.name(), body);
-	kernel.then(|| {
-		let call = Node::List(
+	if !matches!(list.drop_meta(), Node::Symbol(_)) {
+		return None;
+	}
+	let map = key(
+		list.clone(),
+		Op::Dot,
+		Node::List(
 			vec![symbol(MAP_WORD), function.clone()],
 			Bracket::Round,
 			Separator::None,
-		);
-		key(list.clone(), Op::Dot, call).with_attribute(SPLIT_ATTRIBUTE, Node::True)
-	})
+		),
+	);
+	if crate::wasm_emitter::linear_arrays::is_float_kernel(&parameter.name(), body) {
+		Some(map.with_attribute(SPLIT_ATTRIBUTE, Node::True))
+	} else {
+		crate::gpu_maps::gpu_kernel(function).map(|_| map)
+	}
 }
 
 /// `@parallel` on a form parallel_map can't split into tasks (`@parallel square xs`): a warning (an error under strict)
@@ -77,7 +86,7 @@ pub(crate) fn sequential_warning(node: &Node) -> Option<Node> {
 	}
 	let message =
 		"@parallel runs this in sequence: only `xs.map(f)`, `f all xs` and `go for x in xs { … }` run in parallel";
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, message.to_string())]).err()
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, message.to_string()).weak()]).err()
 }
 
 /// `@parallel` (or another attribute, `@gpu`) on a form or on the start of its first part: `@parallel xs.map(f)`
@@ -214,13 +223,8 @@ pub(crate) fn parallel_let(items: &[Node], bracket: &Bracket, separator: &Separa
 		.cloned()
 		.collect();
 	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
-	(names.len() >= 2 && names.len() == values.len() && names.iter().all(is_name) && values.iter().all(is_call))
+	(names.len() >= 2 && names.len() == values.len() && names.iter().all(is_name) && values.iter().all(is_call_head))
 		.then_some((names, values))
-}
-
-/// `f(x)`: a call by name
-fn is_call(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
 }
 
 /// Each call but the last in a task, the last one here, then the tasks awaited, while task_forks() finds a core free;
@@ -305,5 +309,5 @@ fn copied_updates(body: &Node, shared: &[String]) -> Option<Node> {
 	let message = format!(
 		"{name} is updated in a parallel loop: every task updates its own copy; share it: `shared {name} = …` (P106)"
 	);
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&at, message)]).err()
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&at, message).severe()]).err()
 }

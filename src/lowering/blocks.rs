@@ -58,7 +58,7 @@ struct BlockFunction {
 }
 
 /// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter; a parameter named `block` or
-/// `code` without a type is one too (`def repeats(n: int, block) := …`)
+/// `code` without a type is one too when the body runs it (`def repeats(n: int, block) := … block() …`), else a value
 fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else {
 		return None;
@@ -73,7 +73,10 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let parameters: Vec<(String, bool)> = parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(name) => Some((name.clone(), BLOCK_WORDS.contains(&name.as_str()))),
+			Node::Symbol(name) => Some((
+				name.clone(),
+				BLOCK_WORDS.contains(&name.as_str()) && runs_anywhere(body, name),
+			)),
 			Node::Key(name, Op::Colon, kind) => Some((
 				name.name(),
 				matches!(kind.drop_meta(), Node::Symbol(word) if BLOCK_WORDS.contains(&word.as_str())),
@@ -107,7 +110,45 @@ fn prefixed<'a>(value: &'a Node, words: &[&str]) -> Option<&'a Node> {
 
 /// `data e`: e, the expression as written
 pub(crate) fn quoted_data(node: &Node) -> Option<&Node> {
-	prefixed(node, &[DATA_WORD])
+	let quoted = prefixed(node, &[DATA_WORD])?;
+	Some(sealed_code(quoted).unwrap_or(quoted))
+}
+
+/// Quoted code the later passes do not see into (card data-quote-lowered): `data a.b` keeps its `.`, as the run-time
+/// parse does; `unsealed` gives it back before analysis and emission
+#[derive(Clone, PartialEq)]
+struct QuotedCode(Node);
+
+fn sealed_code(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Data(data) => data.downcast_ref::<QuotedCode>().map(|QuotedCode(code)| code),
+		_ => None,
+	}
+}
+
+/// `data e` with e sealed
+pub(crate) fn quote(code: Node) -> Node {
+	let code = match sealed_code(&code) {
+		Some(_) => code,
+		None => Node::data(QuotedCode(code)),
+	};
+	Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)
+}
+
+/// Every `data e` sealed, so the passes after blocks leave e as written
+pub fn seal_quoted(node: Node) -> Node {
+	match prefixed(&node, &[DATA_WORD]) {
+		Some(code) => quote(code.clone()),
+		None => children_rewritten(node, seal_quoted),
+	}
+}
+
+/// Every sealed `data e` open again
+pub fn unsealed(node: Node) -> Node {
+	match sealed_code(&node) {
+		Some(code) => code.clone(),
+		None => children_rewritten(node, unsealed),
+	}
 }
 
 /// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,
@@ -167,6 +208,13 @@ fn runs_parameter(node: &Node, parameter: &str) -> bool {
 		Node::List(items, Bracket::Round, Separator::None) => matches!(items.as_slice(), [only] if is_parameter(only)),
 		_ => bang_target(node).is_some_and(|(target, _)| is_parameter(&target)),
 	}
+}
+
+/// Whether the body runs the parameter somewhere (`block!`, `block()`)
+fn runs_anywhere(body: &Node, parameter: &str) -> bool {
+	let mut runs = false;
+	body.visit(&mut |node| runs |= runs_parameter(node, parameter));
+	runs
 }
 
 /// The arguments of a call to a function with these parameters: one each, or, when the last parameter is a block, the
@@ -230,6 +278,8 @@ fn is_computed(value: &Node) -> bool {
 		{
 			false
 		}
+		// `now!`: the time the run reads where it stands is a value, not a block kept for later (card map-now-bang)
+		_ if crate::time::is_time_call(value) => false,
 		// a range `1..n` is a value too (a descriptor), whatever its bounds compute
 		Node::Key(_, Op::Range | Op::To, _) => false,
 		// a type expression declares: `int[100]`, `100 * int`, `3 * char`

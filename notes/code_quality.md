@@ -384,8 +384,10 @@ by constants defined mid-file (list_ops.rs 1014–1016 `SQUARE_BRACKET_INFO`, `K
   ships test helpers and `extensions` depends on the whole compiler. Move them to tests/common/mod.rs.
 - probes/: 3.2 MB, mostly the fixer prompt templates and per-topic snippet dirs from 2026-10-02 (algo 2.2 MB, ask,
   break, elements, listexpr, listparams, maps, parse, print, slices, globals, …). Once those topics are merged, keep the
-  `.warp` snippets that became tests' inputs and delete the rest; `stage_own_hunks.py`, `unignore.py`,
-  `commit_unignored.py`, `bisect_step.sh` are one-off agent tools (move to ~/dev/bin if reused).
+  `.warp` snippets that became tests' inputs and delete the rest. Done 2026-10-13 (card cleanup-probe-scripts): the
+  one-off agent tools (`stage_own_hunks.py`, `unignore.py`, `commit_unignored.py`, `bisect_step.sh`, parse's hunk
+  selector) and the finished per-topic fixer prompts in probes/algo are gone; the templates fixer_prompt.md and
+  worker_prompt.md stay.
 
 ## 7. Build hygiene
 
@@ -432,6 +434,6 @@ contract `fn(Node) -> Result<Node, Node>`) · #8 runtime API · #9 hard-coded li
 6. Keep the 20 hand-written libm/libc bindings in ffi.rs, or rely on the generic header-driven FFI only?
 7. `Node` operators (`+ - * /`, `IndexMut`): return `Node::Error` instead of panicking?
 8. CLAUDE.md: replace with a symlink to AGENTS.md, and may AGENTS.md's architecture section be rewritten from §1?
-9. Root clutter (`goo`, `conversation.md`, `node.wat`, `test.warp`, dangling `warp`/`warp` links, `build_debug.sh`,
-   `add_ignore_to_failing_tests.sh`, `nextest.sh`): delete or move to notes/OLD?
+9. DONE: root clutter moved to notes/OLD; the scripts, node.wat and test.wasp deleted there (cleanup-stale-notes,
+   2026-10-13). goo and conversation.md stay: the user's own texts.
 10. DONE (user: "can we gate it"): no split needed, the cdylib is gated to web/playground/build.sh.

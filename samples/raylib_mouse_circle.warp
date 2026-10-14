@@ -1,5 +1,4 @@
 #!/usr/bin/env warp
-#!/usr/bin/env warp
 // Raylib FFI Example - Draw persistent trace with mouse
 // Demonstrates using raylib graphics library via FFI with mouse drawing
 
@@ -10,7 +9,7 @@ SetTargetFPS(60)
 
 needsClear = 1
 
-while(!WindowShouldClose()){
+while not WindowShouldClose() {
     mouseX = GetMouseX()
     mouseY = GetMouseY()
 

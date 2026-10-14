@@ -53,3 +53,12 @@ fn spreading_into_a_function_parameter() {
 		7
 	);
 }
+
+/// card list-spread: a spread inside a list literal splices the list's items in (JS `[...xs, 4]`, Python `[*xs, 4]`)
+#[test]
+fn a_spread_in_a_list_literal_splices_its_items() {
+	is!("xs = [1, 2]; [...xs, 4]", ints(vec![1, 2, 4]));
+	is!("xs = [1, 2]; [*xs, 4]", ints(vec![1, 2, 4]));
+	is!("xs = [2, 3]; [1, ...xs, 4, ...xs]", ints(vec![1, 2, 3, 4, 2, 3]));
+	is!("xs = [1, 2, 3]; match xs { [a, *rest] => count(rest); _ => 0 }", 2);
+}

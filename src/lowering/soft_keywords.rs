@@ -3,7 +3,7 @@
 //! name wins with a got-it note ("send is a keyword; here it is your variable"); redefining one at the top level is a
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
-use super::nodes::is_function_keyword;
+use super::nodes::{is_function_keyword, parameter_name};
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -31,7 +31,7 @@ pub const SOFT_KEYWORDS: [&str; 12] = [
 ];
 /// Keyword-like words in neither list: the playground editor colors them like soft keywords (web/playground/keywords.py
 /// makes keywords.js; it also colors every `const …_KEYWORD: &str` in src/, so a pass registers its word by that name). Display only: P165 gives them no meaning; moving one into a list above is a user decision
-pub const HIGHLIGHTED_WORDS: [&str; 59] = [
+pub const HIGHLIGHTED_WORDS: [&str; 62] = [
 	"try",
 	"catch",
 	"except",
@@ -83,6 +83,9 @@ pub const HIGHLIGHTED_WORDS: [&str; 59] = [
 	"meta",
 	"raise",
 	"throw",
+	"fail",
+	"panic",
+	"warn",
 	"require",
 	"and",
 	"or",
@@ -153,7 +156,7 @@ fn defined_name(node: &Node) -> Option<String> {
 		},
 		// `def ((init ø) {1})`: the name leads the head
 		Node::List(words, _, _) if words.len() > 1 && words.first().is_some_and(is_function_keyword) => {
-			Some(crate::lowering::class_methods::leading_name(&words[1])).filter(|name| !name.is_empty())
+			Some(crate::node::leading_name(&words[1])).filter(|name| !name.is_empty())
 		}
 		_ => None,
 	}
@@ -215,14 +218,5 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| walk_names(item, found)),
 		_ => {}
-	}
-}
-
-/// `x`, `x: int`, `x = 1`
-fn parameter_name(parameter: &Node) -> Option<String> {
-	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, Op::Colon | Op::Assign, _) => name.symbol_name().map(String::from),
-		_ => None,
 	}
 }

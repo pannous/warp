@@ -5,6 +5,7 @@ mod test_bend_laws; // card bend-style
 mod test_big_ratio;
 mod test_compound_accumulator; // card compound-accumulator
 mod test_counting_units;
+mod test_data_number_words; // card hint-data-word
 mod test_decimal_units;
 mod test_declared_float_exact_reals;
 mod test_degrees; // card angles-degrees
@@ -13,10 +14,12 @@ mod test_division_by_zero;
 mod test_duration_text;
 mod test_dynamic_units; // card units-dynamic
 mod test_exact_parameters;
+mod test_exponent_texts; // card int-text
 mod test_fixed_width_ints;
 mod test_float_accumulator; // card float-accumulator
 mod test_float_assignment;
 mod test_float_bit_operations;
+mod test_float_bits; // card f64-const
 mod test_float_exact_context;
 mod test_float_parameters;
 mod test_float_promotion;

@@ -1,3 +1,10 @@
+# JSON-to-Node cleanup
+
+- Pin the existing foreign-call conversion behavior with a focused test before changing production code.
+- Reuse one public-within-crate JSON conversion for foreign calls and headless event details.
+- Preserve object order, array grouping and separators, integer/float handling, booleans, nulls, and the codepoint sentinel.
+- Run the focused JSON and headless tests, formatting, clippy, and the wasm32 check.
+
 # Delete-list cleanup
 
 - Reproduce deletion of a list variable with a new focused probe test.
@@ -59,3 +66,50 @@
 - Reuse one lifecycle result representation and one final-artifact writer rather than adding shell-only special cases.
 - Keep all failure details loud in the artifact, worker log, and Warp Boss end notice.
 - Keep the worktree-only Cargo version suffix uncommitted.
+
+# Runtime and parser source-position cleanup
+
+## Scope
+
+- Reproduce one parser error and one runtime error whose diagnostics omit the originating line and column.
+- Preserve source metadata through the existing parse, lowering, emission, and runtime-error paths instead of introducing a parallel diagnostic representation.
+- Report missing metadata loudly at the ownership boundary rather than silently inventing a position.
+
+## Verification
+
+- Establish focused parser and runtime diagnostic baselines through `tests/queue.sh` before implementation.
+- Add focused regression coverage in the existing test hierarchy without changing established tests.
+- Re-run only the affected queued filters and hand the full-suite gate to the Integrator.
+
+## Cleanup
+
+- Reuse the existing `Meta`, diagnostic, and runtime-error helpers.
+- Remove any temporary probes or debug output once the focused tests pass.
+- Keep the worktree-only Cargo version suffix uncommitted.
+
+## Done (2026-10-12)
+
+- Parser: `diagnostic::first_located_error` in the pipeline. Runtime: the `trap_position` global. Guide in
+  notes/error_positions.md.
+- Upgraded two exact-error pins (welcoming ask/slices) to include the new position.
+
+# Quoted list-text cleanup
+
+- Reproduce the self-hosted serializer's dynamically built quoted text inside a list before changing production code.
+- Reuse the existing `text_quoted` runtime path for literal and computed texts instead of adding another serializer.
+- Keep bare texts unquoted while ensuring container text reads back with quotes and backslashes escaped.
+- Run the focused text test before and after, then formatting, clippy, and the wasm32 check.
+
+# Standard-library documentation association cleanup
+
+- Pin the reported markup and sound entries with a focused regression before changing the indexer.
+- Keep the documented contract that a word uses the comment line directly above its definition.
+- Reuse the existing single pending-comment slot; do not add module-specific exceptions or rewrite library comments.
+- Run the focused documentation tests, formatting, clippy, and the wasm32 check.
+
+# Repeated text-construction instruction cleanup
+
+- Preserve the exact emitted instruction order while extracting the repeated pointer/length `new_text` sequences.
+- Reuse helpers on `WasmEmitter`; keep callers responsible for computing any nonstandard pointer or length expression.
+- Extract the repeated closure entry-field load into one helper without changing closure layout or call behavior.
+- Establish and rerun focused text and closure test baselines, then run formatting, clippy, and the wasm32 check.

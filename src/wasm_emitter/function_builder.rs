@@ -5,7 +5,7 @@ use wasm_encoder::*;
 use Instruction as I;
 
 /// The runtime functions a page's scripts call (web/playground: host.js buildValue, guarded_call, reader.js readNode)
-const PAGE_HOST_CALLS: [&str; 12] = [
+const PAGE_HOST_CALLS: [&str; 13] = [
 	"new_empty",
 	"new_int",
 	"new_float",
@@ -18,6 +18,7 @@ const PAGE_HOST_CALLS: [&str; 12] = [
 	"error_of",
 	super::int_lists::INTS_TO_LIST,
 	super::int_lists::LIST_TO_INTS,
+	super::NODE_AT,
 ];
 
 impl WasmGcEmitter {
@@ -84,7 +85,7 @@ impl WasmGcEmitter {
 	/// Exports the emitted runtime function `name` for the host; a page's host (web/playground) calls only some, and
 	/// the others are left to tree shaking (web::test_bundle_budget)
 	pub(super) fn export_runtime_function(&mut self, name: &'static str) {
-		if !crate::pipeline::is_for_a_page() || PAGE_HOST_CALLS.contains(&name) {
+		if !super::config::compile_mode().for_a_page || PAGE_HOST_CALLS.contains(&name) {
 			let index = self.func_index(name);
 			self.exports.export(name, ExportKind::Func, index);
 		}
@@ -94,6 +95,24 @@ impl WasmGcEmitter {
 		for instruction in instructions {
 			func.instruction(instruction);
 		}
+	}
+
+	pub(super) fn emit_new_text(&self, func: &mut Function, address: u32, length: u32) {
+		Self::emit_list(func, &[I::LocalGet(address), I::LocalGet(length)]);
+		self.call(func, "new_text");
+	}
+
+	pub(super) fn emit_new_text_to(&self, func: &mut Function, address: u32, position: u32) {
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(address),
+				I::LocalGet(position),
+				I::LocalGet(address),
+				I::I32Sub,
+			],
+		);
+		self.call(func, "new_text");
 	}
 
 	/// `while condition { body }`: `condition` leaves an i32, `body` leaves nothing

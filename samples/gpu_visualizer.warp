@@ -16,6 +16,7 @@ fall = 0.8
 // how much of the kick stays per frame, and how much rise across all bands is a full kick
 kick_fade = 0.85
 full_kick = 3.0
+// the shortest frame: a frame that took less waits for the rest
 frame_milliseconds = 16
 
 tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4] C5 G4 E4 [C3 E4 G4 C5]]
@@ -138,6 +139,7 @@ tone = 0.0
 started = clock()
 time = 0.0
 while time < seconds {
+	frame_started = clock()
 	heard = spectrum(song, time, bands)
 	rise = 0.0
 	loudest = 0
@@ -150,9 +152,9 @@ while time < seconds {
 	}
 	kick = max(kick * kick_fade, min(1.0, rise / full_kick))
 	tone += (loudest / bands - tone) * 0.1
-	bass = (levels[0] + levels[1] + levels[2] + levels[3]) / 4
-	treble = (levels[10] + levels[11] + levels[12] + levels[13]) / 4
+	bass = (levels#1 + levels#2 + levels#3 + levels#4) / 4
+	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)
-	sleep(frame_milliseconds)
+	sleep(max(0, frame_milliseconds - (clock() - frame_started)))
 	time = (clock() - started) / 1000.0
 }

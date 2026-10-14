@@ -155,6 +155,9 @@ impl WasmGcEmitter {
 
 	/// Emit FFI function call with automatic result handling based on context
 	pub(super) fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
+		if [crate::host::STD_PURE, crate::host::STD_IO].contains(&fn_name) {
+			self.note_std_module(args.first());
+		}
 		if self.emit_import_call(func, fn_name, args, ctx) {
 			return;
 		}
@@ -167,6 +170,15 @@ impl WasmGcEmitter {
 			func.instruction(&I::Call(idx));
 		}
 		self.emit_ffi_result(func, &sig, ctx);
+	}
+
+	/// The std module a std_pure / std_io call names, for the host parts a site ships (host_parts.rs std_modules_of)
+	fn note_std_module(&mut self, module: Option<&Node>) {
+		let name = match module.map(Node::drop_meta) {
+			Some(Node::Text(name)) => name.clone(),
+			_ => crate::host::ANY_STD_MODULE.to_string(),
+		};
+		self.std_modules.insert(name);
 	}
 
 	/// Check if a node argument should be treated as a string

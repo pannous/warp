@@ -19,6 +19,9 @@ self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same comp
 
 let compiler; // the compiler instance's exports
 let webEvaluate; // its web_evaluate, an async function where JSPI is (host-compiler.js awaitedEntry)
+// its web_worker_bundle, likewise: compiling may run code (warp_host.run, a Suspending import), and a Suspending import
+// called outside WebAssembly.promising throws "No matching WebAssembly.promising" (card compiler-crashed)
+let webWorkerBundle;
 // the messages use the compiler one after another: an evaluation whose program waits for a promise (host.js JSPI) holds
 // the compiler's memory until it ends
 let compilerTurn = Promise.resolve();
@@ -29,8 +32,6 @@ function inTurn(work) {
 }
 let live; // the run whose page events are handled (host.js runProgram), until the next run
 const PAGE_VALUE = "page·value";
-const PAGE_HOLE = "page·hole";
-const PATH_JOINER = "·";
 // after a handler that patched holes, the value text waits this long for the next event before it is read whole
 const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
@@ -112,6 +113,7 @@ async function loadCompiler() {
 	const instance = await WebAssembly.instantiate(module, { warp_host: warpHost(() => compiler.memory, hooks, true) });
 	compiler = instance.exports;
 	webEvaluate = awaitedEntry(compiler.web_evaluate);
+	webWorkerBundle = awaitedEntry(compiler.web_worker_bundle);
 }
 
 function passText(text) {
@@ -188,12 +190,12 @@ function handleSubmit(request) {
 	if (live) showHandled(live, runSubmitted(live, hooks, request));
 }
 
-// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web.rs
+// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web/mod.rs
 // worker_bundle), `{scripts, module}` or `{error}`
-function workerBundle(code) {
+async function workerBundle(code) {
 	const codeText = passText(code);
 	try {
-		const length = compiler.web_worker_bundle(...codeText);
+		const length = await webWorkerBundle(...codeText);
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
 		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, compiler.web_bundle_module(), report.module_length).slice();
 		compiler.web_free(...codeText);
@@ -223,7 +225,7 @@ function showHandled(holder, handled, timer = false) {
 	post({ type: "handled", value, html: page, error: failed });
 }
 
-// the value and HTML the compiler shows for a run outcome (src/web.rs shown)
+// the value and HTML the compiler shows for a run outcome (src/web/mod.rs shown)
 function shownOf(outcome) {
 	const outcomeText = passText(JSON.stringify(outcome));
 	const length = compiler.web_show(...outcomeText);
@@ -233,20 +235,23 @@ function shownOf(outcome) {
 }
 
 // markup with holes (PAGE_HOLE·<path>, src/lowering/event_signals.rs, card web-fine-holes): only the elements holding
-// computed parts are read, the page gets those whose HTML changed; the whole value follows once the events pause.
+// computed parts, or their computed texts alone between children (TEXT_HOLE), are read, the page gets those whose HTML changed; the whole value follows once the events pause.
 // False when there are none, or one fails (the whole value then shows the error)
 function showHoles(holder) {
-	const holes = Object.keys(holder.exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER));
+	const holes = pageHoles(holder.exports);
 	if (!holes.length) return false;
+	const rendering = holder.exports[PAGE_HOLES];
+	if (rendering && outcomeOf(holder, hooks, rendering).result === undefined) return false;
 	holder.holeHtml ??= new Map();
 	const patches = [];
-	for (const name of holes) {
+	for (const { name, path, after } of holes) {
 		const outcome = outcomeOf(holder, hooks, holder.exports[name]);
 		if (outcome.result === undefined) return false;
-		const html = outcome.html ?? shownOf(outcome).html;
-		if (holder.holeHtml.get(name) === html) continue;
-		holder.holeHtml.set(name, html);
-		patches.push({ path: name.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number), html });
+		const shown = after === undefined ? { html: outcome.html ?? shownOf(outcome).html } : { text: String(plainOfTree(outcome.result)), after };
+		const seen = shown.html ?? shown.text;
+		if (holder.holeHtml.get(name) === seen) continue;
+		holder.holeHtml.set(name, seen);
+		patches.push({ path, ...shown });
 	}
 	post({ type: "handled", patches });
 	clearTimeout(holder.valueTimer);
@@ -285,7 +290,7 @@ async function handleMessage(data) {
 	if (data.submit) return handleSubmit(data.submit);
 	if (data.bundle !== undefined) { // the running program keeps running
 		if (!compiler) await loadCompiler();
-		return post({ type: "bundle", bundle: workerBundle(data.bundle) });
+		return post({ type: "bundle", bundle: await workerBundle(data.bundle) });
 	}
 	if (live) stopListening(live);
 	live = undefined;

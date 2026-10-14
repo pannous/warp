@@ -5,14 +5,13 @@
 //!   multi-value results, and a plain call `f()` gets them packed into the list `[a b]`
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
-use super::nodes::key;
+use super::nodes::children_rewritten;
 use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::STARRED;
 
 pub const RETURN: &str = "return";
 pub const DESTRUCTURE: &str = "$destructure";
-/// The mark of the name taking the rest in `a, *rest = xs` (Python's starred target)
-pub const STARRED: &str = "*";
 /// The hidden names holding the value of a nested target: `(a, b), c = …`
 const UNPACKED: &str = "unpacked";
 
@@ -23,14 +22,9 @@ pub fn unstarred(name: &str) -> &str {
 
 pub fn lower(node: Node) -> Node {
 	let lowered = match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower(*node)),
-			data,
-		},
 		Node::Key(left, Op::Assign, right) if bracketed_targets(&left).is_some() => {
 			regroup_bracketed_destructuring(&left, &lower(*right)).expect("guarded")
 		}
-		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::List(items, bracket, separator) => {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
 			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
@@ -59,7 +53,7 @@ pub fn lower(node: Node) -> Node {
 			};
 			regrouped.unwrap_or(Node::List(items, bracket, separator))
 		}
-		other => other,
+		other => children_rewritten(other, lower),
 	};
 	check_definition(&lowered).unwrap_or(lowered)
 }
@@ -101,17 +95,6 @@ pub fn tuple_arity(body: &Node) -> Option<usize> {
 		}
 	});
 	arity
-}
-
-/// `f(args)` / `f args` / `f()`: the callee and the arguments; whether `f` returns several values is the caller's question
-pub fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
-	match node.drop_meta() {
-		Node::List(items, _, _) => match items.first()?.drop_meta() {
-			Node::Symbol(name) => Some((name.as_str(), &items[1..])),
-			_ => None,
-		},
-		_ => None,
-	}
 }
 
 /// The wasm name of the function packing f's values into a list

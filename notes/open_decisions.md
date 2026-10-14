@@ -9,6 +9,10 @@ the wiki).
 (none)
 
 ## Parked (user: "later")
+- unit-edges (warp-operator-shall, cards cleanup-units-answer and cleanup-units-interpreter): eight ignored
+  cleanup-edge tests, kept or retired? Constant `1950 cm ± 50` folding (now at run time, prints right again), ranges
+  with a unit (`1900 - 2000 AD`, descending, the "different units" error, `1900 - 2000 AD == 1950 AD ± 50`: three
+  more tests), the mixed-dimension `5 m ± 1 s` error. Parked 2026-10-13; revisit with card discuss-moving.
 - P237 (warp-class, card natural-phrases): what `numbers.sort by size` means; today a silent no-op. The user leans to
   `size` as an alias chain size → abs → norm (`[3, -5, 2].sort by size` → [2 3 -5]). Open: does `size [3, 4]` stay
   the count 2 (recommended, norm via `norm`) or become the norm 5? Parked 2026-10-09.
@@ -20,3 +24,9 @@ the wiki).
   they are at `!` and assigns only declared globals. Parked 2026-10-05 until run-time `!` is built.
 - P76: grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. Parked 2026-10-05: no grants exist yet.
+- P45 script mode: a mode where a variable may change kind (`x=[1]; x=5`); today that is a compile error "unless we
+  are in script mode, which is not defined yet". Not designed. Parked 2026-10-05.
+- Extended rationals: ±1/0 as exact infinities instead of the divide-by-zero error (footgun-divzero). Parked
+  2026-10-10.
+- #10 Polish notation for .wat/.wast (`(module a b)` as nodes, a ParserOptions mode): "Keep parked"; test_wast stays
+  ignored. Parked 2026-10-03.

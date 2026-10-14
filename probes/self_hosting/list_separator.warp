@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+// card keep-list: a list keeps its separator, warp code reads it (n.separator) and sets it (separated)
+commas = data [a, b]
+lines = data {a; b}
+built = separated(bracketed([1, 2], "("), ";")
+print commas.separator lines.separator built.bracket built.separator

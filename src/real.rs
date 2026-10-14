@@ -135,7 +135,7 @@ fn with_real_type_arguments(node: Node, real_variables: &HashMap<String, Node>) 
 	}
 	match node {
 		Node::List(mut items, bracket, separator) => {
-			let asks_type = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == "type" || head == crate::type_tests::IS_TYPE);
+			let asks_type = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == "type" || head == crate::words::IS_TYPE);
 			let variable_value = match items.get(1).map(Node::drop_meta) {
 				Some(Node::Symbol(name)) if asks_type => real_variables.get(name),
 				_ => None,
@@ -152,16 +152,7 @@ fn with_real_type_arguments(node: Node, real_variables: &HashMap<String, Node>) 
 				separator,
 			)
 		}
-		Node::Key(left, op, right) => Node::Key(
-			Box::new(with_real_type_arguments(*left, real_variables)),
-			op,
-			Box::new(with_real_type_arguments(*right, real_variables)),
-		),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_real_type_arguments(*node, real_variables)),
-			data,
-		},
-		other => other,
+		other => children_rewritten(other, |child| with_real_type_arguments(child, real_variables)),
 	}
 }
 
@@ -198,7 +189,7 @@ fn is_type_of_real(items: &[Node]) -> bool {
 }
 
 fn is_type_test_of_real(items: &[Node]) -> bool {
-	matches!(items, [head, argument, spec] if matches!(head.drop_meta(), Node::Symbol(name) if name == crate::type_tests::IS_TYPE)
+	matches!(items, [head, argument, spec] if matches!(head.drop_meta(), Node::Symbol(name) if name == crate::words::IS_TYPE)
 		&& matches!(spec.drop_meta(), Node::Text(_)) && known_before_lowering(argument))
 }
 

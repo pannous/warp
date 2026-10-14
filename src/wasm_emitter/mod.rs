@@ -1,5 +1,15 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
+mod traps;
+pub use traps::*;
+mod diagnostics;
+mod module_finish;
+mod node_functions;
+mod raw_structs;
+#[cfg(feature = "native")]
+pub use raw_structs::run_raw_struct;
+pub(crate) use raw_structs::*;
+
 mod arithmetic;
 pub(crate) mod component_adapters;
 mod control_flow;
@@ -15,7 +25,7 @@ mod values;
 pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
 pub(crate) mod exact;
-pub(crate) mod hex;
+pub(crate) mod radix;
 pub(crate) use casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
 mod config;
@@ -33,7 +43,9 @@ mod list_dispatch;
 mod list_emitter;
 pub(crate) mod list_sharing;
 mod node_api;
+pub use node_api::NODE_AT;
 mod similarity;
+mod text_rooms;
 mod text_unicode;
 mod time_arithmetic;
 pub(crate) mod time_zones;
@@ -78,14 +90,14 @@ const DEBUG_MODULE: &str = ".cache/warp/last.wasm";
 const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "none"];
 /// wasmtime's words for an integer division or remainder by zero
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
-/// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
-const UNKNOWN_POSITION: &str = " at 0:0";
 /// Node locals every function has after its Int scratch: node_scratch and container_scratch (globals.rs)
 const NODE_SCRATCH_LOCALS: u32 = 2;
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
 pub const MEMORY_ENTITY: &str = "memory";
 pub const TABLE_ENTITY: &str = "table";
 pub const IMPORTABLE_ENTITIES: [&str; 2] = [MEMORY_ENTITY, TABLE_ENTITY];
+/// The bytes of a wasm memory page
+const PAGE_BYTES: u64 = 65536;
 const MEMORY: MemoryType = MemoryType {
 	minimum: 1,
 	maximum: None,
@@ -93,8 +105,6 @@ const MEMORY: MemoryType = MemoryType {
 	shared: false,
 	page_size_log2: None,
 };
-/// Between a diagnostic's message and its fix
-const FIX_SEPARATOR: &str = "; fix: ";
 /// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
 /// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
@@ -146,45 +156,6 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 pub const TRAP_DETAIL: &str = "trap_detail";
 /// How a trapped run carries that value into its error: `trap detail: <value>`
 pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
-
-/// The `trap detail: <value>` line of a trapped run; an Error value raised as it is (Node arithmetic on an Error, a text
-/// builtin of an Error) names its message
-pub fn trap_detail_line(detail: &Node) -> String {
-	let shown = match detail {
-		Node::Error(reason) => reason.serialize(),
-		value => value.serialize(),
-	};
-	// one line in the trace, whatever lines the value has: `\` and line breaks escaped, trap_detail reads them back
-	format!(
-		"{TRAP_DETAIL_PREFIX}{}",
-		shown.replace('\\', "\\\\").replace('\n', "\\n")
-	)
-}
-
-/// The value a trace's `trap detail: …` line carries, its line breaks back
-fn trap_detail(trace: &str) -> Option<String> {
-	let line = trace.split_once(TRAP_DETAIL_PREFIX)?.1.lines().next()?;
-	let mut detail = String::with_capacity(line.len());
-	let mut characters = line.chars();
-	while let Some(character) = characters.next() {
-		detail.push(
-			match (character, (character == '\\').then(|| characters.next()).flatten()) {
-				(_, Some('n')) => '\n',
-				(_, Some(escaped)) => escaped,
-				(plain, None) => plain,
-			},
-		);
-	}
-	Some(detail)
-}
-
-/// Why a unit word is an undefined variable: quantities are computed in constant expressions only
-const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
-/// The global behind the export `trap_detail`: not a warp name, so no user global meets it
-const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
-
-const TERNARY_BRANCHES: &str = "`condition ? then : else`";
-const IF_THEN: &str = "`if condition then ...`";
 
 /// The condition and the then-branch of `if condition then branch`
 /// The call `join(list, separator)`: the items' text forms with the separator between them
@@ -271,9 +242,10 @@ pub struct WasmGcEmitter {
 	names: NameSection,
 	/// main's index, named in the name section (a trap's backtrace shows `main`, not `<wasm function N>`)
 	main_index: Option<u32>,
-	/// the address of the items of `print(value)` that ends main when the pipeline added it (pipeline::prints_result)
+	/// the address of the items of `print(value)` that ends main when the pipeline added it (CompileMode::prints_result)
 	result_print: usize,
-	memory: MemorySection,
+	/// the module declares its own memory (not imported), sized by its texts when the module is finished
+	owns_memory: bool,
 	globals: GlobalSection,
 	tags: TagSection,
 	guards_errors: bool, // the program has a `try` that catches runtime errors
@@ -322,6 +294,7 @@ pub struct WasmGcEmitter {
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
+	text_room_globals: Option<u32>, // the first global of the rooms texts grow into (text_rooms.rs)
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
@@ -331,8 +304,13 @@ pub struct WasmGcEmitter {
 	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
 	writes_tags: bool,
 	type_errors: Vec<String>,
+	/// The std modules the program calls through std_pure / std_io (STD_MODULES_SECTION), ANY_STD_MODULE for a module
+	/// named at run time
+	std_modules: std::collections::BTreeSet<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<crate::meta::LineInfo>,
+	/// The position of the statement being emitted, which `trap_position` holds while it runs (emit_trap_position)
+	statement_position: Option<crate::meta::LineInfo>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
@@ -375,7 +353,7 @@ impl WasmGcEmitter {
 			names: NameSection::new(),
 			main_index: None,
 			result_print: 0,
-			memory: MemorySection::new(),
+			owns_memory: false,
 			globals: GlobalSection::new(),
 			tags: TagSection::new(),
 			guards_errors: false,
@@ -408,12 +386,15 @@ impl WasmGcEmitter {
 			returned_tuple: vec![],
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
+			text_room_globals: None,
 			discovered_needs: Default::default(),
 			inherited_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
 			writes_tags: false,
 			type_errors: Vec::new(),
+			std_modules: Default::default(),
 			source_position: None,
+			statement_position: None,
 			loop_labels: Vec::new(),
 			typed_lists: HashMap::new(),
 			typed_globals: HashMap::new(),
@@ -473,7 +454,8 @@ impl WasmGcEmitter {
 
 	/// Emit core GC types (String, Node, i64box, f64box)
 	fn emit_gc_types(&mut self) {
-		self.type_manager.emit_gc_types();
+		self.type_manager
+			.emit_gc_types(self.should_emit_function(node_api::NODE_AT));
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -584,7 +566,9 @@ impl WasmGcEmitter {
 				!matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
 			}
 			Node::Key(_left, op, _right) if op.is_shift() || op.is_comparison() => true,
-			Node::Key(left, op, right) if op.is_logical() => self.is_numeric(left) && self.is_numeric(right),
+			Node::Key(left, op, right) if op.is_logical() || op.is_bitwise() => {
+				self.is_numeric(left) && self.is_numeric(right)
+			}
 			// `not x` is always 1 or 0
 			Node::Key(left, Op::Not, _) if matches!(left.drop_meta(), Node::Empty) => true,
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
@@ -633,9 +617,7 @@ impl WasmGcEmitter {
 			Some(module) => self
 				.import_manager
 				.import_entity(&module, MEMORY_ENTITY, EntityType::Memory(MEMORY)),
-			None => {
-				self.memory.memory(MEMORY);
-			}
+			None => self.owns_memory = true,
 		}
 		if let Some(module) = imported(self, TABLE_ENTITY) {
 			let table = TableType {
@@ -662,7 +644,7 @@ impl WasmGcEmitter {
 		self.import_manager
 			.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
 		self.next_func_idx = self.import_manager.import_count();
-		self.type_manager.emit_gc_types();
+		self.emit_gc_types();
 		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
 		self.emit_registered_user_types();
 		self.emit_instance_types();
@@ -714,17 +696,9 @@ impl WasmGcEmitter {
 		];
 
 		for (name, tag) in tags {
-			self.globals.global(
-				GlobalType {
-					val_type: ValType::I64,
-					mutable: false,
-					shared: false,
-				},
-				&ConstExpr::i64_const(tag as i64),
-			);
-			self.exports.export(name, ExportKind::Global, self.next_global_idx);
-			self.ctx.kind_global_indices.insert(tag, self.next_global_idx);
-			self.next_global_idx += 1;
+			let global = self.declare_constant_global(ValType::I64, ConstExpr::i64_const(tag as i64));
+			self.exports.export(name, ExportKind::Global, global);
+			self.ctx.kind_global_indices.insert(tag, global);
 		}
 	}
 
@@ -760,6 +734,11 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
+		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes or parses
+		// (cards data-meta, parse-word)
+		if node.mentions_any(&list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
+			self.ctx.required_functions.insert(node_api::NODE_AT);
+		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
 		}
@@ -780,6 +759,7 @@ impl WasmGcEmitter {
 		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
+		self.require_function_text(); // before the similarity's: function_text needs values_equal
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
@@ -831,204 +811,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The first type error found while emitting; the module must not run then
-	pub fn type_error(&self) -> Option<Node> {
-		self.type_errors
-			.first()
-			.or(self.type_manager.type_errors.first())
-			.map(|message| crate::node::error(message))
-	}
-
-	/// A value used as a number that has none (ø, a list, a type…): an error value at its source position, not a panic
-	fn emit_not_a_number(&mut self, func: &mut Function, located: &Node, value: &Node) {
-		let diagnostic = crate::diagnostic::Diagnostic::at(
-			located,
-			format!("cannot extract a numeric value from {}", value.serialize()),
-		);
-		self.emit_type_error(func, diagnostic.to_string());
-	}
-
-	/// A construct whose shape the emitter cannot handle: an error value at its source position, not a panic
-	fn emit_malformed(&mut self, func: &mut Function, located: &Node, expected: &str) {
-		let diagnostic =
-			crate::diagnostic::Diagnostic::at(located, format!("expected {expected}, got {}", located.serialize()));
-		self.emit_type_error(func, diagnostic.to_string());
-	}
-
-	fn emit_type_error(&mut self, func: &mut Function, message: String) {
-		let message = self.located(message);
-		self.type_errors.push(message);
-		func.instruction(&I::Unreachable);
-	}
-
-	/// The latest source position among the nodes being emitted: where an emitter error points
-	fn note_position(&mut self, node: &Node) {
-		if let Some(info) = node.get_lineinfo() {
-			self.source_position = Some(info);
-		}
-	}
-
-	/// An emitter error at the source position of the statement being emitted, unless it names one already
-	fn located(&self, message: String) -> String {
-		let Some(position) = &self.source_position else {
-			return message;
-		};
-		let at = format!(" at {}", position.place());
-		if message.contains(UNKNOWN_POSITION) {
-			return message.replacen(UNKNOWN_POSITION, &at, 1);
-		}
-		if crate::diagnostic::names_position(&message) {
-			return message;
-		}
-		match message.split_once(FIX_SEPARATOR) {
-			Some((what, fix)) => format!("{what}{at}{FIX_SEPARATOR}{fix}"),
-			None => format!("{message}{at}"),
-		}
-	}
-
-	/// Does the node call a function of the program or a host word giving a value (`str(f(1))` is the text of f's result, not of the call)
-	fn mentions_call(&self, node: &Node) -> bool {
-		let mut found = false;
-		node.visit(&mut |part| {
-			if let Node::List(items, _, _) = part {
-				// a user function's call, or a host word's that gives a value (`foreign_call`, `fetch_reply`)
-				found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name) || crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()));
-			}
-		});
-		found
-	}
-
-	/// Does the node read a variable or global (key names and other symbols of a data literal are not variables)
-	fn mentions_variable(&self, node: &Node) -> bool {
-		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name)));
-		found
-	}
-
-	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a
-	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle), and a loop's variable in main (`[str f for f in xs]`).
-	/// main also holds a local for each `sq := it * 2`, which is the function
-	fn is_variable(&self, name: &str) -> bool {
-		self.scope
-			.lookup(name)
-			.is_some_and(|local| local.is_param || self.compiling.is_some() || self.loop_variables.contains(name))
-	}
-
-	/// A name that is no variable, global, function or `$n` parameter here
-	fn is_unbound(&self, name: &str) -> bool {
-		!name.starts_with('$')
-			&& !crate::type_tests::is_type_word(name)
-			&& self.scope.lookup(name).is_none()
-			&& !self.ctx.user_globals.contains_key(name)
-			&& !self.ctx.user_functions.contains_key(name)
-	}
-
-	/// `x is 5` of a name defined nowhere: `is` compares (P61, user: "educate the user to use the be key word for
-	/// definitions"), so the error teaches the definition `x be 5`
-	fn emit_undefined_comparison(&mut self, func: &mut Function, node: &Node) -> bool {
-		let Node::Key(subject, Op::Eq, value) = node.drop_meta() else {
-			return false;
-		};
-		let Node::Symbol(name) = subject.drop_meta() else {
-			return false;
-		};
-		if !self.is_unbound(name) {
-			return false;
-		}
-		let value = crate::type_tests::compared_text(subject)
-			.unwrap_or_else(|| value.drop_meta().serialize().trim().to_string());
-		let message = format!("undefined variable: {name}; `is` compares, a definition is written `{name} be {value}`");
-		let diagnostic = self.diagnostic_here(message).offer(
-			"a definition",
-			format!("{name} is {value}"),
-			format!("{name} be {value}"),
-		);
-		self.emit_type_error(func, diagnostic.remembered());
-		true
-	}
-
-	/// An operand of arithmetic as an i64: a character is no number there (P65): a character written or held is the type
-	/// error, an element read whose kind shows only at run time (`x#2` of `[1,'a']`) fails with not_a_number
-	pub(super) fn emit_arithmetic_operand(&mut self, func: &mut Function, operand: &Node) {
-		match operand.drop_meta() {
-			_ if matches!(self.get_type(operand), Kind::Codepoint | Kind::Text) => {
-				let kind = self.get_type(operand);
-				self.emit_type_error(
-					func,
-					format!("type error: {kind} in arithmetic: {}", list_ops::CHARACTER_IS_NO_NUMBER),
-				);
-			}
-			// an array of Ints or Floats holds no character: its fast read stays
-			Node::Key(list, Op::Hash, index)
-				if !matches!(list.drop_meta(), Node::Empty)
-					&& !self.holds_only_numbers(list)
-					&& !self.map_is_indexed_by_key(index) =>
-			{
-				self.emit_list_element_node(func, list, index);
-				let held = self.node_scratch();
-				Self::emit_list(
-					func,
-					&[
-						I::LocalTee(held),
-						I::RefAsNonNull,
-						I::StructGet {
-							struct_type_index: self.type_manager.node_type,
-							field_index: 0,
-						},
-					],
-				);
-				Self::emit_list(
-					func,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Codepoint as i64),
-						I::I64Eq,
-					],
-				);
-				self.emit_fail_if(func, list_ops::NOT_A_NUMBER);
-				Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
-				self.emit_call(func, "get_int_value");
-			}
-			_ => self.emit_numeric_value(func, operand),
-		}
-	}
-
-	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
-		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
-		let unit_hint = if crate::units::is_unit(name) {
-			UNIT_AT_RUN_TIME
-		} else {
-			""
-		};
-		let diagnostic = self.offer_near_name(
-			self.diagnostic_here(format!("undefined variable: {name}{unit_hint}")),
-			name,
-		);
-		self.emit_type_error(func, diagnostic.remembered());
-	}
-
-	/// A diagnostic at the source position of the statement being emitted
-	fn diagnostic_here(&self, message: String) -> crate::diagnostic::Diagnostic {
-		let position = self.source_position.clone().unwrap_or_default();
-		crate::diagnostic::Diagnostic {
-			message,
-			line: position.line_nr,
-			column: position.column,
-			file: position.file,
-			..Default::default()
-		}
-	}
-
-	/// The local slot of a defined variable; an undefined one is an error value at the use
-	fn defined_local_position(&mut self, func: &mut Function, name: &str) -> Option<u32> {
-		let position = self.scope.lookup(name).map(|local| local.position);
-		if position.is_none() {
-			self.emit_undefined_variable(func, name);
-		}
-		position
-	}
-
 	/// Imports follow resolved calls: only called FFI functions, WASI/host only if called.
 	/// Explicitly enabled imports stay enabled.
 	fn derive_imports_from_effects(&mut self, node: &Node) {
@@ -1077,222 +859,6 @@ impl WasmGcEmitter {
 			Wasi => self.config.emit_wasi_imports,
 			Ffi | Libm => self.config.emit_ffi_imports,
 			Sql | Process => false, // no host implements execute or exec yet: such a module fails to link, loudly
-		}
-	}
-
-	/// Emit with user-defined types from a TypeRegistry
-	/// Order: memory, gc_types, user_types, kind_globals, constructors, user_constructors
-	pub fn emit_with_types(&mut self, registry: &TypeRegistry) {
-		// Memory
-		self.emit_memory();
-
-		// Core GC types (String, Node, i64box, f64box)
-		self.emit_gc_types();
-
-		// User-defined struct types (before any functions!)
-		self.emit_user_types(registry);
-
-		// Kind globals
-		if self.config.emit_kind_globals {
-			self.emit_kind_globals();
-		}
-
-		// Core Node constructors
-		self.emit_constructors();
-
-		// User type constructors
-		self.emit_user_type_constructors(registry);
-	}
-
-	/// Emit constructor functions for user-defined types
-	fn emit_user_type_constructors(&mut self, registry: &TypeRegistry) {
-		for type_def in registry.types() {
-			self.emit_user_type_constructor(type_def);
-		}
-	}
-
-	/// Emit a constructor function for a single user type: new_TypeName(fields...) -> ref $TypeName
-	fn emit_user_type_constructor(&mut self, type_def: &TypeDef) {
-		let type_idx = match self.ctx.user_type_indices.get(&type_def.name) {
-			Some(idx) => *idx,
-			None => return,
-		};
-
-		let type_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(type_idx),
-		};
-
-		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
-		let field_count = params.len() as u32;
-		self.host_only_function(
-			&format!("new_{}", type_def.name),
-			params,
-			vec![Ref(type_ref)],
-			vec![],
-			|_, func| {
-				(0..field_count).for_each(|field| {
-					func.instruction(&I::LocalGet(field));
-				});
-				func.instruction(&I::StructNew(type_idx));
-			},
-		);
-	}
-
-	/// Emit constructor functions for the compact Node
-	fn emit_constructors(&mut self) {
-		// Emit basic Node constructors using macros
-		self.emit_int_heap_globals();
-		self.emit_list_cursor_globals();
-		self.emit_text_cursor_globals();
-		self.emit_map_index_globals();
-		constructors::emit_all_constructors(self);
-		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
-		self.emit_int_runtime();
-		self.export_exact_builders();
-		// a C function returning char * hands its text in through the text heap (ffi.rs text_node)
-		if self
-			.ctx
-			.ffi_imports
-			.values()
-			.any(|sig| sig.library != crate::host::HOST_LIBRARY && matches!(sig.results.first(), Some(ValType::Ref(_))))
-		{
-			self.emit_text_heap_global();
-		}
-		self.emit_getters(); // before the list ops (list_at calls get_int_value), after the runtime errors it calls
-					   // Emit list and string operation functions
-		self.emit_list_ops();
-		self.emit_linear_arrays();
-		self.emit_cells();
-		self.emit_text_of();
-		self.emit_equality_ops();
-		self.emit_node_type_name(); // after values_equal, which names an instance's declared type
-		self.emit_text_as_int(); // after the getters: it calls get_int_value
-		self.emit_text_as_float();
-		self.emit_text_as_number(); // after text_as_float and text_as_int, which it calls
-		self.emit_uncertain_runtime(); // after text_as_float, which it calls
-		self.emit_times_runtime();
-		self.emit_time_zones();
-		self.emit_time_arithmetic();
-		if self.config.emit_reflection {
-			self.emit_reflection();
-		}
-		self.emit_math_helpers();
-		self.emit_text_builtins();
-		self.emit_map_get(); // after the text builtins: map keys are compared by text_of; with the hash tables
-		self.emit_library_ops(); // after the text builtins: the library words call text_of
-		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
-		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
-		self.emit_node_api(); // after text_of, text_concat and error_of, which it calls
-	}
-
-	fn emit_getters(&mut self) {
-		let node_ref = self.node_ref(true);
-
-		// get_kind(node: ref $Node) -> i64
-		self.exported_function(
-			"get_kind",
-			vec![Ref(node_ref)],
-			vec![ValType::I64],
-			vec![],
-			|s, func| {
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 0,
-				});
-			},
-		);
-
-		// get_int_value(node: ref $Node) -> i64
-		// Extract integer from Node's data field (i64box); a character is its code point ('5' as int is 53), so a
-		// character variable compares with c >= '0'. Any other node is the runtime error not_an_int, which a `try`
-		// catches, never a raw cast trap
-		self.exported_function(
-			"get_int_value",
-			vec![Ref(node_ref)],
-			vec![ValType::I64],
-			vec![],
-			|s, func| {
-				let node_kind_is = |kind: Kind| {
-					[
-						I::LocalGet(0),
-						I::StructGet {
-							struct_type_index: s.type_manager.node_type,
-							field_index: 0,
-						},
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(kind as i64),
-						I::I64Eq,
-					]
-				};
-				Self::emit_list(func, &node_kind_is(Kind::Codepoint));
-				Self::emit_list(func, &[I::If(BlockType::Empty), I::LocalGet(0)]);
-				s.emit_codepoint_of_node(func);
-				Self::emit_list(func, &[I::Return, I::End]);
-				Self::emit_list(func, &node_kind_is(Kind::Int));
-				Self::emit_list(func, &[I::I32Eqz, I::If(BlockType::Empty)]);
-				s.emit_runtime_error(func, "not_an_int");
-				func.instruction(&I::End);
-				func.instruction(&I::LocalGet(0)); // Node
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 1, // data field
-				});
-				s.emit_int_from_payload(func);
-			},
-		);
-		// get_text_ptr / get_text_len(node: ref $Node) -> i32: the $String of a Text, Symbol or Error, 0 for any other node,
-		// so a host without GC field access (JavaScript) can read a result text from memory
-		for (name, field_index) in [("get_text_ptr", 0), ("get_text_len", 1)] {
-			self.exported_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
-				let string = HeapType::Concrete(s.type_manager.string_type);
-				s.emit_field(f, 0, 1);
-				Self::emit_list(f, &[I::RefTestNonNull(string), I::If(BlockType::Result(ValType::I32))]);
-				s.emit_text_field(f, 0, field_index);
-				Self::emit_list(f, &[I::Else, I::I32Const(0), I::End]);
-			});
-		}
-	}
-
-	/// Emit math helper functions (i64_pow, etc.)
-	fn emit_math_helpers(&mut self) {
-		// i64_pow(base, exponent) -> i64: base multiplied exponent times
-		if self.should_emit_function("i64_pow") {
-			self.exported_function(
-				"i64_pow",
-				vec![ValType::I64, ValType::I64],
-				vec![ValType::I64],
-				vec![ValType::I64],
-				|_, func| {
-					let (base, exponent, result) = (0, 1, 2);
-					Self::emit_list(
-						func,
-						&[
-							I::I64Const(1),
-							I::LocalSet(result),
-							I::Block(BlockType::Empty),
-							I::Loop(BlockType::Empty),
-							I::LocalGet(exponent),
-							I::I64Eqz,
-							I::BrIf(1),
-							I::LocalGet(result),
-							I::LocalGet(base),
-							I::I64Mul,
-							I::LocalSet(result),
-							I::LocalGet(exponent),
-							I::I64Const(1),
-							I::I64Sub,
-							I::LocalSet(exponent),
-							I::Br(0),
-							I::End,
-							I::End,
-							I::LocalGet(result),
-						],
-					);
-				},
-			);
 		}
 	}
 
@@ -1396,7 +962,7 @@ impl WasmGcEmitter {
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
-		self.result_print = if crate::pipeline::prints_result() {
+		self.result_print = if config::compile_mode().prints_result {
 			last_statement_items(node)
 		} else {
 			0
@@ -1452,7 +1018,7 @@ impl WasmGcEmitter {
 		self.exports.export("main", ExportKind::Func, self.next_func_idx);
 		self.main_index = Some(self.next_func_idx);
 		self.next_func_idx += 1;
-		if crate::pipeline::is_for_wagi() {
+		if config::compile_mode().for_wagi {
 			self.emit_wagi_start();
 		}
 	}
@@ -1516,8 +1082,8 @@ impl WasmGcEmitter {
 		if !matches!(node.drop_meta(), Node::True | Node::False) && crate::analyzer::is_boolean(node, &self.scope) {
 			self.emit_call(func, constructors::AS_BOOL);
 		}
-		if self.shows_hex(node) {
-			self.emit_call(func, hex::AS_HEX);
+		if let Some(radix) = self.shown_radix(node) {
+			self.emit_call(func, radix.as_function);
 		}
 	}
 
@@ -1664,423 +1230,8 @@ impl WasmGcEmitter {
 			}
 		}
 	}
-
-	#[cfg(not(feature = "validate"))]
-	fn try_validate_wasm(_bytes: &[u8]) -> Result<(), String> {
-		Ok(()) // the engine that runs the module validates it (the browser build, web/playground)
-	}
-
-	#[cfg(feature = "validate")]
-	fn try_validate_wasm(bytes: &[u8]) -> Result<(), String> {
-		let mut features = WasmFeatures::default();
-		features.set(WasmFeatures::REFERENCE_TYPES, true);
-		features.set(WasmFeatures::GC, true);
-		features.set(WasmFeatures::EXCEPTIONS, true);
-		let mut validator = Validator::new_with_features(features);
-		match validator.validate_all(bytes) {
-			Ok(_) => {
-				trace!("✓ WASM validation with GC features passed");
-				Ok(())
-			}
-			Err(e) => Err(format!("{}", e)),
-		}
-	}
-
-	/// The module bytes; a module that fails validation is a compiler bug, only test helpers may treat it as a panic
-	pub fn finish(self) -> Vec<u8> {
-		self.try_finish().unwrap_or_else(|message| panic!("{message}"))
-	}
-
-	/// The module bytes, or the validation failure as an error message
-	pub fn try_finish(mut self) -> Result<Vec<u8>, String> {
-		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
-		self.module.section(self.type_manager.types());
-		if self.ctx.func_registry.import_count() > 0 || !self.ctx.imported_entities.is_empty() {
-			self.module.section(self.import_manager.imports());
-		}
-		self.module.section(&self.functions);
-		self.module.section(&self.memory);
-		if !self.tags.is_empty() {
-			self.module.section(&self.tags);
-		}
-		if self.next_global_idx > 0 {
-			self.module.section(&self.globals);
-		}
-		self.module.section(&self.exports);
-		// functions taken by ref.func: one declarative element segment for all (a module has one element section)
-		let declared_functions: Vec<u32> = self
-			.closures
-			.declared_functions()
-			.into_iter()
-			.chain(self.witness_dispatcher())
-			.collect();
-		if !declared_functions.is_empty() {
-			let mut elements = ElementSection::new();
-			elements.declared(Elements::Functions(declared_functions.into()));
-			self.module.section(&elements);
-		}
-		self.module.section(&self.code);
-		self.module.section(self.string_table.data_section());
-		let c_calls = crate::wasm_modules::c_calls(self.ctx.ffi_imports.values());
-		if !c_calls.is_empty() {
-			self.module.section(&CustomSection {
-				name: crate::wasm_modules::C_CALLS_SECTION.into(),
-				data: c_calls.as_bytes().into(),
-			});
-		}
-		self.emit_names();
-		self.module.section(&self.names);
-
-		let bytes = crate::dead_functions::without_dead_functions(&self.module.finish())
-			.map_err(|message| format!("internal error: dropping dead functions failed: {message}"))?;
-		write_debug_module(&bytes);
-		Self::try_validate_wasm(&bytes)
-			.map_err(|message| format!("internal error: WASM validation failed: {message}"))?;
-		Ok(bytes)
-	}
-
-	/// The name section: subsections in id order (module, functions, types, globals, fields, tags), every map by index
-	fn emit_names(&mut self) {
-		self.names.module("warp_compact");
-
-		let functions: Vec<(u32, String)> = self
-			.ctx
-			.func_registry
-			.all()
-			.iter()
-			.map(|f| (f.call_index as u32, f.name.clone()))
-			.chain(
-				self.ctx
-					.user_functions
-					.values()
-					.filter_map(|function| Some((function.func_index?, function.name.clone()))),
-			)
-			.chain(self.closures.entry_names())
-			.chain(
-				self.tuple_packers
-					.iter()
-					.map(|(function, index)| (*index, crate::tuples::packer_name(function))),
-			)
-			.chain(self.main_index.map(|index| (index, "main".to_string())))
-			.collect();
-		self.names.functions(&name_map(
-			&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect(),
-		));
-
-		// a user function's parameter names, for debuggers and wasm-tools; a page leaves them out for size, an importer
-		// reads them from warp.meta (wasm_modules.rs read_exports)
-		if !crate::pipeline::is_for_a_page() {
-			let parameter_names = self
-				.ctx
-				.user_functions
-				.values()
-				.filter_map(|function| {
-					Some((
-						function.func_index?,
-						function
-							.params
-							.iter()
-							.enumerate()
-							.map(|(i, param)| (i as u32, param.name.as_str()))
-							.collect(),
-					))
-				})
-				.collect();
-			self.names.locals(&indirect_name_map(parameter_names));
-		}
-
-		let tm = &self.type_manager;
-		let mut types = vec![
-			(tm.string_type, "String"),
-			(tm.i64_box_type, "i64box"),
-			(tm.f64_box_type, "f64box"),
-			(tm.node_type, "Node"),
-			(tm.int_array_type, "IntArray"),
-			(tm.int_list_type, "IntList"),
-			(tm.float_array_type, "FloatArray"),
-			(tm.float_list_type, "FloatList"),
-		];
-		types.extend(
-			self.ctx
-				.user_type_indices
-				.iter()
-				.map(|(name, idx)| (*idx, name.as_str())),
-		);
-		let instance_names: Vec<(u32, String)> = self
-			.instance_types
-			.iter()
-			.map(|(class, instance)| {
-				(
-					instance.type_index,
-					format!("{class}{}", struct_backend::INSTANCE_SUFFIX),
-				)
-			})
-			.collect();
-		types.extend(instance_names.iter().map(|(idx, name)| (*idx, name.as_str())));
-		self.names.types(&name_map(&mut types));
-
-		if self.next_global_idx > 0 {
-			const KIND_GLOBALS: [&str; 12] = [
-				"kind_empty",
-				"kind_int",
-				"kind_float",
-				"kind_text",
-				"kind_codepoint",
-				"kind_symbol",
-				"kind_key",
-				"kind_block",
-				"kind_list",
-				"kind_data",
-				"kind_meta",
-				"kind_error",
-			];
-			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS
-				.iter()
-				.enumerate()
-				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32)
-				.map(|(idx, name)| (idx as u32, *name))
-				.collect();
-			globals.extend(
-				self.extra_global_names
-					.iter()
-					.map(|(index, name)| (*index, name.as_str())),
-			);
-			self.names.globals(&name_map(&mut globals));
-		}
-
-		let mut fields: Vec<(u32, Vec<(u32, &str)>)> = vec![
-			(tm.node_type, vec![(0, "kind"), (1, "data"), (2, "value")]),
-			(tm.string_type, vec![(0, "ptr"), (1, "len")]),
-			(tm.i64_box_type, vec![(0, "value")]),
-			(tm.f64_box_type, vec![(0, "value")]),
-			(tm.int_list_type, vec![(0, "length"), (1, "items")]),
-			(tm.float_list_type, vec![(0, "length"), (1, "items")]),
-		];
-		for type_def in self.ctx.type_registry.types() {
-			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
-				fields.push((
-					type_idx,
-					type_def
-						.fields
-						.iter()
-						.enumerate()
-						.map(|(i, field)| (i as u32, field.name.as_str()))
-						.collect(),
-				));
-			}
-		}
-		fields.extend(self.instance_types.values().map(|instance| {
-			(
-				instance.type_index,
-				instance
-					.fields
-					.iter()
-					.enumerate()
-					.map(|(i, (field, _))| (i as u32, field.as_str()))
-					.collect(),
-			)
-		}));
-		self.names.fields(&indirect_name_map(fields));
-
-		if let Some(tag_names) = self.error_tag_names() {
-			self.names.tags(&tag_names);
-		}
-	}
-
-	pub fn get_unused_functions(&self) -> Vec<String> {
-		self.ctx
-			.func_registry
-			.all()
-			.iter()
-			.map(|f| f.name.clone())
-			.filter(|name: &String| !self.ctx.used_functions.contains(name.as_str()))
-			.collect()
-	}
-
-	pub fn get_used_functions(&self) -> Vec<&'static str> {
-		self.ctx.used_functions.iter().copied().collect()
-	}
-
-	/// Emit a standalone WASM module that returns a raw GC struct instance.
-	/// This is the standard path for returning user-defined GC objects.
-	///
-	/// # Arguments
-	/// * `type_def` - The type definition for the struct
-	/// * `field_values` - Field values as (name, RawFieldValue) pairs
-	///
-	/// # Returns
-	/// WASM bytes that can be loaded and executed to get the GC struct
-	pub fn emit_raw_struct(type_def: &TypeDef, field_values: &[RawFieldValue]) -> Vec<u8> {
-		use wasm_encoder::StorageType::Val;
-		use wasm_encoder::*;
-
-		let mut module = Module::new();
-
-		// Collect string data and compute offsets
-		let mut string_data = Vec::new();
-		let mut string_offsets: Vec<(usize, usize)> = Vec::new(); // (offset, len) for each string field
-		let mut current_offset = 0usize;
-
-		for value in field_values {
-			if let RawFieldValue::String(s) = value {
-				string_offsets.push((current_offset, s.len()));
-				string_data.extend_from_slice(s.as_bytes());
-				current_offset += s.len();
-			} else {
-				string_offsets.push((0, 0)); // placeholder for non-strings
-			}
-		}
-
-		let mut types = TypeSection::new();
-
-		// Type 0: $String = struct { ptr: i32, len: i32 }
-		types.ty().struct_(type_manager::string_fields());
-		let string_type_idx = 0u32;
-
-		// Type 1: User struct type
-		let string_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(string_type_idx),
-		};
-		let struct_fields: Vec<FieldType> = type_def
-			.fields
-			.iter()
-			.map(|f| {
-				let element_type = match crate::type_kinds::field_storage(&f.type_name) {
-					crate::type_kinds::FieldStorage::I64 => Val(ValType::I64),
-					crate::type_kinds::FieldStorage::I32 => Val(ValType::I32),
-					crate::type_kinds::FieldStorage::F64 => Val(ValType::F64),
-					crate::type_kinds::FieldStorage::F32 => Val(ValType::F32),
-					crate::type_kinds::FieldStorage::Text => Val(Ref(string_ref)),
-					_ => Val(ValType::I64), // default
-				};
-				FieldType {
-					element_type,
-					mutable: false,
-				}
-			})
-			.collect();
-		types.ty().struct_(struct_fields);
-		let struct_type_idx = 1u32;
-
-		// Type 2: main() -> ref $StructType
-		let struct_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(struct_type_idx),
-		};
-		types.ty().func_type(&FuncType::new([], [Ref(struct_ref)]));
-
-		module.section(&types);
-
-		// Function section
-		let mut functions = FunctionSection::new();
-		functions.function(2); // main uses type 2
-		module.section(&functions);
-
-		// Memory section (only if we have strings)
-		let has_strings = !string_data.is_empty();
-		if has_strings {
-			let mut memories = MemorySection::new();
-			memories.memory(MemoryType {
-				minimum: 1,
-				maximum: None,
-				memory64: false,
-				shared: false,
-				page_size_log2: None,
-			});
-			module.section(&memories);
-		}
-
-		// Export section
-		let mut exports = ExportSection::new();
-		if has_strings {
-			exports.export("memory", ExportKind::Memory, 0);
-		}
-		exports.export("main", ExportKind::Func, 0);
-		module.section(&exports);
-
-		// Code section
-		let mut codes = CodeSection::new();
-		let mut func = Function::new([]);
-
-		// Emit field values in order
-		let mut string_idx = 0usize;
-		for value in field_values.iter() {
-			match value {
-				RawFieldValue::I64(v) => {
-					func.instruction(&I::I64Const(*v));
-				}
-				RawFieldValue::I32(v) => {
-					func.instruction(&I32Const(*v));
-				}
-				RawFieldValue::F64(v) => {
-					func.instruction(&I::F64Const(Ieee64::new(v.to_bits())));
-				}
-				RawFieldValue::F32(v) => {
-					func.instruction(&I::F32Const(Ieee32::new(v.to_bits())));
-				}
-				RawFieldValue::String(_) => {
-					let (ptr, len) = string_offsets[string_idx];
-					Self::emit_list(
-						&mut func,
-						&[
-							I32Const(ptr as i32),
-							I32Const(len as i32),
-							I::StructNew(string_type_idx),
-						],
-					);
-					string_idx += 1;
-				}
-			}
-		}
-		Self::emit_list(&mut func, &[I::StructNew(struct_type_idx), I::End]);
-		codes.function(&func);
-		module.section(&codes);
-
-		// Data section for strings
-		if has_strings {
-			let mut data = DataSection::new();
-			data.active(0, &ConstExpr::i32_const(0), string_data.iter().copied());
-			module.section(&data);
-		}
-
-		// Name section for field name resolution, subsections in ascending id order (function 1, type 4, field 10)
-		let mut names = NameSection::new();
-
-		// Function names (subsection 1 comes before types and fields)
-		let mut func_names = NameMap::new();
-		func_names.append(0, "main");
-		names.functions(&func_names);
-
-		// Type names
-		let mut type_names = NameMap::new();
-		type_names.append(string_type_idx, "String");
-		type_names.append(struct_type_idx, &type_def.name);
-		names.types(&type_names);
-
-		// Field names for structs
-		let mut type_field_names = IndirectNameMap::new();
-
-		// String struct fields
-		Self::append_string_field_names(&mut type_field_names, string_type_idx);
-
-		// User struct fields
-		let mut struct_fields_names = NameMap::new();
-		for (i, field) in type_def.fields.iter().enumerate() {
-			struct_fields_names.append(i as u32, &field.name);
-		}
-		type_field_names.append(struct_type_idx, &struct_fields_names);
-		names.fields(&type_field_names);
-
-		module.section(&names);
-
-		let bytes = module.finish();
-		write_debug_module(&bytes);
-		bytes
-	}
 }
 
-/// A name map in index order (the name section requires it), one name per index
 /// The address of the items of the program's last statement when it is a call or a list, else 0
 fn last_statement_items(program: &Node) -> usize {
 	let last = match program.drop_meta() {
@@ -2090,107 +1241,6 @@ fn last_statement_items(program: &Node) -> usize {
 	match last.map(Node::drop_meta) {
 		Some(Node::List(items, _, _)) => items.as_ptr() as usize,
 		_ => 0,
-	}
-}
-
-fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
-	names.sort_by_key(|(idx, _)| *idx);
-	names.dedup_by_key(|(idx, _)| *idx);
-	let mut map = NameMap::new();
-	for (idx, name) in names.iter() {
-		map.append(*idx, name);
-	}
-	map
-}
-
-/// Name maps of several functions or types, in index order, one map per index
-fn indirect_name_map(mut entries: Vec<(u32, Vec<(u32, &str)>)>) -> IndirectNameMap {
-	entries.sort_by_key(|(idx, _)| *idx);
-	entries.dedup_by_key(|(idx, _)| *idx);
-	let mut map = IndirectNameMap::new();
-	for (idx, mut names) in entries {
-		map.append(idx, &name_map(&mut names));
-	}
-	map
-}
-
-#[cfg(feature = "native")]
-/// Run raw struct WASM and return GcObject wrapped in Node::Data
-pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
-	use wasmtime::{Linker, Val};
-
-	// Register WASM metadata for field name lookup in Debug output
-	let module_id = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes).ok();
-
-	let engine = gc_engine();
-	let mut store = crate::util::fueled_store(&engine, ());
-	let module =
-		crate::run::module_cache::compiled_module(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
-
-	let linker = Linker::new(&engine);
-	let instance = linker
-		.instantiate(&mut store, &module)
-		.map_err(|e: wasmtime::Error| e.to_string())?;
-
-	let main = instance
-		.get_func(&mut store, "main")
-		.ok_or_else(|| "no main function".to_string())?;
-
-	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)
-		.map_err(|e: wasmtime::Error| e.to_string())?;
-
-	let gc_obj = ErgonomicGcObject::new(results[0], store, Some(instance))
-		.map_err(|e: anyhow::Error| e.to_string())?
-		.with_module(module_id);
-
-	Ok(crate::node::data(gc_obj))
-}
-
-/// Find a struct instantiation anywhere in the AST using TypeRegistry
-/// todo instead of recursing different types individually, we should have one central walker and delegate from there.
-/// The instance a program consists of: type definitions, then `TypeName:{field:value, ...}` as its value. An instance
-/// anywhere else (an argument `f(pt{…})`, a statement among others) is no such program: it runs the standard way
-pub(crate) fn find_struct_instantiation(registry: &TypeRegistry, node: &Node) -> Option<(TypeDef, Vec<RawFieldValue>)> {
-	let statements = match node.drop_meta() {
-		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.as_slice(),
-		_ => std::slice::from_ref(node),
-	};
-	let (last, before) = statements.split_last()?;
-	if !before
-		.iter()
-		.all(|statement| matches!(statement.drop_meta(), Node::Type { .. } | Node::Empty))
-	{
-		return None;
-	}
-	find_instantiation_recursive(registry, last)
-}
-
-fn find_instantiation_recursive(registry: &TypeRegistry, node: &Node) -> Option<(TypeDef, Vec<RawFieldValue>)> {
-	/// todo instead of recursing different types individually, we should have one central walker and delegate from there.
-	use crate::type_kinds::extract_instance_values;
-	let node = node.drop_meta();
-	match node {
-		Node::Key(left, Op::Colon, right) => {
-			if let Node::Symbol(name) = left.drop_meta() {
-				if let Some(type_def) = registry.get_by_name(name) {
-					if let Some((_, values)) = extract_instance_values(node) {
-						return Some((type_def.clone(), values));
-					}
-				}
-			}
-			// Recurse into right
-			find_instantiation_recursive(registry, right)
-		}
-		Node::List(items, _, _) => {
-			for item in items {
-				if let Some(result) = find_instantiation_recursive(registry, item) {
-					return Some(result);
-				}
-			}
-			None
-		}
-		_ => None,
 	}
 }
 
@@ -2215,11 +1265,7 @@ pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 
 /// Is the first statement that mentions `name` its plain assignment `name = value` (value not reading name)
 fn first_mention_assigns(statements: &[Node], name: &str) -> bool {
-	let mentions = |node: &Node| {
-		let mut found = false;
-		node.visit(&mut |part| found |= matches!(part, Node::Symbol(word) if word == name));
-		found
-	};
+	let mentions = |node: &Node| node.mentions(name);
 	match statements
 		.iter()
 		.find(|statement| mentions(statement))
@@ -2243,6 +1289,42 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 		Bracket::Other(_, _) => 4,
 		Bracket::None => 5,
 	}
+}
+
+/// The separators of a list by their code above SEPARATOR_SHIFT (None is 0: a list made at run time names none)
+pub const SEPARATORS: [Separator; 6] = [
+	Separator::None,
+	Separator::Space,
+	Separator::Colon,
+	Separator::Semicolon,
+	Separator::Newline,
+	Separator::Tab,
+];
+
+/// The code of a list's separator, as `separated` and `n.separator` know it
+pub fn separator_code(separator: &Separator) -> i64 {
+	SEPARATORS.iter().position(|known| known == separator).unwrap_or(0) as i64
+}
+
+/// The kind field's info bits (above KIND_BITS) of a list: its bracket and its separator (card keep-list)
+pub fn list_info(bracket: &Bracket, separator: &Separator) -> i64 {
+	bracket_info(bracket)
+		| separator_code(separator) << (crate::type_kinds::SEPARATOR_SHIFT - crate::type_kinds::KIND_BITS)
+}
+
+/// Each separator's code and the text `n.separator` gives for it ("" for none)
+pub fn separator_texts() -> Vec<(i64, String)> {
+	SEPARATORS
+		.iter()
+		.enumerate()
+		.map(|(code, separator)| (code as i64, separator.to_char().map(String::from).unwrap_or_default()))
+		.collect()
+}
+
+/// The separator of a list's kind field, separator_code read back
+pub fn separator_of_kind(kind: i64) -> Separator {
+	let code = (kind & crate::type_kinds::SEPARATOR_MASK) >> crate::type_kinds::SEPARATOR_SHIFT;
+	SEPARATORS.get(code as usize).cloned().unwrap_or(Separator::None)
 }
 
 /// The bracket of a list's kind high bits, bracket_info read back (Other as None)
@@ -2272,101 +1354,4 @@ pub(crate) fn write_debug_module(bytes: &[u8]) {
 	if let Err(failure) = written {
 		warn!("could not write {}: {failure}", path.display());
 	}
-}
-
-/// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
-/// of the compiler or the environment. Both become error values, never the unevaluated program.
-#[cfg(feature = "native")]
-pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
-	if let Some(task) = failure
-		.chain()
-		.find_map(|cause| cause.downcast_ref::<crate::tasks::TaskFailure>())
-	{
-		return crate::node::error(&task.0);
-	}
-	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
-		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
-		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),
-		Some(trap) => trap,
-	};
-	trap_error(&format!("{:?}", failure), trap.to_string())
-}
-
-/// How an index error of an empty list ends: a lookup that found nothing (a served route answers it 404)
-pub const EMPTY_RANGE: &str = "an empty list";
-
-/// "index out of range: 7 not in 1…3" from index_out_of_range_of's detail `7:3` (the index asked for, the list's count)
-fn index_range_message(detail: &str) -> Option<String> {
-	let numbers: Vec<i64> = detail
-		.split(|c: char| !(c.is_ascii_digit() || c == '-'))
-		.filter_map(|part| part.parse().ok())
-		.collect();
-	let [index, count] = numbers.as_slice() else {
-		return None;
-	};
-	let range = if *count == 0 {
-		EMPTY_RANGE.to_string()
-	} else {
-		format!("1…{count}")
-	};
-	Some(format!(
-		"{}: {index} not in {range}",
-		list_ops::runtime_error_message("index_out_of_range")
-	))
-}
-
-/// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
-/// line; `trap` (the engine's own words) when the trace names none. Shared by wasmtime and the browser (web.rs).
-pub fn trap_error(trace: &str, trap: String) -> Node {
-	let missing_field = trace.split_once(list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
-		// a meta key starts with its mark (`no_field_@source`); a later `@` begins the url of a Firefox or Safari frame
-		let mark = rest.strip_prefix(crate::node::ATTRIBUTE_MARK).map_or("", |_| "@");
-		let name: String = rest[mark.len()..]
-			.chars()
-			.take_while(|c| c.is_alphanumeric() || *c == '_')
-			.collect();
-		format!("{}{mark}{name}", list_ops::NO_FIELD_MESSAGE)
-	});
-	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
-		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		match trap_detail(trace) {
-			Some(value) => format!("no case for {label} = {value}"),
-			None => format!("no case for {label}"),
-		}
-	});
-	let overflow = trace.split_once(crate::fixed_width::OVERFLOW_PREFIX).map(|(_, rest)| {
-		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
-		crate::fixed_width::overflow_message(&type_name)
-	});
-	// `return error("…")` from a number function: the message is the trap detail
-	let returned_error = trace
-		.contains(list_ops::RETURNED_ERROR)
-		.then(|| trap_detail(trace))
-		.flatten()
-		.map(|detail| detail.trim_matches('"').to_string());
-	let index_range = trace
-		.contains(list_ops::INDEX_OUT_OF_RANGE_OF)
-		.then(|| index_range_message(&trap_detail(trace)?))
-		.flatten();
-	let runtime_error = returned_error
-		.or(index_range)
-		.or(missing_field)
-		.or(no_case)
-		.or(overflow)
-		.or_else(|| {
-			list_ops::RUNTIME_ERRORS
-				.iter()
-				.find(|name| trace.contains(*name))
-				.map(|name| list_ops::runtime_error_message(name))
-		});
-	let exact_trap = EXACT_TRAP_MESSAGES
-		.iter()
-		.find(|(function, _)| trace.contains(function))
-		.map(|(_, message)| message.to_string());
-	// the engine's own integer divide trap (a division the emitter did not guard) reads as the guarded one
-	let divide_trap = trap
-		.ends_with(ENGINE_DIVIDE_BY_ZERO)
-		.then(|| list_ops::runtime_error_message(list_ops::DIVIDE_BY_ZERO));
-	let message = runtime_error.or(exact_trap).or(divide_trap).unwrap_or(trap);
-	crate::node::error(&message)
 }

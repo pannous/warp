@@ -9,7 +9,6 @@
 //! gives it ø.
 
 use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol};
-use super::words::{FOR_WORD, RETURN_WORD};
 use crate::for_loop::block_items;
 use crate::generators::{
 	generators, holds_own, holds_stop, is_return, yield_statement, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD,
@@ -20,6 +19,7 @@ use crate::operators::Op;
 use crate::ruby_blocks::arguments;
 use crate::warp_parser::{parse, while_do};
 use crate::wasm_emitter::{is_step, split_step};
+use crate::words::{FOR_WORD, RETURN_WORD};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// `iter(count_to(3))` makes the object explicitly
@@ -164,15 +164,7 @@ fn fields(generator: &Generator) -> Vec<String> {
 
 /// The names a body assigns: the `for` lowering's `x·items` and `x·index` too
 fn assigned_names(body: &Node) -> BTreeSet<String> {
-	let mut names = BTreeSet::new();
-	body.visit(&mut |part| {
-		if let Node::Key(target, op, _) = part {
-			if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) {
-				names.extend(target.symbol_name().map(String::from));
-			}
-		}
-	});
-	names
+	body.assigned_names(Op::is_write)
 }
 
 /// `class count_to·generator { n: any; k: any; generator·state: any; next() := machine }`

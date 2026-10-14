@@ -17,7 +17,8 @@ pub const BOOL_INFO: i64 = 1;
 pub const BOOL_KIND: i64 = (BOOL_INFO << KIND_BITS) | Kind::Int as i64;
 /// An Int shown in hex, 0xFF (card hex-printing, wasm_emitter/hex.rs): marked only where it becomes a Node
 pub const HEX_INFO: i64 = 2;
-pub const HEX_KIND: i64 = (HEX_INFO << KIND_BITS) | Kind::Int as i64;
+/// An Int shown in binary, 0b101 (card binary-int, wasm_emitter/radix.rs)
+pub const BINARY_INFO: i64 = 3;
 /// The bit of a bool in the kind masks of run-time type tests (node_kind_in): no Kind is that high
 pub const BOOL_MASK_BIT: i64 = 62;
 /// P215: the head cell of a declared list carries the run-time kinds its element type admits, its element mark, in the
@@ -31,6 +32,14 @@ const _: () = assert!(
 );
 pub const MARK_KINDS_MASK: i64 = (1 << MARK_KIND_BITS) - 1;
 pub const MARK_BOOL_BIT: i64 = MARK_KIND_BITS;
+/// The separator of a list (card keep-list: `,` `;` newline, space; 0 for none), in the kind field above the element
+/// mark; the bracket byte and the kind stay where they were, so whatever masks them reads them as before
+pub const SEPARATOR_SHIFT: i64 = 48;
+pub const SEPARATOR_MASK: i64 = 0x7 << SEPARATOR_SHIFT;
+const _: () = assert!(
+	MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < SEPARATOR_SHIFT,
+	"the separator lies above the element mark"
+);
 /// A kind field without its element mark, for the comparisons of whole kinds (bracket and kind)
 pub const UNMARKED_KIND: i64 = (1 << ELEMENT_MARK_SHIFT) - 1;
 const _: () = assert!(
@@ -114,10 +123,9 @@ impl Kind {
 		match s {
 			"void" => Kind::Empty,
 			"int" | "int32_t" | "uint32_t" | "Uint32" => Kind::Int32,
-			"long" | "long int" | "int64_t" | "uint64_t" | "long long" => Kind::Int,
+			s if crate::ffi::C_INT64_TYPES.contains(&s) => Kind::Int,
 			"float" => Kind::Float32,
 			"double" => Kind::Float,
-			"size_t" | "ssize_t" | "ptrdiff_t" => Kind::Int,
 			"bool" | "_Bool" => Kind::Int32,
 			"short" | "int16_t" | "uint16_t" => Kind::Int32,
 			"char" | "int8_t" | "uint8_t" => Kind::Codepoint,
@@ -177,6 +185,18 @@ pub struct TypeDef {
 
 const OPTIONAL_SUFFIX: char = '?';
 pub const UNTYPED_FIELD: &str = "any";
+
+/// `email?: text` parses as the elvis `email ? email : text`: the optional field, as its `email: text`
+pub(crate) fn optional_field(node: &crate::node::Node) -> Option<&crate::node::Node> {
+	use crate::node::Node;
+	use crate::operators::Op;
+	match node.drop_meta() {
+		Node::Key(name, Op::Question, field) if matches!(field.drop_meta(), Node::Key(same, Op::Colon, _) if same == name) => {
+			Some(field)
+		}
+		_ => None,
+	}
+}
 
 impl FieldDef {
 	/// A field written as a bare word, `name`, optional as `email?`
@@ -380,21 +400,20 @@ impl TypeRegistry {
 	fn extract_field(node: &crate::node::Node) -> Option<FieldDef> {
 		use crate::node::Node;
 		let node = node.drop_meta();
+		// in a type body the optional typed field
+		if let Some(field) = optional_field(node) {
+			let field = Self::extract_field(field)?;
+			return Some(FieldDef {
+				type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name),
+				..field
+			});
+		}
 		match node {
 			// `x:int=0`: the typed field x with a default
 			Node::Key(target, crate::operators::Op::Assign, _)
 				if matches!(target.drop_meta(), Node::Key(_, crate::operators::Op::Colon, _)) =>
 			{
 				Self::extract_field(target)
-			}
-			// `email?: text` parses as the elvis `email ? email : text`; in a type body it is the optional typed field
-			Node::Key(name_node, crate::operators::Op::Question, rest) if matches!(rest.drop_meta(), Node::Key(same, crate::operators::Op::Colon, _) if same == name_node) =>
-			{
-				let field = Self::extract_field(rest)?;
-				Some(FieldDef {
-					type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name),
-					..field
-				})
 			}
 			Node::Key(name_node, _, type_node) => {
 				let name = Self::written_name(name_node)?;

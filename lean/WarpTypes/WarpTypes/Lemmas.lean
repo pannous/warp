@@ -70,7 +70,7 @@ theorem exactNumber_typed {Γ T} (op : ArithOp) (x y : Rat)
     · exact ⟨t', ht, sub_trans (sub_trans s (by decide)) h⟩
     · exact ⟨t', ht, sub_trans s h⟩
   · rcases h with h | ⟨h, _⟩
-    · exact ⟨_, .flt, h⟩
+    · exact ⟨_, .flt, sub_trans (by decide) h⟩
     · simp_all
 
 -- the brute-force case split over operand values needs more than the default budget
@@ -395,10 +395,17 @@ theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
     simp only [convertValue]; split
     · exact ⟨_, .int, sub_refl _⟩
     · exact parsed _ _ (fun _ => ⟨_, .int, sub_refl _⟩)
-  case number =>
+  case float =>
     simp only [convertValue]; split
     · exact ⟨_, .flt, sub_refl _⟩
     · exact parsed _ _ (fun _ => ⟨_, .flt, sub_refl _⟩)
+  case number =>
+    simp only [convertValue]; split
+    · rename_i n; cases v <;> simp [isNumber] at n
+      all_goals first
+        | exact ⟨_, .bool, by decide⟩ | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩
+        | exact ⟨_, .flt, by decide⟩
+    · exact parsed _ _ (fun q => let ⟨t', h, s⟩ := exactValue_typed (P := P) (Γ := Γ) q; ⟨t', h, sub_trans s (by decide)⟩)
   case exact =>
     simp only [convertValue]; split
     · exact fits_typed ‹_›

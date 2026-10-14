@@ -1,0 +1,5 @@
+// card held-key: with no key held, held_key is "" (in a function and a loop too)
+print "[" + held_key + "]"
+f() := held_key
+print f() == ""
+for i in 1..2 { print held_key == "" }

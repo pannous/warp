@@ -38,6 +38,12 @@ pub const CLIPBOARD_COUNT: &str = "clipboard count";
 pub const MOUSE_X: &str = "mouse_x";
 pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
+/// Whether a key is held now, over the paint window or the page (card keyboard-state): `on key` hears each press
+pub const KEY_DOWN: &str = "key_down";
+/// The name of the key held now ("a", "ArrowUp", "" for none), as `on key` names presses (card held-key): the word
+/// a program reads, made from KEY_CODE_HELD, the held key's code (0: none), which it does not name
+pub const HELD_KEY: &str = "held_key";
+pub const KEY_CODE_HELD: &str = "key code held";
 /// Whether a window shows the pictures: natively the paint window until it closes (no before the first paint and
 /// headless), on a page its canvas, always; `while window_open { … }` is a drawing loop that ends with its window
 pub const WINDOW_OPEN: &str = "window_open";
@@ -46,12 +52,17 @@ pub const TIME_OF_DAY: &str = "time of day";
 /// the size a picture gets: the playground's output pane, natively the paint window's first size (system_values.rs)
 pub const VIEW_WIDTH: &str = "view_width";
 pub const VIEW_HEIGHT: &str = "view_height";
-/// Whether `use draw` draws on the GPU (src/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
+/// Whether `use draw` draws on the GPU (src/graphics/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
 pub const GPU_DRAWING: &str = "gpu_drawing";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
 /// (lowering/system_signals.rs); not a value a program names
 pub const KEY_PRESSED: &str = "key_pressed";
-pub const SYSTEM_VALUES: [(&str, bool); 12] = [
+/// Whether a click over the paint window is left to read (1, then it is the click read) or none (0), each click read
+/// once, and that click's place: natively `on click {…}` (lowering/system_signals.rs); not values a program names
+pub const CLICK_PRESSED: &str = "click_pressed";
+pub const CLICK_X: &str = "click_x";
+pub const CLICK_Y: &str = "click_y";
+pub const SYSTEM_VALUES: [(&str, bool); 13] = [
 	(BATTERY, false),
 	(CHARGING, true),
 	(ONLINE, true),
@@ -60,6 +71,7 @@ pub const SYSTEM_VALUES: [(&str, bool); 12] = [
 	(MOUSE_X, false),
 	(MOUSE_Y, false),
 	(MOUSE_DOWN, true),
+	(KEY_DOWN, true),
 	(WINDOW_OPEN, true),
 	(VIEW_WIDTH, false),
 	(VIEW_HEIGHT, false),
@@ -80,7 +92,7 @@ pub const GPU_COMPUTE: &str = "gpu_compute";
 pub const GPU_RENDER: &str = "gpu_render";
 /// `text_coverage(words, size)`: the words set in a sans-serif font `size` pixels high (card paint-text, lib/draw.warp
 /// label): [width, height, then how much each pixel is covered, 0 to 255, row by row]; the browser's canvas 2D fillText
-/// in the playground, a system font through ab_glyph natively (src/text_raster.rs)
+/// in the playground, a system font through ab_glyph natively (src/graphics/text_raster.rs)
 pub const TEXT_COVERAGE: &str = "text_coverage";
 /// `gpu_compute(shader, xs, workgroups)` of a `linear xs = float[n]`: the shader runs over the cells of the block in linear
 /// memory, read and written in place without building a list (card gpu-vectors, notes/gpu.md); gives the block back
@@ -103,7 +115,7 @@ pub const INTERRUPT_HANDLER: &str = "on·interrupt";
 pub const EXIT_HANDLER: &str = "on·exit";
 /// `on·every·0`: the handler of the first `on every … {…}`
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
-/// `on·fetch·0`: the handler run when the reply of the first `users := fetch url` arrived (src/fetches.rs)
+/// `on·fetch·0`: the handler run when the reply of the first `users := fetch url` arrived (src/web/fetches.rs)
 pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";

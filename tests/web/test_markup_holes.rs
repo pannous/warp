@@ -30,7 +30,7 @@ fn the_elements_holding_computed_parts_are_the_holes() {
 #[test]
 fn fixed_markup_or_a_computed_root_has_no_holes() {
 	assert!(hole_paths("div{ p{ \"a\" } ul{ li{ \"b\" } } }").is_empty());
-	assert!(hole_paths("div{ \"count \" + n p{ m } }").is_empty());
+	assert!(hole_paths("div{ n p{ m } }").is_empty());
 }
 
 #[test]

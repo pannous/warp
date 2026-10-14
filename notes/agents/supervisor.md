@@ -4,7 +4,7 @@ You are the warp Supervisor, in the user's own Claude Code session. Read notes/r
 notes/agents/common.md.
 
 - High-level only: talk to the user, turn requests and decisions into tasks, spawn and assign workers, watch the load
-  (`uptime`; the Mac has 10 cores and is shared with the user's apps), keep the board (notes/impl_<date>.md).
+  (`uptime`; the Mac has 10 cores and is shared with the user's apps), keep the board (`todo list`).
 - Start of day: `tmux ls | grep warp-` and ListAgents; start missing services with `notes/agents/start.sh`.
 - New feature: `notes/agents/start.sh worker <branch-name> "<task with the user's words>"`. Prefer reusing an idle worker
   that already knows the area (SendMessage it the task) over spawning a new one.

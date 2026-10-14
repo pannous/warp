@@ -17,7 +17,7 @@ warp-integrator). Session names can change; ListAgents shows the current ones.
 
 ## Supervisor
 High-level only: talks to the user, turns decisions into tasks (notes/open_decisions.md, the board
-notes/impl_2026-10-03.md), spawns and assigns workers, watches load. No merging, no test runs, no decision questions
+via ~/dev/bin/todo), spawns and assigns workers, watches load. No merging, no test runs, no decision questions
 to the user (those go to the Interviewer).
 
 ## Interviewer
@@ -106,6 +106,11 @@ The only session that runs the full suite and the only one that pushes code to m
   test it changes the meaning of goes to the Interviewer), commit it as the user's change in a commit of its own; run
   the targeted tests through the queue, `git pull --rebase --autostash`, push, and tell the Integrator the commit and
   filters (its next full run is the check). Bigger or overlapping work keeps its worktree and branch.
+  Auto-commit, right away and in the main checkout itself (user, 2026-10-13: "always auto-commit my changes and
+  integrate them in a meaningful way"): staged and untracked files count too; the user's `git status` must end clean.
+  Never park their edits only in an Integrator batch: an unpushed batch commit leaves their checkout showing them
+  uncommitted. Meaningful: complete them to the conventions (a new sample gets its shebang and chmod +x), run them; if
+  the intent is unclear, ask warp-interviewer.
   Moving on demand: a change that grows (more than a few files, many build/test rounds, or another session's files)
   moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`, `git diff -- <own paths> |
   git -C <worktree> apply`, then undo only your own paths in the main checkout. Never leave unpushed commits on main.

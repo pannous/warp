@@ -1,23 +1,58 @@
 //! The small node forms many lowering passes build and test: a call of a word, a word
 
-use super::words::{FOR_WORD, IN_WORD};
+use crate::analyzer::call_name;
+use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD, MATCH_WORD};
 use std::cell::Cell;
 
-pub(crate) use crate::node::{int, symbol};
-
-/// `function(arguments…)`
-pub(crate) fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List(
-		[vec![symbol(function)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
-}
+pub(crate) use crate::node::{call, children_rewritten, int, symbol};
 
 pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))
+}
+
+/// `match subject { arms }`
+pub(crate) fn matched(subject: Node, arms: Vec<Node>) -> Node {
+	Node::List(
+		vec![
+			Node::Symbol(MATCH_WORD.into()),
+			subject,
+			Node::List(arms, Bracket::Curly, Separator::Semicolon),
+		],
+		Bracket::None,
+		Separator::Space,
+	)
+}
+
+/// The code with each placeholder word as its node: `filled("f(X)", [("X", x)])`
+pub(crate) fn filled<'a>(code: &str, bindings: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
+	let bindings = bindings
+		.into_iter()
+		.map(|(placeholder, node)| (placeholder.to_string(), node))
+		.collect();
+	crate::law::substitute(crate::warp_parser::parse(code).drop_meta(), &bindings)
+}
+
+/// The words of a phrase, the groups the parser makes of it undone: `cheapest = items sorted by price` reads as
+/// `[[items, [sorted, by]], price]`
+pub(crate) fn phrase_words(items: &[Node]) -> Vec<Node> {
+	items
+		.iter()
+		.flat_map(|item| match item.drop_meta() {
+			Node::List(inner, Bracket::None, Separator::Space) => phrase_words(inner),
+			_ => vec![item.clone()],
+		})
+		.collect()
+}
+
+/// The operands of `a or b or c` (`|` parses as or, between whole numbers as the bit or), else the node itself
+pub(crate) fn or_operands(node: &Node) -> Vec<Node> {
+	match node.drop_meta() {
+		Node::Key(left, Op::Or | Op::BitOr, right) => [or_operands(left), or_operands(right)].concat(),
+		_ => vec![node.clone()],
+	}
 }
 
 pub(crate) fn assign(target: Node, value: Node) -> Node {
@@ -128,12 +163,34 @@ pub(crate) fn is_type_word(node: &Node) -> bool {
 		.is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
 }
 
+/// An operand `&` and `|` may combine bit by bit (card operator-shall): a whole number, a name, a call or an
+/// arithmetic; a truth value, comparison, text, list, float or type is no whole number, where they are and/or
+pub(crate) fn may_be_whole_number(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Number(number) => matches!(number, Number::Int(_) | Number::BigInt(_)),
+		Node::Symbol(name) => !is_type_word(node) && !name.starts_with(char::is_uppercase),
+		Node::Key(_, op, _) => !(op.is_comparison() || op.is_logical() || *op == Op::Not),
+		// a call `f(4)`, never `[1 2]` or the type-headed `text { … }`
+		Node::List(items, bracket, _) => *bracket != Bracket::Square && items.first().is_none_or(may_be_whole_number),
+		_ => false,
+	}
+}
+
 /// The name a parameter declares: `x`, `x:int`, `x=1`
 pub(crate) fn parameter_name(parameter: &Node) -> Option<String> {
+	parameter_head(parameter).symbol_name().map(String::from)
+}
+
+/// The word a parameter declares, also when it is no symbol
+pub(crate) fn parameter_word(parameter: &Node) -> String {
+	parameter_head(parameter).name()
+}
+
+/// `x` of `x`, `x:int`, `x:int=1`: the innermost left side
+fn parameter_head(parameter: &Node) -> &Node {
 	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
-		_ => None,
+		Node::Key(name, _, _) => parameter_head(name),
+		other => other,
 	}
 }
 
@@ -156,25 +213,6 @@ pub(crate) fn spaced_statement(items: &[Node]) -> Option<(&Node, Vec<&str>, &Nod
 		.map(Node::symbol_name)
 		.collect::<Option<_>>()?;
 	Some((name, words, body))
-}
-
-/// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
-/// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone
-pub(crate) fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> Node {
-	match node {
-		Node::Key(left, op, right) => {
-			let left = rewrite(*left);
-			key(left, op, rewrite(*right))
-		}
-		Node::List(items, bracket, separator) => {
-			Node::List(items.into_iter().map(rewrite).collect(), bracket, separator)
-		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(rewrite(*node)),
-			data,
-		},
-		other => other,
-	}
 }
 
 /// A parameter as the parameters it stands for: a group `(a, b)` its items, ø none
@@ -200,10 +238,192 @@ impl Counter {
 	}
 }
 
+thread_local! {
+	/// The numbers of the temporaries a compile invents across passes (`race·0`, `item·0`)
+	static FRESH_NUMBERS: Counter = const { Counter::starting_at(0) };
+	/// How deep in compiles we are: a nested compile continues the numbers of the one around it, so their names never meet
+	static COMPILE_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+/// The next number for a temporary that has to differ from all others of the compile
+pub(crate) fn fresh_number() -> usize {
+	FRESH_NUMBERS.with(Counter::next_number)
+}
+
+/// Run a compile whose fresh numbers start from 0 when it is the outermost one, so a program lowers alike every time
+pub(crate) fn numbering_fresh_names<R>(compile: impl FnOnce() -> R) -> R {
+	struct Leave;
+	impl Drop for Leave {
+		fn drop(&mut self) {
+			COMPILE_DEPTH.with(|depth| depth.set(depth.get() - 1));
+		}
+	}
+	if COMPILE_DEPTH.with(|depth| depth.replace(depth.get() + 1)) == 0 {
+		FRESH_NUMBERS.with(|numbers| numbers.0.set(0));
+	}
+	let _leave = Leave;
+	compile()
+}
+
 /// `x = value`: the name and the value
 pub(crate) fn named_assignment(statement: &Node) -> Option<(String, Node)> {
 	match statement.drop_meta() {
 		Node::Key(name, Op::Assign, value) => Some((name.symbol_name()?.to_string(), value.as_ref().clone())),
 		_ => None,
 	}
+}
+
+/// How a function definition is written
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DefinitionForm {
+	/// `f(x) := body`, `f(x) = body`, `f(x): int := body`: Define or Assign
+	Operator(Op),
+	/// `def f(x): body`, `def f(x) := body`, `def f(x) -> int {…}`, `def f(x): int = body`: the operator after the head
+	Keyword(Op),
+	/// `def f(x) { body }`: head and block side by side, the parameters grouped `(f (x))`
+	KeywordBlock,
+	/// `def (f x) { body }`: keyword, head and body as three words
+	KeywordSpaced,
+}
+
+/// One view of a function definition in any of its forms (DefinitionForm): what each pass takes apart
+#[derive(Clone)]
+pub struct FunctionHead<'a> {
+	/// `(f x y)`
+	pub head: &'a Node,
+	pub name: &'a str,
+	/// What follows the name in the head, as written: `x y` of `(f x y)`, `(x, y)` of `def f(x, y) {…}`
+	pub written_parameters: &'a [Node],
+	pub form: DefinitionForm,
+	/// `int` of `f(x): int := …`, `def f(x) -> int {…}`, `def f(x): int: …`
+	pub result: Option<&'a Node>,
+	pub body: &'a Node,
+	/// Everything after the operator: the body with a result type written before it (`int {…}` of `def f(x): int {…}`)
+	pub written_body: &'a Node,
+	/// The bracket around head and block of `def f(x) { body }`
+	pub block_bracket: Option<&'a Bracket>,
+}
+
+impl<'a> FunctionHead<'a> {
+	/// The parameters: none for `f()`, the grouped ones of `def f(x, y) {…}`
+	pub fn parameters(&self) -> Vec<&'a Node> {
+		match self.written_parameters {
+			[only] if only.is_nothing() => vec![],
+			[Node::List(grouped, Bracket::Round, _)] => grouped.iter().collect(),
+			parameters => parameters.iter().collect(),
+		}
+	}
+
+	/// `f(x) := body`, `f(x) = body` with a round head and no result type: its operator
+	pub fn plain_operator(&self) -> Option<Op> {
+		match self.form {
+			DefinitionForm::Operator(op) if self.result.is_none() && is_call_head(self.head) => Some(op),
+			_ => None,
+		}
+	}
+
+	/// `f(x)` written without a space before its parenthesis
+	pub fn is_glued_head(&self) -> bool {
+		matches!(self.head.drop_meta(), Node::List(_, _, Separator::None))
+	}
+}
+
+/// `f(x) := body` and the other forms of a function definition (DefinitionForm), whose head is a word and what follows it
+pub fn function_head(statement: &Node) -> Option<FunctionHead<'_>> {
+	match statement.drop_meta() {
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
+			let (head, result) = typed_head(target);
+			viewed(head, DefinitionForm::Operator(*op), result, body, body)
+		}
+		Node::List(items, _, _) => match items.as_slice() {
+			[keyword, definition] if is_function_word(keyword) => keyword_function_head(definition),
+			[keyword, head, body] if is_function_word(keyword) => {
+				viewed(head, DefinitionForm::KeywordSpaced, None, body, body)
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn is_function_word(word: &Node) -> bool {
+	crate::operators::is_function_keyword(&word.drop_meta().name())
+}
+
+fn keyword_function_head(definition: &Node) -> Option<FunctionHead<'_>> {
+	match definition.drop_meta() {
+		Node::List(parts, bracket, _) if parts.len() == 2 => {
+			let definition = viewed(&parts[0], DefinitionForm::KeywordBlock, None, &parts[1], &parts[1])?;
+			Some(FunctionHead {
+				block_bracket: Some(bracket),
+				..definition
+			})
+		}
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
+			let (head, result) = typed_head(target);
+			viewed(head, DefinitionForm::Keyword(*op), result, body, body)
+		}
+		Node::Key(head, op @ (Op::Colon | Op::Arrow), written_body) => {
+			let (result, body) = result_and_body(written_body);
+			viewed(head, DefinitionForm::Keyword(*op), result, body, written_body)
+		}
+		_ => None,
+	}
+}
+
+fn viewed<'a>(
+	head: &'a Node,
+	form: DefinitionForm,
+	result: Option<&'a Node>,
+	body: &'a Node,
+	written_body: &'a Node,
+) -> Option<FunctionHead<'a>> {
+	let Node::List(items, _, _) = head.drop_meta() else {
+		return None;
+	};
+	let (name, written_parameters) = items.split_first()?;
+	Some(FunctionHead {
+		head,
+		name: name.drop_meta().symbol_name()?,
+		written_parameters,
+		form,
+		result,
+		body,
+		written_body,
+		block_bracket: None,
+	})
+}
+
+/// `(f x): int`, `(f x) as int`: the head and its result type
+fn typed_head(target: &Node) -> (&Node, Option<&Node>) {
+	match target.drop_meta() {
+		Node::Key(head, Op::Colon | Op::As, result) if is_word_head(head) => (head, Some(result)),
+		_ => (target, None),
+	}
+}
+
+fn is_word_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|name| matches!(name.drop_meta(), Node::Symbol(_))))
+}
+
+/// `int {…}` or `int: body` after `def f(x):` or `->`: the result type and the body; anything else is the body
+fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
+	match written_body.drop_meta() {
+		Node::List(parts, _, Separator::Space)
+			if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			(Some(&parts[0]), &parts[1])
+		}
+		Node::Key(result, Op::Colon, body) => (Some(result), body),
+		_ => (None, written_body),
+	}
+}
+
+/// The function a list calls: `f(a, b)`, or spaced `f a b`
+pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	let Node::Symbol(name) = items.first()?.drop_meta() else {
+		return None;
+	};
+	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
+	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
 }

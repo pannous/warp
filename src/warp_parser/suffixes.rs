@@ -6,6 +6,9 @@ use super::*;
 const THEN_WORD: &str = "then";
 /// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
 const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
+/// The operands a braceless call binds in: from the right side of `or` to the right side of `+`; a `*` operand keeps
+/// `h*w int` the typed array `(h*w) int`
+const OPERAND_APPLICATION_BPS: std::ops::RangeInclusive<u8> = Op::Or.binding_power().1..=Op::Add.binding_power().1;
 
 impl WarpParser {
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
@@ -165,7 +168,7 @@ impl WarpParser {
 			// `{a*a}!` evaluates the block on the spot
 			(None, Node::List(_, Bracket::Curly, _)) => lhs.clone(),
 			// `ø!`: P73 force → unwrap (direct call; marking Empty is stripped by is_nothing / run_time_blocks)
-			(None, Node::Empty) => call(crate::mutation::UNWRAP, vec![lhs.clone()]),
+			(None, Node::Empty) => call(crate::words::UNWRAP, vec![lhs.clone()]),
 			(None, _) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, _) => crate::mutation::marked(lhs.clone()),
 		})
@@ -384,49 +387,30 @@ impl WarpParser {
 		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after)
 	}
 
+	/// `n times {body}`, `n times: body`, `n times [x]`, `n times "ab"`: the phrase [n times operand] as written, which
+	/// lowering/times_phrases.rs makes a loop, a filled list or a repeated text
 	pub(super) fn parse_times_loop(&mut self, count: Node) -> Node {
 		self.skip_spaces();
-		let body = match self.current_char() {
-			'{' => self.parse_atom(),
+		let operand = match self.current_char() {
+			'{' | '[' => self.parse_atom(),
 			':' => {
 				self.advance();
-				self.with_equals_comparing(false, |parser| parser.parse_expr(0))
+				super::statements::as_block(self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
 			}
-			'[' => {
-				let list = self.parse_atom();
-				return crate::analyzer::filled_list(count, &list)
-					.unwrap_or_else(|| error("`n times [x]` repeats one element: `3 times [0]`"));
-			}
-			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
-			// `3 times 4`: numbers multiply (list_emitter.rs emit_text_times)
 			quote_or_letter
 				if matches!(quote_or_letter, '"' | '\'')
 					|| self.is_identifier_start(0)
 					|| quote_or_letter.is_ascii_digit() =>
 			{
-				return call(TEXT_TIMES, vec![count, self.parse_atom()])
+				self.parse_atom()
 			}
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
-		self.times_loops += 1;
-		let counter = Symbol(format!("{TIMES_WORD}·{}", self.times_loops));
-		// the count is evaluated once, before the first round (user decision #22): the body may change what it reads
-		let (count_binding, count) = match count.drop_meta() {
-			Node::Number(_) => (None, count),
-			_ => {
-				let held = Symbol(format!("{TIMES_WORD}·count·{}", self.times_loops));
-				(
-					Some(Node::Key(Box::new(held.clone()), Op::Assign, Box::new(count))),
-					held,
-				)
-			}
-		};
-		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		let rounds = for_in_loop(counter, zero_to_count, body);
-		match count_binding {
-			Some(binding) => Node::List(vec![binding, rounds], Bracket::Round, Separator::Semicolon),
-			None => rounds,
-		}
+		Node::List(
+			vec![count, Symbol(TIMES_WORD.to_string()), operand],
+			Bracket::None,
+			Separator::Space,
+		)
 	}
 
 	pub(super) fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
@@ -445,6 +429,7 @@ impl WarpParser {
 		self.advance(); // skip '['
 		self.skip_whitespace();
 
+		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, false); // `xs[i -1]` subtracts
 		let mut indices = vec![self.parse_slice_from_start().unwrap_or_else(|| self.parse_expr(0))];
 		self.skip_whitespace();
 
@@ -454,6 +439,7 @@ impl WarpParser {
 			indices.push(self.parse_expr(0));
 			self.skip_whitespace();
 		}
+		self.in_spaced_list = outer_spaced_list;
 
 		if self.current_char() != ']' {
 			self.rewind(before_bracket); // `foo [1 2 3]`: a list argument, not an index
@@ -465,7 +451,7 @@ impl WarpParser {
 		}
 		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
 		let names_a_type =
-			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::zero_list(Empty, word).is_some());
+			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::declaration_forms::zero_list(Empty, word).is_some());
 		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(
@@ -543,6 +529,20 @@ impl WarpParser {
 		Some(Node::List(vec![lhs.clone()], Bracket::Square, Separator::Space))
 	}
 
+	/// The word at the cursor begins what follows the operand rather than being its argument: a loop clause
+	/// (`[x - y for x in xs]`), a block's `end` (`return a + b end`), a key (`inner  _: 0`) or an element (`n p{m}`)
+	fn word_begins_item(&self) -> bool {
+		if self.matches_keyword(crate::words::FOR_WORD) || self.matches_keyword(END_KEYWORD) {
+			return true;
+		}
+		let length = (0..).take_while(|at| is_identifier_char(self.peek_char(*at))).count();
+		match (self.peek_char(length), self.peek_char(length + 1)) {
+			('{', _) => length > 0,
+			(':', next) => length > 0 && !matches!(next, ':' | '='),
+			_ => false,
+		}
+	}
+
 	pub(super) fn try_parse_implicit_application(
 		&mut self,
 		lhs: &Node,
@@ -556,8 +556,14 @@ impl WarpParser {
 			_ => false,
 		};
 		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
-		let lhs_is_operand_word =
-			|| matches!(lhs.drop_meta(), Node::Symbol(name) if crate::library_words::is_operand_word(name));
+		// application binds tighter than the logical, comparison and additive operators: `1 + count xs` is
+		// `1 + count(xs)` for any name (card count-xs); a `:` operand keeps `a: b c d` apart, and an argument takes no
+		// call of its own: `on change s` is one call with two arguments; a loop header's last word is no call of its body
+		// (`for i in 1 to n body`), and a word that begins the next item is no argument (word_begins_item)
+		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp)
+			&& min_bp != argument_bp
+			&& !self.in_for_header
+			&& !self.word_begins_item();
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier =
@@ -567,8 +573,8 @@ impl WarpParser {
 				|| ch == '(' || ch == '['
 				|| ch == '{' || ch == '-'
 				|| self.starts_function_reference();
-		let should_apply =
-			in_assignment_context || arg_is_non_identifier || lhs_is_defined_function || lhs_is_operand_word();
+		let applies_otherwise = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function;
+		let should_apply = in_operand || applies_otherwise;
 
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
 		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does
@@ -582,7 +588,11 @@ impl WarpParser {
 		}
 
 		let start = self.pos;
+		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's
+		let outer_header = self.in_for_header;
+		self.in_for_header = outer_header || !applies_otherwise;
 		let arg = self.parse_expr(argument_bp);
+		self.in_for_header = outer_header;
 		if arg == Empty && self.pos == start {
 			return None; // an ø or [] written there is the argument: `x = sum []`
 		}

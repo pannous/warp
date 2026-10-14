@@ -1,0 +1,8 @@
+// cards sandbox-exec, sandbox-hosted: `warp --sandbox probes/sandbox/escape.warp` from an empty folder writes
+// inside.txt there, then stops at the write outside it with a refusal naming --sandbox; drop that line to see the
+// process refusal, drop both to get 42
+use file
+write("inside.txt", "allowed")
+write("../outside.txt", "refused: leaves the state folder")
+exec sh"echo refused: starts a process"
+6 * 7

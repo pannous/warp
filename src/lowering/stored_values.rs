@@ -13,7 +13,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub const STORED_WORD: &str = "stored";
 /// `stored visits default 0`: the value of the first run, the same as `stored visits = 0`
@@ -51,7 +51,7 @@ pub fn lower(program: Node) -> Node {
 	};
 	let stores = crate::warp_parser::mentions(&program, STORED_WORD)
 		&& !crate::soft_keywords::program_names(&program, STORED_WORD);
-	let dev = crate::pipeline::is_for_dev();
+	let dev = crate::pipeline::compile_mode().for_dev;
 	if !stores && !dev {
 		return program;
 	}
@@ -146,12 +146,9 @@ fn dev_kept(statement: &Node, changed: &HashSet<String>, kept_names: &mut HashSe
 
 /// `x = std_io("store", "declare", ["x", v, file])` (v kept when x isn't yet) and the listener saving each change of x
 fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
-	let load = parse(&format!(
-		"{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"
-	));
-	let load = crate::law::substitute(
-		&load,
-		&HashMap::from([(DEFAULT_PLACEHOLDER.to_string(), default.clone())]),
+	let load = super::nodes::filled(
+		&format!("{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"),
+		[(DEFAULT_PLACEHOLDER, default.clone())],
 	);
 	let save = parse(&format!(
 		"on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"

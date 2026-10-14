@@ -26,7 +26,7 @@ fn sort_with_comparator() {
 fn sort_with_key() {
 	assert_eq!(
 		printed("xs=[\"bb\",\"ccc\",\"a\"]; sorted(xs, key: s => s.length)"),
-		"['a' \"bb\" \"ccc\"]"
+		"[\"a\" \"bb\" \"ccc\"]"
 	); // Python key=
 	assert_eq!(printed("xs=[3,-1,2]; xs.sortedBy { it*it }"), "[-1 2 3]"); // Kotlin sortedBy
 	assert_eq!(printed("xs=[3,-1,2]; xs.sort_by(x => -x)"), "[3 2 -1]"); // Ruby sort_by
@@ -56,7 +56,7 @@ fn sort_with_defined_function() {
 	assert_eq!(printed("def desc(a,b){ b-a }; sorted([1,3,2], desc)"), "[3 2 1]");
 	assert_eq!(
 		printed("def size(s){ s.length }; sorted([\"bb\",\"ccc\",\"a\"], size)"),
-		"['a' \"bb\" \"ccc\"]"
+		"[\"a\" \"bb\" \"ccc\"]"
 	);
 }
 

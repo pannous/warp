@@ -321,7 +321,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// a call of a user or FFI function: `(f)` without arguments, `f(a, b…)`
-		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+		if let Some(fn_name) = self.called_function(items, bracket, separator) {
 			if self.ctx.user_functions.contains_key(fn_name) {
 				self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
 				return;
@@ -388,7 +388,7 @@ impl WasmGcEmitter {
 		if self.is_library_word_call(items, bracket, separator) {
 			return self.emit_node_as_f64(func, &Node::List(items.to_vec(), bracket.clone(), separator.clone()));
 		}
-		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+		if let Some(fn_name) = self.called_function(items, bracket, separator) {
 			if self.ctx.ffi_imports.contains_key(fn_name) {
 				self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
 				return;
@@ -397,9 +397,14 @@ impl WasmGcEmitter {
 				self.emit_user_function_call_float(func, fn_name, &items[1..]);
 				return;
 			}
-			// `float(x)` is `x as float` (a text parses its digits)
+			if super::text_builtins::text_builtin_kind(fn_name, items.len() - 1) == Some(Kind::Float) {
+				return self.emit_float_builtin(func, fn_name, &items[1..]);
+			}
+			// `float(x)` is `x as float` (a text parses its digits), `int(x)` is `x as int` (an int path of a float function)
 			if let [type_word, value] = items {
-				if crate::type_tests::canonical_spec_word(fn_name) == "float" {
+				if crate::type_tests::canonical_spec_word(fn_name) == "float"
+					|| type_word_kind(fn_name) == Some(Kind::Int)
+				{
 					return self.emit_float_value(
 						func,
 						&Node::Key(Box::new(value.clone()), Op::As, Box::new(type_word.clone())),
@@ -852,8 +857,9 @@ impl WasmGcEmitter {
 			func.instruction(&I::Else);
 			self.emit_node_instructions(func, right);
 			func.instruction(&I::End);
-		} else if Self::is_run_time_value(left) || Self::is_operation(left) {
-			// a variable, call, element or operation (`a or b`) holding a Node: its truthiness is known at run time only
+		} else if !Self::is_written_data(left) {
+			// a variable, call, element, operation (`a or b`) or block (`(c.skip(" "); …)`, a mutating method call)
+			// holding a Node: its truthiness is known at run time only, and its effects happen
 			let held = self.node_scratch();
 			self.emit_node_instructions(func, left);
 			func.instruction(&I::LocalTee(held));
@@ -872,23 +878,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `a or b`, `(x is rgb or 0)`: an operation, also in parentheses, computed at run time; a pair `a: 1` is data
-	fn is_operation(node: &Node) -> bool {
-		match node.drop_meta() {
-			Node::Key(_, op, _) => *op != Op::Colon,
-			Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [single] if Self::is_operation(single)),
-			_ => false,
-		}
-	}
-
-	/// A name, call, element or field: its value exists only at run time
-	pub(super) fn is_run_time_value(node: &Node) -> bool {
-		match node.drop_meta() {
-			Node::Symbol(_) => true,
-			Node::List(items, Bracket::Round, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
-			Node::Key(_, Op::Hash | Op::Dot, _) => true,
-			_ => false,
-		}
+	/// `3`, `"a"`, `'a'`, `[]`, `{a: 1}`: a value written as it is, falsy or not at compile time
+	fn is_written_data(node: &Node) -> bool {
+		matches!(
+			node.drop_meta(),
+			Node::Number(_)
+				| Node::Text(_)
+				| Node::Char(_)
+				| Node::Empty
+				| Node::List(_, Bracket::Square | Bracket::Curly, _)
+		)
 	}
 
 	/// The f64 of a number Node computed at run time: a Float's value, an Int converted

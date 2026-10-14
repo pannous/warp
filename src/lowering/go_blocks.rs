@@ -6,10 +6,10 @@
 //! from shared values (P106); `await job or y` is `try await job else y`.
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
-use super::nodes::{call, key, Counter};
-use super::words::{FOR_WORD, RETURN_WORD};
+use super::nodes::{call, key, parameter_word, Counter};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, RETURN_WORD};
 
 const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
@@ -94,7 +94,7 @@ impl GoBlocks {
 				let Node::List(items, _, _) = head.drop_meta() else {
 					unreachable!("guarded")
 				};
-				let parameters: Vec<String> = items[1..].iter().map(parameter_name).collect();
+				let parameters: Vec<String> = items[1..].iter().map(parameter_word).collect();
 				Node::Key(
 					head,
 					Op::Define,
@@ -104,8 +104,8 @@ impl GoBlocks {
 			// `x => …`, `(x, y) => …`
 			Node::Key(parameters, Op::FatArrow, body) => {
 				let names: Vec<String> = match parameters.drop_meta() {
-					Node::List(items, _, _) => items.iter().map(parameter_name).collect(),
-					single => vec![parameter_name(single)],
+					Node::List(items, _, _) => items.iter().map(parameter_word).collect(),
+					single => vec![parameter_word(single)],
 				};
 				Node::Key(
 					parameters,
@@ -247,7 +247,7 @@ fn after_task(condition: Node, value: Node, phrases: &Phrases) -> Node {
 		return crate::node::error(&format!("after {name}: a task gets a copy of {name}, which never changes there; share it: `shared {name} = …` (P106)"));
 	}
 	let template = crate::warp_parser::parse(&format!(
-		"{GO_WORD} {{ while not ({AFTER_CONDITION}) {{ sleep({AFTER_POLL_MILLISECONDS} ms) }}; {AFTER_VALUE} }}"
+		"{GO_WORD} {{ while not ({AFTER_CONDITION}) {{ sleep({AFTER_POLL_MILLISECONDS}ms) }}; {AFTER_VALUE} }}"
 	));
 	let template = crate::library_words::substitute(template, AFTER_CONDITION, &condition);
 	crate::library_words::substitute(template, AFTER_VALUE, &value)
@@ -286,15 +286,7 @@ fn defines_go(node: &Node) -> bool {
 }
 
 fn assigned_variables(node: &Node) -> Vec<String> {
-	let mut names = vec![];
-	node.visit(&mut |part| {
-		if let Node::Key(target, Op::Assign | Op::Define, _) = part {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.push(name.clone());
-			}
-		}
-	});
-	names
+	node.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
 }
 
 /// The symbols of a block in their first order, each once
@@ -308,12 +300,4 @@ fn read_symbols(node: &Node) -> Vec<String> {
 		}
 	});
 	symbols
-}
-
-/// `x`, `x: int`, `x = 1`: the parameter's name
-fn parameter_name(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(name, _, _) => name.drop_meta().name(),
-		other => other.name(),
-	}
 }

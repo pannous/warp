@@ -9,8 +9,13 @@ name: Playground
 on:
   push:
     branches: [ main ]
-    paths: [ "src/**", "web/playground/**", "samples/**", "Cargo.toml", "Cargo.lock", ".github/workflows/pages.yml" ]
+    paths: [ "src/**", "crates/**", "web/playground/**", "samples/**", "Cargo.toml", "Cargo.lock", ".github/workflows/pages.yml" ]
   workflow_dispatch:
+    inputs:
+      runner:
+        # validate the next image before ubuntu-latest moves to it: `gh workflow run … --ref <branch> -f runner=ubuntu-26.04`
+        description: the runner image to run on
+        default: ubuntu-latest
 
 permissions:
   contents: read
@@ -33,13 +38,13 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: wasm32-unknown-unknown
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       with:
         path: |
           ~/.cargo/registry
@@ -71,11 +76,11 @@ jobs:
         echo "warp.pannous.com" > _site/CNAME
         # the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
         web/playground/build.sh served _site
-    - uses: actions/upload-pages-artifact@v3
+    - uses: actions/upload-pages-artifact@v5
       with:
         path: _site
     # the tour jobs check this very site, in parallel (user 2026-10-09): Chrome and Firefox each take minutes
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: site
         path: _site
@@ -84,11 +89,11 @@ jobs:
   # a branch check runs the browser suite only when the branch changes code or tests (docs-only branches skip it);
   # main always runs it
   scope:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     outputs:
       suite: ${{ steps.changes.outputs.suite }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
     - id: changes
@@ -106,7 +111,7 @@ jobs:
   browser-suite:
     needs: scope
     if: needs.scope.outputs.suite == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -116,11 +121,11 @@ jobs:
     env:
       WARP_BROWSER_TEST_SHARD: ${{ matrix.shard }}/4
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: wasm32-wasip1
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       with:
         path: |
           ~/.cargo/registry
@@ -156,25 +161,27 @@ jobs:
   # console, in the collected site, else no deploy
   tour-chrome:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v4
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
       with:
         name: site
         path: _site
     - name: Install agent-browser (headless Chrome)
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The tour in headless Chrome
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (console_watch.mjs)
       run: python3 web/playground/test_in_browser.py --examples --site _site
 
   # the same in headless Firefox: the runner's own, driven by firefox_driver.mjs
   tour-firefox:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v4
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
       with:
         name: site
         path: _site
@@ -183,6 +190,8 @@ jobs:
       # a failed first attempt runs again once, loudly (card tour-firefox-stall: an intermittent worker-start stall in
       # Firefox); a real bug fails both
       timeout-minutes: 25
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (firefox_driver.mjs)
       run: |
         set -o pipefail
         tour() { python3 web/playground/test_in_browser.py --examples --firefox --site _site 2>&1 | tee "$1"; }
@@ -191,33 +200,55 @@ jobs:
         echo "::warning title=Firefox tour failed once, running it again::${stall:-the first attempt is in the log above} (card tour-firefox-stall)"
         tour second-attempt.log
 
+  # the painting checks in Safari on a macOS runner (card webgpu-safari: samples/webgpu ran Safari out of memory). The
+  # runner's Safari has navigator.gpu but no adapter, so the GPU samples show their no-adapter error. Beside the deploy,
+  # not before it: macOS runners queue longer
+  tour-safari:
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: site
+        path: _site
+    - name: Allow remote automation
+      run: sudo safaridriver --enable
+    - name: The painting checks in Safari
+      run: python3 web/playground/test_in_browser.py --examples --safari --site _site webgpu shader_trails "(the view's size stays as paintings of that size are shown)" "(many GPU jobs in one run)" "(many tasks in one run)" async "(named GPU arrays, a shader painted into the page's canvas)"
+
   # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
   # tours, green, instead of a failed deploy mailing a failed run
   deploy:
     needs: [ tour-chrome, tour-firefox ]
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
     - id: deployment
-      uses: actions/deploy-pages@v4
+      uses: actions/deploy-pages@v5
 
   # the same check against the deployed page: its console stays clean too (card console-errors)
   verify:
     needs: deploy
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Install agent-browser
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The live playground shows the tour and its console stays clean
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/
     # the page is deployed by now: a Firefox failure here (the intermittent worker-start hang, card firefox-hello) is a
     # warning annotation on the run, not a failed run mailing the user (user 2026-10-09: "conditionally skip the tests")
     - name: The same in headless Firefox (a warning, not a failure)
       timeout-minutes: 15
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/ ||
           echo "::warning title=Firefox check of the live playground failed::see this step's log (card firefox-hello)"

@@ -86,50 +86,68 @@ fn is_memoizable(function: &UserFunctionDef, report: &EffectReport, main: &Scope
 pub(crate) type Rebuild = Box<dyn Fn(Node, Node) -> Node>;
 
 /// A definition `f(n) := body`, `def f(n) = body` (`(f n) = body`) or `def f(n): body` (the keyword form, not yet
-/// lowered here): its head, body and a constructor of the same form for another head and body
+/// lowered here): its head, body and a constructor of the same form for another head and body, which keeps the
+/// definition's meta (its comment, which `f.doc` reads)
 pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
-	match node.drop_meta() {
+	match node {
+		Node::Meta { node: inner, data } => {
+			let data = data.clone();
+			wrapped(definition_parts(inner), move |node| Node::Meta {
+				node: Box::new(node),
+				data: data.clone(),
+			})
+		}
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if *op == Op::Define || is_call_head(head) => {
-			let op = *op;
-			Some((
-				head.as_ref().clone(),
-				body.as_ref().clone(),
-				Box::new(move |head: Node, body: Node| key(head, op, body)),
-			))
+			key_parts(head, *op, body)
 		}
 		Node::List(items, bracket, separator) => match items.as_slice() {
 			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => {
-				match definition.drop_meta() {
-					Node::Key(head, Op::Colon | Op::Define, body) => {
-						let (keyword, bracket, separator, op) = (
-							keyword.clone(),
-							bracket.clone(),
-							separator.clone(),
-							if matches!(definition.drop_meta(), Node::Key(_, Op::Define, _)) {
-								Op::Define
-							} else {
-								Op::Colon
-							},
-						);
-						Some((
-							head.as_ref().clone(),
-							body.as_ref().clone(),
-							Box::new(move |head: Node, body: Node| {
-								Node::List(
-									vec![keyword.clone(), key(head, op, body)],
-									bracket.clone(),
-									separator.clone(),
-								)
-							}),
-						))
-					}
-					_ => None,
-				}
+				let (keyword, bracket, separator) = (keyword.clone(), bracket.clone(), separator.clone());
+				wrapped(keyword_definition_parts(definition.drop_meta()), move |definition| {
+					Node::List(vec![keyword.clone(), definition], bracket.clone(), separator.clone())
+				})
 			}
 			_ => None,
 		},
 		_ => None,
 	}
+}
+
+/// What follows the keyword of `def f(n): body`, `def f(n) := body` and `def f() { … }` (as parsed: the head and the
+/// block)
+fn keyword_definition_parts(definition: &Node) -> Option<(Node, Node, Rebuild)> {
+	match definition {
+		Node::Key(head, op @ (Op::Colon | Op::Define), body) => key_parts(head, *op, body),
+		Node::List(parts, bracket, separator) => match parts.as_slice() {
+			[head, body] if is_call_head(head) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+				let (bracket, separator) = (bracket.clone(), separator.clone());
+				Some((
+					head.clone(),
+					body.clone(),
+					Box::new(move |head, body| Node::List(vec![head, body], bracket.clone(), separator.clone())),
+				))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn key_parts(head: &Node, op: Op, body: &Node) -> Option<(Node, Node, Rebuild)> {
+	Some((
+		head.clone(),
+		body.clone(),
+		Box::new(move |head, body| key(head, op, body)),
+	))
+}
+
+/// The parts of a definition rebuilt inside what `wrap` makes of it
+fn wrapped(
+	parts: Option<(Node, Node, Rebuild)>,
+	wrap: impl Fn(Node) -> Node + 'static,
+) -> Option<(Node, Node, Rebuild)> {
+	let (head, body, rebuild) = parts?;
+	Some((head, body, Box::new(move |head, body| wrap(rebuild(head, body)))))
 }
 
 /// The parameter names of every function the program defines: a variable of the same name in another function is
@@ -138,12 +156,18 @@ pub(crate) fn parameter_names(program: &Node) -> std::collections::HashSet<Strin
 	let mut names = std::collections::HashSet::new();
 	program.visit(&mut |part| {
 		if let Some((head, _, _)) = definition_parts(part) {
-			if let Node::List(items, _, _) = head.drop_meta() {
-				names.extend(items.iter().skip(1).filter_map(super::nodes::parameter_name));
-			}
+			names.extend(head_parameters(&head));
 		}
 	});
 	names
+}
+
+/// The parameter names of a definition's head `(f a b)`
+pub(crate) fn head_parameters(head: &Node) -> Vec<String> {
+	match head.drop_meta() {
+		Node::List(items, _, _) => items.iter().skip(1).filter_map(super::nodes::parameter_name).collect(),
+		_ => vec![],
+	}
 }
 
 /// `(f n)`: a name and its parameters, what `f(n) = body` assigns, unlike `x = body`

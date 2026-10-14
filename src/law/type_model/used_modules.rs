@@ -2,7 +2,7 @@
 //! becomes the definitions of X the program calls, and the ones those call, as if the program had written them.
 //! Builtins that warp computes the way a warp definition would come along the same way when called.
 
-use super::{function_definition, mentions, statements};
+use super::{function_definition, statements};
 use crate::modules::{std_module_source, USE_KEYWORDS};
 use crate::node::{Bracket, Node, Separator};
 
@@ -46,7 +46,7 @@ fn calls(node: &Node, word: &str) -> bool {
 fn defines(program: &[&Node], word: &str) -> bool {
 	program
 		.iter()
-		.any(|statement| function_definition(statement).is_some_and(|(name, _, _)| name == word))
+		.any(|statement| function_definition(statement).is_some_and(|definition| definition.name == word))
 }
 
 fn inline_modules(program: &Node) -> Result<Node, String> {
@@ -91,13 +91,13 @@ fn used_module(statement: &Node) -> Option<String> {
 fn needed_definitions(module: &Node, program: &[&Node]) -> Vec<Node> {
 	let definitions: Vec<(&str, &Node)> = statements(module)
 		.into_iter()
-		.filter_map(|statement| function_definition(statement).map(|(name, _, _)| (name, statement)))
+		.filter_map(|statement| function_definition(statement).map(|definition| (definition.name, statement)))
 		.collect();
 	let mut needed: Vec<&str> = vec![];
 	let mut callers: Vec<&Node> = program.to_vec();
 	while let Some(caller) = callers.pop() {
 		for (name, definition) in &definitions {
-			if !needed.contains(name) && !defines(program, name) && mentions(caller, name) {
+			if !needed.contains(name) && !defines(program, name) && caller.mentions(name) {
 				needed.push(name);
 				callers.push(definition);
 			}

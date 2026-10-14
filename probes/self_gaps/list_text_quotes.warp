@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+// a quote or \ inside a text in a list prints escaped, so the printed list reads back (P126, card list-text-quotes)
+quote = "\""
+print [quote + "hi" + quote, "a\\b"]

@@ -13,8 +13,8 @@ use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
 /// Runtime functions called from lowered code with their node arguments, and how many those are
 const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
-	(crate::analyzer::LIST_DROP_LAST, 1),
-	(crate::analyzer::LIST_BECOME, 2),
+	(crate::declaration_forms::LIST_DROP_LAST, 1),
+	(crate::declaration_forms::LIST_BECOME, 2),
 	(super::list_ops::LIST_EXTEND, 2),
 	(super::library_ops::LIST_SORTED_BY, 2),
 ];
@@ -32,14 +32,14 @@ const BUILTIN_CALLS: [&str; 27] = [
 	"use",
 	crate::min_max::EMPTY_EXTREMUM_CALL,
 	crate::switch::NO_CASE_CALL,
-	crate::analyzer::ZERO_FILL_CALL,
-	crate::analyzer::INSERT_AT_CALL,
-	crate::analyzer::INSERT_EITHER_CALL,
+	crate::declaration_forms::ZERO_FILL_CALL,
+	crate::declaration_forms::INSERT_AT_CALL,
+	crate::declaration_forms::INSERT_EITHER_CALL,
 	crate::library_words::LIST_SUM,
-	crate::traits::INSTANCE_OF,
-	crate::analyzer::REMOVED_VALUE_CALL,
-	crate::analyzer::LIST_DROP_LAST,
-	crate::analyzer::LIST_BECOME,
+	crate::words::INSTANCE_OF,
+	crate::declaration_forms::REMOVED_VALUE_CALL,
+	crate::declaration_forms::LIST_DROP_LAST,
+	crate::declaration_forms::LIST_BECOME,
 	crate::library_words::VALUES_SIMILAR,
 	super::list_ops::LIST_EXTEND,
 	crate::library_words::VALUES_ROUGH,
@@ -84,7 +84,7 @@ fn juxtaposed_text(argument: &Node) -> Option<Node> {
 const INSERT_ORDER_TOPIC: &str = "insert-order";
 /// The got-it topic of an unknown word applied to a value (`cube 3`)
 /// `data cube 3`: the rest is data (P62, P63: `data` is the word for what never runs)
-const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
+pub(super) const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
 /// Words the near-miss warning compares with besides the program's own names
@@ -93,6 +93,16 @@ const CODEPOINT_TYPE: &str = "codepoint";
 const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
+	/// The word a list calls; a parameter named like a function or global is the parameter (`g(f, b) := [f, b]`)
+	pub(super) fn called_function<'a>(
+		&self,
+		items: &'a [Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> Option<&'a str> {
+		called_word(items, bracket, separator).filter(|name| !self.scope.is_parameter(name))
+	}
+
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
 	/// A variable is not callable.
 	pub(super) fn resolves_call(&self, name: &str) -> bool {
@@ -106,7 +116,7 @@ impl WasmGcEmitter {
 			|| BUILTIN_CALLS.contains(&name)
 			|| super::cells::CELL_WORDS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
-			|| name == crate::type_tests::IS_TYPE
+			|| name == crate::words::IS_TYPE
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
 			|| super::text_builtins::is_text_builtin(name)
@@ -135,7 +145,7 @@ impl WasmGcEmitter {
 		if self.emit_typed_map_membership(func, items) {
 			return true;
 		}
-		if name == crate::library_words::SLICE {
+		if name == crate::words::SLICE {
 			for bound in items.iter().skip(2) {
 				self.emit_integral_index_check(func, bound); // `a[0:n/2]` like `a[n/2]`: an integer, with the `n//2` hint
 			}
@@ -176,7 +186,7 @@ impl WasmGcEmitter {
 		bracket: &Bracket,
 		separator: &Separator,
 	) -> bool {
-		let Some(fn_name) = called_word(items, bracket, separator) else {
+		let Some(fn_name) = self.called_function(items, bracket, separator) else {
 			return false;
 		};
 		// `(angle)` of a variable is its value
@@ -385,7 +395,7 @@ impl WasmGcEmitter {
 
 		if let [word, instance, type_name] = items {
 			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
-				if name == crate::traits::INSTANCE_OF {
+				if name == crate::words::INSTANCE_OF {
 					self.emit_instance_of(func, instance, type_name);
 					self.emit_call(func, "new_int");
 					return;
@@ -434,10 +444,10 @@ impl WasmGcEmitter {
 			return;
 		}
 		if let [Node::Symbol(call), count, zero] = items {
-			if call == crate::analyzer::ZERO_FILL_CALL {
+			if call == crate::declaration_forms::ZERO_FILL_CALL {
 				self.emit_numeric_value(func, count);
 				self.emit_node_instructions(func, zero);
-				self.emit_call(func, crate::analyzer::ZERO_FILL_CALL);
+				self.emit_call(func, crate::declaration_forms::ZERO_FILL_CALL);
 				return;
 			}
 		}
@@ -476,22 +486,23 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(call), collection, key] = items {
-			if call == crate::analyzer::REMOVED_VALUE_CALL {
+			if call == crate::declaration_forms::REMOVED_VALUE_CALL {
 				self.emit_node_instructions(func, collection);
 				self.emit_node_instructions(func, key);
-				self.emit_call(func, crate::analyzer::REMOVED_VALUE_CALL);
+				self.emit_call(func, crate::declaration_forms::REMOVED_VALUE_CALL);
 				return;
 			}
 		}
 		if let [Node::Symbol(call), list, first, second] = items {
-			if call == crate::analyzer::INSERT_AT_CALL || call == crate::analyzer::INSERT_EITHER_CALL {
+			if call == crate::declaration_forms::INSERT_AT_CALL || call == crate::declaration_forms::INSERT_EITHER_CALL
+			{
 				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else {
 					return;
 				};
 				self.emit_node_instructions(func, list);
 				self.emit_numeric_value(func, position);
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, crate::analyzer::INSERT_AT_CALL);
+				self.emit_call(func, crate::declaration_forms::INSERT_AT_CALL);
 				return;
 			}
 		}
@@ -539,8 +550,8 @@ impl WasmGcEmitter {
 					self.emit_call(func, "new_int");
 				}
 			} else {
-				// Build linked list: (first, rest, bracket_info)
-				self.emit_list_structure(func, items, bracket);
+				// Build linked list: (first, rest, bracket_info); a value keeps no separator, only data does (card keep-list)
+				self.emit_list_structure(func, items, bracket, &Separator::None);
 			}
 		}
 	}
@@ -569,6 +580,14 @@ impl WasmGcEmitter {
 	fn has_unknown_static_type(&self, subject: &Node) -> bool {
 		!matches!(subject.drop_meta(), Node::Number(_))
 			&& matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
+	}
+
+	/// `x is int` of a variable typed int that may hold a ratio: a spec covering the whole numbers but not the ratios
+	fn whole_only_at_run_time(&self, subject: &Node, spec: &str) -> bool {
+		self.int_runtime()
+			&& !matches!(subject.drop_meta(), Node::Number(_))
+			&& self.static_type_name(subject) == crate::Kind::Int.to_string()
+			&& names_whole_numbers_only(spec)
 	}
 
 	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
@@ -641,7 +660,7 @@ impl WasmGcEmitter {
 		let Node::List(items, bracket, separator) = node.drop_meta() else {
 			return false;
 		};
-		if call_name(items, bracket, separator) != Some(crate::type_tests::IS_TYPE) {
+		if call_name(items, bracket, separator) != Some(crate::words::IS_TYPE) {
 			return false;
 		}
 		let [_, subject, spec] = items.as_slice() else {
@@ -694,6 +713,15 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, subject);
 				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
+				if self.int_runtime() && names_whole_numbers_only(spec) {
+					// an Int node may hold a ratio (`f(2.5)` of an untyped parameter)
+					Self::emit_list(func, &[I::I32WrapI64, I::If(BlockType::Result(ValType::I64))]);
+					self.emit_node_instructions(func, subject);
+					func.instruction(&I::RefAsNonNull);
+					self.emit_call(func, "get_int_value");
+					self.call(func, "is_ratio");
+					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::Else, I::I64Const(0), I::End]);
+				}
 				// a map is a curly list at run time, no list (card inside-function)
 				if crate::type_tests::canonical_spec_word(spec) == crate::type_tests::LIST_WORD {
 					self.emit_node_instructions(func, subject);
@@ -705,7 +733,7 @@ impl WasmGcEmitter {
 			None if declared_type => {
 				let instance_test = Node::List(
 					vec![
-						Node::Symbol(crate::traits::INSTANCE_OF.to_string()),
+						Node::Symbol(crate::words::INSTANCE_OF.to_string()),
 						subject.clone(),
 						Node::Text(spec.clone()),
 					],
@@ -713,6 +741,12 @@ impl WasmGcEmitter {
 					Separator::None,
 				);
 				self.emit_numeric_value(func, &instance_test);
+			}
+			// `x = 2.5; x is int`: an exact ratio is an Int at run time, only is_ratio tells it from a whole number
+			None if self.whole_only_at_run_time(subject, spec) => {
+				self.emit_numeric_value(func, subject);
+				self.call(func, "is_ratio");
+				Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U]);
 			}
 			None => {
 				let answer = crate::type_tests::type_matches(&self.static_type_name(subject), spec);
@@ -966,6 +1000,8 @@ impl WasmGcEmitter {
 				}
 				continue;
 			}
+			self.statement_position = crate::diagnostic::line_info(item);
+			self.emit_trap_position(func);
 			if Some(i) == last_statement {
 				emit(self, func, item);
 			} else if self.emit_loop_jump(func, item) { // `break`, `continue`: a jump, or its own error outside a loop
@@ -992,7 +1028,7 @@ impl WasmGcEmitter {
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
 		use crate::diagnostic::{ask, reading, Ask, Fallback};
-		if call == crate::analyzer::INSERT_AT_CALL {
+		if call == crate::declaration_forms::INSERT_AT_CALL {
 			return Some((first, second));
 		}
 		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
@@ -1186,7 +1222,8 @@ impl WasmGcEmitter {
 		};
 		let known = self.scope.lookup(name).is_some()
 			|| self.ctx.user_globals.contains_key(name)
-			|| self.ctx.user_functions.contains_key(name);
+			|| self.ctx.user_functions.contains_key(name)
+			|| self.ctx.variant_names.contains(name);
 		(!known).then(|| name.clone())
 	}
 
@@ -1430,11 +1467,11 @@ impl WasmGcEmitter {
 	}
 }
 
-/// The loop `for T in xs` a type test filters, carried from the parser (warp_parser FilterLoop)
-fn filter_loop_of(test: &Node) -> Option<crate::warp_parser::FilterLoop> {
+/// The loop `for T in xs` a type test filters, carried from its header (for_loop/headers.rs FilterLoop)
+fn filter_loop_of(test: &Node) -> Option<crate::for_loop::headers::FilterLoop> {
 	let Node::Meta { data, node } = test else { return None };
 	data.data_value()
-		.downcast_ref::<crate::warp_parser::FilterLoop>()
+		.downcast_ref::<crate::for_loop::headers::FilterLoop>()
 		.cloned()
 		.or_else(|| filter_loop_of(node))
 }
@@ -1447,4 +1484,11 @@ pub(super) fn float_rounding(name: &str) -> Option<Instruction<'static>> {
 		"round" => Some(Instruction::F64Nearest),
 		_ => None,
 	}
+}
+
+/// `int`, `i64`, `integer`: a type the whole numbers have but the exact ratios don't
+fn names_whole_numbers_only(spec: &str) -> bool {
+	let int = crate::Kind::Int.to_string();
+	crate::type_tests::type_matches(&int, spec)
+		&& !crate::type_tests::type_matches(crate::analyzer::RATIONAL_WORD, spec)
 }

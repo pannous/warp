@@ -14,7 +14,7 @@ get "/list" { [1, 2.5, "a", yes, [3]] }
 get "/nested" { {name: "x", tags: ["a", "b"], inner: {k: no}} }"#;
 
 /// the CGI reply the module prints for `GET path`
-fn answer(module: &Module, path: &str) -> String {
+pub(super) fn answer(module: &Module, path: &str) -> String {
 	let stdout = MemoryOutputPipe::new(OUTPUT_CAPACITY);
 	let mut context = WasiCtxBuilder::new();
 	context
