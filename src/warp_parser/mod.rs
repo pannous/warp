@@ -46,8 +46,18 @@ mod definitions;
 mod expressions;
 mod lists;
 mod literals;
+pub(crate) use expressions::*;
 pub use literals::shader_blocks;
+pub(crate) use literals::*;
+use lookahead::*;
+pub use scanning::read_atoms;
+use scanning::*;
+mod annotations;
+mod math_notation;
 mod suffixes;
+mod types;
+pub(crate) use math_notation::*;
+pub(crate) use types::*;
 use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
@@ -223,28 +233,6 @@ const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
-/// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
-/// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
-fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
-	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::FatArrow, _));
-	let Some(arrow) = items.iter().position(is_arrow) else {
-		return items;
-	};
-	if arrow + 1 == items.len() || items[arrow + 1..].iter().any(is_arrow) {
-		return items;
-	}
-	let rest = items.split_off(arrow + 1);
-	let Node::Key(parameters, op, body) = items.pop().expect("the arrow").drop_meta().clone() else {
-		unreachable!("an arrow")
-	};
-	let body = one_expression(&[vec![*body], rest].concat());
-	items.push(Node::Key(parameters, op, Box::new(body)));
-	items
-}
-
-fn is_unindexable_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
-}
 /// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
 pub const TRY_MARKER: &str = "try·else";
 /// `after C return V` (wiki/thread.md) as the marker call `after·return(C, V)`, lowered by go_blocks into a waiting task
@@ -271,10 +259,6 @@ const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
 /// Words between two operands besides the operator words (operators::is_operator_word): `of`, `matches`
 const JOINING_WORDS: [&str; 2] = [OF_WORD, "matches"];
 
-/// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
-pub(crate) fn joins_operands(word: &str) -> bool {
-	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word)
-}
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -348,50 +332,6 @@ impl ParserOptions {
 	}
 }
 
-/// A word that can take type arguments: a capitalised type, a built-in type word, a plural type word, `list`, `map` …
-fn names_a_type(word: &str) -> bool {
-	word.chars().next().is_some_and(char::is_uppercase)
-		|| crate::analyzer::type_word_kind(&word.to_lowercase()).is_some()
-		|| crate::analyzer::plural_element_type(word).is_some()
-		|| GENERIC_TYPE_HEADS.contains(&word)
-}
-
-/// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
-fn type_application_name(name: &str, arguments: &str) -> String {
-	let arguments = arguments.replace('<', " of ").replace('>', "");
-	format!(
-		"{} of {}",
-		noted_list_type_head(name),
-		arguments.split_whitespace().collect::<Vec<_>>().join(" ")
-	)
-}
-
-/// The head of a list type: `Vec`, `vector`, `Array`… are list
-pub(crate) fn list_type_head(name: &str) -> &str {
-	if FOREIGN_LIST_HEADS.contains(&name) {
-		LIST_HEAD
-	} else {
-		name
-	}
-}
-
-/// list_type_head, with a note naming warp's word for a foreign one
-pub(crate) fn noted_list_type_head(name: &str) -> &str {
-	if FOREIGN_LIST_HEADS.contains(&name) {
-		crate::diagnostic::note_alias(name, LIST_HEAD);
-	}
-	list_type_head(name)
-}
-
-/// The sign of a superscript exponent: ⁺ is +1, ⁻ is -1
-fn superscript_sign(ch: char) -> Option<i64> {
-	match ch {
-		'⁺' => Some(1),
-		'⁻' => Some(-1),
-		_ => None,
-	}
-}
-
 /// Superscript letters and the letters they raise: `2ⁿ` is 2^n
 const SUPERSCRIPT_LETTERS: [(char, char); 25] = [
 	('ᵃ', 'a'),
@@ -421,43 +361,6 @@ const SUPERSCRIPT_LETTERS: [(char, char); 25] = [
 	('ᶻ', 'z'),
 ];
 
-fn superscript_letter(ch: char) -> Option<char> {
-	SUPERSCRIPT_LETTERS
-		.iter()
-		.find(|(raised, _)| *raised == ch)
-		.map(|(_, letter)| *letter)
-}
-
-fn superscript_digit(ch: char) -> Option<i64> {
-	SUPERSCRIPT_DIGITS
-		.chars()
-		.position(|digit| digit == ch)
-		.map(|position| position as i64)
-}
-
-/// Numerator and denominator of a Unicode vulgar fraction character: ½ → (1, 2), ⅚ → (5, 6), ↉ → (0, 3)
-fn vulgar_fraction(ch: char) -> Option<(i64, i64)> {
-	let decomposed: String = std::iter::once(ch).nfkd().collect();
-	let (numerator, denominator) = decomposed.split_once(FRACTION_SLASH)?;
-	Some((numerator.parse().ok()?, denominator.parse().ok()?))
-}
-
-/// Characters that are numeric for Unicode but written next to a number as operators or literals of their own
-fn is_number_glyph(ch: char) -> bool {
-	// every such glyph is a numeric character outside ASCII: asked of every identifier character, this skips the
-	// decomposition of vulgar_fraction for all others
-	!ch.is_ascii() && ch.is_numeric() && (superscript_digit(ch).is_some() || vulgar_fraction(ch).is_some())
-}
-
-fn is_identifier_char(c: char) -> bool {
-	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
-}
-
-/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/music_words.rs)
-fn is_music_accidental(c: char) -> bool {
-	matches!(c, '♯' | '♭')
-}
-
 /// `floor_quotient(a, b)`: what `a // b` and `a div b` are, the Euclidean quotient that goes with `%`
 /// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
@@ -486,27 +389,6 @@ pub fn parse(input: &str) -> Node {
 		return parse_file(input);
 	}
 	WarpParser::parse(input)
-}
-
-/// The number a text spells if the whole text is one number literal, so `int "12a"` never guesses; "1/3" spells the
-/// exact ratio of two Ints, as the code 1/3 does (card fraction-number)
-pub fn number_in_text(text: &str) -> Option<Number> {
-	let text = text.trim();
-	if let Some((numerator, denominator)) = text.split_once('/') {
-		return match (number_in_text(numerator)?, number_in_text(denominator)?) {
-			(numerator @ Number::Int(_), denominator @ Number::Int(_)) => Some(Number::ratio(numerator, denominator)),
-			_ => None,
-		};
-	}
-	let spells_number = !text.is_empty() && text.chars().all(|c| c.is_ascii_digit() || "+-._eE".contains(c));
-	if !spells_number {
-		return None;
-	}
-	// read as data: code marks `2.5e-2` `as float` (scientific_float), a text spells just the number
-	match parse_data(text).drop_meta() {
-		Node::Number(number) => Some(*number),
-		_ => None,
-	}
 }
 
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
@@ -735,13 +617,6 @@ pub struct Atom {
 	pub written: String,
 }
 
-/// The atoms the parser reads in a source, in order, as code: the token stream of this scannerless parser
-pub fn read_atoms(source: &str) -> Vec<Atom> {
-	let mut parser = WarpParser::new_with_options(source.to_string(), ParserOptions::default());
-	parser.parse_list_with_separators(None, Bracket::None);
-	parser.atoms
-}
-
 /// The one element of `items`, moved out (cloning it copied a whole subtree, the whole program at the top)
 fn only<T>(items: Vec<T>) -> T {
 	items.into_iter().next().expect("one element")
@@ -749,10 +624,6 @@ fn only<T>(items: Vec<T>) -> T {
 
 /// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
 const DATA_WORD_LITERALS: [&str; 3] = ["true", "false", "null"];
-
-fn real(exact: Exact) -> Node {
-	Node::Number(Number::real(Real::Exact(exact)))
-}
 
 /// The glyphs that are true or false (card keyword-glyphs), longest spelling first: `✔️` is `✔` with an emoji variation
 /// selector. Most start an emoji, which would otherwise be a codepoint (atoms.rs, parse_emoji)
@@ -772,44 +643,7 @@ pub(crate) const TRUTH_GLYPHS: [(&str, bool); 13] = [
 	("✗", false),
 ];
 
-pub(crate) fn truth_glyph(glyph: &str) -> Option<Node> {
-	TRUTH_GLYPHS
-		.iter()
-		.find(|(spelling, _)| *spelling == glyph)
-		.map(|(_, truth)| if *truth { Node::True } else { Node::False })
-}
-
-fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
-	let is_word = s.chars().all(|c| c.is_ascii_alphabetic());
-	if data_mode && is_word && !DATA_WORD_LITERALS.contains(&s) {
-		return None;
-	}
-	match s.to_lowercase().as_str() {
-		"true" | "yes" => Some(Node::True),
-		"false" | "no" | "" => Some(Node::False),
-		glyph if TRUTH_GLYPHS.iter().any(|(spelling, _)| *spelling == glyph) => truth_glyph(glyph),
-		"ø" | "null" | "nul" | "none" | "nil" | "nill" | "nix" | "nada" | "nothing" | "empty" | "void" => Some(Empty),
-		// exact generators (extensions/reals.rs); a bare `e` or `i` stays a free name
-		"π" | "pi" => Some(real(Exact::pi())),
-		"τ" | "tau" => Some(real(Exact::pi().scale(&Rational::integer(2)))),
-		"euler" | "ℯ" => Some(real(Exact::euler())),
-		"ⅈ" => Some(real(Exact::imaginary())),
-		// hyperreals (wiki/hyperreals.md): the glyphs only, `epsilon` stays a free name like `e`
-		"ε" => Some(real(Exact::epsilon())),
-		"ω" => Some(real(Exact::omega())),
-		_ => None,
-	}
-}
 // Tests moved to tests/parser/test_parser.rs
-
-/// `n-1`, the end a Kotlin writer gives an inclusive `..`
-fn is_minus_one(end: &Node) -> bool {
-	match end.drop_meta() {
-		Node::Key(_, Op::Sub, one) => matches!(one.drop_meta(), Node::Number(Number::Int(1))),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_minus_one(&items[0]),
-		_ => false,
-	}
-}
 
 pub(crate) fn mentions(node: &Node, name: &str) -> bool {
 	if crate::interpolation::template_mentions(node, |hole| mentions(hole, name)) {
@@ -823,75 +657,4 @@ pub(crate) fn mentions(node: &Node, name: &str) -> bool {
 	}
 }
 
-/// `a==b` built in the same expression, not grouped by parentheses (a group is parsed as its own node)
-fn ungrouped_equality(node: &Node) -> bool {
-	matches!(node, Node::Key(_, op, _) if op.is_equality())
-}
-
-/// `1==1==1` chains in Python (true) but is `(1==1)==1` in C: ambiguous, like in Rust
-fn chained_equality(lhs: &Node, op: Op, rhs: &Node) -> Diagnostic {
-	let (left, right) = (lhs.serialize(), rhs.serialize());
-	let middle = match lhs {
-		Node::Key(_, _, middle) => middle.serialize(),
-		_ => left.clone(),
-	};
-	let symbol = op.as_str();
-	let (chained, grouped) = (
-		format!("{left} and {middle} {symbol} {right}"),
-		format!("({left}) {symbol} {right}"),
-	);
-	Diagnostic::default()
-		.fix(format!("{chained} or {grouped}"))
-		.message(format!("ambiguous: equality does not chain in {left} {symbol} {right}"))
-		.offer(
-			"both equalities, as Python chains them",
-			format!("{left} {symbol} {right}"),
-			chained,
-		)
-		.offer(
-			"compare the first result, as C does",
-			format!("{left} {symbol} {right}"),
-			grouped,
-		)
-}
-
 const COMPARISON_FIRST: &str = "the comparison first, as C";
-/// `3 & 4 == 4` is `(3&4)==4` in Python but `3 & (4==4)` in C: `&`/`|` next to an ungrouped comparison is ambiguous.
-/// The word forms `and`/`or` read unambiguously and are not affected: `x==1 and y==2`.
-fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<Diagnostic> {
-	let comparison = |node: &Node| match node.drop_meta() {
-		Node::Key(left, op, right) if op.is_comparison() => Some((left.serialize(), op.as_str(), right.serialize())),
-		_ => None,
-	};
-	let (left, right) = (lhs.serialize(), rhs.serialize());
-	let readings = match (comparison(lhs), comparison(rhs)) {
-		(None, Some((a, op, b))) => vec![
-			(COMPARISON_FIRST.to_string(), format!("{left} {symbol} ({a} {op} {b})")),
-			(
-				format!("`{symbol}` first, as Python"),
-				format!("({left} {symbol} {a}) {op} {b}"),
-			),
-		],
-		(Some((a, op, b)), None) => vec![
-			(COMPARISON_FIRST.to_string(), format!("({a} {op} {b}) {symbol} {right}")),
-			(
-				format!("`{symbol}` first, as Python"),
-				format!("{a} {op} ({b} {symbol} {right})"),
-			),
-		],
-		(Some(_), Some(_)) => vec![(
-			"both comparisons first".to_string(),
-			format!("({left}) {symbol} ({right})"),
-		)],
-		(None, None) => return None,
-	};
-	let word = if symbol == '&' { "and" } else { "or" };
-	let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
-	let written = format!("{left} {symbol} {right}");
-	let diagnostic = Diagnostic::default().fix(forms.join(" or ")).message(format!(
-		"ambiguous: `{symbol}` mixed with a comparison in {written}; group it or write `{word}`"
-	));
-	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
-		diagnostic.offer(meaning, &written, form)
-	}))
-}

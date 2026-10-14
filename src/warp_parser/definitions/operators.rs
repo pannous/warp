@@ -348,32 +348,4 @@ impl WarpParser {
 		norm::operator(&written, is_prefix);
 		written
 	}
-
-	/// Ranges whose end readers expect either way are Asks, by default read as warp does (exclusive):
-	/// `a upto b` (wiki/range.md: excludes b) and the loop bound `for i in 0..n-1` (Kotlin's `..` includes n-1)
-	pub(crate) fn range_reading(
-		&self,
-		op: Op,
-		written: &str,
-		end: &Node,
-		line: usize,
-		column: usize,
-	) -> Result<Op, Node> {
-		let end_text = crate::normalize::operand_text(end);
-		let question = match written {
-			UPTO => format!(
-				"does `upto {end_text}` include {end_text}? (`..<` or `..` exclude it, `to` or `...` include it)"
-			),
-			EXCLUSIVE_DOTS if self.in_for_header && is_minus_one(end) => {
-				format!("does the loop bound `..{end_text}` include {end_text}? (warp's `..` excludes it, Kotlin's includes it)")
-			}
-			_ => return Ok(op),
-		};
-		let topic = if written == UPTO { UPTO } else { KOTLIN_RANGE };
-		let readings = vec![reading("exclusive", "..<"), reading("inclusive", "...")];
-		let chosen = ask(&Ask::new(topic, question, readings, Fallback::Warning)
-			.written(written)
-			.at(line, column))?;
-		Ok(if chosen == 0 { Op::Range } else { Op::To })
-	}
 }
