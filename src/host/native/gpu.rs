@@ -12,56 +12,77 @@ pub(super) fn gpu_compute(
 	let shader = given_shader(&mut caller, shader, &failure)?;
 	let numbers = given_node(&mut caller, numbers)?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
-	if let Some(arrays) = named_arrays(&numbers) {
-		let arrays = arrays
-			.into_iter()
-			.map(|(name, numbers)| {
-				Ok((
-					name,
-					numbers
-						.iter()
-						.map(|number| number_of(&number, &failure).map(f64::from))
-						.collect::<wasmtime::Result<Vec<f64>>>()?,
-				))
-			})
-			.collect::<wasmtime::Result<Vec<_>>>()?;
-		let left = crate::graphics::gpu::compute_named(&shader, &arrays, workgroups).map_err(&failure)?;
-		let entries = left
-			.into_iter()
-			.map(|(name, element, numbers)| {
-				let item = |number: f64| {
-					Node::Number(if element == crate::graphics::gpu::Element::Float {
-						Number::Float(number)
-					} else {
-						Number::Int(number as i64)
-					})
-				};
-				Node::Key(
-					Box::new(Node::Symbol(name)),
-					crate::operators::Op::Colon,
-					Box::new(Node::List(
-						numbers.into_iter().map(item).collect(),
-						crate::node::Bracket::Square,
-						crate::node::Separator::Space,
-					)),
-				)
-			})
-			.collect();
-		return built_in_program(
-			&mut caller,
-			&Node::List(entries, crate::node::Bracket::Curly, crate::node::Separator::Space),
-			GPU_COMPUTE,
-		);
-	}
+	let left = match named_arrays(&numbers) {
+		Some(arrays) => named_arrays_computed(&shader, arrays, workgroups, &failure)?,
+		None => array_computed(&shader, &numbers, workgroups, &failure)?,
+	};
+	built_in_program(&mut caller, &left, GPU_COMPUTE)
+}
+
+/// `{xs: [1 2 3], ys: [4 5 6]}`: the arrays the shader left, by name, as floats or ints as it declares them
+fn named_arrays_computed(
+	shader: &str,
+	arrays: Vec<(String, &Node)>,
+	workgroups: u32,
+	failure: &impl Fn(String) -> wasmtime::Error,
+) -> wasmtime::Result<Node> {
+	let arrays = arrays
+		.into_iter()
+		.map(|(name, numbers)| {
+			Ok((
+				name,
+				numbers
+					.iter()
+					.map(|number| number_of(&number, failure).map(f64::from))
+					.collect::<wasmtime::Result<Vec<f64>>>()?,
+			))
+		})
+		.collect::<wasmtime::Result<Vec<_>>>()?;
+	let left = crate::graphics::gpu::compute_named(shader, &arrays, workgroups).map_err(failure)?;
+	let entries = left
+		.into_iter()
+		.map(|(name, element, numbers)| {
+			let item = |number: f64| {
+				Node::Number(if element == crate::graphics::gpu::Element::Float {
+					Number::Float(number)
+				} else {
+					Number::Int(number as i64)
+				})
+			};
+			Node::Key(
+				Box::new(Node::Symbol(name)),
+				crate::operators::Op::Colon,
+				Box::new(Node::List(
+					numbers.into_iter().map(item).collect(),
+					crate::node::Bracket::Square,
+					crate::node::Separator::Space,
+				)),
+			)
+		})
+		.collect();
+	Ok(Node::List(
+		entries,
+		crate::node::Bracket::Curly,
+		crate::node::Separator::Space,
+	))
+}
+
+/// `[1 2 3]`: the array the shader left, of f32 or of i32/u32 as it declares its array
+fn array_computed(
+	shader: &str,
+	numbers: &Node,
+	workgroups: u32,
+	failure: &impl Fn(String) -> wasmtime::Error,
+) -> wasmtime::Result<Node> {
 	let numbers = numbers
 		.iter()
-		.map(|number| number_of(&number, &failure))
+		.map(|number| number_of(&number, failure))
 		.collect::<wasmtime::Result<Vec<Number>>>()?;
-	let left: Vec<Node> = match crate::graphics::gpu::element_of(&shader) {
+	let left: Vec<Node> = match crate::graphics::gpu::element_of(shader) {
 		crate::graphics::gpu::Element::Float => {
 			let floats: Vec<f32> = numbers.iter().map(|&number| f64::from(number) as f32).collect();
-			crate::graphics::gpu::compute(&shader, &floats, workgroups)
-				.map_err(&failure)?
+			crate::graphics::gpu::compute(shader, &floats, workgroups)
+				.map_err(failure)?
 				.into_iter()
 				.map(|float| Node::Number(Number::Float(float as f64)))
 				.collect()
@@ -76,18 +97,18 @@ pub(super) fn gpu_compute(
 					))),
 				})
 				.collect::<wasmtime::Result<Vec<i64>>>()?;
-			crate::graphics::gpu::compute_ints(&shader, &ints, workgroups, element)
-				.map_err(&failure)?
+			crate::graphics::gpu::compute_ints(shader, &ints, workgroups, element)
+				.map_err(failure)?
 				.into_iter()
 				.map(|int| Node::Number(Number::Int(int)))
 				.collect()
 		}
 	};
-	built_in_program(
-		&mut caller,
-		&Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space),
-		GPU_COMPUTE,
-	)
+	Ok(Node::List(
+		left,
+		crate::node::Bracket::Square,
+		crate::node::Separator::Space,
+	))
 }
 
 pub(super) fn number_of(node: &Node, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Number> {
