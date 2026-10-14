@@ -218,7 +218,7 @@ pub fn with_default_routes(program: Node) -> Node {
 /// A run without a server (the playground, `warp run`) has a page but answers no requests: each top-level `get "/path"
 /// {…}` is also the page at its path, `route "/path" {…}` (cards square-int, recognized-browser: `get "/" {"ok"}` shows
 /// "ok", the address bar's /square/9 shows `get "/square/:n:int" { n*n }`'s 81). A block reading the request has no
-/// page: there is no request
+/// page: there is no request; its `status`/`header` lines answer nothing there (host.js response_header)
 pub fn with_page_routes(program: Node) -> Node {
 	let mode = crate::pipeline::compile_mode();
 	let serving = crate::compiler::compile_context::read(|context| context.serving_port).is_some();
@@ -238,7 +238,7 @@ pub fn with_page_routes(program: Node) -> Node {
 			.filter(|(method, _, body)| method == "GET" && !reads_the_request(body))
 			.map(|(_, path, body)| {
 				Node::List(
-					vec![symbol(crate::routes::ROUTE_WORD), path, body],
+					vec![symbol(crate::routes::ROUTE_WORD), path, with_answer_headers(body)],
 					Bracket::None,
 					Separator::Space,
 				)

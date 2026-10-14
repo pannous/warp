@@ -27,3 +27,10 @@ get "/square/:n:int" { n*n }"#;
 	assert_eq!(shown_at("/square/3", program), "9");
 	assert!(shown_at("/", program).contains("try it"));
 }
+
+// samples/route_headers.warp: a route's status and header lines have no HTTP answer in the playground, its page shows
+#[test]
+fn a_page_of_a_route_with_headers_shows_its_value() {
+	let program = include_str!("../../samples/route_headers.warp");
+	assert_eq!(shown_at("/teapot", program), r#""short and stout""#);
+}
