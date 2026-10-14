@@ -84,6 +84,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
   (malloc/free, uniscript_error, uniscript_warnings) and release v1.0.8 ships uniscript_c.wasm + uniscript_c.h;
   `use uniscript` imports the prebuilt module (1.45–2.9 s → 0.27–0.57 s per run).
+  Default: warp's uniscript tests follow the released uniscript (`<:red 𓀀>` keeps red as color meta with a warning;
+  any uniscript.org/vN header is read without a warning, backwards compatible).
 - chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
   printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes. A one-character text is a character, so
   `["a" "b"]` prints `['a' 'b']` and `["a" "bc"]` prints `['a' "bc"]`.
