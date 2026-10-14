@@ -20,7 +20,7 @@
   `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/web/test_uniscript.rs 335 s → 24 s.
   A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
   identical GC rec groups); not there yet.
-- Package tools are prebuilt WebAssembly, never built from source into a shared target (src/package_tools.rs):
+- Package tools are prebuilt WebAssembly, never built from source into a shared target (src/modules/package_tools.rs):
   `run_package_tool(name, args)` / `warp tool <name> args…` runs `<name>.wasm`, a wasm32-wasip1 command, in-process
   under wasmtime-wasi with the package directory preopened as `.`. One artifact for every OS, no per-platform binaries.
   It comes from `<package>/<name>.wasm`, else the GitHub release asset `<name>.wasm` of the pinned tag (v1.2.3 or 1.2.3),

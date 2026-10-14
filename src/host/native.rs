@@ -17,7 +17,7 @@ fn guarded_call(
 	arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
 	let message = |failure: anyhow::Error| wasmtime::Error::msg(failure.to_string());
-	let name = crate::tasks::c_string(&mut caller, name).map_err(message)?;
+	let name = crate::host::tasks::c_string(&mut caller, name).map_err(message)?;
 	let function = caller
 		.get_export(&name)
 		.and_then(Extern::into_func)
@@ -30,8 +30,8 @@ fn guarded_call(
 	}];
 	let value = match function.call(&mut caller, &[Val::AnyRef(arguments)], &mut result) {
 		Ok(()) => match result[0] {
-			Val::I64(n) => crate::tasks::TaskValue::Int(n),
-			Val::F64(bits) => crate::tasks::TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits))),
+			Val::I64(n) => crate::host::tasks::TaskValue::Int(n),
+			Val::F64(bits) => crate::host::tasks::TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits))),
 			node => return Ok(node.unwrap_anyref().copied()),
 		},
 		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => {
@@ -39,7 +39,7 @@ fn guarded_call(
 		}
 		Err(failure) => return Err(failure),
 	};
-	let builders = crate::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(message)?;
+	let builders = crate::host::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(message)?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(message)?;
 	Ok(built.unwrap_anyref().copied())
 }
@@ -60,7 +60,7 @@ fn error_in_program(caller: &mut Caller<'_, HostState>, reason: &str) -> wasmtim
 	Ok(error[0].unwrap_anyref().copied())
 }
 
-use crate::tasks::task_failure;
+use crate::host::tasks::task_failure;
 use crate::util::gc_engine;
 use anyhow::anyhow;
 use log::trace;
@@ -282,9 +282,9 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, RESPONSE_HEADER, response_header)?;
 	linker.func_wrap(HOST_LIBRARY, FETCH_START, fetch_start)?;
 	linker.func_wrap(HOST_LIBRARY, FETCH_REPLY, fetch_reply)?;
-	crate::channels::forget_listeners(); // each run links anew, on its own thread
+	crate::host::channels::forget_listeners(); // each run links anew, on its own thread
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_LISTEN, channel_listen)?;
-	linker.func_wrap(HOST_LIBRARY, CHANNEL_PENDING, crate::channels::pending)?;
+	linker.func_wrap(HOST_LIBRARY, CHANNEL_PENDING, crate::host::channels::pending)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_NEXT, channel_next)?;
 	linker.func_wrap(HOST_LIBRARY, CLIPBOARD_TEXT, clipboard_text)?;
 	linker.func_wrap(HOST_LIBRARY, PAGE_PATH, page_path)?;
@@ -506,7 +506,7 @@ fn run_block(
 	values: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	definitions: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
-	use crate::tasks::TaskValue;
+	use crate::host::tasks::TaskValue;
 	let memory = module_memory(&mut caller, "run_block")?;
 	let mut store = caller.as_context_mut();
 	let [block, names, values, definitions] = [block, names, values, definitions]
@@ -533,11 +533,11 @@ fn parse_code(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Re
 
 thread_local! {
 	/// The values of the blocks running on this thread, the innermost last (a block may run a block)
-	static BLOCK_VALUES: std::cell::RefCell<Vec<Vec<crate::tasks::TaskValue>>> = const { std::cell::RefCell::new(Vec::new()) };
+	static BLOCK_VALUES: std::cell::RefCell<Vec<Vec<crate::host::tasks::TaskValue>>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Run `body` while block·value reads `values`
-pub fn with_block_values<R>(values: Vec<crate::tasks::TaskValue>, body: impl FnOnce() -> R) -> R {
+pub fn with_block_values<R>(values: Vec<crate::host::tasks::TaskValue>, body: impl FnOnce() -> R) -> R {
 	BLOCK_VALUES.with(|stack| stack.borrow_mut().push(values));
 	let result = body();
 	BLOCK_VALUES.with(|stack| stack.borrow_mut().pop());
@@ -562,7 +562,7 @@ fn block_value(
 }
 
 /// The host side of foreign_call: the runtime, module and member names and the arguments come in as Nodes, the
-/// answer goes back as one (src/foreign.rs)
+/// answer goes back as one (src/modules/foreign.rs)
 fn foreign_call(
 	mut caller: Caller<'_, HostState>,
 	runtime: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
@@ -571,7 +571,7 @@ fn foreign_call(
 	call: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
-	use crate::tasks::{Builders, TaskValue};
+	use crate::host::tasks::{Builders, TaskValue};
 	let memory = module_memory(&mut caller, "foreign_call")?;
 	let mut store = caller.as_context_mut();
 	let functions = function_arguments(&mut store, arguments)?;
@@ -599,7 +599,7 @@ fn foreign_call(
 			.map_err(|trap| trap.root_cause().to_string())?;
 		given_node(&mut caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
 	};
-	let answer = crate::foreign::call(
+	let answer = crate::modules::foreign::call(
 		&runtime.name(),
 		&module,
 		&member.name(),
@@ -658,14 +658,14 @@ fn function_arguments(
 		.collect()
 }
 
-/// The arguments with each closure `{$warp_function: index}`, its index among the closures (crate::foreign)
+/// The arguments with each closure `{$warp_function: index}`, its index among the closures (crate::modules::foreign)
 fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<wasmtime::AnyRef>>]) -> Node {
 	if functions.iter().all(Option::is_none) {
 		return arguments;
 	}
 	let marker = |index: usize| {
 		Node::List(
-			vec![Node::key(crate::foreign::WARP_FUNCTION_KEY, Node::int(index as i64))],
+			vec![Node::key(crate::modules::foreign::WARP_FUNCTION_KEY, Node::int(index as i64))],
 			crate::node::Bracket::Curly,
 			crate::node::Separator::Space,
 		)
@@ -757,7 +757,7 @@ fn route_failure(
 		_ => failure,
 	};
 	let trace = format!("{failure:?}");
-	let message = crate::tasks::failure_message(failure);
+	let message = crate::host::tasks::failure_message(failure);
 	eprintln!("{path} failed: {message}\n{trace}");
 	crate::web::web_server::RouteFailure { message, raised }
 }
@@ -799,7 +799,7 @@ fn route_value(caller: &mut Caller<'_, HostState>, function: &str, request: &Nod
 	})
 }
 
-/// std_pure / std_io(module, member, arguments): a word of the standard library's adapters (src/std_adapters.rs)
+/// std_pure / std_io(module, member, arguments): a word of the standard library's adapters (src/modules/std_adapters.rs)
 fn std_call(
 	mut caller: Caller<'_, HostState>,
 	module: HostNode,
@@ -812,7 +812,7 @@ fn std_call(
 		("table", "select") => queried_rows(&mut caller, &arguments?)?,
 		("sound", "signal") => played_signal(&mut caller, &arguments?)?,
 		("sound", "blocks") => played_blocks(&mut caller, &arguments?)?,
-		_ => match crate::std_adapters::call(&module, &member, &arguments?) {
+		_ => match crate::modules::std_adapters::call(&module, &member, &arguments?) {
 			Ok(answer) => answer,
 			// the program raises it (emit_ffi_result): `try` catches it, uncaught it ends the run with this reason
 			Err(problem) => return error_in_program(&mut caller, &problem),
@@ -825,7 +825,7 @@ fn std_call(
 /// that fails fails the query with its own error (the trap, whose trap_detail says what went wrong)
 fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
 	calling_back("table.select", |kept| {
-		crate::database::select(&arguments.children(), &mut |function, request| {
+		crate::host::database::select(&arguments.children(), &mut |function, request| {
 			route_value(caller, function, request).map_err(&mut *kept)
 		})
 	})
@@ -962,17 +962,17 @@ fn given_node(caller: &mut Caller<'_, HostState>, value: HostNode) -> wasmtime::
 	))
 }
 
-/// `on message from "chat" {…}` starts listening (src/channels.rs)
+/// `on message from "chat" {…}` starts listening (src/host/channels.rs)
 fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode) -> wasmtime::Result<()> {
 	let channel = given_node(&mut caller, channel)?;
-	crate::channels::listen(id, &channel.name()).map_err(task_failure)
+	crate::host::channels::listen(id, &channel.name()).map_err(task_failure)
 }
 
 /// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/serve.rs)
 fn request_of(request: &Node) -> crate::web::fetches::Request {
 	match request.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 => {
-			(items[0].name(), Some(crate::foreign::json_of(&items[1]).to_string()))
+			(items[0].name(), Some(crate::modules::foreign::json_of(&items[1]).to_string()))
 		}
 		url => (url.name(), None),
 	}
@@ -993,7 +993,7 @@ fn fetch_reply(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<H
 /// The oldest message the listener got, as the value it was sent as (ø when none waits)
 fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
 	let message = crate::web::web_sockets::next(id).unwrap_or_else(|| {
-		crate::channels::next(id)
+		crate::host::channels::next(id)
 			.map(|text| crate::warp_parser::parse(&text).drop_meta().clone())
 			.unwrap_or(Node::Empty)
 	});
@@ -1025,10 +1025,10 @@ pub fn with_page_path<R>(path: &str, body: impl FnOnce() -> R) -> R {
 /// The value built in the program by its exported constructors
 fn build_in_program(
 	caller: &mut Caller<'_, HostState>,
-	value: &crate::tasks::TaskValue,
+	value: &crate::host::tasks::TaskValue,
 	failure: &impl Fn(String) -> wasmtime::Error,
 ) -> wasmtime::Result<HostNode> {
-	let builders = crate::tasks::Builders::of(&mut |export| caller.get_export(export))
+	let builders = crate::host::tasks::Builders::of(&mut |export| caller.get_export(export))
 		.map_err(|problem| failure(problem.to_string()))?;
 	let built = builders
 		.build(value, &mut caller.as_context_mut())
@@ -1038,7 +1038,7 @@ fn build_in_program(
 
 /// A value of the host as a value of the program, built by its exported constructors
 fn built_in_program(caller: &mut Caller<'_, HostState>, value: &Node, word: &str) -> wasmtime::Result<HostNode> {
-	use crate::tasks::TaskValue;
+	use crate::host::tasks::TaskValue;
 	let failure = |problem: String| task_failure(format!("{word}: {problem}"));
 	let value = TaskValue::of(value).map_err(|problem| failure(problem.to_string()))?;
 	build_in_program(caller, &value, &failure)
@@ -1051,7 +1051,7 @@ fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: H
 	if crate::web::web_sockets::is_socket_address(&channel.name()) {
 		return crate::web::web_sockets::send(&channel.name(), &message).map_err(task_failure);
 	}
-	crate::channels::send(&channel.name(), message.serialize().trim()).map_err(task_failure)
+	crate::host::channels::send(&channel.name(), message.serialize().trim()).map_err(task_failure)
 }
 
 /// An event for the page: kept for the headless page (headless.rs dispatched); a page without a browser shows nothing

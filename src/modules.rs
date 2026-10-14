@@ -14,6 +14,21 @@ use loader::*;
 mod std_modules;
 pub use std_modules::*;
 mod packages;
+pub mod wasm_modules;
+#[cfg(feature = "native")]
+pub mod components;
+#[cfg(feature = "native")]
+pub mod component_builder;
+#[cfg(feature = "native")]
+pub mod cargo_crates;
+#[cfg(feature = "native")]
+pub mod package_tools;
+#[cfg(feature = "native")]
+pub mod std_adapters;
+pub mod std_docs;
+#[cfg(feature = "native")]
+pub mod foreign;
+pub mod binaryen;
 pub use packages::*;
 
 /// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
@@ -87,7 +102,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 			Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 			None => Ok(program),
 		})
-		.map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
+		.map(|program| crate::modules::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
 	let files = loader
 		.loaded
@@ -126,14 +141,14 @@ pub fn insert_module_classes(program: Node) -> Node {
 		if let Some(module) = loader
 			.find(&used.name)
 			.is_none()
-			.then(|| loader.find_with(&used.name, &crate::wasm_modules::MODULE_EXTENSIONS))
+			.then(|| loader.find_with(&used.name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
 			.flatten()
 		{
 			let module = module.to_string_lossy();
-			let classes = crate::wasm_modules::classes(&module);
+			let classes = crate::modules::wasm_modules::classes(&module);
 			let names: Vec<String> = classes.iter().filter_map(declared_name).collect();
 			program =
-				crate::wasm_modules::with_bare_classes(program, &crate::wasm_modules::module_alias(&module), &names);
+				crate::modules::wasm_modules::with_bare_classes(program, &crate::modules::wasm_modules::module_alias(&module), &names);
 			file_classes.extend(classes);
 			continue;
 		}
@@ -579,7 +594,7 @@ pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
 	if names_a_module(name) {
 		return None;
 	}
-	program_loader().find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS)
+	program_loader().find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS)
 }
 
 /// Does `use name` name anything: a module (warp, standard, WebAssembly), a scope, a package or a C library

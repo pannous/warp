@@ -21,13 +21,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// A program that starts tasks (`go`): each runs in a fresh instance of the module (src/tasks.rs)
+	/// A program that starts tasks (`go`): each runs in a fresh instance of the module (src/host/tasks.rs)
 	pub(super) fn spawns_tasks(&self) -> bool {
 		self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES)
 			|| self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN)
 	}
 
-	/// A global whose value a task's instance gets from the spawning instance (src/tasks.rs copies these at the start)
+	/// A global whose value a task's instance gets from the spawning instance (src/host/tasks.rs copies these at the start)
 	pub(super) fn export_to_tasks(&mut self, label: &str, global: u32) {
 		if self.spawns_tasks() {
 			self.exports

@@ -17,7 +17,7 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
 // window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
 const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
-// the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
+// the standard library's adapters (src/modules/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
 
@@ -53,7 +53,7 @@ function errorInProgram(program, reason) {
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
 // host-files.js, host-sound.js (needs host-files.js), host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
 // host-gpu.js (needs host-media.js), host-timers.js, host-random.js, host-media.js. A built site
-// ships a part only when its module imports one of the part's words or calls one of its std modules (src/host_parts.rs HOST_PARTS); the playground's workers
+// ships a part only when its module imports one of the part's words or calls one of its std modules (src/host/host_parts.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
 // name) an import module by its name (a .wasm path), else undefined; adapters, std modules for STD_ADAPTERS;
@@ -188,7 +188,7 @@ const decode = bytes => utf8Decoder.decode(bytes);
 
 const textTree = text => ({ kind: "3", data: { text }, chain: [] });
 const KIND_LIST = 8n;
-// the inverse of reader.js readNode for the values a task carries (src/tasks.rs TaskValue): built through the module's
+// the inverse of reader.js readNode for the values a task carries (src/host/tasks.rs TaskValue): built through the module's
 // constructors; a list from its cons cells, the first item in data, the next cells in the chain
 function buildValue(module, tree) {
 	// where it was written (src/web/mod.rs tree_of): kept by node_at, which only a module quoting or parsing code has
@@ -210,7 +210,7 @@ function buildValue(module, tree) {
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
 		case 1: {
-			// a module without bools (no new_bool) takes a truth as its Int 1/0, as src/tasks.rs does
+			// a module without bools (no new_bool) takes a truth as its Int 1/0, as src/host/tasks.rs does
 			if (payload.int !== undefined && String(kind) === BOOL_KIND && module.new_bool) return module.new_bool(BigInt(payload.int));
 			if (payload.int !== undefined) return module.new_int(BigInt(payload.int));
 			// beyond the fixnums: exact.js starts the parts that carry such numbers (tasks, foreign calls, run blocks)
@@ -288,7 +288,7 @@ const BOOL_KIND = String((1n << 8n) | 1n); // BOOL_INFO above Kind::Int
 const SQUARE_LIST = String((1n << 8n) | KIND_LIST);
 const CURLY_LIST = String(KIND_LIST);
 const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: Colon is 1
-// a codepoint (a WIT char, P94) as src/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
+// a codepoint (a WIT char, P94) as src/modules/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
 const KIND_CODEPOINT = "4";
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
 function treeOfPlain(value) {

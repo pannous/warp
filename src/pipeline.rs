@@ -627,8 +627,8 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(compile_context::read(|context| context.granted)) {
-		return Err(crate::node::error(&if crate::sandbox::is_sandboxed() {
-			crate::sandbox::denial(&name, capability.name())
+		return Err(crate::node::error(&if crate::host::sandbox::is_sandboxed() {
+			crate::host::sandbox::denial(&name, capability.name())
 		} else {
 			format!(
 				"capability denied: {name} needs the {} capability, which eval does not grant",
@@ -876,7 +876,7 @@ fn mentions(node: &Node, name: &str) -> bool {
 #[cfg(feature = "native")]
 fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
 	use crate::extensions::numbers::Number;
-	use crate::tasks::TaskValue;
+	use crate::host::tasks::TaskValue;
 	let mut numbers = vec![];
 	let bindings = bound
 		.into_iter()

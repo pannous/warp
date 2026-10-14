@@ -9,7 +9,7 @@ fn calculator() -> String {
 	std::fs::create_dir_all(&directory).unwrap();
 	let path = directory.join("calc.wasm");
 	let source = "interface calculator { add: (i32, i32) -> i32; scale: (f64) -> f64 }\ncomponent calc { export api: calculator }\nexport def add(a: i32, b: i32) -> i32 { a + b }\nexport def scale(x: f64) -> f64 { x * 2.5 }\n0";
-	std::fs::write(&path, warp::component_builder::build(source).expect("a component")).unwrap();
+	std::fs::write(&path, warp::modules::component_builder::build(source).expect("a component")).unwrap();
 	format!("use wasm \"{}\" as calc\n", path.display())
 }
 

@@ -1,10 +1,10 @@
-//! A package's tool is its prebuilt WebAssembly command `<name>.wasm`, run in-process (src/package_tools.rs):
+//! A package's tool is its prebuilt WebAssembly command `<name>.wasm`, run in-process (src/modules/package_tools.rs):
 //! warp never builds a package into a shared cargo target directory, where uniscript 1.0.0 once overwrote
 //! the binary of a uniscript checkout.
 
 use std::path::Path;
 use warp::modules::{cached_package, pinned_version};
-use warp::package_tools::{package_tool, run_package_tool};
+use warp::modules::package_tools::{package_tool, run_package_tool};
 
 #[test]
 fn a_package_tool_runs_in_the_package_directory() {

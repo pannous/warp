@@ -4,7 +4,7 @@
 move_module.py <module> <folder>      e.g. move_module.py real numbers
 
 src/<module>.rs (and src/<module>/) go to src/<folder>/; the `mod` line with its attributes leaves lib.rs for the
-folder's module file (created when missing, declared in lib.rs in place of the old line); every `crate::<module>` and
+folder's module file (created when missing, declared in lib.rs in place of the old line); every `crate::<module>` (in this crate) and
 `warp::<module>` path becomes `…::<folder>::<module>`, lib.rs re-exports included. Its include_str!/include_bytes! paths gain one `../`;
 its `super::` paths are reported for a look (inline `mod tests` keep theirs).
 """
@@ -16,6 +16,8 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(REPO, "src")
 LIB = os.path.join(SOURCE, "lib.rs")
+# A relative path in include_str!/include_bytes!, also when built with concat!
+INCLUDE_PATH = re.compile(r'(include_(?:str|bytes)!\((?:concat!\()?")(?!/)')
 PATH_DIRECTORIES = ["src", "tests", "benches", "examples", "crates", "build.rs", "probes"]
 
 
@@ -66,10 +68,10 @@ def rust_files():
 			yield from (os.path.join(root, file) for file in files if file.endswith(".rs"))
 
 
-def rewrite_grouped_imports(text, module, folder):
+def rewrite_grouped_imports(text, module, folder, roots="crate|warp"):
 	"""`use warp::{a, module, b::c}`: the module named at the group's first level"""
 	output, position = [], 0
-	for opening in re.finditer(r"\buse (crate|warp)::\{", text):
+	for opening in re.finditer(r"\buse (" + roots + r")::\{", text):
 		if opening.start() < position:
 			continue
 		depth, index = 1, opening.end()
@@ -98,10 +100,13 @@ def rewrite_file_mentions(module, folder):
 
 
 def rewrite_paths(module, folder):
-	pattern = re.compile(r"\b(crate|warp)::" + module + r"\b")
 	for path in rust_files():
+		in_this_crate = not os.path.relpath(path, REPO).startswith("crates")
+		pattern = re.compile(r"\b(crate|warp)::" + module + r"\b" if in_this_crate else r"\b(warp)::" + module + r"\b")
 		text = read(path)
-		changed = rewrite_grouped_imports(pattern.sub(r"\1::" + folder + "::" + module, text), module, folder)
+		changed = rewrite_grouped_imports(
+			pattern.sub(r"\1::" + folder + "::" + module, text), module, folder, "crate|warp" if in_this_crate else "warp"
+		)
 		if path == LIB:
 			changed = re.sub(r"\bpub use " + module + r"::", "pub use " + folder + "::" + module + "::", changed)
 		if changed != text:
@@ -112,7 +117,7 @@ def deepen_moved_file(path):
 	text = read(path)
 	if "super::" in text:
 		print(f"{path}: check its super:: paths, they meant the crate root before the move")
-	text = re.sub(r'(include_(?:str|bytes)!\(")(?!/)', r"\1../", text)
+	text = INCLUDE_PATH.sub(r"\1../", text)
 	write(path, text)
 
 
@@ -121,7 +126,7 @@ def deepen_includes(directory):
 		for file in files:
 			if file.endswith(".rs"):
 				path = os.path.join(root, file)
-				write(path, re.sub(r'(include_(?:str|bytes)!\(")(?!/)', r"\1../", read(path)))
+				write(path, INCLUDE_PATH.sub(r"\1../", read(path)))
 
 
 def main():

@@ -566,7 +566,7 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 		let module_name = import.module();
 		// Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
 		let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
-		let wasm_module = crate::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
+		let wasm_module = crate::modules::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
 		if !built_in_libc
 			&& !wasm_module
 			&& !matches!(

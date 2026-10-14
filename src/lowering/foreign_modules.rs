@@ -1,5 +1,5 @@
 //! `use python "math"` (also `use python math`, `use python "os.path" as path`, `use js Math`): the module of another runtime, reached
-//! through the host word foreign_call (src/foreign.rs, notes/stdlib_connectors.md). `math.sqrt(2)` is the call
+//! through the host word foreign_call (src/modules/foreign.rs, notes/stdlib_connectors.md). `math.sqrt(2)` is the call
 //! `foreign_call("python", "math", "sqrt", 1, [2])`, `math.pi` the read `foreign_call("python", "math", "pi", 0, ø)`
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
@@ -16,15 +16,15 @@ const USE_WORD: &str = "use";
 pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME];
 /// JavaScript: its browser globals are typed through WebIDL (src/formats/web_idl.rs)
 const JS_RUNTIME: &str = "js";
-/// The member of a foreign call that constructs its module (`new URL(…)`, src/foreign.rs and host-foreign.js)
+/// The member of a foreign call that constructs its module (`new URL(…)`, src/modules/foreign.rs and host-foreign.js)
 const CONSTRUCTOR_MEMBER: &str = "";
-/// The member a call sets to its one argument: `e.innerHTML = "x"` is the member "set innerHTML" (src/foreign.rs)
+/// The member a call sets to its one argument: `e.innerHTML = "x"` is the member "set innerHTML" (src/modules/foreign.rs)
 const SETTER_PREFIX: &str = "set ";
-/// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
+/// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/modules/components.rs); its module is the file, found next to the
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
 const COMPONENT_EXTENSION: &str = ".wasm";
-/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/cargo_crates.rs)
+/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/modules/cargo_crates.rs)
 pub const CRATE_RUNTIMES: [&str; 2] = ["cargo", "crate"];
 /// The version after `\0asm` in a core module's header; a component's names another layer
 const CORE_MODULE_VERSION: [u8; 4] = [1, 0, 0, 0];
@@ -119,7 +119,7 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 	}))
 }
 
-/// `use cargo regex`, `use crate "regex" as re`: the component src/cargo_crates.rs builds of the crate, `as` the crate's
+/// `use cargo regex`, `use crate "regex" as re`: the component src/modules/cargo_crates.rs builds of the crate, `as` the crate's
 /// name by default
 fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node, String>> {
 	if !word.is_symbol(USE_WORD)
@@ -141,7 +141,7 @@ fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node,
 
 #[cfg(feature = "native")]
 fn crate_component(name: &str) -> Result<String, String> {
-	crate::cargo_crates::component(name)
+	crate::modules::cargo_crates::component(name)
 }
 
 #[cfg(not(feature = "native"))]
@@ -369,10 +369,10 @@ fn is_warp_method(name: &str) -> bool {
 		|| (1..=3).any(|arity| crate::wasm_emitter::text_builtins::text_builtin_kind(name, arity).is_some())
 }
 
-/// The resource a component's function or method gives (src/components.rs); the browser build reads no component
+/// The resource a component's function or method gives (src/modules/components.rs); the browser build reads no component
 #[cfg(feature = "native")]
 fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<String> {
-	crate::components::result_kind(path, member, kind)
+	crate::modules::components::result_kind(path, member, kind)
 }
 
 #[cfg(not(feature = "native"))]
@@ -383,7 +383,7 @@ fn result_kind(_path: &str, _member: &str, _kind: Option<&str>) -> Option<String
 /// Does the resource `kind` of a component have the method `member` taking no arguments?
 #[cfg(feature = "native")]
 fn has_method(path: &str, kind: &str, member: &str) -> bool {
-	crate::components::takes_no_arguments(path, member, kind)
+	crate::modules::components::takes_no_arguments(path, member, kind)
 }
 
 #[cfg(not(feature = "native"))]

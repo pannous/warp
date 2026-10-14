@@ -36,7 +36,7 @@ impl SharedArrays {
 		let array = self.array(id)?;
 		match usize::try_from(index - 1).ok().filter(|cell| *cell < array.len() - 1) {
 			Some(cell) => Ok((array, cell)),
-			None => Err(crate::tasks::task_failure("index out of range".to_string())),
+			None => Err(crate::host::tasks::task_failure("index out of range".to_string())),
 		}
 	}
 

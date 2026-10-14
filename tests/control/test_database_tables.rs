@@ -142,15 +142,15 @@ fn a_table_loads_its_rows_only_when_read() {
 		"people_lazy",
 		"people.add(Person(\"Jo\", 5))\npeople.add(Person(\"Ki\", 6))",
 	));
-	let before = warp::database::rows_read();
+	let before = warp::host::database::rows_read();
 	is!(
 		&program("people_lazy", "people.add(Person(\"Lu\", 7))\ncount(people)"),
 		3
 	);
-	assert_eq!(warp::database::rows_read(), before, "counting and adding loaded rows");
+	assert_eq!(warp::host::database::rows_read(), before, "counting and adding loaded rows");
 	is!(&program("people_lazy", "people#2.name"), "Ki");
 	assert!(
-		warp::database::rows_read() > before,
+		warp::host::database::rows_read() > before,
 		"reading an element loads the rows"
 	);
 }
@@ -163,10 +163,10 @@ fn an_element_of_a_table_loads_one_row() {
 		"people_indexed",
 		"people.add(Person(\"Ny\", 5))\npeople.add(Person(\"Oz\", 6))\npeople.add(Person(\"Pi\", 7))",
 	));
-	let before = warp::database::rows_read();
+	let before = warp::host::database::rows_read();
 	is!(&program("people_indexed", "people#2.name"), "Oz");
 	assert_eq!(
-		warp::database::rows_read(),
+		warp::host::database::rows_read(),
 		before + 1,
 		"people#2 read more than its row"
 	);
@@ -187,7 +187,7 @@ fn iterating_a_table_reads_it_in_pages() {
 		"people_paged",
 		"for i in 1 to 250 { people.add(Person(\"N\" + i, i)) }",
 	));
-	let before = warp::database::rows_read();
+	let before = warp::host::database::rows_read();
 	is!(
 		&program(
 			"people_paged",
@@ -196,7 +196,7 @@ fn iterating_a_table_reads_it_in_pages() {
 		150
 	);
 	assert_eq!(
-		warp::database::rows_read(),
+		warp::host::database::rows_read(),
 		before + 200,
 		"a loop breaking at row 150 read other than two pages"
 	);

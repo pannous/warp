@@ -13,7 +13,6 @@ pub mod words;
 #[cfg(feature = "native")]
 pub use util::gc_engine;
 pub mod analyzer;
-pub mod binaryen;
 pub mod compiler;
 #[cfg(feature = "native")]
 pub mod gc_traits;
@@ -39,46 +38,22 @@ pub use lowering::{
 	variable_signals, variadic, versions, welcome_forms, word_operators, word_slices,
 };
 #[cfg(feature = "native")]
-pub mod cargo_crates;
-#[cfg(feature = "native")]
-pub mod channels;
-#[cfg(feature = "native")]
-pub mod component_builder;
-#[cfg(feature = "native")]
-pub mod components;
-#[cfg(feature = "native")]
 pub mod crash_card;
-#[cfg(feature = "native")]
-pub mod database;
 pub mod diagnostic;
 pub mod ffi;
 pub mod fixits;
-#[cfg(feature = "native")]
-pub mod foreign;
 pub mod graphics;
 pub mod host;
-pub mod host_parts;
 pub mod text;
 pub mod law;
 pub mod modules;
 pub mod normalize;
 pub mod operators;
-#[cfg(feature = "native")]
-pub mod package_tools;
 pub mod numbers;
-pub mod sandbox;
-#[cfg(feature = "native")]
-pub mod shared;
 #[cfg(feature = "native")]
 pub mod sound;
-#[cfg(feature = "native")]
-pub mod std_adapters;
-pub mod std_docs;
-#[cfg(feature = "native")]
-pub mod tasks;
 pub mod time;
 pub mod warp_parser;
-pub mod wasm_modules;
 pub mod web;
 pub mod formats;
 

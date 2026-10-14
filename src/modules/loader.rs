@@ -314,7 +314,7 @@ impl<'a> Loader<'a> {
 					}),
 				};
 			}
-			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
+			if let Some(module) = self.find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS) {
 				return Ok(self.use_wasm_module(&module, statement, import));
 			}
 			if import == Import::Use && package_repository(name).is_some() {
@@ -662,7 +662,7 @@ impl<'a> Loader<'a> {
 			other => other,
 		};
 		let entry = (import == Import::Include)
-			.then(|| crate::wasm_modules::entry_call(&path))
+			.then(|| crate::modules::wasm_modules::entry_call(&path))
 			.flatten();
 		std::iter::once(used).chain(entry).collect()
 	}

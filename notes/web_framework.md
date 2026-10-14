@@ -425,7 +425,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Lazy loading per route (2026-10-07, src/web/route_split.rs, tests/web/test_route_modules.rs, browser probe
   probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
   functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
-  src/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
+  src/modules/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
   placeholder import (`placeholder.app-route-N`) per moved function. site.js instantiates app.wasm (host.js
   instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
   instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
@@ -547,13 +547,13 @@ Each step is useful on its own and is what the next ones stand on.
 - Global object (slice 6): `use js self` / `globalThis` (`window` on a page; in the Worker an error naming self) is
   the program's scope, with WindowOrWorkerGlobalScope bundled whole (fetch, atob, setTimeout…) plus Response and
   Headers. The scope is bundled in part, so a member it lacks stays unchecked (`window.innerWidth`). A `Promise<T>`
-  result is T: node's loop awaits a call (src/foreign.rs), so `self.fetch(url)` is a Response, `.text()` a text,
+  result is T: node's loop awaits a call (src/modules/foreign.rs), so `self.fetch(url)` is a Response, `.text()` a text,
   `.status` an int. Natively node mirrors self/window as globalThis. In the browser host main awaits it via JSPI
   (card jspi-page, notes/web_playground.md "Foreign runtimes"); without JSPI (Safari) a promise is a clear error. warp's own `fetch "/x"` is unaffected.
 - P203 (user): `use js <global>` is the annotation (like `use c` headers), so these checks stay compile errors
   (warp-dc, 2026-10-08).
 - Constructors (slice 7): `use js URL; URL(text)` calls the constructor (JavaScript's `new`: foreign_call member "",
-  foreign_modules.rs CONSTRUCTOR_MEMBER; src/foreign.rs and host-foreign.js construct). WebIDL's `constructor(…)`
+  foreign_modules.rs CONSTRUCTOR_MEMBER; src/modules/foreign.rs and host-foreign.js construct). WebIDL's `constructor(…)`
   members (web_idl.rs Definition.constructors) check the argument count, an interface without one is an error
   (`Location()`), and the value is typed as the interface. Bundled for this: URL, URLSearchParams, Blob, Headers,
   WebSocket. A global WebIDL does not declare (Date) is constructed unchecked.

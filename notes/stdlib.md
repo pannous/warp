@@ -188,7 +188,7 @@ engine has is a loud error in both, never a different result.
 Two host words carry every adapter: `std_pure(module, member, arguments)` for words without effects (json, hash,
 regex: capability like libm's) and `std_io(…)` for words that touch the outside (file, os, net: Host, IO). A std module
 defines its words over them, `parse_json(text) := std_pure("json", "parse", [text])` (lib/json.warp); natively
-src/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
+src/modules/std_adapters.rs answers by (module, member), in the browser host.js STD_ADAPTERS. Values cross as for the foreign
 runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain). Their results are any Node (analyzer
 ANY_VALUE_WORDS). The wrappers' parameters are annotated `any` (`to_json(value:any)`): an unannotated parameter fed
 only by such values would default to an int ("not an int" for `parse_json(post(…))`).
@@ -290,7 +290,7 @@ is the symbol args (no CLI way to pass them); a std module's `use list` worked, 
 - **Discoverability** (done, card std-module-docs): `warp help list` prints a module's leading comment and its words,
   each with the comment line right above it; `warp help --markdown` prints the same index as wiki/standard-library.md,
   so docs never drift from lib/. Consecutive comments keep the nearest line, preventing an earlier helper comment from
-  attaching to the next public word (src/std_docs.rs, tests/modules/test_std_module_docs.rs). `warp help` lists the modules.
+  attaching to the next public word (src/modules/std_docs.rs, tests/modules/test_std_module_docs.rs). `warp help` lists the modules.
 
 ### Cards (column Next)
 std-use-several, std-from-import, std-module-uses-module, std-prelude-module, std-implicit-use, std-args,

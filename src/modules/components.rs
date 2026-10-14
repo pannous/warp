@@ -273,7 +273,7 @@ impl Loaded {
 					_ => false,
 				},
 			})
-			// `regex.Regex("a+")` of a resource without a constructor: its static `new` (a Rust crate's, src/cargo_crates.rs)
+			// `regex.Regex("a+")` of a resource without a constructor: its static `new` (a Rust crate's, src/modules/cargo_crates.rs)
 			.or_else(|| {
 				self.functions
 					.iter()
@@ -556,7 +556,7 @@ impl Handles<'_> {
 			Val::U64(number) => Value::from(*number),
 			Val::Float32(number) => Value::from(f64::from(*number)),
 			Val::Float64(number) => Value::from(*number),
-			Val::Char(character) => serde_json::json!({ crate::foreign::CODEPOINT_KEY: character.to_string() }),
+			Val::Char(character) => serde_json::json!({ crate::modules::foreign::CODEPOINT_KEY: character.to_string() }),
 			Val::String(text) => Value::String(text.clone()),
 			Val::List(items) | Val::Tuple(items) | Val::FixedLengthList(items) => {
 				Value::Array(items.iter().map(|item| self.json_of(item)).collect::<Result<_, _>>()?)

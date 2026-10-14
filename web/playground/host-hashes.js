@@ -42,7 +42,7 @@ const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
 });
 const crc32Of = bytes => (bytes.reduce((crc, byte) => CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8), 0xffffffff) ^ 0xffffffff) >>> 0;
 
-// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/std_adapters.rs)
+// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/modules/std_adapters.rs)
 function withoutClassTags(value, classes) {
 	if (Array.isArray(value)) return value.map(item => withoutClassTags(item, classes));
 	if (value === null || typeof value !== "object") return value;
@@ -50,7 +50,7 @@ function withoutClassTags(value, classes) {
 	if (keys.length === 1 && classes.has(keys[0]) && value[keys[0]] !== null && typeof value[keys[0]] === "object" && !Array.isArray(value[keys[0]])) return withoutClassTags(value[keys[0]], classes);
 	return Object.fromEntries(keys.map(key => [key, withoutClassTags(value[key], classes)]));
 }
-// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
+// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/modules/std_adapters.rs regex_of)
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
 	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);

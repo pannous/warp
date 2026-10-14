@@ -139,7 +139,7 @@ impl WasmGcEmitter {
 			.ctx
 			.ffi_imports
 			.values()
-			.any(|import| crate::wasm_modules::is_module_path(import.library))
+			.any(|import| crate::modules::wasm_modules::is_module_path(import.library))
 		{
 			let assign = (0..3).flat_map(|field_index| {
 				[

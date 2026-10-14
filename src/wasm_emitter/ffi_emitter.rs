@@ -12,7 +12,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_ffi_args(&mut self, func: &mut Function, args: &[Node], sig: &crate::ffi::FfiSignature) {
 		// a text whose length the call leaves out crosses as (pointer, length): strcmp's, a module's `const void *, size_t`
 		let texts_with_lengths = if args.len() < sig.params.len() {
-			crate::wasm_modules::texts_with_lengths(sig)
+			crate::modules::wasm_modules::texts_with_lengths(sig)
 		} else {
 			vec![]
 		};

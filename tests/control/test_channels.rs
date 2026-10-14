@@ -26,7 +26,7 @@ fn receiving_with_no_task_left_is_an_error() {
 	crate::common::fails_with("ch = channel(); ch.receive()", "waits forever");
 }
 
-// `channel "name"` is the machine-wide channel (src/channels.rs) with the same words; a program hears its own sends.
+// `channel "name"` is the machine-wide channel (src/host/channels.rs) with the same words; a program hears its own sends.
 // Native only: the page's BroadcastChannel does not deliver to its sender, and a waiting receive cannot yield to it
 #[cfg(feature = "native")]
 #[test]

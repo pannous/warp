@@ -66,8 +66,8 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    - Foreign calls in an executable (card exe-foreign, done 2026-10-12): `use python`/`use js` work in an
      executable. It starts python3 or node from PATH when it runs (user decision) and fails loudly naming a missing
      interpreter ("cannot start python3 (…); set WARP_PYTHON to an interpreter"). One bridge for both:
-     warp-runtime/src/foreign.rs holds the children, loop scripts and callbacks on serde_json::Value; warp's
-     src/foreign.rs only turns Nodes into JSON and back and calls components. warp-runtime/src/gc_values.rs reads a
+     warp-runtime/src/modules/foreign.rs holds the children, loop scripts and callbacks on serde_json::Value; warp's
+     src/modules/foreign.rs only turns Nodes into JSON and back and calls components. warp-runtime/src/gc_values.rs reads a
      program's GC Node as JSON and builds JSON back through its constructor exports (new_text … exact_add);
      stub_calls_export_with_foreign_calls keeps those exports when the program imports foreign_call.
      `use python` no longer imports fetch, read, warn and run (wasm_emitter emit_host_imports only for those words).

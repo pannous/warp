@@ -38,7 +38,7 @@ const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("wasi_environment", Wasi, &[IO]),
 	("execute", Sql, &[IO]),
 	("exec", Process, &[IO]),
-	// the standard library's adapters (src/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO
+	// the standard library's adapters (src/modules/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO
 	("std_pure", Libm, &[]),
 	("std_io", Host, &[IO]),
 ];
@@ -155,7 +155,7 @@ pub enum Capability {
 	Sql,
 	/// Runs typed `sh` commands (`exec`)
 	Process,
-	/// Modules of another runtime, `use python "math"` (foreign_call, src/foreign.rs; user decision P89)
+	/// Modules of another runtime, `use python "math"` (foreign_call, src/modules/foreign.rs; user decision P89)
 	Foreign,
 }
 

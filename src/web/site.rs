@@ -6,10 +6,10 @@
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
 use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
-pub(crate) use crate::host_parts::{
+pub(crate) use crate::host::host_parts::{
 	compile_failure, exports, host_scripts_of, imports_of, message_of, with_excerpt, GPU_WORDS, TASK_WORD_PREFIXES,
 };
-pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
+pub use crate::host::host_parts::{HostPart, Script, HOST_PARTS};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 pub use warp_runtime::site_files::{content_type, file_at, SiteFile};
@@ -230,7 +230,7 @@ fn replies_script(requests: &[Node], values: &[Node]) -> String {
 			let answer = crate::web::web_server::Answer::of(value);
 			Some(serde_json::json!({
 				"url": url.name(),
-				"arguments": crate::foreign::json_of(&arguments),
+				"arguments": crate::modules::foreign::json_of(&arguments),
 				"body": String::from_utf8_lossy(&answer.body),
 				"text": answer.content_type.starts_with(crate::web::web_server::TEXT_REPLY_TYPE),
 			}))

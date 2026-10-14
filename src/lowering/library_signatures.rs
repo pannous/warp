@@ -51,7 +51,7 @@ pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 
 /// `replace(t, old, new) := …` → `(t, old, new)`
 fn prelude_signature(word: &str) -> Option<String> {
-	let head = crate::std_docs::word_head(PRELUDE, word)?;
+	let head = crate::modules::std_docs::word_head(PRELUDE, word)?;
 	head.strip_prefix(word).map(str::to_string)
 }
 

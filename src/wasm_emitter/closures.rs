@@ -20,7 +20,7 @@ use ValType::Ref;
 
 const ENTRY_PREFIX: &str = "closure_entry_";
 /// closure_rebuild(name, captured) and closure_captured(f): what a host needs to carry a closure to another instance of
-/// the module (a task, src/tasks.rs): its target's name and its captured values; the entry is found again by name
+/// the module (a task, src/host/tasks.rs): its target's name and its captured values; the entry is found again by name
 pub const CLOSURE_REBUILD: &str = "closure_rebuild";
 pub const CLOSURE_CAPTURED: &str = "closure_captured";
 /// closure_apply(f, arguments): f called with the items of the list `arguments`, as many as f takes (missing ones ø,

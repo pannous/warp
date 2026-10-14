@@ -620,7 +620,7 @@ pub struct TaskTable {
 	/// the tasks of the run still running, nested ones too (task_forks)
 	running: AtomicI64,
 	/// the shared arrays of the run, linked into every task (shared.rs)
-	shared: Option<Arc<crate::shared::SharedArrays>>,
+	shared: Option<Arc<crate::host::shared::SharedArrays>>,
 	channels: Channels,
 }
 
@@ -630,7 +630,7 @@ pub fn link(
 	engine: &Engine,
 	module: &Module,
 	imports: Imports,
-	shared: Option<Arc<crate::shared::SharedArrays>>,
+	shared: Option<Arc<crate::host::shared::SharedArrays>>,
 ) -> Result<Arc<TaskTable>> {
 	let table = Arc::new_cyclic(|own| TaskTable {
 		own: own.clone(),

@@ -66,7 +66,7 @@ pub const TASK_PAUSE: i64 = 2;
 pub const TASK_RESUME: i64 = 3;
 /// The Int arguments task_spawn carries; a function of more runs where it is started
 pub const MAX_TASK_ARGUMENTS: usize = 4;
-/// Shared arrays (shared_arrays.rs, src/shared.rs natively, host.js): shared_new(n) → array, shared_get(array, i),
+/// Shared arrays (shared_arrays.rs, src/host/shared.rs natively, host.js): shared_new(n) → array, shared_get(array, i),
 /// shared_set(array, i, v), shared_add(array, i, v) (atomic, the new value), shared_count(array)
 pub const SHARED_WORDS: [&str; 5] = ["shared_new", "shared_get", "shared_set", "shared_add", "shared_count"];
 /// shared_writes(array): how many sets and adds the array had, so a listener polling it sees each write (P156 footgun
@@ -97,7 +97,7 @@ pub const DRAW_SHOW: &str = "draw_show";
 pub const SOUND: &str = "sound_samples";
 /// The host words whose first argument is a list of ints, read in one call of the module's list_to_ints
 pub const INT_LIST_WORDS: [&str; 2] = [PAINT, SOUND];
-/// Channels between programs (src/channels.rs): channel_listen(id, channel), channel_pending(id) → count,
+/// Channels between programs (src/host/channels.rs): channel_listen(id, channel), channel_pending(id) → count,
 /// channel_next(id) → the oldest message, channel_send(channel, value)
 pub const CHANNEL_LISTEN: &str = "channel_listen";
 pub const CHANNEL_PENDING: &str = "channel_pending";
@@ -106,7 +106,7 @@ pub const CHANNEL_SEND: &str = "channel_send";
 /// dispatch_event(name, detail): an emit no handler of a page's program receives, as a DOM CustomEvent on the page
 /// (card page-custom-event, lowering/event_signals.rs; host.js; natively the headless page keeps it)
 pub const DISPATCH_EVENT: &str = "dispatch_event";
-/// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/std_adapters.rs, host.js),
+/// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/modules/std_adapters.rs, host.js),
 /// called by the words of lib/<module>.warp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
 pub const STD_IO: &str = "std_io";
@@ -277,6 +277,16 @@ use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
 #[cfg(feature = "native")]
 mod native;
+pub mod host_parts;
+pub mod sandbox;
+#[cfg(feature = "native")]
+pub mod channels;
+#[cfg(feature = "native")]
+pub mod tasks;
+#[cfg(feature = "native")]
+pub mod shared;
+#[cfg(feature = "native")]
+pub mod database;
 #[cfg(feature = "native")]
 pub use native::*;
 /// Body of `url`, or the reason it could not be fetched

@@ -1,4 +1,4 @@
-// A task of a program on its own Worker (host.js startTask, src/tasks.rs natively): the function runs in a fresh instance
+// A task of a program on its own Worker (host.js startTask, src/host/tasks.rs natively): the function runs in a fresh instance
 // of the program's module, and its result (or failure) and printed output go back as JSON in the shared buffer the
 // starting program waits on with Atomics.wait.
 

@@ -264,7 +264,7 @@ pub fn shown(outcome: &Value) -> Value {
 /// The playground's Deploy (deploy.js, notes/hosting.md): `{scripts, module_length}` (the host scripts' names, which
 /// warp-hosting takes as ?scripts=) and the program's module for a Worker, or `{error}` and no module
 pub fn worker_bundle(code: &str) -> (Value, Vec<u8>) {
-	match crate::host_parts::worker_parts(code) {
+	match crate::host::host_parts::worker_parts(code) {
 		Ok((module, scripts)) => {
 			let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
 			(json!({ "scripts": names, "module_length": module.len() }), module)
@@ -309,7 +309,7 @@ fn tree_of(node: &Node) -> Option<Value> {
 		Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => {
 			json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] })
 		}
-		// beyond the fixnums: host.js composes it from fixnum pieces (src/tasks.rs EXACT_BUILDERS)
+		// beyond the fixnums: host.js composes it from fixnum pieces (src/host/tasks.rs EXACT_BUILDERS)
 		Node::Number(Number::Int(n)) => {
 			json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] })
 		}

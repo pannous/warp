@@ -4,7 +4,7 @@
 //! keeps a table slot and a placeholder import (module `placeholder.app-route-N`) per moved function, and the route's
 //! module, instantiated with the primary's exports as `primary`, fills the slots. Without wasm-split on PATH the site
 //! ships one module, with a note.
-use crate::binaryen::BINARYEN_FEATURES;
+use crate::modules::binaryen::BINARYEN_FEATURES;
 use crate::compiler::dead_functions::CallGraph;
 use crate::host::{TASK_SPAWN, TASK_SPAWN_VALUES, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR};
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ pub fn split_by_route(module: &[u8]) -> Result<Option<RouteModules>, String> {
 	if manifest.is_empty() {
 		return Ok(None);
 	}
-	if !crate::binaryen::available(WASM_SPLIT) {
+	if !crate::modules::binaryen::available(WASM_SPLIT) {
 		eprintln!(
 			"note: the site ships one module: install binaryen for wasm-split, so each route loads its own module"
 		);
@@ -98,12 +98,12 @@ fn manifest(module: &[u8]) -> Result<Vec<(String, Vec<String>)>, String> {
 /// The program's own functions, exported only for tasks (host.rs USER_FUNCTIONS_SECTION): a task runs them by name in
 /// an instance of its own, without the route's module, so with tasks they stay
 fn movable_exports(module: &[u8]) -> Result<Vec<String>, String> {
-	let spawns_tasks = crate::host_parts::imports_of(module)?
+	let spawns_tasks = crate::host::host_parts::imports_of(module)?
 		.iter()
 		.any(|(_, name)| TASK_SPAWNS.contains(&name.as_str()));
 	match spawns_tasks {
 		true => Ok(vec![]),
-		false => crate::host_parts::section_names(module, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR),
+		false => crate::host::host_parts::section_names(module, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR),
 	}
 }
 

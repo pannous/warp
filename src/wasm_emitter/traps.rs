@@ -100,7 +100,7 @@ pub(super) const IF_THEN: &str = "`if condition then ...`";
 pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	if let Some(task) = failure
 		.chain()
-		.find_map(|cause| cause.downcast_ref::<crate::tasks::TaskFailure>())
+		.find_map(|cause| cause.downcast_ref::<crate::host::tasks::TaskFailure>())
 	{
 		return crate::node::error(&task.0);
 	}

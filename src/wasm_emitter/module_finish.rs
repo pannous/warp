@@ -73,10 +73,10 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.code);
 		self.module.section(self.string_table.data_section());
-		let c_calls = crate::wasm_modules::c_calls(self.ctx.ffi_imports.values());
+		let c_calls = crate::modules::wasm_modules::c_calls(self.ctx.ffi_imports.values());
 		if !c_calls.is_empty() {
 			self.module.section(&CustomSection {
-				name: crate::wasm_modules::C_CALLS_SECTION.into(),
+				name: crate::modules::wasm_modules::C_CALLS_SECTION.into(),
 				data: c_calls.as_bytes().into(),
 			});
 		}

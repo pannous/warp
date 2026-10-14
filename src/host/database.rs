@@ -603,7 +603,7 @@ fn connection(file: &str) -> Result<Handle, String> {
 	let path = match file {
 		crate::database_tables::TABLES_FILE => IN_MEMORY.to_string(),
 		file => {
-			crate::sandbox::check_write(file)?;
+			crate::host::sandbox::check_write(file)?;
 			test_thread_copy(file).unwrap_or_else(|| file.to_string())
 		}
 	};

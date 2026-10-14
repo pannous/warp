@@ -1196,8 +1196,8 @@ fn copied(
 		.and_then(wasmtime::Extern::into_memory)
 		.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))?;
 	let node = crate::run::wasm_reader::node_in(value, &mut caller.as_context_mut(), memory);
-	let value = crate::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
-	let builders = crate::tasks::Builders::of(&mut |name| export_of(caller, into, name))
+	let value = crate::host::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
+	let builders = crate::host::tasks::Builders::of(&mut |name| export_of(caller, into, name))
 		.map_err(|failure| wasmtime::format_err!("{failure}"))?;
 	builders
 		.build(&value, &mut caller.as_context_mut())

@@ -442,7 +442,7 @@ fn component_exports(node: &Node) -> HashMap<String, Vec<String>> {
 	crate::foreign_modules::component_modules(node)
 		.into_iter()
 		.filter_map(
-			|(alias, path)| match crate::wasm_modules::component_export_names(&path) {
+			|(alias, path)| match crate::modules::wasm_modules::component_export_names(&path) {
 				Ok(names) => Some((alias, names)),
 				Err(failure) => {
 					eprintln!("[wasm] {failure}");
@@ -463,12 +463,12 @@ fn module_objects(node: &Node) -> Objects {
 		.ffi_imports
 		.values()
 		.map(|import| import.library)
-		.filter(|library| crate::wasm_modules::is_module_path(library))
+		.filter(|library| crate::modules::wasm_modules::is_module_path(library))
 		.collect();
 	let mut objects = Objects::default();
 	for path in paths {
-		let alias = crate::wasm_modules::module_alias(path);
-		let bytes = crate::wasm_modules::module_bytes(path).ok();
+		let alias = crate::modules::wasm_modules::module_alias(path);
+		let bytes = crate::modules::wasm_modules::module_bytes(path).ok();
 		let entry = |key: &str| bytes.as_ref().and_then(|bytes| crate::formats::meta_section::entry(bytes, key));
 		let functions = entry(META_FUNCTIONS);
 		let is_own = |name: &String| {
@@ -476,7 +476,7 @@ fn module_objects(node: &Node) -> Objects {
 				.as_ref()
 				.is_none_or(|functions| !matches!(functions[name.as_str()].drop_meta(), Node::Empty))
 		};
-		let mut names: Vec<String> = crate::wasm_modules::exports(path)
+		let mut names: Vec<String> = crate::modules::wasm_modules::exports(path)
 			.keys()
 			.filter(|name| !name.contains(' ') && is_own(name))
 			.cloned()

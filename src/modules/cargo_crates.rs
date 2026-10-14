@@ -3,11 +3,11 @@
 //! on any toolchain) lists the crate's public functions and the structs it constructs; every one whose types map to
 //! WIT is exported (a struct as a resource), built for wasm32-wasip2 with wit-bindgen, and what the compiler refuses
 //! is dropped by the lines its errors name. The component lands in ~/.cache/warp/crates/<crate>@<version>.wasm (with
-//! its .wit), once per machine; `use wasm` loads it from there (src/components.rs). Common crates are prebuilt by CI
+//! its .wit), once per machine; `use wasm` loads it from there (src/modules/components.rs). Common crates are prebuilt by CI
 //! and downloaded instead (release crates-<generation>), so most users need no cargo.
 //! The wrappers are members of one cargo workspace (~/.cache/warp/crates/Cargo.toml), so a configured target-dir is
 //! honoured and a user without one gets that workspace's single target/.
-use crate::package_tools::{download_bytes, write_atomically};
+use crate::modules::package_tools::{download_bytes, write_atomically};
 use crate::versions::Version;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};

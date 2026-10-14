@@ -1,4 +1,4 @@
-use warp::std_docs::standard_library_markdown;
+use warp::modules::std_docs::standard_library_markdown;
 
 const META_ATTRIBUTES: &str = "html_meta_attributes";
 const SOUND_QUEUED: &str = "sound_queued()";

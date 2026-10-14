@@ -8,7 +8,7 @@
 //! writes the directory. A host uploading the Worker itself (Cloudflare's API) sends worker.js as the main module,
 //! app.wasm as a compiled module and app.bin as data, the parts wrangler.toml names.
 
-pub use crate::host_parts::worker_parts;
+pub use crate::host::host_parts::worker_parts;
 use crate::web::site::{write_files, BuiltSite, SiteFile};
 use std::path::{Path, PathBuf};
 

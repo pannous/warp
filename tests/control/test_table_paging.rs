@@ -19,10 +19,10 @@ fn fifty_people(table: &str) {
 fn a_slice_of_a_table_reads_only_its_rows() {
 	fifty_people("people_sliced");
 	let read = |rest: &str, expected: i64, rows: usize| {
-		let before = warp::database::rows_read();
+		let before = warp::host::database::rows_read();
 		is!(&program("people_sliced", rest), expected);
 		assert_eq!(
-			warp::database::rows_read(),
+			warp::host::database::rows_read(),
 			before + rows,
 			"{rest} read other rows than its {rows}"
 		);
