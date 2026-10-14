@@ -150,6 +150,7 @@ impl WarpParser {
 			// `ul { li: "a" li: "b" }`: a block after a name and a blank is that tag's block
 			self.tag_block = ch == '{'
 				&& matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
+			let item_position = self.get_position();
 			let item = self.parse_value();
 			self.tag_block = false;
 			self.pipe_takes_call = outer_pipe;
@@ -180,6 +181,13 @@ impl WarpParser {
 				.get(statement_start)
 				.is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
 			let item = if defines { self.with_definition_block(item) } else { item };
+			let (line, column) = item_position;
+			let item = match is_argument
+				.then(|| self.argument_cast_reading(&items_with_seps[statement_start].0, &item, line, column))
+			{
+				Some(Err(unanswered)) => unanswered,
+				_ => item,
+			};
 			let item = match self.take_trailing_comment() {
 				Some(comment) => item.with_comment(comment),
 				None => item,

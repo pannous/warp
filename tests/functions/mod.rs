@@ -4,6 +4,7 @@ mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
+mod test_argument_cast;
 mod test_argument_kinds;
 mod test_argument_labels;
 mod test_arity_overloads;

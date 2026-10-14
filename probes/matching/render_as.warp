@@ -8,7 +8,7 @@ to render text as pdf:
 to render text as docx:
 	return docx("<w:t>" + text + "</w:t>")
 
-result = render "hello" as pdf
+result = (render "hello") as pdf
 print type of result
 print result.body
 
