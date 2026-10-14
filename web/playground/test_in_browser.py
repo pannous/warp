@@ -144,6 +144,11 @@ BRUSH_SAMPLE = "shader_brush"
 BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU takes far longer for its 1280×800
 BRUSH_POLL_MS = 250
 PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
+# cards https-pannous, very-fast: the `on frame` shader samples keep painting, as the user saw them stop at once in
+# Chromium and Safari; their canvas still changes between two looks, the pointer moving over it
+FRAME_SHADERS = "(the on frame shader samples keep painting)"
+FRAME_SHADER_SAMPLES = ["shader_brush", "shader_trails"]
+FRAME_SHADER_LOOKS_MS = [1500, 5000]  # a software GPU takes long for a 1280×800 frame
 # card shader-read: $previous(at) reads the frame the shader left before, as natively (tests/programs/
 # test_shader_builtins.rs a_shader_reads_its_previous_frame): three renders of a quarter red more give 192 red
 PREVIOUS_FRAME = "(a shader reads its previous frame)"
@@ -603,6 +608,40 @@ def brush_wrong():
 	return [] if "colored" in shown else [f"the middle of the canvas under the pointer: {shown!r}, expected a color, not paper"]
 
 
+def frame_shaders_wrong():
+	"""each `on frame` shader sample still paints a few seconds in: its canvas changes between two looks"""
+	wrong = []
+	for sample in FRAME_SHADER_SAMPLES:
+		browser("eval", f"void playground.chooseExample({json.dumps(sample)})")
+		shown = browser("eval", f"""(async () => {{
+			const page = () => `value ${{document.getElementById("value").textContent}} status ${{document.getElementById("status").textContent}} output ${{document.getElementById("output").textContent.slice(0, 300)}}`;
+			const looks = [];
+			let started = performance.now();
+			for (const at of {json.dumps(FRAME_SHADER_LOOKS_MS)}) {{
+				const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
+				for (let moved = 0; performance.now() - started < at; moved++) {{
+					const bounds = canvas?.getBoundingClientRect();
+					if (bounds) canvas.dispatchEvent(new PointerEvent("pointermove", {{ clientX: bounds.left + bounds.width * (0.2 + 0.6 * (moved % 7) / 7), clientY: bounds.top + bounds.height / 2, bubbles: true }}));
+					await new Promise(done => setTimeout(done, 100));
+				}}
+				const now = [...document.querySelectorAll("#paintings canvas")].at(-1);
+				if (!now) {{ looks.push("no canvas"); continue; }}
+				const copy = new OffscreenCanvas(now.width, now.height).getContext("2d");
+				copy.drawImage(now, 0, 0);
+				const data = copy.getImageData(0, 0, now.width, now.height).data;
+				let sum = 0;
+				for (let at = 0; at < data.length; at += 4093) sum = (sum * 31 + data[at]) >>> 0;
+				looks.push(`${{now.width}}×${{now.height}} #${{sum}}`);
+			}}
+			return looks[0] !== looks[1] && !looks.includes("no canvas") ? "painting" : `looks ${{looks.join(" then ")}}; ${{page()}}`;
+		}})()""")
+		if NO_GPU in shown:
+			print(f"skip {FRAME_SHADERS} {sample}: this browser {NO_GPU}")
+		elif "painting" not in shown:
+			wrong.append(f"samples/{sample} stopped painting: {shown}")
+	return wrong
+
+
 def completion_keys_wrong():
 	"""the editor's code after each of COMPLETIONS' keys, pressed through CodeMirror's own key handling: what differs"""
 	script = f"""(() => {{
@@ -711,7 +750,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

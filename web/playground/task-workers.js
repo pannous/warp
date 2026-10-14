@@ -16,6 +16,7 @@ function serveTaskWorkers(programWorker) {
 			return taskWorkers.delete(endTaskWorker);
 		}
 		const made = new Worker(taskWorker.url);
+		made.addEventListener("error", event => console.error(`task Worker ${taskWorker.id}: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 		const channel = new MessageChannel();
 		made.postMessage({ port: channel.port1 }, [channel.port1]);
 		programWorker.postMessage({ taskWorker: taskWorker.id, port: channel.port2 }, [channel.port2]);

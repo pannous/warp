@@ -976,4 +976,7 @@ window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress,
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
+// an error nothing caught, said with where it came from: Firefox says only "uncaught exception: undefined" otherwise
+addEventListener("error", event => console.error(`the page: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
+addEventListener("unhandledrejection", event => console.error(`the page: unhandled rejection ${event.reason}`, event.reason?.stack));
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
