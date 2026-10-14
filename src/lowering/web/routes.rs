@@ -17,7 +17,7 @@ use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use std::collections::HashMap;
 
-const ROUTE_WORD: &str = "route";
+pub(crate) const ROUTE_WORD: &str = "route";
 const ROUTE_PREFIX: &str = "page·route·";
 /// An inner route's own block, which its layout shows at its outlet
 const PART_PREFIX: &str = "page·part·";
