@@ -1,15 +1,6 @@
 === Test Results ===
 
 PASSED:
-  ✓ control::test_aborting_handlers::a_handled_block_assigned_to_a_number_variable
-  ✓ control::test_aborting_handlers::a_resuming_handler_and_the_end_of_the_block_still_work
-  ✓ control::test_aborting_handlers::a_try_inside_the_block_does_not_catch_the_abort
-  ✓ control::test_aborting_handlers::an_abort_for_an_outer_block_passes_the_inner_one
-  ✓ control::test_aborting_handlers::an_error_after_an_abort_out_of_a_try_keeps_its_message
-  ✓ control::test_aborting_handlers::any_value_and_a_loop_break_inside_the_handler
-  ✓ control::test_aborting_handlers::break_in_a_handler_ends_its_block
-  ✓ control::test_aborting_handlers::the_abort_skips_the_rest_of_the_block
-  ✓ control::test_aborting_handlers::the_innermost_aborting_handler_takes_it_and_the_outer_goes_on
   ✓ control::test_after::a_cancelled_after_gives_the_fallback
   ✓ control::test_after::after_needs_a_shared_condition
   ✓ control::test_after::after_waits_for_its_condition
@@ -166,9 +157,7 @@ PASSED:
   ✓ control::test_do_block::do_still_joins_a_while_condition_with_its_body
   ✓ control::test_each_colon::a_range_do_walks_it
   ✓ control::test_each_colon::each_and_all_with_a_colon_walk_the_list
-  ✓ control::test_emit_operands::an_emit_is_an_operand
   ✓ control::test_emit_operands::an_emitted_value_is_the_handlers_number
-  ✓ control::test_emit_operands::ask_is_an_emit_operand
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
@@ -287,12 +276,8 @@ PASSED:
   ✓ control::test_go_heavy_map::a_go_map_of_a_heavy_kernel_takes_the_gpu_switch
   ✓ control::test_go_heavy_map::a_small_go_map_of_a_heavy_kernel_is_exact_on_the_cpu
   ✓ control::test_go_statement::a_go_block_of_one_statement_runs_it
-  ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
   ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
-  ✓ control::test_handler_unwinding::a_block_that_ends_still_answers_inside
-  ✓ control::test_handler_unwinding::an_error_caught_outside_the_block_leaves_its_handler
-  ✓ control::test_handler_unwinding::another_events_abort_leaves_the_inner_handler
   ✓ control::test_held_key::held_key_compares_with_the_key_words
   ✓ control::test_held_key::held_key_names_the_key_held_now
   ✓ control::test_help_word::a_programs_own_help_wins
@@ -543,11 +528,6 @@ PASSED:
   ✓ control::test_schemas::an_arm_matches_a_schema
   ✓ control::test_schemas::an_optional_field_may_be_missing
   ✓ control::test_schemas::parsed_json_is_tested_against_a_schema
-  ✓ control::test_scoped_handlers::a_block_handler_answers_emits_in_the_block
-  ✓ control::test_scoped_handlers::a_block_handler_answers_the_functions_the_block_calls
-  ✓ control::test_scoped_handlers::a_handler_emitting_its_own_event_reaches_the_next_handler_out
-  ✓ control::test_scoped_handlers::outside_any_block_the_program_handler_answers
-  ✓ control::test_scoped_handlers::the_innermost_handler_wins_and_ends_with_its_block
   ✓ control::test_shared_arrays::a_shared_array_is_a_list_as_a_whole
   ✓ control::test_shared_arrays::a_shared_array_of_floats
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
@@ -818,7 +798,6 @@ PASSED:
   ✓ control::test_undo_history::any_value_and_any_writer_has_a_history
   ✓ control::test_undo_history::redo_takes_back_an_undo_until_a_new_change
   ✓ control::test_undo_history::undo_steps_back_through_the_changes
-  ✓ control::test_unhandled_emits::a_handled_emit_does_not_warn
   ✓ control::test_unhandled_emits::an_emit_nobody_handles_warns
   ✓ control::test_unit_tasks::a_go_block_with_units_runs
   ✓ control::test_unit_tasks::a_started_function_with_units_runs
@@ -1238,7 +1217,6 @@ PASSED:
   ✓ functions::test_deterministic_inference::a_program_compiles_the_same_every_time
   ✓ functions::test_dollar_body::dollar_parameters_in_a_body_block
   ✓ functions::test_each_spellings::for_each_spellings_are_each
-  ✓ functions::test_effect_block_operand::effect_block_as_operand
   ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
   ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
   ✓ functions::test_effects_value::effects_of_as_a_value
@@ -1256,8 +1234,6 @@ PASSED:
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
   ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
   ✓ functions::test_empty_function_bodies::calling_a_function_with_an_empty_body_gives_empty
-  ✓ functions::test_event_effects::a_block_handler_handles_its_event
-  ✓ functions::test_event_effects::a_declared_effect_set_reports_an_unhandled_event
   ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
@@ -5372,4 +5348,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5367 passed, 0 failed, 5367 total tested
+13 ignored, 5343 passed, 0 failed, 5343 total tested
