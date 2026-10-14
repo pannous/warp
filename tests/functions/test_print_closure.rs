@@ -19,7 +19,10 @@ fn print_shows_a_list_of_functions() {
 #[cfg(feature = "native")]
 fn print_shows_a_function_reference() {
 	assert_eq!(crate::common::printed("f(x) := x + 1; print &f").trim(), "f(x) := x+1");
-	assert_eq!(crate::common::printed("f(x) := x + 1; g = &f; print g").trim(), "f(x) := x+1");
+	assert_eq!(
+		crate::common::printed("f(x) := x + 1; g = &f; print g").trim(),
+		"f(x) := x+1"
+	);
 	assert_eq!(crate::common::printed("f(x) := x + 1; g = &f; print g(2)").trim(), "3");
 	assert_eq!(crate::common::printed("f(x) := x + 1; g = &f; print g 2").trim(), "3");
 }
