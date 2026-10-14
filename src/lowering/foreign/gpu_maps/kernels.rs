@@ -111,7 +111,7 @@ var<workgroup> partial: array<f32, {WORKGROUP_SIZE}>;
 
 /// The kernel mapping every item of `data` by the lambda `parameter => body`, if WGSL can compute it
 pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
-	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else {
+	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {
 		return None;
 	};
 	let Node::Symbol(parameter) = parameter.drop_meta() else {

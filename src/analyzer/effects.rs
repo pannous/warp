@@ -582,7 +582,7 @@ impl Resolver<'_> {
 		}
 		match node.drop_meta() {
 			// a cell is shared: a `nonlocal` or a watched variable another function sees (signal_values)
-			Node::Symbol(name) if name == STATE_KEYWORD || name == crate::wasm_emitter::cells::CELL_SET => {
+			Node::Symbol(name) if name == STATE_KEYWORD || name == crate::wasm_emitter::functions::cells::CELL_SET => {
 				function.perform(State)
 			}
 			// a closure call may run any lambda the program lifted: a listener closure's print is the writer's IO

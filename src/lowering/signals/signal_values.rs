@@ -205,7 +205,7 @@ pub fn subscribe(program: Node) -> Node {
 	collect_definitions(&program, &mut definitions);
 	let written_in_functions: HashSet<String> = definitions
 		.iter()
-		.flat_map(|definition| declared_globals(&definition.body))
+		.flat_map(|definition| definition.body.declared_globals::<Vec<String>>())
 		.collect();
 	reflected.extend(
 		statements
@@ -669,8 +669,8 @@ impl Signals {
 		}
 		// `xs.add(v)` on a signal is a write of its cell, which runs the listeners
 		if let Node::Key(list, Op::Dot, method) = node.drop_meta() {
-			if signals.contains(&signal_name(list)) && crate::declaration_forms::updates_list(list, method) {
-				let update = crate::declaration_forms::list_update(list.clone(), method);
+			if signals.contains(&signal_name(list)) && crate::list_mutations::updates_list(list, method) {
+				let update = crate::list_mutations::list_update(list.clone(), method);
 				return self.rewrite(update, signals, main);
 			}
 		}
