@@ -251,3 +251,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-09 generators-yield: yield from / yield each / yield* delegate (generators.rs delegations); a parameterless Python def with yield was a getter form, now a definition.
 - 2026-10-09 generators-send: x = yield v + g.send(w); numbered ·result temps in class_methods
 - 2026-10-09 sum-helper: compiler temporaries marked with · and skipped by the scope check (notes/compiler_temporaries.md)
+- 2026-10-14 isn-parse: `3 isn't 4` parsed as an unterminated string; isn't/isn’t are negated spellings of is (tests/operators/test_isnt.rs)
