@@ -112,10 +112,6 @@ SHADER_ERROR_CODE = """broken = shader {
 }
 paint(broken, 8, 8)"""
 SHADER_ERROR_PLACE = "at 5:22"
-# the console lines a check makes on purpose: Chrome logs the broken shader's WGSL error itself
-# Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
-# firefox-gpu-jobs-uncaught)
-EXPECTED_CONSOLE = {SHADER_ERROR: "Error while parsing WGSL", GPU_JOBS: "uncaught exception: undefined"}
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
@@ -133,6 +129,10 @@ GPU_JOBS_CODE = """shader = "@group(0) @binding(0) var<storage, read_write> xs: 
 400 times { try gpu_compute(shader, [1], 1) else 0 }
 gpu_compute(shader, [1], 1)"""
 GPU_JOBS_NEVER = "Out of memory"
+# the console lines a check makes on purpose: Chrome logs the broken shader's WGSL error itself
+# Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
+# firefox-gpu-jobs-uncaught)
+EXPECTED_CONSOLE = {SHADER_ERROR: "Error while parsing WGSL", GPU_JOBS: "uncaught exception: undefined"}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
 MANY_TASKS_CODE = """twice(x) := x * 2
