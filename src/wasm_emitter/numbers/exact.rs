@@ -851,11 +851,10 @@ impl WasmGcEmitter {
 		};
 
 		// int_text(n): sign, then the digits written from the last one back, a chunk of CHUNK_DIGITS per big division
-		// (card out-fuel); locals: negative, digits, rest, address, length, chunk
-		let i32_locals = [i32t, i32t];
-		let locals = [i32_locals.as_slice(), &[i64t, i32t, i32t, i64t]].concat();
+		// (card out-fuel); locals: negative, digits, rest, address, length, chunk, left (digits of the chunk to write)
+		let locals = vec![i32t, i32t, i64t, i32t, i32t, i64t, i32t];
 		self.runtime_function(INT_TEXT, vec![i64t], vec![node_ref], locals, |s, f| {
-			let (value, negative, digits, rest, address, length, chunk) = (0, 1, 2, 3, 4, 5, 6);
+			let (value, negative, digits, rest, address, length, chunk, left) = (0, 1, 2, 3, 4, 5, 6, 7);
 			// a chunk of one Int: its i64 value
 			let is_chunk = |f: &mut Function, local: u32| {
 				Self::emit_list(f, &[I::LocalGet(local), I::I64Const(CHUNK)]);
@@ -951,39 +950,51 @@ impl WasmGcEmitter {
 					I::I32Const(b'-' as i32),
 					I::I32Store8(BYTE),
 					I::End,
-					// the full chunks from the last one back, each CHUNK_DIGITS digits with its zeros
-					I::Block(BlockType::Empty),
+					// the chunks from the last one back: a full one has CHUNK_DIGITS digits with its zeros, the first one,
+					// an i64, the digits left
 					I::Loop(BlockType::Empty),
 				],
 			);
 			is_chunk(f, value);
-			Self::emit_list(f, &[I::BrIf(1), I::LocalGet(value), I::I64Const(CHUNK)]);
-			s.call(f, "int_rem");
-			Self::emit_list(f, &[I::LocalSet(chunk), I::LocalGet(value), I::I64Const(CHUNK)]);
-			s.call(f, "int_quot");
-			f.instruction(&I::LocalSet(value));
-			for _ in 0..CHUNK_DIGITS {
-				write_digit(f);
-			}
-			// the first chunk, an i64, without leading zeros
 			Self::emit_list(
 				f,
 				&[
-					I::Br(0),
-					I::End,
-					I::End,
+					I::If(BlockType::Empty),
 					I::LocalGet(value),
 					I::LocalSet(chunk),
-					I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
 					I::LocalGet(digits),
 					I::LocalGet(negative),
-					I::I32LeU,
-					I::BrIf(1),
+					I::I32Sub,
+					I::LocalSet(left),
+					I::Else,
+					I::LocalGet(value),
+					I::I64Const(CHUNK),
 				],
 			);
+			s.call(f, "int_rem");
+			Self::emit_list(f, &[I::LocalSet(chunk), I::LocalGet(value), I::I64Const(CHUNK)]);
+			s.call(f, "int_quot");
+			Self::emit_list(
+				f,
+				&[I::LocalSet(value), I::I32Const(CHUNK_DIGITS), I::LocalSet(left), I::End, I::Loop(BlockType::Empty)],
+			);
 			write_digit(f);
-			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(left),
+					I::I32Const(1),
+					I::I32Sub,
+					I::LocalTee(left),
+					I::BrIf(0),
+					I::End,
+					I::LocalGet(digits),
+					I::LocalGet(negative),
+					I::I32GtU,
+					I::BrIf(0),
+					I::End,
+				],
+			);
 			s.emit_new_text(f, address, length);
 		});
 
