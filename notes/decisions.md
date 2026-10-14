@@ -62,6 +62,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   function printed on its own shows doc + definition (reflection).
 - function-type (2026-10-14): `type(gcd)` prints `function: (a, b) -> int`, the kind followed by the signature;
   `gcd is function` is yes.
+- parse-type (2026-10-14, from the user's draft "key !?!?!"): an operator node reports type `operation`
+  (`parse("1+1").type`, `a<b`; alias `expression`), a pair `a:1` stays `key`; `.op` keeps the operator.
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - float-as-rational (2026-10-14): `x as rational` / `rational(x)` of a float is the exact fraction of its shortest
