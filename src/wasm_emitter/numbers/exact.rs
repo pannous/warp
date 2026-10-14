@@ -14,10 +14,10 @@
 
 use super::super::WasmGcEmitter;
 use crate::wasm_emitter::layout::BYTE;
+use Instruction as I;
 use num_bigint::BigInt;
 use num_traits::One;
 use wasm_encoder::*;
-use Instruction as I;
 
 /// Largest shift count: `1 << n` allocates n bits, a bigger count is a runtime error instead of an out-of-memory
 pub const MAX_SHIFT_COUNT: i64 = 1 << 16;
@@ -1059,22 +1059,7 @@ impl WasmGcEmitter {
 				// a denominator with a prime other than 2 and 5 never terminates: numerator/denominator
 				Self::emit_list(f, &[I::LocalGet(denominator), I::LocalSet(rest)]);
 				for prime in DECIMAL_PRIMES {
-					Self::emit_list(
-						f,
-						&[
-							I::Block(BlockType::Empty),
-							I::Loop(BlockType::Empty),
-							I::LocalGet(rest),
-							I::I64Const(prime),
-						],
-					);
-					s.call(f, "int_rem");
-					Self::emit_list(
-						f,
-						&[I::I64Eqz, I::I32Eqz, I::BrIf(1), I::LocalGet(rest), I::I64Const(prime)],
-					);
-					s.call(f, "int_quot");
-					Self::emit_list(f, &[I::LocalSet(rest), I::Br(0), I::End, I::End]);
+					s.divide_out(f, rest, prime, &[]);
 				}
 				Self::emit_list(
 					f,
@@ -1191,33 +1176,11 @@ impl WasmGcEmitter {
 			);
 			exact_text_if(f);
 			for (prime, count) in DECIMAL_PRIMES.into_iter().zip([before_period, fives]) {
-				Self::emit_list(
+				s.divide_out(
 					f,
-					&[
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(rest),
-						I::I64Const(prime),
-					],
-				);
-				s.call(f, "int_rem");
-				Self::emit_list(
-					f,
-					&[I::I64Eqz, I::I32Eqz, I::BrIf(1), I::LocalGet(rest), I::I64Const(prime)],
-				);
-				s.call(f, "int_quot");
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(rest),
-						I::LocalGet(count),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalSet(count),
-						I::Br(0),
-						I::End,
-						I::End,
-					],
+					rest,
+					prime,
+					&[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)],
 				);
 			}
 			Self::emit_list(
@@ -1393,6 +1356,28 @@ impl WasmGcEmitter {
 			s.emit_new_text(f, address, length);
 			concat(f);
 		});
+	}
+
+	/// `while rest rem prime == 0 { rest = rest quot prime; each_time }` on the Int local `rest`
+	fn divide_out(&self, f: &mut Function, rest: u32, prime: i64, each_time: &[I]) {
+		Self::emit_list(
+			f,
+			&[
+				I::Block(BlockType::Empty),
+				I::Loop(BlockType::Empty),
+				I::LocalGet(rest),
+				I::I64Const(prime),
+			],
+		);
+		self.call(f, "int_rem");
+		Self::emit_list(
+			f,
+			&[I::I64Eqz, I::I32Eqz, I::BrIf(1), I::LocalGet(rest), I::I64Const(prime)],
+		);
+		self.call(f, "int_quot");
+		f.instruction(&I::LocalSet(rest));
+		Self::emit_list(f, each_time);
+		Self::emit_list(f, &[I::Br(0), I::End, I::End]);
 	}
 
 	/// Push numerator(x) quot denominator(x)
