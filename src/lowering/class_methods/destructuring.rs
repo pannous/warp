@@ -113,9 +113,7 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 			recurse(Node::Key(Box::new(target), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator) if is_match(&items) => {
-			let items = crate::welcome_forms::with_match_cases(items, |cases| {
-				class_arms(&crate::welcome_forms::colon_cases(cases), fields)
-			});
+			let items = crate::welcome_forms::with_match_cases(items, |cases| class_arms(cases, fields));
 			Node::List(items, bracket, separator).map_children(recurse)
 		}
 		other => other.map_children(recurse),

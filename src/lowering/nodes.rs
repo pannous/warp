@@ -451,12 +451,11 @@ pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &
 	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
 }
 
-/// The statements of a template with its placeholders filled in
+/// The statements of a template with its placeholders filled in, its match arms in the form the passes read
 pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
-	let filled = bindings
-		.iter()
-		.fold(crate::warp_parser::parse(text), |node, (placeholder, value)| {
-			crate::library_words::substitute(node, placeholder, value)
-		});
+	let parsed = crate::welcome_forms::lower_match_arms(crate::warp_parser::parse(text));
+	let filled = bindings.iter().fold(parsed, |node, (placeholder, value)| {
+		crate::library_words::substitute(node, placeholder, value)
+	});
 	filled.drop_meta().sequence_statements().to_vec()
 }

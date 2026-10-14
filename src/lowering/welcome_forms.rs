@@ -103,7 +103,7 @@ pub fn lower(node: Node) -> Node {
 	} else {
 		r_vectors(node)
 	};
-	let node = qualified_module_calls(module_aliases(named_switch_subjects(node)));
+	let node = qualified_module_calls(module_aliases(node));
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -205,7 +205,7 @@ fn forms(node: Node) -> Node {
 				[word, body] => endless_loop(word, body),
 				_ => None,
 			};
-			endless.unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
+			endless.unwrap_or_else(|| Node::List(items, bracket, separator))
 		}
 		// Ruby's `loop do … end`
 		Node::Key(word, Op::Do, body) if endless_loop(&word, &body).is_some() => {
@@ -356,10 +356,17 @@ fn split_at_in(value: &Node) -> (Node, Option<Node>) {
 	(phrase(&words[..position]), Some(phrase(&words[position + 1..])))
 }
 
-/// `[match, subject, {k => v …}]`, or `[match, (subject {k => v …})]` as an assigned match parses: the cases as `k: v`,
-/// `_ => v` as `default: v`
-fn arrow_cases(items: Vec<Node>) -> Vec<Node> {
-	with_match_cases(items, colon_cases)
+/// Every match's arms in the one form the later passes read, right after parsing: `[match, subject, {k => v …}]` (or
+/// `[match, (subject {k => v …})]` as an assigned match parses) with the cases as `k: v`, `_ => v` as `default: v`
+pub fn lower_match_arms(node: Node) -> Node {
+	colon_arms(named_switch_subjects(node))
+}
+
+fn colon_arms(node: Node) -> Node {
+	match node.map_children(colon_arms) {
+		Node::List(items, bracket, separator) => Node::List(with_match_cases(items, colon_cases), bracket, separator),
+		other => other,
+	}
 }
 
 fn is_switch_word(word: &Node) -> bool {
@@ -443,8 +450,7 @@ pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> 
 	items
 }
 
-/// The canonical arm form every match lowering reads: `pattern: body`
-pub(crate) fn colon_cases(block: &Node) -> Node {
+fn colon_cases(block: &Node) -> Node {
 	let Node::List(cases, Bracket::Curly, separator) = block.drop_meta() else {
 		return block.clone();
 	};
