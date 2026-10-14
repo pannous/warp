@@ -7,7 +7,7 @@
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
 use super::nodes::{call, key, parameter_word, Counter};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, RETURN_WORD};
 
@@ -132,17 +132,9 @@ impl GoBlocks {
 		let block = inputs.iter().fold(block, |block, input| {
 			crate::library_words::substitute(block, input, &parameter(input))
 		});
-		let head = Node::List(
-			[vec![name.clone()], inputs.iter().map(parameter).collect()].concat(),
-			Bracket::Round,
-			Separator::None,
-		);
+		let head = parens([vec![name.clone()], inputs.iter().map(parameter).collect()].concat());
 		definitions.push(key(head, Op::Define, block));
-		Node::List(
-			[vec![name], inputs.into_iter().map(Node::Symbol).collect()].concat(),
-			Bracket::Round,
-			Separator::None,
-		)
+		parens([vec![name], inputs.into_iter().map(Node::Symbol).collect()].concat())
 	}
 }
 

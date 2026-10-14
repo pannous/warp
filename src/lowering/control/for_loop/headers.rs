@@ -4,7 +4,7 @@
 //! walks the text by that unit, `for word in text`, `for line in text` and `for byte in text` by words, lines and bytes.
 
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{call, Bracket, Node, Separator};
+use crate::node::{call, parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, mentions};
 use crate::words::{IMPLICIT_PARAMETER, INSTANCE_OF, IS_TYPE};
@@ -325,12 +325,10 @@ fn item_named(node: Node, name: &str, item: &Node) -> Node {
 		{
 			let mut items = items.into_iter();
 			let head = items.next().expect("a head");
-			Node::List(
+			parens(
 				std::iter::once(head)
 					.chain(items.map(|part| item_named(part, name, item)))
 					.collect(),
-				Bracket::Round,
-				Separator::None,
 			)
 		}
 		other => other.map_children(|child| item_named(child, name, item)),
@@ -388,7 +386,7 @@ fn bytes_of(text: &Node) -> Node {
 		Box::new(call("byte_at", vec![text.clone(), offset])),
 	);
 	Node::Key(
-		Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)),
+		Box::new(parens(vec![offsets])),
 		Op::Dot,
 		Box::new(call("map", vec![byte])),
 	)

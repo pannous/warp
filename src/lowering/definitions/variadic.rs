@@ -11,7 +11,7 @@
 use super::nodes::{call, called_name, children_rewritten, if_then_else, key, parameter_name};
 use crate::analyzer::call_name;
 use crate::named_arguments::named_argument;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{COUNT_WORD, STARRED};
 use std::collections::{HashMap, HashSet};
@@ -289,11 +289,7 @@ impl Variadic {
 				.map(|argument| starred(argument).map(Node::Symbol).unwrap_or_else(|| argument.clone()))
 				.collect(),
 		};
-		Node::List(
-			[vec![head], arguments, keywords.into_iter().collect()].concat(),
-			Bracket::Round,
-			Separator::None,
-		)
+		parens([vec![head], arguments, keywords.into_iter().collect()].concat())
 	}
 }
 

@@ -6,7 +6,7 @@
 
 use super::nodes::key;
 use crate::errors::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
@@ -49,11 +49,7 @@ fn unshaped(node: Node, shapes: &mut Shapes) -> Node {
 				Some(_) => parameter_name(&parameter),
 				None => parameter,
 			});
-			let head = Node::List(
-				std::iter::once(Node::Symbol(name)).chain(plain).collect(),
-				Bracket::Round,
-				Separator::None,
-			);
+			let head = parens(std::iter::once(Node::Symbol(name)).chain(plain).collect());
 			key(head, op, unshaped(*body, shapes))
 		}
 		other => other.map_children(|child| unshaped(child, shapes)),

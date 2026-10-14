@@ -1,6 +1,7 @@
 //! Classes as other languages write them: Rust's `impl Point {…}`, Go's `func (p Point) Sum() int {…}`, Ruby's
 //! `Point.new(1, 2)`, and the text, equality and order methods by their other names (`toString`, `__eq__`, `compareTo`)
 use super::*;
+use crate::node::parens;
 
 /// Rust's `impl Point { fn sum(&self) -> i32 {…} }` (and `impl Trait for Point {…}`): its functions are methods of
 /// the class Point, the impl block itself goes
@@ -171,7 +172,7 @@ pub(super) fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 					.collect(),
 				_ => vec![],
 			};
-			Node::List([vec![*class], arguments].concat(), Bracket::Round, Separator::None)
+			parens([vec![*class], arguments].concat())
 		}
 		other => other.map_children(|child| constructed_by_new(child, classes)),
 	}

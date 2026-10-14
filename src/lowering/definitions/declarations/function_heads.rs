@@ -1,5 +1,6 @@
 //! Function heads: result types (`-> int`, `as int or text`, curried, function and tuple results), parameter labels and types, Ruby's `end` and bodiless definitions
 use super::*;
+use crate::node::parens;
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
@@ -146,11 +147,7 @@ pub(super) fn function_typed_result(definition: Node) -> Node {
 				&& is_kinded_type_word(result_type)
 				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
-			Node::List(
-				vec![head.as_ref().clone(), body.clone()],
-				Bracket::Round,
-				Separator::None,
-			)
+			parens(vec![head.as_ref().clone(), body.clone()])
 		}
 		_ => definition,
 	}
@@ -175,7 +172,7 @@ pub(super) fn typed_returns(body: Node, result_types: &Node) -> Node {
 				.iter()
 				.zip(types)
 				.map(|(value, kind)| {
-					let grouped = Node::List(vec![value.clone()], Bracket::Round, Separator::None);
+					let grouped = parens(vec![value.clone()]);
 					key(grouped, Op::As, kind.clone())
 				})
 				.collect()
@@ -375,7 +372,7 @@ pub(super) fn bodiless_definition(statement: &Node) -> Option<(Node, Node)> {
 /// loose words would read as Swift's labeled parameter)
 pub(super) fn function_head(head: &Node) -> Node {
 	match head.drop_meta() {
-		Node::Symbol(_) => Node::List(vec![head.clone()], Bracket::Round, Separator::None),
+		Node::Symbol(_) => parens(vec![head.clone()]),
 		Node::List(items, Bracket::Round, separator) if items.len() > 2 => {
 			let parameters = Node::List(items[1..].to_vec(), Bracket::Round, Separator::Colon);
 			Node::List(vec![items[0].clone(), parameters], Bracket::Round, separator.clone())

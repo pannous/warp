@@ -3,7 +3,7 @@
 
 use super::nodes::{call, children_rewritten, is_binding, key};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -289,7 +289,7 @@ fn is_infix_arithmetic(node: &Node) -> bool {
 }
 
 fn grouped(node: Node) -> Node {
-	Node::List(vec![node], Bracket::Round, Separator::None)
+	parens(vec![node])
 }
 
 /// `x squared` is `square(x)`; after ungrouped arithmetic (`1+2 squared`) the user is asked what the word applies to (D9)

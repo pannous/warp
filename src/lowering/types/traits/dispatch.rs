@@ -1,5 +1,6 @@
 //! Static dispatch: `p < q` of known instances calls their witness, else a dispatcher per operation; values admitted to places of a declared type
 use super::*;
+use crate::node::parens;
 use crate::words::INSTANCE_OF;
 use crate::Kind;
 
@@ -122,12 +123,10 @@ pub(super) fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[Dispat
 		.iter()
 		.enumerate()
 		.map(|(position, parameter)| instance(position, parameter));
-	let head = Node::List(
+	let head = parens(
 		std::iter::once(Node::Symbol(witness_name(operation, DISPATCH)))
 			.chain(head_parameters)
 			.collect(),
-		Bracket::Round,
-		Separator::None,
 	);
 	key(head, Op::Define, body)
 }

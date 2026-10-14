@@ -25,7 +25,7 @@ pub use json::*;
 mod method_aliases;
 use method_aliases::*;
 mod statics;
-use crate::node::{leading_name, symbol, text, Bracket, Node, Separator};
+use crate::node::{leading_name, parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::{operator_method, Op, OPERATOR_METHODS};
 use inheritance::*;
 pub(crate) use operators::is_library_method;
@@ -539,7 +539,7 @@ fn copies(node: Node) -> Node {
 								Node::Text(field),
 								value,
 							];
-							Node::List(call, Bracket::Round, Separator::None)
+							parens(call)
 						},
 					)
 				}
@@ -560,11 +560,7 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 				let receiver = symbol(RECEIVER);
 				let requirement = match parameters.is_empty() {
 					true => Node::Symbol(name.clone()),
-					false => Node::List(
-						[vec![Node::Symbol(name.clone()), receiver], parameters].concat(),
-						Bracket::Round,
-						Separator::None,
-					),
+					false => parens([vec![Node::Symbol(name.clone()), receiver], parameters].concat()),
 				};
 				methods.push((name, requirement));
 			}
@@ -627,13 +623,11 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Coun
 	if !called.contains(&name) && !changing.contains(&name) {
 		return key(receiver, Op::Dot, recurse(*member));
 	}
-	let call = Node::List(
+	let call = parens(
 		[Node::Symbol(name.clone()), receiver.clone()]
 			.into_iter()
 			.chain(arguments)
 			.collect(),
-		Bracket::Round,
-		Separator::None,
 	);
 	let item = |pair: Node, position: i64| key(pair, Op::Hash, Node::int(position));
 	match receiver.drop_meta() {
@@ -876,11 +870,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		}
 	};
 	let receiver = key(symbol(RECEIVER), Op::Colon, symbol(class));
-	let head = Node::List(
-		[vec![symbol(method), receiver], parameters].concat(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let head = parens([vec![symbol(method), receiver], parameters].concat());
 	(key(head, Op::Define, body), changes)
 }
 

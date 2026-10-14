@@ -12,7 +12,7 @@ use super::nodes::{
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::lowering::{function_head, DefinitionForm};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, witness_operation, InstanceTypes, Shape};
 use crate::type_kinds::{Kind, TypeRegistry};
@@ -224,11 +224,7 @@ impl Lowering {
 			return self.call(head, result, arguments);
 		}
 		if self.single_results.contains_key(&head.name()) {
-			return Node::List(
-				[vec![head.clone()], arguments].concat(),
-				Bracket::Round,
-				Separator::None,
-			);
+			return parens([vec![head.clone()], arguments].concat());
 		}
 		let companion = call(
 			&format!("{}{COMPANION_SUFFIX}", witness_operation(&head.name())),
@@ -342,11 +338,7 @@ impl Lowering {
 		if let Some(variant) = variant {
 			head[0] = Node::Symbol(variant);
 		}
-		Some(Node::Key(
-			Box::new(Node::List(head, Bracket::Round, Separator::None)),
-			*op,
-			body,
-		))
+		Some(Node::Key(Box::new(parens(head)), *op, body))
 	}
 
 	/// The written result type, else the type of the instance the body constructs
@@ -439,7 +431,7 @@ impl Lowering {
 
 	fn call(&self, head: &Node, result: &str, arguments: Vec<Node>) -> Node {
 		let variant = Node::Symbol(witness_name(&head.name(), result));
-		Node::List([vec![variant], arguments].concat(), Bracket::Round, Separator::None)
+		parens([vec![variant], arguments].concat())
 	}
 }
 
@@ -593,7 +585,7 @@ trait VariantRenaming {
 		};
 		let mut head = definition.head.to_vec();
 		head[0] = Node::Symbol(variant);
-		let head = Node::List(head, Bracket::Round, Separator::None);
+		let head = parens(head);
 		let target = match target.drop_meta() {
 			Node::Key(_, result_op @ (Op::Colon | Op::As), result) => {
 				Node::Key(Box::new(head), *result_op, result.clone())

@@ -5,7 +5,7 @@
 //! already turned into calls) keeps its meaning. Runs before welcome_forms' module_calls: Python's json is also the
 //! name of warp's module.
 
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -135,11 +135,7 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 				.order
 				.iter()
 				.map(|&index| aliased(arguments[index].clone(), kept, used));
-			Node::List(
-				std::iter::once(symbol(alias.word)).chain(arguments).collect(),
-				Bracket::Round,
-				Separator::None,
-			)
+			parens(std::iter::once(symbol(alias.word)).chain(arguments).collect())
 		}
 		None => node.map_children(|child| aliased(child, kept, used)),
 	}
