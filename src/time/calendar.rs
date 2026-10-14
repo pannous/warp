@@ -22,6 +22,13 @@ pub struct Date {
 	pub day: i64,
 }
 
+/// What `type(now.time)` says, the kind every error names
+pub const CLOCK_KIND: &str = "time of day";
+/// `now.time`: a time's time of day
+pub const TIME_OF_DAY_FIELD: &str = "time";
+/// `now.date`: a time's date
+pub const DATE_FIELD: &str = "date";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clock {
 	pub hour: i64,
@@ -41,6 +48,8 @@ pub enum Time {
 	Local(Date, Clock),
 	/// `2024-01-31T09:00Z`: a point on the UTC line; its calendar fields are the wall clock of the environment's time zone
 	Instant(Instant),
+	/// `now.time`, `22:27:46`: a time of day, no date, no zone
+	Clock(Clock),
 	/// `2024-01-31T10:00+01:00[Europe/Berlin]`: a wall time in a zone, the instant is derived
 	Zoned(Zoned),
 }
@@ -618,6 +627,7 @@ impl Time {
 			Time::Local(..) => "local time",
 			Time::Instant(_) => "instant",
 			Time::Zoned(..) => "zoned time",
+			Time::Clock(_) => CLOCK_KIND,
 		}
 	}
 
@@ -630,12 +640,16 @@ impl Time {
 			Time::Date(date) => {
 				Err(format!("a date has no time of day: give {date} a clock before placing it in {}", zone.name))
 			}
+			Time::Clock(clock) => {
+				Err(format!("{CLOCK_KIND} {clock} has no date: give it one before placing it in {}", zone.name))
+			}
 		}
 	}
 
-	/// The calendar day and wall clock; an instant's in the environment's time zone
-	fn calendar(self) -> (Date, Option<Clock>) {
-		match self {
+	/// The calendar day and wall clock; an instant's in the environment's time zone. A time of day has no day
+	fn calendar(self) -> (Option<Date>, Option<Clock>) {
+		let (date, clock) = match self {
+			Time::Clock(clock) => return (None, Some(clock)),
 			Time::Date(date) => (date, None),
 			Time::Local(date, clock) => (date, Some(clock)),
 			Time::Zoned(zoned) => (zoned.date, Some(zoned.clock)),
@@ -643,6 +657,20 @@ impl Time {
 				let (date, clock) = local_at(instant, crate::time::local_offset(instant));
 				(date, Some(clock))
 			}
+		};
+		(Some(date), clock)
+	}
+
+	/// `now.time`, `now.date`: the time of day in whole seconds or the date of a time, as the calendar fields read
+	/// them; None for other names
+	pub fn part(self, name: &str) -> Option<Result<Time, String>> {
+		let kind = self.kind();
+		let (date, clock) = self.calendar();
+		let whole_seconds = |clock: Clock| Time::Clock(Clock { nanos: 0, ..clock });
+		match name {
+			TIME_OF_DAY_FIELD => Some(clock.map(whole_seconds).ok_or_else(|| format!("{kind} has no time of day"))),
+			DATE_FIELD => Some(date.map(Time::Date).ok_or_else(|| format!("{kind} has no date"))),
+			_ => None,
 		}
 	}
 
@@ -654,12 +682,13 @@ impl Time {
 		}
 		let (date, clock) = self.calendar();
 		let clock_field = |pick: fn(Clock) -> i64| clock.map(pick).ok_or_else(|| format!("{kind} has no {name}"));
+		let date_field = |pick: fn(Date) -> i64| date.map(pick).ok_or_else(|| format!("{kind} has no {name}"));
 		match name {
-			"year" => Ok(date.year),
-			"month" => Ok(date.month),
-			"day" => Ok(date.day),
-			"weekday" => Ok(date.weekday()),
-			"day_of_year" => Ok(date.day_of_year()),
+			"year" => date_field(|date| date.year),
+			"month" => date_field(|date| date.month),
+			"day" => date_field(|date| date.day),
+			"weekday" => date_field(|date| date.weekday()),
+			"day_of_year" => date_field(|date| date.day_of_year()),
 			"hour" => clock_field(|clock| clock.hour),
 			"minute" => clock_field(|clock| clock.minute),
 			"second" => clock_field(|clock| clock.second),
@@ -687,6 +716,13 @@ impl Time {
 				Err(format!("an instant has no calendar: place it in a zone before adding {duration}"))
 			}
 			Time::Instant(instant) => Ok(Time::Instant(instant + nanos)),
+			// a time of day goes round the clock: 23:00 + 2 hours is 01:00
+			Time::Clock(_) if !duration.is_exact() => {
+				Err(format!("{CLOCK_KIND} has no calendar: add {duration} to a local time"))
+			}
+			Time::Clock(clock) => {
+				Ok(Time::Clock(Clock::from_nanos_of_day((clock.nanos_of_day() + nanos).rem_euclid(DAY))))
+			}
 			Time::Zoned(zoned) => {
 				let zoned = if duration.is_exact() {
 					zoned
@@ -704,6 +740,7 @@ impl Time {
 			Time::Local(date, clock) => wall_nanos(date, clock),
 			Time::Instant(instant) => instant,
 			Time::Zoned(zoned) => zoned.instant(),
+			Time::Clock(clock) => clock.nanos_of_day(),
 		}
 	}
 
@@ -737,8 +774,14 @@ impl Time {
 }
 
 fn write_clock(f: &mut fmt::Formatter<'_>, clock: Clock) -> fmt::Result {
-	write!(f, "T{:02}:{:02}", clock.hour, clock.minute)?;
-	if clock.second != 0 || clock.nanos != 0 {
+	write!(f, "T")?;
+	write_time_of_day(f, clock, false)
+}
+
+/// `22:27`, the seconds when there are any or `always_seconds`, the fraction without trailing zeros
+fn write_time_of_day(f: &mut fmt::Formatter<'_>, clock: Clock, always_seconds: bool) -> fmt::Result {
+	write!(f, "{:02}:{:02}", clock.hour, clock.minute)?;
+	if always_seconds || clock.second != 0 || clock.nanos != 0 {
 		write!(f, ":{:02}", clock.second)?;
 	}
 	if clock.nanos != 0 {
@@ -746,6 +789,13 @@ fn write_clock(f: &mut fmt::Formatter<'_>, clock: Clock) -> fmt::Result {
 		write!(f, ".{}", fraction.trim_end_matches('0'))?;
 	}
 	Ok(())
+}
+
+/// A time of day shows its seconds, `22:27:46`, so it reads as a clock and not as a ratio
+impl fmt::Display for Clock {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write_time_of_day(f, *self, true)
+	}
 }
 
 impl fmt::Display for Date {
@@ -773,6 +823,7 @@ impl fmt::Display for Time {
 				write!(f, "{}[_tzdata={}]", zoned.plain(), zoned.rules.version)
 			}
 			Time::Zoned(zoned) => write!(f, "{}", zoned.plain()),
+			Time::Clock(clock) => write!(f, "{clock}"),
 		}
 	}
 }

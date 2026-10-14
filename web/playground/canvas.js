@@ -20,11 +20,16 @@ const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuf
 
 // paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
 // what a pixel value shows, as src/graphics/paint.rs shade: paper for 0, its color for a value with an alpha byte, else ink
+// as one opaque pixel of ImageData's bytes R, G, B, A read as a little-endian 32-bit word
+const OPAQUE_WORD = 0xFF000000;
+const grayWord = level => (OPAQUE_WORD | level << 16 | level << 8 | level) >>> 0;
+const PAPER_WORD = grayWord(PAINT_PAPER);
+const INK_WORD = grayWord(PAINT_INK);
 function paintShade(value) {
+	if (!value) return PAPER_WORD;
 	const number = Number(value);
-	if (!value) return [PAINT_PAPER, PAINT_PAPER, PAINT_PAPER];
-	if (number >= PAINT_COLOR_FROM) return [Math.floor(number / 65536) % 256, Math.floor(number / 256) % 256, number % 256];
-	return [PAINT_INK, PAINT_INK, PAINT_INK];
+	if (number < PAINT_COLOR_FROM) return INK_WORD;
+	return (OPAQUE_WORD | (number % 256) << 16 | (Math.floor(number / 256) % 256) << 8 | Math.floor(number / 65536) % 256) >>> 0;
 }
 
 // a canvas of the painting's size, shown scaled up by a whole factor; the GPU's own canvas of a painted shader as it is
@@ -57,9 +62,9 @@ const sameSize = (one, other) => one.width === other.width && one.height === oth
 
 function drawn(canvas, { pixels, width, height }) {
 	const image = canvas.getContext("2d").createImageData(width, height);
-	for (let index = 0; index < width * height; index++) {
-		image.data.set([...paintShade(pixels[index]), 255], index * 4);
-	}
+	// a word per pixel, no array per pixel: a 1280×800 frame of samples/finger_paint took Safari far too long (card abysmally-slow)
+	const words = new Uint32Array(image.data.buffer);
+	for (let index = 0; index < width * height; index++) words[index] = paintShade(pixels[index]);
 	canvas.getContext("2d").putImageData(image, 0, 0);
 	return canvas;
 }

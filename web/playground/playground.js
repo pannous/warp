@@ -240,7 +240,7 @@ function startWorker(restarts = 0) {
 				slept(pending, data.milliseconds);
 			}
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
-			if (data.type === "paint") painted(pending, data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data);
+			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
@@ -734,15 +734,18 @@ function showFrame(paintings) {
 }
 
 // the canvases paint of a shader draws into, by id (host-gpu.js gpuPainted): the page makes one and sends its
-// OffscreenCanvas through the port to the task Worker holding the GPU device
+// OffscreenCanvas straight to the task Worker holding the GPU device (task-workers.js). Not through a port the program's
+// Worker made: Firefox lost a canvas posted into a port still on its way to the task Worker (card shaders-firefox)
 const paintCanvases = new Map();
-function sendPaintCanvas({ id, width, height, port, replaces }) {
+// a paint message as shown: a GPU-drawn one names its canvas by id
+const paintingOf = data => data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data;
+function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
 	const canvas = paintingElement({ width, height });
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
 	const offscreen = canvas.transferControlToOffscreen();
-	port.postMessage({ canvas: offscreen }, [offscreen]);
+	worker.postToTaskWorker(taskWorkerId, { paintCanvas: { id, canvas: offscreen } }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click
@@ -824,7 +827,9 @@ function showEventOutput(data) {
 		$("printed").textContent = terminalText($("printed").textContent + data.text);
 		$("printed").hidden = false;
 	}
-	if (data.type === "paint") showPaintings([data]);
+	// a frame of `on frame` (cards https-pannous, very-fast: its GPU canvas showed as its id, and a pixel frame made a
+	// new canvas each time)
+	if (data.type === "paint") showFrame([paintingOf(data)]);
 	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) showValue(data.value, data.error, data.html);

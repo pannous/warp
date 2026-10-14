@@ -22,6 +22,8 @@ function serveTaskWorkers(programWorker) {
 		reportBareErrors(made, `task Worker ${taskWorker.id}`);
 		taskWorkers.set(taskWorker.id, made);
 	});
+	// a message of the page's own to one of them (playground.js sendPaintCanvas)
+	programWorker.postToTaskWorker = (id, message, transfer) => taskWorkers.get(id)?.postMessage(message, transfer);
 	reportBareErrors(programWorker, "the program's Worker");
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {

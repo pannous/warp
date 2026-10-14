@@ -12,6 +12,7 @@ mod test_constant_shadowing;
 mod test_count_shadowed; // card count-shadowed
 mod test_discarded_error_warning; // card error-if
 mod test_discarded_pure_warning;
+mod test_dot_without_parens;
 mod test_end_and_def_blocks; // cards std-module-swallowed, end-indented, def-indented
 mod test_english_operator_words;
 mod test_error_excerpt;
@@ -74,4 +75,4 @@ mod test_welcoming_parse;
 mod test_welcoming_print;
 mod test_welcoming_rangeblock;
 mod test_welcoming_slices;
-mod test_welcoming_sugar; // cards crash-show, show-crashes, crashes-broken
+mod test_welcoming_sugar; // cards crash-show, show-crashes, crashes-broken // cards type-module, abc-chars

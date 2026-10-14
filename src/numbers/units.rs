@@ -93,9 +93,10 @@ const LONG_NAMES: [(&str, &str); 19] = [
 	("lbs", "lb"),
 ];
 // `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
+/// `now` compared with a duration is its local time of day, unless the program names something so (card time-day-value);
+/// a bare `time` is the type (user decision print-time), so `time < 12h` fails with the fix `now < 12h`
+use crate::time::{NOW_WORD, TIME_WORD};
 use crate::words::IN_WORD;
-/// The local time of day, unless the program names something so (card time-day-value)
-const TIME_WORD: &str = "time";
 
 fn unit_named(name: &str) -> Option<&'static Unit> {
 	if crate::compiler::compile_context::read(|context| context.shadowed_units.contains(name)) {
@@ -603,20 +604,21 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 /// Comparisons of quantities where the rest of the program runs (card time-day-value): a comparison of constant
 /// quantities, also of a main-level variable assigned one once (`x = 2 km; if x > 1500 m : …`), is its answer 1 or 0,
 /// and such a variable no other statement reads is dropped; the word `time` of a program that names nothing so is the
-/// local time of day, compared with a constant duration in milliseconds: `time < 24h` is
-/// `system·time of day < 86400000` (lowering/signals/system_values.rs reads it, so `whenever time > 18h {…}` listens too)
+/// local time of day of now, compared with a constant duration in milliseconds: `now < 24h` is
+/// `system·time of day < 86400000` (lowering/signals/system_values.rs reads it, so `whenever now > 18h {…}` listens too)
 pub fn lower_quantity_comparisons(program: Node) -> Node {
 	shadowing(&program.clone(), || quantity_comparisons_folded(program))
 }
 
 fn quantity_comparisons_folded(program: Node) -> Node {
-	if !(needs_quantities(&program) || program.mentions(TIME_WORD)) {
+	if !(needs_quantities(&program) || program.mentions_any(&[NOW_WORD, TIME_WORD])) {
 		return program;
 	}
 	let bound = crate::system_values::assigned_symbols(&program);
 	let constants = constant_quantities(&program);
-	let clock = !bound.contains(TIME_WORD);
-	let folded = fold_comparisons(program, &constants, clock);
+	let clock = !bound.contains(NOW_WORD);
+	let time_is_the_type = !bound.contains(TIME_WORD);
+	let folded = fold_comparisons(program, &constants, clock, time_is_the_type);
 	without_unread_constants(folded, &constants)
 }
 
@@ -660,16 +662,24 @@ fn with_constants(node: &Node, constants: &Constants) -> Node {
 	})
 }
 
-fn fold_comparisons(node: Node, constants: &Constants, clock: bool) -> Node {
+fn fold_comparisons(node: Node, constants: &Constants, clock: bool, time_is_the_type: bool) -> Node {
 	let Node::Key(left, op, right) = node.drop_meta() else {
-		return node.map_children(|child| fold_comparisons(child, constants, clock));
+		return node.map_children(|child| fold_comparisons(child, constants, clock, time_is_the_type));
 	};
 	if !op.is_comparison() {
-		return node.map_children(|child| fold_comparisons(child, constants, clock));
+		return node.map_children(|child| fold_comparisons(child, constants, clock, time_is_the_type));
 	}
-	let is_clock = |side: &Node| clock && matches!(side.drop_meta(), Node::Symbol(name) if name == TIME_WORD);
-	// `x is time` tests the type (card anchor-time); `x == time` compares with the clock (the parser marks its operand)
+	let is_clock = |side: &Node| clock && side.is_symbol(NOW_WORD);
 	let type_test = *op == Op::Eq && !crate::type_tests::is_equality_operand(right);
+	if time_is_the_type && (left.is_symbol(TIME_WORD) || right.is_symbol(TIME_WORD) && !type_test) {
+		let other = if left.is_symbol(TIME_WORD) { right } else { left };
+		if let Some(amount) = milliseconds(&with_constants(other, constants)) {
+			return error(&format!(
+				"time is the type of times, not the clock: compare now, e.g. now {op} {}",
+				written_milliseconds(amount)
+			));
+		}
+	}
 	if is_clock(left) || (is_clock(right) && !type_test) {
 		let (duration, clock_left) = if is_clock(left) { (right, true) } else { (left, false) };
 		return match clock_milliseconds(&with_constants(duration, constants)) {
@@ -692,7 +702,16 @@ fn fold_comparisons(node: Node, constants: &Constants, clock: bool) -> Node {
 	match static_units::constant(&with_constants(&node, constants)) {
 		Ok(Some((truth @ (Node::True | Node::False), _))) if reads_quantities => truth,
 		Err(message) if reads_quantities => error(&message),
-		_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
+		_ => node.map_children(|child| fold_comparisons(child, constants, clock, time_is_the_type)),
+	}
+}
+
+/// `18h`, `90min`, `500ms`: an amount of milliseconds in the largest unit it is whole in
+fn written_milliseconds(amount: i64) -> String {
+	const UNITS: [(i64, &str); 3] = [(3_600_000, "h"), (60_000, "min"), (1000, "s")];
+	match UNITS.iter().find(|(size, _)| amount % size == 0) {
+		Some((size, unit)) => format!("{}{unit}", amount / size),
+		None => format!("{amount}ms"),
 	}
 }
 
@@ -703,7 +722,7 @@ fn clock_milliseconds(duration: &Node) -> Result<Option<i64>, String> {
 	}
 	match static_units::constant(duration) {
 		Ok(Some((amount, signature))) if signature.is_empty() => {
-			Err(format!("the time of day is a duration: compare it with one, e.g. time < {}h", amount.serialize()))
+			Err(format!("the time of day is a duration: compare it with one, e.g. now < {}h", amount.serialize()))
 		}
 		Ok(Some(_)) => Err(format!("DimensionError: the time of day is a duration, {} is none", duration.serialize())),
 		_ => Ok(None),

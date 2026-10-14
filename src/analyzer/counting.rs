@@ -30,12 +30,12 @@ pub(crate) fn is_counting_word(name: &str) -> bool {
 	COUNTING_WORDS.contains(&name)
 }
 
-/// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.chars` (code points), `x.graphemes`
+/// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.codepoints`, `x.graphemes` (`x.chars` is the list of characters)
 pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 	match name {
 		_ if is_counting_property(name) => Some("node_count"),
 		"bytes" | BYTE_SIZE => Some("node_bytes"),
-		"chars" | "codepoints" => Some("text_codepoint_count"),
+		"codepoints" => Some("text_codepoint_count"),
 		"graphemes" => Some("text_grapheme_count"),
 		_ => counting_function(name, ctx),
 	}

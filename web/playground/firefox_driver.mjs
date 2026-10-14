@@ -11,7 +11,7 @@
 // A fresh profile per run, so the user's own Firefox is never touched.
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -55,7 +55,10 @@ async function startFirefox(profile) {
 	throw new Error(`Firefox (${FIREFOX}) did not listen for WebDriver BiDi in ${START_SECONDS} s`);
 }
 
+// FIREFOX_PREFS: a JSON5 map of preferences for the fresh profile (its user.js), e.g. WebGPU on a runner without it
+const preferences = Object.entries(process.env.FIREFOX_PREFS ? new Function(`"use strict"; return (${process.env.FIREFOX_PREFS});`)() : {});
 const profile = mkdtempSync(join(tmpdir(), "warp-firefox-"));
+writeFileSync(join(profile, "user.js"), preferences.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(""));
 const { socket, exited } = await startFirefox(profile);
 let nextId = 1;
 const pending = new Map();

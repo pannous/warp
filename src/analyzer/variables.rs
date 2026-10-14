@@ -54,6 +54,7 @@ pub(super) fn global_binding(declaration: &Node, scope: &Scope) -> Option<Local>
 pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<Node>>) {
 	let kind = binding_kind(value, scope);
 	let type_name = match kind {
+		_ if super::is_code(value, scope) => Some(crate::words::CODE_WORD.to_string()),
 		Kind::List => Some(list_type_name(value, scope)),
 		Kind::Int if is_boolean(value, scope) => Some(BOOL_TYPE.to_string()),
 		// `x = 255 as hex`, `x = 255 as byte`: x shows in hex too (card hex-printing), without the byte's range

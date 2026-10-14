@@ -817,7 +817,7 @@ impl Lowering {
 		if is_field && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		// `x.chars` stays the count of characters; `chars x`, `chars(x)` and the call `x.chars()` are the list
+		// `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list (user 2026-10-14, card abc-chars)
 		let is_called = matches!(method.drop_meta(), Node::List(..));
 		// `n.first` of a person with a field first reads the field, not the library word first
 		if !is_called && self.instances.is_instance_field(receiver, name) {
