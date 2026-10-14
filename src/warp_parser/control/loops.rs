@@ -291,7 +291,7 @@ impl WarpParser {
 		let binds = min_bp <= TIMES_BP
 			|| self.times_fills_list()
 			|| (self.value_after_times() && min_bp <= Op::Mul.binding_power().0);
-		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) || !binds || !self.matches_keyword(TIMES_WORD) {
+		if self.options.data_mode || lhs.is_empty_node() || !binds || !self.matches_keyword(TIMES_WORD) {
 			return None;
 		}
 		self.advance_by(TIMES_WORD.len());
