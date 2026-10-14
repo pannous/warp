@@ -366,7 +366,7 @@ fn test_text_is_indexed_by_grapheme() {
 fn test_text_units_are_explicit() {
 	is!("x=\"👍🏽\";x.size", 1);
 	is!("byte count of \"👍🏽\"", 8);
-	is!("x=\"👍🏽\";x.chars", 2);
+	is!("x=\"👍🏽\";x.chars.count", 2); // x.chars is the list (user 2026-10-14, card abc-chars)
 	is!("x=\"👍🏽\";x.graphemes", 1);
 	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
