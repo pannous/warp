@@ -106,6 +106,7 @@ mod test_safari_imports;
 #[cfg(feature = "native")] // runs the warp binary
 mod test_sandbox_refusals; // card sandbox-exec
 mod test_sandboxed_programs; // card ferron-hosting
+mod test_script_words; // card browser-twin
 mod test_select_options; // card select-shorthand
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_serve_error_body; // card serve-error-body
