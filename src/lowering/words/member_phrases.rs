@@ -15,7 +15,9 @@ pub fn lower(node: Node) -> Node {
 	let Node::Key(receiver, Op::Dot, member) = head.drop_meta() else {
 		return node;
 	};
-	if arguments.is_empty() || member.drop_meta().symbol_name().is_none() {
+	// `xs.sum { |x| x * 2 }`: a trailing block, which the block passes read
+	let trailing_block = matches!(arguments, [block] if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)));
+	if arguments.is_empty() || trailing_block || member.drop_meta().symbol_name().is_none() {
 		return node;
 	}
 	let call = parens([vec![(**member).clone()], arguments.to_vec()].concat());
