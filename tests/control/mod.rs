@@ -75,6 +75,7 @@ mod test_for_implicit_it;
 mod test_for_it;
 mod test_for_loop;
 mod test_for_over_a_number;
+mod test_for_semicolon_end; // card print-end
 mod test_for_underscore;
 mod test_for_unit_words;
 mod test_frame_event; // card frame-event
