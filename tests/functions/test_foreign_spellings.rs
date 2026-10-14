@@ -51,6 +51,7 @@ fn auto_is_var() {
 fn r_and_php_words_come_with_their_use() {
 	is!("use R; sapply(c(1, 2, 3), function(x) x * 2)", parse("[2 4 6]"));
 	is!("use R; lapply(c(1, 2), function(x) x + 1)", parse("[2 3]"));
+	is!("use R; vapply(c(1, 2), function(x) x * 3)", parse("[3 6]"));
 	is!("use PHP; array_map(fn($x) => $x * 2, [1, 2, 3])", parse("[2 4 6]"));
 	is!("use PHP; array_filter([1, 2, 3], fn($x) => $x > 1)", parse("[2 3]"));
 	is!("use PHP; array_sum([1, 2, 3])", 6);
