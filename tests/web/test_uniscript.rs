@@ -91,7 +91,8 @@ fn unsupported_characters_and_combinations_warn() {
 	warns("x <:fracture 7>", "x 7", "uniscript: no fracture form of 7 at byte 2");
 	// a color that does not apply stays as color meta, a TAG sequence (uniscript 1.0.8; user decision
 	// uniscript-binary-import: uniscript's own implementation is the truth)
-	const RED_META: &str = "\u{E003A}\u{E0063}\u{E006F}\u{E006C}\u{E006F}\u{E0072}\u{E0020}\u{E0072}\u{E0065}\u{E0064}\u{E007F}";
+	const RED_META: &str =
+		"\u{E003A}\u{E0063}\u{E006F}\u{E006C}\u{E006F}\u{E0072}\u{E0020}\u{E0072}\u{E0065}\u{E0064}\u{E007F}";
 	warns("<:red 𓀀>", &format!("𓀀{RED_META}"), "uniscript: red on 𓀀 kept as color meta at byte 0");
 	warns("<:mirror red 狗>", &format!("狗\u{E004D}{RED_META}"), "uniscript: red on 狗 kept as color meta at byte 0");
 	warns("<:beside a b>", "ab", "uniscript: no beside group of a at byte 0");

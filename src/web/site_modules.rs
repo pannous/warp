@@ -4,8 +4,8 @@
 use crate::modules::wasm_modules::{is_module_path, module_bytes, C_CALLS_SECTION};
 use std::collections::HashMap;
 use std::path::Path;
-use wasm_encoder::reencode::{utils, Error, Reencode};
 use warp_runtime::site_files::SiteFile;
+use wasm_encoder::reencode::{utils, Error, Reencode};
 
 const MODULES_DIRECTORY: &str = "modules";
 const WASM_EXTENSION: &str = "wasm";
@@ -59,7 +59,9 @@ impl Reencode for Renaming {
 			wasmparser::Imports::Compact1 { module, .. } | wasmparser::Imports::Compact2 { module, .. }
 				if self.0.contains_key(module) =>
 			{
-				return Err(Error::UserError(format!("{module}: compact imports of a shipped module are not renamed yet")))
+				return Err(Error::UserError(format!(
+					"{module}: compact imports of a shipped module are not renamed yet"
+				)))
 			}
 			compact => return utils::parse_imports(self, section, compact),
 		};
@@ -84,10 +86,7 @@ impl Reencode for Renaming {
 				None => line.to_string(),
 			})
 			.collect();
-		module.section(&wasm_encoder::CustomSection {
-			name: C_CALLS_SECTION.into(),
-			data: renamed.as_bytes().into(),
-		});
+		module.section(&wasm_encoder::CustomSection { name: C_CALLS_SECTION.into(), data: renamed.as_bytes().into() });
 		Ok(())
 	}
 }

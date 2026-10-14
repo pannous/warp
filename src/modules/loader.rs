@@ -355,8 +355,9 @@ impl<'a> Loader<'a> {
 	/// A package's prebuilt library through warp's binding, loaded as if it lay beside the library: its
 	/// `import <library>` finds `<library>.wasm` there (packages.warp `library`)
 	fn use_library(&mut self, name: &str, library: &str) -> Result<Vec<Node>, Node> {
-		let binding = library_binding(name)
-			.ok_or_else(|| error(&format!("package {name}: warp has no binding lib/packages/{name}.warp for {library}")))?;
+		let binding = library_binding(name).ok_or_else(|| {
+			error(&format!("package {name}: warp has no binding lib/packages/{name}.warp for {library}"))
+		})?;
 		#[cfg(feature = "native")]
 		let directory = crate::modules::package_tools::library_directory(name, library);
 		// browsers cannot fetch release assets: the page serves them (web/playground/build.sh libraries)
