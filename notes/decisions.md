@@ -59,6 +59,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   get rebuilt small ("why do we need 200 lines for this simple pattern?"), without the semver crate. `nonlocal`
   (closures already share) and the defined-twice diagnostic are cut. rustfmt `use_small_heuristics = "Max"` comes
   in one fmt commit after the open cleanup branches are merged.
+  Kotlin `when x { 1 -> … }` works, and `match` takes `->` arms and `else` too. `case` is an optional word before any match arm (`case 1: …`).
+- real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
+  type next to the exact ratios; then it goes.
 - watched-cells (2026-10-13): watched variables use the run-time cell, except main-level variables no function
   writes, which keep the inserted check (same speed, about −300 lines).
 - crash-fixes-first (2026-10-12): crash fixes merge with the highest priority (notes/roles.md).
@@ -392,7 +395,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   under `try` are caught. failed-raised (2026-10-10): a raised error stops the program; bare `try X` turns it into
   the value (`r failed`). try-finally: `try X finally Z` runs Z, X's value or Error is the result.
 - P55 a while loop's value is its last body value. P213 a loop ending in `print` gives ø; loops stay expressions.
-- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `->` arms a Kotlin switch.
+- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`,
+  `when {cond -> …}` = an if chain; all four give the same one warning naming the word meant (user, 2026-10-13: the
+  shapes are not unambiguous).
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √`
   are accepted and normalized.

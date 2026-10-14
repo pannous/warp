@@ -390,6 +390,14 @@ R/PHP `sapply`/`array_map` ~34 · R `c(1,2)` ~57 · R `<- function` ~24 · OCaml
 `.call` ~43 · `xs.sum { |x| }`/`sumOf` ~27 · Ruby `.to_s`/`.upcase` ~33 · Python `lambda x:` ~30 (5 tests) · variadic
 lambdas ~23 · JS `({a, b}) =>` ~38. All ≈ 770 lines. Kept (samples use them): match `=>` arms, `loop {}`, `function(){}`.
 
+Done (branch foreign-spellings, user decision 2026-10-13, src+lib net ≈ −274): dropped OCaml let-in and `fun x ->`,
+Elixir `def …, do:`/defp, C++ `[](…){…}` lambdas (tests ignored `cleanup-edge: foreign-spellings`); R and PHP words
+moved to lib/R.warp, lib/PHP.warp (`use R`, `use PHP`); LINQ, Ruby `.to_s`/`.upcase`, `sumOf` and module-qualified
+`Enum.map`/`List.map`/`Seq.sum` are one-line rows of METHOD_ALIASES / ITERATION_MODULES (a program's own names are
+never aliased); C++ `auto x` notes and becomes `var x`; every `when` shape gives one warning naming the word meant.
+Variadic lambdas stay on starred_lambda: rest parameters are packed at compile time per named signature (variadic.rs),
+so a lambda needs a definition to get one.
+
 ## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)
 
 How a change is checked: behaviour-preserving emitter changes emit the same bytes. Build warp before and after in the

@@ -643,7 +643,7 @@ fn folder_of(file: &Path) -> PathBuf {
 }
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 24] = [
+const STD_MODULES: [(&str, &str); 26] = [
 	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
 	("memory", include_str!("../lib/memory.warp")),
 	("net", include_str!("../lib/net.warp")),
@@ -668,6 +668,8 @@ const STD_MODULES: [(&str, &str); 24] = [
 	(UNITS_MODULE, include_str!("../lib/units.warp")),
 	(AGENT_MODULE, include_str!("../lib/agent.warp")),
 	(SOUND_MODULE, include_str!("../lib/sound.warp")),
+	("R", include_str!("../lib/R.warp")),
+	("PHP", include_str!("../lib/PHP.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
