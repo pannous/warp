@@ -199,6 +199,22 @@ pub fn subscribe(program: Node) -> Node {
 	if !crate::variable_signals::is_statement_list(&bracket, &separator) {
 		return program;
 	}
+	// P111: a main-level listener on a variable a function writes through `global x` listens on its cell (decision
+	// watched-cells); one on main-level writes only stays variable_signals' check after each write
+	let mut definitions = vec![];
+	collect_definitions(&program, &mut definitions);
+	let written_in_functions: HashSet<String> = definitions
+		.iter()
+		.flat_map(|definition| declared_globals(&definition.body))
+		.collect();
+	reflected.extend(
+		statements
+			.iter()
+			.filter_map(listener_parts)
+			.map(|(listener_word, subject, _)| watched_names(listener_word, &subject))
+			.filter(|watched| watched.iter().any(|name| written_in_functions.contains(name)))
+			.flatten(),
+	);
 	// P128: a named listener `alarm = whenever t > 30 {…}` can be removed, so its variables are reflected too
 	let named: Vec<(String, String)> = statements
 		.iter()
@@ -509,16 +525,19 @@ impl Subscriptions {
 			}
 		};
 		// the listener shares the main-level variables it changes, as a named one does (P124)
-		let globals = crate::event_signals::global_declarations(
-			std::slice::from_ref(&check),
-			&self.main_variables,
-			&[VALUE_WORD, OLD_WORD],
+		// the watched cells it captures are no globals
+		let captured: Vec<&str> = [VALUE_WORD, OLD_WORD]
+			.into_iter()
+			.chain(watched.iter().map(String::as_str))
+			.collect();
+		let globals =
+			crate::event_signals::global_declarations(std::slice::from_ref(&check), &self.main_variables, &captured);
+		// a sequence, not a block: the declarations move to the main level, and a block of the check alone reads as data
+		let closure_check = Node::List(
+			globals.iter().cloned().chain([check.clone()]).collect(),
+			Bracket::Round,
+			Separator::Semicolon,
 		);
-		let closure_check = if globals.is_empty() {
-			check.clone()
-		} else {
-			block(globals.iter().cloned().chain([check.clone()]).collect())
-		};
 		// every listener closure of one arity returns one kind (wasm_emitter/closures.rs): 0
 		let listener = from_template(
 			&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"),
@@ -647,6 +666,13 @@ impl Signals {
 			);
 			let body = self.rewrite(definition.body.clone(), &inner, false);
 			return with_body(node, body);
+		}
+		// `xs.add(v)` on a signal is a write of its cell, which runs the listeners
+		if let Node::Key(list, Op::Dot, method) = node.drop_meta() {
+			if signals.contains(&signal_name(list)) && crate::declaration_forms::updates_list(list, method) {
+				let update = crate::declaration_forms::list_update(list.clone(), method);
+				return self.rewrite(update, signals, main);
+			}
 		}
 		if matches!(node.drop_meta(), Node::Key(_, Op::Dot, _)) && signals.contains(&signal_name(&node)) {
 			return call(CELL_GET, vec![node]);

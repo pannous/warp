@@ -581,7 +581,18 @@ impl Resolver<'_> {
 			return;
 		}
 		match node.drop_meta() {
-			Node::Symbol(name) if name == STATE_KEYWORD => function.perform(State),
+			// a cell is shared: a `nonlocal` or a watched variable another function sees (signal_values)
+			Node::Symbol(name) if name == STATE_KEYWORD || name == crate::wasm_emitter::cells::CELL_SET => {
+				function.perform(State)
+			}
+			// a closure call may run any lambda the program lifted: a listener closure's print is the writer's IO
+			Node::Symbol(name) if name.starts_with(crate::closures::CLOSURE_CALL_PREFIX) => function.calls.extend(
+				self.context
+					.user_functions
+					.keys()
+					.filter(|lifted| lifted.starts_with(crate::closures::LIFTED_PREFIX))
+					.cloned(),
+			),
 			Node::Symbol(name) if self.resolves(name) => {
 				function.calls.insert(name.clone());
 			}
