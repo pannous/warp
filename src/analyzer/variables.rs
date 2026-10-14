@@ -399,15 +399,10 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 			|| [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float))
 			|| [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint))
 	};
-	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
-	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
-	// a number of run-time kind may be a float: `out = out + x` of an element of unknown kind, `total = total + run.load`
-	let run_time_number = local.kind == Kind::Int
-		&& crate::analyzer::inference::is_run_time_kind(&assigned)
-		&& !matches!(value.drop_meta(), Node::Empty)
-		|| assigned == Kind::Data && matches!(value.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic());
-	let other_kind =
-		unknown_element || run_time_number || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
+	// a value of run-time kind may be anything: `for item in basket` after `item = 2`, `total = total + run.load`
+	let run_time_value =
+		crate::analyzer::inference::is_run_time_kind(&assigned) && !matches!(value.drop_meta(), Node::Empty);
+	let other_kind = run_time_value || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;

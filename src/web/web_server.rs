@@ -273,21 +273,16 @@ pub fn routes_of(routes: &Node) -> Vec<Route> {
 		.iter()
 		.filter_map(|route| match route.drop_meta() {
 			Node::List(parts, _, _) if (3..=4).contains(&parts.len()) => Some(Route {
-				method: text_of(&parts[0]),
-				path: text_of(&parts[1]),
-				function: text_of(&parts[2]),
+				method: parts[0].text_or_name(),
+				path: parts[1].text_or_name(),
+				function: parts[2].text_or_name(),
 				lists: parts
 					.get(3)
-					.is_some_and(|mark| text_of(mark) == crate::serve::LIST_ANSWER),
+					.is_some_and(|mark| mark.text_or_name() == crate::serve::LIST_ANSWER),
 			}),
 			_ => None,
 		})
 		.collect()
-}
-
-/// A text of the route table; the path "/" arrives as a one-character Char
-fn text_of(node: &Node) -> String {
-	crate::routes::pattern_text(node)
 }
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
