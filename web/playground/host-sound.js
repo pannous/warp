@@ -5,7 +5,7 @@
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
-// play of a signal (src/sound/mod.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
+// play of a signal (src/sound/mod.rs play_signal, lowering/words/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
@@ -285,7 +285,7 @@ addHostPart({
 					return blocks;
 				});
 			},
-			// play(fill, 2s) of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
+			// play(fill, 2s) of a block function (lowering/words/music_words.rs with_block_signals): the program's fill·blocks(t)
 			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
 			blocks(caller, addresses, seconds, rate) {
 				const blocks = [addresses].flat().map(Number);

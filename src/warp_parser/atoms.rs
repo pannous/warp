@@ -496,7 +496,7 @@ impl WarpParser {
 			return self.parse_url(symbol);
 		}
 
-		// C's `void f() { … }`: the result type of a function, not ø (src/lowering/declarations.rs c_function)
+		// C's `void f() { … }`: the result type of a function, not ø (src/lowering/definitions/declarations.rs c_function)
 		if symbol == VOID_WORD && self.named_call_follows() {
 			return Node::Symbol(symbol);
 		}
