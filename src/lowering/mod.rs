@@ -1,7 +1,6 @@
 //! The lowering passes: each rewrites the program into forms the later passes and the emitter know (the order is
 //! `SOURCE_PHASES` and `MEANING_PASSES` in src/pipeline.rs). The crate root re-exports them (`crate::mutation`).
 
-pub mod blocks;
 pub mod declarations;
 pub mod folding;
 pub mod library_words;
@@ -12,7 +11,6 @@ pub use nodes::{function_head, DefinitionForm, FunctionHead};
 pub mod of_lookups;
 pub mod phrase_calls;
 pub mod pipes;
-pub mod plain_enums;
 pub mod type_name_matching;
 pub mod welcome_forms;
 pub mod word_slices;
