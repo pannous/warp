@@ -735,7 +735,7 @@ Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, sha
 
 ## Acceleration
 
-Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an acceleration card (e.g. GPU Graphical/General Processing Unit ).
+Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an accelerator such as the graphics card (GPU).
 
 To tune the performance yourself, ask for the GPU explicitly with `@gpu`:
 
@@ -743,6 +743,11 @@ To tune the performance yourself, ask for the GPU explicitly with `@gpu`:
 xs = [1.0, 2.0, 3.0]
 total = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
 ```
+
+A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
+card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
+design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
+block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
 
 [[#Pictures]] above shows how to draw directly on the GPU.
 

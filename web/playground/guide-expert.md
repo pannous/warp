@@ -217,9 +217,9 @@ Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cl
 
 `use draw` keeps a pixel canvas that `show()` paints; WGSL shaders color every pixel on the GPU (WebGPU in the page).
 
-## GPU
+## Acceleration
 
-Heavy float maps move to the GPU by themselves above a size threshold (notes/gpu.md); `@gpu` asks for it explicitly.
+Number lists run as SIMD loops; heavy float maps move to the GPU by themselves above a size threshold (notes/gpu.md); `@gpu` asks for it explicitly.
 
 ## Sound and music
 
