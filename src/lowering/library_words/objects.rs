@@ -186,6 +186,12 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 	collect_assigned_names(node, &mut defined);
 	let context = crate::analyzer::function_definitions(node);
 	defined.extend(context.user_functions.into_keys());
+	// a method lowered from a class or Go's `func (p Point) Sum()`: `(Sum self:Point) := …`
+	node.visit(&mut |part| {
+		if let Node::Key(head, Op::Define, _) = part {
+			defined.insert(crate::node::leading_name(head));
+		}
+	});
 	defined
 }
 
