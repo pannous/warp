@@ -17,30 +17,15 @@ impl WasmGcEmitter {
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 		// is the node in `local` an entry or cell (a Key or List), else leave the function giving it back
 		let return_unless_structure = |f: &mut Function, local: u32, kind: u32| {
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(local),
-					I::StructGet { struct_type_index: node_type, field_index: 0 },
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::LocalTee(kind),
-					I::I64Const(KEY_KIND),
-					I::I64Ne,
-					I::LocalGet(kind),
-					I::I64Const(Kind::List as i64),
-					I::I64Ne,
-					I::I32And,
-					I::LocalGet(kind),
-					I::I64Const(Kind::Empty as i64),
-					I::I64Ne,
-					I::I32And,
-					I::If(BlockType::Empty),
-					I::LocalGet(local),
-					I::Return,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(local), I::StructGet { struct_type_index: node_type, field_index: 0 },
+				I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(KEY_KIND), I::I64Ne,
+				I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::I32And, I::LocalGet(kind),
+				I::I64Const(Kind::Empty as i64), I::I64Ne, I::I32And, I::If(BlockType::Empty),
+					I::LocalGet(local), I::Return,
+				I::End,
+			]);
 		};
 		let entry_copy = |s: &Self, f: &mut Function, local: u32| {
 			for field_index in 0..3 {
@@ -58,17 +43,12 @@ impl WasmGcEmitter {
 			vec![ValType::I64, Self::any_ref(), nullable],
 			|s, f| {
 				let (node, kind, item, entry) = (0, 1, 2, 3);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(node),
-						I::RefIsNull,
-						I::If(BlockType::Empty),
-						I::RefNull(node_heap),
-						I::Return,
-						I::End,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(node), I::RefIsNull, I::If(BlockType::Empty),
+						I::RefNull(node_heap), I::Return,
+					I::End,
+				]);
 				return_unless_structure(f, node, kind);
 				Self::emit_list(
 					f,
@@ -78,23 +58,13 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Return, I::End]);
 				// a cell: its item new when it is an entry
 				s.emit_field(f, node, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalTee(item),
-						I::RefTestNonNull(node_heap),
-						I::If(BlockType::Empty),
-						I::LocalGet(item),
-						I::RefCastNonNull(node_heap),
-						I::LocalTee(entry),
-						I::StructGet { struct_type_index: node_type, field_index: 0 },
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(KEY_KIND),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalTee(item), I::RefTestNonNull(node_heap), I::If(BlockType::Empty),
+						I::LocalGet(item), I::RefCastNonNull(node_heap), I::LocalTee(entry),
+						I::StructGet { struct_type_index: node_type, field_index: 0 }, I::I64Const(KIND_MASK),
+						I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty),
+				]);
 				entry_copy(s, f, entry);
 				Self::emit_list(f, &[I::LocalSet(item), I::End, I::End]);
 				s.emit_field(f, node, 0);
@@ -114,88 +84,58 @@ impl WasmGcEmitter {
 			vec![ValType::I64, nullable, nullable, nullable, Self::any_ref()],
 			|s, f| {
 				let (node, memo, kind, cell, pair, copy, data) = (0, 1, 2, 3, 4, 5, 6);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(node),
-						I::RefIsNull,
-						I::If(BlockType::Empty),
-						I::RefNull(node_heap),
-						I::Return,
-						I::End,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(node), I::RefIsNull, I::If(BlockType::Empty),
+						I::RefNull(node_heap), I::Return,
+					I::End,
+				]);
 				return_unless_structure(f, node, kind);
 				s.emit_field(f, memo, 2);
 				f.instruction(&I::LocalSet(cell));
 				s.emit_cell_walk(f, cell, |f| {
 					s.emit_field(f, cell, 1);
-					Self::emit_list(
-						f,
-						&[
-							I::RefCastNonNull(node_heap),
-							I::LocalTee(pair),
-							I::StructGet { struct_type_index: node_type, field_index: 1 },
-							I::RefCastNonNull(node_heap),
-							I::LocalGet(node),
-							I::RefEq,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::RefCastNonNull(node_heap), I::LocalTee(pair),
+						I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(node_heap),
+						I::LocalGet(node), I::RefEq, I::If(BlockType::Empty),
+					]);
 					s.emit_field(f, pair, 2);
 					Self::emit_list(f, &[I::Return, I::End]);
 				});
 				s.emit_field(f, node, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }),
-						I::RefNull(node_heap),
-						I::StructNew(node_type),
-						I::LocalSet(copy),
-						I::LocalGet(memo),
-						I::I64Const(Kind::List as i64),
-						I::I64Const(KEY_KIND),
-						I::LocalGet(node),
-						I::LocalGet(copy),
-						I::StructNew(node_type),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), I::RefNull(node_heap),
+					I::StructNew(node_type), I::LocalSet(copy),
+					I::LocalGet(memo), I::I64Const(Kind::List as i64), I::I64Const(KEY_KIND), I::LocalGet(node),
+					I::LocalGet(copy), I::StructNew(node_type),
+				]);
 				s.emit_field(f, memo, 2);
 				Self::emit_list(
 					f,
 					&[I::StructNew(node_type), I::StructSet { struct_type_index: node_type, field_index: 2 }],
 				);
 				s.emit_field(f, node, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(data),
-						I::LocalGet(copy),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalSet(data),
+					I::LocalGet(copy), I::LocalGet(data), I::RefTestNonNull(node_heap),
+					I::If(BlockType::Result(Self::any_ref())),
+						I::LocalGet(data), I::RefCastNonNull(node_heap), I::LocalGet(memo), I::Call(deep),
+					I::Else,
 						I::LocalGet(data),
-						I::RefTestNonNull(node_heap),
-						I::If(BlockType::Result(Self::any_ref())),
-						I::LocalGet(data),
-						I::RefCastNonNull(node_heap),
-						I::LocalGet(memo),
-						I::Call(deep),
-						I::Else,
-						I::LocalGet(data),
-						I::End,
-						I::StructSet { struct_type_index: node_type, field_index: 1 },
-						I::LocalGet(copy),
-					],
-				);
+					I::End,
+					I::StructSet { struct_type_index: node_type, field_index: 1 },
+					I::LocalGet(copy),
+				]);
 				s.emit_field(f, node, 2);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(memo),
-						I::Call(deep),
-						I::StructSet { struct_type_index: node_type, field_index: 2 },
-						I::LocalGet(copy),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(memo), I::Call(deep), I::StructSet { struct_type_index: node_type, field_index: 2 },
+					I::LocalGet(copy),
+				]);
 			},
 		);
 		assert_eq!(self.func_index("deep_copy"), deep, "recursive call index");
@@ -224,23 +164,14 @@ impl WasmGcEmitter {
 						&[I::LocalGet(body), I::Call(spine), I::StructNew(node_type), I::Return, I::End],
 					);
 				}
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(object),
-						I::Call(spine),
-						I::RefAsNonNull,
-						I::Return,
-						I::End,
-						I::LocalGet(object),
-						I::I64Const(Kind::Empty as i64),
-						I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }),
-						I::RefNull(node_heap),
-						I::StructNew(node_type),
-						I::Call(deep),
-						I::RefAsNonNull,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(object), I::Call(spine), I::RefAsNonNull, I::Return,
+					I::End,
+					I::LocalGet(object), I::I64Const(Kind::Empty as i64),
+					I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), I::RefNull(node_heap),
+					I::StructNew(node_type), I::Call(deep), I::RefAsNonNull,
+				]);
 			},
 		);
 	}
@@ -258,16 +189,12 @@ impl WasmGcEmitter {
 			|s, f| {
 				Self::emit_list(f, &s.forget_list_cursor_keeping_map_indexes());
 				let (cells, name, value, entry, kind) = (0, 1, 2, 3, 4);
-				Self::emit_list(
-					f,
-					&[
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(cells),
-						I::RefIsNull,
-						I::BrIf(1),
-					],
-				);
+							I::LocalGet(cells), I::RefIsNull, I::BrIf(1),
+				]);
 				s.emit_field(f, cells, 0);
 				Self::emit_list(
 					f,
@@ -276,39 +203,24 @@ impl WasmGcEmitter {
 				// one field: the fields are that entry; else the entry is the cell's item
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(cells), I::LocalSet(entry), I::Else]);
 				s.emit_field(f, cells, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNullable(HeapType::Concrete(node_type)),
-						I::LocalSet(entry),
-						I::End,
-						I::LocalGet(entry),
-						I::RefIsNull,
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-						I::LocalGet(entry),
-						I::RefAsNonNull,
-						I::LocalGet(name),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(entry),
+					I::End,
+					I::LocalGet(entry), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty),
+						I::LocalGet(entry), I::RefAsNonNull, I::LocalGet(name),
+				]);
 				s.call(f, "map_entry_has_key");
-				Self::emit_list(
-					f,
-					&[
-						I::If(BlockType::Empty),
-						I::LocalGet(entry),
-						I::LocalGet(value),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::If(BlockType::Empty),
+						I::LocalGet(entry), I::LocalGet(value),
 						I::StructSet { struct_type_index: node_type, field_index: 2 },
-						I32Const(1),
-						I::Return,
-						I::End,
-						I::End,
-						I::LocalGet(kind),
-						I::I64Const(KEY_KIND),
-						I::I64Eq,
-						I::BrIf(1),
-					],
-				);
+						I32Const(1), I::Return,
+					I::End,
+					I::End,
+					I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::BrIf(1),
+				]);
 				s.emit_field(f, cells, 2);
 				Self::emit_list(f, &[I::LocalSet(cells), I::Br(0), I::End, I::End, I32Const(0)]);
 			},
@@ -330,18 +242,11 @@ impl WasmGcEmitter {
 			s.call(f, super::super::super::maps::map_index::MAP_INDEX_GROW);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::Return, I::End]);
 			s.emit_field(f, fields, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::LocalSet(kind),
-					I::LocalGet(kind),
-					I::I64Const(Kind::Empty as i64),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind),
+				I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+			]);
 			for field_index in 0..3 {
 				f.instruction(&I::LocalGet(fields));
 				s.emit_field(f, entry, field_index);
@@ -454,35 +359,24 @@ impl WasmGcEmitter {
 			// a map walked lately has an index: its entry takes the value, else the field is new
 			Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(name)]);
 			s.call(f, super::super::super::maps::map_index::MAP_INDEX_ENTRY);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(indexed),
-					I::LocalSet(entry),
-					I::LocalGet(indexed),
-					I::If(BlockType::Empty),
-					I::LocalGet(entry),
-					I::RefIsNull,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(indexed),
+				I::LocalSet(entry),
+				I::LocalGet(indexed), I::If(BlockType::Empty),
+					I::LocalGet(entry), I::RefIsNull, I::If(BlockType::Empty),
+			]);
 			add_field(s, f);
-			Self::emit_list(
-				f,
-				&[
-					I::Else,
-					I::LocalGet(entry),
-					I::LocalGet(value),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Else,
+					I::LocalGet(entry), I::LocalGet(value),
 					I::StructSet { struct_type_index: s.type_manager.node_type, field_index: 2 },
-					I::End,
-					I::LocalGet(object),
-					I::Return,
-					I::End,
-					I::LocalGet(fields),
-					I::LocalGet(name),
-					I::LocalGet(value),
-				],
-			);
+				I::End,
+				I::LocalGet(object), I::Return,
+				I::End,
+				I::LocalGet(fields), I::LocalGet(name), I::LocalGet(value),
+			]);
 			s.call(f, FIELD_SET_IN_PLACE);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			add_field(s, f);

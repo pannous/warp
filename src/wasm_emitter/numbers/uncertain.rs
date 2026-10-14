@@ -193,19 +193,12 @@ impl WasmGcEmitter {
 					s.apply_math_word(f, word);
 					f.instruction(&I::LocalSet(local));
 				}
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(low),
-						I::LocalGet(high),
-						I::F64Min,
-						I::LocalGet(low),
-						I::LocalGet(high),
-						I::F64Max,
-						I::LocalSet(high),
-						I::LocalSet(low),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(low), I::LocalGet(high), I::F64Min, I::LocalGet(low), I::LocalGet(high), I::F64Max,
+					I::LocalSet(high),
+					I::LocalSet(low),
+				]);
 				for extremum in extrema {
 					let bound = if extremum.high { high } else { low };
 					Self::emit_list(f, &[I::F64Const(extremum.value.into()), I::LocalGet(bound)]);
@@ -236,23 +229,12 @@ impl WasmGcEmitter {
 			self.apply_math_word(func, word);
 		}
 		// (f(x + h) - f(x - h)) / 2h, 0 without a σ
-		Self::emit_list(
-			func,
-			&[
-				I::F64Sub,
-				I::LocalGet(step),
-				I::F64Const(2.0.into()),
-				I::F64Mul,
-				I::F64Div,
-				I::F64Const(0.0.into()),
-				I::LocalGet(step),
-				I::F64Const(0.0.into()),
-				I::F64Gt,
-				I::Select,
-				I::LocalGet(parts),
-				I::F64Const(0.0.into()),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::F64Sub, I::LocalGet(step), I::F64Const(2.0.into()), I::F64Mul, I::F64Div, I::F64Const(0.0.into()),
+			I::LocalGet(step), I::F64Const(0.0.into()), I::F64Gt, I::Select, I::LocalGet(parts),
+			I::F64Const(0.0.into()),
+		]);
 		self.call(func, GAUSSIAN_COMBINE);
 	}
 
@@ -345,19 +327,11 @@ impl WasmGcEmitter {
 		self.runtime_function(UNCERTAIN_NEW, vec![ValType::F64; 2], vec![node_ref], vec![], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(radius), I::F64Const(0.0.into()), I::F64Lt]);
 			s.emit_fail_if(f, NEGATIVE_UNCERTAINTY);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(Kind::Uncertain as i64),
-					I::LocalGet(value),
-					I::LocalGet(value),
-					I::LocalGet(radius),
-					I::F64Sub,
-					I::LocalGet(value),
-					I::LocalGet(radius),
-					I::F64Add,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(Kind::Uncertain as i64), I::LocalGet(value), I::LocalGet(value), I::LocalGet(radius),
+				I::F64Sub, I::LocalGet(value), I::LocalGet(radius), I::F64Add,
+			]);
 			s.new_uncertain_node(f);
 		});
 	}
@@ -370,26 +344,13 @@ impl WasmGcEmitter {
 		self.runtime_function(GAUSSIAN_NEW, vec![ValType::F64; 2], vec![node_ref], vec![], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(deviation), I::F64Const(0.0.into()), I::F64Lt]);
 			s.emit_fail_if(f, NEGATIVE_UNCERTAINTY);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(Kind::Uncertain as i64),
-					I::LocalGet(value),
-					I::LocalGet(value),
-					I::LocalGet(deviation),
-					I::F64Sub,
-					I::LocalGet(value),
-					I::LocalGet(deviation),
-					I::F64Add,
-					I::LocalGet(deviation),
-					I::GlobalGet(last_id),
-					I::F64Const(1.0.into()),
-					I::F64Add,
-					I::GlobalSet(last_id),
-					I::GlobalGet(last_id),
-					I::LocalGet(deviation),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(Kind::Uncertain as i64), I::LocalGet(value), I::LocalGet(value), I::LocalGet(deviation),
+				I::F64Sub, I::LocalGet(value), I::LocalGet(deviation), I::F64Add, I::LocalGet(deviation),
+				I::GlobalGet(last_id), I::F64Const(1.0.into()), I::F64Add, I::GlobalSet(last_id),
+				I::GlobalGet(last_id), I::LocalGet(deviation),
+			]);
 			s.new_uncertain_node_of(f, GAUSSIAN_PARTS + CONTRIBUTION_PARTS);
 		});
 	}
@@ -419,16 +380,13 @@ impl WasmGcEmitter {
 
 	/// `for counter in 0..limit { body }`, limit an i32 the instructions push
 	fn repeat(func: &mut Function, counter: u32, limit: &[I<'static>], body: impl FnOnce(&mut Function)) {
-		Self::emit_list(
-			func,
-			&[
-				I::I32Const(0),
-				I::LocalSet(counter),
-				I::Block(BlockType::Empty),
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I32Const(0), I::LocalSet(counter),
+			I::Block(BlockType::Empty),
 				I::Loop(BlockType::Empty),
-				I::LocalGet(counter),
-			],
-		);
+					I::LocalGet(counter),
+		]);
 		Self::emit_list(func, limit);
 		Self::emit_list(func, &[I::I32GeS, I::BrIf(1)]);
 		body(func);
@@ -493,41 +451,30 @@ impl WasmGcEmitter {
 			});
 			Self::repeat(f, index, &Self::contributions(b), |f| {
 				Self::emit_list(f, &get(b, index, 0));
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(id),
-						I::I32Const(0),
-						I::LocalSet(search),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalSet(id),
+					I::I32Const(0), I::LocalSet(search),
+					I::Block(BlockType::Empty),
 						I::Block(BlockType::Empty),
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(search),
-						I::LocalGet(count),
-						I::I32GeS,
-						I::BrIf(1),
-					],
-				);
+							I::Loop(BlockType::Empty),
+								I::LocalGet(search), I::LocalGet(count), I::I32GeS, I::BrIf(1),
+				]);
 				Self::emit_list(f, &get(sums, search, 0));
 				Self::emit_list(f, &[I::LocalGet(id), I::F64Eq, I::If(BlockType::Empty)]);
 				let mut summed = get(sums, search, 1);
 				summed.extend(scaled(b, b_slope));
 				summed.push(I::F64Add);
 				set_in_sums(f, search, 1, &summed);
-				Self::emit_list(
-					f,
-					&[
-						I::Br(3),
-						I::End,
-						I::LocalGet(search),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalSet(search),
-						I::Br(0),
-						I::End,
-						I::End,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::Br(3),
+					I::End,
+					I::LocalGet(search), I::I32Const(1), I::I32Add, I::LocalSet(search),
+					I::Br(0),
+					I::End,
+					I::End,
+				]);
 				set_in_sums(f, count, 0, &[I::LocalGet(id)]);
 				set_in_sums(f, count, 1, &scaled(b, b_slope));
 				next(f);
@@ -536,41 +483,21 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::F64Const(0.0.into()), I::LocalSet(square_sum)]);
 			Self::repeat(f, index, &[I::LocalGet(count)], |f| {
 				Self::emit_list(f, &get(sums, index, 1));
-				Self::emit_list(
-					f,
-					&[
-						I::LocalTee(id),
-						I::LocalGet(id),
-						I::F64Mul,
-						I::LocalGet(square_sum),
-						I::F64Add,
-						I::LocalSet(square_sum),
-					],
-				);
-			});
-			Self::emit_list(
-				f,
-				&[
-					I::I32Const(GAUSSIAN_PARTS as i32),
-					I::LocalGet(count),
-					I::I32Const(1),
-					I::I32Shl,
-					I::I32Add,
-					I::ArrayNewDefault(array),
-					I::LocalSet(parts),
-					I::LocalGet(parts),
-					I::I32Const(GAUSSIAN_PARTS as i32),
-					I::LocalGet(sums),
-					I::I32Const(GAUSSIAN_PARTS as i32),
-					I::LocalGet(count),
-					I::I32Const(1),
-					I::I32Shl,
-					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-					I::LocalGet(square_sum),
-					I::F64Sqrt,
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalTee(id), I::LocalGet(id), I::F64Mul, I::LocalGet(square_sum), I::F64Add,
 					I::LocalSet(square_sum),
-				],
-			);
+				]);
+			});
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(GAUSSIAN_PARTS as i32), I::LocalGet(count), I::I32Const(1), I::I32Shl, I::I32Add,
+				I::ArrayNewDefault(array), I::LocalSet(parts),
+				I::LocalGet(parts), I::I32Const(GAUSSIAN_PARTS as i32), I::LocalGet(sums),
+				I::I32Const(GAUSSIAN_PARTS as i32), I::LocalGet(count), I::I32Const(1), I::I32Shl,
+				I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
+				I::LocalGet(square_sum), I::F64Sqrt, I::LocalSet(square_sum),
+			]);
 			let parts_of = [
 				(VALUE, vec![I::LocalGet(value)]),
 				(LOW, vec![I::LocalGet(value), I::LocalGet(square_sum), I::F64Sub]),
@@ -582,15 +509,11 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &amount);
 				f.instruction(&I::ArraySet(array));
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(Kind::Uncertain as i64),
-					I::LocalGet(parts),
-					I::RefNull(HeapType::Concrete(node)),
-					I::StructNew(node),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(Kind::Uncertain as i64), I::LocalGet(parts), I::RefNull(HeapType::Concrete(node)),
+				I::StructNew(node),
+			]);
 		});
 	}
 
@@ -646,15 +569,11 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(array)), I::Return, I::End, I::LocalGet(0)]);
 			s.call(f, TEXT_AS_FLOAT);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalTee(1),
-					I::LocalGet(1),
-					I::LocalGet(1),
-					I::ArrayNewFixed { array_type_index: array, array_size: 3 },
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalTee(1), I::LocalGet(1), I::LocalGet(1),
+				I::ArrayNewFixed { array_type_index: array, array_size: 3 },
+			]);
 		});
 	}
 
@@ -735,18 +654,11 @@ impl WasmGcEmitter {
 				f.instruction(&I::Return);
 			};
 			let put = |f: &mut Function, byte: u8| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(position),
-						I::I32Const(byte as i32),
-						I::I32Store8(BYTE),
-						I::LocalGet(position),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalSet(position),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE),
+					I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position),
+				]);
 			};
 			let write_decimal = |f: &mut Function, number: &[I<'static>]| {
 				f.instruction(&I::LocalGet(position));
@@ -758,54 +670,26 @@ impl WasmGcEmitter {
 			let fixed = |f: &mut Function| {
 				Self::emit_list(f, &[I::LocalGet(x), I::F64Const(0.0.into()), I::F64Lt, I::If(BlockType::Empty)]);
 				put(f, b'-');
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(x),
-						I::F64Neg,
-						I::LocalSet(x),
-						I::End,
-						I::LocalGet(decimals),
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-					],
-				);
-				write_decimal(
-					f,
-					&[
-						I::LocalGet(x),
-						I::LocalGet(scale),
-						I::F64Mul,
-						I::F64Const(0.5.into()),
-						I::F64Add,
-						I::F64Floor,
-						I::I64TruncF64S,
-						I::F64Const(1.0.into()),
-						I::LocalGet(scale),
-						I::F64Div,
-						I::F64Nearest,
-						I::I64TruncF64S,
-						I::I64Mul,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(position),
-						I::I32Add,
-						I::LocalSet(position),
-						I::Else,
-						I::LocalGet(scale),
-						I::I64TruncF64S,
-						I::LocalSet(power),
-						I::LocalGet(x),
-						I::LocalGet(scale),
-						I::F64Mul,
-						I::F64Nearest,
-						I::I64TruncF64S,
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(x), I::F64Neg, I::LocalSet(x),
+					I::End,
+					I::LocalGet(decimals), I::I32Eqz, I::If(BlockType::Empty),
+				]);
+				#[rustfmt::skip]
+				write_decimal(f, &[
+					I::LocalGet(x), I::LocalGet(scale), I::F64Mul, I::F64Const(0.5.into()), I::F64Add, I::F64Floor,
+					I::I64TruncF64S, I::F64Const(1.0.into()), I::LocalGet(scale), I::F64Div, I::F64Nearest,
+					I::I64TruncF64S, I::I64Mul,
+				]);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(position), I::I32Add, I::LocalSet(position),
+					I::Else,
+						I::LocalGet(scale), I::I64TruncF64S, I::LocalSet(power),
+						I::LocalGet(x), I::LocalGet(scale), I::F64Mul, I::F64Nearest, I::I64TruncF64S,
 						I::LocalSet(digits),
-					],
-				);
+				]);
 				write_decimal(f, &[I::LocalGet(digits), I::LocalGet(power), I::I64DivS]);
 				Self::emit_list(f, &[I::LocalGet(position), I::I32Add, I::LocalSet(position)]);
 				// the fraction with its leading zeros: power + fraction, its leading 1 overwritten by the point
@@ -824,48 +708,27 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &s.part(parts, VALUE));
 			f.instruction(&I::LocalSet(value));
 			s.push_radius(f, parts);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalTee(radius),
-					I::F64Const(0.0.into()),
-					I::F64Gt,
-					I::LocalGet(radius),
-					I::F64Const(f64::INFINITY.into()),
-					I::F64Lt,
-					I::I32And,
-					I::I32Eqz,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalTee(radius), I::F64Const(0.0.into()), I::F64Gt, I::LocalGet(radius),
+				I::F64Const(f64::INFINITY.into()), I::F64Lt, I::I32And, I::I32Eqz, I::If(BlockType::Empty),
+			]);
 			each_as_float_text(f);
 			f.instruction(&I::End);
 			// scale: the power of ten that puts the ± part, rounded, in [10, 100): its 2 significant digits before the point
 			let scaled_radius = [I::LocalGet(radius), I::LocalGet(scale), I::F64Mul];
 			Self::emit_list(f, &[I::F64Const(1.0.into()), I::LocalSet(scale)]);
 			let mut too_small = scaled_radius.to_vec();
+			#[rustfmt::skip]
 			too_small.extend([
-				I::F64Const(ROUNDS_TO_TEN.into()),
-				I::F64Lt,
-				I::LocalGet(decimals),
-				I::I32Const(MAX_DECIMALS),
-				I::I32LeS,
-				I::I32And,
+				I::F64Const(ROUNDS_TO_TEN.into()), I::F64Lt, I::LocalGet(decimals), I::I32Const(MAX_DECIMALS),
+				I::I32LeS, I::I32And,
 			]);
-			Self::emit_while(
-				f,
-				&too_small,
-				&[
-					I::LocalGet(scale),
-					I::F64Const(10.0.into()),
-					I::F64Mul,
-					I::LocalSet(scale),
-					I::LocalGet(decimals),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(decimals),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_while(f, &too_small, &[
+				I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Mul, I::LocalSet(scale),
+				I::LocalGet(decimals), I::I32Const(1), I::I32Add, I::LocalSet(decimals),
+			]);
 			let mut too_large = scaled_radius.to_vec();
 			too_large.extend([I::F64Const(ROUNDS_TO_HUNDRED.into()), I::F64Ge]);
 			Self::emit_while(
@@ -873,23 +736,12 @@ impl WasmGcEmitter {
 				&too_large,
 				&[I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Div, I::LocalSet(scale)],
 			);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(decimals),
-					I::I32Const(MAX_DECIMALS),
-					I::I32GtS,
-					I::LocalGet(value),
-					I::F64Abs,
-					I::LocalGet(scale),
-					I::F64Mul,
-					I::F64Const(MAX_SCALED.into()),
-					I::F64Lt,
-					I::I32Eqz,
-					I::I32Or,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(decimals), I::I32Const(MAX_DECIMALS), I::I32GtS, I::LocalGet(value), I::F64Abs,
+				I::LocalGet(scale), I::F64Mul, I::F64Const(MAX_SCALED.into()), I::F64Lt, I::I32Eqz, I::I32Or,
+				I::If(BlockType::Empty),
+			]);
 			each_as_float_text(f);
 			f.instruction(&I::End);
 
@@ -927,42 +779,27 @@ impl WasmGcEmitter {
 			|s, f| {
 				// a plain number is the exact interval [x, x]: `q.amount.low` of an exact quantity (card quantity-tolerance)
 				s.is_plain_number(f, node);
-				Self::emit_list(
-					f,
-					&[
-						I::If(BlockType::Empty),
-						I::LocalGet(field),
-						I::I32Const(RADIUS_FIELD),
-						I::I32Eq,
-						I::If(BlockType::Empty),
-						I::F64Const(0.0.into()),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::If(BlockType::Empty),
+						I::LocalGet(field), I::I32Const(RADIUS_FIELD), I::I32Eq, I::If(BlockType::Empty),
+							I::F64Const(0.0.into()),
+				]);
 				s.call(f, "new_float");
 				Self::emit_list(f, &[I::Return, I::End, I::LocalGet(node), I::Return, I::End]);
 				s.is_uncertain(f, node);
-				Self::emit_list(
-					f,
-					&[
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-						I::RefNull(HeapType::Concrete(s.type_manager.node_type)),
-						I::Return,
-						I::End,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I32Eqz, I::If(BlockType::Empty),
+						I::RefNull(HeapType::Concrete(s.type_manager.node_type)), I::Return,
+					I::End,
+				]);
 				s.emit_field(f, node, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNonNull(HeapType::Concrete(array)),
-						I::LocalSet(parts),
-						I::LocalGet(field),
-						I::I32Const(RADIUS_FIELD),
-						I::I32Eq,
-						I::If(BlockType::Result(ValType::F64)),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefCastNonNull(HeapType::Concrete(array)), I::LocalSet(parts),
+					I::LocalGet(field), I::I32Const(RADIUS_FIELD), I::I32Eq, I::If(BlockType::Result(ValType::F64)),
+				]);
 				s.push_radius(f, parts);
 				Self::emit_list(f, &[I::Else, I::LocalGet(parts), I::LocalGet(field), I::ArrayGet(array), I::End]);
 				s.call(f, "new_float");
@@ -1080,15 +917,11 @@ impl WasmGcEmitter {
 		(pointer, length): (u32, u32),
 	) {
 		let op_index = ORDERINGS.iter().position(|ordering| *ordering == op).expect("an ordering");
-		Self::emit_list(
-			func,
-			&[
-				I::I32Const(op_index as i32),
-				I::I32Const(mode as i32),
-				I::I32Const(pointer as i32),
-				I::I32Const(length as i32),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I32Const(op_index as i32), I::I32Const(mode as i32), I::I32Const(pointer as i32),
+			I::I32Const(length as i32),
+		]);
 		self.emit_call(func, UNCERTAIN_ORDER);
 		func.instruction(&I::I64ExtendI32U);
 	}
@@ -1163,40 +996,25 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalSet(parts));
 			}
 			compare_ends(f, [HIGH, LOW, LOW, HIGH]);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalTee(certain),
-					I::LocalGet(mode),
-					I::I32Const(CertaintyMode::Certainly as i32),
-					I::I32Eq,
-					I::BrIf(0),
-					I::Drop,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalTee(certain), I::LocalGet(mode), I::I32Const(CertaintyMode::Certainly as i32), I::I32Eq,
+				I::BrIf(0),
+				I::Drop,
+			]);
 			compare_ends(f, [LOW, HIGH, HIGH, LOW]);
 			Self::emit_list(f, &[I::LocalGet(mode), I::I32Const(CertaintyMode::Possibly as i32), I::I32Eq, I::BrIf(0)]);
 			match (host_warn, warned) {
 				// bare: an overlap (possible, not certain) warns once
 				(Some(host_warn), Some(warned)) => {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(certain),
-							I::I32Eqz,
-							I::I32And,
-							I::GlobalGet(warned),
-							I::I32Eqz,
-							I::I32And,
-							I::If(BlockType::Empty),
-							I::I32Const(1),
-							I::GlobalSet(warned),
-							I::LocalGet(pointer),
-							I::LocalGet(length),
-							I::Call(host_warn),
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(certain), I::I32Eqz, I::I32And, I::GlobalGet(warned), I::I32Eqz, I::I32And,
+						I::If(BlockType::Empty),
+							I::I32Const(1), I::GlobalSet(warned),
+							I::LocalGet(pointer), I::LocalGet(length), I::Call(host_warn),
+						I::End,
+					]);
 				}
 				_ => {
 					f.instruction(&I::Drop);

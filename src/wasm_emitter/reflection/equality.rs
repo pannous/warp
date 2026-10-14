@@ -248,28 +248,15 @@ impl WasmGcEmitter {
 		self.runtime_function(SAME_NODE, vec![node_ref, node_ref], vec![ValType::I32], vec![ValType::I64], |s, f| {
 			let (left, right, kind) = (0, 1, 2);
 			kind_of(f, left);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(crate::type_kinds::KIND_MASK),
-					I::I64And,
-					I::LocalTee(kind),
-					I::I64Const(Kind::Key as i64),
-					I::I64Eq,
-					I::LocalGet(kind),
-					I::I64Const(Kind::List as i64),
-					I::I64Eq,
-					I::I32Or,
-					I::If(BlockType::Empty),
-					I::LocalGet(left),
-					I::LocalGet(right),
-					I::RefEq,
-					I::Return,
-					I::End,
-					I::LocalGet(left),
-					I::LocalGet(right),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Key as i64),
+				I::I64Eq, I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Eq, I::I32Or,
+				I::If(BlockType::Empty),
+					I::LocalGet(left), I::LocalGet(right), I::RefEq, I::Return,
+				I::End,
+				I::LocalGet(left), I::LocalGet(right),
+			]);
 			s.emit_call(f, VALUES_EQUAL);
 			for side in [left, right] {
 				kind_of(f, side);
@@ -304,27 +291,17 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalSet(key));
 				is_node_of_kind(f, key, Kind::Symbol);
 				Self::field(f, key, node, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNonNull(HeapType::Concrete(string)),
-						I::LocalSet(name),
-						I::LocalGet(name),
-						I::StructGet { struct_type_index: string, field_index: 1 },
-						I::I32Eqz,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefCastNonNull(HeapType::Concrete(string)), I::LocalSet(name),
+					I::LocalGet(name), I::StructGet { struct_type_index: string, field_index: 1 }, I::I32Eqz,
+				]);
 				Self::return_if(f, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(name),
-						I::StructGet { struct_type_index: string, field_index: 0 },
-						I::I32Load8U(BYTE),
-						I::I32Const(crate::node::ATTRIBUTE_MARK as i32),
-						I::I32Eq,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(name), I::StructGet { struct_type_index: string, field_index: 0 }, I::I32Load8U(BYTE),
+					I::I32Const(crate::node::ATTRIBUTE_MARK as i32), I::I32Eq,
+				]);
 			},
 		);
 	}
@@ -528,20 +505,13 @@ impl WasmGcEmitter {
 			s.skip_meta_cell(f, 0, 1, recurse, &[]);
 			s.skip_meta_cell(f, 1, 0, recurse, &[]);
 			// null equals only null
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(0),
-					I::RefIsNull,
-					I::If(BlockType::Empty),
-					I::LocalGet(1),
-					I::RefIsNull,
-					I::Return,
-					I::End,
-					I::LocalGet(1),
-					I::RefIsNull,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
+					I::LocalGet(1), I::RefIsNull, I::Return,
+				I::End,
+				I::LocalGet(1), I::RefIsNull,
+			]);
 			Self::return_if(f, 0);
 
 			// Nodes: same kind (Int and Float are compatible), then equal data and equal value
@@ -668,33 +638,18 @@ impl WasmGcEmitter {
 			Self::field(f, 0, node, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(1)]);
 			// ø and errors are falsy: `if x {…}` is the check of a result that may have failed (fetch)
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(1),
-					I::I64Const(Kind::Empty as i64),
-					I::I64Eq,
-					I::LocalGet(1),
-					I::I64Const(Kind::Error as i64),
-					I::I64Eq,
-					I::I32Or,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(1), I::I64Const(Kind::Empty as i64), I::I64Eq, I::LocalGet(1),
+				I::I64Const(Kind::Error as i64), I::I64Eq, I::I32Or,
+			]);
 			Self::return_if(f, 0);
 			// lists and blocks are truthy when they have a first element
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(1),
-					I::I64Const(Kind::Block as i64),
-					I::I64Eq,
-					I::LocalGet(1),
-					I::I64Const(Kind::List as i64),
-					I::I64Eq,
-					I::I32Or,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(1), I::I64Const(Kind::Block as i64), I::I64Eq, I::LocalGet(1),
+				I::I64Const(Kind::List as i64), I::I64Eq, I::I32Or, I::If(BlockType::Empty),
+			]);
 			Self::field(f, 0, node, 1);
 			Self::emit_list(f, &[I::RefIsNull, I::I32Eqz, I::Return, I::End]);
 			// keys are falsy only when key and value are
@@ -708,19 +663,13 @@ impl WasmGcEmitter {
 
 			// payloads: zero numbers, '\0' and empty text are falsy
 			Self::test(f, 0, Self::i31_heap());
-			Self::emit_list(
-				f,
-				&[
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::RefCastNonNull(Self::i31_heap()),
-					I::I31GetS,
-					I::I32Const(0),
-					I::I32Ne,
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::If(BlockType::Empty),
+					I::LocalGet(0), I::RefCastNonNull(Self::i31_heap()), I::I31GetS, I::I32Const(0), I::I32Ne,
 					I::Return,
-					I::End,
-				],
-			);
+				I::End,
+			]);
 			Self::test(f, 0, HeapType::Concrete(string));
 			f.instruction(&I::If(BlockType::Empty));
 			Self::field(f, 0, string, 1);

@@ -300,37 +300,21 @@ impl WasmGcEmitter {
 					],
 				);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::I32Const(FNV_OFFSET),
-					I::LocalSet(hash),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(FNV_OFFSET), I::LocalSet(hash),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(length),
-					I::I32Eqz,
-					I::BrIf(1),
-					I::LocalGet(hash),
-					I::LocalGet(pointer),
-					I::I32Load8U(MemArg { offset: 0, align: 0, memory_index: 0 }),
-					I::I32Xor,
-					I::I32Const(FNV_PRIME),
-					I::I32Mul,
-					I::LocalSet(hash),
-					I::LocalGet(pointer),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(pointer),
-					I::LocalGet(length),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalSet(length),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(hash),
-				],
-			);
+						I::LocalGet(length), I::I32Eqz, I::BrIf(1),
+						I::LocalGet(hash), I::LocalGet(pointer),
+						I::I32Load8U(MemArg { offset: 0, align: 0, memory_index: 0 }), I::I32Xor,
+						I::I32Const(FNV_PRIME), I::I32Mul, I::LocalSet(hash),
+						I::LocalGet(pointer), I::I32Const(1), I::I32Add, I::LocalSet(pointer),
+						I::LocalGet(length), I::I32Const(1), I::I32Sub, I::LocalSet(length),
+						I::Br(0),
+				I::End, I::End,
+				I::LocalGet(hash),
+			]);
 		});
 
 		// the slot of a name: the one holding its entry, else the empty one where it would go
@@ -347,76 +331,48 @@ impl WasmGcEmitter {
 					&[I::LocalTee(table), I::ArrayLen, I::I32Const(1), I::I32Sub, I::LocalSet(mask), I::LocalGet(1)],
 				);
 				s.call(f, NODE_MAP_HASH);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(mask),
-						I::I32And,
-						I::LocalSet(slot),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(table),
-						I::LocalGet(slot),
-						I::ArrayGet(slots),
-						I::LocalTee(entry),
-						I::I32Const(EMPTY_SLOT),
-						I::I32Eq,
-						I::If(BlockType::Empty),
-						I::LocalGet(slot),
-						I::Return,
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(mask), I::I32And, I::LocalSet(slot),
+					I::Loop(BlockType::Empty),
+						I::LocalGet(table), I::LocalGet(slot), I::ArrayGet(slots), I::LocalTee(entry),
+						I::I32Const(EMPTY_SLOT), I::I32Eq, I::If(BlockType::Empty),
+							I::LocalGet(slot), I::Return,
 						I::End,
-					],
-				);
+				]);
 				field(f, 0, KEYS);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(entry),
-						I::ArrayGet(array),
-						I::RefAsNonNull,
-						I::StructGet { struct_type_index: node, field_index: 1 },
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(entry), I::ArrayGet(array), I::RefAsNonNull,
+					I::StructGet { struct_type_index: node, field_index: 1 },
+				]);
 				s.emit_field(f, 1, 1);
 				s.call(f, super::super::VALUES_EQUAL);
-				Self::emit_list(
-					f,
-					&[
-						I::If(BlockType::Empty),
-						I::LocalGet(slot),
-						I::Return,
-						I::End,
-						I::LocalGet(slot),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalGet(mask),
-						I::I32And,
-						I::LocalSet(slot),
-						I::Br(0),
-						I::End,
-						I::Unreachable,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::If(BlockType::Empty),
+						I::LocalGet(slot), I::Return,
+					I::End,
+					I::LocalGet(slot), I::I32Const(1), I::I32Add, I::LocalGet(mask), I::I32And, I::LocalSet(slot),
+					I::Br(0),
+					I::End,
+					I::Unreachable,
+				]);
 			},
 		);
 
 		// node_map_reslot(map, slots): that many slots, every entry placed again
 		self.runtime_function(NODE_MAP_RESLOT, vec![map_ref, int], vec![], vec![int], |s, f| {
 			let entry = 2;
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(0),
-					I::I32Const(EMPTY_SLOT),
-					I::LocalGet(1),
-					I::ArrayNew(slots),
-					I::StructSet { struct_type_index: map, field_index: SLOTS },
-					I::I32Const(0),
-					I::LocalSet(entry),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::I32Const(EMPTY_SLOT), I::LocalGet(1), I::ArrayNew(slots),
+				I::StructSet { struct_type_index: map, field_index: SLOTS },
+				I::I32Const(0), I::LocalSet(entry),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(entry),
-				],
-			);
+						I::LocalGet(entry),
+			]);
 			field(f, 0, COUNT);
 			Self::emit_list(f, &[I::I32GeU, I::BrIf(1)]);
 			field(f, 0, SLOTS);
@@ -424,20 +380,14 @@ impl WasmGcEmitter {
 			field(f, 0, KEYS);
 			Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array), I::RefAsNonNull]);
 			s.call(f, NODE_MAP_SLOT);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(entry),
-					I::ArraySet(slots),
-					I::LocalGet(entry),
-					I::I32Const(1),
-					I::I32Add,
-					I::LocalSet(entry),
-					I::Br(0),
-					I::End,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(entry), I::ArraySet(slots),
+				I::LocalGet(entry), I::I32Const(1), I::I32Add, I::LocalSet(entry),
+				I::Br(0),
+				I::End,
+				I::End,
+			]);
 		});
 
 		// node_map_set(map, key, value): the entry of that name set, or added after the others
@@ -457,17 +407,11 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalSet(slot));
 				let slots_of_map = |f: &mut Function| field(f, 0, SLOTS);
 				slots_of_map(f);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(slot),
-						I::ArrayGet(slots),
-						I::LocalTee(entry),
-						I::I32Const(EMPTY_SLOT),
-						I::I32Ne,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(slot), I::ArrayGet(slots), I::LocalTee(entry), I::I32Const(EMPTY_SLOT), I::I32Ne,
+					I::If(BlockType::Empty),
+				]);
 				field(f, 0, VALUES);
 				Self::emit_list(f, &[I::LocalGet(entry), I::LocalGet(2), I::ArraySet(array), I::Return, I::End]);
 				// a new entry: room for it, then key, value and slot
@@ -489,18 +433,13 @@ impl WasmGcEmitter {
 						],
 					);
 					field(f, 0, part);
-					Self::emit_list(
-						f,
-						&[
-							I::I32Const(0),
-							I::LocalGet(count),
-							I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-							I::LocalGet(0),
-							I::LocalGet(grown),
-							I::RefAsNonNull,
-							I::StructSet { struct_type_index: map, field_index: part },
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I32Const(0), I::LocalGet(count),
+						I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
+						I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull,
+						I::StructSet { struct_type_index: map, field_index: part },
+					]);
 				}
 				f.instruction(&I::End);
 				for (part, value) in [(KEYS, name), (VALUES, 2)] {
@@ -508,23 +447,13 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::LocalGet(count), I::LocalGet(value), I::ArraySet(array)]);
 				}
 				slots_of_map(f);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(slot),
-						I::LocalGet(count),
-						I::ArraySet(slots),
-						I::LocalGet(0),
-						I::LocalGet(count),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalTee(count),
-						I::StructSet { struct_type_index: map, field_index: COUNT },
-						I::LocalGet(count),
-						I::I32Const(1),
-						I::I32Shl,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(slot), I::LocalGet(count), I::ArraySet(slots),
+					I::LocalGet(0), I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalTee(count),
+					I::StructSet { struct_type_index: map, field_index: COUNT },
+					I::LocalGet(count), I::I32Const(1), I::I32Shl,
+				]);
 				slots_of_map(f);
 				Self::emit_list(f, &[I::ArrayLen, I::I32GtU, I::If(BlockType::Empty), I::LocalGet(0)]);
 				slots_of_map(f);
@@ -560,30 +489,19 @@ impl WasmGcEmitter {
 				field(f, 0, part);
 				f.instruction(&I::LocalGet(entry));
 				field(f, 0, part);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(entry),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalGet(count),
-						I::LocalGet(entry),
-						I::I32Sub,
-						I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(entry), I::I32Const(1), I::I32Add, I::LocalGet(count), I::LocalGet(entry), I::I32Sub,
+					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
+				]);
 				field(f, 0, part);
 				Self::emit_list(f, &[I::LocalGet(count), null_node.clone(), I::ArraySet(array)]);
 			}
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(0),
-					I::LocalGet(count),
-					I::StructSet { struct_type_index: map, field_index: COUNT },
-					I::LocalGet(0),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::LocalGet(count), I::StructSet { struct_type_index: map, field_index: COUNT },
+				I::LocalGet(0),
+			]);
 			field(f, 0, SLOTS);
 			f.instruction(&I::ArrayLen);
 			s.call(f, NODE_MAP_RESLOT);
@@ -607,33 +525,22 @@ impl WasmGcEmitter {
 			|s, f| {
 				let (table, cell, entry, kind) = (1, 2, 3, 4);
 				let add_entry = |s: &Self, f: &mut Function| {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(table),
-							I::LocalGet(entry),
-							I::RefAsNonNull,
-							I::StructGet { struct_type_index: node, field_index: 1 },
-							I::RefCastNonNull(HeapType::Concrete(node)),
-							I::LocalGet(entry),
-							I::RefAsNonNull,
-							I::StructGet { struct_type_index: node, field_index: 2 },
-							I::RefIsNull,
-							I::If(BlockType::Result(node_ref)),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(table), I::LocalGet(entry), I::RefAsNonNull,
+						I::StructGet { struct_type_index: node, field_index: 1 },
+						I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(entry), I::RefAsNonNull,
+						I::StructGet { struct_type_index: node, field_index: 2 }, I::RefIsNull,
+						I::If(BlockType::Result(node_ref)),
+					]);
 					s.call(f, "new_empty");
-					Self::emit_list(
-						f,
-						&[
-							I::Else,
-							I::LocalGet(entry),
-							I::RefAsNonNull,
-							I::StructGet { struct_type_index: node, field_index: 2 },
-							I::RefAsNonNull,
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::Else,
+							I::LocalGet(entry), I::RefAsNonNull,
+							I::StructGet { struct_type_index: node, field_index: 2 }, I::RefAsNonNull,
+						I::End,
+					]);
 					s.call(f, NODE_MAP_SET);
 				};
 				let kind_is = |f: &mut Function, local: u32, expected: i64| {
@@ -648,83 +555,51 @@ impl WasmGcEmitter {
 					Self::emit_kind_test(f, expected, I::I64Eq);
 				};
 				s.call(f, NODE_MAP_NEW);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(table),
-						I::LocalGet(0),
-						I::StructGet { struct_type_index: node, field_index: 0 },
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::LocalTee(kind),
-						I::I64Const(Kind::Empty as i64),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-						I::LocalGet(table),
-						I::Return,
-						I::End,
-						I::LocalGet(kind),
-						I::I64Const(Kind::Key as i64),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-						I::LocalGet(0),
-						I::LocalSet(entry),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalSet(table),
+					I::LocalGet(0), I::StructGet { struct_type_index: node, field_index: 0 }, I::I64Const(KIND_MASK),
+					I::I64And, I::LocalTee(kind), I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::LocalGet(table), I::Return,
+					I::End,
+					I::LocalGet(kind), I::I64Const(Kind::Key as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::LocalGet(0), I::LocalSet(entry),
+				]);
 				add_entry(s, f);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(table),
-						I::Return,
-						I::End,
-						I::LocalGet(kind),
-						I::I64Const(Kind::List as i64),
-						I::I64Ne,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(table), I::Return,
+					I::End,
+					I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty),
+				]);
 				s.call(f, "not_an_object");
-				Self::emit_list(
-					f,
-					&[
-						I::End,
-						I::LocalGet(0),
-						I::LocalSet(cell),
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::End,
+					I::LocalGet(0), I::LocalSet(cell),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(cell),
-						I::RefIsNull,
-						I::BrIf(1),
-						I::LocalGet(cell),
-						I::RefAsNonNull,
-						I::StructGet { struct_type_index: node, field_index: 1 },
-						I::RefCastNullable(HeapType::Concrete(node)),
-						I::LocalTee(entry),
-						I::RefIsNull,
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-					],
-				);
+							I::LocalGet(cell), I::RefIsNull, I::BrIf(1),
+							I::LocalGet(cell), I::RefAsNonNull,
+							I::StructGet { struct_type_index: node, field_index: 1 },
+							I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(entry), I::RefIsNull, I::I32Eqz,
+							I::If(BlockType::Empty),
+				]);
 				kind_is(f, entry, Kind::Key as i64);
 				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 				s.call(f, "not_an_object");
 				f.instruction(&I::End);
 				add_entry(s, f);
-				Self::emit_list(
-					f,
-					&[
-						I::End,
-						I::LocalGet(cell),
-						I::RefAsNonNull,
-						I::StructGet { struct_type_index: node, field_index: 2 },
-						I::LocalSet(cell),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(table),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::End,
+					I::LocalGet(cell), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 2 },
+					I::LocalSet(cell),
+					I::Br(0),
+					I::End,
+					I::End,
+					I::LocalGet(table),
+				]);
 			},
 		);
 
@@ -743,51 +618,33 @@ impl WasmGcEmitter {
 			field(f, 0, COUNT);
 			Self::emit_list(f, &[I::LocalTee(entry), I::I32Eqz, I::If(BlockType::Empty)]);
 			s.call(f, "new_empty");
-			Self::emit_list(
-				f,
-				&[
-					I::Return,
-					I::End,
-					I::LocalGet(entry),
-					I::I32Const(1),
-					I::I32Eq,
-					I::If(BlockType::Empty),
-					I::I32Const(0),
-					I::LocalSet(entry),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Return,
+				I::End,
+				I::LocalGet(entry), I::I32Const(1), I::I32Eq, I::If(BlockType::Empty),
+					I::I32Const(0), I::LocalSet(entry),
+			]);
 			entry_node(s, f);
-			Self::emit_list(
-				f,
-				&[
-					I::Return,
-					I::End,
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Return,
+				I::End,
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(entry),
-					I::I32Eqz,
-					I::BrIf(1),
-					I::LocalGet(entry),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalSet(entry),
-					I::I64Const(CURLY_LIST_KIND),
-				],
-			);
+						I::LocalGet(entry), I::I32Eqz, I::BrIf(1),
+						I::LocalGet(entry), I::I32Const(1), I::I32Sub, I::LocalSet(entry),
+						I::I64Const(CURLY_LIST_KIND),
+			]);
 			entry_node(s, f);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(rest),
-					I::StructNew(node),
-					I::LocalSet(rest),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(rest),
-					I::RefAsNonNull,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(rest), I::RefAsNonNull,
+			]);
 		});
 	}
 }

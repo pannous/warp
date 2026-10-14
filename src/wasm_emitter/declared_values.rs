@@ -317,16 +317,10 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
 		let is_list = [I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq];
+		#[rustfmt::skip]
 		let is_list_or_empty = [
-			I::I64Const(KIND_MASK),
-			I::I64And,
-			I::LocalTee(2),
-			I::I64Const(Kind::List as i64),
-			I::I64Eq,
-			I::LocalGet(2),
-			I::I64Const(Kind::Empty as i64),
-			I::I64Eq,
-			I::I32Or,
+			I::I64Const(KIND_MASK), I::I64And, I::LocalTee(2), I::I64Const(Kind::List as i64), I::I64Eq, I::LocalGet(2),
+			I::I64Const(Kind::Empty as i64), I::I64Eq, I::I32Or,
 		];
 		self.runtime_function(LIST_MARK, vec![node_ref, ValType::I64], vec![node_ref], vec![ValType::I64], |s, f| {
 			let (list, mark) = (0, 1);
@@ -334,16 +328,12 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &is_list_or_empty);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list)]);
 			s.emit_field(f, list, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(mark),
-					I::I64Or,
-					I::StructSet { struct_type_index: node_type, field_index: 0 },
-					I::End,
-					I::LocalGet(list),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(mark), I::I64Or, I::StructSet { struct_type_index: node_type, field_index: 0 },
+				I::End,
+				I::LocalGet(list),
+			]);
 		});
 		self.runtime_function(LIST_ITEM_CHECK, vec![nullable, node_ref], vec![], vec![ValType::I64], |s, f| {
 			let (list, item, mark) = (0, 1, 2);
@@ -352,36 +342,19 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &is_list_or_empty);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Return, I::End]);
 			s.emit_field(f, list, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(ELEMENT_MARK_SHIFT),
-					I::I64ShrU,
-					I::LocalTee(mark),
-					I::I64Eqz,
-					I::If(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(ELEMENT_MARK_SHIFT), I::I64ShrU, I::LocalTee(mark), I::I64Eqz, I::If(BlockType::Empty),
 					I::Return,
-					I::End,
-				],
-			);
+				I::End,
+			]);
 			// the node_kind_in mask of the mark: its kind bits, its bool bit back at BOOL_MASK_BIT
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(item),
-					I::LocalGet(mark),
-					I::I64Const(MARK_KINDS_MASK),
-					I::I64And,
-					I::LocalGet(mark),
-					I::I64Const(MARK_BOOL_BIT),
-					I::I64ShrU,
-					I::I64Const(1),
-					I::I64And,
-					I::I64Const(BOOL_MASK_BIT),
-					I::I64Shl,
-					I::I64Or,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(item), I::LocalGet(mark), I::I64Const(MARK_KINDS_MASK), I::I64And, I::LocalGet(mark),
+				I::I64Const(MARK_BOOL_BIT), I::I64ShrU, I::I64Const(1), I::I64And, I::I64Const(BOOL_MASK_BIT),
+				I::I64Shl, I::I64Or,
+			]);
 			s.call(f, crate::type_tests::NODE_KIND_IN);
 			f.instruction(&I::I64Eqz);
 			s.emit_fail_if(f, LIST_CANNOT_HOLD);

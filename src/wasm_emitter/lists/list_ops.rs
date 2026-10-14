@@ -310,24 +310,16 @@ impl WasmGcEmitter {
 					let kind = 2;
 					f.instruction(&I::LocalGet(1));
 					s.emit_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalTee(kind),
-							I::I64Const(crate::type_kinds::BOOL_KIND),
-							I::I64Eq,
-							I::If(BlockType::Result(ValType::I64)),
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalTee(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq,
+						I::If(BlockType::Result(ValType::I64)),
 							I::I64Const(crate::type_kinds::BOOL_MASK_BIT),
-							I::Else,
-							I::LocalGet(kind),
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::End,
-							I::I64ShrU,
-							I::I64Const(1),
-							I::I64And,
-						],
-					);
+						I::Else,
+							I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And,
+						I::End,
+						I::I64ShrU, I::I64Const(1), I::I64And,
+					]);
 				},
 			);
 		}
@@ -335,17 +327,12 @@ impl WasmGcEmitter {
 
 	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`)
 	pub(in crate::wasm_emitter) fn emit_is_map(&self, func: &mut Function) {
-		Self::emit_list(
-			func,
-			&[
-				I::RefAsNonNull,
-				I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
-				I::I64Const(crate::type_kinds::UNMARKED_KIND),
-				I::I64And,
-				I::I64Const(crate::type_kinds::CURLY_LIST_KIND),
-				I::I64Eq,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::RefAsNonNull, I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
+			I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::CURLY_LIST_KIND),
+			I::I64Eq,
+		]);
 	}
 
 	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol
@@ -388,17 +375,11 @@ impl WasmGcEmitter {
 				let type_names: Vec<String> =
 					s.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
 				if !type_names.is_empty() {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(kind),
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(Kind::Key as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Key as i64), I::I64Eq,
+						I::If(BlockType::Empty),
+					]);
 					for type_name in &type_names {
 						s.emit_field(f, 0, 1);
 						f.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
@@ -417,35 +398,20 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Return, I::End]);
 				for form in crate::time::TIME_FORMS {
 					s.emit_time_form(f, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(form as i64),
-							I::I64Eq,
-							I::LocalGet(kind),
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(Kind::Time as i64),
-							I::I64Eq,
-							I::I32And,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I64Const(form as i64), I::I64Eq, I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And,
+						I::I64Const(Kind::Time as i64), I::I64Eq, I::I32And, I::If(BlockType::Empty),
+					]);
 					s.emit_string_call(f, form.name(), "new_symbol");
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
 				for named in RUN_TIME_TYPE_KINDS {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(kind),
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(named as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(named as i64), I::I64Eq,
+						I::If(BlockType::Empty),
+					]);
 					s.emit_string_call(f, &named.to_string(), "new_symbol");
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
@@ -474,17 +440,12 @@ impl WasmGcEmitter {
 					// ø is the empty list
 					s.emit_field(func, 0, 0);
 					s.emit_unmarked(func);
-					Self::emit_list(
-						func,
-						&[
-							I::I64Const(Kind::Empty as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-							I::I64Const(0),
-							I::Return,
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(func, &[
+						I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+							I::I64Const(0), I::Return,
+						I::End,
+					]);
 
 					// a key:value pair is one item, the one-entry object `{a:1}`
 					s.emit_field(func, 0, 0);
@@ -495,18 +456,12 @@ impl WasmGcEmitter {
 					if let (Some(counted), Some(count)) =
 						(s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count))
 					{
-						Self::emit_list(
-							func,
-							&[
-								I::GlobalGet(counted),
-								I::LocalGet(0),
-								I::RefEq,
-								I::If(BlockType::Empty),
-								I::GlobalGet(count),
-								I::Return,
-								I::End,
-							],
-						);
+						#[rustfmt::skip]
+						Self::emit_list(func, &[
+							I::GlobalGet(counted), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty),
+								I::GlobalGet(count), I::Return,
+							I::End,
+						]);
 					}
 
 					// the cells along the value chain, a meta entry `@name:value` counting none
@@ -522,20 +477,13 @@ impl WasmGcEmitter {
 					if let (Some(counted), Some(count)) =
 						(s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count))
 					{
-						Self::emit_list(
-							func,
-							&[
-								I::LocalGet(1),
-								I::I64Const(SHORT_WALK),
-								I::I64GtS,
-								I::If(BlockType::Empty),
-								I::LocalGet(0),
-								I::GlobalSet(counted),
-								I::LocalGet(1),
-								I::GlobalSet(count),
-								I::End,
-							],
-						);
+						#[rustfmt::skip]
+						Self::emit_list(func, &[
+							I::LocalGet(1), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
+								I::LocalGet(0), I::GlobalSet(counted),
+								I::LocalGet(1), I::GlobalSet(count),
+							I::End,
+						]);
 					}
 					func.instruction(&I::LocalGet(1));
 				},
@@ -590,16 +538,11 @@ impl WasmGcEmitter {
 					s.emit_require_integral(func, 1);
 
 					// a one-character text is held as a Codepoint: its only element is itself
-					Self::emit_list(
-						func,
-						&[
-							I::LocalGet(0),
-							I::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
-							I::I64Const(Kind::Codepoint as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(func, &[
+						I::LocalGet(0), I::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
+						I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Empty),
+					]);
 					Self::emit_index_compare(func, I::I64Ne);
 					s.emit_fail_if(func, "index_out_of_range");
 					Self::emit_list(func, &[I::LocalGet(0), I::Return, I::End]);
@@ -642,10 +585,9 @@ impl WasmGcEmitter {
 			|s, f| {
 				Self::emit_list(f, &s.forget_list_cursor());
 				let (list, position, value, cell) = (0, 1, 2, 3);
+				#[rustfmt::skip]
 				let lone_cell = [
-					I::I64Const(SQUARE_LIST_KIND),
-					I::LocalGet(value),
-					I::RefNull(HeapType::Concrete(node_type)),
+					I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::RefNull(HeapType::Concrete(node_type)),
 					I::StructNew(node_type),
 				];
 				s.emit_item_check(f, super::super::declared_values::LIST_ITEM_CHECK, list, value);
@@ -654,16 +596,11 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Return, I::End]);
 				s.emit_field(f, list, 0);
 				s.emit_unmarked(f);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(Kind::Empty as i64),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-						I::LocalGet(list),
-						I::I64Const(SQUARE_LIST_KIND),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::LocalGet(list), I::I64Const(SQUARE_LIST_KIND),
+				]);
 				s.emit_or_element_mark(f, list);
 				Self::emit_list(
 					f,
@@ -708,19 +645,14 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &lone_cell);
 				Self::emit_list(f, &[set(2), I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 				s.emit_field(f, cell, 2);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(cell),
-						I::LocalGet(position),
-						I::I64Const(1),
-						I::I64Sub,
-						I::LocalSet(position),
-						I::Br(0),
-						I::End,
-						I::Unreachable,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalSet(cell),
+					I::LocalGet(position), I::I64Const(1), I::I64Sub, I::LocalSet(position),
+					I::Br(0),
+					I::End,
+					I::Unreachable,
+				]);
 			},
 		);
 	}
@@ -740,16 +672,11 @@ impl WasmGcEmitter {
 			s.call(f, "grapheme_end");
 			Self::emit_list(f, &[I::LocalSet(stop), I::LocalGet(start), I::LocalGet(end)]);
 			s.call(f, "utf8_next");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(stop),
-					I::I32Eq,
-					I::If(BlockType::Result(node_ref)),
-					I::LocalGet(start),
-					I::LocalGet(end),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(stop), I::I32Eq, I::If(BlockType::Result(node_ref)),
+					I::LocalGet(start), I::LocalGet(end),
+			]);
 			s.call(f, "utf8_decode");
 			s.call(f, "new_codepoint");
 			Self::emit_list(f, &[I::Else, I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
@@ -776,34 +703,19 @@ impl WasmGcEmitter {
 			|s, f| {
 				let rest = 2;
 				s.emit_require_whole(f, 0, COUNT_NOT_INTEGRAL);
-				Self::emit_list(
-					f,
-					&[
-						I::RefNull(HeapType::Concrete(node)),
-						I::LocalSet(rest),
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(0),
-						I::I64Const(0),
-						I::I64LeS,
-						I::BrIf(1),
-						I::I64Const(SQUARE_LIST_KIND),
-						I::LocalGet(1),
-						I::LocalGet(rest),
-						I::StructNew(node),
-						I::LocalSet(rest),
-						I::LocalGet(0),
-						I::I64Const(1),
-						I::I64Sub,
-						I::LocalSet(0),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(rest),
-						I::RefIsNull,
-						I::If(BlockType::Result(node_ref)),
-					],
-				);
+							I::LocalGet(0), I::I64Const(0), I::I64LeS, I::BrIf(1),
+							I::I64Const(SQUARE_LIST_KIND), I::LocalGet(1), I::LocalGet(rest), I::StructNew(node),
+							I::LocalSet(rest),
+							I::LocalGet(0), I::I64Const(1), I::I64Sub, I::LocalSet(0),
+							I::Br(0),
+					I::End, I::End,
+					I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref)),
+				]);
 				s.call(f, "new_empty");
 				Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
 			},
@@ -871,28 +783,14 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(0), I::LocalSet(current)]);
 		// at or past a cursor of this list: walk on from its cell, the rest of the index
 		for (list, cell, index) in self.read_cursors() {
-			Self::emit_list(
-				func,
-				&[
-					I::GlobalGet(list),
-					I::LocalGet(0),
-					I::RefEq,
-					I::LocalGet(asked),
-					I::GlobalGet(index),
-					I::I64GeS,
-					I::I32And,
-					I::If(BlockType::Empty),
-					I::GlobalGet(cell),
-					I::LocalSet(current),
-					I::LocalGet(asked),
-					I::GlobalGet(index),
-					I::I64Sub,
-					I::I64Const(1),
-					I::I64Add,
-					I::LocalSet(1),
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::LocalGet(asked), I::GlobalGet(index), I::I64GeS,
+				I::I32And, I::If(BlockType::Empty),
+					I::GlobalGet(cell), I::LocalSet(current),
+					I::LocalGet(asked), I::GlobalGet(index), I::I64Sub, I::I64Const(1), I::I64Add, I::LocalSet(1),
+				I::End,
+			]);
 		}
 		Self::emit_list(
 			func,
@@ -937,17 +835,12 @@ impl WasmGcEmitter {
 		}
 		for pair in cursors.windows(2).rev() {
 			let ((list, cell, index), (next_list, next_cell, next_index)) = (pair[0], pair[1]);
-			Self::emit_list(
-				func,
-				&[
-					I::GlobalGet(list),
-					I::GlobalSet(next_list),
-					I::GlobalGet(cell),
-					I::GlobalSet(next_cell),
-					I::GlobalGet(index),
-					I::GlobalSet(next_index),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::GlobalGet(list), I::GlobalSet(next_list),
+				I::GlobalGet(cell), I::GlobalSet(next_cell),
+				I::GlobalGet(index), I::GlobalSet(next_index),
+			]);
 		}
 		Self::emit_list(func, &store(cursors[0]));
 		for _ in cursors {
@@ -1110,18 +1003,13 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
 		self.emit_field(func, list, 0);
 		self.emit_unmarked(func);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(Kind::Empty as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-				I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
-				I::LocalSet(list),
-				I::End,
-				I::End,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+				I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::LocalSet(list),
+			I::End,
+			I::End,
+		]);
 	}
 
 	/// The kind on the stack without its element mark, when the program's lists carry marks (declared_values LIST_MARK)

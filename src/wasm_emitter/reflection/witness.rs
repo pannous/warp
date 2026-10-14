@@ -61,20 +61,13 @@ impl WasmGcEmitter {
 		for kind in kinds {
 			Self::emit_list(func, &[I::LocalGet(kind), I::I64Const(Kind::Key as i64), I::I64Eq]);
 		}
-		Self::emit_list(
-			func,
-			&[
-				I::I32And,
-				I::If(BlockType::Empty),
-				I::LocalGet(first),
-				I::LocalGet(second),
-				I::GlobalGet(table.global),
-				I::RefAsNonNull,
-				I::CallRef(table.order_type),
-				I::Return,
-				I::End,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I32And, I::If(BlockType::Empty),
+				I::LocalGet(first), I::LocalGet(second), I::GlobalGet(table.global), I::RefAsNonNull,
+				I::CallRef(table.order_type), I::Return,
+			I::End,
+		]);
 	}
 
 	/// instance_compare(a, b): the order of two instances by the witness of a's type; a type without one is not comparable
@@ -125,20 +118,12 @@ impl WasmGcEmitter {
 						s.emit_call(func, "get_int_value");
 					}
 					// the sign of the i64: (order > 0) - (order < 0)
-					Self::emit_list(
-						func,
-						&[
-							I::LocalTee(order),
-							I::I64Const(0),
-							I::I64GtS,
-							I::LocalGet(order),
-							I::I64Const(0),
-							I::I64LtS,
-							I::I32Sub,
-							I::Return,
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(func, &[
+						I::LocalTee(order), I::I64Const(0), I::I64GtS, I::LocalGet(order), I::I64Const(0), I::I64LtS,
+						I::I32Sub, I::Return,
+						I::End,
+					]);
 				}
 				s.emit_call(func, "not_comparable");
 				func.instruction(&I::Unreachable);
