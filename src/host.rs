@@ -17,8 +17,8 @@ const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetc
 pub use warp_runtime::host_words::{
 	CLIPBOARD_TEXT, CLOCK, EXIT, FETCH_HANDLER_PREFIX, FILE_HANDLER_PREFIX, GPU_COMPUTE, GPU_COMPUTE_LINEAR,
 	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, INTERRUPT_HANDLER, LOCAL_OFFSET, NOTIFY, PAGE_PATH,
-	RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_FRAME,
-	SIGNAL_POLL, SIGNAL_WATCH, SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
+	RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_LISTEN, SIGNAL_POLL, SIGNAL_WATCH, SLEEP, SYSTEM_VALUE,
+	TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
 };
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
@@ -187,7 +187,7 @@ pub const VALUE_GIVING_WORDS: [&str; 15] = [
 use wasm_encoder::ValType::{F64, I32, I64};
 const NODE: wasm_encoder::ValType = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 /// name, parameters, results of each host word
-pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 70] = [
+pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 67] = [
 	(DRAW_SHAPE, &[I64, F64, F64, F64, F64, I64], &[]),
 	(DRAW_SHOW, &[I64, I64], &[]),
 	(GPU_COMPUTE, &[NODE, NODE, I64], &[NODE]),
@@ -224,10 +224,7 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(CLOCK, &[], &[I64]),
 	(LOCAL_OFFSET, &[I64], &[I64]),
 	(SIGNAL_POLL, &[], &[]),
-	(SIGNAL_EVERY, &[I64, I64], &[]),
-	(SIGNAL_DAILY, &[I64, I64, I64], &[]),
-	(SIGNAL_AT, &[I64, I64], &[]),
-	(SIGNAL_FRAME, &[I64, I64], &[]),
+	(SIGNAL_LISTEN, &[I64, I64, I64], &[]),
 	(SIGNAL_WATCH, &[I64, I32], &[]),
 	(SYSTEM_VALUE, &[I32], &[I64]),
 	(EXIT, &[I64], &[]),
