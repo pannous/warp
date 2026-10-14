@@ -340,3 +340,16 @@ impl WarpParser {
 pub(crate) fn ends_path(c: char) -> bool {
 	c.is_whitespace() || matches!(c, '\0' | ']' | ')' | '}' | ',' | ';')
 }
+
+pub(crate) fn starts_code(first: &Node) -> bool {
+	match first.drop_meta() {
+		Node::Symbol(word) => {
+			crate::operators::is_function_keyword(word)
+				|| super::ACCESSOR_WORDS.contains(&word.as_str())
+				|| super::MEMBER_MODIFIERS.contains(&word.as_str())
+		}
+		// `init(n) {…}`, JavaScript's `sum() {…}` and `constructor(x, y) {…}`
+		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+		_ => false,
+	}
+}
