@@ -36,7 +36,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   failed only, `if no x` and `x or 0` cover both; at a WIT export a function that can fail gives `result`, one that
   only gives ø an `option`, one doing both `result<option<T>>`; `effects of f` tells which. Where a caller can take it, the Error value propagates instead of
   being raised (card error-gaps, wiki/Error.md "Not yet").
-- use-script (2026-10-14): `use script` = `use relaxed` (no hints) plus the scripting words without further `use`:
+- use-script (2026-10-14): `use script` (alias `use script mode`) = `use relaxed` (no hints) plus the scripting words without further `use`:
   the modules os, file and net (env, exec, write, exists, list_files, lines, post …), plus new words where missing:
   `command("…")` (run a shell command, its output as text; the explicit opt-in to text-as-shell), `arguments` (the
   program's arguments as a list), `cwd`, `glob("*.toml")`, `stdin`/`input`, `sleep`, `exit n`. `use relaxed` stays
