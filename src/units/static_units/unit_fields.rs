@@ -186,14 +186,8 @@ pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
 
 /// A constant quantity's SI amount and the quantity it measures, as unit_type gives a column's: `5 km` is (5000, "m")
 pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
-	let Ok(crate::units::Value::Quantity(quantity)) = crate::units::evaluate(node) else {
-		return None;
-	};
-	let per_unit = crate::units::scale(&quantity.factors, |factor| super::base_unit(factor.unit.dimension));
-	Some((
-		quantity.amount.mul(&per_unit).to_f64(),
-		shown(&crate::units::signature(&quantity.factors)),
-	))
+	let (amount, signature) = super::constant(node).ok()??;
+	(!signature.is_empty()).then(|| Some((super::exact_amount(&amount)?.to_f64(), shown(&signature))))?
 }
 
 /// The construction `P{…}` with `body` in place of its fields, its marks kept
