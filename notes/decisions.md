@@ -60,6 +60,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (`t = help(x)` silent, `print help(x)` prints once).
 - function-in-list (2026-10-14): inside a list or text a function prints as its name (`[gcd lcm clamp …]`); only a
   function printed on its own shows doc + definition (reflection).
+- function-type (2026-10-14): `type(gcd)` prints `function: (a, b) -> int`, the kind followed by the signature;
+  `gcd is function` is yes.
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
