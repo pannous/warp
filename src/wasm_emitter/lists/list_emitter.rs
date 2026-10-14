@@ -614,6 +614,8 @@ impl WasmGcEmitter {
 			// a key may be an instance of a declared type or an operation (`parse("1+1")`)
 			crate::Kind::Key => true,
 			crate::Kind::List => self.may_be_map(subject),
+			// a text value may be a character (`"abc".chars#1`, chars-codepoints): one-character texts are held as such
+			crate::Kind::Text => !matches!(subject.drop_meta(), Node::Text(_)),
 			_ => false,
 		}
 	}

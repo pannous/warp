@@ -33,14 +33,6 @@ impl Node {
 		self.serialize_recurse(false)
 	}
 
-	/// A list item: a character is quoted like a text, `["a" "bb"]`, and reads back as the character it is (P126)
-	fn item_text(&self) -> String {
-		match self.drop_meta() {
-			Char(c) => quoted(&c.to_string()),
-			_ => self.serialize(),
-		}
-	}
-
 	pub fn meta_string(&self) -> String {
 		// todo as impl for Meta?
 		// Extract MetaData from Data node if present
@@ -104,9 +96,9 @@ impl Node {
 				if nodes.is_empty() {
 					format!("{}{}", bracket, close)
 				} else if nodes.len() == 1 {
-					format!("{}{}{}", bracket, nodes[0].item_text(), close)
+					format!("{}{}{}", bracket, nodes[0].serialize(), close)
 				} else {
-					let items: Vec<String> = nodes.iter().map(Node::item_text).collect();
+					let items: Vec<String> = nodes.iter().map(Node::serialize).collect();
 					format!("{}{}{}", bracket, items.join(&separator.joint()), close)
 				}
 			}
