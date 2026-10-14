@@ -387,7 +387,7 @@ function runTask(module, hooks, warnings, name, values, arrays, captured = [], c
 		const unread = joinTasks(taskHolder.run, hooks);
 		const { signals, unrenderedSounds: sounds } = taskHolder.run;
 		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals, sounds };
-		return { value: result === null ? null : readNode(instance.exports, result), signals, sounds };
+		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : portableInt(instance.exports, result), signals, sounds };
 	} catch (trap) {
 		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
 		return { failure: `task ${taskName(name)}: ${taskFailure(instance?.exports, trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
@@ -599,8 +599,16 @@ function exactParts(exports, handle) {
 	return exactOfPayload(readNode(exports, exports.new_int(handle)).data);
 }
 
-// a task's result as a tree: an empty result as Empty
+// a task's whole-number result as it can leave its instance: a handle beyond the fixnums as the tree of its parts
+function portableInt(exports, result) {
+	return isExactHandle(result) ? { kind: KIND_INT, data: { exact: exactParts(exports, result).map(String) }, chain: [] } : result;
+}
+
+// a task's result as a tree: the number a wrapper of a function of numbers gives (f·node gives f's i64 or f64), else
+// the tree already read
 function taskTree(value) {
+	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
+	if (typeof value === "number") return { kind: KIND_FLOAT, data: { float: value }, chain: [] };
 	return value ?? { kind: "0", data: null, chain: [] };
 }
 
