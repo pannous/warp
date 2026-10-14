@@ -524,10 +524,6 @@ fn run_command(args: &[String]) {
 		if !only_run && wants_executable() && !matches!(result, Node::Error(_)) {
 			leave_executable(path);
 		}
-		if let Some(code) = warp_runtime::system_signals::take_exit_code() {
-			let _ = io::stdout().flush();
-			std::process::exit(code); // `exit(code)` (P121)
-		}
 		print_and_exit(result);
 	} else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
 		// Compile WAT/WAST text format to WASM binary, then execute
@@ -632,6 +628,7 @@ fn fail(message: impl std::fmt::Display) -> ! {
 
 /// The program's value printed, its Int the exit status, an uncaught error status 1
 fn print_and_exit(result: Node) -> ! {
+	exit_if_program_exited();
 	show(&result, "");
 	ended_well(&result);
 	std::process::exit(node_to_i32(&result));
@@ -639,11 +636,20 @@ fn print_and_exit(result: Node) -> ! {
 
 /// The value of inline code printed; an uncaught error exits with status 1, so scripts and CI see it failed
 fn show_and_fail_on_error(result: &Node, mark: &str) {
+	exit_if_program_exited();
 	show(result, mark);
 	if matches!(result.drop_meta(), Node::Error(_)) {
 		std::process::exit(ERROR_STATUS);
 	}
 	ended_well(result);
+}
+
+/// The status of the program's `exit(code)` (P121), for a file run and inline code alike
+fn exit_if_program_exited() {
+	if let Some(code) = warp_runtime::system_signals::take_exit_code() {
+		let _ = io::stdout().flush();
+		std::process::exit(code);
+	}
 }
 
 /// A program that ended well keeps its painted window up until the user closes it; exit() or a failure closes it
