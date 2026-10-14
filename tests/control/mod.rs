@@ -50,6 +50,7 @@ mod test_database_short_names; // card orm-one-letter-column
 mod test_database_tables; // card orm
 mod test_database_units_everywhere; // card browser-unit
 mod test_do_block;
+mod test_doc_strings; // card doc-strings
 mod test_each_colon;
 mod test_emit_operands;
 mod test_empty_block;

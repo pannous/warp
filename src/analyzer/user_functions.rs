@@ -215,6 +215,7 @@ pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserF
 	UserFunctionDef {
 		name: name.to_string(),
 		params,
+		doc: crate::lowering::doc_strings::doc_of(&body),
 		body: Box::new(body),
 		return_kind,
 		tuple_kinds: vec![],

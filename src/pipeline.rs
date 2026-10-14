@@ -177,6 +177,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
 	// `help(sound)`, `help(midi)`: a standard module's index, a word's head and comment (word_help.rs), before reflection.rs
 	// answers help(sound) with the signature of the word sound
+	// a function's leading text and the comment above it: its doc (doc_strings.rs), before reflection.rs reads `f.doc`
+	crate::lowering::doc_strings::lower,
 	crate::lowering::word_help::lower,
 	crate::lowering::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
