@@ -493,7 +493,7 @@ impl WarpParser {
 	/// `norm() := …`, `def abs(): …`, `fun sqrt() { … }`: the word `length` characters ahead names what is defined, not
 	/// the operator. A function of that name is refused (analyzer check_operator_word_functions, P141); a method is
 	/// called as `p.norm()` (card class-method-named)
-	fn defines_named(&self, length: usize) -> bool {
+	pub(super) fn defines_named(&self, length: usize) -> bool {
 		if self.peek_char(length) != '(' {
 			return false;
 		}
